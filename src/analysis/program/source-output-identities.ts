@@ -102,7 +102,8 @@ export function planRustSourceOutputIdentities(
       continue;
     }
     const normalizedSourcePath = sourceSegments.join("/");
-    const existing = seenSourcePaths.get(normalizedSourcePath);
+    const sourcePathIdentity = `${sourcePackage.componentId}\u0000${normalizedSourcePath}`;
+    const existing = seenSourcePaths.get(sourcePathIdentity);
     if (existing !== undefined && existing !== fileName) {
       diagnostics.push(identityCollisionDiagnostic(
         "RUST_SOURCE_MODULE_IDENTITY_COLLISION",
@@ -113,7 +114,7 @@ export function planRustSourceOutputIdentities(
       ));
       continue;
     }
-    seenSourcePaths.set(normalizedSourcePath, fileName);
+    seenSourcePaths.set(sourcePathIdentity, fileName);
     const localComponent = sourcePackage.componentId === rootPackage.componentId;
     const localSegments = (packageCountByComponent.get(sourcePackage.componentId) ?? 0) > 1
       ? [rustModuleSegmentBase(sourcePackage.name ?? "package"), ...sourceSegments]

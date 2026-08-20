@@ -6,9 +6,10 @@ import {
 } from "../../../analysis/facts/keys.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { applyRustFallibleResultExpression } from "../types/fallible-shape.js";
-import { diagnosticInput, registerAliasFromPath } from "../program/plan-context.js";
+import { diagnosticInput, registerAliasFromPath, rustActiveErrorType } from "../program/plan-context.js";
 import { expressionCarrier, providerSelectedCallMatches, requireExpressionCarrier, rustOperationFact } from "./fundamentals.js";
-import { finishProviderOperationExpression, planArguments, planProviderOperationExpression } from "./conversions.js";
+import { finishProviderOperationExpression, planProviderOperationExpression } from "./conversions.js";
+import { planRustCallArguments } from "./input-shaping.js";
 import {
   KindCallExpression,
   KindPropertyAccessExpression,
@@ -39,7 +40,8 @@ export function planRegExpCreate(node: Node, context: RustPlanContext): RustExpr
     ));
     return undefined;
   }
-  if (context.fallibleContext !== true) {
+  const activeErrorType = rustActiveErrorType(context);
+  if (activeErrorType === undefined) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
       "rust.error.call",
@@ -50,7 +52,8 @@ export function planRegExpCreate(node: Node, context: RustPlanContext): RustExpr
   registerAliasFromPath(context, "js_abi::JsRegExp::new");
   return {
     kind: "try",
-    errorDomain: "runtime",
+    resultErrorType: activeErrorType,
+    operandErrorType: { kind: "named", path: "js_abi::JsError" },
     expr: {
       kind: "call",
       path: "js_abi::JsRegExp::new",
@@ -71,7 +74,7 @@ export function planNewExpression(node: Node, context: RustPlanContext): RustExp
     if (!requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.source-constructor-carrier")) {
       return undefined;
     }
-    const args = planArguments(node, context);
+    const args = planRustCallArguments(node, context);
     return args === undefined
       ? undefined
       : planSelectedSourceCall(node, Node_Expression(context.input.ast, node), args, fact, context);
@@ -114,6 +117,7 @@ export function planNewExpression(node: Node, context: RustPlanContext): RustExp
     undefined,
     argumentNodes,
     node,
+    { resultUse: "value" },
   );
   if (planned === undefined && context.diagnostics.length === diagnosticCount) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -238,9 +242,17 @@ export function planOptionalChainExpression(
   if (innerFallible) {
     context.usedAliases?.add("rt");
   }
+  const activeErrorType = rustActiveErrorType(context);
+  if (innerFallible && activeErrorType === undefined) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, node),
+      "rust.error.optional-chain",
+      "Fallible optional-chain operations require a finalized fallible lowering context.",
+    ));
+    return undefined;
+  }
   const fallibleBody = applyRustFallibleResultExpression(body, {
-    errorDomain: context.errorDomain,
-    errorTypePath: "rt::TsonicError",
+    errorType: activeErrorType!,
   });
   const mapped: RustExpr = {
     kind: "method-call",
@@ -257,7 +269,8 @@ export function planOptionalChainExpression(
   }
   const transposed: RustExpr = {
     kind: "try",
-    errorDomain: context.errorDomain,
+    resultErrorType: activeErrorType!,
+    operandErrorType: activeErrorType!,
     expr: { kind: "method-call", receiver: mapped, method: "transpose", args: [] },
   };
   return fact.lowering === "and-then"

@@ -339,7 +339,7 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /tsonic_rust_node::http::create_server_callable/u);
-  assert.match(source, /fn handle\([^)]*\) -> rt::TsonicResult<\(\)>/u);
+  assert.match(source, /fn handle\([^)]*\) -> Result<\(\), rt::TsonicError>/u);
   assert.match(source, /response\.set_status_code\(/u);
   assert.match(source, /response\.set_header\(/u);
   assert.match(source, /response\.end_buffer\(/u);

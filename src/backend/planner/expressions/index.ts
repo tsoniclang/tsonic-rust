@@ -8,12 +8,12 @@ export {
 export { planRustOperatorCallExpression } from "./binary.js";
 export {
   applyFinalizedValueConversion,
-  applyRustArgumentMode,
   applyRustValueConversion,
   lowerRustValueConversion,
   planFinalizedSourceInput,
   planFinalizedTargetInput,
 } from "./conversions.js";
+export { applyRustArgumentMode } from "./input-shaping.js";
 export {
   planRustSelectedSourceCallArguments,
   requireProviderArgumentPassingFacts,

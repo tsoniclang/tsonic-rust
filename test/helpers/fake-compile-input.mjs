@@ -76,6 +76,11 @@ export function fakeCompileInput({
       moduleExports: () => [],
       memberDispatch: () => undefined,
       memberImplementation: () => ({ kind: "unrelated" }),
+      memberContracts: (declaration) => ({
+        kind: "resolved",
+        implementationDeclaration: declaration,
+        contracts: [],
+      }),
       callableImplementation: () => ({ kind: "unrelated" }),
       classConstructors: () => ({ kind: "resolved", constructors: [] }),
       declaredHeritage: () => ({ kind: "resolved", edges: [] }),
@@ -103,7 +108,7 @@ export function fakeCompileInput({
         hasUnclassifiedValueUse: false,
       }),
       parameterUseSummary: () => undefined,
-      expressionResultUse: () => ({ kind: "discarded" }),
+      expressionResultUse: () => "discarded",
       expressionEffects: () => ({
         invokes: false,
         mutates: false,

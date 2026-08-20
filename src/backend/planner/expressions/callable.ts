@@ -5,6 +5,8 @@ import {
 import {
   diagnosticInput,
   isValidRustIdentifier,
+  rustActiveErrorType,
+  rustCurrentErrorBoundary,
   rustSourceBindingPath,
 } from "../program/plan-context.js";
 import {
@@ -207,6 +209,17 @@ export function planCallableExpression(
   }
   const fallible = context.input.facts.getFact(node, rustFallibleFactKey) !== undefined;
   const resultIsFallible = callableProtocol !== undefined || fallible;
+  const callableErrorBoundary = resultIsFallible
+    ? context.fallibleBoundary ?? rustCurrentErrorBoundary(context)
+    : undefined;
+  if (resultIsFallible && callableErrorBoundary === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.closure-error-boundary",
+      "Callable expression has no exact source-package error boundary.",
+    ));
+    return undefined;
+  }
   if (resultIsFallible) {
     context.usedAliases?.add("rt");
   }
@@ -264,7 +277,7 @@ export function planCallableExpression(
     controlFlow: { nextLoopId: 0 },
     controlTargets: undefined,
     completionBoundary: undefined,
-    fallibleContext: resultIsFallible,
+    fallibleBoundary: callableErrorBoundary,
     asyncContext: false,
     generator: undefined,
     expressionOverrides,
@@ -411,8 +424,7 @@ export function planCallableExpression(
     }
     const resultBody = resultIsFallible
       ? applyRustFallibleResultExpression(body, {
-          errorDomain: context.errorDomain,
-          errorTypePath: "rt::TsonicError",
+          errorType: rustActiveErrorType(callableClosureContext)!,
         })
       : body;
     const closure: RustExpr = bindingStatements.length === 0 &&
@@ -484,12 +496,13 @@ export function planCallableExpression(
   const finalizedBlock = applyFallibleShape(applyRustTailShape(
     { statements: [...bindingStatements, ...block.statements] },
     !isRustUnitCarrier(resultCarrier),
-  ), {
-    fallible: resultIsFallible,
-    hasReturnValue: !isRustUnitCarrier(resultCarrier),
-    errorDomain: context.errorDomain,
-    errorTypePath: "rt::TsonicError",
-  });
+  ), resultIsFallible
+    ? {
+        fallible: true,
+        hasReturnValue: !isRustUnitCarrier(resultCarrier),
+        errorType: rustActiveErrorType(callableClosureContext)!,
+      }
+    : { fallible: false, hasReturnValue: !isRustUnitCarrier(resultCarrier) });
   const onlyStatement = finalizedBlock.statements.length === 1
     ? finalizedBlock.statements[0]
     : undefined;

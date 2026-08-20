@@ -25,6 +25,7 @@ import {
 } from "../../../analysis/program/source-output-identities.js";
 import { planRustProgramErrorModule } from "./errors.js";
 import { applyRustErrorBoundary } from "../types/error-boundary.js";
+import { rustTypeFromCarrier } from "../types/render.js";
 import { planRustStructuralShapeModule } from "../objects/structural-shapes.js";
 import { rustPublicSignatureTypeNames } from "../../rust-ast/source-style.js";
 import type {
@@ -38,7 +39,11 @@ import {
   planRustSourcePackageInitializers,
   type RustSourcePackageInitializerPlan,
 } from "./source-package-initializers.js";
-import { planRustExternalSourcePackageErrors } from "./source-package-errors.js";
+import {
+  planRustSourcePackageErrors,
+  rustSourcePackageErrorTypeIdentity,
+} from "./source-package-errors.js";
+import { planRustSourcePackageComponents } from "./source-package-components.js";
 
 export function planRustArtifacts(input: RustPlanningContext): RustArtifactPlanResult {
   const diagnostics: TargetDiagnostic[] = [];
@@ -58,58 +63,66 @@ export function planRustArtifacts(input: RustPlanningContext): RustArtifactPlanR
     [...identityPlan.identities].filter(([, identity]) =>
       identity.externalCrateName === undefined),
   );
-  const localSourceFileNames = Object.freeze(new Set(localIdentities.keys()));
   const facadeResult = planRustSourcePackageFacades(input, identityPlan.identities);
   diagnostics.push(...facadeResult.diagnostics);
   if (facadeResult.plan === undefined || diagnostics.length > 0) {
     return { artifacts: [], diagnostics };
   }
   const facadePlan = facadeResult.plan;
+  const componentResult = planRustSourcePackageComponents(
+    input,
+    identityPlan.identities,
+    facadePlan,
+  );
+  if (componentResult.kind === "rejected") {
+    return { artifacts: [], diagnostics: [...diagnostics, ...componentResult.diagnostics] };
+  }
+  const componentPlans = componentResult.components;
+  const rootComponentPlan = componentPlans.find((component) => component.root);
+  if (rootComponentPlan === undefined) {
+    return {
+      artifacts: [],
+      diagnostics: [...diagnostics, {
+        code: "RUST_SOURCE_PACKAGE_COMPONENT_ROOT_MISSING",
+        category: "error",
+        source: "tsonic-rust",
+        message: "Rust artifact planning has no exact root source-package component.",
+        evidence: ["target.capability=rust.backend.source-package-components"],
+      }],
+    };
+  }
   const initializerResult = planRustSourcePackageInitializers(input, identityPlan.identities);
   diagnostics.push(...initializerResult.diagnostics);
   if (initializerResult.plan === undefined || diagnostics.length > 0) {
     return { artifacts: [], diagnostics };
   }
   const packageInitializers = initializerResult.plan;
-  const externalErrorPlan = planRustExternalSourcePackageErrors(
+  const sourcePackageErrorResult = planRustSourcePackageErrors(
     input,
     identityPlan.identities,
-    facadePlan.rootComponentId,
+    componentPlans,
   );
-  diagnostics.push(...externalErrorPlan.diagnostics);
-  if (diagnostics.length > 0) {
+  diagnostics.push(...sourcePackageErrorResult.diagnostics);
+  if (sourcePackageErrorResult.plan === undefined || diagnostics.length > 0) {
     return { artifacts: [], diagnostics };
   }
-  const localProgramErrorDefinitions = input.projectTypes.programErrorDefinitions
-    .filter((definition) => localSourceFileNames.has(definition.fileName));
-  const localErrorDomain = localProgramErrorDefinitions.length === 0 &&
-      externalErrorPlan.errors.length === 0
-    ? "runtime" as const
-    : "project" as const;
-  const structuralShapesModuleName = allocateRustComponentSupportModuleName(
-    identityPlan.identities,
-    facadePlan.rootComponentId,
-    "shapes",
-  );
+  const sourcePackageErrors = sourcePackageErrorResult.plan;
+  const structuralShapesModuleName = rootComponentPlan.structuralShapesModuleName;
+  const componentPlanById = new Map(componentPlans.map((component) =>
+    [component.componentId, component] as const));
   const externalStructuralShapeModuleByFileName = new Map(
     [...identityPlan.identities].flatMap(([fileName, identity]) => {
       if (identity.externalCrateName === undefined) {
         return [];
       }
-      const moduleName = allocateRustComponentSupportModuleName(
-        identityPlan.identities,
-        identity.componentId,
-        "shapes",
-      );
-      return [[fileName, `${identity.externalCrateName}::${moduleName}`] as const];
+      const component = componentPlanById.get(identity.componentId);
+      return component === undefined
+        ? []
+        : [[fileName,
+          `${identity.externalCrateName}::${component.structuralShapesModuleName}`] as const];
     }),
   );
-  const programModuleName = allocateRustComponentSupportModuleName(
-    identityPlan.identities,
-    facadePlan.rootComponentId,
-    "program",
-    [structuralShapesModuleName],
-  );
+  const programModuleName = rootComponentPlan.programModuleName;
   const initializerFacadeModuleName = packageInitializers.facadeModuleNameByComponent.get(
     facadePlan.rootComponentId,
   );
@@ -129,24 +142,20 @@ export function planRustArtifacts(input: RustPlanningContext): RustArtifactPlanR
     "initialize",
     [structuralShapesModuleName, programModuleName, initializerFacadeModuleName],
   );
-  const plannedSources = reconstructRustSourceFiles(
+  const reconstructedSources = reconstructRustSourceFiles(
     input,
     identityPlan.identities,
     facadePlan.externalItemPathByIdentity,
     externalStructuralShapeModuleByFileName,
-    facadePlan.publicModuleNames,
-    facadePlan.publicImplementationItemIdentities,
-    localErrorDomain,
-    programModuleName,
-    structuralShapesModuleName,
+    componentPlans,
+    sourcePackageErrors,
     diagnostics,
   );
-  if (plannedSources === undefined) {
+  if (reconstructedSources === undefined) {
     return { artifacts: [], diagnostics };
   }
-  const rootPlannedSources = plannedSources.filter((source) =>
-    identityPlan.identities.get(input.ast.getFileName(source.sourceFile))?.componentId ===
-      facadePlan.rootComponentId);
+  const rootPlannedSources = reconstructedSources.rootSources;
+  const externalItemPathByIdentity = reconstructedSources.externalItemPathByIdentity;
   const facades = applyRustSourcePackageFacades(
     rootPlannedSources,
     facadePlan.rootExports,
@@ -160,7 +169,7 @@ export function planRustArtifacts(input: RustPlanningContext): RustArtifactPlanR
     input,
     moduleNameByFileName,
     externalCrateNameByFileName,
-    facadePlan.externalItemPathByIdentity,
+    externalItemPathByIdentity,
     externalStructuralShapeModuleByFileName,
     structuralShapesModuleName,
     facadePlan.rootComponentId,
@@ -199,6 +208,8 @@ export function planRustArtifacts(input: RustPlanningContext): RustArtifactPlanR
         facades.sources,
         initializationRoots,
         packageInitializers,
+        sourcePackageErrors,
+        facadePlan.rootComponentId,
         diagnostics,
       );
 
@@ -235,29 +246,54 @@ export function planRustArtifacts(input: RustPlanningContext): RustArtifactPlanR
   }));
   const activeEpilogues = input.providerSemantics.binaryEpilogues.filter((epilogue) =>
     activeCrates.has(epilogue.requiredCrate));
+  const epilogueErrorTypes = new Map<
+    (typeof activeEpilogues)[number],
+    import("../../rust-ast/nodes.js").RustType
+  >();
   for (const epilogue of activeEpilogues) {
     if (epilogue.errorBoundary === "provider-native") {
       registerRustProviderErrorCarrier(input, epilogue.errorCarrier);
+      const errorType = rustTypeFromCarrier(epilogue.errorCarrier);
+      if (errorType === undefined) {
+        diagnostics.push({
+          code: "RUST_PROVIDER_EPILOGUE_ERROR_TYPE_MISSING",
+          category: "error",
+          source: "tsonic-rust",
+          message: `Binary epilogue '${epilogue.path}' has no exact renderable provider error type.`,
+          evidence: ["target.capability=rust.error.provider-conversion"],
+        });
+      } else {
+        epilogueErrorTypes.set(epilogue, errorType);
+      }
     }
   }
+  const rootErrorDomain = sourcePackageErrors.domainsByComponentId.get(
+    facadePlan.rootComponentId,
+  )!;
+  const rootErrorTypeIdentity = rustSourcePackageErrorTypeIdentity(
+    facadePlan.rootComponentId,
+    rootErrorDomain.errorDomain,
+  );
   const programErrorModel = planRustProgramErrorModule(
     input,
     moduleNameByFileName,
-    localSourceFileNames,
-    externalErrorPlan.errors,
+    rootErrorDomain,
     diagnostics,
   );
   if (diagnostics.length > 0) {
     return { artifacts: [], diagnostics };
   }
-  const errorDomain = localErrorDomain;
+  const rootCrateErrorType: import("../../rust-ast/nodes.js").RustType = {
+    kind: "named",
+    path: programErrorModel === undefined
+      ? "tsonic_rust_runtime::TsonicError"
+      : `crate::${programModuleName}::TsonicError`,
+    identity: rootErrorTypeIdentity,
+  };
   const crateInitializer = planRustCrateInitializer(
     moduleInitializers ?? [],
     crateInitializerFunctionName,
-    programErrorModel === undefined
-      ? "tsonic_rust_runtime::TsonicResult"
-      : `crate::${programModuleName}::TsonicResult`,
-    errorDomain,
+    rootCrateErrorType,
   );
   const initializerFacadeModel = planRustInitializerFacadeModule(
     facades.sources,
@@ -290,8 +326,12 @@ export function planRustArtifacts(input: RustPlanningContext): RustArtifactPlanR
         : [{
             kind: "mod-decl" as const,
             name: structuralShapesModuleName,
-            visibility: "public" as const,
-            attrs: ["#[doc(hidden)]"],
+            visibility: publicStructuralShapeNames.size > 0
+              ? "public" as const
+              : "crate" as const,
+            ...(publicStructuralShapeNames.size > 0
+              ? { attrs: ["#[doc(hidden)]"] }
+              : {}),
           }]),
       ...(initializerFacadeModel === undefined
         ? []
@@ -304,7 +344,9 @@ export function planRustArtifacts(input: RustPlanningContext): RustArtifactPlanR
       ...sortedTopLevelModuleNames.map((name): RustItem => ({
         kind: "mod-decl",
         name,
-        visibility: facadePlan.publicTopLevelModules.has(name) ? "public" : "crate",
+        visibility: facadePlan.publicTopLevelModules.has(name)
+          ? "public"
+          : "crate",
       })),
       ...facades.rootItems,
       ...(entryFunction === undefined || binaryEntryExportName === undefined
@@ -366,6 +408,13 @@ export function planRustArtifacts(input: RustPlanningContext): RustArtifactPlanR
   }
   if (outputType === "bin" && entryFunction !== undefined) {
     const crateName = readRustCrateName(input.target);
+    const mainErrorType: import("../../rust-ast/nodes.js").RustType = {
+      kind: "named",
+      path: programErrorModel === undefined
+        ? "tsonic_rust_runtime::TsonicError"
+        : `${crateName}::${programModuleName}::TsonicError`,
+      identity: rootErrorTypeIdentity,
+    };
     const entryCall = {
       kind: "call" as const,
       path: `${crateName}::${binaryEntryExportName!}`,
@@ -382,10 +431,11 @@ export function planRustArtifacts(input: RustPlanningContext): RustArtifactPlanR
       ? []
       : [{
           kind: "expr" as const,
-          expr: crateInitializer.fallible
+          expr: crateInitializer.errorType !== undefined
             ? {
               kind: "try" as const,
-              errorDomain,
+              resultErrorType: mainErrorType,
+              operandErrorType: mainErrorType,
               expr: crateInitializer.asynchronous
                   ? {
                       kind: "call" as const,
@@ -428,22 +478,37 @@ export function planRustArtifacts(input: RustPlanningContext): RustArtifactPlanR
         expr: applyRustErrorBoundary(
           call,
           epilogue.errorBoundary,
-          errorDomain,
-          epilogue.errorCarrier,
+          mainErrorType,
+          epilogue.errorBoundary === "provider-native"
+            ? epilogueErrorTypes.get(epilogue)
+            : undefined,
         ),
       };
     });
     const mainFallible = entryFunction.fallible ||
-      crateInitializer?.fallible === true ||
+      crateInitializer?.errorType !== undefined ||
       activeEpilogues.some((epilogue) => epilogue.isFallible === true);
     const entryStatement = {
       kind: "expr" as const,
       expr: entryFunction.fallible
-        ? { kind: "try" as const, expr: entryExecution, errorDomain }
+        ? {
+            kind: "try" as const,
+            expr: entryExecution,
+            resultErrorType: mainErrorType,
+            operandErrorType: mainErrorType,
+          }
         : entryExecution,
     };
     const completionStatements = mainFallible
-      ? [{ kind: "tail" as const, expr: { kind: "path" as const, path: "Ok(())" } }]
+      ? [{
+          kind: "tail" as const,
+          expr: {
+            kind: "call" as const,
+            path: "Ok",
+            typeArguments: [{ kind: "unit" as const }, mainErrorType],
+            args: [{ kind: "path" as const, path: "()" }],
+          },
+        }]
       : [];
     const mainItem: RustItem = {
       kind: "function",
@@ -452,13 +517,7 @@ export function planRustArtifacts(input: RustPlanningContext): RustArtifactPlanR
       params: [],
       ...(mainFallible
         ? {
-            returnType: {
-              kind: "named" as const,
-              path: programErrorModel === undefined
-                ? "tsonic_rust_runtime::TsonicResult"
-                : `${crateName}::${programModuleName}::TsonicResult`,
-              typeArguments: [{ kind: "unit" as const }],
-            },
+            errorType: mainErrorType,
             body: { statements: [...initializationStatements, entryStatement, ...epilogueStatements, ...completionStatements] },
           }
         : { body: { statements: [...initializationStatements, entryStatement, ...epilogueStatements] } }),
@@ -506,7 +565,9 @@ function planSyntheticModuleArtifacts(
           .map((name): RustItem => ({
             kind: "mod-decl",
             name,
-            visibility: publicModuleNames.has(`${moduleName}::${name}`) ? "public" : "crate",
+            visibility: publicModuleNames.has(`${moduleName}::${name}`)
+              ? "public"
+              : "crate",
           })),
           ...(facade?.items ?? []),
         ],
@@ -537,10 +598,13 @@ function planRustInitializerFacadeModule(
     ))) {
     const source = sourceByFile.get(contract.sourceFile);
     const initialization = source?.moduleInitialization;
+    const initializerErrorContractMatches = contract.fallible
+      ? initialization?.errorBoundary?.componentId === contract.componentId
+      : initialization?.errorBoundary === undefined;
     if (source === undefined || initialization === undefined ||
       initialization.functionName !== contract.implementationFunctionName ||
       initialization.asynchronous !== contract.asynchronous ||
-      initialization.fallible !== contract.fallible) {
+      !initializerErrorContractMatches) {
       diagnostics.push({
         code: "RUST_SOURCE_PACKAGE_INITIALIZER_CONTRACT_MISMATCH",
         category: "error",

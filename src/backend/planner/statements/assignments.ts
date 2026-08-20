@@ -449,7 +449,7 @@ export function planRustSourceAccessorAssignment(
     );
     const finalizedRead = plannedRead === undefined
       ? undefined
-      : finishRustSourceAccessorCall(target, "read", plannedRead, context);
+      : finishRustSourceAccessorCall(target, read.declaration, "read", plannedRead, context);
     if (finalizedRead === undefined) {
       return undefined;
     }
@@ -493,7 +493,7 @@ export function planRustSourceAccessorAssignment(
   );
   const finalizedWrite = plannedWrite === undefined
     ? undefined
-    : finishRustSourceAccessorCall(target, "write", plannedWrite, context);
+    : finishRustSourceAccessorCall(target, write.declaration, "write", plannedWrite, context);
   return finalizedWrite === undefined
     ? undefined
     : [{ kind: "expr", expr: { kind: "block", bindings, value: finalizedWrite } }];

@@ -3,7 +3,13 @@ import { rustFallibleFactKey } from "../../../analysis/facts/keys.js";
 import type { RustExpr } from "../../rust-ast/nodes.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { isValidRustIdentifier, sourceModuleItemPath } from "../program/plan-context.js";
+import {
+  isValidRustIdentifier,
+  rustCurrentErrorBoundary,
+  rustErrorBoundaryForProjectMember,
+  rustErrorType,
+  sourceModuleItemPath,
+} from "../program/plan-context.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import { applyRustFallibleResultExpression } from "../types/fallible-shape.js";
@@ -55,11 +61,30 @@ export function planRustSourceCallableValue(
     value.sourceDeclaration,
     rustFallibleFactKey,
   ) !== undefined;
-  const callableResult = fallible
-    ? invocation
-    : applyRustFallibleResultExpression(invocation, {
-        errorDomain: context.errorDomain,
-      });
+  const currentBoundary = rustCurrentErrorBoundary(context);
+  const sourceBoundary = fallible
+    ? rustErrorBoundaryForProjectMember(value.sourceDeclaration, context)
+    : undefined;
+  if (currentBoundary === undefined || fallible && sourceBoundary === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, value.sourceDeclaration),
+      "rust.backend.callable-value-error-boundary",
+      "Project-source callable value has no exact error boundary.",
+    ));
+    return undefined;
+  }
+  const currentErrorType = rustErrorType(currentBoundary);
+  const callableResult = applyRustFallibleResultExpression(
+    fallible
+      ? {
+          kind: "try",
+          expr: invocation,
+          resultErrorType: currentErrorType,
+          operandErrorType: rustErrorType(sourceBoundary!),
+        }
+      : invocation,
+    { errorType: currentErrorType },
+  );
   const mutableArguments = value.argumentModes.some((mode) => mode === "mut-ref");
   const implementation: RustExpr = mutableArguments
     ? {

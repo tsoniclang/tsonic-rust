@@ -6,7 +6,12 @@ import {
   KindVariableDeclaration,
   KindVariableStatement,
 } from "@tsonic/target-api/source";
-import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath } from "../program/plan-context.js";
+import {
+  diagnosticInput,
+  isValidRustIdentifier,
+  registerAliasFromPath,
+  rustActiveErrorType,
+} from "../program/plan-context.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planStatementSequence } from "./core.js";
 import { planVariableStatement } from "./variable-declarations.js";
@@ -15,6 +20,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustBlock, RustExpr, RustStmt } from "../../rust-ast/nodes.js";
 import type { RustCompletionBoundary, RustControlTarget, RustPlanContext } from "../program/plan-context.js";
 import type { RustResourceManagementFact } from "../../../analysis/facts/keys.js";
+import { rustTypeFromCarrierInContext } from "../types/render.js";
 
 export function directResourceDeclaration(
   statement: Node,
@@ -100,7 +106,7 @@ export function resourceFactForPlanning(
     ));
     return undefined;
   }
-  if (fact.disposal.fallible && context.fallibleContext !== true) {
+  if (fact.disposal.fallible && context.fallibleBoundary === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, declaration),
       "rust.backend.resource-fallibility",
@@ -136,7 +142,7 @@ export function planResourceManagedBody(
   }
   const boundary = createRustCompletionBoundary(
     context,
-    context.fallibleContext === true,
+    context.fallibleBoundary !== undefined,
   );
   const body = planBody({ ...context, completionBoundary: boundary });
   const cleanupResourceName = allocateRustSyntheticName(
@@ -246,14 +252,27 @@ function planResourceCleanup(
     disposal = { kind: "await", expr: disposal };
   }
   if (fact.disposal.fallible) {
+    const resultErrorType = rustActiveErrorType(context);
+    const providerErrorType = fact.disposal.errorBoundary === "provider-native"
+      ? rustTypeFromCarrierInContext(fact.disposal.errorCarrier, context)
+      : undefined;
+    if (resultErrorType === undefined ||
+      fact.disposal.errorBoundary === "provider-native" && providerErrorType === undefined) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, context.sourceFile),
+        "rust.backend.resource-error-type",
+        "A fallible resource disposer has no exact result or provider error type.",
+      ));
+      return undefined;
+    }
     if (fact.disposal.errorBoundary === "provider-native") {
       registerRustProviderErrorCarrier(context.input, fact.disposal.errorCarrier);
     }
     disposal = applyRustErrorBoundary(
       disposal,
       fact.disposal.errorBoundary,
-      context.errorDomain,
-      fact.disposal.errorCarrier,
+      resultErrorType,
+      providerErrorType,
     );
   }
   const body: RustBlock = { statements: [{ kind: "expr", expr: disposal }] };

@@ -1,8 +1,9 @@
 import type { TargetTypeRef } from "../../../policy/types/model.js";
 import type { RustAssignmentOperator } from "../../model/syntax.js";
 import { isRustCopyCarrier } from "../../../policy/types/target-types.js";
-import type { RustErrorDomain, RustExpr, RustType } from "../../rust-ast/nodes.js";
+import type { RustExpr, RustType } from "../../rust-ast/nodes.js";
 import type { RustObjectRepresentation } from "../../../analysis/project-types/object-representation.js";
+import type { RustPlannedProjectFieldDispatchRole } from "./project-field-dispatch.js";
 
 export const rustProjectObjectStateField = "state";
 export const rustProjectObjectIdentityField = "identity";
@@ -523,11 +524,7 @@ function rustStructuralObjectStatePath(
 export function readRustProjectDispatchedField(
   receiver: RustExpr,
   readSlot: string,
-  role: {
-    readonly selfMode: "ref" | "rc";
-    readonly fallible: boolean;
-    readonly errorDomain: RustErrorDomain;
-  } = { selfMode: "ref", fallible: false, errorDomain: "runtime" },
+  role: RustPlannedProjectFieldDispatchRole = { selfMode: "ref", fallible: false },
 ): RustExpr {
   const dispatch: RustExpr = {
     kind: "field",
@@ -543,7 +540,12 @@ export function readRustProjectDispatchedField(
     args: [],
   };
   return role.fallible
-    ? { kind: "try", expr: call, errorDomain: role.errorDomain }
+    ? {
+        kind: "try",
+        expr: call,
+        resultErrorType: role.resultErrorType,
+        operandErrorType: role.operandErrorType,
+      }
     : call;
 }
 
@@ -555,19 +557,11 @@ export function writeRustProjectDispatchedField(
   operator: RustAssignmentOperator,
   value: RustExpr,
   roles: {
-    readonly read: {
-      readonly selfMode: "ref" | "rc";
-      readonly fallible: boolean;
-    };
-    readonly write: {
-      readonly selfMode: "ref" | "rc";
-      readonly fallible: boolean;
-    };
-    readonly errorDomain: RustErrorDomain;
+    readonly read: RustPlannedProjectFieldDispatchRole;
+    readonly write: RustPlannedProjectFieldDispatchRole;
   } = {
     read: { selfMode: "ref", fallible: false },
     write: { selfMode: "ref", fallible: false },
-    errorDomain: "runtime",
   },
 ): RustExpr {
   const selectedReceiver: RustExpr = { kind: "path", path: receiverBinding };
@@ -576,10 +570,7 @@ export function writeRustProjectDispatchedField(
     : {
         kind: "binary" as const,
         operator: operator.slice(0, -1) as "+" | "-" | "*" | "/" | "%",
-        left: readRustProjectDispatchedField(selectedReceiver, readSlot, {
-          ...roles.read,
-          errorDomain: roles.errorDomain,
-        }),
+        left: readRustProjectDispatchedField(selectedReceiver, readSlot, roles.read),
         right: value,
       };
   const dispatch: RustExpr = {
@@ -599,7 +590,12 @@ export function writeRustProjectDispatchedField(
     kind: "block",
     bindings: [{ name: receiverBinding, value: receiver }],
     value: roles.write.fallible
-      ? { kind: "try", expr: writeCall, errorDomain: roles.errorDomain }
+      ? {
+          kind: "try",
+          expr: writeCall,
+          resultErrorType: roles.write.resultErrorType,
+          operandErrorType: roles.write.operandErrorType,
+        }
       : writeCall,
   };
 }

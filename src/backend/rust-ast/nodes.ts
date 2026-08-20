@@ -8,12 +8,13 @@ import type {
 } from "../model/syntax.js";
 
 export type RustType =
+  | { readonly kind: "infer" }
   | { readonly kind: "primitive"; readonly name: RustPrimitiveTypeName }
   | { readonly kind: "string" }
   | { readonly kind: "str-ref" }
   | { readonly kind: "unit" }
   | { readonly kind: "never" }
-  | { readonly kind: "named"; readonly path: string; readonly lifetimeArguments?: readonly string[]; readonly typeArguments?: readonly RustType[] }
+  | { readonly kind: "named"; readonly path: string; readonly identity?: string; readonly lifetimeArguments?: readonly string[]; readonly typeArguments?: readonly RustType[] }
   | { readonly kind: "trait-object"; readonly trait: RustType }
   | { readonly kind: "reference"; readonly referent: RustType; readonly mutable: boolean }
   | { readonly kind: "raw-pointer"; readonly pointee: RustType; readonly mutable: boolean }
@@ -109,7 +110,8 @@ export type RustExpr =
   | {
       readonly kind: "try";
       readonly expr: RustExpr;
-      readonly errorDomain: RustErrorDomain;
+      readonly resultErrorType: RustType;
+      readonly operandErrorType: RustType;
     }
   | { readonly kind: "return-expression"; readonly expr?: RustExpr }
   | { readonly kind: "unreachable"; readonly message: string }
@@ -234,7 +236,7 @@ export interface RustImplFunction {
   readonly attrs?: readonly string[];
   readonly isAsync?: boolean;
   readonly isUnsafe?: boolean;
-  readonly fallible?: boolean;
+  readonly errorType?: RustType;
   readonly typeParams?: readonly RustTypeParameter[];
   readonly selfParam?: RustSelfParam;
   readonly params: readonly RustFunctionParam[];
@@ -246,7 +248,7 @@ export interface RustTraitFunction {
   readonly name: string;
   readonly attrs?: readonly string[];
   readonly isUnsafe?: boolean;
-  readonly fallible?: boolean;
+  readonly errorType?: RustType;
   readonly selfParam?: RustSelfParam;
   readonly params: readonly RustFunctionParam[];
   readonly returnType?: RustType;
@@ -260,7 +262,7 @@ export type RustItem =
       readonly attrs?: readonly string[];
       readonly isAsync?: boolean;
       readonly isUnsafe?: boolean;
-      readonly fallible?: boolean;
+      readonly errorType?: RustType;
       readonly typeParams?: readonly RustTypeParameter[];
       readonly params: readonly RustFunctionParam[];
       readonly returnType?: RustType;
@@ -288,7 +290,7 @@ export type RustItem =
   | { readonly kind: "trait"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly string[]; readonly typeParams?: readonly RustTypeParameter[]; readonly superTraits?: readonly RustType[]; readonly functions: readonly RustTraitFunction[] }
   | { readonly kind: "impl"; readonly typeParams?: readonly RustTypeParameter[]; readonly trait?: RustType; readonly target: RustType; readonly functions: readonly RustImplFunction[] }
   | { readonly kind: "enum"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly string[]; readonly derives: readonly string[]; readonly variants: readonly { readonly name: string; readonly discriminant?: string; readonly fields?: readonly RustType[] }[] }
-  | { readonly kind: "type-alias"; readonly name: string; readonly visibility: RustVisibility; readonly typeParams?: readonly RustTypeParameter[]; readonly target: RustType }
+  | { readonly kind: "type-alias"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly string[]; readonly typeParams?: readonly RustTypeParameter[]; readonly target: RustType }
   | { readonly kind: "use"; readonly path: string; readonly alias?: string; readonly visibility?: RustVisibility };
 
 export interface RustSourceFileModel {

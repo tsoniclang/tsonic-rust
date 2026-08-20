@@ -1,5 +1,6 @@
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustPlanningContext } from "../context.js";
+import { rustRuntimeErrorTypeIdentity } from "./source-package-errors.js";
 import { rustTypeFromCarrier } from "../types/render.js";
 import { rustJsErrorTargetType, rustProgramErrorTargetType } from "../../../policy/types/target-types.js";
 import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
@@ -11,7 +12,6 @@ import {
   type RustSourceFileModel,
   type RustType,
 } from "../../rust-ast/nodes.js";
-import type { RustExternalSourcePackageError } from "./source-package-errors.js";
 
 const programErrorName = "TsonicError";
 const programResultName = "TsonicResult";
@@ -20,6 +20,7 @@ const programErrorType: RustType = { kind: "named", path: programErrorName };
 const runtimeErrorType: RustType = {
   kind: "named",
   path: "tsonic_rust_runtime::TsonicError",
+  identity: rustRuntimeErrorTypeIdentity,
 };
 const runtimeJsErrorType: RustType = {
   kind: "named",
@@ -66,12 +67,11 @@ function path(name: string): RustExpr {
 export function planRustProgramErrorModule(
   input: RustPlanningContext,
   moduleNameByFileName: ReadonlyMap<string, string>,
-  includedFileNames: ReadonlySet<string>,
-  externalPackageErrors: readonly RustExternalSourcePackageError[],
+  domain: import("./source-package-errors.js").RustSourcePackageErrorDomainPlan,
   diagnostics: TargetDiagnostic[],
 ): RustSourceFileModel | undefined {
-  const definitions = input.projectTypes.programErrorDefinitions.filter((definition) =>
-    includedFileNames.has(definition.fileName));
+  const definitions = domain.definitions;
+  const externalPackageErrors = domain.externalErrors;
   if (definitions.length === 0 && externalPackageErrors.length === 0) {
     return undefined;
   }
@@ -100,25 +100,10 @@ export function planRustProgramErrorModule(
     return undefined;
   }
   const exactProjectVariants = projectVariants.filter((variant) => variant !== undefined);
-  const usedVariantNames = new Set([
-    "Runtime",
-    "Suppressed",
-    ...exactProjectVariants.map(({ variant }) => variant),
-  ]);
-  const externalVariants = externalPackageErrors.map((external) => {
-    let variant = external.preferredVariantName;
-    let suffix = 2;
-    while (usedVariantNames.has(variant)) {
-      variant = `${external.preferredVariantName}${suffix}`;
-      suffix += 1;
-    }
-    usedVariantNames.add(variant);
-    return Object.freeze({
-      ...external,
-      variant,
-      type: namedType(external.typePath),
-    });
-  });
+  const externalVariants = externalPackageErrors.map((external) => Object.freeze({
+    ...external,
+    type: namedType(external.typePath),
+  }));
   const providerErrorTypes: RustType[] = [];
   for (const carrier of input.providerErrorCarriers) {
     if (rustTargetTypeRefEquals(carrier, rustJsErrorTargetType()) ||

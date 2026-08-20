@@ -5,6 +5,7 @@ import {
 import {
   diagnosticInput,
   isValidRustIdentifier,
+  rustActiveErrorType,
   rustSourceBindingPath,
   sourceTypePath,
 } from "../program/plan-context.js";
@@ -60,6 +61,7 @@ import {
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { applyFinalizedValueConversion, finishProviderOperationExpression, planProviderOperationExpression } from "./conversions.js";
 import { applyRustErrorBoundary } from "../types/error-boundary.js";
+import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { registerRustProviderErrorCarrier } from "../context.js";
 import { expressionCarrier, planBigIntLiteral, planDeleteExpression, planGeneratorResumeExpression, planNumericLiteral, planSourceConversion, planTemplateExpression, requireExpressionCarrier, rustOperationFact, selectedOperationMatches } from "./fundamentals.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
@@ -172,7 +174,14 @@ export function planExpressionInner(
           ));
           return undefined;
         }
-        const planned = planProviderOperationExpression(context, identifierFact, undefined, [], node);
+        const planned = planProviderOperationExpression(
+          context,
+          identifierFact,
+          undefined,
+          [],
+          node,
+          { resultUse: "value" },
+        );
         if (planned === undefined) {
           context.diagnostics.push(unsupportedConstructDiagnostic(
             diagnosticInput(context, node),
@@ -444,7 +453,8 @@ export function planExpressionInner(
         return undefined;
       }
       if (future.awaiting === "fallible") {
-        if (context.fallibleContext !== true) {
+        const activeErrorType = rustActiveErrorType(context);
+        if (activeErrorType === undefined) {
           context.diagnostics.push(unsupportedConstructDiagnostic(
             diagnosticInput(context, node),
             "rust.error.call",
@@ -466,8 +476,8 @@ export function planExpressionInner(
         awaited = applyRustErrorBoundary(
           awaited,
           future.errorBoundary,
-          context.errorDomain,
-          future.errorCarrier,
+          activeErrorType,
+          rustTypeFromCarrierInContext(future.errorCarrier, context),
         );
       }
       const converted = applyFinalizedValueConversion(

@@ -5,13 +5,14 @@ import {
   projectOwnFields,
   projectOwnMethods,
 } from "./model.js";
-import { projectAccessorCallableShape, projectDowncastReturnType } from "./forwarders.js";
+import { projectAccessorCallableShape } from "./forwarders.js";
 import { rustCallableSpecialization } from "../../declarations/callable-generics.js";
 import { rustLintAttributes } from "../../../rust-ast/lint-policy.js";
 import { rustProjectDispatchTraitName, rustProjectDispatchTraitType, rustProjectTypeParameters } from "./names.js";
 import { rustProjectObjectIdentityField } from "../project-objects.js";
 import type { RustItem, RustTraitFunction, RustType } from "../../../rust-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
+import { rustErrorBoundaryForProjectMember, rustErrorType } from "../../program/plan-context.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
 import type { TargetTypeRef } from "../../../../policy/types/model.js";
 
@@ -21,6 +22,41 @@ export function projectIdentityImplementations(
 ): readonly RustItem[] {
   const typeParams = rustProjectTypeParameters(definition);
   return [
+    {
+      kind: "impl",
+      ...(typeParams.length === 0 ? {} : { typeParams }),
+      trait: { kind: "named", path: "std::fmt::Debug" },
+      target: wrapperType,
+      functions: [{
+        name: "fmt",
+        visibility: "private",
+        selfParam: "ref",
+        params: [{
+          name: "formatter",
+          type: {
+            kind: "reference",
+            mutable: true,
+            referent: {
+              kind: "named",
+              path: "std::fmt::Formatter",
+              lifetimeArguments: ["_"],
+            },
+          },
+        }],
+        returnType: { kind: "named", path: "std::fmt::Result" },
+        body: {
+          statements: [{
+            kind: "tail",
+            expr: {
+              kind: "method-call",
+              receiver: { kind: "path", path: "formatter" },
+              method: "write_str",
+              args: [{ kind: "str-literal", value: definition.targetName }],
+            },
+          }],
+        },
+      }],
+    },
     {
       kind: "impl",
       ...(typeParams.length === 0 ? {} : { typeParams }),
@@ -80,18 +116,6 @@ export function planProjectDispatchTrait(
     return undefined;
   }
   const functions: RustTraitFunction[] = [];
-  for (const route of context.input.projectTypes.downcastRoutesFor(definition)) {
-    const returnType = projectDowncastReturnType(route, context);
-    if (returnType === undefined) {
-      return undefined;
-    }
-    functions.push({
-      name: route.slot,
-      selfParam: "rc",
-      params: [],
-      returnType,
-    });
-  }
   for (const field of fields) {
     const dispatch = context.input.projectFieldDispatch.planFor(field.declaration);
     const read = context.input.projectTypes.memberSlotName(field.declaration, "read");
@@ -102,19 +126,30 @@ export function planProjectDispatchTrait(
       dispatch.write !== undefined && write === undefined) {
       return undefined;
     }
+    const fieldErrorBoundary = dispatch.read.fallible || dispatch.write?.fallible === true
+      ? rustErrorBoundaryForProjectMember(field.declaration, context)
+      : undefined;
+    if ((dispatch.read.fallible || dispatch.write?.fallible === true) &&
+      fieldErrorBoundary === undefined) {
+      return undefined;
+    }
     functions.push({
       name: read,
       selfParam: dispatch.read.selfMode,
       params: [],
       returnType: field.type,
-      ...(dispatch.read.fallible ? { fallible: true } : {}),
+      ...(dispatch.read.fallible
+        ? { errorType: rustErrorType(fieldErrorBoundary!) }
+        : {}),
     });
     if (dispatch.write !== undefined) {
       functions.push({
         name: write!,
         selfParam: dispatch.write.selfMode,
         params: [{ name: "value", type: field.type }],
-        ...(dispatch.write.fallible ? { fallible: true } : {}),
+        ...(dispatch.write.fallible
+          ? { errorType: rustErrorType(fieldErrorBoundary!) }
+          : {}),
       });
     }
   }
@@ -138,7 +173,7 @@ export function planProjectDispatchTrait(
       selfParam: "rc",
       params: shape.params.map((parameter) => ({ ...parameter, mutable: false })),
       ...(shape.returnType === undefined ? {} : { returnType: shape.returnType }),
-      ...(shape.fallible ? { fallible: true } : {}),
+      ...(shape.errorType === undefined ? {} : { errorType: shape.errorType }),
       ...(shape.isUnsafe ? { isUnsafe: true } : {}),
     });
   }
@@ -162,7 +197,7 @@ export function planProjectDispatchTrait(
         selfParam: "rc",
         params: shape.params.map((parameter) => ({ ...parameter, mutable: false })),
         ...(shape.returnType === undefined ? {} : { returnType: shape.returnType }),
-        ...(shape.fallible ? { fallible: true } : {}),
+        ...(shape.errorType === undefined ? {} : { errorType: shape.errorType }),
         ...(shape.isUnsafe ? { isUnsafe: true } : {}),
       });
       functions.push(signature(variant.virtualSlot));
@@ -192,11 +227,16 @@ export function planProjectDispatchTrait(
       params: [{ name: "value", type: property.callableType }],
     });
   }
-  const superTraits = context.input.projectTypes.heritageForDefinition(definition).map((edge) =>
+  const inheritedTraits = context.input.projectTypes.heritageForDefinition(definition).map((edge) =>
     rustProjectDispatchTraitType(edge.targetType, context));
-  if (superTraits.some((type) => type === undefined)) {
+  if (inheritedTraits.some((type) => type === undefined)) {
     return undefined;
   }
+  context.usedAliases?.add("rt");
+  const superTraits: readonly RustType[] = [
+    { kind: "named", path: "rt::ProjectObject" },
+    ...inheritedTraits as readonly RustType[],
+  ];
   const typeParams = rustProjectTypeParameters(definition);
   return {
     kind: "trait",
@@ -204,7 +244,7 @@ export function planProjectDispatchTrait(
     visibility: "crate",
     attrs: [rustLintAttributes.deadCode],
     ...(typeParams.length === 0 ? {} : { typeParams }),
-    ...(superTraits.length === 0 ? {} : { superTraits: superTraits as readonly RustType[] }),
+    superTraits,
     functions,
   };
 }

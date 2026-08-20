@@ -192,7 +192,7 @@ export async function roundtrip(dir: string, file: string): Promise<int32> {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub async fn roundtrip\(dir: String, file: String\) -> rt::TsonicResult<i32> \{/u);
+  assert.match(text, /pub async fn roundtrip\(dir: String, file: String\) -> Result<i32, rt::TsonicError> \{/u);
   assert.match(text, /tsonic_rust_node::fs_promises::mkdir_async\(&dir, true\)\.await\?/u);
   assert.match(text, /tsonic_rust_node::fs_promises::read_file_string_async\(&file, "utf8"\)\.await\?/u);
   validateGeneratedProject("r7-async-fs-lib", result.artifacts);

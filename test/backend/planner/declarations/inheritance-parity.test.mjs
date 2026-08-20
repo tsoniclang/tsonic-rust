@@ -83,6 +83,39 @@ export function main(): void {
   assert.equal(run.status, 0, run.stderr || run.stdout);
 });
 
+test("polymorphic wrappers provide closed Debug support to containing value classes", { timeout: 300_000 }, () => {
+  const { result } = compileExecutable({
+    "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+class TemplateNode {}
+
+class TextNode extends TemplateNode {}
+
+class ParseResult {
+  nodes: TemplateNode[] = [];
+
+  value(): int32 {
+    return 1;
+  }
+}
+
+export function main(): void {
+  const result = new ParseResult();
+  check(result.value() === 1);
+}
+`,
+  }, "rust_polymorphic_debug_proof");
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /impl std::fmt::Debug for TemplateNode/u);
+  assert.match(source, /formatter\.write_str\("TemplateNode"\)/u);
+  const run = validateGeneratedProject("polymorphic-debug", result.artifacts, { run: true });
+  assert.equal(run.status, 0, run.stderr || run.stdout);
+});
+
 test("project interfaces retain exact implementation identity and inherited contracts", { timeout: 300_000 }, () => {
   const { result } = compileExecutable({
     "index.ts": `

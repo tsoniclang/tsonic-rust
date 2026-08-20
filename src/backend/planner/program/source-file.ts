@@ -18,6 +18,7 @@ import {
 import {
   createRustSourceFile,
 } from "../../rust-ast/nodes.js";
+import { rustItemsReferenceModuleAlias } from "../../rust-ast/source-module-usage.js";
 import type {
   RustItem,
   RustSourceFileModel,
@@ -37,6 +38,8 @@ import {
   diagnosticInput,
   isUpperSnakeName,
   isValidRustIdentifier,
+  rustCurrentErrorBoundary,
+  rustErrorType,
   rustSourceItemIsPubliclyReachable,
   rustRuntimeAliasImports,
 } from "./plan-context.js";
@@ -69,6 +72,7 @@ import { planRustClassInitialization } from "../declarations/class-static-fields
 import { createRustObjectLiteralImplementationRegistry } from "../objects/object-literal-implementations.js";
 import { planRustSourceCallableValue } from "../expressions/source-callable-value.js";
 import { rustModuleInitializerFunctionName } from "./source-package-initializers.js";
+import type { RustSourcePackageErrorPlan } from "./source-package-errors.js";
 
 export interface PlannedRustSourceFile {
   readonly sourceFile: SourceFile;
@@ -77,13 +81,14 @@ export interface PlannedRustSourceFile {
   readonly moduleInitialization?: {
     readonly functionName: string;
     readonly asynchronous: boolean;
-    readonly fallible: boolean;
+    readonly errorBoundary?: import("./source-package-errors.js").RustSourcePackageErrorBoundary;
   };
 }
 
 export function planRustSourceFile(
   sourceFile: SourceFile,
   moduleName: string,
+  sourcePackageComponentId: string,
   crateName: string | undefined,
   moduleNameByFileName: ReadonlyMap<string, string>,
   externalCrateNameByFileName: ReadonlyMap<string, string>,
@@ -95,6 +100,7 @@ export function planRustSourceFile(
   publicModuleNames: ReadonlySet<string>,
   publicImplementationItemIdentities: ReadonlySet<string>,
   errorDomain: import("../../rust-ast/nodes.js").RustErrorDomain,
+  sourcePackageErrors: RustSourcePackageErrorPlan,
   input: RustPlanningContext,
   diagnostics: TargetDiagnostic[],
 ): PlannedRustSourceFile {
@@ -104,6 +110,7 @@ export function planRustSourceFile(
   const context: RustPlanContext = {
     input,
     sourceFile,
+    sourcePackageComponentId,
     moduleName,
     ...(crateName === undefined ? {} : { crateName }),
     moduleNameByFileName,
@@ -115,6 +122,7 @@ export function planRustSourceFile(
     publicImplementationItemIdentities,
     diagnostics,
     errorDomain,
+    sourcePackageErrors,
     usedAliases,
     planBlock: planBlockLike,
   };
@@ -137,7 +145,10 @@ export function planRustSourceFile(
         : "Planning produced a module initializer although finalized module facts prove initialization unnecessary.",
     ));
   }
-  const aliases = Object.freeze(new Set(usedAliases));
+  const aliases = Object.freeze(new Set(
+    [...usedAliases].filter((alias) =>
+      rustItemsReferenceModuleAlias(plannedModule.items, alias)),
+  ));
   const useItems: RustItem[] = [...aliases]
     .sort((left, right) => left.localeCompare(right, "en"))
     .map((alias) => alias === "rt" && errorDomain === "project"
@@ -146,18 +157,19 @@ export function planRustSourceFile(
     .filter((entry): entry is { path: string; alias: string } =>
       entry !== undefined)
     .map((entry) => ({ kind: "use", path: entry.path, alias: entry.alias }));
+  const model = createRustSourceFile([
+    ...useItems,
+    ...childModuleNames.map((name): RustItem => ({
+      kind: "mod-decl",
+      name,
+      visibility: publicModuleNames.has(`${moduleName}::${name}`) ? "public" : "crate",
+    })),
+    ...plannedModule.items,
+  ]);
   return Object.freeze({
     sourceFile,
     moduleName,
-    model: createRustSourceFile([
-      ...useItems,
-      ...childModuleNames.map((name): RustItem => ({
-        kind: "mod-decl",
-        name,
-        visibility: publicModuleNames.has(`${moduleName}::${name}`) ? "public" : "crate",
-      })),
-      ...plannedModule.items,
-    ]),
+    model,
     ...(plannedModule.initialization === undefined
       ? {}
       : { moduleInitialization: plannedModule.initialization }),
@@ -169,7 +181,7 @@ interface PlannedRustModuleItems {
   readonly initialization?: {
     readonly functionName: string;
     readonly asynchronous: boolean;
-    readonly fallible: boolean;
+    readonly errorBoundary?: import("./source-package-errors.js").RustSourcePackageErrorBoundary;
   };
 }
 
@@ -199,13 +211,22 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
     context.sourceFile,
     rustFallibleFactKey,
   ) !== undefined;
+  const errorBoundary = fallible ? rustCurrentErrorBoundary(context) : undefined;
+  if (fallible && errorBoundary === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, context.sourceFile),
+      "rust.backend.module-initializer-error-boundary",
+      "Module initializer has no exact source-package error boundary.",
+    ));
+    return { items };
+  }
   const initializationContext: RustPlanContext = {
     ...context,
     syntheticNames,
     controlFlow: { nextLoopId: 0 },
     functionReturnType: { kind: "unit" },
     ...(asynchronous ? { asyncContext: true } : {}),
-    ...(fallible ? { fallibleContext: true } : {}),
+    ...(errorBoundary === undefined ? {} : { fallibleBoundary: errorBoundary }),
   };
   for (const statement of ast.statements(context.sourceFile)) {
     if (statement === undefined) {
@@ -402,7 +423,7 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
   const initialization: NonNullable<PlannedRustModuleItems["initialization"]> = {
     functionName: initializationFunctionName,
     asynchronous,
-    fallible,
+    ...(errorBoundary === undefined ? {} : { errorBoundary }),
   };
   items.push({
     kind: "function",
@@ -412,15 +433,13 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
       "#[doc(hidden)]",
     ],
     ...(asynchronous ? { isAsync: true } : {}),
-    ...(fallible ? { fallible: true } : {}),
+    ...(errorBoundary === undefined ? {} : { errorType: rustErrorType(errorBoundary) }),
     params: [],
     body: applyFallibleShape(
       { statements: initializationStatements },
-      {
-        fallible,
-        hasReturnValue: false,
-        errorDomain: context.errorDomain,
-      },
+      fallible
+        ? { fallible: true, hasReturnValue: false, errorType: rustErrorType(errorBoundary!) }
+        : { fallible: false, hasReturnValue: false },
     ),
   });
   return { items, initialization };
@@ -528,7 +547,8 @@ function planTopLevelVariableStatement(
       ));
       return undefined;
     }
-    const visibility = ast.hasModifierKind(statement, "export")
+    const visibility = ast.hasModifierKind(statement, "export") ||
+        rustSourceItemIsPubliclyReachable(context, name)
       ? "public" as const
       : "crate" as const;
     if (binding.storage === "native-callable") {

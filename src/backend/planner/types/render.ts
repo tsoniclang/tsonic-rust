@@ -282,9 +282,12 @@ export function rustTypeFromCarrierInContext(
     const externalShapeModule = context.externalStructuralShapeModuleByFileName.get(
       definition.ownerFileName,
     );
+    const externalShapeCrate = context.externalCrateNameByFileName.get(
+      definition.ownerFileName,
+    );
     const stateType: RustType = {
       kind: "named",
-      path: externalShapeModule !== undefined
+      path: externalShapeModule !== undefined && externalShapeCrate !== context.crateName
         ? `${externalShapeModule}::${definition.targetName}`
         : context.moduleName === context.structuralShapesModuleName
         ? definition.targetName

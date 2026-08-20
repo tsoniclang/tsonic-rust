@@ -80,9 +80,6 @@ export function createRustProjectTypePolicyRegistry(): RustProjectTypePolicyRegi
     concreteClassesFor(definition) {
       return requireCurrent().concreteClassesFor(definition);
     },
-    downcastRoutesFor(definition) {
-      return requireCurrent().downcastRoutesFor(definition);
-    },
     downcastRoute(source, targetCarrier) {
       return requireCurrent().downcastRoute(source, targetCarrier);
     },

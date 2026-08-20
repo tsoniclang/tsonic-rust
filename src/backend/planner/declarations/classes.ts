@@ -4,6 +4,8 @@ import { createRustProjectObject, rustProjectObjectStateField, rustProjectObject
 import {
   diagnosticInput,
   isValidRustIdentifier,
+  rustErrorBoundaryForDeclaration,
+  rustErrorType,
   rustLocalBindingName,
   rustSourceItemIsPubliclyReachable,
 } from "../program/plan-context.js";
@@ -367,7 +369,9 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     kind: "struct",
     name: className,
     ...(generatedStructAttributes.length === 0 ? {} : { attrs: generatedStructAttributes }),
-    visibility: exported ? "public" : "crate",
+    visibility: exported || rustSourceItemIsPubliclyReachable(context, className)
+      ? "public"
+      : "crate",
     derives: ["Clone", "Debug", "PartialEq"],
     ...(typeParams.length === 0 ? {} : { typeParams }),
     fields: structFields,
@@ -436,6 +440,17 @@ function planConstructor(
     member ?? classDeclaration,
     rustFallibleFactKey,
   ) !== undefined;
+  const errorBoundary = fallible
+    ? rustErrorBoundaryForDeclaration(member ?? classDeclaration, context)
+    : undefined;
+  if (fallible && errorBoundary === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, member ?? classDeclaration),
+      "rust.backend.constructor-error-boundary",
+      "Constructor has no exact source-package error boundary.",
+    ));
+    return undefined;
+  }
   if (fallible) {
     context.usedAliases?.add("rt");
   }
@@ -444,7 +459,7 @@ function planConstructor(
     syntheticNames,
     controlFlow: { nextLoopId: 0 },
     functionReturnType: classType,
-    ...(fallible ? { fallibleContext: true } : {}),
+    ...(errorBoundary === undefined ? {} : { fallibleBoundary: errorBoundary }),
   };
   const parameterStatements = planRustCallableParameterPrelude(
     parameterPlan,
@@ -569,15 +584,16 @@ function planConstructor(
       ? "public"
       : "private",
     ...(constructorAttributes.length === 0 ? {} : { attrs: constructorAttributes }),
-    ...(fallible ? { fallible: true } : {}),
+    ...(errorBoundary === undefined ? {} : { errorType: rustErrorType(errorBoundary) }),
     params,
     returnType: classType,
     body: {
-      ...applyFallibleShape({ statements }, {
-        fallible,
-        hasReturnValue: true,
-        errorDomain: context.errorDomain,
-      }),
+      ...applyFallibleShape(
+        { statements },
+        fallible
+          ? { fallible: true, hasReturnValue: true, errorType: rustErrorType(errorBoundary!) }
+          : { fallible: false, hasReturnValue: true },
+      ),
     },
   };
 }

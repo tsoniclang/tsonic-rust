@@ -140,6 +140,37 @@ test("rustfmt-stable calls, closures, conditionals, and borrowed fallible chains
           kind: "expr",
           expr: {
             kind: "call",
+            path: "rt::option_coalesce",
+            args: [{
+              kind: "method-call",
+              receiver: { kind: "path", path: "value" },
+              method: "with",
+              args: [{
+                kind: "closure",
+                params: [{ name: "state", mutable: false }],
+                body: {
+                  kind: "field",
+                  receiver: { kind: "path", path: "state" },
+                  name: "id",
+                },
+              }],
+            }, {
+              kind: "path",
+              path: "Ok",
+            }, {
+              kind: "closure",
+              params: [],
+              body: {
+                kind: "call",
+                path: "tsonic_rust_runtime::conversions::f64_to_i32",
+                args: [{ kind: "float-literal", text: "0.0" }],
+              },
+            }],
+          },
+        }, {
+          kind: "expr",
+          expr: {
+            kind: "call",
             path: "call_bound",
             args: [{ kind: "path", path: "receiver" }, {
               kind: "associated-call",
@@ -200,6 +231,10 @@ test("rustfmt-stable calls, closures, conditionals, and borrowed fallible chains
   );
   assert.match(source, /rt::source_string\(&callable\.call\(\(\n/u);
   assert.doesNotMatch(source, /rt::source_string\(&callable\n {8}\.call/u);
+  assert.match(
+    source,
+    /rt::option_coalesce\(value\.with\(\|state\| state\.id\), Ok, \|\| \{\n {8}tsonic_rust_runtime::conversions::f64_to_i32\(0\.0\)\n {4}\}\);/u,
+  );
   assert.match(
     source,
     /rt::Callable::<\(i32, Option<String>\), rt::TsonicResult<String>>::new\(/u,

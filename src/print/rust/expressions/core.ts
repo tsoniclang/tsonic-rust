@@ -1,7 +1,8 @@
 import { escapeRustString, printRustMatchExpression, printRustPattern } from "../patterns.js";
 import { expressionIsRightHandBlock, printBinaryOperand, printOperand, RustPrecedence } from "./precedence.js";
 import { printRustAssociatedCallOwner, printRustBlockExpressionInlineContents, printRustConditionalArmInline } from "./blocks.js";
-import { printRustAssociatedOwner, printRustCallTypeArguments, rustMethodChainPrefersVerticalLayout } from "./chains.js";
+import { printRustAssociatedOwner, rustMethodChainPrefersVerticalLayout } from "./chains.js";
+import { printRustAssociatedCallTarget, printRustDirectCallTarget, printRustMethodCallTarget } from "./callable.js";
 import { printRustBlockStatements } from "../blocks.js";
 import { printRustClosureParams } from "./closure-params.js";
 import { printRustType } from "../types.js";
@@ -64,7 +65,7 @@ export function printRustExpr(expression: RustExpr): string {
       return `${printRustExpr(expression.target)} ${expression.operator} ${printRustExpr(expression.value)}`;
     }
     case "call": {
-      return `${expression.path}${printRustCallTypeArguments(expression.typeArguments)}(${expression.args.map(printRustExpr).join(", ")})`;
+      return `${printRustDirectCallTarget(expression)}(${expression.args.map(printRustExpr).join(", ")})`;
     }
     case "invoke": {
       return `${printOperand(expression.callee, RustPrecedence.Postfix, false)}(${expression.args.map(printRustExpr).join(", ")})`;
@@ -76,11 +77,11 @@ export function printRustExpr(expression: RustExpr): string {
       return `${owner}::${expression.name}`;
     }
     case "associated-call": {
-      return `${printRustAssociatedCallOwner(expression)}::${expression.method}${printRustCallTypeArguments(expression.typeArguments)}(${expression.args.map(printRustExpr).join(", ")})`;
+      return `${printRustAssociatedCallTarget(expression, printRustAssociatedCallOwner(expression))}(${expression.args.map(printRustExpr).join(", ")})`;
     }
     case "method-call": {
       const receiver = printOperand(expression.receiver, RustPrecedence.Postfix, false);
-      return `${receiver}.${expression.method}${printRustCallTypeArguments(expression.typeArguments)}(${expression.args.map(printRustExpr).join(", ")})`;
+      return `${printRustMethodCallTarget(expression, receiver)}(${expression.args.map(printRustExpr).join(", ")})`;
     }
     case "field": {
       const receiver = printOperand(expression.receiver, RustPrecedence.Postfix, false);

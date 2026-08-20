@@ -5,7 +5,7 @@ import type {
   RustTargetOperationFact,
 } from "../../../analysis/facts/keys.js";
 import { isRustProgramErrorCarrier } from "../../../policy/types/target-types.js";
-import type { RustExpr } from "../../rust-ast/nodes.js";
+import type { RustExpr, RustPattern } from "../../rust-ast/nodes.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
@@ -13,6 +13,10 @@ import {
   allocateRustSyntheticName,
   createRustSyntheticNameState,
 } from "../names/synthetic.js";
+import {
+  resolveRustProgramErrorRoute,
+  type RustProgramErrorRoute,
+} from "../program/source-package-errors.js";
 
 type RustProgramErrorTypeTestFact = Extract<
   RustTargetOperationFact,
@@ -30,12 +34,13 @@ export function planRustProgramErrorTypeTest(
   fact: RustProgramErrorTypeTestFact,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  if (!programErrorVariantMatches(
+  const route = resolveProgramErrorFactRoute(
     fact.sourceCarrier,
     fact.targetCarrier,
     fact.variant,
     context,
-  )) {
+  );
+  if (route === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.program-error-type-test",
@@ -47,11 +52,7 @@ export function planRustProgramErrorTypeTest(
   return {
     kind: "matches",
     expression,
-    pattern: {
-      kind: "tuple-variant",
-      path: `rt::TsonicError::${fact.variant}`,
-      elements: [{ kind: "wildcard" }],
-    },
+    pattern: programErrorPattern(route, { kind: "wildcard" }),
   };
 }
 
@@ -61,12 +62,13 @@ export function planRustProgramErrorFlowRead(
   fact: RustProgramErrorFlowReadFact,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  if (!programErrorVariantMatches(
+  const route = resolveProgramErrorFactRoute(
     fact.sourceCarrier,
     fact.selectedCarrier,
     fact.variant,
     context,
-  )) {
+  );
+  if (route === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.program-error-flow-read",
@@ -84,11 +86,7 @@ export function planRustProgramErrorFlowRead(
     expression,
     arms: [
       {
-        pattern: {
-          kind: "tuple-variant",
-          path: `rt::TsonicError::${fact.variant}`,
-          elements: [{ kind: "binding", name: valueName }],
-        },
+        pattern: programErrorPattern(route, { kind: "binding", name: valueName }),
         expression: { kind: "path", path: valueName },
       },
       {
@@ -102,15 +100,45 @@ export function planRustProgramErrorFlowRead(
   };
 }
 
-function programErrorVariantMatches(
+function resolveProgramErrorFactRoute(
   sourceCarrier: RustProgramErrorTypeTestFact["sourceCarrier"],
   targetCarrier: RustProgramErrorTypeTestFact["targetCarrier"],
   variant: string,
   context: RustPlanContext,
-): boolean {
+): RustProgramErrorRoute | undefined {
   const definition = context.input.projectTypes.definitionForCarrier(targetCarrier);
-  return isRustProgramErrorCarrier(sourceCarrier) &&
-    definition !== undefined &&
-    context.input.projectTypes.programErrorVariant(definition) === variant &&
-    rustTargetTypeRefEquals(context.input.projectTypes.openCarrier(definition), targetCarrier);
+  if (!isRustProgramErrorCarrier(sourceCarrier) ||
+    definition === undefined ||
+    context.input.projectTypes.programErrorVariant(definition) !== variant ||
+    !rustTargetTypeRefEquals(context.input.projectTypes.openCarrier(definition), targetCarrier)) {
+    return undefined;
+  }
+  return resolveRustProgramErrorRoute(
+    context.sourcePackageErrors,
+    context.sourcePackageComponentId,
+    definition,
+    variant,
+  );
+}
+
+function programErrorPattern(
+  route: RustProgramErrorRoute,
+  payload: RustPattern,
+): RustPattern {
+  if (route.kind === "local") {
+    return {
+      kind: "tuple-variant",
+      path: `rt::TsonicError::${route.variant}`,
+      elements: [payload],
+    };
+  }
+  return {
+    kind: "tuple-variant",
+    path: `rt::TsonicError::${route.consumerVariant}`,
+    elements: [{
+      kind: "tuple-variant",
+      path: `${route.ownerTypePath}::${route.ownerVariant}`,
+      elements: [payload],
+    }],
+  };
 }

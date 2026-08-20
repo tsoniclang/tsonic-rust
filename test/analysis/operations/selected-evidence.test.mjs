@@ -69,7 +69,7 @@ export function truncate(value: float64): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn truncate\(value: f64\) -> rt::TsonicResult<i32>/u);
+  assert.match(text, /pub fn truncate\(value: f64\) -> Result<i32, rt::TsonicError>/u);
   assert.match(text, /\n    tsonic_rust_runtime::conversions::f64_to_i32\(value\)\n/u);
   assert.doesNotMatch(text, /Ok\([^\n]*\?\)/u);
   assert.doesNotMatch(text, /\sas\si32/u);
@@ -283,7 +283,7 @@ export function read(value: Counter | undefined): int32 {
   validateGeneratedProject("selected-narrowed-project-property", result.artifacts);
 });
 
-test("project instanceof and assertions use closed generated downcast routes", { timeout: 300_000 }, () => {
+test("project instanceof and assertions use exact native concrete identity", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     packages: [acmeTestingPackage()],
     target: {
@@ -307,6 +307,13 @@ export class JsonObject extends JsonValue {
   value: JsonValue | undefined;
   constructor(value: JsonValue | undefined) { super(); this.value = value; }
   getValue(): JsonValue | undefined { return this.value; }
+}
+`,
+      "identity.ts": `
+import { JsonString, JsonValue } from "./model.js";
+
+export function isString(value: JsonValue): boolean {
+  return value instanceof JsonString;
 }
 `,
       "index.ts": `
@@ -371,10 +378,14 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const model = artifactText(result, "src/model.rs");
+  const identity = artifactText(result, "src/identity.rs");
   const index = artifactText(result, "src/index.rs");
-  assert.match(model, /fn downcast_json_value_to_json_string\(\s*self: std::rc::Rc<Self>,?\s*\)/u);
-  assert.match(index, /downcast_json_value_to_json_string\(\)\s*\.is_some\(\)/u);
-  assert.match(index, /downcast_json_value_to_json_string\(\)\s*\.unwrap\(\)/u);
+  assert.match(model, /trait JsonValueDispatch: rt::ProjectObject/u);
+  assert.doesNotMatch(model, /fn downcast_/u);
+  assert.doesNotMatch(identity, /use .* as rt;/u);
+  assert.match(identity, /into_any\(\)\s*\.is::<crate::model::JsonStringRoot>\(\)/u);
+  assert.match(index, /into_any\(\)\s*\.is::<crate::model::JsonStringRoot>\(\)/u);
+  assert.match(index, /into_any\(\)\s*\.downcast::<crate::model::JsonStringRoot>\(\)\s*\.unwrap\(\)/u);
   const run = validateGeneratedProject("selected-project-downcast", result.artifacts, { run: true });
   assert.equal(run.status, 0, run.stderr || run.stdout);
 });

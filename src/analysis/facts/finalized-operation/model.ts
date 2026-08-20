@@ -90,7 +90,11 @@ export type RustFinalizedOperationResult =
 export interface RustFinalizedOperationAbi {
   readonly operationKind: RustFinalizedOperationKind;
   readonly target: RustProviderOperationForm;
-  readonly sourceReceiver: { readonly kind: "none" } | { readonly kind: "receiver"; readonly carrier: TargetTypeRef };
+  readonly sourceReceiver: { readonly kind: "none" } | {
+    readonly kind: "receiver";
+    readonly carrier: TargetTypeRef;
+    readonly disposition: "runtime" | "compile-time";
+  };
   readonly sourceArguments: readonly RustFinalizedSourceArgument[];
   readonly targetReceiver: { readonly kind: "none" } | { readonly kind: "input"; readonly input: RustFinalizedSourceInput };
   readonly targetArguments: readonly RustFinalizedTargetInput[];

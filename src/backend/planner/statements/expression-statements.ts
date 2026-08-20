@@ -23,11 +23,10 @@ import {
   planRustPromotedStorageWrite,
 } from "../expressions/typed-locations.js";
 import {
-  rustSourceBindingFactKey,
   rustTargetOperationFactKey,
 } from "../../../analysis/facts/keys.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { diagnosticInput, isValidRustIdentifier } from "../program/plan-context.js";
+import { diagnosticInput } from "../program/plan-context.js";
 import { isRustAssignmentOperator } from "../../model/syntax.js";
 import { isRustStringCarrier } from "../../../policy/types/target-types.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
@@ -36,9 +35,10 @@ import { planRuntimeSetStatement, selectedOperatorMatches } from "./iteration.js
 import { planRustCompoundAssignmentValue, planRustDirectOperatorCallAssignment, planRustSourceAccessorAssignment, planRustSourceIndexAssignment, planRustSourceMethodPropertyAssignment, planRustSourceStaticFieldAssignment } from "./assignments.js";
 import { planRustSourceUnionFieldProjection } from "../expressions/unions.js";
 import { readRustProjectDispatchedField, writeRustProjectDispatchedField } from "../objects/project-objects.js";
+import { planRustProjectFieldDispatchRoles } from "../objects/project-field-dispatch.js";
 import { readRustStoredObjectField, writeRustStoredObjectField } from "../objects/project-storage.js";
 import { rustStringConcat } from "../../rust-ast/expressions.js";
-import { rustTargetOperationIsDirectLocation } from "../../../analysis/facts/target-operation.js";
+import { planRustDirectStorage } from "../expressions/updates/target.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustAssignmentOperationFact } from "./core.js";
 import type { RustExpr, RustStmt } from "../../rust-ast/nodes.js";
@@ -100,22 +100,7 @@ export function planExpressionAsStatement(
       }
       const sourceField = context.input.facts.getFact(left, rustTargetOperationFactKey);
       const storageOverride = context.expressionOverrides?.get(left);
-      const target = storageOverride?.valueForm === "storage"
-        ? storageOverride.expression
-        : ast.kindName(left) === KindIdentifier
-        ? (() => {
-            const declaration = context.input.facts.getFact(
-              left,
-              rustSourceBindingFactKey,
-            )?.sourceDeclaration;
-            const path = context.input.names.nameForDeclaration(declaration) ?? "";
-            return isValidRustIdentifier(path) ? { kind: "path" as const, path } : undefined;
-          })()
-        : rustTargetOperationIsDirectLocation(
-            context.input.facts.getFact(left, rustTargetOperationFactKey),
-          )
-          ? planExpression(left, context)
-          : undefined;
+      const target = planRustDirectStorage(left, context);
       if (target === undefined && sourceField?.kind !== "source-accessor" &&
         sourceField?.kind !== "source-static-field" &&
         sourceField?.kind !== "source-field" &&
@@ -385,19 +370,14 @@ export function planExpressionAsStatement(
           ));
           return undefined;
         }
-        const dispatchRoles = dispatchPlan?.write === undefined
+        const dispatchRoles = dispatchPlan === undefined
           ? undefined
-          : {
-              read: dispatchPlan.read,
-              write: dispatchPlan.write,
-              errorDomain: context.errorDomain,
-            };
-        const dispatchReadRole = dispatchPlan === undefined
-          ? undefined
-          : {
-              ...dispatchPlan.read,
-              errorDomain: context.errorDomain,
-            };
+          : planRustProjectFieldDispatchRoles(dispatchPlan, context);
+        if ((dispatchPlan !== undefined && dispatchRoles === undefined) ||
+          (dispatchPlan?.write !== undefined && dispatchRoles?.write === undefined)) {
+          return undefined;
+        }
+        const dispatchReadRole = dispatchRoles?.read;
         const receiverName = allocateRustSyntheticName(context.syntheticNames, "receiver");
         if (fact.kind === "operator-call") {
           const currentName = allocateRustSyntheticName(context.syntheticNames, "current");
@@ -446,7 +426,7 @@ export function planExpressionAsStatement(
                 sourceField.dispatch.write,
                 "=",
                 { kind: "path", path: nextName },
-                dispatchRoles!,
+                { read: dispatchRoles!.read, write: dispatchRoles!.write! },
               );
           if (current === undefined || next === undefined || written === undefined) {
             return undefined;
@@ -508,7 +488,7 @@ export function planExpressionAsStatement(
                 sourceField.dispatch.write,
                 "=",
                 concatenated,
-                dispatchRoles!,
+                { read: dispatchRoles!.read, write: dispatchRoles!.write! },
               );
           if (current === undefined || written === undefined) {
             return undefined;
@@ -542,7 +522,7 @@ export function planExpressionAsStatement(
               sourceField.dispatch.write,
               operator,
               { kind: "path", path: valueName },
-              dispatchRoles!,
+              { read: dispatchRoles!.read, write: dispatchRoles!.write! },
             );
         if (written === undefined) {
           return undefined;
@@ -683,4 +663,3 @@ export function planExpressionAsStatement(
     ? undefined
     : [{ kind: "let", name: "_", mutable: false, init: planned }];
 }
-

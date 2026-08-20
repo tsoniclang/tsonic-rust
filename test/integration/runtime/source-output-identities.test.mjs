@@ -9,6 +9,9 @@ import {
   rustModuleNameForSourcePath,
 } from "../../../dist/analysis/program/source-output-identities.js";
 import {
+  planRustSourcePackageFacades,
+} from "../../../dist/backend/planner/program/source-package-facades.js";
+import {
   fakeAstReader,
   fakeSourcePackageGraph,
   fakeSourceFile,
@@ -122,6 +125,100 @@ test("source path allocation reserves sibling bases before assigning collision s
   assert.equal(plan.identities.get("/project/foo-bar.ts")?.moduleName, "foo_bar_3");
 });
 
+test("identical source paths in distinct package components remain distinct", () => {
+  const root = fakeSourceFile({ fileName: "/project/src/index.ts" });
+  const dependency = fakeSourceFile({ fileName: "/project/node_modules/dependency/src/index.ts" });
+  const rootPackageId = "fixture:root";
+  const dependencyPackageId = "fixture:dependency";
+  const rootComponentId = "fixture:root-component";
+  const dependencyComponentId = "fixture:dependency-component";
+  const sourcePackages = {
+    fingerprint: "fixture-distinct-components",
+    rootPackageId,
+    packages: [
+      {
+        id: rootPackageId,
+        name: "root",
+        packageRoot: "/project",
+        sourceRoot: "/project/src",
+        sourceFiles: [root.fileName],
+        dependencies: [dependencyPackageId],
+        exports: [],
+        componentId: rootComponentId,
+      },
+      {
+        id: dependencyPackageId,
+        name: "dependency",
+        packageRoot: "/project/node_modules/dependency",
+        sourceRoot: "/project/node_modules/dependency/src",
+        sourceFiles: [dependency.fileName],
+        dependencies: [],
+        exports: [],
+        componentId: dependencyComponentId,
+      },
+    ],
+    components: [
+      { id: rootComponentId, packages: [rootPackageId], dependencies: [dependencyComponentId] },
+      { id: dependencyComponentId, packages: [dependencyPackageId], dependencies: [] },
+    ],
+  };
+  const plan = planRustSourceOutputIdentities({
+    ast: fakeAstReader([root, dependency]),
+    sourceFiles: [root, dependency],
+    sourcePackages,
+    paths: {
+      projectFilePath: "/project/tsonic.json",
+      projectRoot: "/project/src",
+      outputRoot: "/project/out",
+      targetOutputRoot: "/project/out/rust",
+    },
+  });
+
+  assert.equal(plan.kind, "accepted");
+  assert.equal(plan.identities.get(root.fileName)?.moduleName, "index");
+  assert.equal(plan.identities.get(dependency.fileName)?.moduleName, "index");
+  assert.equal(plan.identities.get(root.fileName)?.componentId, rootComponentId);
+  assert.equal(plan.identities.get(dependency.fileName)?.componentId, dependencyComponentId);
+});
+
+test("facade planning ignores valid package exports outside the checked closure", () => {
+  const root = fakeSourceFile({ fileName: "/project/src/index.ts" });
+  const packageId = "fixture:root";
+  const componentId = "fixture:component";
+  const sourcePackages = {
+    fingerprint: "fixture-unused-export",
+    rootPackageId: packageId,
+    packages: [{
+      id: packageId,
+      name: "root",
+      packageRoot: "/project",
+      sourceRoot: "/project/src",
+      sourceFiles: [root.fileName, "/project/src/testing.ts"],
+      dependencies: [],
+      exports: [
+        { specifier: ".", sourceFile: root.fileName },
+        { specifier: "./testing.js", sourceFile: "/project/src/testing.ts" },
+      ],
+      componentId,
+    }],
+    components: [{ id: componentId, packages: [packageId], dependencies: [] }],
+  };
+  const result = planRustSourcePackageFacades({
+    ast: fakeAstReader([root]),
+    sourceFiles: [root],
+    sourcePackages,
+    source: {
+      navigation: {
+        moduleExports: () => [],
+      },
+    },
+  }, new Map());
+
+  assert.deepEqual(result.diagnostics, []);
+  assert.notEqual(result.plan, undefined);
+  assert.deepEqual(result.plan.rootExports, []);
+});
+
 test("a same-named child receives a readable non-inception module identity", () => {
   const { result } = compileRust({
     files: {
@@ -150,7 +247,10 @@ export function childValue(): string { return "child"; }
     "src/template.rs",
     "src/template/template_2.rs",
   ]);
-  assert.match(artifactText(result, "src/template.rs"), /pub\(crate\) mod template_2;/u);
+  assert.match(
+    artifactText(result, "src/template.rs"),
+    /pub\(crate\) mod template_2;/u,
+  );
   assert.match(
     artifactText(result, "src/index.rs"),
     /crate::template::parent_value\(\).*crate::template::template_2::child_value\(\)/su,
@@ -175,7 +275,10 @@ test("an authored parent module owns its child declaration", () => {
     "src/build/site.rs",
     "src/index.rs",
   ]);
-  assert.match(artifactText(result, "src/build.rs"), /pub\(crate\) mod site;/u);
+  assert.match(
+    artifactText(result, "src/build.rs"),
+    /pub\(crate\) mod site;/u,
+  );
   assert.equal(artifactText(result, "src/lib.rs").match(/pub\(crate\) mod build;/gu)?.length, 1);
 });
 

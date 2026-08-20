@@ -7,13 +7,18 @@ import {
   projectOwnFields,
   projectOwnMethods,
 } from "./model.js";
-import { planProjectFieldAccessorCall, planRootAccessorImplementation, planRootCallableForwarder, planRootMethodForwarder, planRootMethodImplementation, projectAccessorCallableShape, projectDowncastReturnType } from "./forwarders.js";
+import { planProjectFieldAccessorCall, planRootAccessorForwarder, planRootAccessorImplementation, planRootMethodForwarder, planRootMethodImplementation, projectAccessorCallableShape } from "./forwarders.js";
 import { readRustProjectObjectField, writeRustProjectMethodOverride, writeRustProjectObjectField } from "../project-objects.js";
 import { rustProjectDispatchTraitType, rustProjectTypeParameters } from "./names.js";
-import { rustTargetTypeRefEquals } from "../../../../policy/types/equality.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustImplFunction, RustItem, RustType } from "../../../rust-ast/nodes.js";
+import type { RustExpr, RustImplFunction, RustItem, RustType } from "../../../rust-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
+import {
+  rustErrorBoundaryForProjectMember,
+  rustErrorType,
+} from "../../program/plan-context.js";
+import { rustTypeEquals } from "../../../rust-ast/type-equality.js";
+import { applyRustFallibleResultExpression } from "../../types/fallible-shape.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
 import type { TargetTypeRef } from "../../../../policy/types/model.js";
 import type { ProjectClassStateLayer } from "./model.js";
@@ -147,30 +152,6 @@ function planRootContractFunctions(
   context: RustPlanContext,
 ): readonly RustImplFunction[] | undefined {
   const functions: RustImplFunction[] = [];
-  for (const route of context.input.projectTypes.downcastRoutesFor(contract)) {
-    const returnType = projectDowncastReturnType(route, context);
-    if (returnType === undefined) {
-      return undefined;
-    }
-    const relation = context.input.projectTypes.relationship(concreteCarrier, route.target);
-    const matches = relation.kind === "related" &&
-      rustTargetTypeRefEquals(relation.targetType, route.targetCarrier);
-    functions.push({
-      name: route.slot,
-      visibility: "private",
-      selfParam: "rc",
-      params: [],
-      returnType,
-      body: {
-        statements: [{
-          kind: "tail",
-          expr: matches
-            ? { kind: "call", path: "Some", args: [{ kind: "path", path: "self" }] }
-            : { kind: "none" },
-        }],
-      },
-    });
-  }
   const fields = projectOwnFields(contract, contractCarrier, context);
   if (fields === undefined) {
     return undefined;
@@ -193,7 +174,7 @@ function planRootContractFunctions(
     const write = dispatch?.write === undefined
       ? undefined
       : context.input.projectTypes.memberSlotName(field.declaration, "write");
-    const readValue = implementation?.kind === "stored"
+    const readValue: { readonly expression: RustExpr; readonly errorType?: RustType } | undefined = implementation?.kind === "stored"
       ? storagePath === undefined
         ? undefined
         : {
@@ -203,7 +184,6 @@ function planRootContractFunctions(
               field.carrier,
               representation,
             ),
-            fallible: false,
           }
       : implementation?.kind === "accessor"
         ? planProjectFieldAccessorCall(
@@ -218,13 +198,26 @@ function planRootContractFunctions(
       dispatch.write !== undefined && write === undefined) {
       return undefined;
     }
+    const fieldErrorBoundary = dispatch.read.fallible || dispatch.write?.fallible === true
+      ? rustErrorBoundaryForProjectMember(field.declaration, context)
+      : undefined;
+    if ((dispatch.read.fallible || dispatch.write?.fallible === true) &&
+      fieldErrorBoundary === undefined) {
+      return undefined;
+    }
+    const fieldErrorType = fieldErrorBoundary === undefined
+      ? undefined
+      : rustErrorType(fieldErrorBoundary);
     const readResult = dispatch.read.fallible
-      ? readValue.fallible
-        ? readValue.expression
-        : { kind: "call" as const, path: "Ok", args: [readValue.expression] }
-      : readValue.fallible
+      ? readValue.errorType !== undefined &&
+          !rustTypeEquals(readValue.errorType, fieldErrorType)
         ? undefined
-        : readValue.expression;
+        : applyRustFallibleResultExpression(readValue.expression, {
+            errorType: fieldErrorType!,
+          })
+      : readValue.errorType === undefined
+        ? readValue.expression
+        : undefined;
     if (readResult === undefined) {
       return undefined;
     }
@@ -234,7 +227,7 @@ function planRootContractFunctions(
       selfParam: dispatch.read.selfMode,
       params: [],
       returnType: field.type,
-      ...(dispatch.read.fallible ? { fallible: true } : {}),
+      ...(dispatch.read.fallible ? { errorType: fieldErrorType! } : {}),
       body: {
         statements: [{
           kind: "tail",
@@ -243,7 +236,7 @@ function planRootContractFunctions(
       },
     });
     if (dispatch.write !== undefined) {
-      const writeValue = implementation.kind === "stored"
+      const writeValue: { readonly expression: RustExpr; readonly errorType?: RustType } | undefined = implementation.kind === "stored"
         ? storagePath === undefined
           ? undefined
           : (() => {
@@ -256,7 +249,7 @@ function planRootContractFunctions(
               );
               return expression === undefined
                 ? undefined
-                : { expression, fallible: false as const };
+                : { expression };
             })()
         : implementation.setter === undefined
           ? undefined
@@ -269,7 +262,10 @@ function planRootContractFunctions(
                 field.type,
               );
             })();
-      if (writeValue === undefined || !dispatch.write.fallible && writeValue.fallible) {
+      if (writeValue === undefined ||
+        (!dispatch.write.fallible && writeValue.errorType !== undefined) ||
+        (dispatch.write.fallible && writeValue.errorType !== undefined &&
+          !rustTypeEquals(writeValue.errorType, fieldErrorType))) {
         return undefined;
       }
       functions.push({
@@ -277,19 +273,22 @@ function planRootContractFunctions(
         visibility: "private",
         selfParam: dispatch.write.selfMode,
         params: [{ name: "value", type: field.type }],
-        ...(dispatch.write.fallible ? { fallible: true } : {}),
+        ...(dispatch.write.fallible ? { errorType: fieldErrorType! } : {}),
         body: dispatch.write.fallible
           ? {
               statements: [{
                 kind: "tail",
-                expr: writeValue.fallible
-                  ? writeValue.expression
-                  : {
+                expr: writeValue.errorType === undefined
+                  ? {
                       kind: "evaluate-then",
                       effect: writeValue.expression,
                       discard: "unit",
-                      value: { kind: "call", path: "Ok", args: [{ kind: "path", path: "()" }] },
-                    },
+                      value: applyRustFallibleResultExpression(
+                        { kind: "path", path: "()" },
+                        { errorType: fieldErrorType! },
+                      ),
+                    }
+                  : writeValue.expression,
               }],
             }
           : {
@@ -324,13 +323,15 @@ function planRootContractFunctions(
     const forwarder = implementation === undefined || helper === undefined ||
         slot === undefined || contractShape === undefined
       ? undefined
-      : planRootCallableForwarder(
+      : planRootAccessorForwarder(
+          concreteCarrier,
+          accessor.declaration,
           implementation,
+          accessor.role,
           slot,
           rootType,
           helper,
           contractShape,
-          undefined,
           context,
         );
     if (forwarder === undefined) {

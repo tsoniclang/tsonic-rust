@@ -4,7 +4,10 @@ import { rustLintAttributes } from "../../../rust-ast/lint-policy.js";
 import { rustDefaultImplementation } from "../../declarations/default-implementation.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
-import { diagnosticInput } from "../../program/plan-context.js";
+import {
+  diagnosticInput,
+  rustSourceItemIsPubliclyReachable,
+} from "../../program/plan-context.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import {
   rustProjectObjectDispatchField,
@@ -135,7 +138,10 @@ export function planPolymorphicClassDeclaration(
       name: definition.targetName,
       visibility: context.input.projectTypes.programErrorVariant(definition) !== undefined
         ? "public"
-        : context.input.ast.hasModifierKind(declaration, "export") ? "public" : "crate",
+        : context.input.ast.hasModifierKind(declaration, "export") ||
+            rustSourceItemIsPubliclyReachable(context, definition.targetName)
+          ? "public"
+          : "crate",
       attrs: [
         rustLintAttributes.deadCode,
         ...(context.input.projectTypes.programErrorVariant(definition) === undefined
@@ -297,7 +303,10 @@ export function planPolymorphicInterfaceDeclaration(
     {
       kind: "struct",
       name: definition.targetName,
-      visibility: context.input.ast.hasModifierKind(declaration, "export") ? "public" : "crate",
+      visibility: context.input.ast.hasModifierKind(declaration, "export") ||
+          rustSourceItemIsPubliclyReachable(context, definition.targetName)
+        ? "public"
+        : "crate",
       attrs: [rustLintAttributes.deadCode],
       derives: ["Clone"],
       ...(typeParams.length === 0 ? {} : { typeParams }),

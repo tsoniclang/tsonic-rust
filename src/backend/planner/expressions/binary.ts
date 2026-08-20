@@ -6,13 +6,15 @@ import {
   rustSourcePrimitiveTargetType,
 } from "../../../policy/types/target-types.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
-import { applyRustArgumentMode, applyRustValueConversion } from "./conversions.js";
+import { applyRustValueConversion } from "./conversions.js";
+import { applyRustArgumentMode } from "./input-shaping.js";
 import { applyRustFallibleResultExpression, rustExpressionUsesTryInCurrentRegion } from "../types/fallible-shape.js";
 import {
   BinaryExpression_Left,
   BinaryExpression_Right,
 } from "@tsonic/target-api/source";
-import { diagnosticInput, registerAliasFromPath } from "../program/plan-context.js";
+import { diagnosticInput, registerAliasFromPath, rustActiveErrorType } from "../program/plan-context.js";
+import { rustTargetRuntimeErrorType } from "../types/error-boundary.js";
 import { effectivePlannedExpressionCarrier, expressionCarrier, requireExpressionCarrier, rustOperationFact, rustPartialOrderingTest, selectedOperationMatches } from "./fundamentals.js";
 import { isRustBinaryOperator } from "../../model/syntax.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
@@ -123,6 +125,10 @@ export function planBinaryExpression(node: Node, context: RustPlanContext): Rust
     }
     context.usedAliases?.add("rt");
     const fallbackIsFallible = rustExpressionUsesTryInCurrentRegion(right);
+    const activeErrorType = rustActiveErrorType(context);
+    if (fallbackIsFallible && activeErrorType === undefined) {
+      return undefined;
+    }
     const fallback: RustExpr = !fallbackIsFallible && right.kind === "call" && right.args.length === 0
       ? { kind: "path", path: right.path }
       : {
@@ -130,8 +136,7 @@ export function planBinaryExpression(node: Node, context: RustPlanContext): Rust
           params: [],
           body: fallbackIsFallible
             ? applyRustFallibleResultExpression(right, {
-                errorDomain: context.errorDomain,
-                errorTypePath: "rt::TsonicError",
+                errorType: activeErrorType!,
               })
             : right,
         };
@@ -140,14 +145,14 @@ export function planBinaryExpression(node: Node, context: RustPlanContext): Rust
       "present_value",
     );
     const present: RustExpr = fallbackIsFallible && fact.rightOperand !== "option"
-      ? { kind: "path", path: "Ok::<_, rt::TsonicError>" }
+      ? { kind: "path", path: "Ok" }
       : fallbackIsFallible
         ? {
             kind: "closure",
             params: [{ name: presentValueName, byRefCopy: false }],
             body: {
               kind: "call",
-              path: "Ok::<_, rt::TsonicError>",
+              path: "Ok",
               args: [fact.rightOperand === "option"
                 ? { kind: "call", path: "Some", args: [{ kind: "path", path: presentValueName }] }
                 : { kind: "path", path: presentValueName }],
@@ -170,7 +175,12 @@ export function planBinaryExpression(node: Node, context: RustPlanContext): Rust
       return coalesced;
     }
     context.usedAliases?.add("rt");
-    return { kind: "try", expr: coalesced, errorDomain: context.errorDomain };
+    return {
+      kind: "try",
+      expr: coalesced,
+      resultErrorType: activeErrorType!,
+      operandErrorType: activeErrorType!,
+    };
   }
   if (fact !== undefined && fact.kind === "option-check") {
     const leftNode = BinaryExpression_Left(context.input.ast, node);
@@ -504,7 +514,8 @@ export function planRustOperatorCallExpression(
   rightNode?: Node,
 ): RustExpr | undefined {
   registerAliasFromPath(context, fact.path);
-  if (fact.fallible && context.fallibleContext !== true) {
+  const activeErrorType = rustActiveErrorType(context);
+  if (fact.fallible && activeErrorType === undefined) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
       "rust.error.operator",
@@ -543,7 +554,14 @@ export function planRustOperatorCallExpression(
     path: fact.path,
     args: operands as readonly RustExpr[],
   };
-  return fact.fallible ? { kind: "try", expr: call, errorDomain: "runtime" } : call;
+  return fact.fallible
+    ? {
+        kind: "try",
+        expr: call,
+        resultErrorType: activeErrorType!,
+        operandErrorType: rustTargetRuntimeErrorType,
+      }
+    : call;
 }
 
 function planEmptyStringComparison(

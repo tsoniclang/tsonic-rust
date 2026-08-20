@@ -43,7 +43,7 @@ export function publishRustSourceCallableContract(
       : { sourceTypeArguments: Object.freeze([...sourceTypeArguments]) }),
     name: item.name,
     isAsync: item.isAsync === true,
-    fallible: item.fallible === true,
+    ...(item.errorType === undefined ? {} : { errorType: item.errorType }),
     typeParameters: Object.freeze([...(item.typeParams ?? [])]),
     parameters: Object.freeze([...item.params]),
     ...(item.returnType === undefined ? {} : { returnType: item.returnType }),

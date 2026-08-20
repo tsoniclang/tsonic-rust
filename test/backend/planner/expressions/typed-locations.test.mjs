@@ -301,6 +301,30 @@ export function main(): void {
   assert.equal(run.status, 0);
 });
 
+test("writable projections reject later exact storage rebinding", () => {
+  assertRustTargetRejection({
+    packages: [acmeTestingPackage()],
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+function indexOf(_values: int32[]): int32 {
+  return 0;
+}
+
+export function reject(): void {
+  let values: int32[] = [10];
+  const replacement: int32[] = [20];
+  values[indexOf(values = replacement)]++;
+}
+`,
+    },
+  }, [{
+    code: "RUST_UNSUPPORTED_AST",
+    message: "Writable projection cannot preserve source evaluation order when a later expression rebinds its selected storage. Node kind: KindIdentifier.",
+  }]);
+});
+
 test("module binding locations preserve one initialized identity", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     packages: [acmeTestingPackage()],
@@ -519,7 +543,24 @@ export function reject(): void {
     },
   }, [{
     code: "RUST_UNSUPPORTED_AST",
-    message: "One provider operation cannot hold multiple mutable Rust locations projected from the same promoted storage root. Node kind: KindPropertyAccessExpression.",
+    message: "One provider operation cannot hold multiple mutable Rust locations with the same exact source storage root. Node kind: KindPropertyAccessExpression.",
+  }]);
+
+  assertRustTargetRejection({
+    packages: [acmeVectorsPackage()],
+    files: {
+      "index.ts": `
+import { Vector, mutateBoth } from "@acme/vectors";
+
+export function reject(): void {
+  let value = new Vector(1, 2);
+  mutateBoth(value, value);
+}
+`,
+    },
+  }, [{
+    code: "RUST_UNSUPPORTED_AST",
+    message: "One provider operation cannot hold multiple mutable Rust locations with the same exact source storage root. Node kind: KindIdentifier.",
   }]);
 });
 

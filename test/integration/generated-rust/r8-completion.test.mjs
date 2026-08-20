@@ -49,7 +49,7 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn manifest_has\(path: String, needle: String\) -> rt::TsonicResult<bool>/u);
+  assert.match(text, /pub fn manifest_has\(path: String, needle: String\) -> Result<bool, rt::TsonicError>/u);
   assert.match(text, /let xs: \[i32; 3\] = \[10, 20, 30\];/u);
   assert.match(text, /tsonic_rust_node::crypto::random_bytes\(tsonic_rust_runtime::conversions::i32_to_usize\(\s*16,?\s*\)\?\)\?/u);
   const run = validateGeneratedProject("r8-proof-bin", result.artifacts, { run: true });
@@ -105,7 +105,7 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /fn selected\(mut values: \[i32; 3\], index: i32\) -> rt::TsonicResult<i32>/u);
+  assert.match(text, /fn selected\(mut values: \[i32; 3\], index: i32\) -> Result<i32, rt::TsonicError>/u);
   assert.match(text, /tsonic_rust_runtime::conversions::usize_to_i32\(values\.len\(\)\)\?/u);
   assert.equal(
     validateGeneratedProject("source-fixed-array", result.artifacts, { run: true }).status,

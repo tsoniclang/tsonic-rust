@@ -81,7 +81,6 @@ export interface RustProjectDowncastRoute {
   readonly source: RustProjectTypeDefinition;
   readonly target: RustProjectTypeDefinition;
   readonly targetCarrier: TargetTypeRef;
-  readonly slot: string;
 }
 
 export interface RustProjectTypePolicy {
@@ -116,7 +115,6 @@ export interface RustProjectTypePolicy {
   classLineage(definition: RustProjectTypeDefinition): readonly RustProjectTypeDefinition[] | undefined;
   interfacesForClass(definition: RustProjectTypeDefinition): readonly RustProjectTypeDefinition[] | undefined;
   concreteClassesFor(definition: RustProjectTypeDefinition): readonly RustProjectTypeDefinition[];
-  downcastRoutesFor(definition: RustProjectTypeDefinition): readonly RustProjectDowncastRoute[];
   downcastRoute(
     source: RustProjectTypeDefinition,
     targetCarrier: TargetTypeRef,

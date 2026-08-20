@@ -198,7 +198,7 @@ export function roundtrip(text: string): string {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn roundtrip\(text: String\) -> rt::TsonicResult<String> \{/u);
+  assert.match(text, /pub fn roundtrip\(text: String\) -> Result<String, rt::TsonicError> \{/u);
   assert.match(text, /js_abi::json_parse\(&text\)\?/u);
   assert.match(text, /js_abi::json_stringify\(&value\)\?/u);
 });
@@ -220,7 +220,7 @@ export function load(path: string): string {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn load\(path: String\) -> rt::TsonicResult<String> \{/u);
+  assert.match(text, /pub fn load\(path: String\) -> Result<String, rt::TsonicError> \{/u);
   assert.match(text, /tsonic_rust_node::fs::read_file_sync_string\(&path, "utf8"\)/u);
   assert.doesNotMatch(text, /Ok\(tsonic_rust_node::fs::read_file_sync_string/u);
 });
@@ -304,9 +304,9 @@ export async function forwards(): Promise<string> {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub async fn risky\(\) -> rt::TsonicResult<String>/u);
-  assert.match(text, /pub async fn forwards\(\) -> rt::TsonicResult<String>/u);
-  assert.match(text, /pub async fn forwards\(\) -> rt::TsonicResult<String> \{\n    risky\(\)\.await\n\}/u);
+  assert.match(text, /pub async fn risky\(\) -> Result<String, rt::TsonicError>/u);
+  assert.match(text, /pub async fn forwards\(\) -> Result<String, rt::TsonicError>/u);
+  assert.match(text, /pub async fn forwards\(\) -> Result<String, rt::TsonicError> \{\n    risky\(\)\.await\n\}/u);
   assert.doesNotMatch(text, /risky\(\)\.await\?/u);
   assert.doesNotMatch(text, /risky\(\)\?\.await/u);
 });
@@ -409,8 +409,8 @@ export function drive(): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /fn risky\(flag: bool\) -> rt::TsonicResult<i32> \{/u);
-  assert.match(text, /pub fn drive\(\) -> rt::TsonicResult<i32> \{\n    Machine::risky\(false\)\n\}/u);
+  assert.match(text, /fn risky\(flag: bool\) -> Result<i32, rt::TsonicError> \{/u);
+  assert.match(text, /pub fn drive\(\) -> Result<i32, rt::TsonicError> \{\n    Machine::risky\(false\)\n\}/u);
   assert.doesNotMatch(text, /Ok\(Machine::risky\(false\)\?\)/u);
 });
 
@@ -473,11 +473,11 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /fn initialize_state[^\n]*-> rt::TsonicResult</u);
-  assert.match(text, /pub fn new\([^)]*\) -> rt::TsonicResult<Derived>/u);
-  assert.match(text, /pub fn new\(\) -> rt::TsonicResult<Initialized>/u);
-  assert.match(text, /fn dispatch_[^(]+\([^)]*\) -> rt::TsonicResult<i32>/u);
-  assert.match(text, /fn read_through_base\([^)]*\) -> rt::TsonicResult<i32>/u);
+  assert.match(text, /fn initialize_state[^\n]*-> Result<[^,>]+, rt::TsonicError>/u);
+  assert.match(text, /pub fn new\([^)]*\) -> Result<Derived, rt::TsonicError>/u);
+  assert.match(text, /pub fn new\(\) -> Result<Initialized, rt::TsonicError>/u);
+  assert.match(text, /fn dispatch_[^(]+\([^)]*\) -> Result<i32, rt::TsonicError>/u);
+  assert.match(text, /fn read_through_base\([^)]*\) -> Result<i32, rt::TsonicError>/u);
   assert.equal(validateGeneratedProject("project-fallibility-closure", result.artifacts, { run: true }).status, 0);
 });
 
@@ -509,7 +509,7 @@ export function fallback(flag: boolean): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn fallback\(flag: bool\) -> rt::TsonicResult<i32> \{/u);
+  assert.match(text, /pub fn fallback\(flag: bool\) -> Result<i32, rt::TsonicError> \{/u);
   assert.match(text, /Ok\(rt::Completion::Return\(2\)\)/u);
   assert.match(text, /rt::Completion::Return\(value\) => return Ok\(value\)/u);
   assert.match(text, /return risky\(\);/u);
@@ -666,7 +666,7 @@ export function main(): void {
   const source = artifactText(result, "src/index.rs");
   assert.match(
     source,
-    /Ok\(js_string::replace_all\(value, "a", "b"\)\?\)/u,
+    /js_string::replace_all\(value, "a", "b"\)\.map_err\(rt::TsonicError::from\)/u,
   );
   assert.equal(validateGeneratedProject("concise-program-error", result.artifacts, { run: true }).status, 0);
 });

@@ -122,7 +122,7 @@ export function fails(): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /pub fn fails\(\) -> rt::TsonicResult<i32>/u);
+  assert.match(source, /pub fn fails\(\) -> Result<i32, rt::TsonicError>/u);
   assert.match(source, /rt::finish_finally/u);
   assert.doesNotMatch(source, /finish_resource/u);
 });

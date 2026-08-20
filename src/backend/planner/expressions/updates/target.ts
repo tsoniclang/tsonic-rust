@@ -12,12 +12,13 @@ import { diagnosticInput, isValidRustIdentifier, rustSourceBindingPath } from ".
 import { expressionCarrier } from "../fundamentals.js";
 import { isRustCopyCarrier } from "../../../../policy/types/target-types.js";
 import { isRustFinalizedSourceInput } from "../../../../analysis/facts/finalized-operation-abi.js";
-import { missingFactDiagnostic } from "../../diagnostics.js";
+import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
 import { mutateRustStoredObjectField } from "../../objects/project-storage.js";
 import { planExpression } from "../entry.js";
 import { planFinalizedTargetInput, planProviderOperationExpression } from "../conversions.js";
-import { planRustMutableProjectReceiver, planRustNonConsumingValue } from "../typed-locations.js";
+import { planRustMutableProjectReceiver } from "../typed-locations.js";
 import { readRustProjectDispatchedField, writeRustProjectDispatchedField } from "../../objects/project-objects.js";
+import { planRustProjectFieldDispatchRoles } from "../../objects/project-field-dispatch.js";
 import { rustSourceBindingFactKey, rustTargetOperationFactKey } from "../../../../analysis/facts/keys.js";
 import { rustTargetOperationIsDirectLocation } from "../../../../analysis/facts/target-operation.js";
 import { sourceFieldSelectedOperationMatches } from "../properties.js";
@@ -77,11 +78,11 @@ export function planRustSourceFieldUpdate(
         overrides.set(fieldExpression, {
           expression: storage,
           carrier: field.resultCarrier,
-          valueForm: "value",
+          valueForm: "storage",
         });
         const target = operand === fieldExpression
           ? storage
-          : planRustDirectUpdateTarget(operand, {
+          : planRustDirectStorage(operand, {
               ...context,
               expressionOverrides: overrides,
             }, projection.inputOverrides);
@@ -126,25 +127,24 @@ export function planRustSourceFieldUpdate(
     ));
     return undefined;
   }
-  const dispatchRoles = {
-    read: dispatchPlan.read,
-    write: dispatchPlan.write,
-    errorDomain: context.errorDomain,
-  };
+  const dispatchRoles = planRustProjectFieldDispatchRoles(dispatchPlan, context);
+  if (dispatchRoles?.write === undefined) {
+    return undefined;
+  }
   const fieldName = allocateRustSyntheticName(context.syntheticNames, "update_field");
   const fieldPath: RustExpr = { kind: "path", path: fieldName };
   const overrides = new Map(context.expressionOverrides ?? []);
   overrides.set(fieldExpression, {
     expression: fieldPath,
     carrier: field.resultCarrier,
-    valueForm: "value",
+    valueForm: "storage",
   });
   for (const override of projection.overrides) {
     overrides.set(override.node, override.value);
   }
   const target = operand === fieldExpression
     ? fieldPath
-    : planRustDirectUpdateTarget(operand, {
+    : planRustDirectStorage(operand, {
         ...context,
         expressionOverrides: overrides,
       }, projection.inputOverrides);
@@ -170,8 +170,7 @@ export function planRustSourceFieldUpdate(
         name: fieldName,
         mutable: true,
         value: readRustProjectDispatchedField(receiverPath, field.dispatch.read, {
-          ...dispatchPlan.read,
-          errorDomain: context.errorDomain,
+          ...dispatchRoles.read,
         }),
       },
       ...projection.bindings,
@@ -186,7 +185,7 @@ export function planRustSourceFieldUpdate(
         field.dispatch.write,
         "=",
         fieldPath,
-        dispatchRoles,
+        { read: dispatchRoles.read, write: dispatchRoles.write },
       ),
       discard: "unit",
       value: { kind: "path", path: resultName },
@@ -411,16 +410,24 @@ export function planRustUpdateValue(options: {
   };
 }
 
-export function planRustDirectUpdateTarget(
+export function planRustDirectStorage(
   operand: Node,
   context: RustPlanContext,
   inputOverrides?: ReadonlyMap<RustFinalizedSourceInput, RustExpr>,
 ): RustExpr | undefined {
   const { ast } = context.input;
+  const storageOverride = context.expressionOverrides?.get(operand);
+  if (storageOverride?.valueForm === "storage") {
+    return storageOverride.expression;
+  }
   if (ast.kindName(operand) === KindIdentifier) {
     const binding = context.input.facts.getFact(operand, rustSourceBindingFactKey);
     const path = binding === undefined ? undefined : rustSourceBindingPath(context, binding);
     return path !== undefined && isValidRustIdentifier(path) ? { kind: "path", path } : undefined;
+  }
+  const operandKind = ast.kindName(operand);
+  if (operandKind === "KindThisExpression" || operandKind === "KindThisKeyword") {
+    return { kind: "path", path: "self" };
   }
   const fact = context.input.facts.getFact(operand, rustTargetOperationFactKey);
   if (!rustTargetOperationIsDirectLocation(fact)) {
@@ -436,15 +443,52 @@ export function planRustDirectUpdateTarget(
     const argument = ast.kindName(operand) === KindElementAccessExpression
       ? ElementAccessExpression_ArgumentExpression(ast, operand)
       : undefined;
+    const finalizedInputOverrides = new Map(inputOverrides ?? []);
+    const receiverInput = fact.abi.targetReceiver.kind === "input"
+      ? fact.abi.targetReceiver.input
+      : undefined;
+    const receiverStorage = receiver === undefined
+      ? undefined
+      : context.expressionOverrides?.get(receiver);
+    if (receiverInput?.source.kind === "receiver") {
+      if (receiverInput.conversion.kind !== "identity" || receiver === undefined) {
+        return undefined;
+      }
+      const explicitStorage = receiverStorage?.valueForm === "storage"
+        ? receiverStorage.expression
+        : undefined;
+      const directStorage = explicitStorage ?? planRustDirectStorage(
+        receiver,
+        context,
+        inputOverrides,
+      );
+      if (directStorage === undefined || !directStorageRemainsSelected(
+        receiver,
+        argument === undefined ? [] : [argument],
+        explicitStorage !== undefined,
+        context,
+      )) {
+        return undefined;
+      }
+      finalizedInputOverrides.set(receiverInput, directStorage);
+    }
     return planProviderOperationExpression(
       context,
       fact,
       receiver,
       argument === undefined ? [] : [argument],
       operand,
-      inputOverrides === undefined
-        ? undefined
-        : { sourceValues: new Map(), inputs: inputOverrides },
+      {
+        resultUse: "storage",
+        ...(finalizedInputOverrides.size === 0
+          ? {}
+          : {
+              overrides: {
+                sourceValues: new Map(),
+                inputs: finalizedInputOverrides,
+              },
+            }),
+      },
     );
   }
   if (fact?.kind !== "tuple-index" && fact?.kind !== "fixed-index") {
@@ -452,13 +496,15 @@ export function planRustDirectUpdateTarget(
   }
   const receiverNode = Node_Expression(ast, operand);
   const indexNode = ElementAccessExpression_ArgumentExpression(ast, operand);
-  const plannedReceiver = receiverNode === undefined
+  const explicitReceiverStorage = receiverNode === undefined
     ? undefined
-    : planExpression(receiverNode, context);
-  const receiver = receiverNode === undefined || plannedReceiver === undefined
+    : context.expressionOverrides?.get(receiverNode);
+  const receiver = receiverNode === undefined
     ? undefined
-    : planRustNonConsumingValue(receiverNode, plannedReceiver, context);
-  if (receiver === undefined || indexNode === undefined) {
+    : explicitReceiverStorage?.valueForm === "storage"
+      ? explicitReceiverStorage.expression
+      : planRustDirectStorage(receiverNode, context, inputOverrides);
+  if (receiverNode === undefined || receiver === undefined || indexNode === undefined) {
     return undefined;
   }
   const target: RustExpr = fact.kind === "tuple-index"
@@ -471,8 +517,80 @@ export function planRustDirectUpdateTarget(
   if (ast.kindName(indexNode) === KindNumericLiteral) {
     return target;
   }
+  if (!directStorageRemainsSelected(
+    receiverNode,
+    [indexNode],
+    explicitReceiverStorage?.valueForm === "storage",
+    context,
+  )) {
+    return undefined;
+  }
   const effect = planExpression(indexNode, context);
   return effect === undefined
     ? undefined
     : { kind: "evaluate-then", effect, discard: "value", value: target };
+}
+
+function directStorageRemainsSelected(
+  receiver: Node,
+  laterExpressions: readonly Node[],
+  receiverAlreadySelected: boolean,
+  context: RustPlanContext,
+): boolean {
+  if (receiverAlreadySelected || laterExpressions.length === 0) {
+    return true;
+  }
+  const effectful = laterExpressions.filter((expression) => {
+    const effects = context.input.source.navigation.expressionEffects(expression);
+    return effects.invokes || effects.mutates || effects.suspends || effects.mayThrow;
+  });
+  if (effectful.length === 0) {
+    return true;
+  }
+  const reference = directStorageReference(receiver, context);
+  if (reference === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, receiver),
+      "rust.backend.direct-storage-identity",
+      "Effectful writable projection requires one exact source storage identity.",
+    ));
+    return false;
+  }
+  if (effectful.some((expression) =>
+    context.input.source.navigation.bindingWritesWithin(
+      reference.symbol,
+      expression,
+    ).length !== 0)) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, receiver),
+      "rust.backend.direct-storage-rebinding",
+      "Writable projection cannot preserve source evaluation order when a later expression rebinds its selected storage.",
+    ));
+    return false;
+  }
+  return true;
+}
+
+function directStorageReference(
+  node: Node,
+  context: RustPlanContext,
+): import("@tsonic/target-api/source").SourceDeclarationReference | undefined {
+  let current: Node | undefined = node;
+  while (current !== undefined) {
+    const reference = context.input.source.navigation.sourceReferenceFor(current);
+    if (reference !== undefined) {
+      return reference;
+    }
+    const kind = context.input.ast.kindName(current);
+    if (kind !== KindPropertyAccessExpression && kind !== KindElementAccessExpression &&
+      kind !== KindParenthesizedExpression) {
+      return undefined;
+    }
+    const receiver = Node_Expression(context.input.ast, current);
+    if (receiver === current) {
+      return undefined;
+    }
+    current = receiver;
+  }
+  return undefined;
 }

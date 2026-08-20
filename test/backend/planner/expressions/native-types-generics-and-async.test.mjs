@@ -553,7 +553,7 @@ export function drive(): int32 {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn pass_through<T>\(value: T\) -> T \{/u);
-  assert.match(text, /pub fn drive\(\) -> rt::TsonicResult<i32>/u);
+  assert.match(text, /pub fn drive\(\) -> Result<i32, rt::TsonicError>/u);
   assert.match(
     text,
     /tsonic_rust_runtime::conversions::f64_to_i32\(pass_through::<f64>\(41\.0\) \+ 1\.0\)/u,
@@ -634,7 +634,7 @@ export async function main(): Promise<void> {}
   );
 });
 
-test("throwing functions lower to TsonicResult with Err returns and Ok wrapping", () => {
+test("throwing functions lower to native Result with Err returns and Ok wrapping", () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
@@ -662,9 +662,9 @@ export function caller(flag: boolean): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn risky\(flag: bool\) -> rt::TsonicResult<i32> \{/u);
+  assert.match(text, /pub fn risky\(flag: bool\) -> Result<i32, rt::TsonicError> \{/u);
   assert.match(text, /return Err\(rt::TsonicError::from\(rt::JsError::error\(/u);
-  assert.match(text, /Ok\(7\)/u);
+  assert.match(text, /Ok::<_, rt::TsonicError>\(7\)/u);
   assert.match(text, /let try_body: rt::TsonicResult<rt::Completion<i32>> = rt::completion_region\(\|\| \{/u);
   assert.match(text, /outcome = risky\(flag\)\?;/u);
   assert.match(text, /let try_flow: rt::Completion<i32> = match try_body \{/u);

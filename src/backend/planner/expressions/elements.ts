@@ -209,7 +209,14 @@ function planElementAccessInner(node: Node, context: RustPlanContext): RustExpr 
     return undefined;
   }
   const diagnosticCount = context.diagnostics.length;
-  const planned = planProviderOperationExpression(context, fact, Node_Expression(context.input.ast, node), [argumentNode], node);
+  const planned = planProviderOperationExpression(
+    context,
+    fact,
+    Node_Expression(context.input.ast, node),
+    [argumentNode],
+    node,
+    { resultUse: "value" },
+  );
   if (planned === undefined && context.diagnostics.length === diagnosticCount) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),

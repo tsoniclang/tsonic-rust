@@ -56,8 +56,8 @@ export function forwards(): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn forwards\(\) -> rt::TsonicResult<i32> \{/u);
-  assert.match(text, /pub fn forwards\(\) -> rt::TsonicResult<i32> \{\n    risky\(\)\n\}/u);
+  assert.match(text, /pub fn forwards\(\) -> Result<i32, rt::TsonicError> \{/u);
+  assert.match(text, /pub fn forwards\(\) -> Result<i32, rt::TsonicError> \{\n    risky\(\)\n\}/u);
   assert.doesNotMatch(text, /Ok\(risky\(\)\?\)/u);
 });
 
@@ -80,7 +80,7 @@ export function bad(xs: int32[]): boolean {
   });
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn bad\(xs: js_abi::JsArray<i32>\) -> rt::TsonicResult<bool>/u);
+  assert.match(text, /pub fn bad\(xs: js_abi::JsArray<i32>\) -> Result<bool, rt::TsonicError>/u);
   assert.match(text, /xs\.try_some\(\|x\| Ok::<_, rt::TsonicError>\(risky\(x\)\? == 1\)\)/u);
 });
 

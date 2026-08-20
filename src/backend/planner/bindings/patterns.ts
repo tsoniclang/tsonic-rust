@@ -32,6 +32,7 @@ import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagno
 import {
   diagnosticInput,
   isValidRustIdentifier,
+  rustActiveErrorType,
 } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
@@ -410,25 +411,27 @@ function normalizeBindingValue(
     ));
     return undefined;
   }
-  if (context.fallibleContext !== true) {
+  const activeErrorType = rustActiveErrorType(context);
+  if (activeErrorType === undefined) {
     return rustOptionDefaultValue(flattened, fallback);
   }
-  context.usedAliases?.add("rt");
   const result = (value: RustExpr): RustExpr => ({
     kind: "call",
-    path: "Ok::<_, rt::TsonicError>",
+    path: "Ok",
+    typeArguments: [{ kind: "infer" }, activeErrorType],
     args: [value],
   });
   return {
     kind: "try",
-    errorDomain: context.errorDomain,
+    resultErrorType: activeErrorType,
+    operandErrorType: activeErrorType,
     expr: {
       kind: "method-call",
       receiver: flattened,
       method: "map_or_else",
       args: [
         { kind: "closure", params: [], body: result(fallback) },
-        { kind: "path", path: "Ok::<_, rt::TsonicError>" },
+        { kind: "path", path: "Ok" },
       ],
     },
   };

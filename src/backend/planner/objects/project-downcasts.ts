@@ -19,6 +19,7 @@ import {
   rustProjectObjectDispatchField,
   rustProjectObjectIdentityField,
 } from "./project-objects.js";
+import { rustProjectRootType } from "./polymorphism/names.js";
 import {
   allocateRustSyntheticName,
   createRustSyntheticNameState,
@@ -60,15 +61,16 @@ export function planRustProjectDowncastValue(
     : context.input.projectTypes.downcastRoute(sourceDefinition, targetCarrier);
   const targetValue = rustSourceTypeCarrierValue(targetCarrier);
   const targetPath = targetValue === undefined ? undefined : sourceTypePath(context, targetValue);
+  const targetRootType = rustProjectRootType(targetCarrier, context);
   const optionalElement = rustOptionElementCarrier(sourceCarrier);
   if (sourceDefinition === undefined || targetDefinition === undefined || route === undefined ||
-    targetPath === undefined ||
+    route.target !== targetDefinition || targetPath === undefined || targetRootType === undefined ||
     (!rustTargetTypeRefEquals(sourceCarrier, dispatchCarrier) &&
       !rustTargetTypeRefEquals(optionalElement, dispatchCarrier))) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.project-downcast",
-      "Project downcast conflicts with its exact source carrier, target carrier, or generated dispatch route.",
+      "Project downcast conflicts with its exact source carrier, target carrier, or concrete Rust identity route.",
     ));
     return undefined;
   }
@@ -77,6 +79,7 @@ export function planRustProjectDowncastValue(
     "downcast_value",
   );
   const sourceExpression = planRustNonConsumingProjectValue(node, expression, context);
+  context.usedAliases?.add("rt");
   const sourceReference: RustExpr = { kind: "reference", expr: sourceExpression };
   const valuePath: RustExpr = optionalElement === undefined
     ? { kind: "path", path: valueName }
@@ -106,7 +109,7 @@ export function planRustProjectDowncastValue(
           name: rustProjectObjectDispatchField,
           value: {
             kind: "method-call",
-            receiver: projectDowncastDispatch(valuePath, route.slot),
+            receiver: projectDowncastRoot(valuePath, targetRootType),
             method: "unwrap",
             args: [],
           },
@@ -150,14 +153,16 @@ export function planRustProjectTypeTest(
   const route = sourceDefinition === undefined
     ? undefined
     : context.input.projectTypes.downcastRoute(sourceDefinition, fact.targetCarrier);
-  if (route === undefined) {
+  const targetRootType = rustProjectRootType(fact.targetCarrier, context);
+  if (route === undefined || targetRootType === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.project-type-test",
-      "Project type test has no exact generated dispatch route for its finalized carriers.",
+      "Project type test has no exact concrete Rust identity route for its finalized carriers.",
     ));
     return undefined;
   }
+  context.usedAliases?.add("rt");
   const optionalElement = rustOptionElementCarrier(fact.sourceCarrier);
   if (optionalElement !== undefined) {
     return {
@@ -169,8 +174,9 @@ export function planRustProjectTypeTest(
         params: [{ name: "value", byRefCopy: false }],
         body: {
           kind: "method-call",
-          receiver: projectDowncastDispatch({ kind: "path", path: "value" }, route.slot),
-          method: "is_some",
+          receiver: projectObjectAny({ kind: "path", path: "value" }),
+          method: "is",
+          typeArguments: [targetRootType],
           args: [],
         },
       }],
@@ -178,17 +184,28 @@ export function planRustProjectTypeTest(
   }
   return {
     kind: "method-call",
-    receiver: projectDowncastDispatch(expression, route.slot),
-    method: "is_some",
+    receiver: projectObjectAny(expression),
+    method: "is",
+    typeArguments: [targetRootType],
     args: [],
   };
 }
 
-function projectDowncastDispatch(expression: RustExpr, slot: string): RustExpr {
+function projectObjectAny(expression: RustExpr): RustExpr {
   return {
     kind: "method-call",
     receiver: cloneProjectField(expression, rustProjectObjectDispatchField),
-    method: slot,
+    method: "into_any",
+    args: [],
+  };
+}
+
+function projectDowncastRoot(expression: RustExpr, targetRootType: import("../../rust-ast/nodes.js").RustType): RustExpr {
+  return {
+    kind: "method-call",
+    receiver: projectObjectAny(expression),
+    method: "downcast",
+    typeArguments: [targetRootType],
     args: [],
   };
 }

@@ -45,6 +45,7 @@ export function validateRustFinalizedOperationAbi(candidate: unknown): candidate
     return false;
   }
   const runtimeIndexes = new Set<number>();
+  let receiverUsed = false;
   const validateSourceInput = (input: RustFinalizedSourceInput): boolean => {
     if (!finalizedConversionIsValid(input.conversion) ||
       !rustTargetTypeRefEquals(input.sourceCarrier, input.conversion.sourceCarrier) ||
@@ -59,9 +60,13 @@ export function validateRustFinalizedOperationAbi(candidate: unknown): candidate
         return false;
       }
       runtimeIndexes.add(input.source.sourceIndex);
-    } else if (abi.sourceReceiver.kind !== "receiver" ||
-      !rustTargetTypeRefEquals(abi.sourceReceiver.carrier, input.sourceCarrier)) {
-      return false;
+    } else {
+      if (abi.sourceReceiver.kind !== "receiver" ||
+        abi.sourceReceiver.disposition !== "runtime" ||
+        !rustTargetTypeRefEquals(abi.sourceReceiver.carrier, input.sourceCarrier)) {
+        return false;
+      }
+      receiverUsed = true;
     }
     return true;
   };
@@ -104,7 +109,9 @@ export function validateRustFinalizedOperationAbi(candidate: unknown): candidate
     }
   }
   if (abi.sourceArguments.some((argument) =>
-    argument.disposition === "runtime" && !runtimeIndexes.has(argument.sourceIndex))) {
+    argument.disposition === "runtime" && !runtimeIndexes.has(argument.sourceIndex)) ||
+    abi.sourceReceiver.kind === "receiver" &&
+      (abi.sourceReceiver.disposition === "runtime") !== receiverUsed) {
     return false;
   }
   const sourceReceiverCarrier = abi.sourceReceiver.kind === "receiver"
@@ -175,7 +182,9 @@ const dispositions = new Set<unknown>(["runtime", "compile-time"]);
 function isSourceReceiver(value: unknown): value is RustFinalizedOperationAbi["sourceReceiver"] {
   return isRecord(value) && (value.kind === "none"
     ? hasExactKeys(value, ["kind"])
-    : value.kind === "receiver" && hasExactKeys(value, ["kind", "carrier"]) && isRustTargetTypeRef(value.carrier));
+    : value.kind === "receiver" &&
+      hasExactKeys(value, ["kind", "carrier", "disposition"]) &&
+      isRustTargetTypeRef(value.carrier) && dispositions.has(value.disposition));
 }
 
 function isSourceArgument(value: unknown): value is RustFinalizedSourceArgument {

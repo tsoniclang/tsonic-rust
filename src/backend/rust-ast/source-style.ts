@@ -570,6 +570,8 @@ function collectLocalRustTypeNames(
 
 function rustTypeNames(type: RustType): readonly string[] {
   switch (type.kind) {
+    case "infer":
+      return [];
     case "named":
       return [type.path, ...(type.typeArguments?.flatMap(rustTypeNames) ?? [])];
     case "trait-object":

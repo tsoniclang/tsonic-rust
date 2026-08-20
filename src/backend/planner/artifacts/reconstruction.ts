@@ -21,29 +21,44 @@ import {
 import type {
   PlannedRustSourceFile,
 } from "../program/source-file.js";
+import type { RustSourcePackageComponentPlan } from "../program/source-package-components.js";
+import type { RustSourcePackageErrorPlan } from "../program/source-package-errors.js";
+import { rustSourceItemIdentity } from "../program/source-package-facades.js";
+import type { RustSourceFileModel } from "../../rust-ast/nodes.js";
 
 const minimumRustArtifactReconstructionCount = 64;
 const maximumReconstructionsPerSourceFile = 32;
 
+export interface RustSourceFileReconstructionPlan {
+  readonly rootSources: readonly PlannedRustSourceFile[];
+  readonly externalItemPathByIdentity: ReadonlyMap<string, string>;
+}
+
 export function reconstructRustSourceFiles(
   input: RustPlanningContext,
   identitiesByFileName: ReadonlyMap<string, RustSourceFileOutputIdentity>,
-  externalItemPathByIdentity: ReadonlyMap<string, string>,
+  facadeExternalItemPathByIdentity: ReadonlyMap<string, string>,
   externalStructuralShapeModuleByFileName: ReadonlyMap<string, string>,
-  publicModuleNames: ReadonlySet<string>,
-  publicImplementationItemIdentities: ReadonlySet<string>,
-  errorDomain: import("../../rust-ast/nodes.js").RustErrorDomain,
-  programModuleName: string,
-  structuralShapesModuleName: string,
+  components: readonly RustSourcePackageComponentPlan[],
+  sourcePackageErrors: RustSourcePackageErrorPlan,
   diagnostics: TargetDiagnostic[],
-): readonly PlannedRustSourceFile[] | undefined {
+): RustSourceFileReconstructionPlan | undefined {
   const sourceFilesByOwner = new Map<string, SourceFile>();
   const ownerBySourceFile = new Map<SourceFile, string>();
+  const ownersByComponent = new Map<string, string[]>();
+  const componentById = new Map(components.map((component) =>
+    [component.componentId, component] as const));
+  const moduleNameByFileName = new Map(
+    [...identitiesByFileName].map(([fileName, identity]) =>
+      [fileName, identity.moduleName] as const),
+  );
+  const externalCrateNameByFileName = new Map(
+    [...identitiesByFileName]
+      .filter(([, identity]) => identity.externalCrateName !== undefined)
+      .map(([fileName, identity]) =>
+        [fileName, identity.externalCrateName!] as const),
+  );
   for (const sourceFile of input.sourceFiles) {
-    const identity = identitiesByFileName.get(input.ast.getFileName(sourceFile));
-    if (identity?.externalCrateName !== undefined) {
-      continue;
-    }
     const owner = sourceFileArtifactOwner(input, sourceFile);
     if (owner === undefined) {
       diagnostics.push(reconstructionDiagnostic(
@@ -61,6 +76,24 @@ export function reconstructRustSourceFiles(
     }
     sourceFilesByOwner.set(owner, sourceFile);
     ownerBySourceFile.set(sourceFile, owner);
+    const fileName = input.ast.getFileName(sourceFile);
+    const identity = identitiesByFileName.get(fileName);
+    const component = identity === undefined
+      ? undefined
+      : componentById.get(identity.componentId);
+    if (identity === undefined || component === undefined) {
+      diagnostics.push(reconstructionDiagnostic(
+        "RUST_SOURCE_PACKAGE_COMPONENT_IDENTITY_MISSING",
+        `Rust source file '${fileName}' has no exact source-package component plan.`,
+      ));
+      return undefined;
+    }
+    const owners = ownersByComponent.get(component.componentId) ?? [];
+    owners.push(owner);
+    ownersByComponent.set(component.componentId, owners);
+  }
+  for (const owners of ownersByComponent.values()) {
+    owners.sort((left, right) => left.localeCompare(right, "en"));
   }
 
   const maximumReconstructionCount = rustArtifactReconstructionBudget(
@@ -76,6 +109,8 @@ export function reconstructRustSourceFiles(
 
   const plannedByOwner = new Map<string, PlannedRustSourceFile>();
   const diagnosticsByOwner = new Map<string, readonly TargetDiagnostic[]>();
+  const externalItemPathByIdentity = new Map(facadeExternalItemPathByIdentity);
+  const plannedExternalItemIdentitiesByOwner = new Map<string, ReadonlySet<string>>();
   const reconstruction = reconstructTargetArtifacts(
     input.artifacts.contractGraph,
     [...sourceFilesByOwner.keys()].sort((left, right) =>
@@ -97,31 +132,49 @@ export function reconstructRustSourceFiles(
           reason: `Rust source artifact '${owner}' has no finalized module identity.`,
         };
       }
+      const component = componentById.get(identity.componentId);
+      if (component === undefined) {
+        return {
+          kind: "rejected",
+          code: "RUST_SOURCE_PACKAGE_COMPONENT_IDENTITY_MISSING",
+          reason: `Rust source artifact '${owner}' has no exact source-package component plan.`,
+        };
+      }
+      const componentDependencies = component.dependencyComponentIds.flatMap(
+        (dependencyComponentId) =>
+          (ownersByComponent.get(dependencyComponentId) ?? []).map((dependencyOwner) => ({
+            owner: dependencyOwner,
+            facet: "source-file-public-surface" as const,
+          })),
+      );
+      if (componentDependencies.some((dependency) =>
+        !graph.hasPublishedFacet(dependency))) {
+        return {
+          kind: "blocked",
+          reason:
+            `Rust source artifact '${owner}' requires complete target linkage from its source-package dependencies.`,
+          dependencies: Object.freeze(componentDependencies),
+        };
+      }
       const revision = graph.revision;
       const candidateDiagnostics: TargetDiagnostic[] = [];
       const captured = input.artifacts.captureDependencies(owner, () =>
         planRustSourceFile(
           sourceFile,
           identity.moduleName,
-          identity.externalCrateName,
-          new Map(
-            [...identitiesByFileName].map(([candidateFileName, candidate]) =>
-              [candidateFileName, candidate.moduleName] as const),
-          ),
-          new Map(
-            [...identitiesByFileName]
-              .filter(([, candidate]) => candidate.externalCrateName !== undefined)
-              .map(([candidateFileName, candidate]) =>
-                [candidateFileName, candidate.externalCrateName!] as const),
-          ),
+          identity.componentId,
+          component.crateName,
+          moduleNameByFileName,
+          externalCrateNameByFileName,
           externalItemPathByIdentity,
           externalStructuralShapeModuleByFileName,
-          programModuleName,
-          structuralShapesModuleName,
+          component.programModuleName,
+          component.structuralShapesModuleName,
           identity.childModuleNames,
-          publicModuleNames,
-          publicImplementationItemIdentities,
-          errorDomain,
+          component.publicModuleNames,
+          component.publicImplementationItemIdentities,
+          component.errorDomain,
+          sourcePackageErrors,
           input,
           candidateDiagnostics,
         )
@@ -150,10 +203,15 @@ export function reconstructRustSourceFiles(
         sourceFile,
         owner,
         ownerBySourceFile,
-        identitiesByFileName,
       );
       if (moduleDependencies.kind === "rejected") {
         return moduleDependencies;
+      }
+      if (component.crateName !== undefined) {
+        plannedExternalItemIdentitiesByOwner.set(owner, new Set(
+          rustSourceFileItemNames(captured.value.model).map((itemName) =>
+            rustSourceItemIdentity(fileName, itemName)),
+        ));
       }
       const candidate = rustSourceFileContractCandidate(
         owner,
@@ -196,13 +254,60 @@ export function reconstructRustSourceFiles(
     ));
     return undefined;
   }
-  return Object.freeze(input.sourceFiles.flatMap((sourceFile) => {
-    if (identitiesByFileName.get(input.ast.getFileName(sourceFile))?.externalCrateName !== undefined) {
+  const plannedExternalItemIdentities = new Set(
+    [...plannedExternalItemIdentitiesByOwner.values()].flatMap((identities) =>
+      [...identities]),
+  );
+  for (const itemIdentity of facadeExternalItemPathByIdentity.keys()) {
+    if (!plannedExternalItemIdentities.has(itemIdentity)) {
+      diagnostics.push(reconstructionDiagnostic(
+        "RUST_SOURCE_PACKAGE_LINKAGE_ITEM_MISSING",
+        "An external source-package facade names an item absent from its exact planned Rust implementation.",
+      ));
+    }
+  }
+  if (diagnostics.length > 0) {
+    return undefined;
+  }
+  const rootComponent = components.find((component) => component.root);
+  if (rootComponent === undefined) {
+    diagnostics.push(reconstructionDiagnostic(
+      "RUST_SOURCE_PACKAGE_COMPONENT_ROOT_MISSING",
+      "Rust source reconstruction has no exact root source-package component.",
+    ));
+    return undefined;
+  }
+  const rootSources = input.sourceFiles.flatMap((sourceFile) => {
+    const identity = identitiesByFileName.get(input.ast.getFileName(sourceFile));
+    if (identity?.componentId !== rootComponent.componentId) {
       return [];
     }
     const owner = ownerBySourceFile.get(sourceFile);
     const planned = owner === undefined ? undefined : plannedByOwner.get(owner);
     return planned === undefined ? [] : [planned];
+  });
+  return Object.freeze({
+    rootSources: Object.freeze(rootSources),
+    externalItemPathByIdentity: new Map(externalItemPathByIdentity),
+  });
+}
+
+function rustSourceFileItemNames(model: RustSourceFileModel): readonly string[] {
+  return Object.freeze(model.items.flatMap((item) => {
+    switch (item.kind) {
+      case "function":
+      case "const":
+      case "thread-local":
+      case "struct":
+      case "trait":
+      case "enum":
+      case "type-alias":
+        return [item.name];
+      case "mod-decl":
+      case "impl":
+      case "use":
+        return [];
+    }
   }));
 }
 
@@ -211,7 +316,6 @@ function sourceFilePublicDependencies(
   sourceFile: SourceFile,
   owner: string,
   ownerBySourceFile: ReadonlyMap<SourceFile, string>,
-  identitiesByFileName: ReadonlyMap<string, RustSourceFileOutputIdentity>,
 ):
   | {
       readonly kind: "resolved";
@@ -224,11 +328,6 @@ function sourceFilePublicDependencies(
     } {
   const dependencies: TargetArtifactDependency<RustArtifactFacet>[] = [];
   for (const reference of input.source.navigation.moduleReferences(sourceFile)) {
-    if (identitiesByFileName.get(
-      input.ast.getFileName(reference.sourceFile),
-    )?.externalCrateName !== undefined) {
-      continue;
-    }
     const dependencyOwner = ownerBySourceFile.get(reference.sourceFile) ??
       sourceFileArtifactOwner(input, reference.sourceFile);
     if (dependencyOwner === undefined) {

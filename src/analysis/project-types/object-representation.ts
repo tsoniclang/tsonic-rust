@@ -1,7 +1,7 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import {
-  Node_Expression,
   sourceNodesEqual,
+  type SourceDeclarationUse,
   type SourceExpressionValueFlowSummary,
   type SourceProgramNavigation,
 } from "@tsonic/target-api/source";
@@ -198,7 +198,7 @@ function collectMutatingProjectMethods(input: {
           mutating.add(caller);
         }
         if (isInstanceCallable(member, input.ast) && use.kind === "direct-call" &&
-          sourceCallReceiverIsThis(use.reference, input.ast)) {
+          sourceUseReceiverIsThis(use, input.ast)) {
           const callees = calls.get(caller) ?? new Set<Node>();
           callees.add(member);
           calls.set(caller, callees);
@@ -262,19 +262,20 @@ function enclosingProjectMethod(
   return undefined;
 }
 
-function sourceCallReceiverIsThis(reference: Node, ast: AstReader): boolean {
-  let current = reference;
+function sourceUseReceiverIsThis(
+  use: SourceDeclarationUse,
+  ast: AstReader,
+): boolean {
+  let current = use.memberReceiver;
+  if (current === undefined) {
+    return false;
+  }
   let parent = ast.parent(current);
   while (parent !== undefined && sourceTransparentWrapperContains(ast, parent, current)) {
     current = parent;
     parent = ast.parent(current);
   }
-  if (parent === undefined || !ast.is.IsPropertyAccessExpression(parent) ||
-    !sourceNodesEqual(ast, ast.name(parent), current)) {
-    return false;
-  }
-  const receiver = Node_Expression(ast, parent);
-  const kind = receiver === undefined ? "" : ast.kindName(receiver);
+  const kind = ast.kindName(current);
   return kind === "KindThisExpression" || kind === "KindThisKeyword";
 }
 

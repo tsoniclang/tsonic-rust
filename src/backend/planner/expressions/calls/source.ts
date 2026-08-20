@@ -7,7 +7,16 @@ import {
 } from "../../../../policy/types/target-types.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { applyRustSourceCallableRequirements } from "../../artifacts/source-callable-contracts.js";
-import { diagnosticInput, isValidRustIdentifier, sourceModuleItemPath, sourceTypePath } from "../../program/plan-context.js";
+import {
+  diagnosticInput,
+  isValidRustIdentifier,
+  rustActiveErrorType,
+  rustCurrentErrorBoundary,
+  rustErrorBoundaryForProjectMember,
+  rustErrorType,
+  sourceModuleItemPath,
+  sourceTypePath,
+} from "../../program/plan-context.js";
 import { invokeRustStructuralObjectMethod } from "../../objects/project-storage.js";
 import { isDenseDataArray } from "../../../../policy/model/closed-data.js";
 import {
@@ -392,7 +401,18 @@ export function planSelectedSourceCall(
   if (effects.invocation === "infallible") {
     return isRustNeverCarrier(fact.resultCarrier) ? rustBottomExpression(planned) : planned;
   }
-  if (context.fallibleContext !== true) {
+  const resultErrorType = rustActiveErrorType(context);
+  const callableCarrier = fact.target.form === "callable"
+    ? fact.target.carrier
+    : fact.target.form === "structural-method"
+      ? fact.target.callableCarrier
+      : undefined;
+  const operandBoundary = rustCallableProtocol(callableCarrier) !== undefined
+    ? rustCurrentErrorBoundary(context)
+    : selected.sourceDeclaration === undefined
+      ? undefined
+      : rustErrorBoundaryForProjectMember(selected.sourceDeclaration, context);
+  if (resultErrorType === undefined) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
       "rust.error.call",
@@ -400,10 +420,19 @@ export function planSelectedSourceCall(
     ));
     return undefined;
   }
+  if (operandBoundary === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.source-call-error-boundary",
+      "Fallible source call has no exact selected declaration error boundary.",
+    ));
+    return undefined;
+  }
   const propagated: RustExpr = {
     kind: "try",
     expr: planned,
-    errorDomain: context.errorDomain,
+    resultErrorType,
+    operandErrorType: rustErrorType(operandBoundary),
   };
   return isRustNeverCarrier(fact.resultCarrier)
     ? rustBottomAfterEffect(propagated, "fallible never call returned")

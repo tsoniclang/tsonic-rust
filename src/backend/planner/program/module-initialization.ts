@@ -2,15 +2,20 @@ import type { SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustPlanningContext } from "../context.js";
 import { stronglyConnectedSourceFiles } from "../../../analysis/program/module-graph.js";
-import type { RustErrorDomain, RustItem, RustStmt } from "../../rust-ast/nodes.js";
+import type { RustItem, RustStmt, RustType } from "../../rust-ast/nodes.js";
 import type { PlannedRustSourceFile } from "./source-file.js";
 import type { RustSourcePackageInitializerPlan } from "./source-package-initializers.js";
+import {
+  resolveRustSourcePackageErrorBoundary,
+  type RustSourcePackageErrorBoundary,
+  type RustSourcePackageErrorPlan,
+} from "./source-package-errors.js";
 
 export interface RustModuleInitializer {
   readonly sourceFile: SourceFile;
   readonly path: string;
   readonly asynchronous: boolean;
-  readonly fallible: boolean;
+  readonly errorBoundary?: RustSourcePackageErrorBoundary;
 }
 
 export function planRustModuleInitializers(
@@ -18,6 +23,8 @@ export function planRustModuleInitializers(
   plannedSources: readonly PlannedRustSourceFile[],
   roots: readonly SourceFile[],
   packageInitializers: RustSourcePackageInitializerPlan,
+  sourcePackageErrors: RustSourcePackageErrorPlan,
+  consumerComponentId: string,
   diagnostics: TargetDiagnostic[],
 ): readonly RustModuleInitializer[] | undefined {
   const plannedBySourceFile = new Map(
@@ -53,14 +60,34 @@ export function planRustModuleInitializers(
         sourceFile,
         path: `crate::${planned.moduleName}::${initialization.functionName}`,
         asynchronous: initialization.asynchronous,
-        fallible: initialization.fallible,
+        ...(initialization.errorBoundary === undefined
+          ? {}
+          : { errorBoundary: initialization.errorBoundary }),
       });
     } else if (planned === undefined && contract?.crateName !== undefined) {
+      const errorBoundary = contract.fallible
+        ? resolveRustSourcePackageErrorBoundary(
+            sourcePackageErrors,
+            consumerComponentId,
+            contract.componentId,
+          )
+        : undefined;
+      if (contract.fallible && errorBoundary === undefined) {
+        diagnostics.push({
+          code: "RUST_SOURCE_PACKAGE_INITIALIZER_ERROR_BOUNDARY_MISSING",
+          category: "error",
+          source: "tsonic-rust",
+          message: `External source module '${contract.fileName}' has no exact initializer error ABI from component '${consumerComponentId}'.`,
+          sourceNode: sourceFile,
+          evidence: ["target.capability=rust.backend.source-package-initialization"],
+        });
+        return;
+      }
       ordered.push({
         sourceFile,
         path: `${contract.crateName}::${contract.facadeModuleName}::${contract.facadeFunctionName}`,
         asynchronous: contract.asynchronous,
-        fallible: contract.fallible,
+        ...(errorBoundary === undefined ? {} : { errorBoundary }),
       });
     }
   };
@@ -73,21 +100,20 @@ export function planRustModuleInitializers(
 export interface RustCrateInitializer {
   readonly functionName: string;
   readonly asynchronous: boolean;
-  readonly fallible: boolean;
+  readonly errorType?: RustType;
   readonly item: RustItem;
 }
 
 export function planRustCrateInitializer(
   initializers: readonly RustModuleInitializer[],
   functionName: string,
-  resultTypePath: string,
-  errorDomain: RustErrorDomain,
+  errorType: RustType,
 ): RustCrateInitializer | undefined {
   if (initializers.length === 0) {
     return undefined;
   }
   const asynchronous = initializers.some((initializer) => initializer.asynchronous);
-  const fallible = initializers.some((initializer) => initializer.fallible);
+  const fallible = initializers.some((initializer) => initializer.errorBoundary !== undefined);
   const statements: RustStmt[] = initializers.map((initializer) => {
     const call = {
       kind: "call" as const,
@@ -99,15 +125,29 @@ export function planRustCrateInitializer(
       : call;
     return {
       kind: "expr" as const,
-      expr: initializer.fallible
-        ? { kind: "try" as const, expr: execution, errorDomain }
+      expr: initializer.errorBoundary !== undefined
+        ? {
+            kind: "try" as const,
+            expr: execution,
+            resultErrorType: errorType,
+            operandErrorType: {
+              kind: "named" as const,
+              path: initializer.errorBoundary.errorTypePath,
+              identity: initializer.errorBoundary.errorTypeIdentity,
+            },
+          }
         : execution,
     };
   });
   if (fallible) {
     statements.push({
       kind: "tail",
-      expr: { kind: "path", path: "Ok(())" },
+      expr: {
+        kind: "call",
+        path: "Ok",
+        typeArguments: [{ kind: "unit" }, errorType],
+        args: [{ kind: "path", path: "()" }],
+      },
     });
   }
   const item: RustItem = {
@@ -118,20 +158,14 @@ export function planRustCrateInitializer(
     ...(asynchronous ? { isAsync: true } : {}),
     params: [],
     ...(fallible
-      ? {
-          returnType: {
-            kind: "named" as const,
-            path: resultTypePath,
-            typeArguments: [{ kind: "unit" as const }],
-          },
-        }
+      ? { errorType }
       : {}),
     body: { statements },
   };
   return {
     functionName,
     asynchronous,
-    fallible,
+    ...(fallible ? { errorType } : {}),
     item,
   };
 }

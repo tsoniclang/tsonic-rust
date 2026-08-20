@@ -69,29 +69,52 @@ test("value-returning fallible bodies never synthesize an invalid Ok unit", () =
 
 test("fallible result expressions preserve conversion into the enclosing program error", () => {
   const providerCall = { kind: "call", path: "provider::read", args: [] };
+  const runtimeError = { kind: "named", path: "rt::TsonicError" };
+  const providerError = { kind: "named", path: "provider::Error" };
+  const projectError = { kind: "named", path: "project::Error" };
 
   assert.deepEqual(
     applyRustFallibleResultExpression(
-      { kind: "try", expr: providerCall, errorDomain: "runtime" },
-      { errorDomain: "project", errorTypePath: "rt::TsonicError" },
+      {
+        kind: "try",
+        expr: providerCall,
+        operandErrorType: providerError,
+        resultErrorType: runtimeError,
+      },
+      { errorType: runtimeError },
     ),
     {
-      kind: "call",
-      path: "Ok::<_, rt::TsonicError>",
-      args: [{ kind: "try", expr: providerCall, errorDomain: "runtime" }],
+      kind: "method-call",
+      receiver: providerCall,
+      method: "map_err",
+      args: [{
+        kind: "associated-value",
+        owner: runtimeError,
+        name: "from",
+      }],
     },
   );
   assert.deepEqual(
     applyRustFallibleResultExpression(
-      { kind: "try", expr: providerCall, errorDomain: "runtime" },
-      { errorDomain: "runtime" },
+      {
+        kind: "try",
+        expr: providerCall,
+        operandErrorType: runtimeError,
+        resultErrorType: runtimeError,
+      },
+      { errorType: runtimeError },
     ),
     providerCall,
   );
   assert.deepEqual(
     applyRustFallibleResultExpression(
-      { kind: "try", expr: providerCall, errorDomain: "project" },
-      { errorDomain: "project" },
+      {
+        kind: "try",
+        expr: providerCall,
+        operandErrorType: projectError,
+        resultErrorType: projectError,
+      },
+      { errorType: projectError },
     ),
     providerCall,
   );
@@ -411,7 +434,7 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   assert.match(
     artifactText(result, "src/main.rs"),
-    /fn main\(\) -> tsonic_rust_runtime::TsonicResult<\(\)> \{\n    fallible_main::tsonic_entry\(\)\?;\n    Ok\(\(\)\)\n\}/u,
+    /fn main\(\) -> Result<\(\), tsonic_rust_runtime::TsonicError> \{\n    fallible_main::tsonic_entry\(\)\?;\n    Ok::<\(\), tsonic_rust_runtime::TsonicError>\(\(\)\)\n\}/u,
   );
   validateGeneratedProject("backend-fallible-main", result.artifacts, { run: true });
 });

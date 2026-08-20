@@ -3,6 +3,7 @@ import { expressionIsRightHandBlock, expressionIsStatementBlockOperand, expressi
 import { indentText } from "../types.js";
 import { printFittedCall } from "./calls.js";
 import { printFittedLeftAssociativeBinaryChain, printFittedLogicalChain, printFittedMethodChain, rustBinaryOperandPrefersExpandedCall, rustExpandedMethodClosureOpeningWidth, rustMethodCallKeepsTrailingClosureAttached, rustMethodChain, rustMethodChainBreaksReceiverForClosure, rustMethodChainBreaksReceiverWhenExpanded, rustMethodChainContainsClosure, rustMethodChainFirstMethodRequiresExpansion, rustMethodChainPrefersVerticalLayout, rustMethodChainRequiresVerticalLayout } from "./chains.js";
+import { printRustAssociatedCallTarget, printRustCallMember, printRustDirectCallTarget, printRustMethodCallTarget } from "./callable.js";
 import { printRustClosureParams } from "./closure-params.js";
 import { printRustFormatArgument } from "./format-arguments.js";
 import { printNestedCallArgument } from "./nested-calls.js";
@@ -219,7 +220,12 @@ export function printRustExprFitted(
       );
     }
     case "call":
-      return printFittedCall(expression.path, expression.args, depth, column);
+      return printFittedCall(
+        printRustDirectCallTarget(expression),
+        expression.args,
+        depth,
+        column,
+      );
     case "invoke":
       return printFittedCall(
         printOperand(expression.callee, RustPrecedence.Postfix, false),
@@ -229,14 +235,15 @@ export function printRustExprFitted(
       );
     case "associated-call":
       {
+        const method = printRustCallMember(expression.method, expression.typeArguments);
         const owner = printRustAssociatedCallOwnerFitted(
           expression,
           depth,
-          column + `::${expression.method}(`.length,
+          column + `::${method}(`.length,
         );
         if (owner.includes("\n") && expression.args.length === 1 &&
           (expression.args[0]?.kind === "closure" || expression.args[0]?.kind === "closure-block")) {
-          const callable = appendToLastLine(owner, `::${expression.method}(`);
+          const callable = appendToLastLine(owner, `::${method}(`);
           const argument = printRustExprFitted(
             expression.args[0],
             depth,
@@ -245,7 +252,7 @@ export function printRustExprFitted(
           return appendToLastLine(`${callable}${argument}`, ")");
         }
         return printFittedCall(
-          appendToLastLine(owner, `::${expression.method}`),
+          appendToLastLine(owner, `::${method}`),
           expression.args,
           depth,
           column,
@@ -271,7 +278,7 @@ export function printRustExprFitted(
       }
       const hasClosure = expression.args.some((argument) =>
         argument.kind === "closure" || argument.kind === "closure-block");
-      const attachedCallable = `${receiver}.${expression.method}`;
+      const attachedCallable = printRustMethodCallTarget(expression, receiver);
       const attachedArgumentsPreferExpansion = expression.args.some((argument) =>
         argument.kind === "binary" || argument.kind === "tuple-literal" ||
         rustExpressionContainsClosure(argument) ||
@@ -291,7 +298,7 @@ export function printRustExprFitted(
         selectorCount === 2 &&
         firstMethodRequiresExpansion &&
         renderedFits(
-          `${printRustExpr(chain.base)}.${firstStep.name}.${secondStep.name}(`,
+          `${printRustExpr(chain.base)}.${firstStep.name}.${printRustCallMember(secondStep.name, secondStep.typeArguments)}(`,
           column,
         );
       if (chain !== undefined && selectorCount === 1 && !hasClosure &&
@@ -347,7 +354,7 @@ export function printRustExprFitted(
           (expandedClosureOpening !== undefined &&
             expandedClosureOpening <= rustMethodChainWidth)) &&
         rustMethodCallKeepsTrailingClosureAttached(expression, depth, column)) {
-        return printFittedCall(`${receiver}.${expression.method}`, expression.args, depth, column);
+        return printFittedCall(attachedCallable, expression.args, depth, column);
       }
       if (chain !== undefined && hasClosure && !renderedFits(flat, column)) {
         return printFittedMethodChain(
@@ -383,9 +390,9 @@ export function printRustExprFitted(
         );
       }
       if (hasClosure) {
-        return printFittedCall(`${receiver}.${expression.method}`, expression.args, depth, column);
+        return printFittedCall(attachedCallable, expression.args, depth, column);
       }
-      return printFittedCall(`${receiver}.${expression.method}`, expression.args, depth, column);
+      return printFittedCall(attachedCallable, expression.args, depth, column);
     }
     case "closure":
       return printRustClosureFitted(expression, depth, column);
@@ -413,7 +420,7 @@ export function printRustExprFitted(
       return !rendered.includes("\n") && renderedFits(attached, column) &&
           renderedFits(flat, column)
         ? attached
-        : `${rendered}\n${indentText(depth + 1)}.await`;
+        : `${rendered}\n${indentText(depth)}.await`;
     }
     case "try": {
       const chain = rustMethodChain(expression);
@@ -435,7 +442,7 @@ export function printRustExprFitted(
         rustMethodCallKeepsTrailingClosureAttached(expression.expr, depth, column + 1)) {
         const receiver = printOperand(expression.expr.receiver, RustPrecedence.Postfix, false);
         return appendToLastLine(printFittedCall(
-          `${receiver}.${expression.expr.method}`,
+          printRustMethodCallTarget(expression.expr, receiver),
           expression.expr.args,
           depth,
           column + 1,
@@ -585,7 +592,7 @@ export function printRustExprFitted(
           (rustBinaryOperandPrefersExpandedCall(expression.left) ||
             !renderedFits(printRustExpr(expression.left), column))
         ? printFittedCall(
-            expression.left.path,
+            printRustDirectCallTarget(expression.left),
             expression.left.args,
             depth,
             column,
@@ -598,7 +605,10 @@ export function printRustExprFitted(
             (rustBinaryOperandPrefersExpandedCall(expression.left) ||
               !renderedFits(printRustExpr(expression.left), column))
           ? printFittedCall(
-              `${printRustAssociatedCallOwner(expression.left)}::${expression.left.method}`,
+              printRustAssociatedCallTarget(
+                expression.left,
+                printRustAssociatedCallOwner(expression.left),
+              ),
               expression.left.args,
               depth,
               column,

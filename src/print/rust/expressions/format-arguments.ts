@@ -3,7 +3,7 @@ import { indentText } from "../types.js";
 import { rustInlineFormatArgumentWidth, rustNestedCallWidth } from "../formatting.js";
 import { printRustAssociatedCallOwner } from "./blocks.js";
 import { printFittedCall } from "./calls.js";
-import { printRustCallTypeArguments } from "./chains.js";
+import { printRustAssociatedCallTarget, printRustDirectCallTarget, printRustMethodCallTarget } from "./callable.js";
 import { printRustClosureParams } from "./closure-params.js";
 import { printRustExpr, rustExpressionContainsPreferredVerticalMethodChain } from "./core.js";
 import { printRustExprFitted } from "./fitted.js";
@@ -37,8 +37,8 @@ export function printRustFormatArgument(
     }
     const argument = expression.args[0]!;
     const callable = expression.kind === "call"
-      ? expression.path
-      : `${printRustAssociatedCallOwner(expression)}::${expression.method}`;
+      ? printRustDirectCallTarget(expression)
+      : printRustAssociatedCallTarget(expression, printRustAssociatedCallOwner(expression));
     const prefix = `${callable}(`;
     const borrowedNested = printBorrowedNestedRustFormatArgument(
       callable,
@@ -136,17 +136,20 @@ function rustInvocationParts(expression: RustExpr): {
       return { callable: "String::from", arguments: [expression.expression] };
     case "call":
       return {
-        callable: `${expression.path}${printRustCallTypeArguments(expression.typeArguments)}`,
+        callable: printRustDirectCallTarget(expression),
         arguments: expression.args,
       };
     case "associated-call":
       return {
-        callable: `${printRustAssociatedCallOwner(expression)}::${expression.method}${printRustCallTypeArguments(expression.typeArguments)}`,
+        callable: printRustAssociatedCallTarget(expression, printRustAssociatedCallOwner(expression)),
         arguments: expression.args,
       };
     case "method-call":
       return {
-        callable: `${printOperand(expression.receiver, RustPrecedence.Postfix, false)}.${expression.method}${printRustCallTypeArguments(expression.typeArguments)}`,
+        callable: printRustMethodCallTarget(
+          expression,
+          printOperand(expression.receiver, RustPrecedence.Postfix, false),
+        ),
         arguments: expression.args,
       };
     case "invoke":
@@ -170,15 +173,21 @@ function printBorrowedNestedRustFormatArgument(
   }
   const nested = argument.expr;
   const nestedCall = nested.kind === "call"
-    ? { callable: nested.path, arguments: nested.args }
+    ? {
+        callable: printRustDirectCallTarget(nested),
+        arguments: nested.args,
+      }
     : nested.kind === "associated-call"
       ? {
-          callable: `${printRustAssociatedCallOwner(nested)}::${nested.method}`,
+          callable: printRustAssociatedCallTarget(nested, printRustAssociatedCallOwner(nested)),
           arguments: nested.args,
         }
       : nested.kind === "method-call"
         ? {
-            callable: `${printOperand(nested.receiver, RustPrecedence.Postfix, false)}.${nested.method}`,
+            callable: printRustMethodCallTarget(
+              nested,
+              printOperand(nested.receiver, RustPrecedence.Postfix, false),
+            ),
             arguments: nested.args,
           }
         : undefined;

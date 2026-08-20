@@ -85,7 +85,11 @@ export function run(value: int32): int32 { return apply(value); }
   assert.match(api, /ModuleCell<IncrementCallable>/u);
   assert.doesNotMatch(api, /type_complexity/u);
   assert.match(api, /pub static INCREMENT/u);
-  assert.doesNotMatch(api, /pub fn increment/u);
+  assert.match(api, /pub\(crate\) fn increment/u);
+  assert.doesNotMatch(api, /#\[doc\(hidden\)\]\npub(?:\(crate\))? fn increment/u);
+  const index = artifactText(result, "src/index.rs");
+  assert.match(index, /crate::api::INCREMENT\.with\(\|module_binding\| module_binding\.load\(\)\)/u);
+  assert.match(index, /crate::api::increment\(value\)/u);
 });
 
 test("callback, return, and collection observations retain callable-value storage", { timeout: 300_000 }, () => {
@@ -110,7 +114,9 @@ export const retained = [selected];
   assert.match(output, /ModuleCell<SelectedCallable>/u);
   assert.doesNotMatch(output, /type_complexity/u);
   assert.match(output, /pub static SELECTED/u);
-  assert.doesNotMatch(output, /pub fn selected/u);
+  assert.match(output, /pub\(crate\) fn selected/u);
+  assert.doesNotMatch(output, /#\[doc\(hidden\)\]\npub(?:\(crate\))? fn selected/u);
+  assert.match(output, /invoke\(SELECTED\.with\(\|module_binding\| module_binding\.load\(\)\)\)/u);
   validateGeneratedProject("observed-module-callable", result.artifacts);
 });
 
@@ -347,8 +353,8 @@ export function forwards(): int32 { return risky(false); }
 
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
-  assert.match(output, /pub fn risky\(flag: bool\) -> rt::TsonicResult<i32>/u);
-  assert.match(output, /pub fn forwards\(\) -> rt::TsonicResult<i32>/u);
+  assert.match(output, /pub fn risky\(flag: bool\) -> Result<i32, rt::TsonicError>/u);
+  assert.match(output, /pub fn forwards\(\) -> Result<i32, rt::TsonicError>/u);
   assert.match(output, /risky\(false\)/u);
   assert.doesNotMatch(output, /ModuleCell|Callable|thread_local!/u);
 });

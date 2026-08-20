@@ -221,7 +221,7 @@ export function pad(): string {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn pad\(\) -> rt::TsonicResult<String>/u);
+  assert.match(text, /pub fn pad\(\) -> Result<String, rt::TsonicError>/u);
   assert.match(text, /js_string::pad_start_with\("7", 3\.0, "0"\)\?/u);
   assert.match(text, /js_string::pad_end\("x", 2\.0\)\?/u);
 });
@@ -449,7 +449,7 @@ export function probe(name: string): boolean {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn probe\(name: &str\) -> rt::TsonicResult<bool> \{/u);
+  assert.match(text, /pub fn probe\(name: &str\) -> Result<bool, rt::TsonicError> \{/u);
   assert.match(text, /js_string::to_upper_case\(name\)/u);
   assert.match(text, /js_string::starts_with_from_start\(&upper, "A"\)/u);
   assert.match(text, /js_string::includes_from_start\(&upper, "B"\)/u);
@@ -502,7 +502,7 @@ export function probe(text: string, values: readonly int32[]): boolean {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn probe\(text: &str, values: js_abi::JsArray<i32>\) -> rt::TsonicResult<bool>/u);
+  assert.match(text, /pub fn probe\(text: &str, values: js_abi::JsArray<i32>\) -> Result<bool, rt::TsonicError>/u);
   assert.match(text, /values\.slice_to\(1\.0, 3\.0\)/u);
   assert.match(text, /copied\.join\("-"\)/u);
   assert.match(text, /js_string::slice_to\(text, 1\.0, -1\.0\)\?/u);

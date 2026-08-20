@@ -245,7 +245,7 @@ test("provider and library identity never flows through local-name recasing", ()
     "utf8",
   );
   const providerLowering = expressions.slice(
-    expressions.indexOf("function refShape"),
+    expressions.indexOf("export function planProviderOperationExpression"),
     expressions.indexOf("export function finishProviderOperationExpression"),
   );
   assert.ok(providerLowering.includes("function planProviderOperationExpression"), "slice covers provider lowering");

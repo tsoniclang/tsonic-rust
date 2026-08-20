@@ -26,6 +26,11 @@ export interface RustSourcePackageFacadePlan {
   readonly publicTopLevelModules: ReadonlySet<string>;
   readonly publicModuleNames: ReadonlySet<string>;
   readonly publicImplementationItemIdentities: ReadonlySet<string>;
+  readonly publicModuleNamesByComponent: ReadonlyMap<string, ReadonlySet<string>>;
+  readonly publicImplementationItemIdentitiesByComponent: ReadonlyMap<
+    string,
+    ReadonlySet<string>
+  >;
 }
 
 export function planRustSourcePackageFacades(
@@ -55,10 +60,6 @@ export function planRustSourcePackageFacades(
     for (const sourceExport of sourcePackage.exports) {
       const exportedSourceFile = sourceFileByName.get(normalizePath(sourceExport.sourceFile));
       if (exportedSourceFile === undefined) {
-        diagnostics.push(facadeDiagnostic(
-          "RUST_SOURCE_PACKAGE_FACADE_SOURCE_MISSING",
-          `Source-package export '${sourceExport.specifier}' in '${sourcePackage.name ?? sourcePackage.id}' has no checked source file.`,
-        ));
         continue;
       }
       const facadeModuleSegments = sourcePackageFacadeModuleSegments(
@@ -145,12 +146,32 @@ export function planRustSourcePackageFacades(
   }
   const rootExports = Object.freeze(exports.filter((entry) =>
     entry.componentId === rootPackage.componentId));
-  const publicModuleNames = new Set<string>();
-  for (const exported of rootExports) {
-    for (let length = 1; length <= exported.facadeModuleSegments.length; length += 1) {
-      publicModuleNames.add(exported.facadeModuleSegments.slice(0, length).join("::"));
+  const publicModuleNamesByComponent = new Map<string, ReadonlySet<string>>();
+  const publicImplementationItemIdentitiesByComponent = new Map<
+    string,
+    ReadonlySet<string>
+  >();
+  for (const component of input.sourcePackages.components) {
+    const componentExports = exports.filter((entry) =>
+      entry.componentId === component.id);
+    const moduleNames = new Set<string>();
+    for (const exported of componentExports) {
+      for (let length = 1; length <= exported.facadeModuleSegments.length; length += 1) {
+        moduleNames.add(exported.facadeModuleSegments.slice(0, length).join("::"));
+      }
     }
+    publicModuleNamesByComponent.set(component.id, Object.freeze(moduleNames));
+    publicImplementationItemIdentitiesByComponent.set(
+      component.id,
+      Object.freeze(new Set(componentExports.map((entry) =>
+        sourceItemIdentity(entry.implementationFileName, entry.implementationName)))),
+    );
   }
+  const publicModuleNames = publicModuleNamesByComponent.get(rootPackage.componentId) ??
+    Object.freeze(new Set<string>());
+  const publicImplementationItemIdentities =
+    publicImplementationItemIdentitiesByComponent.get(rootPackage.componentId) ??
+      Object.freeze(new Set<string>());
   return {
     diagnostics: Object.freeze([]),
     plan: Object.freeze({
@@ -160,8 +181,9 @@ export function planRustSourcePackageFacades(
       publicTopLevelModules: Object.freeze(new Set([...publicModuleNames]
         .filter((name) => !name.includes("::")))),
       publicModuleNames: Object.freeze(publicModuleNames),
-      publicImplementationItemIdentities: Object.freeze(new Set(rootExports.map((entry) =>
-        sourceItemIdentity(entry.implementationFileName, entry.implementationName)))),
+      publicImplementationItemIdentities,
+      publicModuleNamesByComponent,
+      publicImplementationItemIdentitiesByComponent,
     }),
   };
 }

@@ -1,7 +1,8 @@
 import { appendToLastLine, firstLine, lastLine, lastLineLength, remainingLines, renderedFits, rustExpressionContainsTry } from "../patterns.js";
-import { expressionIsRightHandBlock, expressionIsStatementBlockOperand, expressionPrecedence, operatorPrecedence, printFittedBinaryOperand, printOperand, RustPrecedence } from "./precedence.js";
+import { expressionIsStatementBlockOperand, expressionPrecedence, operatorPrecedence, printFittedBinaryOperand, printOperand, RustPrecedence } from "./precedence.js";
 import { indentText, printRustType } from "../types.js";
 import { printFittedCall } from "./calls.js";
+import { printRustAssociatedCallTarget, printRustCallMember, printRustDirectCallTarget, printRustMethodCallTarget } from "./callable.js";
 import { printRustExpr, rustExpressionContainsClosure } from "./core.js";
 import { printRustExprFitted } from "./fitted.js";
 import { rustExpressionContainsExpandedStructLiteral, rustFormatArgumentIsAtomic } from "./inspection.js";
@@ -17,12 +18,12 @@ export function printRustSingleCollectionCallContinuation(
 ): string | undefined {
   const invocation = initializer.kind === "call"
     ? {
-        callable: `${initializer.path}${printRustCallTypeArguments(initializer.typeArguments)}`,
+        callable: printRustDirectCallTarget(initializer),
         arguments: initializer.args,
       }
     : initializer.kind === "associated-call"
       ? {
-          callable: `${printRustAssociatedOwner(initializer.owner)}::${initializer.method}${printRustCallTypeArguments(initializer.typeArguments)}`,
+          callable: printRustAssociatedCallTarget(initializer, printRustAssociatedOwner(initializer.owner)),
           arguments: initializer.args,
         }
       : undefined;
@@ -68,12 +69,6 @@ export function printRustAssociatedOwner(owner: RustType): string {
   return `${owner.path}::<${owner.typeArguments.map(printRustType).join(", ")}>`;
 }
 
-export function printRustCallTypeArguments(typeArguments: readonly RustType[] | undefined): string {
-  return typeArguments === undefined || typeArguments.length === 0
-    ? ""
-    : `::<${typeArguments.map(printRustType).join(", ")}>`;
-}
-
 export function printFittedLogicalChain(
   expression: Extract<RustExpr, { readonly kind: "binary" }>,
   operator: "||" | "&&",
@@ -87,17 +82,28 @@ export function printFittedLogicalChain(
   if (first === undefined) {
     return printRustExpr(expression);
   }
-  let rendered = printFittedLogicalOperand(
-    first,
-    operator,
-    depth,
-    column,
-    grammarPosition,
-  );
+  const second = operands[1];
+  const firstFlat = printRustExpr(first);
+  const firstParenthesized = expressionPrecedence(first) < operatorPrecedence(operator) ||
+    grammarPosition === "statement" && expressionIsStatementBlockOperand(first);
+  const firstFlatOperand = firstParenthesized ? `(${firstFlat})` : firstFlat;
+  let rendered = operands.length === 2 && second !== undefined &&
+      rustExpressionContainsStatementBlock(second) &&
+      !firstFlat.includes("\n") &&
+      renderedFits(`${firstFlatOperand} ${operator} {`, column)
+    ? firstFlatOperand
+    : printFittedLogicalOperand(
+        first,
+        operator,
+        depth,
+        column,
+        grammarPosition,
+      );
   const continuationIndent = indentText(depth + 1);
   for (const operand of operands.slice(1)) {
     const attachedToClosingBlock = lastLine(rendered).trim() === "}";
-    if (!rendered.includes("\n") && expressionIsRightHandBlock(operand)) {
+    if (operands.length === 2 && !rendered.includes("\n") &&
+      rustExpressionContainsStatementBlock(operand)) {
       const separator = ` ${operator} `;
       const attachedRight = printFittedLogicalOperand(
         operand,
@@ -106,7 +112,8 @@ export function printFittedLogicalChain(
         column + rendered.length + separator.length,
         "expression",
       );
-      if (column + rendered.length + separator.length + firstLine(attachedRight).length <=
+      if (firstLine(attachedRight).trimStart().startsWith("{") &&
+        column + rendered.length + separator.length + firstLine(attachedRight).length <=
         rustFormatWidth) {
         rendered = `${rendered}${separator}${attachedRight}`;
         continue;
@@ -225,7 +232,12 @@ interface RustMethodChain {
 }
 
 type RustMethodChainStep =
-  | { readonly kind: "method"; readonly name: string; readonly args: readonly RustExpr[] }
+  | {
+      readonly kind: "method";
+      readonly name: string;
+      readonly typeArguments?: readonly RustType[];
+      readonly args: readonly RustExpr[];
+    }
   | { readonly kind: "field"; readonly name: string }
   | { readonly kind: "await" }
   | { readonly kind: "try" };
@@ -266,7 +278,7 @@ export function rustExpandedMethodClosureOpeningWidth(
     return 0;
   }
   const receiver = printOperand(expression.receiver, RustPrecedence.Postfix, false);
-  const prefix = `${receiver}.${expression.method}(${preceding.length === 0 ? "" : `${preceding.join(", ")}, `}`;
+  const prefix = `${printRustMethodCallTarget(expression, receiver)}(${preceding.length === 0 ? "" : `${preceding.join(", ")}, `}`;
   const renderedClosure = printRustExprFitted(trailing, depth, column + prefix.length);
   return renderedClosure.includes("\n")
     ? prefix.length + firstLine(renderedClosure).length + 1
@@ -289,7 +301,8 @@ export function rustMethodCallKeepsTrailingClosureAttached(
     return false;
   }
   const receiver = printOperand(expression.receiver, RustPrecedence.Postfix, false);
-  const prefix = `${receiver}.${expression.method}(${preceding.length === 0 ? "" : `${preceding.join(", ")}, `}`;
+  const method = printRustCallMember(expression.method, expression.typeArguments);
+  const prefix = `${receiver}.${method}(${preceding.length === 0 ? "" : `${preceding.join(", ")}, `}`;
   const renderedClosure = printRustExprFitted(
     trailing,
     depth,
@@ -297,7 +310,7 @@ export function rustMethodCallKeepsTrailingClosureAttached(
   );
   if (trailing.kind === "closure" && renderedClosure.includes("\n")) {
     const flatClosure = printRustExpr(trailing);
-    const continuationWidth = indentText(depth + 1).length + expression.method.length +
+    const continuationWidth = indentText(depth + 1).length + method.length +
       (preceding.length === 0 ? 3 : preceding.join(", ").length + 5) + flatClosure.length;
     const bodyChain = rustMethodChain(trailing.body);
     const complexBody = bodyChain !== undefined &&
@@ -347,9 +360,11 @@ export function rustMethodChainBreaksReceiverWhenExpanded(chain: RustMethodChain
   const first = chain.steps[0];
   const selectorCount = chain.steps.filter((step) =>
     step.kind === "method" || step.kind === "field" || step.kind === "await").length;
-  const firstSelectorWidth = first?.kind === "method" || first?.kind === "field"
-    ? first.name.length + 1
-    : first?.kind === "await" ? ".await".length
+  const firstSelectorWidth = first?.kind === "method"
+    ? printRustCallMember(first.name, first.typeArguments).length + 1
+    : first?.kind === "field"
+      ? first.name.length + 1
+      : first?.kind === "await" ? ".await".length
       : first?.kind === "try" ? 1 : 0;
   const laterFallibleArgument = chain.steps.some((step, index) =>
     index > 0 && step.kind === "method" && step.args.some(rustExpressionContainsTry));
@@ -374,7 +389,8 @@ export function rustMethodChainFirstSegmentWidth(chain: RustMethodChain): number
       width += step.name.length + 1;
       continue;
     }
-    return width + step.name.length + step.args.map(printRustExpr).join(", ").length + 3;
+    return width + printRustCallMember(step.name, step.typeArguments).length +
+      step.args.map(printRustExpr).join(", ").length + 3;
   }
   return width;
 }
@@ -389,7 +405,7 @@ export function rustMethodChainFirstMethodRequiresExpansion(
   }
   const continuationIndent = indentText(depth + 1);
   return printFittedCall(
-    `.${firstMethod.name}`,
+    `.${printRustCallMember(firstMethod.name, firstMethod.typeArguments)}`,
     firstMethod.args,
     depth + 1,
     continuationIndent.length + 1,
@@ -419,7 +435,8 @@ function rustMethodChainLastSelectorWidth(chain: RustMethodChain): number {
   if (selector.kind === "await") {
     return ".await".length;
   }
-  return selector.name.length + selector.args.map(printRustExpr).join(", ").length + 3;
+  return printRustCallMember(selector.name, selector.typeArguments).length +
+    selector.args.map(printRustExpr).join(", ").length + 3;
 }
 
 function printRustMethodChain(chain: RustMethodChain): string {
@@ -432,7 +449,7 @@ function printRustMethodChain(chain: RustMethodChain): string {
     } else if (step.kind === "field") {
       rendered += `.${step.name}`;
     } else {
-      rendered += `.${step.name}(${step.args.map(printRustExpr).join(", ")})`;
+      rendered += `.${printRustCallMember(step.name, step.typeArguments)}(${step.args.map(printRustExpr).join(", ")})`;
     }
   }
   return rendered;
@@ -459,7 +476,14 @@ export function rustMethodChainBreaksReceiverForClosure(
 function collectRustMethodChain(expression: RustExpr, steps: RustMethodChainStep[]): RustExpr {
   if (expression.kind === "method-call") {
     const base = collectRustMethodChain(expression.receiver, steps);
-    steps.push({ kind: "method", name: expression.method, args: expression.args });
+    steps.push({
+      kind: "method",
+      name: expression.method,
+      ...(expression.typeArguments === undefined
+        ? {}
+        : { typeArguments: expression.typeArguments }),
+      args: expression.args,
+    });
     return base;
   }
   if (expression.kind === "try") {
@@ -530,7 +554,7 @@ export function printFittedMethodChain(
       continue;
     }
     const inlineMethod = printFittedCall(
-      `.${step.name}`,
+      `.${printRustCallMember(step.name, step.typeArguments)}`,
       step.args,
       depth,
       selectedContinuationIndent.length + 1,
@@ -542,12 +566,12 @@ export function printFittedMethodChain(
       !rendered.includes("\n") &&
       (forceAttachFirstSelector ||
         (inlineMethod.includes("\n")
-          ? renderedFits(`${rendered}.${step.name}(`, column)
+          ? renderedFits(`${rendered}.${printRustCallMember(step.name, step.typeArguments)}(`, column)
           : renderedFits(`${rendered}${inlineMethod}`, column)));
     const method = inlineFirstMethod
       ? inlineMethod
       : printFittedCall(
-          `.${step.name}`,
+          `.${printRustCallMember(step.name, step.typeArguments)}`,
           step.args,
           depth + 1,
           selectedContinuationIndent.length + 1,

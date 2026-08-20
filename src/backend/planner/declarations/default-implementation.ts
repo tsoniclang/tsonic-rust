@@ -13,7 +13,7 @@ export function rustDefaultImplementation(
   if (constructor.name !== "new" || constructor.visibility !== "public" ||
     constructor.params.length !== 0 || (constructor.typeParams?.length ?? 0) > 0 ||
     constructor.isAsync === true ||
-    constructor.isUnsafe === true || constructor.fallible === true) {
+    constructor.isUnsafe === true || constructor.errorType !== undefined) {
     return undefined;
   }
   return {

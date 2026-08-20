@@ -10,7 +10,7 @@ import {
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { diagnosticInput } from "../../program/plan-context.js";
 import { expressionCarrier, negateRustPlannedBooleanExpression, planNumericLiteralWithCarrier, requireExpressionCarrier, rustOperationFact, selectedOperationMatches } from "../fundamentals.js";
-import { findRustUpdateProjectField, planRustBorrowedUpdateLocation, planRustDirectUpdateTarget, planRustOwnedUpdateLocation, planRustSourceFieldUpdate, planRustUpdateProjectionArguments, planRustUpdateValue } from "./target.js";
+import { findRustUpdateProjectField, planRustBorrowedUpdateLocation, planRustDirectStorage, planRustOwnedUpdateLocation, planRustSourceFieldUpdate, planRustUpdateProjectionArguments, planRustUpdateValue } from "./target.js";
 import { finishRustSourceAccessorCall, planRustSourceAccessorCall, sourceAccessorSelectedOperationMatches, sourceIndexSelectedOperationMatches, sourceStaticFieldSelectedOperationMatches, sourceUnionFieldSelectedOperationMatches } from "../properties.js";
 import { isRustBigIntCarrier } from "../../../../policy/types/target-types.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
@@ -223,13 +223,16 @@ function planRustUpdateExpression(
           context,
         );
   }
-  const target = planRustDirectUpdateTarget(operand, context);
+  const diagnosticCount = context.diagnostics.length;
+  const target = planRustDirectStorage(operand, context);
   if (target === undefined) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, expression),
-      "rust.backend.update-location",
-      "Increment/decrement requires a finalized writable Rust location.",
-    ));
+    if (context.diagnostics.length === diagnosticCount) {
+      context.diagnostics.push(unsupportedConstructDiagnostic(
+        diagnosticInput(context, expression),
+        "rust.backend.update-location",
+        "Increment/decrement requires a finalized writable Rust location.",
+      ));
+    }
     return undefined;
   }
   if (resultUse === "discarded" &&
@@ -411,9 +414,10 @@ function planRustSourceAccessorUpdate(
   );
   const read = plannedRead === undefined
     ? undefined
-    : finishRustSourceAccessorCall(
-        accessorExpression,
-        "read",
+      : finishRustSourceAccessorCall(
+          accessorExpression,
+          accessor.read!.declaration,
+          "read",
         plannedRead,
         context,
       );
@@ -436,6 +440,7 @@ function planRustSourceAccessorUpdate(
         ? undefined
         : finishRustSourceAccessorCall(
             accessorExpression,
+            accessor.write!.declaration,
             "write",
             plannedWrite,
             context,
@@ -510,11 +515,11 @@ function planRustSourceUnionFieldUpdate(
           overrides.set(fieldExpression, {
             expression: storage,
             carrier: field.resultCarrier,
-            valueForm: "value",
+            valueForm: "storage",
           });
           const target = operand === fieldExpression
             ? storage
-            : planRustDirectUpdateTarget(operand, {
+            : planRustDirectStorage(operand, {
                 ...context,
                 expressionOverrides: overrides,
               }, projection.inputOverrides);

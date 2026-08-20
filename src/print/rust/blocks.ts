@@ -1,6 +1,7 @@
 import { appendToLastLine, firstLine, lastLine, lastLineLength, remainingLines, renderedFits } from "./patterns.js";
 import { indentText, printRustType } from "./types.js";
 import { printFittedCall } from "./expressions/calls.js";
+import { printRustAssociatedCallTarget, printRustDirectCallTarget } from "./expressions/callable.js";
 import { printFittedMethodChain, printRustAssociatedOwner, printRustFlatLetInitializer, rustMethodChain, rustMethodChainBreaksReceiverWhenExpanded, rustMethodChainFirstMethodRequiresExpansion } from "./expressions/chains.js";
 import { printRustAssociatedCallOwner, printRustLetInitializer, printRustTypeFitted } from "./expressions/blocks.js";
 import { printRustExpr } from "./expressions/core.js";
@@ -250,17 +251,10 @@ export function collectNestedCallExpressionChain(
   let current = expression;
   for (;;) {
     callables.push(current.kind === "call"
-      ? current.path
-      : `${printRustAssociatedOwner(current.owner)}::${current.method}`);
+      ? printRustDirectCallTarget(current)
+      : printRustAssociatedCallTarget(current, printRustAssociatedOwner(current.owner)));
     if (current.args.length !== 1 ||
       (current.args[0]?.kind !== "call" && current.args[0]?.kind !== "associated-call")) {
-      if (current.args.length === 1 && current.args[0]?.kind === "string-literal") {
-        callables.push("String::from");
-        return {
-          callables,
-          arguments: [{ kind: "str-literal", value: current.args[0].value }],
-        };
-      }
       return current.args.length === 0 ? undefined : { callables, arguments: current.args };
     }
     current = current.args[0];
@@ -748,8 +742,11 @@ function printRustStatementExpr(
   if (expression.kind === "try" &&
     (expression.expr.kind === "call" || expression.expr.kind === "associated-call")) {
     const callable = expression.expr.kind === "call"
-      ? expression.expr.path
-      : `${printRustAssociatedCallOwner(expression.expr)}::${expression.expr.method}`;
+      ? printRustDirectCallTarget(expression.expr)
+      : printRustAssociatedCallTarget(
+          expression.expr,
+          printRustAssociatedCallOwner(expression.expr),
+        );
     const flat = printRustExpr(expression.expr);
     const forceExpanded = !renderedFits(`${flat}?`, column) ||
       expression.expr.args.length > 1 && flat.length > rustNestedCallWidth &&

@@ -43,6 +43,7 @@ import {
   readRustProjectDispatchedField,
   writeRustProjectDispatchedField,
 } from "../objects/project-objects.js";
+import { planRustProjectFieldDispatchRoles } from "../objects/project-field-dispatch.js";
 import {
   readRustStoredObjectField,
   writeRustStoredObjectField,
@@ -556,6 +557,16 @@ function planRustLocationStorage(
         "A typed location cannot expose a project field whose dynamic dispatch may execute a fallible accessor.",
       );
     }
+    const dispatchRoles = dispatchPlan === undefined
+      ? undefined
+      : planRustProjectFieldDispatchRoles(dispatchPlan, context);
+    if (dispatchPlan !== undefined && dispatchRoles?.write === undefined) {
+      return rejectLocationStorage(
+        expression,
+        context,
+        "The finalized projected member has no exact Rust dispatch ABI.",
+      );
+    }
     const ownerName = "location_owner";
     const valueName = "location_value";
     const owner: RustExpr = { kind: "path", path: ownerName };
@@ -568,10 +579,7 @@ function planRustLocationStorage(
           operation.resultCarrier,
           context,
         )
-      : readRustProjectDispatchedField(owner, operation.dispatch.read, {
-          ...dispatchPlan!.read,
-          errorDomain: context.errorDomain,
-        });
+      : readRustProjectDispatchedField(owner, operation.dispatch.read, dispatchRoles!.read);
     const write = operation.dispatch === undefined
       ? writeRustStoredObjectField(
           operation.storage,
@@ -590,9 +598,8 @@ function planRustLocationStorage(
           "=",
           { kind: "path", path: valueName },
           {
-            read: dispatchPlan!.read,
-            write: dispatchPlan!.write!,
-            errorDomain: context.errorDomain,
+            read: dispatchRoles!.read,
+            write: dispatchRoles!.write!,
           },
         );
     if (read === undefined || write === undefined) {

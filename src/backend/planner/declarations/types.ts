@@ -74,7 +74,10 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
   return [{
     kind: "enum",
     name: enumName,
-    visibility: ast.hasModifierKind(node, "export") ? "public" : "crate",
+    visibility: ast.hasModifierKind(node, "export") ||
+        rustSourceItemIsPubliclyReachable(context, enumName)
+      ? "public"
+      : "crate",
     ...(rustSourceItemIsPubliclyReachable(context, enumName)
       ? {}
       : { attrs: [rustLintAttributes.deadCode] }),
@@ -269,7 +272,9 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
     kind: "struct",
     name: interfaceName,
     ...(interfaceAttributes.length === 0 ? {} : { attrs: interfaceAttributes }),
-    visibility: exported ? "public" : "crate",
+    visibility: exported || rustSourceItemIsPubliclyReachable(context, interfaceName)
+      ? "public"
+      : "crate",
     derives: ["Clone", "Debug", "PartialEq"],
     ...(typeParams.length === 0 ? {} : { typeParams }),
     fields: [{
@@ -311,7 +316,10 @@ export function planTypeAliasDeclaration(node: Node, context: RustPlanContext): 
   return [{
     kind: "enum",
     name: aliasName,
-    visibility: ast.hasModifierKind(node, "export") ? "public" : "crate",
+    visibility: ast.hasModifierKind(node, "export") ||
+        rustSourceItemIsPubliclyReachable(context, aliasName)
+      ? "public"
+      : "crate",
     ...(rustSourceItemIsPubliclyReachable(context, aliasName)
       ? {}
       : { attrs: [rustLintAttributes.deadCode] }),
