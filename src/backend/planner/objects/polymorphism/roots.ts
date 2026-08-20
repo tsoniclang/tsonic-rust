@@ -7,16 +7,30 @@ import {
   projectOwnFields,
   projectOwnMethods,
 } from "./model.js";
-import { planProjectFieldAccessorCall, planRootAccessorImplementation, planRootCallableForwarder, planRootMethodForwarder, planRootMethodImplementation, projectAccessorCallableShape, projectDowncastReturnType } from "./forwarders.js";
-import { readRustProjectObjectField, writeRustProjectMethodOverride, writeRustProjectObjectField } from "../project-objects.js";
+import { planProjectDowncastRouteImplementation, planProjectFieldAccessorCall, planRootAccessorForwarder, planRootAccessorImplementation, planRootMethodForwarder, planRootMethodImplementation, projectAccessorCallableShape } from "./forwarders.js";
+import {
+  readRustProjectObjectField,
+  readRustProjectPrivateField,
+  writeRustProjectMethodOverride,
+  writeRustProjectObjectField,
+  writeRustProjectPrivateField,
+} from "../project-objects.js";
 import { rustProjectDispatchTraitType, rustProjectTypeParameters } from "./names.js";
-import { rustTargetTypeRefEquals } from "../../../../policy/types/equality.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustImplFunction, RustItem, RustType } from "../../../rust-ast/nodes.js";
+import type { RustExpr, RustImplFunction, RustItem, RustType } from "../../../rust-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
+import {
+  rustErrorBoundaryForProjectMember,
+  rustErrorType,
+} from "../../program/plan-context.js";
+import { rustTypeEquals } from "../../../rust-ast/type-equality.js";
+import { applyRustFallibleResultExpression } from "../../types/fallible-shape.js";
+import { rustTargetTypeRefEquals } from "../../../../policy/types/equality.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
 import type { TargetTypeRef } from "../../../../policy/types/model.js";
 import type { ProjectClassStateLayer } from "./model.js";
+import type { RustObjectRepresentation } from "../../../../analysis/project-types/object-representation.js";
+import { rustProjectMemberIsPrivate } from "../../../../analysis/project-types/member-privacy.js";
 
 export function planProjectRootImplementations(
   concrete: RustProjectTypeDefinition,
@@ -27,7 +41,8 @@ export function planProjectRootImplementations(
 ): readonly RustItem[] | undefined {
   const lineage = context.input.projectTypes.classLineage(concrete);
   const interfaces = context.input.projectTypes.interfacesForClass(concrete);
-  if (lineage === undefined || interfaces === undefined) {
+  const representation = context.input.objectRepresentations.representationFor(concrete);
+  if (lineage === undefined || interfaces === undefined || representation === undefined) {
     return undefined;
   }
   const items: RustItem[] = [];
@@ -95,6 +110,7 @@ export function planProjectRootImplementations(
       relation.targetType,
       rootType,
       layers,
+      representation,
       implementationFor,
       accessorImplementationFor,
       context,
@@ -132,6 +148,7 @@ function planRootContractFunctions(
   contractCarrier: TargetTypeRef,
   rootType: RustType,
   layers: readonly ProjectClassStateLayer[],
+  representation: RustObjectRepresentation,
   implementationFor: (
     implementation: Node,
     targetTypeArguments: readonly TargetTypeRef[],
@@ -144,37 +161,27 @@ function planRootContractFunctions(
 ): readonly RustImplFunction[] | undefined {
   const functions: RustImplFunction[] = [];
   for (const route of context.input.projectTypes.downcastRoutesFor(contract)) {
-    const returnType = projectDowncastReturnType(route, context);
-    if (returnType === undefined) {
-      return undefined;
-    }
     const relation = context.input.projectTypes.relationship(concreteCarrier, route.target);
     const matches = relation.kind === "related" &&
       rustTargetTypeRefEquals(relation.targetType, route.targetCarrier);
-    functions.push({
-      name: route.slot,
-      visibility: "private",
-      selfParam: "rc",
-      params: [],
-      returnType,
-      body: {
-        statements: [{
-          kind: "tail",
-          expr: matches
-            ? { kind: "call", path: "Some", args: [{ kind: "path", path: "self" }] }
-            : { kind: "none" },
-        }],
-      },
-    });
+    const implementation = planProjectDowncastRouteImplementation(route, matches, context);
+    if (implementation === undefined) {
+      return undefined;
+    }
+    functions.push(implementation);
   }
   const fields = projectOwnFields(contract, contractCarrier, context);
   if (fields === undefined) {
     return undefined;
   }
   for (const field of fields) {
+    const privateField = field.origin === "project" &&
+      rustProjectMemberIsPrivate(context.input.ast, field.declaration);
     const dispatch = context.input.projectFieldDispatch.planFor(field.declaration);
     const implementation = field.origin === "external"
       ? { kind: "stored" as const, declaration: field.declaration }
+      : privateField
+        ? { kind: "stored" as const, declaration: field.declaration }
       : context.input.projectFieldDispatch.implementationFor(
           concrete,
           field.declaration,
@@ -189,17 +196,27 @@ function planRootContractFunctions(
     const write = dispatch?.write === undefined
       ? undefined
       : context.input.projectTypes.memberSlotName(field.declaration, "write");
-    const readValue = implementation?.kind === "stored"
+    const readValue: { readonly expression: RustExpr; readonly errorType?: RustType } | undefined = implementation?.kind === "stored"
       ? storagePath === undefined
         ? undefined
-        : {
-            expression: readRustProjectObjectField(
-              { kind: "path", path: "self" },
-              storagePath,
-              field.carrier,
-            ),
-            fallible: false,
-          }
+        : (() => {
+            const expression = privateField
+              ? read === undefined
+                ? undefined
+                : readRustProjectPrivateField(
+                    { kind: "path", path: "self" },
+                    storagePath,
+                    read,
+                    representation,
+                  )
+              : readRustProjectObjectField(
+                  { kind: "path", path: "self" },
+                  storagePath,
+                  field.carrier,
+                  representation,
+                );
+            return expression === undefined ? undefined : { expression };
+          })()
       : implementation?.kind === "accessor"
         ? planProjectFieldAccessorCall(
             rootType,
@@ -213,13 +230,26 @@ function planRootContractFunctions(
       dispatch.write !== undefined && write === undefined) {
       return undefined;
     }
+    const fieldErrorBoundary = dispatch.read.fallible || dispatch.write?.fallible === true
+      ? rustErrorBoundaryForProjectMember(field.declaration, context)
+      : undefined;
+    if ((dispatch.read.fallible || dispatch.write?.fallible === true) &&
+      fieldErrorBoundary === undefined) {
+      return undefined;
+    }
+    const fieldErrorType = fieldErrorBoundary === undefined
+      ? undefined
+      : rustErrorType(fieldErrorBoundary);
     const readResult = dispatch.read.fallible
-      ? readValue.fallible
-        ? readValue.expression
-        : { kind: "call" as const, path: "Ok", args: [readValue.expression] }
-      : readValue.fallible
+      ? readValue.errorType !== undefined &&
+          !rustTypeEquals(readValue.errorType, fieldErrorType)
         ? undefined
-        : readValue.expression;
+        : applyRustFallibleResultExpression(readValue.expression, {
+            errorType: fieldErrorType!,
+          })
+      : readValue.errorType === undefined
+        ? readValue.expression
+        : undefined;
     if (readResult === undefined) {
       return undefined;
     }
@@ -229,7 +259,7 @@ function planRootContractFunctions(
       selfParam: dispatch.read.selfMode,
       params: [],
       returnType: field.type,
-      ...(dispatch.read.fallible ? { fallible: true } : {}),
+      ...(dispatch.read.fallible ? { errorType: fieldErrorType! } : {}),
       body: {
         statements: [{
           kind: "tail",
@@ -238,18 +268,31 @@ function planRootContractFunctions(
       },
     });
     if (dispatch.write !== undefined) {
-      const writeValue = implementation.kind === "stored"
+      const writeValue: { readonly expression: RustExpr; readonly errorType?: RustType } | undefined = implementation.kind === "stored"
         ? storagePath === undefined
           ? undefined
-          : {
-              expression: writeRustProjectObjectField(
-                { kind: "path", path: "self" },
-                storagePath,
-                "=",
-                { kind: "path", path: "value" },
-              ),
-              fallible: false,
-            }
+          : (() => {
+              const expression = privateField
+                ? write === undefined
+                  ? undefined
+                  : writeRustProjectPrivateField(
+                      { kind: "path", path: "self" },
+                      storagePath,
+                      write,
+                      { kind: "path", path: "value" },
+                      representation,
+                    )
+                : writeRustProjectObjectField(
+                    { kind: "path", path: "self" },
+                    storagePath,
+                    "=",
+                    { kind: "path", path: "value" },
+                    representation,
+                  );
+              return expression === undefined
+                ? undefined
+                : { expression };
+            })()
         : implementation.setter === undefined
           ? undefined
           : (() => {
@@ -261,7 +304,10 @@ function planRootContractFunctions(
                 field.type,
               );
             })();
-      if (writeValue === undefined || !dispatch.write.fallible && writeValue.fallible) {
+      if (writeValue === undefined ||
+        (!dispatch.write.fallible && writeValue.errorType !== undefined) ||
+        (dispatch.write.fallible && writeValue.errorType !== undefined &&
+          !rustTypeEquals(writeValue.errorType, fieldErrorType))) {
         return undefined;
       }
       functions.push({
@@ -269,19 +315,22 @@ function planRootContractFunctions(
         visibility: "private",
         selfParam: dispatch.write.selfMode,
         params: [{ name: "value", type: field.type }],
-        ...(dispatch.write.fallible ? { fallible: true } : {}),
+        ...(dispatch.write.fallible ? { errorType: fieldErrorType! } : {}),
         body: dispatch.write.fallible
           ? {
               statements: [{
                 kind: "tail",
-                expr: writeValue.fallible
-                  ? writeValue.expression
-                  : {
+                expr: writeValue.errorType === undefined
+                  ? {
                       kind: "evaluate-then",
                       effect: writeValue.expression,
                       discard: "unit",
-                      value: { kind: "call", path: "Ok", args: [{ kind: "path", path: "()" }] },
-                    },
+                      value: applyRustFallibleResultExpression(
+                        { kind: "path", path: "()" },
+                        { errorType: fieldErrorType! },
+                      ),
+                    }
+                  : writeValue.expression,
               }],
             }
           : {
@@ -316,13 +365,15 @@ function planRootContractFunctions(
     const forwarder = implementation === undefined || helper === undefined ||
         slot === undefined || contractShape === undefined
       ? undefined
-      : planRootCallableForwarder(
+      : planRootAccessorForwarder(
+          concreteCarrier,
+          accessor.declaration,
           implementation,
+          accessor.role,
           slot,
           rootType,
           helper,
           contractShape,
-          undefined,
           context,
         );
     if (forwarder === undefined) {
@@ -419,6 +470,15 @@ function planRootContractFunctions(
           return undefined;
         }
         if (!functions.some((candidate) => candidate.name === write)) {
+          const replacement = writeRustProjectMethodOverride(
+            { kind: "path", path: "self" },
+            storagePath,
+            { kind: "path", path: "value" },
+            representation,
+          );
+          if (replacement === undefined) {
+            return undefined;
+          }
           functions.push({
             name: write,
             visibility: "private",
@@ -427,11 +487,7 @@ function planRootContractFunctions(
             body: {
               statements: [{
                 kind: "expr",
-                expr: writeRustProjectMethodOverride(
-                  { kind: "path", path: "self" },
-                  storagePath,
-                  { kind: "path", path: "value" },
-                ),
+                expr: replacement,
               }],
             },
           });

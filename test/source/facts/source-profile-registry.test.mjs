@@ -38,13 +38,13 @@ test("nested path lookalikes make source profile provenance fail closed", () => 
 
 test("native and JavaScript profile paths are mode-exact", () => {
   const native = sourceFile("/project/.tsonic/source-profiles/rust-provider/rust-globals.d.ts");
-  const compat = sourceFile("/project/.tsonic/source-profiles/rust-provider/js-globals.d.ts");
+  const jsProfile = sourceFile("/project/.tsonic/source-profiles/rust-provider/js-globals.d.ts");
   const surface = sourceFile("/project/.tsonic/source-profiles/js/js-globals.d.ts");
-  const nativeRegistry = createRustSourceProfileRegistry([native, compat], ast, false);
+  const nativeRegistry = createRustSourceProfileRegistry([native, jsProfile], ast, false);
   const jsRegistry = createRustSourceProfileRegistry([surface], ast, true);
 
   assert.equal(nativeRegistry.profileForNode(declaration(native), ast), "native");
-  assert.equal(nativeRegistry.profileForNode(declaration(compat), ast), undefined);
+  assert.equal(nativeRegistry.profileForNode(declaration(jsProfile), ast), undefined);
 
   assert.equal(jsRegistry.profileForNode(declaration(native), ast), undefined);
   assert.equal(jsRegistry.profileForNode(declaration(surface), ast), "js");

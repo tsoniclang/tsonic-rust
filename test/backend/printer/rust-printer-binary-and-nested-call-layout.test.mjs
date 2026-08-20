@@ -548,6 +548,62 @@ test("fallible nested calls in comparisons use rustfmt-compatible wrapper layout
   assert.match(text, /isize_to_i32\(js_string::last_index_of_from_end\(\n            "banana", "ana",\n        \)\)\? == 3/u);
 });
 
+test("fallible comparison calls expand nested closure arguments at their selected column", () => {
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "call",
+            path: "acme_testing::check",
+            args: [{
+              kind: "binary",
+              operator: "==",
+              left: {
+                kind: "try",
+                expr: {
+                  kind: "call",
+                  path: "invoke",
+                  args: [
+                    {
+                      kind: "method-call",
+                      receiver: { kind: "path", path: "RISKY_CALLABLE" },
+                      method: "with",
+                      args: [{
+                        kind: "closure",
+                        params: [{ name: "module_binding" }],
+                        body: {
+                          kind: "method-call",
+                          receiver: { kind: "path", path: "module_binding" },
+                          method: "load",
+                          args: [],
+                        },
+                      }],
+                    },
+                    { kind: "int-literal", text: "4" },
+                  ],
+                },
+              },
+              right: { kind: "int-literal", text: "5" },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    text,
+    /invoke\(\n {12}RISKY_CALLABLE\.with\(\|module_binding\| module_binding\.load\(\)\),\n {12}4,\n {8}\)\? == 5/u,
+  );
+});
+
 test("long borrowed slices use rustfmt-compatible element layout", () => {
   const text = printRustSourceFile({
     headerComment,

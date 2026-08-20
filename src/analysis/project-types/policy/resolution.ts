@@ -1,6 +1,6 @@
 import { allocateRustGeneratedName as allocateGeneratedName, rustGeneratedNameComponent } from "../../../policy/names/generated.js";
 import { compareProjectDefinitions, definitionKey, denseNodes, heritageKindIssue, projectDefinition, projectMemberNames, sourceFileIdentifierNames } from "./helpers.js";
-import { rustScreamingSnakeIdentifier, rustSnakeCaseIdentifier } from "../../../policy/names/identifiers.js";
+import { rustPascalCaseIdentifier, rustScreamingSnakeIdentifier, rustSnakeCaseIdentifier } from "../../../policy/names/identifiers.js";
 import { rustSourceTypeCarrier, rustSourceTypeCarrierValue, substituteRustTargetTypeParameters } from "../../../policy/types/target-types.js";
 import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
 import type { Node, Signature, SourceFile } from "@tsonic/tsts";
@@ -197,6 +197,11 @@ export function createRustProjectTypePolicy(
 
   const polymorphic = new Set<RustProjectTypeDefinition>();
   for (const definition of definitions) {
+    if (definition.kind === "class" && host.externallyExtensible(definition.declaration)) {
+      polymorphic.add(definition);
+    }
+  }
+  for (const definition of definitions) {
     if (definition.kind === "interface" &&
       (denseNodes(host.ast.members(definition.declaration)) ?? []).some((member) =>
         host.ast.kindName(member) === "KindMethodSignature")) {
@@ -249,9 +254,30 @@ export function createRustProjectTypePolicy(
       return fileOrder === 0 ? left.sourceName.localeCompare(right.sourceName, "en") : fileOrder;
     }));
   const programErrorVariantByDefinition = new WeakMap<RustProjectTypeDefinition, string>();
-  programErrorDefinitions.forEach((definition, index) => {
-    programErrorVariantByDefinition.set(definition, `Project${index}`);
-  });
+  const usedProgramErrorVariantsByComponent = new Map<string, Set<string>>();
+  for (const definition of programErrorDefinitions) {
+    const componentId = host.sourcePackageComponentForFile(definition.fileName);
+    if (componentId === undefined) {
+      issues.push({
+        node: definition.declaration,
+        code: "RUST_PROJECT_ERROR_SOURCE_PACKAGE_MISSING",
+        message: `Project error '${definition.sourceName}' has no exact source-package component identity.`,
+      });
+      continue;
+    }
+    const usedProgramErrorVariants = usedProgramErrorVariantsByComponent.get(componentId) ??
+      new Set(["Runtime", "Suppressed"]);
+    usedProgramErrorVariantsByComponent.set(componentId, usedProgramErrorVariants);
+    const base = rustPascalCaseIdentifier(definition.sourceName);
+    let variant = base;
+    let suffix = 2;
+    while (usedProgramErrorVariants.has(variant)) {
+      variant = `${base}${suffix}`;
+      suffix += 1;
+    }
+    usedProgramErrorVariants.add(variant);
+    programErrorVariantByDefinition.set(definition, variant);
+  }
 
   const classLineage = (
     definition: RustProjectTypeDefinition,
@@ -454,7 +480,9 @@ export function createRustProjectTypePolicy(
     ];
     for (const member of denseNodes(host.ast.members(definition.declaration)) ?? []) {
       const kind = host.ast.kindName(member);
-      const targetName = host.names.nameForDeclaration(member);
+      const targetName = kind === "KindMethodDeclaration" || kind === "KindMethodSignature"
+        ? host.targetNameForCallable(member)
+        : host.names.nameForDeclaration(member);
       if (targetName === undefined) {
         continue;
       }
@@ -518,9 +546,14 @@ export function createRustProjectTypePolicy(
     if (usedNames === undefined) {
       throw new Error("Rust project definition has no dispatch name scope.");
     }
-    const targets = orderedDefinitions
-      .filter((target) => target.kind === "class" && target.typeParameterNames.length === 0)
-      .filter((target) => relationship(openCarrier(target), source).kind === "related");
+    const sourceComponent = host.sourcePackageComponentForFile(source.fileName);
+    const targets = sourceComponent === undefined
+      ? []
+      : orderedDefinitions
+          .filter((target) => target.kind === "class" && target.typeParameterNames.length === 0)
+          .filter((target) =>
+            host.sourcePackageComponentForFile(target.fileName) === sourceComponent)
+          .filter((target) => relationship(openCarrier(target), source).kind === "related");
     downcastRoutesByDefinition.set(source, Object.freeze(targets.map((target) => Object.freeze({
       source,
       target,

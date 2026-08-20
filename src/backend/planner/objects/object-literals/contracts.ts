@@ -8,8 +8,8 @@ import {
 } from "../project-objects.js";
 import { applyRustObjectLiteralValueAdapter, planRustObjectLiteralMethodArguments } from "../method-adapters.js";
 import { projectOwnFields, projectOwnMethods } from "../polymorphism/model.js";
+import { planProjectDowncastRouteImplementation } from "../polymorphism/forwarders.js";
 import { rustProjectDispatchTraitType } from "../polymorphism/names.js";
-import { rustTargetTypeRefEquals } from "../../../../policy/types/equality.js";
 import type {
   RustExpr,
   RustImplFunction,
@@ -18,11 +18,15 @@ import type {
 } from "../../../rust-ast/nodes.js";
 import type { RustObjectLiteralAccessorImplementationPlan, RustObjectLiteralImplementationPlan, RustObjectLiteralMethodDispatchPlan } from "./model.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import type { TargetTypeRef } from "../../../../policy/types/model.js";
+import {
+  rustErrorBoundaryForProjectMember,
+  rustErrorType,
+} from "../../program/plan-context.js";
+import { applyRustFallibleResultExpression } from "../../types/fallible-shape.js";
+import { rustTypeEquals } from "../../../rust-ast/type-equality.js";
 
 export function planContractImplementation(
   contract: import("../../../../analysis/project-types/type-policy.js").RustProjectInterfaceContract,
-  resultCarrier: TargetTypeRef,
   rootType: RustType,
   wrapperType: RustType,
   stateFields: readonly RustObjectLiteralImplementationPlan["stateFields"][number][],
@@ -32,41 +36,20 @@ export function planContractImplementation(
 ): RustItem | undefined {
   const trait = rustProjectDispatchTraitType(contract.carrier, context);
   const fields = projectOwnFields(contract.definition, contract.carrier, context);
-  if (trait === undefined || fields === undefined || wrapperType.kind !== "named") {
+  const representation = context.input.objectRepresentations.representationFor(
+    contract.definition,
+  );
+  if (trait === undefined || fields === undefined || representation === undefined ||
+    wrapperType.kind !== "named") {
     return undefined;
   }
   const functions: RustImplFunction[] = [];
   for (const route of context.input.projectTypes.downcastRoutesFor(contract.definition)) {
-    const routeTrait = rustProjectDispatchTraitType(route.targetCarrier, context);
-    if (routeTrait === undefined) {
+    const implementation = planProjectDowncastRouteImplementation(route, false, context);
+    if (implementation === undefined) {
       return undefined;
     }
-    const relation = context.input.projectTypes.relationship(resultCarrier, route.target);
-    const matches = relation.kind === "related" &&
-      rustTargetTypeRefEquals(relation.targetType, route.targetCarrier);
-    functions.push({
-      name: route.slot,
-      visibility: "private",
-      selfParam: "rc",
-      params: [],
-      returnType: {
-        kind: "named",
-        path: "Option",
-        typeArguments: [{
-          kind: "named",
-          path: "std::rc::Rc",
-          typeArguments: [{ kind: "trait-object", trait: routeTrait }],
-        }],
-      },
-      body: {
-        statements: [{
-          kind: "tail",
-          expr: matches
-            ? { kind: "call", path: "Some", args: [{ kind: "path", path: "self" }] }
-            : { kind: "none" },
-        }],
-      },
-    });
+    functions.push(implementation);
   }
   for (const field of fields) {
     const dispatch = context.input.projectFieldDispatch.planFor(field.declaration);
@@ -82,11 +65,22 @@ export function planContractImplementation(
       read === undefined || dispatch.write !== undefined && write === undefined) {
       return undefined;
     }
+    const fieldErrorBoundary = dispatch.read.fallible || dispatch.write?.fallible === true
+      ? rustErrorBoundaryForProjectMember(field.declaration, context)
+      : undefined;
+    if ((dispatch.read.fallible || dispatch.write?.fallible === true) &&
+      fieldErrorBoundary === undefined) {
+      return undefined;
+    }
+    const fieldErrorType = fieldErrorBoundary === undefined
+      ? undefined
+      : rustErrorType(fieldErrorBoundary);
     const readValue: RustExpr = stateField !== undefined
       ? readRustProjectObjectField(
           { kind: "path", path: "self" },
           stateField.targetName,
           field.carrier,
+          representation,
         )
       : {
           kind: "method-call",
@@ -117,7 +111,7 @@ export function planContractImplementation(
       selfParam: dispatch.read.selfMode,
       params: [],
       returnType: field.type,
-      ...(dispatch.read.fallible ? { fallible: true } : {}),
+      ...(dispatch.read.fallible ? { errorType: fieldErrorType! } : {}),
       body: {
         statements: [{
           kind: "tail",
@@ -132,6 +126,7 @@ export function planContractImplementation(
             stateField.targetName,
             "=",
             { kind: "path", path: "value" },
+            representation,
           )
         : accessor?.setter === undefined
           ? undefined
@@ -159,7 +154,7 @@ export function planContractImplementation(
         visibility: "private",
         selfParam: dispatch.write.selfMode,
         params: [{ name: "value", type: field.type }],
-        ...(dispatch.write.fallible ? { fallible: true } : {}),
+        ...(dispatch.write.fallible ? { errorType: fieldErrorType! } : {}),
         body: dispatch.write.fallible
           ? {
               statements: [{
@@ -238,6 +233,7 @@ export function planContractImplementation(
             expression: readRustProjectMethodOverride(
               { kind: "path", path: "self" },
               method.override.fieldName,
+              representation,
             ),
             body: {
               statements: [{
@@ -257,9 +253,17 @@ export function planContractImplementation(
               }],
             },
           }];
+      const methodErrorBoundary = method.errorType === undefined
+        ? undefined
+        : rustErrorBoundaryForProjectMember(method.contractMethod, context);
+      if (method.errorType !== undefined &&
+        (methodErrorBoundary === undefined ||
+          !rustTypeEquals(rustErrorType(methodErrorBoundary), method.errorType))) {
+        return undefined;
+      }
       const adapterContext: RustPlanContext = {
         ...context,
-        fallibleContext: method.fallible,
+        fallibleBoundary: methodErrorBoundary,
       };
       const implementationBinding: RustExpr = {
         kind: "path",
@@ -278,13 +282,29 @@ export function planContractImplementation(
             })),
           }],
         };
+        if (method.errorType === undefined && method.implementation.errorType !== undefined) {
+          return undefined;
+        }
+        const result = method.errorType === undefined
+          ? invocation
+          : applyRustFallibleResultExpression(
+              method.implementation.errorType === undefined
+                ? invocation
+                : {
+                    kind: "try",
+                    expr: invocation,
+                    resultErrorType: method.errorType,
+                    operandErrorType: method.implementation.errorType,
+                  },
+              { errorType: method.errorType },
+            );
         functions.push({
           name: variant.virtualSlot,
           visibility: "private",
           selfParam: "rc",
           params: method.parameters,
           ...(method.returnType === undefined ? {} : { returnType: method.returnType }),
-          fallible: true,
+          ...(method.errorType === undefined ? {} : { errorType: method.errorType }),
           body: {
             statements: [...overrideStatements, {
               kind: "let",
@@ -302,7 +322,7 @@ export function planContractImplementation(
               },
             }, {
               kind: "tail",
-              expr: invocation,
+              expr: result,
             }],
           },
         });
@@ -321,8 +341,13 @@ export function planContractImplementation(
           elements: [receiver, ...adapted.adaptedArguments],
         }],
       };
-      if (method.implementation.fallible) {
-        invocation = { kind: "try", expr: invocation, errorDomain: "runtime" };
+      if (method.implementation.errorType !== undefined) {
+        invocation = {
+          kind: "try",
+          expr: invocation,
+          resultErrorType: method.errorType!,
+          operandErrorType: method.implementation.errorType,
+        };
       }
       const adaptedResult = applyRustObjectLiteralValueAdapter(
         invocation,
@@ -333,18 +358,16 @@ export function planContractImplementation(
       if (adaptedResult === undefined) {
         return undefined;
       }
-      const result = method.fallible
-        ? adaptedResult.kind === "try"
-          ? adaptedResult.expr
-          : { kind: "call" as const, path: "Ok", args: [adaptedResult] }
-        : adaptedResult;
+      const result = method.errorType === undefined
+        ? adaptedResult
+        : applyRustFallibleResultExpression(adaptedResult, { errorType: method.errorType });
       functions.push({
         name: variant.virtualSlot,
         visibility: "private",
         selfParam: "rc",
         params: method.parameters,
         ...(method.returnType === undefined ? {} : { returnType: method.returnType }),
-        ...(method.fallible ? { fallible: true } : {}),
+        ...(method.errorType === undefined ? {} : { errorType: method.errorType }),
         ...(method.isUnsafe ? { isUnsafe: true } : {}),
         body: {
           statements: [...overrideStatements, {
@@ -381,6 +404,15 @@ export function planContractImplementation(
         implementations.some((candidate) => candidate.override !== override)) {
         return undefined;
       }
+      const replacement = writeRustProjectMethodOverride(
+        { kind: "path", path: "self" },
+        override.fieldName,
+        { kind: "path", path: "value" },
+        representation,
+      );
+      if (replacement === undefined) {
+        return undefined;
+      }
       functions.push({
         name: write,
         visibility: "private",
@@ -389,11 +421,7 @@ export function planContractImplementation(
         body: {
           statements: [{
             kind: "expr",
-            expr: writeRustProjectMethodOverride(
-              { kind: "path", path: "self" },
-              override.fieldName,
-              { kind: "path", path: "value" },
-            ),
+            expr: replacement,
           }],
         },
       });

@@ -26,13 +26,9 @@ import {
   cargoPathReferenceKind,
   cargoRegistryPatchAttributeName,
 } from "../providers/model/cargo-reference.js";
-import {
-  readRustTypescriptCompatibilityMode,
-  validateRustTargetOptions,
-} from "../options/rust-target-options.js";
+import { validateRustTargetOptions } from "../options/rust-target-options.js";
 import { createCargoToolchain } from "../toolchain/cargo-toolchain.js";
 import {
-  rustCompatibilitySourceProfileContributions,
   rustJsSurfaceSourceProfileContributions,
   rustNativeSourceProfileContributions,
   rustJsSourceProfileOwnerId,
@@ -84,7 +80,6 @@ export function createRustTargetPack(): TargetPack {
         return {
           references: [
             rustRuntimeCrateReference(context, "@tsonic/rust-runtime", "tsonic_rust_runtime"),
-            ...rustTypescriptCompatibilityRuntimeReferences(context),
           ],
         };
       },
@@ -111,7 +106,7 @@ export function createRustTargetPack(): TargetPack {
       return createRustBackend(
         context,
         composeRustProviderSemantics(context, compilerSession?.semantics()),
-        rustJsSemanticsEnabled(context.target, context.selectedSurfaces),
+        rustJsSemanticsEnabled(context.selectedSurfaces),
       );
     },
     createToolchain(context: TargetToolchainContext): TargetToolchain {
@@ -127,17 +122,13 @@ function rustSourceProfileContributions(
   if (context.selectedSurfaces.some((surface) => surface.id === rustJsSourceProfileOwnerId)) {
     return { declarations: [] };
   }
-  return readRustTypescriptCompatibilityMode(context.target) === "compat"
-    ? rustCompatibilitySourceProfileContributions()
-    : rustNativeSourceProfileContributions();
+  return rustNativeSourceProfileContributions();
 }
 
 function rustJsSemanticsEnabled(
-  target: TargetSelection,
   selectedSurfaces: readonly { readonly id: string }[],
 ): boolean {
-  return selectedSurfaces.some((surface) => surface.id === rustJsSourceProfileOwnerId) ||
-    readRustTypescriptCompatibilityMode(target) === "compat";
+  return selectedSurfaces.some((surface) => surface.id === rustJsSourceProfileOwnerId);
 }
 
 function rustRuntimeCrateReference(
@@ -167,11 +158,4 @@ function resolveRuntimePackageRoot(context: TargetRuntimeContributionContext, pa
     }
   }
   throw new Error(`Required Rust runtime package '${packageName}' is not installed or does not export package.json.`);
-}
-
-function rustTypescriptCompatibilityRuntimeReferences(context: TargetRuntimeContributionContext): readonly TargetRuntimeReference[] {
-  if (readRustTypescriptCompatibilityMode(context.target) !== "compat" || context.selectedSurfaces.some((surface) => surface.id === "js")) {
-    return [];
-  }
-  return [rustRuntimeCrateReference(context, "@tsonic/rust-js", "tsonic_rust_js")];
 }

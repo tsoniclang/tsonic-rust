@@ -83,7 +83,8 @@ export function read(type: string): string {
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /fn new\(r#type: String\)/u);
   assert.match(text, /pub fn read\(r#type: String\) -> String/u);
-  assert.match(text, /Label::new\(r#type\.clone\(\)\)/u);
+  assert.match(text, /Label::new\(r#type\)/u);
+  assert.doesNotMatch(text, /Label::new\(r#type\.clone\(\)\)/u);
   validateGeneratedProject("native-raw-identifiers", result.artifacts);
 });
 
@@ -91,7 +92,7 @@ test("Rust keyword-shaped project methods use one raw identifier at declaration 
   const { result } = compileRust({
     files: {
       "index.ts": `
-export class Matcher {
+class Matcher {
   match(value: string): string {
     return value;
   }
@@ -108,7 +109,8 @@ export function read(value: string): string {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /fn r#match\(&self, value: String\) -> String/u);
-  assert.match(text, /matcher\.r#match\(value\.clone\(\)\)/u);
+  assert.match(text, /matcher\.r#match\(value\)/u);
+  assert.doesNotMatch(text, /value\.clone\(\)/u);
   assert.doesNotMatch(text, /matcher\.clone\(\)\.r#match/u);
   validateGeneratedProject("native-raw-method-identifiers", result.artifacts);
 });
@@ -266,8 +268,8 @@ export function shift(p: Point, dx: int32): Point {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub\(crate\) struct PointState \{\s*pub\(crate\) x: i32,\s*pub\(crate\) y: i32,/u);
-  assert.match(text, /#\[derive\(Clone, Debug, PartialEq\)\]\npub struct Point \{\s*pub\(crate\) state: rt::ObjectHandle<PointState>,/u);
+  assert.match(text, /#\[doc\(hidden\)\][\s\S]*pub struct PointState \{\s*pub x: i32,\s*pub y: i32,/u);
+  assert.match(text, /#\[derive\(Clone, Debug, PartialEq\)\]\npub struct Point \{\s*#\[doc\(hidden\)\]\s*pub state: rt::ObjectHandle<PointState>,/u);
   assert.doesNotMatch(text, /derive\([^\n]*Copy/u);
   assert.match(text, /let record_x = 0;/u);
   assert.match(text, /let record_y = 0;/u);
@@ -383,9 +385,11 @@ export function first(entry: [int32, string]): int32 {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn pair\(a: i32, label: String\) -> \(i32, String\)/u);
-  assert.match(text, /let entry: \(i32, String\) = \(a, label\.clone\(\)\);/u);
+  assert.match(text, /let entry: \(i32, String\) = \(a, label\);/u);
+  assert.doesNotMatch(text, /\(a, label\.clone\(\)\)/u);
   assert.match(text, /pub fn first\(entry: \(i32, String\)\) -> i32/u);
-  assert.match(text, /entry\.clone\(\)\.0/u);
+  assert.match(text, /entry\.0/u);
+  assert.doesNotMatch(text, /entry\.clone\(\)\.0/u);
 });
 
 test("homogeneous tuple carriers support checked dynamic indexing", { timeout: 300_000 }, () => {
@@ -549,7 +553,7 @@ export function drive(): int32 {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn pass_through<T>\(value: T\) -> T \{/u);
-  assert.match(text, /pub fn drive\(\) -> rt::TsonicResult<i32>/u);
+  assert.match(text, /pub fn drive\(\) -> Result<i32, rt::TsonicError>/u);
   assert.match(
     text,
     /tsonic_rust_runtime::conversions::f64_to_i32\(pass_through::<f64>\(41\.0\) \+ 1\.0\)/u,
@@ -626,11 +630,11 @@ export async function main(): Promise<void> {}
   assert.deepEqual(asyncMain.result.diagnostics, []);
   assert.match(
     artifactText(asyncMain.result, "src/main.rs"),
-    /tsonic_rust_runtime::block_on\(async_main::index::main\(\)\)/u,
+    /tsonic_rust_runtime::block_on\(async_main::tsonic_entry\(\)\)/u,
   );
 });
 
-test("throwing functions lower to TsonicResult with Err returns and Ok wrapping", () => {
+test("throwing functions lower to native Result with Err returns and Ok wrapping", () => {
   const { result } = compileRust({
     files: {
       "index.ts": `
@@ -658,9 +662,9 @@ export function caller(flag: boolean): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn risky\(flag: bool\) -> rt::TsonicResult<i32> \{/u);
+  assert.match(text, /pub fn risky\(flag: bool\) -> Result<i32, rt::TsonicError> \{/u);
   assert.match(text, /return Err\(rt::TsonicError::from\(rt::JsError::error\(/u);
-  assert.match(text, /Ok\(7\)/u);
+  assert.match(text, /Ok::<_, rt::TsonicError>\(7\)/u);
   assert.match(text, /let try_body: rt::TsonicResult<rt::Completion<i32>> = rt::completion_region\(\|\| \{/u);
   assert.match(text, /outcome = risky\(flag\)\?;/u);
   assert.match(text, /let try_flow: rt::Completion<i32> = match try_body \{/u);

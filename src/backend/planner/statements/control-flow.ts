@@ -26,11 +26,12 @@ import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { collectVariableDeclarations, directResourceDeclaration, planResourceManagedBody, resourceFactForPlanning, rustBlockDefinitelyExits } from "./resources.js";
 import { diagnosticInput, isValidRustIdentifier } from "../program/plan-context.js";
 import { expressionCarrier, negateRustPlannedBooleanExpression, planExpression } from "../expressions/index.js";
-import { isRustBoolCarrier } from "../../../policy/types/target-types.js";
+import { isRustBoolCarrier, isRustIntegerCarrier } from "../../../policy/types/target-types.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { negateRustBooleanExpression } from "../../rust-ast/expressions.js";
 import { planBlockLike, planStatementSequence } from "./core.js";
-import { planExpressionAsStatement, planVariableStatement } from "./variables.js";
+import { planExpressionAsStatement } from "./expression-statements.js";
+import { planVariableStatement } from "./variable-declarations.js";
 import { planForInStatement, planForOfStatement } from "./iteration.js";
 import { rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
@@ -83,7 +84,12 @@ export function planIfStatement(node: Node, context: RustPlanContext): readonly 
     kind: "if",
     condition: planned,
     then: thenBlock,
-    ...(elseBlock === undefined ? {} : { else: elseBlock }),
+    ...(elseBlock === undefined
+      ? {}
+      : {
+          else: elseBlock,
+          ...(context.input.ast.is.IsIfStatement(elseStatement) ? { elseIf: true as const } : {}),
+        }),
   }];
 }
 
@@ -365,6 +371,10 @@ export function planForStatement(
   context: RustPlanContext,
   sourceLabel?: string,
 ): readonly RustStmt[] | undefined {
+  const counted = planCountedForStatement(node, context, sourceLabel);
+  if (counted !== undefined) {
+    return counted;
+  }
   const initializer = ForStatement_Initializer(context.input.ast, node);
   const condition = ForStatement_Condition(context.input.ast, node);
   const incrementor = ForStatement_Incrementor(context.input.ast, node);
@@ -446,6 +456,80 @@ export function planForStatement(
   return scope === undefined
     ? undefined
     : [{ kind: "scope", body: { statements: [...initStatements, scope] } }];
+}
+
+function planCountedForStatement(
+  node: Node,
+  context: RustPlanContext,
+  sourceLabel?: string,
+): readonly RustStmt[] | undefined {
+  const counted = context.input.source.navigation.countedLoop(node);
+  if (counted === undefined) {
+    return undefined;
+  }
+  const counterSummary = context.input.source.navigation.declarationUseSummary(
+    counted.counterDeclaration,
+  );
+  const startCarrier = expressionCarrier(counted.start, context);
+  const boundCarrier = expressionCarrier(counted.bound, context);
+  if (!isRustIntegerCarrier(startCarrier) || boundCarrier === undefined ||
+    !rustTargetTypeRefEquals(startCarrier, boundCarrier) ||
+    counterSummary.captured || counterSummary.memberWritten ||
+    !countedLoopBoundIsStable(counted.bound, context)) {
+    return undefined;
+  }
+  const binding = context.input.names.nameForDeclaration(counted.counterDeclaration) ?? "";
+  const start = planExpression(counted.start, context);
+  const bound = planExpression(counted.bound, context);
+  const target = createRustLoopTarget(context, [], sourceLabel);
+  if (!isValidRustIdentifier(binding) || start === undefined || bound === undefined ||
+    target === undefined) {
+    return undefined;
+  }
+  const body = planEmbeddedBlock(
+    counted.body,
+    withRustControlTarget(context, target),
+  );
+  if (body === undefined) {
+    return undefined;
+  }
+  return [{
+    kind: "for",
+    ...(target.used.value ? { label: target.label } : {}),
+    binding,
+    iterable: { kind: "range", start, end: bound },
+    body,
+  }];
+}
+
+function countedLoopBoundIsStable(
+  bound: Node,
+  context: RustPlanContext,
+): boolean {
+  const effects = context.input.source.navigation.expressionEffects(bound);
+  if (effects.invokes || effects.mutates || effects.suspends || effects.mayThrow) {
+    return false;
+  }
+  let stable = true;
+  const visited = new Set<Node>();
+  const visit = (node: Node | undefined): void => {
+    if (node === undefined || !stable) {
+      return;
+    }
+    const selected = context.input.source.navigation.sourceReferenceFor(node);
+    const declaration = selected?.declaration;
+    if (declaration !== undefined && !visited.has(declaration)) {
+      visited.add(declaration);
+      const summary = context.input.source.navigation.declarationUseSummary(declaration);
+      if (summary.bindingWritten) {
+        stable = false;
+        return;
+      }
+    }
+    context.input.ast.forEachChild(node, visit);
+  };
+  visit(bound);
+  return stable;
 }
 
 export function createRustLoopTarget(

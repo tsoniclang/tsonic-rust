@@ -89,6 +89,13 @@ export function rustCarrierSupportsClone(carrier: TargetTypeRef | undefined): bo
   return carrier.target === "rust" && carrier.name === "source-type";
 }
 
+export function rustCarrierReferentMutationRequiresMutableBinding(
+  carrier: TargetTypeRef | undefined,
+): boolean {
+  return rustStructuralObjectCarrierValue(carrier) === undefined &&
+    rustSourceUnionCarrierValue(carrier) === undefined;
+}
+
 const rustEqHashTraitPaths: ReadonlySet<string> = new Set([
   "core::cmp::Eq",
   "core::hash::Hash",

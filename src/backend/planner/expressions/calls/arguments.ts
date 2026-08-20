@@ -15,7 +15,10 @@ import {
   Node_Expression,
 } from "@tsonic/target-api/source";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
-import { mutRefShape, planArguments } from "../conversions.js";
+import {
+  createRustMutableReferenceArgument,
+  planRustCallArguments,
+} from "../input-shaping.js";
 import { planExpression } from "../entry.js";
 import { planRustNonConsumingValue } from "../typed-locations.js";
 import { rustArgumentPassingMode } from "../../../../analysis/facts/parameter-passing.js";
@@ -250,7 +253,7 @@ export function planRustSelectedSourceCallArguments(
     return undefined;
   }
   const argumentNodes = rawArguments as readonly Node[];
-  const arguments_ = planArguments(call, context);
+  const arguments_ = planRustCallArguments(call, context);
   return arguments_ === undefined
     ? undefined
     : shapeRustSourceCallParameters(
@@ -324,7 +327,7 @@ function shapeRustSourceCallInput(
     : nonConsumingInput.kind === "string-literal" && !mutable
       ? { kind: "str-literal", value: nonConsumingInput.value }
       : mutable
-        ? mutRefShape(nonConsumingInput)
+        ? createRustMutableReferenceArgument(nonConsumingInput)
         : { kind: "reference", expr: nonConsumingInput };
 }
 

@@ -16,7 +16,7 @@ export type RustObjectLiteralMethodImplementationPlan = {
   readonly callableType: RustType;
   readonly parameterCount: number;
   readonly typeParameterSubstitutions: readonly (readonly [string, TargetTypeRef])[];
-  readonly fallible: boolean;
+  readonly errorType?: RustType;
 } | {
   readonly kind: "spread";
   readonly propertyIdentity: Node;
@@ -24,7 +24,7 @@ export type RustObjectLiteralMethodImplementationPlan = {
   readonly fieldName: string;
   readonly callableType: RustType;
   readonly parameterCount: number;
-  readonly fallible: true;
+  readonly errorType: RustType;
 };
 
 export interface RustObjectLiteralMethodOverridePlan {
@@ -33,6 +33,7 @@ export interface RustObjectLiteralMethodOverridePlan {
   readonly callableType: RustType;
   readonly parameters: readonly RustFunctionParam[];
   readonly returnType?: RustType;
+  readonly errorType?: RustType;
 }
 
 export interface RustObjectLiteralMethodDispatchPlan {
@@ -47,7 +48,7 @@ export interface RustObjectLiteralMethodDispatchPlan {
   };
   readonly override?: RustObjectLiteralMethodOverridePlan;
   readonly returnType?: RustType;
-  readonly fallible: boolean;
+  readonly errorType?: RustType;
   readonly isUnsafe: boolean;
 }
 

@@ -258,6 +258,48 @@ test("a fitted condition moves only its overflowing brace", () => {
   assert.match(source, /truncate_value\(-2\.7\) != -2\.0\n    \{\}/u);
 });
 
+test("a block-valued comparison chain keeps its body brace at statement indentation", () => {
+  const blockValue = (name, value) => ({
+    kind: "block",
+    bindings: [{ name, value }],
+    value: { kind: "path", path: name },
+  });
+  const condition = {
+    kind: "binary",
+    operator: "||",
+    left: {
+      kind: "binary",
+      operator: "||",
+      left: {
+        kind: "binary",
+        operator: "!=",
+        left: blockValue("first", { kind: "int-literal", text: "1" }),
+        right: { kind: "int-literal", text: "1" },
+      },
+      right: {
+        kind: "binary",
+        operator: "!=",
+        left: blockValue("second", { kind: "int-literal", text: "2" }),
+        right: { kind: "int-literal", text: "2" },
+      },
+    },
+    right: blockValue("third", { kind: "bool-literal", value: false }),
+  };
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: { statements: [{ kind: "if", condition, then: { statements: [] } }] },
+    }],
+  });
+
+  assert.match(source, /        third\n        \}\n    \{\}/u);
+  assert.doesNotMatch(source, /        \} \{\}/u);
+});
+
 test("conditional expressions move the brace after a multiline method chain", () => {
   const condition = {
     kind: "method-call",
@@ -489,6 +531,45 @@ test("pure method chains keep the first fitting call attached to their receiver"
   assert.match(
     source,
     /set\.add_eq\(first_value\(\)\)\n        \.add_eq\(second_value\(\)\)\n        \.add_eq\(third_value\(\)\);/u,
+  );
+});
+
+test("fitting collection chains keep their first argument-bearing call attached", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "method-call",
+            receiver: {
+              kind: "method-call",
+              receiver: { kind: "path", path: "map" },
+              method: "set",
+              args: [
+                { kind: "call", path: "String::from", args: [{ kind: "str-literal", value: "a" }] },
+                { kind: "int-literal", text: "1" },
+              ],
+            },
+            method: "set_discard",
+            args: [
+              { kind: "call", path: "String::from", args: [{ kind: "str-literal", value: "b" }] },
+              { kind: "int-literal", text: "2" },
+            ],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /map\.set\(String::from\("a"\), 1\)\n        \.set_discard\(String::from\("b"\), 2\);/u,
   );
 });
 

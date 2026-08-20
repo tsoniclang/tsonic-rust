@@ -1,25 +1,28 @@
 import type { RustFallibleErrorBoundary } from "../../../policy/operations/error-boundary.js";
-import { rustErrorBoundaryDomain } from "../../../policy/operations/error-boundary.js";
-import type { RustErrorDomain, RustExpr } from "../../rust-ast/nodes.js";
+import type { RustExpr, RustType } from "../../rust-ast/nodes.js";
+import { rustRuntimeErrorTypeIdentity } from "../program/source-package-errors.js";
+
+export const rustTargetRuntimeErrorType: RustType = Object.freeze({
+  kind: "named",
+  path: "tsonic_rust_runtime::TsonicError",
+  identity: rustRuntimeErrorTypeIdentity,
+});
 
 export function applyRustErrorBoundary(
   expression: RustExpr,
   boundary: RustFallibleErrorBoundary,
-  currentDomain: RustErrorDomain,
+  currentErrorType: RustType,
+  providerErrorType?: RustType,
 ): RustExpr {
-  const converted = boundary === "provider-native"
-    ? {
-        kind: "method-call" as const,
-        receiver: expression,
-        method: "map_err",
-        args: [{ kind: "path" as const, path: "tsonic_rust_runtime::TsonicError::from" }],
-      }
-    : expression;
+  if (boundary === "provider-native" && providerErrorType === undefined) {
+    throw new Error("A provider-native Rust error boundary requires one exact provider error type.");
+  }
   return {
     kind: "try",
-    expr: converted,
-    errorDomain: rustErrorBoundaryDomain(boundary) === "current"
-      ? currentDomain
-      : "runtime",
+    expr: expression,
+    resultErrorType: currentErrorType,
+    operandErrorType: boundary === "provider-native"
+      ? providerErrorType!
+      : boundary === "target-runtime" ? rustTargetRuntimeErrorType : currentErrorType,
   };
 }

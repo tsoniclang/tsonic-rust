@@ -48,6 +48,7 @@ export interface RustStructuralObjectFieldCarrierValue {
 }
 
 export interface RustStructuralObjectCarrierValue {
+  readonly ownerFileName: string;
   readonly fields: readonly RustStructuralObjectFieldCarrierValue[];
 }
 
@@ -111,6 +112,7 @@ export function rustSourceTypeCarrierValue(
 }
 
 export function rustStructuralObjectTargetType(
+  ownerFileName: string,
   fields: readonly RustStructuralObjectFieldCarrierValue[],
 ): TargetTypeRef {
   const canonicalFields = Object.freeze(
@@ -120,7 +122,7 @@ export function rustStructuralObjectTargetType(
     kind: "target-specific",
     target: "rust",
     name: rustStructuralObjectCarrierName,
-    value: { fields: canonicalFields },
+    value: { ownerFileName, fields: canonicalFields },
   };
 }
 
@@ -133,11 +135,17 @@ export function rustStructuralObjectCarrierValue(
   }
   const value = carrier.value;
   if (typeof value !== "object" || value === null || Array.isArray(value) ||
-    !hasExactObjectKeys(value, ["fields"])) {
+    !hasExactObjectKeys(value, ["fields", "ownerFileName"])) {
     return undefined;
   }
-  const fields = (value as { readonly fields?: unknown }).fields;
-  if (!isDenseDataArray(fields) || fields.length === 0) {
+  const candidateValue = value as {
+    readonly fields?: unknown;
+    readonly ownerFileName?: unknown;
+  };
+  const fields = candidateValue.fields;
+  if (typeof candidateValue.ownerFileName !== "string" ||
+    candidateValue.ownerFileName.length === 0 ||
+    !isDenseDataArray(fields) || fields.length === 0) {
     return undefined;
   }
   const seenNames = new Set<string>();
@@ -171,7 +179,10 @@ export function rustStructuralObjectCarrierValue(
     seenNames.add(candidate.sourceName);
     normalized.push(candidate as RustStructuralObjectFieldCarrierValue);
   }
-  return { fields: Object.freeze(normalized) };
+  return {
+    ownerFileName: candidateValue.ownerFileName,
+    fields: Object.freeze(normalized),
+  };
 }
 
 export function rustSourceUnionTargetType(

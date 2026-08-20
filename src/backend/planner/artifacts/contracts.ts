@@ -21,7 +21,7 @@ export interface RustSourceCallableContract {
   readonly sourceTypeArguments?: readonly TargetTypeRef[];
   readonly name: string;
   readonly isAsync: boolean;
-  readonly fallible: boolean;
+  readonly errorType?: RustType;
   readonly typeParameters: readonly RustTypeParameter[];
   readonly parameters: readonly RustFunctionParam[];
   readonly returnType?: RustType;
@@ -70,7 +70,7 @@ export function rustSourceCallableSurface(
   return rustFunctionSurface({
     name: callable.name,
     isAsync: callable.isAsync,
-    fallible: callable.fallible,
+    ...(callable.errorType === undefined ? {} : { errorType: callable.errorType }),
     typeParameters: callable.typeParameters,
     parameters: callable.parameters,
     identityParts: [
@@ -88,7 +88,7 @@ export function rustFunctionSurface(
   callable: {
     readonly name: string;
     readonly isAsync: boolean;
-    readonly fallible: boolean;
+    readonly errorType?: RustType;
     readonly typeParameters: readonly RustTypeParameter[];
     readonly parameters: readonly RustFunctionParam[];
     readonly returnType?: RustType;
@@ -99,7 +99,9 @@ export function rustFunctionSurface(
     "source-callable",
     callable.name,
     callable.isAsync ? "async" : "sync",
-    callable.fallible ? "fallible" : "infallible",
+    callable.errorType === undefined
+      ? "infallible"
+      : encodeRustContractParts(["fallible", closedMetadataKey(callable.errorType)]),
     ...(callable.identityParts ?? []),
     ...callable.typeParameters.map((parameter) =>
       encodeRustContractParts([

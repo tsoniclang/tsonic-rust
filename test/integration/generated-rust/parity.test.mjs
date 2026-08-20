@@ -152,13 +152,10 @@ export function scrub(text: string): int32 {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /js_abi::JsRegExp::new\("\\\\s\+", "g"\)\?/u);
-  assert.match(text, /spaces\s*\.replace\(&text, "-"\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
-  assert.match(text, /\.split\(&joined\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
-  assert.match(text, /\.search\(&joined\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
-  assert.match(
-    text,
-    /if spaces\n {8}\.test\(&text\)\n {8}\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u,
-  );
+  assert.match(text, /spaces\.replace\(&text, "-"\)\?/u);
+  assert.match(text, /\.split\(&joined\)\?/u);
+  assert.match(text, /\.search\(&joined\)\?/u);
+  assert.match(text, /if spaces\.test\(&text\)\?/u);
 
   const constructed = compileRust({
     surfaces: ["js"],

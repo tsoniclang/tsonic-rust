@@ -6,8 +6,14 @@ import {
   rustFunctionTypesMatch,
 } from "./model.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
-import { diagnosticInput, sourceTypePath } from "../../program/plan-context.js";
+import {
+  diagnosticInput,
+  rustErrorBoundaryForProjectMember,
+  rustErrorType,
+  sourceTypePath,
+} from "../../program/plan-context.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
+import { rustTypeEquals } from "../../../rust-ast/type-equality.js";
 import { planProjectMethod } from "../../declarations/nominal.js";
 import { readRustProjectMethodOverride, rustProjectObjectDispatchField, rustProjectObjectIdentityField } from "../project-objects.js";
 import { rustCallableSpecialization } from "../../declarations/callable-generics.js";
@@ -16,7 +22,8 @@ import { rustSourceTypeCarrierValue } from "../../../../policy/types/target-type
 import type { Node } from "@tsonic/tsts";
 import type { RustEffectiveExpressionOverride, RustPlanContext } from "../../program/plan-context.js";
 import type { RustExpr, RustImplFunction, RustType } from "../../../rust-ast/nodes.js";
-import type { RustProjectDowncastRoute, RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
+import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
+import type { RustProjectDowncastRoute } from "../../../../policy/types/project-types.js";
 import type { RustProjectMethodDispatchVariant } from "../../../../analysis/project-types/method-dispatch.js";
 import type { TargetTypeRef } from "../../../../policy/types/model.js";
 import type { ProjectCallableShape } from "./model.js";
@@ -26,7 +33,7 @@ export function planProjectFieldAccessorCall(
   helper: RustImplFunction | undefined,
   value: RustExpr | undefined,
   valueType: RustType,
-): { readonly expression: RustExpr; readonly fallible: boolean } | undefined {
+): { readonly expression: RustExpr; readonly errorType?: RustType } | undefined {
   const read = value === undefined;
   const expectedParameters = read ? [] : [{ name: "value", type: valueType }];
   if (helper === undefined || helper.selfParam !== "rc" || helper.isAsync === true ||
@@ -45,7 +52,7 @@ export function planProjectFieldAccessorCall(
       method: helper.name,
       args: [{ kind: "path", path: "self" }, ...(read ? [] : [value])],
     },
-    fallible: helper.fallible === true,
+    ...(helper.errorType === undefined ? {} : { errorType: helper.errorType }),
   };
 }
 
@@ -64,6 +71,31 @@ export function projectDowncastReturnType(
           path: "std::rc::Rc",
           typeArguments: [{ kind: "trait-object", trait: dispatch }],
         }],
+      };
+}
+
+export function planProjectDowncastRouteImplementation(
+  route: RustProjectDowncastRoute,
+  matches: boolean,
+  context: RustPlanContext,
+): RustImplFunction | undefined {
+  const returnType = projectDowncastReturnType(route, context);
+  return returnType === undefined
+    ? undefined
+    : {
+        name: route.slot,
+        visibility: "private",
+        selfParam: "rc",
+        params: [],
+        returnType,
+        body: {
+          statements: [{
+            kind: "tail",
+            expr: matches
+              ? { kind: "call", path: "Some", args: [{ kind: "path", path: "self" }] }
+              : { kind: "none" },
+          }],
+        },
       };
 }
 
@@ -110,6 +142,50 @@ export function planRootAccessorImplementation(
       );
 }
 
+export function planRootAccessorForwarder(
+  concreteCarrier: TargetTypeRef,
+  contractAccessor: Node,
+  implementation: Node,
+  role: "read" | "write",
+  slot: string,
+  rootType: RustType,
+  helper: RustImplFunction,
+  contractShape: ProjectCallableShape,
+  context: RustPlanContext,
+): RustImplFunction | undefined {
+  if (rustTypeEquals(helper.errorType, contractShape.errorType)) {
+    return planRootCallableForwarder(
+      implementation,
+      slot,
+      rootType,
+      helper,
+      contractShape,
+      undefined,
+      context,
+    );
+  }
+  const fallibleBoundary = contractShape.errorType === undefined
+    ? undefined
+    : rustErrorBoundaryForProjectMember(contractAccessor, context);
+  if (fallibleBoundary === undefined ||
+    !rustTypeEquals(rustErrorType(fallibleBoundary), contractShape.errorType)) {
+    return rejectRootContractErrorAbi(implementation, context);
+  }
+  const planned = planRootCallableImplementation(
+    concreteCarrier,
+    implementation,
+    context,
+    {
+      targetName: slot,
+      safetyPlacement: role === "read" ? "getter" : "setter",
+      fallibleBoundary,
+    },
+  );
+  return planned !== undefined && rootCallableMatchesShape(planned, contractShape)
+    ? planned
+    : rejectRootContractErrorAbi(implementation, context);
+}
+
 function planRootCallableImplementation(
   concreteCarrier: TargetTypeRef,
   implementation: Node,
@@ -118,6 +194,7 @@ function planRootCallableImplementation(
     readonly targetName: string;
     readonly safetyPlacement?: "getter" | "setter";
     readonly typeArgumentSubstitutions?: ReadonlyMap<string, TargetTypeRef>;
+    readonly fallibleBoundary?: import("../../program/source-package-errors.js").RustSourcePackageErrorBoundary;
   },
 ): RustImplFunction | undefined {
   const owner = context.input.projectTypes.definitionContainingDeclaration(implementation);
@@ -150,6 +227,9 @@ function planRootCallableImplementation(
     ...(options.typeArgumentSubstitutions === undefined
       ? {}
       : { typeArgumentSubstitutions: options.typeArgumentSubstitutions }),
+    ...(options.fallibleBoundary === undefined
+      ? {}
+      : { fallibleBoundary: options.fallibleBoundary }),
   });
   if (planned === undefined) {
     return undefined;
@@ -200,11 +280,13 @@ export function planRootMethodForwarder(
           contractOwner,
           contractRelation.targetType,
         ),
-      }, specialization)
+      }, { methodTypeArgumentSubstitutions: specialization })
     : undefined;
-  return contractShape === undefined
-    ? undefined
-    : planRootCallableForwarder(
+  if (contractShape === undefined) {
+    return undefined;
+  }
+  if (rustTypeEquals(helper.errorType, contractShape.errorType)) {
+    return planRootCallableForwarder(
         implementation,
         slot,
         rootType,
@@ -213,6 +295,33 @@ export function planRootMethodForwarder(
         overrideStoragePath,
         context,
       );
+  }
+  const fallibleBoundary = contractShape.errorType === undefined
+    ? undefined
+    : rustErrorBoundaryForProjectMember(contractMember, context);
+  if (fallibleBoundary === undefined ||
+    !rustTypeEquals(rustErrorType(fallibleBoundary), contractShape.errorType)) {
+    return rejectRootContractErrorAbi(implementation, context);
+  }
+  const direct = planRootCallableImplementation(
+    concreteCarrier,
+    implementation,
+    context,
+    {
+      targetName: slot,
+      typeArgumentSubstitutions: specialization!,
+      fallibleBoundary,
+    },
+  );
+  if (direct === undefined || !rootCallableMatchesShape(direct, contractShape)) {
+    return rejectRootContractErrorAbi(implementation, context);
+  }
+  return applyRootMethodOverride(
+    implementation,
+    direct,
+    overrideStoragePath,
+    context,
+  );
 }
 
 export function planRootCallableForwarder(
@@ -224,15 +333,10 @@ export function planRootCallableForwarder(
   overrideStoragePath: readonly string[] | undefined,
   context: RustPlanContext,
 ): RustImplFunction | undefined {
-  if (
-    (helper.fallible === true) !== contractShape.fallible ||
-    (helper.isUnsafe === true) !== contractShape.isUnsafe ||
-    !rustFunctionTypesMatch(
-      helper.params,
-      helper.returnType,
-      contractShape.params,
-      contractShape.returnType,
-    )) {
+  const representation = context.input.objectRepresentations.representationFor(
+    context.input.projectTypes.definitionContainingDeclaration(implementation),
+  );
+  if (representation === undefined || !rootCallableMatchesShape(helper, contractShape)) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, implementation),
       "rust.backend.project-dispatch-signature",
@@ -252,56 +356,107 @@ export function planRootCallableForwarder(
       })),
     ],
   };
-  const overrideName = allocateRustLocalName(
-    new Set(helper.params.map((parameter) => parameter.name)),
-    "method_override",
-  );
-  return {
+  return applyRootMethodOverride(
+    implementation,
+    {
     name: slot,
     visibility: "private",
     selfParam: "rc",
     params: helper.params,
     ...(helper.returnType === undefined ? {} : { returnType: helper.returnType }),
-    ...(helper.fallible === true ? { fallible: true } : {}),
+    ...(helper.errorType === undefined ? {} : { errorType: helper.errorType }),
     ...(helper.isUnsafe === true ? { isUnsafe: true } : {}),
     body: {
-      statements: [
-        ...(overrideStoragePath === undefined
-          ? []
-          : [{
-              kind: "if-let-some" as const,
-              binding: overrideName,
-              expression: readRustProjectMethodOverride(
-                { kind: "path", path: "self" },
-                overrideStoragePath,
-              ),
-              body: {
-                statements: [{
-                  kind: "return" as const,
-                  expr: {
-                    kind: "method-call" as const,
-                    receiver: { kind: "path" as const, path: overrideName },
-                    method: "call",
-                    args: [{
-                      kind: "tuple-literal" as const,
-                      elements: helper.params.map((parameter) => ({
-                        kind: "path" as const,
-                        path: parameter.name,
-                      })),
-                    }],
-                  },
-                }],
-              },
-            }]),
-        {
+      statements: [{
         kind: "tail",
         expr: helper.isUnsafe === true
           ? { kind: "unsafe", expression: call }
           : call,
+      }],
+    },
+    },
+    overrideStoragePath,
+    context,
+  );
+}
+
+function rootCallableMatchesShape(
+  callable: RustImplFunction,
+  shape: ProjectCallableShape,
+): boolean {
+  return rustTypeEquals(callable.errorType, shape.errorType) &&
+    (callable.isUnsafe === true) === shape.isUnsafe &&
+    rustFunctionTypesMatch(
+      callable.params,
+      callable.returnType,
+      shape.params,
+      shape.returnType,
+    );
+}
+
+function applyRootMethodOverride(
+  implementation: Node,
+  callable: RustImplFunction,
+  overrideStoragePath: readonly string[] | undefined,
+  context: RustPlanContext,
+): RustImplFunction | undefined {
+  if (overrideStoragePath === undefined) {
+    return callable;
+  }
+  const representation = context.input.objectRepresentations.representationFor(
+    context.input.projectTypes.definitionContainingDeclaration(implementation),
+  );
+  if (representation === undefined) {
+    return undefined;
+  }
+  const overrideName = allocateRustLocalName(
+    new Set(callable.params.map((parameter) => parameter.name)),
+    "method_override",
+  );
+  return {
+    ...callable,
+    body: {
+      ...callable.body,
+      statements: [{
+        kind: "if-let-some",
+        binding: overrideName,
+        expression: readRustProjectMethodOverride(
+          { kind: "path", path: "self" },
+          overrideStoragePath,
+          representation,
+        ),
+        body: {
+          statements: [{
+            kind: "return",
+            expr: {
+              kind: "method-call",
+              receiver: { kind: "path", path: overrideName },
+              method: "call",
+              args: [{
+                kind: "tuple-literal",
+                elements: callable.params.map((parameter) => ({
+                  kind: "path" as const,
+                  path: parameter.name,
+                })),
+              }],
+            },
+          }],
         },
-      ],
+      }, ...callable.body.statements],
     },
   };
+}
+
+function rejectRootContractErrorAbi(
+  implementation: Node,
+  context: RustPlanContext,
+): undefined {
+  context.diagnostics.push(missingFactDiagnostic(
+    diagnosticInput(context, implementation),
+    "rust.backend.project-dispatch-error-abi",
+    "Selected project member implementation cannot be planned under the exact contract-owned Rust error ABI.",
+  ));
+  return undefined;
 }
 
 export function projectAccessorCallableShape(
@@ -311,10 +466,14 @@ export function projectAccessorCallableShape(
   role: "read" | "write",
   context: RustPlanContext,
 ): ProjectCallableShape | undefined {
-  const shape = projectCallableShape(declaration, {
-    ...context,
-    typeParameterSubstitutions: projectTypeSubstitutions(definition, carrier),
-  });
+  const shape = projectCallableShape(
+    declaration,
+    {
+      ...context,
+      typeParameterSubstitutions: projectTypeSubstitutions(definition, carrier),
+    },
+    { safetyPlacement: role === "read" ? "getter" : "setter" },
+  );
   if (shape === undefined || shape.params.length !== (role === "read" ? 0 : 1)) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, declaration),

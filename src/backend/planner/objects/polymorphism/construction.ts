@@ -30,7 +30,12 @@ import {
   planExpression,
   planRustSelectedSourceCallArguments,
 } from "../../expressions/index.js";
-import { diagnosticInput } from "../../program/plan-context.js";
+import {
+  diagnosticInput,
+  rustErrorBoundaryForDeclaration,
+  rustErrorType,
+  rustProjectTypeHasPublicImplementationAbi,
+} from "../../program/plan-context.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import {
   rustProjectObjectDispatchField,
@@ -147,6 +152,20 @@ export function planProjectClassConstructor(
     constructor ?? definition.declaration,
     rustFallibleFactKey,
   ) !== undefined;
+  const constructorErrorBoundary = fallible
+    ? rustErrorBoundaryForDeclaration(constructor ?? definition.declaration, context)
+    : undefined;
+  if (fallible && constructorErrorBoundary === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, constructor ?? definition.declaration),
+      "rust.backend.project-constructor-error-boundary",
+      "A fallible project constructor has no exact source-package error boundary.",
+    ));
+    return undefined;
+  }
+  const constructorErrorType = constructorErrorBoundary === undefined
+    ? undefined
+    : rustErrorType(constructorErrorBoundary);
   if (fallible) {
     context.usedAliases?.add("rt");
   }
@@ -159,7 +178,9 @@ export function planProjectClassConstructor(
     syntheticNames,
     controlFlow: { nextLoopId: 0 },
     functionReturnType: stateType,
-    ...(fallible ? { fallibleContext: true } : {}),
+    ...(constructorErrorBoundary === undefined
+      ? {}
+      : { fallibleBoundary: constructorErrorBoundary }),
   };
   const prelude = planRustCallableParameterPrelude(parameterPlan, initializationContext, planExpression);
   if (prelude === undefined) {
@@ -292,10 +313,23 @@ export function planProjectClassConstructor(
       return undefined;
     }
     if (baseFallible) {
+      const baseErrorBoundary = rustErrorBoundaryForDeclaration(
+        baseConstructor.declaration ?? base.target.declaration,
+        context,
+      );
+      if (baseErrorBoundary === undefined) {
+        context.diagnostics.push(missingFactDiagnostic(
+          diagnosticInput(context, constructor ?? definition.declaration),
+          "rust.backend.project-base-constructor-error-boundary",
+          "A fallible selected base constructor has no exact source-package error boundary.",
+        ));
+        return undefined;
+      }
       baseInitialization = {
         kind: "try",
         expr: baseInitialization,
-        errorDomain: context.errorDomain,
+        resultErrorType: constructorErrorType!,
+        operandErrorType: rustErrorType(baseErrorBoundary),
       };
     }
     statements.push({
@@ -470,21 +504,31 @@ export function planProjectClassConstructor(
     ],
   };
   statements.push({ kind: "tail", expr: state });
+  const publishesImplementationAbi = rustProjectTypeHasPublicImplementationAbi(
+    context,
+    definition.targetName,
+  );
   const initialize: RustImplFunction = {
     name: constructorSignature.initializeName,
-    visibility: "crate",
-    ...(initializationSafetyAttributes.length === 0
+    visibility: publishesImplementationAbi ? "public" : "crate",
+    ...(!publishesImplementationAbi && initializationSafetyAttributes.length === 0
       ? {}
-      : { attrs: initializationSafetyAttributes }),
+      : {
+          attrs: [
+            ...(publishesImplementationAbi ? ["#[doc(hidden)]"] : []),
+            ...initializationSafetyAttributes,
+          ],
+        }),
     params: parameterPlan.params,
-    ...(fallible ? { fallible: true } : {}),
+    ...(constructorErrorType === undefined ? {} : { errorType: constructorErrorType }),
     returnType: stateType,
     body: {
-      ...applyFallibleShape({ statements }, {
-        fallible,
-        hasReturnValue: true,
-        errorDomain: context.errorDomain,
-      }),
+      ...applyFallibleShape(
+        { statements },
+        fallible
+          ? { fallible: true, hasReturnValue: true, errorType: constructorErrorType! }
+          : { fallible: false, hasReturnValue: true },
+      ),
     },
   };
   const forwardArgs = parameterPlan.params.map((parameter) => ({
@@ -509,7 +553,7 @@ export function planProjectClassConstructor(
       return attrs.length === 0 ? {} : { attrs };
     })(),
     params: parameterPlan.params,
-    ...(fallible ? { fallible: true } : {}),
+    ...(constructorErrorType === undefined ? {} : { errorType: constructorErrorType }),
     returnType: wrapperType,
     body: applyFallibleShape({
       statements: [
@@ -519,7 +563,8 @@ export function planProjectClassConstructor(
           mutable: false,
           init: fallible ? {
             kind: "try",
-            errorDomain: context.errorDomain,
+            resultErrorType: constructorErrorType!,
+            operandErrorType: constructorErrorType!,
             expr: {
               kind: "associated-call",
               owner: wrapperType,
@@ -584,11 +629,9 @@ export function planProjectClassConstructor(
           },
         },
       ],
-    }, {
-      fallible,
-      hasReturnValue: true,
-      errorDomain: context.errorDomain,
-    }),
+    }, fallible
+      ? { fallible: true, hasReturnValue: true, errorType: constructorErrorType! }
+      : { fallible: false, hasReturnValue: true }),
   };
   return { initialize, construct };
 }

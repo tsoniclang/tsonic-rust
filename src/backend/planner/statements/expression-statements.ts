@@ -12,237 +12,37 @@ import {
   KindDeleteExpression,
   KindEqualsToken,
   KindIdentifier,
-  KindArrayBindingPattern,
-  KindObjectBindingPattern,
   KindPostfixUnaryExpression,
   KindPrefixUnaryExpression,
   KindVoidExpression,
   Node_Expression,
-  Node_Initializer,
-  Node_Name,
-  Node_Type,
 } from "@tsonic/target-api/source";
 import {
-  planRustSharedReceiver,
+  planRustMutableProjectReceiver,
   planRustPromotedStorageLocation,
   planRustPromotedStorageWrite,
-  rustLocationStorageForDeclaration,
 } from "../expressions/typed-locations.js";
 import {
-  rustMutatedBindingFactKey,
-  rustMutatedReferentFactKey,
-  rustResourceManagementFactKey,
-  rustSourceBindingFactKey,
   rustTargetOperationFactKey,
 } from "../../../analysis/facts/keys.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { collectVariableDeclarations, resourceDisposalReceiverMode } from "./resources.js";
-import { diagnosticInput, isValidRustIdentifier } from "../program/plan-context.js";
+import { diagnosticInput } from "../program/plan-context.js";
 import { isRustAssignmentOperator } from "../../model/syntax.js";
-import { isRustStringCarrier, rustLocationTargetType, rustOptionElementCarrier } from "../../../policy/types/target-types.js";
+import { isRustStringCarrier } from "../../../policy/types/target-types.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planExpression, sourceFieldSelectedOperationMatches, sourceUnionFieldSelectedOperationMatches } from "../expressions/index.js";
 import { planRuntimeSetStatement, selectedOperatorMatches } from "./iteration.js";
-import { planRustBindingPattern } from "../bindings/patterns.js";
 import { planRustCompoundAssignmentValue, planRustDirectOperatorCallAssignment, planRustSourceAccessorAssignment, planRustSourceIndexAssignment, planRustSourceMethodPropertyAssignment, planRustSourceStaticFieldAssignment } from "./assignments.js";
 import { planRustSourceUnionFieldProjection } from "../expressions/unions.js";
 import { readRustProjectDispatchedField, writeRustProjectDispatchedField } from "../objects/project-objects.js";
+import { planRustProjectFieldDispatchRoles } from "../objects/project-field-dispatch.js";
 import { readRustStoredObjectField, writeRustStoredObjectField } from "../objects/project-storage.js";
-import { requireRustLocationValueCarrier } from "../types/generic-requirements.js";
 import { rustStringConcat } from "../../rust-ast/expressions.js";
-import { rustTargetOperationIsDirectLocation } from "../../../analysis/facts/target-operation.js";
-import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
-import { rustTypeFromCarrierInContext } from "../types/render.js";
+import { planRustDirectStorage } from "../expressions/updates/target.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustAssignmentOperationFact } from "./core.js";
 import type { RustExpr, RustStmt } from "../../rust-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-
-export function planVariableStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
-  const declarations = collectVariableDeclarations(node, context);
-  if (declarations.length === 0) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.variable",
-      "Variable statement has no exact variable declaration.",
-    ));
-    return undefined;
-  }
-  const statements: RustStmt[] = [];
-  for (const declaration of declarations) {
-    const planned = planVariableDeclaration(declaration, context);
-    if (planned === undefined) {
-      return undefined;
-    }
-    statements.push(...planned);
-  }
-  return statements;
-}
-
-function planVariableDeclaration(
-  declaration: Node,
-  context: RustPlanContext,
-): readonly RustStmt[] | undefined {
-  const { ast } = context.input;
-  const nameNode = Node_Name(context.input.ast, declaration);
-  const nameKind = nameNode === undefined ? "" : ast.kindName(nameNode);
-  if (nameNode !== undefined && (nameKind === KindArrayBindingPattern || nameKind === KindObjectBindingPattern)) {
-    return planBindingVariableDeclaration(declaration, nameNode, context);
-  }
-  const name = context.input.names.nameForDeclaration(declaration) ?? "";
-  if (!isValidRustIdentifier(name)) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, declaration),
-      "rust.backend.variable",
-      "Variable declarations require a plain identifier that is valid in Rust.",
-    ));
-    return undefined;
-  }
-  const initializer = Node_Initializer(context.input.ast, declaration);
-  const locationStorage = rustLocationStorageForDeclaration(declaration, context);
-  if (initializer === undefined && locationStorage !== undefined) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, declaration),
-      "rust.backend.typed-location-storage",
-      "Promoted Rust location storage requires an initialized source binding.",
-    ));
-    return undefined;
-  }
-  const planned = initializer === undefined ? undefined : planExpression(initializer, context);
-  if (initializer !== undefined && planned === undefined) {
-    return undefined;
-  }
-  const typeNode = Node_Type(context.input.ast, declaration);
-  const annotatedCarrier = typeNode === undefined
-    ? undefined
-    : context.input.facts.getRuntimeCarrierFact(typeNode)?.carrier;
-  let rustType;
-  if (typeNode !== undefined) {
-    const renderedCarrier = locationStorage === undefined
-      ? annotatedCarrier
-      : rustLocationTargetType(locationStorage.valueCarrier);
-    rustType = rustTypeFromCarrierInContext(renderedCarrier, context);
-    if (rustType === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, typeNode),
-        "rust.backend.variable",
-        "Variable type annotation has no supported Rust carrier fact.",
-      ));
-      return undefined;
-    }
-  }
-  const declarationCarrier = context.input.facts.getRuntimeCarrierFact(declaration)?.carrier;
-  if (declarationCarrier === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, declaration),
-      "rust.backend.variable-carrier",
-      "Variable declaration has no finalized Rust carrier fact.",
-    ));
-    return undefined;
-  }
-  if (rustType === undefined) {
-    const renderedCarrier = locationStorage === undefined
-      ? declarationCarrier
-      : rustLocationTargetType(locationStorage.valueCarrier);
-    rustType = rustTypeFromCarrierInContext(renderedCarrier, context);
-    if (rustType === undefined && initializer === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, declaration),
-        "rust.backend.variable",
-        "Uninitialized variable declaration has no renderable finalized Rust carrier.",
-      ));
-      return undefined;
-    }
-  }
-  if (locationStorage !== undefined &&
-    (!rustTargetTypeRefEquals(declarationCarrier, locationStorage.valueCarrier) ||
-      (annotatedCarrier !== undefined &&
-        !rustTargetTypeRefEquals(annotatedCarrier, locationStorage.valueCarrier)))) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, declaration),
-      "rust.backend.typed-location-storage-carrier",
-      "Promoted Rust storage conflicts with its finalized declaration carrier.",
-    ));
-    return undefined;
-  }
-  const ownedBinding = declarationCarrier.kind !== "pointer" && declarationCarrier.kind !== "reference";
-  const resourceFact = context.input.facts.getFact(declaration, rustResourceManagementFactKey);
-  const mutable = locationStorage === undefined &&
-    (context.input.facts.getFact(declaration, rustMutatedBindingFactKey) !== undefined ||
-      (ownedBinding && context.input.facts.getFact(declaration, rustMutatedReferentFactKey) !== undefined) ||
-      resourceFact !== undefined && resourceDisposalReceiverMode(resourceFact) === "mut-ref");
-  let init: RustExpr | undefined;
-  if (initializer !== undefined) {
-    if (planned === undefined) {
-      return undefined;
-    }
-    if (locationStorage === undefined) {
-      init = planned;
-    } else {
-      if (!requireRustLocationValueCarrier(
-        locationStorage.valueCarrier,
-        declaration,
-        context,
-      )) {
-        return undefined;
-      }
-      context.usedAliases?.add("rt");
-      init = { kind: "call", path: "rt::Location::allocate", args: [planned] };
-    }
-  } else if (rustOptionElementCarrier(declarationCarrier) !== undefined && rustType !== undefined) {
-    init = { kind: "associated-value", owner: rustType, name: "None" };
-  }
-  if (initializer !== undefined && init === undefined) {
-    return undefined;
-  }
-  return [{
-    kind: "let",
-    name,
-    mutable,
-    ...(rustType === undefined ? {} : { type: rustType }),
-    ...(init === undefined ? {} : { init }),
-  }];
-}
-
-function planBindingVariableDeclaration(
-  declaration: Node,
-  pattern: Node,
-  context: RustPlanContext,
-): readonly RustStmt[] | undefined {
-  const initializer = Node_Initializer(context.input.ast, declaration);
-  const sourceCarrier = context.input.facts.getRuntimeCarrierFact(declaration)?.carrier;
-  if (initializer === undefined || sourceCarrier === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, declaration),
-      "rust.backend.binding-declaration",
-      "Binding-pattern declaration requires an initializer and one finalized source carrier.",
-    ));
-    return undefined;
-  }
-  if (context.syntheticNames === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, pattern),
-      "rust.backend.binding-temporary",
-      "Binding-pattern declaration requires a finalized hygienic-name scope.",
-    ));
-    return undefined;
-  }
-  const value = planExpression(initializer, context);
-  if (value === undefined) {
-    return undefined;
-  }
-  const temporary = allocateRustSyntheticName(context.syntheticNames, "binding");
-  const bindings = planRustBindingPattern(
-    pattern,
-    { kind: "path", path: temporary },
-    sourceCarrier,
-    context,
-    planExpression,
-  );
-  return bindings === undefined
-    ? undefined
-    : [{ kind: "let", name: temporary, mutable: false, init: value }, ...bindings];
-}
 
 export function planExpressionStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const expression = Node_Expression(context.input.ast, node);
@@ -300,22 +100,7 @@ export function planExpressionAsStatement(
       }
       const sourceField = context.input.facts.getFact(left, rustTargetOperationFactKey);
       const storageOverride = context.expressionOverrides?.get(left);
-      const target = storageOverride?.valueForm === "storage"
-        ? storageOverride.expression
-        : ast.kindName(left) === KindIdentifier
-        ? (() => {
-            const declaration = context.input.facts.getFact(
-              left,
-              rustSourceBindingFactKey,
-            )?.sourceDeclaration;
-            const path = context.input.names.nameForDeclaration(declaration) ?? "";
-            return isValidRustIdentifier(path) ? { kind: "path" as const, path } : undefined;
-          })()
-        : rustTargetOperationIsDirectLocation(
-            context.input.facts.getFact(left, rustTargetOperationFactKey),
-          )
-          ? planExpression(left, context)
-          : undefined;
+      const target = planRustDirectStorage(left, context);
       if (target === undefined && sourceField?.kind !== "source-accessor" &&
         sourceField?.kind !== "source-static-field" &&
         sourceField?.kind !== "source-field" &&
@@ -555,7 +340,12 @@ export function planExpressionAsStatement(
           : planExpression(receiverNode, context);
         const receiver = receiverNode === undefined || plannedReceiver === undefined
           ? plannedReceiver
-          : planRustSharedReceiver(receiverNode, plannedReceiver, context);
+          : planRustMutableProjectReceiver(
+              receiverNode,
+              plannedReceiver,
+              sourceField.receiverCarrier,
+              context,
+            );
         if (receiver === undefined) {
           return undefined;
         }
@@ -580,19 +370,14 @@ export function planExpressionAsStatement(
           ));
           return undefined;
         }
-        const dispatchRoles = dispatchPlan?.write === undefined
+        const dispatchRoles = dispatchPlan === undefined
           ? undefined
-          : {
-              read: dispatchPlan.read,
-              write: dispatchPlan.write,
-              errorDomain: context.errorDomain,
-            };
-        const dispatchReadRole = dispatchPlan === undefined
-          ? undefined
-          : {
-              ...dispatchPlan.read,
-              errorDomain: context.errorDomain,
-            };
+          : planRustProjectFieldDispatchRoles(dispatchPlan, context);
+        if ((dispatchPlan !== undefined && dispatchRoles === undefined) ||
+          (dispatchPlan?.write !== undefined && dispatchRoles?.write === undefined)) {
+          return undefined;
+        }
+        const dispatchReadRole = dispatchRoles?.read;
         const receiverName = allocateRustSyntheticName(context.syntheticNames, "receiver");
         if (fact.kind === "operator-call") {
           const currentName = allocateRustSyntheticName(context.syntheticNames, "current");
@@ -641,7 +426,7 @@ export function planExpressionAsStatement(
                 sourceField.dispatch.write,
                 "=",
                 { kind: "path", path: nextName },
-                dispatchRoles!,
+                { read: dispatchRoles!.read, write: dispatchRoles!.write! },
               );
           if (current === undefined || next === undefined || written === undefined) {
             return undefined;
@@ -703,7 +488,7 @@ export function planExpressionAsStatement(
                 sourceField.dispatch.write,
                 "=",
                 concatenated,
-                dispatchRoles!,
+                { read: dispatchRoles!.read, write: dispatchRoles!.write! },
               );
           if (current === undefined || written === undefined) {
             return undefined;
@@ -737,7 +522,7 @@ export function planExpressionAsStatement(
               sourceField.dispatch.write,
               operator,
               { kind: "path", path: valueName },
-              dispatchRoles!,
+              { read: dispatchRoles!.read, write: dispatchRoles!.write! },
             );
         if (written === undefined) {
           return undefined;
@@ -768,6 +553,18 @@ export function planExpressionAsStatement(
         );
       }
       if (operator === "+=" && isRustStringCarrier(fact.resultCarrier)) {
+        if (fact.writeStrategy === "in-place-string-append") {
+          return [{
+            kind: "expr",
+            expr: {
+              kind: "method-call",
+              receiver: target,
+              receiverMode: "mut-ref",
+              method: "push_str",
+              args: [{ kind: "reference", expr: value, mutable: false }],
+            },
+          }];
+        }
         if (context.syntheticNames === undefined) {
           context.diagnostics.push(missingFactDiagnostic(
             diagnosticInput(context, expression),
@@ -858,7 +655,7 @@ export function planExpressionAsStatement(
   if (expressionKind === KindCallExpression || expressionKind === "KindAwaitExpression" ||
     expressionKind === "KindYieldExpression" || expressionKind === KindDeleteExpression ||
     expressionKind === KindVoidExpression) {
-    const planned = planExpression(expression, context);
+    const planned = planExpression(expression, context, "discarded");
     return planned === undefined ? undefined : [{ kind: "expr", expr: planned }];
   }
   const planned = planExpression(expression, context);

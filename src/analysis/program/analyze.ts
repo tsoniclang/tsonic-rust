@@ -24,6 +24,11 @@ import type { RustAnalysisContext } from "./context.js";
 import type { RustFactWalk } from "./walk.js";
 import type { RustOperationsProviderOptions } from "../operations/provider/index.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
+import { rustStructuralObjectCarrierValue } from "../../policy/types/target-types.js";
+import { rustLocationStorageFactKey } from "../facts/keys.js";
+import { rustTypedLocationStorageRootReference } from "../operations/typed-locations.js";
+import { selectRustAddressOfSourceOperation } from "../../policy/operations/typed-location-source.js";
+import { rustProjectCallableTargetName } from "../facts/source-member-name.js";
 
 export function analyzeRustProgram(context: RustAnalysisContext): void {
   const { ast } = context;
@@ -45,7 +50,6 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   const sourceCallableAbi = createRustSourceCallableAbiResolver();
   const projectSourceFiles = [...context.sourceFiles]
     .sort((left, right) => ast.getFileName(left).localeCompare(ast.getFileName(right)));
-  const moduleBindings = createRustModuleBindingPolicy(context);
   for (const sourceFile of projectSourceFiles) {
     const statements = ast.statements(sourceFile);
     if (!isDenseDataArray(statements) || statements.some((statement) => statement === undefined)) {
@@ -53,6 +57,11 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
       return;
     }
   }
+  const externallyExtensibleDeclarations = collectExternallyExtensibleDeclarations(
+    context,
+    projectSourceFiles,
+  );
+  const moduleBindings = createRustModuleBindingPolicy(context);
   let finalizedProjectTypes: RustProjectTypePolicy | undefined;
   const operationOptions: RustOperationsProviderOptions = {
     providerExports: providerSemantics.exports,
@@ -68,6 +77,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     },
     sourceCallableAbi,
     projectTypes: context.projectTypes,
+    projectMethodDispatch: context.projectMethodDispatch,
     projectMethodProperties: context.projectMethodProperties,
   };
   const walk: RustFactWalk = {
@@ -99,6 +109,16 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     names: context.names,
     navigation: context.source.navigation,
     sourceFiles: projectSourceFiles,
+    externallyExtensible(declaration) {
+      return externallyExtensibleDeclarations.has(declaration);
+    },
+    targetNameForCallable(declaration) {
+      return rustProjectCallableTargetName(declaration, context);
+    },
+    sourcePackageComponentForFile(fileName) {
+      return context.sourcePackages.packages.find((entry) =>
+        entry.sourceFiles.includes(fileName))?.componentId;
+    },
     resolveSelectedType(authoredTypeNode, selectedType, heritage) {
       return resolveRustTargetTypeRef(
         authoredTypeNode ?? selectedType,
@@ -123,6 +143,43 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   if (projectTypes.issues.length > 0) {
     return;
   }
+  const promotedStorageDeclarations = new Set<Node>();
+  const collectPromotedStorage = (node: Node): void => {
+    const operation = selectRustAddressOfSourceOperation(
+      node,
+      (subject, key) => context.facts.resolve(subject, key),
+      (subject, key) => context.facts.get(subject, key),
+    );
+    if (operation !== undefined) {
+      const root = rustTypedLocationStorageRootReference(
+        operation.storageExpression,
+        ast,
+        context.source.navigation,
+      );
+      if (root !== undefined) {
+        promotedStorageDeclarations.add(root.declaration);
+      }
+    }
+    ast.forEachChild(node, (child) => {
+      if (child !== undefined) {
+        collectPromotedStorage(child);
+      }
+    });
+  };
+  for (const sourceFile of projectSourceFiles) {
+    collectPromotedStorage(sourceFile);
+  }
+  context.objectRepresentations.initialize({
+    ast,
+    navigation: context.source.navigation,
+    projectTypes,
+    sourceFiles: projectSourceFiles,
+    hasPromotedStorage(declaration) {
+      return promotedStorageDeclarations.has(declaration) ||
+        context.facts.get(declaration, rustLocationStorageFactKey) !== undefined ||
+        context.facts.resolve(declaration, rustLocationStorageFactKey) !== undefined;
+    },
+  });
   for (const sourceFile of projectSourceFiles) {
     for (const statement of ast.statements(sourceFile) as readonly Node[]) {
       const kind = ast.kindName(statement);
@@ -240,9 +297,26 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
       ["target.capability=rust.object-literal-method.exact-adapter"],
     );
   }
+  const structuralObjects = sourceTypes.structuralObjects();
+  const sourcePackageComponentByFile = new Map(context.sourcePackages.packages.flatMap((entry) =>
+    entry.sourceFiles.map((fileName) => [fileName, entry.componentId] as const)));
+  for (const shape of structuralObjects) {
+    const ownerFileName = rustStructuralObjectCarrierValue(shape.carrier)?.ownerFileName;
+    if (ownerFileName === undefined || !sourcePackageComponentByFile.has(ownerFileName)) {
+      appendRustDiagnostic(
+        walk,
+        "RUST_STRUCTURAL_SHAPE_SOURCE_PACKAGE_MISSING",
+        "A structural source type has no exact source-package component owner.",
+        shape.fields[0]!.declarations[0]!,
+        ["target.capability=rust.structural-shape.source-package-ownership"],
+      );
+      return;
+    }
+  }
   context.structuralShapes.initialize(
-    sourceTypes.structuralObjects(),
+    structuralObjects,
     sourceTypes.structuralFieldImplementations(),
+    (fileName) => sourcePackageComponentByFile.get(fileName)!,
   );
   context.projectFieldDispatch.initialize({
     ast,
@@ -254,4 +328,41 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   recordFallibilityFacts(walk, projectSourceFiles);
   recordResourceManagementFacts(walk, projectSourceFiles);
   recordFutureValueFacts(walk, projectSourceFiles);
+}
+
+function collectExternallyExtensibleDeclarations(
+  context: RustAnalysisContext,
+  sourceFiles: readonly SourceFile[],
+): ReadonlySet<Node> {
+  const rootPackage = context.sourcePackages.packages.find((sourcePackage) =>
+    sourcePackage.id === context.sourcePackages.rootPackageId);
+  if (rootPackage === undefined) {
+    return Object.freeze(new Set<Node>());
+  }
+  const sourceFileByName = new Map(sourceFiles.map((sourceFile) =>
+    [normalizeSourceFileName(context.ast.getFileName(sourceFile)), sourceFile] as const));
+  const result = new Set<Node>();
+  for (const sourcePackage of context.sourcePackages.packages) {
+    const publishesLibrary = sourcePackage.componentId !== rootPackage.componentId ||
+      context.rootPublishesLibrary;
+    if (!publishesLibrary) {
+      continue;
+    }
+    for (const sourceExport of sourcePackage.exports) {
+      const sourceFile = sourceFileByName.get(normalizeSourceFileName(sourceExport.sourceFile));
+      if (sourceFile === undefined) {
+        continue;
+      }
+      for (const exported of context.source.navigation.moduleExports(sourceFile)) {
+        if (context.ast.is.IsClassDeclaration(exported.declaration)) {
+          result.add(exported.declaration);
+        }
+      }
+    }
+  }
+  return Object.freeze(result);
+}
+
+function normalizeSourceFileName(value: string): string {
+  return value.split("\\").join("/");
 }

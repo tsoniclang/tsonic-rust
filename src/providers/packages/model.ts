@@ -61,11 +61,18 @@ export type RustProviderOperationDefinition<
 > = RustProviderOperationDefinitionBase<OperationKind> & (
   | {
       readonly isFallible: true;
-      readonly errorBoundary: RustFallibleErrorBoundary;
+      readonly errorBoundary: "provider-native";
+      readonly errorCarrier: TargetTypeRef;
+    }
+  | {
+      readonly isFallible: true;
+      readonly errorBoundary: Exclude<RustFallibleErrorBoundary, "provider-native">;
+      readonly errorCarrier?: never;
     }
   | {
       readonly isFallible?: false;
       readonly errorBoundary?: never;
+      readonly errorCarrier?: never;
     }
 );
 
@@ -140,11 +147,18 @@ export type RustProviderBinaryEpilogueDefinition =
   & (
     | {
         readonly isFallible: true;
-        readonly errorBoundary: RustFallibleErrorBoundary;
+        readonly errorBoundary: "provider-native";
+        readonly errorCarrier: TargetTypeRef;
+      }
+    | {
+        readonly isFallible: true;
+        readonly errorBoundary: Exclude<RustFallibleErrorBoundary, "provider-native">;
+        readonly errorCarrier?: never;
       }
     | {
         readonly isFallible?: false;
         readonly errorBoundary?: never;
+        readonly errorCarrier?: never;
       }
   );
 

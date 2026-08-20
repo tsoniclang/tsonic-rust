@@ -31,11 +31,15 @@ import {
   isRustNumericCarrier,
   isRustNullishSourceCarrier,
   isRustOptionCarrier,
+  isRustStringCarrier,
   rustOptionElementCarrier,
   rustSourcePrimitiveTargetType,
 } from "../../policy/types/target-types.js";
 import {
+  rustModuleBindingFactKey,
+  rustMutatedBindingFactKey,
   rustOptionProjectionFactKey,
+  rustLocationStorageFactKey,
   rustPostCheckUnaryMinusOperationId,
   rustPostCheckUnaryPlusOperationId,
   rustTargetOperationFactKey,
@@ -488,6 +492,19 @@ export function resolvePostCheckBinaryCarrier(
       }
     }
   }
+  const inPlaceStringAppendDeclaration = fact?.kind === "operator-token" &&
+      fact.operator === "+=" && isRustStringCarrier(fact.resultCarrier)
+    ? inPlaceStringAppendDeclarationFor(walk, leftNode, operands.rightNode)
+    : undefined;
+  if (inPlaceStringAppendDeclaration !== undefined && fact?.kind === "operator-token") {
+    fact = { ...fact, writeStrategy: "in-place-string-append" };
+    walk.context.facts.set(
+      inPlaceStringAppendDeclaration,
+      rustMutatedBindingFactKey,
+      { mutated: true },
+      [{ message: "rust in-place string append requires mutable local storage" }],
+    );
+  }
   if (fact === undefined) {
     walk.postCheckOperations.delete(expression);
     if (operatorKind === KindEqualsToken && selectedLeftOperation !== undefined &&
@@ -530,6 +547,30 @@ export function resolvePostCheckBinaryCarrier(
   setRustOperationFact(walk, expression, fact);
   recordFinalizedOperatorSelection(walk, expression, fact, resultCarrier);
   return setCarrierFact(walk, expression, resultCarrier);
+}
+
+function inPlaceStringAppendDeclarationFor(
+  walk: RustFactWalk,
+  target: Node,
+  value: Node,
+): Node | undefined {
+  if (walk.context.ast.kindName(target) !== KindIdentifier) {
+    return undefined;
+  }
+  const reference = walk.context.source.navigation.sourceReferenceFor(target);
+  if (reference === undefined ||
+    walk.context.facts.get(reference.declaration, rustModuleBindingFactKey) !== undefined ||
+    walk.context.facts.resolve(reference.declaration, rustModuleBindingFactKey) !== undefined ||
+    walk.context.facts.get(reference.declaration, rustLocationStorageFactKey) !== undefined ||
+    walk.context.facts.resolve(reference.declaration, rustLocationStorageFactKey) !== undefined ||
+    walk.context.source.navigation.declarationUseSummary(reference.declaration).captured ||
+    walk.context.source.navigation.referencesWithin(reference.symbol, value).length !== 0) {
+    return undefined;
+  }
+  const effects = walk.context.source.navigation.expressionEffects(value);
+  return !effects.invokes && !effects.mutates && !effects.suspends && !effects.mayThrow
+    ? reference.declaration
+    : undefined;
 }
 
 function selectedOptionNullishRelationship(

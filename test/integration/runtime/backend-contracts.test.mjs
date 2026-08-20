@@ -69,29 +69,52 @@ test("value-returning fallible bodies never synthesize an invalid Ok unit", () =
 
 test("fallible result expressions preserve conversion into the enclosing program error", () => {
   const providerCall = { kind: "call", path: "provider::read", args: [] };
+  const runtimeError = { kind: "named", path: "rt::TsonicError" };
+  const providerError = { kind: "named", path: "provider::Error" };
+  const projectError = { kind: "named", path: "project::Error" };
 
   assert.deepEqual(
     applyRustFallibleResultExpression(
-      { kind: "try", expr: providerCall, errorDomain: "runtime" },
-      { errorDomain: "project", errorTypePath: "rt::TsonicError" },
+      {
+        kind: "try",
+        expr: providerCall,
+        operandErrorType: providerError,
+        resultErrorType: runtimeError,
+      },
+      { errorType: runtimeError },
     ),
     {
-      kind: "call",
-      path: "Ok::<_, rt::TsonicError>",
-      args: [{ kind: "try", expr: providerCall, errorDomain: "runtime" }],
+      kind: "method-call",
+      receiver: providerCall,
+      method: "map_err",
+      args: [{
+        kind: "associated-value",
+        owner: runtimeError,
+        name: "from",
+      }],
     },
   );
   assert.deepEqual(
     applyRustFallibleResultExpression(
-      { kind: "try", expr: providerCall, errorDomain: "runtime" },
-      { errorDomain: "runtime" },
+      {
+        kind: "try",
+        expr: providerCall,
+        operandErrorType: runtimeError,
+        resultErrorType: runtimeError,
+      },
+      { errorType: runtimeError },
     ),
     providerCall,
   );
   assert.deepEqual(
     applyRustFallibleResultExpression(
-      { kind: "try", expr: providerCall, errorDomain: "project" },
-      { errorDomain: "project" },
+      {
+        kind: "try",
+        expr: providerCall,
+        operandErrorType: projectError,
+        resultErrorType: projectError,
+      },
+      { errorType: projectError },
     ),
     providerCall,
   );
@@ -199,6 +222,7 @@ test("compile-time provider arguments never require runtime carrier or passing f
     isAsync: false,
     isFallible: true,
     errorBoundary: "provider-native",
+    errorCarrier: { kind: "target-named", id: "rust.test.ProviderError" },
   });
   assert.ok(abi);
   const runtimeArgument = {};
@@ -291,8 +315,8 @@ export function make(): Empty {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub struct Empty \{\n    pub\(crate\) state: rt::ObjectHandle<EmptyState>,\n\}/u);
-  assert.match(text, /state: rt::ObjectHandle::new\(EmptyState \{\}\)/u);
+  assert.match(text, /pub struct Empty \{\n    #\[doc\(hidden\)\]\n    pub identity: rt::ObjectIdentity,\n    #\[doc\(hidden\)\]\n    pub dispatch: std::rc::Rc<dyn EmptyDispatch>,\n\}/u);
+  assert.match(text, /let root = std::rc::Rc::new\(EmptyRoot \{/u);
   validateGeneratedProject("backend-empty-class", result.artifacts);
 });
 
@@ -341,11 +365,12 @@ export class Secret {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /    pub\(crate\) state: rt::ObjectHandle<SecretState>,/u);
-  assert.doesNotMatch(text, /    (?:pub )?value: i32,/u);
-  assert.match(text, /    fn hidden\(&self\) -> i32/u);
-  assert.doesNotMatch(text, /    pub fn hidden\(&self\)/u);
-  assert.match(text, /    pub fn reveal\(&self\) -> i32/u);
+  assert.match(text, /pub struct Secret \{\n    #\[doc\(hidden\)\]\n    pub identity: rt::ObjectIdentity,\n    #\[doc\(hidden\)\]\n    pub dispatch: std::rc::Rc<dyn SecretDispatch>,\n\}/u);
+  assert.match(text, /    value: i32,/u);
+  assert.doesNotMatch(text, /    pub(?:\(crate\))? value: i32,/u);
+  assert.match(text, /fn exact_secret_hidden\(self: std::rc::Rc<Self>\) -> i32/u);
+  assert.doesNotMatch(text, /pub fn (?:exact_secret_hidden|hidden)\(/u);
+  assert.match(text, /fn dispatch_secret_reveal\(self: std::rc::Rc<Self>\) -> i32/u);
   validateGeneratedProject("backend-private-members", result.artifacts);
 });
 
@@ -362,7 +387,7 @@ export function main(): void {}
   assert.deepEqual(result.diagnostics, []);
   assert.match(
     artifactText(result, "src/main.rs"),
-    /fn main\(\) \{\n    structured_main::index::main\(\);\n\}/u,
+    /fn main\(\) \{\n    structured_main::tsonic_entry\(\);\n\}/u,
   );
   validateGeneratedProject("backend-structured-main", result.artifacts, { run: true });
 });
@@ -387,7 +412,7 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   assert.match(
     artifactText(result, "src/main.rs"),
-    /exact_entry_path::index::main\(\);/u,
+    /exact_entry_path::tsonic_entry\(\);/u,
   );
   validateGeneratedProject("backend-exact-entry-path", result.artifacts, { run: true });
 });
@@ -410,7 +435,7 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   assert.match(
     artifactText(result, "src/main.rs"),
-    /fn main\(\) -> tsonic_rust_runtime::TsonicResult<\(\)> \{\n    fallible_main::index::main\(\)\?;\n    Ok\(\(\)\)\n\}/u,
+    /fn main\(\) -> Result<\(\), tsonic_rust_runtime::TsonicError> \{\n    fallible_main::tsonic_entry\(\)\?;\n    Ok::<\(\), tsonic_rust_runtime::TsonicError>\(\(\)\)\n\}/u,
   );
   validateGeneratedProject("backend-fallible-main", result.artifacts, { run: true });
 });

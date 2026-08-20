@@ -13,23 +13,21 @@ import {
   validateRustFinalizedOperationAbi,
 } from "../../../analysis/facts/finalized-operation-abi.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
-import { applyRustErrorBoundary } from "../types/error-boundary.js";
-import { applyRustProviderLocationScope, planRustProviderLocationScope } from "../project/provider-location-scope.js";
-import { diagnosticInput, registerAliasFromPath, sourceTypePath } from "../program/plan-context.js";
+import { applyRustErrorBoundary, rustTargetRuntimeErrorType } from "../types/error-boundary.js";
+import { registerRustProviderErrorCarrier } from "../context.js";
+import { applyRustProviderEvaluationScope, planRustProviderEvaluationScope } from "../project/provider-evaluation-scope.js";
+import { diagnosticInput, registerAliasFromPath, rustActiveErrorType, sourceTypePath } from "../program/plan-context.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planExpression } from "./entry.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
 import { rustBinaryOperatorTraitPath } from "../../model/syntax.js";
-import { rustBorrowedStringView } from "../../rust-ast/expressions.js";
 import { rustBottomExpression } from "../types/fallible-shape.js";
 import { rustEffectiveValueCarrier, rustValueCarrierTransitionTarget } from "../../../analysis/facts/value-carrier-queries.js";
 import { rustFinalizedCarrierTransitionMatches } from "../../../analysis/facts/target-operation.js";
-import { rustSourceParameterAbiFactKey } from "../../../analysis/facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustValueConversionContract } from "../../../policy/conversions/contracts.js";
 import type {
-  RustArgumentMode,
   RustProviderConstantArgument,
   RustProviderChainStep,
   RustTargetOperationFact,
@@ -37,87 +35,14 @@ import type {
 } from "../../../analysis/facts/keys.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr, RustType } from "../../rust-ast/nodes.js";
-import type { RustFinalizedInputPlanOverrides } from "../project/provider-location-scope.js";
+import type { RustFinalizedInputPlanOverrides } from "../project/provider-evaluation-scope.js";
 import type { RustFinalizedSourceInput, RustFinalizedTargetInput, RustFinalizedValueConversion } from "../../../analysis/facts/finalized-operation-abi.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { TargetTypeRef } from "../../../policy/types/model.js";
-
-export function planArguments(node: Node, context: RustPlanContext): readonly RustExpr[] | undefined {
-  const args: RustExpr[] = [];
-  for (const argument of context.input.ast.arguments(node)) {
-    if (argument === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, node),
-        "rust.backend.call-argument",
-        "Call expression contains an undefined argument slot.",
-      ));
-      return undefined;
-    }
-    const planned = planExpression(argument, context);
-    if (planned === undefined) {
-      return undefined;
-    }
-    args.push(planned);
-  }
-  return args;
-}
-
-// An expression already borrowing (&str-carried identifiers) is passed
-// bare; owned expressions take &.
-function refShape(context: RustPlanContext, argument: RustExpr, node: Node | undefined): RustExpr {
-  const borrowedString = rustBorrowedStringView(argument);
-  if (borrowedString !== argument) {
-    return borrowedString;
-  }
-  if (node !== undefined &&
-    context.expressionOverrides?.get(node)?.valueForm === "shared-reference") {
-    return argument;
-  }
-  const sourceParameterAbi = node === undefined
-    ? undefined
-    : context.input.facts.getFact(node, rustSourceParameterAbiFactKey);
-  if (sourceParameterAbi?.mode === "ref" || sourceParameterAbi?.mode === "mut-ref") {
-    return argument;
-  }
-  if (argument.kind === "string-literal") {
-    return { kind: "str-literal", value: argument.value };
-  }
-  if (argument.kind === "vec-literal") {
-    return { kind: "reference", expr: { kind: "slice-literal", elements: argument.elements } };
-  }
-  return { kind: "reference", expr: argument };
-}
-
-export function mutRefShape(argument: RustExpr): RustExpr {
-  return {
-    kind: "reference",
-    expr: argument.kind === "vec-literal"
-      ? { kind: "slice-literal", elements: argument.elements }
-      : argument,
-    mutable: true,
-  };
-}
-
-export function applyRustArgumentMode(
-  context: RustPlanContext,
-  argument: RustExpr,
-  mode: RustArgumentMode,
-  node: Node | undefined,
-): RustExpr {
-  if (mode === "ref") {
-    return refShape(context, argument, node);
-  }
-  if (mode === "mut-ref") {
-    const sourceParameterAbi = node === undefined
-      ? undefined
-      : context.input.facts.getFact(node, rustSourceParameterAbiFactKey);
-    if (sourceParameterAbi?.mode === "mut-ref") {
-      return argument;
-    }
-    return mutRefShape(argument);
-  }
-  return argument;
-}
+import {
+  applyFinalizedRustArgumentMode,
+  applyRustArgumentMode,
+} from "./input-shaping.js";
 
 export function applyRustValueConversion(
   context: RustPlanContext,
@@ -172,7 +97,8 @@ export function applyRustValueConversion(
   if (!contract.fallible) {
     return converted;
   }
-  if (context.fallibleContext !== true) {
+  const activeErrorType = rustActiveErrorType(context);
+  if (activeErrorType === undefined) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node ?? context.sourceFile),
       "rust.backend.value-conversion",
@@ -180,7 +106,12 @@ export function applyRustValueConversion(
     ));
     return undefined;
   }
-  return { kind: "try", expr: converted, errorDomain: "runtime" };
+  return {
+    kind: "try",
+    expr: converted,
+    resultErrorType: activeErrorType,
+    operandErrorType: rustTargetRuntimeErrorType,
+  };
 }
 
 export function lowerRustValueConversion(
@@ -294,7 +225,10 @@ export function planProviderOperationExpression(
   receiverNode: Node | undefined,
   argumentNodes: readonly (Node | undefined)[],
   operationNode: Node,
-  explicitOverrides?: RustFinalizedInputPlanOverrides,
+  options: {
+    readonly resultUse: "value" | "storage";
+    readonly overrides?: RustFinalizedInputPlanOverrides;
+  },
 ): RustExpr | undefined {
   if (!validateRustFinalizedOperationAbi(fact.abi)) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -315,19 +249,20 @@ export function planProviderOperationExpression(
     ));
     return undefined;
   }
-  const locationScope = planRustProviderLocationScope(
+  const evaluationScope = planRustProviderEvaluationScope(
     context,
     fact,
     receiverNode,
     argumentNodes,
     planExpression,
+    options.overrides?.inputs,
   );
-  if (locationScope.kind === "failed") {
+  if (evaluationScope.kind === "failed") {
     return undefined;
   }
   const overrides = mergeRustFinalizedInputOverrides(
-    locationScope.kind === "selected" ? locationScope.overrides : undefined,
-    explicitOverrides,
+    evaluationScope.kind === "selected" ? evaluationScope.overrides : undefined,
+    options.overrides,
     operationNode,
     context,
   );
@@ -381,9 +316,9 @@ export function planProviderOperationExpression(
     ? undefined
     : targetTypeArguments as readonly RustType[];
   const scoped = (expression: RustExpr | undefined): RustExpr | undefined =>
-    expression === undefined || locationScope.kind !== "selected"
+    expression === undefined || evaluationScope.kind !== "selected"
       ? expression
-      : applyRustProviderLocationScope(expression, locationScope);
+      : applyRustProviderEvaluationScope(expression, evaluationScope);
   switch (form.form) {
     case "marker":
       return undefined;
@@ -477,6 +412,9 @@ export function planProviderOperationExpression(
         return undefined;
       }
       const field: RustExpr = { kind: "field", receiver, name: form.name };
+      if (options.resultUse === "storage") {
+        return scoped(field);
+      }
       if (isRustCopyCarrier(fact.resultCarrier)) {
         return scoped(field);
       }
@@ -635,7 +573,8 @@ export function finishProviderOperationExpression(
 ): RustExpr | undefined {
   let raw = expression;
   if (fact.abi.effects.invocation === "fallible") {
-    if (context.fallibleContext !== true) {
+    const activeErrorType = rustActiveErrorType(context);
+    if (activeErrorType === undefined) {
       context.diagnostics.push(unsupportedConstructDiagnostic(
         diagnosticInput(context, node),
         "rust.error.call",
@@ -651,7 +590,16 @@ export function finishProviderOperationExpression(
       ));
       return undefined;
     }
-    raw = applyRustErrorBoundary(raw, fact.abi.effects.errorBoundary, context.errorDomain);
+    if (fact.abi.effects.errorBoundary === "provider-native" &&
+      fact.abi.effects.errorCarrier !== undefined) {
+      registerRustProviderErrorCarrier(context.input, fact.abi.effects.errorCarrier);
+    }
+    raw = applyRustErrorBoundary(
+      raw,
+      fact.abi.effects.errorBoundary,
+      activeErrorType,
+      rustTypeFromCarrierInContext(fact.abi.effects.errorCarrier, context),
+    );
   }
   if (fact.abi.result.kind === "async") {
     return raw;
@@ -791,12 +739,14 @@ export function planFinalizedSourceInput(
   if (inputOverride !== undefined) {
     return inputOverride;
   }
-  const plannedExpression = overrides?.sourceValues.get(sourceNode) ??
+  const sourceValueOverride = overrides?.sourceValues.get(sourceNode);
+  const plannedExpression = sourceValueOverride ??
     planExpression(sourceNode, context);
   if (plannedExpression === undefined) {
     return undefined;
   }
-  const directStorage = expressionOverride?.valueForm === "storage" &&
+  const directStorage = sourceValueOverride === undefined &&
+      expressionOverride?.valueForm === "storage" &&
       input.conversion.kind === "identity" &&
       (position === "target-receiver" || input.mode !== "value")
     ? expressionOverride.expression
@@ -818,44 +768,13 @@ export function planFinalizedSourceInput(
     ? undefined
     : position === "target-receiver"
       ? converted
-      : applyFinalizedArgumentMode(
+      : applyFinalizedRustArgumentMode(
+          context,
+          sourceNode,
           converted,
           input,
-          context.input.facts.getFact(sourceNode, rustSourceParameterAbiFactKey),
           expressionOverride?.valueForm === "shared-reference",
         );
-}
-
-function applyFinalizedArgumentMode(
-  expression: RustExpr,
-  input: RustFinalizedSourceInput,
-  sourceParameterAbi: import("../../../analysis/facts/keys.js").RustSourceParameterAbiFact | undefined,
-  sourceIsSharedReference: boolean,
-): RustExpr {
-  if (input.mode === "value") {
-    return expression;
-  }
-  if (sourceParameterAbi?.mode === input.mode &&
-    rustTargetTypeRefEquals(sourceParameterAbi.parameterCarrier, input.parameterCarrier)) {
-    return expression;
-  }
-  if (sourceIsSharedReference && input.mode === "ref") {
-    return expression;
-  }
-  if (input.mode === "mut-ref") {
-    return mutRefShape(expression);
-  }
-  const borrowedString = rustBorrowedStringView(expression);
-  if (borrowedString !== expression) {
-    return borrowedString;
-  }
-  if (expression.kind === "string-literal") {
-    return { kind: "str-literal", value: expression.value };
-  }
-  if (expression.kind === "vec-literal") {
-    return { kind: "reference", expr: { kind: "slice-literal", elements: expression.elements } };
-  }
-  return { kind: "reference", expr: expression };
 }
 
 export function applyFinalizedValueConversion(

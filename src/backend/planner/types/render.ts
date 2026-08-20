@@ -6,6 +6,7 @@ import {
   rustSourceUnionCarrierValue,
   rustStructuralObjectCarrierValue,
 } from "../../../policy/types/target-types.js";
+import { rustSourceItemIdentity } from "../program/source-package-facades.js";
 import {
   rustBigIntTargetId,
   rustJsArrayTargetId,
@@ -232,6 +233,10 @@ export function rustTypeFromCarrierInContext(
   context: {
     readonly moduleName: string;
     readonly moduleNameByFileName: ReadonlyMap<string, string>;
+    readonly externalCrateNameByFileName: ReadonlyMap<string, string>;
+    readonly externalItemPathByIdentity: ReadonlyMap<string, string>;
+    readonly externalStructuralShapeModuleByFileName: ReadonlyMap<string, string>;
+    readonly crateName?: string;
     readonly structuralShapesModuleName: string;
     readonly usedAliases?: Set<string>;
     readonly typeParameterSubstitutions?: ReadonlyMap<string, TargetTypeRef>;
@@ -250,8 +255,14 @@ export function rustTypeFromCarrierInContext(
       return undefined;
     }
     const typeName = context.input.names.nameForSourceType(value.fileName, value.typeName);
-    return typeName === undefined
-      ? undefined
+    if (typeName === undefined) {
+      return undefined;
+    }
+    const externalCrate = context.externalCrateNameByFileName.get(value.fileName);
+    return externalCrate !== undefined && externalCrate !== context.crateName
+      ? context.externalItemPathByIdentity.get(
+          rustSourceItemIdentity(value.fileName, typeName),
+        )
       : moduleName === context.moduleName ? typeName : `crate::${moduleName}::${typeName}`;
   };
   const resolveStructuralShape = (shapeCarrier: TargetTypeRef): RustType | undefined => {
@@ -268,9 +279,17 @@ export function rustTypeFromCarrierInContext(
     if (typeArguments.some((argument) => argument === undefined)) {
       return undefined;
     }
+    const externalShapeModule = context.externalStructuralShapeModuleByFileName.get(
+      definition.ownerFileName,
+    );
+    const externalShapeCrate = context.externalCrateNameByFileName.get(
+      definition.ownerFileName,
+    );
     const stateType: RustType = {
       kind: "named",
-      path: context.moduleName === context.structuralShapesModuleName
+      path: externalShapeModule !== undefined && externalShapeCrate !== context.crateName
+        ? `${externalShapeModule}::${definition.targetName}`
+        : context.moduleName === context.structuralShapesModuleName
         ? definition.targetName
         : `crate::${context.structuralShapesModuleName}::${definition.targetName}`,
       ...(typeArguments.length === 0
@@ -299,6 +318,10 @@ export function rustReturnTypeFromCarrierInContext(
   context: {
     readonly moduleName: string;
     readonly moduleNameByFileName: ReadonlyMap<string, string>;
+    readonly externalCrateNameByFileName: ReadonlyMap<string, string>;
+    readonly externalItemPathByIdentity: ReadonlyMap<string, string>;
+    readonly externalStructuralShapeModuleByFileName: ReadonlyMap<string, string>;
+    readonly crateName?: string;
     readonly structuralShapesModuleName: string;
     readonly usedAliases?: Set<string>;
     readonly typeParameterSubstitutions?: ReadonlyMap<string, TargetTypeRef>;

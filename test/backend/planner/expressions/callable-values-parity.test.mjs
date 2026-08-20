@@ -95,7 +95,7 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /fn invoke\([^)]*Callable<\(i32,\), rt::TsonicResult<i32>>[^)]*\) -> rt::TsonicResult<i32>/u);
+  assert.match(source, /fn invoke\([^)]*Callable<\(i32,\), rt::TsonicResult<i32>>[^)]*\) -> Result<i32, rt::TsonicError>/u);
   assert.match(source, /action\.call\(\(value,\)\)/u);
   assert.match(source, /rt::Callable::<\(i32,\), rt::TsonicResult<i32>>::new/u);
   validateGeneratedProject("callable-throw", result.artifacts, { run: true });
@@ -132,7 +132,7 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /fn parse_positive\(value: i32\) -> rt::TsonicResult<i32>/u);
+  assert.match(source, /fn parse_positive\(value: i32\) -> Result<i32, rt::TsonicError>/u);
   assert.doesNotMatch(source, /rt::Callable<\(i32,\), rt::TsonicResult<i32>>/u);
   assert.match(source, /Err\(rt::TsonicError::from\(rt::JsError::error\("negative"\)\)\)/u);
   validateGeneratedProject("callable-top-level", result.artifacts, { run: true });

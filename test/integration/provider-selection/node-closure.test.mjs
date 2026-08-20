@@ -40,12 +40,12 @@ export function probe(): string {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /tsonic_rust_node::buffer::Buffer::from_string_enc\("hi", "utf8"\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
+  assert.match(text, /tsonic_rust_node::buffer::Buffer::from_string_enc\("hi", "utf8"\)\?/u);
   assert.match(text, /tsonic_rust_runtime::conversions::usize_to_i32\(buf\.len\(\)\)\?/u);
-  assert.match(text, /tsonic_rust_node::url::Url::parse\(\s*"https:\/\/example\.com\/a\?b=1",\s*None,?\s*\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
-  assert.match(text, /tsonic_rust_node::url::UrlSearchParams::new_from\("x=1"\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
-  assert.match(text, /h\.update_str_owned\("abc"\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
-  assert.match(text, /h\.digest_string\("hex"\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
+  assert.match(text, /tsonic_rust_node::url::Url::parse\(\s*"https:\/\/example\.com\/a\?b=1",\s*None,?\s*\)\?/u);
+  assert.match(text, /tsonic_rust_node::url::UrlSearchParams::new_from\("x=1"\)\?/u);
+  assert.match(text, /h\.update_str_owned\("abc"\)\?/u);
+  assert.match(text, /h\.digest_string\("hex"\)\?/u);
   assert.match(text, /tsonic_rust_runtime::conversions::u32_to_i32\(tsonic_rust_node::process::pid\(\)\)\?/u);
   assert.match(text, /rt::option_coalesce\(\s*tsonic_rust_node::process::env_get\("PATH"\),\s*std::convert::identity,/u);
 });
@@ -192,9 +192,9 @@ export async function roundtrip(dir: string, file: string): Promise<int32> {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub async fn roundtrip\(dir: String, file: String\) -> rt::TsonicResult<i32> \{/u);
-  assert.match(text, /tsonic_rust_node::fs_promises::mkdir_async\(&dir, true\)\s*\.await\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
-  assert.match(text, /tsonic_rust_node::fs_promises::read_file_string_async\(&file, "utf8"\)\s*\.await\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
+  assert.match(text, /pub async fn roundtrip\(dir: String, file: String\) -> Result<i32, rt::TsonicError> \{/u);
+  assert.match(text, /tsonic_rust_node::fs_promises::mkdir_async\(&dir, true\)\.await\?/u);
+  assert.match(text, /tsonic_rust_node::fs_promises::read_file_string_async\(&file, "utf8"\)\.await\?/u);
   validateGeneratedProject("r7-async-fs-lib", result.artifacts);
 });
 

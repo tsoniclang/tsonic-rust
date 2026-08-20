@@ -69,8 +69,8 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /matches!\(error\.clone\(\), rt::TsonicError::Project[0-9]+\(_\)\)/u);
-  assert.match(source, /rt::TsonicError::Project[0-9]+\(program_error\)/u);
+  assert.match(source, /matches!\(error\.clone\(\), rt::TsonicError::NamedError\(_\)\)/u);
+  assert.match(source, /rt::TsonicError::NamedError\(program_error\)/u);
   assert.equal(validateGeneratedProject("caught-project-error", result.artifacts, { run: true }).status, 0);
 });
 
@@ -198,9 +198,9 @@ export function roundtrip(text: string): string {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn roundtrip\(text: String\) -> rt::TsonicResult<String> \{/u);
-  assert.match(text, /js_abi::json_parse\(&text\)\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
-  assert.match(text, /js_abi::json_stringify\(&value\)\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
+  assert.match(text, /pub fn roundtrip\(text: String\) -> Result<String, rt::TsonicError> \{/u);
+  assert.match(text, /js_abi::json_parse\(&text\)\?/u);
+  assert.match(text, /js_abi::json_stringify\(&value\)\?/u);
 });
 
 test("node fs read lowers through the fallible provider row", async () => {
@@ -220,7 +220,7 @@ export function load(path: string): string {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn load\(path: String\) -> rt::TsonicResult<String> \{/u);
+  assert.match(text, /pub fn load\(path: String\) -> Result<String, rt::TsonicError> \{/u);
   assert.match(text, /tsonic_rust_node::fs::read_file_sync_string\(&path, "utf8"\)/u);
   assert.doesNotMatch(text, /Ok\(tsonic_rust_node::fs::read_file_sync_string/u);
 });
@@ -252,7 +252,7 @@ export function forwards(text: string): string {
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn catches\(text: String\) -> String \{/u);
   assert.match(text, /pub fn forwards\(text: String\) -> String \{/u);
-  assert.match(text, /catches\(text\.clone\(\)\)/u);
+  assert.match(text, /catches\(text\)/u);
   assert.doesNotMatch(text, /pub fn (?:catches|forwards)[^{]+TsonicResult/u);
   assert.doesNotMatch(text, /catches\(text\)\?/u);
 });
@@ -279,10 +279,10 @@ export function inspectJson(): boolean {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /let value: js_abi::JsValue = js_abi::json_parse\("\{\\"tag\\":\\"tsonic\\"\}"\)\s*\.map_err\(\s*tsonic_rust_runtime::TsonicError::from,?\s*\)\?;/u);
+  assert.match(text, /let value: js_abi::JsValue = js_abi::json_parse\("\{\\"tag\\":\\"tsonic\\"\}"\)\?;/u);
   assert.match(
     text,
-    /let rendered: String = rt::option_coalesce\(\s*js_abi::json_stringify\(&value\)\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?,\s*std::convert::identity,\s*\|\| String::from\(""\),\s*\);/u,
+    /let rendered: String = rt::option_coalesce\(\s*js_abi::json_stringify\(&value\)\?,\s*std::convert::identity,\s*\|\| String::from\(""\),\s*\);/u,
   );
   assert.match(text, /ok = js_string::includes_from_start\(&rendered, "tsonic"\);/u);
 });
@@ -304,9 +304,9 @@ export async function forwards(): Promise<string> {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub async fn risky\(\) -> rt::TsonicResult<String>/u);
-  assert.match(text, /pub async fn forwards\(\) -> rt::TsonicResult<String>/u);
-  assert.match(text, /pub async fn forwards\(\) -> rt::TsonicResult<String> \{\n    risky\(\)\.await\n\}/u);
+  assert.match(text, /pub async fn risky\(\) -> Result<String, rt::TsonicError>/u);
+  assert.match(text, /pub async fn forwards\(\) -> Result<String, rt::TsonicError>/u);
+  assert.match(text, /pub async fn forwards\(\) -> Result<String, rt::TsonicError> \{\n    risky\(\)\.await\n\}/u);
   assert.doesNotMatch(text, /risky\(\)\.await\?/u);
   assert.doesNotMatch(text, /risky\(\)\?\.await/u);
 });
@@ -409,8 +409,8 @@ export function drive(): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /fn risky\(flag: bool\) -> rt::TsonicResult<i32> \{/u);
-  assert.match(text, /pub fn drive\(\) -> rt::TsonicResult<i32> \{\n    Machine::risky\(false\)\n\}/u);
+  assert.match(text, /fn risky\(flag: bool\) -> Result<i32, rt::TsonicError> \{/u);
+  assert.match(text, /pub fn drive\(\) -> Result<i32, rt::TsonicError> \{\n    Machine::risky\(false\)\n\}/u);
   assert.doesNotMatch(text, /Ok\(Machine::risky\(false\)\?\)/u);
 });
 
@@ -473,11 +473,11 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /fn initialize_state[^\n]*-> rt::TsonicResult</u);
-  assert.match(text, /pub fn new\([^)]*\) -> rt::TsonicResult<Derived>/u);
-  assert.match(text, /pub fn new\(\) -> rt::TsonicResult<Initialized>/u);
-  assert.match(text, /fn dispatch_[^(]+\([^)]*\) -> rt::TsonicResult<i32>/u);
-  assert.match(text, /fn read_through_base\([^)]*\) -> rt::TsonicResult<i32>/u);
+  assert.match(text, /fn initialize_state[^\n]*-> Result<[^,>]+, rt::TsonicError>/u);
+  assert.match(text, /pub fn new\([^)]*\) -> Result<Derived, rt::TsonicError>/u);
+  assert.match(text, /pub fn new\(\) -> Result<Initialized, rt::TsonicError>/u);
+  assert.match(text, /fn dispatch_[^(]+\([^)]*\) -> Result<i32, rt::TsonicError>/u);
+  assert.match(text, /fn read_through_base\([^)]*\) -> Result<i32, rt::TsonicError>/u);
   assert.equal(validateGeneratedProject("project-fallibility-closure", result.artifacts, { run: true }).status, 0);
 });
 
@@ -509,7 +509,7 @@ export function fallback(flag: boolean): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn fallback\(flag: bool\) -> rt::TsonicResult<i32> \{/u);
+  assert.match(text, /pub fn fallback\(flag: bool\) -> Result<i32, rt::TsonicError> \{/u);
   assert.match(text, /Ok\(rt::Completion::Return\(2\)\)/u);
   assert.match(text, /rt::Completion::Return\(value\) => return Ok\(value\)/u);
   assert.match(text, /return risky\(\);/u);
@@ -666,7 +666,7 @@ export function main(): void {
   const source = artifactText(result, "src/index.rs");
   assert.match(
     source,
-    /Ok::<_, rt::TsonicError>\(\s*js_string::replace_all\(&value, "a", "b"\)[\s\S]*\?\s*,?\s*\)/u,
+    /js_string::replace_all\(value, "a", "b"\)\.map_err\(rt::TsonicError::from\)/u,
   );
   assert.equal(validateGeneratedProject("concise-program-error", result.artifacts, { run: true }).status, 0);
 });
@@ -698,4 +698,31 @@ export function sorted(values: int32[]): int32[] {
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /pub fn sorted[\s\S]*?\{\n\s*values\s*\.try_sort/u);
   assert.doesNotMatch(source, /Ok::<_, rt::TsonicError>\(\s*values\s*\.try_sort/u);
+});
+
+test("capture-free exact forwarding callbacks use their native Rust function directly", () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+function compare(left: number, right: number): number {
+  if (left < 0 || right < 0) throw new Error("negative");
+  return left - right;
+}
+
+export function sorted(values: number[]): number[] {
+  return values.sort((left, right) => compare(left, right));
+}
+
+export function reversed(values: number[]): number[] {
+  return values.sort((left, right) => compare(right, left));
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /values\.try_sort\(compare\)/u);
+  assert.match(source, /values\.try_sort\(\|left, right\| compare\(right, left\)\)/u);
 });

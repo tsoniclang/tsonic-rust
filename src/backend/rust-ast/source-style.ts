@@ -16,7 +16,7 @@ export function finalizeRustSourceStyle(
   model: RustSourceFileModel,
 ): RustSourceFileModel {
   const items = closePublicRustTypeVisibility(model.items);
-  const publicTypes = publicNominalRustTypeNames(items);
+  const publicTypes = publicDeclaredRustTypeNames(items);
   return {
     ...model,
     items: items.map((item) => finalizeRustItemStyle(item, publicTypes)),
@@ -29,14 +29,6 @@ export function rustPublicSignatureTypeNames(model: RustSourceFileModel): readon
   return Object.freeze([...new Set(items.flatMap((item) =>
     publicSignatureTypes(item, publicTypes).flatMap(rustTypeNames)))].sort((left, right) =>
       left.localeCompare(right, "en")));
-}
-
-function publicNominalRustTypeNames(items: readonly RustItem[]): ReadonlySet<string> {
-  return new Set(items.flatMap((item) =>
-    (item.kind === "struct" || item.kind === "trait" || item.kind === "enum") &&
-        item.visibility === "public"
-      ? [item.name]
-      : []));
 }
 
 function publicDeclaredRustTypeNames(items: readonly RustItem[]): ReadonlySet<string> {
@@ -52,40 +44,27 @@ function finalizeRustItemStyle(
   publicTypes: ReadonlySet<string>,
 ): RustItem {
   if (item.kind === "function") {
-    const itemAttrs = item.visibility === "public"
-      ? removeDeadCodeAttributes(item.attrs)
-      : item.attrs;
     const attrs = item.params.length <= 7
-      ? itemAttrs
-      : appendRustAttribute(itemAttrs, rustLintAttributes.tooManyArguments);
+      ? item.attrs
+      : appendRustAttribute(item.attrs, rustLintAttributes.tooManyArguments);
     return { ...item, attrs, body: finalizeRustFunctionBodyStyle(item.body) };
   }
   if (item.kind === "trait") {
     return {
       ...item,
-      ...(item.visibility === "public"
-        ? { attrs: removeDeadCodeAttributes(item.attrs) }
-        : {}),
       functions: item.functions.map(finalizeRustTraitFunctionStyle),
     };
   }
   if (item.kind === "impl") {
-    const publicTarget = item.target.kind === "named" && publicTypes.has(item.target.path);
+    const publicOwner = item.target.kind === "named" && publicTypes.has(item.target.path);
     return {
       ...item,
       functions: item.functions.map((fn) =>
-        finalizeRustImplFunctionStyle(fn, item.trait === undefined, publicTarget)),
+        finalizeRustImplFunctionStyle(fn, item.trait === undefined, publicOwner)),
     };
   }
   if (item.kind === "const" || item.kind === "thread-local") {
     return { ...item, value: finalizeRustExpressionStyle(item.value) };
-  }
-  if (item.kind === "enum" && item.visibility === "public") {
-    return { ...item, attrs: removeDeadCodeAttributes(item.attrs) };
-  }
-  if (item.kind === "struct" && item.visibility === "public" &&
-    item.fields.every((field) => field.visibility === "public")) {
-    return { ...item, attrs: removeDeadCodeAttributes(item.attrs) };
   }
   return item;
 }
@@ -100,11 +79,9 @@ function finalizeRustTraitFunctionStyle(fn: RustTraitFunction): RustTraitFunctio
 function finalizeRustImplFunctionStyle(
   fn: RustImplFunction,
   inherent: boolean,
-  publicTarget: boolean,
+  publicOwner: boolean,
 ): RustImplFunction {
-  let attrs = publicTarget && fn.visibility === "public"
-    ? removeDeadCodeAttributes(fn.attrs)
-    : fn.attrs;
+  let attrs = fn.attrs;
   const argumentCount = fn.params.length + (fn.selfParam === undefined ? 0 : 1);
   if (inherent && argumentCount > 7) {
     attrs = appendRustAttribute(attrs, rustLintAttributes.tooManyArguments);
@@ -113,15 +90,11 @@ function finalizeRustImplFunctionStyle(
     fn.params.length === 0 && fn.returnType?.kind === "string") {
     attrs = appendRustAttribute(attrs, rustLintAttributes.inherentToString);
   }
+  if (inherent && publicOwner && fn.visibility === "public" && fn.name === "next" &&
+    fn.selfParam !== undefined && fn.params.length === 0) {
+    attrs = appendRustAttribute(attrs, rustLintAttributes.shouldImplementTrait);
+  }
   return { ...fn, attrs, body: finalizeRustFunctionBodyStyle(fn.body) };
-}
-
-function removeDeadCodeAttributes(
-  attrs: readonly string[] | undefined,
-): readonly string[] | undefined {
-  const filtered = attrs?.filter((attribute) =>
-    attribute !== rustLintAttributes.deadCode);
-  return filtered === undefined || filtered.length === 0 ? undefined : filtered;
 }
 
 function finalizeRustFunctionBodyStyle(block: RustBlock): RustBlock {
@@ -605,6 +578,8 @@ function collectLocalRustTypeNames(
 
 function rustTypeNames(type: RustType): readonly string[] {
   switch (type.kind) {
+    case "infer":
+      return [];
     case "named":
       return [type.path, ...(type.typeArguments?.flatMap(rustTypeNames) ?? [])];
     case "trait-object":

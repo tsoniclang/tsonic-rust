@@ -4,7 +4,10 @@ import { rustLintAttributes } from "../../../rust-ast/lint-policy.js";
 import { rustDefaultImplementation } from "../../declarations/default-implementation.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
-import { diagnosticInput } from "../../program/plan-context.js";
+import {
+  diagnosticInput,
+  rustProjectTypeHasPublicImplementationAbi,
+} from "../../program/plan-context.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import {
   rustProjectObjectDispatchField,
@@ -33,6 +36,11 @@ import {
   rustProjectTypeParameters,
 } from "./names.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
+import {
+  rustProjectImplementationVisibility,
+  rustProjectMemberStorageVisibility,
+} from "../project-storage-abi.js";
+import { planProjectPrivateStateAccessors } from "./private-fields.js";
 
 export function planPolymorphicClassDeclaration(
   declaration: Node,
@@ -42,6 +50,7 @@ export function planPolymorphicClassDeclaration(
   if (definition?.kind !== "class" || !context.input.projectTypes.isPolymorphic(definition)) {
     return undefined;
   }
+  const diagnosticCountBeforeShape = context.diagnostics.length;
   const openCarrier = context.input.projectTypes.openCarrier(definition);
   const wrapperType = rustTypeFromCarrierInContext(openCarrier, context);
   const dispatchType = rustProjectDispatchTraitType(openCarrier, context);
@@ -50,15 +59,40 @@ export function planPolymorphicClassDeclaration(
   const stateType = layers === undefined ? undefined : projectStateType(layers, context);
   if (wrapperType === undefined || dispatchType === undefined || rootType === undefined ||
     layers === undefined || stateType === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, declaration),
-      "rust.backend.project-polymorphism-carrier",
-      "Polymorphic project class has no exact wrapper, dispatch, root, or state carrier.",
-    ));
+    if (context.diagnostics.length === diagnosticCountBeforeShape) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, declaration),
+        "rust.backend.project-polymorphism-carrier",
+        "Polymorphic project class has no exact wrapper, dispatch, root, or state carrier.",
+      ));
+    }
     return undefined;
   }
+  const diagnosticCountBeforeTrait = context.diagnostics.length;
   const trait = planProjectDispatchTrait(definition, openCarrier, context);
+  if (trait === undefined) {
+    if (context.diagnostics.length === diagnosticCountBeforeTrait) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, declaration),
+        "rust.backend.project-polymorphism-dispatch",
+        "Polymorphic project class has no complete exact dispatch-trait plan.",
+      ));
+    }
+    return undefined;
+  }
+  const diagnosticCountBeforeConstructor = context.diagnostics.length;
   const constructor = planProjectClassConstructor(definition, wrapperType, rootType, layers, context);
+  if (constructor === undefined) {
+    if (context.diagnostics.length === diagnosticCountBeforeConstructor) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, declaration),
+        "rust.backend.project-polymorphism-construction",
+        "Polymorphic project class has no complete exact construction plan.",
+      ));
+    }
+    return undefined;
+  }
+  const diagnosticCountBeforeRootImplementations = context.diagnostics.length;
   const rootImplementations = planProjectRootImplementations(
     definition,
     openCarrier,
@@ -66,13 +100,33 @@ export function planPolymorphicClassDeclaration(
     layers,
     context,
   );
-  if (trait === undefined || constructor === undefined || rootImplementations === undefined) {
+  if (rootImplementations === undefined) {
+    if (context.diagnostics.length === diagnosticCountBeforeRootImplementations) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, declaration),
+        "rust.backend.project-polymorphism-root",
+        "Polymorphic project class has no complete exact root implementation plan.",
+      ));
+    }
     return undefined;
   }
   context.usedAliases?.add("rt");
   const typeParams = rustProjectTypeParameters(definition);
   const stateMarker = rustProjectStateMarker(definition, context);
+  const programErrorVariant = context.input.projectTypes.programErrorVariant(definition);
+  const publiclyReachable = programErrorVariant !== undefined ||
+    rustProjectTypeHasPublicImplementationAbi(context, definition.targetName);
+  const exported = context.input.ast.hasModifierKind(declaration, "export");
   const ownLayer = layers[layers.length - 1]!;
+  const privateStateAccessors = planProjectPrivateStateAccessors(
+    stateType,
+    ownLayer,
+    publiclyReachable,
+    context,
+  );
+  if (privateStateAccessors === undefined) {
+    return undefined;
+  }
   const baseLayer = layers[layers.length - 2];
   const baseStateType = baseLayer === undefined
     ? undefined
@@ -89,6 +143,7 @@ export function planPolymorphicClassDeclaration(
   if (staticMethods === undefined || externalErrorImplementations === undefined) {
     return undefined;
   }
+  const implementationVisibility = rustProjectImplementationVisibility(publiclyReachable);
   const defaultImplementation = rustDefaultImplementation(
     wrapperType,
     typeParams,
@@ -99,8 +154,11 @@ export function planPolymorphicClassDeclaration(
     {
       kind: "struct",
       name: definition.stateName,
-      visibility: "crate",
-      attrs: [rustLintAttributes.deadCode],
+      visibility: implementationVisibility,
+      attrs: [
+        ...(publiclyReachable ? ["#[doc(hidden)]"] : []),
+        rustLintAttributes.deadCode,
+      ],
       derives: [],
       ...(typeParams.length === 0 ? {} : { typeParams }),
       fields: [
@@ -109,12 +167,17 @@ export function planPolymorphicClassDeclaration(
           : [{
               name: context.input.projectTypes.baseStateFieldName(definition),
               type: baseStateType,
-              visibility: "crate" as const,
+              visibility: implementationVisibility,
+              ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
             }]),
         ...ownLayer.fields.map((field) => ({
           name: field.targetName,
           type: field.type,
-          visibility: "crate" as const,
+          visibility: rustProjectMemberStorageVisibility(
+            context.input.ast,
+            field.declaration,
+            publiclyReachable,
+          ),
         })),
         ...ownLayer.methodProperties.map((property) => ({
           name: property.targetName,
@@ -123,22 +186,27 @@ export function planPolymorphicClassDeclaration(
             path: "Option",
             typeArguments: [property.callableType],
           },
-          visibility: "crate" as const,
+          visibility: implementationVisibility,
+          ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
         })),
         ...(stateMarker === undefined
           ? []
-          : [{ name: stateMarker.name, type: stateMarker.type, visibility: "crate" as const }]),
+          : [{
+              name: stateMarker.name,
+              type: stateMarker.type,
+              visibility: implementationVisibility,
+              ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
+            }]),
       ],
     },
+    ...privateStateAccessors,
     {
       kind: "struct",
       name: definition.targetName,
-      visibility: context.input.projectTypes.programErrorVariant(definition) !== undefined
-        ? "public"
-        : context.input.ast.hasModifierKind(declaration, "export") ? "public" : "crate",
+      visibility: exported || publiclyReachable ? "public" : "crate",
       attrs: [
         rustLintAttributes.deadCode,
-        ...(context.input.projectTypes.programErrorVariant(definition) === undefined
+        ...(programErrorVariant === undefined
           ? []
           : ["#[doc(hidden)]"]),
       ],
@@ -148,12 +216,14 @@ export function planPolymorphicClassDeclaration(
         {
           name: rustProjectObjectIdentityField,
           type: { kind: "named", path: "rt::ObjectIdentity" },
-          visibility: "crate",
+          visibility: implementationVisibility,
+          ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
         },
         {
           name: rustProjectObjectDispatchField,
           type: rustRcType({ kind: "trait-object", trait: dispatchType }),
-          visibility: "crate",
+          visibility: implementationVisibility,
+          ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
         },
       ],
     },
@@ -292,12 +362,18 @@ export function planPolymorphicInterfaceDeclaration(
   }
   context.usedAliases?.add("rt");
   const typeParams = rustProjectTypeParameters(definition);
+  const exported = context.input.ast.hasModifierKind(declaration, "export");
+  const publiclyReachable = rustProjectTypeHasPublicImplementationAbi(
+    context,
+    definition.targetName,
+  );
+  const implementationVisibility = rustProjectImplementationVisibility(publiclyReachable);
   return [
     trait,
     {
       kind: "struct",
       name: definition.targetName,
-      visibility: context.input.ast.hasModifierKind(declaration, "export") ? "public" : "crate",
+      visibility: exported || publiclyReachable ? "public" : "crate",
       attrs: [rustLintAttributes.deadCode],
       derives: ["Clone"],
       ...(typeParams.length === 0 ? {} : { typeParams }),
@@ -305,12 +381,14 @@ export function planPolymorphicInterfaceDeclaration(
         {
           name: rustProjectObjectIdentityField,
           type: { kind: "named", path: "rt::ObjectIdentity" },
-          visibility: "crate",
+          visibility: implementationVisibility,
+          ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
         },
         {
           name: rustProjectObjectDispatchField,
           type: rustRcType({ kind: "trait-object", trait: dispatchType }),
-          visibility: "crate",
+          visibility: implementationVisibility,
+          ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
         },
       ],
     },

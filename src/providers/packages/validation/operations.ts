@@ -20,7 +20,7 @@ export function validateOperationRows(
   for (const row of definition.operations) {
     requireExactKeys(asRecord(row), [
       "exportId", "memberId", "signatureId", "operationKind", "target", "resultCarrier",
-      "parameterCarriers", "receiverCarrier", "typeParameters", "typeRequirements", "targetTypeArguments", "resultConversion", "isAsync", "isFallible", "errorBoundary", "isUnsafe", "immediateCallback",
+      "parameterCarriers", "receiverCarrier", "typeParameters", "typeRequirements", "targetTypeArguments", "resultConversion", "isAsync", "isFallible", "errorBoundary", "errorCarrier", "isUnsafe", "immediateCallback",
     ], `operation row '${String((row as { readonly memberId?: unknown; readonly exportId?: unknown }).memberId ?? row.exportId)}'`, fail);
     const label = row.memberId ?? row.exportId;
     if (row.operationKind !== "method" && row.operationKind !== "constructor" &&
@@ -78,14 +78,25 @@ export function validateOperationRows(
     if (row.isFallible !== true && row.errorBoundary !== undefined) {
       fail(`infallible row '${label}' cannot declare an errorBoundary.`);
     }
-    if (row.isAsync !== undefined && typeof row.isAsync !== "boolean") {
-      fail(`isAsync must be boolean when present (row '${label}').`);
-    }
     if (row.isFallible === true && row.operationKind !== "method" && row.operationKind !== "constructor" && row.operationKind !== "property") {
       fail(`isFallible is supported only on method, constructor, and property operations (row '${label}').`);
     }
     if (row.isAsync === true && row.operationKind !== "method") {
       fail(`isAsync is supported only on method operations (row '${label}').`);
+    }
+    if (row.errorBoundary === "provider-native") {
+      if (row.errorCarrier === undefined) {
+        fail(`provider-native row '${label}' requires an exact errorCarrier.`);
+      } else {
+        validateCarrier(row.errorCarrier, definition, `${label}.errorCarrier`, fail, {
+          position: "return",
+        });
+      }
+    } else if (row.errorCarrier !== undefined) {
+      fail(`row '${label}' cannot declare an errorCarrier outside a provider-native boundary.`);
+    }
+    if (row.isAsync !== undefined && typeof row.isAsync !== "boolean") {
+      fail(`isAsync must be boolean when present (row '${label}').`);
     }
     validateProviderCallback(row, definition, label, fail);
     validateOperationParameters(row, exported, member, signature, fail);

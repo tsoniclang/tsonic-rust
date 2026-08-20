@@ -4,6 +4,7 @@ import {
   rustJsArrayTargetId,
   rustJsArrayConcatItemTargetId,
   rustJsDateTargetId,
+  rustJsErrorTargetId,
   rustJsMapTargetId,
   rustJsSetTargetId,
   rustJsValueTargetId,
@@ -45,6 +46,7 @@ export const builtInTargetCarrierIds = new Set([
   rustJsMapTargetId,
   rustJsSetTargetId,
   rustJsDateTargetId,
+  rustJsErrorTargetId,
   "rust.js.JsRegExp",
   "rust.js.JsRegExpMatch",
 ]);

@@ -5,9 +5,17 @@ import {
   rustSourceTypeCarrierValue,
   substituteRustTargetTypeParameters,
 } from "../../../../policy/types/target-types.js";
-import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { applyRustSourceCallableRequirements } from "../../artifacts/source-callable-contracts.js";
-import { diagnosticInput, isValidRustIdentifier, sourceTypePath } from "../../program/plan-context.js";
+import {
+  diagnosticInput,
+  isValidRustIdentifier,
+  rustActiveErrorType,
+  rustCurrentErrorBoundary,
+  rustErrorBoundaryForProjectMember,
+  rustErrorType,
+  sourceModuleItemPath,
+  sourceTypePath,
+} from "../../program/plan-context.js";
 import { invokeRustStructuralObjectMethod } from "../../objects/project-storage.js";
 import { isDenseDataArray } from "../../../../policy/model/closed-data.js";
 import {
@@ -19,8 +27,10 @@ import { planExpression } from "../entry.js";
 import { planPromotedSourceMethodCall, shapeRustSourceCallParameters, sourceCallSelectedMemberMatches } from "./arguments.js";
 import { planRustNonConsumingValue, planRustPromotedStorageLocation } from "../typed-locations.js";
 import { rustBottomAfterEffect, rustBottomExpression } from "../../types/fallible-shape.js";
-import { rustProjectDispatchTraitType } from "../../objects/polymorphism/names.js";
-import { rustProjectObjectDispatchField } from "../../objects/project-objects.js";
+import {
+  planRustExactProjectMethodCall,
+  planRustVirtualProjectMethodCall,
+} from "../../objects/project-method-dispatch.js";
 import { rustSourceCallEffectsFactKey } from "../../../../analysis/facts/keys.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import type { Node } from "@tsonic/tsts";
@@ -150,16 +160,14 @@ export function planSelectedSourceCall(
   let planned: RustExpr | undefined;
   switch (fact.target.form) {
     case "function": {
-      const moduleName = context.moduleNameByFileName.get(fact.target.fileName);
       const targetName = callableSpecialization?.targetName ?? fact.target.name;
-      if (moduleName === undefined || !isValidRustIdentifier(targetName)) {
+      const path = sourceModuleItemPath(context, fact.target.fileName, targetName);
+      if (path === undefined || !isValidRustIdentifier(targetName)) {
         break;
       }
       planned = {
         kind: "call",
-        path: moduleName === context.moduleName
-          ? targetName
-          : `crate::${moduleName}::${targetName}`,
+        path,
         args: shaped,
         ...(callTypeArguments === undefined ? {} : { typeArguments: callTypeArguments }),
       };
@@ -191,66 +199,30 @@ export function planSelectedSourceCall(
           ));
           break;
         }
-        const dispatchReceiver = fact.target.dispatch.selected === "exact"
-          ? context.projectDispatchRoot
+        planned = fact.target.dispatch.selected === "exact"
+          ? planRustExactProjectMethodCall(
+              node,
+              context.projectDispatchRoot,
+              fact.target.dispatch.ownerCarrier,
+              dispatchVariant.exactSlot,
+              shaped,
+              context,
+            )
           : receiverNode === undefined
             ? undefined
-            : planExpression(receiverNode, context);
-        if (dispatchReceiver !== undefined) {
-          if (fact.target.dispatch.selected === "exact") {
-            const trait = rustProjectDispatchTraitType(
-              fact.target.dispatch.ownerCarrier,
-              context,
-            );
-            if (trait !== undefined) {
-              planned = {
-                kind: "associated-call",
-                owner: { kind: "named", path: "Self" },
-                trait,
-                method: dispatchVariant.exactSlot,
-                args: [{
-                  kind: "method-call",
-                  receiver: dispatchReceiver,
-                  method: "clone",
-                  args: [],
-                }, ...shaped],
-              };
-            }
-          } else {
-            if (context.syntheticNames === undefined) {
-              context.diagnostics.push(missingFactDiagnostic(
-                diagnosticInput(context, node),
-                "rust.backend.project-dispatch-temporary",
-                "Project method dispatch requires a finalized hygienic-name scope.",
-              ));
-              break;
-            }
-            const receiverName = allocateRustSyntheticName(
-              context.syntheticNames,
-              "dispatch_receiver",
-            );
-            const root = {
-                kind: "field" as const,
-                receiver: { kind: "path" as const, path: receiverName },
-                name: rustProjectObjectDispatchField,
-              };
-            planned = {
-              kind: "block",
-              bindings: [{ name: receiverName, value: dispatchReceiver }],
-              value: {
-                kind: "method-call",
-                receiver: {
-                  kind: "method-call",
-                  receiver: root,
-                  method: "clone",
-                  args: [],
-                },
-                method: dispatchVariant.virtualSlot,
-                args: shaped,
-              },
-            };
-          }
-        }
+            : (() => {
+                const receiver = planExpression(receiverNode, context);
+                return receiver === undefined
+                  ? undefined
+                  : planRustVirtualProjectMethodCall(
+                      node,
+                      receiver,
+                      fact.target.dispatch.ownerCarrier,
+                      dispatchVariant.virtualSlot,
+                      shaped,
+                      context,
+                    );
+              })();
         break;
       }
       const promoted = receiverNode === undefined || !fact.target.mutatesSelf
@@ -394,7 +366,18 @@ export function planSelectedSourceCall(
   if (effects.invocation === "infallible") {
     return isRustNeverCarrier(fact.resultCarrier) ? rustBottomExpression(planned) : planned;
   }
-  if (context.fallibleContext !== true) {
+  const resultErrorType = rustActiveErrorType(context);
+  const callableCarrier = fact.target.form === "callable"
+    ? fact.target.carrier
+    : fact.target.form === "structural-method"
+      ? fact.target.callableCarrier
+      : undefined;
+  const operandBoundary = rustCallableProtocol(callableCarrier) !== undefined
+    ? rustCurrentErrorBoundary(context)
+    : selected.sourceDeclaration === undefined
+      ? undefined
+      : rustErrorBoundaryForProjectMember(selected.sourceDeclaration, context);
+  if (resultErrorType === undefined) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
       "rust.error.call",
@@ -402,10 +385,19 @@ export function planSelectedSourceCall(
     ));
     return undefined;
   }
+  if (operandBoundary === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.source-call-error-boundary",
+      "Fallible source call has no exact selected declaration error boundary.",
+    ));
+    return undefined;
+  }
   const propagated: RustExpr = {
     kind: "try",
     expr: planned,
-    errorDomain: context.errorDomain,
+    resultErrorType,
+    operandErrorType: rustErrorType(operandBoundary),
   };
   return isRustNeverCarrier(fact.resultCarrier)
     ? rustBottomAfterEffect(propagated, "fallible never call returned")

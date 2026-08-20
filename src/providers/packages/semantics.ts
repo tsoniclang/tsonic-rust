@@ -1,4 +1,9 @@
-import { canonicalizeProviderOperationRow, expandProviderPath, materializeProviderCarrier, materializeProviderOperationRow } from "./materialization.js";
+import {
+  canonicalizeProviderOperationRow,
+  materializeProviderBinaryEpilogueRow,
+  materializeProviderCarrier,
+  materializeProviderOperationRow,
+} from "./materialization.js";
 import { rustProviderBindingProviderId } from "./source-provider.js";
 import { validateProviderPackageDefinition } from "./validation.js";
 import { snapshotClosedMetadata } from "../../policy/model/closed-data.js";
@@ -155,12 +160,17 @@ export function collectRustProviderSemanticsFromDefinitions(
       }));
     }
     const aliases = new Map((definition.aliasImports ?? []).map((entry) => [entry.alias, entry.path]));
-    binaryEpilogues.push(...(definition.binaryEpilogues ?? []).map((epilogue) => Object.freeze({
-      ...epilogue,
-      path: expandProviderPath(epilogue.path, aliases),
-      providerPackageId: definition.id,
-      providerVersion: definition.version,
-    })));
+    binaryEpilogues.push(...(definition.binaryEpilogues ?? []).map((epilogue) =>
+      Object.freeze(materializeProviderBinaryEpilogueRow(
+        epilogue,
+        aliases,
+        carrierPathRows,
+        carrierTraitRows,
+        {
+          providerPackageId: definition.id,
+          providerVersion: definition.version,
+        },
+      ))));
     operations.push(...definition.operations.map((row) => {
       const owner = moduleByExportId.get(row.exportId);
       if (owner === undefined) {

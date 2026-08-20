@@ -176,6 +176,7 @@ export interface RustFutureValueFact {
   readonly awaitedConversion: RustFinalizedValueConversion;
   readonly awaiting: "infallible" | "fallible";
   readonly errorBoundary: RustErrorBoundary;
+  readonly errorCarrier?: TargetTypeRef;
 }
 
 // Exact await behavior for one first-class future value. Unlike its runtime

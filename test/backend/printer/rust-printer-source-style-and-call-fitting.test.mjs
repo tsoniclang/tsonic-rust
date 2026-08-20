@@ -26,6 +26,12 @@ test("source style attributes are item-local and derived from exact Rust signatu
       derives: [],
       fields: [],
     }, {
+      kind: "struct",
+      name: "InternalCursor",
+      visibility: "crate",
+      derives: [],
+      fields: [],
+    }, {
       kind: "impl",
       target: { kind: "named", path: "Owner" },
       functions: [{
@@ -36,15 +42,35 @@ test("source style attributes are item-local and derived from exact Rust signatu
         returnType: { kind: "string" },
         body: { statements: [{ kind: "tail", expr: { kind: "string-literal", value: "owner" } }] },
       }, {
+        name: "next",
+        visibility: "public",
+        selfParam: "mut-ref",
+        params: [],
+        returnType: { kind: "string" },
+        body: { statements: [{ kind: "tail", expr: { kind: "string-literal", value: "value" } }] },
+      }, {
         name: "configure",
         visibility: "public",
         params: parameters,
         body: { statements: [] },
       }],
+    }, {
+      kind: "impl",
+      target: { kind: "named", path: "InternalCursor" },
+      functions: [{
+        name: "next",
+        visibility: "public",
+        selfParam: "mut-ref",
+        params: [],
+        returnType: { kind: "string" },
+        body: { statements: [{ kind: "tail", expr: { kind: "string-literal", value: "internal" } }] },
+      }],
     }],
   });
 
   assert.match(text, /#\[expect\(clippy::inherent_to_string, reason = "authored toString contract"\)\]\n    pub fn to_string/u);
+  assert.match(text, /#\[expect\(clippy::should_implement_trait, reason = "authored method contract"\)\]\n    pub fn next/u);
+  assert.match(text, /impl InternalCursor \{\n    pub fn next/u);
   assert.match(
     text,
     /#\[expect\(clippy::too_many_arguments, reason = "checked source signature"\)\]\n    pub fn configure/u,
@@ -466,7 +492,7 @@ test("a nested call owns the fitting break inside a wider expression", () => {
   assert.match(text, /usize_to_i32\(js_string::js_len\(\n            &tsonic_rust_node::os::platform\(\),\n        \)\)\? > 0/u);
 });
 
-test("a fitting fallible nested call remains horizontal", () => {
+test("fallible statement calls reserve the trailing semicolon before fitting nested calls", () => {
   const text = printRustSourceFile({
     headerComment,
     items: [{
@@ -505,7 +531,7 @@ test("a fitting fallible nested call remains horizontal", () => {
 
   assert.match(
     text,
-    /random_bytes\(tsonic_rust_runtime::conversions::i32_to_usize\(16\)\?\)\?/u,
+    /random_bytes\(tsonic_rust_runtime::conversions::i32_to_usize\(\n {12}16,\n {8}\)\?\)\?/u,
   );
 });
 

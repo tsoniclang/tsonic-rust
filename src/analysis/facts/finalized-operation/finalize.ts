@@ -1,12 +1,18 @@
 import { createInputFactory, finalizeSourceArguments, finalizeTargetInputs } from "./inputs.js";
-import { declaredCarriersMatch, finalizeValueConversion } from "./conversions.js";
+import {
+  declaredCarriersMatch,
+  finalizeValueConversion,
+  isRustFinalizedArrayInput,
+  isRustFinalizedSliceInput,
+  isRustFinalizedTaggedArrayInput,
+} from "./conversions.js";
 import { isDenseDataArray } from "../../../policy/model/closed-data.js";
 import { isRustFallibleErrorBoundary } from "../../../policy/operations/error-boundary.js";
 import { isRustTargetTypeRef } from "../../../policy/types/equality.js";
 import { operationKinds, validateRustFinalizedOperationAbi } from "./validation.js";
 import { rustFutureTargetType, rustTargetTypeParameterNames } from "../../../policy/types/target-types.js";
 import { rustProviderOperationFormAcceptsTargetTypeArguments, rustProviderOperationFormContractViolation } from "../../../policy/operations/forms.js";
-import type { FinalizeRustProviderOperationAbiOptions, RustFinalizedOperationAbiFor, RustFinalizedOperationResult } from "./model.js";
+import type { FinalizeRustProviderOperationAbiOptions, RustFinalizedOperationAbiFor, RustFinalizedOperationResult, RustFinalizedTargetInput } from "./model.js";
 import type { RustFinalizedOperationKind } from "../../../policy/operations/model.js";
 
 export function finalizeRustProviderOperationAbi<OperationKind extends RustFinalizedOperationKind>(
@@ -32,6 +38,9 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
     typeof options.isAsync !== "boolean" || typeof options.isFallible !== "boolean" ||
     (options.isFallible && !isRustFallibleErrorBoundary(options.errorBoundary)) ||
     (!options.isFallible && options.errorBoundary !== undefined) ||
+    (options.errorBoundary === "provider-native"
+      ? !isRustTargetTypeRef(options.errorCarrier)
+      : options.errorCarrier !== undefined) ||
     (options.isUnsafe !== undefined && typeof options.isUnsafe !== "boolean")) {
     return undefined;
   }
@@ -97,7 +106,13 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
     target: options.form,
     sourceReceiver: options.sourceReceiverCarrier === undefined
       ? { kind: "none" }
-      : { kind: "receiver", carrier: options.sourceReceiverCarrier },
+      : {
+          kind: "receiver",
+          carrier: options.sourceReceiverCarrier,
+          disposition: mappingUsesSourceReceiver(mapping.targetReceiver, mapping.targetArguments)
+            ? "runtime"
+            : "compile-time",
+        },
     sourceArguments,
     targetReceiver: mapping.targetReceiver,
     targetArguments: mapping.targetArguments,
@@ -111,8 +126,31 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
       errorBoundary: options.isFallible && isRustFallibleErrorBoundary(options.errorBoundary)
         ? options.errorBoundary
         : "none",
+      ...(options.errorBoundary === "provider-native" && options.errorCarrier !== undefined
+        ? { errorCarrier: options.errorCarrier }
+        : {}),
       safety: options.isUnsafe ? "requires-unsafe" : "safe",
     },
   };
   return validateRustFinalizedOperationAbi(abi) ? abi : undefined;
+}
+
+function mappingUsesSourceReceiver(
+  receiver: RustFinalizedOperationAbiFor<RustFinalizedOperationKind>["targetReceiver"],
+  arguments_: readonly RustFinalizedTargetInput[],
+): boolean {
+  const usesReceiver = (input: RustFinalizedTargetInput): boolean => {
+    if (input.source.kind === "receiver") {
+      return true;
+    }
+    if (isRustFinalizedSliceInput(input) || isRustFinalizedArrayInput(input)) {
+      return input.elements.some(usesReceiver);
+    }
+    if (isRustFinalizedTaggedArrayInput(input)) {
+      return input.elements.some((element) => usesReceiver(element.input));
+    }
+    return false;
+  };
+  return receiver.kind === "input" && usesReceiver(receiver.input) ||
+    arguments_.some(usesReceiver);
 }

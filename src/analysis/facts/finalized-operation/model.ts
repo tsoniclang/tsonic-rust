@@ -90,7 +90,11 @@ export type RustFinalizedOperationResult =
 export interface RustFinalizedOperationAbi {
   readonly operationKind: RustFinalizedOperationKind;
   readonly target: RustProviderOperationForm;
-  readonly sourceReceiver: { readonly kind: "none" } | { readonly kind: "receiver"; readonly carrier: TargetTypeRef };
+  readonly sourceReceiver: { readonly kind: "none" } | {
+    readonly kind: "receiver";
+    readonly carrier: TargetTypeRef;
+    readonly disposition: "runtime" | "compile-time";
+  };
   readonly sourceArguments: readonly RustFinalizedSourceArgument[];
   readonly targetReceiver: { readonly kind: "none" } | { readonly kind: "input"; readonly input: RustFinalizedSourceInput };
   readonly targetArguments: readonly RustFinalizedTargetInput[];
@@ -100,6 +104,7 @@ export interface RustFinalizedOperationAbi {
     readonly invocation: "infallible" | "fallible";
     readonly awaiting: "not-applicable" | "infallible" | "fallible";
     readonly errorBoundary: RustErrorBoundary;
+    readonly errorCarrier?: TargetTypeRef;
     readonly safety: "safe" | "requires-unsafe";
   };
 }
@@ -125,5 +130,6 @@ export interface FinalizeRustProviderOperationAbiOptions<
   readonly isAsync: boolean;
   readonly isFallible: boolean;
   readonly errorBoundary?: RustFallibleErrorBoundary;
+  readonly errorCarrier?: TargetTypeRef;
   readonly isUnsafe?: boolean;
 }

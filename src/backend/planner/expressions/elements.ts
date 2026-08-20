@@ -12,6 +12,7 @@ import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagno
 import { planExpression } from "./entry.js";
 import { planRustSharedReceiver } from "./typed-locations.js";
 import { readRustProjectObjectIndex } from "../objects/project-objects.js";
+import { rustProjectObjectRepresentation } from "../objects/project-storage.js";
 import { requireProviderArgumentPassingFacts } from "./calls/arguments.js";
 import { rustOptionalChainFactKey } from "../../../analysis/facts/keys.js";
 import { rustOptionElementCarrier } from "../../../policy/types/target-types.js";
@@ -56,8 +57,9 @@ function planElementAccessInner(node: Node, context: RustPlanContext): RustExpr 
       ? undefined
       : planExpression(receiverNode, context);
     const key = keyNode === undefined ? undefined : planExpression(keyNode, context);
+    const representation = rustProjectObjectRepresentation(fact.receiverCarrier, context);
     if (receiverNode === undefined || plannedReceiver === undefined || key === undefined ||
-      context.syntheticNames === undefined) {
+      representation === undefined || context.syntheticNames === undefined) {
       return undefined;
     }
     const receiverName = allocateRustSyntheticName(context.syntheticNames, "index_receiver");
@@ -76,6 +78,7 @@ function planElementAccessInner(node: Node, context: RustPlanContext): RustExpr 
         fact.storageName,
         { kind: "path", path: keyName },
         resultCarrier,
+        representation,
       ),
     };
   }
@@ -206,7 +209,14 @@ function planElementAccessInner(node: Node, context: RustPlanContext): RustExpr 
     return undefined;
   }
   const diagnosticCount = context.diagnostics.length;
-  const planned = planProviderOperationExpression(context, fact, Node_Expression(context.input.ast, node), [argumentNode], node);
+  const planned = planProviderOperationExpression(
+    context,
+    fact,
+    Node_Expression(context.input.ast, node),
+    [argumentNode],
+    node,
+    { resultUse: "value" },
+  );
   if (planned === undefined && context.diagnostics.length === diagnosticCount) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),

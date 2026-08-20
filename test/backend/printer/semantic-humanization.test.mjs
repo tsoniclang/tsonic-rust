@@ -85,7 +85,11 @@ export function run(value: int32): int32 { return apply(value); }
   assert.match(api, /ModuleCell<IncrementCallable>/u);
   assert.doesNotMatch(api, /type_complexity/u);
   assert.match(api, /pub static INCREMENT/u);
-  assert.doesNotMatch(api, /pub fn increment/u);
+  assert.match(api, /pub fn increment/u);
+  assert.doesNotMatch(api, /#\[doc\(hidden\)\]\npub(?:\(crate\))? fn increment/u);
+  const index = artifactText(result, "src/index.rs");
+  assert.match(index, /crate::api::INCREMENT\.with\(\|module_binding\| module_binding\.load\(\)\)/u);
+  assert.match(index, /crate::api::increment\(value\)/u);
 });
 
 test("callback, return, and collection observations retain callable-value storage", { timeout: 300_000 }, () => {
@@ -110,7 +114,9 @@ export const retained = [selected];
   assert.match(output, /ModuleCell<SelectedCallable>/u);
   assert.doesNotMatch(output, /type_complexity/u);
   assert.match(output, /pub static SELECTED/u);
-  assert.doesNotMatch(output, /pub fn selected/u);
+  assert.match(output, /pub fn selected/u);
+  assert.doesNotMatch(output, /#\[doc\(hidden\)\]\npub(?:\(crate\))? fn selected/u);
+  assert.match(output, /invoke\(SELECTED\.with\(\|module_binding\| module_binding\.load\(\)\)\)/u);
   validateGeneratedProject("observed-module-callable", result.artifacts);
 });
 
@@ -306,8 +312,9 @@ export function passByValue(page: Page): string { return consume(page); }
 
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
-  assert.match(output, /page\.state\.with\(\|state\| state\.title\.clone\(\)\)/u);
-  assert.doesNotMatch(output, /page\.clone\(\)\.state\.with/u);
+  assert.match(output, /let dispatch_receiver(?:_\d+)? = &page;/u);
+  assert.match(output, /dispatch_receiver(?:_\d+)?\.dispatch\.read_page_title\(\)/u);
+  assert.doesNotMatch(output, /page\.state/u);
   assert.match(output, /let dispatch_receiver = &value;/u);
   assert.match(output, /dispatch_receiver\.dispatch\.read_base_value\(\)/u);
   assert.doesNotMatch(output, /dispatch\.clone\(\)\.read_base_value\(\)/u);
@@ -317,13 +324,15 @@ export function passByValue(page: Page): string { return consume(page); }
   assert.match(output, /\.dispatch\.write_base_value\(value_\d+\)/u);
   assert.doesNotMatch(output, /dispatch\.clone\(\)\.write_base_value\(/u);
   assert.match(output, /let dispatch_receiver = &project_this;/u);
-  assert.match(output, /page\.read_title\(\)/u);
-  assert.match(output, /page\.rename\(String::from\("renamed"\)\)/u);
-  assert.doesNotMatch(output, /page\.clone\(\)\.(?:read_title|rename)\(/u);
+  assert.match(output, /\.dispatch\s*\.clone\(\)\s*\.dispatch_page_read_title\(\)/u);
+  assert.match(output, /\.dispatch\s*\.clone\(\)\s*\.dispatch_page_rename\(String::from\("renamed"\)\)/u);
+  assert.doesNotMatch(output, /page\.(?:read_title|rename)\(/u);
   assert.match(output, /let receiver = &page;/u);
   assert.match(output, /let accessor_receiver = &page;/u);
-  assert.match(output, /dispatch_receiver(?:_\d+)? = value\.clone\(\);/u);
-  assert.match(output, /consume\(page\.clone\(\)\)/u);
+  assert.match(output, /dispatch_receiver(?:_\d+)? = value;/u);
+  assert.doesNotMatch(output, /dispatch_receiver(?:_\d+)? = value\.clone\(\);/u);
+  assert.match(output, /consume\(page\)/u);
+  assert.doesNotMatch(output, /consume\(page\.clone\(\)\)/u);
   validateGeneratedProject("non-consuming-project-access", result.artifacts);
 });
 
@@ -345,8 +354,8 @@ export function forwards(): int32 { return risky(false); }
 
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
-  assert.match(output, /pub fn risky\(flag: bool\) -> rt::TsonicResult<i32>/u);
-  assert.match(output, /pub fn forwards\(\) -> rt::TsonicResult<i32>/u);
+  assert.match(output, /pub fn risky\(flag: bool\) -> Result<i32, rt::TsonicError>/u);
+  assert.match(output, /pub fn forwards\(\) -> Result<i32, rt::TsonicError>/u);
   assert.match(output, /risky\(false\)/u);
   assert.doesNotMatch(output, /ModuleCell|Callable|thread_local!/u);
 });

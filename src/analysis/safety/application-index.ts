@@ -10,6 +10,7 @@ import type {
   SourceFile,
 } from "@tsonic/tsts";
 import type { SourceProgramNavigation } from "@tsonic/target-api/source";
+import { Node_Expression } from "@tsonic/target-api/source";
 import {
   readRustSourceSafetyBuilder,
   readRustSourceUnsafeContext,
@@ -19,7 +20,12 @@ export interface RustSafetyApplicationFactIndex {
   readonly all: readonly RustSafetyApplication[];
   forSourceFile(sourceFile: SourceFile): readonly RustSafetyApplication[];
   forDeclaration(declaration: Node): readonly RustSafetyApplication[];
+  isCompileTimeApplicationReference(
+    declaration: Node,
+    reference: Node,
+  ): boolean;
   operationForSubject(subject: Node): RustSafetyOperation | undefined;
+  operationForExpression(expression: Node): RustSafetyOperation | undefined;
 }
 
 export interface RustSafetyApplication extends TsonicSafetyApplicationFact {
@@ -80,8 +86,37 @@ export function createRustSafetyApplicationFactIndex(
       bySourceFile.get(sourceFile) ?? emptyApplications,
     forDeclaration: (declaration: Node) =>
       byDeclaration.get(declaration) ?? emptyApplications,
+    isCompileTimeApplicationReference(declaration: Node, reference: Node) {
+      return (byDeclaration.get(declaration) ?? emptyApplications).some(
+        (application) => nodeIsWithin(reference, application.sourceSubject, input.ast),
+      );
+    },
     operationForSubject: (subject: Node) => bySubject.get(subject),
+    operationForExpression(expression: Node) {
+      let current: Node | undefined = expression;
+      while (current !== undefined) {
+        const operation = bySubject.get(current);
+        if (operation !== undefined) {
+          return operation;
+        }
+        current = input.ast.kindName(current) === "KindParenthesizedExpression"
+          ? Node_Expression(input.ast, current)
+          : undefined;
+      }
+      return undefined;
+    },
   });
+}
+
+function nodeIsWithin(node: Node, ancestor: Node, ast: AstReader): boolean {
+  let current: Node | undefined = node;
+  while (current !== undefined) {
+    if (current === ancestor) {
+      return true;
+    }
+    current = ast.parent(current);
+  }
+  return false;
 }
 
 function resolveApplication(

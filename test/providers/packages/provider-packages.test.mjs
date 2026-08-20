@@ -39,7 +39,9 @@ export function load(path: string): string {
   });
 
   assert.deepEqual(result.diagnostics, []);
-  assert.match(artifactText(result, "src/index.rs"), /acme_files::read_text\(path\.clone\(\)\)/u);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /acme_files::read_text\(path\)/u);
+  assert.doesNotMatch(source, /path\.clone\(\)/u);
   const manifest = artifactText(result, "Cargo.toml");
   assert.match(manifest, /acme_files = \{ path = ".*acme_files" \}/u);
   assert.match(manifest, /tsonic_rust_runtime = \{ path = /u);

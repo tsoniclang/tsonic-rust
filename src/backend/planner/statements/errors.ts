@@ -10,7 +10,11 @@ import {
 } from "@tsonic/target-api/source";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { collectRustCompletionDispatch, createRustCompletionBoundary, rustBlockDefinitelyExits, tailCompletionExits } from "./resources.js";
-import { diagnosticInput } from "../program/plan-context.js";
+import {
+  diagnosticInput,
+  registerAliasFromPath,
+  rustCurrentErrorBoundary,
+} from "../program/plan-context.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planBlockLike } from "./core.js";
 import { planExpression, providerSelectedCallMatches } from "../expressions/index.js";
@@ -18,6 +22,8 @@ import { rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustCompletionBoundary, RustPlanContext } from "../program/plan-context.js";
 import type { RustExpr, RustStmt } from "../../rust-ast/nodes.js";
+import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
+import { resolveRustProgramErrorRoute } from "../program/source-package-errors.js";
 
 export function planThrowStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const fact = context.input.facts.getFact(node, rustTargetOperationFactKey);
@@ -29,7 +35,8 @@ export function planThrowStatement(node: Node, context: RustPlanContext): readon
     ));
     return undefined;
   }
-  if (context.fallibleContext !== true) {
+  const activeBoundary = context.fallibleBoundary;
+  if (activeBoundary === undefined) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
       "rust.error.throw",
@@ -65,13 +72,63 @@ export function planThrowStatement(node: Node, context: RustPlanContext): readon
     return undefined;
   }
   context.usedAliases?.add("rt");
-  const error: RustExpr = fact.error.kind === "program"
-    ? value
-    : {
+  registerAliasFromPath(context, activeBoundary.errorTypePath);
+  let error: RustExpr;
+  if (fact.error.kind === "program") {
+    if (activeBoundary.componentId !== context.sourcePackageComponentId) {
+      context.diagnostics.push(unsupportedConstructDiagnostic(
+        diagnosticInput(context, expression),
+        "rust.error.cross-package-rethrow",
+        "A source-package program error cannot be rethrown through an unrelated callable error ABI.",
+      ));
+      return undefined;
+    }
+    error = value;
+  } else if (fact.error.kind === "runtime") {
+    error = {
         kind: "call",
-        path: "rt::TsonicError::from",
+        path: `${activeBoundary.errorTypePath}::from`,
         args: [value],
       };
+  } else {
+    const definition = context.input.projectTypes.definitionForCarrier(fact.error.carrier);
+    const route = definition === undefined ||
+      context.input.projectTypes.programErrorVariant(definition) !== fact.error.variant ||
+      !rustTargetTypeRefEquals(
+        context.input.projectTypes.openCarrier(definition),
+        fact.error.carrier,
+      )
+      ? undefined
+      : resolveRustProgramErrorRoute(
+          context.sourcePackageErrors,
+          activeBoundary.componentId,
+          definition,
+          fact.error.variant,
+        );
+    if (route === undefined) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, expression),
+        "rust.backend.throw-project-error-route",
+        "Project error throw has no exact route through the current source-package error domain.",
+      ));
+      return undefined;
+    }
+    error = route.kind === "local"
+      ? {
+          kind: "call",
+          path: `${activeBoundary.errorTypePath}::${route.variant}`,
+          args: [value],
+        }
+      : {
+          kind: "call",
+          path: `${activeBoundary.errorTypePath}::${route.consumerVariant}`,
+          args: [{
+            kind: "call",
+            path: `${route.ownerTypePath}::${route.ownerVariant}`,
+            args: [value],
+          }],
+        };
+  }
   return [{ kind: "throw", error }];
 }
 
@@ -98,13 +155,24 @@ export function planTryStatement(node: Node, context: RustPlanContext): readonly
     return undefined;
   }
 
-  const outwardFallible = context.fallibleContext === true;
+  const outwardFallible = context.fallibleBoundary !== undefined;
   const bodyFallible = catchBlock !== undefined || outwardFallible;
+  const bodyErrorBoundary = catchBlock === undefined
+    ? context.fallibleBoundary
+    : rustCurrentErrorBoundary(context);
+  if (bodyFallible && bodyErrorBoundary === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.try-error-boundary",
+      "A throwing try body has no exact source-package error ABI.",
+    ));
+    return undefined;
+  }
   const bodyBoundary = createRustCompletionBoundary(context, bodyFallible);
   const body = planBlockLike(tryBlock, {
     ...context,
     completionBoundary: bodyBoundary,
-    ...(bodyFallible ? { fallibleContext: true } : {}),
+    ...(bodyErrorBoundary === undefined ? {} : { fallibleBoundary: bodyErrorBoundary }),
   });
   if (body === undefined) {
     return undefined;
@@ -117,7 +185,9 @@ export function planTryStatement(node: Node, context: RustPlanContext): readonly
     const catchBody = planBlockLike(catchBlock, {
       ...context,
       completionBoundary: catchBoundary,
-      ...(outwardFallible ? { fallibleContext: true } : {}),
+      ...(context.fallibleBoundary === undefined
+        ? {}
+        : { fallibleBoundary: context.fallibleBoundary }),
     });
     if (catchBody === undefined) {
       return undefined;
@@ -165,7 +235,9 @@ export function planTryStatement(node: Node, context: RustPlanContext): readonly
     const finallyBody = planBlockLike(finallyBlock, {
       ...context,
       completionBoundary: finallyBoundary,
-      ...(outwardFallible ? { fallibleContext: true } : {}),
+      ...(context.fallibleBoundary === undefined
+        ? {}
+        : { fallibleBoundary: context.fallibleBoundary }),
     });
     if (finallyBody === undefined) {
       return undefined;

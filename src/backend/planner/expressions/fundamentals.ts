@@ -21,10 +21,10 @@ import {
 } from "../../../analysis/facts/keys.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { applyRustValueConversion, finishProviderOperationExpression, planProviderOperationExpression } from "./conversions.js";
-import { diagnosticInput } from "../program/plan-context.js";
+import { diagnosticInput, rustActiveErrorType } from "../program/plan-context.js";
 import { isDenseDataArray } from "../../../policy/model/closed-data.js";
 import { isFloatCarrier, rustTypeFromCarrierInContext } from "../types/render.js";
-import { isRustBigIntCarrier, isRustIntegerCarrier } from "../../../policy/types/target-types.js";
+import { isRustBigIntCarrier, isRustIntegerCarrier, isRustStringCarrier } from "../../../policy/types/target-types.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { negateRustBooleanExpression, rustStringConcat } from "../../rust-ast/expressions.js";
 import { parseSourceBigIntLiteral, parseSourceIntegerLiteral } from "../../../policy/types/literals.js";
@@ -64,6 +64,15 @@ export function planGeneratorResumeExpression(
   const nextName = allocateRustSyntheticName(context.syntheticNames, "generator_next");
   const returnName = allocateRustSyntheticName(context.syntheticNames, "generator_return");
   const errorName = allocateRustSyntheticName(context.syntheticNames, "generator_error");
+  const activeErrorType = rustActiveErrorType(context);
+  if (activeErrorType === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, context.sourceFile),
+      "rust.backend.generator-error-boundary",
+      "Generator resume lowering requires one exact error boundary.",
+    ));
+    return undefined;
+  }
   context.usedAliases?.add("rt");
   return {
     kind: "match",
@@ -93,7 +102,8 @@ export function planGeneratorResumeExpression(
       },
       expression: {
         kind: "try",
-        errorDomain: "runtime",
+        resultErrorType: activeErrorType,
+        operandErrorType: activeErrorType,
         expr: {
           kind: "call",
           path: "Err",
@@ -150,15 +160,17 @@ export function planTemplateExpression(node: Node, context: RustPlanContext): Ru
     if (value === undefined) {
       return undefined;
     }
-    context.usedAliases?.add("rt");
-    parts.push({
-      kind: "call",
-      path: "rt::source_string",
-      args: [{
-        kind: "reference",
-        expr: planRustNonConsumingValue(expression, value, context),
-      }],
-    });
+    const selectedValue = planRustNonConsumingValue(expression, value, context);
+    if (isRustStringCarrier(substitution.carrier)) {
+      parts.push(selectedValue);
+    } else {
+      context.usedAliases?.add("rt");
+      parts.push({
+        kind: "call",
+        path: "rt::source_string",
+        args: [{ kind: "reference", expr: selectedValue }],
+      });
+    }
     parts.push({ kind: "string-literal", value: context.input.ast.text(literal) });
   }
   return rustStringConcat(parts);
@@ -188,7 +200,14 @@ export function planDeleteExpression(node: Node, context: RustPlanContext): Rust
     ));
     return undefined;
   }
-  const planned = planProviderOperationExpression(context, fact, receiver, [index], node);
+  const planned = planProviderOperationExpression(
+    context,
+    fact,
+    receiver,
+    [index],
+    node,
+    { resultUse: "value" },
+  );
   return planned === undefined
     ? undefined
     : finishProviderOperationExpression(context, fact, planned, node);

@@ -314,10 +314,10 @@ export function inspect(value: int32): int32 {
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /pub unsafe fn new\(value: i32\) -> Box/u);
-  assert.match(source, /pub unsafe fn read\(&self\) -> i32/u);
+  assert.match(source, /unsafe fn dispatch_box_read\(self: std::rc::Rc<Self>\) -> i32/u);
   assert.match(source, /let instance: Box = unsafe \{ Box::new\(value\) \};/u);
-  assert.match(source, /unsafe \{ instance\.read\(\) \}/u);
-  assert.doesNotMatch(source, /instance\.clone\(\)\.read/u);
+  assert.match(source, /unsafe \{[\s\S]*dispatch_receiver\.dispatch\.clone\(\)\.dispatch_box_read\(\)[\s\S]*\}/u);
+  assert.doesNotMatch(source, /instance\.read\(\)/u);
   validateGeneratedProject("explicit-safety-method-constructor", result.artifacts);
 });
 
@@ -507,8 +507,14 @@ export function write(value: Value, next: int32): void {
   }).result;
   assert.deepEqual(accepted.diagnostics, []);
   const text = artifactText(accepted, "src/index.rs");
-  assert.match(text, /unsafe fn read_value_current\(&self\) -> i32/u);
-  assert.match(text, /unsafe fn write_value_current\(&self, value: i32\)/u);
+  assert.match(
+    text,
+    /unsafe fn read_value_current\(self: std::rc::Rc<Self>\) -> i32/u,
+  );
+  assert.match(
+    text,
+    /unsafe fn write_value_current\(self: std::rc::Rc<Self>, value: i32\)/u,
+  );
   assert.match(text, /unsafe \{[\s\S]*read_value_current/u);
   assert.match(text, /unsafe \{[\s\S]*write_value_current/u);
 });

@@ -2,6 +2,8 @@ import type { RustType } from "../../backend/rust-ast/nodes.js";
 
 export function printRustType(type: RustType): string {
   switch (type.kind) {
+    case "infer":
+      return "_";
     case "primitive": {
       return type.name;
     }

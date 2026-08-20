@@ -19,6 +19,8 @@ export const rustLintAttributes = Object.freeze({
     '#[allow(non_upper_case_globals, reason = "preserves the authored module export name")]',
   pointerDerefOutsideUnsafeFunction:
     '#[allow(clippy::not_unsafe_ptr_arg_deref, reason = "explicit unsafe region")]',
+  shouldImplementTrait:
+    '#[expect(clippy::should_implement_trait, reason = "authored method contract")]',
   tooManyArguments:
     '#[expect(clippy::too_many_arguments, reason = "checked source signature")]',
   unusedAssignments:

@@ -289,6 +289,36 @@ test("logical chains attach a fitting trailing block to the first operand", () =
   assert.match(text, /ready && \{\n        let _ = source;\n        true\n    \}/u);
 });
 
+test("logical blocks preserve rustfmt vertical layout for a long method-chain operand", () => {
+  const downcast = {
+    kind: "method-call",
+    receiver: {
+      kind: "method-call",
+      receiver: clone(field({ kind: "path", path: "value" }, "dispatch")),
+      method: "downcast_value_to_null_value",
+      args: [],
+    },
+    method: "is_some",
+    args: [],
+  };
+  const text = projectFunction({
+    kind: "binary",
+    operator: "&&",
+    left: downcast,
+    right: {
+      kind: "evaluate-then",
+      effect: { kind: "path", path: "source" },
+      discard: "value",
+      value: { kind: "bool-literal", value: true },
+    },
+  });
+
+  assert.match(
+    text,
+    /value\n        \.dispatch\n        \.clone\(\)\n        \.downcast_value_to_null_value\(\)\n        \.is_some\(\)\n        && \{/u,
+  );
+});
+
 test("associated values preserve their exact generic owner", () => {
   const text = projectFunction({
     kind: "associated-value",

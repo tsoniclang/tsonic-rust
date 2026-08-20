@@ -29,7 +29,7 @@ import {
   rustSourcePrimitiveTargetType,
   rustCarrierSupportsClone,
 } from "../../../policy/types/target-types.js";
-import { acceptDeclarationOperation, acceptRustMemberOperation, acceptRustOperation, elementProvenance, isDeclarationFileSubject, normalizeSelectedLiteralCarrier, rejectSelectedOperation, selectedArgumentCompatibility, selectedMemberReceiverCarrier, sourceOperationId } from "./result.js";
+import { acceptDeclarationOperation, acceptRustMemberOperation, acceptRustOperation, elementProvenance, isDeclarationFileSubject, normalizeSelectedLiteralCarrier, rejectSelectedOperation, selectedArgumentMatchScore, selectedMemberReceiverCarrier, sourceOperationId } from "./result.js";
 import { finalizeProviderOperationFromSubjects, mapProviderCheckedOperation } from "./conversions.js";
 import { isDenseDataArray } from "../../../policy/model/closed-data.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
@@ -224,7 +224,7 @@ export function selectRustCheckedElementAccess(
       operationKind: "indexer",
       ...(receiverCarrier === undefined ? {} : { receiverCarrier }),
       argumentCarriers: [selectedArgumentCarrier],
-      argumentCompatibility: selectedArgumentCompatibility([request.argument], context, options),
+      argumentMatchScore: selectedArgumentMatchScore([request.argument], context, options),
     });
     if (selection === undefined || selection.fact.kind !== "provider-operation" || selection.resultCarrier === undefined) {
       return rejectSelectedOperation(

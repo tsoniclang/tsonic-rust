@@ -62,7 +62,7 @@ export function planRustProjectDowncastValue(
   const targetPath = targetValue === undefined ? undefined : sourceTypePath(context, targetValue);
   const optionalElement = rustOptionElementCarrier(sourceCarrier);
   if (sourceDefinition === undefined || targetDefinition === undefined || route === undefined ||
-    targetPath === undefined ||
+    route.target !== targetDefinition || targetPath === undefined ||
     (!rustTargetTypeRefEquals(sourceCarrier, dispatchCarrier) &&
       !rustTargetTypeRefEquals(optionalElement, dispatchCarrier))) {
     context.diagnostics.push(missingFactDiagnostic(

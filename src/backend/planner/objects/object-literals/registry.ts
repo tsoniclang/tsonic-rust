@@ -22,6 +22,11 @@ import type {
 import type { Node } from "@tsonic/tsts";
 import type { RustObjectLiteralAccessorImplementationPlan, RustObjectLiteralImplementationPlan, RustObjectLiteralMethodDispatchPlan, RustObjectLiteralMethodImplementationPlan, RustObjectLiteralMethodOverridePlan, RustRecordLiteralFact } from "./model.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
+import {
+  rustErrorBoundaryForDeclaration,
+  rustErrorType,
+} from "../../program/plan-context.js";
+import { rustTypeEquals } from "../../../rust-ast/type-equality.js";
 import type { RustSyntheticNameState } from "../../names/synthetic.js";
 
 export function createImplementationPlan(
@@ -106,10 +111,18 @@ export function createImplementationPlan(
       (!field.readonly && dispatch.write?.fallible !== true)) {
       return undefined;
     }
+    const errorBoundary = rustErrorBoundaryForDeclaration(
+      field.contractDeclarations[0]!,
+      context,
+    );
+    if (errorBoundary === undefined) {
+      return undefined;
+    }
+    const errorType = rustErrorType(errorBoundary);
     const result = (type: RustType): RustType => ({
       kind: "named",
-      path: "rt::TsonicResult",
-      typeArguments: [type],
+      path: "Result",
+      typeArguments: [type, errorType],
     });
     accessors.push({
       storageIndex: field.storageIndex,
@@ -154,11 +167,18 @@ export function createImplementationPlan(
       implementation.sourceCallable,
       rustFallibleFactKey,
     ) !== undefined;
+    const errorBoundary = fallible
+      ? rustErrorBoundaryForDeclaration(implementation.sourceCallable, context)
+      : undefined;
+    if (fallible && errorBoundary === undefined) {
+      return undefined;
+    }
+    const errorType = errorBoundary === undefined ? undefined : rustErrorType(errorBoundary);
     const callableResultType: RustType = fallible
       ? {
           kind: "named",
-          path: "rt::TsonicResult",
-          typeArguments: [resultType],
+          path: "Result",
+          typeArguments: [resultType, errorType!],
         }
       : resultType;
     implementations.push({
@@ -176,7 +196,7 @@ export function createImplementationPlan(
       },
       parameterCount: implementation.parameters.length,
       typeParameterSubstitutions: implementation.typeParameterSubstitutions,
-      fallible,
+      ...(errorType === undefined ? {} : { errorType }),
     });
   }
   const finalContributions = new Map<Node, typeof fact.contributions[number]>();
@@ -199,6 +219,7 @@ export function createImplementationPlan(
     implementation: RustObjectLiteralMethodImplementationPlan,
     parameters: readonly RustFunctionParam[],
     returnType: RustType | undefined,
+    errorType: RustType | undefined,
   ): RustObjectLiteralMethodOverridePlan | undefined | false => {
     const usage = context.input.projectMethodProperties.usageFor(contractMethod) ??
       context.input.projectMethodProperties.usageFor(implementation.propertyIdentity);
@@ -212,6 +233,9 @@ export function createImplementationPlan(
         existing.returnType,
         parameters,
         returnType,
+      ) && rustTypeEquals(
+        existing.errorType,
+        errorType,
       )
         ? existing
         : false;
@@ -222,9 +246,11 @@ export function createImplementationPlan(
       callableType: rustProjectMethodPropertyCallableType({
         params: parameters,
         ...(returnType === undefined ? {} : { returnType }),
+        ...(errorType === undefined ? {} : { errorType }),
       }),
       parameters,
       ...(returnType === undefined ? {} : { returnType }),
+      ...(errorType === undefined ? {} : { errorType }),
     };
     methodOverrideByIdentity.set(implementation.propertyIdentity, override);
     methodOverrides.push(override);
@@ -259,12 +285,17 @@ export function createImplementationPlan(
     const shape = projectCallableShape(
       dispatch.contractMethod,
       { ...context, typeParameterSubstitutions: substitutions },
-      new Map(variant.sourceTypeParameterNames.map((name, index) =>
-        [name, variant.targetTypeArguments[index]!] as const)),
+      {
+        methodTypeArgumentSubstitutions: new Map(
+          variant.sourceTypeParameterNames.map((name, index) =>
+            [name, variant.targetTypeArguments[index]!] as const),
+        ),
+      },
     );
     if (shape === undefined || shape.params.length !== dispatch.parameters.length ||
       dispatch.parameterAdapters.length !== implementation.parameterCount ||
-      (implementation.fallible || dispatch.adapterFallible) && !shape.fallible) {
+      (implementation.errorType !== undefined || dispatch.adapterFallible) &&
+        shape.errorType === undefined) {
       return undefined;
     }
     const override = methodOverrideFor(
@@ -272,8 +303,10 @@ export function createImplementationPlan(
       implementation,
       shape.params,
       shape.returnType,
+      shape.errorType,
     );
-    if (override === false || override !== undefined && (!shape.fallible || shape.isUnsafe)) {
+    if (override === false || override !== undefined &&
+      (shape.errorType === undefined || shape.isUnsafe)) {
       return undefined;
     }
     const usedContractParameters = new Set(dispatch.parameterAdapters.flatMap((adapter) => {
@@ -302,7 +335,7 @@ export function createImplementationPlan(
       },
       ...(override === undefined ? {} : { override }),
       ...(shape.returnType === undefined ? {} : { returnType: shape.returnType }),
-      fallible: shape.fallible,
+      ...(shape.errorType === undefined ? {} : { errorType: shape.errorType }),
       isUnsafe: shape.isUnsafe,
     });
   }
@@ -333,11 +366,19 @@ export function createImplementationPlan(
               ownerRelation.targetType,
             ),
           },
-          new Map(),
+          { methodTypeArgumentSubstitutions: new Map() },
         );
     if (source === undefined || callable === undefined || callableType === undefined ||
       variant === undefined || shape === undefined ||
-      callable.parameters.length !== shape.params.length || !shape.fallible || shape.isUnsafe) {
+      callable.parameters.length !== shape.params.length || shape.errorType === undefined ||
+      shape.isUnsafe) {
+      return undefined;
+    }
+    const sourceErrorBoundary = rustErrorBoundaryForDeclaration(
+      source.sourceDeclaration,
+      context,
+    );
+    if (sourceErrorBoundary === undefined) {
       return undefined;
     }
     const implementation: RustObjectLiteralMethodImplementationPlan = {
@@ -347,15 +388,17 @@ export function createImplementationPlan(
       fieldName: allocateMemberFieldName(methodFieldNames, "method_implementation"),
       callableType,
       parameterCount: callable.parameters.length,
-      fallible: true,
+      errorType: rustErrorType(sourceErrorBoundary),
     };
     const override = methodOverrideFor(
       contractMethod,
       implementation,
       shape.params,
       shape.returnType,
+      shape.errorType,
     );
-    if (override === false || override !== undefined && (!shape.fallible || shape.isUnsafe)) {
+    if (override === false || override !== undefined &&
+      (shape.errorType === undefined || shape.isUnsafe)) {
       return undefined;
     }
     implementations.push(implementation);
@@ -366,7 +409,7 @@ export function createImplementationPlan(
       parameters: shape.params,
       ...(override === undefined ? {} : { override }),
       ...(shape.returnType === undefined ? {} : { returnType: shape.returnType }),
-      fallible: true,
+      errorType: shape.errorType,
       isUnsafe: false,
     });
   }
@@ -386,7 +429,6 @@ export function createImplementationPlan(
   const traitItems = contracts.map((contract) =>
     planContractImplementation(
       contract,
-      fact.resultCarrier,
       rootType,
       wrapperType,
       finalizedStateFields,

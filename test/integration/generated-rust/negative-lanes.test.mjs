@@ -55,7 +55,7 @@ export function mix(a: int32, b: float64): float64 {
   assert.match(text, /a as f64 \+ b/u);
 });
 
-test("dynamic any member access fails closed in strict-native mode", () => {
+test("dynamic any member access fails closed without selected evidence", () => {
   const options = {
     files: {
       "index.ts": `
@@ -158,7 +158,7 @@ export class Box {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn no_annotation\(a: f64\) -> f64/u);
-  assert.match(text, /pub fn value\(&self\) -> f64/u);
+  assert.match(text, /fn dispatch_box_value\(self: std::rc::Rc<Self>\) -> f64/u);
 });
 
 test("throw Error requires the exact selected one-message constructor shape", () => {

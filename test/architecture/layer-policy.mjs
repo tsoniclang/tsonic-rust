@@ -87,8 +87,8 @@ export const rustLayerPolicies = Object.freeze([
   ], "ARCH-PLANNER-001", "Rust planning consumes finalized analysis and cannot invoke provider workers, emission, printers, or toolchains."),
   policy("emission", ["artifact-model", "printer"], "ARCH-PRINTER-001", "Emission materializes completed typed artifacts through pure printers."),
   policy("backend-entrypoint", [
-    "analysis", "planner", "emission", "provider-model",
-  ], "ARCH-PLANNER-001", "The backend entrypoint only sequences analysis, planning, and materialization."),
+    "analysis", "planner", "emission", "provider-model", "options",
+  ], "ARCH-PLANNER-001", "The backend entrypoint normalizes target options and sequences analysis, planning, and materialization."),
   policy("printer", ["target-model", "target-ast", "artifact-model"], "ARCH-PRINTER-001", "Rust and Cargo printers consume only typed syntax and completed project models."),
   policy("toolchain", ["artifact-model", "options", "provider-model"], "ARCH-TOOLCHAIN-001", "Cargo execution consumes completed artifacts, references, and target options only."),
 ]);

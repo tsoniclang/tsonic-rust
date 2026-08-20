@@ -1,5 +1,6 @@
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
-import { applyRustValueConversion, finishProviderOperationExpression, planArguments, planProviderOperationExpression } from "../conversions.js";
+import { applyRustValueConversion, finishProviderOperationExpression, planProviderOperationExpression } from "../conversions.js";
+import { planRustCallArguments } from "../input-shaping.js";
 import { diagnosticInput } from "../../program/plan-context.js";
 import { effectiveMemberResultCarrier, planOptionalChainExpression } from "../special.js";
 import { isDenseDataArray } from "../../../../policy/model/closed-data.js";
@@ -76,7 +77,7 @@ function planCallExpressionInner(node: Node, context: RustPlanContext): RustExpr
     return planRustTypedLocationCall(node, fact, context, planExpression);
   }
   if (fact !== undefined && fact.kind === "flow-marker") {
-    const args = planArguments(node, context);
+    const args = planRustCallArguments(node, context);
     if (args === undefined || args.length !== 1) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, node),
@@ -164,6 +165,7 @@ function planCallExpressionInner(node: Node, context: RustPlanContext): RustExpr
       receiverNode,
       providerArgumentNodes,
       node,
+      { resultUse: "value" },
     );
     if (planned === undefined && context.diagnostics.length === diagnosticCount) {
       context.diagnostics.push(unsupportedConstructDiagnostic(

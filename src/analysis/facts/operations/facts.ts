@@ -12,6 +12,7 @@ export type RustTargetOperationFact =
       readonly resultCarrier: TargetTypeRef;
       readonly leftConversion?: RustValueConversion;
       readonly rightConversion?: RustValueConversion;
+      readonly writeStrategy?: "in-place-string-append";
     }
   | {
       readonly kind: "operator-call";

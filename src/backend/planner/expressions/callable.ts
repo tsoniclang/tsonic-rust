@@ -5,6 +5,8 @@ import {
 import {
   diagnosticInput,
   isValidRustIdentifier,
+  rustActiveErrorType,
+  rustCurrentErrorBoundary,
   rustSourceBindingPath,
 } from "../program/plan-context.js";
 import {
@@ -45,6 +47,21 @@ import type { Node } from "@tsonic/tsts";
 import type { RustExpr, RustStmt } from "../../rust-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { TargetTypeRef } from "../../../policy/types/model.js";
+
+function collapseExactForwardingClosure(
+  closure: RustExpr,
+  captureCount: number,
+): RustExpr {
+  if (captureCount !== 0 || closure.kind !== "closure" || closure.move === true ||
+    closure.params.some((parameter) => parameter.byRefCopy) ||
+    closure.body.kind !== "call" || (closure.body.typeArguments?.length ?? 0) !== 0 ||
+    closure.body.args.length !== closure.params.length ||
+    !closure.body.args.every((argument, index) =>
+      argument.kind === "path" && argument.path === closure.params[index]?.name)) {
+    return closure;
+  }
+  return { kind: "path", path: closure.body.path };
+}
 
 export function planCallableExpression(
   node: Node,
@@ -207,6 +224,17 @@ export function planCallableExpression(
   }
   const fallible = context.input.facts.getFact(node, rustFallibleFactKey) !== undefined;
   const resultIsFallible = callableProtocol !== undefined || fallible;
+  const callableErrorBoundary = resultIsFallible
+    ? context.fallibleBoundary ?? rustCurrentErrorBoundary(context)
+    : undefined;
+  if (resultIsFallible && callableErrorBoundary === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.closure-error-boundary",
+      "Callable expression has no exact source-package error boundary.",
+    ));
+    return undefined;
+  }
   if (resultIsFallible) {
     context.usedAliases?.add("rt");
   }
@@ -264,7 +292,7 @@ export function planCallableExpression(
     controlFlow: { nextLoopId: 0 },
     controlTargets: undefined,
     completionBoundary: undefined,
-    fallibleContext: resultIsFallible,
+    fallibleBoundary: callableErrorBoundary,
     asyncContext: false,
     generator: undefined,
     expressionOverrides,
@@ -411,8 +439,7 @@ export function planCallableExpression(
     }
     const resultBody = resultIsFallible
       ? applyRustFallibleResultExpression(body, {
-          errorDomain: context.errorDomain,
-          errorTypePath: "rt::TsonicError",
+          errorType: rustActiveErrorType(callableClosureContext)!,
         })
       : body;
     const closure: RustExpr = bindingStatements.length === 0 &&
@@ -434,8 +461,9 @@ export function planCallableExpression(
           body: { statements: [...bindingStatements, { kind: "tail", expr: resultBody }] },
         };
     if (callableProtocol === undefined) {
+      const nativeCallable = collapseExactForwardingClosure(closure, captureBindings.length);
       return nativeClosureProtocol === undefined || captureBindings.length === 0
-        ? closure
+        ? nativeCallable
         : { kind: "block", bindings: captureBindings, value: closure };
     }
     const callableType = rustCallableConstructionType(
@@ -484,12 +512,13 @@ export function planCallableExpression(
   const finalizedBlock = applyFallibleShape(applyRustTailShape(
     { statements: [...bindingStatements, ...block.statements] },
     !isRustUnitCarrier(resultCarrier),
-  ), {
-    fallible: resultIsFallible,
-    hasReturnValue: !isRustUnitCarrier(resultCarrier),
-    errorDomain: context.errorDomain,
-    errorTypePath: "rt::TsonicError",
-  });
+  ), resultIsFallible
+    ? {
+        fallible: true,
+        hasReturnValue: !isRustUnitCarrier(resultCarrier),
+        errorType: rustActiveErrorType(callableClosureContext)!,
+      }
+    : { fallible: false, hasReturnValue: !isRustUnitCarrier(resultCarrier) });
   const onlyStatement = finalizedBlock.statements.length === 1
     ? finalizedBlock.statements[0]
     : undefined;
@@ -512,8 +541,9 @@ export function planCallableExpression(
         body: finalizedBlock,
       };
   if (callableProtocol === undefined) {
+    const nativeCallable = collapseExactForwardingClosure(closure, captureBindings.length);
     return nativeClosureProtocol === undefined || captureBindings.length === 0
-      ? closure
+      ? nativeCallable
       : { kind: "block", bindings: captureBindings, value: closure };
   }
   const callableType = rustCallableConstructionType(

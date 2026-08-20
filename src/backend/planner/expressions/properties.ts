@@ -1,5 +1,12 @@
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { diagnosticInput, isValidRustIdentifier, sourceTypePath } from "../program/plan-context.js";
+import {
+  diagnosticInput,
+  isValidRustIdentifier,
+  rustActiveErrorType,
+  rustErrorBoundaryForProjectMember,
+  rustErrorType,
+  sourceTypePath,
+} from "../program/plan-context.js";
 import { effectiveMemberResultCarrier, planOptionalChainExpression } from "./special.js";
 import { effectivePlannedExpressionCarrier, requireExpressionCarrier, rustOperationFact, selectedOperationMatches } from "./fundamentals.js";
 import { finishProviderOperationExpression, planProviderOperationExpression } from "./conversions.js";
@@ -9,6 +16,7 @@ import { planExpression } from "./entry.js";
 import { planRustNonConsumingValue, planRustSharedReceiver } from "./typed-locations.js";
 import { planRustSourceUnionFieldProjection } from "./unions.js";
 import { readRustProjectDispatchedField, rustProjectObjectDispatchField } from "../objects/project-objects.js";
+import { planRustProjectFieldDispatchRoles } from "../objects/project-field-dispatch.js";
 import { readRustSourceStaticField } from "../declarations/static-field-storage.js";
 import { readRustStoredObjectField } from "../objects/project-storage.js";
 import { rustCallableProtocol, rustSourceTypeCarrierValue } from "../../../policy/types/target-types.js";
@@ -59,7 +67,7 @@ function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr
     const planned = planRustSourceAccessorCall(node, fact, "read", [], context);
     return planned === undefined
       ? undefined
-      : finishRustSourceAccessorCall(node, "read", planned, context);
+      : finishRustSourceAccessorCall(node, read.declaration, "read", planned, context);
   }
   if (fact !== undefined && fact.kind === "source-static-field") {
     const resultCarrier = effectiveMemberResultCarrier(node, fact.resultCarrier, context);
@@ -138,6 +146,10 @@ function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr
       ));
       return undefined;
     }
+    const dispatchRoles = planRustProjectFieldDispatchRoles(dispatchPlan, context);
+    if (dispatchRoles === undefined) {
+      return undefined;
+    }
     const receiverName = allocateRustSyntheticName(
       context.syntheticNames,
       "dispatch_receiver",
@@ -151,10 +163,7 @@ function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr
       value: readRustProjectDispatchedField(
         { kind: "path", path: receiverName },
         fact.dispatch.read,
-        {
-          ...dispatchPlan.read,
-          errorDomain: context.errorDomain,
-        },
+        dispatchRoles.read,
       ),
     };
   }
@@ -228,7 +237,14 @@ function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr
     return undefined;
   }
   const diagnosticCount = context.diagnostics.length;
-  const planned = planProviderOperationExpression(context, fact, Node_Expression(context.input.ast, node), [], node);
+  const planned = planProviderOperationExpression(
+    context,
+    fact,
+    Node_Expression(context.input.ast, node),
+    [],
+    node,
+    { resultUse: "value" },
+  );
   if (planned === undefined && context.diagnostics.length === diagnosticCount) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
@@ -566,6 +582,7 @@ export function planRustSourceAccessorCall(
 
 export function finishRustSourceAccessorCall(
   node: Node,
+  selectedDeclaration: Node,
   role: "read" | "write",
   expression: RustExpr,
   context: RustPlanContext,
@@ -583,7 +600,9 @@ export function finishRustSourceAccessorCall(
   if (effect === "infallible") {
     return expression;
   }
-  if (context.fallibleContext !== true) {
+  const resultErrorType = rustActiveErrorType(context);
+  const operandBoundary = rustErrorBoundaryForProjectMember(selectedDeclaration, context);
+  if (resultErrorType === undefined) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
       "rust.error.accessor",
@@ -591,7 +610,20 @@ export function finishRustSourceAccessorCall(
     ));
     return undefined;
   }
-  return { kind: "try", expr: expression, errorDomain: context.errorDomain };
+  if (operandBoundary === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.source-accessor-error-boundary",
+      "Fallible source accessor has no exact selected declaration error boundary.",
+    ));
+    return undefined;
+  }
+  return {
+    kind: "try",
+    expr: expression,
+    resultErrorType,
+    operandErrorType: rustErrorType(operandBoundary),
+  };
 }
 
 export function sourceUnionFieldSelectedOperationMatches(

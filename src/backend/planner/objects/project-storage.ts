@@ -4,6 +4,8 @@ import type { RustAssignmentOperator } from "../../model/syntax.js";
 import { rustProjectObjectLayout } from "../../../analysis/project-types/object-layout.js";
 import type { RustExpr } from "../../rust-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
+import { rustActiveErrorType } from "../program/plan-context.js";
+import { rustTargetRuntimeErrorType } from "../types/error-boundary.js";
 import type { RustStructuralShapeField } from "../../../analysis/objects/structural-shape-plan.js";
 import {
   createRustStructuralObject,
@@ -145,9 +147,10 @@ export function readRustStoredObjectField(
       : readRustStructuralObjectField(receiver, field.targetName, resultCarrier);
   }
   const path = rustDirectProjectFieldStoragePath(receiverCarrier, storageIndex, context);
-  return path === undefined
+  const representation = rustProjectObjectRepresentation(receiverCarrier, context);
+  return path === undefined || representation === undefined
     ? undefined
-    : readRustProjectObjectField(receiver, path, resultCarrier);
+    : readRustProjectObjectField(receiver, path, resultCarrier, representation);
 }
 
 export function readRustStructuralObjectMethodStorage(
@@ -271,9 +274,10 @@ export function writeRustStoredObjectField(
       : writeRustStructuralObjectField(receiver, field.targetName, operator, value);
   }
   const path = rustDirectProjectFieldStoragePath(receiverCarrier, storageIndex, context);
-  return path === undefined
+  const representation = rustProjectObjectRepresentation(receiverCarrier, context);
+  return path === undefined || representation === undefined
     ? undefined
-    : writeRustProjectObjectField(receiver, path, operator, value);
+    : writeRustProjectObjectField(receiver, path, operator, value, representation);
 }
 
 export function mutateRustStoredObjectField(
@@ -303,9 +307,19 @@ export function mutateRustStoredObjectField(
       : mutateRustStructuralObjectField(receiver, field.targetName, mutation);
   }
   const path = rustDirectProjectFieldStoragePath(receiverCarrier, storageIndex, context);
-  return path === undefined
+  const representation = rustProjectObjectRepresentation(receiverCarrier, context);
+  return path === undefined || representation === undefined
     ? undefined
-    : mutateRustProjectObjectField(receiver, path, mutation);
+    : mutateRustProjectObjectField(receiver, path, mutation, representation);
+}
+
+export function rustProjectObjectRepresentation(
+  carrier: TargetTypeRef,
+  context: RustPlanContext,
+) {
+  return context.input.objectRepresentations.representationFor(
+    context.input.projectTypes.definitionForCarrier(carrier),
+  );
 }
 
 function readRustStructuralObjectProperty(
@@ -345,6 +359,9 @@ function readRustStructuralObjectProperty(
     [cloneExpression(receiverPath)],
     context,
   );
+  if (getterCall === undefined) {
+    return undefined;
+  }
   const presentValue = field.presence === "optional"
     ? { kind: "call" as const, path: "Some", args: [getterCall] }
     : getterCall;
@@ -463,6 +480,9 @@ function writeRustStructuralObjectProperty(
     [cloneExpression(receiverPath), selectedValue],
     context,
   );
+  if (setterCall === undefined) {
+    return undefined;
+  }
   const storedWrite = writeRustStructuralObjectField(
     receiverPath,
     field.targetName,
@@ -570,10 +590,15 @@ function callRustStructuralObjectAccessor(
   bindingName: string,
   arguments_: readonly RustExpr[],
   context: RustPlanContext,
-): RustExpr {
+): RustExpr | undefined {
+  const resultErrorType = rustActiveErrorType(context);
+  if (resultErrorType === undefined) {
+    return undefined;
+  }
   return {
     kind: "try",
-    errorDomain: context.errorDomain,
+    resultErrorType,
+    operandErrorType: rustTargetRuntimeErrorType,
     expr: {
       kind: "method-call",
       receiver: { kind: "path", path: bindingName },

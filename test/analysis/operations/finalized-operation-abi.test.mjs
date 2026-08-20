@@ -18,6 +18,7 @@ const float64 = { kind: "source-primitive", name: "float64" };
 const int32 = { kind: "source-primitive", name: "int32" };
 const isize = { kind: "source-primitive", name: "native-int" };
 const jsValue = { kind: "target-named", id: "rust.js.JsValue" };
+const providerError = { kind: "target-named", id: "rust.test.ProviderError" };
 const string = { kind: "target-named", id: "rust.std.String" };
 const sourceNullish = { kind: "target-specific", target: "rust", name: "source-nullish" };
 const unit = { kind: "tuple", elements: [] };
@@ -121,7 +122,11 @@ test("provider methods finalize receiver, source order, passing modes, conversio
     argModes: ["value"],
     argConversions: [{ kind: "semantic-conversion", id: "checked-i32-to-usize" }],
   });
-  assert.deepEqual(abi.sourceReceiver, { kind: "receiver", carrier: string });
+  assert.deepEqual(abi.sourceReceiver, {
+    kind: "receiver",
+    carrier: string,
+    disposition: "runtime",
+  });
   assert.equal(abi.targetReceiver.kind, "input");
   assert.equal(abi.targetReceiver.input.mode, "ref");
   assert.deepEqual(abi.targetArguments[0], {
@@ -150,6 +155,43 @@ test("provider methods finalize receiver, source order, passing modes, conversio
   });
 });
 
+test("provider receivers distinguish runtime values from compile-time owner identities", () => {
+  const owner = {
+    kind: "target-specific",
+    target: "rust",
+    name: "named-type",
+    value: {
+      id: "rust.test.Environment",
+      path: "acme::Environment",
+      typeArguments: [],
+      traits: { implementations: [] },
+    },
+  };
+  const abi = finalizeRustProviderOperationAbi({
+    operationKind: "indexer",
+    form: { form: "call", path: "acme::environment_get", argModes: ["ref"] },
+    sourceReceiverCarrier: owner,
+    sourceArgumentCarriers: [string],
+    resultCarrier: string,
+    isAsync: false,
+    isFallible: false,
+  });
+
+  assert.ok(abi);
+  assert.deepEqual(abi.sourceReceiver, {
+    kind: "receiver",
+    carrier: owner,
+    disposition: "compile-time",
+  });
+  assert.deepEqual(abi.targetArguments.map((input) => input.source), [
+    { kind: "argument", sourceIndex: 0 },
+  ]);
+  assert.equal(validateRustFinalizedOperationAbi({
+    ...abi,
+    sourceReceiver: { ...abi.sourceReceiver, disposition: "runtime" },
+  }), false);
+});
+
 test("compile-time source arguments must be declared explicitly and remain in the source ABI", () => {
   const options = {
     operationKind: "method",
@@ -166,6 +208,7 @@ test("compile-time source arguments must be declared explicitly and remain in th
     isAsync: false,
     isFallible: true,
     errorBoundary: "provider-native",
+    errorCarrier: providerError,
   };
 
   assert.equal(finalizeRustProviderOperationAbi(options), undefined);

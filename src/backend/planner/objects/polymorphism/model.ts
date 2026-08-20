@@ -22,12 +22,15 @@ import type {
   RustFunctionParam,
   RustType,
 } from "../../../rust-ast/nodes.js";
+import { rustTypeEquals } from "../../../rust-ast/type-equality.js";
 import {
   missingFactDiagnostic,
   unsupportedConstructDiagnostic,
 } from "../../diagnostics.js";
 import {
   diagnosticInput,
+  rustErrorBoundaryForProjectMember,
+  rustErrorType,
 } from "../../program/plan-context.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustReturnTypeFromCarrierInContext, rustTypeFromCarrierInContext } from "../../types/render.js";
@@ -51,7 +54,7 @@ export interface ProjectFieldPlan {
 export interface ProjectCallableShape {
   readonly params: readonly RustFunctionParam[];
   readonly returnType?: RustType;
-  readonly fallible: boolean;
+  readonly errorType?: RustType;
   readonly isUnsafe: boolean;
 }
 
@@ -153,7 +156,13 @@ export function projectOwnFields(
       definition,
       layoutField.declaration,
     );
-    if (carrier === undefined || type === undefined || targetName === undefined) {
+    if (carrier === undefined || isRustNeverCarrier(carrier) ||
+      type === undefined || targetName === undefined) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, layoutField.declaration),
+        "rust.backend.class",
+        `Class field '${layoutField.sourceName}' has no supported Rust storage identity or carrier fact.`,
+      ));
       return undefined;
     }
     const initializer = Node_Initializer(context.input.ast, layoutField.declaration);
@@ -234,11 +243,12 @@ export function projectOwnMethodProperties(
       : projectCallableShape(declaration, {
           ...context,
           typeParameterSubstitutions: projectTypeSubstitutions(owner, relation.targetType),
-        });
+        }, { methodTypeArgumentSubstitutions: new Map() });
     const targetName = owner === undefined
       ? undefined
       : context.input.projectTypes.fieldStorageName(owner, declaration);
-    if (shape === undefined || targetName === undefined || shape.isUnsafe || !shape.fallible) {
+    if (shape === undefined || targetName === undefined || shape.isUnsafe ||
+      shape.errorType === undefined) {
       return undefined;
     }
     seen.add(declaration);
@@ -254,7 +264,7 @@ export function projectOwnMethodProperties(
 }
 
 export function rustProjectMethodPropertyCallableType(
-  shape: Pick<ProjectCallableShape, "params" | "returnType">,
+  shape: Pick<ProjectCallableShape, "params" | "returnType" | "errorType">,
 ): RustType {
   const resultType = shape.returnType ?? { kind: "unit" as const };
   return {
@@ -265,8 +275,8 @@ export function rustProjectMethodPropertyCallableType(
       elements: shape.params.map((parameter) => parameter.type),
     }, {
       kind: "named",
-      path: "rt::TsonicResult",
-      typeArguments: [resultType],
+      path: "Result",
+      typeArguments: [resultType, shape.errorType!],
     }],
   };
 }
@@ -284,8 +294,12 @@ export function projectMembers(
 export function projectCallableShape(
   member: Node,
   context: RustPlanContext,
-  methodTypeArgumentSubstitutions?: ReadonlyMap<string, TargetTypeRef>,
+  options?: {
+    readonly methodTypeArgumentSubstitutions?: ReadonlyMap<string, TargetTypeRef>;
+    readonly safetyPlacement?: "declaration" | "getter" | "setter";
+  },
 ): ProjectCallableShape | undefined {
+  const methodTypeArgumentSubstitutions = options?.methodTypeArgumentSubstitutions;
   const methodTypeParameters = context.input.ast.typeParameters(member);
   const methodTypeParameterNames = methodTypeParameters.map((parameter) => {
     const name = parameter === undefined ? undefined : context.input.ast.name(parameter);
@@ -322,6 +336,17 @@ export function projectCallableShape(
     return undefined;
   }
   const fallible = context.input.facts.getFact(member, rustFallibleFactKey) !== undefined;
+  const errorBoundary = fallible
+    ? rustErrorBoundaryForProjectMember(member, selectedContext)
+    : undefined;
+  if (fallible && errorBoundary === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, member),
+      "rust.backend.project-dispatch-error-boundary",
+      "Polymorphic project method has no exact source-package error boundary.",
+    ));
+    return undefined;
+  }
   const returnType = isRustUnitCarrier(returnCarrier) || fallible && isRustNeverCarrier(returnCarrier)
     ? undefined
     : rustReturnTypeFromCarrierInContext(returnCarrier, selectedContext);
@@ -331,10 +356,10 @@ export function projectCallableShape(
   return {
     params: parameterPlan.params,
     ...(returnType === undefined ? {} : { returnType }),
-    fallible,
+    ...(errorBoundary === undefined ? {} : { errorType: rustErrorType(errorBoundary) }),
     isUnsafe: rustDeclarationRequiresUnsafe(
       member,
-      "declaration",
+      options?.safetyPlacement ?? "declaration",
       selectedContext.input,
     ),
   };
@@ -432,57 +457,6 @@ export function rustFunctionTypesMatch(
     leftParams.every((parameter, index) =>
       rustTypeEquals(parameter.type, rightParams[index]?.type)) &&
     rustTypeEquals(leftReturn, rightReturn);
-}
-
-function rustTypeEquals(left: RustType | undefined, right: RustType | undefined): boolean {
-  if (left === undefined || right === undefined) {
-    return left === right;
-  }
-  if (left.kind !== right.kind) {
-    return false;
-  }
-  switch (left.kind) {
-    case "primitive":
-      return right.kind === "primitive" && left.name === right.name;
-    case "string":
-    case "str-ref":
-    case "unit":
-    case "never":
-      return true;
-    case "named":
-      return right.kind === "named" && left.path === right.path &&
-        sameStrings(left.lifetimeArguments, right.lifetimeArguments) &&
-        sameTypes(left.typeArguments, right.typeArguments);
-    case "trait-object":
-      return right.kind === "trait-object" && rustTypeEquals(left.trait, right.trait);
-    case "reference":
-      return right.kind === "reference" && left.mutable === right.mutable &&
-        rustTypeEquals(left.referent, right.referent);
-    case "raw-pointer":
-      return right.kind === "raw-pointer" && left.mutable === right.mutable &&
-        rustTypeEquals(left.pointee, right.pointee);
-    case "fixed-array":
-      return right.kind === "fixed-array" && left.length === right.length &&
-        rustTypeEquals(left.element, right.element);
-    case "slice":
-      return right.kind === "slice" && rustTypeEquals(left.element, right.element);
-    case "function-pointer":
-      return right.kind === "function-pointer" && left.isUnsafe === right.isUnsafe &&
-        sameStrings(left.abi, right.abi) &&
-        sameTypes(left.parameters, right.parameters) && rustTypeEquals(left.result, right.result);
-    case "tuple":
-      return right.kind === "tuple" && sameTypes(left.elements, right.elements);
-  }
-}
-
-function sameStrings(left: readonly string[] | undefined, right: readonly string[] | undefined): boolean {
-  return (left ?? []).length === (right ?? []).length &&
-    (left ?? []).every((value, index) => value === (right ?? [])[index]);
-}
-
-function sameTypes(left: readonly RustType[] | undefined, right: readonly RustType[] | undefined): boolean {
-  return (left ?? []).length === (right ?? []).length &&
-    (left ?? []).every((value, index) => rustTypeEquals(value, (right ?? [])[index]));
 }
 
 export function rustRcType(inner: RustType): RustType {

@@ -1,19 +1,27 @@
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { applyRustErrorBoundary } from "../types/error-boundary.js";
+import { registerRustProviderErrorCarrier } from "../context.js";
 import {
   BreakOrContinueStatement_Label,
   KindVariableDeclaration,
   KindVariableStatement,
 } from "@tsonic/target-api/source";
-import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath } from "../program/plan-context.js";
+import {
+  diagnosticInput,
+  isValidRustIdentifier,
+  registerAliasFromPath,
+  rustActiveErrorType,
+} from "../program/plan-context.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planStatementSequence } from "./core.js";
-import { planVariableStatement } from "./variables.js";
+import { planVariableStatement } from "./variable-declarations.js";
 import { rustResourceManagementFactKey } from "../../../analysis/facts/keys.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustBlock, RustExpr, RustStmt } from "../../rust-ast/nodes.js";
 import type { RustCompletionBoundary, RustControlTarget, RustPlanContext } from "../program/plan-context.js";
 import type { RustResourceManagementFact } from "../../../analysis/facts/keys.js";
+import { rustTypeFromCarrierInContext } from "../types/render.js";
+import { planRustVirtualProjectMethodCall } from "../objects/project-method-dispatch.js";
 
 export function directResourceDeclaration(
   statement: Node,
@@ -99,7 +107,7 @@ export function resourceFactForPlanning(
     ));
     return undefined;
   }
-  if (fact.disposal.fallible && context.fallibleContext !== true) {
+  if (fact.disposal.fallible && context.fallibleBoundary === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, declaration),
       "rust.backend.resource-fallibility",
@@ -135,7 +143,7 @@ export function planResourceManagedBody(
   }
   const boundary = createRustCompletionBoundary(
     context,
-    context.fallibleContext === true,
+    context.fallibleBoundary !== undefined,
   );
   const body = planBody({ ...context, completionBoundary: boundary });
   const cleanupResourceName = allocateRustSyntheticName(
@@ -143,6 +151,7 @@ export function planResourceManagedBody(
     "resource",
   );
   const cleanup = planResourceCleanup(
+    declaration,
     resourceName,
     cleanupResourceName,
     fact,
@@ -214,6 +223,7 @@ export function collectRustCompletionDispatch(
 }
 
 function planResourceCleanup(
+  declaration: Node,
   resourceName: string,
   cleanupResourceName: string,
   fact: RustResourceManagementFact,
@@ -233,6 +243,7 @@ function planResourceCleanup(
     path: fact.nullable ? cleanupResourceName : resourceName,
   };
   let disposal = planResourceDisposalExpression(
+    declaration,
     receiver,
     fact,
     fact.nullable,
@@ -245,7 +256,28 @@ function planResourceCleanup(
     disposal = { kind: "await", expr: disposal };
   }
   if (fact.disposal.fallible) {
-    disposal = applyRustErrorBoundary(disposal, fact.disposal.errorBoundary, context.errorDomain);
+    const resultErrorType = rustActiveErrorType(context);
+    const providerErrorType = fact.disposal.errorBoundary === "provider-native"
+      ? rustTypeFromCarrierInContext(fact.disposal.errorCarrier, context)
+      : undefined;
+    if (resultErrorType === undefined ||
+      fact.disposal.errorBoundary === "provider-native" && providerErrorType === undefined) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, context.sourceFile),
+        "rust.backend.resource-error-type",
+        "A fallible resource disposer has no exact result or provider error type.",
+      ));
+      return undefined;
+    }
+    if (fact.disposal.errorBoundary === "provider-native") {
+      registerRustProviderErrorCarrier(context.input, fact.disposal.errorCarrier);
+    }
+    disposal = applyRustErrorBoundary(
+      disposal,
+      fact.disposal.errorBoundary,
+      resultErrorType,
+      providerErrorType,
+    );
   }
   const body: RustBlock = { statements: [{ kind: "expr", expr: disposal }] };
   if (!fact.nullable) {
@@ -286,6 +318,7 @@ export function resourceDisposalReceiverMode(
 }
 
 function planResourceDisposalExpression(
+  subject: Node,
   receiver: RustExpr,
   fact: RustResourceManagementFact,
   alreadyBorrowed: boolean,
@@ -293,6 +326,16 @@ function planResourceDisposalExpression(
 ): RustExpr | undefined {
   const target = fact.disposal.target;
   if (target.form === "source-method") {
+    if (target.dispatch !== undefined) {
+      return planRustVirtualProjectMethodCall(
+        subject,
+        receiver,
+        target.dispatch.ownerCarrier,
+        target.dispatch.virtualSlot,
+        [],
+        context,
+      );
+    }
     return {
       kind: "method-call",
       receiver,

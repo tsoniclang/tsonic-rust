@@ -8,6 +8,7 @@ import type {
   RustProjectTypePolicy,
 } from "./type-policy.js";
 import { rustProjectObjectLayout } from "./object-layout.js";
+import { rustProjectMemberIsPrivate } from "./member-privacy.js";
 
 export interface RustProjectFieldDispatchRole {
   readonly selfMode: "ref" | "rc";
@@ -189,6 +190,16 @@ function resolveFieldImplementation(
     semanticsFor(node: Node): SourceFileSemantics;
   },
 ): RustProjectFieldImplementation | undefined {
+  if (rustProjectMemberIsPrivate(input.ast, contractDeclaration)) {
+    const owner = input.projectTypes.definitionContainingDeclaration(contractDeclaration);
+    if (owner?.kind !== "class") {
+      return undefined;
+    }
+    const lineage = input.projectTypes.classLineage(concrete);
+    return lineage?.includes(owner) === true
+      ? Object.freeze({ kind: "stored", declaration: contractDeclaration })
+      : undefined;
+  }
   const selected = input.projectTypes.memberImplementation(concrete, contractDeclaration);
   if (selected.kind !== "resolved") {
     return undefined;

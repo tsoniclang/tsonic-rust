@@ -49,7 +49,7 @@ function publicItemSurface(item: RustItem): readonly string[] {
         ? [rustFunctionSurface({
             name: item.name,
             isAsync: item.isAsync === true,
-            fallible: item.fallible === true,
+            ...(item.errorType === undefined ? {} : { errorType: item.errorType }),
             typeParameters: item.typeParams ?? [],
             parameters: item.params,
             ...(item.returnType === undefined
@@ -112,7 +112,9 @@ function publicMethodSurface(
     owner,
     method.name,
     method.selfParam ?? "static",
-    method.fallible === true ? "fallible" : "infallible",
+    method.errorType === undefined
+      ? "infallible"
+      : encodeRustContractParts(["fallible", closedMetadataKey(method.errorType)]),
     ...method.params.map((parameter, index) =>
       encodeRustContractParts([
         "parameter",

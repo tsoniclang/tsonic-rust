@@ -8,7 +8,13 @@ import {
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { applyFallibleShape } from "../types/fallible-shape.js";
 import { applyRustTailShape, rustBlockTerminates } from "./functions.js";
-import { diagnosticInput, isValidRustIdentifier } from "../program/plan-context.js";
+import {
+  diagnosticInput,
+  isValidRustIdentifier,
+  rustCurrentErrorBoundary,
+  rustErrorBoundaryForProjectMember,
+  rustErrorType,
+} from "../program/plan-context.js";
 import { isRustNeverCarrier, isRustUnitCarrier } from "../../../policy/types/target-types.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { Node_Type } from "@tsonic/target-api/source";
@@ -36,6 +42,7 @@ export function planProjectMethod(
     readonly targetName?: string;
     readonly safetyPlacement?: "getter" | "setter";
     readonly typeArgumentSubstitutions?: ReadonlyMap<string, TargetTypeRef>;
+    readonly fallibleBoundary?: import("../program/source-package-errors.js").RustSourcePackageErrorBoundary;
   },
 ): RustImplFunction | undefined {
   let context = outerContext;
@@ -111,6 +118,20 @@ export function planProjectMethod(
     return undefined;
   }
   const fallible = context.input.facts.getFact(member, rustFallibleFactKey) !== undefined;
+  const callableErrorBoundary = fallible
+    ? options?.fallibleBoundary ?? rustErrorBoundaryForProjectMember(member, context)
+    : undefined;
+  const bodyErrorBoundary = callableErrorBoundary ?? (generatorFact === undefined
+    ? undefined
+    : rustCurrentErrorBoundary(context));
+  if ((fallible || generatorFact !== undefined) && bodyErrorBoundary === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, member),
+      "rust.backend.method-error-boundary",
+      "Method has no exact source-package error boundary.",
+    ));
+    return undefined;
+  }
   const isUnit = isRustUnitCarrier(returnCarrier);
   const isNever = isRustNeverCarrier(returnCarrier);
   const returnType = isUnit || fallible && isNever
@@ -172,7 +193,7 @@ export function planProjectMethod(
             protocol: generatorFact,
           },
         }),
-    ...(fallible || generatorFact !== undefined ? { fallibleContext: true } : {}),
+    ...(bodyErrorBoundary === undefined ? {} : { fallibleBoundary: bodyErrorBoundary }),
   };
   const parameterStatements = planRustCallableParameterPrelude(
     parameterPlan,
@@ -230,7 +251,7 @@ export function planProjectMethod(
       ...(isUnsafe ? { isUnsafe: true } : {}),
       visibility: !ast.hasModifierKind(member, "private") && !ast.hasModifierKind(member, "protected") ? "public" : "private",
       ...(methodAttributes.length === 0 ? {} : { attrs: methodAttributes }),
-      ...(isStatic ? {} : { selfParam: "ref" as const }),
+      ...(isStatic ? {} : { selfParam: selfMode!.mode }),
       ...(typeParams.length === 0 ? {} : { typeParams }),
       params,
       returnType: generatorReturnType,
@@ -252,7 +273,7 @@ export function planProjectMethod(
                 {
                   fallible: true,
                   hasReturnValue: !isRustUnitCarrier(generatorFact.returnType),
-                  errorDomain: context.errorDomain,
+                  errorType: rustErrorType(bodyErrorBoundary!),
                 },
               ),
             }],
@@ -264,11 +285,13 @@ export function planProjectMethod(
   const typeParams = genericPlan.finalizeTypeParameters();
   const finalizedBody = applyFallibleShape(
     applyRustTailShape({ statements: [...parameterStatements, ...body.statements] }, returnType !== undefined),
-    {
-      fallible,
-      hasReturnValue: returnType !== undefined,
-      errorDomain: context.errorDomain,
-    },
+    fallible
+      ? {
+          fallible: true,
+          hasReturnValue: returnType !== undefined,
+          errorType: rustErrorType(callableErrorBoundary!),
+        }
+      : { fallible: false, hasReturnValue: returnType !== undefined },
   );
   const overridePrelude = options?.targetName === undefined && !isStatic
     ? planDirectProjectMethodOverridePrelude(member, params, syntheticNames, context)
@@ -281,9 +304,11 @@ export function planProjectMethod(
     ...(isUnsafe ? { isUnsafe: true } : {}),
     visibility: !ast.hasModifierKind(member, "private") && !ast.hasModifierKind(member, "protected") ? "public" : "private",
     ...(methodAttributes.length === 0 ? {} : { attrs: methodAttributes }),
-    ...(fallible ? { fallible: true } : {}),
+    ...(callableErrorBoundary === undefined
+      ? {}
+      : { errorType: rustErrorType(callableErrorBoundary) }),
     ...(sourceAsync ? { isAsync: true } : {}),
-    ...(isStatic ? {} : { selfParam: "ref" as const }),
+    ...(isStatic ? {} : { selfParam: selfMode!.mode }),
     ...(typeParams.length === 0 ? {} : { typeParams }),
     params,
     ...(returnType === undefined ? {} : { returnType }),
@@ -306,7 +331,9 @@ function planDirectProjectMethodOverridePrelude(
   const targetName = owner === undefined
     ? undefined
     : context.input.projectTypes.fieldStorageName(owner, member);
+  const representation = context.input.objectRepresentations.representationFor(owner);
   if (owner?.kind !== "class" || targetName === undefined ||
+    representation === undefined ||
     context.input.facts.getFact(member, rustFallibleFactKey) === undefined ||
     syntheticNames === undefined) {
     return undefined;
@@ -321,6 +348,7 @@ function planDirectProjectMethodOverridePrelude(
     expression: readRustProjectMethodOverride(
       { kind: "path", path: "self" },
       targetName,
+      representation,
     ),
     body: {
       statements: [{

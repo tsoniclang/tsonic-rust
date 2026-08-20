@@ -4,7 +4,14 @@ import { isRustNeverCarrier, isRustUnitCarrier } from "../../../policy/types/tar
 import type { RustBlock, RustItem } from "../../rust-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planBlockLike } from "../statements/index.js";
-import { diagnosticInput, isValidRustIdentifier } from "../program/plan-context.js";
+import {
+  diagnosticInput,
+  isValidRustIdentifier,
+  rustCurrentErrorBoundary,
+  rustErrorBoundaryForDeclaration,
+  rustErrorType,
+  rustSourceItemIsPubliclyReachable,
+} from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustReturnTypeFromCarrierInContext } from "../types/render.js";
 import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustGeneratorFactKey, rustSourceCallableReturnFactKey } from "../../../analysis/facts/keys.js";
@@ -33,6 +40,7 @@ import { resolveRustCallableBodyReturnType } from "./callable-body-return.js";
 import { rustDeclarationRequiresUnsafe } from "../safety/explicit-safety.js";
 import { rustSafetyAttributesForDeclaration } from "../safety/explicit-safety.js";
 import { applyFallibleShape } from "../types/fallible-shape.js";
+import { rustLintAttributes } from "../../rust-ast/lint-policy.js";
 
 export { applyRustTailShape, rustBlockTerminates } from "../statements/block-flow.js";
 
@@ -122,6 +130,12 @@ function planRustFunctionItem(
   const isExported = source.exported;
   const name = source.name ??
     outerContext.input.names.nameForDeclaration(source.nameDeclaration) ?? "";
+  const declarationAttributes = [
+    ...(rustSourceItemIsPubliclyReachable(outerContext, name)
+      ? []
+      : [rustLintAttributes.deadCode]),
+    ...safetyAttributes,
+  ];
   let context: RustPlanContext = outerContext;
   if (!isValidRustIdentifier(name)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -162,6 +176,20 @@ function planRustFunctionItem(
   const returnCarrier = generatorFact?.carrier ?? asyncFact?.outputCarrier ??
     context.input.facts.getFact(node, rustSourceCallableReturnFactKey)?.returnCarrier;
   const fallible = context.input.facts.getFact(node, rustFallibleFactKey) !== undefined;
+  const callableErrorBoundary = fallible
+    ? rustErrorBoundaryForDeclaration(node, context)
+    : undefined;
+  const bodyErrorBoundary = callableErrorBoundary ?? (generatorFact === undefined
+    ? undefined
+    : rustCurrentErrorBoundary(context));
+  if ((fallible || generatorFact !== undefined) && bodyErrorBoundary === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.function-error-boundary",
+      "Function has no exact source-package error boundary.",
+    ));
+    return undefined;
+  }
   const isUnit = isRustUnitCarrier(returnCarrier);
   const isNever = isRustNeverCarrier(returnCarrier);
   const returnType = isUnit || fallible && isNever
@@ -234,7 +262,7 @@ function planRustFunctionItem(
             protocol: generatorFact,
           },
         }),
-    ...(fallible || generatorFact !== undefined ? { fallibleContext: true } : {}),
+    ...(bodyErrorBoundary === undefined ? {} : { fallibleBoundary: bodyErrorBoundary }),
   };
   const parameterStatements = planRustCallableParameterPrelude(
     parameterPlan,
@@ -272,10 +300,12 @@ function planRustFunctionItem(
     const item: Extract<RustItem, { readonly kind: "function" }> = {
       kind: "function",
       name,
-      visibility: isExported ? "public" : "crate",
-      ...(safetyAttributes.length === 0
+      visibility: isExported || rustSourceItemIsPubliclyReachable(outerContext, name)
+        ? "public"
+        : "crate",
+      ...(declarationAttributes.length === 0
         ? {}
-        : { attrs: safetyAttributes }),
+        : { attrs: declarationAttributes }),
       ...(isUnsafe ? { isUnsafe: true } : {}),
       ...(finalizedTypeParams.length === 0 ? {} : { typeParams: finalizedTypeParams }),
       params,
@@ -296,7 +326,7 @@ function planRustFunctionItem(
                 {
                   fallible: true,
                   hasReturnValue: !isRustUnitCarrier(generatorFact.returnType),
-                  errorDomain: context.errorDomain,
+                  errorType: rustErrorType(bodyErrorBoundary!),
                 },
               ),
             }],
@@ -323,13 +353,17 @@ function planRustFunctionItem(
   const item: Extract<RustItem, { readonly kind: "function" }> = {
     kind: "function",
     name,
-    visibility: isExported ? "public" : "crate",
-    ...(safetyAttributes.length === 0
+    visibility: isExported || rustSourceItemIsPubliclyReachable(outerContext, name)
+      ? "public"
+      : "crate",
+    ...(declarationAttributes.length === 0
       ? {}
-      : { attrs: safetyAttributes }),
+      : { attrs: declarationAttributes }),
     ...(isAsync ? { isAsync: true } : {}),
     ...(isUnsafe ? { isUnsafe: true } : {}),
-    ...(fallible ? { fallible: true } : {}),
+    ...(callableErrorBoundary === undefined
+      ? {}
+      : { errorType: rustErrorType(callableErrorBoundary) }),
     ...(finalizedTypeParams.length === 0
       ? {}
       : { typeParams: finalizedTypeParams }),
@@ -338,11 +372,13 @@ function planRustFunctionItem(
     body: {
       ...applyFallibleShape(
         applyRustTailShape({ statements: [...parameterStatements, ...body.statements] }, returnType !== undefined),
-        {
-          fallible,
-          hasReturnValue: returnType !== undefined,
-          errorDomain: context.errorDomain,
-        },
+        fallible
+          ? {
+              fallible: true,
+              hasReturnValue: returnType !== undefined,
+              errorType: rustErrorType(callableErrorBoundary!),
+            }
+          : { fallible: false, hasReturnValue: returnType !== undefined },
       ),
     },
   };

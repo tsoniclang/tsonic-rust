@@ -5,7 +5,6 @@ import {
   readRustEdition,
   readRustOutputType,
   readRustUserProjectFile,
-  readRustTypescriptCompatibilityMode,
   validateRustTargetOptions,
 } from "../../../dist/options/rust-target-options.js";
 
@@ -18,7 +17,6 @@ test("rust target options default deterministically", () => {
   assert.equal(readRustEdition(target()), "2021");
   assert.equal(readRustOutputType(target()), "lib");
   assert.equal(readRustUserProjectFile(target()), undefined);
-  assert.equal(readRustTypescriptCompatibilityMode(target()), "strict-native");
 });
 
 test("rust target options accept explicit supported values", () => {
@@ -27,7 +25,6 @@ test("rust target options accept explicit supported values", () => {
     edition: "2024",
     outputType: "bin",
     projectFile: "native/Cargo.toml",
-    typescriptCompatibility: "compat",
   });
 
   validateRustTargetOptions(selection);
@@ -35,7 +32,6 @@ test("rust target options accept explicit supported values", () => {
   assert.equal(readRustEdition(selection), "2024");
   assert.equal(readRustOutputType(selection), "bin");
   assert.equal(readRustUserProjectFile(selection), "native/Cargo.toml");
-  assert.equal(readRustTypescriptCompatibilityMode(selection), "compat");
 });
 
 test("rust target options reject unknown keys", () => {
@@ -52,8 +48,8 @@ test("rust target options reject invalid values", () => {
   assert.throws(() => readRustOutputType(target({ outputType: "Exe" })), /'lib' or 'bin'/);
   assert.throws(() => validateRustTargetOptions(target({ projectFile: 42 })), /non-empty string/);
   assert.throws(
-    () => readRustTypescriptCompatibilityMode(target({ typescriptCompatibility: "loose" })),
-    /'strict-native' or 'compat'/,
+    () => validateRustTargetOptions(target({ typescriptCompatibility: "compat" })),
+    /option 'options\.typescriptCompatibility' is not supported/,
   );
   assert.throws(() => validateRustTargetOptions(target({ crateName: "My-App" })), /crateName/);
 });

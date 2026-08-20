@@ -69,7 +69,7 @@ export function truncate(value: float64): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn truncate\(value: f64\) -> rt::TsonicResult<i32>/u);
+  assert.match(text, /pub fn truncate\(value: f64\) -> Result<i32, rt::TsonicError>/u);
   assert.match(text, /\n    tsonic_rust_runtime::conversions::f64_to_i32\(value\)\n/u);
   assert.doesNotMatch(text, /Ok\([^\n]*\?\)/u);
   assert.doesNotMatch(text, /\sas\si32/u);
@@ -273,7 +273,7 @@ export function read(value: Counter | undefined): int32 {
   const source = artifactText(result, "src/index.rs");
   assert.match(
     source,
-    /match value\.as_ref\(\) \{[\s\S]*Some\(flow_value\) => flow_value\.clone\(\),[\s\S]*None => unreachable!\("checked flow selected a missing optional value"\),[\s\S]*\}\s*\.state/su,
+    /let dispatch_receiver(?:_\d+)? = &match value\.as_ref\(\) \{[\s\S]*Some\(flow_value(?:_\d+)?\) => flow_value(?:_\d+)?\.clone\(\),[\s\S]*None => unreachable!\("checked flow selected a missing optional value"\),[\s\S]*\};[\s\S]*dispatch_receiver(?:_\d+)?\.dispatch\.read_counter_value\(\)/su,
   );
   assert.equal(
     source.match(/match value\.as_ref\(\)/gsu)?.length,
@@ -307,6 +307,13 @@ export class JsonObject extends JsonValue {
   value: JsonValue | undefined;
   constructor(value: JsonValue | undefined) { super(); this.value = value; }
   getValue(): JsonValue | undefined { return this.value; }
+}
+`,
+      "identity.ts": `
+import { JsonString, JsonValue } from "./model.js";
+
+export function isString(value: JsonValue): boolean {
+  return value instanceof JsonString;
 }
 `,
       "index.ts": `
@@ -371,10 +378,13 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const model = artifactText(result, "src/model.rs");
+  const identity = artifactText(result, "src/identity.rs");
   const index = artifactText(result, "src/index.rs");
   assert.match(model, /fn downcast_json_value_to_json_string\(\s*self: std::rc::Rc<Self>,?\s*\)/u);
+  assert.match(identity, /downcast_json_value_to_json_string\(\)\s*\.is_some\(\)/u);
   assert.match(index, /downcast_json_value_to_json_string\(\)\s*\.is_some\(\)/u);
   assert.match(index, /downcast_json_value_to_json_string\(\)\s*\.unwrap\(\)/u);
+  assert.doesNotMatch(`${model}\n${identity}\n${index}`, /into_any|std::any::Any|TypeId/u);
   const run = validateGeneratedProject("selected-project-downcast", result.artifacts, { run: true });
   assert.equal(run.status, 0, run.stderr || run.stdout);
 });
@@ -607,7 +617,9 @@ export function currentPlatform(platform: string): string {
   });
 
   assert.deepEqual(result.diagnostics, []);
-  assert.match(artifactText(result, "src/index.rs"), /pub fn current_platform\(platform: String\) -> String \{\n    platform\.clone\(\)\n\}/u);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /pub fn current_platform\(platform: String\) -> String \{\n    platform\n\}/u);
+  assert.doesNotMatch(source, /platform\.clone\(\)/u);
 });
 
 test("a selected provider value without a target relation fails closed", () => {

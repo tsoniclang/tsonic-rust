@@ -10,6 +10,7 @@ import {
   readRustStoredObjectField,
   readRustStructuralObjectMethodStorage,
   rustDirectProjectFieldStoragePath,
+  rustProjectObjectRepresentation,
 } from "../objects/project-storage.js";
 import {
   isRustIntegerCarrier,
@@ -61,18 +62,22 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
     ? rustSourceTypeCarrierValue(fact.resultCarrier)
     : undefined;
   const typePath = value === undefined ? undefined : sourceTypePath(context, value);
-  const stateType = fact.storage === "project-object"
-    ? rustProjectStateType(fact.resultCarrier, context)
-    : undefined;
   const projectDefinition = fact.storage === "project-object"
     ? context.input.projectTypes.definitionForCarrier(fact.resultCarrier)
+    : undefined;
+  const projectRepresentation = projectDefinition === undefined
+    ? undefined
+    : context.input.objectRepresentations.representationFor(projectDefinition);
+  const stateType = fact.storage === "project-object" && projectRepresentation?.kind !== "value"
+    ? rustProjectStateType(fact.resultCarrier, context)
     : undefined;
   const stateMarker = projectDefinition === undefined
     ? undefined
     : rustProjectStateMarker(projectDefinition, context);
   const statePath = stateType?.kind === "named" ? stateType.path : undefined;
   if (fact.storage === "project-object" &&
-    (typePath === undefined || statePath === undefined)) {
+    (typePath === undefined || projectRepresentation === undefined ||
+      projectRepresentation.kind !== "value" && statePath === undefined)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.record",
@@ -476,7 +481,9 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
       projectFields.push({ name: storagePath[0]!, value });
     }
   }
-  context.usedAliases?.add("rt");
+  if (fact.storage === "object-handle" || projectRepresentation?.kind !== "value") {
+    context.usedAliases?.add("rt");
+  }
   if (stateMarker !== undefined) {
     projectFields.push({ name: stateMarker.name, value: stateMarker.value });
   }
@@ -578,13 +585,23 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
       }],
     };
   } else {
-    constructed = fact.storage === "project-object"
-      ? createRustProjectObject(typePath!, statePath!, projectFields)
-      : createRustStructuralObjectFromCarrier(
-          fact.resultCarrier,
-          structuralInitializers,
-          context,
-        );
+    if (fact.storage === "project-object") {
+      if (typePath === undefined || projectRepresentation === undefined) {
+        return undefined;
+      }
+      constructed = createRustProjectObject(
+        typePath,
+        statePath ?? typePath,
+        projectFields,
+        projectRepresentation,
+      );
+    } else {
+      constructed = createRustStructuralObjectFromCarrier(
+        fact.resultCarrier,
+        structuralInitializers,
+        context,
+      );
+    }
   }
   return constructed === undefined
     ? undefined
@@ -607,10 +624,12 @@ function planProjectIndexRecordLiteral(
     return undefined;
   }
   const definition = context.input.projectTypes.definitionForCarrier(fact.resultCarrier);
+  const representation = context.input.objectRepresentations.representationFor(definition);
   const wrapperType = rustTypeFromCarrierInContext(fact.resultCarrier, context);
   const stateType = rustProjectStateType(fact.resultCarrier, context);
   const properties = context.input.ast.properties(node);
-  if (definition?.kind !== "interface" || context.input.projectTypes.isPolymorphic(definition) ||
+  if (definition?.kind !== "interface" || representation === undefined ||
+    context.input.projectTypes.isPolymorphic(definition) ||
     wrapperType?.kind !== "named" || stateType?.kind !== "named" ||
     properties.length !== fact.contributions.length ||
     fact.contributions.some((contribution, index) => contribution.property !== properties[index])) {
@@ -661,7 +680,11 @@ function planProjectIndexRecordLiteral(
     const spread = spreadExpression === contribution.expression
       ? planExpression(contribution.expression, context)
       : undefined;
-    if (spread === undefined) {
+    const sourceRepresentation = rustProjectObjectRepresentation(
+      contribution.sourceCarrier,
+      context,
+    );
+    if (spread === undefined || sourceRepresentation === undefined) {
       return undefined;
     }
     const spreadName = allocateRustSyntheticName(context.syntheticNames, "record_index_spread");
@@ -674,6 +697,7 @@ function planProjectIndexRecordLiteral(
       value: readRustProjectObjectIndexStorage(
         { kind: "path", path: spreadName },
         contribution.sourceStorageName,
+        sourceRepresentation,
       ),
     });
     const spreadEntries: RustExpr = { kind: "path", path: spreadEntriesName };
@@ -704,6 +728,7 @@ function planProjectIndexRecordLiteral(
       wrapperType.path,
       stateType.path,
       [{ name: fact.storageName, value: mapPath }],
+      representation,
     ),
   };
 }

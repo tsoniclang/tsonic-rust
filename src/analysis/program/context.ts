@@ -50,6 +50,14 @@ import {
 } from "../safety/application-index.js";
 import type { RustSafetyApplicationFactIndex } from "../safety/application-index.js";
 import type { RustTargetAnalysisQueries } from "./model.js";
+import {
+  createRustObjectRepresentationPlanRegistry,
+  type RustObjectRepresentationPlanRegistry,
+} from "../project-types/object-representation.js";
+import {
+  createRustRuntimeValueUsePlan,
+  type RustRuntimeValueUsePlan,
+} from "./runtime-value-uses.js";
 
 export interface RustAnalysisContext extends RustSourcePolicyContext {
   readonly backend: TargetBackendContext;
@@ -57,8 +65,11 @@ export interface RustAnalysisContext extends RustSourcePolicyContext {
   readonly jsEnabled: boolean;
   readonly ast: AstReader;
   readonly sourceFiles: readonly SourceFile[];
+  readonly sourcePackages: TargetCompileInput["sourcePackages"];
+  readonly rootPublishesLibrary: boolean;
   readonly facts: RustPlanBuilder;
   readonly projectTypes: RustProjectTypePolicyRegistry;
+  readonly objectRepresentations: RustObjectRepresentationPlanRegistry;
   readonly projectMethodDispatch: RustProjectMethodDispatchPlanRegistry;
   readonly projectMethodProperties: RustProjectMethodPropertyPlanRegistry;
   readonly projectFieldDispatch: RustProjectFieldDispatchPlanRegistry;
@@ -66,6 +77,7 @@ export interface RustAnalysisContext extends RustSourcePolicyContext {
   readonly structuralShapes: RustStructuralShapePlanRegistry;
   readonly providerSemantics: RustProviderSemantics;
   readonly safetyApplications: RustSafetyApplicationFactIndex;
+  readonly runtimeValueUses: RustRuntimeValueUsePlan;
   readonly names: RustNamePlan;
   readonly diagnostics: TargetDiagnostic[];
   readonly analysis: RustTargetAnalysisQueries;
@@ -78,6 +90,7 @@ export function createRustAnalysisContext(
   input: TargetCompileInput,
   providerSemantics: RustProviderSemantics,
   jsEnabled: boolean,
+  rootPublishesLibrary: boolean,
 ): RustAnalysisContext {
   const ast = input.source.ast;
   const rawSourceFiles: readonly (SourceFile | undefined)[] = input.source.sourceFiles;
@@ -87,6 +100,17 @@ export function createRustAnalysisContext(
           sourceFile !== undefined && !ast.isDeclarationFile(sourceFile))
       : [],
   );
+  const safetyApplications = createRustSafetyApplicationFactIndex({
+    ast,
+    sourceFiles,
+    sourceFacts: input.source.sourceFacts,
+    navigation: input.source.navigation,
+  });
+  const runtimeValueUses = createRustRuntimeValueUsePlan({
+    ast,
+    navigation: input.source.navigation,
+    safetyApplications,
+  });
   return Object.freeze({
     source: input.source,
     backend,
@@ -94,23 +118,23 @@ export function createRustAnalysisContext(
     jsEnabled,
     ast,
     sourceFiles,
+    sourcePackages: input.sourcePackages,
+    rootPublishesLibrary,
     facts: createRustPlanBuilder(input.source.sourceFacts),
     projectTypes: createRustProjectTypePolicyRegistry(),
+    objectRepresentations: createRustObjectRepresentationPlanRegistry(),
     projectMethodDispatch: createRustProjectMethodDispatchPlanRegistry(),
     projectMethodProperties: createRustProjectMethodPropertyPlanRegistry(),
     projectFieldDispatch: createRustProjectFieldDispatchPlanRegistry(),
     sourceCallableSpecializations: createRustSourceCallableSpecializationPlanRegistry(),
     structuralShapes: createRustStructuralShapePlanRegistry(),
     providerSemantics,
-    safetyApplications: createRustSafetyApplicationFactIndex({
-      ast,
-      sourceFiles,
-      sourceFacts: input.source.sourceFacts,
-      navigation: input.source.navigation,
-    }),
+    safetyApplications,
+    runtimeValueUses,
     names: createRustNamePlan({
       ast,
       navigation: input.source.navigation,
+      runtimeValueUses,
       sourceFiles,
     }),
     diagnostics: [],

@@ -6,9 +6,13 @@ export function printCargoManifest(manifest: CargoManifestPlan): string {
     `name = ${tomlString(manifest.packageName)}`,
     'version = "0.1.0"',
     `edition = ${tomlString(manifest.edition)}`,
-    "",
-    "[workspace]",
   ];
+  if (manifest.workspace !== undefined) {
+    lines.push("", "[workspace]", 'resolver = "3"');
+    if (manifest.workspace.members.length > 0) {
+      lines.push(`members = [${manifest.workspace.members.map(tomlString).join(", ")}]`);
+    }
+  }
   if (manifest.dependencies.length > 0) {
     lines.push("", "[dependencies]");
     for (const dependency of manifest.dependencies) {

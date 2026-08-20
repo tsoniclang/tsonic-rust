@@ -161,6 +161,7 @@ export function planCargoManifest(
       edition: readRustEdition(target),
       outputType: readRustOutputType(target),
       dependencies: [...dependenciesByName.values()].sort((left, right) => left.name.localeCompare(right.name, "en")),
+      workspace: { members: [] },
     },
     diagnostics: [],
   };

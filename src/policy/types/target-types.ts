@@ -142,6 +142,7 @@ export {
   isRustJsStrictEqualityCarrier,
   isRustSourceStringConvertibleCarrier,
   rustCarrierSupportsClone,
+  rustCarrierReferentMutationRequiresMutableBinding,
   rustCarrierSupportsJsEquality,
   rustCarrierSupportsTrait,
 } from "./carriers/traits.js";

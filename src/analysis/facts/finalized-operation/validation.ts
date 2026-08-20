@@ -25,6 +25,9 @@ export function validateRustFinalizedOperationAbi(candidate: unknown): candidate
     (abi.effects.invocation !== "infallible" && abi.effects.invocation !== "fallible") ||
     (abi.effects.awaiting !== "not-applicable" && abi.effects.awaiting !== "infallible" && abi.effects.awaiting !== "fallible") ||
     !isRustErrorBoundary(abi.effects.errorBoundary) ||
+    (abi.effects.errorBoundary === "provider-native"
+      ? !isRustTargetTypeRef(abi.effects.errorCarrier)
+      : abi.effects.errorCarrier !== undefined) ||
     (abi.effects.safety !== "safe" && abi.effects.safety !== "requires-unsafe")) {
     return false;
   }
@@ -42,6 +45,7 @@ export function validateRustFinalizedOperationAbi(candidate: unknown): candidate
     return false;
   }
   const runtimeIndexes = new Set<number>();
+  let receiverUsed = false;
   const validateSourceInput = (input: RustFinalizedSourceInput): boolean => {
     if (!finalizedConversionIsValid(input.conversion) ||
       !rustTargetTypeRefEquals(input.sourceCarrier, input.conversion.sourceCarrier) ||
@@ -56,9 +60,13 @@ export function validateRustFinalizedOperationAbi(candidate: unknown): candidate
         return false;
       }
       runtimeIndexes.add(input.source.sourceIndex);
-    } else if (abi.sourceReceiver.kind !== "receiver" ||
-      !rustTargetTypeRefEquals(abi.sourceReceiver.carrier, input.sourceCarrier)) {
-      return false;
+    } else {
+      if (abi.sourceReceiver.kind !== "receiver" ||
+        abi.sourceReceiver.disposition !== "runtime" ||
+        !rustTargetTypeRefEquals(abi.sourceReceiver.carrier, input.sourceCarrier)) {
+        return false;
+      }
+      receiverUsed = true;
     }
     return true;
   };
@@ -101,7 +109,9 @@ export function validateRustFinalizedOperationAbi(candidate: unknown): candidate
     }
   }
   if (abi.sourceArguments.some((argument) =>
-    argument.disposition === "runtime" && !runtimeIndexes.has(argument.sourceIndex))) {
+    argument.disposition === "runtime" && !runtimeIndexes.has(argument.sourceIndex)) ||
+    abi.sourceReceiver.kind === "receiver" &&
+      (abi.sourceReceiver.disposition === "runtime") !== receiverUsed) {
     return false;
   }
   const sourceReceiverCarrier = abi.sourceReceiver.kind === "receiver"
@@ -172,7 +182,9 @@ const dispositions = new Set<unknown>(["runtime", "compile-time"]);
 function isSourceReceiver(value: unknown): value is RustFinalizedOperationAbi["sourceReceiver"] {
   return isRecord(value) && (value.kind === "none"
     ? hasExactKeys(value, ["kind"])
-    : value.kind === "receiver" && hasExactKeys(value, ["kind", "carrier"]) && isRustTargetTypeRef(value.carrier));
+    : value.kind === "receiver" &&
+      hasExactKeys(value, ["kind", "carrier", "disposition"]) &&
+      isRustTargetTypeRef(value.carrier) && dispositions.has(value.disposition));
 }
 
 function isSourceArgument(value: unknown): value is RustFinalizedSourceArgument {
@@ -331,10 +343,16 @@ function isOperationResult(value: unknown): value is RustFinalizedOperationResul
 }
 
 function isEffects(value: unknown): value is RustFinalizedOperationAbi["effects"] {
-  return isRecord(value) && hasExactKeys(value, ["invocation", "awaiting", "errorBoundary", "safety"]) &&
+  return isRecord(value) && hasExactKeys(
+    value,
+    value.errorBoundary === "provider-native"
+      ? ["invocation", "awaiting", "errorBoundary", "errorCarrier", "safety"]
+      : ["invocation", "awaiting", "errorBoundary", "safety"],
+  ) &&
     (value.invocation === "infallible" || value.invocation === "fallible") &&
     (value.awaiting === "not-applicable" || value.awaiting === "infallible" || value.awaiting === "fallible") &&
     isRustErrorBoundary(value.errorBoundary) &&
+    (value.errorCarrier === undefined || isRustTargetTypeRef(value.errorCarrier)) &&
     (value.safety === "safe" || value.safety === "requires-unsafe");
 }
 

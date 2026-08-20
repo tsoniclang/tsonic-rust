@@ -231,7 +231,7 @@ export function main(): void {}
   assert.deepEqual(result.diagnostics, []);
   assert.match(
     artifactText(result, "src/index.rs"),
-    /pub fn module_init\(\) -> rt::TsonicResult<\(\)>[\s\S]*?json_parse\("1"\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u,
+    /pub fn module_init\(\) -> Result<\(\), rt::TsonicError>[\s\S]*?json_parse\("1"\)\?/u,
   );
   assert.match(
     artifactText(result, "src/main.rs"),
@@ -308,6 +308,7 @@ test("a fallible provider epilogue makes binary completion explicitly fallible",
         requiredCrate: "acme_files",
         isFallible: true,
         errorBoundary: "provider-native",
+        errorCarrier: { kind: "target-named", id: "rust.runtime.JsError" },
       }],
     })],
     target: {
@@ -327,11 +328,11 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const main = artifactText(result, "src/main.rs");
-  assert.match(main, /fn main\(\) -> tsonic_rust_runtime::TsonicResult<\(\)>/u);
+  assert.match(main, /fn main\(\) -> Result<\(\), tsonic_rust_runtime::TsonicError>/u);
   assert.match(
     main,
-    /acme_files::drain_runtime_fallible\(\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?;/u,
+    /acme_files::drain_runtime_fallible\(\)\?;/u,
   );
-  assert.match(main, /Ok\(\(\)\)/u);
+  assert.match(main, /Ok::<\(\), tsonic_rust_runtime::TsonicError>\(\(\)\)/u);
   validateGeneratedProject("fallible-epilogue-proof", result.artifacts);
 });

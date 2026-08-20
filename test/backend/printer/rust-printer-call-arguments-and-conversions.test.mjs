@@ -315,7 +315,11 @@ test("long calls on the left of comparisons expand before the operator", () => {
                   {
                     kind: "closure",
                     params: [],
-                    body: { kind: "int-literal", text: "-1" },
+                    body: {
+                      kind: "unary",
+                      operator: "-",
+                      operand: { kind: "int-literal", text: "1" },
+                    },
                   },
                 ],
               },
@@ -668,4 +672,124 @@ test("method chains inside expanded call comparisons use argument indentation", 
   });
 
   assert.match(source, /acme_testing::check\(\n        pair\.load\(\)\n            \.addLeft/u);
+});
+
+test("every fitted call layout preserves exact call-site type arguments", () => {
+  const errorType = { kind: "named", path: "rt::TsonicError" };
+  const expandedValue = {
+    kind: "block",
+    bindings: [{
+      name: "selected",
+      value: {
+        kind: "call",
+        path: "load_selected_value",
+        typeArguments: [{ kind: "string" }],
+        args: [{ kind: "path", path: "input" }],
+      },
+    }],
+    value: { kind: "path", path: "selected" },
+  };
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "let",
+          name: "direct",
+          mutable: false,
+          init: {
+            kind: "call",
+            path: "Ok",
+            typeArguments: [{ kind: "infer" }, errorType],
+            args: [expandedValue],
+          },
+        }, {
+          kind: "let",
+          name: "associated",
+          mutable: false,
+          init: {
+            kind: "associated-call",
+            owner: { kind: "named", path: "Factory" },
+            method: "make",
+            typeArguments: [{ kind: "string" }],
+            args: [expandedValue],
+          },
+        }, {
+          kind: "let",
+          name: "method",
+          mutable: false,
+          init: {
+            kind: "method-call",
+            receiver: { kind: "path", path: "values" },
+            method: "convert",
+            typeArguments: [{ kind: "string" }],
+            args: [expandedValue],
+          },
+        }, {
+          kind: "let",
+          name: "nested",
+          mutable: false,
+          init: {
+            kind: "call",
+            path: "wrap",
+            args: [{
+              kind: "call",
+              path: "Ok",
+              typeArguments: [{ kind: "infer" }, errorType],
+              args: [expandedValue],
+            }],
+          },
+        }, {
+          kind: "tail",
+          expr: {
+            kind: "try",
+            resultErrorType: errorType,
+            operandErrorType: errorType,
+            expr: {
+              kind: "method-call",
+              receiver: {
+                kind: "method-call",
+                receiver: { kind: "path", path: "values" },
+                method: "map",
+                args: [{
+                  kind: "closure",
+                  params: [{ name: "value", byRefCopy: false }],
+                  body: {
+                    kind: "call",
+                    path: "Ok",
+                    typeArguments: [{ kind: "infer" }, errorType],
+                    args: [{
+                      kind: "try",
+                      resultErrorType: errorType,
+                      operandErrorType: errorType,
+                      expr: {
+                        kind: "call",
+                        path: "convert_value_with_an_intentionally_long_name",
+                        args: [{ kind: "path", path: "value" }],
+                      },
+                    }],
+                  },
+                }],
+              },
+              method: "transpose",
+              args: [],
+            },
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /Ok::<_, rt::TsonicError>\(\{/u);
+  assert.match(source, /Factory::make::<String>\(\{/u);
+  assert.match(source, /values\.convert::<String>\(\{/u);
+  assert.match(source, /wrap\(Ok::<_, rt::TsonicError>\(\{/u);
+  assert.match(
+    source,
+    /\.map\(\|value\| \{\n {12}Ok::<_, rt::TsonicError>\(convert_value_with_an_intentionally_long_name\(value\)\?\)\n {8}\}\)/u,
+  );
 });

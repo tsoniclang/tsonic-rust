@@ -22,7 +22,8 @@ import { isErasedRustSafetyExpressionStatement, isRustExplicitUnsafeBlockMarker,
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planDoStatement, planForStatement, planIfStatement, planLabeledStatement, planSwitchStatement, planWhileStatement } from "./control-flow.js";
 import { planExpression } from "../expressions/index.js";
-import { planExpressionStatement, planVariableStatement } from "./variables.js";
+import { planExpressionStatement } from "./expression-statements.js";
+import { planVariableStatement } from "./variable-declarations.js";
 import { planForInStatement, planForOfStatement } from "./iteration.js";
 import { planRustReturnExit } from "./completion-exits.js";
 import { planThrowStatement, planTryStatement } from "./errors.js";

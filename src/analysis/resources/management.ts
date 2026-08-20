@@ -23,6 +23,7 @@ import {
 } from "../../policy/evidence/selected-source.js";
 import { selectRustProviderOperation } from "../../policy/operations/provider-selection.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
+import { rustProjectCallableTargetName } from "../facts/source-member-name.js";
 
 export interface RustProjectDisposerEffects {
   readonly selfMode: { readonly mode: "ref" | "mut-ref" };
@@ -71,6 +72,7 @@ export function selectRustResourceManagement(
       alternative.disposal.kind !== first.disposal.kind ||
       alternative.disposal.fallible !== first.disposal.fallible ||
       alternative.disposal.errorBoundary !== first.disposal.errorBoundary ||
+      !optionalCarrierEquals(alternative.disposal.errorCarrier, first.disposal.errorCarrier) ||
       !resourceDisposalTargetsEqual(alternative.disposal.target, first.disposal.target))) {
     return rejected("Rust resource alternatives must resolve to one identical carrier and disposal operation.");
   }
@@ -129,10 +131,29 @@ function selectDisposalAlternative(
       : context.semanticsFor(declaration).getResolvedWellKnownSymbolInfo(name);
     const expectedKind = alternative.kind === "sync" ? "dispose" : "async-dispose";
     const effects = projectDisposerEffects(declaration);
+    const targetName = rustProjectCallableTargetName(declaration, context);
+    const owner = options.projectTypes.definitionContainingDeclaration(declaration);
     if (wellKnown?.kind !== expectedKind || effects === undefined ||
+      targetName === undefined || owner === undefined ||
       effects.async !== (alternative.kind === "async")) {
       return rejected("The selected project-source disposer has no exact Rust well-known method contract.");
     }
+    const polymorphic = options.projectTypes.isPolymorphic(owner);
+    const relationship = polymorphic
+      ? options.projectTypes.relationship(resourceCarrier, owner)
+      : undefined;
+    const dispatchVariant = polymorphic
+      ? options.projectMethodDispatch.variantForMember(declaration, [])
+      : undefined;
+    if (polymorphic && (relationship?.kind !== "related" || dispatchVariant === undefined)) {
+      return rejected("The selected project-source disposer has no exact Rust dispatch contract.");
+    }
+    const dispatch = relationship?.kind === "related" && dispatchVariant !== undefined
+      ? {
+          virtualSlot: dispatchVariant.virtualSlot,
+          ownerCarrier: relationship.targetType,
+        }
+      : undefined;
     const sourceResult = resolveRustTargetTypeRef(
       Node_Type(context.ast, declaration),
       context,
@@ -153,8 +174,9 @@ function selectDisposalAlternative(
         errorBoundary: "source-program",
         target: {
           form: "source-method",
-          name: alternative.kind === "sync" ? "dispose" : "dispose_async",
+          name: targetName,
           receiverMode: effects.selfMode.mode,
+          ...(dispatch === undefined ? {} : { dispatch }),
         },
       } : {
         kind: alternative.kind,
@@ -162,8 +184,9 @@ function selectDisposalAlternative(
         errorBoundary: "none",
         target: {
           form: "source-method",
-          name: alternative.kind === "sync" ? "dispose" : "dispose_async",
+          name: targetName,
           receiverMode: effects.selfMode.mode,
+          ...(dispatch === undefined ? {} : { dispatch }),
         },
       },
     };
@@ -198,21 +221,42 @@ function selectDisposalAlternative(
   if (!isRustUnitCarrier(row.resultCarrier)) {
     return rejected("The selected provider resource disposer must have an exact void result.");
   }
+  const target = { form: "provider" as const, target: row.target };
+  const disposal: RustResourceManagementFact["disposal"] = row.isFallible !== true
+    ? {
+        kind: alternative.kind,
+        fallible: false,
+        errorBoundary: "none",
+        target,
+      }
+    : row.errorBoundary === "provider-native"
+      ? {
+          kind: alternative.kind,
+          fallible: true,
+          errorBoundary: "provider-native",
+          errorCarrier: row.errorCarrier,
+          target,
+        }
+      : {
+          kind: alternative.kind,
+          fallible: true,
+          errorBoundary: row.errorBoundary,
+          target,
+        };
   return {
     kind: "selected",
     resourceCarrier,
-    disposal: row.isFallible === true ? {
-      kind: alternative.kind,
-      fallible: true,
-      errorBoundary: row.errorBoundary,
-      target: { form: "provider", target: row.target },
-    } : {
-      kind: alternative.kind,
-      fallible: false,
-      errorBoundary: "none",
-      target: { form: "provider", target: row.target },
-    },
+    disposal,
   };
+}
+
+function optionalCarrierEquals(
+  left: TargetTypeRef | undefined,
+  right: TargetTypeRef | undefined,
+): boolean {
+  return left === undefined
+    ? right === undefined
+    : right !== undefined && rustTargetTypeRefEquals(left, right);
 }
 
 function providerDisposalTargetIsSupported(

@@ -157,6 +157,22 @@ test("no runtime crate code inside tsonic-rust", () => {
   assert.throws(() => statSync(join(repositoryRoot, "crates")), /ENOENT/u);
 });
 
+test("project downcasts use closed generated routes without runtime type discovery", () => {
+  for (const { path, text } of sourceFiles) {
+    assert.doesNotMatch(text, /std::any::Any|\bTypeId\b|\binto_any\b/u, `${path} uses runtime type discovery`);
+    assert.doesNotMatch(text, /method:\s*"downcast"/u, `${path} emits a runtime downcast`);
+  }
+  const policy = readFileSync(
+    join(sourceRoot, "analysis/project-types/policy/resolution.ts"),
+    "utf8",
+  );
+  assert.match(policy, /downcastRoutesByDefinition/u);
+  assert.match(
+    policy,
+    /sourcePackageComponentForFile\(target\.fileName\) === sourceComponent/u,
+  );
+});
+
 test("Cargo registry patches require explicit runtime-reference provenance", () => {
   const planner = readFileSync(join(sourceRoot, "backend/planner/project/cargo.ts"), "utf8");
   const printer = readFileSync(join(sourceRoot, "print/cargo/manifest.ts"), "utf8");
@@ -245,7 +261,7 @@ test("provider and library identity never flows through local-name recasing", ()
     "utf8",
   );
   const providerLowering = expressions.slice(
-    expressions.indexOf("function refShape"),
+    expressions.indexOf("export function planProviderOperationExpression"),
     expressions.indexOf("export function finishProviderOperationExpression"),
   );
   assert.ok(providerLowering.includes("function planProviderOperationExpression"), "slice covers provider lowering");
@@ -500,8 +516,15 @@ test("native module-function eligibility is finalized before backend planning", 
     join(sourceRoot, "analysis/program/module-bindings.ts"),
     "utf8",
   );
-  assert.match(semantics, /referencesToDeclaration\(declaration\)/u);
+  assert.match(semantics, /runtimeValueUses\.hasFirstClassUse\(declaration\)/u);
   assert.match(semantics, /storage: "module-cell"/u);
+  const runtimeUses = readFileSync(
+    join(sourceRoot, "analysis/program/runtime-value-uses.ts"),
+    "utf8",
+  );
+  assert.match(runtimeUses, /navigation\.declarationUses\(declaration\)/u);
+  assert.match(runtimeUses, /use\.kind === "first-class"/u);
+  assert.match(runtimeUses, /isCompileTimeApplicationReference/u);
   for (const { path, text } of sourceFiles) {
     if (!path.includes("/backend/")) {
       continue;
@@ -630,15 +653,20 @@ test("call-argument conversion consumes the checked expression carrier, not a se
 });
 
 test("backend assignment and nullish checks consume finalized fact details", () => {
-  const statements = readFileSync(join(sourceRoot, "backend/planner/statements/variables.ts"), "utf8");
+  const statements = readFileSync(
+    join(sourceRoot, "backend/planner/statements/expression-statements.ts"),
+    "utf8",
+  );
   const expressions = readFileSync(join(sourceRoot, "backend/planner/expressions/binary.ts"), "utf8");
   const semantics = readFileSync(join(sourceRoot, "analysis/operations/operators.ts"), "utf8");
   const operators = readFileSync(join(sourceRoot, "policy/operations/operator-rules.ts"), "utf8");
   assert.match(statements, /assignment === undefined \|\| assignment\.kind !== "operator-token"/u);
   assert.match(statements, /selectedOperatorMatches\(expression, assignment, context\)/u);
   assert.doesNotMatch(statements, /sourceReferenceFor|selectRustEquivalentAssignment/u);
+  assert.match(statements, /fact\.writeStrategy === "in-place-string-append"/u);
   assert.match(semantics, /targetReference\.symbol !== valueReference\.symbol/u);
   assert.match(semantics, /targetReference\.declaration !== valueReference\.declaration/u);
+  assert.match(semantics, /writeStrategy: "in-place-string-append"/u);
   assert.match(operators, /export function selectRustEquivalentAssignment\(/u);
   assert.match(expressions, /fact\.optionOperand === "left" \? leftNode : rightNode/u);
   assert.doesNotMatch(expressions, /getRuntimeCarrierFact\(leftNode\)/u);

@@ -1,10 +1,12 @@
 import { collectImportActivatedTargetCapabilities, collectRuntimeActivatedTargetCapabilities } from "../../../../tsonic/packages/host/dist/target/capability-activation.js";
 import { collectTargetSourceProfileContributions, createTargetSourceCompilerComposition, getTargetRequiredProviderModules } from "../../../../tsonic/packages/host/dist/index.js";
+import { collectTargetSourcePackageGraph } from "../../../../tsonic/packages/host/dist/source-package-inputs.js";
 import { createRustTargetPack } from "../../../dist/index.js";
 import { composeRustCapabilities } from "../../../dist/plugin/compose.js";
 import { analyzeRustTargetProgram } from "../../../dist/analysis/program/index.js";
 import { materializeRustArtifacts } from "../../../dist/backend/emission/materialize.js";
 import { planRustArtifacts } from "../../../dist/backend/planner/program/index.js";
+import { readRustOutputType } from "../../../dist/options/rust-target-options.js";
 import { createCompilerSessionFromFiles, formatDiagnostics } from "@tsonic/tsts";
 import { createRustPlanningContext } from "../../../dist/backend/planner/context.js";
 import { composeRustProviderSemantics } from "../../../dist/providers/packages/semantics.js";
@@ -14,7 +16,7 @@ import {
 } from "@tsonic/target-api/source";
 import assert from "node:assert/strict";
 
-export function createRustSession({ files, target = { id: "rust", options: {} }, packages = [], capabilities = [], surfaces = [], entryPoint = "index.ts" } = {}) {
+export function createRustSession({ files, target = { id: "rust", options: {} }, packages = [], capabilities = [], surfaces = [], entryPoint = "index.ts", sourcePackages } = {}) {
   const pack = createRustTargetPack();
   target = surfaces.length === 0 || target.surfaces !== undefined
     ? target
@@ -56,8 +58,16 @@ export function createRustSession({ files, target = { id: "rust", options: {} },
   if (sourceProfile.diagnostics.length !== 0) {
     throw new Error(sourceProfile.diagnostics.map((diagnostic) => diagnostic.message).join("\n"));
   }
+  const projectFiles = new Map(
+    Object.entries(files).map(([name, text]) => [`/src/${name}`, text]),
+  );
+  sourcePackages ??= withFixtureEntryExport(
+    collectTargetSourcePackageGraph("/src", "/src", projectFiles),
+    projectFiles,
+    entryPoint,
+  );
   const fileMap = new Map([
-    ...Object.entries(files).map(([name, text]) => [`/src/${name}`, text]),
+    ...projectFiles,
     ...sourceProfile.files.map((file) => [file.path, file.text]),
   ]);
   const composition = createTargetSourceCompilerComposition(providerContext);
@@ -84,8 +94,33 @@ export function createRustSession({ files, target = { id: "rust", options: {} },
     providerContext,
     runtimeContributionContext,
     paths,
+    sourcePackages,
     runtimeActivatedCapabilities: packages.filter((capability) => activation.runtimeIds.has(capability.id)),
   };
+}
+
+function withFixtureEntryExport(sourcePackages, projectFiles, entryPoint) {
+  const entryFile = entryPoint.startsWith("/")
+    ? entryPoint
+    : `/src/${entryPoint.replace(/^\.\//u, "")}`;
+  if (!projectFiles.has(entryFile)) {
+    return sourcePackages;
+  }
+  const packages = sourcePackages.packages.map((sourcePackage) =>
+    sourcePackage.id !== sourcePackages.rootPackageId
+      ? sourcePackage
+      : Object.freeze({
+          ...sourcePackage,
+          exports: Object.freeze([{
+            specifier: ".",
+            sourceFile: entryFile,
+          }]),
+        }));
+  return Object.freeze({
+    ...sourcePackages,
+    fingerprint: `${sourcePackages.fingerprint}:fixture-entry:${entryFile}`,
+    packages: Object.freeze(packages),
+  });
 }
 
 function collectCapabilityActivation(files, candidates, targetId) {
@@ -139,9 +174,10 @@ function checkedRustSource(harness) {
   return harness.checkedSource;
 }
 
-function createRustCompileInputFromSession({ source, project, target, runtimeReferences, paths }) {
+function createRustCompileInputFromSession({ source, sourcePackages, project, target, runtimeReferences, paths }) {
   return {
     source: createTargetSourceProgram(source),
+    sourcePackages,
     project,
     target,
     runtimeReferences,
@@ -149,8 +185,8 @@ function createRustCompileInputFromSession({ source, project, target, runtimeRef
   };
 }
 
-export function compileRust({ files, target = { id: "rust", options: {} }, packages = [], capabilities = [], surfaces = [], entryPoint = "index.ts" }) {
-  const harness = createRustSession({ files, target, packages, capabilities, surfaces, entryPoint });
+export function compileRust({ files, target = { id: "rust", options: {} }, packages = [], capabilities = [], surfaces = [], entryPoint = "index.ts", sourcePackages }) {
+  const harness = createRustSession({ files, target, packages, capabilities, surfaces, entryPoint, sourcePackages });
   const source = checkRustSession(harness);
   const extensionDiagnostics = source.extensionDiagnostics
     .filter((diagnostic) => diagnostic.category === "error")
@@ -172,18 +208,19 @@ export function compileRust({ files, target = { id: "rust", options: {} }, packa
   const runtimeReferences = runtimeReferencesForHarness(harness);
   const input = createRustCompileInputFromSession({
     source,
+    sourcePackages: harness.sourcePackages,
     project: harness.project,
     target,
     runtimeReferences,
     paths: harness.paths,
   });
-  const jsEnabled = target.options?.typescriptCompatibility === "compat" ||
-    harness.providerContext.selectedSurfaces.some((surface) => surface.id === "js");
+  const jsEnabled = harness.providerContext.selectedSurfaces.some((surface) => surface.id === "js");
   const analysis = analyzeRustTargetProgram(
     harness.providerContext,
     input,
     composeRustProviderSemantics(harness.providerContext),
     jsEnabled,
+    readRustOutputType(target) === "lib",
   );
   if (analysis.kind === "rejected") {
     const diagnostics = withBoundedDiagnosticInspection(analysis.diagnostics);
@@ -218,11 +255,13 @@ export function compileRustThroughTargetPack({
   capabilities = [],
   surfaces = [],
   entryPoint = "index.ts",
+  sourcePackages,
 }) {
-  const harness = createRustSession({ files, target, packages, capabilities, surfaces, entryPoint });
+  const harness = createRustSession({ files, target, packages, capabilities, surfaces, entryPoint, sourcePackages });
   const source = checkRustSession(harness);
   const input = createRustCompileInputFromSession({
     source,
+    sourcePackages: harness.sourcePackages,
     project: harness.project,
     target,
     runtimeReferences: runtimeReferencesForHarness(harness),

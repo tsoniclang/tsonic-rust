@@ -83,7 +83,7 @@ export function readOffset(bytes: Buffer): int32 {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /read_uint8_number\(&bytes, index \+ 1\.0\)/u);
+  assert.match(text, /read_uint8_number\(\s*&bytes,\s*index \+ 1\.0,?\s*\)/u);
   assert.match(text, /f64_to_i32\([\s\S]*read_uint8_number/u);
 });
 
@@ -195,11 +195,11 @@ export function verify(value: boolean): void {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /tsonic_rust_node::assert::ok\(value, None\)\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
-  assert.match(text, /tsonic_rust_node::assert::ok_with_message\(value, "value must be true"\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u);
+  assert.match(text, /tsonic_rust_node::assert::ok\(value, None\)\?/u);
+  assert.match(text, /tsonic_rust_node::assert::ok_with_message\(value, "value must be true"\)\?/u);
   assert.match(
     text,
-    /tsonic_rust_node::assert::ok_with_message\(\s*sum_is_four\(2\.0, 2\.0\),\s*"nested operations must be finalized",\s*\)\s*\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?/u,
+    /tsonic_rust_node::assert::ok_with_message\(\s*sum_is_four\(2\.0, 2\.0\),\s*"nested operations must be finalized",\s*\)\?/u,
   );
 });
 
@@ -339,11 +339,11 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /tsonic_rust_node::http::create_server_callable/u);
-  assert.match(source, /fn handle\([^)]*\) -> rt::TsonicResult<\(\)>/u);
+  assert.match(source, /fn handle\([^)]*\) -> Result<\(\), rt::TsonicError>/u);
   assert.match(source, /response\.set_status_code\(/u);
-  assert.match(source, /response\n\s+\.set_header\(/u);
+  assert.match(source, /response\.set_header\(/u);
   assert.match(source, /response\.end_buffer\(/u);
-  assert.match(source, /server\n\s+\.listen\(/u);
+  assert.match(source, /server\s*\.listen\(/u);
   assert.match(source, /tsonic_rust_node::timers::set_interval_callable/u);
   assert.match(source, /rt::Callable::<[^;]+rt::TsonicResult<\(\)>>/u);
   const main = artifactText(result, "src/main.rs");
@@ -371,7 +371,8 @@ export function register(
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /handler: rt::Callable<[\s\S]*?rt::TsonicResult<\(\)>,?\s*>/u);
-  assert.match(source, /tsonic_rust_node::http::create_server_callable\(handler\.clone\(\)\)/u);
+  assert.match(source, /tsonic_rust_node::http::create_server_callable\(handler\)/u);
+  assert.doesNotMatch(source, /handler\.clone\(\)/u);
   validateGeneratedProject("node-retained-callback", result.artifacts);
 });
 
@@ -397,7 +398,8 @@ export async function run_migration(path: string): Promise<int32> {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub async fn run_migration\(path: String\) -> i32/u);
-  assert.match(text, /acme_db::connect\(path\.clone\(\)\)\.await/u);
+  assert.match(text, /acme_db::connect\(path\)\.await/u);
+  assert.doesNotMatch(text, /path\.clone\(\)/u);
   assert.match(text, /db\.execute\(String::from\("create table items\(id int\)"\)\)\.await/u);
   assert.match(artifactText(result, "Cargo.toml"), /acme_db = \{ path = /u);
 });

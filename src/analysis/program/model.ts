@@ -18,6 +18,8 @@ import type { RustProjectMethodPropertyPlan } from "../project-types/method-prop
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
 import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";
 import type { RustSafetyApplicationFactIndex } from "../safety/application-index.js";
+import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
+import type { RustModuleInitializationPlan } from "./module-initialization-facts.js";
 
 export interface RustTargetAnalysisQueries {
   getEnumMemberConstant(node: Node): { readonly value: string | number } | undefined;
@@ -29,6 +31,7 @@ export interface RustTargetProgram {
   readonly sourceFiles: readonly SourceFile[];
   readonly facts: RustPlanQueries;
   readonly projectTypes: RustProjectTypePolicy;
+  readonly objectRepresentations: RustObjectRepresentationPlan;
   readonly projectMethodDispatch: RustProjectMethodDispatchPlan;
   readonly projectMethodProperties: RustProjectMethodPropertyPlan;
   readonly projectFieldDispatch: RustProjectFieldDispatchQueries;
@@ -36,6 +39,7 @@ export interface RustTargetProgram {
   readonly structuralShapes: RustStructuralShapePlan;
   readonly providerSemantics: RustProviderSemantics;
   readonly safetyApplications: RustSafetyApplicationFactIndex;
+  readonly moduleInitialization: RustModuleInitializationPlan;
   readonly names: RustNamePlan;
   readonly analysis: RustTargetAnalysisQueries;
   semantics(sourceFile: SourceFile): SourceFileSemantics;

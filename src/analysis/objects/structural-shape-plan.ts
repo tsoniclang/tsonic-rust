@@ -30,6 +30,8 @@ export interface RustStructuralShapeField {
 
 export interface RustStructuralShapeDefinition {
   readonly carrier: TargetTypeRef;
+  readonly ownerFileName: string;
+  readonly componentId: string;
   readonly targetName: string;
   readonly typeParameterNames: readonly string[];
   readonly fields: readonly RustStructuralShapeField[];
@@ -46,6 +48,7 @@ export interface RustStructuralShapePlanRegistry extends RustStructuralShapePlan
   initialize(
     shapes: readonly RustSourceObjectShape[],
     implementations: readonly RustStructuralFieldImplementation[],
+    componentForFile: (fileName: string) => string,
   ): RustStructuralShapePlan;
   isInitialized(): boolean;
   seal(): RustStructuralShapePlan;
@@ -63,11 +66,12 @@ export function createRustStructuralShapePlanRegistry(): RustStructuralShapePlan
     initialize(
       shapes: readonly RustSourceObjectShape[],
       implementations: readonly RustStructuralFieldImplementation[],
+      componentForFile: (fileName: string) => string,
     ) {
       if (current !== undefined) {
         throw new Error("Rust structural shape plan can be initialized only once.");
       }
-      current = createRustStructuralShapePlan(shapes, implementations);
+      current = createRustStructuralShapePlan(shapes, implementations, componentForFile);
       return current;
     },
     isInitialized() {
@@ -93,7 +97,8 @@ export function createRustStructuralShapePlanRegistry(): RustStructuralShapePlan
 
 export function createRustStructuralShapePlan(
   shapes: readonly RustSourceObjectShape[],
-  implementations: readonly RustStructuralFieldImplementation[] = [],
+  implementations: readonly RustStructuralFieldImplementation[],
+  componentForFile: (fileName: string) => string,
 ): RustStructuralShapePlan {
   const uniqueByKey = new Map<string, TargetTypeRef>();
   for (const shape of shapes) {
@@ -109,7 +114,7 @@ export function createRustStructuralShapePlan(
       throw new Error("Rust structural carrier canonicalization produced a non-injective identity.");
     }
   }
-  const usedTypeNames = new Set<string>();
+  const usedTypeNamesByComponent = new Map<string, Set<string>>();
   const definitions = [...uniqueByKey]
     .sort(([left], [right]) => left.localeCompare(right, "en"))
     .map(([, carrier]): RustStructuralShapeDefinition => {
@@ -117,6 +122,9 @@ export function createRustStructuralShapePlan(
       if (structural === undefined) {
         throw new Error("Rust structural shape plan contains a non-structural carrier.");
       }
+      const componentId = componentForFile(structural.ownerFileName);
+      const usedTypeNames = usedTypeNamesByComponent.get(componentId) ?? new Set<string>();
+      usedTypeNamesByComponent.set(componentId, usedTypeNames);
       const usedFieldNames = new Set<string>();
       const fields = structural.fields.map((field, storageIndex): RustStructuralShapeField => {
         const targetName = allocateSnakeName(
@@ -158,6 +166,8 @@ export function createRustStructuralShapePlan(
       });
       return Object.freeze({
         carrier,
+        ownerFileName: structural.ownerFileName,
+        componentId,
         targetName: allocatePascalName(usedTypeNames, preferredShapeName(fields)),
         typeParameterNames: rustTargetTypeParameterNames(carrier),
         fields: Object.freeze(fields),

@@ -387,7 +387,8 @@ function resolveObjectRestBindingCarrier(
     new Set(fields.map((field) => field.sourceName)).size !== fields.length) {
     return undefined;
   }
-  const carrier = rustStructuralObjectTargetType(fields.map((field) => ({
+  const ownerFileName = context.ast.getFileName(context.ast.getSourceFile(binding));
+  const carrier = rustStructuralObjectTargetType(ownerFileName, fields.map((field) => ({
     sourceName: field.sourceName,
     type: field.carrier,
     presence: field.presence,

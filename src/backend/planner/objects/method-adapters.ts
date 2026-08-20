@@ -17,7 +17,9 @@ import {
 } from "../expressions/index.js";
 import type { RustObjectLiteralMethodDispatchPlan } from "./object-literal-implementations.js";
 import type { RustPlanContext } from "../program/plan-context.js";
+import { rustActiveErrorType } from "../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
+import { rustTargetRuntimeErrorType } from "../types/error-boundary.js";
 import {
   allocateRustSyntheticName,
   createRustSyntheticNameState,
@@ -123,8 +125,8 @@ export function planRustObjectLiteralMethodArguments(
       const collectionType: RustType = raw.fallible
         ? {
             kind: "named",
-            path: "rt::TsonicResult",
-            typeArguments: [targetType],
+            path: "Result",
+            typeArguments: [targetType, rustTargetRuntimeErrorType],
           }
         : targetType;
       if (raw.fallible) {
@@ -137,8 +139,17 @@ export function planRustObjectLiteralMethodArguments(
         typeArguments: [collectionType],
         args: [],
       };
+      const activeErrorType = rustActiveErrorType(context);
+      if (raw.fallible && activeErrorType === undefined) {
+        return undefined;
+      }
       adaptedArguments.push(raw.fallible
-        ? { kind: "try", expr: collected, errorDomain: "runtime" }
+        ? {
+            kind: "try",
+            expr: collected,
+            resultErrorType: activeErrorType!,
+            operandErrorType: rustTargetRuntimeErrorType,
+          }
         : collected);
       continue;
     }
@@ -236,8 +247,14 @@ export function applyRustObjectLiteralValueAdapter(
   if (!raw.fallible) {
     return raw.expression;
   }
-  return context.fallibleContext === true
-    ? { kind: "try", expr: raw.expression, errorDomain: "runtime" }
+  const activeErrorType = rustActiveErrorType(context);
+  return activeErrorType !== undefined
+    ? {
+        kind: "try",
+        expr: raw.expression,
+        resultErrorType: activeErrorType,
+        operandErrorType: rustTargetRuntimeErrorType,
+      }
     : undefined;
 }
 

@@ -42,19 +42,159 @@ test("classes lower to reference-backed object wrappers with fact-backed members
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub\(crate\) struct CounterState \{\n    pub\(crate\) value: i32,\n\}/u);
-  assert.match(text, /#\[derive\(Clone, Debug, PartialEq\)\]\npub struct Counter \{\n    pub\(crate\) state: rt::ObjectHandle<CounterState>,\n\}/u);
+  assert.match(text, /#\[doc\(hidden\)\][\s\S]*pub trait CounterDispatch/u);
+  assert.match(
+    text,
+    /#\[doc\(hidden\)\][\s\S]*pub struct CounterState \{\s+pub value: i32,/u,
+  );
+  assert.match(
+    text,
+    /pub struct Counter \{\s+#\[doc\(hidden\)\]\s+pub identity: rt::ObjectIdentity,\s+#\[doc\(hidden\)\]\s+pub dispatch:/u,
+  );
+  assert.match(
+    text,
+    /pub\(crate\) struct CounterRoot \{\s+identity: rt::ObjectIdentity,\s+state: rt::ObjectHandle<CounterState>,/u,
+  );
   assert.doesNotMatch(text, /derive\([^\n]*Copy/u);
   assert.match(text, /impl Counter \{/u);
   assert.match(text, /let field_value: i32 = value;/u);
-  assert.match(text, /state: rt::ObjectHandle::new\(CounterState \{ value: field_value \}\)/u);
-  assert.match(text, /pub fn add\(&self, delta: i32\) -> i32 \{/u);
-  assert.match(text, /\.with_mut\(\|state\| state\.value \+= value_2\)/u);
-  assert.match(text, /pub fn current\(&self\) -> i32 \{/u);
+  assert.match(text, /pub fn initialize_state\(value: i32\) -> CounterState/u);
+  assert.match(text, /state: rt::ObjectHandle::new\(state\)/u);
+  assert.match(text, /fn exact_counter_add/u);
+  assert.match(
+    text,
+    /write_counter_value\(dispatch_receiver\.dispatch\.read_counter_value\(\) \+ value_2\)/u,
+  );
+  assert.match(text, /fn exact_counter_current/u);
   assert.match(text, /let counter: Counter = Counter::new\(10\);/u);
-  assert.match(text, /counter\.add\(5\);/u);
-  assert.match(text, /counter\.current\(\)/u);
-  assert.doesNotMatch(text, /counter\.clone\(\)\.(?:add|current)\(/u);
+  assert.match(text, /dispatch_counter_add\(5\)/u);
+  assert.match(text, /dispatch_counter_current\(\)/u);
+  assert.doesNotMatch(text, /counter\.(?:add|current)\(/u);
+});
+
+test("value-class mutation propagates through exact this-receiver calls", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "transitive_mutation" } },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+class Counter {
+  value: int32 = 0;
+
+  increment(): void {
+    this.value += 1;
+  }
+
+  advance(): void {
+    this.increment();
+  }
+
+  current(): int32 {
+    return this.value;
+  }
+}
+
+export function main(): void {
+  const counter = new Counter();
+  counter.advance();
+  check(counter.current() === 1);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /fn increment\(&mut self\)/u);
+  assert.match(text, /fn advance\(&mut self\)/u);
+  const run = validateGeneratedProject("transitive-mutation", result.artifacts, { run: true });
+  assert.equal(run.status, 0, run.stderr || run.stdout);
+});
+
+test("provider evaluation snapshots borrowed receivers before later source mutation", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    surfaces: ["js"],
+    target: { id: "rust", options: { outputType: "bin", crateName: "provider_evaluation_order" } },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+
+class Cursor {
+  text: string;
+  index: int32 = 0;
+
+  constructor(text: string) {
+    this.text = text;
+  }
+
+  next(): string {
+    return this.text[this.index++]!;
+  }
+}
+
+export function main(): void {
+  const cursor = new Cursor("ab");
+  check(cursor.next() === "a");
+  check(cursor.next() === "b");
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /let operation_input_0 = self\.text\.clone\(\);/u);
+  assert.match(text, /js_string::char_at\(\s*&operation_input_0,/u);
+  const run = validateGeneratedProject("provider-evaluation-order", result.artifacts, { run: true });
+  assert.equal(run.status, 0, run.stderr || run.stdout);
+});
+
+test("provider evaluation preserves direct and owned mutable inputs", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeVectorsPackage(), acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "provider_mutable_evaluation" } },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+import { Vector, mutateBoth, scale } from "@acme/vectors";
+
+let calls: int32 = 0;
+
+function nextFactor(): int32 {
+  calls += 1;
+  return 3;
+}
+
+export function main(): void {
+  const retained = new Vector(2, 4);
+  scale(retained, nextFactor());
+  check(retained.x === 6 && retained.y === 12);
+  scale(new Vector(1, 1), nextFactor());
+  let left = new Vector(5, 7);
+  let right = new Vector(11, 13);
+  mutateBoth(left, right);
+  check(left.x === 6 && left.y === 7);
+  check(right.x === 11 && right.y === 14);
+  check(calls === 2);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /let operation_input_1 = next_factor\(\);[\s\S]*?acme_vectors::scale\(&mut retained, operation_input_1\)/u);
+  assert.doesNotMatch(text, /let (?:mut )?operation_input_0 = retained/u);
+  assert.match(text, /let mut operation_input_0 = acme_vectors::Vector::new\(1, 1\);/u);
+  assert.match(text, /acme_vectors::mutate_both\(&mut left, &mut right\)/u);
+  const run = validateGeneratedProject("provider-mutable-evaluation", result.artifacts, { run: true });
+  assert.equal(run.status, 0, run.stderr || run.stdout);
 });
 
 test("ECMAScript private fields retain declaration identity and closed storage", { timeout: 300_000 }, () => {
@@ -100,8 +240,10 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.doesNotMatch(text, /#value/u);
-  assert.match(text, /struct LeftState \{\s*pub\(crate\) value: i32,/u);
-  assert.match(text, /struct RightState \{\s*pub\(crate\) value: i32,/u);
+  assert.match(text, /struct Left \{\s*value: i32,/u);
+  assert.match(text, /struct Right \{\s*value: i32,/u);
+  assert.doesNotMatch(text, /pub(?:\(crate\))? value: i32,/u);
+  assert.match(text, /fn increment\(&mut self\) -> i32/u);
   assert.equal(validateGeneratedProject("private-field-bin", result.artifacts, { run: true }).status, 0);
 });
 
@@ -204,9 +346,9 @@ export function write(value: Value, next: int32): void {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /fn read_value_current\(&self\) -> rt::TsonicResult<i32>/u);
-  assert.match(text, /fn write_value_current\(&self, _value: i32\) -> rt::TsonicResult<\(\)>/u);
-  assert.match(text, /pub fn read\(value: Value\) -> rt::TsonicResult<i32>[\s\S]*read_value_current\(\)/u);
+  assert.match(text, /fn read_value_current\(self: std::rc::Rc<Self>\) -> Result<i32, rt::TsonicError>/u);
+  assert.match(text, /fn write_value_current\(self: std::rc::Rc<Self>, _value: i32\) -> Result<\(\), rt::TsonicError>/u);
+  assert.match(text, /pub fn read\(value: Value\) -> Result<i32, rt::TsonicError>[\s\S]*read_value_current\(\)/u);
   assert.match(text, /write_value_current\(accessor_value\)\?/u);
   validateGeneratedProject("class-accessor-fallibility", result.artifacts);
 });
@@ -233,10 +375,10 @@ export function create(): Initialized {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /impl Initialized \{\n    pub fn new\(\) -> Initialized/u);
+  assert.match(text, /impl Initialized \{[\s\S]*pub fn new\(\) -> Initialized/u);
   assert.match(text, /impl Default for Initialized \{\n    fn default\(\) -> Self \{\n        Self::new\(\)/u);
   assert.match(text, /let field_value: i32 = 42;/u);
-  assert.match(text, /impl Empty \{\n    pub fn new\(\) -> Empty/u);
+  assert.match(text, /impl Empty \{[\s\S]*pub fn new\(\) -> Empty/u);
   assert.match(text, /impl Default for Empty \{\n    fn default\(\) -> Self \{\n        Self::new\(\)/u);
 });
 
@@ -638,7 +780,7 @@ export function grow(xs: int32[]): void {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn grow\(xs: js_abi::JsArray<i32>\)/u);
-  assert.match(text, /xs\s*\.push_many\(\[4\]\)/u);
+  assert.match(text, /xs\.push_many_discard\(\[4\]\)/u);
   assert.doesNotMatch(text, /f64_to_i32/u);
 });
 
