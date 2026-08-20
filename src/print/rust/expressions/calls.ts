@@ -7,7 +7,7 @@ import { printFittedNestedCallWrapper, printNestedCallArgument } from "./nested-
 import { printRustClosureFitted } from "./blocks.js";
 import { printRustExpr, rustExpressionContainsPreferredVerticalMethodChain } from "./core.js";
 import { printRustExprFitted } from "./fitted.js";
-import { rustExpressionContainsExpandedStructLiteral, rustFormatArgumentCanShareLine, rustFormatArgumentIsAtomic } from "./inspection.js";
+import { rustExpressionContainsExpandedCollectionLiteral, rustExpressionContainsExpandedStructLiteral, rustFormatArgumentCanShareLine, rustFormatArgumentIsAtomic } from "./inspection.js";
 import { rustExpressionContainsStatementBlock } from "../../../backend/rust-ast/expressions.js";
 import { rustFormatWidth, rustInlineFieldReceiverWidth, rustMethodChainWidth, rustNestedCallWidth, rustNestedClosureOpeningWidth, rustNestedMethodFirstSegmentWidth } from "../formatting.js";
 import type { RustExpr } from "../../../backend/rust-ast/nodes.js";
@@ -242,7 +242,7 @@ export function printFittedCall(
     const attached = appendToLastLine(`${prefix}${renderedArgument}`, ")");
     const nestedMatchScrutinee = arguments_[0].kind === "match" &&
       rustExpressionContainsStatementBlock(arguments_[0].expression);
-    const matchCanRemainAttached = arguments_[0].kind !== "match" ||
+    const matchCanRemainAttached = arguments_[0].kind !== "match" || !forceExpanded ||
       firstLine(attached).length <= rustNestedCallWidth &&
       firstLine(renderedArgument).trimEnd().endsWith("{");
     if (!nestedMatchScrutinee &&
@@ -430,7 +430,9 @@ export function printFittedCall(
       false,
     );
     const attached = appendToLastLine(`${prefix}&${nested}`, ")");
-    if (nested.includes("\n") && expandedNested.includes("\n") &&
+    if (nested.includes("\n") &&
+      (expandedNested.includes("\n") ||
+        rustExpressionContainsExpandedCollectionLiteral(arguments_[0])) &&
       renderedFits(attached, column)) {
       return attached;
     }
