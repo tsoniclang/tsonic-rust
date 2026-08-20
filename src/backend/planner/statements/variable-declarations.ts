@@ -49,7 +49,6 @@ export function planVariableStatement(node: Node, context: RustPlanContext): rea
   }
   return statements;
 }
-
 function planVariableDeclaration(
   declaration: Node,
   context: RustPlanContext,
@@ -224,4 +223,3 @@ function planBindingVariableDeclaration(
     ? undefined
     : [{ kind: "let", name: temporary, mutable: false, init: value }, ...bindings];
 }
-
