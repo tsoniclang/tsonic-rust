@@ -817,8 +817,11 @@ function printRustConditionalBlock(
   const body = printRustBlockStatements(block, depth + 1);
   const conditionHeader = `${indent}${prefix}${renderedCondition}`;
   const conditionEnding = lastLine(renderedCondition).trim();
+  const conditionEndingLine = lastLine(conditionHeader);
+  const conditionEndingIndent = conditionEndingLine.length - conditionEndingLine.trimStart().length;
   const header = (conditionEnding === "}" || conditionEnding.endsWith("})")) &&
-      lastLine(conditionHeader).length + 2 <= rustFormatWidth
+      conditionEndingIndent === indent.length &&
+      conditionEndingLine.length + 2 <= rustFormatWidth
     ? appendToLastLine(conditionHeader, " {")
     : `${conditionHeader}\n${indent}{`;
   return body.length === 0

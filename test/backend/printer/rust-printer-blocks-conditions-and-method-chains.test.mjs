@@ -258,6 +258,48 @@ test("a fitted condition moves only its overflowing brace", () => {
   assert.match(source, /truncate_value\(-2\.7\) != -2\.0\n    \{\}/u);
 });
 
+test("a block-valued comparison chain keeps its body brace at statement indentation", () => {
+  const blockValue = (name, value) => ({
+    kind: "block",
+    bindings: [{ name, value }],
+    value: { kind: "path", path: name },
+  });
+  const condition = {
+    kind: "binary",
+    operator: "||",
+    left: {
+      kind: "binary",
+      operator: "||",
+      left: {
+        kind: "binary",
+        operator: "!=",
+        left: blockValue("first", { kind: "int-literal", text: "1" }),
+        right: { kind: "int-literal", text: "1" },
+      },
+      right: {
+        kind: "binary",
+        operator: "!=",
+        left: blockValue("second", { kind: "int-literal", text: "2" }),
+        right: { kind: "int-literal", text: "2" },
+      },
+    },
+    right: blockValue("third", { kind: "bool-literal", value: false }),
+  };
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: { statements: [{ kind: "if", condition, then: { statements: [] } }] },
+    }],
+  });
+
+  assert.match(source, /        third\n        \}\n    \{\}/u);
+  assert.doesNotMatch(source, /        \} \{\}/u);
+});
+
 test("conditional expressions move the brace after a multiline method chain", () => {
   const condition = {
     kind: "method-call",
