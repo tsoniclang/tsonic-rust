@@ -74,6 +74,31 @@ export function projectDowncastReturnType(
       };
 }
 
+export function planProjectDowncastRouteImplementation(
+  route: RustProjectDowncastRoute,
+  matches: boolean,
+  context: RustPlanContext,
+): RustImplFunction | undefined {
+  const returnType = projectDowncastReturnType(route, context);
+  return returnType === undefined
+    ? undefined
+    : {
+        name: route.slot,
+        visibility: "private",
+        selfParam: "rc",
+        params: [],
+        returnType,
+        body: {
+          statements: [{
+            kind: "tail",
+            expr: matches
+              ? { kind: "call", path: "Some", args: [{ kind: "path", path: "self" }] }
+              : { kind: "none" },
+          }],
+        },
+      };
+}
+
 export function planRootMethodImplementation(
   concreteCarrier: TargetTypeRef,
   implementation: Node,

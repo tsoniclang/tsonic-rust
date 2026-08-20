@@ -7,7 +7,7 @@ import {
   projectOwnFields,
   projectOwnMethods,
 } from "./model.js";
-import { planProjectFieldAccessorCall, planRootAccessorForwarder, planRootAccessorImplementation, planRootMethodForwarder, planRootMethodImplementation, projectAccessorCallableShape, projectDowncastReturnType } from "./forwarders.js";
+import { planProjectDowncastRouteImplementation, planProjectFieldAccessorCall, planRootAccessorForwarder, planRootAccessorImplementation, planRootMethodForwarder, planRootMethodImplementation, projectAccessorCallableShape } from "./forwarders.js";
 import { readRustProjectObjectField, writeRustProjectMethodOverride, writeRustProjectObjectField } from "../project-objects.js";
 import { rustProjectDispatchTraitType, rustProjectTypeParameters } from "./names.js";
 import type { Node } from "@tsonic/tsts";
@@ -154,28 +154,14 @@ function planRootContractFunctions(
 ): readonly RustImplFunction[] | undefined {
   const functions: RustImplFunction[] = [];
   for (const route of context.input.projectTypes.downcastRoutesFor(contract)) {
-    const returnType = projectDowncastReturnType(route, context);
-    if (returnType === undefined) {
-      return undefined;
-    }
     const relation = context.input.projectTypes.relationship(concreteCarrier, route.target);
     const matches = relation.kind === "related" &&
       rustTargetTypeRefEquals(relation.targetType, route.targetCarrier);
-    functions.push({
-      name: route.slot,
-      visibility: "private",
-      selfParam: "rc",
-      params: [],
-      returnType,
-      body: {
-        statements: [{
-          kind: "tail",
-          expr: matches
-            ? { kind: "call", path: "Some", args: [{ kind: "path", path: "self" }] }
-            : { kind: "none" },
-        }],
-      },
-    });
+    const implementation = planProjectDowncastRouteImplementation(route, matches, context);
+    if (implementation === undefined) {
+      return undefined;
+    }
+    functions.push(implementation);
   }
   const fields = projectOwnFields(contract, contractCarrier, context);
   if (fields === undefined) {
