@@ -283,7 +283,7 @@ export function read(value: Counter | undefined): int32 {
   validateGeneratedProject("selected-narrowed-project-property", result.artifacts);
 });
 
-test("project instanceof and assertions use exact native concrete identity", { timeout: 300_000 }, () => {
+test("project instanceof and assertions use closed generated downcast routes", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     packages: [acmeTestingPackage()],
     target: {
@@ -380,12 +380,11 @@ export function main(): void {
   const model = artifactText(result, "src/model.rs");
   const identity = artifactText(result, "src/identity.rs");
   const index = artifactText(result, "src/index.rs");
-  assert.match(model, /trait JsonValueDispatch: rt::ProjectObject/u);
-  assert.doesNotMatch(model, /fn downcast_/u);
-  assert.doesNotMatch(identity, /use .* as rt;/u);
-  assert.match(identity, /into_any\(\)\s*\.is::<crate::model::JsonStringRoot>\(\)/u);
-  assert.match(index, /into_any\(\)\s*\.is::<crate::model::JsonStringRoot>\(\)/u);
-  assert.match(index, /into_any\(\)\s*\.downcast::<crate::model::JsonStringRoot>\(\)\s*\.unwrap\(\)/u);
+  assert.match(model, /fn downcast_json_value_to_json_string\(\s*self: std::rc::Rc<Self>,?\s*\)/u);
+  assert.match(identity, /downcast_json_value_to_json_string\(\)\s*\.is_some\(\)/u);
+  assert.match(index, /downcast_json_value_to_json_string\(\)\s*\.is_some\(\)/u);
+  assert.match(index, /downcast_json_value_to_json_string\(\)\s*\.unwrap\(\)/u);
+  assert.doesNotMatch(`${model}\n${identity}\n${index}`, /into_any|std::any::Any|TypeId/u);
   const run = validateGeneratedProject("selected-project-downcast", result.artifacts, { run: true });
   assert.equal(run.status, 0, run.stderr || run.stdout);
 });

@@ -89,6 +89,7 @@ export function printFittedLogicalChain(
   const firstFlatOperand = firstParenthesized ? `(${firstFlat})` : firstFlat;
   let rendered = operands.length === 2 && second !== undefined &&
       rustExpressionContainsStatementBlock(second) &&
+      !rustMethodChainPrefersVerticalLayout(first) &&
       !firstFlat.includes("\n") &&
       renderedFits(`${firstFlatOperand} ${operator} {`, column)
     ? firstFlatOperand

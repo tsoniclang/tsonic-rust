@@ -1,11 +1,11 @@
 import { allocateRustGeneratedName as allocateGeneratedName, rustGeneratedNameComponent } from "../../../policy/names/generated.js";
-import { definitionKey, denseNodes, heritageKindIssue, projectDefinition, projectMemberNames, sourceFileIdentifierNames } from "./helpers.js";
+import { compareProjectDefinitions, definitionKey, denseNodes, heritageKindIssue, projectDefinition, projectMemberNames, sourceFileIdentifierNames } from "./helpers.js";
 import { rustPascalCaseIdentifier, rustScreamingSnakeIdentifier, rustSnakeCaseIdentifier } from "../../../policy/names/identifiers.js";
 import { rustSourceTypeCarrier, rustSourceTypeCarrierValue, substituteRustTargetTypeParameters } from "../../../policy/types/target-types.js";
 import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
 import type { Node, Signature, SourceFile } from "@tsonic/tsts";
 import type { RustExternalProjectBase } from "../../../policy/types/external-project-types.js";
-import type { RustProjectConstructorSignature, RustProjectHeritageEdge, RustProjectMemberSlotCandidate, RustProjectMemberSlotRole, RustProjectTypeDefinition, RustProjectTypeIssue, RustProjectTypePolicy, RustProjectTypePolicyHost, RustProjectTypeRelationship } from "../../../policy/types/project-types.js";
+import type { RustProjectConstructorSignature, RustProjectDowncastRoute, RustProjectHeritageEdge, RustProjectMemberSlotCandidate, RustProjectMemberSlotRole, RustProjectTypeDefinition, RustProjectTypeIssue, RustProjectTypePolicy, RustProjectTypePolicyHost, RustProjectTypeRelationship } from "../../../policy/types/project-types.js";
 import type { TargetTypeRef } from "../../../policy/types/model.js";
 
 export function createRustProjectTypePolicy(
@@ -529,6 +529,34 @@ export function createRustProjectTypePolicy(
 
   const frozenDefinitions = Object.freeze(definitions);
   const frozenIssues = Object.freeze(issues);
+  const orderedDefinitions = [...frozenDefinitions].sort(compareProjectDefinitions);
+  const downcastRoutesByDefinition = new WeakMap<
+    RustProjectTypeDefinition,
+    readonly RustProjectDowncastRoute[]
+  >();
+  for (const source of frozenDefinitions) {
+    const usedNames = dispatchUsedNamesByDefinition.get(source);
+    if (usedNames === undefined) {
+      throw new Error("Rust project definition has no dispatch name scope.");
+    }
+    const sourceComponent = host.sourcePackageComponentForFile(source.fileName);
+    const targets = sourceComponent === undefined
+      ? []
+      : orderedDefinitions
+          .filter((target) => target.kind === "class" && target.typeParameterNames.length === 0)
+          .filter((target) =>
+            host.sourcePackageComponentForFile(target.fileName) === sourceComponent)
+          .filter((target) => relationship(openCarrier(target), source).kind === "related");
+    downcastRoutesByDefinition.set(source, Object.freeze(targets.map((target) => Object.freeze({
+      source,
+      target,
+      targetCarrier: openCarrier(target),
+      slot: allocateGeneratedName(
+        usedNames,
+        `downcast_${rustGeneratedNameComponent(source.targetName)}_to_${rustGeneratedNameComponent(target.targetName)}`,
+      ),
+    }))));
+  }
   const policy: RustProjectTypePolicy = {
     definitions: frozenDefinitions,
     issues: frozenIssues,
@@ -620,14 +648,13 @@ export function createRustProjectTypePolicy(
         return relation.kind === "related";
       }));
     },
+    downcastRoutesFor(definition) {
+      return downcastRoutesByDefinition.get(definition) ?? Object.freeze([]);
+    },
     downcastRoute(source, targetCarrier) {
-      const target = definitionForCarrier(targetCarrier);
-      if (target?.kind !== "class" || target.typeParameterNames.length !== 0 ||
-        !rustTargetTypeRefEquals(openCarrier(target), targetCarrier) ||
-        relationship(targetCarrier, source).kind !== "related") {
-        return undefined;
-      }
-      return Object.freeze({ source, target, targetCarrier });
+      const matches = (downcastRoutesByDefinition.get(source) ?? []).filter((route) =>
+        rustTargetTypeRefEquals(route.targetCarrier, targetCarrier));
+      return matches.length === 1 ? matches[0] : undefined;
     },
     constructorsForDefinition(definition) {
       return constructorsByDefinition.get(definition) ?? Object.freeze([]);

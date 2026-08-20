@@ -7,7 +7,7 @@ import {
   projectOwnFields,
   projectOwnMethods,
 } from "./model.js";
-import { planProjectFieldAccessorCall, planRootAccessorForwarder, planRootAccessorImplementation, planRootMethodForwarder, planRootMethodImplementation, projectAccessorCallableShape } from "./forwarders.js";
+import { planProjectFieldAccessorCall, planRootAccessorForwarder, planRootAccessorImplementation, planRootMethodForwarder, planRootMethodImplementation, projectAccessorCallableShape, projectDowncastReturnType } from "./forwarders.js";
 import { readRustProjectObjectField, writeRustProjectMethodOverride, writeRustProjectObjectField } from "../project-objects.js";
 import { rustProjectDispatchTraitType, rustProjectTypeParameters } from "./names.js";
 import type { Node } from "@tsonic/tsts";
@@ -19,6 +19,7 @@ import {
 } from "../../program/plan-context.js";
 import { rustTypeEquals } from "../../../rust-ast/type-equality.js";
 import { applyRustFallibleResultExpression } from "../../types/fallible-shape.js";
+import { rustTargetTypeRefEquals } from "../../../../policy/types/equality.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
 import type { TargetTypeRef } from "../../../../policy/types/model.js";
 import type { ProjectClassStateLayer } from "./model.js";
@@ -152,6 +153,30 @@ function planRootContractFunctions(
   context: RustPlanContext,
 ): readonly RustImplFunction[] | undefined {
   const functions: RustImplFunction[] = [];
+  for (const route of context.input.projectTypes.downcastRoutesFor(contract)) {
+    const returnType = projectDowncastReturnType(route, context);
+    if (returnType === undefined) {
+      return undefined;
+    }
+    const relation = context.input.projectTypes.relationship(concreteCarrier, route.target);
+    const matches = relation.kind === "related" &&
+      rustTargetTypeRefEquals(relation.targetType, route.targetCarrier);
+    functions.push({
+      name: route.slot,
+      visibility: "private",
+      selfParam: "rc",
+      params: [],
+      returnType,
+      body: {
+        statements: [{
+          kind: "tail",
+          expr: matches
+            ? { kind: "call", path: "Some", args: [{ kind: "path", path: "self" }] }
+            : { kind: "none" },
+        }],
+      },
+    });
+  }
   const fields = projectOwnFields(contract, contractCarrier, context);
   if (fields === undefined) {
     return undefined;

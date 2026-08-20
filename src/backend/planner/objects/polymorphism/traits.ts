@@ -5,7 +5,7 @@ import {
   projectOwnFields,
   projectOwnMethods,
 } from "./model.js";
-import { projectAccessorCallableShape } from "./forwarders.js";
+import { projectAccessorCallableShape, projectDowncastReturnType } from "./forwarders.js";
 import { rustCallableSpecialization } from "../../declarations/callable-generics.js";
 import { rustLintAttributes } from "../../../rust-ast/lint-policy.js";
 import { rustProjectDispatchTraitName, rustProjectDispatchTraitType, rustProjectTypeParameters } from "./names.js";
@@ -116,6 +116,18 @@ export function planProjectDispatchTrait(
     return undefined;
   }
   const functions: RustTraitFunction[] = [];
+  for (const route of context.input.projectTypes.downcastRoutesFor(definition)) {
+    const returnType = projectDowncastReturnType(route, context);
+    if (returnType === undefined) {
+      return undefined;
+    }
+    functions.push({
+      name: route.slot,
+      selfParam: "rc",
+      params: [],
+      returnType,
+    });
+  }
   for (const field of fields) {
     const dispatch = context.input.projectFieldDispatch.planFor(field.declaration);
     const read = context.input.projectTypes.memberSlotName(field.declaration, "read");
@@ -227,16 +239,11 @@ export function planProjectDispatchTrait(
       params: [{ name: "value", type: property.callableType }],
     });
   }
-  const inheritedTraits = context.input.projectTypes.heritageForDefinition(definition).map((edge) =>
+  const superTraits = context.input.projectTypes.heritageForDefinition(definition).map((edge) =>
     rustProjectDispatchTraitType(edge.targetType, context));
-  if (inheritedTraits.some((type) => type === undefined)) {
+  if (superTraits.some((type) => type === undefined)) {
     return undefined;
   }
-  context.usedAliases?.add("rt");
-  const superTraits: readonly RustType[] = [
-    { kind: "named", path: "rt::ProjectObject" },
-    ...inheritedTraits as readonly RustType[],
-  ];
   const typeParams = rustProjectTypeParameters(definition);
   return {
     kind: "trait",
@@ -244,7 +251,7 @@ export function planProjectDispatchTrait(
     visibility: "crate",
     attrs: [rustLintAttributes.deadCode],
     ...(typeParams.length === 0 ? {} : { typeParams }),
-    superTraits,
+    ...(superTraits.length === 0 ? {} : { superTraits: superTraits as readonly RustType[] }),
     functions,
   };
 }

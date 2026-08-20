@@ -23,6 +23,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustEffectiveExpressionOverride, RustPlanContext } from "../../program/plan-context.js";
 import type { RustExpr, RustImplFunction, RustType } from "../../../rust-ast/nodes.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
+import type { RustProjectDowncastRoute } from "../../../../policy/types/project-types.js";
 import type { RustProjectMethodDispatchVariant } from "../../../../analysis/project-types/method-dispatch.js";
 import type { TargetTypeRef } from "../../../../policy/types/model.js";
 import type { ProjectCallableShape } from "./model.js";
@@ -53,6 +54,24 @@ export function planProjectFieldAccessorCall(
     },
     ...(helper.errorType === undefined ? {} : { errorType: helper.errorType }),
   };
+}
+
+export function projectDowncastReturnType(
+  route: RustProjectDowncastRoute,
+  context: RustPlanContext,
+): RustType | undefined {
+  const dispatch = rustProjectDispatchTraitType(route.targetCarrier, context);
+  return dispatch === undefined
+    ? undefined
+    : {
+        kind: "named",
+        path: "Option",
+        typeArguments: [{
+          kind: "named",
+          path: "std::rc::Rc",
+          typeArguments: [{ kind: "trait-object", trait: dispatch }],
+        }],
+      };
 }
 
 export function planRootMethodImplementation(

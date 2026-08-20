@@ -157,6 +157,22 @@ test("no runtime crate code inside tsonic-rust", () => {
   assert.throws(() => statSync(join(repositoryRoot, "crates")), /ENOENT/u);
 });
 
+test("project downcasts use closed generated routes without runtime type discovery", () => {
+  for (const { path, text } of sourceFiles) {
+    assert.doesNotMatch(text, /std::any::Any|\bTypeId\b|\binto_any\b/u, `${path} uses runtime type discovery`);
+    assert.doesNotMatch(text, /method:\s*"downcast"/u, `${path} emits a runtime downcast`);
+  }
+  const policy = readFileSync(
+    join(sourceRoot, "analysis/project-types/policy/resolution.ts"),
+    "utf8",
+  );
+  assert.match(policy, /downcastRoutesByDefinition/u);
+  assert.match(
+    policy,
+    /sourcePackageComponentForFile\(target\.fileName\) === sourceComponent/u,
+  );
+});
+
 test("Cargo registry patches require explicit runtime-reference provenance", () => {
   const planner = readFileSync(join(sourceRoot, "backend/planner/project/cargo.ts"), "utf8");
   const printer = readFileSync(join(sourceRoot, "print/cargo/manifest.ts"), "utf8");
