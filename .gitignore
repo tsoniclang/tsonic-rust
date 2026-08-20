@@ -145,3 +145,4 @@ vite.config.ts.timestamp-*
 
 # Rust artifacts:
 /target/
+test/fixtures/crates/*/Cargo.lock
