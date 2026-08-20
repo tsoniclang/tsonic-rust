@@ -225,8 +225,9 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.doesNotMatch(text, /#value/u);
-  assert.match(text, /struct Left \{\s*pub\(crate\) value: i32,/u);
-  assert.match(text, /struct Right \{\s*pub\(crate\) value: i32,/u);
+  assert.match(text, /struct Left \{\s*value: i32,/u);
+  assert.match(text, /struct Right \{\s*value: i32,/u);
+  assert.doesNotMatch(text, /pub(?:\(crate\))? value: i32,/u);
   assert.match(text, /fn increment\(&mut self\) -> i32/u);
   assert.equal(validateGeneratedProject("private-field-bin", result.artifacts, { run: true }).status, 0);
 });
