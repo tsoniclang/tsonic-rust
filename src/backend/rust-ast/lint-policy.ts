@@ -20,7 +20,7 @@ export const rustLintAttributes = Object.freeze({
   pointerDerefOutsideUnsafeFunction:
     '#[allow(clippy::not_unsafe_ptr_arg_deref, reason = "explicit unsafe region")]',
   shouldImplementTrait:
-    '#[expect(clippy::should_implement_trait, reason = "preserves the authored method contract")]',
+    '#[expect(clippy::should_implement_trait, reason = "authored method contract")]',
   tooManyArguments:
     '#[expect(clippy::too_many_arguments, reason = "checked source signature")]',
   unusedAssignments:

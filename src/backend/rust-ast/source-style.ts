@@ -16,9 +16,10 @@ export function finalizeRustSourceStyle(
   model: RustSourceFileModel,
 ): RustSourceFileModel {
   const items = closePublicRustTypeVisibility(model.items);
+  const publicTypes = publicDeclaredRustTypeNames(items);
   return {
     ...model,
-    items: items.map(finalizeRustItemStyle),
+    items: items.map((item) => finalizeRustItemStyle(item, publicTypes)),
   };
 }
 
@@ -40,6 +41,7 @@ function publicDeclaredRustTypeNames(items: readonly RustItem[]): ReadonlySet<st
 
 function finalizeRustItemStyle(
   item: RustItem,
+  publicTypes: ReadonlySet<string>,
 ): RustItem {
   if (item.kind === "function") {
     const attrs = item.params.length <= 7
@@ -54,10 +56,11 @@ function finalizeRustItemStyle(
     };
   }
   if (item.kind === "impl") {
+    const publicOwner = item.target.kind === "named" && publicTypes.has(item.target.path);
     return {
       ...item,
       functions: item.functions.map((fn) =>
-        finalizeRustImplFunctionStyle(fn, item.trait === undefined)),
+        finalizeRustImplFunctionStyle(fn, item.trait === undefined, publicOwner)),
     };
   }
   if (item.kind === "const" || item.kind === "thread-local") {
@@ -76,6 +79,7 @@ function finalizeRustTraitFunctionStyle(fn: RustTraitFunction): RustTraitFunctio
 function finalizeRustImplFunctionStyle(
   fn: RustImplFunction,
   inherent: boolean,
+  publicOwner: boolean,
 ): RustImplFunction {
   let attrs = fn.attrs;
   const argumentCount = fn.params.length + (fn.selfParam === undefined ? 0 : 1);
@@ -86,7 +90,8 @@ function finalizeRustImplFunctionStyle(
     fn.params.length === 0 && fn.returnType?.kind === "string") {
     attrs = appendRustAttribute(attrs, rustLintAttributes.inherentToString);
   }
-  if (inherent && fn.name === "next" && fn.selfParam !== undefined && fn.params.length === 0) {
+  if (inherent && publicOwner && fn.visibility === "public" && fn.name === "next" &&
+    fn.selfParam !== undefined && fn.params.length === 0) {
     attrs = appendRustAttribute(attrs, rustLintAttributes.shouldImplementTrait);
   }
   return { ...fn, attrs, body: finalizeRustFunctionBodyStyle(fn.body) };

@@ -26,6 +26,12 @@ test("source style attributes are item-local and derived from exact Rust signatu
       derives: [],
       fields: [],
     }, {
+      kind: "struct",
+      name: "InternalCursor",
+      visibility: "crate",
+      derives: [],
+      fields: [],
+    }, {
       kind: "impl",
       target: { kind: "named", path: "Owner" },
       functions: [{
@@ -48,11 +54,23 @@ test("source style attributes are item-local and derived from exact Rust signatu
         params: parameters,
         body: { statements: [] },
       }],
+    }, {
+      kind: "impl",
+      target: { kind: "named", path: "InternalCursor" },
+      functions: [{
+        name: "next",
+        visibility: "public",
+        selfParam: "mut-ref",
+        params: [],
+        returnType: { kind: "string" },
+        body: { statements: [{ kind: "tail", expr: { kind: "string-literal", value: "internal" } }] },
+      }],
     }],
   });
 
   assert.match(text, /#\[expect\(clippy::inherent_to_string, reason = "authored toString contract"\)\]\n    pub fn to_string/u);
-  assert.match(text, /#\[expect\(clippy::should_implement_trait, reason = "preserves the authored method contract"\)\]\n    pub fn next/u);
+  assert.match(text, /#\[expect\(clippy::should_implement_trait, reason = "authored method contract"\)\]\n    pub fn next/u);
+  assert.match(text, /impl InternalCursor \{\n    pub fn next/u);
   assert.match(
     text,
     /#\[expect\(clippy::too_many_arguments, reason = "checked source signature"\)\]\n    pub fn configure/u,
