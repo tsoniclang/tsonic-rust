@@ -1,6 +1,6 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import { closedMetadataKey, isDenseDataArray } from "../../policy/model/closed-data.js";
-import { rustTargetTypeRefEquals } from "../../policy/types/equality.js";
+import { closedMetadataKey, isDenseDataArray } from "../../target-model/metadata/closed-data.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustPlanBuilder } from "../facts/plan-store.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import {
@@ -16,7 +16,7 @@ import type {
   RustObjectLiteralValueAdapter,
   RustTargetOperationFact,
 } from "../facts/keys.js";
-import { rustValueConversionIsFallible } from "../../policy/conversions/contracts.js";
+import { rustValueConversionIsFallible } from "../../target-model/conversions/contracts.js";
 import {
   inferRustTargetTypeParameterBindings,
   isRustCopyCarrier,
@@ -28,7 +28,7 @@ import {
   rustSourceTypeCarrierValue,
   rustTargetTypeContainsTypeParameter,
   substituteRustTargetTypeParameters,
-} from "../../policy/types/target-types.js";
+} from "../../target-model/types/index.js";
 import type { RustProjectMethodDispatchPlan } from "../project-types/method-dispatch.js";
 import type {
   RustProjectTypeDefinition,

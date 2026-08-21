@@ -10,7 +10,7 @@ import {
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { diagnosticInput, isValidRustIdentifier, rustSourceBindingPath } from "../../program/plan-context.js";
 import { expressionCarrier } from "../fundamentals.js";
-import { isRustCopyCarrier } from "../../../../policy/types/target-types.js";
+import { isRustCopyCarrier } from "../../../../target-model/types/index.js";
 import { isRustFinalizedSourceInput } from "../../../../analysis/facts/finalized-operation-abi.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
 import { mutateRustStoredObjectField } from "../../objects/project-storage.js";
@@ -541,7 +541,7 @@ function directStorageRemainsSelected(
     return true;
   }
   const effectful = laterExpressions.filter((expression) => {
-    const effects = context.input.program.source.navigation.expressionEffects(expression);
+    const effects = context.input.program.sourceNavigation.expressionEffects(expression);
     return effects.invokes || effects.mutates || effects.suspends || effects.mayThrow;
   });
   if (effectful.length === 0) {
@@ -557,7 +557,7 @@ function directStorageRemainsSelected(
     return false;
   }
   if (effectful.some((expression) =>
-    context.input.program.source.navigation.bindingWritesWithin(
+    context.input.program.sourceNavigation.bindingWritesWithin(
       reference.symbol,
       expression,
     ).length !== 0)) {
@@ -577,7 +577,7 @@ function directStorageReference(
 ): import("@tsonic/target-api/source").SourceDeclarationReference | undefined {
   let current: Node | undefined = node;
   while (current !== undefined) {
-    const reference = context.input.program.source.navigation.sourceReferenceFor(current);
+    const reference = context.input.program.sourceNavigation.sourceReferenceFor(current);
     if (reference !== undefined) {
       return reference;
     }

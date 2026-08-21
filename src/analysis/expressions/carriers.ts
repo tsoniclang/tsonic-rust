@@ -31,7 +31,7 @@ import {
   rustOptionTargetType,
   rustNullishSourceTargetType,
   rustSourcePrimitiveTargetType,
-} from "../../policy/types/target-types.js";
+} from "../../target-model/types/index.js";
 import {
   selectRustFlowReadProjection,
   selectRustValueCarrierReconciliation,
@@ -55,8 +55,8 @@ import { recordSelectedOperationInputs } from "../operations/inputs.js";
 import { resolveBinaryOperandCarriers } from "../operations/operators.js";
 import { resolveExpressionCarrierUncached } from "./value-resolution.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
-import { rustConversionKey, rustRuntimeCarrierKey, rustSelectedOperationKey } from "../../policy/model/selections.js";
-import { rustTargetTypeRefEquals } from "../../policy/types/equality.js";
+import { rustConversionKey, rustRuntimeCarrierKey, rustSelectedOperationKey } from "../../target-model/facts/selections.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
 import type {
   AstReader,

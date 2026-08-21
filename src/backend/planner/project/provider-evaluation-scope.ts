@@ -23,7 +23,7 @@ import {
 import {
   rustTargetOperationIsDirectLocation,
 } from "../../../analysis/facts/target-operation.js";
-import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { RustExpr } from "../../target-ast/nodes.js";
 import {
   missingFactDiagnostic,
@@ -216,7 +216,7 @@ function providerInputStabilizationKeys(
   }
   const effects = new Map(sourceSlots.map((slot) => [
     slot.key,
-    context.input.program.source.navigation.expressionEffects(slot.node),
+    context.input.program.sourceNavigation.expressionEffects(slot.node),
   ]));
   const sourceEffectOrder = sourceSlots
     .filter((slot) => !preplannedKeys.has(slot.key) &&
@@ -499,7 +499,7 @@ function providerDirectMutableRoot(
 ): Node | undefined {
   const { ast } = context.input.program.source;
   if (ast.is.IsIdentifier(node)) {
-    return context.input.program.source.navigation.sourceReferenceFor(node)?.declaration;
+    return context.input.program.sourceNavigation.sourceReferenceFor(node)?.declaration;
   }
   const kind = ast.kindName(node);
   if (kind === "KindThisExpression" || kind === "KindThisKeyword") {

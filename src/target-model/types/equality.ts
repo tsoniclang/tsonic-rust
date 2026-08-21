@@ -2,7 +2,7 @@ import {
   closedMetadataEquals,
   isClosedMetadata,
   isDenseDataArray,
-} from "../model/closed-data.js";
+} from "../metadata/closed-data.js";
 import type {
   RustSelectedTargetOperation,
   RustSelectedTargetSignature,

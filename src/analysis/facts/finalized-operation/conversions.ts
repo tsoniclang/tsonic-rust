@@ -1,6 +1,6 @@
-import { isDenseDataArray } from "../../../policy/model/closed-data.js";
-import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
-import { rustValueConversionContract } from "../../../policy/conversions/contracts.js";
+import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import type { RustArgumentMode, RustProviderOperationForm, RustValueConversion } from "../keys.js";
 import type { RustFinalizedArrayInput, RustFinalizedConstantInput, RustFinalizedSliceInput, RustFinalizedSourceInput, RustFinalizedTaggedArrayInput, RustFinalizedTargetInput, RustFinalizedValueConversion } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";

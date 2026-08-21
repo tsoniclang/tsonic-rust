@@ -4,7 +4,7 @@ import type {
   RustItem,
   RustSourceFileModel,
 } from "../../target-ast/nodes.js";
-import { closedMetadataKey } from "../../../policy/model/closed-data.js";
+import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import type {
   RustArtifactContractCandidate,
   RustArtifactFacet,

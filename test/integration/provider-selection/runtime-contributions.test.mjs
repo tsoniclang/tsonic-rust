@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRustTargetPack } from "../../../dist/index.js";
-import { cargoPathReferenceKind } from "../../../dist/providers/model/cargo-reference.js";
+import { cargoPathReferenceKind } from "../../../dist/target-model/project/cargo-reference.js";
 
 function references(contextOptions) {
   const pack = createRustTargetPack();

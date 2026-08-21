@@ -3,7 +3,7 @@ import type {
   ExtensionFactSubject,
   ReadonlySourceFactResolver,
 } from "@tsonic/tsts";
-import type { RustPlanKey } from "../../policy/model/keys.js";
+import type { RustPlanKey } from "../../target-model/facts/keys.js";
 import {
   isRustPlanKey,
   rustArgumentPassingKey,
@@ -11,12 +11,12 @@ import {
   rustRuntimeCarrierKey,
   rustSelectedCallKey,
   rustSelectedOperationKey,
-} from "../../policy/model/selections.js";
+} from "../../target-model/facts/selections.js";
 import type {
   RustIterationSelection,
   RustPlanQueries,
   RustPlanWriter,
-} from "../../policy/model/selections.js";
+} from "../../target-model/facts/selections.js";
 
 export interface RustPlanBuilder extends RustPlanWriter {
   seal(): RustPlanQueries;

@@ -1,9 +1,9 @@
 import { asRecord, requireExactKeys, requireNonEmpty, requireRustIdentifier, requireRustPath, rustSourcePrimitiveHasCarrier, validateCarrier } from "./carriers.js";
 import { builtInTargetCarrierIds } from "./model.js";
-import { isClosedMetadata } from "../../../policy/model/closed-data.js";
+import { isClosedMetadata } from "../../../target-model/metadata/closed-data.js";
 import { isRustFallibleErrorBoundary } from "../../../target-model/operations/error-boundary.js";
-import { isRustNamedTypeTraitContract } from "../../../policy/types/target-types.js";
-import { isRustTargetTypeRef } from "../../../policy/types/equality.js";
+import { isRustNamedTypeTraitContract } from "../../../target-model/types/index.js";
+import { isRustTargetTypeRef } from "../../../target-model/types/equality.js";
 import { validateOperationRows, validateTypeParameterRequirements } from "./operations.js";
 import type {
   ProviderExportDeclaration,

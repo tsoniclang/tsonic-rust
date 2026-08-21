@@ -15,7 +15,7 @@ import {
   rustErrorBoundaryForProjectMember,
   rustErrorType,
 } from "../program/plan-context.js";
-import { isRustNeverCarrier, isRustUnitCarrier } from "../../../policy/types/target-types.js";
+import { isRustNeverCarrier, isRustUnitCarrier } from "../../../target-model/types/index.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { Node_Type } from "@tsonic/target-api/source";
 import { planBlockLike } from "../statements/index.js";
@@ -27,7 +27,6 @@ import { readRustProjectMethodOverride } from "../objects/project-objects.js";
 import { resolveRustCallableBodyReturnType } from "./callable-body-return.js";
 import { rustDeclarationRequiresUnsafe, rustSafetyAttributesForDeclaration } from "../safety/explicit-safety.js";
 import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
-import { rustProjectCallableTargetName } from "../../../analysis/facts/source-member-name.js";
 import { rustReturnTypeFromCarrierInContext } from "../types/render.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustPlanContext } from "../program/plan-context.js";
@@ -48,12 +47,7 @@ export function planProjectMethod(
   let context = outerContext;
   const { ast } = context.input.program.source;
   const sourceMethodName = options?.targetName ??
-    context.input.program.names.nameForDeclaration(member) ??
-    rustProjectCallableTargetName(member, {
-      ast: context.input.program.source.ast,
-      names: context.input.program.names,
-      semanticsFor: context.input.program.source.semantics.forNode,
-    });
+    context.input.program.projectTypes.callableTargetName(member);
   const isUnsafe = rustDeclarationRequiresUnsafe(
     member,
     options?.safetyPlacement ?? "declaration",

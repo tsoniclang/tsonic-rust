@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import {
   KindArrayBindingPattern,
@@ -32,7 +32,7 @@ import type { RustSyntheticNameState } from "../names/synthetic.js";
 import { rustLocationStorageForDeclaration } from "../expressions/typed-locations.js";
 import type { RustBindingExpressionPlanner } from "../bindings/patterns.js";
 import { rustOptionDefaultValue } from "../option-default.js";
-import { rustCarrierReferentMutationRequiresMutableBinding } from "../../../policy/types/target-types.js";
+import { rustCarrierReferentMutationRequiresMutableBinding } from "../../../target-model/types/index.js";
 
 type RustParameterPrelude =
   | { readonly kind: "statement"; readonly statement: RustStmt }

@@ -2,20 +2,19 @@ import type {
   ArgumentPassingFact,
   ExtensionFactKey,
   ExtensionFactSubject,
-  Node,
 } from "@tsonic/tsts";
 import type {
   RustSelectedTargetOperation,
   RustSelectedTargetSignature,
   RustTargetTypeRef,
-} from "../../target-model/types/model.js";
+} from "../types/model.js";
 import { defineRustPlanKey } from "./keys.js";
 import type { RustPlanKey } from "./keys.js";
 import {
   rustSelectedTargetOperationEquals,
   rustSelectedTargetSignatureEquals,
   rustTargetTypeRefEquals,
-} from "../types/equality.js";
+} from "../../target-model/types/equality.js";
 
 export interface RustRuntimeCarrierSelection {
   readonly carrier: RustTargetTypeRef;
@@ -101,9 +100,4 @@ export function isRustPlanKey<T>(
 ): key is RustPlanKey<T> {
   return typeof (key as { readonly id?: unknown }).id === "string" &&
     (key as { readonly id: string }).id.startsWith("tsonic.rust.");
-}
-
-export interface RustTargetAnalysis {
-  readonly facts: RustPlanQueries;
-  getEnumMemberConstant(node: Node): { readonly value: string | number } | undefined;
 }

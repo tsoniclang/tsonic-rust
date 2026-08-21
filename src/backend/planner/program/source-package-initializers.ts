@@ -38,23 +38,23 @@ export function planRustSourcePackageInitializers(
 } {
   const diagnostics: TargetDiagnostic[] = [];
   const facadeModuleNameByComponent = new Map<string, string>();
-  for (const component of input.input.sourcePackages.components) {
+  for (const component of input.program.sourcePackageComponents.components) {
     const shapesName = allocateRustComponentSupportModuleName(
       identitiesByFileName,
-      component.id,
+      component.componentId,
       "shapes",
     );
     const programName = allocateRustComponentSupportModuleName(
       identitiesByFileName,
-      component.id,
+      component.componentId,
       "program",
       [shapesName],
     );
     facadeModuleNameByComponent.set(
-      component.id,
+      component.componentId,
       allocateRustComponentSupportModuleName(
         identitiesByFileName,
-        component.id,
+        component.componentId,
         "initializers",
         [shapesName, programName],
       ),
@@ -104,7 +104,7 @@ export function planRustSourcePackageInitializers(
       implementationModuleName: identity.moduleName,
       implementationFunctionName: rustModuleInitializerFunctionName(input, sourceFile),
       facadeModuleName,
-      asynchronous: input.program.source.navigation.moduleHasTopLevelAwait(sourceFile),
+      asynchronous: input.program.sourceNavigation.moduleHasTopLevelAwait(sourceFile),
       fallible: input.program.facts.getFact(sourceFile, rustFallibleFactKey) !== undefined,
     });
   }

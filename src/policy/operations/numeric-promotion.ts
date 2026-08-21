@@ -4,9 +4,9 @@ import type { RustValueConversion } from "../../target-model/operations/model.js
 import {
   isRustNumericCarrier,
   rustSourcePrimitiveTargetType,
-} from "../types/target-types.js";
-import { rustTargetTypeRefEquals } from "../types/equality.js";
-import { rustNumericPromotionKind } from "./numeric-promotion-model.js";
+} from "../../target-model/types/index.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustNumericPromotionKind } from "../../target-model/conversions/numeric-promotion.js";
 
 export interface RustNumericBinaryPromotion {
   readonly carrier: TargetTypeRef;

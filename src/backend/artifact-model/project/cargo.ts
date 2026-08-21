@@ -1,11 +1,10 @@
-import type { RustEdition, RustOutputType } from "../../../target-model/project/model.js";
-import type { cargoCratesIoRegistry } from "../../../target-model/project/model.js";
+import type {
+  RustCargoDependency,
+  RustEdition,
+  RustOutputType,
+} from "../../../target-model/project/model.js";
 
-export interface CargoDependency {
-  readonly name: string;
-  readonly path: string;
-  readonly registryPatch?: typeof cargoCratesIoRegistry;
-}
+export type CargoDependency = RustCargoDependency;
 
 export interface CargoManifestPlan {
   readonly packageName: string;

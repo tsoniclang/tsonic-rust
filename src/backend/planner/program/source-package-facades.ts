@@ -1,22 +1,24 @@
-import type { Node } from "@tsonic/tsts";
-import type { TargetSourcePackage } from "@tsonic/target-api";
-import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import { isValidRustIdentifier } from "../../../policy/names/identifiers.js";
-import type { RustPlanningContext } from "../context.js";
-import type { RustSourceFileOutputIdentity } from "../names/source-output-identities.js";
-import { rustModuleSegmentName } from "../names/source-output-identities.js";
-import { rustModuleBindingFactKey } from "../../../analysis/facts/keys.js";
+import type {
+  TargetDiagnostic,
+} from "@tsonic/target-api/artifacts";
+import {
+  rustSourceItemIdentity,
+} from "../../../analysis/program/source-package-facades.js";
+import type {
+  RustSourcePackageFacadeExportContract,
+} from "../../../analysis/program/source-package-facades.js";
+import type {
+  RustPlanningContext,
+} from "../context.js";
+import type {
+  RustSourceFileOutputIdentity,
+} from "../names/source-output-identities.js";
 
-export interface RustSourcePackageFacadeExport {
-  readonly packageId: string;
-  readonly componentId: string;
-  readonly sourceModuleFileName: string;
-  readonly declaration: Node;
-  readonly implementationFileName: string;
+export { rustSourceItemIdentity };
+
+export interface RustSourcePackageFacadeExport
+  extends RustSourcePackageFacadeExportContract {
   readonly implementationModuleName: string;
-  readonly implementationName: string;
-  readonly facadeModuleSegments: readonly string[];
-  readonly facadeName: string;
 }
 
 export interface RustSourcePackageFacadePlan {
@@ -30,100 +32,65 @@ export interface RustSourcePackageFacadePlan {
   readonly publicTopLevelModules: ReadonlySet<string>;
   readonly publicModuleNames: ReadonlySet<string>;
   readonly publicImplementationItemIdentities: ReadonlySet<string>;
-  readonly publicModuleNamesByComponent: ReadonlyMap<string, ReadonlySet<string>>;
+  readonly publicModuleNamesByComponent: ReadonlyMap<
+    string,
+    ReadonlySet<string>
+  >;
   readonly publicImplementationItemIdentitiesByComponent: ReadonlyMap<
     string,
     ReadonlySet<string>
   >;
 }
 
-export function planRustSourcePackageFacades(
+export function materializeRustSourcePackageFacades(
   input: RustPlanningContext,
   identitiesByFileName: ReadonlyMap<string, RustSourceFileOutputIdentity>,
-): { readonly plan?: RustSourcePackageFacadePlan; readonly diagnostics: readonly TargetDiagnostic[] } {
+): {
+  readonly plan?: RustSourcePackageFacadePlan;
+  readonly diagnostics: readonly TargetDiagnostic[];
+} {
   const diagnostics: TargetDiagnostic[] = [];
-  const packageById = new Map(input.input.sourcePackages.packages.map((entry) =>
-    [entry.id, entry] as const));
-  const rootPackage = packageById.get(input.input.sourcePackages.rootPackageId);
-  if (rootPackage === undefined) {
-    return {
-      diagnostics: [facadeDiagnostic(
-        "RUST_SOURCE_PACKAGE_FACADE_ROOT_MISSING",
-        "The checked source-package graph has no root package for Rust facade planning.",
-      )],
-    };
-  }
-  const sourceFileByName = new Map(input.program.sourceFiles.map((sourceFile) =>
-    [normalizePath(input.program.source.ast.getFileName(sourceFile)), sourceFile] as const));
-  const componentPackageCounts = new Map(input.input.sourcePackages.components.map((component) =>
-    [component.id, component.packages.length] as const));
+  const classifications = input.program.sourcePackageFacades;
   const exports: RustSourcePackageFacadeExport[] = [];
-  const facadeOwners = new Map<string, RustSourcePackageFacadeExport>();
-
-  for (const sourcePackage of input.input.sourcePackages.packages) {
-    for (const sourceExport of sourcePackage.exports) {
-      const exportedSourceFile = sourceFileByName.get(normalizePath(sourceExport.sourceFile));
-      if (exportedSourceFile === undefined) {
+  for (const componentId of classifications.componentIds) {
+    const contract = classifications.exportsForComponent(componentId);
+    for (const exported of contract) {
+      const implementationIdentity = identitiesByFileName.get(
+        exported.implementationFileName,
+      );
+      if (
+        implementationIdentity === undefined ||
+        implementationIdentity.componentId !== exported.componentId
+      ) {
+        diagnostics.push(facadeDiagnostic(
+          "RUST_SOURCE_PACKAGE_FACADE_DECLARATION_IDENTITY_MISSING",
+          `Facade '${facadeDisplayPath(exported)}' has no physical module in its sealed source-package component.`,
+        ));
         continue;
       }
-      const facadeModuleSegments = sourcePackageFacadeModuleSegments(
-        sourcePackage,
-        sourceExport.specifier,
-        (componentPackageCounts.get(sourcePackage.componentId) ?? 0) > 1,
-      );
-      for (const exported of input.program.source.navigation.moduleExports(exportedSourceFile)) {
-        const implementationFileName = input.program.source.ast.getFileName(exported.sourceFile);
-        const implementationIdentity = identitiesByFileName.get(implementationFileName);
-        if (implementationIdentity === undefined ||
-          implementationIdentity.componentId !== sourcePackage.componentId) {
-          diagnostics.push(facadeDiagnostic(
-            "RUST_SOURCE_PACKAGE_FACADE_DECLARATION_IDENTITY_MISSING",
-            `Export '${exported.exportName}' from '${sourceExport.specifier}' has no implementation in its exact source-package component.`,
-          ));
-          continue;
-        }
-        for (const implementationName of rustDeclarationItemNames(input, exported.declaration)) {
-          const entry: RustSourcePackageFacadeExport = Object.freeze({
-            packageId: sourcePackage.id,
-            componentId: sourcePackage.componentId,
-            sourceModuleFileName: input.program.source.ast.getFileName(exportedSourceFile),
-            declaration: exported.declaration,
-            implementationFileName,
-            implementationModuleName: implementationIdentity.moduleName,
-            implementationName,
-            facadeModuleSegments,
-            facadeName: implementationName,
-          });
-          const ownerKey = facadeExportIdentity(entry);
-          const existing = facadeOwners.get(ownerKey);
-          if (existing !== undefined &&
-            (existing.implementationFileName !== entry.implementationFileName ||
-              existing.implementationName !== entry.implementationName)) {
-            diagnostics.push(facadeDiagnostic(
-              "RUST_SOURCE_PACKAGE_FACADE_EXPORT_CONFLICT",
-              `Rust package facade '${facadeDisplayPath(entry)}' resolves to more than one exact source declaration.`,
-            ));
-            continue;
-          }
-          if (existing === undefined) {
-            facadeOwners.set(ownerKey, entry);
-            exports.push(entry);
-          }
-        }
-      }
+      exports.push(Object.freeze({
+        ...exported,
+        implementationModuleName: implementationIdentity.moduleName,
+      }));
     }
   }
-
   if (diagnostics.length > 0) {
     return { diagnostics: Object.freeze(diagnostics) };
   }
   exports.sort(compareFacadeExports);
-  const externalItemCandidates = new Map<string, RustSourcePackageFacadeExport[]>();
+
+  const externalItemCandidates = new Map<
+    string,
+    RustSourcePackageFacadeExport[]
+  >();
   for (const exported of exports) {
-    if (exported.componentId === rootPackage.componentId) {
+    if (exported.componentId === classifications.rootComponentId) {
       continue;
     }
-    const key = sourceItemIdentity(exported.implementationFileName, exported.implementationName);
+    const key = rustSourceItemIdentity(
+      exported.implementationFileName,
+      exported.implementationName,
+    );
     const candidates = externalItemCandidates.get(key) ?? [];
     candidates.push(exported);
     externalItemCandidates.set(key, candidates);
@@ -132,7 +99,9 @@ export function planRustSourcePackageFacades(
   for (const [key, candidates] of externalItemCandidates) {
     candidates.sort(compareFacadePreference);
     const selected = candidates[0]!;
-    const crateName = identitiesByFileName.get(selected.implementationFileName)?.externalCrateName;
+    const crateName = identitiesByFileName.get(
+      selected.implementationFileName,
+    )?.externalCrateName;
     if (crateName === undefined) {
       diagnostics.push(facadeDiagnostic(
         "RUST_SOURCE_PACKAGE_FACADE_CRATE_IDENTITY_MISSING",
@@ -142,53 +111,60 @@ export function planRustSourcePackageFacades(
     }
     externalItemPathByIdentity.set(
       key,
-      [crateName, ...selected.facadeModuleSegments, selected.facadeName].join("::"),
+      [crateName, ...selected.facadeModuleSegments, selected.facadeName]
+        .join("::"),
     );
   }
   if (diagnostics.length > 0) {
     return { diagnostics: Object.freeze(diagnostics) };
   }
-  const rootExports = Object.freeze(exports.filter((entry) =>
-    entry.componentId === rootPackage.componentId));
-  const exportsByComponentId = new Map(input.input.sourcePackages.components.map((component) =>
-    [component.id, Object.freeze(exports.filter((entry) =>
-      entry.componentId === component.id))] as const));
-  const publicModuleNamesByComponent = new Map<string, ReadonlySet<string>>();
-  const publicImplementationItemIdentitiesByComponent = new Map<
-    string,
-    ReadonlySet<string>
-  >();
-  for (const component of input.input.sourcePackages.components) {
-    const componentExports = exports.filter((entry) =>
-      entry.componentId === component.id);
-    const moduleNames = new Set<string>();
-    for (const exported of componentExports) {
-      for (let length = 1; length <= exported.facadeModuleSegments.length; length += 1) {
-        moduleNames.add(exported.facadeModuleSegments.slice(0, length).join("::"));
-      }
-    }
-    publicModuleNamesByComponent.set(component.id, Object.freeze(moduleNames));
-    publicImplementationItemIdentitiesByComponent.set(
-      component.id,
-      Object.freeze(new Set(componentExports.map((entry) =>
-        sourceItemIdentity(entry.implementationFileName, entry.implementationName)))),
-    );
-  }
-  const publicModuleNames = publicModuleNamesByComponent.get(rootPackage.componentId) ??
-    Object.freeze(new Set<string>());
-  const publicImplementationItemIdentities =
-    publicImplementationItemIdentitiesByComponent.get(rootPackage.componentId) ??
-      Object.freeze(new Set<string>());
+
+  const exportsByComponentId = new Map(
+    classifications.componentIds.map((componentId) =>
+      [componentId, Object.freeze(exports.filter((entry) =>
+        entry.componentId === componentId))] as const),
+  );
+  const rootExports = exportsByComponentId.get(
+    classifications.rootComponentId,
+  ) ?? Object.freeze([]);
+  const publicModuleNames = Object.freeze(new Set(
+    classifications.publicModuleNamesForComponent(
+      classifications.rootComponentId,
+    ),
+  ));
+  const publicImplementationItemIdentities = Object.freeze(new Set(
+    classifications.publicImplementationItemIdentitiesForComponent(
+      classifications.rootComponentId,
+    ),
+  ));
+  const publicModuleNamesByComponent = new Map(
+    classifications.componentIds.map((componentId) => [
+      componentId,
+      Object.freeze(new Set(
+        classifications.publicModuleNamesForComponent(componentId),
+      )),
+    ] as const),
+  );
+  const publicImplementationItemIdentitiesByComponent = new Map(
+    classifications.componentIds.map((componentId) => [
+      componentId,
+      Object.freeze(new Set(
+        classifications.publicImplementationItemIdentitiesForComponent(
+          componentId,
+        ),
+      )),
+    ] as const),
+  );
   return {
     diagnostics: Object.freeze([]),
     plan: Object.freeze({
-      rootComponentId: rootPackage.componentId,
+      rootComponentId: classifications.rootComponentId,
       rootExports,
-      exportsByComponentId: new Map(exportsByComponentId),
+      exportsByComponentId,
       externalItemPathByIdentity,
       publicTopLevelModules: Object.freeze(new Set([...publicModuleNames]
         .filter((name) => !name.includes("::")))),
-      publicModuleNames: Object.freeze(publicModuleNames),
+      publicModuleNames,
       publicImplementationItemIdentities,
       publicModuleNamesByComponent,
       publicImplementationItemIdentitiesByComponent,
@@ -196,62 +172,9 @@ export function planRustSourcePackageFacades(
   };
 }
 
-export function rustSourceItemIdentity(fileName: string, itemName: string): string {
-  return sourceItemIdentity(fileName, itemName);
-}
-
-function rustDeclarationItemNames(
-  input: RustPlanningContext,
-  declaration: Node,
-): readonly string[] {
-  const binding = input.program.facts.getFact(declaration, rustModuleBindingFactKey);
-  const candidates = binding?.storage === "native-callable"
-    ? [binding.value?.name ?? binding.name]
-    : input.program.source.ast.is.IsFunctionDeclaration(declaration)
-      ? [input.program.names.functionNameForDeclaration(declaration)]
-      : [input.program.names.nameForDeclaration(declaration)];
-  const names = new Set(candidates.filter((name): name is string =>
-    name !== undefined && isValidRustIdentifier(name)));
-  return Object.freeze([...names].sort(compareNames));
-}
-
-function sourcePackageFacadeModuleSegments(
-  sourcePackage: TargetSourcePackage,
-  specifier: string,
-  packagePrefixRequired: boolean,
-): readonly string[] {
-  const packagePrefix = packagePrefixRequired
-    ? [rustModuleSegmentName(sourcePackage.name ?? sourcePackage.id)]
-    : [];
-  if (specifier === "." || specifier === "./index.js" ||
-    specifier === "./index.mjs" || specifier === "./index.ts" ||
-    specifier === "./index.mts") {
-    return Object.freeze(packagePrefix);
-  }
-  const withoutPrefix = specifier.startsWith("./") ? specifier.slice(2) : specifier;
-  const withoutExtension = withoutPrefix.replace(/\.(?:mjs|mts|js|ts)$/u, "");
-  const segments = withoutExtension.split("/")
-    .filter((segment) => segment.length > 0)
-    .map(rustModuleSegmentName);
-  if (segments[segments.length - 1] === "index") {
-    segments.pop();
-  }
-  return Object.freeze([...packagePrefix, ...segments]);
-}
-
-function facadeExportIdentity(value: RustSourcePackageFacadeExport): string {
-  return [
-    value.componentId,
-    value.facadeModuleSegments.join("::"),
-    value.facadeName,
-  ].map((part) => `${part.length}:${part}`).join("");
-}
-
-function sourceItemIdentity(fileName: string, itemName: string): string {
-  return `${fileName.length}:${fileName}${itemName.length}:${itemName}`;
-}
-
-function facadeDisplayPath(value: RustSourcePackageFacadeExport): string {
+function facadeDisplayPath(
+  value: RustSourcePackageFacadeExportContract,
+): string {
   return [...value.facadeModuleSegments, value.facadeName].join("::");
 }
 
@@ -260,7 +183,10 @@ function compareFacadeExports(
   right: RustSourcePackageFacadeExport,
 ): number {
   return compareNames(left.componentId, right.componentId) ||
-    compareNames(left.facadeModuleSegments.join("::"), right.facadeModuleSegments.join("::")) ||
+    compareNames(
+      left.facadeModuleSegments.join("::"),
+      right.facadeModuleSegments.join("::"),
+    ) ||
     compareNames(left.facadeName, right.facadeName) ||
     compareNames(left.implementationFileName, right.implementationFileName) ||
     compareNames(left.implementationName, right.implementationName);
@@ -282,10 +208,6 @@ function facadeDiagnostic(code: string, message: string): TargetDiagnostic {
     message,
     evidence: ["target.capability=rust.backend.source-package-facade"],
   };
-}
-
-function normalizePath(value: string): string {
-  return value.split("\\").join("/");
 }
 
 function compareNames(left: string, right: string): number {

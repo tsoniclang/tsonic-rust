@@ -7,8 +7,8 @@ import {
 import { resolveOwnedSourceProfileTypeNameForDeclaration } from "./providers.js";
 import { resolveRustTargetType } from "./target.js";
 import { resolveRustTargetTypeSyntax, resolveRustTypeComponentEvidence } from "./source.js";
-import { rustSliceMutRefTargetType, rustSliceRefTargetType } from "../target-types.js";
-import { rustTargetTypeRefEquals } from "../equality.js";
+import { rustSliceMutRefTargetType, rustSliceRefTargetType } from "../../../target-model/types/index.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import {
   sourceTransformedTypeFactEvidenceNodes,
   sourceTupleElementTypeEvidenceNodes,

@@ -21,7 +21,7 @@ import {
   rustVecTargetType,
   rustFixedArrayTargetType,
   isRustJsArrayCarrier,
-} from "../target-types.js";
+} from "../../../target-model/types/index.js";
 import { asNode } from "../../evidence/selected-source.js";
 import { denseDefined, resolveProjectSourceCarrier } from "./project.js";
 import { functionPointerFactKey, pointerFactKey } from "@tsonic/tsts";
@@ -29,7 +29,7 @@ import { instantiateProviderTargetType, providerCarrierFromRelations, resolveOwn
 import { resolveCallableType, resolveSourcePrimitive, resolveSourceTypeParameter } from "./callables.js";
 import { resolveReferencedDeclarationType, resolveRustAuthoredTargetType, resolveRustTupleElementTargetTypeWithState, rustParameterLaneTargetType } from "./tuples.js";
 import { resolveRustExactNullishValueCarrier, resolveRustTargetType, resolveStructuralObjectType } from "./target.js";
-import { rustTargetTypeRefEquals } from "../equality.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { sourceTransformedTypeFactEvidenceNodes } from "@tsonic/target-api/source";
 import { tsonicFixedArrayFactKey } from "@tsonic/source-core/facts";
 import type { ExtensionFactSubject, Node, Type } from "@tsonic/tsts";

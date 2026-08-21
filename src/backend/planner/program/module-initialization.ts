@@ -47,7 +47,7 @@ export function planRustModuleInitializers(
       return;
     }
     active.add(sourceFile);
-    for (const dependency of input.program.source.navigation.moduleDependencies(sourceFile)) {
+    for (const dependency of input.program.sourceNavigation.moduleDependencies(sourceFile)) {
       visit(dependency.sourceFile);
     }
     active.delete(sourceFile);
@@ -178,10 +178,10 @@ function validateRuntimeModuleGraph(
   diagnostics: TargetDiagnostic[],
 ): boolean {
   const reachable = collectReachableSourceFiles(input, roots);
-  const components = stronglyConnectedSourceFiles(input.program.source.navigation, reachable);
+  const components = stronglyConnectedSourceFiles(input.program.sourceNavigation, reachable);
   let valid = true;
   for (const component of components) {
-    const cyclic = component.length > 1 || input.program.source.navigation
+    const cyclic = component.length > 1 || input.program.sourceNavigation
       .moduleDependencies(component[0]!)
       .some((dependency) => dependency.sourceFile === component[0]);
     if (!cyclic) {
@@ -225,7 +225,7 @@ function collectReachableSourceFiles(
       return;
     }
     reachable.add(sourceFile);
-    for (const dependency of input.program.source.navigation.moduleDependencies(sourceFile)) {
+    for (const dependency of input.program.sourceNavigation.moduleDependencies(sourceFile)) {
       visit(dependency.sourceFile);
     }
   };

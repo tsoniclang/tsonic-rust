@@ -1,6 +1,6 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
-import type { RustNamePlan } from "../../policy/names/model.js";
+import type { RustNamePlan } from "../../target-model/names/model.js";
 
 export interface RustSourceMemberNameContext {
   readonly ast: AstReader;

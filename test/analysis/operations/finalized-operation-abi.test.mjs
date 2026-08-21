@@ -7,11 +7,11 @@ import {
 import {
   isClosedMetadata,
   snapshotClosedMetadata,
-} from "../../../dist/policy/model/closed-data.js";
+} from "../../../dist/target-model/metadata/closed-data.js";
 import {
   isRustTargetTypeRef,
   rustTargetTypeRefEquals,
-} from "../../../dist/policy/types/equality.js";
+} from "../../../dist/target-model/types/equality.js";
 
 const bool = { kind: "source-primitive", name: "bool" };
 const float64 = { kind: "source-primitive", name: "float64" };

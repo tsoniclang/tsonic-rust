@@ -1,11 +1,11 @@
 import { acceptRustMemberOperation, elementProvenance, normalizeSelectedOperationInputCarrier, rejectSelectedOperation } from "./result.js";
-import { closedMetadataKey } from "../../../policy/model/closed-data.js";
+import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { finalizeProviderOperationFromSubjects } from "./conversions.js";
 import { isProjectSourceDeclaration } from "../../../policy/evidence/selected-source.js";
-import { isRustCopyCarrier } from "../../../policy/types/target-types.js";
-import { rustFixedArrayCarrierValue, rustSourcePrimitiveTargetType } from "../../../policy/types/target-types.js";
+import { isRustCopyCarrier } from "../../../target-model/types/index.js";
+import { rustFixedArrayCarrierValue, rustSourcePrimitiveTargetType } from "../../../target-model/types/index.js";
 import { rustInt32ToUsizeValueConversion, rustUsizeToInt32ValueConversion } from "../../../target-model/conversions/model.js";
-import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectedValueCarrier } from "./operators.js";
 import type {
   RustCheckedElementSelectionInput,

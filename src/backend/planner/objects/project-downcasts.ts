@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type {
   RustProjectDowncastFact,
@@ -10,7 +10,7 @@ import {
   rustCarrierSupportsClone,
   rustOptionElementCarrier,
   rustSourceTypeCarrierValue,
-} from "../../../policy/types/target-types.js";
+} from "../../../target-model/types/index.js";
 import type { RustExpr } from "../../target-ast/nodes.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { diagnosticInput, sourceTypePath } from "../program/plan-context.js";

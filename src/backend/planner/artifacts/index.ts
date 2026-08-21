@@ -9,7 +9,6 @@ export type {
   RustArtifactContractCandidate,
   RustArtifactFacet,
   RustArtifactSnapshot,
-  RustSourceCallableContract,
 } from "./contracts.js";
 export {
   planRustSourceOutputIdentities,

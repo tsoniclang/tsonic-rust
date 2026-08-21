@@ -17,7 +17,7 @@ import {
   isRustNamedTypeTraitContract,
   rustNamedTypeCarrierValue,
   rustNamedTargetType,
-} from "../../../dist/policy/types/target-types.js";
+} from "../../../dist/target-model/types/index.js";
 
 test("native trait contracts preserve exact conditional Copy and Clone semantics", () => {
   const traits = {

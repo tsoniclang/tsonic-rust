@@ -1,5 +1,5 @@
 import { rustBigIntTargetId, rustJsArrayConcatItemTargetId, rustJsArrayTargetId, rustJsDateTargetId, rustJsErrorTargetId, rustJsMapTargetId, rustJsSetTargetId, rustJsValueTargetId, rustNeverCarrierName, rustNullTargetId, rustOptionTargetId, rustProgramErrorTargetId, rustStringTargetId, rustUndefinedTargetId } from "./source-types.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type { TargetTypeRef } from "../model.js";
 
 export function rustJsValueTargetType(): TargetTypeRef {
   return { kind: "target-named", id: rustJsValueTargetId };

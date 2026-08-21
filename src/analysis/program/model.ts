@@ -1,11 +1,14 @@
-import type { Node, SourceFile } from "@tsonic/tsts";
+import type { SourceFile } from "@tsonic/tsts";
 import type { TargetCompileInput } from "@tsonic/target-api";
-import type { TargetSourceProgram } from "@tsonic/target-api/source";
+import type {
+  TargetPlanningSourceNavigation,
+  TargetSourceSyntaxProgram,
+} from "@tsonic/target-api/analysis";
 import type { TargetStageResult } from "@tsonic/target-api/artifacts";
-import type { RustNamePlan } from "../../policy/names/model.js";
-import type { RustPlanQueries } from "../../policy/model/selections.js";
-import type { RustProviderSemantics } from "../../providers/packages/model.js";
+import type { RustNamePlan } from "../../target-model/names/model.js";
+import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 import type { RustSourceCallableSpecializationPlan } from "../callables/specializations.js";
+import type { RustCallableGenericRequirementIndex } from "../callables/generic-requirements.js";
 import type { RustProjectFieldDispatchQueries } from "../project-types/field-dispatch.js";
 import type { RustProjectMethodDispatchPlan } from "../project-types/method-dispatch.js";
 import type { RustProjectMethodPropertyPlan } from "../project-types/method-properties.js";
@@ -15,6 +18,21 @@ import type { RustSafetyApplicationFactIndex } from "../safety/application-index
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
 import type { RustModuleInitializationPlan } from "./module-initialization-facts.js";
 import type { RustTargetConfiguration } from "../../target-model/configuration/model.js";
+import type { RustValueLifetimePlan } from "./value-lifetimes.js";
+import type { RustRuntimeReferencePlan } from "../runtime/index.js";
+import type { RustBinaryEpiloguePlan } from "../runtime/index.js";
+import type {
+  RustEnumMemberConstantIndex,
+} from "../declarations/enum-member-constants.js";
+import type {
+  RustSourcePackageFacadeClassifications,
+} from "./source-package-facades.js";
+import type {
+  RustSourcePackageComponentClassifications,
+} from "./source-package-components.js";
+import type {
+  RustProviderSemantics,
+} from "../../providers/packages/model.js";
 
 export interface RustTargetAnalysisRequest {
   readonly input: TargetCompileInput;
@@ -24,13 +42,17 @@ export interface RustTargetAnalysisRequest {
   readonly rootPublishesLibrary: boolean;
 }
 
-export interface RustTargetAnalysisQueries {
-  getEnumMemberConstant(node: Node): { readonly value: string | number } | undefined;
+export interface RustPlanningHost {
+  readonly paths: TargetCompileInput["paths"];
+  readonly entryPoint: string;
+  readonly sourcePackages: TargetCompileInput["sourcePackages"];
 }
 
 export interface RustTargetProgram {
+  readonly host: RustPlanningHost;
   readonly configuration: RustTargetConfiguration;
-  readonly source: TargetSourceProgram;
+  readonly source: TargetSourceSyntaxProgram;
+  readonly sourceNavigation: TargetPlanningSourceNavigation;
   readonly sourceFiles: readonly SourceFile[];
   readonly facts: RustPlanQueries;
   readonly projectTypes: RustProjectTypePolicy;
@@ -39,12 +61,18 @@ export interface RustTargetProgram {
   readonly projectMethodProperties: RustProjectMethodPropertyPlan;
   readonly projectFieldDispatch: RustProjectFieldDispatchQueries;
   readonly sourceCallableSpecializations: RustSourceCallableSpecializationPlan;
+  readonly callableGenericRequirements: RustCallableGenericRequirementIndex;
+  readonly valueLifetimes: RustValueLifetimePlan;
   readonly structuralShapes: RustStructuralShapePlan;
-  readonly providerSemantics: RustProviderSemantics;
+  readonly runtimeReferences: RustRuntimeReferencePlan;
+  readonly binaryEpilogues: readonly RustBinaryEpiloguePlan[];
+  readonly providerErrorCarriers: readonly import("../../target-model/types/model.js").TargetTypeRef[];
   readonly safetyApplications: RustSafetyApplicationFactIndex;
   readonly moduleInitialization: RustModuleInitializationPlan;
   readonly names: RustNamePlan;
-  readonly analysis: RustTargetAnalysisQueries;
+  readonly enumMemberConstants: RustEnumMemberConstantIndex;
+  readonly sourcePackageFacades: RustSourcePackageFacadeClassifications;
+  readonly sourcePackageComponents: RustSourcePackageComponentClassifications;
 }
 
 export type AnalyzeRustTargetProgramResult = TargetStageResult<RustTargetProgram>;

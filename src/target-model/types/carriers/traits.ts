@@ -3,7 +3,7 @@ import { isRustIntegerCarrier, rustPrimitiveTypeName } from "./primitives.js";
 import { rustBigIntTargetId, rustCallableTargetId, rustJsArrayTargetId, rustJsDateTargetId, rustJsErrorTargetId, rustJsMapTargetId, rustJsRegExpMatchTargetId, rustJsRegExpTargetId, rustJsSetTargetId, rustJsValueTargetId, rustLocationTargetId, rustNullTargetId, rustOptionTargetId, rustProgramErrorTargetId, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustStringTargetId, rustStructuralObjectCarrierValue, rustUndefinedTargetId } from "./source-types.js";
 import { rustFixedArrayCarrierValue, rustNamedTypeCarrierValue } from "./native.js";
 import type { RustNamedTypeCarrierValue } from "./native.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type { TargetTypeRef } from "../model.js";
 
 export function isRustCopyCarrier(carrier: TargetTypeRef | undefined): boolean {
   if (carrier === undefined) {

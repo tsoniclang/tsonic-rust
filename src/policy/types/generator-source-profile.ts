@@ -5,7 +5,7 @@ import {
   getRustIteratorResultProtocol,
   rustIteratorResultTargetType,
   rustSourcePrimitiveTargetType,
-} from "./target-types.js";
+} from "../../target-model/types/index.js";
 
 export interface RustGeneratorSourceCallRequest {
   readonly ownerName: string;

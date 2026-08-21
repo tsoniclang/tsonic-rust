@@ -13,7 +13,7 @@ import {
   createRustProviderPackageSourceProvider,
   mergeRustProviderSemantics,
 } from "../../../dist/providers/packages/index.js";
-import { rustNamedTypeCarrierValue } from "../../../dist/policy/types/target-types.js";
+import { rustNamedTypeCarrierValue } from "../../../dist/target-model/types/index.js";
 import { captureRustProviderContributions } from "../../helpers/provider-contributions.mjs";
 
 const int32Carrier = { kind: "source-primitive", name: "int32" };

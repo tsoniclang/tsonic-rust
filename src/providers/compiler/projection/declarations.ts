@@ -1,7 +1,7 @@
 import { canonicalPathKey, compareText, requireCurrentType, rustCompilerTypeNamesCurrentType, sourceVisibleTypeParameters, withDefaultTypeBindings } from "./utilities.js";
 import { compilerExportId, compilerTargetTypeId, materializeImports, operationRow, projectCompilerTraitContract, recordCarrierPath, recordCarrierTraits, targetTraitPath, typeRequirements } from "./operations.js";
 import { compilerFunctionResult, projectFunction, selectUnambiguousMembers } from "./functions.js";
-import { rustUnitTargetType } from "../../../policy/types/target-types.js";
+import { rustUnitTargetType } from "../../../target-model/types/index.js";
 import { sourceTypeFor, targetTypeFor } from "./types.js";
 import type {
   ProviderExportDeclaration,

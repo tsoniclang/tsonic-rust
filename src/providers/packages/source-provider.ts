@@ -1,4 +1,4 @@
-import { materializeClosedMetadata } from "../../policy/model/closed-data.js";
+import { materializeClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { TstsSourceProviderContractVersion } from "@tsonic/tsts";
 import type {
   CompilerExtension,

@@ -1,4 +1,4 @@
-import { rustSourcePrimitiveTargetType } from "../../../policy/types/target-types.js";
+import { rustSourcePrimitiveTargetType } from "../../../target-model/types/index.js";
 import type { ProviderDeclarationModel, ProviderTypeExpression } from "@tsonic/tsts";
 import type { RustCompilerDependency, RustCompilerType, RustCompilerStandardTypeLocation } from "../model/model.js";
 import type { RustNamedTypeTraitContract } from "../../../target-model/types/model.js";

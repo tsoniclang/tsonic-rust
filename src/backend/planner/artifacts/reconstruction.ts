@@ -124,7 +124,11 @@ export function reconstructRustSourceFiles(
     > => {
       const sourceFile = sourceFilesByOwner.get(owner);
       if (sourceFile === undefined) {
-        return input.artifacts.reconstructArtifact(owner);
+        return {
+          kind: "rejected",
+          code: "RUST_TARGET_ARTIFACT_RECONSTRUCTOR_MISSING",
+          reason: `Dirty Rust target artifact '${owner}' has no source-file reconstructor.`,
+        };
       }
       const fileName = input.program.source.ast.getFileName(sourceFile);
       const identity = identitiesByFileName.get(fileName);
@@ -159,38 +163,28 @@ export function reconstructRustSourceFiles(
           dependencies: Object.freeze(componentDependencies),
         };
       }
-      const revision = graph.revision;
       const candidateDiagnostics: TargetDiagnostic[] = [];
-      const captured = input.artifacts.captureDependencies(owner, () =>
-        planRustSourceFile(
-          sourceFile,
-          identity.moduleName,
-          identity.componentId,
-          component.crateName,
-          moduleNameByFileName,
-          externalCrateNameByFileName,
-          externalItemPathByIdentity,
-          externalStructuralShapeModuleByFileName,
-          component.programModuleName,
-          component.structuralShapesModuleName,
-          identity.childModuleNames,
-          component.publicModuleNames,
-          component.publicImplementationModuleNames,
-          component.publicImplementationItemIdentities,
-          component.publishesImplementationAbi,
-          component.errorDomain,
-          sourcePackageErrors,
-          input,
-          candidateDiagnostics,
-        )
+      const planned = planRustSourceFile(
+        sourceFile,
+        identity.moduleName,
+        identity.componentId,
+        component.crateName,
+        moduleNameByFileName,
+        externalCrateNameByFileName,
+        externalItemPathByIdentity,
+        externalStructuralShapeModuleByFileName,
+        component.programModuleName,
+        component.structuralShapesModuleName,
+        identity.childModuleNames,
+        component.publicModuleNames,
+        component.publicImplementationModuleNames,
+        component.publicImplementationItemIdentities,
+        component.publishesImplementationAbi,
+        component.errorDomain,
+        sourcePackageErrors,
+        input,
+        candidateDiagnostics,
       );
-      if (graph.revision !== revision) {
-        return {
-          kind: "retry",
-          reason:
-            "Rust planning discovered or strengthened an exact prerequisite target artifact contract.",
-        };
-      }
       if (candidateDiagnostics.length > 0) {
         diagnosticsByOwner.set(
           owner,
@@ -213,7 +207,7 @@ export function reconstructRustSourceFiles(
         return moduleDependencies;
       }
       if (component.crateName !== undefined) {
-        const itemNames = rustSourceFileItemNames(captured.value.model);
+        const itemNames = rustSourceFileItemNames(planned.model);
         plannedExternalItemIdentitiesByOwner.set(owner, new Set(
           itemNames.map((itemName) => rustSourceItemIdentity(fileName, itemName)),
         ));
@@ -229,10 +223,10 @@ export function reconstructRustSourceFiles(
       }
       const candidate = rustSourceFileContractCandidate(
         owner,
-        captured.value.model,
-        [...moduleDependencies.dependencies, ...captured.dependencies],
+        planned.model,
+        moduleDependencies.dependencies,
       );
-      plannedByOwner.set(owner, captured.value);
+      plannedByOwner.set(owner, planned);
       return {
         kind: "resolved",
         contract: candidate.contract,
@@ -344,7 +338,7 @@ function sourceFilePublicDependencies(
       readonly reason: string;
     } {
   const dependencies: TargetArtifactDependency<RustArtifactFacet>[] = [];
-  for (const reference of input.program.source.navigation.moduleReferences(sourceFile)) {
+  for (const reference of input.program.sourceNavigation.moduleReferences(sourceFile)) {
     const dependencyOwner = ownerBySourceFile.get(reference.sourceFile) ??
       sourceFileArtifactOwner(input, reference.sourceFile);
     if (dependencyOwner === undefined) {

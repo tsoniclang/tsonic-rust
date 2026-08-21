@@ -1,5 +1,3 @@
-import { createRequire } from "node:module";
-import { dirname, resolve } from "node:path";
 import type {
   TargetCompilationSession,
   TargetCompilationSessionContext,
@@ -10,7 +8,6 @@ import type {
 import type {
   TargetCompileResult,
   TargetRuntimeContributions,
-  TargetRuntimeReference,
 } from "@tsonic/target-api/artifacts";
 import { compileRustTarget } from "../backend/compile.js";
 import {
@@ -31,16 +28,9 @@ import {
   mergeRustProviderSemantics,
 } from "../providers/packages/semantics.js";
 import {
-  cargoCrateAttributeName,
-  cargoPathReferenceKind,
-  cargoRegistryPatchAttributeName,
-} from "../providers/model/cargo-reference.js";
-import { cargoCratesIoRegistry } from "../target-model/project/model.js";
-import {
   createRustTargetConfiguration,
 } from "../options/rust-target-options.js";
-
-const require = createRequire(import.meta.url);
+import { rustRuntimeCrateReference } from "./runtime-references.js";
 
 type RustCompilationSessionState =
   | "created"
@@ -113,38 +103,6 @@ export function createRustCompilationSession(
       state = "closed";
     },
   });
-}
-
-function rustRuntimeCrateReference(
-  context: TargetCompilationSessionContext,
-  packageName: string,
-  crateName: string,
-): TargetRuntimeReference {
-  const packageRoot = resolveRuntimePackageRoot(context, packageName);
-  return Object.freeze({
-    kind: cargoPathReferenceKind,
-    include: resolve(packageRoot, `crates/${crateName}`),
-    attributes: Object.freeze({
-      [cargoCrateAttributeName]: crateName,
-      [cargoRegistryPatchAttributeName]: cargoCratesIoRegistry,
-    }),
-  });
-}
-
-function resolveRuntimePackageRoot(
-  context: TargetCompilationSessionContext,
-  packageName: string,
-): string {
-  const packageJsonSpecifier = `${packageName}/package.json`;
-  const projectRequire = createRequire(resolve(context.paths.projectRoot, "package.json"));
-  for (const resolver of [projectRequire, require]) {
-    try {
-      return dirname(resolver.resolve(packageJsonSpecifier));
-    } catch {
-      continue;
-    }
-  }
-  throw new Error(`Required Rust runtime package '${packageName}' is not installed or does not export package.json.`);
 }
 
 function requireState(

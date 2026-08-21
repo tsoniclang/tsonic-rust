@@ -1,10 +1,10 @@
-import { closedMetadataEquals } from "../../policy/model/closed-data.js";
-import { defineRustPlanKey } from "../../policy/model/keys.js";
+import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
+import { defineRustPlanKey } from "../../target-model/facts/keys.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustArgumentMode, RustValueConversion } from "../../target-model/operations/model.js";
 import type { RustErrorBoundary } from "../../target-model/operations/error-boundary.js";
 import type { RustFinalizedValueConversion } from "./finalized-operation-abi.js";
-import type { RustPlanKey } from "../../policy/model/keys.js";
+import type { RustPlanKey } from "../../target-model/facts/keys.js";
 import type { RustSourceParameterAbiFact } from "./callables-and-resources.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 

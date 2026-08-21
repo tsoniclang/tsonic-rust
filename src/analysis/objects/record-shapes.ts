@@ -6,7 +6,7 @@ import {
   rustSourceTypeCarrierValue,
   rustStructuralObjectCarrierValue,
   rustCarrierSupportsClone,
-} from "../../policy/types/target-types.js";
+} from "../../target-model/types/index.js";
 import {
   KindSpreadAssignment,
   Node_Type,
@@ -21,8 +21,8 @@ import { resolveTypeNodeCarrier } from "../control-flow/statements.js";
 import { rustGeneratorFactKey, rustSourceCallableReturnFactKey, rustSourceParameterAbiFactKey } from "../facts/keys.js";
 import { rustProjectObjectLayout } from "../project-types/object-layout.js";
 import { rustResolutionContext } from "../program/walk.js";
-import { rustRuntimeCarrierKey } from "../../policy/model/selections.js";
-import { rustTargetTypeRefEquals } from "../../policy/types/equality.js";
+import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
 import type { Node, SourceFile, Type } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";

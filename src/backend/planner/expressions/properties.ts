@@ -19,10 +19,9 @@ import { readRustProjectDispatchedField, rustProjectObjectDispatchField } from "
 import { planRustProjectFieldDispatchRoles } from "../objects/project-field-dispatch.js";
 import { readRustSourceStaticField } from "../declarations/static-field-storage.js";
 import { readRustStoredObjectField } from "../objects/project-storage.js";
-import { rustCallableProtocol, rustSourceTypeCarrierValue } from "../../../policy/types/target-types.js";
+import { rustCallableProtocol, rustSourceTypeCarrierValue } from "../../../target-model/types/index.js";
 import { rustFallibleFactKey, rustSourceAccessorEffectsFactKey } from "../../../analysis/facts/keys.js";
-import { rustProjectCallableTargetName } from "../../../analysis/facts/source-member-name.js";
-import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/nodes.js";
@@ -342,18 +341,15 @@ export function planRustBoundProjectMethodCallable(
     ? selectedImplementation.implementation.declaration
     : declaration;
   const variant = context.input.program.projectMethodDispatch.variantForMember(declaration, []);
-  const implementation = context.input.program.source.navigation.callableImplementation(
+  const implementation = context.input.program.sourceNavigation.callableImplementation(
     selectedDeclaration,
   );
   const implementationDeclaration = implementation.kind === "resolved"
     ? implementation.implementation.declaration
     : selectedDeclaration;
-  const targetName = context.input.program.names.nameForDeclaration(implementationDeclaration) ??
-    rustProjectCallableTargetName(implementationDeclaration, {
-      ast: context.input.program.source.ast,
-      names: context.input.program.names,
-      semanticsFor: context.input.program.source.semantics.forNode,
-    });
+  const targetName = context.input.program.names.nameForDeclaration(
+    implementationDeclaration,
+  );
   if (callable === undefined || callableType === undefined ||
     receiverDefinition === undefined || context.syntheticNames === undefined ||
     (context.input.program.projectTypes.isPolymorphic(receiverDefinition)

@@ -1,5 +1,5 @@
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { RustAssignmentOperator } from "../../../target-model/syntax/tokens.js";
 import { rustProjectObjectLayout } from "../../../analysis/project-types/object-layout.js";
 import type { RustExpr } from "../../target-ast/nodes.js";
@@ -28,7 +28,7 @@ import {
   rustStructuralPropertyValueCarrier,
   rustStructuralMethodCallableCarrier,
   rustStructuralMethodStorageCarrier,
-} from "../../../policy/types/target-types.js";
+} from "../../../target-model/types/index.js";
 
 export type RustStructuralObjectFieldInitializer =
   | { readonly kind: "stored"; readonly value: RustExpr }

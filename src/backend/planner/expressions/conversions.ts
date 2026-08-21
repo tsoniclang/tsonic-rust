@@ -4,7 +4,7 @@ import {
   rustCarrierSupportsClone,
   rustPrimitiveTypeName,
   rustSourceUnionCarrierValue,
-} from "../../../policy/types/target-types.js";
+} from "../../../target-model/types/index.js";
 import {
   isRustFinalizedArrayInput,
   isRustFinalizedConstantInput,
@@ -23,9 +23,9 @@ import { rustBinaryOperatorTraitPath } from "../../../target-model/syntax/tokens
 import { rustBottomExpression } from "../types/fallible-shape.js";
 import { rustEffectiveValueCarrier, rustValueCarrierTransitionTarget } from "../../../analysis/facts/value-carrier-queries.js";
 import { rustFinalizedCarrierTransitionMatches } from "../../../analysis/facts/target-operation.js";
-import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
-import { rustValueConversionContract } from "../../../policy/conversions/contracts.js";
+import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import type {
   RustProviderConstantArgument,
   RustProviderChainStep,
@@ -114,7 +114,7 @@ export function applyRustValueConversion(
 }
 
 export function lowerRustValueConversion(
-  contract: import("../../../policy/conversions/contracts.js").RustValueConversionContract,
+  contract: import("../../../target-model/conversions/contracts.js").RustValueConversionContract,
   source: RustExpr,
   context: RustPlanContext,
   node: Node | undefined,
@@ -588,10 +588,6 @@ export function finishProviderOperationExpression(
         "A finalized fallible Rust operation requires one exact error boundary.",
       ));
       return undefined;
-    }
-    if (fact.abi.effects.errorBoundary === "provider-native" &&
-      fact.abi.effects.errorCarrier !== undefined) {
-      context.input.providerErrors.register(fact.abi.effects.errorCarrier);
     }
     raw = applyRustErrorBoundary(
       raw,

@@ -17,10 +17,10 @@ import {
   rustSourceTypeCarrierValue,
   rustSourceUnionCarrierValue,
   rustStructuralObjectCarrierValue,
-} from "../../policy/types/target-types.js";
+} from "../../target-model/types/index.js";
 import { appendMalformedSourceAst } from "../declarations/project-types.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
-import { isDenseDataArray } from "../../policy/model/closed-data.js";
+import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { resolveExpressionCarrier } from "./carriers.js";
 import { resolveFunctionExpressionCarrier } from "../callables/closures.js";
 import { resolveObjectLiteralMethodCarrier, resolveProjectIndexRecordLiteral, resolveProjectMethodPropertyCarrier, resolveRustRecordShape, selectRustRecordLiteralUnionVariant, selectRustRecordLiteralUnionVariantByCheckedType } from "../objects/record-shapes.js";
@@ -28,14 +28,51 @@ import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { resolveTypeNodeCarrier } from "../control-flow/statements.js";
 import { rustProjectInterfaceContracts } from "../project-types/type-policy.js";
 import { rustProjectObjectLayout } from "../project-types/object-layout.js";
-import { rustRuntimeCarrierKey } from "../../policy/model/selections.js";
-import { rustTargetTypeRefEquals } from "../../policy/types/equality.js";
+import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { selectSourceObjectLiteralAccessors } from "@tsonic/target-api/source";
 import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustTargetOperationFact } from "../facts/keys.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustProjectTypeDefinition } from "../project-types/type-policy.js";
+
+function projectRecordMemberImplementation(
+  walk: RustFactWalk,
+  definition: RustProjectTypeDefinition | undefined,
+  contract: Node,
+): Node | undefined {
+  if (definition === undefined) return undefined;
+  const implementation = walk.context.source.navigation.memberImplementation(
+    definition.declaration,
+    contract,
+  );
+  return implementation.kind === "resolved"
+    ? implementation.implementation.declaration
+    : undefined;
+}
+
+function selectedProjectMethodContracts(
+  walk: RustFactWalk,
+  candidates: readonly Node[],
+  selectedDeclarations: readonly Node[],
+): readonly Node[] | undefined {
+  const candidateSet = new Set(candidates);
+  const selected = candidates.filter((candidate) =>
+    selectedDeclarations.includes(candidate));
+  if (selected.length === 0) return Object.freeze([]);
+  const matched = new Set<Node>();
+  for (const implementation of selected) {
+    matched.add(implementation);
+    const contracts = walk.context.source.navigation.memberContracts(implementation);
+    if (contracts.kind === "unresolved") return undefined;
+    for (const contract of contracts.contracts) {
+      if (candidateSet.has(contract)) matched.add(contract);
+    }
+  }
+  return Object.freeze(candidates.filter((candidate) => matched.has(candidate)));
+}
 
 export function requireDenseSourceNodes(
   walk: RustFactWalk,
@@ -162,7 +199,6 @@ export function resolveRecordLiteralCarrier(
   const structuralExpected = rustStructuralObjectCarrierValue(selectedExpected);
   let resultCarrier: TargetTypeRef;
   let storage: "project-object" | "object-handle";
-  let selectedProjectDefinition: import("../project-types/type-policy.js").RustProjectTypeDefinition | undefined;
   let selectedFields: readonly {
     readonly implementationDeclaration?: Node;
     readonly contractDeclarations: readonly Node[];
@@ -196,7 +232,8 @@ export function resolveRecordLiteralCarrier(
         return [undefined];
       }
       return layout.fields.map((field) => {
-        const implementation = walk.context.projectTypes.memberImplementation(
+        const implementationDeclaration = projectRecordMemberImplementation(
+          walk,
           definition,
           field.declaration,
         );
@@ -209,11 +246,11 @@ export function resolveRecordLiteralCarrier(
               selectedExpected,
               declared,
             );
-        return carrier === undefined || implementation.kind !== "resolved"
+        return carrier === undefined || implementationDeclaration === undefined
           ? undefined
           : {
               contractDeclaration: field.declaration,
-              implementationDeclaration: implementation.implementation.declaration,
+              implementationDeclaration,
               sourceName: field.sourceName,
               carrier,
               presence: "required" as const,
@@ -262,7 +299,6 @@ export function resolveRecordLiteralCarrier(
     }
     resultCarrier = selectedExpected;
     storage = "project-object";
-    selectedProjectDefinition = definition;
     selectedMethodDeclarations = contracts.flatMap((contract) =>
       ast.members(contract.definition.declaration).filter((member): member is Node =>
         member !== undefined && ast.kindName(member) === "KindMethodSignature"));
@@ -423,23 +459,22 @@ export function resolveRecordLiteralCarrier(
       }[] = [];
       if (storage === "project-object") {
         for (const contractDeclaration of selectedMethodDeclarations) {
-          const implementation = sourceDefinition === undefined
-            ? undefined
-            : walk.context.projectTypes.memberImplementation(
-                sourceDefinition,
-                contractDeclaration,
-              );
+          const implementation = projectRecordMemberImplementation(
+            walk,
+            sourceDefinition,
+            contractDeclaration,
+          );
           const callableCarrier = resolveProjectMethodPropertyCarrier(
             walk,
             contractDeclaration,
             sourceCarrier,
           );
-          if (implementation?.kind !== "resolved" || callableCarrier === undefined) {
+          if (implementation === undefined || callableCarrier === undefined) {
             return undefined;
           }
           spreadMethods.push({
             contractDeclaration,
-            sourceDeclaration: implementation.implementation.declaration,
+            sourceDeclaration: implementation,
             callableCarrier,
           });
           assignedMethodDeclarations.add(contractDeclaration);
@@ -610,20 +645,15 @@ export function resolveRecordLiteralCarrier(
         assignedStorageIndexes.add(targetField.storageIndex);
         continue;
       }
-      const matchedDeclarations = selectedMethodDeclarations.filter((declaration) => {
-        const implementation = selectedProjectDefinition === undefined
-          ? undefined
-          : walk.context.projectTypes.memberImplementation(
-              selectedProjectDefinition,
-              declaration,
-            );
-        return implementation?.kind === "resolved" && selectedDeclarations.includes(
-          implementation.implementation.declaration,
-        );
-      });
+      const matchedDeclarations = selectedProjectMethodContracts(
+        walk,
+        selectedMethodDeclarations,
+        selectedDeclarations,
+      );
       if (storage !== "project-object" || selectedElement?.elementKind !== "method" ||
         selectedDeclaration === undefined || !selectedMethodDeclarations.includes(selectedDeclaration) ||
-        matchedDeclarations.length === 0 || selectedParameterCarriers === undefined ||
+        matchedDeclarations === undefined || matchedDeclarations.length === 0 ||
+        selectedParameterCarriers === undefined ||
         selectedResultCarrier === undefined) {
         return undefined;
       }
@@ -659,17 +689,11 @@ export function resolveRecordLiteralCarrier(
       storage === "project-object" && selectedElement?.elementKind === "property") {
       const selectedDeclarations = selectedElement.sourceSelectedDeclarations;
       const selectedDeclaration = selectedElement.sourceSelectedDeclaration;
-      const matchedDeclarations = selectedMethodDeclarations.filter((declaration) => {
-        const implementation = selectedProjectDefinition === undefined
-          ? undefined
-          : walk.context.projectTypes.memberImplementation(
-              selectedProjectDefinition,
-              declaration,
-            );
-        return implementation?.kind === "resolved" && selectedDeclarations.includes(
-          implementation.implementation.declaration,
-        );
-      });
+      const matchedDeclarations = selectedProjectMethodContracts(
+        walk,
+        selectedMethodDeclarations,
+        selectedDeclarations,
+      );
       const selectedMemberCarrier = selectedDeclaration === undefined
         ? undefined
         : resolveObjectLiteralMethodCarrier(
@@ -688,7 +712,8 @@ export function resolveRecordLiteralCarrier(
         : selectedCallable?.result ?? selectedClosure?.result;
       if (selectedDeclaration === undefined ||
         !selectedMethodDeclarations.includes(selectedDeclaration) ||
-        matchedDeclarations.length === 0 || selectedParameterCarriers === undefined ||
+        matchedDeclarations === undefined || matchedDeclarations.length === 0 ||
+        selectedParameterCarriers === undefined ||
         selectedResultCarrier === undefined) {
         return undefined;
       }

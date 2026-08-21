@@ -5,7 +5,7 @@ import {
   isRustNumericCarrier,
   rustOptionElementCarrier,
   isRustSignedNumericCarrier,
-} from "../../../policy/types/target-types.js";
+} from "../../../target-model/types/index.js";
 import {
   rustTargetOperationFactKey,
   rustPostCheckBinaryOperationId,
@@ -23,8 +23,8 @@ import { finalizeRustProviderOperationAbi } from "../../facts/finalized-operatio
 import { instantiateProviderOperationTemplate, providerFormRequiresSourceReceiver } from "./calls/instantiation.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
 import { rustEffectiveValueCarrier } from "../../facts/value-carrier-queries.js";
-import { rustSourcePrimitiveTargetType, rustUnitTargetType } from "../../../policy/types/target-types.js";
-import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
+import { rustSourcePrimitiveTargetType, rustUnitTargetType } from "../../../target-model/types/index.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectJsSurfaceOperation } from "../../../policy/operations/js-surface.js";
 import { selectRustProviderOperation } from "../../../policy/operations/provider-selection.js";
 import type {

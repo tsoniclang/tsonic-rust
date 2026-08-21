@@ -3,7 +3,7 @@ import {
   rustCallableProtocol,
   inferRustTargetTypeParameterBindings,
   substituteRustTargetTypeParameters,
-} from "../../policy/types/target-types.js";
+} from "../../target-model/types/index.js";
 import {
   KindBinaryExpression,
   KindCallExpression,
@@ -31,16 +31,16 @@ import {
 } from "../facts/keys.js";
 import { appendMalformedSourceAst } from "../declarations/project-types.js";
 import { appendRustDiagnostic, rustOperationContext } from "../program/walk.js";
-import { isDenseDataArray } from "../../policy/model/closed-data.js";
+import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { recordBindingWrite, resolveParameterAbi, validateFlowMarkerAgainstMode } from "../declarations/types-and-bindings.js";
 import { selectRustFlowReadProjection } from "../../policy/types/value-carrier-reconciliation.js";
 import { recordRustFlowReadProjection } from "../facts/value-carrier-queries.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
-import { rustArgumentPassingKey, rustRuntimeCarrierKey, rustSelectedOperationKey } from "../../policy/model/selections.js";
+import { rustArgumentPassingKey, rustRuntimeCarrierKey, rustSelectedOperationKey } from "../../target-model/facts/selections.js";
 import { rustArgumentPassingMode } from "../facts/parameter-passing.js";
 import { rustProjectCallableTargetName } from "../facts/source-member-name.js";
-import { rustTargetTypeRefEquals } from "../../policy/types/equality.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { selectedSourceLiteralIsRepresentable } from "../../policy/types/selected-numeric-literal.js";
 import { sourceTypeCarrierForDeclaration } from "./inputs.js";
 import type { Node, SourceFile } from "@tsonic/tsts";

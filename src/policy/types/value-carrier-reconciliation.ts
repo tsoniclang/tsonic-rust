@@ -1,4 +1,4 @@
-import { rustTargetTypeRefEquals } from "./equality.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type {
   RustContextualValueConversionFact,
@@ -9,7 +9,7 @@ import {
   isRustProgramErrorCarrier,
   rustCarrierSupportsClone,
   rustOptionElementCarrier,
-} from "./target-types.js";
+} from "../../target-model/types/index.js";
 import type { RustProjectTypePolicy } from "./project-types.js";
 import { selectRustSourceValueConversion } from "../conversions/selection.js";
 

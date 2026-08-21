@@ -10,7 +10,7 @@ import {
   rustJsArrayConcatItemTargetType,
   rustJsArrayTargetType,
   rustSourcePrimitiveTargetType,
-} from "../../types/target-types.js";
+} from "../../../target-model/types/index.js";
 import { defineJsOperationRows } from "./model.js";
 import type { JsOperationRowData } from "./model.js";
 import type { RustCallbackOperationTemplate, RustProviderOperationForm, RustValueConversion } from "../../../target-model/operations/model.js";

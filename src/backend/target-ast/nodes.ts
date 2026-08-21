@@ -118,7 +118,9 @@ export type RustExpr =
   | { readonly kind: "struct-literal"; readonly path: string; readonly fields: readonly { readonly name: string; readonly value: RustExpr }[] }
   | { readonly kind: "tuple-literal"; readonly elements: readonly RustExpr[] };
 
-export type RustErrorDomain = "runtime" | "project";
+export type {
+  RustErrorDomain,
+} from "../../target-model/operations/error-boundary.js";
 
 export type RustStmt =
   | { readonly kind: "let"; readonly name: string; readonly mutable: boolean; readonly type?: RustType; readonly init?: RustExpr; readonly attrs?: readonly string[] }

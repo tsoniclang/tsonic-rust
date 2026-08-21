@@ -165,6 +165,14 @@ export function acmeVectorsPackage() {
       },
     ],
     carrierPaths: { "acme.vectors.Vector": "acme_vectors::Vector" },
+    carrierTraits: {
+      "acme.vectors.Vector": {
+        implementations: [
+          { traitPath: "core::clone::Clone", requirements: [] },
+          { traitPath: "core::marker::Copy", requirements: [] },
+        ],
+      },
+    },
     crates: [{ crateName: "acme_vectors", cargoPath: resolve(fixtureCratesRoot, "acme_vectors") }],
   });
 }

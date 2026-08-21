@@ -17,7 +17,7 @@ import {
   isRustUnitCarrier,
   rustOptionElementCarrier,
   rustSourceTypeCarrierValue,
-} from "../../../policy/types/target-types.js";
+} from "../../../target-model/types/index.js";
 import {
   KindBinaryExpression,
   KindBigIntLiteral,
@@ -77,8 +77,8 @@ import { requireRustCarrierRequirements } from "../types/generic-requirements.js
 import { rustEffectiveValueCarrier } from "../../../analysis/facts/value-carrier-queries.js";
 import { rustExpressionContainsStatementBlock } from "../../target-ast/expressions.js";
 import { rustFutureValueMatchesCarrier } from "../../../analysis/facts/future-values.js";
-import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
-import { sourceCharCodeUnit } from "../../../policy/types/literals.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { sourceCharCodeUnit } from "../../../target-model/syntax/literals.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustExpressionResultUse } from "./entry.js";
@@ -468,9 +468,6 @@ export function planExpressionInner(
             "A finalized fallible Rust future requires one exact error boundary.",
           ));
           return undefined;
-        }
-        if (future.errorBoundary === "provider-native" && future.errorCarrier !== undefined) {
-          context.input.providerErrors.register(future.errorCarrier);
         }
         awaited = applyRustErrorBoundary(
           awaited,

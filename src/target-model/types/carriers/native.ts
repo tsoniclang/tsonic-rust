@@ -1,5 +1,5 @@
 import { hasExactObjectKeys } from "./primitives.js";
-import { isDenseDataArray } from "../../model/closed-data.js";
+import { isDenseDataArray } from "../../metadata/closed-data.js";
 import { isRustTargetTypeRef } from "../equality.js";
 import { rustBigIntTargetId, rustNamedTypeCarrierName, rustNeverCarrierName, rustNullTargetId, rustStringTargetId, rustUndefinedTargetId } from "./source-types.js";
 import type { SourcePrimitiveKind } from "@tsonic/tsts";
@@ -8,7 +8,7 @@ import type {
   RustNamedTypeTraitImplementation,
   RustNamedTypeTraitRequirement,
   TargetTypeRef,
-} from "../../../target-model/types/model.js";
+} from "../model.js";
 
 export function rustSourcePrimitiveTargetType(kind: SourcePrimitiveKind): TargetTypeRef {
   return { kind: "source-primitive", name: kind };

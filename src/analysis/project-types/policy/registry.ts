@@ -107,6 +107,9 @@ export function createRustProjectTypePolicyRegistry(): RustProjectTypePolicyRegi
     memberSlotName(declaration, role) {
       return requireCurrent().memberSlotName(declaration, role);
     },
+    callableTargetName(declaration) {
+      return requireCurrent().callableTargetName(declaration);
+    },
     memberImplementation(concreteClass, contractMember) {
       return requireCurrent().memberImplementation(concreteClass, contractMember);
     },

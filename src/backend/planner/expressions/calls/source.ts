@@ -4,8 +4,7 @@ import {
   rustFutureOutputCarrier,
   rustSourceTypeCarrierValue,
   substituteRustTargetTypeParameters,
-} from "../../../../policy/types/target-types.js";
-import { applyRustSourceCallableRequirements } from "../../artifacts/source-callable-contracts.js";
+} from "../../../../target-model/types/index.js";
 import {
   diagnosticInput,
   isValidRustIdentifier,
@@ -17,7 +16,7 @@ import {
   sourceTypePath,
 } from "../../program/plan-context.js";
 import { invokeRustStructuralObjectMethod } from "../../objects/project-storage.js";
-import { isDenseDataArray } from "../../../../policy/model/closed-data.js";
+import { isDenseDataArray } from "../../../../target-model/metadata/closed-data.js";
 import {
   KindPropertyAccessExpression,
   Node_Expression,
@@ -75,9 +74,6 @@ export function planSelectedSourceCall(
       "rust.backend.source-call-selected-signature",
       "Selected project-source call fact conflicts with the TSTS-selected target member ABI.",
     ));
-    return undefined;
-  }
-  if (!applyRustSourceCallableRequirements(node, selected, fact, context)) {
     return undefined;
   }
   const rawArgumentNodes = context.input.program.source.ast.arguments(node);

@@ -26,7 +26,7 @@ import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { collectVariableDeclarations, directResourceDeclaration, planResourceManagedBody, resourceFactForPlanning, rustBlockDefinitelyExits } from "./resources.js";
 import { diagnosticInput, isValidRustIdentifier } from "../program/plan-context.js";
 import { expressionCarrier, negateRustPlannedBooleanExpression, planExpression } from "../expressions/index.js";
-import { isRustBoolCarrier, isRustIntegerCarrier } from "../../../policy/types/target-types.js";
+import { isRustBoolCarrier, isRustIntegerCarrier } from "../../../target-model/types/index.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { negateRustBooleanExpression } from "../../target-ast/expressions.js";
 import { planBlockLike, planStatementSequence } from "./core.js";
@@ -34,7 +34,7 @@ import { planExpressionAsStatement } from "./expression-statements.js";
 import { planVariableStatement } from "./variable-declarations.js";
 import { planForInStatement, planForOfStatement } from "./iteration.js";
 import { rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";
-import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustBlock, RustExpr, RustStmt } from "../../target-ast/nodes.js";
 import type { RustControlTarget, RustLoopTarget, RustPlanContext } from "../program/plan-context.js";
@@ -463,11 +463,11 @@ function planCountedForStatement(
   context: RustPlanContext,
   sourceLabel?: string,
 ): readonly RustStmt[] | undefined {
-  const counted = context.input.program.source.navigation.countedLoop(node);
+  const counted = context.input.program.sourceNavigation.countedLoop(node);
   if (counted === undefined) {
     return undefined;
   }
-  const counterSummary = context.input.program.source.navigation.declarationUseSummary(
+  const counterSummary = context.input.program.sourceNavigation.declarationUseSummary(
     counted.counterDeclaration,
   );
   const startCarrier = expressionCarrier(counted.start, context);
@@ -506,7 +506,7 @@ function countedLoopBoundIsStable(
   bound: Node,
   context: RustPlanContext,
 ): boolean {
-  const effects = context.input.program.source.navigation.expressionEffects(bound);
+  const effects = context.input.program.sourceNavigation.expressionEffects(bound);
   if (effects.invokes || effects.mutates || effects.suspends || effects.mayThrow) {
     return false;
   }
@@ -516,11 +516,11 @@ function countedLoopBoundIsStable(
     if (node === undefined || !stable) {
       return;
     }
-    const selected = context.input.program.source.navigation.sourceReferenceFor(node);
+    const selected = context.input.program.sourceNavigation.sourceReferenceFor(node);
     const declaration = selected?.declaration;
     if (declaration !== undefined && !visited.has(declaration)) {
       visited.add(declaration);
-      const summary = context.input.program.source.navigation.declarationUseSummary(declaration);
+      const summary = context.input.program.sourceNavigation.declarationUseSummary(declaration);
       if (summary.bindingWritten) {
         stable = false;
         return;

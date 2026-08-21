@@ -1,5 +1,5 @@
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type {
   RustCallbackOperationTemplate,
   RustProviderOperationTemplate,
@@ -7,7 +7,7 @@ import type {
 import {
   rustCallableProtocol,
   rustJsArrayTargetType,
-} from "../../../policy/types/target-types.js";
+} from "../../../target-model/types/index.js";
 
 export interface RustCallbackOperationSelection {
   readonly fact: RustProviderOperationTemplate;

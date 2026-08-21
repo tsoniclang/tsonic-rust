@@ -51,7 +51,7 @@ import {
   rustStringTargetType,
   rustUndefinedTargetType,
   rustSourceTypeCarrierValue,
-} from "../../policy/types/target-types.js";
+} from "../../target-model/types/index.js";
 import {
   rustGeneratorFactKey,
   rustTargetOperationFactKey,
@@ -59,8 +59,8 @@ import {
   rustYieldFactKey,
 } from "../facts/keys.js";
 import { appendRustDiagnostic, boolCarrier, checkedPropertySelectionInput, recordPolicySelection, rustOperationContext, rustResolutionContext } from "../program/walk.js";
-import { isDenseDataArray } from "../../policy/model/closed-data.js";
-import { parseSourceBigIntLiteral, sourceCharCodeUnit } from "../../policy/types/literals.js";
+import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
+import { parseSourceBigIntLiteral, sourceCharCodeUnit } from "../../target-model/syntax/literals.js";
 import { recordFinalizedOperatorSelection, resolvePostCheckBinaryCarrier, resolvePostCheckUnaryCarrier } from "../operations/operators.js";
 import { recordTargetOperation, setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
 import { resolveArrayLiteralCarrier } from "../operations/inputs.js";
@@ -69,7 +69,7 @@ import { resolveExpressionCarrier } from "./carriers.js";
 import { resolveFunctionExpressionCarrier } from "../callables/closures.js";
 import { resolveRecordLiteralCarrier } from "./records.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
-import { rustTargetTypeRefEquals } from "../../policy/types/equality.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { selectedSourceLiteralIsRepresentable, selectedSourceLiteralOperandIsRepresentable } from "../../policy/types/selected-numeric-literal.js";
 import { selectRustCheckedPropertyAccess } from "../operations/provider/index.js";
 import type { Node, SourceFile } from "@tsonic/tsts";

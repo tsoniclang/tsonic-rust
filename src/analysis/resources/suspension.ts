@@ -18,10 +18,10 @@ import {
 } from "../facts/keys.js";
 import { appendRustDiagnostic, rustOperationContext } from "../program/walk.js";
 import { collectDescendantsOfKind } from "../operations/inputs.js";
-import { isRustProgramErrorCarrier, rustStringTargetType } from "../../policy/types/target-types.js";
+import { isRustProgramErrorCarrier, rustStringTargetType } from "../../target-model/types/index.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { rustFutureValueForOperation, rustFutureValueMatchesCarrier } from "../facts/future-values.js";
-import { rustRuntimeCarrierKey } from "../../policy/model/selections.js";
+import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
 import { selectRustResourceManagement } from "./management.js";
 import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
 import type { Node, SourceFile } from "@tsonic/tsts";

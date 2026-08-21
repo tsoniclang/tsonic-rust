@@ -1,6 +1,6 @@
-import { rustTargetTypeRefEquals } from "../../policy/types/equality.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { rustFutureOutputCarrier, rustFutureTargetType } from "../../policy/types/target-types.js";
+import { rustFutureOutputCarrier, rustFutureTargetType } from "../../target-model/types/index.js";
 import { validateRustFinalizedOperationAbi } from "./finalized-operation-abi.js";
 import type {
   RustFutureValueFact,

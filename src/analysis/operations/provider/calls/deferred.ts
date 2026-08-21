@@ -4,9 +4,9 @@ import { defaultValueFactKey, flowStateFactKey } from "@tsonic/tsts";
 import { finalizeRustCallbackOperation } from "../callbacks.js";
 import { rejectSelectedOperation } from "../result.js";
 import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution.js";
-import { rustSelectedCallKey, rustSelectedOperationKey } from "../../../../policy/model/selections.js";
+import { rustSelectedCallKey, rustSelectedOperationKey } from "../../../../target-model/facts/selections.js";
 import { rustTargetOperationFactKey } from "../../../facts/keys.js";
-import { rustTargetTypeRefEquals } from "../../../../policy/types/equality.js";
+import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { selectedCallArgumentNodes, selectedCallCalleeDeclaration, selectedCallCalleeSymbol } from "../operators.js";
 import { selectRustTypedLocationCall } from "../../typed-locations.js";
 import type {

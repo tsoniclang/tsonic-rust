@@ -11,7 +11,7 @@ import { selectRustOptionalChain } from "../../../dist/policy/operations/optiona
 import {
   rustOptionTargetType,
   rustStringTargetType,
-} from "../../../dist/policy/types/target-types.js";
+} from "../../../dist/target-model/types/index.js";
 
 const providerValuePackage = createRustProviderPackage({
   id: "acme-environment",

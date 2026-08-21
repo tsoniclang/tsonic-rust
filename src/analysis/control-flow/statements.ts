@@ -46,7 +46,7 @@ import {
   isRustStringCarrier,
   rustProgramErrorTargetType,
   rustSourceTypeCarrierValue,
-} from "../../policy/types/target-types.js";
+} from "../../target-model/types/index.js";
 import {
   rustAsyncFunctionFactKey,
   rustGeneratorFactKey,
@@ -55,15 +55,15 @@ import {
 } from "../facts/keys.js";
 import { appendRustDiagnostic, boolCarrier, rustResolutionContext } from "../program/walk.js";
 import { collectDescendantsOfKind, recordForOfFacts } from "../operations/inputs.js";
-import { isDenseDataArray } from "../../policy/model/closed-data.js";
+import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { reconcileRequiredCarrier, resolveExpressionCarrier } from "../expressions/carriers.js";
 import { recordBindingPatternFacts } from "../declarations/types-and-bindings.js";
 import { recordCallableValueSignatureForDeclaration } from "../callables/signatures.js";
 import { recordThrowFacts } from "../resources/suspension.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
-import { rustRuntimeCarrierKey } from "../../policy/model/selections.js";
-import { rustTargetTypeRefEquals } from "../../policy/types/equality.js";
+import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";

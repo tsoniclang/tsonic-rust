@@ -1,5 +1,5 @@
 import type { RustValueConversion } from "../../target-model/operations/model.js";
-import { rustNumericPromotionKind } from "../operations/numeric-promotion-model.js";
+import { rustNumericPromotionKind } from "../../target-model/conversions/numeric-promotion.js";
 import {
   isRustNeverCarrier,
   rustJsValueTargetType,
@@ -7,9 +7,9 @@ import {
   rustSourcePrimitiveTargetType,
   rustSourceUnionCarrierValue,
   rustStringTargetType,
-} from "../types/target-types.js";
+} from "../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { rustTargetTypeRefEquals } from "../types/equality.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import {
   rustBoolToJsValueConversion,
   rustFloat64ToInt32ValueConversion,

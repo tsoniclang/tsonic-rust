@@ -1,11 +1,11 @@
 import type { Node } from "@tsonic/tsts";
-import { rustTargetTypeRefEquals } from "../types/equality.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustOptionalChainFact } from "../../target-model/operations/model.js";
 import {
   rustOptionElementCarrier,
   rustOptionTargetType,
-} from "../types/target-types.js";
+} from "../../target-model/types/index.js";
 
 export type RustOptionalChainSelection =
   | { readonly kind: "direct"; readonly resultCarrier: TargetTypeRef }

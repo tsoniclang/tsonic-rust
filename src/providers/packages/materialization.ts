@@ -4,7 +4,7 @@ import {
   rustMoveOnlyNamedTypeTraits,
   rustNamedTargetType,
   rustNamedTypeCarrierValue,
-} from "../../policy/types/target-types.js";
+} from "../../target-model/types/index.js";
 import type { RustNamedTypeTraitContract } from "../../target-model/types/model.js";
 import type {
   RustProviderBinaryEpilogueDefinition,

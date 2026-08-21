@@ -22,9 +22,9 @@ import {
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
   rustUnitTargetType,
-} from "../../types/target-types.js";
+} from "../../../target-model/types/index.js";
 import { jsOperationRows, rustInferCarrier } from "./rows.js";
-import { rustTargetTypeRefEquals } from "../../types/equality.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { JsCarrierRef, JsLane, JsOperationRequest, JsOperationRowData, JsOperationSelection } from "./model.js";
 import type { RustProviderOperationForm } from "../../../target-model/operations/model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";

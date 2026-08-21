@@ -1,4 +1,4 @@
-import { rustTargetTypeRefEquals } from "./equality.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type {
   AstReader,
   Node,
@@ -13,7 +13,7 @@ import type {
   SourceProjectMemberImplementationResult,
 } from "@tsonic/target-api/source";
 import type { RustExternalProjectBase, RustExternalProjectField } from "./external-project-types.js";
-import type { RustNamePlan } from "../names/model.js";
+import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export interface RustProjectTypeIssue {
@@ -140,6 +140,7 @@ export interface RustProjectTypePolicy {
     declaration: Node,
     role: RustProjectMemberSlotRole,
   ): string | undefined;
+  callableTargetName(declaration: Node): string | undefined;
   memberImplementation(
     concreteClass: RustProjectTypeDefinition,
     contractMember: Node,

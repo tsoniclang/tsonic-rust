@@ -6,7 +6,7 @@ import {
   rustRuntimeCarrierKey,
   rustSelectedCallKey,
   rustSelectedOperationKey,
-} from "../../../dist/policy/model/selections.js";
+} from "../../../dist/target-model/facts/selections.js";
 import {
   rustFinalizedCarrierTransitionMatches,
   rustTargetOperationIsDirectLocation,

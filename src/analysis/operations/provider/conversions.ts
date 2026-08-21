@@ -2,16 +2,16 @@ import { acceptRustMemberOperation, acceptRustOperation, normalizeSelectedOperat
 import { acceptRustPolicy } from "../../../policy/operations/contracts.js";
 import { asNode } from "../../../policy/evidence/selected-source.js";
 import { finalizeProviderOperationFact, instantiateProviderOperationTemplate, providerFormRequiresSourceReceiver } from "./calls/instantiation.js";
-import { isRustNullishSourceCarrier, rustOptionElementCarrier } from "../../../policy/types/target-types.js";
+import { isRustNullishSourceCarrier, rustOptionElementCarrier } from "../../../target-model/types/index.js";
 import { selectRustValueCarrierReconciliation } from "../../../policy/types/value-carrier-reconciliation.js";
 import { recordRustValueCarrierReconciliation, rustEffectiveValueCarrier } from "../../facts/value-carrier-queries.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
-import { rustCallableProtocol, rustTargetTypeContainsTypeParameter } from "../../../policy/types/target-types.js";
-import { rustSelectedOperationKey } from "../../../policy/model/selections.js";
+import { rustCallableProtocol, rustTargetTypeContainsTypeParameter } from "../../../target-model/types/index.js";
+import { rustSelectedOperationKey } from "../../../target-model/facts/selections.js";
 import { rustTargetOperationFactKey, rustProjectDowncastFactKey } from "../../facts/keys.js";
-import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectRustProviderOperation } from "../../../policy/operations/provider-selection.js";
-import { rustValueConversionIdentity } from "../../../policy/conversions/contracts.js";
+import { rustValueConversionIdentity } from "../../../target-model/conversions/contracts.js";
 import { selectRustSourceValueConversion } from "../../../policy/conversions/selection.js";
 import type {
   RustCheckedConversionSelectionInput,

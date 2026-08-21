@@ -10,7 +10,7 @@ import {
 import {
   parseSourceBigIntLiteral,
   parseSourceIntegerLiteral,
-} from "./literals.js";
+} from "../../target-model/syntax/literals.js";
 import {
   rustPostCheckUnaryMinusOperationId,
   rustPostCheckUnaryPlusOperationId,

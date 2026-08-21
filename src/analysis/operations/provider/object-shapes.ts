@@ -5,11 +5,11 @@ import {
   rustOptionTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
-} from "../../../policy/types/target-types.js";
+} from "../../../target-model/types/index.js";
 import { acceptRustPolicy } from "../../../policy/operations/contracts.js";
 import { acceptSelectedCall, checkedCallIsConstruction, instantiateExactSelectedConstructionCarrier, mapSelectedTargetTypeArguments, selectedCallReceiverValueCarrier, selectedProjectConstructor, selectRustOptionalCallResult } from "./calls/instantiation.js";
 import { asNode } from "../../../policy/evidence/selected-source.js";
-import { isRustJsArrayCarrier, rustOptionElementCarrier } from "../../../policy/types/target-types.js";
+import { isRustJsArrayCarrier, rustOptionElementCarrier } from "../../../target-model/types/index.js";
 import {
   KindPropertyAssignment,
   KindShorthandPropertyAssignment,
@@ -18,12 +18,12 @@ import {
 import { orderEnumerableOwnStringProperties } from "@tsonic/target-api/source";
 import { rejectSelectedOperation } from "./result.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
-import { rustArgumentPassingKey, rustSelectedCallKey, rustSelectedOperationKey } from "../../../policy/model/selections.js";
+import { rustArgumentPassingKey, rustSelectedCallKey, rustSelectedOperationKey } from "../../../target-model/facts/selections.js";
 import { rustProjectCallableTargetName } from "../../facts/source-member-name.js";
 import { rustTargetOperationFactKey, rustOptionalChainFactKey } from "../../facts/keys.js";
-import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectedCallArgumentNodes, selectedCallCalleeDeclaration, selectedCallCalleeSymbol, selectedSourceValueCarrier, selectedValueCarrier } from "./operators.js";
-import { rustValueConversionIsFallible } from "../../../policy/conversions/contracts.js";
+import { rustValueConversionIsFallible } from "../../../target-model/conversions/contracts.js";
 import { selectRustSourceValueConversion } from "../../../policy/conversions/selection.js";
 import type {
   RustCheckedCallSelectionInput,

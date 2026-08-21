@@ -4,7 +4,7 @@ import {
   parseSourceBigIntLiteral,
   parseSourceIntegerLiteral,
   sourceCharCodeUnit,
-} from "../../../dist/policy/types/literals.js";
+} from "../../../dist/target-model/syntax/literals.js";
 
 test("source integer literal parsing preserves exact authored integer values", () => {
   assert.equal(parseSourceIntegerLiteral("9_007_199_254_740_991"), 9007199254740991n);

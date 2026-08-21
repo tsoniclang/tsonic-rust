@@ -4,7 +4,7 @@ import {
   inferRustTargetTypeParameterBindings,
   rustTargetTypeContainsTypeParameter,
   substituteRustTargetTypeParameters,
-} from "../../../../policy/types/target-types.js";
+} from "../../../../target-model/types/index.js";
 import { acceptRustPolicy } from "../../../../policy/operations/contracts.js";
 import { asNode } from "../../../../policy/evidence/selected-source.js";
 import { finalizeRustProviderOperationAbi } from "../../../facts/finalized-operation-abi.js";
@@ -17,16 +17,16 @@ import { normalizeSelectedArgumentCarrier, rejectSelectedOperation } from "../re
 import { selectRustValueCarrierReconciliation } from "../../../../policy/types/value-carrier-reconciliation.js";
 import { recordRustValueCarrierReconciliation, rustEffectiveValueCarrier } from "../../../facts/value-carrier-queries.js";
 import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution.js";
-import { rustArgumentPassingKey, rustSelectedCallKey, rustSelectedOperationKey } from "../../../../policy/model/selections.js";
+import { rustArgumentPassingKey, rustSelectedCallKey, rustSelectedOperationKey } from "../../../../target-model/facts/selections.js";
 import { rustArgumentPassingMode } from "../../../facts/parameter-passing.js";
-import { rustOptionElementCarrier } from "../../../../policy/types/target-types.js";
+import { rustOptionElementCarrier } from "../../../../target-model/types/index.js";
 import { rustProviderGenericRequirementsAreSatisfied } from "../../../../policy/types/provider-generic-requirements.js";
 import { rustTargetOperationFactKey, rustPreparedOperationResultFactKey, rustOptionalChainFactKey } from "../../../facts/keys.js";
 import { rustTargetOperationText } from "../../../facts/target-operation.js";
-import { rustTargetTypeRefEquals } from "../../../../policy/types/equality.js";
+import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { selectedCallArgumentNodes, selectedCallCalleeDeclaration, selectedCallCalleeSymbol, selectedSourceValueCarrier } from "../operators.js";
 import { selectRustOptionalChain } from "../../../../policy/operations/optional-chains.js";
-import { substituteRustValueConversion } from "../../../../policy/conversions/contracts.js";
+import { substituteRustValueConversion } from "../../../../target-model/conversions/contracts.js";
 import { selectRustSourceValueConversion } from "../../../../policy/conversions/selection.js";
 import type {
   RustCheckedCallSelectionInput,

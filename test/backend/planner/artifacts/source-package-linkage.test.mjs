@@ -4,6 +4,9 @@ import {
   planRustSourcePackageComponents,
 } from "../../../../dist/backend/planner/program/source-package-components.js";
 import {
+  analyzeRustSourcePackageComponents,
+} from "../../../../dist/analysis/program/source-package-components.js";
+import {
   planRustSourcePackageCargo,
 } from "../../../../dist/backend/planner/program/source-package-crates.js";
 import { printCargoManifest } from "../../../../dist/print/project/manifest.js";
@@ -30,13 +33,21 @@ test("source-package components are dependency ordered and ignore inactive packa
     ["/dep/index.ts", sourceIdentity("/dep/index.ts", "dependency", "dependency_crate")],
   ]);
   const result = planRustSourcePackageComponents(planningContext({
-    sourcePackages: {
-      components: [
-        { id: "root", packages: ["root-package"], dependencies: ["dependency", "inactive"] },
-        { id: "dependency", packages: ["dependency-package"], dependencies: [] },
-        { id: "inactive", packages: ["inactive-package"], dependencies: [] },
-      ],
-    },
+    sourcePackageComponents: sourcePackageClassifications("root", [{
+      componentId: "dependency",
+      sourceFileNames: ["/dep/index.ts"],
+      dependencyComponentIds: [],
+      publishesImplementationAbi: true,
+      errorDomain: "project",
+      root: false,
+    }, {
+      componentId: "root",
+      sourceFileNames: ["/root/index.ts"],
+      dependencyComponentIds: ["dependency"],
+      publishesImplementationAbi: false,
+      errorDomain: "project",
+      root: true,
+    }]),
     projectTypes: {
       programErrorDefinitions: [{ fileName: "/dep/index.ts" }],
     },
@@ -61,9 +72,14 @@ test("source-package components are dependency ordered and ignore inactive packa
 test("library roots retain exact facade linkage and component cycles fail closed", () => {
   const rootIdentity = sourceIdentity("/root/index.ts", "root");
   const library = planRustSourcePackageComponents(planningContext({
-    sourcePackages: {
-      components: [{ id: "root", packages: ["root-package"], dependencies: [] }],
-    },
+    sourcePackageComponents: sourcePackageClassifications("root", [{
+      componentId: "root",
+      sourceFileNames: ["/root/index.ts"],
+      dependencyComponentIds: [],
+      publishesImplementationAbi: true,
+      errorDomain: "runtime",
+      root: true,
+    }]),
     projectTypes: { programErrorDefinitions: [] },
     outputType: "lib",
   }), new Map([[rootIdentity.fileName, rootIdentity]]), facadePlan("root", ["root"]));
@@ -71,24 +87,30 @@ test("library roots retain exact facade linkage and component cycles fail closed
   assert.equal(Object.hasOwn(library.components[0], "targetLinkage"), false);
   assert.equal(library.components[0].publishesImplementationAbi, true);
 
-  const dependencyIdentity = sourceIdentity(
-    "/dep/index.ts",
-    "dependency",
-    "dependency_crate",
-  );
-  const cycle = planRustSourcePackageComponents(planningContext({
+  const cycle = analyzeRustSourcePackageComponents({
     sourcePackages: {
-      components: [
-        { id: "root", packages: ["root-package"], dependencies: ["dependency"] },
-        { id: "dependency", packages: ["dependency-package"], dependencies: ["root"] },
-      ],
+      rootPackageId: "root-package",
+      packages: [{
+        id: "root-package",
+        componentId: "root",
+        sourceFiles: ["/root/index.ts"],
+      }, {
+        id: "dependency-package",
+        componentId: "dependency",
+        sourceFiles: ["/dep/index.ts"],
+      }],
+      components: [{
+        id: "root",
+        dependencies: ["dependency"],
+      }, {
+        id: "dependency",
+        dependencies: ["root"],
+      }],
     },
+    sourceFiles: [{ fileName: "/root/index.ts" }, { fileName: "/dep/index.ts" }],
+    ast: { getFileName: (sourceFile) => sourceFile.fileName },
     projectTypes: { programErrorDefinitions: [] },
-    outputType: "bin",
-  }), new Map([
-    [rootIdentity.fileName, rootIdentity],
-    [dependencyIdentity.fileName, dependencyIdentity],
-  ]), facadePlan("root", ["root", "dependency"]));
+  }, "bin");
   assert.equal(cycle.kind, "rejected");
   assert.deepEqual(cycle.diagnostics.map((diagnostic) => diagnostic.code), [
     "RUST_SOURCE_PACKAGE_COMPONENT_GRAPH_CYCLE",
@@ -423,12 +445,14 @@ test("cross-package error planning preserves each component-owned Result ABI", (
   };
   const components = [{
     componentId: "dependency",
+    sourceFileNames: new Set(["/dep/errors.ts"]),
     dependencyComponentIds: [],
     crateName: "engine_crate",
     programModuleName: "program",
     errorDomain: "project",
   }, {
     componentId: "root",
+    sourceFileNames: new Set(["/root/index.ts"]),
     dependencyComponentIds: ["dependency"],
     programModuleName: "program",
     errorDomain: "project",
@@ -439,10 +463,7 @@ test("cross-package error planning preserves each component-owned Result ABI", (
       programErrorVariant: (definition) =>
         definition === engineError ? "EngineFailure" : undefined,
     },
-  }), new Map([
-    ["/root/index.ts", sourceIdentity("/root/index.ts", "root")],
-    ["/dep/errors.ts", sourceIdentity("/dep/errors.ts", "dependency", "engine_crate")],
-  ]), components);
+  }), components);
 
   assert.deepEqual(result.diagnostics, []);
   assert.notEqual(result.plan, undefined);
@@ -494,10 +515,9 @@ test("source-package error planning rejects unowned project errors", () => {
       programErrorDefinitions: [missingError],
       programErrorVariant: () => "MissingFailure",
     },
-  }), new Map([
-    ["/root/index.ts", sourceIdentity("/root/index.ts", "root")],
-  ]), [{
+  }), [{
     componentId: "root",
+    sourceFileNames: new Set(["/root/index.ts"]),
     dependencyComponentIds: [],
     programModuleName: "program",
     errorDomain: "project",
@@ -539,17 +559,30 @@ function facadePlan(rootComponentId, componentIds) {
 }
 
 function planningContext({
-  sourcePackages = { components: [] },
+  sourcePackageComponents = sourcePackageClassifications("root", []),
   projectTypes,
   outputType = "bin",
 }) {
   return {
-    input: { sourcePackages },
     program: {
       configuration: { outputType },
       projectTypes,
+      sourcePackageComponents,
     },
   };
+}
+
+function sourcePackageClassifications(rootComponentId, components) {
+  const frozen = Object.freeze(components.map((entry) => Object.freeze({ ...entry })));
+  const byId = new Map(frozen.map((entry) => [entry.componentId, entry]));
+  const byFile = new Map(frozen.flatMap((entry) =>
+    entry.sourceFileNames.map((fileName) => [fileName, entry])));
+  return Object.freeze({
+    rootComponentId,
+    components: frozen,
+    forComponent: (componentId) => byId.get(componentId),
+    componentForFile: (fileName) => byFile.get(fileName),
+  });
 }
 
 function component(componentId, dependencyComponentIds, crateName, root = false) {

@@ -31,7 +31,7 @@ import {
   rustCallableProtocol,
   rustClosureProtocol,
   rustCallableTargetType,
-} from "../../policy/types/target-types.js";
+} from "../../target-model/types/index.js";
 import { recordBindingPatternFacts, recordDefaultParameterInitializerFacts, setParameterAbiFact } from "../declarations/types-and-bindings.js";
 import { recordStatementFacts, resolveTypeNodeCarrier } from "../control-flow/statements.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
@@ -39,8 +39,8 @@ import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { resolveRustContextualParameterAbi } from "../../policy/ownership/source-callable-abi.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { rustResolutionContext } from "../program/walk.js";
-import { rustRuntimeCarrierKey } from "../../policy/model/selections.js";
-import { rustTargetTypeRefEquals } from "../../policy/types/equality.js";
+import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";

@@ -29,14 +29,14 @@ import {
   rustCallableProtocol,
   rustClosureProtocol,
   rustCallableTargetType,
-} from "../../policy/types/target-types.js";
+} from "../../target-model/types/index.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
-import { isDenseDataArray } from "../../policy/model/closed-data.js";
+import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { recordBindingPatternFacts, recordDefaultParameterInitializerFacts, recordParameterAbiFacts, resolveParameterAbi, setParameterAbiFact } from "../declarations/types-and-bindings.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
 import { resolveRustContextualParameterAbi } from "../../policy/ownership/source-callable-abi.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
-import { rustRuntimeCarrierKey } from "../../policy/model/selections.js";
+import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
 import { setCarrierFact } from "../operations/project-calls.js";
 import type { ExtensionFactSubject, Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";

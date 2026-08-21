@@ -5,17 +5,17 @@ import type {
   Type,
 } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { rustTargetTypeRefEquals } from "../../policy/types/equality.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import {
   KindStringLiteral,
   Node_Type,
 } from "@tsonic/target-api/source";
-import { isDenseDataArray } from "../../policy/model/closed-data.js";
+import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import {
   rustSourceTypeCarrier,
   rustSourceTypeCarrierValue,
   rustSourceUnionCarrierValue,
-} from "../../policy/types/target-types.js";
+} from "../../target-model/types/index.js";
 import type {
   RustSourceEnumVariant,
   RustSourceObjectField,

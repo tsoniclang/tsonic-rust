@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { Node_Type } from "@tsonic/target-api/source";
-import { isRustNeverCarrier, isRustUnitCarrier } from "../../../policy/types/target-types.js";
+import { isRustNeverCarrier, isRustUnitCarrier } from "../../../target-model/types/index.js";
 import type { RustBlock, RustItem } from "../../target-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planBlockLike } from "../statements/index.js";
@@ -23,9 +23,6 @@ import {
 import type {
   RustSourceCallableSpecializationVariant,
 } from "../../../analysis/callables/specializations.js";
-import {
-  publishRustSourceCallableContract,
-} from "../artifacts/source-callable-contracts.js";
 import {
   allocateRustSyntheticName,
   createRustSyntheticNameState,
@@ -334,12 +331,7 @@ function planRustFunctionItem(
         }],
       },
     };
-    return publishRustSourceCallableContract(
-      node,
-      item,
-      context,
-      source.specialization?.targetTypeArguments,
-    ) ? item : undefined;
+    return item;
   }
   if (!isUnit && !rustBlockTerminates(body)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -382,12 +374,5 @@ function planRustFunctionItem(
       ),
     },
   };
-  return publishRustSourceCallableContract(
-    node,
-    item,
-    context,
-    source.specialization?.targetTypeArguments,
-  )
-    ? item
-    : undefined;
+  return item;
 }

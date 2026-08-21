@@ -6,14 +6,14 @@ import {
 } from "../../../policy/evidence/selected-source.js";
 import { acceptDeclarationOperation, acceptRustMemberOperation, acceptRustOperation, isDeclarationFileSubject, normalizeSelectedLiteralCarrier, rejectSelectedOperation, selectedDeclarationIsCallable, selectedMemberReceiverCarrier, sourceOperationId } from "./result.js";
 import { finalizeProviderOperationFromSubjects, mapProviderCheckedOperation } from "./conversions.js";
-import { isDenseDataArray } from "../../../policy/model/closed-data.js";
+import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
 import { isProjectAccessorDeclaration, selectRustFixedArrayLengthProperty, selectStructuralSourceProperty } from "./structural-properties.js";
 import { Node_Type } from "@tsonic/target-api/source";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
-import { rustCallableProtocol, rustSourceTypeCarrier, rustSourcePrimitiveTargetType } from "../../../policy/types/target-types.js";
+import { rustCallableProtocol, rustSourceTypeCarrier, rustSourcePrimitiveTargetType } from "../../../target-model/types/index.js";
 import { rustProjectObjectField, rustProjectStaticFieldStorage } from "../../project-types/object-layout.js";
 import { rustSourceCallableReturnFactKey } from "../../facts/keys.js";
-import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectJsSurfaceOperation } from "../../../policy/operations/js-surface.js";
 import { selectRustGeneratorSourceProperty } from "../../../policy/types/generator-source-profile.js";
 import { tsonicFixedArrayProviderMember } from "@tsonic/source-core/facts";

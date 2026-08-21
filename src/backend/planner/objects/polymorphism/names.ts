@@ -1,6 +1,6 @@
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
-import { rustSourceTypeCarrierValue } from "../../../../policy/types/target-types.js";
+import { rustSourceTypeCarrierValue } from "../../../../target-model/types/index.js";
 import type { RustExpr, RustType, RustTypeParameter } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { sourceModuleItemPath } from "../../program/plan-context.js";
