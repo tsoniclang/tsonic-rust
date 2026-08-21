@@ -1,6 +1,6 @@
-import type { TargetTypeRef } from "../../../policy/types/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { registerAliasFromPath } from "../program/plan-context.js";
-import type { RustType } from "../../rust-ast/nodes.js";
+import type { RustType } from "../../target-ast/nodes.js";
 import {
   rustSourceTypeCarrierValue,
   rustSourceUnionCarrierValue,
@@ -241,8 +241,10 @@ export function rustTypeFromCarrierInContext(
     readonly usedAliases?: Set<string>;
     readonly typeParameterSubstitutions?: ReadonlyMap<string, TargetTypeRef>;
     readonly input: {
-      readonly names: import("../../../policy/names/model.js").RustNamePlan;
-      readonly structuralShapes: import("../../../analysis/objects/structural-shape-plan.js").RustStructuralShapePlan;
+      readonly program: {
+        readonly names: import("../../../policy/names/model.js").RustNamePlan;
+        readonly structuralShapes: import("../../../analysis/objects/structural-shape-plan.js").RustStructuralShapePlan;
+      };
     };
   },
 ): RustType | undefined {
@@ -254,7 +256,7 @@ export function rustTypeFromCarrierInContext(
     if (moduleName === undefined) {
       return undefined;
     }
-    const typeName = context.input.names.nameForSourceType(value.fileName, value.typeName);
+    const typeName = context.input.program.names.nameForSourceType(value.fileName, value.typeName);
     if (typeName === undefined) {
       return undefined;
     }
@@ -266,7 +268,7 @@ export function rustTypeFromCarrierInContext(
       : moduleName === context.moduleName ? typeName : `crate::${moduleName}::${typeName}`;
   };
   const resolveStructuralShape = (shapeCarrier: TargetTypeRef): RustType | undefined => {
-    const definition = context.input.structuralShapes.definitionForCarrier(shapeCarrier);
+    const definition = context.input.program.structuralShapes.definitionForCarrier(shapeCarrier);
     if (definition === undefined) {
       return undefined;
     }
@@ -326,8 +328,10 @@ export function rustReturnTypeFromCarrierInContext(
     readonly usedAliases?: Set<string>;
     readonly typeParameterSubstitutions?: ReadonlyMap<string, TargetTypeRef>;
     readonly input: {
-      readonly names: import("../../../policy/names/model.js").RustNamePlan;
-      readonly structuralShapes: import("../../../analysis/objects/structural-shape-plan.js").RustStructuralShapePlan;
+      readonly program: {
+        readonly names: import("../../../policy/names/model.js").RustNamePlan;
+        readonly structuralShapes: import("../../../analysis/objects/structural-shape-plan.js").RustStructuralShapePlan;
+      };
     };
   },
 ): RustType | undefined {

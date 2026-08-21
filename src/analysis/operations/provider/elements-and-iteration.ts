@@ -33,7 +33,7 @@ import { acceptDeclarationOperation, acceptRustMemberOperation, acceptRustOperat
 import { finalizeProviderOperationFromSubjects, mapProviderCheckedOperation } from "./conversions.js";
 import { isDenseDataArray } from "../../../policy/model/closed-data.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
-import { rustInt32ToUsizeValueConversion } from "../../../policy/conversions/model.js";
+import { rustInt32ToUsizeValueConversion } from "../../../target-model/conversions/model.js";
 import { rustProjectObjectIndexSignature } from "../../project-types/object-layout.js";
 import { rustRuntimeCarrierKey } from "../../../policy/model/selections.js";
 import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
@@ -51,7 +51,7 @@ import type {
 import type { ExtensionFactSubject, Node } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { RustProviderOperationTemplate, RustTargetOperationFact } from "../../facts/keys.js";
-import type { TargetTypeRef } from "../../../policy/types/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function selectRustCheckedElementAccess(
   request: RustCheckedElementSelectionInput,

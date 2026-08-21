@@ -3,9 +3,9 @@ import type {
   RustFinalizedOperationKind,
   RustProviderConstantArgument,
   RustProviderOperationForm,
-} from "./model.js";
+} from "../../target-model/operations/model.js";
 import { rustValueConversionContract } from "../conversions/contracts.js";
-import { isRustBinaryOperator, rustBinaryOperatorTraitPath } from "../../backend/model/syntax.js";
+import { isRustBinaryOperator, rustBinaryOperatorTraitPath } from "../../target-model/syntax/tokens.js";
 import { isDenseDataArray } from "../model/closed-data.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../types/equality.js";
 

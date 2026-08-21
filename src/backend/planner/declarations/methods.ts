@@ -26,14 +26,14 @@ import { projectOwnMethods } from "../objects/polymorphism/model.js";
 import { readRustProjectMethodOverride } from "../objects/project-objects.js";
 import { resolveRustCallableBodyReturnType } from "./callable-body-return.js";
 import { rustDeclarationRequiresUnsafe, rustSafetyAttributesForDeclaration } from "../safety/explicit-safety.js";
-import { rustLintAttributes } from "../../rust-ast/lint-policy.js";
+import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
 import { rustProjectCallableTargetName } from "../../../analysis/facts/source-member-name.js";
 import { rustReturnTypeFromCarrierInContext } from "../types/render.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustProjectTypeDefinition } from "../../../analysis/project-types/type-policy.js";
-import type { RustType, RustImplFunction, RustStmt } from "../../rust-ast/nodes.js";
-import type { TargetTypeRef } from "../../../policy/types/model.js";
+import type { RustType, RustImplFunction, RustStmt } from "../../target-ast/nodes.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function planProjectMethod(
   member: Node,
@@ -46,10 +46,14 @@ export function planProjectMethod(
   },
 ): RustImplFunction | undefined {
   let context = outerContext;
-  const { ast } = context.input;
+  const { ast } = context.input.program.source;
   const sourceMethodName = options?.targetName ??
-    context.input.names.nameForDeclaration(member) ??
-    rustProjectCallableTargetName(member, context.input);
+    context.input.program.names.nameForDeclaration(member) ??
+    rustProjectCallableTargetName(member, {
+      ast: context.input.program.source.ast,
+      names: context.input.program.names,
+      semanticsFor: context.input.program.source.semantics.forNode,
+    });
   const isUnsafe = rustDeclarationRequiresUnsafe(
     member,
     options?.safetyPlacement ?? "declaration",
@@ -87,7 +91,7 @@ export function planProjectMethod(
     return undefined;
   }
   context = genericPlan.context;
-  const generatorFact = context.input.facts.getFact(member, rustGeneratorFactKey);
+  const generatorFact = context.input.program.facts.getFact(member, rustGeneratorFactKey);
   const syntheticNames = context.syntheticNames ?? createRustSyntheticNameState(ast, member, []);
   const parameterPlan = planRustCallableParameters(member, context, syntheticNames, {
     requireStatic: generatorFact !== undefined,
@@ -97,7 +101,7 @@ export function planProjectMethod(
   }
   const params = parameterPlan.params;
   const returnTypeNode = Node_Type(ast, member);
-  const asyncFact = context.input.facts.getFact(member, rustAsyncFunctionFactKey);
+  const asyncFact = context.input.program.facts.getFact(member, rustAsyncFunctionFactKey);
   const sourceAsync = ast.hasModifierKind(member, "async");
   if (sourceAsync && generatorFact === undefined && asyncFact === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -108,7 +112,7 @@ export function planProjectMethod(
     return undefined;
   }
   const returnCarrier = generatorFact?.carrier ?? asyncFact?.outputCarrier ??
-    context.input.facts.getFact(member, rustSourceCallableReturnFactKey)?.returnCarrier;
+    context.input.program.facts.getFact(member, rustSourceCallableReturnFactKey)?.returnCarrier;
   if (returnCarrier === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, returnTypeNode ?? member),
@@ -117,7 +121,7 @@ export function planProjectMethod(
     ));
     return undefined;
   }
-  const fallible = context.input.facts.getFact(member, rustFallibleFactKey) !== undefined;
+  const fallible = context.input.program.facts.getFact(member, rustFallibleFactKey) !== undefined;
   const callableErrorBoundary = fallible
     ? options?.fallibleBoundary ?? rustErrorBoundaryForProjectMember(member, context)
     : undefined;
@@ -215,7 +219,7 @@ export function planProjectMethod(
     ));
     return undefined;
   }
-  const selfMode = isStatic ? undefined : context.input.facts.getFact(member, rustSelfModeFactKey);
+  const selfMode = isStatic ? undefined : context.input.program.facts.getFact(member, rustSelfModeFactKey);
   if (!isStatic && selfMode === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, member),
@@ -319,22 +323,22 @@ export function planProjectMethod(
 }
 function planDirectProjectMethodOverridePrelude(
   member: Node,
-  params: readonly import("../../rust-ast/nodes.js").RustFunctionParam[],
+  params: readonly import("../../target-ast/nodes.js").RustFunctionParam[],
   syntheticNames: import("../names/synthetic.js").RustSyntheticNameState,
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
-  const usage = context.input.projectMethodProperties.usageFor(member);
+  const usage = context.input.program.projectMethodProperties.usageFor(member);
   if (usage?.writable !== true) {
     return [];
   }
-  const owner = context.input.projectTypes.definitionContainingDeclaration(member);
+  const owner = context.input.program.projectTypes.definitionContainingDeclaration(member);
   const targetName = owner === undefined
     ? undefined
-    : context.input.projectTypes.fieldStorageName(owner, member);
-  const representation = context.input.objectRepresentations.representationFor(owner);
+    : context.input.program.projectTypes.fieldStorageName(owner, member);
+  const representation = context.input.program.objectRepresentations.representationFor(owner);
   if (owner?.kind !== "class" || targetName === undefined ||
     representation === undefined ||
-    context.input.facts.getFact(member, rustFallibleFactKey) === undefined ||
+    context.input.program.facts.getFact(member, rustFallibleFactKey) === undefined ||
     syntheticNames === undefined) {
     return undefined;
   }
@@ -374,7 +378,7 @@ export function planProjectMethodVariants(
   member: Node,
   context: RustPlanContext,
 ): readonly RustImplFunction[] | undefined {
-  const specializations = context.input.sourceCallableSpecializations;
+  const specializations = context.input.program.sourceCallableSpecializations;
   if (!specializations.requiresSpecialization(member)) {
     const method = planProjectMethod(member, context);
     return method === undefined ? undefined : Object.freeze([method]);
@@ -410,7 +414,7 @@ export function planProjectStaticMethods(
 ): readonly RustImplFunction[] | undefined {
   const methods: RustImplFunction[] = [];
   for (const member of projectOwnMethods(definition, context)) {
-    if (!context.input.ast.hasModifierKind(member, "static")) {
+    if (!context.input.program.source.ast.hasModifierKind(member, "static")) {
       continue;
     }
     const planned = planProjectMethodVariants(member, context);

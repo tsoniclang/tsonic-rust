@@ -3,7 +3,7 @@ import { closedMetadataKey, isDenseDataArray } from "../../policy/model/closed-d
 import { allocateRustGeneratedName } from "../../policy/names/generated.js";
 import type { RustNamePlan } from "../../policy/names/model.js";
 import { rustTargetTypeRefEquals } from "../../policy/types/equality.js";
-import type { TargetTypeRef } from "../../policy/types/model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 import {
   rustTargetTypeParameterNames,
   substituteRustTargetTypeParameters,

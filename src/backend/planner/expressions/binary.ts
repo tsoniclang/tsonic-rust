@@ -16,9 +16,9 @@ import {
 import { diagnosticInput, registerAliasFromPath, rustActiveErrorType } from "../program/plan-context.js";
 import { rustTargetRuntimeErrorType } from "../types/error-boundary.js";
 import { effectivePlannedExpressionCarrier, expressionCarrier, requireExpressionCarrier, rustOperationFact, rustPartialOrderingTest, selectedOperationMatches } from "./fundamentals.js";
-import { isRustBinaryOperator } from "../../model/syntax.js";
+import { isRustBinaryOperator } from "../../../target-model/syntax/tokens.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
-import { negateRustBooleanExpression, rustBorrowedStringView, rustStringConcat } from "../../rust-ast/expressions.js";
+import { negateRustBooleanExpression, rustBorrowedStringView, rustStringConcat } from "../../target-ast/expressions.js";
 import { planExpression, planExpressionBeforeValueProjections } from "./entry.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
 import { planRustProgramErrorTypeTest } from "./error-operations.js";
@@ -28,20 +28,20 @@ import { rustTargetOperationText } from "../../../analysis/facts/target-operatio
 import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
 import { rustValueCarrierBeforeOptionProjection } from "../../../analysis/facts/value-carrier-queries.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr } from "../../rust-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
 
 export function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
   if (fact?.kind === "program-error-type-test") {
-    const leftNode = BinaryExpression_Left(context.input.ast, node);
+    const leftNode = BinaryExpression_Left(context.input.program.source.ast, node);
     const left = leftNode === undefined ? undefined : planExpression(leftNode, context);
     if (leftNode === undefined || left === undefined ||
       !rustTargetTypeRefEquals(effectivePlannedExpressionCarrier(leftNode, context), fact.sourceCarrier) ||
       !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.program-error-type-test-carrier") ||
       !selectedOperationMatches(
-        context.input.facts.getSelectedTargetOperator(node),
+        context.input.program.facts.getSelectedTargetOperator(node),
         fact.operationId,
         "operator",
         fact.resultCarrier,
@@ -57,7 +57,7 @@ export function planBinaryExpression(node: Node, context: RustPlanContext): Rust
     return planRustProgramErrorTypeTest(node, left, fact, context);
   }
   if (fact?.kind === "project-type-test") {
-    const leftNode = BinaryExpression_Left(context.input.ast, node);
+    const leftNode = BinaryExpression_Left(context.input.program.source.ast, node);
     const plannedLeft = leftNode === undefined ? undefined : planExpression(leftNode, context);
     const left = leftNode === undefined || plannedLeft === undefined
       ? undefined
@@ -66,7 +66,7 @@ export function planBinaryExpression(node: Node, context: RustPlanContext): Rust
       !rustTargetTypeRefEquals(effectivePlannedExpressionCarrier(leftNode, context), fact.sourceCarrier) ||
       !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.project-type-test-carrier") ||
       !selectedOperationMatches(
-        context.input.facts.getSelectedTargetOperator(node),
+        context.input.program.facts.getSelectedTargetOperator(node),
         fact.operationId,
         "operator",
         fact.resultCarrier,
@@ -87,7 +87,7 @@ export function planBinaryExpression(node: Node, context: RustPlanContext): Rust
   }
   if ((fact?.kind === "operator-token" || fact?.kind === "operator-call" || fact?.kind === "string-concat") &&
     !selectedOperationMatches(
-      context.input.facts.getSelectedTargetOperator(node),
+      context.input.program.facts.getSelectedTargetOperator(node),
       fact.operationId,
       "operator",
       fact.resultCarrier,
@@ -104,18 +104,18 @@ export function planBinaryExpression(node: Node, context: RustPlanContext): Rust
     if (!requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.nullish-carrier")) {
       return undefined;
     }
-    const leftNode = BinaryExpression_Left(context.input.ast, node);
+    const leftNode = BinaryExpression_Left(context.input.program.source.ast, node);
     return leftNode === undefined ? undefined : planExpression(leftNode, context);
   }
   if (fact !== undefined && fact.kind === "option-coalesce") {
-    const leftNode = BinaryExpression_Left(context.input.ast, node);
-    const rightNode = BinaryExpression_Right(context.input.ast, node);
+    const leftNode = BinaryExpression_Left(context.input.program.source.ast, node);
+    const rightNode = BinaryExpression_Right(context.input.program.source.ast, node);
     const left = leftNode === undefined ? undefined : planExpression(leftNode, context);
     const right = rightNode === undefined ? undefined : planExpression(rightNode, context);
     if (left === undefined || right === undefined ||
       !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.option-coalesce-carrier") ||
       !selectedOperationMatches(
-        context.input.facts.getSelectedTargetOperator(node),
+        context.input.program.facts.getSelectedTargetOperator(node),
         fact.operationId,
         "operator",
         fact.resultCarrier,
@@ -141,7 +141,7 @@ export function planBinaryExpression(node: Node, context: RustPlanContext): Rust
             : right,
         };
     const presentValueName = allocateRustSyntheticName(
-      context.syntheticNames ?? createRustSyntheticNameState(context.input.ast, node, []),
+      context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []),
       "present_value",
     );
     const present: RustExpr = fallbackIsFallible && fact.rightOperand !== "option"
@@ -183,8 +183,8 @@ export function planBinaryExpression(node: Node, context: RustPlanContext): Rust
     };
   }
   if (fact !== undefined && fact.kind === "option-check") {
-    const leftNode = BinaryExpression_Left(context.input.ast, node);
-    const rightNode = BinaryExpression_Right(context.input.ast, node);
+    const leftNode = BinaryExpression_Left(context.input.program.source.ast, node);
+    const rightNode = BinaryExpression_Right(context.input.program.source.ast, node);
     const optionNode = fact.optionOperand === "left" ? leftNode : rightNode;
     const nullishNode = fact.optionOperand === "left" ? rightNode : leftNode;
     const option = optionNode === undefined
@@ -199,7 +199,7 @@ export function planBinaryExpression(node: Node, context: RustPlanContext): Rust
       !rustTargetTypeRefEquals(expressionCarrier(nullishNode, context), fact.nullishCarrier) ||
       !requireExpressionCarrier(node, boolCarrier, context, "rust.backend.option-check-carrier") ||
       !selectedOperationMatches(
-        context.input.facts.getSelectedTargetOperator(node),
+        context.input.program.facts.getSelectedTargetOperator(node),
         fact.operationId,
         "operator",
         boolCarrier,
@@ -230,7 +230,7 @@ export function planBinaryExpression(node: Node, context: RustPlanContext): Rust
       };
     }
     const optionName = allocateRustSyntheticName(
-      context.syntheticNames ?? createRustSyntheticNameState(context.input.ast, node, []),
+      context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []),
       "option_value",
     );
     return {
@@ -245,8 +245,8 @@ export function planBinaryExpression(node: Node, context: RustPlanContext): Rust
     };
   }
   if (fact !== undefined && fact.kind === "option-equality") {
-    const leftNode = BinaryExpression_Left(context.input.ast, node);
-    const rightNode = BinaryExpression_Right(context.input.ast, node);
+    const leftNode = BinaryExpression_Left(context.input.program.source.ast, node);
+    const rightNode = BinaryExpression_Right(context.input.program.source.ast, node);
     const left = leftNode === undefined
       ? undefined
       : planExpressionBeforeValueProjections(leftNode, context, "value");
@@ -256,7 +256,7 @@ export function planBinaryExpression(node: Node, context: RustPlanContext): Rust
     const boolCarrier = rustSourcePrimitiveTargetType("bool");
     const leftCarrier = leftNode === undefined ? undefined : expressionCarrier(leftNode, context);
     const rightCarrier = rightNode === undefined ? undefined : expressionCarrier(rightNode, context);
-    const selectedOperation = context.input.facts.getSelectedTargetOperator(node);
+    const selectedOperation = context.input.program.facts.getSelectedTargetOperator(node);
     if (leftNode === undefined || rightNode === undefined || left === undefined || right === undefined ||
       !rustTargetTypeRefEquals(leftCarrier, fact.optionCarrier) ||
       !rustTargetTypeRefEquals(rightCarrier, fact.optionCarrier) ||
@@ -295,8 +295,8 @@ export function planBinaryExpression(node: Node, context: RustPlanContext): Rust
     };
   }
   if (fact !== undefined && fact.kind === "option-value-equality") {
-    const leftNode = BinaryExpression_Left(context.input.ast, node);
-    const rightNode = BinaryExpression_Right(context.input.ast, node);
+    const leftNode = BinaryExpression_Left(context.input.program.source.ast, node);
+    const rightNode = BinaryExpression_Right(context.input.program.source.ast, node);
     const optionNode = fact.optionOperand === "left" ? leftNode : rightNode;
     const valueNode = fact.optionOperand === "left" ? rightNode : leftNode;
     const option = optionNode === undefined
@@ -305,13 +305,13 @@ export function planBinaryExpression(node: Node, context: RustPlanContext): Rust
     const value = valueNode === undefined ? undefined : planExpression(valueNode, context);
     const valueProjection = valueNode === undefined
       ? undefined
-      : context.input.facts.getFact(valueNode, rustOptionProjectionFactKey);
+      : context.input.program.facts.getFact(valueNode, rustOptionProjectionFactKey);
     const optionCarrier = optionNode === undefined
       ? undefined
       : expressionCarrier(optionNode, context);
     const valueCarrier = valueNode === undefined
       ? undefined
-      : rustValueCarrierBeforeOptionProjection(context.input.facts, valueNode);
+      : rustValueCarrierBeforeOptionProjection(context.input.program.facts, valueNode);
     if (optionNode === undefined || valueNode === undefined || option === undefined || value === undefined ||
       !rustTargetTypeRefEquals(optionCarrier, fact.optionCarrier) ||
       !rustTargetTypeRefEquals(valueCarrier, fact.valueCarrier) ||
@@ -323,7 +323,7 @@ export function planBinaryExpression(node: Node, context: RustPlanContext): Rust
         "rust.backend.option-value-equality-carrier",
       ) ||
       !selectedOperationMatches(
-        context.input.facts.getSelectedTargetOperator(node),
+        context.input.program.facts.getSelectedTargetOperator(node),
         fact.operationId,
         "operator",
         rustSourcePrimitiveTargetType("bool"),
@@ -355,14 +355,14 @@ export function planBinaryExpression(node: Node, context: RustPlanContext): Rust
     };
   }
   if (fact !== undefined && fact.kind === "disjoint-equality") {
-    const leftNode = BinaryExpression_Left(context.input.ast, node);
-    const rightNode = BinaryExpression_Right(context.input.ast, node);
+    const leftNode = BinaryExpression_Left(context.input.program.source.ast, node);
+    const rightNode = BinaryExpression_Right(context.input.program.source.ast, node);
     const left = leftNode === undefined ? undefined : planExpression(leftNode, context);
     const right = rightNode === undefined ? undefined : planExpression(rightNode, context);
     if (leftNode === undefined || rightNode === undefined || left === undefined || right === undefined ||
       !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.disjoint-equality-carrier") ||
       !selectedOperationMatches(
-        context.input.facts.getSelectedTargetOperator(node),
+        context.input.program.facts.getSelectedTargetOperator(node),
         fact.operationId,
         "operator",
         fact.resultCarrier,
@@ -395,8 +395,8 @@ export function planBinaryExpression(node: Node, context: RustPlanContext): Rust
     ));
     return undefined;
   }
-  const leftNode = BinaryExpression_Left(context.input.ast, node);
-  const rightNode = BinaryExpression_Right(context.input.ast, node);
+  const leftNode = BinaryExpression_Left(context.input.program.source.ast, node);
+  const rightNode = BinaryExpression_Right(context.input.program.source.ast, node);
   const left = leftNode === undefined ? undefined : planExpression(leftNode, context);
   const right = rightNode === undefined ? undefined : planExpression(rightNode, context);
   if (leftNode === undefined || rightNode === undefined || left === undefined || right === undefined) {

@@ -14,9 +14,9 @@ export type {
 export {
   planRustSourceOutputIdentities,
   rustModuleNameForSourcePath,
-} from "../../../analysis/program/source-output-identities.js";
+} from "../names/source-output-identities.js";
 export type {
   RustSourceFileOutputIdentity,
   RustSourceOutputIdentityPlan,
   RustSourceOutputIdentityPlannerHost,
-} from "../../../analysis/program/source-output-identities.js";
+} from "../names/source-output-identities.js";

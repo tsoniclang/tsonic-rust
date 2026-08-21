@@ -7,13 +7,13 @@ import {
   isRustFinalizedTaggedArrayInput,
 } from "./conversions.js";
 import { isDenseDataArray } from "../../../policy/model/closed-data.js";
-import { isRustFallibleErrorBoundary } from "../../../policy/operations/error-boundary.js";
+import { isRustFallibleErrorBoundary } from "../../../target-model/operations/error-boundary.js";
 import { isRustTargetTypeRef } from "../../../policy/types/equality.js";
 import { operationKinds, validateRustFinalizedOperationAbi } from "./validation.js";
 import { rustFutureTargetType, rustTargetTypeParameterNames } from "../../../policy/types/target-types.js";
 import { rustProviderOperationFormAcceptsTargetTypeArguments, rustProviderOperationFormContractViolation } from "../../../policy/operations/forms.js";
 import type { FinalizeRustProviderOperationAbiOptions, RustFinalizedOperationAbiFor, RustFinalizedOperationResult, RustFinalizedTargetInput } from "./model.js";
-import type { RustFinalizedOperationKind } from "../../../policy/operations/model.js";
+import type { RustFinalizedOperationKind } from "../../../target-model/operations/model.js";
 
 export function finalizeRustProviderOperationAbi<OperationKind extends RustFinalizedOperationKind>(
   options: FinalizeRustProviderOperationAbiOptions<OperationKind>,

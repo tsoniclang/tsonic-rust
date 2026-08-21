@@ -10,8 +10,8 @@ import type {
   RustValueConversion,
 } from "../keys.js";
 import type { FinalizeRustProviderOperationAbiOptions, RustFinalizedConstantInput, RustFinalizedOperationAbi, RustFinalizedSourceArgument, RustFinalizedSourceInput, RustFinalizedTargetInput } from "./model.js";
-import type { RustFinalizedOperationKind } from "../../../policy/operations/model.js";
-import type { TargetTypeRef } from "../../../policy/types/model.js";
+import type { RustFinalizedOperationKind } from "../../../target-model/operations/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function createInputFactory(
   receiverCarrier: TargetTypeRef | undefined,

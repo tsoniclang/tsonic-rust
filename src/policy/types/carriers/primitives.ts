@@ -1,7 +1,7 @@
 import { isRustNullCarrier, isRustUndefinedCarrier } from "./js.js";
-import type { RustPrimitiveTypeName } from "../../../backend/model/syntax.js";
+import type { RustPrimitiveTypeName } from "../../../target-model/syntax/tokens.js";
 import type { SourcePrimitiveKind } from "@tsonic/tsts";
-import type { TargetTypeRef } from "../model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 const rustPrimitiveNames: Readonly<Partial<Record<SourcePrimitiveKind, RustPrimitiveTypeName>>> = {
   char: "u16",

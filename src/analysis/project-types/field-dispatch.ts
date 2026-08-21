@@ -213,7 +213,7 @@ function resolveFieldImplementation(
     return undefined;
   }
   const declarations = input.semanticsFor(declaration)
-    .getSymbolDeclarations(selected.implementation.symbol);
+    .declarations.symbolDeclarations(selected.implementation.symbol);
   const getters = declarations.filter((candidate) =>
     input.ast.kindName(candidate) === "KindGetAccessor");
   const setters = declarations.filter((candidate) =>

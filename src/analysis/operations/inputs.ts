@@ -47,7 +47,7 @@ import { setCarrierFact, setRustOperationFact } from "./project-calls.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustTargetOperationFact } from "../facts/keys.js";
-import type { TargetTypeRef } from "../../policy/types/model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export function recordSelectedOperationInputs(
   walk: RustFactWalk,
@@ -344,7 +344,7 @@ function contextualTupleOmissions(
     return [];
   }
   const semantics = walk.context.semantics(sourceFile);
-  const contextual = semantics.selectContextualTupleLiteral(
+  const contextual = semantics.types.contextualTupleSelection(
     expression,
     presentElementCount,
   );
@@ -391,7 +391,7 @@ export function recordForOfFacts(
   if (expression !== undefined) {
     resolveExpressionCarrier(walk, expression, sourceFile, undefined);
   }
-  const source = walk.context.semantics(sourceFile).getResolvedIterationInfo(statement);
+  const source = walk.context.semantics(sourceFile).operations.iteration(statement);
   if (expression !== undefined && source !== undefined) {
     recordPolicySelection(walk, statement, selectRustCheckedIteration({
       target: "rust",

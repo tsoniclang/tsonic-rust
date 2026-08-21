@@ -1,5 +1,5 @@
-import type { TargetTypeRef } from "./model.js";
-import type { RustProviderOperationTemplate } from "../operations/model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustProviderOperationTemplate } from "../../target-model/operations/model.js";
 import {
   getRustGeneratorProtocol,
   getRustIteratorResultProtocol,

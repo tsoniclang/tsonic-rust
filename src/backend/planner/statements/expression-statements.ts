@@ -27,7 +27,7 @@ import {
 } from "../../../analysis/facts/keys.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { diagnosticInput } from "../program/plan-context.js";
-import { isRustAssignmentOperator } from "../../model/syntax.js";
+import { isRustAssignmentOperator } from "../../../target-model/syntax/tokens.js";
 import { isRustStringCarrier } from "../../../policy/types/target-types.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planExpression, sourceFieldSelectedOperationMatches, sourceUnionFieldSelectedOperationMatches } from "../expressions/index.js";
@@ -37,15 +37,15 @@ import { planRustSourceUnionFieldProjection } from "../expressions/unions.js";
 import { readRustProjectDispatchedField, writeRustProjectDispatchedField } from "../objects/project-objects.js";
 import { planRustProjectFieldDispatchRoles } from "../objects/project-field-dispatch.js";
 import { readRustStoredObjectField, writeRustStoredObjectField } from "../objects/project-storage.js";
-import { rustStringConcat } from "../../rust-ast/expressions.js";
+import { rustStringConcat } from "../../target-ast/expressions.js";
 import { planRustDirectStorage } from "../expressions/updates/target.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustAssignmentOperationFact } from "./core.js";
-import type { RustExpr, RustStmt } from "../../rust-ast/nodes.js";
+import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 
 export function planExpressionStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
-  const expression = Node_Expression(context.input.ast, node);
+  const expression = Node_Expression(context.input.program.source.ast, node);
   return expression === undefined
     ? undefined
     : planExpressionAsStatement(expression, context);
@@ -55,10 +55,10 @@ export function planExpressionAsStatement(
   expression: Node,
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
-  const { ast } = context.input;
+  const { ast } = context.input.program.source;
   const expressionKind = ast.kindName(expression);
   if (expressionKind === KindBinaryExpression) {
-    const operatorToken = BinaryExpression_OperatorToken(context.input.ast, expression);
+    const operatorToken = BinaryExpression_OperatorToken(context.input.program.source.ast, expression);
     const operatorKind = operatorToken === undefined ? "" : ast.kindName(operatorToken);
     const compoundTokens = [
       KindPlusEqualsToken,
@@ -69,7 +69,7 @@ export function planExpressionAsStatement(
     ];
     let selectedAssignmentFact: RustAssignmentOperationFact | undefined;
     if (operatorKind === KindEqualsToken) {
-      const assignment = context.input.facts.getFact(expression, rustTargetOperationFactKey);
+      const assignment = context.input.program.facts.getFact(expression, rustTargetOperationFactKey);
       if (assignment !== undefined && assignment.kind === "runtime-set") {
         return planRuntimeSetStatement(expression, assignment, context);
       }
@@ -93,12 +93,12 @@ export function planExpressionAsStatement(
       selectedAssignmentFact = assignment;
     }
     if (operatorKind === KindEqualsToken || compoundTokens.includes(operatorKind)) {
-      const left = BinaryExpression_Left(context.input.ast, expression);
-      const right = BinaryExpression_Right(context.input.ast, expression);
+      const left = BinaryExpression_Left(context.input.program.source.ast, expression);
+      const right = BinaryExpression_Right(context.input.program.source.ast, expression);
       if (left === undefined || right === undefined) {
         return undefined;
       }
-      const sourceField = context.input.facts.getFact(left, rustTargetOperationFactKey);
+      const sourceField = context.input.program.facts.getFact(left, rustTargetOperationFactKey);
       const storageOverride = context.expressionOverrides?.get(left);
       const target = planRustDirectStorage(left, context);
       if (target === undefined && sourceField?.kind !== "source-accessor" &&
@@ -115,7 +115,7 @@ export function planExpressionAsStatement(
         return undefined;
       }
       const fact = selectedAssignmentFact ??
-        context.input.facts.getFact(expression, rustTargetOperationFactKey);
+        context.input.program.facts.getFact(expression, rustTargetOperationFactKey);
       if (fact === undefined || (fact.kind !== "operator-token" && fact.kind !== "operator-call")) {
         context.diagnostics.push(missingFactDiagnostic(
           diagnosticInput(context, expression),
@@ -142,7 +142,7 @@ export function planExpressionAsStatement(
         return undefined;
       }
       const valueNode = operatorKind === KindEqualsToken && operator !== "="
-        ? BinaryExpression_Right(context.input.ast, right)
+        ? BinaryExpression_Right(context.input.program.source.ast, right)
         : right;
       if (valueNode === undefined) {
         context.diagnostics.push(missingFactDiagnostic(
@@ -361,7 +361,7 @@ export function planExpressionAsStatement(
           ? undefined
           : sourceField.declaration === undefined
             ? undefined
-            : context.input.projectFieldDispatch.planFor(sourceField.declaration);
+            : context.input.program.projectFieldDispatch.planFor(sourceField.declaration);
         if (sourceField.dispatch !== undefined && dispatchPlan?.write === undefined) {
           context.diagnostics.push(missingFactDiagnostic(
             diagnosticInput(context, left),

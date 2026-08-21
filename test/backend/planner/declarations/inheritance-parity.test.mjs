@@ -5,7 +5,7 @@ import {
   artifactText,
   compileRust,
 } from "../../../helpers/rust-session.mjs";
-import { rustModuleNameForSourcePath } from "../../../../dist/analysis/program/source-output-identities.js";
+import { rustModuleNameForSourcePath } from "../../../../dist/backend/planner/names/source-output-identities.js";
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
 
 function compileExecutable(files, crateName) {

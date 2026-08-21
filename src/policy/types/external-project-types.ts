@@ -1,6 +1,6 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceDeclaredHeritageEdge } from "@tsonic/target-api/source";
-import type { TargetTypeRef } from "./model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 import {
   rustJsErrorTargetType,
   rustOptionTargetType,

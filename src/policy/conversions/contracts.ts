@@ -1,4 +1,4 @@
-import type { TargetTypeRef } from "../types/model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 import {
   isRustTargetTypeRef,
   rustTargetTypeRefEquals,
@@ -6,7 +6,7 @@ import {
 import type {
   RustValueConversion,
   RustValueConversionId,
-} from "../operations/model.js";
+} from "../../target-model/operations/model.js";
 import {
   isRustNeverCarrier,
   isRustNumericCarrier,
@@ -20,7 +20,7 @@ import {
   rustStringTargetType,
   substituteRustTargetTypeParameters,
 } from "../types/target-types.js";
-import type { RustPrimitiveTypeName } from "../../backend/model/syntax.js";
+import type { RustPrimitiveTypeName } from "../../target-model/syntax/tokens.js";
 import { rustNumericPromotionKind } from "../operations/numeric-promotion-model.js";
 
 const boolCarrier = rustSourcePrimitiveTargetType("bool");

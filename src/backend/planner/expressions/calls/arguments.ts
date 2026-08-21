@@ -29,9 +29,9 @@ import { rustValueCarrierTransitionTarget } from "../../../../analysis/facts/val
 import { rustVecRestAssembly } from "../../../../policy/intrinsics/index.js";
 import { validateRustFinalizedOperationAbi } from "../../../../analysis/facts/finalized-operation-abi.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr } from "../../../rust-ast/nodes.js";
+import type { RustExpr } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import type { RustSelectedTargetSignature as SelectedTargetSignatureFact, TargetTypeRef } from "../../../../policy/types/model.js";
+import type { RustSelectedTargetSignature as SelectedTargetSignatureFact, TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
 
 export function shapeRustSourceCallParameters(
@@ -182,7 +182,7 @@ export function planRustSourceCallArgumentEvaluation(
   readonly arguments: readonly RustExpr[];
   readonly bindings: readonly { readonly name: string; readonly value: RustExpr }[];
 } | undefined {
-  const rawArguments = context.input.ast.arguments(call);
+  const rawArguments = context.input.program.source.ast.arguments(call);
   if (!isDenseDataArray(rawArguments) || rawArguments.some((argument) => argument === undefined)) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, call),
@@ -195,8 +195,8 @@ export function planRustSourceCallArgumentEvaluation(
   const hasSpread = fact.parameters.some((parameter) =>
     parameter.inputs.some((input) => input.sourceForm !== "value"));
   const planned = argumentNodes.map((argument) => {
-    const source = context.input.ast.kindName(argument) === KindSpreadElement
-      ? Node_Expression(context.input.ast, argument)
+    const source = context.input.program.source.ast.kindName(argument) === KindSpreadElement
+      ? Node_Expression(context.input.program.source.ast, argument)
       : argument;
     return source === undefined ? undefined : planExpression(source, context);
   });
@@ -231,8 +231,8 @@ export function planRustSelectedSourceCallArguments(
   call: Node,
   context: RustPlanContext,
 ): readonly RustExpr[] | undefined {
-  const fact = context.input.facts.getFact(call, rustTargetOperationFactKey);
-  const selected = context.input.facts.getSelectedTargetCall(call);
+  const fact = context.input.program.facts.getFact(call, rustTargetOperationFactKey);
+  const selected = context.input.program.facts.getSelectedTargetCall(call);
   if (fact?.kind !== "source-call" || selected === undefined ||
     !sourceCallSelectedMemberMatches(fact, selected) ||
     !applyRustSourceCallableRequirements(call, selected, fact, context)) {
@@ -243,7 +243,7 @@ export function planRustSelectedSourceCallArguments(
     ));
     return undefined;
   }
-  const rawArguments = context.input.ast.arguments(call);
+  const rawArguments = context.input.program.source.ast.arguments(call);
   if (!isDenseDataArray(rawArguments) || rawArguments.some((argument) => argument === undefined)) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, call),
@@ -277,7 +277,7 @@ function shapeRustSourceCallInput(
   if (argumentNode === undefined || argument === undefined) {
     return undefined;
   }
-  const passing = context.input.facts.getArgumentPassingFact(argumentNode);
+  const passing = context.input.program.facts.getArgumentPassingFact(argumentNode);
   const expectedPassing = rustArgumentPassingMode(parameter.mode);
   if (passing?.mode !== expectedPassing) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -287,9 +287,9 @@ function shapeRustSourceCallInput(
     ));
     return undefined;
   }
-  const sourceCarrier = context.input.facts.getRuntimeCarrierFact(argumentNode)?.carrier;
+  const sourceCarrier = context.input.program.facts.getRuntimeCarrierFact(argumentNode)?.carrier;
   const convertedCarrier = rustValueCarrierTransitionTarget(
-    context.input.facts,
+    context.input.program.facts,
     argumentNode,
   );
   const selectedInput = selectRustSpreadSourceInput(
@@ -319,7 +319,7 @@ function shapeRustSourceCallInput(
     return undefined;
   }
   const mutable = parameter.mode === "mut-ref";
-  const sourceParameterAbi = context.input.facts.getFact(argumentNode, rustSourceParameterAbiFactKey);
+  const sourceParameterAbi = context.input.program.facts.getFact(argumentNode, rustSourceParameterAbiFactKey);
   const nonConsumingInput = planRustNonConsumingValue(argumentNode, selectedInput, context);
   return sourceParameterAbi?.mode === parameter.mode &&
       rustTargetTypeRefEquals(sourceParameterAbi.parameterCarrier, parameter.parameterCarrier)
@@ -400,7 +400,7 @@ export function planPromotedSourceMethodCall(
   context: RustPlanContext,
 ): RustExpr {
   const syntheticNames = context.syntheticNames ??
-    createRustSyntheticNameState(context.input.ast, node, []);
+    createRustSyntheticNameState(context.input.program.source.ast, node, []);
   const locationName = allocateRustSyntheticName(syntheticNames, "location");
   const ownerName = allocateRustSyntheticName(syntheticNames, "location_value");
   const argumentBindings = arguments_.map((value, index) => ({
@@ -528,7 +528,7 @@ export function requireProviderArgumentPassingFacts(
     }
     if (requiresSelectedParameterPassingFact) {
       const expected = rustArgumentPassingMode(sourceArgument.mode);
-      const actual = context.input.facts.getArgumentPassingFact(argument);
+      const actual = context.input.program.facts.getArgumentPassingFact(argument);
       if (actual === undefined) {
         context.diagnostics.push(missingFactDiagnostic(
           diagnosticInput(context, argument),

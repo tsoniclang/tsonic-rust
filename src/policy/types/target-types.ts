@@ -1,5 +1,5 @@
-export type { TargetTypeRef } from "./model.js";
-export type { RustPrimitiveTypeName } from "../../backend/model/syntax.js";
+export type { TargetTypeRef } from "../../target-model/types/model.js";
+export type { RustPrimitiveTypeName } from "../../target-model/syntax/tokens.js";
 export {
   getRustGeneratorProtocol,
   getRustIteratorResultProtocol,
@@ -73,7 +73,7 @@ export type {
   RustNamedTypeTraitContract,
   RustNamedTypeTraitImplementation,
   RustNamedTypeTraitRequirement,
-} from "./model.js";
+} from "../../target-model/types/model.js";
 export {
   isRustDefinitelyNullishCarrier,
   isRustIntegerCarrier,

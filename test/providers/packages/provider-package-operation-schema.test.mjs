@@ -14,6 +14,7 @@ import {
   mergeRustProviderSemantics,
 } from "../../../dist/providers/packages/index.js";
 import { rustNamedTypeCarrierValue } from "../../../dist/policy/types/target-types.js";
+import { captureRustProviderContributions } from "../../helpers/provider-contributions.mjs";
 
 const int32Carrier = { kind: "source-primitive", name: "int32" };
 
@@ -53,14 +54,7 @@ function definition(overrides = {}) {
 }
 
 function providerContext(selectedCapabilities) {
-  return {
-    project: { entryPoint: "src/index.ts", targets: [{ id: "rust" }] },
-    projectDirectory: "/src",
-    target: { id: "rust", options: {} },
-    targetPack: { id: "rust" },
-    selectedCapabilities,
-    selectedSurfaces: [],
-  };
+  return captureRustProviderContributions(selectedCapabilities);
 }
 
 test("provider operation metadata accepts only structured Rust forms", () => {

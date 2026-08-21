@@ -16,6 +16,7 @@ export {
 } from "./rust-session/provider-core.mjs";
 export {
   artifactText,
+  analyzeRust,
   assertRustTargetRejection,
   checkRustSession,
   compileRust,

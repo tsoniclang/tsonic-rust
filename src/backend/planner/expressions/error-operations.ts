@@ -5,7 +5,7 @@ import type {
   RustTargetOperationFact,
 } from "../../../analysis/facts/keys.js";
 import { isRustProgramErrorCarrier } from "../../../policy/types/target-types.js";
-import type { RustExpr, RustPattern } from "../../rust-ast/nodes.js";
+import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
@@ -78,7 +78,7 @@ export function planRustProgramErrorFlowRead(
   }
   context.usedAliases?.add("rt");
   const valueName = allocateRustSyntheticName(
-    context.syntheticNames ?? createRustSyntheticNameState(context.input.ast, node, []),
+    context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []),
     "program_error",
   );
   return {
@@ -106,11 +106,11 @@ function resolveProgramErrorFactRoute(
   variant: string,
   context: RustPlanContext,
 ): RustProgramErrorRoute | undefined {
-  const definition = context.input.projectTypes.definitionForCarrier(targetCarrier);
+  const definition = context.input.program.projectTypes.definitionForCarrier(targetCarrier);
   if (!isRustProgramErrorCarrier(sourceCarrier) ||
     definition === undefined ||
-    context.input.projectTypes.programErrorVariant(definition) !== variant ||
-    !rustTargetTypeRefEquals(context.input.projectTypes.openCarrier(definition), targetCarrier)) {
+    context.input.program.projectTypes.programErrorVariant(definition) !== variant ||
+    !rustTargetTypeRefEquals(context.input.program.projectTypes.openCarrier(definition), targetCarrier)) {
     return undefined;
   }
   return resolveRustProgramErrorRoute(

@@ -1,19 +1,25 @@
 import type { SourceFile } from "@tsonic/tsts";
 import { resolve } from "node:path";
-import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
+import {
+  rejectedTargetStage,
+  resolvedTargetStage,
+} from "@tsonic/target-api/artifacts";
+import type {
+  TargetDiagnostic,
+  TargetStageResult,
+} from "@tsonic/target-api/artifacts";
 import {
   KindFunctionDeclaration,
   Node_Name,
 } from "@tsonic/target-api/source";
-import { readRustCrateName, readRustOutputType } from "../../../options/rust-target-options.js";
 import { cargoCrateAttributeName } from "../../../providers/model/cargo-reference.js";
 import { isRustUnitCarrier } from "../../../policy/types/target-types.js";
-import { createRustSourceFile } from "../../rust-ast/nodes.js";
-import type { RustItem } from "../../rust-ast/nodes.js";
+import { createRustSourceFile } from "../../target-ast/nodes.js";
+import type { RustItem } from "../../target-ast/nodes.js";
+import { finalizeRustSourceStyle } from "../../target-ast/normalization/source-style.js";
 import { planRustCargoProject } from "../project/cargo.js";
 import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustSourceCallableReturnFactKey } from "../../../analysis/facts/keys.js";
 import type { RustPlanningContext } from "../context.js";
-import { registerRustProviderErrorCarrier } from "../context.js";
 import { reconstructRustSourceFiles } from "../artifacts/reconstruction.js";
 import {
   planRustCrateInitializer,
@@ -22,13 +28,13 @@ import {
 import {
   allocateRustComponentSupportModuleName,
   planRustSourceOutputIdentities,
-} from "../../../analysis/program/source-output-identities.js";
+} from "../names/source-output-identities.js";
 import { applyRustErrorBoundary } from "../types/error-boundary.js";
 import { rustTypeFromCarrier } from "../types/render.js";
 import type {
-  RustArtifactPlanResult,
   RustPlannedArtifact,
-} from "../../artifacts/model.js";
+  RustOutputPlan,
+} from "../../artifact-model/output.js";
 import { planRustSourcePackageFacades } from "./source-package-facades.js";
 import type { RustSourcePackageFacadeExport } from "./source-package-facades.js";
 import {
@@ -46,11 +52,16 @@ import {
   planRustSourcePackageCrateContent,
 } from "./source-package-crates.js";
 
-export function planRustArtifacts(input: RustPlanningContext): RustArtifactPlanResult {
+export function planRustOutput(input: RustPlanningContext): TargetStageResult<RustOutputPlan> {
   const diagnostics: TargetDiagnostic[] = [];
-  const identityPlan = planRustSourceOutputIdentities(input);
+  const identityPlan = planRustSourceOutputIdentities({
+    ast: input.program.source.ast,
+    sourceFiles: input.program.sourceFiles,
+    paths: input.input.paths,
+    sourcePackages: input.input.sourcePackages,
+  });
   if (identityPlan.kind === "rejected") {
-    return { artifacts: [], diagnostics: [...diagnostics, ...identityPlan.diagnostics] };
+    return rejectedTargetStage([...diagnostics, ...identityPlan.diagnostics]);
   }
   const moduleNameByFileName = new Map(
     [...identityPlan.identities].map(([fileName, identity]) => [fileName, identity.moduleName] as const),
@@ -63,7 +74,7 @@ export function planRustArtifacts(input: RustPlanningContext): RustArtifactPlanR
   const facadeResult = planRustSourcePackageFacades(input, identityPlan.identities);
   diagnostics.push(...facadeResult.diagnostics);
   if (facadeResult.plan === undefined || diagnostics.length > 0) {
-    return { artifacts: [], diagnostics };
+    return rejectedTargetStage(diagnostics);
   }
   const facadePlan = facadeResult.plan;
   const componentResult = planRustSourcePackageComponents(
@@ -72,26 +83,23 @@ export function planRustArtifacts(input: RustPlanningContext): RustArtifactPlanR
     facadePlan,
   );
   if (componentResult.kind === "rejected") {
-    return { artifacts: [], diagnostics: [...diagnostics, ...componentResult.diagnostics] };
+    return rejectedTargetStage([...diagnostics, ...componentResult.diagnostics]);
   }
   const componentPlans = componentResult.components;
   const rootComponentPlan = componentPlans.find((component) => component.root);
   if (rootComponentPlan === undefined) {
-    return {
-      artifacts: [],
-      diagnostics: [...diagnostics, {
+    return rejectedTargetStage([...diagnostics, {
         code: "RUST_SOURCE_PACKAGE_COMPONENT_ROOT_MISSING",
         category: "error",
         source: "tsonic-rust",
         message: "Rust artifact planning has no exact root source-package component.",
         evidence: ["target.capability=rust.backend.source-package-components"],
-      }],
-    };
+      }]);
   }
   const initializerResult = planRustSourcePackageInitializers(input, identityPlan.identities);
   diagnostics.push(...initializerResult.diagnostics);
   if (initializerResult.plan === undefined || diagnostics.length > 0) {
-    return { artifacts: [], diagnostics };
+    return rejectedTargetStage(diagnostics);
   }
   const packageInitializers = initializerResult.plan;
   const sourcePackageErrorResult = planRustSourcePackageErrors(
@@ -101,7 +109,7 @@ export function planRustArtifacts(input: RustPlanningContext): RustArtifactPlanR
   );
   diagnostics.push(...sourcePackageErrorResult.diagnostics);
   if (sourcePackageErrorResult.plan === undefined || diagnostics.length > 0) {
-    return { artifacts: [], diagnostics };
+    return rejectedTargetStage(diagnostics);
   }
   const sourcePackageErrors = sourcePackageErrorResult.plan;
   const structuralShapesModuleName = rootComponentPlan.structuralShapesModuleName;
@@ -131,7 +139,7 @@ export function planRustArtifacts(input: RustPlanningContext): RustArtifactPlanR
       message: "The root source-package component has no exact initializer facade identity.",
       evidence: ["target.capability=rust.backend.source-package-initialization"],
     });
-    return { artifacts: [], diagnostics };
+    return rejectedTargetStage(diagnostics);
   }
   const crateInitializerFunctionName = allocateRustComponentSupportModuleName(
     identityPlan.identities,
@@ -139,6 +147,36 @@ export function planRustArtifacts(input: RustPlanningContext): RustArtifactPlanR
     "initialize",
     [structuralShapesModuleName, programModuleName, initializerFacadeModuleName],
   );
+  const activeCrates = new Set(input.input.runtimeReferences.flatMap((reference) => {
+    const crate = reference.attributes?.[cargoCrateAttributeName];
+    return typeof crate === "string" ? [crate] : [];
+  }));
+  const activeEpilogues = input.program.providerSemantics.binaryEpilogues.filter((epilogue) =>
+    activeCrates.has(epilogue.requiredCrate));
+  const epilogueErrorTypes = new Map<
+    (typeof activeEpilogues)[number],
+    import("../../target-ast/nodes.js").RustType
+  >();
+  for (const epilogue of activeEpilogues) {
+    if (epilogue.errorBoundary === "provider-native") {
+      input.providerErrors.register(epilogue.errorCarrier);
+      const errorType = rustTypeFromCarrier(epilogue.errorCarrier);
+      if (errorType === undefined) {
+        diagnostics.push({
+          code: "RUST_PROVIDER_EPILOGUE_ERROR_TYPE_MISSING",
+          category: "error",
+          source: "tsonic-rust",
+          message: `Binary epilogue '${epilogue.path}' has no exact renderable provider error type.`,
+          evidence: ["target.capability=rust.error.provider-conversion"],
+        });
+      } else {
+        epilogueErrorTypes.set(epilogue, errorType);
+      }
+    }
+  }
+  if (diagnostics.length > 0) {
+    return rejectedTargetStage(diagnostics);
+  }
   const reconstructedSources = reconstructRustSourceFiles(
     input,
     identityPlan.identities,
@@ -149,7 +187,7 @@ export function planRustArtifacts(input: RustPlanningContext): RustArtifactPlanR
     diagnostics,
   );
   if (reconstructedSources === undefined) {
-    return { artifacts: [], diagnostics };
+    return rejectedTargetStage(diagnostics);
   }
   const externalItemPathByIdentity = reconstructedSources.externalItemPathByIdentity;
   const crateContentByComponentId = new Map(componentPlans.flatMap((component) => {
@@ -171,25 +209,28 @@ export function planRustArtifacts(input: RustPlanningContext): RustArtifactPlanR
   }));
   const rootCrateContent = crateContentByComponentId.get(rootComponentPlan.componentId);
   if (rootCrateContent === undefined || diagnostics.length > 0) {
-    return { artifacts: [], diagnostics };
+    return rejectedTargetStage(diagnostics);
   }
   const rootPlannedSources = rootCrateContent.sources;
 
   // Activation: a runtime crate is a dependency only when planned code
   // references it (directly or through a declared alias). Surface-selected
   // crates without carrier/operation use stay out of the manifest.
-  const cargoProject = planRustCargoProject(input.target, input.paths, input.runtimeReferences);
+  const cargoProject = planRustCargoProject(
+    input.program.configuration,
+    input.input.runtimeReferences,
+  );
   if (cargoProject.project === undefined) {
-    return { artifacts: [], diagnostics: [...diagnostics, ...cargoProject.diagnostics] };
+    return rejectedTargetStage([...diagnostics, ...cargoProject.diagnostics]);
   }
   const sourcePackageCargo = cargoProject.project.kind === "generated"
     ? planRustSourcePackageCargo(cargoProject.project.manifest, componentPlans, diagnostics)
     : undefined;
   if (cargoProject.project.kind === "generated" && sourcePackageCargo === undefined) {
-    return { artifacts: [], diagnostics };
+    return rejectedTargetStage(diagnostics);
   }
 
-  const outputType = readRustOutputType(input.target);
+  const outputType = input.program.configuration.outputType;
   const entryFunction = outputType === "bin"
     ? resolveBinaryEntry(input, moduleNameByFileName, diagnostics)
     : undefined;
@@ -215,7 +256,7 @@ export function planRustArtifacts(input: RustPlanningContext): RustArtifactPlanR
       );
 
   if (diagnostics.length > 0) {
-    return { artifacts: [], diagnostics };
+    return rejectedTargetStage(diagnostics);
   }
 
   const sortedTopLevelModuleNames = [...new Set(
@@ -247,34 +288,7 @@ export function planRustArtifacts(input: RustPlanningContext): RustArtifactPlanR
       message: "The selected Rust binary entry has no exact root export identity.",
       evidence: ["target.capability=rust.backend.binary-entry"],
     });
-    return { artifacts: [], diagnostics };
-  }
-  const activeCrates = new Set(input.runtimeReferences.flatMap((reference) => {
-    const crate = reference.attributes?.[cargoCrateAttributeName];
-    return typeof crate === "string" ? [crate] : [];
-  }));
-  const activeEpilogues = input.providerSemantics.binaryEpilogues.filter((epilogue) =>
-    activeCrates.has(epilogue.requiredCrate));
-  const epilogueErrorTypes = new Map<
-    (typeof activeEpilogues)[number],
-    import("../../rust-ast/nodes.js").RustType
-  >();
-  for (const epilogue of activeEpilogues) {
-    if (epilogue.errorBoundary === "provider-native") {
-      registerRustProviderErrorCarrier(input, epilogue.errorCarrier);
-      const errorType = rustTypeFromCarrier(epilogue.errorCarrier);
-      if (errorType === undefined) {
-        diagnostics.push({
-          code: "RUST_PROVIDER_EPILOGUE_ERROR_TYPE_MISSING",
-          category: "error",
-          source: "tsonic-rust",
-          message: `Binary epilogue '${epilogue.path}' has no exact renderable provider error type.`,
-          evidence: ["target.capability=rust.error.provider-conversion"],
-        });
-      } else {
-        epilogueErrorTypes.set(epilogue, errorType);
-      }
-    }
+    return rejectedTargetStage(diagnostics);
   }
   const rootErrorDomain = sourcePackageErrors.domainsByComponentId.get(
     facadePlan.rootComponentId,
@@ -287,14 +301,14 @@ export function planRustArtifacts(input: RustPlanningContext): RustArtifactPlanR
       message: "The root source-package component has no exact error-domain plan.",
       evidence: ["target.capability=rust.backend.source-package-errors"],
     });
-    return { artifacts: [], diagnostics };
+    return rejectedTargetStage(diagnostics);
   }
   const rootErrorTypeIdentity = rustSourcePackageErrorTypeIdentity(
     facadePlan.rootComponentId,
     rootErrorDomain.errorDomain,
   );
   const programErrorModel = rootCrateContent.programErrorModel;
-  const rootCrateErrorType: import("../../rust-ast/nodes.js").RustType = {
+  const rootCrateErrorType: import("../../target-ast/nodes.js").RustType = {
     kind: "named",
     path: programErrorModel === undefined
       ? "tsonic_rust_runtime::TsonicError"
@@ -331,7 +345,7 @@ export function planRustArtifacts(input: RustPlanningContext): RustArtifactPlanR
     },
   );
   if (rootArtifacts === undefined || diagnostics.length > 0) {
-    return { artifacts: [], diagnostics };
+    return rejectedTargetStage(diagnostics);
   }
   const artifacts: RustPlannedArtifact[] = [...rootArtifacts];
   if (sourcePackageCargo !== undefined) {
@@ -364,12 +378,12 @@ export function planRustArtifacts(input: RustPlanningContext): RustArtifactPlanR
     }
   }
   if (diagnostics.length > 0) {
-    return { artifacts: [], diagnostics };
+    return rejectedTargetStage(diagnostics);
   }
   if (outputType === "bin" && entryFunction !== undefined &&
     binaryEntryExportName !== undefined) {
-    const crateName = readRustCrateName(input.target);
-    const mainErrorType: import("../../rust-ast/nodes.js").RustType = {
+    const crateName = input.program.configuration.crateName;
+    const mainErrorType: import("../../target-ast/nodes.js").RustType = {
       kind: "named",
       path: programErrorModel === undefined
         ? "tsonic_rust_runtime::TsonicError"
@@ -485,7 +499,18 @@ export function planRustArtifacts(input: RustPlanningContext): RustArtifactPlanR
     };
     artifacts.push(rustSourceArtifact("src/main.rs", createRustSourceFile([mainItem])));
   }
-  return { artifacts, diagnostics: [] };
+  return resolvedTargetStage(Object.freeze({
+    artifacts: Object.freeze(artifacts.map(finalizeRustPlannedArtifact)),
+  }));
+}
+
+function finalizeRustPlannedArtifact(artifact: RustPlannedArtifact): RustPlannedArtifact {
+  return artifact.kind === "project"
+    ? Object.freeze(artifact)
+    : Object.freeze({
+        ...artifact,
+        model: finalizeRustSourceStyle(artifact.model),
+      });
 }
 
 function compareRustArtifactNames(left: string, right: string): number {
@@ -508,9 +533,9 @@ function allocateRustRootSupportItemName(
 
 function rustSourceArtifact(
   path: string,
-  model: import("../../rust-ast/nodes.js").RustSourceFileModel,
+  model: import("../../target-ast/nodes.js").RustSourceFileModel,
 ): RustPlannedArtifact {
-  return { kind: "source", path, model };
+  return Object.freeze({ kind: "source", path, model });
 }
 
 interface RustBinaryEntry {
@@ -528,8 +553,8 @@ function resolveLibraryInitializationRoots(
   rootComponentId: string,
   diagnostics: TargetDiagnostic[],
 ): readonly SourceFile[] {
-  const sourceFileByName = new Map(input.sourceFiles.map((sourceFile) =>
-    [normalizeSourcePath(input.ast.getFileName(sourceFile)), sourceFile] as const));
+  const sourceFileByName = new Map(input.program.sourceFiles.map((sourceFile) =>
+    [normalizeSourcePath(input.program.source.ast.getFileName(sourceFile)), sourceFile] as const));
   const roots = new Map<string, SourceFile>();
   for (const exported of exports) {
     const fileName = normalizeSourcePath(exported.sourceModuleFileName);
@@ -563,9 +588,9 @@ function resolveProjectEntrySourceFile(
   input: RustPlanningContext,
   diagnostics: TargetDiagnostic[],
 ): SourceFile | undefined {
-  const entryPoint = normalizeSourcePath(resolve(input.paths.projectRoot, input.project.entryPoint));
-  const sourceFile = input.sourceFiles.find((candidate) =>
-    normalizeSourcePath(resolve(input.ast.getFileName(candidate))) === entryPoint
+  const entryPoint = normalizeSourcePath(resolve(input.input.paths.projectRoot, input.input.project.entryPoint));
+  const sourceFile = input.program.sourceFiles.find((candidate) =>
+    normalizeSourcePath(resolve(input.program.source.ast.getFileName(candidate))) === entryPoint
   );
   if (sourceFile === undefined) {
     diagnostics.push({
@@ -589,12 +614,12 @@ function resolveBinaryEntry(
   moduleNameByFileName: ReadonlyMap<string, string>,
   diagnostics: TargetDiagnostic[],
 ): RustBinaryEntry | undefined {
-  const entryPoint = input.project.entryPoint;
+  const entryPoint = input.input.project.entryPoint;
   const entrySourceFile = resolveProjectEntrySourceFile(input, diagnostics);
   if (entrySourceFile === undefined) {
     return undefined;
   }
-  const entryFileName = entrySourceFile === undefined ? undefined : input.ast.getFileName(entrySourceFile);
+  const entryFileName = entrySourceFile === undefined ? undefined : input.program.source.ast.getFileName(entrySourceFile);
   const moduleName = entryFileName === undefined ? undefined : moduleNameByFileName.get(entryFileName);
   if (moduleName === undefined) {
     diagnostics.push({
@@ -606,18 +631,18 @@ function resolveBinaryEntry(
     });
     return undefined;
   }
-  for (const statement of input.ast.statements(entrySourceFile)) {
-    if (statement === undefined || input.ast.kindName(statement) !== KindFunctionDeclaration) {
+  for (const statement of input.program.source.ast.statements(entrySourceFile)) {
+    if (statement === undefined || input.program.source.ast.kindName(statement) !== KindFunctionDeclaration) {
       continue;
     }
-    const nameNode = Node_Name(input.ast, statement);
-    if (nameNode === undefined || input.ast.text(nameNode) !== "main") {
+    const nameNode = Node_Name(input.program.source.ast, statement);
+    if (nameNode === undefined || input.program.source.ast.text(nameNode) !== "main") {
       continue;
     }
-    const asyncFact = input.facts.getFact(statement, rustAsyncFunctionFactKey);
+    const asyncFact = input.program.facts.getFact(statement, rustAsyncFunctionFactKey);
     const returnCarrier = asyncFact?.outputCarrier ??
-      input.facts.getFact(statement, rustSourceCallableReturnFactKey)?.returnCarrier;
-    if (!input.ast.hasModifierKind(statement, "export") || !isRustUnitCarrier(returnCarrier)) {
+      input.program.facts.getFact(statement, rustSourceCallableReturnFactKey)?.returnCarrier;
+    if (!input.program.source.ast.hasModifierKind(statement, "export") || !isRustUnitCarrier(returnCarrier)) {
       break;
     }
     return {
@@ -625,7 +650,7 @@ function resolveBinaryEntry(
       moduleName,
       functionName: "main",
       async: asyncFact !== undefined,
-      fallible: input.facts.getFact(statement, rustFallibleFactKey) !== undefined,
+      fallible: input.program.facts.getFact(statement, rustFallibleFactKey) !== undefined,
     };
   }
   diagnostics.push({

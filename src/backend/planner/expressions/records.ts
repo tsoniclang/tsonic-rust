@@ -35,12 +35,12 @@ import { rustObjectLiteralRequiresDispatchImplementation } from "../objects/obje
 import { rustProjectStateMarker, rustProjectStateType } from "../objects/polymorphism/names.js";
 import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
-import { tupleRustClosureArguments } from "../../rust-ast/expressions.js";
+import { tupleRustClosureArguments } from "../../target-ast/expressions.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr } from "../../rust-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
-import type { TargetTypeRef } from "../../../policy/types/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
@@ -63,11 +63,11 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
     : undefined;
   const typePath = value === undefined ? undefined : sourceTypePath(context, value);
   const projectDefinition = fact.storage === "project-object"
-    ? context.input.projectTypes.definitionForCarrier(fact.resultCarrier)
+    ? context.input.program.projectTypes.definitionForCarrier(fact.resultCarrier)
     : undefined;
   const projectRepresentation = projectDefinition === undefined
     ? undefined
-    : context.input.objectRepresentations.representationFor(projectDefinition);
+    : context.input.program.objectRepresentations.representationFor(projectDefinition);
   const stateType = fact.storage === "project-object" && projectRepresentation?.kind !== "value"
     ? rustProjectStateType(fact.resultCarrier, context)
     : undefined;
@@ -85,7 +85,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
     ));
     return undefined;
   }
-  const { ast } = context.input;
+  const { ast } = context.input.program.source;
   const properties = ast.properties(node);
   if (context.syntheticNames === undefined || properties.length !== fact.contributions.length ||
     fact.contributions.some((contribution, index) => contribution.property !== properties[index]) ||
@@ -219,7 +219,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
       const field = fact.fields.find((candidate) =>
         candidate.storageIndex === contribution.targetStorageIndex);
       const plannedField = fact.storage === "object-handle"
-        ? context.input.structuralShapes.field(
+        ? context.input.program.structuralShapes.field(
             fact.resultCarrier,
             contribution.targetStorageIndex,
           )
@@ -419,7 +419,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
     const accessor = accessorValuesByStorageIndex.get(field.storageIndex);
     if (accessor !== undefined) {
       if (fact.storage === "object-handle") {
-        const plannedField = context.input.structuralShapes.field(
+        const plannedField = context.input.program.structuralShapes.field(
           fact.resultCarrier,
           field.storageIndex,
         );
@@ -623,13 +623,13 @@ function planProjectIndexRecordLiteral(
   ) || context.syntheticNames === undefined) {
     return undefined;
   }
-  const definition = context.input.projectTypes.definitionForCarrier(fact.resultCarrier);
-  const representation = context.input.objectRepresentations.representationFor(definition);
+  const definition = context.input.program.projectTypes.definitionForCarrier(fact.resultCarrier);
+  const representation = context.input.program.objectRepresentations.representationFor(definition);
   const wrapperType = rustTypeFromCarrierInContext(fact.resultCarrier, context);
   const stateType = rustProjectStateType(fact.resultCarrier, context);
-  const properties = context.input.ast.properties(node);
+  const properties = context.input.program.source.ast.properties(node);
   if (definition?.kind !== "interface" || representation === undefined ||
-    context.input.projectTypes.isPolymorphic(definition) ||
+    context.input.program.projectTypes.isPolymorphic(definition) ||
     wrapperType?.kind !== "named" || stateType?.kind !== "named" ||
     properties.length !== fact.contributions.length ||
     fact.contributions.some((contribution, index) => contribution.property !== properties[index])) {
@@ -649,7 +649,7 @@ function planProjectIndexRecordLiteral(
   let entries: RustExpr | undefined;
   for (const contribution of fact.contributions) {
     if (contribution.kind === "property") {
-      const initializer = ObjectLiteralProperty_Value(context.input.ast, contribution.property);
+      const initializer = ObjectLiteralProperty_Value(context.input.program.source.ast, contribution.property);
       const value = initializer === contribution.expression
         ? planExpression(contribution.expression, context)
         : undefined;
@@ -674,7 +674,7 @@ function planProjectIndexRecordLiteral(
       continue;
     }
     const spreadExpression = SpreadAssignment_Expression(
-      context.input.ast,
+      context.input.program.source.ast,
       contribution.property,
     );
     const spread = spreadExpression === contribution.expression

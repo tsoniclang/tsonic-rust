@@ -1,9 +1,9 @@
-import { isRustBinaryOperator, rustBinaryOperatorTraitPath } from "../../../backend/model/syntax.js";
+import { isRustBinaryOperator, rustBinaryOperatorTraitPath } from "../../../target-model/syntax/tokens.js";
 import { requireExactKeys, requireRustIdentifier, requireRustPath, validateCarrier, validateValueConversion } from "./carriers.js";
 import type { Fail } from "./model.js";
-import type { RustProviderConstantArgument, RustProviderOperationForm } from "../../../policy/operations/model.js";
+import type { RustProviderConstantArgument, RustProviderOperationForm } from "../../../target-model/operations/model.js";
 import type { RustProviderPackageDefinition } from "../index.js";
-import type { TargetTypeRef } from "../../../policy/types/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function validateOperationForm(
   operationKind: RustProviderPackageDefinition["operations"][number]["operationKind"],

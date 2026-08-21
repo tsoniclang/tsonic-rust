@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { TargetTypeRef } from "../../../policy/types/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import {
   rustCarrierSupportsTrait,
   rustFixedArrayCarrierValue,
@@ -9,7 +9,7 @@ import {
   rustSourceTypeCarrierValue,
   substituteRustTargetTypeParameters,
 } from "../../../policy/types/target-types.js";
-import type { RustTypeParameter } from "../../rust-ast/nodes.js";
+import type { RustTypeParameter } from "../../target-ast/nodes.js";
 import { unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";

@@ -1,6 +1,5 @@
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { applyRustErrorBoundary } from "../types/error-boundary.js";
-import { registerRustProviderErrorCarrier } from "../context.js";
 import {
   BreakOrContinueStatement_Label,
   KindVariableDeclaration,
@@ -17,7 +16,7 @@ import { planStatementSequence } from "./core.js";
 import { planVariableStatement } from "./variable-declarations.js";
 import { rustResourceManagementFactKey } from "../../../analysis/facts/keys.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustBlock, RustExpr, RustStmt } from "../../rust-ast/nodes.js";
+import type { RustBlock, RustExpr, RustStmt } from "../../target-ast/nodes.js";
 import type { RustCompletionBoundary, RustControlTarget, RustPlanContext } from "../program/plan-context.js";
 import type { RustResourceManagementFact } from "../../../analysis/facts/keys.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
@@ -27,7 +26,7 @@ export function directResourceDeclaration(
   statement: Node,
   context: RustPlanContext,
 ): Node | undefined {
-  if (context.input.ast.kindName(statement) !== KindVariableStatement) {
+  if (context.input.program.source.ast.kindName(statement) !== KindVariableStatement) {
     return undefined;
   }
   const declarations = collectVariableDeclarations(statement, context);
@@ -35,14 +34,14 @@ export function directResourceDeclaration(
     return undefined;
   }
   const [declaration] = declarations;
-  const kind = context.input.ast.variableDeclarationKind(declaration);
+  const kind = context.input.program.source.ast.variableDeclarationKind(declaration);
   return declaration !== undefined && (kind === "using" || kind === "await using")
     ? declaration
     : undefined;
 }
 
 export function collectVariableDeclarations(node: Node, context: RustPlanContext): readonly Node[] {
-  const { ast } = context.input;
+  const { ast } = context.input.program.source;
   const declarations: Node[] = [];
   const visit = (candidate: Node): void => {
     if (ast.kindName(candidate) === KindVariableDeclaration) {
@@ -71,7 +70,7 @@ export function planResourceDeclarationScope(
     return undefined;
   }
   const declarations = planVariableStatement(statement, context);
-  const resourceName = context.input.names.nameForDeclaration(declaration) ?? "";
+  const resourceName = context.input.program.names.nameForDeclaration(declaration) ?? "";
   if (declarations === undefined || !isValidRustIdentifier(resourceName)) {
     return undefined;
   }
@@ -89,7 +88,7 @@ export function resourceFactForPlanning(
   declaration: Node,
   context: RustPlanContext,
 ): RustResourceManagementFact | undefined {
-  const fact = context.input.facts.getFact(declaration, rustResourceManagementFactKey);
+  const fact = context.input.program.facts.getFact(declaration, rustResourceManagementFactKey);
   if (fact === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, declaration),
@@ -270,7 +269,7 @@ function planResourceCleanup(
       return undefined;
     }
     if (fact.disposal.errorBoundary === "provider-native") {
-      registerRustProviderErrorCarrier(context.input, fact.disposal.errorCarrier);
+      context.input.providerErrors.register(fact.disposal.errorCarrier);
     }
     disposal = applyRustErrorBoundary(
       disposal,
@@ -378,10 +377,10 @@ export function planLoopExitStatement(
   completion: "break" | "continue",
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
-  const sourceLabelNode = BreakOrContinueStatement_Label(context.input.ast, node);
+  const sourceLabelNode = BreakOrContinueStatement_Label(context.input.program.source.ast, node);
   const sourceLabel = sourceLabelNode === undefined
     ? undefined
-    : context.input.ast.text(sourceLabelNode);
+    : context.input.program.source.ast.text(sourceLabelNode);
   const target = [...(context.controlTargets ?? [])].reverse().find((candidate) =>
     completion === "continue"
       ? candidate.kind === "loop" &&

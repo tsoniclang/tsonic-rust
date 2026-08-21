@@ -26,7 +26,7 @@ import type {
 } from "../../../policy/operations/contracts.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./model.js";
-import type { TargetTypeRef } from "../../../policy/types/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function selectRustCheckedDelete(
   request: RustCheckedDeleteSelectionInput,

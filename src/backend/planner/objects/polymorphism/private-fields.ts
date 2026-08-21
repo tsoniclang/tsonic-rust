@@ -1,6 +1,6 @@
 import { isRustCopyCarrier } from "../../../../policy/types/target-types.js";
 import { rustProjectMemberIsPrivate } from "../../../../analysis/project-types/member-privacy.js";
-import type { RustExpr, RustImplFunction, RustItem, RustType } from "../../../rust-ast/nodes.js";
+import type { RustExpr, RustImplFunction, RustItem, RustType } from "../../../target-ast/nodes.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
 import { diagnosticInput } from "../../program/plan-context.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
@@ -15,17 +15,17 @@ export function planProjectPrivateStateAccessors(
   context: RustPlanContext,
 ): readonly RustItem[] | undefined {
   const fields = layer.fields.filter((field) =>
-    rustProjectMemberIsPrivate(context.input.ast, field.declaration));
+    rustProjectMemberIsPrivate(context.input.program.source.ast, field.declaration));
   if (fields.length === 0) {
     return [];
   }
   const visibility = rustProjectImplementationVisibility(publiclyReachable);
   const functions: RustImplFunction[] = [];
   for (const field of fields) {
-    const readName = context.input.projectTypes.memberSlotName(field.declaration, "read");
+    const readName = context.input.program.projectTypes.memberSlotName(field.declaration, "read");
     const writeName = field.readonly
       ? undefined
-      : context.input.projectTypes.memberSlotName(field.declaration, "write");
+      : context.input.program.projectTypes.memberSlotName(field.declaration, "write");
     if (readName === undefined || (!field.readonly && writeName === undefined)) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, field.declaration),

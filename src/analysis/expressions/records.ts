@@ -35,7 +35,7 @@ import { setCarrierFact, setRustOperationFact } from "../operations/project-call
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustTargetOperationFact } from "../facts/keys.js";
-import type { TargetTypeRef } from "../../policy/types/model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export function requireDenseSourceNodes(
   walk: RustFactWalk,
@@ -100,7 +100,7 @@ export function resolveRecordLiteralCarrier(
     }
   }
   const selectedExpected = expected ?? resolveRustTargetTypeRef(
-    walk.context.semanticsFor(expression).getTypeAtLocation(expression),
+    walk.context.semanticsFor(expression).types.expressionType(expression),
     rustResolutionContext(walk, expression),
     walk.operationOptions,
   );
@@ -457,7 +457,7 @@ export function resolveRecordLiteralCarrier(
       continue;
     }
     const propertySemantics = walk.context.semanticsFor(property);
-    const selectedElement = propertySemantics.getResolvedObjectLiteralElementInfo(property);
+    const selectedElement = propertySemantics.operations.objectLiteralElement(property);
     if (kind === "KindGetAccessor" || kind === "KindSetAccessor") {
       const accessor = accessorsByElement.get(property);
       const role = kind === "KindGetAccessor" ? "get" as const : "set" as const;
@@ -558,7 +558,9 @@ export function resolveRecordLiteralCarrier(
         : selectedCallable?.result ?? selectedClosure?.result;
       const sourceName = selectedElement?.sourceSelectedSymbol === undefined
         ? ""
-        : propertySemantics.getSymbolName(selectedElement.sourceSelectedSymbol);
+        : propertySemantics.declarations.symbolName(
+            selectedElement.sourceSelectedSymbol,
+          );
       if (storage === "object-handle") {
         const methodProjection = selectedDeclaration === undefined
           ? undefined

@@ -9,7 +9,7 @@ import {
 } from "@tsonic/target-api/source";
 import { rustModuleBindingFactKey } from "../facts/keys.js";
 import { rustProjectStaticFieldStorage } from "../project-types/object-layout.js";
-import type { RustTargetProgram } from "./model.js";
+import type { RustAnalysisContext } from "./context.js";
 
 export type RustModuleInitializationRequirement =
   | { readonly kind: "required" }
@@ -21,7 +21,7 @@ export interface RustModuleInitializationPlan {
 }
 
 type RustModuleInitializationPlanInput = Pick<
-  RustTargetProgram,
+  RustAnalysisContext,
   "ast" | "sourceFiles" | "facts" | "projectTypes" | "safetyApplications"
 >;
 

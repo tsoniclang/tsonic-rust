@@ -4,8 +4,8 @@ import type {
   RustProviderOperationTemplate,
   RustRuntimeSetTemplate,
   RustValueConversion,
-} from "../model.js";
-import type { TargetTypeRef } from "../../types/model.js";
+} from "../../../target-model/operations/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export interface JsOperationRequest {
   readonly ownerName: string;

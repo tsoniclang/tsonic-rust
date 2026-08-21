@@ -17,13 +17,13 @@ import {
 } from "../../../policy/types/target-types.js";
 import {
   createRustSourceFile,
-} from "../../rust-ast/nodes.js";
-import { rustItemsReferenceModuleAlias } from "../../rust-ast/source-module-usage.js";
+} from "../../target-ast/nodes.js";
+import { rustItemsReferenceModuleAlias } from "../../target-ast/inspection/source-module-usage.js";
 import type {
   RustItem,
   RustSourceFileModel,
-} from "../../rust-ast/nodes.js";
-import { rustLintAttributes } from "../../rust-ast/lint-policy.js";
+} from "../../target-ast/nodes.js";
+import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
 import type { RustPlanningContext } from "../context.js";
 import {
   missingFactDiagnostic,
@@ -101,7 +101,7 @@ export function planRustSourceFile(
   publicImplementationModuleNames: ReadonlySet<string>,
   publicImplementationItemIdentities: ReadonlySet<string>,
   publishesImplementationAbi: boolean,
-  errorDomain: import("../../rust-ast/nodes.js").RustErrorDomain,
+  errorDomain: import("../../target-ast/nodes.js").RustErrorDomain,
   sourcePackageErrors: RustSourcePackageErrorPlan,
   input: RustPlanningContext,
   diagnostics: TargetDiagnostic[],
@@ -130,10 +130,10 @@ export function planRustSourceFile(
     planBlock: planBlockLike,
   };
   const plannedModule = planModuleItems(context);
-  const initializationRequirement = input.moduleInitialization.requirementFor(sourceFile);
+  const initializationRequirement = input.program.moduleInitialization.requirementFor(sourceFile);
   if (initializationRequirement.kind === "unresolved") {
     diagnostics.push(unsupportedConstructDiagnostic(
-      { ast: input.ast, sourceFile, node: initializationRequirement.node },
+      { ast: input.program.source.ast, sourceFile, node: initializationRequirement.node },
       "rust.backend.module-initialization-facts",
       initializationRequirement.reason,
     ));
@@ -141,7 +141,7 @@ export function planRustSourceFile(
     (initializationRequirement.kind === "required") !==
     (plannedModule.initialization !== undefined)) {
     diagnostics.push(unsupportedConstructDiagnostic(
-      { ast: input.ast, sourceFile, node: sourceFile },
+      { ast: input.program.source.ast, sourceFile, node: sourceFile },
       "rust.backend.module-initialization-facts",
       initializationRequirement.kind === "required"
         ? "Finalized module facts require initialization, but planning produced no initializer."
@@ -197,9 +197,9 @@ interface PlannedRustModuleItems {
 }
 
 function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
-  const { ast } = context.input;
+  const { ast } = context.input.program.source;
   const items: RustItem[] = [];
-  const initializationStatements = [] as import("../../rust-ast/nodes.js").RustStmt[];
+  const initializationStatements = [] as import("../../target-ast/nodes.js").RustStmt[];
   const syntheticNames = createRustSyntheticNameState(ast, context.sourceFile, []);
   const initializationFunctionName = rustModuleInitializerFunctionName(
     context.input,
@@ -215,10 +215,10 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
     objectLiteralImplementations,
   };
   items.push(...objectLiteralImplementations.items);
-  const asynchronous = context.input.source.navigation.moduleHasTopLevelAwait(
+  const asynchronous = context.input.program.source.navigation.moduleHasTopLevelAwait(
     context.sourceFile,
   );
-  const fallible = context.input.facts.getFact(
+  const fallible = context.input.program.facts.getFact(
     context.sourceFile,
     rustFallibleFactKey,
   ) !== undefined;
@@ -255,7 +255,7 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
     }
     if (kind === KindFunctionDeclaration) {
       if (ast.body(statement) === undefined) {
-        const implementation = context.input.source.navigation
+        const implementation = context.input.program.source.navigation
           .callableImplementation(statement);
         if (implementation.kind === "resolved" &&
           implementation.implementation.declaration !== statement) {
@@ -266,7 +266,7 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
       const plannedFunctions = planFunctionDeclarations(statement, context);
       if (plannedFunctions !== undefined) {
         items.push(...plannedFunctions);
-        const binding = context.input.facts.getFact(statement, rustModuleBindingFactKey);
+        const binding = context.input.program.facts.getFact(statement, rustModuleBindingFactKey);
         if (binding?.storage === "native-callable" && binding.value !== undefined) {
           const value = planRustSourceCallableValue({
             form: "function",
@@ -350,12 +350,12 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
     }
     if (kind === "KindClassDeclaration") {
       const diagnosticCount = context.diagnostics.length;
-      const definition = context.input.projectTypes.definitionForDeclaration(statement);
+      const definition = context.input.program.projectTypes.definitionForDeclaration(statement);
       const classInitialization = planRustClassInitialization(
         statement,
         initializationContext,
       );
-      const planned = definition !== undefined && context.input.projectTypes.isPolymorphic(definition)
+      const planned = definition !== undefined && context.input.program.projectTypes.isPolymorphic(definition)
         ? planPolymorphicClassDeclaration(statement, context)
         : planClassDeclaration(statement, context);
       if (planned !== undefined && classInitialization !== undefined) {
@@ -374,8 +374,8 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
     }
     if (kind === "KindInterfaceDeclaration") {
       const diagnosticCount = context.diagnostics.length;
-      const definition = context.input.projectTypes.definitionForDeclaration(statement);
-      const planned = definition !== undefined && context.input.projectTypes.isPolymorphic(definition)
+      const definition = context.input.program.projectTypes.definitionForDeclaration(statement);
+      const planned = definition !== undefined && context.input.program.projectTypes.isPolymorphic(definition)
         ? planPolymorphicInterfaceDeclaration(statement, context)
         : planInterfaceDeclaration(statement, context);
       if (planned !== undefined) {
@@ -466,7 +466,7 @@ function ensureTopLevelPlanningDiagnostic(
     return;
   }
   context.diagnostics.push(missingFactDiagnostic(
-    { ast: context.input.ast, sourceFile: context.sourceFile, node: statement },
+    { ast: context.input.program.source.ast, sourceFile: context.sourceFile, node: statement },
     `rust.backend.${construct}-finalization`,
     `Top-level ${construct} planning returned no Rust AST and no specific diagnostic.`,
   ));
@@ -474,17 +474,17 @@ function ensureTopLevelPlanningDiagnostic(
 
 interface PlannedTopLevelVariableStatement {
   readonly items: readonly RustItem[];
-  readonly initialization: readonly import("../../rust-ast/nodes.js").RustStmt[];
+  readonly initialization: readonly import("../../target-ast/nodes.js").RustStmt[];
 }
 
 function planDefaultExportAssignment(
   declaration: Node,
   context: RustPlanContext,
 ): PlannedRustModuleCell | undefined {
-  const { ast } = context.input;
+  const { ast } = context.input.program.source;
   const assignment = ast.as.AsExportAssignment(declaration);
-  const binding = context.input.facts.getFact(declaration, rustModuleBindingFactKey);
-  const name = context.input.names.nameForDeclaration(declaration) ?? "";
+  const binding = context.input.program.facts.getFact(declaration, rustModuleBindingFactKey);
+  const name = context.input.program.names.nameForDeclaration(declaration) ?? "";
   if (assignment === undefined || assignment.IsExportEquals === true ||
     assignment.Expression === undefined || binding?.storage !== "module-cell" ||
     !isValidRustIdentifier(name)) {
@@ -522,7 +522,7 @@ function planTopLevelVariableStatement(
   statement: Node,
   context: RustPlanContext,
 ): PlannedTopLevelVariableStatement | undefined {
-  const { ast } = context.input;
+  const { ast } = context.input.program.source;
   const declarations: Node[] = [];
   const visit = (candidate: Node): void => {
     if (ast.kindName(candidate) === "KindVariableDeclaration") {
@@ -545,11 +545,11 @@ function planTopLevelVariableStatement(
     return undefined;
   }
   const items: RustItem[] = [];
-  const initialization: import("../../rust-ast/nodes.js").RustStmt[] = [];
+  const initialization: import("../../target-ast/nodes.js").RustStmt[] = [];
   for (const declaration of declarations) {
-    const name = context.input.names.nameForDeclaration(declaration) ?? "";
+    const name = context.input.program.names.nameForDeclaration(declaration) ?? "";
     const initializer = Node_Initializer(ast, declaration);
-    const binding = context.input.facts.getFact(declaration, rustModuleBindingFactKey);
+    const binding = context.input.program.facts.getFact(declaration, rustModuleBindingFactKey);
     if (initializer === undefined || binding === undefined || !isValidRustIdentifier(name)) {
       context.diagnostics.push(unsupportedConstructDiagnostic(
         { ast, sourceFile: context.sourceFile, node: declaration },

@@ -13,7 +13,7 @@ import type {
   Type,
 } from "@tsonic/tsts";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
-import type { TargetTypeRef } from "../model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function resolveCallableType(
   type: Type,
@@ -21,7 +21,7 @@ export function resolveCallableType(
   options: RustTargetTypeResolutionOptions,
   resolving: Set<object>,
 ): TargetTypeRef | undefined {
-  const callable = context.typeShape.selectCallableType(type);
+  const callable = context.currentSemantics.types.callable(type);
   if (callable === undefined) {
     return undefined;
   }
@@ -44,7 +44,7 @@ export function resolveSourceTypeParameter(
 ): TargetTypeRef | undefined {
   const symbolDeclaration = symbol === undefined
     ? undefined
-    : context.checker.getPrimarySymbolDeclaration(symbol);
+    : context.currentSemantics.declarations.primarySymbolDeclaration(symbol);
   if (referencedDeclaration !== undefined && symbolDeclaration !== undefined &&
     !sourceNodesEqual(context.ast, referencedDeclaration, symbolDeclaration)) {
     return undefined;
@@ -67,7 +67,8 @@ export function resolveSourcePrimitive(
     return direct === undefined ? undefined : rustSourcePrimitiveTargetType(direct.kind);
   }
   const type = subject as Type;
-  const symbol = context.checker.getTypeAliasSymbol(type) ?? context.checker.getTypeSymbol(type);
+  const symbol = context.currentSemantics.declarations.typeAliasSymbol(type) ??
+    context.currentSemantics.declarations.typeSymbol(type);
   if (symbol === undefined) {
     return undefined;
   }
@@ -75,7 +76,9 @@ export function resolveSourcePrimitive(
   if (symbolFact !== undefined) {
     return rustSourcePrimitiveTargetType(symbolFact.kind);
   }
-  const declarations = denseDefined(context.checker.getSymbolDeclarations(symbol));
+  const declarations = denseDefined(
+    context.currentSemantics.declarations.symbolDeclarations(symbol),
+  );
   if (declarations === undefined) {
     return undefined;
   }
@@ -94,12 +97,14 @@ export function resolveUnion(
   options: RustTargetTypeResolutionOptions,
   resolving: Set<object>,
 ): TargetTypeRef | undefined {
-  const members = denseDefined(context.typeShape.getUnionOrIntersectionTypes(type));
+  const members = denseDefined(
+    context.currentSemantics.types.unionOrIntersectionTypes(type),
+  );
   if (members === undefined) {
     return undefined;
   }
-  const valueMembers = members.filter((member) => !context.typeShape.isNullish(member));
-  const nullishMembers = members.filter((member) => context.typeShape.isNullish(member));
+  const valueMembers = members.filter((member) => !context.currentSemantics.types.isNullish(member));
+  const nullishMembers = members.filter((member) => context.currentSemantics.types.isNullish(member));
   const valueCarriers = valueMembers.map((member) =>
     resolveRustTargetType(member, context, options, resolving));
   if (valueCarriers.some((carrier) => carrier === undefined)) {
@@ -117,13 +122,13 @@ export function resolveUnion(
       ? rustOptionTargetType(distinctValueCarriers[0]!)
       : undefined;
   }
-  if (members.length > 0 && members.every((member) => context.typeShape.isStringLike(member))) {
+  if (members.length > 0 && members.every((member) => context.currentSemantics.types.isStringLike(member))) {
     return rustStringTargetType();
   }
-  if (members.length > 0 && members.every((member) => context.typeShape.isNumberLike(member))) {
+  if (members.length > 0 && members.every((member) => context.currentSemantics.types.isNumberLike(member))) {
     return rustSourcePrimitiveTargetType("float64");
   }
-  if (members.length > 0 && members.every((member) => context.typeShape.isBooleanLike(member))) {
+  if (members.length > 0 && members.every((member) => context.currentSemantics.types.isBooleanLike(member))) {
     return rustSourcePrimitiveTargetType("bool");
   }
   const memberCarriers = members.map((member) =>

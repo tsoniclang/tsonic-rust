@@ -1,7 +1,7 @@
 import { carrierAfterMode, finalizedConversionIsValid, isRustFinalizedArrayInput, isRustFinalizedConstantInput, isRustFinalizedSliceInput, isRustFinalizedTaggedArrayInput } from "./conversions.js";
 import { closedMetadataEquals, isClosedMetadata } from "../../../policy/model/closed-data.js";
 import { createInputFactory, finalizeTargetInputs } from "./inputs.js";
-import { isRustErrorBoundary } from "../../../policy/operations/error-boundary.js";
+import { isRustErrorBoundary } from "../../../target-model/operations/error-boundary.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
 import { rustFutureTargetType, rustSliceRefTargetType, rustTargetTypeParameterNames } from "../../../policy/types/target-types.js";
 import { rustProviderOperationFormAcceptsTargetTypeArguments, rustProviderOperationFormContractViolation } from "../../../policy/operations/forms.js";

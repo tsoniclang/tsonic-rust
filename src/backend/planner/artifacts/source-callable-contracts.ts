@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type {
   RustSelectedTargetSignature,
   TargetTypeRef,
-} from "../../../policy/types/model.js";
+} from "../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
 import { substituteRustTargetTypeParameters } from "../../../policy/types/target-types.js";
 import type {
@@ -11,7 +11,7 @@ import type {
 import type {
   RustItem,
   RustTypeBound,
-} from "../../rust-ast/nodes.js";
+} from "../../target-ast/nodes.js";
 import type {
   RustSourceCallableContract,
 } from "./index.js";
@@ -88,10 +88,10 @@ export function applyRustSourceCallableRequirements(
           argument,
           context.typeParameterSubstitutions,
         ));
-  const specialized = context.input.sourceCallableSpecializations
+  const specialized = context.input.program.sourceCallableSpecializations
     .requiresSpecialization(declaration);
   const variant = specialized
-    ? context.input.sourceCallableSpecializations.variantForCall(
+    ? context.input.program.sourceCallableSpecializations.variantForCall(
         declaration,
         targetTypeArguments,
       )

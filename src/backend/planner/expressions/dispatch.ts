@@ -62,7 +62,6 @@ import { allocateRustSyntheticName, createRustSyntheticNameState } from "../name
 import { applyFinalizedValueConversion, finishProviderOperationExpression, planProviderOperationExpression } from "./conversions.js";
 import { applyRustErrorBoundary } from "../types/error-boundary.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
-import { registerRustProviderErrorCarrier } from "../context.js";
 import { expressionCarrier, planBigIntLiteral, planDeleteExpression, planGeneratorResumeExpression, planNumericLiteral, planSourceConversion, planTemplateExpression, requireExpressionCarrier, rustOperationFact, selectedOperationMatches } from "./fundamentals.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planArrayLiteral, planElementAccess } from "./elements.js";
@@ -76,12 +75,12 @@ import { planRecordLiteral } from "./records.js";
 import { planUnaryExpression } from "./updates/source.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import { rustEffectiveValueCarrier } from "../../../analysis/facts/value-carrier-queries.js";
-import { rustExpressionContainsStatementBlock } from "../../rust-ast/expressions.js";
+import { rustExpressionContainsStatementBlock } from "../../target-ast/expressions.js";
 import { rustFutureValueMatchesCarrier } from "../../../analysis/facts/future-values.js";
 import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
 import { sourceCharCodeUnit } from "../../../policy/types/literals.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr } from "../../rust-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustExpressionResultUse } from "./entry.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { planRustSourceCallableValue } from "./source-callable-value.js";
@@ -91,7 +90,7 @@ export function planExpressionInner(
   context: RustPlanContext,
   resultUse: RustExpressionResultUse,
 ): RustExpr | undefined {
-  const { ast } = context.input;
+  const { ast } = context.input.program.source;
   const kind = ast.kindName(node);
   switch (kind) {
     case KindBigIntLiteral: {
@@ -157,7 +156,7 @@ export function planExpressionInner(
     }
     case KindIdentifier: {
       const identifierFact = rustOperationFact(node, context);
-      const binding = context.input.facts.getFact(node, rustSourceBindingFactKey);
+      const binding = context.input.program.facts.getFact(node, rustSourceBindingFactKey);
       if (identifierFact !== undefined && identifierFact.kind === "option-none") {
         return { kind: "none" };
       }
@@ -192,7 +191,7 @@ export function planExpressionInner(
         }
         return finishProviderOperationExpression(context, identifierFact, planned, node);
       }
-      const callableValue = context.input.facts.getFact(node, rustSourceCallableValueFactKey);
+      const callableValue = context.input.program.facts.getFact(node, rustSourceCallableValueFactKey);
       if (callableValue !== undefined) {
         return planRustSourceCallableValue(callableValue, context);
       }
@@ -204,7 +203,7 @@ export function planExpressionInner(
         ));
         return undefined;
       }
-      const name = context.input.names.nameForDeclaration(binding.sourceDeclaration) ?? "";
+      const name = context.input.program.names.nameForDeclaration(binding.sourceDeclaration) ?? "";
       if (!isValidRustIdentifier(name)) {
         context.diagnostics.push(unsupportedConstructDiagnostic(
           diagnosticInput(context, node),
@@ -229,7 +228,7 @@ export function planExpressionInner(
       );
     }
     case KindParenthesizedExpression: {
-      const inner = Node_Expression(context.input.ast, node);
+      const inner = Node_Expression(context.input.program.source.ast, node);
       return inner === undefined ? undefined : planExpression(inner, context);
     }
     case "KindAsExpression":
@@ -238,7 +237,7 @@ export function planExpressionInner(
     }
     case KindSatisfiesExpression: {
       const fact = rustOperationFact(node, context);
-      const inner = Node_Expression(context.input.ast, node);
+      const inner = Node_Expression(context.input.program.source.ast, node);
       if (fact?.kind !== "identity-expression" || inner === undefined) {
         context.diagnostics.push(missingFactDiagnostic(
           diagnosticInput(context, node),
@@ -254,11 +253,11 @@ export function planExpressionInner(
     }
     case KindNonNullExpression: {
       const fact = rustOperationFact(node, context);
-      const inner = Node_Expression(context.input.ast, node);
+      const inner = Node_Expression(context.input.program.source.ast, node);
       const planned = inner === undefined ? undefined : planExpression(inner, context);
       const innerCarrier = inner === undefined
         ? undefined
-        : rustEffectiveValueCarrier(context.input.facts, inner);
+        : rustEffectiveValueCarrier(context.input.program.facts, inner);
       if (fact?.kind !== "non-null-expression" || inner === undefined || planned === undefined ||
         innerCarrier === undefined || !rustTargetTypeRefEquals(innerCarrier, fact.sourceCarrier) ||
         !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.non-null-expression")) {
@@ -284,9 +283,9 @@ export function planExpressionInner(
     }
     case KindConditionalExpression: {
       const fact = rustOperationFact(node, context);
-      const conditionNode = ConditionalExpression_Condition(context.input.ast, node);
-      const whenTrueNode = ConditionalExpression_WhenTrue(context.input.ast, node);
-      const whenFalseNode = ConditionalExpression_WhenFalse(context.input.ast, node);
+      const conditionNode = ConditionalExpression_Condition(context.input.program.source.ast, node);
+      const whenTrueNode = ConditionalExpression_WhenTrue(context.input.program.source.ast, node);
+      const whenFalseNode = ConditionalExpression_WhenFalse(context.input.program.source.ast, node);
       if (fact?.kind !== "conditional" || conditionNode === undefined ||
         whenTrueNode === undefined || whenFalseNode === undefined) {
         context.diagnostics.push(missingFactDiagnostic(
@@ -310,7 +309,7 @@ export function planExpressionInner(
         return conditional;
       }
       const conditionName = allocateRustSyntheticName(
-        context.syntheticNames ?? createRustSyntheticNameState(context.input.ast, node, []),
+        context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []),
         "conditional_test",
       );
       return {
@@ -327,7 +326,7 @@ export function planExpressionInner(
     }
     case KindTypeOfExpression: {
       const fact = rustOperationFact(node, context);
-      const operandNode = Node_Expression(context.input.ast, node);
+      const operandNode = Node_Expression(context.input.program.source.ast, node);
       if (fact?.kind !== "typeof" || operandNode === undefined ||
         !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.typeof-carrier")) {
         context.diagnostics.push(missingFactDiagnostic(
@@ -352,11 +351,11 @@ export function planExpressionInner(
     }
     case KindVoidExpression: {
       const fact = rustOperationFact(node, context);
-      const operandNode = Node_Expression(context.input.ast, node);
+      const operandNode = Node_Expression(context.input.program.source.ast, node);
       if (fact?.kind !== "void-expression" || operandNode === undefined ||
         !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.void-carrier") ||
         !selectedOperationMatches(
-          context.input.facts.getSelectedTargetOperator(node),
+          context.input.program.facts.getSelectedTargetOperator(node),
           fact.operationId,
           "operator",
           fact.resultCarrier,
@@ -386,7 +385,7 @@ export function planExpressionInner(
       const fixedFact = rustOperationFact(node, context);
       if (fixedFact !== undefined && fixedFact.kind === "fixed-array-literal") {
         const elements: RustExpr[] = [];
-        for (const element of context.input.ast.elements(node)) {
+        for (const element of context.input.program.source.ast.elements(node)) {
           if (element === undefined || ast.kindName(element) === "KindOmittedExpression") {
             context.diagnostics.push(missingFactDiagnostic(
               diagnosticInput(context, node),
@@ -431,7 +430,7 @@ export function planExpressionInner(
       if (!requireExpressionCarrier(node, awaitFact.resultCarrier, context, "rust.backend.await-carrier")) {
         return undefined;
       }
-      const operand = Node_Expression(context.input.ast, node);
+      const operand = Node_Expression(context.input.program.source.ast, node);
       const planned = operand === undefined ? undefined : planExpression(operand, context);
       if (planned === undefined) {
         return undefined;
@@ -439,10 +438,10 @@ export function planExpressionInner(
       let awaited: RustExpr = { kind: "await", expr: planned };
       const future = operand === undefined
         ? undefined
-        : context.input.facts.getFact(operand, rustFutureValueFactKey);
+        : context.input.program.facts.getFact(operand, rustFutureValueFactKey);
       const operandCarrier = operand === undefined
         ? undefined
-        : context.input.facts.getRuntimeCarrierFact(operand)?.carrier;
+        : context.input.program.facts.getRuntimeCarrierFact(operand)?.carrier;
       if (future === undefined || !rustFutureValueMatchesCarrier(future, operandCarrier) ||
         !rustTargetTypeRefEquals(awaitFact.resultCarrier, future.outputCarrier)) {
         context.diagnostics.push(missingFactDiagnostic(
@@ -471,7 +470,7 @@ export function planExpressionInner(
           return undefined;
         }
         if (future.errorBoundary === "provider-native" && future.errorCarrier !== undefined) {
-          registerRustProviderErrorCarrier(context.input, future.errorCarrier);
+          context.input.providerErrors.register(future.errorCarrier);
         }
         awaited = applyRustErrorBoundary(
           awaited,
@@ -496,7 +495,7 @@ export function planExpressionInner(
     }
     case "KindYieldExpression": {
       const generator = context.generator;
-      const fact = context.input.facts.getFact(node, rustYieldFactKey);
+      const fact = context.input.program.facts.getFact(node, rustYieldFactKey);
       if (generator === undefined || fact === undefined ||
         fact.generatorDeclaration !== generator.declaration ||
         !rustTargetTypeRefEquals(fact.yieldType, generator.protocol.yieldType) ||
@@ -511,7 +510,7 @@ export function planExpressionInner(
       }
       if (fact.kind === "delegate") {
         const delegated = getRustGeneratorProtocol(fact.delegatedCarrier);
-        const operand = Node_Expression(context.input.ast, node);
+        const operand = Node_Expression(context.input.program.source.ast, node);
         if (delegated === undefined || operand === undefined ||
           !rustTargetTypeRefEquals(delegated.yieldType, generator.protocol.yieldType) ||
           !rustTargetTypeRefEquals(delegated.nextType, generator.protocol.nextType) ||
@@ -543,7 +542,7 @@ export function planExpressionInner(
           },
         }, context);
       }
-      const operand = Node_Expression(context.input.ast, node);
+      const operand = Node_Expression(context.input.program.source.ast, node);
       const value = operand === undefined
         ? ({ kind: "path", path: "()" } as const)
         : planExpression(operand, context);

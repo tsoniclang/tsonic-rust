@@ -3,7 +3,7 @@ import type {
   RustImplFunction,
   RustItem,
   RustSourceFileModel,
-} from "../../rust-ast/nodes.js";
+} from "../../target-ast/nodes.js";
 import { closedMetadataKey } from "../../../policy/model/closed-data.js";
 import type {
   RustArtifactContractCandidate,

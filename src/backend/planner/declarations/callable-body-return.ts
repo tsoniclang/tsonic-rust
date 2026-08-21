@@ -1,5 +1,5 @@
 import type { RustGeneratorFact } from "../../../analysis/facts/keys.js";
-import type { RustType } from "../../rust-ast/nodes.js";
+import type { RustType } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 

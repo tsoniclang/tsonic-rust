@@ -8,8 +8,8 @@ import {
   rustSliceElementCarrier,
 } from "../types/target-types.js";
 import { rustTargetTypeRefEquals } from "../types/equality.js";
-import type { RustArgumentMode } from "../operations/model.js";
-import type { TargetTypeRef } from "../types/model.js";
+import type { RustArgumentMode } from "../../target-model/operations/model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 import {
   resolveRustTargetTypeRef,
   rustParameterLaneTargetType,

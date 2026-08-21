@@ -4,7 +4,7 @@ import {
   rustIsizeToFloat64ValueConversion,
   rustIsizeToInt32ValueConversion,
   rustUsizeToInt32ValueConversion,
-} from "../../conversions/model.js";
+} from "../../../target-model/conversions/model.js";
 import {
   rustJsValueTargetType,
   rustJsArrayConcatItemTargetType,
@@ -13,8 +13,8 @@ import {
 } from "../../types/target-types.js";
 import { defineJsOperationRows } from "./model.js";
 import type { JsOperationRowData } from "./model.js";
-import type { RustCallbackOperationTemplate, RustProviderOperationForm, RustValueConversion } from "../model.js";
-import type { TargetTypeRef } from "../../types/model.js";
+import type { RustCallbackOperationTemplate, RustProviderOperationForm, RustValueConversion } from "../../../target-model/operations/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 const zeroArgument = { kind: "integer", value: 0 } as const;
 const oneArgument = { kind: "integer", value: 1 } as const;

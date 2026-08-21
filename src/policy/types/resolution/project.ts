@@ -2,7 +2,7 @@ import { isDenseDataArray } from "../../model/closed-data.js";
 import { rustSourceTypeCarrier, rustSourceTypeCarrierValue } from "../target-types.js";
 import type { Node, Symbol } from "@tsonic/tsts";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
-import type { TargetTypeRef } from "../model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function resolveProjectSourceCarrier(
   symbol: Symbol | undefined,
@@ -13,7 +13,7 @@ export function resolveProjectSourceCarrier(
 ): TargetTypeRef | undefined {
   const symbolDeclarations = symbol === undefined
     ? []
-    : denseDefined(context.checker.getSymbolDeclarations(symbol));
+    : denseDefined(context.currentSemantics.declarations.symbolDeclarations(symbol));
   if (symbolDeclarations === undefined) {
     return undefined;
   }

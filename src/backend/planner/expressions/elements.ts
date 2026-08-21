@@ -17,7 +17,7 @@ import { requireProviderArgumentPassingFacts } from "./calls/arguments.js";
 import { rustOptionalChainFactKey } from "../../../analysis/facts/keys.js";
 import { rustOptionElementCarrier } from "../../../policy/types/target-types.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr } from "../../rust-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 
 export function planElementAccess(node: Node, context: RustPlanContext): RustExpr | undefined {
@@ -39,7 +39,7 @@ function planElementAccessInner(node: Node, context: RustPlanContext): RustExpr 
       context,
       "rust.backend.project-index-carrier",
     ) || !selectedOperationMatches(
-      context.input.facts.getSelectedTargetElementAccess(node),
+      context.input.program.facts.getSelectedTargetElementAccess(node),
       fact.operationId,
       "indexer",
       resultCarrier,
@@ -51,8 +51,8 @@ function planElementAccessInner(node: Node, context: RustPlanContext): RustExpr 
       ));
       return undefined;
     }
-    const receiverNode = Node_Expression(context.input.ast, node);
-    const keyNode = ElementAccessExpression_ArgumentExpression(context.input.ast, node);
+    const receiverNode = Node_Expression(context.input.program.source.ast, node);
+    const keyNode = ElementAccessExpression_ArgumentExpression(context.input.program.source.ast, node);
     const plannedReceiver = receiverNode === undefined
       ? undefined
       : planExpression(receiverNode, context);
@@ -83,7 +83,7 @@ function planElementAccessInner(node: Node, context: RustPlanContext): RustExpr 
     };
   }
   if (fact !== undefined && fact.kind === "fixed-index") {
-    const optional = context.input.facts.getFact(node, rustOptionalChainFactKey);
+    const optional = context.input.program.facts.getFact(node, rustOptionalChainFactKey);
     const innerResult = optional?.innerResultCarrier ?? expressionCarrier(node, context);
     const selectedResult = innerResult === undefined
       ? undefined
@@ -94,7 +94,7 @@ function planElementAccessInner(node: Node, context: RustPlanContext): RustExpr 
       context,
       "rust.backend.fixed-index-carrier",
     ) || !selectedOperationMatches(
-      context.input.facts.getSelectedTargetElementAccess(node),
+      context.input.program.facts.getSelectedTargetElementAccess(node),
       fact.operationId,
       "indexer",
       selectedResult,
@@ -106,16 +106,16 @@ function planElementAccessInner(node: Node, context: RustPlanContext): RustExpr 
       ));
       return undefined;
     }
-    const receiverNode = Node_Expression(context.input.ast, node);
+    const receiverNode = Node_Expression(context.input.program.source.ast, node);
     const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
-    const indexNode = ElementAccessExpression_ArgumentExpression(context.input.ast, node);
+    const indexNode = ElementAccessExpression_ArgumentExpression(context.input.program.source.ast, node);
     if (receiver === undefined || indexNode === undefined) {
       return undefined;
     }
-    const effect = context.input.ast.kindName(indexNode) === KindNumericLiteral
+    const effect = context.input.program.source.ast.kindName(indexNode) === KindNumericLiteral
       ? undefined
       : planExpression(indexNode, context);
-    if (context.input.ast.kindName(indexNode) !== KindNumericLiteral && effect === undefined) {
+    if (context.input.program.source.ast.kindName(indexNode) !== KindNumericLiteral && effect === undefined) {
       return undefined;
     }
     const value: RustExpr = {
@@ -128,7 +128,7 @@ function planElementAccessInner(node: Node, context: RustPlanContext): RustExpr 
       : { kind: "evaluate-then", effect, discard: "value", value };
   }
   if (fact !== undefined && fact.kind === "tuple-index") {
-    const indexNode = ElementAccessExpression_ArgumentExpression(context.input.ast, node);
+    const indexNode = ElementAccessExpression_ArgumentExpression(context.input.program.source.ast, node);
     if (indexNode === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, node),
@@ -143,7 +143,7 @@ function planElementAccessInner(node: Node, context: RustPlanContext): RustExpr 
       return undefined;
     }
     if (!selectedOperationMatches(
-      context.input.facts.getSelectedTargetElementAccess(node),
+      context.input.program.facts.getSelectedTargetElementAccess(node),
       fact.operationId,
       "indexer",
       resultCarrier,
@@ -155,13 +155,13 @@ function planElementAccessInner(node: Node, context: RustPlanContext): RustExpr 
       ));
       return undefined;
     }
-    const receiver = Node_Expression(context.input.ast, node);
+    const receiver = Node_Expression(context.input.program.source.ast, node);
     const planned = receiver === undefined ? undefined : planExpression(receiver, context);
     if (planned === undefined) {
       return undefined;
     }
     const value: RustExpr = { kind: "field", receiver: planned, name: String(fact.index) };
-    if (context.input.ast.kindName(indexNode) === KindNumericLiteral) {
+    if (context.input.program.source.ast.kindName(indexNode) === KindNumericLiteral) {
       return value;
     }
     const effect = planExpression(indexNode, context);
@@ -184,7 +184,7 @@ function planElementAccessInner(node: Node, context: RustPlanContext): RustExpr 
     return undefined;
   }
   if (!selectedOperationMatches(
-    context.input.facts.getSelectedTargetElementAccess(node),
+    context.input.program.facts.getSelectedTargetElementAccess(node),
     fact.operationId,
     "indexer",
     selectedResult,
@@ -196,7 +196,7 @@ function planElementAccessInner(node: Node, context: RustPlanContext): RustExpr 
     ));
     return undefined;
   }
-  const argumentNode = ElementAccessExpression_ArgumentExpression(context.input.ast, node);
+  const argumentNode = ElementAccessExpression_ArgumentExpression(context.input.program.source.ast, node);
   if (fact.abi.sourceArguments.length !== 1) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -212,7 +212,7 @@ function planElementAccessInner(node: Node, context: RustPlanContext): RustExpr 
   const planned = planProviderOperationExpression(
     context,
     fact,
-    Node_Expression(context.input.ast, node),
+    Node_Expression(context.input.program.source.ast, node),
     [argumentNode],
     node,
     { resultUse: "value" },
@@ -237,7 +237,7 @@ export function planArrayLiteral(node: Node, context: RustPlanContext): RustExpr
       return undefined;
     }
     const elements: RustExpr[] = [];
-    for (const element of context.input.ast.elements(node)) {
+    for (const element of context.input.program.source.ast.elements(node)) {
       if (element === undefined) {
         context.diagnostics.push(missingFactDiagnostic(
           diagnosticInput(context, node),
@@ -287,9 +287,9 @@ export function planArrayLiteral(node: Node, context: RustPlanContext): RustExpr
   if (!requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.array-literal-carrier")) {
     return undefined;
   }
-  const sourceElements = context.input.ast.elements(node);
+  const sourceElements = context.input.program.source.ast.elements(node);
   const hasHoles = sourceElements.some((element) =>
-    element !== undefined && context.input.ast.kindName(element) === "KindOmittedExpression");
+    element !== undefined && context.input.program.source.ast.kindName(element) === "KindOmittedExpression");
   const elements: RustExpr[] = [];
   for (const [index, element] of sourceElements.entries()) {
     if (element === undefined) {
@@ -300,7 +300,7 @@ export function planArrayLiteral(node: Node, context: RustPlanContext): RustExpr
       ));
       return undefined;
     }
-    if (context.input.ast.kindName(element) === "KindOmittedExpression") {
+    if (context.input.program.source.ast.kindName(element) === "KindOmittedExpression") {
       continue;
     }
     const planned = planExpression(element, context);

@@ -1,8 +1,10 @@
 import type { TargetSelection } from "@tsonic/target-api";
+import type { RustTargetConfiguration } from "../target-model/configuration/model.js";
+import type { RustEdition, RustOutputType } from "../target-model/project/model.js";
+import { resolveRustProjectConfiguration } from "./rust-user-project.js";
 
-export type RustOutputType = "lib" | "bin";
-
-export type RustEdition = "2021" | "2024";
+export type { RustTargetConfiguration } from "../target-model/configuration/model.js";
+export type { RustEdition, RustOutputType } from "../target-model/project/model.js";
 
 const supportedRustTargetOptionKeys = Object.freeze([
   "crateName",
@@ -14,6 +16,14 @@ const supportedRustTargetOptionKeys = Object.freeze([
 const crateNamePattern = /^[a-z][a-z0-9_]*$/u;
 
 export function validateRustTargetOptions(target: TargetSelection): void {
+  validateRustTargetOptionKeys(target);
+  readRustCrateName(target);
+  readRustEdition(target);
+  readRustOutputType(target);
+  readRustUserProjectFile(target);
+}
+
+function validateRustTargetOptionKeys(target: TargetSelection): void {
   const options = target.options;
   if (options === undefined) {
     return;
@@ -24,10 +34,24 @@ export function validateRustTargetOptions(target: TargetSelection): void {
       throw new Error(`Rust target option 'options.${key}' is not supported.`);
     }
   }
-  readRustCrateName(target);
-  readRustEdition(target);
-  readRustOutputType(target);
-  readRustUserProjectFile(target);
+}
+
+export function createRustTargetConfiguration(
+  target: TargetSelection,
+  projectDirectory: string,
+  targetOutputRoot: string,
+): RustTargetConfiguration {
+  validateRustTargetOptionKeys(target);
+  return Object.freeze({
+    crateName: readRustCrateName(target),
+    edition: readRustEdition(target),
+    outputType: readRustOutputType(target),
+    project: resolveRustProjectConfiguration(
+      readRustUserProjectFile(target),
+      projectDirectory,
+      targetOutputRoot,
+    ),
+  });
 }
 
 export function readRustCrateName(target: TargetSelection): string {

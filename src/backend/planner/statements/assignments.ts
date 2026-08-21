@@ -22,19 +22,19 @@ import {
   KindIdentifier,
   Node_Expression,
 } from "@tsonic/target-api/source";
-import { isRustAssignmentOperator } from "../../model/syntax.js";
+import { isRustAssignmentOperator } from "../../../target-model/syntax/tokens.js";
 import { isRustCopyCarrier, isRustStringCarrier } from "../../../policy/types/target-types.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { planRustMutableProjectReceiver, planRustSharedReceiver, planRustPromotedStorageLocation } from "../expressions/typed-locations.js";
 import { rustSelectedAccessorRequiresUnsafe } from "../safety/explicit-safety.js";
 import { rustSourceStaticFieldLocation } from "../declarations/static-field-storage.js";
 import { rustProjectObjectRepresentation } from "../objects/project-storage.js";
-import { rustStringConcat } from "../../rust-ast/expressions.js";
+import { rustStringConcat } from "../../target-ast/expressions.js";
 import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustAssignmentOperationFact } from "./core.js";
-import type { RustAssignmentOperator, RustBinaryOperator } from "../../model/syntax.js";
-import type { RustExpr, RustStmt } from "../../rust-ast/nodes.js";
+import type { RustAssignmentOperator, RustBinaryOperator } from "../../../target-model/syntax/tokens.js";
+import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
 
@@ -55,15 +55,15 @@ export function planRustSourceMethodPropertyAssignment(
     ));
     return undefined;
   }
-  const receiverNode = Node_Expression(context.input.ast, left);
+  const receiverNode = Node_Expression(context.input.program.source.ast, left);
   const plannedReceiver = receiverNode === undefined
     ? undefined
     : planExpression(receiverNode, context);
   const value = planExpression(valueNode, context);
-  const receiverDefinition = context.input.projectTypes.definitionForCarrier(
+  const receiverDefinition = context.input.program.projectTypes.definitionForCarrier(
     method.receiverCarrier,
   );
-  const representation = context.input.objectRepresentations.representationFor(
+  const representation = context.input.program.objectRepresentations.representationFor(
     receiverDefinition,
   );
   if (receiverNode === undefined || plannedReceiver === undefined || value === undefined ||
@@ -81,7 +81,7 @@ export function planRustSourceMethodPropertyAssignment(
   );
   const receiver: RustExpr = { kind: "path", path: receiverName };
   const replacement: RustExpr = { kind: "path", path: valueName };
-  const write = context.input.projectTypes.isPolymorphic(receiverDefinition)
+  const write = context.input.program.projectTypes.isPolymorphic(receiverDefinition)
     ? {
         kind: "method-call" as const,
         receiver: {
@@ -285,7 +285,7 @@ export function planRustDirectOperatorCallAssignment(
   const currentName = allocateRustSyntheticName(context.syntheticNames, "current");
   const valueName = allocateRustSyntheticName(context.syntheticNames, "value");
   const nextName = allocateRustSyntheticName(context.syntheticNames, "next");
-  const directIdentifier = context.input.ast.kindName(targetNode) === KindIdentifier;
+  const directIdentifier = context.input.program.source.ast.kindName(targetNode) === KindIdentifier;
   const locationName = directIdentifier
     ? undefined
     : allocateRustSyntheticName(context.syntheticNames, "location");
@@ -423,7 +423,7 @@ export function planRustSourceAccessorAssignment(
   const bindings: { name: string; value: RustExpr }[] = [];
   let receiver: RustExpr | undefined;
   if (accessor.receiver.kind === "instance") {
-    const receiverNode = Node_Expression(context.input.ast, target);
+    const receiverNode = Node_Expression(context.input.program.source.ast, target);
     const plannedReceiver = receiverNode === undefined
       ? undefined
       : planExpression(receiverNode, context);
@@ -542,8 +542,8 @@ export function planRustSourceIndexAssignment(
     ));
     return undefined;
   }
-  const receiverNode = Node_Expression(context.input.ast, target);
-  const keyNode = ElementAccessExpression_ArgumentExpression(context.input.ast, target);
+  const receiverNode = Node_Expression(context.input.program.source.ast, target);
+  const keyNode = ElementAccessExpression_ArgumentExpression(context.input.program.source.ast, target);
   const plannedReceiver = receiverNode === undefined
     ? undefined
     : planExpression(receiverNode, context);

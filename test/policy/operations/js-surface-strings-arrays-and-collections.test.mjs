@@ -15,7 +15,7 @@ import {
   rustUndefinedTargetType,
   rustVecTargetType,
 } from "../../../dist/policy/types/target-types.js";
-import { rustInt32ToFloat64ValueConversion } from "../../../dist/policy/conversions/model.js";
+import { rustInt32ToFloat64ValueConversion } from "../../../dist/target-model/conversions/model.js";
 
 const denseSource = `
 import type { int32 } from "@tsonic/core/types.js";

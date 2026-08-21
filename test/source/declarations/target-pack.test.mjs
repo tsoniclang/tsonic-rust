@@ -30,32 +30,84 @@ test("createTsonicPlugin exposes the installed target plugin contract", async ()
 
 test("rust provider contributes source semantics and validates options", () => {
   const pack = createRustTargetPack();
-  const context = {
-    project: { entryPoint: "src/index.ts", targets: [] },
-    target: { id: "rust", options: {} },
-    targetPack: pack,
-    selectedCapabilities: [],
-    selectedSurfaces: [],
-  };
-
-  const contribution = pack.provider.sourceCompilerContributions(context);
+  const target = { id: "rust", options: {} };
+  const session = pack.createCompilationSession(sessionContext(target));
+  session.sourceProfileContributions();
+  const contribution = session.sourceCompilerContributions();
   assert.equal(contribution.extensions.length, 1);
   assert.equal(contribution.extensions[0].identity.id, "tsonic.rust.source-semantics");
+  session.close();
   assert.throws(
-    () => pack.provider.sourceCompilerContributions({ ...context, target: { id: "rust", options: { unknown: true } } }),
+    () => pack.createCompilationSession(sessionContext({
+      id: "rust",
+      options: { unknown: true },
+    })),
     /Rust target option 'options\.unknown' is not supported\./,
   );
 });
 
-test("createBackend and createToolchain validate target options", () => {
+test("the compilation session owns target option validation", () => {
   const pack = createRustTargetPack();
-  const badContext = {
-    project: { entryPoint: "src/index.ts", targets: [] },
-    target: { id: "rust", options: { unknown: true } },
-  };
+  const target = { id: "rust", options: { unknown: true } };
+  assert.throws(
+    () => pack.createCompilationSession(sessionContext(target)),
+    /not supported/u,
+  );
+});
 
-  assert.throws(() => pack.createBackend(badContext), /not supported/);
-  assert.throws(() => pack.createToolchain(badContext), /not supported/);
+test("the compilation session enforces one ordered lifecycle and idempotent close", () => {
+  const pack = createRustTargetPack();
+  const target = { id: "rust", options: {} };
+  const first = pack.createCompilationSession(sessionContext(target));
+
+  assert.throws(
+    () => first.sourceCompilerContributions(),
+    /expected 'profile-contributed'/u,
+  );
+  first.close();
+  first.close();
+  assert.throws(
+    () => first.sourceProfileContributions(),
+    /while in 'closed'/u,
+  );
+
+  const second = pack.createCompilationSession(sessionContext(target));
+  second.sourceProfileContributions();
+  assert.throws(
+    () => second.sourceProfileContributions(),
+    /expected 'created'/u,
+  );
+  assert.throws(
+    () => second.runtimeContributions(),
+    /expected 'compiler-contributed'/u,
+  );
+  second.sourceCompilerContributions();
+  assert.throws(
+    () => second.sourceCompilerContributions(),
+    /expected 'profile-contributed'/u,
+  );
+  assert.throws(
+    () => second.compile(undefined),
+    /expected 'runtime-contributed'/u,
+  );
+  second.close();
+});
+
+test("the compilation session rejects foreign capability payloads before provider setup", () => {
+  const pack = createRustTargetPack();
+  const context = sessionContext({ id: "rust", options: {} });
+
+  assert.throws(
+    () => pack.createCompilationSession({
+      ...context,
+      capabilities: [{
+        capabilityId: "foreign.capability",
+        moduleOwnership: [],
+        contributions: [{ kind: "foreign-policy" }],
+      }],
+    }),
+    /unsupported target contribution kind 'foreign-policy'/u,
+  );
 });
 
 test("package manifest declares the installed plugin contract", async () => {
@@ -76,13 +128,30 @@ test("package manifest declares the installed plugin contract", async () => {
 test("target runtime crate references resolve inside the package", async () => {
   const { existsSync } = await import("node:fs");
   const pack = createRustTargetPack();
-  const references = pack.provider.runtimeContributions({
-    selectedSurfaces: [],
-    target: { id: "rust", options: {} },
-    paths: { projectRoot: process.cwd() },
-  }).references;
+  const target = { id: "rust", options: {} };
+  const session = pack.createCompilationSession(sessionContext(target));
+  session.sourceProfileContributions();
+  session.sourceCompilerContributions();
+  const references = session.runtimeContributions().references;
+  session.close();
   for (const reference of references) {
     assert.match(reference.include, /rust-runtime\/crates\/tsonic_rust_runtime$/u);
     assert.ok(existsSync(reference.include), `missing packaged crate: ${reference.include}`);
   }
 });
+
+function sessionContext(target) {
+  return {
+    project: { entryPoint: "src/index.ts", targets: [target] },
+    projectDirectory: process.cwd(),
+    target,
+    paths: {
+      projectFilePath: `${process.cwd()}/tsonic.json`,
+      projectRoot: process.cwd(),
+      outputRoot: `${process.cwd()}/out`,
+      targetOutputRoot: `${process.cwd()}/out/rust`,
+    },
+    selectedSurfaceIds: [],
+    capabilities: [],
+  };
+}

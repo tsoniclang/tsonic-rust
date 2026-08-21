@@ -23,7 +23,7 @@ import {
 import type {
   RustTargetMember,
   TargetTypeRef,
-} from "../../policy/types/model.js";
+} from "../../target-model/types/model.js";
 import {
   Node_Expression,
   Node_Type,

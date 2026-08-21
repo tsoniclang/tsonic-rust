@@ -5,20 +5,20 @@ import {
   rustNamedTargetType,
   rustNamedTypeCarrierValue,
 } from "../../policy/types/target-types.js";
-import type { RustNamedTypeTraitContract } from "../../policy/types/model.js";
+import type { RustNamedTypeTraitContract } from "../../target-model/types/model.js";
 import type {
   RustProviderBinaryEpilogueDefinition,
   RustProviderBinaryEpilogueRow,
   RustProviderOperationDefinition,
   RustProviderOperationRow,
 } from "./model.js";
-import type { RustProviderOperationForm, RustValueConversion } from "../../policy/operations/model.js";
-import type { TargetTypeRef } from "../../policy/types/model.js";
+import type { RustProviderOperationForm, RustValueConversion } from "../../target-model/operations/model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export function canonicalizeProviderOperationRow(
   row: RustProviderOperationRow,
-  carrierPaths: ReadonlyMap<string, string>,
-  carrierTraits: ReadonlyMap<string, RustNamedTypeTraitContract>,
+  carrierPaths: Readonly<Record<string, string>>,
+  carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>>,
 ): RustProviderOperationRow {
   return materializeProviderOperationRow(
     row,
@@ -32,8 +32,8 @@ export function canonicalizeProviderOperationRow(
 export function materializeProviderOperationRow(
   row: RustProviderOperationDefinition,
   aliases: ReadonlyMap<string, string>,
-  carrierPaths: Readonly<Record<string, string>> | ReadonlyMap<string, string>,
-  carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>> | ReadonlyMap<string, RustNamedTypeTraitContract>,
+  carrierPaths: Readonly<Record<string, string>>,
+  carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>>,
   owner: Pick<RustProviderOperationRow, "providerPackageId" | "providerId" | "providerVersion" | "providerModuleId" | "moduleSpecifier">,
 ): RustProviderOperationRow {
   const {
@@ -101,8 +101,8 @@ export function materializeProviderOperationRow(
 export function materializeProviderBinaryEpilogueRow(
   epilogue: RustProviderBinaryEpilogueDefinition,
   aliases: ReadonlyMap<string, string>,
-  carrierPaths: Readonly<Record<string, string>> | ReadonlyMap<string, string>,
-  carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>> | ReadonlyMap<string, RustNamedTypeTraitContract>,
+  carrierPaths: Readonly<Record<string, string>>,
+  carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>>,
   owner: Pick<RustProviderBinaryEpilogueRow, "providerPackageId" | "providerVersion">,
 ): RustProviderBinaryEpilogueRow {
   const base = {
@@ -136,8 +136,8 @@ export function materializeProviderBinaryEpilogueRow(
 function materializeProviderOperationForm(
   form: RustProviderOperationForm,
   aliases: ReadonlyMap<string, string>,
-  carrierPaths: Readonly<Record<string, string>> | ReadonlyMap<string, string>,
-  carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>> | ReadonlyMap<string, RustNamedTypeTraitContract>,
+  carrierPaths: Readonly<Record<string, string>>,
+  carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>>,
 ): RustProviderOperationForm {
   const argConversions = "argConversions" in form && form.argConversions !== undefined
     ? [...form.argConversions]
@@ -228,19 +228,15 @@ export function expandProviderPath(path: string, aliases: ReadonlyMap<string, st
 
 export function materializeProviderCarrier(
   carrier: TargetTypeRef,
-  carrierPaths: Readonly<Record<string, string>> | ReadonlyMap<string, string>,
-  carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>> | ReadonlyMap<string, RustNamedTypeTraitContract> = {},
+  carrierPaths: Readonly<Record<string, string>>,
+  carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>> = {},
 ): TargetTypeRef {
   const named = rustNamedTypeCarrierValue(carrier);
   if (named !== undefined) {
     const typeArguments = named.typeArguments.map((argument) =>
       materializeProviderCarrier(argument, carrierPaths, carrierTraits));
-    const path = carrierPaths instanceof Map
-      ? carrierPaths.get(named.id)
-      : (carrierPaths as Readonly<Record<string, string>>)[named.id];
-    const traits = carrierTraits instanceof Map
-      ? carrierTraits.get(named.id)
-      : (carrierTraits as Readonly<Record<string, RustNamedTypeTraitContract>>)[named.id];
+    const path = carrierPaths[named.id];
+    const traits = carrierTraits[named.id];
     return rustNamedTargetType(
       named.id,
       path ?? named.path,
@@ -251,12 +247,8 @@ export function materializeProviderCarrier(
   if (carrier.kind === "target-named") {
     const typeArguments = (carrier.typeArguments ?? []).map((argument) =>
       materializeProviderCarrier(argument, carrierPaths, carrierTraits));
-    const path = carrierPaths instanceof Map
-      ? carrierPaths.get(carrier.id)
-      : (carrierPaths as Readonly<Record<string, string>>)[carrier.id];
-    const traits = carrierTraits instanceof Map
-      ? carrierTraits.get(carrier.id)
-      : (carrierTraits as Readonly<Record<string, RustNamedTypeTraitContract>>)[carrier.id];
+    const path = carrierPaths[carrier.id];
+    const traits = carrierTraits[carrier.id];
     return path === undefined
       ? { ...carrier, ...(typeArguments.length === 0 ? {} : { typeArguments }) }
       : rustNamedTargetType(carrier.id, path, typeArguments, traits ?? rustMoveOnlyNamedTypeTraits);
@@ -291,8 +283,8 @@ export function materializeProviderCarrier(
 
 function materializeProviderValueConversion(
   conversion: RustValueConversion,
-  carrierPaths: Readonly<Record<string, string>> | ReadonlyMap<string, string>,
-  carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>> | ReadonlyMap<string, RustNamedTypeTraitContract>,
+  carrierPaths: Readonly<Record<string, string>>,
+  carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>>,
 ): RustValueConversion {
   switch (conversion.kind) {
     case "copy-from-reference":

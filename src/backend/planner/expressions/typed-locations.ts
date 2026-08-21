@@ -2,13 +2,13 @@ import type { Node } from "@tsonic/tsts";
 import type {
   RustAssignmentOperator,
   RustBinaryOperator,
-} from "../../model/syntax.js";
+} from "../../../target-model/syntax/tokens.js";
 import {
   ElementAccessExpression_ArgumentExpression,
   Node_Expression,
 } from "@tsonic/target-api/source";
 import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
-import type { TargetTypeRef } from "../../../policy/types/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type {
   RustTargetOperationFact,
   RustTypedLocationPlan,
@@ -24,7 +24,7 @@ import {
   isRustCopyCarrier,
   rustCarrierSupportsClone,
 } from "../../../policy/types/target-types.js";
-import type { RustExpr, RustStmt } from "../../rust-ast/nodes.js";
+import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import {
   missingFactDiagnostic,
@@ -62,7 +62,7 @@ export function planRustTypedLocationCall(
   context: RustPlanContext,
   planExpression: RustExpressionPlanner,
 ): RustExpr | undefined {
-  const plan = context.input.facts.getFact(node, rustTypedLocationPlanKey);
+  const plan = context.input.program.facts.getFact(node, rustTypedLocationPlanKey);
   if (plan === undefined || !typedLocationFactMatchesPlan(fact, plan)) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -155,7 +155,7 @@ export function planRustValueRead(
   value: RustExpr,
   context: RustPlanContext,
 ): RustExpr {
-  const carrier = context.input.facts.getRuntimeCarrierFact(node)?.carrier;
+  const carrier = context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
   return rustReadRequiresClone(carrier) &&
       !rustSourceReferenceCanMove(node, context)
     ? { kind: "method-call", receiver: value, method: "clone", args: [] }
@@ -178,7 +178,7 @@ export function planRustCaptureValue(
     };
   }
   const value = planRustIdentifierValue(node, path, context);
-  const carrier = context.input.facts.getRuntimeCarrierFact(node)?.carrier;
+  const carrier = context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
   return !isRustCopyCarrier(carrier) && rustCarrierSupportsClone(carrier) &&
       !(value.kind === "method-call" && value.method === "clone" && value.args.length === 0)
     ? { kind: "method-call", receiver: value, method: "clone", args: [] }
@@ -190,7 +190,7 @@ export function planRustNonConsumingValue(
   expression: RustExpr,
   context: RustPlanContext,
 ): RustExpr {
-  const carrier = context.input.facts.getRuntimeCarrierFact(node)?.carrier;
+  const carrier = context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
   return rustReadRequiresClone(carrier) &&
       expression.kind === "method-call" && expression.method === "clone" &&
       expression.args.length === 0
@@ -208,7 +208,7 @@ export function planRustSharedReceiver(
   if (override?.valueForm === "shared-reference") {
     return value;
   }
-  const kind = context.input.ast.kindName(node);
+  const kind = context.input.program.source.ast.kindName(node);
   return override === undefined &&
       (kind === "KindThisExpression" || kind === "KindThisKeyword")
     ? value
@@ -226,7 +226,7 @@ export function planRustMutableProjectReceiver(
     return planRustSharedReceiver(node, expression, context);
   }
   const value = planRustNonConsumingValue(node, expression, context);
-  const kind = context.input.ast.kindName(node);
+  const kind = context.input.program.source.ast.kindName(node);
   const target = kind === "KindThisExpression" || kind === "KindThisKeyword"
     ? { kind: "dereference" as const, pointer: value }
     : value;
@@ -245,7 +245,7 @@ export function rustLocationStorageForReference(
   readonly storage: "local-location" | "module-cell";
   readonly valueCarrier: TargetTypeRef;
 } | undefined {
-  const declaration = context.input.facts.getFact(node, rustSourceBindingFactKey)
+  const declaration = context.input.program.facts.getFact(node, rustSourceBindingFactKey)
     ?.sourceDeclaration;
   const captured = declaration === undefined
     ? undefined
@@ -261,7 +261,7 @@ export function rustLocationStorageForReference(
   }
   const localStorage = declaration === undefined
     ? undefined
-    : context.input.facts.getFact(declaration, rustLocationStorageFactKey);
+    : context.input.program.facts.getFact(declaration, rustLocationStorageFactKey);
   if (declaration !== undefined && localStorage !== undefined) {
     return {
       declaration,
@@ -271,7 +271,7 @@ export function rustLocationStorageForReference(
   }
   const moduleBinding = declaration === undefined
     ? undefined
-    : context.input.facts.getFact(declaration, rustModuleBindingFactKey);
+    : context.input.program.facts.getFact(declaration, rustModuleBindingFactKey);
   const valueCarrier = moduleBinding?.storage === "module-cell"
     ? moduleBinding.valueCarrier
     : moduleBinding?.storage === "native-callable"
@@ -286,21 +286,21 @@ export function rustLocationStorageForDeclaration(
   declaration: Node,
   context: RustPlanContext,
 ): { readonly valueCarrier: TargetTypeRef } | undefined {
-  return context.input.facts.getFact(declaration, rustLocationStorageFactKey);
+  return context.input.program.facts.getFact(declaration, rustLocationStorageFactKey);
 }
 
 export function rustRawLocationRoot(
   expression: Node,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  const binding = context.input.facts.getFact(
+  const binding = context.input.program.facts.getFact(
     expression,
     rustSourceBindingFactKey,
   );
   if (binding === undefined) {
     return undefined;
   }
-  const name = context.input.names.nameForDeclaration(binding.sourceDeclaration) ?? "";
+  const name = context.input.program.names.nameForDeclaration(binding.sourceDeclaration) ?? "";
   if (!isValidRustIdentifier(name) ||
     rustLocationStorageForReference(expression, context) === undefined) {
     return undefined;
@@ -321,8 +321,8 @@ function rustCapturedBinding(
   node: Node,
   context: RustPlanContext,
 ): import("../program/plan-context.js").RustCapturedBinding | undefined {
-  const declaration = context.input.facts.getFact(node, rustSourceBindingFactKey)
-    ?.sourceDeclaration ?? context.input.source.navigation.sourceReferenceFor(node)?.declaration;
+  const declaration = context.input.program.facts.getFact(node, rustSourceBindingFactKey)
+    ?.sourceDeclaration ?? context.input.program.source.navigation.sourceReferenceFor(node)?.declaration;
   return declaration === undefined
     ? undefined
     : rustCapturedBindingForDeclaration(declaration, context);
@@ -334,10 +334,10 @@ function rustCapturedBindingForDeclaration(
 ): import("../program/plan-context.js").RustCapturedBinding | undefined {
   return context.capturedBindings?.find((binding) =>
     binding.declaration === declaration ||
-    (context.input.ast.getSourceFile(binding.declaration) === context.input.ast.getSourceFile(declaration) &&
-      context.input.ast.kind(binding.declaration) === context.input.ast.kind(declaration) &&
-      context.input.ast.pos(binding.declaration) === context.input.ast.pos(declaration) &&
-      context.input.ast.end(binding.declaration) === context.input.ast.end(declaration)));
+    (context.input.program.source.ast.getSourceFile(binding.declaration) === context.input.program.source.ast.getSourceFile(declaration) &&
+      context.input.program.source.ast.kind(binding.declaration) === context.input.program.source.ast.kind(declaration) &&
+      context.input.program.source.ast.pos(binding.declaration) === context.input.program.source.ast.pos(declaration) &&
+      context.input.program.source.ast.end(binding.declaration) === context.input.program.source.ast.end(declaration)));
 }
 
 export type RustPromotedStorageWritePlan =
@@ -501,8 +501,8 @@ function planRustLocationStorage(
         ? { kind: "method-call", receiver: root, method: "clone", args: [] }
         : root;
   }
-  if (context.input.ast.kindName(expression) === "KindParenthesizedExpression") {
-    const inner = Node_Expression(context.input.ast, expression);
+  if (context.input.program.source.ast.kindName(expression) === "KindParenthesizedExpression") {
+    const inner = Node_Expression(context.input.program.source.ast, expression);
     return inner === undefined
       ? rejectLocationStorage(
           expression,
@@ -517,7 +517,7 @@ function planRustLocationStorage(
           planExpression,
         );
   }
-  const receiverNode = Node_Expression(context.input.ast, expression);
+  const receiverNode = Node_Expression(context.input.program.source.ast, expression);
   if (receiverNode === undefined) {
     return rejectLocationStorage(
       expression,
@@ -535,8 +535,8 @@ function planRustLocationStorage(
   if (receiverLocation === undefined) {
     return undefined;
   }
-  const kind = context.input.ast.kindName(expression);
-  const operation = context.input.facts.getFact(
+  const kind = context.input.program.source.ast.kindName(expression);
+  const operation = context.input.program.facts.getFact(
     expression,
     rustTargetOperationFactKey,
   );
@@ -547,7 +547,7 @@ function planRustLocationStorage(
       ? undefined
       : operation.declaration === undefined
         ? undefined
-        : context.input.projectFieldDispatch.planFor(operation.declaration);
+        : context.input.program.projectFieldDispatch.planFor(operation.declaration);
     if (operation.dispatch !== undefined &&
       (dispatchPlan?.write === undefined ||
         dispatchPlan.read.fallible || dispatchPlan.write.fallible)) {
@@ -633,7 +633,7 @@ function planRustLocationStorage(
   }
   if (kind === "KindElementAccessExpression") {
     const ordinary = planExpression(expression, context);
-    const indexNode = ElementAccessExpression_ArgumentExpression(context.input.ast, expression);
+    const indexNode = ElementAccessExpression_ArgumentExpression(context.input.program.source.ast, expression);
     const index = locationIndexExpression(ordinary);
     if (index === undefined || indexNode === undefined) {
       return rejectLocationStorage(
@@ -671,19 +671,19 @@ function findRustLocationStorageRoot(
 ): { readonly expression: Node; readonly declaration: Node } | undefined {
   let root = expression;
   while (true) {
-    const kind = context.input.ast.kindName(root);
+    const kind = context.input.program.source.ast.kindName(root);
     if (kind !== "KindPropertyAccessExpression" &&
       kind !== "KindElementAccessExpression" &&
       kind !== "KindParenthesizedExpression") {
       break;
     }
-    const receiver = Node_Expression(context.input.ast, root);
+    const receiver = Node_Expression(context.input.program.source.ast, root);
     if (receiver === undefined) {
       return undefined;
     }
     root = receiver;
   }
-  if (context.input.ast.kindName(root) !== "KindIdentifier") {
+  if (context.input.program.source.ast.kindName(root) !== "KindIdentifier") {
     return undefined;
   }
   const storage = rustLocationStorageForReference(root, context);

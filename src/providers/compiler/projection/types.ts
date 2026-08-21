@@ -14,7 +14,7 @@ import { sourcePrimitiveByRustName } from "./model.js";
 import type { ProjectionContext } from "./model.js";
 import type { ProviderTypeExpression } from "@tsonic/tsts";
 import type { RustCompilerType } from "../model/model.js";
-import type { TargetTypeRef } from "../../../policy/types/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function sourceTypeFor(
   type: RustCompilerType,

@@ -12,8 +12,8 @@ import type {
 } from "../context.js";
 import type {
   RustExpr,
-} from "../../rust-ast/nodes.js";
-import { rustLintAttributes } from "../../rust-ast/lint-policy.js";
+} from "../../target-ast/nodes.js";
+import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
 import type {
   RustPlanContext,
 } from "../program/plan-context.js";
@@ -68,9 +68,9 @@ export function isRustExplicitUnsafeBlockMarker(
   input: RustPlanningContext,
 ): boolean {
   const expression = statement === undefined ||
-      input.ast.kindName(statement) !== "KindExpressionStatement"
+      input.program.source.ast.kindName(statement) !== "KindExpressionStatement"
     ? undefined
-    : Node_Expression(input.ast, statement);
+    : Node_Expression(input.program.source.ast, statement);
   const selected = expression === undefined
     ? undefined
     : exactSafetyOperation(expression, input);
@@ -82,10 +82,10 @@ export function isErasedRustSafetyExpressionStatement(
   statement: Node,
   input: RustPlanningContext,
 ): boolean {
-  if (input.ast.kindName(statement) !== "KindExpressionStatement") {
+  if (input.program.source.ast.kindName(statement) !== "KindExpressionStatement") {
     return false;
   }
-  const expression = Node_Expression(input.ast, statement);
+  const expression = Node_Expression(input.program.source.ast, statement);
   if (expression === undefined) {
     return false;
   }
@@ -112,10 +112,10 @@ export function rustDeclarationRequiresUnsafe(
   additionalDeclaration?: Node,
 ): boolean {
   const applications = uniqueApplications([
-    ...input.safetyApplications.forDeclaration(declaration),
+    ...input.program.safetyApplications.forDeclaration(declaration),
     ...(additionalDeclaration === undefined
       ? []
-      : input.safetyApplications.forDeclaration(additionalDeclaration)),
+      : input.program.safetyApplications.forDeclaration(additionalDeclaration)),
   ]).filter((application) => application.applicationPlacement === placement);
   return applications.length > 0 &&
     applications.every((application) => application.contract === "requires-unsafe");
@@ -125,12 +125,12 @@ export function rustSelectedCallRequiresUnsafe(
   call: Node,
   input: RustPlanningContext,
 ): boolean {
-  const selected = input.facts.getSelectedTargetCall(call);
+  const selected = input.program.facts.getSelectedTargetCall(call);
   const declaration = selected?.sourceDeclaration;
   if (declaration === undefined) {
     return false;
   }
-  return input.safetyApplications.forDeclaration(declaration).some(
+  return input.program.safetyApplications.forDeclaration(declaration).some(
     (application) =>
       application.contract === "requires-unsafe" &&
       (application.applicationPlacement === "declaration" ||
@@ -143,11 +143,11 @@ export function rustSelectedAccessorRequiresUnsafe(
   role: "getter" | "setter",
   input: RustPlanningContext,
 ): boolean {
-  const selected = input.facts.getSelectedTargetProperty(access);
+  const selected = input.program.facts.getSelectedTargetProperty(access);
   const declaration = role === "getter"
     ? selected?.provenance?.sourceSelectedReadDeclaration
     : selected?.provenance?.sourceSelectedWriteDeclaration;
-  return declaration !== undefined && input.safetyApplications.forDeclaration(declaration).some(
+  return declaration !== undefined && input.program.safetyApplications.forDeclaration(declaration).some(
     (application) =>
       application.contract === "requires-unsafe" &&
       application.applicationPlacement === role,
@@ -162,10 +162,10 @@ export function rustSafetyAttributesForDeclaration(
   let hasExplicitUnsafeContext = false;
   let hasNativePointerOperation = false;
   walkSubtree(declaration, input, (node) => {
-    const operation = input.safetyApplications.operationForSubject(node);
+    const operation = input.program.safetyApplications.operationForSubject(node);
     hasExplicitUnsafeContext ||= operation?.kind === "unsafe-context";
     hasNativePointerOperation ||=
-      input.facts.getFact(node, rustTargetOperationFactKey)?.kind ===
+      input.program.facts.getFact(node, rustTargetOperationFactKey)?.kind ===
         "native-pointer";
   });
   return [
@@ -187,7 +187,7 @@ export function diagnoseRustSafetyApplications(
     input,
     diagnostics,
   );
-  for (const application of input.safetyApplications.forSourceFile(sourceFile)) {
+  for (const application of input.program.safetyApplications.forSourceFile(sourceFile)) {
     if (application.targetDeclarations.length === 0) {
       diagnostics.push(targetDiagnostic(
         "RUST_SAFETY_APPLICATION_TARGET_NOT_RESOLVED",
@@ -223,12 +223,12 @@ function diagnoseConflictingSafetyApplications(
   diagnostics: TargetDiagnostic[],
 ): ReadonlySet<Node> {
   const conflicts = new Set<Node>();
-  for (const application of input.safetyApplications.forSourceFile(sourceFile)) {
+  for (const application of input.program.safetyApplications.forSourceFile(sourceFile)) {
     for (const declaration of application.targetDeclarations) {
       if (conflicts.has(declaration)) {
         continue;
       }
-      const related = input.safetyApplications.forDeclaration(declaration)
+      const related = input.program.safetyApplications.forDeclaration(declaration)
         .filter((candidate) =>
           candidate.applicationPlacement === application.applicationPlacement);
       if (new Set(related.map((candidate) => candidate.contract)).size <= 1) {
@@ -255,7 +255,7 @@ function applicationHasRustUnsafeBoundary(
   input: RustPlanningContext,
 ): boolean {
   return application.targetDeclarations.some((declaration) => {
-    const kind = input.ast.kindName(declaration);
+    const kind = input.program.source.ast.kindName(declaration);
     if (application.applicationPlacement === "constructor") {
       return kind === "KindClassDeclaration" ||
         kind === "KindConstructor" ||
@@ -280,7 +280,7 @@ function exactSafetyOperation(
   expression: Node,
   input: RustPlanningContext,
 ): RustSafetyOperation | undefined {
-  return input.safetyApplications.operationForExpression(expression);
+  return input.program.safetyApplications.operationForExpression(expression);
 }
 
 function uniqueApplications(
@@ -294,12 +294,12 @@ function compareSafetyApplications(
   right: RustSafetyApplication,
   input: RustPlanningContext,
 ): number {
-  const pathOrder = input.ast.getPath(left.sourceFile).localeCompare(
-    input.ast.getPath(right.sourceFile),
+  const pathOrder = input.program.source.ast.getPath(left.sourceFile).localeCompare(
+    input.program.source.ast.getPath(right.sourceFile),
   );
   return pathOrder !== 0
     ? pathOrder
-    : input.ast.pos(left.sourceSubject) - input.ast.pos(right.sourceSubject);
+    : input.program.source.ast.pos(left.sourceSubject) - input.program.source.ast.pos(right.sourceSubject);
 }
 
 function targetDiagnostic(
@@ -328,7 +328,7 @@ function walkSubtree(
       continue;
     }
     visit(node);
-    const children = input.ast.children(node);
+    const children = input.program.source.ast.children(node);
     for (let index = children.length - 1; index >= 0; index -= 1) {
       const child = children[index];
       if (child !== undefined) {

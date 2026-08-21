@@ -1,8 +1,8 @@
-import type { TargetTypeRef } from "../../../policy/types/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
-import type { RustAssignmentOperator } from "../../model/syntax.js";
+import type { RustAssignmentOperator } from "../../../target-model/syntax/tokens.js";
 import { rustProjectObjectLayout } from "../../../analysis/project-types/object-layout.js";
-import type { RustExpr } from "../../rust-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustActiveErrorType } from "../program/plan-context.js";
 import { rustTargetRuntimeErrorType } from "../types/error-boundary.js";
@@ -44,7 +44,7 @@ export function createRustStructuralObjectFromCarrier(
   initializers: readonly RustStructuralObjectFieldInitializer[],
   context: RustPlanContext,
 ): RustExpr | undefined {
-  const definition = context.input.structuralShapes.definitionForCarrier(carrier);
+  const definition = context.input.program.structuralShapes.definitionForCarrier(carrier);
   if (definition === undefined || definition.fields.length !== initializers.length) {
     return undefined;
   }
@@ -104,19 +104,19 @@ export function rustDirectProjectFieldStoragePath(
   storageIndex: number,
   context: RustPlanContext,
 ): readonly string[] | undefined {
-  const definition = context.input.projectTypes.definitionForCarrier(receiverCarrier);
-  if (definition === undefined || context.input.projectTypes.isPolymorphic(definition)) {
+  const definition = context.input.program.projectTypes.definitionForCarrier(receiverCarrier);
+  if (definition === undefined || context.input.program.projectTypes.isPolymorphic(definition)) {
     return undefined;
   }
-  const external = context.input.projectTypes.externalBaseForDefinition(definition)?.fields ?? [];
-  const layout = rustProjectObjectLayout(definition.declaration, context.input.ast);
+  const external = context.input.program.projectTypes.externalBaseForDefinition(definition)?.fields ?? [];
+  const layout = rustProjectObjectLayout(definition.declaration, context.input.program.source.ast);
   const declaration = storageIndex < external.length
     ? external.find((field) => field.storageIndex === storageIndex)?.declaration
     : layout?.fields.find((field) =>
         external.length + field.storageIndex === storageIndex)?.declaration;
   const name = declaration === undefined
     ? undefined
-    : context.input.projectTypes.fieldStorageName(definition, declaration);
+    : context.input.program.projectTypes.fieldStorageName(definition, declaration);
   return name === undefined ? undefined : [name];
 }
 
@@ -129,7 +129,7 @@ export function readRustStoredObjectField(
   context: RustPlanContext,
 ): RustExpr | undefined {
   if (storage === "object-handle") {
-    const field = context.input.structuralShapes.field(receiverCarrier, storageIndex);
+    const field = context.input.program.structuralShapes.field(receiverCarrier, storageIndex);
     if (field === undefined) {
       return undefined;
     }
@@ -159,7 +159,7 @@ export function readRustStructuralObjectMethodStorage(
   storageIndex: number,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  const field = context.input.structuralShapes.field(receiverCarrier, storageIndex);
+  const field = context.input.program.structuralShapes.field(receiverCarrier, storageIndex);
   const storageCarrier = field?.method === true
     ? rustStructuralMethodStorageCarrier(receiverCarrier, field.carrier, field.presence)
     : undefined;
@@ -187,7 +187,7 @@ export function invokeRustStructuralObjectMethod(
   context: RustPlanContext,
   storageOverride?: RustStructuralMethodStorageOverride,
 ): RustExpr | undefined {
-  const field = context.input.structuralShapes.field(receiverCarrier, storageIndex);
+  const field = context.input.program.structuralShapes.field(receiverCarrier, storageIndex);
   const callableCarrier = field?.method === true
     ? rustStructuralMethodCallableCarrier(field.carrier, field.presence)
     : undefined;
@@ -255,7 +255,7 @@ export function writeRustStoredObjectField(
   context: RustPlanContext,
 ): RustExpr | undefined {
   if (storage === "object-handle") {
-    const field = context.input.structuralShapes.field(receiverCarrier, storageIndex);
+    const field = context.input.program.structuralShapes.field(receiverCarrier, storageIndex);
     if (field === undefined) {
       return undefined;
     }
@@ -289,7 +289,7 @@ export function mutateRustStoredObjectField(
   context: RustPlanContext,
 ): RustExpr | undefined {
   if (storage === "object-handle") {
-    const field = context.input.structuralShapes.field(receiverCarrier, storageIndex);
+    const field = context.input.program.structuralShapes.field(receiverCarrier, storageIndex);
     if (field === undefined) {
       return undefined;
     }
@@ -317,8 +317,8 @@ export function rustProjectObjectRepresentation(
   carrier: TargetTypeRef,
   context: RustPlanContext,
 ) {
-  return context.input.objectRepresentations.representationFor(
-    context.input.projectTypes.definitionForCarrier(carrier),
+  return context.input.program.objectRepresentations.representationFor(
+    context.input.program.projectTypes.definitionForCarrier(carrier),
   );
 }
 

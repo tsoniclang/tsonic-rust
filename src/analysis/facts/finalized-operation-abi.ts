@@ -21,5 +21,5 @@ export type {
   RustFinalizedTargetInput,
   RustFinalizedValueConversion,
 } from "./finalized-operation/model.js";
-export type { RustFinalizedOperationKind } from "../../policy/operations/model.js";
+export type { RustFinalizedOperationKind } from "../../target-model/operations/model.js";
 export { validateRustFinalizedOperationAbi } from "./finalized-operation/validation.js";

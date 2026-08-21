@@ -1,9 +1,9 @@
 import { rustSourcePrimitiveTargetType } from "../../../policy/types/target-types.js";
 import type { ProviderDeclarationModel, ProviderTypeExpression } from "@tsonic/tsts";
 import type { RustCompilerDependency, RustCompilerType, RustCompilerStandardTypeLocation } from "../model/model.js";
-import type { RustNamedTypeTraitContract } from "../../../policy/types/model.js";
+import type { RustNamedTypeTraitContract } from "../../../target-model/types/model.js";
 import type { RustProviderModuleDefinition, RustProviderOperationDefinition, RustProviderTypeDefinition } from "../../packages/model.js";
-import type { TargetTypeRef } from "../../../policy/types/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export interface RustCompilerProviderProjection {
   readonly declarationModel: ProviderDeclarationModel;

@@ -1,8 +1,8 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustArgumentMode, RustProviderFactOperationKind, RustRuntimeSetOperationKind, RustSourceCallParameterPlan, RustValueConversion } from "../../../policy/operations/model.js";
+import type { RustArgumentMode, RustProviderFactOperationKind, RustRuntimeSetOperationKind, RustSourceCallParameterPlan, RustValueConversion } from "../../../target-model/operations/model.js";
 import type { RustFinalizedOperationAbiFor } from "../finalized-operation-abi.js";
-import type { RustOperationSymbol, RustOperatorToken } from "../../../backend/model/syntax.js";
-import type { TargetTypeRef } from "../../../policy/types/model.js";
+import type { RustOperationSymbol, RustOperatorToken } from "../../../target-model/syntax/tokens.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export type RustTargetOperationFact =
   | {

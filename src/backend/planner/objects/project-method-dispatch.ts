@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
-import type { TargetTypeRef } from "../../../policy/types/model.js";
-import type { RustExpr } from "../../rust-ast/nodes.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustExpr } from "../../target-ast/nodes.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { diagnosticInput } from "../program/plan-context.js";

@@ -15,7 +15,7 @@ import {
   VariableStatement_DeclarationList,
 } from "@tsonic/target-api/source";
 import { cyclicSourceFiles } from "./module-graph.js";
-import type { TargetTypeRef } from "../../policy/types/model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustAnalysisContext } from "./context.js";
 import type { RustModuleBindingFact } from "../facts/keys.js";
 
@@ -130,7 +130,7 @@ function exactNativeCallableInitializer(
   if (initializer === undefined ||
     (kind !== "KindArrowFunction" && kind !== KindFunctionExpression) ||
     context.ast.hasModifierKind(initializer, "async") ||
-    context.semanticsFor(initializer).getResolvedGeneratorInfo(initializer) !== undefined ||
+    context.semanticsFor(initializer).operations.generator(initializer) !== undefined ||
     context.ast.body(initializer) === undefined ||
     kind === KindFunctionExpression && context.ast.name(initializer) !== undefined) {
     return undefined;

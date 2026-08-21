@@ -25,10 +25,10 @@ import { rustProjectCallableTargetName } from "../../../analysis/facts/source-me
 import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr } from "../../rust-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
-import type { TargetTypeRef } from "../../../policy/types/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function planPropertyAccess(node: Node, context: RustPlanContext): RustExpr | undefined {
   return planOptionalChainExpression(
@@ -100,7 +100,7 @@ function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr
       return undefined;
     }
     if (!selectedOperationMatches(
-        context.input.facts.getSelectedTargetProperty(node),
+        context.input.program.facts.getSelectedTargetProperty(node),
         fact.operationId,
         "property",
         resultCarrier,
@@ -112,7 +112,7 @@ function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr
       ));
       return undefined;
     }
-    const receiverNode = Node_Expression(context.input.ast, node);
+    const receiverNode = Node_Expression(context.input.program.source.ast, node);
     const plannedReceiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
     if (receiverNode === undefined || plannedReceiver === undefined) {
       return undefined;
@@ -137,7 +137,7 @@ function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr
     }
     const dispatchPlan = fact.declaration === undefined
       ? undefined
-      : context.input.projectFieldDispatch.planFor(fact.declaration);
+      : context.input.program.projectFieldDispatch.planFor(fact.declaration);
     if (dispatchPlan === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, node),
@@ -177,7 +177,7 @@ function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr
       return undefined;
     }
     if (!selectedOperationMatches(
-      context.input.facts.getSelectedTargetProperty(node),
+      context.input.program.facts.getSelectedTargetProperty(node),
       fact.operationId,
       "property",
       resultCarrier,
@@ -216,7 +216,7 @@ function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr
     return undefined;
   }
   if (!selectedOperationMatches(
-    context.input.facts.getSelectedTargetProperty(node),
+    context.input.program.facts.getSelectedTargetProperty(node),
     fact.operationId,
     "property",
     selectedResult,
@@ -240,7 +240,7 @@ function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr
   const planned = planProviderOperationExpression(
     context,
     fact,
-    Node_Expression(context.input.ast, node),
+    Node_Expression(context.input.program.source.ast, node),
     [],
     node,
     { resultUse: "value" },
@@ -273,7 +273,7 @@ function planRustSourceMethodPropertyRead(
       context,
       "rust.backend.source-method-property-carrier",
     ) || !selectedOperationMatches(
-      context.input.facts.getSelectedTargetProperty(node),
+      context.input.program.facts.getSelectedTargetProperty(node),
       fact.operationId,
       "property",
       resultCarrier,
@@ -285,7 +285,7 @@ function planRustSourceMethodPropertyRead(
     ));
     return undefined;
   }
-  const receiverNode = Node_Expression(context.input.ast, node);
+  const receiverNode = Node_Expression(context.input.program.source.ast, node);
   const plannedReceiver = receiverNode === undefined
     ? undefined
     : planExpression(receiverNode, context);
@@ -331,28 +331,32 @@ export function planRustBoundProjectMethodCallable(
 ): RustExpr | undefined {
   const callable = rustCallableProtocol(callableCarrier);
   const callableType = rustTypeFromCarrierInContext(callableCarrier, context);
-  const receiverDefinition = context.input.projectTypes.definitionForCarrier(receiverCarrier);
+  const receiverDefinition = context.input.program.projectTypes.definitionForCarrier(receiverCarrier);
   const selectedImplementation = receiverDefinition === undefined
     ? undefined
-    : context.input.projectTypes.memberImplementation(
+    : context.input.program.projectTypes.memberImplementation(
         receiverDefinition,
         declaration,
       );
   const selectedDeclaration = selectedImplementation?.kind === "resolved"
     ? selectedImplementation.implementation.declaration
     : declaration;
-  const variant = context.input.projectMethodDispatch.variantForMember(declaration, []);
-  const implementation = context.input.source.navigation.callableImplementation(
+  const variant = context.input.program.projectMethodDispatch.variantForMember(declaration, []);
+  const implementation = context.input.program.source.navigation.callableImplementation(
     selectedDeclaration,
   );
   const implementationDeclaration = implementation.kind === "resolved"
     ? implementation.implementation.declaration
     : selectedDeclaration;
-  const targetName = context.input.names.nameForDeclaration(implementationDeclaration) ??
-    rustProjectCallableTargetName(implementationDeclaration, context.input);
+  const targetName = context.input.program.names.nameForDeclaration(implementationDeclaration) ??
+    rustProjectCallableTargetName(implementationDeclaration, {
+      ast: context.input.program.source.ast,
+      names: context.input.program.names,
+      semanticsFor: context.input.program.source.semantics.forNode,
+    });
   if (callable === undefined || callableType === undefined ||
     receiverDefinition === undefined || context.syntheticNames === undefined ||
-    (context.input.projectTypes.isPolymorphic(receiverDefinition)
+    (context.input.program.projectTypes.isPolymorphic(receiverDefinition)
       ? variant === undefined
       : !isValidRustIdentifier(targetName ?? ""))) {
     return undefined;
@@ -366,7 +370,7 @@ export function planRustBoundProjectMethodCallable(
     receiver: { kind: "path" as const, path: argumentsName },
     name: String(index),
   }));
-  const invocation: RustExpr = context.input.projectTypes.isPolymorphic(receiverDefinition)
+  const invocation: RustExpr = context.input.program.projectTypes.isPolymorphic(receiverDefinition)
     ? {
         kind: "method-call",
         receiver: {
@@ -388,10 +392,10 @@ export function planRustBoundProjectMethodCallable(
         method: targetName!,
         args: argumentsList,
       };
-  const fallible = context.input.facts.getFact(
+  const fallible = context.input.program.facts.getFact(
     implementationDeclaration,
     rustFallibleFactKey,
-  ) !== undefined || context.input.facts.getFact(
+  ) !== undefined || context.input.program.facts.getFact(
     declaration,
     rustFallibleFactKey,
   ) !== undefined;
@@ -428,7 +432,7 @@ function planRustSourceUnionFieldRead(
     return undefined;
   }
   if (!selectedOperationMatches(
-    context.input.facts.getSelectedTargetProperty(node),
+    context.input.program.facts.getSelectedTargetProperty(node),
     fact.operationId,
     "property",
     resultCarrier,
@@ -440,7 +444,7 @@ function planRustSourceUnionFieldRead(
     ));
     return undefined;
   }
-  const receiverNode = Node_Expression(context.input.ast, node);
+  const receiverNode = Node_Expression(context.input.program.source.ast, node);
   const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
   if (receiverNode === undefined || receiver === undefined) {
     return undefined;
@@ -469,7 +473,7 @@ export function sourceFieldSelectedOperationMatches(
   context: RustPlanContext,
 ): boolean {
   return selectedOperationMatches(
-    context.input.facts.getSelectedTargetProperty(node),
+    context.input.program.facts.getSelectedTargetProperty(node),
     fact.operationId,
     "property",
     fact.resultCarrier,
@@ -482,7 +486,7 @@ export function sourceMethodPropertySelectedOperationMatches(
   context: RustPlanContext,
 ): boolean {
   return selectedOperationMatches(
-    context.input.facts.getSelectedTargetProperty(node),
+    context.input.program.facts.getSelectedTargetProperty(node),
     fact.operationId,
     "property",
     fact.resultCarrier,
@@ -495,7 +499,7 @@ export function sourceStaticFieldSelectedOperationMatches(
   context: RustPlanContext,
 ): boolean {
   return selectedOperationMatches(
-    context.input.facts.getSelectedTargetProperty(node),
+    context.input.program.facts.getSelectedTargetProperty(node),
     fact.operationId,
     "property",
     fact.resultCarrier,
@@ -508,7 +512,7 @@ export function sourceAccessorSelectedOperationMatches(
   context: RustPlanContext,
 ): boolean {
   return selectedOperationMatches(
-    context.input.facts.getSelectedTargetProperty(node),
+    context.input.program.facts.getSelectedTargetProperty(node),
     fact.operationId,
     "property",
     fact.resultCarrier,
@@ -534,7 +538,7 @@ export function planRustSourceAccessorCall(
       ? undefined
       : { kind: "call", path: `${ownerPath}::${selected.method}`, args };
   }
-  const receiverNode = Node_Expression(context.input.ast, node);
+  const receiverNode = Node_Expression(context.input.program.source.ast, node);
   const plannedReceiver = receiverOverride ?? (receiverNode === undefined
     ? undefined
     : planExpression(receiverNode, context));
@@ -550,10 +554,10 @@ export function planRustSourceAccessorCall(
   const receiverCarrier = receiverNode === undefined
     ? undefined
     : effectivePlannedExpressionCarrier(receiverNode, context);
-  const owner = context.input.projectTypes.definitionContainingDeclaration(selected.declaration);
+  const owner = context.input.program.projectTypes.definitionContainingDeclaration(selected.declaration);
   const relationship = owner === undefined || receiverCarrier === undefined
     ? undefined
-    : context.input.projectTypes.relationship(receiverCarrier, owner);
+    : context.input.program.projectTypes.relationship(receiverCarrier, owner);
   if (relationship?.kind !== "related" ||
     !rustTargetTypeRefEquals(relationship.targetType, fact.dispatch.ownerCarrier)) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -587,7 +591,7 @@ export function finishRustSourceAccessorCall(
   expression: RustExpr,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  const effects = context.input.facts.getFact(node, rustSourceAccessorEffectsFactKey);
+  const effects = context.input.program.facts.getFact(node, rustSourceAccessorEffectsFactKey);
   const effect = effects?.[role];
   if (effect === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -632,7 +636,7 @@ export function sourceUnionFieldSelectedOperationMatches(
   context: RustPlanContext,
 ): boolean {
   return selectedOperationMatches(
-    context.input.facts.getSelectedTargetProperty(node),
+    context.input.program.facts.getSelectedTargetProperty(node),
     fact.operationId,
     "property",
     fact.resultCarrier,
@@ -645,7 +649,7 @@ export function sourceIndexSelectedOperationMatches(
   context: RustPlanContext,
 ): boolean {
   return selectedOperationMatches(
-    context.input.facts.getSelectedTargetElementAccess(node),
+    context.input.program.facts.getSelectedTargetElementAccess(node),
     fact.operationId,
     "indexer",
     fact.resultCarrier,

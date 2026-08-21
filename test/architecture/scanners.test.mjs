@@ -78,12 +78,12 @@ test("clean emission has no legacy synthetic prefix or blanket lint policy", () 
 
 test("generated lint exceptions have one explicit policy owner", () => {
   for (const { path, text } of sourceFiles) {
-    if (path.endsWith("/backend/rust-ast/lint-policy.ts")) {
+    if (path.endsWith("/backend/target-ast/normalization/lint-policy.ts")) {
       continue;
     }
     assert.doesNotMatch(text, /#!?\[allow\(/u, `${path} emits an unowned Rust lint exception`);
   }
-  const policy = readFileSync(join(sourceRoot, "backend/rust-ast/lint-policy.ts"), "utf8");
+  const policy = readFileSync(join(sourceRoot, "backend/target-ast/normalization/lint-policy.ts"), "utf8");
   assert.doesNotMatch(policy, /#!?\[allow\((?![^\]\n]*reason = )[^\]\n]*\)\]/u);
   assert.match(policy, /reason = /u);
 });
@@ -175,11 +175,11 @@ test("project downcasts use closed generated routes without runtime type discove
 
 test("Cargo registry patches require explicit runtime-reference provenance", () => {
   const planner = readFileSync(join(sourceRoot, "backend/planner/project/cargo.ts"), "utf8");
-  const printer = readFileSync(join(sourceRoot, "print/cargo/manifest.ts"), "utf8");
-  const descriptor = readFileSync(join(sourceRoot, "descriptor/rust-target-pack.ts"), "utf8");
+  const printer = readFileSync(join(sourceRoot, "print/project/manifest.ts"), "utf8");
+  const composition = readFileSync(join(sourceRoot, "compilation/composition.ts"), "utf8");
   assert.match(planner, /registryPatch !== undefined && registryPatch !== cargoCratesIoRegistry/u);
   assert.match(printer, /dependencies\.filter\(\(dependency\) => dependency\.registryPatch === "crates-io"\)/u);
-  assert.match(descriptor, /\[cargoRegistryPatchAttributeName\]: cargoCratesIoRegistry/u);
+  assert.match(composition, /\[cargoRegistryPatchAttributeName\]: cargoCratesIoRegistry/u);
   const patchSection = printer.slice(printer.indexOf('"[patch.crates-io]"'));
   assert.doesNotMatch(patchSection, /for \(const dependency of manifest\.dependencies\)/u);
 });
@@ -214,12 +214,14 @@ test("no Node-as-surface registration", async () => {
   }
 });
 
-test("no fallback source emission: backend diagnostics never coexist with artifacts", () => {
-  // Structural rule enforced in planRustArtifacts: every early return with
-  // diagnostics returns an empty artifact list. Verified behaviorally in the
-  // negative-lane tests; here we pin the source pattern.
-  const plannerText = readFileSync(join(sourceRoot, "backend/planner/program/planning.ts"), "utf8");
-  assert.match(plannerText, /if \(diagnostics\.length > 0\) \{\s*return \{ artifacts: \[\], diagnostics \};/u);
+test("target diagnostics remain outside the complete Rust output plan", () => {
+  const outputModel = readFileSync(join(sourceRoot, "backend/artifact-model/output.ts"), "utf8");
+  const materializer = readFileSync(join(sourceRoot, "backend/emission/materialize.ts"), "utf8");
+  const compiler = readFileSync(join(sourceRoot, "backend/compile.ts"), "utf8");
+  assert.doesNotMatch(outputModel, /diagnostic/iu);
+  assert.doesNotMatch(materializer, /TargetCompileInput/u);
+  assert.match(compiler, /runTargetCompilationStages/u);
+  assert.match(compiler, /materialize:\s*materializeRustOutputPlan/u);
 });
 
 test("JS operation rows are unique per owner/member/kind/lane/variant", async () => {
@@ -323,34 +325,10 @@ test("selected source operation identity is never reconstructed through checker 
     "policy/types/equality.ts|isRustTargetTypeRef",
   ]);
 
-  const allowed = new Set([
-    "selection.ts|runtimeCallableTargetParameters|selectCallParameterSlots",
-    "callables.ts|resolveSourceTypeParameter|getPrimarySymbolDeclaration",
-    "callables.ts|resolveSourcePrimitive|getTypeAliasSymbol",
-    "callables.ts|resolveSourcePrimitive|getTypeSymbol",
-    "callables.ts|resolveSourcePrimitive|getSymbolDeclarations",
-    "project.ts|resolveProjectSourceCarrier|getSymbolDeclarations",
-    "providers.ts|resolveOwnedSourceProfileTypeName|getSymbolDeclarations",
-    "source.ts|resolveRustTargetTypeSyntax|getAuthoredTypeFactSubjects",
-    "source.ts|resolveRustTargetTypeSyntax|getSymbolAtLocation",
-    "target.ts|resolveRustTargetType|getTypeAliasSymbol",
-    "target.ts|resolveRustTargetType|getTypeSymbol",
-    "target.ts|resolveStructuralObjectType|getSymbolDeclarations",
-    "tuples.ts|resolveReferencedDeclarationType|getSymbolAtLocation",
-    "tuples.ts|resolveReferencedDeclarationType|getSymbolDeclarations",
-    "tuples.ts|sourceParameterTypeIsReadonlyArray|getSymbolAtLocation",
-  ]);
-  const observed = new Set();
   for (const { path, text } of semanticFiles) {
-    const functions = [...text.matchAll(/function\s+([A-Za-z0-9_]+)\s*\(/gu)];
-    for (const match of text.matchAll(/\b(?:context\.compiler\.)?checker\.([A-Za-z0-9_]+)\s*\(/gu)) {
-      const owner = functions.filter((candidate) => candidate.index < match.index).at(-1)?.[1] ?? "<module>";
-      const key = `${path.slice(path.lastIndexOf("/") + 1)}|${owner}|${match[1]}`;
-      assert.ok(allowed.has(key), `unclassified checker query: ${key}`);
-      observed.add(key);
-    }
+    assert.doesNotMatch(text, /\.checker\b/u, `${path} retains a raw checker container`);
+    assert.doesNotMatch(text, /\b(?:TypeCheckerQueries|TypeShapeQueries)\b/u, `${path} retains a broad source query interface`);
   }
-  assert.deepEqual([...observed].sort(), [...allowed].sort());
 });
 
 test("runtime source classification uses compiler declaration-file facts", () => {
@@ -760,8 +738,8 @@ test("provider operation metadata contains only structured Rust forms", () => {
 });
 
 test("backend Rust AST exposes only fact-backed primitive numeric casts", () => {
-  const nodes = readFileSync(join(sourceRoot, "backend/rust-ast/nodes.ts"), "utf8");
-  const printer = readFileSync(join(sourceRoot, "print/rust/expressions/core.ts"), "utf8");
+  const nodes = readFileSync(join(sourceRoot, "backend/target-ast/nodes.ts"), "utf8");
+  const printer = readFileSync(join(sourceRoot, "print/source/expressions/core.ts"), "utf8");
   assert.doesNotMatch(nodes, /readonly kind: "cast"/u);
   assert.match(nodes, /readonly kind: "numeric-cast"; readonly expression: RustExpr; readonly target: RustPrimitiveTypeName/u);
   assert.match(printer, /case "numeric-cast"/u);

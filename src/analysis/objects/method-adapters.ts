@@ -2,7 +2,7 @@ import type { AstReader, Node } from "@tsonic/tsts";
 import { closedMetadataKey, isDenseDataArray } from "../../policy/model/closed-data.js";
 import { rustTargetTypeRefEquals } from "../../policy/types/equality.js";
 import type { RustPlanBuilder } from "../facts/plan-store.js";
-import type { TargetTypeRef } from "../../policy/types/model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 import {
   rustObjectLiteralMethodAdapterFactKey,
   rustSourceCallableReturnFactKey,

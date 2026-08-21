@@ -5,7 +5,7 @@ import { rustProviderPolicyContributionKind } from "./model.js";
 import { snapshotClosedMetadata } from "../../policy/model/closed-data.js";
 import { validateProviderPackageDefinition } from "./validation.js";
 import type {
-  TargetProviderContext,
+  SelectedTargetCapabilityContributions,
   TargetRuntimeContributionContext,
 } from "@tsonic/target-api/provider";
 import type {
@@ -65,7 +65,7 @@ export function createRustProviderPackage(definition: RustProviderPackageDefinit
 }
 
 export function collectRustProviderOperationRows(
-  context: TargetProviderContext,
+  capabilities: readonly SelectedTargetCapabilityContributions[],
 ): readonly RustProviderOperationRow[] {
-  return collectRustProviderSemantics(context).operations;
+  return collectRustProviderSemantics(capabilities).operations;
 }

@@ -27,7 +27,7 @@ import {
 import type { Node, Symbol, Type } from "@tsonic/tsts";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
-import type { TargetTypeRef } from "../model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function resolveRustTargetType(
   type: Type | undefined,
@@ -49,7 +49,7 @@ export function resolveRustTargetType(
   if (primitive !== undefined) {
     return primitive;
   }
-  const substitutionBase = context.typeShape.getSubstitutionBaseType(type);
+  const substitutionBase = context.currentSemantics.types.substitutionBaseType(type);
   if (substitutionBase !== undefined) {
     return resolveRustTargetType(
       substitutionBase,
@@ -61,16 +61,17 @@ export function resolveRustTargetType(
   }
   resolving.add(type);
   try {
-    const { checker, typeShape } = context;
-    if (typeShape.isNever(type)) {
+    const semantics = context.currentSemantics;
+    if (semantics.types.isNever(type)) {
       return rustNeverTargetType();
     }
-    if (typeShape.isAny(type) || typeShape.isUnknown(type)) {
+    if (semantics.types.isAny(type) || semantics.types.isUnknown(type)) {
       return undefined;
     }
-    const symbol = checker.getTypeAliasSymbol(type) ?? checker.getTypeSymbol(type);
+    const symbol = semantics.declarations.typeAliasSymbol(type) ??
+      semantics.declarations.typeSymbol(type);
     const providerIdentity = resolveProviderTypeIdentity(
-      typeShape.getTypeFactSubjects(type),
+      semantics.facts.typeSubjects(type),
       context,
     );
     if (providerIdentity !== undefined) {
@@ -88,7 +89,7 @@ export function resolveRustTargetType(
       }
     }
 
-    const sourceTypeArguments = context.typeShape.getEffectiveTypeArguments(type);
+    const sourceTypeArguments = context.currentSemantics.types.effectiveTypeArguments(type);
     const resolvedSourceTypeArguments = sourceTypeArguments?.map((argument) =>
       resolveRustTargetType(argument, context, options, resolving));
     const sourceType = resolvedSourceTypeArguments === undefined ||
@@ -114,33 +115,33 @@ export function resolveRustTargetType(
       return callable;
     }
 
-    if (typeShape.isNullish(type)) {
+    if (semantics.types.isNullish(type)) {
       return rustNullishSourceTargetType();
     }
-    if (typeShape.isStringLike(type)) {
+    if (semantics.types.isStringLike(type)) {
       return rustStringTargetType();
     }
-    if (typeShape.isBooleanLike(type)) {
+    if (semantics.types.isBooleanLike(type)) {
       return rustSourcePrimitiveTargetType("bool");
     }
-    if (typeShape.isNumberLike(type)) {
+    if (semantics.types.isNumberLike(type)) {
       return rustSourcePrimitiveTargetType("float64");
     }
-    if (typeShape.isBigIntLike(type)) {
+    if (semantics.types.isBigIntLike(type)) {
       return rustBigIntTargetType();
     }
-    if (typeShape.isVoidLike(type)) {
+    if (semantics.types.isVoidLike(type)) {
       return rustUnitTargetType();
     }
-    if (typeShape.isUnion(type)) {
+    if (semantics.types.isUnion(type)) {
       return resolveUnion(type, context, options, resolving);
     }
-    if (typeShape.isTuple(type)) {
-      const elements = typeShape.getTupleElementInfos(type)
+    if (semantics.types.isTuple(type)) {
+      const elements = semantics.types.tupleElementInfos(type)
         .map((element) =>
           resolveRustTupleElementTargetTypeWithState(
             element,
-            typeShape,
+            semantics,
             context,
             options,
             resolving,
@@ -152,8 +153,8 @@ export function resolveRustTargetType(
         : undefined;
     }
 
-    if (typeShape.isArrayLike(type) && typeShape.isTypeReference(type)) {
-      const [elementType] = typeShape.getTypeArguments(type);
+    if (semantics.types.isArrayLike(type) && semantics.types.isTypeReference(type)) {
+      const [elementType] = semantics.types.typeArguments(type);
       const element = resolveRustTargetType(elementType, context, options, resolving);
       return element === undefined
         ? undefined
@@ -177,10 +178,11 @@ export function resolveRustExactNullishValueCarrier(
   type: Type,
   queries: SourceFileSemantics,
 ): TargetTypeRef | undefined {
-  if (!queries.isNullish(type)) {
+  if (!queries.types.isNullish(type)) {
     return undefined;
   }
-  return queries.isNever(queries.removeMissingOrUndefined(type))
+  const nonNullishType = queries.types.withoutMissingOrUndefined(type);
+  return nonNullishType !== undefined && queries.types.isNever(nonNullishType)
     ? rustUndefinedTargetType()
     : rustNullTargetType();
 }
@@ -192,21 +194,21 @@ export function resolveStructuralObjectType(
   resolving: Set<object>,
   authoredTypeRoot?: Node,
 ): TargetTypeRef | undefined {
-  const { checker, typeShape } = context;
-  if (typeShape.getCallSignatures(type).length !== 0 ||
-    typeShape.getConstructSignatures(type).length !== 0 ||
-    typeShape.getIndexInfos(type).length !== 0) {
+  const semantics = context.currentSemantics;
+  if (semantics.types.callSignatures(type).length !== 0 ||
+    semantics.types.constructSignatures(type).length !== 0 ||
+    semantics.types.indexInfos(type).length !== 0) {
     return undefined;
   }
-  const properties = denseDefined(typeShape.getPropertyInfos(type));
+  const properties = denseDefined(semantics.types.propertyInfos(type));
   if (properties === undefined || properties.length === 0) {
     return undefined;
   }
   const selected = properties.map((property) => {
     const declarations = denseDefined([...new Set([
-      ...checker.getSymbolDeclarations(property.symbol),
+      ...semantics.declarations.symbolDeclarations(property.symbol),
       ...property.rootSymbols.flatMap((symbol) =>
-        checker.getSymbolDeclarations(symbol)
+        semantics.declarations.symbolDeclarations(symbol)
       ),
     ])]);
     const projectDeclarations = declarations?.filter((declaration) =>
@@ -226,12 +228,12 @@ export function resolveStructuralObjectType(
         kind !== "KindMethodDeclaration" && kind !== "KindMethodSignature";
     }) ?? [];
     const authoredTypeNodes = [
-      ...sourcePropertyTypeEvidenceNodes(context.ast, typeShape, property),
+      ...sourcePropertyTypeEvidenceNodes(context.ast, semantics, property),
       ...(authoredTypeRoot === undefined
         ? []
         : sourceTransformedTypeFactEvidenceNodes(
             context.ast,
-            typeShape,
+            semantics,
             authoredTypeRoot,
             property.type,
           )),

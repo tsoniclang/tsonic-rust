@@ -2,11 +2,15 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRustTargetPack } from "../../../dist/index.js";
 import { cargoPathReferenceKind } from "../../../dist/providers/model/cargo-reference.js";
-import { fakeRuntimeContributionContext } from "../../helpers/fake-compile-input.mjs";
 
 function references(contextOptions) {
   const pack = createRustTargetPack();
-  return pack.provider.runtimeContributions(fakeRuntimeContributionContext(contextOptions)).references;
+  const session = pack.createCompilationSession(sessionContext(contextOptions.target));
+  session.sourceProfileContributions();
+  session.sourceCompilerContributions();
+  const refs = session.runtimeContributions().references;
+  session.close();
+  return refs;
 }
 
 test("the target provider contributes only the shared Rust runtime crate", () => {
@@ -25,13 +29,38 @@ test("the JS surface contributes exactly the rust-js crate", () => {
   const surface = pack.surfaces.find((candidate) => candidate.id === "js");
   assert.ok(surface);
   const refs = surface.runtimeContributions(
-    fakeRuntimeContributionContext({ target: { id: "rust", options: {} } }),
+    surfaceContext({ id: "rust", options: {} }),
   ).references;
 
   assert.deepEqual(refs.map((reference) => reference.attributes.crate), ["tsonic_rust_js"]);
   assert.match(refs[0].include, /rust-js\/crates\/tsonic_rust_js$/u);
   assert.equal(refs[0].attributes.registryPatch, "crates-io");
 });
+
+function sessionContext(target) {
+  const context = surfaceContext(target);
+  return {
+    ...context,
+    projectDirectory: process.cwd(),
+    selectedSurfaceIds: [],
+    capabilities: [],
+  };
+}
+
+function surfaceContext(target) {
+  return {
+    project: { entryPoint: "src/index.ts", targets: [target] },
+    target,
+    selectedCapabilityIds: [],
+    selectedSurfaceIds: [],
+    paths: {
+      projectFilePath: `${process.cwd()}/tsonic.json`,
+      projectRoot: process.cwd(),
+      outputRoot: `${process.cwd()}/out`,
+      targetOutputRoot: `${process.cwd()}/out/rust`,
+    },
+  };
+}
 
 test("runtime crate references resolve to installed package paths", () => {
   const refs = references({ target: { id: "rust", options: {} } });

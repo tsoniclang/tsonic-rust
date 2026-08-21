@@ -65,7 +65,7 @@ import type {
   Type,
 } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
-import type { TargetTypeRef } from "../../policy/types/model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export function resolveExpressionCarrier(
   walk: RustFactWalk,
@@ -297,7 +297,7 @@ function selectedFlowReadSource(
   const semantics = walk.context.source.semantics.forNode(expression);
   const kind = walk.context.ast.kindName(expression);
   if (kind === KindPropertyAccessExpression) {
-    const selected = semantics.getResolvedPropertyAccessInfo(expression);
+    const selected = semantics.operations.propertyAccess(expression);
     return selected?.callCallee === true || selected?.sourceReadType === undefined
       ? undefined
       : {
@@ -308,7 +308,7 @@ function selectedFlowReadSource(
         };
   }
   if (kind === KindElementAccessExpression) {
-    const selected = semantics.getResolvedElementAccessInfo(expression);
+    const selected = semantics.operations.elementAccess(expression);
     return selected?.callCallee === true || selected?.sourceReadType === undefined
       ? undefined
       : {
@@ -332,7 +332,7 @@ function resolveSelectedFlowReadCarrier(
   sourceCarrier: TargetTypeRef,
 ): TargetTypeRef | undefined {
   if (rustOptionElementCarrier(sourceCarrier) !== undefined &&
-    walk.context.semanticsFor(expression).isNullish(selectedType)) {
+    walk.context.semanticsFor(expression).types.isNullish(selectedType)) {
     return sourceCarrier;
   }
   const operation = walk.context.facts.get(expression, rustTargetOperationFactKey) ??
@@ -348,7 +348,7 @@ function resolveSelectedFlowReadCarrier(
   if (typeNode !== undefined && typeSourceFile !== undefined &&
     walk.context.source.semantics.includes(typeSourceFile)) {
     const semantics = walk.context.source.semantics.forNode(typeNode);
-    const authored = semantics.selectAuthoredType(typeNode, selectedType);
+    const authored = semantics.types.authoredSelection(typeNode, selectedType);
     if (authored.kind === "ambiguous") {
       return undefined;
     }
@@ -394,14 +394,14 @@ function resolveSelectedFlowReadCarrier(
       ? semanticCarrier
       : sourceCarrier;
   }
-  const selectedMembers = walk.context.semanticsFor(expression).isUnion(selectedType)
-    ? walk.context.semanticsFor(expression).getUnionOrIntersectionTypes(selectedType)
+  const selectedMembers = walk.context.semanticsFor(expression).types.isUnion(selectedType)
+    ? walk.context.semanticsFor(expression).types.unionOrIntersectionTypes(selectedType)
     : [selectedType];
   if (selectedMembers.some((member) => member === undefined)) {
     return undefined;
   }
   const includesNullish = selectedMembers.some((member) =>
-    member !== undefined && walk.context.semanticsFor(expression).isNullish(member));
+    member !== undefined && walk.context.semanticsFor(expression).types.isNullish(member));
   if (includesNullish) {
     return sourceCarrier;
   }
@@ -573,7 +573,7 @@ function resolveCallSelectionPrerequisites(
   expression: Node,
   sourceFile: SourceFile,
 ): void {
-  const source = walk.context.semantics(sourceFile).getResolvedCallInfo(expression);
+  const source = walk.context.semantics(sourceFile).operations.call(expression);
   const receiver = source?.sourceReceiver?.expression;
   if (receiver !== undefined) {
     resolveExpressionCarrier(walk, receiver, sourceFile, undefined);

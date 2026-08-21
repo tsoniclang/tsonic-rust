@@ -3,8 +3,8 @@ import type { TargetSourcePackage } from "@tsonic/target-api";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { isValidRustIdentifier } from "../../../policy/names/identifiers.js";
 import type { RustPlanningContext } from "../context.js";
-import type { RustSourceFileOutputIdentity } from "../../../analysis/program/source-output-identities.js";
-import { rustModuleSegmentName } from "../../../analysis/program/source-output-identities.js";
+import type { RustSourceFileOutputIdentity } from "../names/source-output-identities.js";
+import { rustModuleSegmentName } from "../names/source-output-identities.js";
 import { rustModuleBindingFactKey } from "../../../analysis/facts/keys.js";
 
 export interface RustSourcePackageFacadeExport {
@@ -42,9 +42,9 @@ export function planRustSourcePackageFacades(
   identitiesByFileName: ReadonlyMap<string, RustSourceFileOutputIdentity>,
 ): { readonly plan?: RustSourcePackageFacadePlan; readonly diagnostics: readonly TargetDiagnostic[] } {
   const diagnostics: TargetDiagnostic[] = [];
-  const packageById = new Map(input.sourcePackages.packages.map((entry) =>
+  const packageById = new Map(input.input.sourcePackages.packages.map((entry) =>
     [entry.id, entry] as const));
-  const rootPackage = packageById.get(input.sourcePackages.rootPackageId);
+  const rootPackage = packageById.get(input.input.sourcePackages.rootPackageId);
   if (rootPackage === undefined) {
     return {
       diagnostics: [facadeDiagnostic(
@@ -53,14 +53,14 @@ export function planRustSourcePackageFacades(
       )],
     };
   }
-  const sourceFileByName = new Map(input.sourceFiles.map((sourceFile) =>
-    [normalizePath(input.ast.getFileName(sourceFile)), sourceFile] as const));
-  const componentPackageCounts = new Map(input.sourcePackages.components.map((component) =>
+  const sourceFileByName = new Map(input.program.sourceFiles.map((sourceFile) =>
+    [normalizePath(input.program.source.ast.getFileName(sourceFile)), sourceFile] as const));
+  const componentPackageCounts = new Map(input.input.sourcePackages.components.map((component) =>
     [component.id, component.packages.length] as const));
   const exports: RustSourcePackageFacadeExport[] = [];
   const facadeOwners = new Map<string, RustSourcePackageFacadeExport>();
 
-  for (const sourcePackage of input.sourcePackages.packages) {
+  for (const sourcePackage of input.input.sourcePackages.packages) {
     for (const sourceExport of sourcePackage.exports) {
       const exportedSourceFile = sourceFileByName.get(normalizePath(sourceExport.sourceFile));
       if (exportedSourceFile === undefined) {
@@ -71,8 +71,8 @@ export function planRustSourcePackageFacades(
         sourceExport.specifier,
         (componentPackageCounts.get(sourcePackage.componentId) ?? 0) > 1,
       );
-      for (const exported of input.source.navigation.moduleExports(exportedSourceFile)) {
-        const implementationFileName = input.ast.getFileName(exported.sourceFile);
+      for (const exported of input.program.source.navigation.moduleExports(exportedSourceFile)) {
+        const implementationFileName = input.program.source.ast.getFileName(exported.sourceFile);
         const implementationIdentity = identitiesByFileName.get(implementationFileName);
         if (implementationIdentity === undefined ||
           implementationIdentity.componentId !== sourcePackage.componentId) {
@@ -86,7 +86,7 @@ export function planRustSourcePackageFacades(
           const entry: RustSourcePackageFacadeExport = Object.freeze({
             packageId: sourcePackage.id,
             componentId: sourcePackage.componentId,
-            sourceModuleFileName: input.ast.getFileName(exportedSourceFile),
+            sourceModuleFileName: input.program.source.ast.getFileName(exportedSourceFile),
             declaration: exported.declaration,
             implementationFileName,
             implementationModuleName: implementationIdentity.moduleName,
@@ -150,7 +150,7 @@ export function planRustSourcePackageFacades(
   }
   const rootExports = Object.freeze(exports.filter((entry) =>
     entry.componentId === rootPackage.componentId));
-  const exportsByComponentId = new Map(input.sourcePackages.components.map((component) =>
+  const exportsByComponentId = new Map(input.input.sourcePackages.components.map((component) =>
     [component.id, Object.freeze(exports.filter((entry) =>
       entry.componentId === component.id))] as const));
   const publicModuleNamesByComponent = new Map<string, ReadonlySet<string>>();
@@ -158,7 +158,7 @@ export function planRustSourcePackageFacades(
     string,
     ReadonlySet<string>
   >();
-  for (const component of input.sourcePackages.components) {
+  for (const component of input.input.sourcePackages.components) {
     const componentExports = exports.filter((entry) =>
       entry.componentId === component.id);
     const moduleNames = new Set<string>();
@@ -204,12 +204,12 @@ function rustDeclarationItemNames(
   input: RustPlanningContext,
   declaration: Node,
 ): readonly string[] {
-  const binding = input.facts.getFact(declaration, rustModuleBindingFactKey);
+  const binding = input.program.facts.getFact(declaration, rustModuleBindingFactKey);
   const candidates = binding?.storage === "native-callable"
     ? [binding.value?.name ?? binding.name]
-    : input.ast.is.IsFunctionDeclaration(declaration)
-      ? [input.names.functionNameForDeclaration(declaration)]
-      : [input.names.nameForDeclaration(declaration)];
+    : input.program.source.ast.is.IsFunctionDeclaration(declaration)
+      ? [input.program.names.functionNameForDeclaration(declaration)]
+      : [input.program.names.nameForDeclaration(declaration)];
   const names = new Set(candidates.filter((name): name is string =>
     name !== undefined && isValidRustIdentifier(name)));
   return Object.freeze([...names].sort(compareNames));

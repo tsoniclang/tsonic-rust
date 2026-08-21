@@ -13,7 +13,7 @@ export function createCargoToolchain(_context: TargetToolchainContext): TargetTo
     prepare(input: TargetToolchainInput): TargetToolchainResult {
       return {
         diagnostics: [],
-        producedArtifacts: input.compileResult.artifacts.map((artifact) => artifact.path),
+        producedArtifacts: input.compileOutput.artifacts.map((artifact) => artifact.path),
       };
     },
   };

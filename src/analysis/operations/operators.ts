@@ -55,10 +55,10 @@ import { rustTargetTypeRefEquals } from "../../policy/types/equality.js";
 import { selectedSourceLiteralIsRepresentable } from "../../policy/types/selected-numeric-literal.js";
 import { setCarrierFact, setRustOperationFact } from "./project-calls.js";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
-import type { RustAssignmentOperator } from "../../backend/model/syntax.js";
+import type { RustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustTargetOperationFact } from "../facts/keys.js";
-import type { TargetTypeRef } from "../../policy/types/model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export function resolveBinaryOperandCarriers(
   walk: RustFactWalk,
@@ -609,20 +609,20 @@ function selectedOptionNullishRelationship(
   }
   const optionSemantics = walk.context.semanticsFor(optionNode);
   const nullishSemantics = walk.context.semanticsFor(nullishNode);
-  const optionType = optionSemantics.getTypeAtLocation(optionNode);
-  const nullishType = nullishSemantics.getTypeAtLocation(nullishNode);
+  const optionType = optionSemantics.types.expressionType(optionNode);
+  const nullishType = nullishSemantics.types.expressionType(nullishNode);
   if (optionType === undefined || nullishType === undefined ||
-    !nullishSemantics.isNullish(nullishType)) {
+    !nullishSemantics.types.isNullish(nullishType)) {
     return undefined;
   }
-  const members = optionSemantics.isUnion(optionType)
-    ? optionSemantics.getUnionOrIntersectionTypes(optionType)
+  const members = optionSemantics.types.isUnion(optionType)
+    ? optionSemantics.types.unionOrIntersectionTypes(optionType)
     : [optionType];
-  const nullishMembers = members.filter((member) => optionSemantics.isNullish(member));
+  const nullishMembers = members.filter((member) => optionSemantics.types.isNullish(member));
   if (nullishMembers.length !== 1) {
     return undefined;
   }
-  return optionSemantics.getTypeRelationship(nullishMembers[0]!, nullishType) === "identical"
+  return optionSemantics.types.relationship(nullishMembers[0]!, nullishType) === "identical"
     ? "member"
     : "disjoint";
 }

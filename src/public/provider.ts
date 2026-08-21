@@ -20,18 +20,18 @@ export type {
 export type {
   RustProviderTypeParameterRequirement,
   RustProviderTypeRequirement,
-} from "../policy/operations/model.js";
-export type { RustTargetTypeRef } from "../policy/types/model.js";
+} from "../target-model/operations/model.js";
+export type { RustTargetTypeRef } from "../target-model/types/model.js";
 export type {
   RustProviderConstantArgument,
   RustProviderOperationForm,
   RustValueConversion,
   RustValueConversionId,
-} from "../policy/operations/model.js";
+} from "../target-model/operations/model.js";
 export type {
   RustErrorBoundary,
   RustFallibleErrorBoundary,
-} from "../policy/operations/error-boundary.js";
+} from "../target-model/operations/error-boundary.js";
 export {
   rustBorrowedStrToStringValueConversion,
   rustFloat64ToInt32ValueConversion,
@@ -45,7 +45,7 @@ export {
   rustUint8ToInt32ValueConversion,
   rustUsizeToFloat64ValueConversion,
   rustUsizeToInt32ValueConversion,
-} from "../policy/conversions/model.js";
+} from "../target-model/conversions/model.js";
 export {
   rustBorrowedStrTargetType,
   rustCallableTargetType,

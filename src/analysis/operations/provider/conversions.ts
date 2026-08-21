@@ -25,7 +25,7 @@ import type {
 import type { ExtensionFactSubject, Node, ProviderDeclarationIdentity } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { RustProviderFactOperationKind, RustProviderOperationTemplate, RustTargetOperationFact } from "../../facts/keys.js";
-import type { TargetTypeRef } from "../../../policy/types/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function selectRustCheckedConversion(
   request: RustCheckedConversionSelectionInput,

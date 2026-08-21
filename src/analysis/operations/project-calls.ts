@@ -45,7 +45,7 @@ import { selectedSourceLiteralIsRepresentable } from "../../policy/types/selecte
 import { sourceTypeCarrierForDeclaration } from "./inputs.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
-import type { RustSelectedTargetSignature, RustTargetMember, TargetTypeRef } from "../../policy/types/model.js";
+import type { RustSelectedTargetSignature, RustTargetMember, TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTargetOperationFact } from "../facts/keys.js";
 
 export function applySelectedProjectSourceCall(

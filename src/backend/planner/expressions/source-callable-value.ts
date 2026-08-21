@@ -1,6 +1,6 @@
 import type { RustSourceCallableValueFact } from "../../../analysis/facts/keys.js";
 import { rustFallibleFactKey } from "../../../analysis/facts/keys.js";
-import type { RustExpr } from "../../rust-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/nodes.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import {
@@ -57,7 +57,7 @@ export function planRustSourceCallableValue(
           : argument;
     }),
   };
-  const fallible = context.input.facts.getFact(
+  const fallible = context.input.program.facts.getFact(
     value.sourceDeclaration,
     rustFallibleFactKey,
   ) !== undefined;

@@ -3,15 +3,15 @@ import assert from "node:assert/strict";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createRustBackend } from "../../../dist/backend/rust-backend.js";
+import { compileRustTarget } from "../../../dist/backend/compile.js";
 import { composeRustProviderSemantics } from "../../../dist/providers/packages/semantics.js";
+import { createRustTargetConfiguration } from "../../../dist/options/rust-target-options.js";
 import {
   planCargoManifest,
   planRustCargoProject,
 } from "../../../dist/backend/planner/project/cargo.js";
-import { printCargoManifest } from "../../../dist/print/cargo/manifest.js";
+import { printCargoManifest } from "../../../dist/print/project/manifest.js";
 import {
-  fakeBackendContext,
   fakeCompileInput,
   fakeSourceFile,
 } from "../../helpers/fake-compile-input.mjs";
@@ -36,8 +36,32 @@ function materializedCrate(name, identity = name) {
   return root;
 }
 
-const backendContext = fakeBackendContext();
-const providerSemantics = composeRustProviderSemantics(backendContext);
+const providerSemantics = composeRustProviderSemantics([]);
+const generatedConfiguration = Object.freeze({
+  crateName: "tsonic_generated",
+  edition: "2021",
+  outputType: "lib",
+  project: Object.freeze({ kind: "generated" }),
+});
+
+function compile(input) {
+  const configuration = createRustTargetConfiguration(
+    input.target,
+    dirname(input.paths.projectFilePath),
+    input.paths.targetOutputRoot,
+  );
+  const result = compileRustTarget(Object.freeze({
+    input,
+    configuration,
+    providerSemantics,
+    jsEnabled: false,
+    rootPublishesLibrary: configuration.outputType === "lib",
+  }));
+  return {
+    artifacts: result.kind === "resolved" ? result.value.artifacts : [],
+    diagnostics: result.diagnostics,
+  };
+}
 
 function runtimeReference(crate, path, { registryPatch } = {}) {
   return {
@@ -48,8 +72,7 @@ function runtimeReference(crate, path, { registryPatch } = {}) {
 }
 
 test("empty program emits a deterministic cargo library project", () => {
-  const backend = createRustBackend(backendContext, providerSemantics, false);
-  const result = backend.compile(fakeCompileInput({
+  const result = compile(fakeCompileInput({
     sourceFiles: [fakeSourceFile({ fileName: "src/empty.ts", text: "", statements: [] })],
     runtimeReferences: [runtimeReference(
       "tsonic_rust_runtime",
@@ -94,8 +117,7 @@ test("empty program emits a deterministic cargo library project", () => {
 });
 
 test("bin output without an exported entry main fails closed", () => {
-  const backend = createRustBackend(backendContext, providerSemantics, false);
-  const result = backend.compile(fakeCompileInput({
+  const result = compile(fakeCompileInput({
     target: { id: "rust", options: { outputType: "bin", crateName: "my_app", edition: "2024" } },
     runtimeReferences: [runtimeReference(
       "tsonic_rust_runtime",
@@ -109,7 +131,7 @@ test("bin output without an exported entry main fails closed", () => {
 });
 
 test("cargo dependencies are sorted and deduplicated deterministically", () => {
-  const plan = planCargoManifest({ id: "rust", options: {} }, [
+  const plan = planCargoManifest(generatedConfiguration, [
     runtimeReference("tsonic_rust_runtime", runtimeCrate),
     runtimeReference("tsonic_rust_js", jsCrate),
     runtimeReference("tsonic_rust_runtime", runtimeCrate),
@@ -123,8 +145,7 @@ test("cargo dependencies are sorted and deduplicated deterministically", () => {
 });
 
 test("unknown runtime reference kinds fail closed without artifacts", () => {
-  const backend = createRustBackend(backendContext, providerSemantics, false);
-  const result = backend.compile(fakeCompileInput({
+  const result = compile(fakeCompileInput({
     runtimeReferences: [{ kind: "project", include: "/repos/x/x.csproj" }],
   }));
 
@@ -135,7 +156,7 @@ test("unknown runtime reference kinds fail closed without artifacts", () => {
 
 test("only explicit registry-source replacements become Cargo patches", () => {
   const acmeProvider = materializedCrate("acme_provider");
-  const plan = planCargoManifest({ id: "rust", options: {} }, [
+  const plan = planCargoManifest(generatedConfiguration, [
     runtimeReference("acme_provider", acmeProvider),
     runtimeReference("tsonic_rust_runtime", runtimeCrate, {
       registryPatch: "crates-io",
@@ -150,13 +171,13 @@ test("only explicit registry-source replacements become Cargo patches", () => {
 });
 
 test("unknown and conflicting registry patch contracts fail closed", () => {
-  const unknown = planCargoManifest({ id: "rust", options: {} }, [
+  const unknown = planCargoManifest(generatedConfiguration, [
     runtimeReference("tsonic_rust_runtime", runtimeCrate, { registryPatch: "private-registry" }),
   ]);
   assert.equal(unknown.manifest, undefined);
   assert.equal(unknown.diagnostics.length, 1);
 
-  const conflicting = planCargoManifest({ id: "rust", options: {} }, [
+  const conflicting = planCargoManifest(generatedConfiguration, [
     runtimeReference("tsonic_rust_runtime", runtimeCrate),
     runtimeReference("tsonic_rust_runtime", runtimeCrate, { registryPatch: "crates-io" }),
   ]);
@@ -167,7 +188,7 @@ test("unknown and conflicting registry patch contracts fail closed", () => {
 test("conflicting crate paths for the same crate name fail closed", () => {
   const first = materializedCrate("conflicting_runtime", "conflicting-runtime-a");
   const second = materializedCrate("conflicting_runtime", "conflicting-runtime-b");
-  const plan = planCargoManifest({ id: "rust", options: {} }, [
+  const plan = planCargoManifest(generatedConfiguration, [
     runtimeReference("conflicting_runtime", first),
     runtimeReference("conflicting_runtime", second),
   ]);
@@ -218,7 +239,7 @@ test("Cargo path references require exact materialized crate identity", () => {
     [{ ...runtimeReference("actual_crate", wrongIdentity), attributes: { crate: "actual_crate", guess: "yes" } }, /attribute 'guess'/u],
     [runtimeReference("actual_crate", `${wrongIdentity}/../wrong-identity`), /absolute normalized path/u],
   ]) {
-    const plan = planCargoManifest({ id: "rust", options: {} }, [reference]);
+    const plan = planCargoManifest(generatedConfiguration, [reference]);
     assert.equal(plan.manifest, undefined);
     assert.equal(plan.diagnostics.length, 1);
     assert.equal(plan.diagnostics[0].code, "RUST_INVALID_CARGO_REFERENCE");
@@ -229,7 +250,7 @@ test("Cargo path references require exact materialized crate identity", () => {
 test("sparse Cargo runtime-reference lists fail closed", () => {
   const references = new Array(2);
   references[1] = runtimeReference("tsonic_rust_runtime", runtimeCrate);
-  const plan = planCargoManifest({ id: "rust", options: {} }, references);
+  const plan = planCargoManifest(generatedConfiguration, references);
 
   assert.equal(plan.manifest, undefined);
   assert.equal(plan.diagnostics.length, 1);
@@ -242,7 +263,6 @@ test("user-owned Cargo mode emits sources without creating or mutating the manif
   mkdirSync(root, { recursive: true });
   const manifestText = "[package]\nname = \"user-owned\"\nversion = \"0.1.0\"\nedition = \"2021\"\n";
   writeFileSync(manifestPath, manifestText);
-  const target = { id: "rust", options: { projectFile: manifestPath } };
   const paths = {
     projectFilePath: resolve(repositoryRoot, "tsonic.json"),
     projectRoot: repositoryRoot,
@@ -250,7 +270,12 @@ test("user-owned Cargo mode emits sources without creating or mutating the manif
     targetOutputRoot: resolve(repositoryRoot, "out/rust"),
   };
 
-  const plan = planRustCargoProject(target, paths, [{ kind: "unowned", include: "ignored" }]);
+  const configuration = createRustTargetConfiguration(
+    { id: "rust", options: { projectFile: manifestPath } },
+    dirname(paths.projectFilePath),
+    paths.targetOutputRoot,
+  );
+  const plan = planRustCargoProject(configuration, [{ kind: "unowned", include: "ignored" }]);
   assert.deepEqual(plan, {
     project: { kind: "user-owned", manifestPath },
     diagnostics: [],
@@ -271,10 +296,18 @@ test("user-owned Cargo mode rejects missing, non-Cargo, and generated-output man
   writeFileSync(insideOutput, "[package]\nname = \"bad\"\nversion = \"0.1.0\"\n");
   writeFileSync(wrongName, "[package]\nname = \"bad\"\nversion = \"0.1.0\"\n");
 
-  for (const configured of [resolve(fixtureRoot, "missing/Cargo.toml"), wrongName, insideOutput]) {
-    const plan = planRustCargoProject({ id: "rust", options: { projectFile: configured } }, paths, []);
-    assert.equal(plan.project, undefined);
-    assert.equal(plan.diagnostics.length, 1);
-    assert.equal(plan.diagnostics[0].code, "RUST_USER_PROJECT_INVALID");
+  for (const [configured, expected] of [
+    [resolve(fixtureRoot, "missing/Cargo.toml"), /does not exist/u],
+    [wrongName, /must point to Cargo\.toml/u],
+    [insideOutput, /must not point inside generated target output root/u],
+  ]) {
+    assert.throws(
+      () => createRustTargetConfiguration(
+        { id: "rust", options: { projectFile: configured } },
+        dirname(paths.projectFilePath),
+        paths.targetOutputRoot,
+      ),
+      expected,
+    );
   }
 });

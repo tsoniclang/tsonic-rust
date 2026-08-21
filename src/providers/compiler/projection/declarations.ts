@@ -19,9 +19,9 @@ import type {
   RustCompilerTypeParameter,
 } from "../model/model.js";
 import type { ProjectionContext, ProjectionOwner, RustCompilerProviderProjection } from "./model.js";
-import type { RustNamedTypeTraitContract } from "../../../policy/types/model.js";
+import type { RustNamedTypeTraitContract } from "../../../target-model/types/model.js";
 import type { RustProviderOperationDefinition, RustProviderTypeDefinition } from "../../packages/model.js";
-import type { TargetTypeRef } from "../../../policy/types/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function projectRustCompilerModule(
   module: RustCompilerModuleModel,

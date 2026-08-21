@@ -24,10 +24,10 @@ import { rustTargetOperationIsDirectLocation } from "../../../../analysis/facts/
 import { sourceFieldSelectedOperationMatches } from "../properties.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustEffectiveExpressionOverride, RustPlanContext } from "../../program/plan-context.js";
-import type { RustExpr } from "../../../rust-ast/nodes.js";
+import type { RustExpr } from "../../../target-ast/nodes.js";
 import type { RustFinalizedSourceInput } from "../../../../analysis/facts/finalized-operation-abi.js";
 import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
-import type { TargetTypeRef } from "../../../../policy/types/model.js";
+import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 
 export function planRustSourceFieldUpdate(
   operand: Node,
@@ -46,7 +46,7 @@ export function planRustSourceFieldUpdate(
     ));
     return undefined;
   }
-  const receiverNode = Node_Expression(context.input.ast, fieldExpression);
+  const receiverNode = Node_Expression(context.input.program.source.ast, fieldExpression);
   const plannedReceiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
   const receiver = receiverNode === undefined || plannedReceiver === undefined
     ? plannedReceiver
@@ -118,7 +118,7 @@ export function planRustSourceFieldUpdate(
   }
   const dispatchPlan = field.declaration === undefined
     ? undefined
-    : context.input.projectFieldDispatch.planFor(field.declaration);
+    : context.input.program.projectFieldDispatch.planFor(field.declaration);
   if (dispatchPlan?.write === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, fieldExpression),
@@ -205,16 +205,16 @@ export function findRustUpdateProjectField(
 } | undefined {
   let current: Node | undefined = operand;
   while (current !== undefined) {
-    const fact = context.input.facts.getFact(current, rustTargetOperationFactKey);
+    const fact = context.input.program.facts.getFact(current, rustTargetOperationFactKey);
     if (fact?.kind === "source-field" || fact?.kind === "source-union-field") {
       return { expression: current, fact };
     }
-    const kind = context.input.ast.kindName(current);
+    const kind = context.input.program.source.ast.kindName(current);
     if (kind !== KindPropertyAccessExpression && kind !== KindElementAccessExpression &&
       kind !== KindParenthesizedExpression) {
       return undefined;
     }
-    current = Node_Expression(context.input.ast, current);
+    current = Node_Expression(context.input.program.source.ast, current);
   }
   return undefined;
 }
@@ -238,7 +238,7 @@ export function planRustUpdateProjectionArguments(
   let current: Node | undefined = operand;
   while (current !== undefined && current !== fieldExpression) {
     projections.push(current);
-    current = Node_Expression(context.input.ast, current);
+    current = Node_Expression(context.input.program.source.ast, current);
   }
   if (current !== fieldExpression) {
     return undefined;
@@ -254,12 +254,12 @@ export function planRustUpdateProjectionArguments(
   }[] = [];
   const inputOverrides = new Map<RustFinalizedSourceInput, RustExpr>();
   for (const projection of projections.reverse()) {
-    if (context.input.ast.kindName(projection) !== KindElementAccessExpression) {
+    if (context.input.program.source.ast.kindName(projection) !== KindElementAccessExpression) {
       continue;
     }
-    const argument = ElementAccessExpression_ArgumentExpression(context.input.ast, projection);
+    const argument = ElementAccessExpression_ArgumentExpression(context.input.program.source.ast, projection);
     const carrier = argument === undefined ? undefined : expressionCarrier(argument, context);
-    const operation = context.input.facts.getFact(projection, rustTargetOperationFactKey);
+    const operation = context.input.program.facts.getFact(projection, rustTargetOperationFactKey);
     const candidateTargetInput = operation?.kind === "provider-operation" &&
         operation.abi.target.form === "index" &&
         operation.abi.targetArguments.length === 1
@@ -276,7 +276,7 @@ export function planRustUpdateProjectionArguments(
         : planFinalizedTargetInput(
             context,
             targetInput,
-            Node_Expression(context.input.ast, projection),
+            Node_Expression(context.input.program.source.ast, projection),
             [argument],
             projection,
           );
@@ -415,13 +415,13 @@ export function planRustDirectStorage(
   context: RustPlanContext,
   inputOverrides?: ReadonlyMap<RustFinalizedSourceInput, RustExpr>,
 ): RustExpr | undefined {
-  const { ast } = context.input;
+  const { ast } = context.input.program.source;
   const storageOverride = context.expressionOverrides?.get(operand);
   if (storageOverride?.valueForm === "storage") {
     return storageOverride.expression;
   }
   if (ast.kindName(operand) === KindIdentifier) {
-    const binding = context.input.facts.getFact(operand, rustSourceBindingFactKey);
+    const binding = context.input.program.facts.getFact(operand, rustSourceBindingFactKey);
     const path = binding === undefined ? undefined : rustSourceBindingPath(context, binding);
     return path !== undefined && isValidRustIdentifier(path) ? { kind: "path", path } : undefined;
   }
@@ -429,7 +429,7 @@ export function planRustDirectStorage(
   if (operandKind === "KindThisExpression" || operandKind === "KindThisKeyword") {
     return { kind: "path", path: "self" };
   }
-  const fact = context.input.facts.getFact(operand, rustTargetOperationFactKey);
+  const fact = context.input.program.facts.getFact(operand, rustTargetOperationFactKey);
   if (!rustTargetOperationIsDirectLocation(fact)) {
     return undefined;
   }
@@ -541,7 +541,7 @@ function directStorageRemainsSelected(
     return true;
   }
   const effectful = laterExpressions.filter((expression) => {
-    const effects = context.input.source.navigation.expressionEffects(expression);
+    const effects = context.input.program.source.navigation.expressionEffects(expression);
     return effects.invokes || effects.mutates || effects.suspends || effects.mayThrow;
   });
   if (effectful.length === 0) {
@@ -557,7 +557,7 @@ function directStorageRemainsSelected(
     return false;
   }
   if (effectful.some((expression) =>
-    context.input.source.navigation.bindingWritesWithin(
+    context.input.program.source.navigation.bindingWritesWithin(
       reference.symbol,
       expression,
     ).length !== 0)) {
@@ -577,16 +577,16 @@ function directStorageReference(
 ): import("@tsonic/target-api/source").SourceDeclarationReference | undefined {
   let current: Node | undefined = node;
   while (current !== undefined) {
-    const reference = context.input.source.navigation.sourceReferenceFor(current);
+    const reference = context.input.program.source.navigation.sourceReferenceFor(current);
     if (reference !== undefined) {
       return reference;
     }
-    const kind = context.input.ast.kindName(current);
+    const kind = context.input.program.source.ast.kindName(current);
     if (kind !== KindPropertyAccessExpression && kind !== KindElementAccessExpression &&
       kind !== KindParenthesizedExpression) {
       return undefined;
     }
-    const receiver = Node_Expression(context.input.ast, current);
+    const receiver = Node_Expression(context.input.program.source.ast, current);
     if (receiver === current) {
       return undefined;
     }

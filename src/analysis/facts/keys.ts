@@ -3,7 +3,7 @@ export type {
   RustBinaryOperator,
   RustOperationSymbol,
   RustOperatorToken,
-} from "../../backend/model/syntax.js";
+} from "../../target-model/syntax/tokens.js";
 export {
   rustAsyncFunctionFactKey,
   rustGeneratorFactKey,
@@ -63,7 +63,7 @@ export {
   rustPostCheckOperationKind,
   rustPostCheckUnaryMinusOperationId,
   rustPostCheckUnaryPlusOperationId,
-} from "../../policy/operations/model.js";
+} from "../../target-model/operations/model.js";
 export type {
   RustArgumentMode,
   RustCallbackOperationTemplate,
@@ -79,7 +79,7 @@ export type {
   RustSourceCallParameterPlan,
   RustValueConversion,
   RustValueConversionId,
-} from "../../policy/operations/model.js";
+} from "../../target-model/operations/model.js";
 export {
   rustBindingProjectionFactKey,
   rustContextualValueConversionFactKey,

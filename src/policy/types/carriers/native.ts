@@ -8,7 +8,7 @@ import type {
   RustNamedTypeTraitImplementation,
   RustNamedTypeTraitRequirement,
   TargetTypeRef,
-} from "../model.js";
+} from "../../../target-model/types/model.js";
 
 export function rustSourcePrimitiveTargetType(kind: SourcePrimitiveKind): TargetTypeRef {
   return { kind: "source-primitive", name: kind };

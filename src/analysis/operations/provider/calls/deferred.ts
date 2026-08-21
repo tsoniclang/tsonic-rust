@@ -19,7 +19,7 @@ import type {
 import type { Node, ProviderDeclarationIdentity, SourceCallMarkerKind } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "../model.js";
 import type { RustProviderOperationTemplate, RustTargetOperationFact } from "../../../facts/keys.js";
-import type { RustTargetMember, TargetTypeRef } from "../../../../policy/types/model.js";
+import type { RustTargetMember, TargetTypeRef } from "../../../../target-model/types/model.js";
 
 export interface RustPreparedDeferredCheckedCall {
   readonly sourceName: string;

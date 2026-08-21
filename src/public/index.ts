@@ -1,7 +1,8 @@
 import { createRustTargetPack } from "../descriptor/rust-target-pack.js";
 
-export { createRustTargetPack, rustTargetId } from "../descriptor/rust-target-pack.js";
-export type { RustEdition, RustOutputType } from "../options/rust-target-options.js";
+export { createRustTargetPack } from "../descriptor/rust-target-pack.js";
+export { rustTargetId } from "../target-model/identities/target.js";
+export type { RustEdition, RustOutputType } from "../target-model/project/model.js";
 
 export function createTsonicPlugin(): import("@tsonic/target-api").TsonicTargetPlugin {
   return {

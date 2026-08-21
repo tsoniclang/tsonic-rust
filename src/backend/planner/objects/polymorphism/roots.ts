@@ -17,17 +17,17 @@ import {
 } from "../project-objects.js";
 import { rustProjectDispatchTraitType, rustProjectTypeParameters } from "./names.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr, RustImplFunction, RustItem, RustType } from "../../../rust-ast/nodes.js";
+import type { RustExpr, RustImplFunction, RustItem, RustType } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import {
   rustErrorBoundaryForProjectMember,
   rustErrorType,
 } from "../../program/plan-context.js";
-import { rustTypeEquals } from "../../../rust-ast/type-equality.js";
+import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js";
 import { applyRustFallibleResultExpression } from "../../types/fallible-shape.js";
 import { rustTargetTypeRefEquals } from "../../../../policy/types/equality.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
-import type { TargetTypeRef } from "../../../../policy/types/model.js";
+import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { ProjectClassStateLayer } from "./model.js";
 import type { RustObjectRepresentation } from "../../../../analysis/project-types/object-representation.js";
 import { rustProjectMemberIsPrivate } from "../../../../analysis/project-types/member-privacy.js";
@@ -39,9 +39,9 @@ export function planProjectRootImplementations(
   layers: readonly ProjectClassStateLayer[],
   context: RustPlanContext,
 ): readonly RustItem[] | undefined {
-  const lineage = context.input.projectTypes.classLineage(concrete);
-  const interfaces = context.input.projectTypes.interfacesForClass(concrete);
-  const representation = context.input.objectRepresentations.representationFor(concrete);
+  const lineage = context.input.program.projectTypes.classLineage(concrete);
+  const interfaces = context.input.program.projectTypes.interfacesForClass(concrete);
+  const representation = context.input.program.objectRepresentations.representationFor(concrete);
   if (lineage === undefined || interfaces === undefined || representation === undefined) {
     return undefined;
   }
@@ -53,7 +53,7 @@ export function planProjectRootImplementations(
     implementation: Node,
     targetTypeArguments: readonly TargetTypeRef[],
   ): RustImplFunction | undefined => {
-    const variant = context.input.projectMethodDispatch.variantForMember(
+    const variant = context.input.program.projectMethodDispatch.variantForMember(
       implementation,
       targetTypeArguments,
     );
@@ -98,7 +98,7 @@ export function planProjectRootImplementations(
     return planned;
   };
   for (const contract of [...lineage, ...interfaces]) {
-    const relation = context.input.projectTypes.relationship(concreteCarrier, contract);
+    const relation = context.input.program.projectTypes.relationship(concreteCarrier, contract);
     if (relation.kind !== "related") {
       return undefined;
     }
@@ -160,8 +160,8 @@ function planRootContractFunctions(
   context: RustPlanContext,
 ): readonly RustImplFunction[] | undefined {
   const functions: RustImplFunction[] = [];
-  for (const route of context.input.projectTypes.downcastRoutesFor(contract)) {
-    const relation = context.input.projectTypes.relationship(concreteCarrier, route.target);
+  for (const route of context.input.program.projectTypes.downcastRoutesFor(contract)) {
+    const relation = context.input.program.projectTypes.relationship(concreteCarrier, route.target);
     const matches = relation.kind === "related" &&
       rustTargetTypeRefEquals(relation.targetType, route.targetCarrier);
     const implementation = planProjectDowncastRouteImplementation(route, matches, context);
@@ -176,13 +176,13 @@ function planRootContractFunctions(
   }
   for (const field of fields) {
     const privateField = field.origin === "project" &&
-      rustProjectMemberIsPrivate(context.input.ast, field.declaration);
-    const dispatch = context.input.projectFieldDispatch.planFor(field.declaration);
+      rustProjectMemberIsPrivate(context.input.program.source.ast, field.declaration);
+    const dispatch = context.input.program.projectFieldDispatch.planFor(field.declaration);
     const implementation = field.origin === "external"
       ? { kind: "stored" as const, declaration: field.declaration }
       : privateField
         ? { kind: "stored" as const, declaration: field.declaration }
-      : context.input.projectFieldDispatch.implementationFor(
+      : context.input.program.projectFieldDispatch.implementationFor(
           concrete,
           field.declaration,
         );
@@ -192,10 +192,10 @@ function planRootContractFunctions(
     const readHelper = implementation?.kind === "accessor"
       ? accessorImplementationFor(implementation.getter, "read")
       : undefined;
-    const read = context.input.projectTypes.memberSlotName(field.declaration, "read");
+    const read = context.input.program.projectTypes.memberSlotName(field.declaration, "read");
     const write = dispatch?.write === undefined
       ? undefined
-      : context.input.projectTypes.memberSlotName(field.declaration, "write");
+      : context.input.program.projectTypes.memberSlotName(field.declaration, "write");
     const readValue: { readonly expression: RustExpr; readonly errorType?: RustType } | undefined = implementation?.kind === "stored"
       ? storagePath === undefined
         ? undefined
@@ -351,7 +351,7 @@ function planRootContractFunctions(
     const helper = implementation === undefined
       ? undefined
       : accessorImplementationFor(implementation, accessor.role);
-    const slot = context.input.projectTypes.memberSlotName(
+    const slot = context.input.program.projectTypes.memberSlotName(
       accessor.declaration,
       accessor.role,
     );
@@ -382,10 +382,10 @@ function planRootContractFunctions(
     functions.push(forwarder);
   }
   for (const member of projectOwnMethods(contract, context)) {
-    if (context.input.ast.hasModifierKind(member, "static")) {
+    if (context.input.program.source.ast.hasModifierKind(member, "static")) {
       continue;
     }
-    for (const variant of context.input.projectMethodDispatch.variantsForMember(member)) {
+    for (const variant of context.input.program.projectMethodDispatch.variantsForMember(member)) {
       const virtualImplementation = projectMemberImplementation(concrete, member, context);
       if (virtualImplementation === undefined) {
         return undefined;
@@ -404,8 +404,8 @@ function planRootContractFunctions(
             variant.virtualSlot,
             rootType,
             virtualImplementationMethod,
-            (context.input.projectMethodProperties.usageFor(member)?.writable === true ||
-                context.input.projectMethodProperties.usageFor(virtualImplementation)?.writable === true)
+            (context.input.program.projectMethodProperties.usageFor(member)?.writable === true ||
+                context.input.program.projectMethodProperties.usageFor(virtualImplementation)?.writable === true)
               ? projectMethodPropertyStoragePath(
                   virtualImplementation,
                   layers,
@@ -441,19 +441,19 @@ function planRootContractFunctions(
         }
         functions.push(exactMethod);
       }
-      const usage = context.input.projectMethodProperties.usageFor(member);
+      const usage = context.input.program.projectMethodProperties.usageFor(member);
       if (usage?.writable === true) {
-        const write = context.input.projectTypes.memberSlotName(member, "method-write");
+        const write = context.input.program.projectTypes.memberSlotName(member, "method-write");
         const storagePath = projectMethodPropertyStoragePath(
           virtualImplementation,
           layers,
           context,
         );
-        const implementationOwner = context.input.projectTypes
+        const implementationOwner = context.input.program.projectTypes
           .definitionContainingDeclaration(virtualImplementation);
         const implementationCarrier = implementationOwner === undefined
           ? undefined
-          : context.input.projectTypes.relationship(
+          : context.input.program.projectTypes.relationship(
               concreteCarrier,
               implementationOwner,
             );

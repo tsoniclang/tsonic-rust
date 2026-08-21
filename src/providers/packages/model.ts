@@ -1,16 +1,16 @@
 import type { ProviderDeclarationKind, ProviderExportDeclaration } from "@tsonic/tsts";
-import type { RustFallibleErrorBoundary } from "../../policy/operations/error-boundary.js";
-import type { RustNamedTypeTraitContract } from "../../policy/types/model.js";
+import type { RustFallibleErrorBoundary } from "../../target-model/operations/error-boundary.js";
+import type { RustNamedTypeTraitContract } from "../../target-model/types/model.js";
 import type {
   RustProviderOperationForm,
   RustProviderTypeParameterRequirement,
   RustValueConversion,
-} from "../../policy/operations/model.js";
+} from "../../target-model/operations/model.js";
 import type {
   TargetCapabilityContribution,
   TargetCapabilityImplementation,
 } from "@tsonic/target-api/provider";
-import type { TargetTypeRef } from "../../policy/types/model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export interface RustProviderModuleDefinition {
   readonly moduleSpecifier: string;
@@ -114,8 +114,8 @@ export interface RustProviderExportRow {
 export interface RustProviderSemantics {
   readonly exports: readonly RustProviderExportRow[];
   readonly operations: readonly RustProviderOperationRow[];
-  readonly carrierPaths: ReadonlyMap<string, string>;
-  readonly carrierTraits: ReadonlyMap<string, RustNamedTypeTraitContract>;
+  readonly carrierPaths: Readonly<Record<string, string>>;
+  readonly carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>>;
   readonly types: readonly RustProviderTypeRow[];
   readonly binaryEpilogues: readonly RustProviderBinaryEpilogueRow[];
 }

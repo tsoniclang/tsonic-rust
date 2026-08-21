@@ -1,7 +1,7 @@
-import type { TargetTypeRef } from "../../../../policy/types/model.js";
+import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
 import { rustSourceTypeCarrierValue } from "../../../../policy/types/target-types.js";
-import type { RustExpr, RustType, RustTypeParameter } from "../../../rust-ast/nodes.js";
+import type { RustExpr, RustType, RustTypeParameter } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { sourceModuleItemPath } from "../../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
@@ -66,7 +66,7 @@ export function rustProjectStateMarker(
     return undefined;
   }
   return {
-    name: context.input.projectTypes.stateMarkerFieldName(definition),
+    name: context.input.program.projectTypes.stateMarkerFieldName(definition),
     type: {
       kind: "named",
       path: "std::marker::PhantomData",
@@ -88,7 +88,7 @@ function rustProjectGeneratedType(
   generatedName: (definition: RustProjectTypeDefinition) => string,
 ): RustType | undefined {
   const value = rustSourceTypeCarrierValue(carrier);
-  const definition = context.input.projectTypes.definitionForCarrier(carrier);
+  const definition = context.input.program.projectTypes.definitionForCarrier(carrier);
   const path = value === undefined || definition === undefined
     ? undefined
     : sourceModuleItemPath(context, value.fileName, generatedName(definition));

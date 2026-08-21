@@ -4,7 +4,7 @@ import type {
 } from "@tsonic/tsts";
 import type { RustOperationPolicyContext } from "../../policy/operations/contracts.js";
 import { rustTargetTypeRefEquals } from "../../policy/types/equality.js";
-import type { TargetTypeRef } from "../../policy/types/model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { closedMetadataEquals } from "../../policy/model/closed-data.js";
 import { Node_Type } from "@tsonic/target-api/source";
 import type {
@@ -46,7 +46,7 @@ export function selectRustResourceManagement(
   projectDisposerEffects: (declaration: Node) => RustProjectDisposerEffects | undefined,
 ): RustResourceManagementSelection {
   const source = context.semanticsFor(declaration)
-    .getResolvedResourceManagementInfo(declaration);
+    .operations.resourceManagement(declaration);
   if (source === undefined) {
     return rejected("TSTS did not retain exact checked resource-management evidence for this declaration.");
   }
@@ -128,7 +128,7 @@ function selectDisposalAlternative(
     const name = context.ast.name(declaration);
     const wellKnown = name === undefined
       ? undefined
-      : context.semanticsFor(declaration).getResolvedWellKnownSymbolInfo(name);
+      : context.semanticsFor(declaration).operations.wellKnownSymbol(name);
     const expectedKind = alternative.kind === "sync" ? "dispose" : "async-dispose";
     const effects = projectDisposerEffects(declaration);
     const targetName = rustProjectCallableTargetName(declaration, context);
@@ -260,7 +260,7 @@ function optionalCarrierEquals(
 }
 
 function providerDisposalTargetIsSupported(
-  target: import("../../policy/operations/model.js").RustProviderOperationForm,
+  target: import("../../target-model/operations/model.js").RustProviderOperationForm,
 ): boolean {
   return target.form === "method" ||
     target.form === "receiver-method" ||

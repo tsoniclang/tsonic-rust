@@ -28,7 +28,7 @@ import type { Node, SourceFile, Type } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustSourceUnion, RustSourceUnionVariant } from "../project-types/source-type-registry.js";
 import type { RustTargetOperationFact } from "../facts/keys.js";
-import type { TargetTypeRef } from "../../policy/types/model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export function resolveProjectMethodPropertyCarrier(
   walk: RustFactWalk,
@@ -355,7 +355,7 @@ export function selectRustRecordLiteralUnionVariantByCheckedType(
   expression: Node,
   union: RustSourceUnion,
 ): RustSourceUnionVariant | undefined {
-  const selectedSourceType = walk.context.semanticsFor(expression).getTypeAtLocation(expression);
+  const selectedSourceType = walk.context.semanticsFor(expression).types.expressionType(expression);
   const selectedCarrier = resolveRustTargetTypeRef(
     selectedSourceType,
     rustResolutionContext(walk, expression),
@@ -381,7 +381,7 @@ export function selectRustRecordLiteralUnionVariant(
     return undefined;
   }
   const semantics = walk.context.semanticsFor(expression);
-  const selectedSourceType = semantics.getTypeAtLocation(expression);
+  const selectedSourceType = semantics.types.expressionType(expression);
   const selectedCarrier = resolveRustTargetTypeRef(
     selectedSourceType,
     rustResolutionContext(walk, expression),
@@ -405,10 +405,10 @@ export function selectRustRecordLiteralUnionVariant(
     const selectedFieldTypes = fieldTypes as readonly Type[];
     const firstFieldType = selectedFieldTypes[0]!;
     if (selectedFieldTypes.every((type) =>
-      semantics.getTypeRelationship(firstFieldType, type) !== "unrelated")) {
+      semantics.types.relationship(firstFieldType, type) !== "unrelated")) {
       continue;
     }
-    const selectedValueType = semantics.getTypeAtLocation(initializer);
+    const selectedValueType = semantics.types.expressionType(initializer);
     if (selectedValueType === undefined) {
       return undefined;
     }
@@ -417,7 +417,7 @@ export function selectRustRecordLiteralUnionVariant(
       if (fieldType === undefined) {
         return false;
       }
-      const refinement = semantics.selectTypeRefinement(fieldType, selectedValueType);
+      const refinement = semantics.types.refinement(fieldType, selectedValueType);
       return refinement.kind === "exact" || refinement.kind === "members";
     });
     if (candidates.length < 2) {

@@ -20,8 +20,8 @@ import type {
   RustImplFunction,
   RustStmt,
   RustType,
-} from "../../../rust-ast/nodes.js";
-import { rustLintAttributes } from "../../../rust-ast/lint-policy.js";
+} from "../../../target-ast/nodes.js";
+import { rustLintAttributes } from "../../../target-ast/normalization/lint-policy.js";
 import {
   missingFactDiagnostic,
   unsupportedConstructDiagnostic,
@@ -94,8 +94,8 @@ export function planProjectClassConstructor(
   if (members === undefined) {
     return undefined;
   }
-  const constructors = members.filter((member) => context.input.ast.kindName(member) === "KindConstructor");
-  const constructorSignatures = context.input.projectTypes.constructorsForDefinition(definition);
+  const constructors = members.filter((member) => context.input.program.source.ast.kindName(member) === "KindConstructor");
+  const constructorSignatures = context.input.program.projectTypes.constructorsForDefinition(definition);
   if (constructorSignatures.length === 0) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, definition.declaration),
@@ -106,7 +106,7 @@ export function planProjectClassConstructor(
   }
   const constructorSignature = constructorSignatures[0]!;
   const implementationConstructors = constructors.filter((candidate) =>
-    context.input.ast.body(candidate) !== undefined);
+    context.input.program.source.ast.body(candidate) !== undefined);
   const constructor = implementationConstructors[0];
   if (implementationConstructors.length > 1 ||
     constructorSignature.implicit !== (constructor === undefined)) {
@@ -130,7 +130,7 @@ export function planProjectClassConstructor(
     context.input,
   );
   const syntheticNames = createRustSyntheticNameState(
-    context.input.ast,
+    context.input.program.source.ast,
     constructor ?? definition.declaration,
     [],
   );
@@ -148,7 +148,7 @@ export function planProjectClassConstructor(
   if (parameterPlan === undefined) {
     return undefined;
   }
-  const fallible = context.input.facts.getFact(
+  const fallible = context.input.program.facts.getFact(
     constructor ?? definition.declaration,
     rustFallibleFactKey,
   ) !== undefined;
@@ -187,14 +187,14 @@ export function planProjectClassConstructor(
     return undefined;
   }
   const statements: RustStmt[] = [...prelude];
-  const body = constructor === undefined ? undefined : context.input.ast.body(constructor);
-  const bodyStatements = body === undefined ? [] : context.input.ast.statements(body);
+  const body = constructor === undefined ? undefined : context.input.program.source.ast.body(constructor);
+  const bodyStatements = body === undefined ? [] : context.input.program.source.ast.statements(body);
   if (bodyStatements.some((statement) => statement === undefined)) {
     return undefined;
   }
-  const base = context.input.projectTypes.heritageForDefinition(definition).find((edge) =>
+  const base = context.input.program.projectTypes.heritageForDefinition(definition).find((edge) =>
     edge.kind === "extends" && edge.target.kind === "class");
-  const externalBase = context.input.projectTypes.externalBaseForDefinition(definition);
+  const externalBase = context.input.program.projectTypes.externalBaseForDefinition(definition);
   const ownLayer = layers[layers.length - 1];
   if (ownLayer === undefined || ownLayer.definition !== definition ||
     (base !== undefined && externalBase !== undefined)) {
@@ -250,7 +250,7 @@ export function planProjectClassConstructor(
         );
     const inheritedBase = constructor === undefined
       ? rustInheritedProjectConstructor(
-          context.input.projectTypes,
+          context.input.program.projectTypes,
           definition,
           constructorSignature,
         )
@@ -285,7 +285,7 @@ export function planProjectClassConstructor(
     };
     const explicitBaseEffects = explicitBase === undefined
       ? undefined
-      : context.input.facts.getFact(
+      : context.input.program.facts.getFact(
           explicitBase.call,
           rustSourceCallEffectsFactKey,
         );
@@ -299,7 +299,7 @@ export function planProjectClassConstructor(
       return undefined;
     }
     const baseFallible = explicitBase === undefined
-      ? context.input.facts.getFact(
+      ? context.input.program.facts.getFact(
           baseConstructor.declaration ?? base.target.declaration,
           rustFallibleFactKey,
         ) !== undefined
@@ -422,7 +422,7 @@ export function planProjectClassConstructor(
       ownLayer.fields.some((field) => field.declaration === selected)) {
       return selected;
     }
-    const resolved = context.input.projectTypes.memberImplementation(
+    const resolved = context.input.program.projectTypes.memberImplementation(
       definition,
       selected,
     );
@@ -486,7 +486,7 @@ export function planProjectClassConstructor(
       ...(base === undefined
         ? []
         : [{
-            name: context.input.projectTypes.baseStateFieldName(definition),
+            name: context.input.program.projectTypes.baseStateFieldName(definition),
             value: { kind: "path" as const, path: baseStateName },
           }]),
       ...ownLayer.fields.map((field) => ({
@@ -539,14 +539,14 @@ export function planProjectClassConstructor(
     name: constructorSignature.targetName,
     ...(isUnsafe ? { isUnsafe: true } : {}),
     visibility: constructor === undefined ||
-        (!context.input.ast.hasModifierKind(constructor, "private") &&
-          !context.input.ast.hasModifierKind(constructor, "protected"))
+        (!context.input.program.source.ast.hasModifierKind(constructor, "private") &&
+          !context.input.program.source.ast.hasModifierKind(constructor, "protected"))
       ? "public"
       : "private",
     ...(() => {
       const attrs = [
         ...(isUnsafe ? [rustLintAttributes.missingSafetyDoc] : []),
-        ...(context.input.ast.hasModifierKind(definition.declaration, "export")
+        ...(context.input.program.source.ast.hasModifierKind(definition.declaration, "export")
           ? []
           : [rustLintAttributes.deadCode]),
       ];
@@ -644,22 +644,22 @@ function planImplicitProjectConstructorParameters(
   readonly params: readonly RustFunctionParam[];
   readonly prelude: readonly never[];
 } | undefined {
-  const receiver = context.input.projectTypes.openCarrier(definition);
+  const receiver = context.input.program.projectTypes.openCarrier(definition);
   const params: RustFunctionParam[] = [];
   for (const parameter of signature.parameters) {
-    const abi = context.input.facts.getFact(
+    const abi = context.input.program.facts.getFact(
       parameter.parameterDeclaration,
       rustSourceParameterAbiFactKey,
     );
     const carrier = abi === undefined
       ? undefined
-      : context.input.projectTypes.instantiateMemberCarrier(
+      : context.input.program.projectTypes.instantiateMemberCarrier(
           parameter.parameterDeclaration,
           receiver,
           abi.parameterCarrier,
         );
     const type = rustTypeFromCarrierInContext(carrier, context);
-    const name = context.input.names.nameForDeclaration(parameter.parameterDeclaration) ?? "";
+    const name = context.input.program.names.nameForDeclaration(parameter.parameterDeclaration) ?? "";
     if (type === undefined || !isValidRustIdentifier(name)) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, parameter.parameterDeclaration),
@@ -680,13 +680,13 @@ function selectedExplicitExternalBaseConstructor(
   context: RustPlanContext,
 ): Node | undefined {
   const first = statements[0];
-  const call = first === undefined ? undefined : Node_Expression(context.input.ast, first);
-  const callee = call === undefined ? undefined : Node_Expression(context.input.ast, call);
+  const call = first === undefined ? undefined : Node_Expression(context.input.program.source.ast, first);
+  const callee = call === undefined ? undefined : Node_Expression(context.input.program.source.ast, call);
   const fact = call === undefined
     ? undefined
-    : context.input.facts.getFact(call, rustTargetOperationFactKey);
-  if (call === undefined || context.input.ast.kindName(call) !== KindCallExpression ||
-    callee === undefined || context.input.ast.kindName(callee) !== "KindSuperKeyword" ||
+    : context.input.program.facts.getFact(call, rustTargetOperationFactKey);
+  if (call === undefined || context.input.program.source.ast.kindName(call) !== KindCallExpression ||
+    callee === undefined || context.input.program.source.ast.kindName(callee) !== "KindSuperKeyword" ||
     fact?.kind !== "provider-operation" || fact.operationId !== operationId ||
     fact.abi.operationKind !== "constructor") {
     context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -706,16 +706,16 @@ function selectedExplicitBaseConstructor(
   context: RustPlanContext,
 ): { readonly call: Node; readonly constructor: RustProjectConstructorSignature } | undefined {
   const first = statements[0];
-  const call = first === undefined ? undefined : Node_Expression(context.input.ast, first);
-  const callee = call === undefined ? undefined : Node_Expression(context.input.ast, call);
+  const call = first === undefined ? undefined : Node_Expression(context.input.program.source.ast, first);
+  const callee = call === undefined ? undefined : Node_Expression(context.input.program.source.ast, call);
   const fact = call === undefined
     ? undefined
-    : context.input.facts.getFact(call, rustTargetOperationFactKey);
+    : context.input.program.facts.getFact(call, rustTargetOperationFactKey);
   const selected = fact?.kind === "source-call" && fact.target.form === "constructor"
-    ? context.input.projectTypes.constructorForTargetName(base, fact.target.name)
+    ? context.input.program.projectTypes.constructorForTargetName(base, fact.target.name)
     : undefined;
-  if (call === undefined || context.input.ast.kindName(call) !== KindCallExpression ||
-    callee === undefined || context.input.ast.kindName(callee) !== "KindSuperKeyword" ||
+  if (call === undefined || context.input.program.source.ast.kindName(call) !== KindCallExpression ||
+    callee === undefined || context.input.program.source.ast.kindName(callee) !== "KindSuperKeyword" ||
     selected === undefined) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, constructor),

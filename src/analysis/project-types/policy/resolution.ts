@@ -6,7 +6,7 @@ import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
 import type { Node, Signature, SourceFile } from "@tsonic/tsts";
 import type { RustExternalProjectBase } from "../../../policy/types/external-project-types.js";
 import type { RustProjectConstructorSignature, RustProjectDowncastRoute, RustProjectHeritageEdge, RustProjectMemberSlotCandidate, RustProjectMemberSlotRole, RustProjectTypeDefinition, RustProjectTypeIssue, RustProjectTypePolicy, RustProjectTypePolicyHost, RustProjectTypeRelationship } from "../../../policy/types/project-types.js";
-import type { TargetTypeRef } from "../../../policy/types/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function createRustProjectTypePolicy(
   host: RustProjectTypePolicyHost,

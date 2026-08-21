@@ -1,11 +1,11 @@
-import type { TargetTypeRef } from "../types/model.js";
-import type { RustArgumentMode, RustValueConversion } from "./model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustArgumentMode, RustValueConversion } from "../../target-model/operations/model.js";
 import type {
   RustAssignmentOperator,
   RustBinaryOperator,
   RustOperationSymbol,
   RustOperatorToken,
-} from "../../backend/model/syntax.js";
+} from "../../target-model/syntax/tokens.js";
 import {
   KindAmpersandToken,
   KindAmpersandAmpersandToken,

@@ -9,7 +9,7 @@ import { allocateMemberFieldName, planContractImplementation } from "./contracts
 import { allocateRustSyntheticTypeName } from "../../names/synthetic.js";
 import { rustCallableProtocol, rustSourceTypeCarrierValue } from "../../../../policy/types/target-types.js";
 import { rustFallibleFactKey, rustObjectLiteralMethodAdapterFactKey } from "../../../../analysis/facts/keys.js";
-import { rustLintAttributes } from "../../../rust-ast/lint-policy.js";
+import { rustLintAttributes } from "../../../target-ast/normalization/lint-policy.js";
 import { rustProjectInterfaceContracts } from "../../../../analysis/project-types/type-policy.js";
 import { rustProjectObjectIdentityField, rustProjectObjectStateField } from "../project-objects.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
@@ -18,7 +18,7 @@ import type {
   RustItem,
   RustStructField,
   RustType,
-} from "../../../rust-ast/nodes.js";
+} from "../../../target-ast/nodes.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustObjectLiteralAccessorImplementationPlan, RustObjectLiteralImplementationPlan, RustObjectLiteralMethodDispatchPlan, RustObjectLiteralMethodImplementationPlan, RustObjectLiteralMethodOverridePlan, RustRecordLiteralFact } from "./model.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
@@ -26,7 +26,7 @@ import {
   rustErrorBoundaryForDeclaration,
   rustErrorType,
 } from "../../program/plan-context.js";
-import { rustTypeEquals } from "../../../rust-ast/type-equality.js";
+import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js";
 import type { RustSyntheticNameState } from "../../names/synthetic.js";
 
 export function createImplementationPlan(
@@ -35,21 +35,21 @@ export function createImplementationPlan(
   context: RustPlanContext,
   names: RustSyntheticNameState,
 ): RustObjectLiteralImplementationPlan | undefined {
-  const definition = context.input.projectTypes.definitionForCarrier(fact.resultCarrier);
+  const definition = context.input.program.projectTypes.definitionForCarrier(fact.resultCarrier);
   const sourceValue = rustSourceTypeCarrierValue(fact.resultCarrier);
   const wrapperType = rustTypeFromCarrierInContext(fact.resultCarrier, context);
   if (definition?.kind !== "interface" || sourceValue === undefined || wrapperType === undefined) {
     return undefined;
   }
   const contracts = rustProjectInterfaceContracts(
-    context.input.projectTypes,
+    context.input.program.projectTypes,
     definition,
     fact.resultCarrier,
   );
   if (contracts === undefined) {
     return undefined;
   }
-  const adapterFact = context.input.facts.getFact(
+  const adapterFact = context.input.program.facts.getFact(
     expression,
     rustObjectLiteralMethodAdapterFactKey,
   );
@@ -74,10 +74,10 @@ export function createImplementationPlan(
     accessorRoles.get(field.storageIndex)?.has("get") !== true).map((field) => {
     const declaration = field.implementationDeclaration;
     const type = rustTypeFromCarrierInContext(field.carrier, context);
-    const owner = context.input.projectTypes.definitionContainingDeclaration(declaration);
+    const owner = context.input.program.projectTypes.definitionContainingDeclaration(declaration);
     const preferred = declaration === undefined || owner === undefined
       ? undefined
-      : context.input.projectTypes.fieldStorageName(owner, declaration);
+      : context.input.program.projectTypes.fieldStorageName(owner, declaration);
     const targetName = preferred === undefined
       ? undefined
       : allocateMemberFieldName(stateFieldNames, preferred);
@@ -102,7 +102,7 @@ export function createImplementationPlan(
       continue;
     }
     const valueType = rustTypeFromCarrierInContext(field.carrier, context);
-    const dispatch = context.input.projectFieldDispatch.planFor(
+    const dispatch = context.input.program.projectFieldDispatch.planFor(
       field.contractDeclarations[0]!,
     );
     if (valueType === undefined || field.contractDeclarations.length === 0 ||
@@ -163,7 +163,7 @@ export function createImplementationPlan(
     if (parameterTypes.some((type) => type === undefined) || resultType === undefined) {
       return undefined;
     }
-    const fallible = context.input.facts.getFact(
+    const fallible = context.input.program.facts.getFact(
       implementation.sourceCallable,
       rustFallibleFactKey,
     ) !== undefined;
@@ -221,8 +221,8 @@ export function createImplementationPlan(
     returnType: RustType | undefined,
     errorType: RustType | undefined,
   ): RustObjectLiteralMethodOverridePlan | undefined | false => {
-    const usage = context.input.projectMethodProperties.usageFor(contractMethod) ??
-      context.input.projectMethodProperties.usageFor(implementation.propertyIdentity);
+    const usage = context.input.program.projectMethodProperties.usageFor(contractMethod) ??
+      context.input.program.projectMethodProperties.usageFor(implementation.propertyIdentity);
     if (usage?.writable !== true) {
       return undefined;
     }
@@ -257,11 +257,11 @@ export function createImplementationPlan(
     return override;
   };
   for (const dispatch of adapterFact?.dispatches ?? []) {
-    const owner = context.input.projectTypes.definitionContainingDeclaration(dispatch.contractMethod);
+    const owner = context.input.program.projectTypes.definitionContainingDeclaration(dispatch.contractMethod);
     const ownerRelation = owner === undefined
       ? undefined
-      : context.input.projectTypes.relationship(fact.resultCarrier, owner);
-    const variant = context.input.projectMethodDispatch
+      : context.input.program.projectTypes.relationship(fact.resultCarrier, owner);
+    const variant = context.input.program.projectMethodDispatch
       .variantsForMember(dispatch.contractMethod)
       .find((candidate) => candidate.virtualSlot === dispatch.virtualSlot);
     const implementation = implementations[dispatch.implementationIndex];
@@ -349,11 +349,11 @@ export function createImplementationPlan(
     const callableType = source === undefined
       ? undefined
       : rustTypeFromCarrierInContext(source.callableCarrier, context);
-    const owner = context.input.projectTypes.definitionContainingDeclaration(contractMethod);
+    const owner = context.input.program.projectTypes.definitionContainingDeclaration(contractMethod);
     const ownerRelation = owner === undefined
       ? undefined
-      : context.input.projectTypes.relationship(fact.resultCarrier, owner);
-    const variants = context.input.projectMethodDispatch.variantsForMember(contractMethod);
+      : context.input.program.projectTypes.relationship(fact.resultCarrier, owner);
+    const variants = context.input.program.projectMethodDispatch.variantsForMember(contractMethod);
     const variant = variants.length === 1 ? variants[0] : undefined;
     const shape = owner === undefined || ownerRelation?.kind !== "related" || variant === undefined
       ? undefined
@@ -415,8 +415,8 @@ export function createImplementationPlan(
   }
   const requiredMethods = contracts.flatMap((contract) =>
     projectOwnMethods(contract.definition, context)
-      .filter((method) => !context.input.ast.hasModifierKind(method, "static"))
-      .flatMap((method) => context.input.projectMethodDispatch.variantsForMember(method)
+      .filter((method) => !context.input.program.source.ast.hasModifierKind(method, "static"))
+      .flatMap((method) => context.input.program.projectMethodDispatch.variantsForMember(method)
         .map((variant) => ({ method, variant }))));
   if (requiredMethods.some((required) => !methods.some((method) =>
     method.contractMethod === required.method &&

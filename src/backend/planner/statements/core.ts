@@ -28,7 +28,7 @@ import { planForInStatement, planForOfStatement } from "./iteration.js";
 import { planRustReturnExit } from "./completion-exits.js";
 import { planThrowStatement, planTryStatement } from "./errors.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustBlock, RustStmt } from "../../rust-ast/nodes.js";
+import type { RustBlock, RustStmt } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
 
@@ -51,14 +51,14 @@ export function planStatement(node: Node, context: RustPlanContext): readonly Ru
 }
 
 function planStatementInner(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
-  const { ast } = context.input;
+  const { ast } = context.input.program.source;
   const kind = ast.kindName(node);
   switch (kind) {
     case KindVariableStatement: {
       return planVariableStatement(node, context);
     }
     case KindReturnStatement: {
-      const expression = Node_Expression(context.input.ast, node);
+      const expression = Node_Expression(context.input.program.source.ast, node);
       const planned = expression === undefined ? undefined : planExpression(expression, context);
       if (expression !== undefined && planned === undefined) {
         return undefined;
@@ -125,7 +125,7 @@ function planStatementInner(node: Node, context: RustPlanContext): readonly Rust
 }
 
 export function planBlockLike(node: Node, context: RustPlanContext): RustBlock | undefined {
-  const { ast } = context.input;
+  const { ast } = context.input.program.source;
   const children = ast.kindName(node) === KindBlock ? ast.statements(node) : [node];
   return planStatementSequence(children, node, context);
 }

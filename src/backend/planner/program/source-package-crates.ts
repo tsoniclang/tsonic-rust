@@ -1,13 +1,13 @@
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustSourceFileOutputIdentity } from "../../../analysis/program/source-output-identities.js";
-import type { CargoDependency, CargoManifestPlan } from "../../project-model/cargo.js";
-import type { RustPlannedArtifact } from "../../artifacts/model.js";
+import type { RustSourceFileOutputIdentity } from "../names/source-output-identities.js";
+import type { CargoDependency, CargoManifestPlan } from "../../artifact-model/project/cargo.js";
+import type { RustPlannedArtifact } from "../../artifact-model/output.js";
 import {
   createRustSourceFile,
   type RustItem,
   type RustSourceFileModel,
-} from "../../rust-ast/nodes.js";
-import { rustPublicSignatureTypeNames } from "../../rust-ast/source-style.js";
+} from "../../target-ast/nodes.js";
+import { rustPublicSignatureTypeNames } from "../../target-ast/normalization/source-style.js";
 import type { RustPlanningContext } from "../context.js";
 import { planRustStructuralShapeModule } from "../objects/structural-shapes.js";
 import { planRustProgramErrorModule } from "./errors.js";
@@ -189,7 +189,7 @@ export function planRustSourcePackageCrateContent(
 }
 
 export function materializeRustSourcePackageCrateArtifacts(
-  input: Pick<RustPlanningContext, "ast">,
+  input: RustPlanningContext,
   plan: RustSourcePackageCrateContentPlan,
   identities: ReadonlyMap<string, RustSourceFileOutputIdentity>,
   facadePlan: RustSourcePackageFacadePlan,
@@ -245,7 +245,7 @@ export function materializeRustSourcePackageCrateArtifacts(
   );
   for (const source of [...plan.sources].sort((left, right) =>
     compareNames(left.moduleName, right.moduleName))) {
-    const identity = identities.get(input.ast.getFileName(source.sourceFile));
+    const identity = identities.get(input.program.source.ast.getFileName(source.sourceFile));
     if (identity === undefined || identity.componentId !== plan.component.componentId) {
       diagnostics.push(crateDiagnostic(
         "RUST_SOURCE_OUTPUT_IDENTITY_MISSING",

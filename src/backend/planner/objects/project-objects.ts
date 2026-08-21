@@ -1,7 +1,7 @@
-import type { TargetTypeRef } from "../../../policy/types/model.js";
-import type { RustAssignmentOperator } from "../../model/syntax.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustAssignmentOperator } from "../../../target-model/syntax/tokens.js";
 import { isRustCopyCarrier } from "../../../policy/types/target-types.js";
-import type { RustExpr, RustType } from "../../rust-ast/nodes.js";
+import type { RustExpr, RustType } from "../../target-ast/nodes.js";
 import type { RustObjectRepresentation } from "../../../analysis/project-types/object-representation.js";
 import type { RustPlannedProjectFieldDispatchRole } from "./project-field-dispatch.js";
 

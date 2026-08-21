@@ -1,13 +1,7 @@
-import type {
-  AstReader,
-  Node,
-  SourceFile,
-} from "@tsonic/tsts";
-import type {
-  SourceFileSemantics,
-  TargetSourceProgram,
-} from "@tsonic/target-api/source";
-import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
+import type { Node, SourceFile } from "@tsonic/tsts";
+import type { TargetCompileInput } from "@tsonic/target-api";
+import type { TargetSourceProgram } from "@tsonic/target-api/source";
+import type { TargetStageResult } from "@tsonic/target-api/artifacts";
 import type { RustNamePlan } from "../../policy/names/model.js";
 import type { RustPlanQueries } from "../../policy/model/selections.js";
 import type { RustProviderSemantics } from "../../providers/packages/model.js";
@@ -20,14 +14,23 @@ import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.j
 import type { RustSafetyApplicationFactIndex } from "../safety/application-index.js";
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
 import type { RustModuleInitializationPlan } from "./module-initialization-facts.js";
+import type { RustTargetConfiguration } from "../../target-model/configuration/model.js";
+
+export interface RustTargetAnalysisRequest {
+  readonly input: TargetCompileInput;
+  readonly configuration: RustTargetConfiguration;
+  readonly providerSemantics: RustProviderSemantics;
+  readonly jsEnabled: boolean;
+  readonly rootPublishesLibrary: boolean;
+}
 
 export interface RustTargetAnalysisQueries {
   getEnumMemberConstant(node: Node): { readonly value: string | number } | undefined;
 }
 
 export interface RustTargetProgram {
+  readonly configuration: RustTargetConfiguration;
   readonly source: TargetSourceProgram;
-  readonly ast: AstReader;
   readonly sourceFiles: readonly SourceFile[];
   readonly facts: RustPlanQueries;
   readonly projectTypes: RustProjectTypePolicy;
@@ -42,10 +45,6 @@ export interface RustTargetProgram {
   readonly moduleInitialization: RustModuleInitializationPlan;
   readonly names: RustNamePlan;
   readonly analysis: RustTargetAnalysisQueries;
-  semantics(sourceFile: SourceFile): SourceFileSemantics;
-  semanticsFor(node: Node): SourceFileSemantics;
 }
 
-export type AnalyzeRustTargetProgramResult =
-  | { readonly kind: "resolved"; readonly program: RustTargetProgram }
-  | { readonly kind: "rejected"; readonly diagnostics: readonly TargetDiagnostic[] };
+export type AnalyzeRustTargetProgramResult = TargetStageResult<RustTargetProgram>;

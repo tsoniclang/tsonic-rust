@@ -1,4 +1,4 @@
-import type { RustValueConversion } from "../operations/model.js";
+import type { RustValueConversion } from "../../target-model/operations/model.js";
 import { rustNumericPromotionKind } from "../operations/numeric-promotion-model.js";
 import {
   isRustNeverCarrier,
@@ -8,7 +8,7 @@ import {
   rustSourceUnionCarrierValue,
   rustStringTargetType,
 } from "../types/target-types.js";
-import type { TargetTypeRef } from "../types/model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../types/equality.js";
 import {
   rustBoolToJsValueConversion,
@@ -22,7 +22,7 @@ import {
   rustUint32ToInt32ValueConversion,
   rustUint64ToFloat64ValueConversion,
   rustUint8ToInt32ValueConversion,
-} from "./model.js";
+} from "../../target-model/conversions/model.js";
 
 const boolCarrier = rustSourcePrimitiveTargetType("bool");
 const int32Carrier = rustSourcePrimitiveTargetType("int32");

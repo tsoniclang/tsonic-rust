@@ -5,9 +5,9 @@ import {
   Node_Expression,
 } from "@tsonic/target-api/source";
 import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
-import type { TargetTypeRef } from "../../../policy/types/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";
-import type { RustExpr } from "../../rust-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/nodes.js";
 import { unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import type {
@@ -38,7 +38,7 @@ export function prepareRustPreconstructionNode(
   context: RustPlanContext,
   resolveSelectedDeclaration?: (declaration: Node) => Node | undefined,
 ): RustPlanContext | undefined {
-  const { ast } = context.input;
+  const { ast } = context.input.program.source;
   const overrides = new Map(context.expressionOverrides ?? []);
   let failure: { readonly node: Node; readonly message: string } | undefined;
 
@@ -51,8 +51,8 @@ export function prepareRustPreconstructionNode(
       const receiver = Node_Expression(ast, node);
       const receiverKind = receiver === undefined ? "" : ast.kindName(receiver);
       if (receiverKind === "KindThisExpression" || receiverKind === "KindThisKeyword") {
-        const fact = context.input.facts.getFact(node, rustTargetOperationFactKey);
-        const selected = context.input.facts.getSelectedTargetProperty(node);
+        const fact = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
+        const selected = context.input.program.facts.getSelectedTargetProperty(node);
         const selectedDeclaration = asSourceNode(
           selected?.provenance?.sourceSelectedDeclaration,
           ast,

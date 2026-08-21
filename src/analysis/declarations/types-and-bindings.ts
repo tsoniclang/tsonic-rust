@@ -29,7 +29,7 @@ import { setCarrierFact, setRustOperationFact } from "../operations/project-call
 import { sourceTypeCarrierForDeclaration } from "../operations/inputs.js";
 import type { Node, SourceFile, Type } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
-import type { TargetTypeRef } from "../../policy/types/model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
   const variants = walk.sourceTypes.enumVariantsForDeclaration(declaration);
@@ -53,12 +53,11 @@ export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
   const typeName = nameNode === undefined ? "" : ast.text(nameNode);
   const fileName = ast.getFileName(ast.getSourceFile(declaration));
   const semantics = walk.context.semanticsFor(declaration);
-  const symbol = nameNode === undefined ? undefined : semantics.getSymbolAtLocation(nameNode);
-  const sourceType = symbol === undefined ? undefined : semantics.getDeclaredTypeOfSymbol(symbol);
+  const sourceType = semantics.declarations.declaredType(declaration);
   if (sourceType === undefined || typeName.length === 0 || fileName.length === 0) {
     return;
   }
-  if (!semantics.isUnion(sourceType)) {
+  if (!semantics.types.isUnion(sourceType)) {
     const typeNode = Node_Type(ast, declaration);
     const carrier = resolveRustTargetTypeRef(
       typeNode ?? sourceType,
@@ -93,7 +92,7 @@ export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
     }, [{ message: "rust representation-identical union declaration" }]);
     return;
   }
-  const sourceMembers = semantics.getUnionOrIntersectionTypes(sourceType);
+  const sourceMembers = semantics.types.unionOrIntersectionTypes(sourceType);
   if (!isDenseDataArray(sourceMembers) || sourceMembers.length < 2 ||
     sourceMembers.some((member) => member === undefined)) {
     return;
@@ -149,8 +148,8 @@ export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
   );
   const variantFieldDeclarations = new Set(finalizedVariants.flatMap((variant) =>
     variant.shape?.fields.flatMap((field) => field.declarations) ?? []));
-  const selectedProperties = semantics.getPropertyInfos(sourceType).map((property) => {
-    const declarations = semantics.getSymbolDeclarations(property.symbol);
+  const selectedProperties = semantics.types.propertyInfos(sourceType).map((property) => {
+    const declarations = semantics.declarations.symbolDeclarations(property.symbol);
     if (!isDenseDataArray(declarations) || declarations.length === 0 ||
       declarations.some((selected) => selected === undefined)) {
       return undefined;

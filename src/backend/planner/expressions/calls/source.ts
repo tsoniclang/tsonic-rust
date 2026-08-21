@@ -34,7 +34,7 @@ import {
 import { rustSourceCallEffectsFactKey } from "../../../../analysis/facts/keys.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr, RustType } from "../../../rust-ast/nodes.js";
+import type { RustExpr, RustType } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
 
@@ -67,7 +67,7 @@ export function planSelectedSourceCall(
   fact: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  const selected = context.input.facts.getSelectedTargetCall(node);
+  const selected = context.input.program.facts.getSelectedTargetCall(node);
   const selectedMatches = selected !== undefined && sourceCallSelectedMemberMatches(fact, selected);
   if (!selectedMatches) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -80,7 +80,7 @@ export function planSelectedSourceCall(
   if (!applyRustSourceCallableRequirements(node, selected, fact, context)) {
     return undefined;
   }
-  const rawArgumentNodes = context.input.ast.arguments(node);
+  const rawArgumentNodes = context.input.program.source.ast.arguments(node);
   if (!isDenseDataArray(rawArgumentNodes) || rawArgumentNodes.some((argument) => argument === undefined)) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -135,11 +135,11 @@ export function planSelectedSourceCall(
   }
   const selectedDeclaration = selected.sourceDeclaration;
   const requiresCallableSpecialization = selectedDeclaration !== undefined &&
-    context.input.sourceCallableSpecializations.requiresSpecialization(
+    context.input.program.sourceCallableSpecializations.requiresSpecialization(
       selectedDeclaration,
     );
   const callableSpecialization = requiresCallableSpecialization && selectedDeclaration !== undefined
-    ? context.input.sourceCallableSpecializations.variantForCall(
+    ? context.input.program.sourceCallableSpecializations.variantForCall(
         selectedDeclaration,
         targetTypeArgumentCarriers,
       )
@@ -180,14 +180,14 @@ export function planSelectedSourceCall(
       if (!isValidRustIdentifier(targetName)) {
         break;
       }
-      const receiverNode = callee !== undefined && context.input.ast.kindName(callee) === KindPropertyAccessExpression
-        ? Node_Expression(context.input.ast, callee)
+      const receiverNode = callee !== undefined && context.input.program.source.ast.kindName(callee) === KindPropertyAccessExpression
+        ? Node_Expression(context.input.program.source.ast, callee)
         : undefined;
       if (fact.target.dispatch !== undefined) {
         const dispatchDeclaration = selected.sourceDeclaration;
         const dispatchVariant = dispatchDeclaration === undefined
           ? undefined
-          : context.input.projectMethodDispatch.variantForMember(
+          : context.input.program.projectMethodDispatch.variantForMember(
               dispatchDeclaration,
               targetTypeArgumentCarriers,
             );
@@ -318,8 +318,8 @@ export function planSelectedSourceCall(
     }
     case "structural-method": {
       const receiverNode = callee !== undefined &&
-          context.input.ast.kindName(callee) === KindPropertyAccessExpression
-        ? Node_Expression(context.input.ast, callee)
+          context.input.program.source.ast.kindName(callee) === KindPropertyAccessExpression
+        ? Node_Expression(context.input.program.source.ast, callee)
         : undefined;
       const receiver = receiverNode === undefined
         ? undefined
@@ -354,7 +354,7 @@ export function planSelectedSourceCall(
     ));
     return undefined;
   }
-  const effects = context.input.facts.getFact(node, rustSourceCallEffectsFactKey);
+  const effects = context.input.program.facts.getFact(node, rustSourceCallEffectsFactKey);
   if (effects === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
