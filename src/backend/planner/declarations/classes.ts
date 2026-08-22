@@ -607,7 +607,12 @@ function planConstructor(
       ...applyFallibleShape(
         { statements },
         fallible
-          ? { fallible: true, hasReturnValue: true, errorType: rustErrorType(errorBoundary!) }
+          ? {
+              fallible: true,
+              hasReturnValue: true,
+              errorType: rustErrorType(errorBoundary!),
+              inferErrorTypeFromReturnType: true,
+            }
           : { fallible: false, hasReturnValue: true },
       ),
     },

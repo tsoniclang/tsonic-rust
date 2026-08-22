@@ -5,6 +5,7 @@ import {
   isRustFinalizedArrayInput,
   isRustFinalizedSliceInput,
   isRustFinalizedTaggedArrayInput,
+  rustFinalizedTargetInputMayMutateSource,
 } from "./conversions.js";
 import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
 import { isRustFallibleErrorBoundary } from "../../../target-model/operations/error-boundary.js";
@@ -36,6 +37,7 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
           !isRustTargetTypeRef(carrier) || rustTargetTypeParameterNames(carrier).length !== 0) ||
         !rustProviderOperationFormAcceptsTargetTypeArguments(options.form))) ||
     typeof options.isAsync !== "boolean" || typeof options.isFallible !== "boolean" ||
+    (options.evaluation !== undefined && options.evaluation !== "pure") ||
     (options.isFallible && !isRustFallibleErrorBoundary(options.errorBoundary)) ||
     (!options.isFallible && options.errorBoundary !== undefined) ||
     (options.errorBoundary === "provider-native"
@@ -72,6 +74,16 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
     options.sourceArgumentCarriers.length,
   );
   if (mapping === undefined) {
+    return undefined;
+  }
+  if (options.evaluation === "pure" && (
+    options.operationKind === "constructor" ||
+    options.operationKind === "property-set" ||
+    options.operationKind === "index-set" ||
+    (mapping.targetReceiver.kind === "input" &&
+      rustFinalizedTargetInputMayMutateSource(mapping.targetReceiver.input)) ||
+    mapping.targetArguments.some(rustFinalizedTargetInputMayMutateSource)
+  )) {
     return undefined;
   }
   const sourceArguments = finalizeSourceArguments(
@@ -119,6 +131,7 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
     targetTypeArguments: options.targetTypeArguments ?? [],
     result,
     effects: {
+      evaluation: options.evaluation === "pure" ? "pure" : "observable",
       invocation: options.isFallible && !options.isAsync ? "fallible" : "infallible",
       awaiting: options.isAsync
         ? options.isFallible ? "fallible" : "infallible"

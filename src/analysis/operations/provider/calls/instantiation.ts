@@ -788,6 +788,7 @@ export function finalizeProviderOperationFact(
     ...(template.resultConversion === undefined ? {} : { resultConversion: template.resultConversion }),
     isAsync: template.isAsync,
     isFallible: template.isFallible,
+    ...(template.evaluation === undefined ? {} : { evaluation: template.evaluation }),
     ...(template.errorBoundary === "none" ? {} : { errorBoundary: template.errorBoundary }),
     ...(template.errorCarrier === undefined ? {} : { errorCarrier: template.errorCarrier }),
     isUnsafe: template.isUnsafe,

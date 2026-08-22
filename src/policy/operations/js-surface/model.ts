@@ -6,6 +6,7 @@ import type {
   RustValueConversion,
 } from "../../../target-model/operations/model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { rustProviderOperationFormDeclaresWritableInput } from "../forms.js";
 
 export interface JsOperationRequest {
   readonly ownerName: string;
@@ -99,6 +100,7 @@ export interface JsOperationRowData {
         readonly target: RustProviderOperationForm;
         readonly discardedTarget?: RustProviderOperationForm;
         readonly resultConversion?: RustValueConversion;
+        readonly evaluation?: "pure";
         readonly result: JsCarrierRef;
         readonly sourceResult?: JsCarrierRef;
         readonly sourceAbsence?: "undefined" | "null";
@@ -116,6 +118,14 @@ export function defineJsOperationRows(rows: readonly JsOperationRowData[]): read
   const identities = new Set<string>();
   const variantsByOperation = new Map<string, string[]>();
   for (const row of rows) {
+    if (row.shape.op === "operation" && row.shape.evaluation === "pure" &&
+      (row.shape.operationKind === "constructor" ||
+        row.callback !== undefined ||
+        rustProviderOperationFormDeclaresWritableInput(row.shape.target))) {
+      throw new Error(
+        `Pure JavaScript operation row '${row.owner}.${row.member}' cannot construct identity, invoke a source callback, or declare writable source inputs.`,
+      );
+    }
     const operation = `${row.owner}|${row.member}|${row.operationKind}|${row.lane}`;
     const variant = row.variant ?? "";
     const identity = `${operation}|${variant}`;

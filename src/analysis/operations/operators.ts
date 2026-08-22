@@ -492,14 +492,14 @@ export function resolvePostCheckBinaryCarrier(
       }
     }
   }
-  const inPlaceStringAppendDeclaration = fact?.kind === "operator-token" &&
+  const inPlaceStringAppend = fact?.kind === "operator-token" &&
       fact.operator === "+=" && isRustStringCarrier(fact.resultCarrier)
     ? inPlaceStringAppendDeclarationFor(walk, leftNode, operands.rightNode)
     : undefined;
-  if (inPlaceStringAppendDeclaration !== undefined && fact?.kind === "operator-token") {
-    fact = { ...fact, writeStrategy: "in-place-string-append" };
+  if (inPlaceStringAppend !== undefined && fact?.kind === "operator-token") {
+    fact = { ...fact, writeStrategy: inPlaceStringAppend.writeStrategy };
     walk.context.facts.set(
-      inPlaceStringAppendDeclaration,
+      inPlaceStringAppend.declaration,
       rustMutatedBindingFactKey,
       { mutated: true },
       [{ message: "rust in-place string append requires mutable local storage" }],
@@ -553,7 +553,12 @@ function inPlaceStringAppendDeclarationFor(
   walk: RustFactWalk,
   target: Node,
   value: Node,
-): Node | undefined {
+): {
+  readonly declaration: Node;
+  readonly writeStrategy:
+    | "in-place-string-append-parts"
+    | "in-place-string-append-value";
+} | undefined {
   if (walk.context.ast.kindName(target) !== KindIdentifier) {
     return undefined;
   }
@@ -568,9 +573,13 @@ function inPlaceStringAppendDeclarationFor(
     return undefined;
   }
   const effects = walk.context.source.navigation.expressionEffects(value);
-  return !effects.invokes && !effects.mutates && !effects.suspends && !effects.mayThrow
-    ? reference.declaration
-    : undefined;
+  return {
+    declaration: reference.declaration,
+    writeStrategy: !effects.invokes && !effects.mutates &&
+        !effects.suspends && !effects.mayThrow
+      ? "in-place-string-append-parts"
+      : "in-place-string-append-value",
+  };
 }
 
 function selectedOptionNullishRelationship(

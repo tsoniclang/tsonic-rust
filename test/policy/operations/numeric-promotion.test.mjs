@@ -4,6 +4,7 @@ import {
   rustNumericPromotionConversion,
 } from "../../../dist/policy/operations/numeric-promotion.js";
 import {
+  rustIntegerKindIsExactlyRepresentableAsFloat64,
   rustNumericPromotionKind,
 } from "../../../dist/target-model/conversions/numeric-promotion.js";
 import {
@@ -95,6 +96,24 @@ test("wide and pointer-width primitives extend one symmetric closed promotion po
         `symmetry for ${kind} with ${other}`,
       );
     }
+  }
+});
+
+test("float64 integer-domain proofs admit only fully exact primitive domains", () => {
+  for (const kind of ["int8", "uint8", "int16", "uint16", "int32", "uint32"]) {
+    assert.equal(rustIntegerKindIsExactlyRepresentableAsFloat64(kind), true, kind);
+  }
+  for (const kind of [
+    "int64",
+    "uint64",
+    "int128",
+    "uint128",
+    "native-int",
+    "native-uint",
+    "float32",
+    "float64",
+  ]) {
+    assert.equal(rustIntegerKindIsExactlyRepresentableAsFloat64(kind), false, kind);
   }
 });
 

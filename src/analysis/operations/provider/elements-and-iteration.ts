@@ -196,6 +196,7 @@ export function selectRustCheckedElementAccess(
       target: { form: "index", indexConversion: rustInt32ToUsizeValueConversion },
       resultCarrier: nativeArrayReceiver.element,
       parameterCarriers: [rustSourcePrimitiveTargetType("int32")],
+      evaluation: "pure",
       isAsync: false,
       isFallible: false,
       errorBoundary: "none",

@@ -21,6 +21,50 @@ export function rustProviderOperationFormAcceptsTargetTypeArguments(
     form.form === "arg-receiver-method" || form.form === "trait-call";
 }
 
+export function rustProviderOperationFormDeclaresWritableInput(
+  form: RustProviderOperationForm,
+): boolean {
+  switch (form.form) {
+    case "call":
+    case "arg-receiver-method":
+      return form.argModes?.includes("mut-ref") === true;
+    case "call-c-variadic":
+      return form.fixedArgumentModes.includes("mut-ref");
+    case "free-call-str-slice":
+      return form.receiverMode === "mut-ref";
+    case "call-value-slice":
+    case "call-value-array":
+      return form.leadingArguments.some((argument) => argument.mode === "mut-ref");
+    case "receiver-value-array":
+      return form.receiverMode === "mut-ref" ||
+        form.leadingArguments.some((argument) => argument.mode === "mut-ref");
+    case "receiver-tagged-array":
+      return form.receiverMode === "mut-ref" ||
+        form.leadingArguments.some((argument) => argument.mode === "mut-ref") ||
+        form.alternatives.some((alternative) => alternative.mode === "mut-ref");
+    case "free-call":
+      return form.receiverMode === "mut-ref" ||
+        form.argModes?.includes("mut-ref") === true;
+    case "trait-call":
+      return form.receiverMode === "mut-ref" ||
+        form.argModes?.includes("mut-ref") === true;
+    case "receiver-method":
+      return form.mutatesReceiver === true ||
+        form.argModes?.includes("mut-ref") === true;
+    case "marker":
+    case "call-str-slice":
+    case "path":
+    case "static":
+    case "method":
+    case "arg-method":
+    case "field":
+    case "index":
+    case "binary-operator":
+    case "trait-associated-value":
+      return false;
+  }
+}
+
 export function rustProviderOperationFormContractViolation(
   operationKind: RustFinalizedOperationKind,
   form: RustProviderOperationForm,

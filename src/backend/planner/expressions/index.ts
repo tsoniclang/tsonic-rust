@@ -1,8 +1,13 @@
-export { planExpression, planRustProjectUpcast } from "./entry.js";
+export {
+  planExpression,
+  planExpressionBeforeValueProjections,
+  planRustProjectUpcast,
+} from "./entry.js";
 export {
   expressionCarrier,
   negateRustPlannedBooleanExpression,
   planNumericLiteral,
+  planNumericLiteralWithCarrier,
   providerSelectedCallMatches,
 } from "./fundamentals.js";
 export { planRustOperatorCallExpression } from "./binary.js";

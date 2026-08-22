@@ -50,6 +50,9 @@ export type RustAssignmentOperator =
 export type RustOperatorToken = RustBinaryOperator | RustAssignmentOperator | "!";
 export type RustOperationSymbol = RustOperatorToken | ">>>" | ">>>=";
 
+export const rustStringPushMethod = "push";
+export const rustStringPushStrMethod = "push_str";
+
 export function isRustBinaryOperator(value: RustOperationSymbol): value is RustBinaryOperator {
   return value === "+" || value === "-" || value === "*" || value === "/" || value === "%" ||
     value === "&" || value === "|" || value === "^" || value === "<<" || value === ">>" ||

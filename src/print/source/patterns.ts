@@ -156,3 +156,7 @@ export function escapeRustString(value: string): string {
   }
   return escaped;
 }
+
+export function escapeRustChar(value: string): string {
+  return value === "'" ? "\\'" : escapeRustString(value);
+}

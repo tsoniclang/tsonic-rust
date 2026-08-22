@@ -19,6 +19,7 @@ export type RustFallibleShapeOptions =
   | (RustFallibleBoundary & {
       readonly fallible: true;
       readonly hasReturnValue: boolean;
+      readonly inferErrorTypeFromReturnType: boolean;
     });
 
 export function rustExpressionUsesTryInCurrentRegion(expression: RustExpr): boolean {
@@ -100,6 +101,7 @@ export function rustExpressionUsesTryInCurrentRegion(expression: RustExpr): bool
     case "float-literal":
     case "bool-literal":
     case "none":
+    case "char-literal":
     case "string-literal":
     case "str-literal":
     case "path":
@@ -112,6 +114,14 @@ export function rustExpressionUsesTryInCurrentRegion(expression: RustExpr): bool
 export function applyRustFallibleResultExpression(
   expression: RustExpr,
   boundary: RustFallibleBoundary,
+): RustExpr {
+  return applyRustResultExpression(expression, boundary, false);
+}
+
+function applyRustResultExpression(
+  expression: RustExpr,
+  boundary: RustFallibleBoundary,
+  inferErrorTypeFromReturnType: boolean,
 ): RustExpr {
   if (expression.kind === "bottom") {
     return expression;
@@ -135,7 +145,9 @@ export function applyRustFallibleResultExpression(
   return {
     kind: "call",
     path: "Ok",
-    typeArguments: [{ kind: "infer" }, boundary.errorType],
+    ...(inferErrorTypeFromReturnType
+      ? {}
+      : { typeArguments: [{ kind: "infer" as const }, boundary.errorType] }),
     args: [expression],
   };
 }
@@ -160,30 +172,28 @@ export function applyFallibleShape(
   if (!options.fallible) {
     return body;
   }
+  const result = (expression: RustExpr): RustExpr => applyRustResultExpression(
+    expression,
+    options,
+    options.inferErrorTypeFromReturnType,
+  );
   const wrap = (statement: RustStmt): RustStmt => {
     if (statement.kind === "return" && statement.expr !== undefined) {
       return {
         kind: "return",
-        expr: applyRustFallibleResultExpression(statement.expr, {
-          errorType: options.errorType,
-        }),
+        expr: result(statement.expr),
       };
     }
     if (statement.kind === "return") {
       return {
         kind: "return",
-        expr: applyRustFallibleResultExpression(
-          { kind: "path", path: "()" },
-          options,
-        ),
+        expr: result({ kind: "path", path: "()" }),
       };
     }
     if (statement.kind === "tail") {
       return {
         kind: "tail",
-        expr: applyRustFallibleResultExpression(statement.expr, {
-          errorType: options.errorType,
-        }),
+        expr: result(statement.expr),
       };
     }
     if (statement.kind === "if") {
@@ -209,10 +219,7 @@ export function applyFallibleShape(
   if (!options.hasReturnValue && !rustBlockTerminates({ statements: wrapped })) {
     wrapped.push({
       kind: "tail",
-      expr: applyRustFallibleResultExpression(
-        { kind: "path", path: "()" },
-        options,
-      ),
+      expr: result({ kind: "path", path: "()" }),
     });
   }
   return { ...body, statements: wrapped };

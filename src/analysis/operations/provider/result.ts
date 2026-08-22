@@ -288,6 +288,7 @@ export function providerOperationTemplate<
     ...(row.resultConversion === undefined ? {} : { resultConversion: row.resultConversion }),
     isAsync: row.isAsync === true,
     isFallible: row.isFallible === true,
+    ...(row.evaluation === undefined ? {} : { evaluation: row.evaluation }),
     errorBoundary: row.isFallible === true ? row.errorBoundary : "none",
     ...(row.errorCarrier === undefined ? {} : { errorCarrier: row.errorCarrier }),
     isUnsafe: row.isUnsafe === true,

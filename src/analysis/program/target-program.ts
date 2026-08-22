@@ -30,6 +30,9 @@ import {
 import {
   analyzeRustSourcePackageComponents,
 } from "./source-package-components.js";
+import {
+  analyzeRustCountedLoopRepresentations,
+} from "../control-flow/counted-loop-representations.js";
 
 export function analyzeRustTargetProgram(
   request: RustTargetAnalysisRequest,
@@ -126,6 +129,12 @@ export function analyzeRustTargetProgram(
     ),
     sourcePackageFacades: sourcePackageFacades.plan,
     sourcePackageComponents: sourcePackageComponents.plan,
+    countedLoops: analyzeRustCountedLoopRepresentations({
+      ast: context.ast,
+      sourceFiles: context.sourceFiles,
+      navigation: context.source.navigation,
+      facts,
+    }),
   });
   return resolvedTargetStage(program);
 }

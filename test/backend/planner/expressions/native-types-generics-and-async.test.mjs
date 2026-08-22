@@ -664,7 +664,8 @@ export function caller(flag: boolean): int32 {
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn risky\(flag: bool\) -> Result<i32, rt::TsonicError> \{/u);
   assert.match(text, /return Err\(rt::TsonicError::from\(rt::JsError::error\(/u);
-  assert.match(text, /Ok::<_, rt::TsonicError>\(7\)/u);
+  assert.match(text, /Ok\(7\)/u);
+  assert.doesNotMatch(text, /Ok::<_, rt::TsonicError>\(7\)/u);
   assert.match(text, /let try_body: rt::TsonicResult<rt::Completion<i32>> = rt::completion_region\(\|\| \{/u);
   assert.match(text, /outcome = risky\(flag\)\?;/u);
   assert.match(text, /let try_flow: rt::Completion<i32> = match try_body \{/u);

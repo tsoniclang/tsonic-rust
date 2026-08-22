@@ -63,7 +63,8 @@ test("value-returning fallible bodies never synthesize an invalid Ok unit", () =
   assert.deepEqual(applyFallibleShape(incomplete, {
     fallible: true,
     hasReturnValue: true,
-    errorDomain: "runtime",
+    errorType: { kind: "named", path: "rt::TsonicError" },
+    inferErrorTypeFromReturnType: true,
   }), incomplete);
 });
 

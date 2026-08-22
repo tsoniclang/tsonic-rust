@@ -43,6 +43,12 @@ export function rustNumericPromotionKind(
     : undefined;
 }
 
+export function rustIntegerKindIsExactlyRepresentableAsFloat64(
+  kind: SourcePrimitiveKind,
+): boolean {
+  return float64ExactIntegerKinds.has(kind);
+}
+
 const numericKinds: ReadonlySet<SourcePrimitiveKind> = new Set([
   "int8",
   "uint8",
@@ -69,6 +75,14 @@ const unsignedKinds: ReadonlySet<SourcePrimitiveKind> = new Set([
   "uint128",
 ]);
 const smallIntegerKinds: ReadonlySet<SourcePrimitiveKind> = new Set([
+  "int8",
+  "uint8",
+  "int16",
+  "uint16",
+  "int32",
+  "uint32",
+]);
+const float64ExactIntegerKinds: ReadonlySet<SourcePrimitiveKind> = new Set([
   "int8",
   "uint8",
   "int16",

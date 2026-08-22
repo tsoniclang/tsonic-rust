@@ -1,6 +1,10 @@
 import { asRecord, requireExactKeys, requireRustIdentifier, requireRustPath, validateCarrier, validateValueConversion } from "./carriers.js";
 import { isRustFallibleErrorBoundary } from "../../../target-model/operations/error-boundary.js";
-import { rustProviderOperationFormAcceptsTargetTypeArguments, rustProviderOperationFormContractViolation } from "../../../policy/operations/forms.js";
+import {
+  rustProviderOperationFormAcceptsTargetTypeArguments,
+  rustProviderOperationFormContractViolation,
+  rustProviderOperationFormDeclaresWritableInput,
+} from "../../../policy/operations/forms.js";
 import { rustTargetTypeParameterNames, isRustUnitCarrier } from "../../../target-model/types/index.js";
 import { validateOperationForm } from "./forms.js";
 import type { ExportRecord, Fail, MemberRecord, SignatureRecord } from "./model.js";
@@ -20,7 +24,7 @@ export function validateOperationRows(
   for (const row of definition.operations) {
     requireExactKeys(asRecord(row), [
       "exportId", "memberId", "signatureId", "operationKind", "target", "resultCarrier",
-      "parameterCarriers", "receiverCarrier", "typeParameters", "typeRequirements", "targetTypeArguments", "resultConversion", "isAsync", "isFallible", "errorBoundary", "errorCarrier", "isUnsafe", "immediateCallback",
+      "parameterCarriers", "receiverCarrier", "typeParameters", "typeRequirements", "targetTypeArguments", "resultConversion", "evaluation", "isAsync", "isFallible", "errorBoundary", "errorCarrier", "isUnsafe", "immediateCallback",
     ], `operation row '${String((row as { readonly memberId?: unknown; readonly exportId?: unknown }).memberId ?? row.exportId)}'`, fail);
     const label = row.memberId ?? row.exportId;
     if (row.operationKind !== "method" && row.operationKind !== "constructor" &&
@@ -69,6 +73,16 @@ export function validateOperationRows(
       fail(`duplicate operation selector row '${label}' for '${row.operationKind}'`);
     }
     rowKeys.add(rowKey);
+    if (row.evaluation !== undefined && row.evaluation !== "pure") {
+      fail(`evaluation must be 'pure' when present (row '${label}').`);
+    }
+    if (row.evaluation === "pure" && (
+      row.operationKind === "constructor" || row.operationKind === "property-set" ||
+      row.operationKind === "index-set" || row.immediateCallback !== undefined ||
+      rustProviderOperationFormDeclaresWritableInput(row.target)
+    )) {
+      fail(`pure evaluation cannot construct identity, invoke a source callback, or declare writable source inputs (row '${label}').`);
+    }
     if (row.isFallible !== undefined && row.isFallible !== true) {
       fail(`isFallible must be true when present (row '${label}').`);
     }

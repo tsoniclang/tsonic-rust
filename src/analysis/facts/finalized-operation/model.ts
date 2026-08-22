@@ -1,6 +1,7 @@
 import type {
   RustArgumentMode,
   RustFinalizedOperationKind,
+  RustOperationEvaluationEffect,
   RustProviderConstantArgument,
   RustProviderOperationForm,
   RustValueConversion,
@@ -101,6 +102,7 @@ export interface RustFinalizedOperationAbi {
   readonly targetTypeArguments: readonly TargetTypeRef[];
   readonly result: RustFinalizedOperationResult;
   readonly effects: {
+    readonly evaluation: RustOperationEvaluationEffect;
     readonly invocation: "infallible" | "fallible";
     readonly awaiting: "not-applicable" | "infallible" | "fallible";
     readonly errorBoundary: RustErrorBoundary;
@@ -129,6 +131,7 @@ export interface FinalizeRustProviderOperationAbiOptions<
   readonly resultConversion?: RustValueConversion;
   readonly isAsync: boolean;
   readonly isFallible: boolean;
+  readonly evaluation?: "pure";
   readonly errorBoundary?: RustFallibleErrorBoundary;
   readonly errorCarrier?: TargetTypeRef;
   readonly isUnsafe?: boolean;

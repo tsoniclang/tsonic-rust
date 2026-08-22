@@ -518,6 +518,7 @@ export function planCallableExpression(
         fallible: true,
         hasReturnValue: !isRustUnitCarrier(resultCarrier),
         errorType: rustActiveErrorType(callableClosureContext)!,
+        inferErrorTypeFromReturnType: false,
       }
     : { fallible: false, hasReturnValue: !isRustUnitCarrier(resultCarrier) });
   const onlyStatement = finalizedBlock.statements.length === 1
