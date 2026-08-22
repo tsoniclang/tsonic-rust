@@ -224,14 +224,16 @@ function parameterIsUnused(
   const body = callable === undefined ? undefined : ast.body(callable);
   const name = ast.name(parameter);
   const reference = navigation.sourceReferenceFor(name);
-  if (body === undefined || name === undefined || reference?.declaration !== parameter ||
-    navigation.referencesWithin(reference.symbol, body).length !== 0) {
+  const symbol = reference?.symbol;
+  if (body === undefined || name === undefined ||
+    reference?.declaration !== parameter || symbol === undefined ||
+    navigation.referencesWithin(symbol, body).length !== 0) {
     return false;
   }
   return ast.parameters(callable).every((candidate) => {
     const initializer = candidate === undefined ? undefined : Node_Initializer(ast, candidate);
     return initializer === undefined ||
-      navigation.referencesWithin(reference.symbol, initializer).length === 0;
+      navigation.referencesWithin(symbol, initializer).length === 0;
   });
 }
 

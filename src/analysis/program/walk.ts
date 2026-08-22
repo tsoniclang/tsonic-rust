@@ -293,7 +293,9 @@ export function selectExpressionOperation(
       ...(sourceReference === undefined
         ? {}
         : {
-            sourceSelectedSymbol: sourceReference.symbol,
+            ...(sourceReference.symbol === undefined
+              ? {}
+              : { sourceSelectedSymbol: sourceReference.symbol }),
             sourceSelectedDeclaration: sourceReference.declaration,
           }),
     }, context, walk.operationOptions);
