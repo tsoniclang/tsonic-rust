@@ -312,8 +312,8 @@ function validateOperationParameters(
     }
     return;
   }
-  if (row.operationKind === "property" || row.target.form === "call-str-slice" ||
-    row.target.form === "free-call-str-slice") {
+  if (row.operationKind === "property" || row.target.form === "call-ref-slice" ||
+    row.target.form === "free-call-ref-slice") {
     return;
   }
   const ownerSignatures = signature === undefined

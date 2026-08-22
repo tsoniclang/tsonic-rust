@@ -14,6 +14,7 @@ import {
   rustJsDateTargetId,
   rustJsMapTargetId,
   rustJsSetTargetId,
+  rustJsStringTargetId,
   rustJsValueTargetId,
   rustLocationTargetId,
   rustCallableTargetId,
@@ -49,9 +50,15 @@ const namedCarrierPaths: Readonly<Record<string, string>> = {
   [rustJsArrayConcatItemTargetId]: "js_abi::JsArrayConcatItem",
   [rustJsMapTargetId]: "js_abi::JsMap",
   [rustJsSetTargetId]: "js_abi::JsSet",
+  [rustJsStringTargetId]: "js_abi::JsString",
   [rustJsDateTargetId]: "js_abi::JsDate",
   "rust.js.JsRegExp": "js_abi::JsRegExp",
-  "rust.js.JsRegExpMatch": "js_abi::JsRegExpMatch",
+  "rust.js.JsRegExpExecArray": "js_abi::JsRegExpExecArray",
+  "rust.js.JsRegExpMatchArray": "js_abi::JsRegExpMatchArray",
+  "rust.js.JsRegExpIndices": "js_abi::JsRegExpIndices",
+  "rust.js.JsRegExpNamedGroups": "js_abi::JsRegExpNamedGroups",
+  "rust.js.JsRegExpNamedIndices": "js_abi::JsRegExpNamedIndices",
+  "rust.js.JsRegExpStringIterator": "js_abi::JsRegExpStringIterator",
 };
 
 export const rustStrRefType: RustType = { kind: "str-ref" };

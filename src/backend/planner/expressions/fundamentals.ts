@@ -24,9 +24,9 @@ import { applyRustValueConversion, finishProviderOperationExpression, planProvid
 import { diagnosticInput, rustActiveErrorType } from "../program/plan-context.js";
 import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
 import { isFloatCarrier, rustTypeFromCarrierInContext } from "../types/render.js";
-import { isRustBigIntCarrier, isRustIntegerCarrier, isRustStringCarrier } from "../../../target-model/types/index.js";
+import { isRustBigIntCarrier, isRustIntegerCarrier, isRustJsStringCarrier, isRustStringCarrier } from "../../../target-model/types/index.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
-import { negateRustBooleanExpression, rustStringConcat } from "../../target-ast/expressions.js";
+import { negateRustBooleanExpression, rustJsStringConcat, rustJsStringLiteral, rustStringConcat } from "../../target-ast/expressions.js";
 import { parseSourceBigIntLiteral, parseSourceIntegerLiteral } from "../../../target-model/syntax/literals.js";
 import { planExpression } from "./entry.js";
 import { planRustFallibleReturnExpression } from "../statements/completion-exits.js";
@@ -138,15 +138,24 @@ export function planTemplateExpression(node: Node, context: RustPlanContext): Ru
     ));
     return undefined;
   }
-  const parts: RustExpr[] = [{ kind: "string-literal", value: context.input.program.source.ast.text(head) }];
+  const jsStringResult = isRustJsStringCarrier(fact.resultCarrier);
+  const stringLiteral = (value: string): RustExpr => jsStringResult
+    ? rustJsStringLiteral(value)
+    : { kind: "string-literal", value };
+  const asJsString = (value: RustExpr): RustExpr => ({
+    kind: "call",
+    path: "js_abi::JsString::from",
+    args: [value],
+  });
+  const parts: RustExpr[] = [stringLiteral(context.input.program.source.ast.text(head))];
   for (const [index, span] of (spans as readonly Node[]).entries()) {
     const expression = TemplateSpan_Expression(context.input.program.source.ast, span);
-    const literal = TemplateSpan_Literal(context.input.program.source.ast, span);
+    const literalNode = TemplateSpan_Literal(context.input.program.source.ast, span);
     const substitution = fact.substitutions[index];
     const actualCarrier = expression === undefined
       ? undefined
       : rustEffectiveValueCarrier(context.input.program.facts, expression);
-    if (expression === undefined || literal === undefined || substitution === undefined ||
+    if (expression === undefined || literalNode === undefined || substitution === undefined ||
       substitution.expression !== expression || actualCarrier === undefined ||
       !rustTargetTypeRefEquals(actualCarrier, substitution.carrier)) {
       context.diagnostics.push(missingFactDiagnostic(
@@ -162,18 +171,23 @@ export function planTemplateExpression(node: Node, context: RustPlanContext): Ru
     }
     const selectedValue = planRustNonConsumingValue(expression, value, context);
     if (isRustStringCarrier(substitution.carrier)) {
-      parts.push(selectedValue);
+      parts.push(
+        jsStringResult && !isRustJsStringCarrier(substitution.carrier)
+          ? asJsString(selectedValue)
+          : selectedValue,
+      );
     } else {
       context.usedAliases?.add("rt");
-      parts.push({
+      const rendered: RustExpr = {
         kind: "call",
         path: "rt::source_string",
         args: [{ kind: "reference", expr: selectedValue }],
-      });
+      };
+      parts.push(jsStringResult ? asJsString(rendered) : rendered);
     }
-    parts.push({ kind: "string-literal", value: context.input.program.source.ast.text(literal) });
+    parts.push(stringLiteral(context.input.program.source.ast.text(literalNode)));
   }
-  return rustStringConcat(parts);
+  return jsStringResult ? rustJsStringConcat(parts) : rustStringConcat(parts);
 }
 
 export function planDeleteExpression(node: Node, context: RustPlanContext): RustExpr | undefined {

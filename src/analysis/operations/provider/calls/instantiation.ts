@@ -1,6 +1,5 @@
 import {
   rustCallableProtocol,
-  rustStringTargetType,
   inferRustTargetTypeParameterBindings,
   rustTargetTypeContainsTypeParameter,
   substituteRustTargetTypeParameters,
@@ -406,12 +405,6 @@ function selectedCallSourceCarriers(
   if (actual.some((carrier) => carrier === undefined)) {
     return { kind: "missing" };
   }
-  if (fact.target.form === "call-str-slice" || fact.target.form === "free-call-str-slice") {
-    const stringCarrier = rustStringTargetType();
-    return actual.every((carrier) => carrier !== undefined && rustTargetTypeRefEquals(carrier, stringCarrier))
-      ? { kind: "resolved", carriers: actual as TargetTypeRef[], reconciliations }
-      : { kind: "incompatible", sourceIndex: 0 };
-  }
   if (fact.target.form === "call-value-slice" || fact.target.form === "call-value-array" ||
     fact.target.form === "receiver-value-array") {
     const form = fact.target;
@@ -465,8 +458,8 @@ function selectedCallArgumentTargetCarrier(
   form: RustProviderOperationForm,
   sourceIndex: number,
 ): TargetTypeRef | undefined {
-  if (form.form === "call-str-slice" || form.form === "free-call-str-slice") {
-    return rustStringTargetType();
+  if (form.form === "call-ref-slice" || form.form === "free-call-ref-slice") {
+    return form.elementCarrier;
   }
   if (form.form === "call-value-slice" || form.form === "call-value-array" ||
     form.form === "receiver-value-array") {
@@ -587,11 +580,12 @@ export function providerFormRequiresSourceReceiver(form: RustProviderOperationFo
     form.form === "field" ||
     form.form === "index" ||
     form.form === "free-call" ||
-    form.form === "free-call-str-slice" ||
+    form.form === "free-call-ref-slice" ||
     form.form === "receiver-method" ||
     form.form === "receiver-value-array" ||
     form.form === "receiver-tagged-array" ||
     form.form === "arg-receiver-method" ||
+    form.form === "arg-structural-method" ||
     (form.form === "trait-call" && form.receiverMode !== undefined);
 }
 
@@ -754,6 +748,17 @@ export function substituteProviderOperationForm(
           inputCarrier: substituteRustTargetTypeParameters(alternative.inputCarrier, substitutions),
         })),
       };
+    case "arg-structural-method":
+    case "arg-receiver-method":
+      return form.argConversions === undefined
+        ? form
+        : {
+            ...form,
+            argConversions: form.argConversions.map((conversion) =>
+              conversion === undefined
+                ? undefined
+                : substituteRustValueConversion(conversion, substitutions)),
+          };
     case "trait-call":
     case "trait-associated-value":
       return {

@@ -1,5 +1,6 @@
 import {
   rustJsErrorTargetType,
+  rustJsStringTargetType,
   rustJsValueTargetType,
   rustOptionTargetType,
   rustSourcePrimitiveTargetType,
@@ -73,7 +74,7 @@ export function mapSelectedJsSpecialCall(
   if (indent === undefined) {
     return rejectSelectedOperation(request.source.call, context, "RUST_JSON_STRINGIFY_INDENT_UNSUPPORTED", "Rust JSON.stringify indentation must be a compile-time string or number selected by the checked source call.");
   }
-  const resultCarrier = rustOptionTargetType(rustStringTargetType());
+  const resultCarrier = rustOptionTargetType(rustJsStringTargetType());
   return acceptSelectedCall(request, {
     kind: "provider-operation",
     operationId: "tsonic.rust.js.JSON.stringify.indent",
@@ -280,7 +281,7 @@ function mapSelectedObjectShapeProjection(
   if (selection.keyArgumentIndex !== undefined &&
     !rustTargetTypeRefEquals(
       parameterCarriers[selection.keyArgumentIndex],
-      rustStringTargetType(),
+      rustJsStringTargetType(),
     )) {
     return rejectSelectedOperation(
       request.source.call,
@@ -448,12 +449,15 @@ function selectedAuthoredObjectFields(
   }
   const authored = [...selected]
     .sort((left, right) => left.start - right.start)
-    .map((entry) => entry.field);
+    .map((entry) => entry.field)
+    .filter((field) => field.sourceKey.kind === "property");
   return {
     kind: "resolved",
     fields: orderEnumerableOwnStringProperties(
       authored,
-      (field) => field.sourceName,
+      (field) => field.sourceKey.kind === "property"
+        ? field.sourceKey.name
+        : "",
     ),
   };
 }

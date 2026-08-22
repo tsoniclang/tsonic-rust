@@ -47,6 +47,7 @@ import {
   rustOptionElementCarrier,
   rustBigIntTargetType,
   rustNullTargetType,
+  rustJsStringTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
   rustUndefinedTargetType,
@@ -195,7 +196,11 @@ export function resolveExpressionCarrierUncached(
           }
         }
       }
-      return setCarrierFact(walk, expression, rustStringTargetType());
+      return setCarrierFact(
+        walk,
+        expression,
+        walk.jsEnabled ? rustJsStringTargetType() : rustStringTargetType(),
+      );
     }
     case KindTemplateExpression: {
       return resolveTemplateExpressionCarrier(walk, expression, sourceFile);
@@ -443,7 +448,9 @@ export function resolveExpressionCarrierUncached(
         );
         return undefined;
       }
-      const resultCarrier = rustStringTargetType();
+      const resultCarrier = walk.jsEnabled
+        ? rustJsStringTargetType()
+        : rustStringTargetType();
       setRustOperationFact(walk, expression, {
         kind: "typeof",
         operationId: `tsonic.rust.syntax.typeof.${result}`,
@@ -575,7 +582,9 @@ function resolveTemplateExpressionCarrier(
     }
     substitutions.push({ expression: substitution, carrier });
   }
-  const resultCarrier = rustStringTargetType();
+  const resultCarrier = walk.jsEnabled
+    ? rustJsStringTargetType()
+    : rustStringTargetType();
   setRustOperationFact(walk, expression, {
     kind: "template-string",
     operationId: "tsonic.rust.syntax.template-string",

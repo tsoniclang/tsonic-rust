@@ -2,7 +2,7 @@ import { asNode } from "../../evidence/selected-source.js";
 import { denseDefined } from "./project.js";
 import { resolveRustCallableEvidence } from "./source.js";
 import { resolveRustTargetType } from "./target.js";
-import { rustOptionTargetType, rustSourcePrimitiveTargetType, rustStringTargetType } from "../../../target-model/types/index.js";
+import { rustJsStringTargetType, rustOptionTargetType, rustSourcePrimitiveTargetType, rustStringTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { sourceNodesEqual } from "@tsonic/target-api/source";
 import { sourcePrimitiveFactKey } from "@tsonic/tsts";
@@ -123,7 +123,7 @@ export function resolveUnion(
       : undefined;
   }
   if (members.length > 0 && members.every((member) => context.currentSemantics.types.isStringLike(member))) {
-    return rustStringTargetType();
+    return options.jsEnabled ? rustJsStringTargetType() : rustStringTargetType();
   }
   if (members.length > 0 && members.every((member) => context.currentSemantics.types.isNumberLike(member))) {
     return rustSourcePrimitiveTargetType("float64");

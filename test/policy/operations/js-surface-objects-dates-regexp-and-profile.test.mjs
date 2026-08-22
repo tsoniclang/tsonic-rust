@@ -237,20 +237,20 @@ export function read(): string {
   }]);
 });
 
-test("constant new RegExp lowers through the oracle-proven engine", () => {
+test("dynamic new RegExp lowers through selected constructor evidence", () => {
   const { result } = compileRust({
     surfaces: ["js"],
     files: {
       "index.ts": `
-export function probe(text: string): boolean {
-  const pattern = new RegExp("\\\\d+");
+export function probe(source: string, text: string): boolean {
+  const pattern = new RegExp(source);
   return pattern.test(text);
 }
 `,
     },
   });
   assert.deepEqual(result.diagnostics, []);
-  assert.match(artifactText(result, "src/index.rs"), /js_abi::JsRegExp::new\("\\\\d\+", ""\)\?/u);
+  assert.match(artifactText(result, "src/index.rs"), /js_abi::JsRegExp::from_string\(&source\)\?/u);
 });
 
 test("readonly arrays retain shared JS identity while exposing only read operations", () => {

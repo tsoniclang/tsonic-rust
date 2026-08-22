@@ -22,10 +22,9 @@ import { planSelectedSourceCall } from "./calls/source.js";
 import { readRustStructuralObjectMethodStorage } from "../objects/project-storage.js";
 import { requireProviderArgumentPassingFacts } from "./calls/arguments.js";
 import { rustOptionElementCarrier, rustOptionTargetType, rustStructuralMethodStorageCarrier } from "../../../target-model/types/index.js";
-import { rustStringTargetType } from "../../../target-model/types/index.js";
+import { rustJsStringTargetType } from "../../../target-model/types/index.js";
 import { rustTargetOperationIsFallible } from "../../../analysis/facts/target-operation.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { rustBorrowedStringView } from "../../target-ast/expressions.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustOptionalChainFact } from "../../../analysis/facts/keys.js";
@@ -38,7 +37,7 @@ export function planRegExpCreate(node: Node, context: RustPlanContext): RustExpr
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
       "rust.js.regexp",
-      "RegExp expressions require a finalized constant-pattern fact.",
+      "RegExp expressions require a finalized construction operation fact.",
     ));
     return undefined;
   }
@@ -96,7 +95,7 @@ function planRegExpCreateArguments(
     return undefined;
   }
   const sourceArguments = context.input.program.source.ast.arguments(node);
-  const expectedArgumentCount = fact.input.flagsCarrier === undefined ? 1 : 2;
+  const expectedArgumentCount = fact.input.sourceArgumentCount;
   if (sourceArguments.length !== expectedArgumentCount) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -105,9 +104,16 @@ function planRegExpCreateArguments(
     ));
     return undefined;
   }
-  const planned = planRustCallArguments(node, context);
+  const planned = expectedArgumentCount === 0 ? [] : planRustCallArguments(node, context);
   const patternNode = sourceArguments[0];
-  if (planned === undefined || patternNode === undefined || planned[0] === undefined ||
+  if (planned === undefined) {
+    return undefined;
+  }
+  if (fact.input.patternKind === "omitted") {
+    return planned.length === 0 ? [] : undefined;
+  }
+  if (patternNode === undefined || planned[0] === undefined ||
+    fact.input.patternCarrier === undefined ||
     !requireExpressionCarrier(
       patternNode,
       fact.input.patternCarrier,
@@ -117,12 +123,14 @@ function planRegExpCreateArguments(
     return undefined;
   }
   const pattern = fact.input.patternKind === "string"
-    ? rustBorrowedStringView(planned[0])
-    : applyRustArgumentMode(context, planned[0], "ref", patternNode);
+    ? applyRustArgumentMode(context, planned[0], "ref", patternNode)
+    : fact.input.patternKind === "regexp"
+      ? applyRustArgumentMode(context, planned[0], "ref", patternNode)
+      : planned[0];
   const flagsNode = sourceArguments[1];
-  const flags = fact.input.flagsCarrier === undefined
-    ? { kind: "str-literal" as const, value: "" }
-    : flagsNode === undefined || planned[1] === undefined ||
+  const flags = fact.input.flagsKind === "omitted"
+    ? undefined
+    : fact.input.flagsCarrier === undefined || flagsNode === undefined || planned[1] === undefined ||
         !requireExpressionCarrier(
           flagsNode,
           fact.input.flagsCarrier,
@@ -130,20 +138,13 @@ function planRegExpCreateArguments(
           "rust.backend.regexp-flags-carrier",
         )
       ? undefined
-      : rustBorrowedStringView(planned[1]);
-  if (flags === undefined) {
+      : fact.input.flagsKind === "string"
+        ? applyRustArgumentMode(context, planned[1], "ref", flagsNode)
+        : planned[1];
+  if (fact.input.flagsKind !== "omitted" && flags === undefined) {
     return undefined;
   }
-  return fact.input.patternKind === "string"
-    ? [pattern, flags]
-    : [
-        pattern,
-        flags,
-        {
-          kind: "bool-literal",
-          value: fact.input.flagsCarrier !== undefined,
-        },
-      ];
+  return flags === undefined ? [pattern] : [pattern, flags];
 }
 
 function selectedRegExpCallMatches(
@@ -157,15 +158,18 @@ function selectedRegExpCallMatches(
   const selected = context.input.program.facts.getSelectedTargetCall(node);
   const operation = context.input.program.facts.getSelectedTargetOperation(node);
   const [patternParameter, flagsParameter] = selected?.member.parameters ?? [];
+  const selectedPatternCarrier = fact.input.patternCarrier ?? rustJsStringTargetType();
+  const selectedFlagsCarrier = fact.input.flagsCarrier ?? rustJsStringTargetType();
   return selected !== undefined &&
     selected.member.id === fact.operationId &&
     selected.member.kind === (fact.input.invocation === "construct" ? "constructor" : "method") &&
     selected.member.parameters.length === 2 &&
     patternParameter !== undefined &&
-    rustTargetTypeRefEquals(patternParameter.type, fact.input.patternCarrier) &&
+    patternParameter.optional === true &&
+    rustTargetTypeRefEquals(patternParameter.type, selectedPatternCarrier) &&
     flagsParameter !== undefined &&
     flagsParameter.optional === true &&
-    rustTargetTypeRefEquals(flagsParameter.type, rustStringTargetType()) &&
+    rustTargetTypeRefEquals(flagsParameter.type, selectedFlagsCarrier) &&
     selected.member.returnType !== undefined &&
     rustTargetTypeRefEquals(selected.member.returnType, fact.resultCarrier) &&
     operation !== undefined &&

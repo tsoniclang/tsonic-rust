@@ -1,5 +1,6 @@
 import {
   isRustBoolCarrier,
+  isRustJsStringCarrier,
   isRustStringCarrier,
   isRustUnitCarrier,
   rustOptionElementCarrier,
@@ -18,7 +19,7 @@ import { rustTargetRuntimeErrorType } from "../types/error-boundary.js";
 import { effectivePlannedExpressionCarrier, expressionCarrier, requireExpressionCarrier, rustOperationFact, rustPartialOrderingTest, selectedOperationMatches } from "./fundamentals.js";
 import { isRustBinaryOperator } from "../../../target-model/syntax/tokens.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
-import { negateRustBooleanExpression, rustBorrowedStringView, rustStringConcat } from "../../target-ast/expressions.js";
+import { negateRustBooleanExpression, rustBorrowedStringView, rustJsStringConcat, rustStringConcat } from "../../target-ast/expressions.js";
 import { planExpression, planExpressionBeforeValueProjections } from "./entry.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
 import { planRustProgramErrorTypeTest } from "./error-operations.js";
@@ -404,14 +405,32 @@ export function planBinaryExpression(node: Node, context: RustPlanContext): Rust
   }
   if (fact.kind === "string-concat") {
     const parts: RustExpr[] = [];
+    const jsStringResult = isRustJsStringCarrier(fact.resultCarrier);
     for (const [sideNode, side] of [[leftNode, left], [rightNode, right]] as const) {
-      if (side.kind === "string-concat") {
+      if (!jsStringResult && side.kind === "string-concat") {
         parts.push(...side.parts);
       } else {
-        parts.push(planRustNonConsumingValue(sideNode, side, context));
+        const value = planRustNonConsumingValue(sideNode, side, context);
+        const carrier = effectivePlannedExpressionCarrier(sideNode, context);
+        if (!jsStringResult || isRustJsStringCarrier(carrier)) {
+          parts.push(value);
+        } else if (isRustStringCarrier(carrier)) {
+          parts.push({ kind: "call", path: "js_abi::JsString::from", args: [value] });
+        } else {
+          context.usedAliases?.add("rt");
+          parts.push({
+            kind: "call",
+            path: "js_abi::JsString::from",
+            args: [{
+              kind: "call",
+              path: "rt::source_string",
+              args: [{ kind: "reference", expr: value }],
+            }],
+          });
+        }
       }
     }
-    return rustStringConcat(parts);
+    return jsStringResult ? rustJsStringConcat(parts) : rustStringConcat(parts);
   }
   if (fact.kind === "operator-call") {
     return planRustOperatorCallExpression(
@@ -441,6 +460,14 @@ export function planBinaryExpression(node: Node, context: RustPlanContext): Rust
       : convertedRight;
     const borrowLiteral = (side: RustExpr): RustExpr => {
       const borrowed = comparison ? rustBorrowedStringView(side) : side;
+      const jsStringLiteral = comparison && borrowed.kind === "call" &&
+          borrowed.path === "js_abi::JsString::from" &&
+          borrowed.args.length === 1 && borrowed.args[0]?.kind === "str-literal"
+        ? borrowed.args[0]
+        : undefined;
+      if (jsStringLiteral !== undefined) {
+        return jsStringLiteral;
+      }
       return comparison && borrowed.kind === "string-literal"
         ? { kind: "str-literal", value: borrowed.value }
         : borrowed;

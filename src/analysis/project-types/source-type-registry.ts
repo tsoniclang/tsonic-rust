@@ -12,6 +12,7 @@ import {
 } from "@tsonic/target-api/source";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import {
+  rustSourceMemberKeysEqual,
   rustSourceTypeCarrier,
   rustSourceTypeCarrierValue,
   rustSourceUnionCarrierValue,
@@ -447,6 +448,7 @@ function freezeSourceObjectField(field: RustSourceObjectField): RustSourceObject
   return Object.freeze({
     declarations: Object.freeze([...field.declarations]),
     symbols: Object.freeze([...field.symbols]),
+    sourceKey: field.sourceKey,
     sourceName: field.sourceName,
     sourceType: field.sourceType,
     storageIndex: field.storageIndex,
@@ -498,7 +500,8 @@ function sourceObjectFieldEquals(
   left: RustSourceObjectField,
   right: RustSourceObjectField,
 ): boolean {
-  return left.sourceName === right.sourceName &&
+  return rustSourceMemberKeysEqual(left.sourceKey, right.sourceKey) &&
+    left.sourceName === right.sourceName &&
     left.sourceType === right.sourceType &&
     left.storageIndex === right.storageIndex &&
     left.presence === right.presence &&
@@ -521,6 +524,7 @@ function sourceObjectTargetContractEquals(
     left.fields.every((field, index) => {
       const selected = right.fields[index];
       return selected !== undefined &&
+        rustSourceMemberKeysEqual(field.sourceKey, selected.sourceKey) &&
         field.sourceName === selected.sourceName &&
         field.storageIndex === selected.storageIndex &&
         field.presence === selected.presence &&
@@ -569,6 +573,7 @@ function sourceObjectTargetFieldProjectionEquals(
 ): boolean {
   return left.shape.storage === right.shape.storage &&
     rustTargetTypeRefEquals(left.shape.carrier, right.shape.carrier) &&
+    rustSourceMemberKeysEqual(left.field.sourceKey, right.field.sourceKey) &&
     left.field.sourceName === right.field.sourceName &&
     left.field.storageIndex === right.field.storageIndex &&
     left.field.presence === right.field.presence &&

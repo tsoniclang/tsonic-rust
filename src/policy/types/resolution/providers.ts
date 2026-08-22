@@ -6,7 +6,15 @@ import {
   rustJsArrayTargetType,
   rustJsDateTargetType,
   rustJsMapTargetType,
+  rustJsRegExpExecArrayTargetType,
+  rustJsRegExpIndicesTargetType,
+  rustJsRegExpMatchArrayTargetType,
+  rustJsRegExpNamedGroupsTargetType,
+  rustJsRegExpNamedIndicesTargetType,
+  rustJsRegExpStringIteratorTargetType,
+  rustJsRegExpTargetType,
   rustJsSetTargetType,
+  rustJsStringTargetType,
   rustJsErrorTargetType,
   rustStringTargetType,
   rustVecTargetType,
@@ -29,11 +37,16 @@ import type { RustSourceProfileRegistry } from "../source-profile.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { jsRegExpSourceProfileIdentity } from "@tsonic/js-source-profile";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 
 const regExpOwner = jsRegExpSourceProfileIdentity.owners.regExp;
-const regExpResultOwners = new Set<string>([
-  jsRegExpSourceProfileIdentity.owners.regExpExecArray,
-  jsRegExpSourceProfileIdentity.owners.regExpMatchArray,
+const regExpStringIteratorOwner = jsRegExpSourceProfileIdentity.owners.regExpStringIterator;
+const regExpResultCarrierByOwner = new Map<string, () => TargetTypeRef>([
+  [jsRegExpSourceProfileIdentity.owners.regExpExecArray, rustJsRegExpExecArrayTargetType],
+  [jsRegExpSourceProfileIdentity.owners.regExpMatchArray, rustJsRegExpMatchArrayTargetType],
+  [jsRegExpSourceProfileIdentity.owners.regExpIndicesArray, rustJsRegExpIndicesTargetType],
+  [jsRegExpSourceProfileIdentity.owners.regExpNamedGroups, rustJsRegExpNamedGroupsTargetType],
+  [jsRegExpSourceProfileIdentity.owners.regExpNamedIndices, rustJsRegExpNamedIndicesTargetType],
 ]);
 
 export function resolveProviderTypeIdentity(
@@ -171,22 +184,32 @@ export function resolveSourceProfileCarrier(
   resolving: Set<object>,
 ): TargetTypeRef | undefined {
   if (name === "String") {
-    return rustStringTargetType();
+    return options.jsEnabled ? rustJsStringTargetType() : rustStringTargetType();
   }
   if (options.jsEnabled && name === "Date") {
     return rustJsDateTargetType();
   }
   if (options.jsEnabled && name === regExpOwner) {
-    return { kind: "target-named", id: "rust.js.JsRegExp" };
+    return rustJsRegExpTargetType();
   }
-  if (options.jsEnabled && regExpResultOwners.has(name)) {
-    return { kind: "target-named", id: "rust.js.JsRegExpMatch" };
+  const regExpResultCarrier = options.jsEnabled
+    ? regExpResultCarrierByOwner.get(name)
+    : undefined;
+  if (regExpResultCarrier !== undefined) {
+    return regExpResultCarrier();
   }
   if (!context.currentSemantics.types.isTypeReference(type)) {
     return undefined;
   }
   const arguments_ = context.currentSemantics.types.typeArguments(type);
   const targetArguments = arguments_.map((argument) => resolveRustTargetType(argument, context, options, resolving));
+  if (options.jsEnabled && name === regExpStringIteratorOwner) {
+    const [element] = targetArguments;
+    return targetArguments.length === 1 && element !== undefined &&
+        rustTargetTypeRefEquals(element, rustJsRegExpExecArrayTargetType())
+      ? rustJsRegExpStringIteratorTargetType()
+      : undefined;
+  }
   const direct = targetArguments.every((argument) => argument !== undefined)
     ? resolveSourceProfileCarrierFromArguments(name, targetArguments as TargetTypeRef[], options)
     : undefined;
@@ -241,7 +264,7 @@ export function resolveSourceProfileCarrierFromArguments(
   options: RustTargetTypeResolutionOptions,
 ): TargetTypeRef | undefined {
   if (name === "String") {
-    return rustStringTargetType();
+    return options.jsEnabled ? rustJsStringTargetType() : rustStringTargetType();
   }
   if (name === "Error" && arguments_.length === 0) {
     return rustJsErrorTargetType();
@@ -286,10 +309,20 @@ export function resolveSourceProfileCarrierFromArguments(
     return rustJsDateTargetType();
   }
   if (options.jsEnabled && name === regExpOwner) {
-    return { kind: "target-named", id: "rust.js.JsRegExp" };
+    return rustJsRegExpTargetType();
   }
-  if (options.jsEnabled && regExpResultOwners.has(name)) {
-    return { kind: "target-named", id: "rust.js.JsRegExpMatch" };
+  const regExpResultCarrier = options.jsEnabled
+    ? regExpResultCarrierByOwner.get(name)
+    : undefined;
+  if (regExpResultCarrier !== undefined) {
+    return regExpResultCarrier();
+  }
+  if (options.jsEnabled && name === regExpStringIteratorOwner) {
+    const [element] = arguments_;
+    return arguments_.length === 1 && element !== undefined &&
+        rustTargetTypeRefEquals(element, rustJsRegExpExecArrayTargetType())
+      ? rustJsRegExpStringIteratorTargetType()
+      : undefined;
   }
   return undefined;
 }

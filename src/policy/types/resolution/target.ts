@@ -1,11 +1,15 @@
 import {
   rustBigIntTargetType,
   rustJsArrayTargetType,
+  rustJsStringTargetType,
   rustNullTargetType,
   rustNullishSourceTargetType,
   rustNeverTargetType,
   rustOptionElementCarrier,
   rustOptionTargetType,
+  rustSourceMemberDisplayName,
+  rustSourceMemberKeysEqual,
+  rustSourceMemberKeyText,
   rustSourcePrimitiveTargetType,
   rustStructuralObjectTargetType,
   rustStringTargetType,
@@ -28,6 +32,8 @@ import type { Node, Symbol, Type } from "@tsonic/tsts";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustSourceMemberKey } from "../../../target-model/types/index.js";
+import { resolveRustSourceMemberKey } from "../../evidence/source-member-key.js";
 
 export function resolveRustTargetType(
   type: Type | undefined,
@@ -119,7 +125,7 @@ export function resolveRustTargetType(
       return rustNullishSourceTargetType();
     }
     if (semantics.types.isStringLike(type)) {
-      return rustStringTargetType();
+      return options.jsEnabled ? rustJsStringTargetType() : rustStringTargetType();
     }
     if (semantics.types.isBooleanLike(type)) {
       return rustSourcePrimitiveTargetType("bool");
@@ -263,7 +269,12 @@ export function resolveStructuralObjectType(
       : undefined;
     const hasExactTransformedIdentity = authoredTypeRoot !== undefined &&
       projectDeclarations !== undefined && projectDeclarations.length === 0;
-    return projectDeclarations === undefined ||
+    const sourceKey = resolveRustSourceMemberKey(
+      declarations ?? [],
+      property.name,
+      context,
+    );
+    return projectDeclarations === undefined || sourceKey === undefined ||
         (!hasExactTransformedIdentity && projectDeclarations.length === 0) ||
         (!hasExactTransformedIdentity && projectDeclarations.length !== declarations?.length) ||
         fieldCarrier === undefined
@@ -278,7 +289,8 @@ export function resolveStructuralObjectType(
             property.symbol,
             ...property.rootSymbols,
           ])]),
-          sourceName: property.name,
+          sourceKey,
+          sourceName: rustSourceMemberDisplayName(sourceKey),
           sourceType: property.type,
           resultCarrier: fieldCarrier,
           presence: property.optional ? "optional" as const : "required" as const,
@@ -293,6 +305,7 @@ export function resolveStructuralObjectType(
   const fields = [...(selected as readonly {
     readonly declarations: readonly Node[];
     readonly symbols: readonly Symbol[];
+    readonly sourceKey: RustSourceMemberKey;
     readonly sourceName: string;
     readonly sourceType: Type;
     readonly resultCarrier: TargetTypeRef;
@@ -304,9 +317,14 @@ export function resolveStructuralObjectType(
     };
     readonly method?: true;
   }[])]
-    .sort((left, right) => left.sourceName.localeCompare(right.sourceName))
+    .sort((left, right) =>
+      rustSourceMemberKeyText(left.sourceKey).localeCompare(
+        rustSourceMemberKeyText(right.sourceKey),
+        "en",
+      ))
     .map((field, storageIndex) => ({ ...field, storageIndex }));
-  if (new Set(fields.map((field) => field.sourceName)).size !== fields.length) {
+  if (fields.some((field, index) => fields.slice(0, index).some((previous) =>
+    rustSourceMemberKeysEqual(previous.sourceKey, field.sourceKey)))) {
     return undefined;
   }
   const ownerFileNames = new Set([
@@ -318,6 +336,7 @@ export function resolveStructuralObjectType(
   }
   const ownerFileName = [...ownerFileNames][0]!;
   const carrier = rustStructuralObjectTargetType(ownerFileName, fields.map((field) => ({
+    sourceKey: field.sourceKey,
     sourceName: field.sourceName,
     type: field.resultCarrier,
     presence: field.presence,

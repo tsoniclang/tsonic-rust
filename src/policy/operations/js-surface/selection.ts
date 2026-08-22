@@ -5,22 +5,34 @@ import {
   rustCarrierSupportsJsEquality,
   isRustBoolCarrier,
   isRustIntegerCarrier,
-  isRustJsArrayCarrier,
+  rustJsArrayLikeElementTargetType,
   isRustSourceStringConvertibleCarrier,
   rustJsValueTargetType,
   rustJsErrorTargetType,
+  rustJsStringTargetType,
   rustStringTargetId,
   rustVecTargetType,
   isRustNumericCarrier,
   isRustStringCarrier,
   rustJsDateTargetId,
+  rustJsRegExpExecArrayTargetType,
+  rustJsRegExpIndicesTargetType,
+  rustJsRegExpMatchArrayTargetType,
+  rustJsRegExpNamedGroupsTargetId,
+  rustJsRegExpNamedGroupsTargetType,
+  rustJsRegExpNamedIndicesTargetId,
+  rustJsRegExpNamedIndicesTargetType,
+  rustJsRegExpStringIteratorTargetId,
+  rustJsRegExpStringIteratorTargetType,
+  rustJsRegExpTargetId,
+  rustJsRegExpTargetType,
   rustJsArrayTargetType,
   rustClosureTargetType,
+  rustCallbackProtocol,
   rustNullTargetType,
   rustOptionTargetType,
   rustUndefinedTargetType,
   rustSourcePrimitiveTargetType,
-  rustStringTargetType,
   rustUnitTargetType,
 } from "../../../target-model/types/index.js";
 import { jsOperationRows, rustInferCarrier } from "./rows.js";
@@ -46,9 +58,9 @@ function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readon
     return { lane: "string", bindings: { receiver: carrier.referent } };
   }
   if (carrier?.kind === "target-named") {
-    if (isRustJsArrayCarrier(carrier)) {
-      const element = carrier.typeArguments?.[0];
-      return element === undefined ? undefined : { lane: "js-array", bindings: { element, receiver: carrier } };
+    const arrayElement = rustJsArrayLikeElementTargetType(carrier);
+    if (arrayElement !== undefined) {
+      return { lane: "js-array", bindings: { element: arrayElement, receiver: carrier } };
     }
     const mapTypes = getRustJsMapTargetTypes(carrier);
     if (mapTypes !== undefined) {
@@ -99,11 +111,20 @@ function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readon
   if (carrier === undefined && ownerName === "ObjectConstructor") {
     return { lane: "object", bindings: {} };
   }
-  if (carrier?.kind === "target-named" && carrier.id === "rust.js.JsRegExp") {
+  if (carrier === undefined && ownerName === "RegExpConstructor") {
+    return { lane: "regexp", bindings: {} };
+  }
+  if (carrier?.kind === "target-named" && carrier.id === rustJsRegExpTargetId) {
     return { lane: "regexp", bindings: { receiver: carrier } };
   }
-  if (carrier?.kind === "target-named" && carrier.id === "rust.js.JsRegExpMatch") {
-    return { lane: "regexp-match", bindings: { receiver: carrier } };
+  if (carrier?.kind === "target-named" && carrier.id === rustJsRegExpNamedGroupsTargetId) {
+    return { lane: "regexp-named-groups", bindings: { receiver: carrier } };
+  }
+  if (carrier?.kind === "target-named" && carrier.id === rustJsRegExpNamedIndicesTargetId) {
+    return { lane: "regexp-named-indices", bindings: { receiver: carrier } };
+  }
+  if (carrier?.kind === "target-named" && carrier.id === rustJsRegExpStringIteratorTargetId) {
+    return { lane: "regexp-string-iterator", bindings: { receiver: carrier } };
   }
   return undefined;
 }
@@ -160,17 +181,51 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
     case "jsvalue":
       return rustJsValueTargetType();
     case "string-array":
-      return rustJsArrayTargetType(rustStringTargetType());
-    case "regexp-match":
-      return { kind: "target-named", id: "rust.js.JsRegExpMatch" };
-    case "option-of-regexp-match":
-      return rustOptionTargetType({ kind: "target-named", id: "rust.js.JsRegExpMatch" });
-    case "regexp-match-vec":
-      return rustVecTargetType({ kind: "target-named", id: "rust.js.JsRegExpMatch" });
+      return rustJsArrayTargetType(rustJsStringTargetType());
+    case "regexp":
+      return rustJsRegExpTargetType();
+    case "regexp-exec-array":
+      return rustJsRegExpExecArrayTargetType();
+    case "regexp-match-array":
+      return rustJsRegExpMatchArrayTargetType();
+    case "regexp-indices":
+      return rustJsRegExpIndicesTargetType();
+    case "regexp-named-groups":
+      return rustJsRegExpNamedGroupsTargetType();
+    case "regexp-named-indices":
+      return rustJsRegExpNamedIndicesTargetType();
+    case "regexp-string-iterator":
+      return rustJsRegExpStringIteratorTargetType();
+    case "regexp-index-pair":
+      return {
+        kind: "tuple",
+        elements: [
+          rustSourcePrimitiveTargetType("float64"),
+          rustSourcePrimitiveTargetType("float64"),
+        ],
+      };
+    case "option-of-regexp-exec-array":
+      return rustOptionTargetType(rustJsRegExpExecArrayTargetType());
+    case "option-of-regexp-match-array":
+      return rustOptionTargetType(rustJsRegExpMatchArrayTargetType());
+    case "option-of-regexp-indices":
+      return rustOptionTargetType(rustJsRegExpIndicesTargetType());
+    case "option-of-regexp-named-groups":
+      return rustOptionTargetType(rustJsRegExpNamedGroupsTargetType());
+    case "option-of-regexp-named-indices":
+      return rustOptionTargetType(rustJsRegExpNamedIndicesTargetType());
+    case "option-of-regexp-index-pair":
+      return rustOptionTargetType({
+        kind: "tuple",
+        elements: [
+          rustSourcePrimitiveTargetType("float64"),
+          rustSourcePrimitiveTargetType("float64"),
+        ],
+      });
     case "option-of-string":
-      return rustOptionTargetType(rustStringTargetType());
+      return rustOptionTargetType(rustJsStringTargetType());
     case "option-of-string-array":
-      return rustOptionTargetType(rustJsArrayTargetType(rustStringTargetType()));
+      return rustOptionTargetType(rustJsArrayTargetType(rustJsStringTargetType()));
     case "element-array":
       return bindings.element === undefined ? undefined : rustJsArrayTargetType(bindings.element);
     case "option-of-float64":
@@ -194,7 +249,7 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
     case "unit":
       return rustUnitTargetType();
     case "string":
-      return rustStringTargetType();
+      return rustJsStringTargetType();
     case "element":
       return bindings.element;
     case "option-of-element":
@@ -370,6 +425,8 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
         candidate.selectedMethodTypeArgumentArity ===
           (request.selectedMethodTypeArgumentCarriers?.length ?? 0)) &&
       carrierRequirementsMatch(candidate.requirements, bindings, request) &&
+      (candidate.callback === undefined ||
+        rustCallbackProtocol(argumentCarriers[candidate.callback.sourceArgumentIndex]) !== undefined) &&
       (candidate.firstArgCarrierId === undefined
         ? firstArgumentId(request) === undefined || !jsOperationRows.some((other) =>
             other.owner === candidate.owner && other.member === candidate.member &&
@@ -415,12 +472,28 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
   const { row, parameterCarriers } = selected;
   const discardResult = request.resultUse === "discarded" &&
     row.shape.op === "operation" && row.shape.discardedTarget !== undefined;
-  const target = materializeVariadicTarget(
+  const materializedTarget = materializeVariadicTarget(
     discardResult && row.shape.op === "operation"
       ? row.shape.discardedTarget!
       : row.shape.target,
     bindings.element,
   );
+  if (materializedTarget === undefined) {
+    return undefined;
+  }
+  const target = row.authoredPropertyKey !== true
+    ? materializedTarget
+    : request.authoredPropertyKey === undefined ||
+        request.authoredPropertyKey.length === 0 ||
+        materializedTarget.form !== "free-call"
+      ? undefined
+      : {
+          ...materializedTarget,
+          trailingArguments: [
+            ...(materializedTarget.trailingArguments ?? []),
+            { kind: "string" as const, value: request.authoredPropertyKey },
+          ],
+        };
   if (target === undefined) {
     return undefined;
   }

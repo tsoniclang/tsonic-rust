@@ -11,6 +11,7 @@ import {
 } from "../program/plan-context.js";
 import {
   getRustGeneratorProtocol,
+  isRustJsStringCarrier,
   isRustNeverCarrier,
   isRustNullCarrier,
   isRustUndefinedCarrier,
@@ -75,7 +76,7 @@ import { planRecordLiteral } from "./records.js";
 import { planUnaryExpression } from "./updates/source.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import { rustEffectiveValueCarrier } from "../../../analysis/facts/value-carrier-queries.js";
-import { rustExpressionContainsStatementBlock } from "../../target-ast/expressions.js";
+import { rustExpressionContainsStatementBlock, rustJsStringLiteral } from "../../target-ast/expressions.js";
 import { rustFutureValueMatchesCarrier } from "../../../analysis/facts/future-values.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { sourceCharCodeUnit } from "../../../target-model/syntax/literals.js";
@@ -126,7 +127,10 @@ export function planExpressionInner(
         }
         return { kind: "int-literal", text: String(value) };
       }
-      return { kind: "string-literal", value: ast.text(node) };
+      const value = ast.text(node);
+      return isRustJsStringCarrier(expressionCarrier(node, context))
+        ? rustJsStringLiteral(value)
+        : { kind: "string-literal", value };
     }
     case KindTrueKeyword: {
       return { kind: "bool-literal", value: true };
@@ -346,7 +350,9 @@ export function planExpressionInner(
               ? planRustNonConsumingValue(operandNode, operand, context)
               : operand,
             discard,
-            value: { kind: "string-literal", value: fact.result },
+            value: isRustJsStringCarrier(fact.resultCarrier)
+              ? rustJsStringLiteral(fact.result)
+              : { kind: "string-literal", value: fact.result },
           };
     }
     case KindVoidExpression: {

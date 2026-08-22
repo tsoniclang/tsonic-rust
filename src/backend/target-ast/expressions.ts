@@ -1,5 +1,49 @@
 import type { RustExpr } from "./nodes.js";
 
+export function rustJsStringLiteral(value: string): RustExpr {
+  const units = Array.from(
+    { length: value.length },
+    (_, index) => value.charCodeAt(index),
+  );
+  const hasUnpairedSurrogate = units.some((unit, index) =>
+    unit >= 0xd800 && unit <= 0xdbff
+      ? !(units[index + 1]! >= 0xdc00 && units[index + 1]! <= 0xdfff)
+      : unit >= 0xdc00 && unit <= 0xdfff &&
+        !(units[index - 1]! >= 0xd800 && units[index - 1]! <= 0xdbff)
+  );
+  return hasUnpairedSurrogate
+    ? {
+        kind: "call",
+        path: "js_abi::JsString::from_units",
+        args: [{
+          kind: "vec-literal",
+          elements: units.map((unit) => ({ kind: "int-literal", text: String(unit) })),
+        }],
+      }
+    : {
+        kind: "call",
+        path: "js_abi::JsString::from",
+        args: [{ kind: "str-literal", value }],
+      };
+}
+
+export function rustJsStringConcat(parts: readonly RustExpr[]): RustExpr {
+  if (parts.length === 0) {
+    return rustJsStringLiteral("");
+  }
+  if (parts.length === 1) {
+    return parts[0]!;
+  }
+  return {
+    kind: "call",
+    path: "js_abi::JsString::concat",
+    args: [{
+      kind: "reference",
+      expr: { kind: "slice-literal", elements: parts },
+    }],
+  };
+}
+
 export function negateRustBooleanExpression(expression: RustExpr): RustExpr {
   if (expression.kind === "bool-literal") {
     return { kind: "bool-literal", value: !expression.value };

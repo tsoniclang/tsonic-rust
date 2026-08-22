@@ -10,7 +10,7 @@ import {
   rustStructuralMethodCallableCarrier,
   rustStructuralMethodStorageCarrier,
   rustStructuralObjectCarrierValue,
-  rustStringTargetType,
+  rustJsStringTargetType,
 } from "../../../../target-model/types/index.js";
 import { acceptProjectSourceCall, mapSelectedJsSpecialCall } from "../object-shapes.js";
 import { acceptRustPolicy } from "../../../../policy/operations/contracts.js";
@@ -29,6 +29,8 @@ import { selectJsSurfaceConstructorBySourceOwner, selectJsSurfaceOperation } fro
 import { selectRustGeneratorSourceCall } from "../../../../policy/types/generator-source-profile.js";
 import { selectRustProviderOperation } from "../../../../policy/operations/provider-selection.js";
 import { sourceCallMarkerByIdentity } from "../model.js";
+import { mapSelectedStringRegExpProtocolCall } from "../regexp-protocols.js";
+import { selectedRustRegExpReplacementCallbackContract } from "../regexp-replacement-callback.js";
 import type {
   RustCheckedCallSelectionInput,
   RustCheckedCallSelectionResult,
@@ -139,12 +141,12 @@ export function selectRustCheckedCall(
       operationId: "tsonic.rust.error.constructor",
       operationKind: "constructor",
       target: { form: "call", path: "rt::JsError::error", argModes: ["ref"] },
-      parameterCarriers: [rustStringTargetType()],
+      parameterCarriers: [rustJsStringTargetType()],
       resultCarrier,
       isAsync: false,
       isFallible: false,
       errorBoundary: "none",
-    }, [rustStringTargetType()], context, options, {
+    }, [rustJsStringTargetType()], context, options, {
       sourceName: "Error",
     });
   }
@@ -184,13 +186,14 @@ export function selectRustCheckedCall(
     if (!options.jsEnabled) {
       return rejectSelectedOperation(request.source.call, context, "RUST_JS_SURFACE_REQUIRED", "The selected call belongs to the explicit JavaScript source profile, which is not active.");
     }
-    if (checkedCallIsConstruction(request, context)) {
-      if (
-        selectedSourceMember.ownerName ===
-          jsRegExpSourceProfileIdentity.owners.regExpConstructor
-      ) {
-        return mapSelectedRegExpConstruction(request, context, options);
-      }
+    const construction = checkedCallIsConstruction(request, context);
+    if (selectedSourceMember.ownerName ===
+        jsRegExpSourceProfileIdentity.owners.regExpConstructor &&
+      ((construction && selectedSourceMember.memberName === "constructor") ||
+        (!construction && selectedSourceMember.memberName === "call"))) {
+      return mapSelectedRegExpConstruction(request, context, options);
+    }
+    if (construction) {
       const typeArgumentCarriers = (request.source.sourceSelectedMethodTypeArguments ?? []).map((argument) =>
         resolveRustTargetTypeRef(argument.explicitTypeNode ?? argument.selectedType, context, options));
       const argumentCarriers = selectedCallArgumentCarriers(request, context, options);
@@ -219,7 +222,17 @@ export function selectRustCheckedCall(
       context,
       options,
     );
-    const argumentCarriers = selectedCallArgumentCarriers(request, context, options);
+    const selectedArgumentCarriers = selectedCallArgumentCarriers(request, context, options);
+    const replacementCallback = selectedRustRegExpReplacementCallbackContract(
+      request,
+      selectedSourceMember.ownerName,
+      selectedSourceMember.memberName,
+      context,
+    );
+    const argumentCarriers = replacementCallback === undefined
+      ? selectedArgumentCarriers
+      : selectedArgumentCarriers.map((carrier, index) =>
+          index === 1 ? replacementCallback.sourceCarrier : carrier);
     const selectedMethodTypeArgumentCarriers =
       (request.source.sourceSelectedMethodTypeArguments ?? []).map((argument) =>
         resolveRustTargetTypeRef(
@@ -232,6 +245,16 @@ export function selectRustCheckedCall(
         argument.explicitTypeNode === undefined
           ? undefined
           : resolveRustTargetTypeRef(argument.explicitTypeNode, context, options));
+    const regexpProtocol = mapSelectedStringRegExpProtocolCall(
+      request,
+      selectedSourceMember.ownerName,
+      selectedSourceMember.memberName,
+      context,
+      options,
+    );
+    if (regexpProtocol !== undefined) {
+      return regexpProtocol;
+    }
     const special = mapSelectedJsSpecialCall(
       request,
       selectedSourceMember.ownerName,

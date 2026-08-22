@@ -9,6 +9,7 @@ import {
   rustJsValueTargetType,
   rustJsArrayConcatItemTargetType,
   rustJsArrayTargetType,
+  rustJsStringTargetType,
   rustSourcePrimitiveTargetType,
 } from "../../../target-model/types/index.js";
 import { defineJsOperationRows } from "./model.js";
@@ -21,11 +22,18 @@ const zeroArgument = { kind: "integer", value: 0 } as const;
 const oneArgument = { kind: "integer", value: 1 } as const;
 const noneArgument = { kind: "none" } as const;
 const regexpOwner = jsRegExpSourceProfileIdentity.owners.regExp;
+const regexpConstructorOwner = jsRegExpSourceProfileIdentity.owners.regExpConstructor;
 const regexpExecArrayOwner = jsRegExpSourceProfileIdentity.owners.regExpExecArray;
+const regexpIndicesArrayOwner = jsRegExpSourceProfileIdentity.owners.regExpIndicesArray;
 const regexpMatchArrayOwner = jsRegExpSourceProfileIdentity.owners.regExpMatchArray;
+const regexpNamedGroupsOwner = jsRegExpSourceProfileIdentity.owners.regExpNamedGroups;
+const regexpNamedIndicesOwner = jsRegExpSourceProfileIdentity.owners.regExpNamedIndices;
+const regexpStringIteratorOwner = jsRegExpSourceProfileIdentity.owners.regExpStringIterator;
 const regexpMembers = jsRegExpSourceProfileIdentity.regExpMembers;
+const regexpConstructorMembers = jsRegExpSourceProfileIdentity.regExpConstructorMembers;
 const regexpResultMembers = jsRegExpSourceProfileIdentity.regExpResultMembers;
 const regexpStringMembers = jsRegExpSourceProfileIdentity.stringMembers;
+const regexpWellKnownMembers = jsRegExpSourceProfileIdentity.wellKnownMemberKeys;
 const stringOwner = jsRegExpSourceProfileIdentity.owners.string;
 export const rustInferCarrier: TargetTypeRef = { kind: "opaque", id: "tsonic.rust.infer" };
 const jsNumberArgumentRows = [
@@ -181,6 +189,17 @@ function staticCallbackOperation(
       path: falliblePath,
       argModes: ["ref", "value"],
     },
+  };
+}
+
+function regexpReplacementCallbackOperation(
+  fallibleTarget: RustProviderOperationForm,
+): RustCallbackOperationTemplate {
+  return {
+    shape: "direct",
+    sourceArgumentIndex: 1,
+    argumentAdapter: "js-regexp-replacement",
+    fallibleTarget,
   };
 }
 const numberPredicateRows = [
@@ -475,8 +494,10 @@ export const jsOperationRows = defineJsOperationRows([
   { owner: stringOwner, member: regexpStringMembers.split, operationKind: "call", lane: "string", variant: "string-default", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::split_all", receiverMode: "ref", argModes: ["ref"] }, result: { ref: "string-array" }, params: [{ ref: "string" }] } },
   ...jsNumberArgumentRows.map(({ variant, carrier, conversion }): JsOperationRowData => ({ owner: stringOwner, member: regexpStringMembers.split, operationKind: "call", lane: "string", variant: `string-limit-${variant}`, fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::split", receiverMode: "ref", argModes: ["ref", "value"], argConversions: [undefined, conversion] }, result: { ref: "string-array" }, params: [{ ref: "string" }, carrier] } })),
   { owner: stringOwner, member: regexpStringMembers.replace, operationKind: "call", lane: "string", variant: "string", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::replace", receiverMode: "ref", argModes: ["ref", "ref"] }, result: { ref: "string" }, params: [{ ref: "string" }, { ref: "string" }] } },
+  { owner: stringOwner, member: regexpStringMembers.replace, operationKind: "call", lane: "string", variant: "string-callback", callback: regexpReplacementCallbackOperation({ form: "free-call", path: "js_string::try_replace_with", receiverMode: "ref", argModes: ["ref", "value"] }), shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::replace_with", receiverMode: "ref", argModes: ["ref", "value"] }, result: { ref: "string" }, params: [{ ref: "string" }, { ref: "argument", index: 1 }] } },
   { owner: stringOwner, member: regexpStringMembers.replaceAll, operationKind: "call", lane: "string", variant: "string", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::replace_all", receiverMode: "ref", argModes: ["ref", "ref"] }, result: { ref: "string" }, params: [{ ref: "string" }, { ref: "string" }] } },
-  { owner: "String", member: "concat", operationKind: "call", lane: "string", variadic: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call-str-slice", path: "js_string::concat", receiverMode: "ref" }, result: { ref: "string" } } },
+  { owner: stringOwner, member: regexpStringMembers.replaceAll, operationKind: "call", lane: "string", variant: "string-callback", callback: regexpReplacementCallbackOperation({ form: "free-call", path: "js_string::try_replace_all_with", receiverMode: "ref", argModes: ["ref", "value"] }), shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::replace_all_with", receiverMode: "ref", argModes: ["ref", "value"] }, result: { ref: "string" }, params: [{ ref: "string" }, { ref: "argument", index: 1 }] } },
+  { owner: "String", member: "concat", operationKind: "call", lane: "string", variadic: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call-ref-slice", path: "js_string::concat", receiverMode: "ref", elementCarrier: rustJsStringTargetType() }, result: { ref: "string" } } },
   { owner: "StringConstructor", member: "fromCharCode", operationKind: "call", lane: "string", variadic: true, fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "call-value-slice", path: "js_string::from_char_code", leadingArguments: [], elementCarrier: rustSourcePrimitiveTargetType("float64") }, result: { ref: "string" } } },
   { owner: "StringConstructor", member: "fromCodePoint", operationKind: "call", lane: "string", variadic: true, fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "call-value-slice", path: "js_string::from_code_point", leadingArguments: [], elementCarrier: rustSourcePrimitiveTargetType("float64") }, result: { ref: "string" } } },
 
@@ -558,28 +579,64 @@ export const jsOperationRows = defineJsOperationRows([
     },
   })),
 
-  // RegExp match-carrier lane. TSTS preserves the exact declaration owner:
-  // RegExp-specific fields come from either match interface, while inherited
-  // array operations come from the selected Array/ReadonlyArray declaration.
-  ...([regexpExecArrayOwner, regexpMatchArrayOwner] as const).flatMap((owner): readonly JsOperationRowData[] => [
-    { owner, member: regexpResultMembers.index, operationKind: "property", lane: "regexp-match", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "index" }, result: { ref: "float64" }, resultConversion: rustInt32ToFloat64ValueConversion } },
-    { owner, member: regexpResultMembers.input, operationKind: "property", lane: "regexp-match", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "input" }, result: { ref: "string" } } },
-  ]),
-  ...([regexpExecArrayOwner, regexpMatchArrayOwner, "Array", "ReadonlyArray"] as const).flatMap((owner): readonly JsOperationRowData[] => [
-    { owner, member: "length", operationKind: "property", lane: "regexp-match", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "len" }, result: { ref: "int32" }, resultConversion: rustUsizeToInt32ValueConversion } },
-    { owner, member: "index", operationKind: "indexer", lane: "regexp-match", shape: { op: "operation", operationKind: "indexer", target: { form: "receiver-method", name: "group", argModes: ["value"], argConversions: [rustInt32ToUsizeValueConversion] }, result: { ref: "option-of-string" }, params: [{ ref: "int32" }] } },
-  ]),
+  // RegExp result objects retain their exact declaration owners. Inherited
+  // array members continue through the ordinary Array/ReadonlyArray rows.
+  { owner: regexpExecArrayOwner, member: regexpResultMembers.first, operationKind: "indexer", lane: "js-array", shape: { op: "operation", operationKind: "indexer", target: { form: "receiver-method", name: "required_group", argModes: ["value"] }, result: { ref: "string" }, params: [{ ref: "float64" }] } },
+  { owner: regexpExecArrayOwner, member: regexpResultMembers.index, operationKind: "property", lane: "js-array", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "index" }, result: { ref: "float64" } } },
+  { owner: regexpExecArrayOwner, member: regexpResultMembers.input, operationKind: "property", lane: "js-array", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "input" }, result: { ref: "string" } } },
+  { owner: regexpExecArrayOwner, member: regexpResultMembers.groups, operationKind: "property", lane: "js-array", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "groups" }, result: { ref: "option-of-regexp-named-groups" }, sourceResult: { ref: "regexp-named-groups" }, sourceAbsence: "undefined" } },
+  { owner: regexpExecArrayOwner, member: regexpResultMembers.indices, operationKind: "property", lane: "js-array", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "indices" }, result: { ref: "option-of-regexp-indices" }, sourceResult: { ref: "regexp-indices" }, sourceAbsence: "undefined" } },
+  { owner: regexpMatchArrayOwner, member: regexpResultMembers.first, operationKind: "indexer", lane: "js-array", shape: { op: "operation", operationKind: "indexer", target: { form: "receiver-method", name: "required_group", argModes: ["value"] }, result: { ref: "string" }, params: [{ ref: "float64" }] } },
+  { owner: regexpMatchArrayOwner, member: regexpResultMembers.index, operationKind: "property", lane: "js-array", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "index" }, result: { ref: "option-of-float64" }, sourceResult: { ref: "float64" }, sourceAbsence: "undefined" } },
+  { owner: regexpMatchArrayOwner, member: regexpResultMembers.input, operationKind: "property", lane: "js-array", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "input" }, result: { ref: "option-of-string" }, sourceResult: { ref: "string" }, sourceAbsence: "undefined" } },
+  { owner: regexpMatchArrayOwner, member: regexpResultMembers.groups, operationKind: "property", lane: "js-array", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "groups" }, result: { ref: "option-of-regexp-named-groups" }, sourceResult: { ref: "regexp-named-groups" }, sourceAbsence: "undefined" } },
+  { owner: regexpMatchArrayOwner, member: regexpResultMembers.indices, operationKind: "property", lane: "js-array", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "indices" }, result: { ref: "option-of-regexp-indices" }, sourceResult: { ref: "regexp-indices" }, sourceAbsence: "undefined" } },
+  { owner: regexpIndicesArrayOwner, member: regexpResultMembers.groups, operationKind: "property", lane: "js-array", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "groups" }, result: { ref: "option-of-regexp-named-indices" }, sourceResult: { ref: "regexp-named-indices" }, sourceAbsence: "undefined" } },
 
-  // RegExp lane: exact selected operations over the complete JS runtime contract.
+  // Named groups are exact closed string-keyed result objects. Property access
+  // supplies the authored key only after the selected index declaration proves
+  // the operation identity; element access supplies the selected key value.
+  { owner: regexpNamedGroupsOwner, member: "index", operationKind: "property", lane: "regexp-named-groups", authoredPropertyKey: true, shape: { op: "operation", operationKind: "property", target: { form: "free-call", path: "js_abi::regexp_named_groups_get", receiverMode: "ref" }, result: { ref: "option-of-string" }, sourceResult: { ref: "string" }, sourceAbsence: "undefined" } },
+  { owner: regexpNamedGroupsOwner, member: "index", operationKind: "indexer", lane: "regexp-named-groups", shape: { op: "operation", operationKind: "indexer", target: { form: "receiver-method", name: "get", argModes: ["ref"] }, result: { ref: "option-of-string" }, sourceResult: { ref: "string" }, sourceAbsence: "undefined", params: [{ ref: "string" }] } },
+  { owner: regexpNamedGroupsOwner, member: "index", operationKind: "property-set", lane: "regexp-named-groups", authoredPropertyKey: true, shape: { op: "set", target: { form: "free-call", path: "js_abi::regexp_named_groups_set", receiverMode: "ref" }, params: [{ ref: "option-of-string" }] } },
+  { owner: regexpNamedGroupsOwner, member: "index", operationKind: "index-set", lane: "regexp-named-groups", shape: { op: "set", target: { form: "receiver-method", name: "set", argModes: ["ref", "value"] }, params: [{ ref: "string" }, { ref: "option-of-string" }] } },
+  { owner: regexpNamedGroupsOwner, member: "index", operationKind: "delete", lane: "regexp-named-groups", shape: { op: "operation", operationKind: "indexer", target: { form: "receiver-method", name: "delete", argModes: ["ref"] }, result: { ref: "bool" }, params: [{ ref: "string" }] } },
+  { owner: regexpNamedIndicesOwner, member: "index", operationKind: "property", lane: "regexp-named-indices", authoredPropertyKey: true, shape: { op: "operation", operationKind: "property", target: { form: "free-call", path: "js_abi::regexp_named_indices_get", receiverMode: "ref" }, result: { ref: "option-of-regexp-index-pair" }, sourceResult: { ref: "regexp-index-pair" }, sourceAbsence: "undefined" } },
+  { owner: regexpNamedIndicesOwner, member: "index", operationKind: "indexer", lane: "regexp-named-indices", shape: { op: "operation", operationKind: "indexer", target: { form: "receiver-method", name: "get", argModes: ["ref"] }, result: { ref: "option-of-regexp-index-pair" }, sourceResult: { ref: "regexp-index-pair" }, sourceAbsence: "undefined", params: [{ ref: "string" }] } },
+  { owner: regexpNamedIndicesOwner, member: "index", operationKind: "property-set", lane: "regexp-named-indices", authoredPropertyKey: true, shape: { op: "set", target: { form: "free-call", path: "js_abi::regexp_named_indices_set", receiverMode: "ref" }, params: [{ ref: "option-of-regexp-index-pair" }] } },
+  { owner: regexpNamedIndicesOwner, member: "index", operationKind: "index-set", lane: "regexp-named-indices", shape: { op: "set", target: { form: "receiver-method", name: "set", argModes: ["ref", "value"] }, params: [{ ref: "string" }, { ref: "option-of-regexp-index-pair" }] } },
+  { owner: regexpNamedIndicesOwner, member: "index", operationKind: "delete", lane: "regexp-named-indices", shape: { op: "operation", operationKind: "indexer", target: { form: "receiver-method", name: "delete", argModes: ["ref"] }, result: { ref: "bool" }, params: [{ ref: "string" }] } },
+
+  // RegExp lane: exact selected operations over the complete built-in runtime contract.
+  { owner: regexpConstructorOwner, member: regexpConstructorMembers.escape, operationKind: "call", lane: "regexp", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::JsRegExp::escape", argModes: ["ref"] }, result: { ref: "string" }, params: [{ ref: "string" }] } },
   { owner: regexpOwner, member: regexpMembers.test, operationKind: "call", lane: "regexp", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "test", argModes: ["ref"] }, result: { ref: "bool" }, params: [{ ref: "string" }] } },
-  { owner: regexpOwner, member: regexpMembers.exec, operationKind: "call", lane: "regexp", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "exec", argModes: ["ref"] }, result: { ref: "option-of-regexp-match" }, params: [{ ref: "string" }] } },
+  { owner: regexpOwner, member: regexpMembers.exec, operationKind: "call", lane: "regexp", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "exec", argModes: ["ref"] }, result: { ref: "option-of-regexp-exec-array" }, sourceResult: { ref: "regexp-exec-array" }, sourceAbsence: "null", params: [{ ref: "string" }] } },
+  { owner: regexpOwner, member: regexpMembers.toString, operationKind: "call", lane: "regexp", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "to_string_value" }, result: { ref: "string" } } },
+  { owner: regexpOwner, member: regexpWellKnownMembers.match, operationKind: "call", lane: "regexp", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "match_result", argModes: ["ref"] }, result: { ref: "option-of-regexp-match-array" }, sourceResult: { ref: "regexp-match-array" }, sourceAbsence: "null", params: [{ ref: "string" }] } },
+  { owner: regexpOwner, member: regexpWellKnownMembers.matchAll, operationKind: "call", lane: "regexp", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "match_all", argModes: ["ref"] }, result: { ref: "regexp-string-iterator" }, params: [{ ref: "string" }] } },
+  { owner: regexpOwner, member: regexpWellKnownMembers.replace, operationKind: "call", lane: "regexp", variant: "string", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "replace", argModes: ["ref", "ref"] }, result: { ref: "string" }, params: [{ ref: "string" }, { ref: "string" }] } },
+  { owner: regexpOwner, member: regexpWellKnownMembers.replace, operationKind: "call", lane: "regexp", variant: "callback", fallible: true, callback: regexpReplacementCallbackOperation({ form: "receiver-method", name: "try_replace_with", argModes: ["ref", "value"] }), shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "replace_with", argModes: ["ref", "value"] }, result: { ref: "string" }, params: [{ ref: "string" }, { ref: "argument", index: 1 }] } },
+  { owner: regexpOwner, member: regexpWellKnownMembers.search, operationKind: "call", lane: "regexp", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "search", argModes: ["ref"] }, result: { ref: "float64" }, params: [{ ref: "string" }] } },
+  { owner: regexpOwner, member: regexpWellKnownMembers.split, operationKind: "call", lane: "regexp", variant: "default", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "split_all", argModes: ["ref"] }, result: { ref: "string-array" }, params: [{ ref: "string" }] } },
+  { owner: regexpOwner, member: regexpWellKnownMembers.split, operationKind: "call", lane: "regexp", variant: "limit", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "split_with_limit", argModes: ["ref", "value"] }, result: { ref: "string-array" }, params: [{ ref: "string" }, { ref: "float64" }] } },
   { owner: regexpOwner, member: regexpMembers.source, operationKind: "property", lane: "regexp", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "source" }, result: { ref: "string" } } },
   { owner: regexpOwner, member: regexpMembers.flags, operationKind: "property", lane: "regexp", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "flags" }, result: { ref: "string" } } },
-  { owner: regexpOwner, member: regexpMembers.global, operationKind: "property", lane: "regexp", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "global" }, result: { ref: "bool" } } },
-  { owner: regexpOwner, member: regexpMembers.ignoreCase, operationKind: "property", lane: "regexp", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "ignore_case" }, result: { ref: "bool" } } },
-  { owner: regexpOwner, member: regexpMembers.multiline, operationKind: "property", lane: "regexp", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "multiline" }, result: { ref: "bool" } } },
-  { owner: regexpOwner, member: regexpMembers.lastIndex, operationKind: "property", lane: "regexp", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "last_index" }, result: { ref: "float64" }, resultConversion: rustInt32ToFloat64ValueConversion } },
-  { owner: stringOwner, member: regexpStringMembers.match, operationKind: "call", lane: "string", firstArgCarrierId: "rust.js.JsRegExp", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "arg-receiver-method", name: "match_result", argModes: ["ref"] }, result: { ref: "option-of-regexp-match" }, params: [undefined] } },
+  ...([
+    [regexpMembers.global, "global"],
+    [regexpMembers.hasIndices, "has_indices"],
+    [regexpMembers.ignoreCase, "ignore_case"],
+    [regexpMembers.multiline, "multiline"],
+    [regexpMembers.dotAll, "dot_all"],
+    [regexpMembers.sticky, "sticky"],
+    [regexpMembers.unicode, "unicode"],
+    [regexpMembers.unicodeSets, "unicode_sets"],
+  ] as const).map(([member, name]): JsOperationRowData => ({ owner: regexpOwner, member, operationKind: "property", lane: "regexp", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name }, result: { ref: "bool" } } })),
+  { owner: regexpOwner, member: regexpMembers.lastIndex, operationKind: "property", lane: "regexp", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "last_index" }, result: { ref: "float64" } } },
+  { owner: regexpOwner, member: regexpMembers.lastIndex, operationKind: "property-set", lane: "regexp", shape: { op: "set", target: { form: "receiver-method", name: "set_last_index" }, params: [{ ref: "float64" }] } },
+
+  // String integration selects the built-in RegExp or string carrier exactly.
+  { owner: stringOwner, member: regexpStringMembers.match, operationKind: "call", lane: "string", variant: "regexp", firstArgCarrierId: "rust.js.JsRegExp", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "arg-receiver-method", name: "match_result", argModes: ["ref"] }, result: { ref: "option-of-regexp-match-array" }, sourceResult: { ref: "regexp-match-array" }, sourceAbsence: "null", params: [{ ref: "regexp" }] } },
+  { owner: stringOwner, member: regexpStringMembers.match, operationKind: "call", lane: "string", variant: "string", firstArgCarrierId: "rust.js.JsString", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::regexp_match_string", receiverMode: "ref", argModes: ["ref"] }, result: { ref: "option-of-regexp-match-array" }, sourceResult: { ref: "regexp-match-array" }, sourceAbsence: "null", params: [{ ref: "string" }] } },
   { owner: "String", member: "padStart", operationKind: "call", lane: "string", variant: "float64-default", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::pad_start", receiverMode: "ref", argModes: ["value"] }, result: { ref: "string" }, params: [{ ref: "float64" }] } },
   { owner: "String", member: "padStart", operationKind: "call", lane: "string", variant: "float64-fill", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::pad_start_with", receiverMode: "ref", argModes: ["value", "ref"] }, result: { ref: "string" }, params: [{ ref: "float64" }, { ref: "string" }] } },
   { owner: "String", member: "padStart", operationKind: "call", lane: "string", variant: "int32-default", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::pad_start", receiverMode: "ref", argModes: ["value"], argConversions: [rustInt32ToFloat64ValueConversion] }, result: { ref: "string" }, params: [{ ref: "int32" }] } },
@@ -588,10 +645,16 @@ export const jsOperationRows = defineJsOperationRows([
   { owner: "String", member: "padEnd", operationKind: "call", lane: "string", variant: "float64-fill", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::pad_end_with", receiverMode: "ref", argModes: ["value", "ref"] }, result: { ref: "string" }, params: [{ ref: "float64" }, { ref: "string" }] } },
   { owner: "String", member: "padEnd", operationKind: "call", lane: "string", variant: "int32-default", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::pad_end", receiverMode: "ref", argModes: ["value"], argConversions: [rustInt32ToFloat64ValueConversion] }, result: { ref: "string" }, params: [{ ref: "int32" }] } },
   { owner: "String", member: "padEnd", operationKind: "call", lane: "string", variant: "int32-fill", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::pad_end_with", receiverMode: "ref", argModes: ["value", "ref"], argConversions: [rustInt32ToFloat64ValueConversion, undefined] }, result: { ref: "string" }, params: [{ ref: "int32" }, { ref: "string" }] } },
-  { owner: stringOwner, member: regexpStringMembers.matchAll, operationKind: "call", lane: "string", firstArgCarrierId: "rust.js.JsRegExp", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "arg-receiver-method", name: "match_all", argModes: ["ref"] }, result: { ref: "regexp-match-vec" }, params: [undefined] } },
-  { owner: stringOwner, member: regexpStringMembers.replace, operationKind: "call", lane: "string", variant: "regexp", firstArgCarrierId: "rust.js.JsRegExp", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "arg-receiver-method", name: "replace", argModes: ["ref", "ref"] }, result: { ref: "string" }, params: [undefined, { ref: "string" }] } },
-  { owner: stringOwner, member: regexpStringMembers.search, operationKind: "call", lane: "string", firstArgCarrierId: "rust.js.JsRegExp", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "arg-receiver-method", name: "search", argModes: ["ref"] }, result: { ref: "int32" }, params: [undefined] } },
-  { owner: stringOwner, member: regexpStringMembers.split, operationKind: "call", lane: "string", variant: "regexp", firstArgCarrierId: "rust.js.JsRegExp", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "arg-receiver-method", name: "split", argModes: ["ref"] }, result: { ref: "string-array" }, params: [undefined] } },
+  { owner: stringOwner, member: regexpStringMembers.matchAll, operationKind: "call", lane: "string", firstArgCarrierId: "rust.js.JsRegExp", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "arg-receiver-method", name: "match_all_for_string", argModes: ["ref"] }, result: { ref: "regexp-string-iterator" }, params: [{ ref: "regexp" }] } },
+  { owner: stringOwner, member: regexpStringMembers.replace, operationKind: "call", lane: "string", variant: "regexp", firstArgCarrierId: "rust.js.JsRegExp", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "arg-receiver-method", name: "replace", argModes: ["ref", "ref"] }, result: { ref: "string" }, params: [{ ref: "regexp" }, { ref: "string" }] } },
+  { owner: stringOwner, member: regexpStringMembers.replace, operationKind: "call", lane: "string", variant: "regexp-callback", firstArgCarrierId: "rust.js.JsRegExp", fallible: true, callback: regexpReplacementCallbackOperation({ form: "arg-receiver-method", name: "try_replace_with", argModes: ["ref", "value"] }), shape: { op: "operation", operationKind: "method", target: { form: "arg-receiver-method", name: "replace_with", argModes: ["ref", "value"] }, result: { ref: "string" }, params: [{ ref: "regexp" }, { ref: "argument", index: 1 }] } },
+  { owner: stringOwner, member: regexpStringMembers.replaceAll, operationKind: "call", lane: "string", variant: "regexp", firstArgCarrierId: "rust.js.JsRegExp", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "arg-receiver-method", name: "replace_all_for_string", argModes: ["ref", "ref"] }, result: { ref: "string" }, params: [{ ref: "regexp" }, { ref: "string" }] } },
+  { owner: stringOwner, member: regexpStringMembers.replaceAll, operationKind: "call", lane: "string", variant: "regexp-callback", firstArgCarrierId: "rust.js.JsRegExp", fallible: true, callback: regexpReplacementCallbackOperation({ form: "arg-receiver-method", name: "try_replace_all_for_string_with", argModes: ["ref", "value"] }), shape: { op: "operation", operationKind: "method", target: { form: "arg-receiver-method", name: "replace_all_for_string_with", argModes: ["ref", "value"] }, result: { ref: "string" }, params: [{ ref: "regexp" }, { ref: "argument", index: 1 }] } },
+  { owner: stringOwner, member: regexpStringMembers.search, operationKind: "call", lane: "string", variant: "regexp", firstArgCarrierId: "rust.js.JsRegExp", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "arg-receiver-method", name: "search", argModes: ["ref"] }, result: { ref: "float64" }, params: [{ ref: "regexp" }] } },
+  { owner: stringOwner, member: regexpStringMembers.search, operationKind: "call", lane: "string", variant: "string", firstArgCarrierId: "rust.js.JsString", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::regexp_search_string", receiverMode: "ref", argModes: ["ref"] }, result: { ref: "float64" }, params: [{ ref: "string" }] } },
+  { owner: stringOwner, member: regexpStringMembers.split, operationKind: "call", lane: "string", variant: "regexp-default", firstArgCarrierId: "rust.js.JsRegExp", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "arg-receiver-method", name: "split_all", argModes: ["ref"] }, result: { ref: "string-array" }, params: [{ ref: "regexp" }] } },
+  { owner: stringOwner, member: regexpStringMembers.split, operationKind: "call", lane: "string", variant: "regexp-limit", firstArgCarrierId: "rust.js.JsRegExp", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "arg-receiver-method", name: "split_with_limit", argModes: ["ref", "value"] }, result: { ref: "string-array" }, params: [{ ref: "regexp" }, { ref: "float64" }] } },
+  { owner: regexpStringIteratorOwner, member: regexpWellKnownMembers.iterator, operationKind: "call", lane: "regexp-string-iterator", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "iterator" }, result: { ref: "regexp-string-iterator" } } },
 
   // Set algebra.
   ...(["Set", "ReadonlySet"] as const).flatMap((owner): readonly JsOperationRowData[] => [

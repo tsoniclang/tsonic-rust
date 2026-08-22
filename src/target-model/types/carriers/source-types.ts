@@ -2,8 +2,14 @@ import { hasExactObjectKeys } from "./primitives.js";
 import { isDenseDataArray } from "../../metadata/closed-data.js";
 import { isRustTargetTypeRef } from "../equality.js";
 import type { TargetTypeRef } from "../model.js";
+import type { RustSourceMemberKey } from "../source-member-keys.js";
+import {
+  rustSourceMemberKeysEqual,
+  rustSourceMemberKeyText,
+} from "../source-member-keys.js";
 
 export const rustStringTargetId = "rust.std.String";
+export const rustJsStringTargetId = "rust.js.JsString";
 export const rustBigIntTargetId = "rust.runtime.BigInt";
 export const rustOptionTargetId = "rust.std.Option";
 export const rustLocationTargetId = "rust.runtime.Location";
@@ -22,7 +28,12 @@ export const rustJsMapTargetId = "rust.js.JsMap";
 export const rustJsSetTargetId = "rust.js.JsSet";
 export const rustJsDateTargetId = "rust.js.JsDate";
 export const rustJsRegExpTargetId = "rust.js.JsRegExp";
-export const rustJsRegExpMatchTargetId = "rust.js.JsRegExpMatch";
+export const rustJsRegExpExecArrayTargetId = "rust.js.JsRegExpExecArray";
+export const rustJsRegExpMatchArrayTargetId = "rust.js.JsRegExpMatchArray";
+export const rustJsRegExpIndicesTargetId = "rust.js.JsRegExpIndices";
+export const rustJsRegExpNamedGroupsTargetId = "rust.js.JsRegExpNamedGroups";
+export const rustJsRegExpNamedIndicesTargetId = "rust.js.JsRegExpNamedIndices";
+export const rustJsRegExpStringIteratorTargetId = "rust.js.JsRegExpStringIterator";
 export const rustNamedTypeCarrierName = "named-type";
 export const rustStructuralObjectCarrierName = "structural-object";
 export const rustSourceUnionCarrierName = "source-union";
@@ -36,6 +47,7 @@ export interface RustSourceTypeCarrierValue {
 }
 
 export interface RustStructuralObjectFieldCarrierValue {
+  readonly sourceKey: RustSourceMemberKey;
   readonly sourceName: string;
   readonly type: TargetTypeRef;
   readonly presence: "required" | "optional";
@@ -116,7 +128,11 @@ export function rustStructuralObjectTargetType(
   fields: readonly RustStructuralObjectFieldCarrierValue[],
 ): TargetTypeRef {
   const canonicalFields = Object.freeze(
-    [...fields].sort((left, right) => left.sourceName.localeCompare(right.sourceName)),
+    [...fields].sort((left, right) =>
+      rustSourceMemberKeyText(left.sourceKey).localeCompare(
+        rustSourceMemberKeyText(right.sourceKey),
+        "en",
+      )),
   );
   return {
     kind: "target-specific",
@@ -148,7 +164,7 @@ export function rustStructuralObjectCarrierValue(
     !isDenseDataArray(fields) || fields.length === 0) {
     return undefined;
   }
-  const seenNames = new Set<string>();
+  const seenKeys: RustSourceMemberKey[] = [];
   const normalized: RustStructuralObjectFieldCarrierValue[] = [];
   for (const field of fields) {
     if (typeof field !== "object" || field === null || Array.isArray(field)) {
@@ -156,12 +172,15 @@ export function rustStructuralObjectCarrierValue(
     }
     const candidate = field as Partial<RustStructuralObjectFieldCarrierValue>;
     const expectedKeys = candidate.accessor !== undefined
-      ? ["accessor", "presence", "readonly", "sourceName", "type"]
+      ? ["accessor", "presence", "readonly", "sourceKey", "sourceName", "type"]
       : candidate.method === true
-        ? ["method", "presence", "readonly", "sourceName", "type"]
-        : ["presence", "readonly", "sourceName", "type"];
+        ? ["method", "presence", "readonly", "sourceKey", "sourceName", "type"]
+        : ["presence", "readonly", "sourceKey", "sourceName", "type"];
+    const sourceKey = validateRustSourceMemberKey(candidate.sourceKey);
     if (typeof candidate.sourceName !== "string" || candidate.sourceName.length === 0 ||
-      seenNames.has(candidate.sourceName) || !isRustTargetTypeRef(candidate.type) ||
+      sourceKey === undefined || seenKeys.some((key) =>
+        rustSourceMemberKeysEqual(key, sourceKey)) ||
+      !isRustTargetTypeRef(candidate.type) ||
       (candidate.presence !== "required" && candidate.presence !== "optional") ||
       typeof candidate.readonly !== "boolean" ||
       !hasExactObjectKeys(field, expectedKeys) ||
@@ -176,7 +195,7 @@ export function rustStructuralObjectCarrierValue(
       )) {
       return undefined;
     }
-    seenNames.add(candidate.sourceName);
+    seenKeys.push(sourceKey);
     normalized.push(candidate as RustStructuralObjectFieldCarrierValue);
   }
   return {
@@ -184,6 +203,48 @@ export function rustStructuralObjectCarrierValue(
     fields: Object.freeze(normalized),
   };
 }
+
+function validateRustSourceMemberKey(value: unknown): RustSourceMemberKey | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return undefined;
+  }
+  const candidate = value as {
+    readonly kind?: unknown;
+    readonly name?: unknown;
+    readonly symbol?: unknown;
+  };
+  if (candidate.kind === "property") {
+    return hasExactObjectKeys(value, ["kind", "name"]) &&
+        typeof candidate.name === "string" && candidate.name.length > 0
+      ? candidate as RustSourceMemberKey
+      : undefined;
+  }
+  if (candidate.kind !== "well-known-symbol" ||
+    !hasExactObjectKeys(value, ["kind", "symbol"]) ||
+    typeof candidate.symbol !== "string" ||
+    !rustWellKnownSymbols.has(candidate.symbol)) {
+    return undefined;
+  }
+  return candidate as RustSourceMemberKey;
+}
+
+const rustWellKnownSymbols: ReadonlySet<string> = new Set([
+  "async-dispose",
+  "async-iterator",
+  "dispose",
+  "has-instance",
+  "is-concat-spreadable",
+  "iterator",
+  "match",
+  "match-all",
+  "replace",
+  "search",
+  "species",
+  "split",
+  "to-primitive",
+  "to-string-tag",
+  "unscopables",
+]);
 
 export function rustSourceUnionTargetType(
   fileName: string,

@@ -2,7 +2,7 @@ import { acceptRustMemberOperation, elementProvenance, normalizeSelectedOperatio
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { finalizeProviderOperationFromSubjects } from "./conversions.js";
 import { isProjectSourceDeclaration } from "../../../policy/evidence/selected-source.js";
-import { isRustCopyCarrier } from "../../../target-model/types/index.js";
+import { isRustCopyCarrier, rustSourceMemberKeysEqual } from "../../../target-model/types/index.js";
 import { rustFixedArrayCarrierValue, rustSourcePrimitiveTargetType } from "../../../target-model/types/index.js";
 import { rustInt32ToUsizeValueConversion, rustUsizeToInt32ValueConversion } from "../../../target-model/conversions/model.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -230,6 +230,7 @@ function structuralFieldProjectionsAgree(
   return left.shape.storage === right.shape.storage &&
     rustTargetTypeRefEquals(left.shape.carrier, right.shape.carrier) &&
     left.field.storageIndex === right.field.storageIndex &&
+    rustSourceMemberKeysEqual(left.field.sourceKey, right.field.sourceKey) &&
     left.field.sourceName === right.field.sourceName &&
     left.field.presence === right.field.presence &&
     left.field.readonly === right.field.readonly &&

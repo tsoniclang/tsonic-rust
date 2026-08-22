@@ -87,9 +87,6 @@ document and the lane list from drifting.
 ## Hard-rejected by architecture
 
 - Open reflection and dynamic member access; eval and embedded engines.
-- Dynamic RegExp patterns and constructs outside the oracle subset (lazy
-  quantifiers, backreferences, lookaround, named groups, word-boundary
-  assertions, unicode property escapes, flags d s u v y).
 - JSON replacer functions and custom toJSON dispatch.
 - Process termination side effects beyond exit(code).
 

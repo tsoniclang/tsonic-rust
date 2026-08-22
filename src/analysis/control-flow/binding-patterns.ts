@@ -27,11 +27,14 @@ import {
   rustFixedArrayTargetType,
   rustOptionElementCarrier,
   rustOptionTargetType,
+  rustPropertySourceMemberKey,
+  rustSourceMemberKeysEqual,
   rustSourceTypeCarrierValue,
   rustStructuralObjectCarrierValue,
   rustStructuralObjectTargetType,
   rustTupleTargetType,
 } from "../../target-model/types/index.js";
+import type { RustSourceMemberKey } from "../../target-model/types/index.js";
 import type { RustAnalysisContext } from "../program/context.js";
 import type {
   RustSourceObjectField,
@@ -39,6 +42,7 @@ import type {
 } from "../project-types/source-type-registry.js";
 import { isRustStructuralObjectFieldDeclaration } from "../../policy/types/source-shapes.js";
 import { rustProjectObjectLayout } from "../project-types/object-layout.js";
+import { resolveRustSourceMemberKey } from "../../policy/evidence/source-member-key.js";
 
 export interface RustBindingPatternFactContext {
   readonly ast: AstReader;
@@ -207,7 +211,8 @@ function selectObjectProjection(
       return undefined;
     }
     const remaining = sourceShape.fields.filter((field) =>
-      !extractedSourceNames.has(field.sourceName));
+      field.sourceKey.kind !== "property" ||
+      !extractedSourceNames.has(field.sourceKey.name));
     if (remaining.some((field) => field.method === true)) {
       return undefined;
     }
@@ -225,7 +230,7 @@ function selectObjectProjection(
     }
     const fields = targetShape.fields.map((targetField, targetStorageIndex) => {
       const sourceField = remaining.find((field) =>
-        field.sourceName === targetField.sourceName);
+        rustSourceMemberKeysEqual(field.sourceKey, targetField.sourceKey));
       return sourceField === undefined ||
           !rustTargetTypeRefEquals(sourceField.carrier, targetField.type)
         ? undefined
@@ -265,7 +270,10 @@ function selectObjectProjection(
     return undefined;
   }
   const field = sourceShape.fields.find((candidate) =>
-    candidate.sourceName === sourceName);
+    rustSourceMemberKeysEqual(
+      candidate.sourceKey,
+      rustPropertySourceMemberKey(sourceName),
+    ));
   if (field?.method === true) {
     return undefined;
   }
@@ -294,6 +302,7 @@ function selectObjectProjection(
 interface ObjectBindingSource {
   readonly storage: "project-object" | "object-handle";
   readonly fields: readonly {
+    readonly sourceKey: RustSourceMemberKey;
     readonly sourceName: string;
     readonly storageIndex: number;
     readonly carrier: TargetTypeRef;
@@ -316,6 +325,7 @@ function resolveObjectBindingSource(
     return {
       storage: "object-handle",
       fields: structural.fields.map((field, storageIndex) => ({
+        sourceKey: field.sourceKey,
         sourceName: field.sourceName,
         storageIndex,
         carrier: field.type,
@@ -345,6 +355,7 @@ function resolveObjectBindingSource(
     return carrier === undefined
       ? undefined
       : {
+          sourceKey: rustPropertySourceMemberKey(field.sourceName),
           sourceName: field.sourceName,
           storageIndex: field.storageIndex,
           carrier,
@@ -357,6 +368,7 @@ function resolveObjectBindingSource(
     : {
         storage: "project-object",
         fields: fields as readonly {
+          readonly sourceKey: RustSourceMemberKey;
           readonly sourceName: string;
           readonly storageIndex: number;
           readonly carrier: TargetTypeRef;
@@ -369,6 +381,7 @@ function resolveObjectBindingSource(
 function resolveObjectRestBindingCarrier(
   binding: Node,
   fields: readonly {
+    readonly sourceKey: RustSourceMemberKey;
     readonly sourceName: string;
     readonly carrier: TargetTypeRef;
     readonly presence: "required" | "optional";
@@ -383,12 +396,13 @@ function resolveObjectRestBindingCarrier(
   }
   const properties = semantics.types.propertyInfos(sourceType);
   if (properties.length !== fields.length ||
-    new Set(properties.map((property) => property.name)).size !== properties.length ||
-    new Set(fields.map((field) => field.sourceName)).size !== fields.length) {
+    fields.some((field, index) => fields.slice(0, index).some((previous) =>
+      rustSourceMemberKeysEqual(previous.sourceKey, field.sourceKey)))) {
     return undefined;
   }
   const ownerFileName = context.ast.getFileName(context.ast.getSourceFile(binding));
   const carrier = rustStructuralObjectTargetType(ownerFileName, fields.map((field) => ({
+    sourceKey: field.sourceKey,
     sourceName: field.sourceName,
     type: field.carrier,
     presence: field.presence,
@@ -399,12 +413,29 @@ function resolveObjectRestBindingCarrier(
     return undefined;
   }
   const registeredFields = canonical.fields.map((field, storageIndex) => {
-    const property = properties.find((candidate) =>
-      candidate.name === field.sourceName);
+    const matches = properties.flatMap((property) => {
+      const declarations = semantics.declarations.symbolDeclarations(property.symbol);
+      const denseDeclarations = declarations === undefined ||
+          !isDenseDataArray(declarations) ||
+          declarations.some((declaration) => declaration === undefined)
+        ? undefined
+        : declarations as readonly Node[];
+      const sourceKey = denseDeclarations === undefined
+        ? undefined
+        : resolveRustSourceMemberKey(
+            denseDeclarations,
+            property.name,
+            context,
+          );
+      return sourceKey !== undefined &&
+          rustSourceMemberKeysEqual(sourceKey, field.sourceKey)
+        ? [{ property, declarations: denseDeclarations }]
+        : [];
+    });
+    const match = matches.length === 1 ? matches[0] : undefined;
+    const property = match?.property;
     const propertyType = property?.type;
-    const declarations = property === undefined
-      ? undefined
-      : semantics.declarations.symbolDeclarations(property.symbol);
+    const declarations = match?.declarations;
     if (property === undefined || propertyType === undefined ||
       declarations === undefined || declarations.length === 0 ||
       !isDenseDataArray(declarations) || declarations.some((declaration) => declaration === undefined) ||
@@ -416,6 +447,7 @@ function resolveObjectRestBindingCarrier(
     return {
       declarations: Object.freeze([...declarations] as Node[]),
       symbols: Object.freeze([property.symbol]),
+      sourceKey: field.sourceKey,
       sourceName: field.sourceName,
       sourceType: propertyType,
       storageIndex,

@@ -38,13 +38,12 @@ export function selectRustCheckedDelete(
     request.sourceSelectedDeclaration,
     options.sourceProfiles,
   );
-  if (!options.jsEnabled || identity?.ownerName !== "Array" ||
-    identity.memberName !== "index") {
+  if (!options.jsEnabled || identity === undefined || identity.memberName !== "index") {
     return rejectSelectedOperation(
       request.expression,
       context,
       "RUST_DELETE_SELECTION_UNSUPPORTED",
-      "delete requires the exact mutable JavaScript Array index signature selected by TSTS.",
+      "delete requires one exact mutable JavaScript index signature selected by TSTS.",
     );
   }
   const receiverCarrier = resolveRustTargetTypeRef(request.receiver, context, options);
@@ -69,7 +68,7 @@ export function selectRustCheckedDelete(
       request.expression,
       context,
       "RUST_DELETE_CARRIER_UNSUPPORTED",
-      "The selected JavaScript Array deletion has no closed Rust receiver and index carriers.",
+      `The selected JavaScript deletion '${identity.ownerName}.${identity.memberName}' has no closed Rust receiver and index carriers.`,
     );
   }
   const fact = finalizeProviderOperationFromSubjects(
@@ -84,7 +83,7 @@ export function selectRustCheckedDelete(
       request.expression,
       context,
       "RUST_DELETE_ABI_INCOMPLETE",
-      "The selected JavaScript Array deletion cannot finalize one total Rust operation ABI.",
+      `The selected JavaScript deletion '${identity.ownerName}.${identity.memberName}' cannot finalize one total Rust operation ABI.`,
     );
   }
   return acceptRustOperation(request.expression, fact, context, {
@@ -286,11 +285,18 @@ export function selectRustCheckedPropertyAccess(
       return rejectSelectedOperation(request.expression, context, "RUST_JS_SURFACE_REQUIRED", "The selected property belongs to the explicit JavaScript source profile, which is not active.");
     }
     const receiverCarrier = selectedReceiverCarrier;
+    const propertyNameNode = context.ast.name(request.expression);
+    const authoredPropertyKey = propertyNameNode === undefined
+      ? undefined
+      : context.ast.text(propertyNameNode);
     const selection = selectJsSurfaceOperation({
       ownerName: jsIdentity.ownerName,
       memberName: jsIdentity.memberName,
       operationKind: "property",
       ...(receiverCarrier === undefined ? {} : { receiverCarrier }),
+      ...(jsIdentity.memberName === "index" && authoredPropertyKey !== undefined
+        ? { authoredPropertyKey }
+        : {}),
     });
     if (selection === undefined || selection.fact.kind !== "provider-operation" || selection.resultCarrier === undefined) {
       return rejectSelectedOperation(

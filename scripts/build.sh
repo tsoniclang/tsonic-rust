@@ -39,7 +39,8 @@ cat > "$CANONICAL_TSCONFIG" <<EOF
       "@tsonic/target-api": ["$TSONIC_ROOT/packages/target-api/dist/public/index.d.ts"],
       "@tsonic/target-api/*": ["$TSONIC_ROOT/packages/target-api/dist/public/*.d.ts"],
       "@tsonic/source-core": ["$TSONIC_ROOT/packages/source-core/dist/public/index.d.ts"],
-      "@tsonic/source-core/*": ["$TSONIC_ROOT/packages/source-core/dist/public/*.d.ts"]
+      "@tsonic/source-core/*": ["$TSONIC_ROOT/packages/source-core/dist/public/*.d.ts"],
+      "@tsonic/js-source-profile": ["$TSONIC_ROOT/packages/js-source-profile/dist/index.d.ts"]
     }
   }
 }

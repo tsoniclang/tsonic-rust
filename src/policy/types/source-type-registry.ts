@@ -6,6 +6,7 @@ import type {
   Type,
 } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustSourceMemberKey } from "../../target-model/types/source-member-keys.js";
 
 export interface RustSourceEnumVariant {
   readonly name: string;
@@ -15,6 +16,7 @@ export interface RustSourceEnumVariant {
 export interface RustSourceObjectField {
   readonly declarations: readonly Node[];
   readonly symbols: readonly Symbol[];
+  readonly sourceKey: RustSourceMemberKey;
   readonly sourceName: string;
   readonly sourceType: Type;
   readonly storageIndex: number;

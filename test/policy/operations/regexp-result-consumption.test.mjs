@@ -42,9 +42,10 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /\.exec\("xa12"\)/u);
-  assert.match(source, /\.match_first\("za7"\)/u);
-  assert.match(source, /\.match_all\("a1 b22"\)/u);
+  assert.match(source, /\.exec\(&js_abi::JsString::from\("xa12"\)\)\?/u);
+  assert.match(source, /\.match_result\(&js_abi::JsString::from\("za7"\)\)\?/u);
+  assert.match(source, /\.match_all_for_string\(&js_abi::JsString::from\("a1 b22"\)\)\?/u);
+  assert.match(source, /item\.input\(\) == "a1 b22"/u);
   assert.match(source, /\.len\(\)/u);
   assert.equal(validateGeneratedProject("regexp-result-consumption", result.artifacts, { run: true }).status, 0);
 });

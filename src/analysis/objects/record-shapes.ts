@@ -3,6 +3,7 @@ import {
   isRustStringCarrier,
   rustCallableTargetType,
   rustClosureTargetType,
+  rustPropertySourceMemberKey,
   rustSourceTypeCarrierValue,
   rustStructuralObjectCarrierValue,
   rustCarrierSupportsClone,
@@ -29,6 +30,7 @@ import type { RustFactWalk } from "../program/walk.js";
 import type { RustSourceUnion, RustSourceUnionVariant } from "../project-types/source-type-registry.js";
 import type { RustTargetOperationFact } from "../facts/keys.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustSourceMemberKey } from "../../target-model/types/index.js";
 
 export function resolveProjectMethodPropertyCarrier(
   walk: RustFactWalk,
@@ -277,6 +279,7 @@ export function resolveObjectLiteralMethodCarrier(
 interface RustResolvedRecordShape {
   readonly storage: "project-object" | "object-handle";
   readonly fields: readonly {
+    readonly sourceKey: RustSourceMemberKey;
     readonly sourceName: string;
     readonly storageIndex: number;
     readonly carrier: TargetTypeRef;
@@ -316,6 +319,7 @@ export function resolveRustRecordShape(
       return instantiated === undefined
         ? undefined
         : {
+            sourceKey: rustPropertySourceMemberKey(field.sourceName),
             sourceName: field.sourceName,
             storageIndex: field.storageIndex,
             carrier: instantiated,
@@ -327,6 +331,7 @@ export function resolveRustRecordShape(
       : {
           storage: "project-object",
           fields: fields as readonly {
+            readonly sourceKey: RustSourceMemberKey;
             readonly sourceName: string;
             readonly storageIndex: number;
             readonly carrier: TargetTypeRef;
@@ -340,6 +345,7 @@ export function resolveRustRecordShape(
     : {
         storage: "object-handle",
         fields: structural.fields.map((field, storageIndex) => ({
+          sourceKey: field.sourceKey,
           sourceName: field.sourceName,
           storageIndex,
           carrier: field.type,

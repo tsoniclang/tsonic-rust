@@ -192,8 +192,14 @@ function materializeProviderOperationForm(
       })),
     };
   }
-  if (form.form === "call-str-slice" || form.form === "free-call-str-slice" || form.form === "path" ||
-    form.form === "static") {
+  if (form.form === "call-ref-slice" || form.form === "free-call-ref-slice") {
+    return {
+      ...form,
+      path: expandProviderPath(form.path, aliases),
+      elementCarrier: materializeProviderCarrier(form.elementCarrier, carrierPaths, carrierTraits),
+    };
+  }
+  if (form.form === "path" || form.form === "static") {
     return { ...form, path: expandProviderPath(form.path, aliases) };
   }
   if (form.form === "binary-operator") {
@@ -211,7 +217,8 @@ function materializeProviderOperationForm(
   if (form.form === "index" && form.indexConversion !== undefined) {
     return form;
   }
-  if (form.form === "receiver-method" && argConversions !== undefined) {
+  if ((form.form === "receiver-method" || form.form === "arg-receiver-method") &&
+    argConversions !== undefined) {
     return { ...form, argConversions };
   }
   return form;
@@ -299,10 +306,16 @@ function materializeProviderValueConversion(
       };
     case "source-union-variant":
     case "bottom-coercion":
+    case "js-argument-vector-callback":
       return {
         ...conversion,
         source: materializeProviderCarrier(conversion.source, carrierPaths, carrierTraits),
         target: materializeProviderCarrier(conversion.target, carrierPaths, carrierTraits),
+      };
+    case "option-some":
+      return {
+        ...conversion,
+        element: materializeProviderCarrier(conversion.element, carrierPaths, carrierTraits),
       };
     case "option-map":
       return {

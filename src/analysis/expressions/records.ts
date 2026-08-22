@@ -7,6 +7,9 @@ import {
 } from "@tsonic/target-api/source";
 import {
   rustOptionElementCarrier,
+  rustPropertySourceMemberKey,
+  rustSourceMemberDisplayName,
+  rustSourceMemberKeysEqual,
   rustCallableProtocol,
   rustStructuralMethodCallableCarrier,
   rustClosureProtocol,
@@ -18,6 +21,7 @@ import {
   rustSourceUnionCarrierValue,
   rustStructuralObjectCarrierValue,
 } from "../../target-model/types/index.js";
+import type { RustSourceMemberKey } from "../../target-model/types/index.js";
 import { appendMalformedSourceAst } from "../declarations/project-types.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
@@ -37,6 +41,10 @@ import type { RustFactWalk } from "../program/walk.js";
 import type { RustTargetOperationFact } from "../facts/keys.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustProjectTypeDefinition } from "../project-types/type-policy.js";
+import {
+  resolveRustDeclarationMemberKey,
+  resolveRustSourceMemberKey,
+} from "../../policy/evidence/source-member-key.js";
 
 function projectRecordMemberImplementation(
   walk: RustFactWalk,
@@ -202,6 +210,7 @@ export function resolveRecordLiteralCarrier(
   let selectedFields: readonly {
     readonly implementationDeclaration?: Node;
     readonly contractDeclarations: readonly Node[];
+    readonly sourceKey: RustSourceMemberKey;
     readonly sourceName: string;
     readonly storageIndex: number;
     readonly carrier: TargetTypeRef;
@@ -246,11 +255,12 @@ export function resolveRecordLiteralCarrier(
               selectedExpected,
               declared,
             );
-        return carrier === undefined || implementationDeclaration === undefined
+          return carrier === undefined || implementationDeclaration === undefined
           ? undefined
           : {
               contractDeclaration: field.declaration,
               implementationDeclaration,
+              sourceKey: rustPropertySourceMemberKey(field.sourceName),
               sourceName: field.sourceName,
               carrier,
               presence: "required" as const,
@@ -264,6 +274,7 @@ export function resolveRecordLiteralCarrier(
     const projectFields: {
       readonly implementationDeclaration: Node;
       readonly contractDeclarations: Node[];
+      readonly sourceKey: RustSourceMemberKey;
       readonly sourceName: string;
       readonly storageIndex: number;
       readonly carrier: TargetTypeRef;
@@ -273,6 +284,7 @@ export function resolveRecordLiteralCarrier(
     for (const field of contractFields as readonly {
       readonly contractDeclaration: Node;
       readonly implementationDeclaration: Node;
+      readonly sourceKey: RustSourceMemberKey;
       readonly sourceName: string;
       readonly carrier: TargetTypeRef;
       readonly presence: "required";
@@ -290,6 +302,7 @@ export function resolveRecordLiteralCarrier(
       projectFields.push({
         implementationDeclaration: field.implementationDeclaration,
         contractDeclarations: [field.contractDeclaration],
+        sourceKey: field.sourceKey,
         sourceName: field.sourceName,
         storageIndex: projectFields.length,
         carrier: field.carrier,
@@ -305,6 +318,7 @@ export function resolveRecordLiteralCarrier(
     selectedFields = projectFields as readonly {
       readonly implementationDeclaration: Node;
       readonly contractDeclarations: readonly Node[];
+      readonly sourceKey: RustSourceMemberKey;
       readonly sourceName: string;
       readonly storageIndex: number;
       readonly carrier: TargetTypeRef;
@@ -356,10 +370,14 @@ export function resolveRecordLiteralCarrier(
     const structuralFields = structuralValue.fields.map((field, storageIndex) => {
       const sourceField = structuralShape.fields[storageIndex];
       const matchingAccessors = selectedAccessorMembers.filter((accessor) =>
-        accessor.sourceName === field.sourceName
+        accessor.sourceSelectedDeclarations.length > 0 &&
+        accessor.sourceSelectedDeclarations.every((declaration) =>
+          sourceField?.declarations.includes(declaration) === true)
       );
       const accessor = matchingAccessors[0];
-      if (sourceField === undefined || sourceField.sourceName !== field.sourceName ||
+      if (sourceField === undefined ||
+        !rustSourceMemberKeysEqual(sourceField.sourceKey, field.sourceKey) ||
+        sourceField.sourceName !== field.sourceName ||
         sourceField.storageIndex !== storageIndex ||
         !rustTargetTypeRefEquals(sourceField.resultCarrier, field.type) ||
         sourceField.presence !== field.presence || sourceField.readonly !== field.readonly ||
@@ -376,6 +394,7 @@ export function resolveRecordLiteralCarrier(
       }
       return {
         contractDeclarations: sourceField.declarations,
+        sourceKey: field.sourceKey,
         sourceName: field.sourceName,
         storageIndex,
         carrier: field.type,
@@ -390,10 +409,15 @@ export function resolveRecordLiteralCarrier(
     }
     selectedFields = structuralFields as typeof selectedFields;
   }
-  const selectedFieldByName = new Map(selectedFields.map((field) => [field.sourceName, field]));
-  if (selectedFieldByName.size !== selectedFields.length) {
+  if (selectedFields.some((field, index) => selectedFields.slice(0, index).some((previous) =>
+    rustSourceMemberKeysEqual(previous.sourceKey, field.sourceKey)))) {
     return undefined;
   }
+  const selectedFieldByKey = (sourceKey: RustSourceMemberKey) => {
+    const matches = selectedFields.filter((field) =>
+      rustSourceMemberKeysEqual(field.sourceKey, sourceKey));
+    return matches.length === 1 ? matches[0] : undefined;
+  };
   const contributions: Extract<
     RustTargetOperationFact,
     { readonly kind: "record-literal" }
@@ -416,6 +440,7 @@ export function resolveRecordLiteralCarrier(
         return undefined;
       }
       const spreadFields: {
+        readonly sourceKey: RustSourceMemberKey;
         readonly sourceName: string;
         readonly sourceStorageIndex: number;
         readonly targetStorageIndex: number;
@@ -427,7 +452,7 @@ export function resolveRecordLiteralCarrier(
         readonly method?: true;
       }[] = [];
       for (const sourceField of sourceShape.fields) {
-        const targetField = selectedFieldByName.get(sourceField.sourceName);
+        const targetField = selectedFieldByKey(sourceField.sourceKey);
         if (targetField === undefined) {
           continue;
         }
@@ -440,6 +465,7 @@ export function resolveRecordLiteralCarrier(
           return undefined;
         }
         spreadFields.push({
+          sourceKey: sourceField.sourceKey,
           sourceName: sourceField.sourceName,
           sourceStorageIndex: sourceField.storageIndex,
           targetStorageIndex: targetField.storageIndex,
@@ -496,10 +522,18 @@ export function resolveRecordLiteralCarrier(
     if (kind === "KindGetAccessor" || kind === "KindSetAccessor") {
       const accessor = accessorsByElement.get(property);
       const role = kind === "KindGetAccessor" ? "get" as const : "set" as const;
-      const matchingFields = accessor === undefined
+      const accessorSourceKey = accessor === undefined
+        ? undefined
+        : resolveRustSourceMemberKey(
+            accessor.sourceSelectedDeclarations,
+            accessor.sourceName,
+            walk.context,
+          );
+      const matchingFields = accessor === undefined || accessorSourceKey === undefined
         ? []
         : selectedFields.filter((field) =>
-            field.method !== true && field.sourceName === accessor.sourceName &&
+            field.method !== true &&
+            rustSourceMemberKeysEqual(field.sourceKey, accessorSourceKey) &&
             accessor.sourceSelectedDeclarations.length > 0 &&
             accessor.sourceSelectedDeclarations.every((declaration) =>
               field.contractDeclarations.includes(declaration))
@@ -591,10 +625,16 @@ export function resolveRecordLiteralCarrier(
       const selectedResultCarrier = selectedCallableCarrier?.kind === "function-pointer"
         ? selectedCallableCarrier.result
         : selectedCallable?.result ?? selectedClosure?.result;
-      const sourceName = selectedElement?.sourceSelectedSymbol === undefined
-        ? ""
-        : propertySemantics.declarations.symbolName(
-            selectedElement.sourceSelectedSymbol,
+      const sourceKey = selectedElement === undefined
+        ? undefined
+        : resolveRustSourceMemberKey(
+            selectedElement.sourceSelectedDeclarations,
+            selectedElement.sourceSelectedSymbol === undefined
+              ? ""
+              : propertySemantics.declarations.symbolName(
+                  selectedElement.sourceSelectedSymbol,
+                ),
+            walk.context,
           );
       if (storage === "object-handle") {
         const methodProjection = selectedDeclaration === undefined
@@ -603,9 +643,17 @@ export function resolveRecordLiteralCarrier(
               selectedDeclaration,
               resultCarrier,
             );
-        const targetField = selectedFields.find((field) =>
-          field.method === true && field.sourceName === sourceName &&
-          field.storageIndex === methodProjection?.field.storageIndex);
+        const targetField = sourceKey === undefined
+          ? undefined
+          : selectedFields.find((field) =>
+              field.method === true &&
+              rustSourceMemberKeysEqual(field.sourceKey, sourceKey) &&
+              field.storageIndex === methodProjection?.field.storageIndex &&
+              methodProjection !== undefined &&
+              rustSourceMemberKeysEqual(
+                field.sourceKey,
+                methodProjection.field.sourceKey,
+              ));
         const targetCallableCarrier = targetField === undefined
           ? undefined
           : rustStructuralMethodCallableCarrier(
@@ -613,7 +661,7 @@ export function resolveRecordLiteralCarrier(
               targetField.presence,
             );
         const targetCallable = rustCallableProtocol(targetCallableCarrier);
-        if (selectedElement?.elementKind !== "method" ||
+        if (selectedElement?.elementKind !== "method" || sourceKey === undefined ||
           selectedDeclaration === undefined || targetField === undefined ||
           selectedParameterCarriers === undefined || selectedResultCarrier === undefined ||
           targetCallable === undefined ||
@@ -639,7 +687,7 @@ export function resolveRecordLiteralCarrier(
           kind: "structural-method",
           property,
           expression: property,
-          sourceName,
+          sourceName: rustSourceMemberDisplayName(sourceKey),
           targetStorageIndex: targetField.storageIndex,
         });
         assignedStorageIndexes.add(targetField.storageIndex);
@@ -682,6 +730,11 @@ export function resolveRecordLiteralCarrier(
     }
     const nameNode = ast.name(property);
     const sourceName = nameNode === undefined ? "" : ast.text(nameNode);
+    const sourceKey = resolveRustDeclarationMemberKey(
+      property,
+      sourceName,
+      walk.context,
+    );
     const initializer = ObjectLiteralProperty_Value(ast, property);
     const initializerKind = initializer === undefined ? "" : ast.kindName(initializer);
     if (initializer !== undefined &&
@@ -748,15 +801,15 @@ export function resolveRecordLiteralCarrier(
           field.implementationDeclaration !== undefined &&
           (selectedElement?.sourceSelectedDeclaration === field.implementationDeclaration ||
             selectedElement?.sourceSelectedDeclarations.includes(field.implementationDeclaration)))
-      : selectedFieldByName.get(sourceName);
-    if (targetField === undefined || initializer === undefined ||
+      : sourceKey === undefined ? undefined : selectedFieldByKey(sourceKey);
+    if (sourceKey === undefined || targetField === undefined || initializer === undefined ||
       resolveExpressionCarrier(walk, initializer, sourceFile, targetField.carrier) === undefined) {
       return undefined;
     }
     contributions.push({
       kind: "property",
       property,
-      sourceName,
+      sourceName: rustSourceMemberDisplayName(sourceKey),
       targetStorageIndex: targetField.storageIndex,
     });
     assignedStorageIndexes.add(targetField.storageIndex);
@@ -777,6 +830,7 @@ export function resolveRecordLiteralCarrier(
       ? {}
       : { implementationDeclaration: field.implementationDeclaration }),
     contractDeclarations: Object.freeze([...field.contractDeclarations]),
+    sourceKey: field.sourceKey,
     sourceName: field.sourceName,
     storageIndex: field.storageIndex,
     carrier: field.carrier,

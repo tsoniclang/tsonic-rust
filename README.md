@@ -135,18 +135,14 @@ dependency. A generated library exposes its authored facade plus a stable
 `#[doc(hidden)]` implementation ABI so separately generated subclasses and
 exact inherited method bodies can link without widening the TypeScript API.
 
-## Explicitly unsupported (fail-closed, classified)
+## RegExp
 
-Each unsupported lane requires a contract that does not exist. RegExp constructs outside the
-oracle-proven subset (constant patterns with classes, quantifiers,
-anchors, alternation, and groups under flags i/g/m, proven against 217
-committed Node oracle vectors plus a 157-entry engine-generated
-acceptance corpus that pins compile-time validation to the runtime
-parser contract — see the rust-js JS parity inventory
-(docs/js-parity.md); lazy quantifiers, backreferences, lookaround,
-named groups, word boundaries, and dynamic patterns reject
-deterministically). Every unsupported lane diagnoses
-deterministically; see `test/architecture/capability-ledger.test.mjs`.
+The JS surface lowers literals and runtime `RegExp` call/constructor arguments
+from exact selected source evidence. Modern grammar, all current flags,
+stateful results, replacement callbacks, String operations, and well-known
+symbol protocols use sealed Rust operation facts and the target-native
+UTF-16 runtime. The target does not parse source text, require constant
+patterns, or infer RegExp identity from names.
 
 ## Build and test
 

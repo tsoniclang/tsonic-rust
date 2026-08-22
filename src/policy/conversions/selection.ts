@@ -2,11 +2,13 @@ import type { RustValueConversion } from "../../target-model/operations/model.js
 import { rustNumericPromotionKind } from "../../target-model/conversions/numeric-promotion.js";
 import {
   isRustNeverCarrier,
+  rustJsStringTargetType,
+  rustJsRegExpExecArrayTargetType,
+  rustJsRegExpMatchArrayTargetType,
   rustJsValueTargetType,
   rustOptionElementCarrier,
   rustSourcePrimitiveTargetType,
   rustSourceUnionCarrierValue,
-  rustStringTargetType,
 } from "../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -18,7 +20,8 @@ import {
   rustInt32ToJsValueConversion,
   rustInt32ToUint8ValueConversion,
   rustJsValueCloneConversion,
-  rustStringToJsValueConversion,
+  rustJsStringToJsValueConversion,
+  rustJsRegExpExecToMatchConversion,
   rustUint32ToInt32ValueConversion,
   rustUint64ToFloat64ValueConversion,
   rustUint8ToInt32ValueConversion,
@@ -27,7 +30,7 @@ import {
 const boolCarrier = rustSourcePrimitiveTargetType("bool");
 const int32Carrier = rustSourcePrimitiveTargetType("int32");
 const float64Carrier = rustSourcePrimitiveTargetType("float64");
-const stringCarrier = rustStringTargetType();
+const stringCarrier = rustJsStringTargetType();
 const jsValueCarrier = rustJsValueTargetType();
 
 export function selectRustSourceValueConversion(
@@ -41,7 +44,8 @@ export function selectRustSourceValueConversion(
       sourceOptionElement,
       targetOptionElement,
     );
-    if (elementConversion === undefined || elementConversion.kind === "option-map") {
+    if (elementConversion === undefined || elementConversion.kind === "option-map" ||
+      elementConversion.kind === "option-some") {
       return undefined;
     }
     return { kind: "option-map", elementConversion };
@@ -82,9 +86,13 @@ export function selectRustSourceValueConversion(
       return rustInt32ToJsValueConversion;
     }
     if (rustTargetTypeRefEquals(source, stringCarrier)) {
-      return rustStringToJsValueConversion;
+      return rustJsStringToJsValueConversion;
     }
     return undefined;
+  }
+  if (rustTargetTypeRefEquals(source, rustJsRegExpExecArrayTargetType()) &&
+    rustTargetTypeRefEquals(target, rustJsRegExpMatchArrayTargetType())) {
+    return rustJsRegExpExecToMatchConversion;
   }
   if (source.kind !== "source-primitive" || target.kind !== "source-primitive") {
     return undefined;

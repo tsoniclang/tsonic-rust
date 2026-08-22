@@ -109,6 +109,25 @@ export function rustClosureProtocol(
     : undefined;
 }
 
+export function rustCallbackProtocol(
+  carrier: TargetTypeRef | undefined,
+): {
+  readonly representation: "closure" | "function-pointer" | "callable";
+  readonly parameters: readonly TargetTypeRef[];
+  readonly result: TargetTypeRef;
+} | undefined {
+  if (carrier?.kind === "closure") {
+    return { representation: "closure", parameters: carrier.args, result: carrier.result };
+  }
+  if (carrier?.kind === "function-pointer") {
+    return { representation: "function-pointer", parameters: carrier.args, result: carrier.result };
+  }
+  const callable = rustCallableProtocol(carrier);
+  return callable === undefined
+    ? undefined
+    : { representation: "callable", parameters: callable.parameters, result: callable.result };
+}
+
 export interface RustGeneratorProtocol {
   readonly kind: "sync" | "async";
   readonly yieldType: TargetTypeRef;

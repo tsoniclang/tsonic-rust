@@ -211,10 +211,47 @@ export function resolveSelectedSourceProfileMember(
     ? "index"
     : context.ast.is.IsConstructSignatureDeclaration(declaration)
       ? "constructor"
-      : context.ast.text(context.ast.name(declaration));
+      : context.ast.is.IsCallSignatureDeclaration(declaration)
+        ? "call"
+      : selectedSourceProfileMemberName(context, declaration);
   return ownerName.length > 0 && memberName.length > 0
     ? { profile, ownerName, memberName, declaration }
     : undefined;
+}
+
+function selectedSourceProfileMemberName(
+  context: RustSourcePolicyContext,
+  declaration: Node,
+): string {
+  const name = context.ast.name(declaration);
+  if (name === undefined) {
+    return "";
+  }
+  if (!context.ast.is.IsComputedPropertyName(name)) {
+    return context.ast.text(name);
+  }
+  const selected = context.semanticsFor(declaration)
+    .operations.wellKnownSymbol(name);
+  if (selected === undefined) {
+    return "";
+  }
+  switch (selected.kind) {
+    case "async-dispose": return "@@asyncDispose";
+    case "async-iterator": return "@@asyncIterator";
+    case "dispose": return "@@dispose";
+    case "has-instance": return "@@hasInstance";
+    case "is-concat-spreadable": return "@@isConcatSpreadable";
+    case "iterator": return "@@iterator";
+    case "match": return "@@match";
+    case "match-all": return "@@matchAll";
+    case "replace": return "@@replace";
+    case "search": return "@@search";
+    case "species": return "@@species";
+    case "split": return "@@split";
+    case "to-primitive": return "@@toPrimitive";
+    case "to-string-tag": return "@@toStringTag";
+    case "unscopables": return "@@unscopables";
+  }
 }
 
 export function resolveSelectedSourceProfilePropertyMembers(

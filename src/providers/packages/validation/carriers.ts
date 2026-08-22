@@ -164,6 +164,19 @@ export function validateValueConversion(
     if (!isRustNeverCarrier(conversion.source) || !isRustTargetTypeRef(conversion.target)) {
       fail(`${where} is not an exact Rust bottom coercion`);
     }
+  } else if (conversion.kind === "js-argument-vector-callback") {
+    requireExactKeys(asRecord(conversion), ["kind", "projections", "source", "target"], where, fail);
+    if (!isRustTargetTypeRef(conversion.source) || !isRustTargetTypeRef(conversion.target) ||
+      !Array.isArray(conversion.projections) ||
+      conversion.projections.some((projection) =>
+        projection !== "string" && projection !== "value" && projection !== "rest-values")) {
+      fail(`${where} is not one exact JavaScript argument-vector callback conversion`);
+    }
+  } else if (conversion.kind === "option-some") {
+    requireExactKeys(asRecord(conversion), ["kind", "element"], where, fail);
+    if (!isRustTargetTypeRef(conversion.element)) {
+      fail(`${where}.element is not a closed Rust target type`);
+    }
   } else if (conversion.kind === "option-map") {
     requireExactKeys(asRecord(conversion), ["kind", "elementConversion"], where, fail);
     validateValueConversion(

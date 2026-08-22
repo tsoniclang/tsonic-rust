@@ -129,7 +129,7 @@ export function f(name: string): string {
   }]);
 });
 
-test("RegExp oracle subset lowers constants, test, replace, split, search", async () => {
+test("RegExp operations lower literals, construction, test, replace, split, and search", async () => {
   const { result } = compileRust({
     surfaces: ["js"],
     files: {
@@ -152,8 +152,8 @@ export function scrub(text: string): int32 {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /js_abi::JsRegExp::new\("\\\\s\+", "g"\)\?/u);
-  assert.match(text, /spaces\.replace\(&text, "-"\)\?/u);
-  assert.match(text, /\.split\(&joined\)\?/u);
+  assert.match(text, /spaces\.replace\(&text, &js_abi::JsString::from\("-"\)\)\?/u);
+  assert.match(text, /\.split_all\(&joined\)\?/u);
   assert.match(text, /\.search\(&joined\)\?/u);
   assert.match(text, /if spaces\.test\(&text\)\?/u);
 
@@ -169,10 +169,13 @@ export function probe(text: string): boolean {
     },
   });
   assert.deepEqual(constructed.result.diagnostics, []);
-  assert.match(artifactText(constructed.result, "src/index.rs"), /js_abi::JsRegExp::new\("\\\\d\+", "g"\)\?/u);
+  assert.match(
+    artifactText(constructed.result, "src/index.rs"),
+    /js_abi::JsRegExp::from_string_with_flags\(\s*&js_abi::JsString::from\("\\\\d\+"\),\s*&js_abi::JsString::from\("g"\),\s*\)\?/u,
+  );
 });
 
-test("RegExp constructs outside the oracle subset fail closed", async () => {
+test("modern and dynamic RegExp construction lower through selected evidence", async () => {
   const cases = [
     { construct: "/a./" },
     { construct: "/[^a]/" },
@@ -186,10 +189,7 @@ test("RegExp constructs outside the oracle subset fail closed", async () => {
     { construct: "/(a)\\1/" },
     { construct: "/a*?/" },
     { construct: "/\\bword\\b/" },
-    {
-      construct: "new RegExp(pattern)",
-      sourceMessage: "Rust RegExp construction requires TSTS-selected RegExp constructor evidence and compile-time string pattern/flags.",
-    },
+    { construct: "new RegExp(pattern)" },
     { construct: "/a/y" },
   ];
   for (const item of cases) {
@@ -197,20 +197,13 @@ test("RegExp constructs outside the oracle subset fail closed", async () => {
       surfaces: ["js"],
       files: { "index.ts": `export function f(pattern: string, s: string): boolean {\n  const re = ${item.construct};\n  return re.test(s);\n}\n` },
     };
-    if (item.sourceMessage !== undefined) {
-      assertRustTargetRejection(options, [{
-        code: "RUST_REGEXP_DYNAMIC_UNSUPPORTED",
-        message: item.sourceMessage,
-      }]);
-      continue;
-    }
     const { result } = compileRust(options);
-    assert.equal(result.artifacts.length, 0, `${item.construct} must fail closed`);
-    assert.ok(result.diagnostics.length > 0, item.construct);
+    assert.deepEqual(result.diagnostics, [], item.construct);
+    assert.ok(result.artifacts.length > 0, `${item.construct} must emit Rust artifacts`);
   }
 });
 
-test("generated cargo binary proves the RegExp subset against oracle expectations", { timeout: 300_000 }, async () => {
+test("generated cargo binary proves selected RegExp operations against oracle expectations", { timeout: 300_000 }, async () => {
   const { result } = compileRust({
     surfaces: ["js"],
     packages: [acmeTestingPackage()],

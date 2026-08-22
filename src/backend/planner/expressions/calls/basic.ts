@@ -22,7 +22,7 @@ import { readRustStoredObjectField } from "../../objects/project-storage.js";
 import { requireRustDefaultValueCarrier } from "../../types/generic-requirements.js";
 import { rustArgumentPassingKey } from "../../../../target-model/facts/selections.js";
 import { rustSourceCallEffectsFactKey } from "../../../../analysis/facts/keys.js";
-import { rustStringTargetType } from "../../../../target-model/types/index.js";
+import { rustJsStringTargetType } from "../../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import type { Node } from "@tsonic/tsts";
@@ -257,10 +257,10 @@ function planObjectShapeProjectionCall(
   }
   const expectedParameterCarriers = staticCall
     ? fact.projection === "has-own"
-      ? [fact.sourceValueCarrier, rustStringTargetType()]
+      ? [fact.sourceValueCarrier, rustJsStringTargetType()]
       : [fact.sourceValueCarrier]
     : fact.projection === "has-own"
-      ? [rustStringTargetType()]
+      ? [rustJsStringTargetType()]
       : [];
   const selected = context.input.program.facts.getSelectedTargetCall(node);
   if (selected === undefined || selected.member.id !== fact.operationId ||

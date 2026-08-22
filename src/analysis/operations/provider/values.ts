@@ -2,10 +2,14 @@ import { acceptRustPolicy } from "../../../policy/operations/contracts.js";
 import { resolveSelectedProviderDeclaration } from "../../../policy/evidence/selected-source.js";
 import { mapProviderCheckedOperation } from "./conversions.js";
 import { rejectSelectedOperation } from "./result.js";
-import { rustSelectedOperationKey } from "../../../target-model/facts/selections.js";
 import {
+  rustSelectedCallKey,
+  rustSelectedOperationKey,
+} from "../../../target-model/facts/selections.js";
+import {
+  isRustUndefinedCarrier,
   rustJsRegExpTargetId,
-  rustStringTargetType,
+  rustJsStringTargetType,
 } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustTargetOperationFactKey } from "../../facts/keys.js";
@@ -26,7 +30,10 @@ import type {
 } from "../../../policy/operations/contracts.js";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { RustTargetOperationFact } from "../../facts/keys.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type {
+  RustSelectedTargetSignature,
+  TargetTypeRef,
+} from "../../../target-model/types/model.js";
 
 export function selectRustCheckedValue(
   request: RustCheckedValueSelectionInput,
@@ -96,12 +103,12 @@ export function mapSelectedRegExpConstruction(
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedCallSelectionResult> {
   const sourceArguments = request.source.sourceArguments;
-  if (sourceArguments.length < 1 || sourceArguments.length > 2) {
+  if (sourceArguments.length > 2) {
     return rejectSelectedOperation(
       request.source.call,
       context,
       "RUST_REGEXP_SELECTED_ARITY_INVALID",
-      "Selected RegExp construction must provide one pattern argument and at most one flags argument.",
+      "Selected RegExp construction must provide at most one pattern and one flags argument.",
     );
   }
   const [patternCarrier, flagsCarrier] = selectedCallArgumentCarriers(
@@ -109,7 +116,7 @@ export function mapSelectedRegExpConstruction(
     context,
     options,
   );
-  if (patternCarrier === undefined) {
+  if (sourceArguments.length > 0 && patternCarrier === undefined) {
     return rejectSelectedOperation(
       request.source.call,
       context,
@@ -117,13 +124,17 @@ export function mapSelectedRegExpConstruction(
       "Selected RegExp construction has no finalized pattern argument carrier.",
     );
   }
-  const stringCarrier = rustStringTargetType();
-  const patternKind = rustTargetTypeRefEquals(patternCarrier, stringCarrier)
-    ? "string"
-    : patternCarrier.kind === "target-named" &&
+  const stringCarrier = rustJsStringTargetType();
+  const patternKind = sourceArguments.length === 0
+    ? "omitted"
+    : patternCarrier !== undefined && rustTargetTypeRefEquals(patternCarrier, stringCarrier)
+      ? "string"
+      : patternCarrier?.kind === "target-named" &&
         patternCarrier.id === rustJsRegExpTargetId
-      ? "regexp"
-      : undefined;
+        ? "regexp"
+        : isRustUndefinedCarrier(patternCarrier)
+          ? "undefined"
+          : undefined;
   if (patternKind === undefined) {
     return rejectSelectedOperation(
       request.source.call,
@@ -132,9 +143,14 @@ export function mapSelectedRegExpConstruction(
       "Selected RegExp pattern argument is neither the exact JS string carrier nor the exact RegExp carrier.",
     );
   }
-  if (sourceArguments.length === 2 &&
-    (flagsCarrier === undefined ||
-      !rustTargetTypeRefEquals(flagsCarrier, stringCarrier))) {
+  const flagsKind = sourceArguments.length < 2
+    ? "omitted"
+    : flagsCarrier !== undefined && rustTargetTypeRefEquals(flagsCarrier, stringCarrier)
+      ? "string"
+      : isRustUndefinedCarrier(flagsCarrier)
+        ? "undefined"
+        : undefined;
+  if (flagsKind === undefined) {
     return rejectSelectedOperation(
       request.source.call,
       context,
@@ -146,17 +162,8 @@ export function mapSelectedRegExpConstruction(
     ? "construct"
     : "call";
   const resultCarrier: TargetTypeRef = { kind: "target-named", id: "rust.js.JsRegExp" };
-  const operationId = `tsonic.rust.js.regexp.create.${invocation}.${patternKind}.${flagsCarrier === undefined ? "default-flags" : "explicit-flags"}`;
-  const targetOperation = patternKind === "string"
-    ? "js_abi::JsRegExp::new"
-    : invocation === "construct"
-      ? "js_abi::JsRegExp::construct_from_regexp"
-      : "js_abi::JsRegExp::call_from_regexp";
-  const targetName = patternKind === "string"
-    ? "new"
-    : invocation === "construct"
-      ? "construct_from_regexp"
-      : "call_from_regexp";
+  const operationId = `tsonic.rust.js.regexp.create.${invocation}.${patternKind}.${flagsKind}-flags`;
+  const targetOperation = selectedRegExpTargetOperation(invocation, patternKind, flagsKind);
   const fact: RustTargetOperationFact = {
     kind: "regexp-create",
     operationId,
@@ -164,8 +171,10 @@ export function mapSelectedRegExpConstruction(
     input: {
       kind: "selected-call",
       invocation,
+      sourceArgumentCount: sourceArguments.length as 0 | 1 | 2,
       patternKind,
-      patternCarrier,
+      ...(patternCarrier === undefined ? {} : { patternCarrier }),
+      flagsKind,
       ...(flagsCarrier === undefined ? {} : { flagsCarrier }),
     },
     resultCarrier,
@@ -186,17 +195,26 @@ export function mapSelectedRegExpConstruction(
       sourceResultType: request.source.sourceResultType,
     },
   }, evidence);
-  return acceptRustPolicy({
-    selectedSignature: {
+  const selectedSignature: RustSelectedTargetSignature = {
       member: {
         id: fact.operationId,
         sourceName: invocation === "construct" ? "constructor" : "call",
-        targetName,
+        targetName: targetOperation,
         kind: invocation === "construct" ? "constructor" : "method",
         ...(invocation === "call" ? { static: true } : {}),
         parameters: [
-          { name: "pattern", type: patternCarrier, passingMode: "by-value" },
-          { name: "flags", type: stringCarrier, passingMode: "by-value", optional: true },
+          {
+            name: "pattern",
+            type: patternCarrier ?? stringCarrier,
+            passingMode: "by-value",
+            optional: true,
+          },
+          {
+            name: "flags",
+            type: flagsCarrier ?? stringCarrier,
+            passingMode: "by-value",
+            optional: true,
+          },
         ],
         returnType: resultCarrier,
       },
@@ -207,6 +225,45 @@ export function mapSelectedRegExpConstruction(
       ...(request.source.sourceResultType === undefined ? {} : { sourceReturnType: request.source.sourceResultType }),
       sourceArgumentBindings: request.source.sourceArgumentBindings,
       sourceSelectedSignatureParameters: request.source.sourceSelectedSignatureParameters,
-    },
-  }, evidence);
+  };
+  context.facts.set(request.source.call, rustSelectedCallKey, selectedSignature, evidence);
+  return acceptRustPolicy({ selectedSignature }, evidence);
+}
+
+function selectedRegExpTargetOperation(
+  invocation: "call" | "construct",
+  patternKind: "omitted" | "string" | "regexp" | "undefined",
+  flagsKind: "omitted" | "string" | "undefined",
+): Extract<RustTargetOperationFact, { readonly kind: "regexp-create" }>[
+  "targetOperation"
+] {
+  if (patternKind === "omitted") {
+    return "js_abi::JsRegExp::empty";
+  }
+  if (patternKind === "string") {
+    return flagsKind === "omitted"
+      ? "js_abi::JsRegExp::from_string"
+      : flagsKind === "string"
+        ? "js_abi::JsRegExp::from_string_with_flags"
+        : "js_abi::JsRegExp::from_string_with_undefined_flags";
+  }
+  if (patternKind === "undefined") {
+    return flagsKind === "omitted"
+      ? "js_abi::JsRegExp::from_undefined"
+      : flagsKind === "string"
+        ? "js_abi::JsRegExp::from_undefined_with_flags"
+        : "js_abi::JsRegExp::from_undefined_with_undefined_flags";
+  }
+  if (invocation === "call") {
+    return flagsKind === "omitted"
+      ? "js_abi::JsRegExp::call_from_regexp"
+      : flagsKind === "string"
+        ? "js_abi::JsRegExp::call_from_regexp_with_flags"
+        : "js_abi::JsRegExp::call_from_regexp_with_undefined_flags";
+  }
+  return flagsKind === "omitted"
+    ? "js_abi::JsRegExp::construct_from_regexp"
+    : flagsKind === "string"
+      ? "js_abi::JsRegExp::construct_from_regexp_with_flags"
+      : "js_abi::JsRegExp::construct_from_regexp_with_undefined_flags";
 }

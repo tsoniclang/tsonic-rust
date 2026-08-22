@@ -8,8 +8,11 @@ import {
 import {
   isRustCopyCarrier,
   getRustGeneratorProtocol,
-  isRustJsArrayCarrier,
+  isRustJsArrayLikeCarrier,
   isRustStringCarrier,
+  rustJsArrayLikeElementTargetType,
+  rustJsRegExpExecArrayTargetType,
+  rustJsRegExpStringIteratorTargetId,
 } from "../../../target-model/types/index.js";
 import {
   KindArrayLiteralExpression,
@@ -349,7 +352,7 @@ function rustPropertyKeyIterationLowering(
     rustFixedArrayCarrierValue(iterable) !== undefined) {
     return { kind: "dense-index-keys" };
   }
-  if (isRustJsArrayCarrier(iterable)) {
+  if (isRustJsArrayLikeCarrier(iterable)) {
     return { kind: "js-array-index-keys" };
   }
   const keys = iterable === undefined
@@ -365,7 +368,7 @@ type RustIterableTargetPolicy =
       readonly input: "direct" | "reference";
     }
   | {
-      readonly kind: "js-array" | "sync-generator" | "async-generator";
+      readonly kind: "js-array" | "sync-generator" | "async-generator" | "fallible-owned";
       readonly elementCarrier: TargetTypeRef;
     }
   | {
@@ -385,7 +388,7 @@ function rustIterableTargetPolicy(iterable: TargetTypeRef | undefined): RustIter
   if (fixed !== undefined) {
     return { kind: "borrowed", elementCarrier: fixed.element, input: "reference" };
   }
-  const jsElement = isRustJsArrayCarrier(iterable) ? iterable?.typeArguments?.[0] : undefined;
+  const jsElement = rustJsArrayLikeElementTargetType(iterable);
   if (jsElement !== undefined) {
     return { kind: "js-array", elementCarrier: jsElement };
   }
@@ -401,6 +404,13 @@ function rustIterableTargetPolicy(iterable: TargetTypeRef | undefined): RustIter
   const setElement = getRustJsSetElementTargetType(iterable);
   if (setElement !== undefined && rustCarrierSupportsClone(setElement)) {
     return { kind: "receiver-method", elementCarrier: setElement, method: "values" };
+  }
+  if (iterable?.kind === "target-named" &&
+    iterable.id === rustJsRegExpStringIteratorTargetId) {
+    return {
+      kind: "fallible-owned",
+      elementCarrier: rustJsRegExpExecArrayTargetType(),
+    };
   }
   const generator = getRustGeneratorProtocol(iterable);
   return generator === undefined
@@ -439,7 +449,11 @@ function selectRustIterationLowering(
     if (target.kind === "receiver-method") {
       return { kind: "receiver-method", name: target.method };
     }
-    return target.kind === "js-array" ? { kind: "js-array" } : { kind: "owned" };
+    return target.kind === "js-array"
+      ? { kind: "js-array" }
+      : target.kind === "fallible-owned"
+        ? { kind: "fallible-owned" }
+        : { kind: "owned" };
   }
   if (source.mechanism.kind === "asynchronous-iterator-protocol") {
     return target.kind === "async-generator" ? { kind: "async-generator" } : undefined;
@@ -460,7 +474,11 @@ function selectRustIterationLowering(
   if (target.kind === "receiver-method") {
     return { kind: "receiver-method", name: target.method };
   }
-  return target.kind === "js-array" ? { kind: "js-array" } : { kind: "owned" };
+  return target.kind === "js-array"
+    ? { kind: "js-array" }
+    : target.kind === "fallible-owned"
+      ? { kind: "fallible-owned" }
+      : { kind: "owned" };
 }
 
 function isFreshRustIterationValue(

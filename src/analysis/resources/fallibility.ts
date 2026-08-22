@@ -382,9 +382,6 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
     readonly fallible: boolean;
     readonly subjects: readonly Node[];
   }
-  const callbackExpressionIsFallible = (
-    pending: { readonly request: import("../../policy/operations/contracts.js").RustCheckedCallSelectionInput; readonly prepared: RustPreparedDeferredCheckedCall },
-  ): boolean => callbackValueAnalysis(callbackExpression(pending), new Set())?.fallible === true;
   const callbackValueAnalysis = (
     expression: Node | undefined,
     resolving: Set<Node>,
@@ -429,9 +426,19 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
   };
   const preparedCallbackOperationIsFallible = (node: Node): boolean => {
     const pending = walk.preparedCallbackCalls.get(node);
-    return pending !== undefined && (
-      pending.prepared.template.isFallible || callbackExpressionIsFallible(pending)
+    if (pending === undefined) {
+      return false;
+    }
+    const callbackAnalysis = callbackValueAnalysis(
+      callbackExpression(pending),
+      new Set(),
     );
+    const callbackCarrier = pending.prepared.parameterCarriers[
+      pending.prepared.callback.sourceArgumentIndex
+    ];
+    return pending.prepared.template.isFallible ||
+      callbackAnalysis?.fallible === true ||
+      callbackAnalysis === undefined && rustCallableProtocol(callbackCarrier) !== undefined;
   };
   function expressionRegionIsFallible(root: Node): boolean {
     let found = false;

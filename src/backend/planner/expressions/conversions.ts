@@ -2,6 +2,7 @@ import {
   isRustCopyCarrier,
   isRustNeverCarrier,
   rustCarrierSupportsClone,
+  rustCallableProtocol,
   rustPrimitiveTypeName,
   rustSourceUnionCarrierValue,
 } from "../../../target-model/types/index.js";
@@ -42,6 +43,7 @@ import {
   applyFinalizedRustArgumentMode,
   applyRustArgumentMode,
 } from "./input-shaping.js";
+import { invokeRustStructuralObjectMethod } from "../objects/project-storage.js";
 
 export function applyRustValueConversion(
   context: RustPlanContext,
@@ -131,6 +133,51 @@ export function lowerRustValueConversion(
       return { kind: "owned-string-from-borrowed-str", expression: source };
     case "copy-from-reference":
       return { kind: "dereference", pointer: source };
+    case "js-argument-vector-callback": {
+      const names = context.syntheticNames ?? createRustSyntheticNameState(
+        context.input.program.source.ast,
+        node ?? context.sourceFile,
+        [],
+      );
+      const callbackName = allocateRustSyntheticName(names, "replacement_callback");
+      const argumentsName = allocateRustSyntheticName(names, "replacement_arguments");
+      const argumentsExpression: RustExpr = { kind: "path", path: argumentsName };
+      const callbackArguments = contract.projections.map((projection, index): RustExpr => {
+        const path = projection === "string"
+          ? "js_abi::regexp_replacement_argument_string"
+          : projection === "value"
+            ? "js_abi::regexp_replacement_argument_value"
+            : "js_abi::regexp_replacement_argument_rest";
+        registerAliasFromPath(context, path);
+        return {
+          kind: "call",
+          path,
+          args: [
+            { kind: "reference", expr: argumentsExpression },
+            { kind: "int-literal", text: String(index) },
+          ],
+        };
+      });
+      const callbackExpression: RustExpr = { kind: "path", path: callbackName };
+      const invocation: RustExpr = rustCallableProtocol(contract.source) === undefined
+        ? { kind: "invoke", callee: callbackExpression, args: callbackArguments }
+        : {
+            kind: "method-call",
+            receiver: callbackExpression,
+            method: "call",
+            args: [{ kind: "tuple-literal", elements: callbackArguments }],
+          };
+      return {
+        kind: "block",
+        bindings: [{ name: callbackName, value: source }],
+        value: {
+          kind: "closure",
+          move: true,
+          params: [{ name: argumentsName, byRefCopy: false }],
+          body: invocation,
+        },
+      };
+    }
     case "source-union-variant": {
       const union = rustSourceUnionCarrierValue(contract.target);
       const typePath = union === undefined ? undefined : sourceTypePath(context, union);
@@ -151,6 +198,8 @@ export function lowerRustValueConversion(
         args: [source],
       };
     }
+    case "option-some":
+      return { kind: "call", path: "Some", args: [source] };
     case "option-map": {
       const valueName = allocateRustSyntheticName(
         context.syntheticNames ?? createRustSyntheticNameState(
@@ -364,8 +413,8 @@ export function planProviderOperationExpression(
       });
     case "call-value-slice":
     case "call-value-array":
-    case "call-str-slice":
-    case "free-call-str-slice":
+    case "call-ref-slice":
+    case "free-call-ref-slice":
     case "free-call": {
       registerAliasFromPath(context, form.path);
       return scoped({ kind: "call", path: form.path, args });
@@ -392,6 +441,19 @@ export function planProviderOperationExpression(
             ...(concreteTargetTypeArguments === undefined ? {} : { typeArguments: concreteTargetTypeArguments }),
             ...(receiverMode === undefined ? {} : { receiverMode }),
           });
+    case "arg-structural-method": {
+      if (receiver === undefined || fact.abi.targetReceiver.kind !== "input") {
+        return undefined;
+      }
+      return scoped(invokeRustStructuralObjectMethod(
+        fact.abi.targetReceiver.input.parameterCarrier,
+        receiver,
+        form.storageIndex,
+        args,
+        fact.resultCarrier,
+        context,
+      ));
+    }
     case "receiver-method":
       return receiver === undefined
         ? undefined

@@ -17,7 +17,7 @@ export function rustTargetOperationText(fact: RustTargetOperationFact): string {
   if (fact.kind === "provider-operation") {
     const target = fact.abi.target;
     if (target.form === "call" || target.form === "call-c-variadic" || target.form === "path" || target.form === "static" || target.form === "free-call" ||
-      target.form === "call-str-slice" || target.form === "free-call-str-slice" ||
+      target.form === "call-ref-slice" || target.form === "free-call-ref-slice" ||
       target.form === "call-value-slice" || target.form === "call-value-array") {
       return target.path;
     }
@@ -35,6 +35,9 @@ export function rustTargetOperationText(fact: RustTargetOperationFact): string {
     }
     if (target.form === "trait-associated-value") {
       return `${target.traitPath}::${target.name}`;
+    }
+    if (target.form === "arg-structural-method") {
+      return `structural-method[${target.storageIndex}]`;
     }
     return target.name;
   }
@@ -115,6 +118,9 @@ export function rustTargetOperationIsFallible(
   }
   if (fact.kind === "regexp-create") {
     return true;
+  }
+  if (fact.kind === "iteration") {
+    return fact.iterationKind !== "for-in" && fact.lowering.kind === "fallible-owned";
   }
   if (fact.kind === "source-conversion") {
     return rustValueConversionIsFallible(fact.conversion);

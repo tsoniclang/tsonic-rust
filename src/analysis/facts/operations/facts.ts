@@ -3,6 +3,7 @@ import type { RustArgumentMode, RustProviderFactOperationKind, RustRuntimeSetOpe
 import type { RustFinalizedOperationAbiFor } from "../finalized-operation-abi.js";
 import type { RustOperationSymbol, RustOperatorToken } from "../../../target-model/syntax/tokens.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustSourceMemberKey } from "../../../target-model/types/index.js";
 
 export type RustTargetOperationFact =
   | {
@@ -150,6 +151,7 @@ export type RustTargetOperationFact =
         | { readonly kind: "js-array" }
         | { readonly kind: "receiver-method"; readonly name: string }
         | { readonly kind: "owned" }
+        | { readonly kind: "fallible-owned" }
         | { readonly kind: "async-generator" };
     }
   | {
@@ -344,6 +346,7 @@ export type RustTargetOperationFact =
       readonly fields: readonly {
         readonly implementationDeclaration?: Node;
         readonly contractDeclarations: readonly Node[];
+        readonly sourceKey: RustSourceMemberKey;
         readonly sourceName: string;
         readonly storageIndex: number;
         readonly carrier: TargetTypeRef;
@@ -389,6 +392,7 @@ export type RustTargetOperationFact =
             readonly sourceStorage: "project-object" | "object-handle";
             readonly sourceCarrier: TargetTypeRef;
             readonly fields: readonly {
+              readonly sourceKey: RustSourceMemberKey;
               readonly sourceName: string;
             readonly sourceStorageIndex: number;
             readonly targetStorageIndex: number;
@@ -471,8 +475,19 @@ export type RustTargetOperationFact =
       readonly operationId: string;
       readonly targetOperation:
         | "js_abi::JsRegExp::new"
+        | "js_abi::JsRegExp::empty"
+        | "js_abi::JsRegExp::from_string"
+        | "js_abi::JsRegExp::from_string_with_flags"
+        | "js_abi::JsRegExp::from_string_with_undefined_flags"
+        | "js_abi::JsRegExp::from_undefined"
+        | "js_abi::JsRegExp::from_undefined_with_flags"
+        | "js_abi::JsRegExp::from_undefined_with_undefined_flags"
         | "js_abi::JsRegExp::call_from_regexp"
-        | "js_abi::JsRegExp::construct_from_regexp";
+        | "js_abi::JsRegExp::call_from_regexp_with_flags"
+        | "js_abi::JsRegExp::call_from_regexp_with_undefined_flags"
+        | "js_abi::JsRegExp::construct_from_regexp"
+        | "js_abi::JsRegExp::construct_from_regexp_with_flags"
+        | "js_abi::JsRegExp::construct_from_regexp_with_undefined_flags";
       readonly input:
         | {
             readonly kind: "literal";
@@ -482,8 +497,10 @@ export type RustTargetOperationFact =
         | {
             readonly kind: "selected-call";
             readonly invocation: "call" | "construct";
-            readonly patternKind: "string" | "regexp";
-            readonly patternCarrier: TargetTypeRef;
+            readonly sourceArgumentCount: 0 | 1 | 2;
+            readonly patternKind: "omitted" | "string" | "regexp" | "undefined";
+            readonly patternCarrier?: TargetTypeRef;
+            readonly flagsKind: "omitted" | "string" | "undefined";
             readonly flagsCarrier?: TargetTypeRef;
           };
       readonly resultCarrier: TargetTypeRef;

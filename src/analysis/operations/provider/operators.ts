@@ -311,6 +311,12 @@ function mapSelectedAssignment(
   const indexNode = operationKind === "index-set" && leftNode !== undefined
     ? ElementAccessExpression_ArgumentExpression(context.ast, leftNode)
     : undefined;
+  const propertyNameNode = operationKind === "property-set" && leftNode !== undefined
+    ? context.ast.name(leftNode)
+    : undefined;
+  const authoredPropertyKey = propertyNameNode === undefined
+    ? undefined
+    : context.ast.text(propertyNameNode);
   const assignmentSubjects = operationKind === "index-set"
     ? indexNode === undefined || request.right === undefined ? undefined : [indexNode, request.right]
     : request.right === undefined ? undefined : [request.right];
@@ -325,6 +331,9 @@ function mapSelectedAssignment(
     argumentCarriers: assignmentSubjects.map((subject) =>
       resolveRustTargetTypeRef(subject, context, options)),
     argumentMatchScore: selectedArgumentMatchScore(assignmentSubjects, context, options),
+    ...(jsIdentity.memberName === "index" && authoredPropertyKey !== undefined
+      ? { authoredPropertyKey }
+      : {}),
   });
   if (selection === undefined || selection.fact.kind !== "runtime-set") {
     return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_ASSIGNMENT_UNSUPPORTED", `The selected JavaScript assignment '${jsIdentity.ownerName}.${jsIdentity.memberName}' has no closed Rust setter operation.`);

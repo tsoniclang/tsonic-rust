@@ -31,15 +31,20 @@ export function validateOperationForm(
       requireRustPath(form.path, `${label}.target.path`, fail);
       validateModes(form.fixedArgumentModes, label, parameterCarriers?.length, fail);
       return;
-    case "call-str-slice":
+    case "call-ref-slice":
+      requireExactKeys(record, ["form", "path", "elementCarrier"], `${label}.target`, fail);
+      requireRustPath(form.path, `${label}.target.path`, fail);
+      validateCarrier(form.elementCarrier, definition, `${label}.target.elementCarrier`, fail);
+      return;
     case "path":
     case "static":
       requireExactKeys(record, ["form", "path"], `${label}.target`, fail);
       requireRustPath(form.path, `${label}.target.path`, fail);
       return;
-    case "free-call-str-slice":
-      requireExactKeys(record, ["form", "path", "receiverMode"], `${label}.target`, fail);
+    case "free-call-ref-slice":
+      requireExactKeys(record, ["form", "path", "receiverMode", "elementCarrier"], `${label}.target`, fail);
       requireRustPath(form.path, `${label}.target.path`, fail);
+      validateCarrier(form.elementCarrier, definition, `${label}.target.elementCarrier`, fail);
       if (form.receiverMode !== "value" && form.receiverMode !== "ref" && form.receiverMode !== "mut-ref") {
         fail(`${label}.target.receiverMode contains unsupported mode '${String(form.receiverMode)}'`);
       }
@@ -99,9 +104,29 @@ export function validateOperationForm(
       requireRustIdentifier(form.name, `${label}.target.name`, fail);
       return;
     case "arg-receiver-method":
-      requireExactKeys(record, ["form", "name", "argModes"], `${label}.target`, fail);
+      requireExactKeys(record, ["form", "name", "argModes", "argConversions"], `${label}.target`, fail);
       requireRustIdentifier(form.name, `${label}.target.name`, fail);
       validateModes(form.argModes, label, parameterCarriers?.length, fail);
+      validateArgumentMetadata(form, definition, label, parameterCarriers, fail);
+      if (form.argConversions?.[0] !== undefined) {
+        fail(`${label}.target.argConversions[0] cannot convert the receiver argument`);
+      }
+      return;
+    case "arg-structural-method":
+      requireExactKeys(record, ["form", "storageIndex", "argModes", "argConversions", "trailingArguments"], `${label}.target`, fail);
+      if (!Number.isSafeInteger(form.storageIndex) || form.storageIndex < 0) {
+        fail(`${label}.target.storageIndex must be one non-negative safe integer`);
+      }
+      validateArgumentMetadata(form, definition, label, parameterCarriers, fail);
+      if (form.argConversions !== undefined &&
+        parameterCarriers !== undefined &&
+        form.argConversions.length !== parameterCarriers.length) {
+        fail(`${label}.target.argConversions must exactly cover every source argument when present`);
+      }
+      if (form.argConversions?.[0] !== undefined) {
+        fail(`${label}.target.argConversions[0] cannot convert the source receiver`);
+      }
+      validateTrailingArguments(form.trailingArguments, label, fail);
       return;
     case "index":
       requireExactKeys(record, ["form", "indexConversion"], `${label}.target`, fail);
@@ -220,7 +245,9 @@ function expandValidationAlias(
 }
 
 function validateArgumentMetadata(
-  form: Extract<RustProviderOperationForm, { readonly form: "call" | "free-call" | "receiver-method" }>,
+  form: Extract<RustProviderOperationForm, {
+    readonly form: "call" | "free-call" | "receiver-method" | "arg-receiver-method" | "arg-structural-method";
+  }>,
   definition: RustProviderPackageDefinition,
   label: string,
   parameterCarriers: readonly TargetTypeRef[] | undefined,
@@ -233,7 +260,9 @@ function validateArgumentMetadata(
   }
   for (const [targetIndex, conversion] of (form.argConversions ?? []).entries()) {
     if (conversion !== undefined) {
-      const sourceIndex = form.argOrder?.[targetIndex] ?? targetIndex;
+      const sourceIndex = "argOrder" in form
+        ? form.argOrder?.[targetIndex] ?? targetIndex
+        : targetIndex;
       validateValueConversion(
         conversion,
         definition,
@@ -244,7 +273,7 @@ function validateArgumentMetadata(
       );
     }
   }
-  if (form.argOrder !== undefined) {
+  if ("argOrder" in form && form.argOrder !== undefined) {
     if (parameterCount !== undefined && form.argOrder.length !== parameterCount) {
       fail(`${label}.target.argOrder must contain exactly ${parameterCount} parameter indexes`);
     }

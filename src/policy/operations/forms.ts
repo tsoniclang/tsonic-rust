@@ -83,10 +83,11 @@ export function rustProviderOperationFormContractViolation(
             (operationKind === "property-set" && runtimeSourceIndexes.length === 1))
         ? undefined
         : "static form must be one closed Rust path with the exact property read/write arity";
-    case "call-str-slice":
-      return hasExactKeys(form, ["form", "path"], ["form", "path"]) && typeof form.path === "string" && rustPathPattern.test(form.path)
+    case "call-ref-slice":
+      return hasExactKeys(form, ["form", "path", "elementCarrier"], ["form", "path", "elementCarrier"]) &&
+          typeof form.path === "string" && rustPathPattern.test(form.path) && isRustTargetTypeRef(form.elementCarrier)
         ? undefined
-        : "slice-call form must contain one closed Rust path";
+        : "reference-slice call form must contain one closed Rust path and element carrier";
     case "call-c-variadic":
       return hasExactKeys(
         form,
@@ -99,11 +100,12 @@ export function rustProviderOperationFormContractViolation(
         sourceArgumentCount >= form.fixedArgumentModes.length
         ? undefined
         : "C-variadic call form must contain one path, exact fixed argument modes, and only runtime source arguments";
-    case "free-call-str-slice":
-      return hasExactKeys(form, ["form", "path", "receiverMode"], ["form", "path", "receiverMode"]) &&
-          typeof form.path === "string" && rustPathPattern.test(form.path) && modes.has(form.receiverMode)
+    case "free-call-ref-slice":
+      return hasExactKeys(form, ["form", "path", "receiverMode", "elementCarrier"], ["form", "path", "receiverMode", "elementCarrier"]) &&
+          typeof form.path === "string" && rustPathPattern.test(form.path) && modes.has(form.receiverMode) &&
+          isRustTargetTypeRef(form.elementCarrier)
         ? undefined
-        : "receiver slice-call form must contain one closed Rust path and receiver mode";
+        : "receiver reference-slice call form must contain one closed Rust path, receiver mode, and element carrier";
     case "call-value-slice":
     case "call-value-array":
       return hasExactKeys(
@@ -171,12 +173,42 @@ export function rustProviderOperationFormContractViolation(
         ? undefined
         : "field form must contain one Rust identifier with the exact property read/write arity";
     case "arg-receiver-method": {
-      if (!hasExactKeys(form, ["form", "name", "argModes"], ["form", "name"]) ||
+      if (!hasExactKeys(form, ["form", "name", "argModes", "argConversions"], ["form", "name"]) ||
         typeof form.name !== "string" || !rustIdentifierPattern.test(form.name)) {
         return "argument-receiver method form is malformed";
       }
-      return validateModes(form.argModes);
+      const modeViolation = validateModes(form.argModes);
+      if (modeViolation !== undefined) {
+        return modeViolation;
+      }
+      return form.argConversions === undefined ||
+          isDenseDataArray(form.argConversions) &&
+          form.argConversions.length === runtimeSourceIndexes.length &&
+          form.argConversions[0] === undefined &&
+          form.argConversions.every((conversion) =>
+            conversion === undefined || rustValueConversionContract(conversion) !== undefined)
+        ? undefined
+        : "argument-receiver method conversions must exactly cover source arguments without converting the receiver argument";
     }
+    case "arg-structural-method":
+      return hasExactKeys(
+        form,
+        ["form", "storageIndex", "argModes", "argConversions", "trailingArguments"],
+        ["form", "storageIndex", "argModes"],
+      ) && operationKind === "method" && runtimeSourceIndexes.length >= 1 &&
+        Number.isSafeInteger(form.storageIndex) && form.storageIndex >= 0 &&
+        validateModes(form.argModes) === undefined &&
+        (form.argConversions === undefined ||
+          isDenseDataArray(form.argConversions) &&
+          form.argConversions.length === runtimeSourceIndexes.length &&
+          form.argConversions[0] === undefined &&
+          form.argConversions.every((conversion) =>
+            conversion === undefined || rustValueConversionContract(conversion) !== undefined)) &&
+        (form.trailingArguments === undefined ||
+          isDenseDataArray(form.trailingArguments) &&
+          form.trailingArguments.every((argument) => constantIsValid(argument)))
+        ? undefined
+        : "argument structural-method form requires one exact storage index, receiver/argument metadata, closed trailing constants, and at least one source argument";
     case "index":
       return hasExactKeys(form, ["form", "indexConversion"], ["form"]) &&
         (form.indexConversion === undefined || rustValueConversionContract(form.indexConversion) !== undefined) &&

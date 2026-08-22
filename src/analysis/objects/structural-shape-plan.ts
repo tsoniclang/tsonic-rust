@@ -6,15 +6,18 @@ import {
   rustSnakeCaseIdentifier,
 } from "../../target-model/names/identifiers.js";
 import {
+  rustSourceMemberTargetName,
   rustStructuralObjectCarrierValue,
   rustTargetTypeParameterNames,
 } from "../../target-model/types/index.js";
+import type { RustSourceMemberKey } from "../../target-model/types/index.js";
 import type {
   RustSourceObjectShape,
   RustStructuralFieldImplementation,
 } from "../project-types/source-type-registry.js";
 
 export interface RustStructuralShapeField {
+  readonly sourceKey: RustSourceMemberKey;
   readonly sourceName: string;
   readonly targetName: string;
   readonly carrier: TargetTypeRef;
@@ -129,7 +132,7 @@ export function createRustStructuralShapePlan(
       const fields = structural.fields.map((field, storageIndex): RustStructuralShapeField => {
         const targetName = allocateSnakeName(
           usedFieldNames,
-          rustSnakeCaseIdentifier(field.sourceName),
+          rustSnakeCaseIdentifier(rustSourceMemberTargetName(field.sourceKey)),
         );
         const fieldImplementations = implementations.filter((implementation) =>
           implementation.storageIndex === storageIndex &&
@@ -137,6 +140,7 @@ export function createRustStructuralShapePlan(
         const propertyStorage = field.accessor !== undefined ||
           fieldImplementations.some((implementation) => implementation.kind === "accessor");
         return Object.freeze({
+          sourceKey: field.sourceKey,
           sourceName: field.sourceName,
           targetName,
           carrier: field.type,

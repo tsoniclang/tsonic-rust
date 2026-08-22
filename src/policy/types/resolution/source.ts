@@ -8,6 +8,7 @@ import {
   rustBigIntTargetType,
   rustCallableTargetType,
   rustJsArrayTargetType,
+  rustJsStringTargetType,
   rustLocationTargetType,
   rustNullTargetType,
   rustNeverTargetType,
@@ -180,7 +181,7 @@ export function resolveRustTargetTypeSyntax(
     }
   }
   if (kind === "KindStringKeyword") {
-    return rustStringTargetType();
+    return options.jsEnabled ? rustJsStringTargetType() : rustStringTargetType();
   }
   if (kind === "KindBooleanKeyword") {
     return rustSourcePrimitiveTargetType("bool");

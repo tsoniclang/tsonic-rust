@@ -64,6 +64,7 @@ export type RustValueConversionId =
   | "js-value-from-i32"
   | "js-value-from-string"
   | "js-value-clone"
+  | "js-regexp-exec-to-match"
   | "owned-string-from-borrowed-str";
 
 export type RustNonOptionValueConversion =
@@ -94,10 +95,24 @@ export type RustNonOptionValueConversion =
       readonly kind: "bottom-coercion";
       readonly source: TargetTypeRef;
       readonly target: TargetTypeRef;
+    }
+  | {
+      readonly kind: "js-argument-vector-callback";
+      readonly source: TargetTypeRef;
+      readonly target: TargetTypeRef;
+      readonly projections: readonly (
+        | "string"
+        | "value"
+        | "rest-values"
+      )[];
     };
 
 export type RustValueConversion =
   | RustNonOptionValueConversion
+  | {
+      readonly kind: "option-some";
+      readonly element: TargetTypeRef;
+    }
   | {
       readonly kind: "option-map";
       readonly elementConversion: RustNonOptionValueConversion;
@@ -116,17 +131,15 @@ export type RustProviderOperationForm =
       readonly fixedArgumentModes: readonly RustArgumentMode[];
     }
   | {
-      // Free function taking all arguments as one &[&str] slice (variadic
-      // string APIs like path join).
-      readonly form: "call-str-slice";
+      readonly form: "call-ref-slice";
       readonly path: string;
+      readonly elementCarrier: TargetTypeRef;
     }
   | {
-      // Free function taking the selected source receiver followed by all
-      // source arguments as one &[&str] slice.
-      readonly form: "free-call-str-slice";
+      readonly form: "free-call-ref-slice";
       readonly path: string;
       readonly receiverMode: RustArgumentMode;
+      readonly elementCarrier: TargetTypeRef;
     }
   | {
       readonly form: "call-value-slice";
@@ -192,6 +205,18 @@ export type RustProviderOperationForm =
       readonly form: "arg-receiver-method";
       readonly name: string;
       readonly argModes?: readonly RustArgumentMode[];
+      readonly argConversions?: readonly (RustValueConversion | undefined)[];
+    }
+  | {
+      // Receiver-swapping structural method: the first source argument is the
+      // checker-selected structural protocol object and the JavaScript
+      // receiver is the first callable argument. The storage index is an exact
+      // finalized object-shape identity, never a source-name lookup.
+      readonly form: "arg-structural-method";
+      readonly storageIndex: number;
+      readonly argModes: readonly RustArgumentMode[];
+      readonly argConversions?: readonly (RustValueConversion | undefined)[];
+      readonly trailingArguments?: readonly RustProviderConstantArgument[];
     }
   | { readonly form: "field"; readonly name: string }
   | {
@@ -272,6 +297,7 @@ export interface RustCallbackOperationTemplate {
   readonly shape: "direct" | "map" | "reduce";
   readonly sourceArgumentIndex: number;
   readonly accumulatorArgumentIndex?: number;
+  readonly argumentAdapter?: "js-regexp-replacement";
   readonly fallibleTarget: RustProviderOperationForm;
 }
 
