@@ -249,11 +249,11 @@ export function observe(path: string): void {
   }]);
 });
 
-test("node package requires the js surface", async () => {
+test("node package is a target capability independent of the js source surface", async () => {
   const capability = await nodejsCapability();
   assert.equal(capability.kind, "target-capability");
   assert.equal(capability.targetId, "rust");
-  assert.deepEqual(capability.requiredSurfaces, ["js"]);
+  assert.equal(Object.hasOwn(capability, "requiredSurfaces"), false);
   assert.deepEqual(capability.moduleOwnership.map((entry) => entry.specifierPrefix ?? entry.moduleSpecifier).length > 0, true);
 });
 

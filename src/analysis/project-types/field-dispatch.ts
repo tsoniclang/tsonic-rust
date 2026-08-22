@@ -212,8 +212,12 @@ function resolveFieldImplementation(
   if (kind !== "KindGetAccessor" && kind !== "KindSetAccessor") {
     return undefined;
   }
+  const symbol = selected.implementation.symbol;
+  if (symbol === undefined) {
+    return undefined;
+  }
   const declarations = input.semanticsFor(declaration)
-    .declarations.symbolDeclarations(selected.implementation.symbol);
+    .declarations.symbolDeclarations(symbol);
   const getters = declarations.filter((candidate) =>
     input.ast.kindName(candidate) === "KindGetAccessor");
   const setters = declarations.filter((candidate) =>

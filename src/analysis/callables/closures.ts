@@ -336,7 +336,11 @@ function rustCapturedBindingStorage(
   }
   const selected = walk.context.source.navigation.sourceReferenceFor(reference);
   const sourceFile = walk.context.ast.getSourceFile(declaration);
-  if (selected?.declaration !== declaration || sourceFile === undefined) {
+  if (
+    selected?.declaration !== declaration ||
+    selected.symbol === undefined ||
+    sourceFile === undefined
+  ) {
     return undefined;
   }
   const mutated = walk.context.facts.get(declaration, rustMutatedBindingFactKey) !== undefined ||
