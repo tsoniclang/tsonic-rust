@@ -645,13 +645,62 @@ test("backend assignment and nullish checks consume finalized fact details", () 
   assert.match(statements, /assignment === undefined \|\| assignment\.kind !== "operator-token"/u);
   assert.match(statements, /selectedOperatorMatches\(expression, assignment, context\)/u);
   assert.doesNotMatch(statements, /sourceReferenceFor|selectRustEquivalentAssignment/u);
-  assert.match(statements, /fact\.writeStrategy === "in-place-string-append"/u);
+  assert.match(statements, /fact\.writeStrategy === "in-place-string-append-parts"/u);
+  assert.match(statements, /fact\.writeStrategy === "in-place-string-append-value"/u);
   assert.match(semantics, /targetReference\.symbol !== valueReference\.symbol/u);
   assert.match(semantics, /targetReference\.declaration !== valueReference\.declaration/u);
-  assert.match(semantics, /writeStrategy: "in-place-string-append"/u);
+  assert.match(semantics, /"in-place-string-append-parts"/u);
+  assert.match(semantics, /"in-place-string-append-value"/u);
   assert.match(operators, /export function selectRustEquivalentAssignment\(/u);
   assert.match(expressions, /fact\.optionOperand === "left" \? leftNode : rightNode/u);
   assert.doesNotMatch(expressions, /getRuntimeCarrierFact\(leftNode\)/u);
+});
+
+test("counted-loop planning consumes one sealed Rust representation plan", () => {
+  const analysis = readFileSync(
+    join(sourceRoot, "analysis/control-flow/counted-loop-representations.ts"),
+    "utf8",
+  );
+  const targetProgram = readFileSync(
+    join(sourceRoot, "analysis/program/target-program.ts"),
+    "utf8",
+  );
+  const planning = readFileSync(
+    join(sourceRoot, "backend/planner/statements/control-flow.ts"),
+    "utf8",
+  );
+  assert.match(targetProgram, /countedLoops: analyzeRustCountedLoopRepresentations\(/u);
+  assert.match(analysis, /input\.navigation\.countedLoop\(statement\)/u);
+  assert.match(analysis, /fact\.abi\.effects\.evaluation === "pure"/u);
+  assert.match(analysis, /carrierHasIndependentScalarValue/u);
+  assert.doesNotMatch(analysis, /isRustCopyCarrier/u);
+  assert.match(planning, /program\.countedLoops\.representationFor\(node\)/u);
+  assert.doesNotMatch(planning, /sourceNavigation\.countedLoop|expressionEffects|declarationUseSummary/u);
+  assert.doesNotMatch(analysis, /\.text\([^)]*bound|memberName|propertyName|sourceName|targetName/u);
+});
+
+test("provider purity uses one generic operation-form writability policy", () => {
+  const forms = readFileSync(
+    join(sourceRoot, "policy/operations/forms.ts"),
+    "utf8",
+  );
+  const providerValidation = readFileSync(
+    join(sourceRoot, "providers/packages/validation/operations.ts"),
+    "utf8",
+  );
+  const jsRows = readFileSync(
+    join(sourceRoot, "policy/operations/js-surface/model.ts"),
+    "utf8",
+  );
+  const finalization = readFileSync(
+    join(sourceRoot, "analysis/facts/finalized-operation/finalize.ts"),
+    "utf8",
+  );
+  assert.match(forms, /export function rustProviderOperationFormDeclaresWritableInput\(/u);
+  assert.match(providerValidation, /rustProviderOperationFormDeclaresWritableInput\(row\.target\)/u);
+  assert.match(jsRows, /rustProviderOperationFormDeclaresWritableInput\(row\.shape\.target\)/u);
+  assert.match(finalization, /rustFinalizedTargetInputMayMutateSource/u);
+  assert.doesNotMatch(providerValidation, /function operationFormDeclaresMutableInput/u);
 });
 
 test("backend operation facts cannot override runtime carriers or selected source identity", () => {

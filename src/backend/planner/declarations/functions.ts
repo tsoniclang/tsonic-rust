@@ -324,6 +324,7 @@ function planRustFunctionItem(
                   fallible: true,
                   hasReturnValue: !isRustUnitCarrier(generatorFact.returnType),
                   errorType: rustErrorType(bodyErrorBoundary!),
+                  inferErrorTypeFromReturnType: false,
                 },
               ),
             }],
@@ -369,6 +370,7 @@ function planRustFunctionItem(
               fallible: true,
               hasReturnValue: returnType !== undefined,
               errorType: rustErrorType(callableErrorBoundary!),
+              inferErrorTypeFromReturnType: true,
             }
           : { fallible: false, hasReturnValue: returnType !== undefined },
       ),

@@ -449,7 +449,12 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
     body: applyFallibleShape(
       { statements: initializationStatements },
       fallible
-        ? { fallible: true, hasReturnValue: false, errorType: rustErrorType(errorBoundary!) }
+        ? {
+            fallible: true,
+            hasReturnValue: false,
+            errorType: rustErrorType(errorBoundary!),
+            inferErrorTypeFromReturnType: true,
+          }
         : { fallible: false, hasReturnValue: false },
     ),
   });

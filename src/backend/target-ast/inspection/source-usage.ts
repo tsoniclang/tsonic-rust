@@ -113,6 +113,7 @@ export function rustExpressionChildren(expression: RustExpr): readonly RustExpr[
     case "float-literal":
     case "bool-literal":
     case "none":
+    case "char-literal":
     case "string-literal":
     case "str-literal":
     case "path":

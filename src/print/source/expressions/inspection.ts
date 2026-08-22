@@ -195,7 +195,7 @@ export function rustFormatArgumentIsAtomic(expression: RustExpr): boolean {
   }
   return expression.kind === "int-literal" || expression.kind === "float-literal" ||
     expression.kind === "bool-literal" || expression.kind === "none" ||
-    expression.kind === "str-literal" ||
+    expression.kind === "char-literal" || expression.kind === "str-literal" ||
     expression.kind === "path" || expression.kind === "associated-value";
 }
 

@@ -1,4 +1,4 @@
-import { escapeRustString, printRustMatchExpression, printRustPattern } from "../patterns.js";
+import { escapeRustChar, escapeRustString, printRustMatchExpression, printRustPattern } from "../patterns.js";
 import { expressionIsRightHandBlock, printBinaryOperand, printOperand, RustPrecedence } from "./precedence.js";
 import { printRustAssociatedCallOwner, printRustBlockExpressionInlineContents, printRustConditionalArmInline } from "./blocks.js";
 import { printRustAssociatedOwner, rustMethodChainPrefersVerticalLayout } from "./chains.js";
@@ -19,6 +19,9 @@ export function printRustExpr(expression: RustExpr): string {
     }
     case "none": {
       return "None";
+    }
+    case "char-literal": {
+      return `'${escapeRustChar(expression.value)}'`;
     }
     case "string-literal": {
       return `String::from("${escapeRustString(expression.value)}")`;

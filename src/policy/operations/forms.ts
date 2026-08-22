@@ -21,6 +21,53 @@ export function rustProviderOperationFormAcceptsTargetTypeArguments(
     form.form === "arg-receiver-method" || form.form === "trait-call";
 }
 
+export function rustProviderOperationFormDeclaresWritableInput(
+  form: RustProviderOperationForm,
+): boolean {
+  switch (form.form) {
+    case "call":
+    case "arg-receiver-method":
+    case "arg-structural-method":
+      return form.argModes?.includes("mut-ref") === true;
+    case "call-c-variadic":
+      return form.fixedArgumentModes.includes("mut-ref");
+    case "free-call-str-slice":
+    case "free-call-ref-slice":
+      return form.receiverMode === "mut-ref";
+    case "call-value-slice":
+    case "call-value-array":
+      return form.leadingArguments.some((argument) => argument.mode === "mut-ref");
+    case "receiver-value-array":
+      return form.receiverMode === "mut-ref" ||
+        form.leadingArguments.some((argument) => argument.mode === "mut-ref");
+    case "receiver-tagged-array":
+      return form.receiverMode === "mut-ref" ||
+        form.leadingArguments.some((argument) => argument.mode === "mut-ref") ||
+        form.alternatives.some((alternative) => alternative.mode === "mut-ref");
+    case "free-call":
+      return form.receiverMode === "mut-ref" ||
+        form.argModes?.includes("mut-ref") === true;
+    case "trait-call":
+      return form.receiverMode === "mut-ref" ||
+        form.argModes?.includes("mut-ref") === true;
+    case "receiver-method":
+      return form.mutatesReceiver === true ||
+        form.argModes?.includes("mut-ref") === true;
+    case "marker":
+    case "call-str-slice":
+    case "call-ref-slice":
+    case "path":
+    case "static":
+    case "method":
+    case "arg-method":
+    case "field":
+    case "index":
+    case "binary-operator":
+    case "trait-associated-value":
+      return false;
+  }
+}
+
 export function rustProviderOperationFormContractViolation(
   operationKind: RustFinalizedOperationKind,
   form: RustProviderOperationForm,
@@ -83,6 +130,11 @@ export function rustProviderOperationFormContractViolation(
             (operationKind === "property-set" && runtimeSourceIndexes.length === 1))
         ? undefined
         : "static form must be one closed Rust path with the exact property read/write arity";
+    case "call-str-slice":
+      return hasExactKeys(form, ["form", "path"], ["form", "path"]) &&
+          typeof form.path === "string" && rustPathPattern.test(form.path)
+        ? undefined
+        : "string-slice call form must contain one closed Rust path";
     case "call-ref-slice":
       return hasExactKeys(form, ["form", "path", "elementCarrier"], ["form", "path", "elementCarrier"]) &&
           typeof form.path === "string" && rustPathPattern.test(form.path) && isRustTargetTypeRef(form.elementCarrier)
@@ -100,6 +152,11 @@ export function rustProviderOperationFormContractViolation(
         sourceArgumentCount >= form.fixedArgumentModes.length
         ? undefined
         : "C-variadic call form must contain one path, exact fixed argument modes, and only runtime source arguments";
+    case "free-call-str-slice":
+      return hasExactKeys(form, ["form", "path", "receiverMode"], ["form", "path", "receiverMode"]) &&
+          typeof form.path === "string" && rustPathPattern.test(form.path) && modes.has(form.receiverMode)
+        ? undefined
+        : "receiver string-slice call form must contain one closed Rust path and receiver mode";
     case "free-call-ref-slice":
       return hasExactKeys(form, ["form", "path", "receiverMode", "elementCarrier"], ["form", "path", "receiverMode", "elementCarrier"]) &&
           typeof form.path === "string" && rustPathPattern.test(form.path) && modes.has(form.receiverMode) &&

@@ -214,6 +214,7 @@ function rustExpressionReferencesModuleAlias(expression: RustExpr, alias: string
     case "float-literal":
     case "bool-literal":
     case "none":
+    case "char-literal":
     case "string-literal":
     case "str-literal":
     case "unreachable":

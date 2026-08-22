@@ -25,8 +25,14 @@ import {
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { collectVariableDeclarations, directResourceDeclaration, planResourceManagedBody, resourceFactForPlanning, rustBlockDefinitelyExits } from "./resources.js";
 import { diagnosticInput, isValidRustIdentifier } from "../program/plan-context.js";
-import { expressionCarrier, negateRustPlannedBooleanExpression, planExpression } from "../expressions/index.js";
-import { isRustBoolCarrier, isRustIntegerCarrier } from "../../../target-model/types/index.js";
+import {
+  expressionCarrier,
+  negateRustPlannedBooleanExpression,
+  planExpression,
+  planExpressionBeforeValueProjections,
+  planNumericLiteralWithCarrier,
+} from "../expressions/index.js";
+import { isRustBoolCarrier } from "../../../target-model/types/index.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { negateRustBooleanExpression } from "../../target-ast/expressions.js";
 import { planBlockLike, planStatementSequence } from "./core.js";
@@ -36,6 +42,7 @@ import { planForInStatement, planForOfStatement } from "./iteration.js";
 import { rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { Node } from "@tsonic/tsts";
+import type { RustCountedLoopRepresentation } from "../../../analysis/control-flow/counted-loop-representations.js";
 import type { RustBlock, RustExpr, RustStmt } from "../../target-ast/nodes.js";
 import type { RustControlTarget, RustLoopTarget, RustPlanContext } from "../program/plan-context.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
@@ -371,9 +378,9 @@ export function planForStatement(
   context: RustPlanContext,
   sourceLabel?: string,
 ): readonly RustStmt[] | undefined {
-  const counted = planCountedForStatement(node, context, sourceLabel);
+  const counted = context.input.program.countedLoops.representationFor(node);
   if (counted !== undefined) {
-    return counted;
+    return planCountedForStatement(node, counted, context, sourceLabel);
   }
   const initializer = ForStatement_Initializer(context.input.program.source.ast, node);
   const condition = ForStatement_Condition(context.input.program.source.ast, node);
@@ -460,27 +467,17 @@ export function planForStatement(
 
 function planCountedForStatement(
   node: Node,
+  counted: RustCountedLoopRepresentation,
   context: RustPlanContext,
   sourceLabel?: string,
 ): readonly RustStmt[] | undefined {
-  const counted = context.input.program.sourceNavigation.countedLoop(node);
-  if (counted === undefined) {
-    return undefined;
-  }
-  const counterSummary = context.input.program.sourceNavigation.declarationUseSummary(
-    counted.counterDeclaration,
-  );
-  const startCarrier = expressionCarrier(counted.start, context);
-  const boundCarrier = expressionCarrier(counted.bound, context);
-  if (!isRustIntegerCarrier(startCarrier) || boundCarrier === undefined ||
-    !rustTargetTypeRefEquals(startCarrier, boundCarrier) ||
-    counterSummary.captured || counterSummary.memberWritten ||
-    !countedLoopBoundIsStable(counted.bound, context)) {
-    return undefined;
-  }
   const binding = context.input.program.names.nameForDeclaration(counted.counterDeclaration) ?? "";
-  const start = planExpression(counted.start, context);
-  const bound = planExpression(counted.bound, context);
+  const start = counted.kind === "native-counter"
+    ? planExpression(counted.start, context)
+    : planNumericLiteralWithCarrier(counted.start, counted.rangeCarrier, context);
+  const bound = counted.kind === "native-counter"
+    ? planExpression(counted.bound, context)
+    : planExpressionBeforeValueProjections(counted.bound, context, "value");
   const target = createRustLoopTarget(context, [], sourceLabel);
   if (!isValidRustIdentifier(binding) || start === undefined || bound === undefined ||
     target === undefined) {
@@ -493,43 +490,46 @@ function planCountedForStatement(
   if (body === undefined) {
     return undefined;
   }
+  if (counted.kind === "native-counter") {
+    return [{
+      kind: "for",
+      ...(target.used.value ? { label: target.label } : {}),
+      binding,
+      iterable: { kind: "range", start, end: bound },
+      body,
+    }];
+  }
+  if (context.syntheticNames === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.counted-loop-range-name",
+      "A sealed integer-range number loop requires one finalized hygienic-name scope.",
+    ));
+    return undefined;
+  }
+  const rangeBinding = allocateRustSyntheticName(
+    context.syntheticNames,
+    `${binding}_range`,
+  );
   return [{
     kind: "for",
     ...(target.used.value ? { label: target.label } : {}),
-    binding,
+    binding: rangeBinding,
     iterable: { kind: "range", start, end: bound },
-    body,
+    body: {
+      ...body,
+      statements: [{
+        kind: "let",
+        name: binding,
+        mutable: false,
+        init: {
+          kind: "numeric-cast",
+          expression: { kind: "path", path: rangeBinding },
+          target: "f64",
+        },
+      }, ...body.statements],
+    },
   }];
-}
-
-function countedLoopBoundIsStable(
-  bound: Node,
-  context: RustPlanContext,
-): boolean {
-  const effects = context.input.program.sourceNavigation.expressionEffects(bound);
-  if (effects.invokes || effects.mutates || effects.suspends || effects.mayThrow) {
-    return false;
-  }
-  let stable = true;
-  const visited = new Set<Node>();
-  const visit = (node: Node | undefined): void => {
-    if (node === undefined || !stable) {
-      return;
-    }
-    const selected = context.input.program.sourceNavigation.sourceReferenceFor(node);
-    const declaration = selected?.declaration;
-    if (declaration !== undefined && !visited.has(declaration)) {
-      visited.add(declaration);
-      const summary = context.input.program.sourceNavigation.declarationUseSummary(declaration);
-      if (summary.bindingWritten) {
-        stable = false;
-        return;
-      }
-    }
-    context.input.program.source.ast.forEachChild(node, visit);
-  };
-  visit(bound);
-  return stable;
 }
 
 export function createRustLoopTarget(

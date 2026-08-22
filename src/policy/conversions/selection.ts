@@ -9,6 +9,7 @@ import {
   rustOptionElementCarrier,
   rustSourcePrimitiveTargetType,
   rustSourceUnionCarrierValue,
+  rustStringTargetType,
 } from "../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -22,6 +23,8 @@ import {
   rustJsValueCloneConversion,
   rustJsStringToJsValueConversion,
   rustJsRegExpExecToMatchConversion,
+  rustJsStringFromNativeStringConversion,
+  rustNativeStringFromJsStringConversion,
   rustUint32ToInt32ValueConversion,
   rustUint64ToFloat64ValueConversion,
   rustUint8ToInt32ValueConversion,
@@ -31,6 +34,7 @@ const boolCarrier = rustSourcePrimitiveTargetType("bool");
 const int32Carrier = rustSourcePrimitiveTargetType("int32");
 const float64Carrier = rustSourcePrimitiveTargetType("float64");
 const stringCarrier = rustJsStringTargetType();
+const nativeStringCarrier = rustStringTargetType();
 const jsValueCarrier = rustJsValueTargetType();
 
 export function selectRustSourceValueConversion(
@@ -93,6 +97,14 @@ export function selectRustSourceValueConversion(
   if (rustTargetTypeRefEquals(source, rustJsRegExpExecArrayTargetType()) &&
     rustTargetTypeRefEquals(target, rustJsRegExpMatchArrayTargetType())) {
     return rustJsRegExpExecToMatchConversion;
+  }
+  if (rustTargetTypeRefEquals(source, stringCarrier) &&
+    rustTargetTypeRefEquals(target, nativeStringCarrier)) {
+    return rustNativeStringFromJsStringConversion;
+  }
+  if (rustTargetTypeRefEquals(source, nativeStringCarrier) &&
+    rustTargetTypeRefEquals(target, stringCarrier)) {
+    return rustJsStringFromNativeStringConversion;
   }
   if (source.kind !== "source-primitive" || target.kind !== "source-primitive") {
     return undefined;

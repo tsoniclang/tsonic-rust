@@ -31,6 +31,10 @@ export function validateOperationForm(
       requireRustPath(form.path, `${label}.target.path`, fail);
       validateModes(form.fixedArgumentModes, label, parameterCarriers?.length, fail);
       return;
+    case "call-str-slice":
+      requireExactKeys(record, ["form", "path"], `${label}.target`, fail);
+      requireRustPath(form.path, `${label}.target.path`, fail);
+      return;
     case "call-ref-slice":
       requireExactKeys(record, ["form", "path", "elementCarrier"], `${label}.target`, fail);
       requireRustPath(form.path, `${label}.target.path`, fail);
@@ -40,6 +44,13 @@ export function validateOperationForm(
     case "static":
       requireExactKeys(record, ["form", "path"], `${label}.target`, fail);
       requireRustPath(form.path, `${label}.target.path`, fail);
+      return;
+    case "free-call-str-slice":
+      requireExactKeys(record, ["form", "path", "receiverMode"], `${label}.target`, fail);
+      requireRustPath(form.path, `${label}.target.path`, fail);
+      if (form.receiverMode !== "value" && form.receiverMode !== "ref" && form.receiverMode !== "mut-ref") {
+        fail(`${label}.target.receiverMode contains unsupported mode '${String(form.receiverMode)}'`);
+      }
       return;
     case "free-call-ref-slice":
       requireExactKeys(record, ["form", "path", "receiverMode", "elementCarrier"], `${label}.target`, fail);

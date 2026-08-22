@@ -1,4 +1,12 @@
-import { carrierAfterMode, finalizedConversionIsValid, isRustFinalizedArrayInput, isRustFinalizedConstantInput, isRustFinalizedSliceInput, isRustFinalizedTaggedArrayInput } from "./conversions.js";
+import {
+  carrierAfterMode,
+  finalizedConversionIsValid,
+  isRustFinalizedArrayInput,
+  isRustFinalizedConstantInput,
+  isRustFinalizedSliceInput,
+  isRustFinalizedTaggedArrayInput,
+  rustFinalizedTargetInputMayMutateSource,
+} from "./conversions.js";
 import { closedMetadataEquals, isClosedMetadata } from "../../../target-model/metadata/closed-data.js";
 import { createInputFactory, finalizeTargetInputs } from "./inputs.js";
 import { isRustErrorBoundary } from "../../../target-model/operations/error-boundary.js";
@@ -22,13 +30,21 @@ export function validateRustFinalizedOperationAbi(candidate: unknown): candidate
   ) !== undefined ||
     (abi.targetTypeArguments.length > 0 &&
       !rustProviderOperationFormAcceptsTargetTypeArguments(abi.target)) ||
+    (abi.effects.evaluation !== "observable" && abi.effects.evaluation !== "pure") ||
     (abi.effects.invocation !== "infallible" && abi.effects.invocation !== "fallible") ||
     (abi.effects.awaiting !== "not-applicable" && abi.effects.awaiting !== "infallible" && abi.effects.awaiting !== "fallible") ||
     !isRustErrorBoundary(abi.effects.errorBoundary) ||
     (abi.effects.errorBoundary === "provider-native"
       ? !isRustTargetTypeRef(abi.effects.errorCarrier)
       : abi.effects.errorCarrier !== undefined) ||
-    (abi.effects.safety !== "safe" && abi.effects.safety !== "requires-unsafe")) {
+    (abi.effects.safety !== "safe" && abi.effects.safety !== "requires-unsafe") ||
+    (abi.effects.evaluation === "pure" && (
+      abi.operationKind === "constructor" || abi.operationKind === "property-set" ||
+      abi.operationKind === "index-set" ||
+      (abi.targetReceiver.kind === "input" &&
+        rustFinalizedTargetInputMayMutateSource(abi.targetReceiver.input)) ||
+      abi.targetArguments.some(rustFinalizedTargetInputMayMutateSource)
+    ))) {
     return false;
   }
   if (abi.sourceArguments.some((argument, index) => {
@@ -361,9 +377,10 @@ function isEffects(value: unknown): value is RustFinalizedOperationAbi["effects"
   return isRecord(value) && hasExactKeys(
     value,
     value.errorBoundary === "provider-native"
-      ? ["invocation", "awaiting", "errorBoundary", "errorCarrier", "safety"]
-      : ["invocation", "awaiting", "errorBoundary", "safety"],
+      ? ["evaluation", "invocation", "awaiting", "errorBoundary", "errorCarrier", "safety"]
+      : ["evaluation", "invocation", "awaiting", "errorBoundary", "safety"],
   ) &&
+    (value.evaluation === "observable" || value.evaluation === "pure") &&
     (value.invocation === "infallible" || value.invocation === "fallible") &&
     (value.awaiting === "not-applicable" || value.awaiting === "infallible" || value.awaiting === "fallible") &&
     isRustErrorBoundary(value.errorBoundary) &&

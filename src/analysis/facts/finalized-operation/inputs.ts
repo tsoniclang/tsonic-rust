@@ -1,6 +1,6 @@
 import { isRustCVariadicArgumentCarrier } from "../c-variadic.js";
 import { isRustFinalizedArrayInput, isRustFinalizedSliceInput, isRustFinalizedSourceInput, isRustFinalizedTaggedArrayInput, sourceInput } from "./conversions.js";
-import { rustSliceRefTargetType } from "../../../target-model/types/index.js";
+import { rustSliceRefTargetType, rustStringTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectRustSourceValueConversion } from "../../../policy/conversions/selection.js";
 import type {
@@ -241,6 +241,29 @@ export function finalizeTargetInputs(
       return sourceArgumentCount === 0
         ? { targetReceiver: none, targetArguments: [] }
         : undefined;
+    case "call-str-slice": {
+      const stringCarrier = rustStringTargetType();
+      const elements = indexes.map((index) => input.argumentTo(index, "ref", stringCarrier));
+      if (elements.some((entry) => entry === undefined)) {
+        return undefined;
+      }
+      const closed = elements as RustFinalizedSourceInput[];
+      const elementCarrier = {
+        kind: "reference",
+        referent: stringCarrier,
+        mutable: false,
+      } as const;
+      return {
+        targetReceiver: none,
+        targetArguments: [{
+          source: { kind: "argument-slice", sourceIndexes: indexes },
+          elements: closed,
+          elementCarrier,
+          mode: "ref",
+          parameterCarrier: rustSliceRefTargetType(elementCarrier),
+        }],
+      };
+    }
     case "call-ref-slice": {
       const elements = indexes.map((index) => input.argumentTo(index, "ref", form.elementCarrier));
       if (elements.some((entry) => entry === undefined)) {
@@ -261,6 +284,33 @@ export function finalizeTargetInputs(
           mode: "ref",
           parameterCarrier: rustSliceRefTargetType(elementCarrier),
         }],
+      };
+    }
+    case "free-call-str-slice": {
+      const receiver = input.receiver(form.receiverMode);
+      const stringCarrier = rustStringTargetType();
+      const elements = indexes.map((index) => input.argumentTo(index, "ref", stringCarrier));
+      if (receiver === undefined || elements.some((entry) => entry === undefined)) {
+        return undefined;
+      }
+      const closed = elements as RustFinalizedSourceInput[];
+      const elementCarrier = {
+        kind: "reference",
+        referent: stringCarrier,
+        mutable: false,
+      } as const;
+      return {
+        targetReceiver: none,
+        targetArguments: [
+          receiver,
+          {
+            source: { kind: "argument-slice", sourceIndexes: indexes },
+            elements: closed,
+            elementCarrier,
+            mode: "ref",
+            parameterCarrier: rustSliceRefTargetType(elementCarrier),
+          },
+        ],
       };
     }
     case "free-call-ref-slice": {

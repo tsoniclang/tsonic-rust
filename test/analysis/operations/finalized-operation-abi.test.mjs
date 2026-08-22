@@ -12,6 +12,9 @@ import {
   isRustTargetTypeRef,
   rustTargetTypeRefEquals,
 } from "../../../dist/target-model/types/equality.js";
+import {
+  rustProviderOperationFormDeclaresWritableInput,
+} from "../../../dist/policy/operations/forms.js";
 
 const bool = { kind: "source-primitive", name: "bool" };
 const float64 = { kind: "source-primitive", name: "float64" };
@@ -56,6 +59,187 @@ test("provider calls retain closed target-only generic arguments", () => {
     isAsync: false,
     isFallible: false,
   }), undefined);
+});
+
+test("provider evaluation effects are conservative by default and require an exact pure opt-in", () => {
+  const array = {
+    kind: "target-named",
+    id: "rust.js.JsArray",
+    typeArguments: [int32],
+  };
+  const taggedForm = {
+    form: "receiver-tagged-array",
+    name: "mutating_values",
+    receiverMode: "ref",
+    leadingArguments: [],
+    elementCarrier: {
+      kind: "target-named",
+      id: "acme.MutableInput",
+      typeArguments: [int32],
+    },
+    alternatives: [{
+      inputCarrier: int32,
+      mode: "mut-ref",
+      constructorPath: "acme::MutableInput::Value",
+    }],
+  };
+  const observable = finalizeRustProviderOperationAbi({
+    operationKind: "property",
+    form: { form: "call", path: "acme::observable" },
+    sourceArgumentCarriers: [],
+    resultCarrier: int32,
+    isAsync: false,
+    isFallible: false,
+  });
+  const pure = finalizeRustProviderOperationAbi({
+    operationKind: "property",
+    form: { form: "call", path: "acme::pure" },
+    sourceArgumentCarriers: [],
+    resultCarrier: int32,
+    isAsync: false,
+    isFallible: false,
+    evaluation: "pure",
+  });
+  const mutatingObservable = finalizeRustProviderOperationAbi({
+    operationKind: "method",
+    form: {
+      form: "call",
+      path: "acme::mutating",
+      argModes: ["mut-ref"],
+    },
+    sourceArgumentCarriers: [int32],
+    resultCarrier: int32,
+    isAsync: false,
+    isFallible: false,
+  });
+  const nestedMutatingObservable = finalizeRustProviderOperationAbi({
+    operationKind: "method",
+    form: taggedForm,
+    sourceReceiverCarrier: array,
+    sourceArgumentCarriers: [int32],
+    resultCarrier: int32,
+    isAsync: false,
+    isFallible: false,
+  });
+
+  assert.equal(observable?.effects.evaluation, "observable");
+  assert.equal(pure?.effects.evaluation, "pure");
+  assert.equal(mutatingObservable?.effects.evaluation, "observable");
+  assert.equal(nestedMutatingObservable?.effects.evaluation, "observable");
+  assert.equal(finalizeRustProviderOperationAbi({
+    operationKind: "constructor",
+    form: { form: "call", path: "acme::Value::new" },
+    sourceArgumentCarriers: [],
+    resultCarrier: int32,
+    isAsync: false,
+    isFallible: false,
+    evaluation: "pure",
+  }), undefined);
+  assert.equal(validateRustFinalizedOperationAbi({
+    ...mutatingObservable,
+    effects: { ...mutatingObservable?.effects, evaluation: "pure" },
+  }), false);
+  assert.equal(finalizeRustProviderOperationAbi({
+    operationKind: "property",
+    form: { form: "call", path: "acme::invalid" },
+    sourceArgumentCarriers: [],
+    resultCarrier: int32,
+    isAsync: false,
+    isFallible: false,
+    evaluation: "guess",
+  }), undefined);
+  assert.equal(finalizeRustProviderOperationAbi({
+    operationKind: "method",
+    form: {
+      form: "call",
+      path: "acme::mutating",
+      argModes: ["mut-ref"],
+    },
+    sourceArgumentCarriers: [int32],
+    resultCarrier: int32,
+    isAsync: false,
+    isFallible: false,
+    evaluation: "pure",
+  }), undefined);
+  assert.equal(finalizeRustProviderOperationAbi({
+    operationKind: "method",
+    form: taggedForm,
+    sourceReceiverCarrier: array,
+    sourceArgumentCarriers: [int32],
+    resultCarrier: int32,
+    isAsync: false,
+    isFallible: false,
+    evaluation: "pure",
+  }), undefined);
+});
+
+test("operation-form writability is one exhaustive structural policy", () => {
+  const mutableForms = [
+    { form: "call", path: "acme::call", argModes: ["mut-ref"] },
+    { form: "call-c-variadic", path: "acme::variadic", fixedArgumentModes: ["mut-ref"] },
+    { form: "free-call-str-slice", path: "acme::slice", receiverMode: "mut-ref" },
+    {
+      form: "call-value-array",
+      path: "acme::array",
+      leadingArguments: [{ carrier: int32, mode: "mut-ref" }],
+      elementCarrier: int32,
+    },
+    {
+      form: "receiver-value-array",
+      name: "array",
+      receiverMode: "mut-ref",
+      leadingArguments: [],
+      elementCarrier: int32,
+    },
+    {
+      form: "receiver-tagged-array",
+      name: "tagged",
+      receiverMode: "ref",
+      leadingArguments: [],
+      elementCarrier: int32,
+      alternatives: [{
+        inputCarrier: int32,
+        mode: "mut-ref",
+        constructorPath: "acme::Mutable::Value",
+      }],
+    },
+    {
+      form: "free-call",
+      path: "acme::free",
+      receiverMode: "ref",
+      argModes: ["mut-ref"],
+    },
+    {
+      form: "trait-call",
+      owner: int32,
+      traitPath: "acme::Trait",
+      traitTypeArguments: [],
+      method: "mutate",
+      receiverMode: "mut-ref",
+    },
+    { form: "receiver-method", name: "mutate", mutatesReceiver: true },
+    { form: "arg-receiver-method", name: "mutate", argModes: ["mut-ref"] },
+  ];
+  const readOnlyForms = [
+    { form: "call", path: "acme::call", argModes: ["ref"] },
+    {
+      form: "call-value-slice",
+      path: "acme::slice",
+      leadingArguments: [{ carrier: int32, mode: "ref" }],
+      elementCarrier: int32,
+    },
+    { form: "receiver-method", name: "read" },
+    { form: "method", name: "read" },
+    { form: "index" },
+    { form: "path", path: "acme::VALUE" },
+  ];
+
+  for (const form of mutableForms) {
+    assert.equal(rustProviderOperationFormDeclaresWritableInput(form), true, form.form);
+  }
+  for (const form of readOnlyForms) {
+    assert.equal(rustProviderOperationFormDeclaresWritableInput(form), false, form.form);
+  }
 });
 
 test("provider results preserve exact borrowed-string ownership conversion", () => {
@@ -553,6 +737,7 @@ test("async ABI separates invocation, await fallibility, and post-await conversi
 
   assert.ok(abi);
   assert.deepEqual(abi.effects, {
+    evaluation: "observable",
     invocation: "infallible",
     awaiting: "fallible",
     errorBoundary: "target-runtime",
@@ -654,6 +839,7 @@ test("finalized ABI validation is total and rejects every mutated closed-contrac
     null,
     {},
     { ...abi, unexpected: true },
+    { ...abi, effects: { ...abi.effects, evaluation: "guess" } },
     { ...abi, effects: { ...abi.effects, invocation: "guess" } },
     { ...abi, effects: { ...abi.effects, awaiting: "guess" } },
     { ...abi, effects: { ...abi.effects, errorBoundary: "guess" } },

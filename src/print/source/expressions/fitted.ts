@@ -323,8 +323,12 @@ export function printRustExprFitted(
           depth,
           column,
         );
+        const borrowedBlockArgument = expression.args.length === 1 &&
+          expression.args[0]?.kind === "reference" &&
+          expressionIsRightHandBlock(expression.args[0].expr);
         if (attached.includes("\n") &&
-          column + firstLine(attached).length > rustMethodChainWidth) {
+          column + firstLine(attached).length > rustMethodChainWidth &&
+          !borrowedBlockArgument) {
           attached = printFittedCall(
             attachedCallable,
             expression.args,

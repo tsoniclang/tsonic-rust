@@ -46,6 +46,11 @@ export function choose(value: int32): int32 {
   return 0;
 }
 
+export function returnDisposedResource(): Resource {
+  using resource = new Resource();
+  return resource;
+}
+
 export function loopValues(): void {
   for (let index: int32 = 0; index < 3; index++) {
     using resource = new Resource();
@@ -70,6 +75,7 @@ export function doValues(): void {
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /rt::Completion::Return\(value\)/u);
+  assert.match(source, /rt::Completion::Return\(resource\.clone\(\)\)/u);
   assert.match(source, /rt::Completion::Continue\(0\)/u);
   assert.match(source, /rt::Completion::Break\(0\)/u);
   assert.match(source, /continue 'loop/u);

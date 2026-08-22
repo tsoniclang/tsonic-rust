@@ -26,6 +26,8 @@ export function rustPostCheckOperationKind(
 // spelling.
 export type RustArgumentMode = "value" | "ref" | "mut-ref";
 
+export type RustOperationEvaluationEffect = "observable" | "pure";
+
 export type RustProviderTypeRequirement =
   | "clone"
   | "copy"
@@ -65,6 +67,8 @@ export type RustValueConversionId =
   | "js-value-from-string"
   | "js-value-clone"
   | "js-regexp-exec-to-match"
+  | "native-string-from-js-string"
+  | "js-string-from-native-string"
   | "owned-string-from-borrowed-str";
 
 export type RustNonOptionValueConversion =
@@ -129,6 +133,15 @@ export type RustProviderOperationForm =
       readonly form: "call-c-variadic";
       readonly path: string;
       readonly fixedArgumentModes: readonly RustArgumentMode[];
+    }
+  | {
+      readonly form: "call-str-slice";
+      readonly path: string;
+    }
+  | {
+      readonly form: "free-call-str-slice";
+      readonly path: string;
+      readonly receiverMode: RustArgumentMode;
     }
   | {
       readonly form: "call-ref-slice";
@@ -288,6 +301,7 @@ export interface RustProviderOperationTemplate<
   readonly compileTimeSourceArgumentIndexes?: readonly number[];
   readonly isAsync: boolean;
   readonly isFallible: boolean;
+  readonly evaluation?: "pure";
   readonly errorBoundary: RustErrorBoundary;
   readonly errorCarrier?: TargetTypeRef;
   readonly isUnsafe?: boolean;

@@ -181,6 +181,8 @@ export function planRuntimeSetStatement(
     }];
   }
   if (fact.abi.target.form === "call" || fact.abi.target.form === "free-call" ||
+    fact.abi.target.form === "call-str-slice" ||
+    fact.abi.target.form === "free-call-str-slice" ||
     fact.abi.target.form === "call-ref-slice" ||
     fact.abi.target.form === "free-call-ref-slice" ||
     fact.abi.target.form === "call-value-slice" ||

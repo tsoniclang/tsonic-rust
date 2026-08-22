@@ -26,4 +26,6 @@ export const rustInt32ToJsValueConversion = semanticConversion("js-value-from-i3
 export const rustJsStringToJsValueConversion = semanticConversion("js-value-from-string");
 export const rustJsValueCloneConversion = semanticConversion("js-value-clone");
 export const rustJsRegExpExecToMatchConversion = semanticConversion("js-regexp-exec-to-match");
+export const rustNativeStringFromJsStringConversion = semanticConversion("native-string-from-js-string");
+export const rustJsStringFromNativeStringConversion = semanticConversion("js-string-from-native-string");
 export const rustBorrowedStrToStringValueConversion = semanticConversion("owned-string-from-borrowed-str");

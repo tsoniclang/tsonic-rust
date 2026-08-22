@@ -277,6 +277,10 @@ export function rustValueConversionContract(
       return contract(value.id, "exact", "tsonic_rust_js::abi::clone_js_value", "ref", jsValueCarrier, jsValueCarrier, false);
     case "js-regexp-exec-to-match":
       return contract(value.id, "exact", "tsonic_rust_js::abi::regexp_exec_into_match_array", "value", regexpExecArrayCarrier, regexpMatchArrayCarrier, false);
+    case "native-string-from-js-string":
+      return contract(value.id, "exact", "tsonic_rust_js::abi::js_string_to_utf8", "ref", jsStringCarrier, nativeStringCarrier, false);
+    case "js-string-from-native-string":
+      return contract(value.id, "exact", "tsonic_rust_js::abi::js_string_from_utf8", "value", nativeStringCarrier, jsStringCarrier, false);
     case "owned-string-from-borrowed-str":
       return {
         category: "ownership",

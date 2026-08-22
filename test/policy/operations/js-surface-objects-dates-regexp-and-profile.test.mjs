@@ -54,7 +54,7 @@ export function timing(): boolean {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /js_abi::JsDate::from_string\("1970-01-02T00:00:00.000Z"\)/u);
+  assert.match(text, /js_abi::JsDate::from_string\(&js_abi::JsString::from\("1970-01-02T00:00:00.000Z"\)\)/u);
 });
 
 test("Boolean, Unicode string, and mutable UTC Date operations use exact runtime rows", () => {
@@ -183,9 +183,9 @@ export function aliases(): boolean {
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /let same_date: js_abi::JsDate = date\.clone\(\);/u);
   assert.match(text, /let same_pattern: js_abi::JsRegExp = pattern\.clone\(\);/u);
-  assert.match(text, /same_pattern\.test\("1"\)\?/u);
+  assert.match(text, /same_pattern\.test\(&js_abi::JsString::from\("1"\)\)\?/u);
   assert.match(text, /same_date == date/u);
-  assert.match(text, /i32_to_f64\(pattern\.last_index\(\)\) == 1\.0/u);
+  assert.match(text, /pattern\.last_index\(\) == 1\.0/u);
 });
 
 test("js surface contributes the rust-js cargo dependency", () => {

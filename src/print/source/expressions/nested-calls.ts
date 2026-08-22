@@ -19,6 +19,28 @@ export function printFittedNestedCallWrapper(
   depth: number,
   column: number,
 ): string | undefined {
+  const soleNestedArgument = nested.args.length === 1
+    ? nested.args[0]
+    : undefined;
+  if (soleNestedArgument?.kind === "try") {
+    const argumentIndent = indentText(depth + 1);
+    const flatArgument = printRustExpr(soleNestedArgument);
+    const nestedCallable = nested.kind === "call"
+      ? printRustDirectCallTarget(nested)
+      : printRustAssociatedCallTarget(
+          nested,
+          printRustAssociatedOwner(nested.owner),
+        );
+    const opening = `${outerCallable}(${nestedCallable}(`;
+    if (renderedFits(opening, column) &&
+      renderedFits(`${flatArgument},`, argumentIndent.length)) {
+      return [
+        opening,
+        `${argumentIndent}${flatArgument},`,
+        `${indentText(depth)}))`,
+      ].join("\n");
+    }
+  }
   if (nested.args.length > 1) {
     const nestedCallable = nested.kind === "call"
       ? printRustDirectCallTarget(nested)

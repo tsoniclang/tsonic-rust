@@ -184,6 +184,7 @@ export function rustExpressionContainsStatementBlock(expression: RustExpr): bool
     case "float-literal":
     case "bool-literal":
     case "none":
+    case "char-literal":
     case "string-literal":
     case "str-literal":
     case "path":

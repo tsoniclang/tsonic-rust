@@ -118,6 +118,54 @@ test("provider operation metadata rejects unknown and missing operation kinds", 
   }
 });
 
+test("provider operation evaluation is observable unless exact metadata opts into purity", () => {
+  assert.doesNotThrow(() => createRustProviderPackage(definition({
+    operations: [{
+      exportId: "@acme/validation::run",
+      operationKind: "method",
+      target: { form: "call", path: "acme_validation::run" },
+      resultCarrier: int32Carrier,
+      evaluation: "pure",
+    }],
+  })));
+  assert.throws(() => createRustProviderPackage(definition({
+    operations: [{
+      exportId: "@acme/validation::run",
+      operationKind: "method",
+      target: { form: "call", path: "acme_validation::run" },
+      resultCarrier: int32Carrier,
+      evaluation: "guess",
+    }],
+  })), /evaluation must be 'pure'/u);
+  assert.throws(() => createRustProviderPackage(definition({
+    operations: [{
+      exportId: "@acme/validation::run",
+      operationKind: "method",
+      target: {
+        form: "receiver-method",
+        name: "mutate",
+        mutatesReceiver: true,
+      },
+      receiverCarrier: int32Carrier,
+      resultCarrier: int32Carrier,
+      evaluation: "pure",
+    }],
+  })), /pure evaluation cannot construct identity, invoke a source callback, or declare writable source inputs/u);
+  assert.throws(() => createRustProviderPackage(definition({
+    operations: [{
+      exportId: "@acme/validation::run",
+      operationKind: "method",
+      target: { form: "call", path: "acme_validation::run" },
+      resultCarrier: int32Carrier,
+      evaluation: "pure",
+      immediateCallback: {
+        sourceArgumentIndex: 0,
+        fallibleTarget: { form: "call", path: "acme_validation::try_run" },
+      },
+    }],
+  })), /pure evaluation cannot construct identity, invoke a source callback, or declare writable source inputs/u);
+});
+
 test("provider declaration variants reject runtime-only extra fields", () => {
   const invalidTypes = [
     { type: { kind: "string", sourceShape: { kind: "string" } }, pattern: /unsupported field 'sourceShape'/u },

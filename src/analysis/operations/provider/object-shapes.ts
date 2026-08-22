@@ -4,7 +4,6 @@ import {
   rustJsValueTargetType,
   rustOptionTargetType,
   rustSourcePrimitiveTargetType,
-  rustStringTargetType,
 } from "../../../target-model/types/index.js";
 import { acceptRustPolicy } from "../../../policy/operations/contracts.js";
 import { acceptSelectedCall, checkedCallIsConstruction, instantiateExactSelectedConstructionCarrier, mapSelectedTargetTypeArguments, selectedCallReceiverValueCarrier, selectedProjectConstructor, selectRustOptionalCallResult } from "./calls/instantiation.js";
@@ -222,6 +221,7 @@ function mapSelectedObjectShapeProjection(
       context,
       "RUST_OBJECT_SHAPE_PROJECTION_RESULT_INVALID",
       projectedFields.reason,
+      [{ message: `resultCarrier=${JSON.stringify(innerResultCarrier)}` }],
     );
   }
   const keyExpression = selection.keyArgumentIndex === undefined
@@ -490,13 +490,13 @@ function selectObjectShapeProjectionFields(
   }
   const elementCarrier = resultCarrier.typeArguments[0]!;
   if (projection === "keys") {
-    return rustTargetTypeRefEquals(elementCarrier, rustStringTargetType())
+    return rustTargetTypeRefEquals(elementCarrier, rustJsStringTargetType())
       ? { kind: "resolved", fields: fields.map(projectIdentityField) }
       : { kind: "rejected", reason: "Object.keys requires an exact string-array result carrier." };
   }
   const valueCarrier = projection === "entries" && elementCarrier.kind === "tuple" &&
       elementCarrier.elements.length === 2 &&
-      rustTargetTypeRefEquals(elementCarrier.elements[0]!, rustStringTargetType())
+      rustTargetTypeRefEquals(elementCarrier.elements[0]!, rustJsStringTargetType())
     ? elementCarrier.elements[1]
     : projection === "values"
       ? elementCarrier

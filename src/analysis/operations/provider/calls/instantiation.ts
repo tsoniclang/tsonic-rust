@@ -1,5 +1,6 @@
 import {
   rustCallableProtocol,
+  rustStringTargetType,
   inferRustTargetTypeParameterBindings,
   rustTargetTypeContainsTypeParameter,
   substituteRustTargetTypeParameters,
@@ -135,12 +136,31 @@ export function instantiateSelectedCallTemplate(
       directTypeArguments.set(argument.typeParameterName, carrier);
     }
   }
-  return instantiateProviderOperationTemplate(template, {
+  const instantiation = instantiateProviderOperationTemplate(template, {
     sourceReceiverCarrier: rawReceiverCarrier,
     sourceParameterCarriers: selectedParameterCarriers,
     sourceResultCarrier: selectedResultCarrier,
     directTypeArguments,
   });
+  if (instantiation === undefined || selectedResultCarrier === undefined ||
+    instantiation.template.resultConversion !== undefined ||
+    rustTargetTypeRefEquals(instantiation.template.resultCarrier, selectedResultCarrier)) {
+    return instantiation;
+  }
+  const resultConversion = selectRustSourceValueConversion(
+    instantiation.template.resultCarrier,
+    selectedResultCarrier,
+  );
+  return resultConversion === undefined
+    ? instantiation
+    : {
+        ...instantiation,
+        template: {
+          ...instantiation.template,
+          resultCarrier: selectedResultCarrier,
+          resultConversion,
+        },
+      };
 }
 
 export function acceptSelectedCall(
@@ -389,7 +409,10 @@ function selectedCallSourceCarriers(
         options.projectTypes,
       );
       if (reconciliation.kind === "conversion" || reconciliation.kind === "project-upcast") {
-        if (reconciliation.kind === "project-upcast" || targetExpected === undefined) {
+        const targetFormSelectsStringBridge = fact.target.form === "call-str-slice" ||
+          fact.target.form === "free-call-str-slice";
+        if (reconciliation.kind === "project-upcast" || targetExpected === undefined ||
+          targetFormSelectsStringBridge) {
           reconciliations.push({ sourceIndex: index, reconciliation });
           effective = expected;
         }
@@ -404,6 +427,12 @@ function selectedCallSourceCarriers(
   }
   if (actual.some((carrier) => carrier === undefined)) {
     return { kind: "missing" };
+  }
+  if (fact.target.form === "call-str-slice" || fact.target.form === "free-call-str-slice") {
+    const stringCarrier = rustStringTargetType();
+    return actual.every((carrier) => carrier !== undefined && rustTargetTypeRefEquals(carrier, stringCarrier))
+      ? { kind: "resolved", carriers: actual as TargetTypeRef[], reconciliations }
+      : { kind: "incompatible", sourceIndex: 0 };
   }
   if (fact.target.form === "call-value-slice" || fact.target.form === "call-value-array" ||
     fact.target.form === "receiver-value-array") {
@@ -458,6 +487,9 @@ function selectedCallArgumentTargetCarrier(
   form: RustProviderOperationForm,
   sourceIndex: number,
 ): TargetTypeRef | undefined {
+  if (form.form === "call-str-slice" || form.form === "free-call-str-slice") {
+    return rustStringTargetType();
+  }
   if (form.form === "call-ref-slice" || form.form === "free-call-ref-slice") {
     return form.elementCarrier;
   }
@@ -580,6 +612,7 @@ export function providerFormRequiresSourceReceiver(form: RustProviderOperationFo
     form.form === "field" ||
     form.form === "index" ||
     form.form === "free-call" ||
+    form.form === "free-call-str-slice" ||
     form.form === "free-call-ref-slice" ||
     form.form === "receiver-method" ||
     form.form === "receiver-value-array" ||
@@ -793,6 +826,7 @@ export function finalizeProviderOperationFact(
     ...(template.resultConversion === undefined ? {} : { resultConversion: template.resultConversion }),
     isAsync: template.isAsync,
     isFallible: template.isFallible,
+    ...(template.evaluation === undefined ? {} : { evaluation: template.evaluation }),
     ...(template.errorBoundary === "none" ? {} : { errorBoundary: template.errorBoundary }),
     ...(template.errorCarrier === undefined ? {} : { errorCarrier: template.errorCarrier }),
     isUnsafe: template.isUnsafe,

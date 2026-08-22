@@ -25,6 +25,22 @@ export function isRustFinalizedConstantInput(input: RustFinalizedTargetInput): i
   return input.source.kind === "constant";
 }
 
+export function rustFinalizedTargetInputMayMutateSource(
+  input: RustFinalizedTargetInput,
+): boolean {
+  if (isRustFinalizedSourceInput(input)) {
+    return input.mode === "mut-ref";
+  }
+  if (isRustFinalizedSliceInput(input) || isRustFinalizedArrayInput(input)) {
+    return input.elements.some(rustFinalizedTargetInputMayMutateSource);
+  }
+  if (isRustFinalizedTaggedArrayInput(input)) {
+    return input.elements.some((element) =>
+      rustFinalizedTargetInputMayMutateSource(element.input));
+  }
+  return false;
+}
+
 export function sourceInput(
   source: RustFinalizedSourceInput["source"],
   sourceCarrier: TargetTypeRef,

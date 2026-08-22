@@ -199,7 +199,8 @@ function materializeProviderOperationForm(
       elementCarrier: materializeProviderCarrier(form.elementCarrier, carrierPaths, carrierTraits),
     };
   }
-  if (form.form === "path" || form.form === "static") {
+  if (form.form === "call-str-slice" || form.form === "free-call-str-slice" ||
+    form.form === "path" || form.form === "static") {
     return { ...form, path: expandProviderPath(form.path, aliases) };
   }
   if (form.form === "binary-operator") {

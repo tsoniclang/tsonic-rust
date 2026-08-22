@@ -413,6 +413,8 @@ export function planProviderOperationExpression(
       });
     case "call-value-slice":
     case "call-value-array":
+    case "call-str-slice":
+    case "free-call-str-slice":
     case "call-ref-slice":
     case "free-call-ref-slice":
     case "free-call": {

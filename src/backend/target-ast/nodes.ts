@@ -39,6 +39,7 @@ export type RustExpr =
   | { readonly kind: "float-literal"; readonly text: string }
   | { readonly kind: "bool-literal"; readonly value: boolean }
   | { readonly kind: "none" }
+  | { readonly kind: "char-literal"; readonly value: string }
   | { readonly kind: "string-literal"; readonly value: string }
   | { readonly kind: "str-literal"; readonly value: string }
   | { readonly kind: "owned-string-from-borrowed-str"; readonly expression: RustExpr }
