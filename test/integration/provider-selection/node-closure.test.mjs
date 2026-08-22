@@ -50,6 +50,95 @@ export function probe(): string {
   assert.match(text, /rt::option_coalesce\(\s*tsonic_rust_node::process::env_get\("PATH"\),\s*std::convert::identity,/u);
 });
 
+test("portable Node boundaries lower through exact selected provider evidence", async () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    capabilities: [await nodejsCapability()],
+    files: {
+      "index.ts": `
+import { Buffer } from "node:buffer";
+import { spawnSync } from "node:child_process";
+import { lstatSync } from "node:fs";
+import { TextDecoder } from "node:util";
+import { format, parse } from "node:url";
+
+export function status(command: string, args: string[]): number | null {
+  const result = spawnSync(command, args);
+  result.status = null;
+  return result.status;
+}
+
+export function symbolic(path: string): boolean {
+  return lstatSync(path).isSymbolicLink();
+}
+
+export function legacyRoundTrip(value: string): string {
+  const parsed = parse(value);
+  parsed.href = value;
+  parsed.pathname = "/checked";
+  parsed.query = null;
+  return format(parsed) + (parsed.pathname ?? "");
+}
+
+export function decode(value: string): string {
+  return new TextDecoder().decode(Buffer.from(value, "utf8"));
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /tsonic_rust_node::child_process::spawn_sync_result/u);
+  assert.match(text, /tsonic_rust_node::fs::lstat_sync/u);
+  assert.match(text, /tsonic_rust_node::url::parse_legacy/u);
+  assert.match(text, /tsonic_rust_node::url::format_legacy/u);
+  assert.match(text, /set_required_href/u);
+  assert.match(text, /tsonic_rust_node::util::text_decoder_new\(\)/u);
+  assert.match(text, /\.decode_buffer\(/u);
+});
+
+test("spawnSync accepts the selected native array carrier without the JS surface", async () => {
+  const { result } = compileRust({
+    capabilities: [await nodejsCapability()],
+    files: {
+      "index.ts": `
+import { spawnSync } from "node:child_process";
+
+export function status(command: string, args: string[]): number | null {
+  return spawnSync(command, args).status;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  assert.match(
+    artifactText(result, "src/index.rs"),
+    /tsonic_rust_node::child_process::spawn_sync_result/u,
+  );
+});
+
+test("legacy URL declarations reject non-null source assumptions", async () => {
+  const capability = await nodejsCapability();
+
+  assert.throws(
+    () => compileRust({
+      capabilities: [capability],
+      files: {
+        "index.ts": `
+import { parse } from "node:url";
+
+export function invalid(value: string): string {
+  return parse(value).pathname;
+}
+`,
+      },
+    }),
+    /TS2322[\s\S]*string \| null/u,
+  );
+});
+
 test("generated cargo binary proves the multi-module node closure at runtime", { timeout: 300_000 }, async () => {
   const { result } = compileRust({
     surfaces: ["js"],

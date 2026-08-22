@@ -22,12 +22,13 @@ import { planRustProjectFieldDispatchRoles } from "../../objects/project-field-d
 import { rustSourceBindingFactKey, rustTargetOperationFactKey } from "../../../../analysis/facts/keys.js";
 import { rustTargetOperationIsDirectLocation } from "../../../../analysis/facts/target-operation.js";
 import { sourceFieldSelectedOperationMatches } from "../properties.js";
-import type { Node } from "@tsonic/tsts";
+import type { Node, Symbol } from "@tsonic/tsts";
 import type { RustEffectiveExpressionOverride, RustPlanContext } from "../../program/plan-context.js";
 import type { RustExpr } from "../../../target-ast/nodes.js";
 import type { RustFinalizedSourceInput } from "../../../../analysis/facts/finalized-operation-abi.js";
 import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
+import type { SourceDeclarationReference } from "@tsonic/target-api/source";
 
 export function planRustSourceFieldUpdate(
   operand: Node,
@@ -574,12 +575,17 @@ function directStorageRemainsSelected(
 function directStorageReference(
   node: Node,
   context: RustPlanContext,
-): import("@tsonic/target-api/source").SourceDeclarationReference | undefined {
+):
+  | (
+      SourceDeclarationReference &
+      { readonly symbol: Symbol }
+    )
+  | undefined {
   let current: Node | undefined = node;
   while (current !== undefined) {
     const reference = context.input.program.sourceNavigation.sourceReferenceFor(current);
     if (reference !== undefined) {
-      return reference;
+      return sourceReferenceHasSymbol(reference) ? reference : undefined;
     }
     const kind = context.input.program.source.ast.kindName(current);
     if (kind !== KindPropertyAccessExpression && kind !== KindElementAccessExpression &&
@@ -593,4 +599,10 @@ function directStorageReference(
     current = receiver;
   }
   return undefined;
+}
+
+function sourceReferenceHasSymbol(
+  reference: SourceDeclarationReference,
+): reference is SourceDeclarationReference & { readonly symbol: Symbol } {
+  return reference.symbol !== undefined;
 }

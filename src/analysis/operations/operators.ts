@@ -558,7 +558,7 @@ function inPlaceStringAppendDeclarationFor(
     return undefined;
   }
   const reference = walk.context.source.navigation.sourceReferenceFor(target);
-  if (reference === undefined ||
+  if (reference === undefined || reference.symbol === undefined ||
     walk.context.facts.get(reference.declaration, rustModuleBindingFactKey) !== undefined ||
     walk.context.facts.resolve(reference.declaration, rustModuleBindingFactKey) !== undefined ||
     walk.context.facts.get(reference.declaration, rustLocationStorageFactKey) !== undefined ||
@@ -658,7 +658,7 @@ function selectEquivalentBindingAssignment(
   }
   const targetReference = walk.context.source.navigation.sourceReferenceFor(target);
   const valueReference = walk.context.source.navigation.sourceReferenceFor(valueLeft);
-  if (targetReference === undefined || valueReference === undefined ||
+  if (targetReference?.symbol === undefined || valueReference?.symbol === undefined ||
     targetReference.symbol !== valueReference.symbol ||
     targetReference.declaration !== valueReference.declaration) {
     return undefined;
