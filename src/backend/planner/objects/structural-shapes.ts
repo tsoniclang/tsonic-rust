@@ -12,7 +12,7 @@ import type {
   RustVisibility,
 } from "../../target-ast/nodes.js";
 import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
-import { rustPascalCaseIdentifier } from "../../../policy/names/identifiers.js";
+import { rustPascalCaseIdentifier } from "../../../target-model/names/identifiers.js";
 import {
   rustRuntimeAliasImports,
 } from "../program/plan-context.js";
@@ -25,7 +25,7 @@ import {
   rustStructuralPropertySetterStorageCarrier,
   rustStructuralPropertyValueCarrier,
   rustStructuralMethodStorageCarrier,
-} from "../../../policy/types/target-types.js";
+} from "../../../target-model/types/index.js";
 
 export function planRustStructuralShapeModule(
   input: RustPlanningContext,

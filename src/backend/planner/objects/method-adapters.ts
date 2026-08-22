@@ -1,15 +1,15 @@
 import type { Node } from "@tsonic/tsts";
-import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type {
   RustObjectLiteralMethodParameterAbi,
   RustObjectLiteralValueAdapter,
 } from "../../../analysis/facts/keys.js";
-import { rustValueConversionContract } from "../../../policy/conversions/contracts.js";
+import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import {
   isRustCopyCarrier,
   isRustVecCarrier,
   rustCarrierSupportsClone,
-} from "../../../policy/types/target-types.js";
+} from "../../../target-model/types/index.js";
 import type { RustExpr, RustStmt, RustType } from "../../target-ast/nodes.js";
 import {
   lowerRustValueConversion,

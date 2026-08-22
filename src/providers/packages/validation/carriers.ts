@@ -3,10 +3,10 @@ import {
   rustPrimitiveTypeName,
   isRustNeverCarrier,
   rustOptionElementCarrier,
-} from "../../../policy/types/target-types.js";
+} from "../../../target-model/types/index.js";
 import { builtInTargetCarrierIds, rustIdentifierPattern, rustPathPattern } from "./model.js";
-import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
-import { rustValueConversionContract } from "../../../policy/conversions/contracts.js";
+import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import type { Fail } from "./model.js";
 import type { RustProviderPackageDefinition } from "../index.js";
 import type { RustValueConversion } from "../../../target-model/operations/model.js";

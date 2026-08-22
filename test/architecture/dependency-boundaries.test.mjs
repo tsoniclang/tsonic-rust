@@ -33,6 +33,10 @@ test("Rust architecture rules reject target-specific boundary mutations", () => 
     ["ARCH-RUST-PROVIDER-001", "src/providers/packages/model.ts", "interface RustProviderSemantics { readonly carrierPaths: ReadonlyMap<string, string>; }"],
     ["ARCH-RUST-PROVIDER-002", "src/providers/packages/materialization.ts", "type Carriers = Readonly<Record<string, string>> | ReadonlyMap<string, string>;"],
     ["ARCH-RUST-SELECTION-001", "src/analysis/operations/call.ts", "semantics.types.callSignatures(type);"],
+    ["ARCH-TARGET-PLANNER-002", "src/backend/planner/call.ts", "selectRustTargetCall(node);"],
+    ["ARCH-TARGET-ANALYSIS-002", "src/analysis/calls.ts", 'import { planCall } from "../backend/planner/call.js";'],
+    ["ARCH-TARGET-MODEL-001", "src/target-model/types.ts", 'import { analyzeType } from "../analysis/types.js";'],
+    ["ARCH-TARGET-PRINTER-002", "src/print/source.ts", 'import { selectType } from "../policy/types.js";'],
   ];
   for (const [ruleId, file, source] of mutations) {
     assert.equal(
@@ -132,4 +136,27 @@ test("Rust tests mirror explicit architecture domains", () => {
     new Set(domains),
   );
   assert.deepEqual(findings, [], formatArchitectureFindings(findings));
+});
+
+test("Rust runtime-reference construction has one owner and explicit core/surface ownership", () => {
+  const helper = readFileSync(
+    resolve(repositoryRoot, "src/compilation/runtime-references.ts"),
+    "utf8",
+  );
+  const session = readFileSync(
+    resolve(repositoryRoot, "src/compilation/session.ts"),
+    "utf8",
+  );
+  const composition = readFileSync(
+    resolve(repositoryRoot, "src/compilation/composition.ts"),
+    "utf8",
+  );
+
+  assert.match(helper, /export function rustRuntimeCrateReference/u);
+  assert.doesNotMatch(session, /function rustRuntimeCrateReference/u);
+  assert.doesNotMatch(composition, /function rustRuntimeCrateReference/u);
+  assert.match(session, /"@tsonic\/rust-runtime"/u);
+  assert.doesNotMatch(session, /"@tsonic\/rust-js"/u);
+  assert.match(composition, /"@tsonic\/rust-js"/u);
+  assert.doesNotMatch(composition, /"@tsonic\/rust-runtime"/u);
 });

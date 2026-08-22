@@ -131,14 +131,14 @@ test("no C# target references in Rust target code", () => {
   }
 });
 
-test("Rust target-type validation and equality have one policy owner", () => {
+test("Rust target-type validation and equality have one target-model owner", () => {
   const owners = sourceFiles.filter(({ text }) =>
     /export function (?:isRustTargetTypeRef|rustTargetTypeRefEquals)\b/u.test(text));
   assert.deepEqual(
     owners.map(({ path }) => path.slice(sourceRoot.length + 1)),
-    ["policy/types/equality.ts"],
+    ["target-model/types/equality.ts"],
   );
-  const carrierHelpers = readFileSync(join(sourceRoot, "policy/types/target-types.ts"), "utf8");
+  const carrierHelpers = readFileSync(join(sourceRoot, "target-model/types/index.ts"), "utf8");
   assert.doesNotMatch(carrierHelpers, /export function (?:isRustTargetTypeRef|rustTargetTypeRefEquals)\b/u);
 });
 
@@ -174,12 +174,15 @@ test("project downcasts use closed generated routes without runtime type discove
 });
 
 test("Cargo registry patches require explicit runtime-reference provenance", () => {
-  const planner = readFileSync(join(sourceRoot, "backend/planner/project/cargo.ts"), "utf8");
+  const analysis = readFileSync(join(sourceRoot, "analysis/runtime/references.ts"), "utf8");
   const printer = readFileSync(join(sourceRoot, "print/project/manifest.ts"), "utf8");
-  const composition = readFileSync(join(sourceRoot, "compilation/composition.ts"), "utf8");
-  assert.match(planner, /registryPatch !== undefined && registryPatch !== cargoCratesIoRegistry/u);
+  const runtimeReferences = readFileSync(
+    join(sourceRoot, "compilation/runtime-references.ts"),
+    "utf8",
+  );
+  assert.match(analysis, /registryPatch !== undefined && registryPatch !== cargoCratesIoRegistry/u);
   assert.match(printer, /dependencies\.filter\(\(dependency\) => dependency\.registryPatch === "crates-io"\)/u);
-  assert.match(composition, /\[cargoRegistryPatchAttributeName\]: cargoCratesIoRegistry/u);
+  assert.match(runtimeReferences, /\[cargoRegistryPatchAttributeName\]: cargoCratesIoRegistry/u);
   const patchSection = printer.slice(printer.indexOf('"[patch.crates-io]"'));
   assert.doesNotMatch(patchSection, /for \(const dependency of manifest\.dependencies\)/u);
 });
@@ -295,7 +298,8 @@ test("source profile identity comes from the registered compiler SourceFile, nev
 
 test("selected source operation identity is never reconstructed through checker queries", () => {
   const semanticFiles = sourceFiles.filter(({ path }) =>
-    path.includes("/analysis/") || path.includes("/policy/"));
+    path.includes("/analysis/") || path.includes("/policy/") ||
+    path.includes("/target-model/"));
   const forbidden = [
     /getResolvedSignature\s*\(/u,
     /getPropertyOfType\s*\(/u,
@@ -321,8 +325,8 @@ test("selected source operation identity is never reconstructed through checker 
     }
   }
   assert.deepEqual(broadCatchOwners, [
-    "policy/model/closed-data.ts|isClosedMetadata",
-    "policy/types/equality.ts|isRustTargetTypeRef",
+    "target-model/metadata/closed-data.ts|isClosedMetadata",
+    "target-model/types/equality.ts|isRustTargetTypeRef",
   ]);
 
   for (const { path, text } of semanticFiles) {
@@ -750,8 +754,59 @@ test("value conversions use target-owned semantic ids, never arbitrary helper pa
   for (const { path, text } of sourceFiles) {
     assert.doesNotMatch(text, /rustHelperCallValueConversion|kind:\s*["']helper-call["']/u, `${path} exposes arbitrary conversion helpers`);
   }
-  const conversions = readFileSync(join(sourceRoot, "policy/conversions/contracts.ts"), "utf8");
+  const conversions = readFileSync(join(sourceRoot, "target-model/conversions/contracts.ts"), "utf8");
   assert.match(conversions, /function rustValueConversionContract/u);
   assert.match(conversions, /case "checked-i32-to-usize"/u);
   assert.match(conversions, /case "js-number-from-usize"/u);
+});
+
+test("source-package semantics are sealed before physical Rust planning", () => {
+  const facadeAnalysis = readFileSync(
+    join(sourceRoot, "analysis/program/source-package-facades.ts"),
+    "utf8",
+  );
+  const facadePlanner = readFileSync(
+    join(sourceRoot, "backend/planner/program/source-package-facades.ts"),
+    "utf8",
+  );
+  assert.match(facadeAnalysis, /source\.navigation\.moduleExports/u);
+  assert.match(facadeAnalysis, /exportsForComponent/u);
+  assert.doesNotMatch(facadePlanner, /moduleExports\s*\(/u);
+  assert.match(facadePlanner, /program\.sourcePackageFacades/u);
+
+  const componentAnalysis = readFileSync(
+    join(sourceRoot, "analysis/program/source-package-components.ts"),
+    "utf8",
+  );
+  const componentPlanner = readFileSync(
+    join(sourceRoot, "backend/planner/program/source-package-components.ts"),
+    "utf8",
+  );
+  assert.match(componentAnalysis, /publishesImplementationAbi/u);
+  assert.match(componentAnalysis, /componentReachesError/u);
+  assert.match(componentPlanner, /program\.sourcePackageComponents/u);
+  assert.doesNotMatch(
+    componentPlanner,
+    /programErrorDefinitions|componentReachesError|configuration\.outputType/u,
+  );
+});
+
+test("sealed Rust project-type queries never re-enter source navigation", () => {
+  const text = readFileSync(
+    join(sourceRoot, "analysis/project-types/policy/resolution.ts"),
+    "utf8",
+  );
+  const sealedPolicy = sourceSection(
+    text,
+    "const policy: RustProjectTypePolicy = {",
+    "return Object.freeze(policy);",
+  );
+  assert.doesNotMatch(sealedPolicy, /\bhost\.navigation\b/u);
+  assert.match(text, /memberImplementationByClass/u);
+  assert.match(text, /relatedDefinitions/u);
+  assert.doesNotMatch(
+    text,
+    /definitions\.filter\([\s\S]*\.length\s*\*\s*contractMembers\.size/u,
+  );
+  assert.match(text, /RUST_PROJECT_MEMBER_IMPLEMENTATION_BUDGET_EXCEEDED/u);
 });

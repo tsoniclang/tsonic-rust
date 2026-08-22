@@ -14,7 +14,7 @@ import {
   rustStringTargetType,
   rustUndefinedTargetType,
   rustVecTargetType,
-} from "../../../dist/policy/types/target-types.js";
+} from "../../../dist/target-model/types/index.js";
 import { rustInt32ToFloat64ValueConversion } from "../../../dist/target-model/conversions/model.js";
 
 const denseSource = `

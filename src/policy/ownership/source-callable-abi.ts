@@ -6,8 +6,8 @@ import {
   rustOptionElementCarrier,
   rustOptionTargetType,
   rustSliceElementCarrier,
-} from "../types/target-types.js";
-import { rustTargetTypeRefEquals } from "../types/equality.js";
+} from "../../target-model/types/index.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustArgumentMode } from "../../target-model/operations/model.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import {

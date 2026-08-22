@@ -3,7 +3,7 @@ import {
   rustCarrierSupportsClone,
   rustOptionElementCarrier,
   rustSourceTypeCarrierValue,
-} from "../../../policy/types/target-types.js";
+} from "../../../target-model/types/index.js";
 import {
   KindBinaryExpression,
   KindPostfixUnaryExpression,
@@ -31,7 +31,7 @@ import { planRustNonConsumingValue } from "./typed-locations.js";
 import { planRustProjectDowncast } from "../objects/project-downcasts.js";
 import { rustProjectObjectDispatchField, rustProjectObjectIdentityField } from "../objects/project-objects.js";
 import { rustSelectedAccessorRequiresUnsafe, rustSelectedCallRequiresUnsafe, tryPlanRustExplicitSafetyExpression } from "../safety/explicit-safety.js";
-import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustValueCarrierBeforeContextualConversion } from "../../../analysis/facts/value-carrier-queries.js";
 import { tryPlanRustNativePointerOperation } from "./native-pointers.js";

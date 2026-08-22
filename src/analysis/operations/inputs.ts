@@ -31,7 +31,7 @@ import {
   rustJsArrayTargetType,
   rustSourcePrimitiveTargetType,
   rustVecTargetType,
-} from "../../policy/types/target-types.js";
+} from "../../target-model/types/index.js";
 import { appendMalformedSourceAst } from "../declarations/project-types.js";
 import { appendRustDiagnostic, recordPolicySelection, rustOperationContext, rustResolutionContext } from "../program/walk.js";
 import { recordBindingPatternFacts, recordBindingWrite, validateFlowMarkerAgainstMode } from "../declarations/types-and-bindings.js";
@@ -41,7 +41,7 @@ import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { resolveRustTupleElementTargetType } from "../../policy/types/resolution.js";
 import { rustMutatedBindingFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
 import { rustSelectedAssignmentValueCarrier } from "./operators.js";
-import { rustTargetTypeRefEquals } from "../../policy/types/equality.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { selectRustCheckedIteration } from "./provider/index.js";
 import { setCarrierFact, setRustOperationFact } from "./project-calls.js";
 import type { Node, SourceFile } from "@tsonic/tsts";

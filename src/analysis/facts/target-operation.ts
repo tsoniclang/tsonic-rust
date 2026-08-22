@@ -1,5 +1,5 @@
 import type { RustTargetOperationFact } from "./keys.js";
-import { rustTargetTypeRefEquals } from "../../policy/types/equality.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import {
   isRustFinalizedArrayInput,
@@ -8,7 +8,7 @@ import {
   isRustFinalizedTaggedArrayInput,
 } from "./finalized-operation-abi.js";
 import type { RustFinalizedOperationAbi } from "./finalized-operation-abi.js";
-import { rustValueConversionIsFallible } from "../../policy/conversions/contracts.js";
+import { rustValueConversionIsFallible } from "../../target-model/conversions/contracts.js";
 
 export function rustTargetOperationText(fact: RustTargetOperationFact): string {
   if (fact.kind === "provider-operation") {

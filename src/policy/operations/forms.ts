@@ -4,10 +4,10 @@ import type {
   RustProviderConstantArgument,
   RustProviderOperationForm,
 } from "../../target-model/operations/model.js";
-import { rustValueConversionContract } from "../conversions/contracts.js";
+import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
 import { isRustBinaryOperator, rustBinaryOperatorTraitPath } from "../../target-model/syntax/tokens.js";
-import { isDenseDataArray } from "../model/closed-data.js";
-import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../types/equality.js";
+import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
+import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 const rustIdentifierPattern = /^(?:r#)?[A-Za-z_][A-Za-z0-9_]*$/u;
 const rustPathPattern = /^(?:r#)?[A-Za-z_][A-Za-z0-9_]*(?:::(?:r#)?[A-Za-z_][A-Za-z0-9_]*)*$/u;

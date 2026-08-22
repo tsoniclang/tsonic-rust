@@ -10,7 +10,7 @@ import {
   getRustGeneratorProtocol,
   isRustJsArrayCarrier,
   isRustStringCarrier,
-} from "../../../policy/types/target-types.js";
+} from "../../../target-model/types/index.js";
 import {
   KindArrayLiteralExpression,
   KindCallExpression,
@@ -28,15 +28,15 @@ import {
   getRustJsSetElementTargetType,
   rustSourcePrimitiveTargetType,
   rustCarrierSupportsClone,
-} from "../../../policy/types/target-types.js";
+} from "../../../target-model/types/index.js";
 import { acceptDeclarationOperation, acceptRustMemberOperation, acceptRustOperation, elementProvenance, isDeclarationFileSubject, normalizeSelectedLiteralCarrier, rejectSelectedOperation, selectedArgumentMatchScore, selectedMemberReceiverCarrier, sourceOperationId } from "./result.js";
 import { finalizeProviderOperationFromSubjects, mapProviderCheckedOperation } from "./conversions.js";
-import { isDenseDataArray } from "../../../policy/model/closed-data.js";
+import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
 import { rustInt32ToUsizeValueConversion } from "../../../target-model/conversions/model.js";
 import { rustProjectObjectIndexSignature } from "../../project-types/object-layout.js";
-import { rustRuntimeCarrierKey } from "../../../policy/model/selections.js";
-import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
+import { rustRuntimeCarrierKey } from "../../../target-model/facts/selections.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectedValueCarrier } from "./operators.js";
 import { selectJsSurfaceOperation } from "../../../policy/operations/js-surface.js";
 import { selectRustFixedArrayElementAccess } from "./structural-properties.js";

@@ -4,7 +4,7 @@ import {
   asSourceNode,
   Node_Expression,
 } from "@tsonic/target-api/source";
-import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";
 import type { RustExpr } from "../../target-ast/nodes.js";

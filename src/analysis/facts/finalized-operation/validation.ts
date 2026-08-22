@@ -1,11 +1,11 @@
 import { carrierAfterMode, finalizedConversionIsValid, isRustFinalizedArrayInput, isRustFinalizedConstantInput, isRustFinalizedSliceInput, isRustFinalizedTaggedArrayInput } from "./conversions.js";
-import { closedMetadataEquals, isClosedMetadata } from "../../../policy/model/closed-data.js";
+import { closedMetadataEquals, isClosedMetadata } from "../../../target-model/metadata/closed-data.js";
 import { createInputFactory, finalizeTargetInputs } from "./inputs.js";
 import { isRustErrorBoundary } from "../../../target-model/operations/error-boundary.js";
-import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
-import { rustFutureTargetType, rustSliceRefTargetType, rustTargetTypeParameterNames } from "../../../policy/types/target-types.js";
+import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustFutureTargetType, rustSliceRefTargetType, rustTargetTypeParameterNames } from "../../../target-model/types/index.js";
 import { rustProviderOperationFormAcceptsTargetTypeArguments, rustProviderOperationFormContractViolation } from "../../../policy/operations/forms.js";
-import { rustValueConversionContract } from "../../../policy/conversions/contracts.js";
+import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import type { RustFinalizedOperationAbi, RustFinalizedOperationResult, RustFinalizedSourceArgument, RustFinalizedSourceArgumentRole, RustFinalizedSourceInput, RustFinalizedTargetInput, RustFinalizedValueConversion } from "./model.js";
 import type { RustProviderConstantArgument, RustValueConversion } from "../keys.js";
 

@@ -2,7 +2,7 @@ import type { AstReader, Node } from "@tsonic/tsts";
 import {
   rustPascalCaseIdentifier,
   rustSnakeCaseIdentifier,
-} from "../../../policy/names/identifiers.js";
+} from "../../../target-model/names/identifiers.js";
 
 export interface RustSyntheticNameState {
   readonly reserved: Set<string>;

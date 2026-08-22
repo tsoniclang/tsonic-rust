@@ -209,7 +209,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     }
     if (memberKind === "KindMethodDeclaration") {
       if (ast.body(member) === undefined) {
-        const implementation = context.input.program.source.navigation
+        const implementation = context.input.program.sourceNavigation
           .callableImplementation(member);
         if (implementation.kind !== "resolved" ||
           implementation.implementation.declaration === member) {

@@ -5,7 +5,7 @@ import {
   rustSourceTypeCarrierValue,
   rustSourceUnionCarrierValue,
   rustStructuralObjectCarrierValue,
-} from "../../../policy/types/target-types.js";
+} from "../../../target-model/types/index.js";
 import { rustSourceItemIdentity } from "../program/source-package-facades.js";
 import {
   rustBigIntTargetId,
@@ -31,7 +31,7 @@ import {
   substituteRustTargetTypeParameters,
   rustStringTargetId,
   isRustNeverCarrier,
-} from "../../../policy/types/target-types.js";
+} from "../../../target-model/types/index.js";
 
 const namedCarrierPaths: Readonly<Record<string, string>> = {
   [rustBigIntTargetId]: "rt::BigInt",
@@ -242,7 +242,7 @@ export function rustTypeFromCarrierInContext(
     readonly typeParameterSubstitutions?: ReadonlyMap<string, TargetTypeRef>;
     readonly input: {
       readonly program: {
-        readonly names: import("../../../policy/names/model.js").RustNamePlan;
+        readonly names: import("../../../target-model/names/model.js").RustNamePlan;
         readonly structuralShapes: import("../../../analysis/objects/structural-shape-plan.js").RustStructuralShapePlan;
       };
     };
@@ -329,7 +329,7 @@ export function rustReturnTypeFromCarrierInContext(
     readonly typeParameterSubstitutions?: ReadonlyMap<string, TargetTypeRef>;
     readonly input: {
       readonly program: {
-        readonly names: import("../../../policy/names/model.js").RustNamePlan;
+        readonly names: import("../../../target-model/names/model.js").RustNamePlan;
         readonly structuralShapes: import("../../../analysis/objects/structural-shape-plan.js").RustStructuralShapePlan;
       };
     };

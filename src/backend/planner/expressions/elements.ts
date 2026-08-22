@@ -15,7 +15,7 @@ import { readRustProjectObjectIndex } from "../objects/project-objects.js";
 import { rustProjectObjectRepresentation } from "../objects/project-storage.js";
 import { requireProviderArgumentPassingFacts } from "./calls/arguments.js";
 import { rustOptionalChainFactKey } from "../../../analysis/facts/keys.js";
-import { rustOptionElementCarrier } from "../../../policy/types/target-types.js";
+import { rustOptionElementCarrier } from "../../../target-model/types/index.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";

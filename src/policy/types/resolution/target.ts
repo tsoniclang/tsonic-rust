@@ -13,13 +13,13 @@ import {
   rustUnitTargetType,
   rustUndefinedTargetType,
   rustVecTargetType,
-} from "../target-types.js";
+} from "../../../target-model/types/index.js";
 import { denseDefined, resolveProjectSourceCarrier } from "./project.js";
 import { instantiateTargetType, providerCarrierFromRelations, resolveOwnedSourceProfileTypeName, resolveProviderTypeIdentity, resolveSourceProfileCarrier } from "./providers.js";
 import { isRustStructuralObjectFieldDeclaration } from "../source-shapes.js";
 import { resolveCallableType, resolveSourcePrimitive, resolveSourceTypeParameter, resolveUnion } from "./callables.js";
 import { resolveRustAuthoredTargetType, resolveRustTupleElementTargetTypeWithState } from "./tuples.js";
-import { rustTargetTypeRefEquals } from "../equality.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import {
   sourcePropertyTypeEvidenceNodes,
   sourceTransformedTypeFactEvidenceNodes,

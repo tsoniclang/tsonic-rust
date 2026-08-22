@@ -5,10 +5,10 @@ import {
 } from "../../../dist/policy/operations/numeric-promotion.js";
 import {
   rustNumericPromotionKind,
-} from "../../../dist/policy/operations/numeric-promotion-model.js";
+} from "../../../dist/target-model/conversions/numeric-promotion.js";
 import {
   rustValueConversionContract,
-} from "../../../dist/policy/conversions/contracts.js";
+} from "../../../dist/target-model/conversions/contracts.js";
 import {
   selectRustSourceValueConversion,
 } from "../../../dist/policy/conversions/selection.js";

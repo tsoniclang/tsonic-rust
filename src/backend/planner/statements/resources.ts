@@ -268,9 +268,6 @@ function planResourceCleanup(
       ));
       return undefined;
     }
-    if (fact.disposal.errorBoundary === "provider-native") {
-      context.input.providerErrors.register(fact.disposal.errorCarrier);
-    }
     disposal = applyRustErrorBoundary(
       disposal,
       fact.disposal.errorBoundary,

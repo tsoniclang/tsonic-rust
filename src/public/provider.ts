@@ -58,4 +58,4 @@ export {
   rustStringTargetType,
   rustUnitTargetType,
   rustVecTargetType,
-} from "../policy/types/target-types.js";
+} from "../target-model/types/index.js";

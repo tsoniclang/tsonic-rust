@@ -5,7 +5,7 @@ import {
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
   rustUnitTargetType,
-} from "../../../policy/types/target-types.js";
+} from "../../../target-model/types/index.js";
 import { canonicalCompilerTypePathKey, importedSourceType, isRustOptionPath, isRustStringPath, requireCurrentType, rustCompilerTypeText, standardSourceTypeArguments, standardTargetTypeArguments } from "./utilities.js";
 import { compilerModuleSpecifier, compilerTargetTypeId, providerFunctionPointerAbi, recordCarrierPath, rustPath } from "./operations.js";
 import { rustConstPointerExport, rustMutPointerExport } from "../../../source/extension/source-extension.js";

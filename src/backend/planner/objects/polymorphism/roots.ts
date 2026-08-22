@@ -25,7 +25,7 @@ import {
 } from "../../program/plan-context.js";
 import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js";
 import { applyRustFallibleResultExpression } from "../../types/fallible-shape.js";
-import { rustTargetTypeRefEquals } from "../../../../policy/types/equality.js";
+import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { ProjectClassStateLayer } from "./model.js";

@@ -1,5 +1,5 @@
-import { isDenseDataArray } from "../../model/closed-data.js";
-import { rustSourceTypeCarrier, rustSourceTypeCarrierValue } from "../target-types.js";
+import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
+import { rustSourceTypeCarrier, rustSourceTypeCarrierValue } from "../../../target-model/types/index.js";
 import type { Node, Symbol } from "@tsonic/tsts";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";

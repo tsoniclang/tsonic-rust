@@ -6,7 +6,7 @@ import {
 } from "@tsonic/target-api/source";
 import {
   rustCarrierSupportsClone,
-} from "../../../policy/types/target-types.js";
+} from "../../../target-model/types/index.js";
 import { rustProjectStaticFieldStorage } from "../../../analysis/project-types/object-layout.js";
 import type { RustItem, RustStmt } from "../../target-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";

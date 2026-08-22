@@ -12,8 +12,7 @@ import {
   KindFunctionDeclaration,
   Node_Name,
 } from "@tsonic/target-api/source";
-import { cargoCrateAttributeName } from "../../../providers/model/cargo-reference.js";
-import { isRustUnitCarrier } from "../../../policy/types/target-types.js";
+import { isRustUnitCarrier } from "../../../target-model/types/index.js";
 import { createRustSourceFile } from "../../target-ast/nodes.js";
 import type { RustItem } from "../../target-ast/nodes.js";
 import { finalizeRustSourceStyle } from "../../target-ast/normalization/source-style.js";
@@ -35,7 +34,7 @@ import type {
   RustPlannedArtifact,
   RustOutputPlan,
 } from "../../artifact-model/output.js";
-import { planRustSourcePackageFacades } from "./source-package-facades.js";
+import { materializeRustSourcePackageFacades } from "./source-package-facades.js";
 import type { RustSourcePackageFacadeExport } from "./source-package-facades.js";
 import {
   planRustSourcePackageInitializers,
@@ -57,8 +56,8 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
   const identityPlan = planRustSourceOutputIdentities({
     ast: input.program.source.ast,
     sourceFiles: input.program.sourceFiles,
-    paths: input.input.paths,
-    sourcePackages: input.input.sourcePackages,
+    paths: input.host.paths,
+    sourcePackages: input.host.sourcePackages,
   });
   if (identityPlan.kind === "rejected") {
     return rejectedTargetStage([...diagnostics, ...identityPlan.diagnostics]);
@@ -71,7 +70,10 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
       .filter(([, identity]) => identity.externalCrateName !== undefined)
       .map(([fileName, identity]) => [fileName, identity.externalCrateName!] as const),
   );
-  const facadeResult = planRustSourcePackageFacades(input, identityPlan.identities);
+  const facadeResult = materializeRustSourcePackageFacades(
+    input,
+    identityPlan.identities,
+  );
   diagnostics.push(...facadeResult.diagnostics);
   if (facadeResult.plan === undefined || diagnostics.length > 0) {
     return rejectedTargetStage(diagnostics);
@@ -104,7 +106,6 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
   const packageInitializers = initializerResult.plan;
   const sourcePackageErrorResult = planRustSourcePackageErrors(
     input,
-    identityPlan.identities,
     componentPlans,
   );
   diagnostics.push(...sourcePackageErrorResult.diagnostics);
@@ -147,19 +148,13 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     "initialize",
     [structuralShapesModuleName, programModuleName, initializerFacadeModuleName],
   );
-  const activeCrates = new Set(input.input.runtimeReferences.flatMap((reference) => {
-    const crate = reference.attributes?.[cargoCrateAttributeName];
-    return typeof crate === "string" ? [crate] : [];
-  }));
-  const activeEpilogues = input.program.providerSemantics.binaryEpilogues.filter((epilogue) =>
-    activeCrates.has(epilogue.requiredCrate));
+  const activeEpilogues = input.program.binaryEpilogues;
   const epilogueErrorTypes = new Map<
     (typeof activeEpilogues)[number],
     import("../../target-ast/nodes.js").RustType
   >();
   for (const epilogue of activeEpilogues) {
     if (epilogue.errorBoundary === "provider-native") {
-      input.providerErrors.register(epilogue.errorCarrier);
       const errorType = rustTypeFromCarrier(epilogue.errorCarrier);
       if (errorType === undefined) {
         diagnostics.push({
@@ -218,15 +213,12 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
   // crates without carrier/operation use stay out of the manifest.
   const cargoProject = planRustCargoProject(
     input.program.configuration,
-    input.input.runtimeReferences,
+    input.program.runtimeReferences,
   );
-  if (cargoProject.project === undefined) {
-    return rejectedTargetStage([...diagnostics, ...cargoProject.diagnostics]);
-  }
-  const sourcePackageCargo = cargoProject.project.kind === "generated"
-    ? planRustSourcePackageCargo(cargoProject.project.manifest, componentPlans, diagnostics)
+  const sourcePackageCargo = cargoProject.kind === "generated"
+    ? planRustSourcePackageCargo(cargoProject.manifest, componentPlans, diagnostics)
     : undefined;
-  if (cargoProject.project.kind === "generated" && sourcePackageCargo === undefined) {
+  if (cargoProject.kind === "generated" && sourcePackageCargo === undefined) {
     return rejectedTargetStage(diagnostics);
   }
 
@@ -588,7 +580,7 @@ function resolveProjectEntrySourceFile(
   input: RustPlanningContext,
   diagnostics: TargetDiagnostic[],
 ): SourceFile | undefined {
-  const entryPoint = normalizeSourcePath(resolve(input.input.paths.projectRoot, input.input.project.entryPoint));
+  const entryPoint = normalizeSourcePath(resolve(input.host.paths.projectRoot, input.host.entryPoint));
   const sourceFile = input.program.sourceFiles.find((candidate) =>
     normalizeSourcePath(resolve(input.program.source.ast.getFileName(candidate))) === entryPoint
   );
@@ -614,7 +606,7 @@ function resolveBinaryEntry(
   moduleNameByFileName: ReadonlyMap<string, string>,
   diagnostics: TargetDiagnostic[],
 ): RustBinaryEntry | undefined {
-  const entryPoint = input.input.project.entryPoint;
+  const entryPoint = input.host.entryPoint;
   const entrySourceFile = resolveProjectEntrySourceFile(input, diagnostics);
   if (entrySourceFile === undefined) {
     return undefined;

@@ -9,8 +9,8 @@ import {
   rustModuleNameForSourcePath,
 } from "../../../dist/backend/planner/names/source-output-identities.js";
 import {
-  planRustSourcePackageFacades,
-} from "../../../dist/backend/planner/program/source-package-facades.js";
+  analyzeRustSourcePackageFacades,
+} from "../../../dist/analysis/program/source-package-facades.js";
 import {
   fakeAstReader,
   fakeSourcePackageGraph,
@@ -203,21 +203,26 @@ test("facade planning ignores valid package exports outside the checked closure"
     }],
     components: [{ id: componentId, packages: [packageId], dependencies: [] }],
   };
-  const result = planRustSourcePackageFacades({
-    input: { sourcePackages },
-    program: {
-      sourceFiles: [root],
-      source: {
-        ast: fakeAstReader([root]),
-        navigation: {
-          moduleExports: () => [],
-        },
+  const ast = fakeAstReader([root]);
+  const result = analyzeRustSourcePackageFacades({
+    sourcePackages,
+    sourceFiles: [root],
+    ast,
+    source: {
+      navigation: {
+        moduleExports: () => [],
       },
     },
-  }, new Map());
+    facts: {
+      getFact: () => undefined,
+    },
+    names: {
+      functionNameForDeclaration: () => undefined,
+      nameForDeclaration: () => undefined,
+    },
+  });
 
-  assert.deepEqual(result.diagnostics, []);
-  assert.notEqual(result.plan, undefined);
+  assert.equal(result.kind, "resolved");
   assert.deepEqual(result.plan.rootExports, []);
 });
 

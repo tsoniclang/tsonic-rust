@@ -5,6 +5,8 @@ export type RustFallibleErrorBoundary =
 
 export type RustErrorBoundary = "none" | RustFallibleErrorBoundary;
 
+export type RustErrorDomain = "runtime" | "project";
+
 export function isRustFallibleErrorBoundary(
   value: unknown,
 ): value is RustFallibleErrorBoundary {

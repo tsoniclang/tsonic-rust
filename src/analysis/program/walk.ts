@@ -25,10 +25,10 @@ import {
 } from "../operations/provider/index.js";
 import { isSharedSourceMarkerOperation } from "../expressions/references.js";
 import { resolveRegExpCreation } from "../expressions/regexp.js";
-import { rustConversionKey, rustSelectedOperationKey } from "../../policy/model/selections.js";
+import { rustConversionKey, rustSelectedOperationKey } from "../../target-model/facts/selections.js";
 import { rustPolicyTargetDiagnostic } from "../../policy/operations/contracts.js";
 import { rustPostCheckOperationKind } from "../facts/keys.js";
-import { rustSourcePrimitiveTargetType } from "../../policy/types/target-types.js";
+import { rustSourcePrimitiveTargetType } from "../../target-model/types/index.js";
 import type { Node, ResolvedSourcePropertyAccessInfo, SourceFile } from "@tsonic/tsts";
 import type { RustAnalysisContext } from "./context.js";
 import type { RustModuleBindingPolicy } from "./module-bindings.js";

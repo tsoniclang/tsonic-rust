@@ -1,8 +1,10 @@
 import type { SourceFile } from "@tsonic/tsts";
 import type { SourceProgramNavigation } from "@tsonic/target-api/source";
 
+type SourceModuleGraph = Pick<SourceProgramNavigation, "moduleDependencies">;
+
 export function stronglyConnectedSourceFiles(
-  navigation: SourceProgramNavigation,
+  navigation: SourceModuleGraph,
   sourceFiles: ReadonlySet<SourceFile>,
 ): readonly (readonly SourceFile[])[] {
   let nextIndex = 0;
@@ -60,7 +62,7 @@ export function stronglyConnectedSourceFiles(
 }
 
 export function cyclicSourceFiles(
-  navigation: SourceProgramNavigation,
+  navigation: SourceModuleGraph,
   sourceFiles: readonly SourceFile[],
 ): ReadonlySet<SourceFile> {
   const sourceFileSet = new Set(sourceFiles);

@@ -19,7 +19,7 @@ import {
   rustArgumentPassingKey,
   rustSelectedCallKey,
   rustSelectedOperationKey,
-} from "../../policy/model/selections.js";
+} from "../../target-model/facts/selections.js";
 import type {
   RustTargetMember,
   TargetTypeRef,
@@ -44,7 +44,7 @@ import {
   rustOptionTargetType,
   rustSourcePrimitiveTargetType,
   rustUnitTargetType,
-} from "../../policy/types/target-types.js";
+} from "../../target-model/types/index.js";
 import {
   resolveRustTargetTypeRef,
 } from "../../policy/types/resolution.js";

@@ -3,9 +3,9 @@ import type {
   ResolvedSourceResourceManagementInfo,
 } from "@tsonic/tsts";
 import type { RustOperationPolicyContext } from "../../policy/operations/contracts.js";
-import { rustTargetTypeRefEquals } from "../../policy/types/equality.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { closedMetadataEquals } from "../../policy/model/closed-data.js";
+import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
 import { Node_Type } from "@tsonic/target-api/source";
 import type {
   RustResourceDisposalTarget,
@@ -15,7 +15,7 @@ import {
   isRustUnitCarrier,
   rustFutureOutputCarrier,
   rustOptionElementCarrier,
-} from "../../policy/types/target-types.js";
+} from "../../target-model/types/index.js";
 import type { RustOperationsProviderOptions } from "../operations/provider/index.js";
 import {
   isProjectSourceDeclaration,

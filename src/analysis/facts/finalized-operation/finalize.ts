@@ -6,11 +6,11 @@ import {
   isRustFinalizedSliceInput,
   isRustFinalizedTaggedArrayInput,
 } from "./conversions.js";
-import { isDenseDataArray } from "../../../policy/model/closed-data.js";
+import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
 import { isRustFallibleErrorBoundary } from "../../../target-model/operations/error-boundary.js";
-import { isRustTargetTypeRef } from "../../../policy/types/equality.js";
+import { isRustTargetTypeRef } from "../../../target-model/types/equality.js";
 import { operationKinds, validateRustFinalizedOperationAbi } from "./validation.js";
-import { rustFutureTargetType, rustTargetTypeParameterNames } from "../../../policy/types/target-types.js";
+import { rustFutureTargetType, rustTargetTypeParameterNames } from "../../../target-model/types/index.js";
 import { rustProviderOperationFormAcceptsTargetTypeArguments, rustProviderOperationFormContractViolation } from "../../../policy/operations/forms.js";
 import type { FinalizeRustProviderOperationAbiOptions, RustFinalizedOperationAbiFor, RustFinalizedOperationResult, RustFinalizedTargetInput } from "./model.js";
 import type { RustFinalizedOperationKind } from "../../../target-model/operations/model.js";

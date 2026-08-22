@@ -11,18 +11,18 @@ import {
   rustStructuralMethodStorageCarrier,
   rustStructuralObjectCarrierValue,
   rustStringTargetType,
-} from "../../../../policy/types/target-types.js";
+} from "../../../../target-model/types/index.js";
 import { acceptProjectSourceCall, mapSelectedJsSpecialCall } from "../object-shapes.js";
 import { acceptRustPolicy } from "../../../../policy/operations/contracts.js";
 import { acceptSelectedCall, checkedCallIsConstruction, instantiateSelectedCallTemplate, selectedCallReceiverValueCarrier, selectRustOptionalCallResult, substituteProviderOperationForm } from "./instantiation.js";
-import { closedMetadataKey } from "../../../../policy/model/closed-data.js";
+import { closedMetadataKey } from "../../../../target-model/metadata/closed-data.js";
 import { mapRustSourceMarkerCall } from "./deferred.js";
 import { mapSelectedRegExpConstruction } from "../values.js";
 import { providerIdentityText, providerOperationFact, rejectSelectedOperation, selectedArgumentMatchScore } from "../result.js";
 import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution.js";
 import { rustOptionalChainFactKey } from "../../../facts/keys.js";
-import { rustOptionElementCarrier } from "../../../../policy/types/target-types.js";
-import { rustRuntimeCarrierKey, rustSelectedCallKey } from "../../../../policy/model/selections.js";
+import { rustOptionElementCarrier } from "../../../../target-model/types/index.js";
+import { rustRuntimeCarrierKey, rustSelectedCallKey } from "../../../../target-model/facts/selections.js";
 import { selectedCallArgumentCarriers, selectedCallArgumentNodes, selectedCallCalleeDeclaration, selectedCallCalleeSymbol, selectedValueCarrier } from "../operators.js";
 import { selectJsSurfaceConstructorBySourceOwner, selectJsSurfaceOperation } from "../../../../policy/operations/js-surface.js";
 import { selectRustGeneratorSourceCall } from "../../../../policy/types/generator-source-profile.js";

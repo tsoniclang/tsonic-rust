@@ -1,7 +1,7 @@
-import { allocateRustGeneratedName as allocateGeneratedName } from "../../../policy/names/generated.js";
-import { isDenseDataArray } from "../../../policy/model/closed-data.js";
+import { allocateRustGeneratedName as allocateGeneratedName } from "../../../target-model/names/generated.js";
+import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
-import type { RustNamePlan } from "../../../policy/names/model.js";
+import type { RustNamePlan } from "../../../target-model/names/model.js";
 import type { RustProjectTypeDefinition } from "../../../policy/types/project-types.js";
 
 export function projectDefinition(

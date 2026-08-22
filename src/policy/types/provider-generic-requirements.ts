@@ -6,7 +6,7 @@ import {
   isRustCopyCarrier,
   rustCarrierSupportsTrait,
   rustCarrierSupportsClone,
-} from "./target-types.js";
+} from "../../target-model/types/index.js";
 
 export function rustProviderGenericRequirementsAreSatisfied(
   requirements: readonly RustProviderTypeParameterRequirement[] | undefined,

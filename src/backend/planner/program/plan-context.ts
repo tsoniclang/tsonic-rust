@@ -1,7 +1,6 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustPlanningContext } from "../context.js";
-import type { RustGenericRequirementSet } from "../types/generic-requirements.js";
 import type { RustGeneratorFact, RustSourceBindingFact } from "../../../analysis/facts/keys.js";
 import { rustModuleBindingFactKey } from "../../../analysis/facts/keys.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
@@ -17,8 +16,8 @@ import type { RustBlock, RustErrorDomain, RustExpr, RustType } from "../../targe
 import {
   isValidRustIdentifier,
   rustSnakeCaseIdentifier,
-} from "../../../policy/names/identifiers.js";
-export { isValidRustIdentifier, rustReservedIdentifiers } from "../../../policy/names/identifiers.js";
+} from "../../../target-model/names/identifiers.js";
+export { isValidRustIdentifier, rustReservedIdentifiers } from "../../../target-model/names/identifiers.js";
 
 export interface RustEffectiveExpressionOverride {
   readonly expression: RustExpr;
@@ -96,10 +95,9 @@ export interface RustPlanContext {
   // Structured import requirements: runtime alias prefixes used by planned
   // operations and rendered types. Never inferred from printed text.
   readonly usedAliases?: Set<string>;
-  // Rust-native obligations discovered while planning one generic function.
-  // The finalized signature is rendered only after the complete body has been
-  // planned, so late requirements cannot produce an invalid partial contract.
-  readonly genericRequirements?: RustGenericRequirementSet;
+  // Exact callable contract whose generic obligations were sealed by target
+  // analysis before this syntax-planning context was created.
+  readonly callableDeclaration?: Node;
   readonly generator?: {
     readonly declaration: Node;
     readonly controllerName: string;
@@ -148,7 +146,7 @@ export function rustErrorBoundaryForProjectMember(
   if (!projectMember) {
     return rustErrorBoundaryForDeclaration(declaration, context);
   }
-  const contracts = context.input.program.source.navigation.memberContracts(declaration);
+  const contracts = context.input.program.sourceNavigation.memberContracts(declaration);
   if (contracts.kind === "unresolved") {
     return undefined;
   }

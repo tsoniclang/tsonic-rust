@@ -1,10 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustTypeParameter } from "../../target-ast/nodes.js";
-import {
-  applyRustGenericRequirements,
-  createRustGenericRequirementSet,
-} from "../types/generic-requirements.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { diagnosticInput, isValidRustIdentifier } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
@@ -45,6 +41,20 @@ export function planRustCallableGenerics(
     sourceTypeParameterNames.push(sourceName);
     targetTypeParameters.push({ name: targetName, bounds: [] });
   }
+  const contract = context.input.program.callableGenericRequirements.contractFor(
+    declaration,
+  );
+  if (contract === undefined ||
+    contract.typeParameters.length !== targetTypeParameters.length ||
+    contract.typeParameters.some((parameter, index) =>
+      parameter.name !== targetTypeParameters[index]?.name)) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, declaration),
+      "rust.backend.callable-generic-contract",
+      "Callable declaration has no exact sealed Rust generic-requirement contract.",
+    ));
+    return undefined;
+  }
 
   if (specialization !== undefined) {
     if (specialization.size !== sourceTypeParameterNames.length ||
@@ -61,21 +71,32 @@ export function planRustCallableGenerics(
       substitutions.set(name, carrier);
     }
     return {
-      context: { ...context, typeParameterSubstitutions: substitutions },
+      context: {
+        ...context,
+        callableDeclaration: declaration,
+        typeParameterSubstitutions: substitutions,
+      },
       sourceTypeParameterNames: Object.freeze(sourceTypeParameterNames),
       finalizeTypeParameters: () => Object.freeze([]),
     };
   }
 
-  const genericRequirements = createRustGenericRequirementSet(
-    targetTypeParameters.map((parameter) => parameter.name),
-  );
+  const finalizedTypeParameters = Object.freeze(targetTypeParameters.map(
+    (parameter, index): RustTypeParameter => ({
+      ...parameter,
+      bounds: contract.typeParameters[index]!.requirements.map((requirement) =>
+        requirement === "static"
+          ? { kind: "lifetime" as const, name: "static" }
+          : {
+              kind: "trait" as const,
+              path: requirement === "clone" ? "Clone" : "Default",
+            }),
+    }),
+  ));
   return {
-    context: { ...context, genericRequirements },
+    context: { ...context, callableDeclaration: declaration },
     sourceTypeParameterNames: Object.freeze(sourceTypeParameterNames),
-    finalizeTypeParameters: () => Object.freeze(
-      applyRustGenericRequirements(targetTypeParameters, genericRequirements),
-    ),
+    finalizeTypeParameters: () => finalizedTypeParameters,
   };
 }
 

@@ -1,10 +1,10 @@
-import { closedMetadataEquals } from "../../policy/model/closed-data.js";
-import { defineRustPlanKey } from "../../policy/model/keys.js";
-import { rustTargetTypeRefEquals } from "../../policy/types/equality.js";
+import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
+import { defineRustPlanKey } from "../../target-model/facts/keys.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustArgumentMode, RustProviderOperationForm } from "../../target-model/operations/model.js";
 import type { RustFallibleErrorBoundary } from "../../target-model/operations/error-boundary.js";
-import type { RustPlanKey } from "../../policy/model/keys.js";
+import type { RustPlanKey } from "../../target-model/facts/keys.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export type RustTypeAliasDeclarationFact =

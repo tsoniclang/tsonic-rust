@@ -18,12 +18,12 @@ import {
   rustCarrierReferentMutationRequiresMutableBinding,
   rustLocationTargetType,
   rustOptionElementCarrier,
-} from "../../../policy/types/target-types.js";
+} from "../../../target-model/types/index.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planExpression } from "../expressions/index.js";
 import { planRustBindingPattern } from "../bindings/patterns.js";
 import { requireRustLocationValueCarrier } from "../types/generic-requirements.js";
-import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
@@ -137,7 +137,7 @@ function planVariableDeclaration(
   }
   const ownedBinding = declarationCarrier.kind !== "pointer" && declarationCarrier.kind !== "reference";
   const resourceFact = context.input.program.facts.getFact(declaration, rustResourceManagementFactKey);
-  const sourceUseSummary = context.input.program.source.navigation.declarationUseSummary(declaration);
+  const sourceUseSummary = context.input.program.sourceNavigation.declarationUseSummary(declaration);
   const objectRepresentation = context.input.program.objectRepresentations.representationFor(
     context.input.program.projectTypes.definitionForCarrier(declarationCarrier),
   );

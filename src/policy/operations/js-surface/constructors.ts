@@ -3,9 +3,9 @@ import {
   rustJsDateTargetType,
   rustJsMapTargetType,
   rustJsSetTargetType,
-} from "../../types/target-types.js";
+} from "../../../target-model/types/index.js";
 import { resolveCarrierRef } from "./selection.js";
-import { rustTargetTypeRefEquals } from "../../types/equality.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { JsCarrierRef, JsOperationSelection } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 

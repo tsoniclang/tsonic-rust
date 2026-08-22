@@ -5,11 +5,10 @@ import {
   rustFixedArrayCarrierValue,
   rustSliceElementCarrier,
   substituteRustTargetTypeParameters,
-} from "../../../../policy/types/target-types.js";
+} from "../../../../target-model/types/index.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
-import { applyRustSourceCallableRequirements } from "../../artifacts/source-callable-contracts.js";
 import { diagnosticInput } from "../../program/plan-context.js";
-import { isDenseDataArray } from "../../../../policy/model/closed-data.js";
+import { isDenseDataArray } from "../../../../target-model/metadata/closed-data.js";
 import {
   KindSpreadElement,
   Node_Expression,
@@ -24,9 +23,9 @@ import { planRustNonConsumingValue } from "../typed-locations.js";
 import { rustArgumentPassingMode } from "../../../../analysis/facts/parameter-passing.js";
 import { rustFinalizedCarrierTransitionMatches } from "../../../../analysis/facts/target-operation.js";
 import { rustSourceParameterAbiFactKey, rustTargetOperationFactKey } from "../../../../analysis/facts/keys.js";
-import { rustTargetTypeRefEquals } from "../../../../policy/types/equality.js";
+import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { rustValueCarrierTransitionTarget } from "../../../../analysis/facts/value-carrier-queries.js";
-import { rustVecRestAssembly } from "../../../../policy/intrinsics/index.js";
+import { rustVecRestAssembly } from "../../../../target-model/operations/rest-assembly.js";
 import { validateRustFinalizedOperationAbi } from "../../../../analysis/facts/finalized-operation-abi.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../../target-ast/nodes.js";
@@ -234,8 +233,7 @@ export function planRustSelectedSourceCallArguments(
   const fact = context.input.program.facts.getFact(call, rustTargetOperationFactKey);
   const selected = context.input.program.facts.getSelectedTargetCall(call);
   if (fact?.kind !== "source-call" || selected === undefined ||
-    !sourceCallSelectedMemberMatches(fact, selected) ||
-    !applyRustSourceCallableRequirements(call, selected, fact, context)) {
+    !sourceCallSelectedMemberMatches(fact, selected)) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, call),
       "rust.backend.source-call-selected-arguments",
@@ -292,7 +290,7 @@ function shapeRustSourceCallInput(
     context.input.program.facts,
     argumentNode,
   );
-  const selectedInput = selectRustSpreadSourceInput(
+  const selectedInput = resolveFinalizedRustSpreadInput(
     input,
     sourceCarrier,
     convertedCarrier,
@@ -331,7 +329,7 @@ function shapeRustSourceCallInput(
         : { kind: "reference", expr: nonConsumingInput };
 }
 
-function selectRustSpreadSourceInput(
+function resolveFinalizedRustSpreadInput(
   input: import("../../../../analysis/facts/keys.js").RustSourceCallParameterPlan["inputs"][number],
   sourceCarrier: TargetTypeRef | undefined,
   convertedCarrier: TargetTypeRef | undefined,

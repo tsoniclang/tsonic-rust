@@ -4,7 +4,7 @@ import {
   isRustUnitCarrier,
   rustOptionElementCarrier,
   rustSourcePrimitiveTargetType,
-} from "../../../policy/types/target-types.js";
+} from "../../../target-model/types/index.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { applyRustValueConversion } from "./conversions.js";
 import { applyRustArgumentMode } from "./input-shaping.js";
@@ -25,7 +25,7 @@ import { planRustProgramErrorTypeTest } from "./error-operations.js";
 import { planRustProjectTypeTest } from "../objects/project-downcasts.js";
 import { rustOptionProjectionFactKey } from "../../../analysis/facts/keys.js";
 import { rustTargetOperationText } from "../../../analysis/facts/target-operation.js";
-import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustValueCarrierBeforeOptionProjection } from "../../../analysis/facts/value-carrier-queries.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/nodes.js";

@@ -6,7 +6,7 @@ import {
 } from "./materialization.js";
 import { rustProviderBindingProviderId } from "./source-provider.js";
 import { validateProviderPackageDefinition } from "./validation.js";
-import { snapshotClosedMetadata } from "../../policy/model/closed-data.js";
+import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { rustBuiltInSourceTypeSemantics } from "../builtins/source-types.js";
 import type { RustNamedTypeTraitContract } from "../../target-model/types/model.js";
 import { rustProviderPolicyContributionKind } from "./model.js";

@@ -1,7 +1,7 @@
 import { rustAsyncGeneratorTargetId, rustCallableTargetId, rustGeneratorTargetId, rustIteratorResultTargetId, rustLocationTargetId, rustOptionTargetId } from "./source-types.js";
 import { rustOptionElementCarrier } from "./js.js";
 import { rustTupleTargetType, rustUnitTargetType } from "./native.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type { TargetTypeRef } from "../model.js";
 
 export function rustOptionTargetType(value: TargetTypeRef): TargetTypeRef {
   return { kind: "target-named", id: rustOptionTargetId, typeArguments: [value] };

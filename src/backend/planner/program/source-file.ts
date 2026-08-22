@@ -14,7 +14,7 @@ import {
 } from "../../../analysis/facts/keys.js";
 import {
   rustCarrierSupportsClone,
-} from "../../../policy/types/target-types.js";
+} from "../../../target-model/types/index.js";
 import {
   createRustSourceFile,
 } from "../../target-ast/nodes.js";
@@ -215,7 +215,7 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
     objectLiteralImplementations,
   };
   items.push(...objectLiteralImplementations.items);
-  const asynchronous = context.input.program.source.navigation.moduleHasTopLevelAwait(
+  const asynchronous = context.input.program.sourceNavigation.moduleHasTopLevelAwait(
     context.sourceFile,
   );
   const fallible = context.input.program.facts.getFact(
@@ -255,7 +255,7 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
     }
     if (kind === KindFunctionDeclaration) {
       if (ast.body(statement) === undefined) {
-        const implementation = context.input.program.source.navigation
+        const implementation = context.input.program.sourceNavigation
           .callableImplementation(statement);
         if (implementation.kind === "resolved" &&
           implementation.implementation.declaration !== statement) {

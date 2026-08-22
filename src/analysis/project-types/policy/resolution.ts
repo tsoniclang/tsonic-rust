@@ -1,9 +1,12 @@
-import { allocateRustGeneratedName as allocateGeneratedName, rustGeneratedNameComponent } from "../../../policy/names/generated.js";
+import { allocateRustGeneratedName as allocateGeneratedName, rustGeneratedNameComponent } from "../../../target-model/names/generated.js";
 import { compareProjectDefinitions, definitionKey, denseNodes, heritageKindIssue, projectDefinition, projectMemberNames, sourceFileIdentifierNames } from "./helpers.js";
-import { rustPascalCaseIdentifier, rustScreamingSnakeIdentifier, rustSnakeCaseIdentifier } from "../../../policy/names/identifiers.js";
-import { rustSourceTypeCarrier, rustSourceTypeCarrierValue, substituteRustTargetTypeParameters } from "../../../policy/types/target-types.js";
-import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
+import { rustPascalCaseIdentifier, rustScreamingSnakeIdentifier, rustSnakeCaseIdentifier } from "../../../target-model/names/identifiers.js";
+import { rustSourceTypeCarrier, rustSourceTypeCarrierValue, substituteRustTargetTypeParameters } from "../../../target-model/types/index.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { Node, Signature, SourceFile } from "@tsonic/tsts";
+import type {
+  SourceProjectMemberImplementationResult,
+} from "@tsonic/target-api/source";
 import type { RustExternalProjectBase } from "../../../policy/types/external-project-types.js";
 import type { RustProjectConstructorSignature, RustProjectDowncastRoute, RustProjectHeritageEdge, RustProjectMemberSlotCandidate, RustProjectMemberSlotRole, RustProjectTypeDefinition, RustProjectTypeIssue, RustProjectTypePolicy, RustProjectTypePolicyHost, RustProjectTypeRelationship } from "../../../policy/types/project-types.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
@@ -445,6 +448,7 @@ export function createRustProjectTypePolicy(
   const memberSlotNames = new WeakMap<Node, Map<RustProjectMemberSlotRole, string>>();
   const canonicalSlotNames = new WeakMap<Node, Map<RustProjectMemberSlotRole, string>>();
   const dispatchUsedNamesByDefinition = new WeakMap<RustProjectTypeDefinition, Set<string>>();
+  const callableTargetNames = new WeakMap<Node, string>();
   const setMemberSlotName = (
     declaration: Node,
     role: RustProjectMemberSlotRole,
@@ -485,6 +489,9 @@ export function createRustProjectTypePolicy(
         : host.names.nameForDeclaration(member);
       if (targetName === undefined) {
         continue;
+      }
+      if (kind === "KindMethodDeclaration" || kind === "KindMethodSignature") {
+        callableTargetNames.set(member, targetName);
       }
       if (kind === "KindPropertyDeclaration" && host.ast.hasModifierKind(member, "static")) {
         const staticName = allocateGeneratedName(
@@ -535,7 +542,6 @@ export function createRustProjectTypePolicy(
   }
 
   const frozenDefinitions = Object.freeze(definitions);
-  const frozenIssues = Object.freeze(issues);
   const orderedDefinitions = [...frozenDefinitions].sort(compareProjectDefinitions);
   const downcastRoutesByDefinition = new WeakMap<
     RustProjectTypeDefinition,
@@ -564,6 +570,74 @@ export function createRustProjectTypePolicy(
       ),
     }))));
   }
+  const memberImplementationByClass = new WeakMap<
+    RustProjectTypeDefinition,
+    WeakMap<Node, SourceProjectMemberImplementationResult>
+  >();
+  const maximumMemberImplementations = 1_048_576;
+  let memberImplementationCount = 0;
+  let memberImplementationBudgetExceeded = false;
+  for (const definition of frozenDefinitions) {
+    if (definition.kind !== "class") {
+      continue;
+    }
+    const relatedDefinitions = frozenDefinitions.filter((candidate) =>
+      relationship(openCarrier(definition), candidate).kind === "related");
+    const contractMembers = new Set<Node>();
+    for (const related of relatedDefinitions) {
+      for (
+        const member of
+          denseNodes(host.ast.members(related.declaration)) ?? []
+      ) {
+        contractMembers.add(member);
+      }
+      for (
+        const field of externalBaseByDeclaration.get(related.declaration)
+          ?.fields ?? []
+      ) {
+        contractMembers.add(field.declaration);
+      }
+    }
+    const implementations = new WeakMap<
+      Node,
+      SourceProjectMemberImplementationResult
+    >();
+    for (const member of contractMembers) {
+      memberImplementationCount += 1;
+      if (
+        !Number.isSafeInteger(memberImplementationCount) ||
+        memberImplementationCount > maximumMemberImplementations
+      ) {
+        memberImplementationBudgetExceeded = true;
+        break;
+      }
+      implementations.set(
+        member,
+        host.navigation.memberImplementation(
+          definition.declaration,
+          member,
+        ),
+      );
+    }
+    memberImplementationByClass.set(definition, implementations);
+    if (memberImplementationBudgetExceeded) {
+      break;
+    }
+  }
+  if (memberImplementationBudgetExceeded) {
+    issues.push({
+      node: frozenDefinitions[0]?.declaration ?? host.sourceFiles[0]!,
+      code: "RUST_PROJECT_MEMBER_IMPLEMENTATION_BUDGET_EXCEEDED",
+      message:
+        `Rust project member implementation analysis exceeds its finite ${maximumMemberImplementations}-classification budget while closing exact related type hierarchies.`,
+    });
+  }
+  const unclassifiedMemberImplementation = Object.freeze({
+    kind: "unresolved" as const,
+    reason:
+      "The project member implementation was not classified before the Rust target program was sealed.",
+  });
+  const frozenIssues = Object.freeze(issues);
   const policy: RustProjectTypePolicy = {
     definitions: frozenDefinitions,
     issues: frozenIssues,
@@ -693,6 +767,9 @@ export function createRustProjectTypePolicy(
     memberSlotName(declaration, role) {
       return memberSlotNames.get(declaration)?.get(role);
     },
+    callableTargetName(declaration) {
+      return callableTargetNames.get(declaration);
+    },
     stateMarkerFieldName(definition) {
       const name = stateMarkerFieldNamesByDefinition.get(definition);
       if (name === undefined) {
@@ -701,10 +778,9 @@ export function createRustProjectTypePolicy(
       return name;
     },
     memberImplementation(concreteClass, contractMember) {
-      return host.navigation.memberImplementation(
-        concreteClass.declaration,
+      return memberImplementationByClass.get(concreteClass)?.get(
         contractMember,
-      );
+      ) ?? unclassifiedMemberImplementation;
     },
   };
   return Object.freeze(policy);

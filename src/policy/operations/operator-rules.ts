@@ -43,9 +43,9 @@ import {
   rustSourcePrimitiveTargetType,
   rustStructuralObjectCarrierValue,
   sameRustPrimitiveCarrier,
-} from "../types/target-types.js";
-import { rustTargetTypeRefEquals } from "../types/equality.js";
-import { rustSourceTypeCarrierValue } from "../types/target-types.js";
+} from "../../target-model/types/index.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustSourceTypeCarrierValue } from "../../target-model/types/index.js";
 import {
   type RustNumericBinaryPromotion,
   rustNumericPromotionConversion,

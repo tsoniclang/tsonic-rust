@@ -12,7 +12,7 @@ import {
   rustOptionTargetId,
   rustUndefinedTargetId,
   rustStringTargetId,
-} from "../../../policy/types/target-types.js";
+} from "../../../target-model/types/index.js";
 import type { ProviderExportDeclaration, ProviderMemberDeclaration, ProviderSignatureDeclaration } from "@tsonic/tsts";
 
 export type Fail = (message: string) => never;

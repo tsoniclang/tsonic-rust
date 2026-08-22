@@ -3,7 +3,7 @@ import { applyRustValueConversion, finishProviderOperationExpression, planProvid
 import { planRustCallArguments } from "../input-shaping.js";
 import { diagnosticInput } from "../../program/plan-context.js";
 import { effectiveMemberResultCarrier, planOptionalChainExpression } from "../special.js";
-import { isDenseDataArray } from "../../../../policy/model/closed-data.js";
+import { isDenseDataArray } from "../../../../target-model/metadata/closed-data.js";
 import {
   KindPropertyAccessExpression,
   Node_Expression,
@@ -16,10 +16,10 @@ import { planSelectedSourceCall, sourceCallEffectsMatch } from "./source.js";
 import { providerSelectedCallMatches, rustOperationFact } from "../fundamentals.js";
 import { readRustStoredObjectField } from "../../objects/project-storage.js";
 import { requireRustDefaultValueCarrier } from "../../types/generic-requirements.js";
-import { rustArgumentPassingKey } from "../../../../policy/model/selections.js";
+import { rustArgumentPassingKey } from "../../../../target-model/facts/selections.js";
 import { rustSourceCallEffectsFactKey } from "../../../../analysis/facts/keys.js";
-import { rustStringTargetType } from "../../../../policy/types/target-types.js";
-import { rustTargetTypeRefEquals } from "../../../../policy/types/equality.js";
+import { rustStringTargetType } from "../../../../target-model/types/index.js";
+import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../../target-ast/nodes.js";

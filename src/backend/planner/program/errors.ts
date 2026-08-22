@@ -2,8 +2,8 @@ import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustPlanningContext } from "../context.js";
 import { rustRuntimeErrorTypeIdentity } from "./source-package-errors.js";
 import { rustTypeFromCarrier } from "../types/render.js";
-import { rustJsErrorTargetType, rustProgramErrorTargetType } from "../../../policy/types/target-types.js";
-import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
+import { rustJsErrorTargetType, rustProgramErrorTargetType } from "../../../target-model/types/index.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import {
   createRustSourceFile,
   type RustExpr,
@@ -105,7 +105,7 @@ export function planRustProgramErrorModule(
     type: namedType(external.typePath),
   }));
   const providerErrorTypes: RustType[] = [];
-  for (const carrier of input.providerErrors.seal()) {
+  for (const carrier of input.program.providerErrorCarriers) {
     if (rustTargetTypeRefEquals(carrier, rustJsErrorTargetType()) ||
       rustTargetTypeRefEquals(carrier, rustProgramErrorTargetType())) {
       continue;

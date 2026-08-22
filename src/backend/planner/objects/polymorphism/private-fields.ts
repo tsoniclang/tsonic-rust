@@ -1,4 +1,4 @@
-import { isRustCopyCarrier } from "../../../../policy/types/target-types.js";
+import { isRustCopyCarrier } from "../../../../target-model/types/index.js";
 import { rustProjectMemberIsPrivate } from "../../../../analysis/project-types/member-privacy.js";
 import type { RustExpr, RustImplFunction, RustItem, RustType } from "../../../target-ast/nodes.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";

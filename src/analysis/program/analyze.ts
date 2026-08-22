@@ -4,7 +4,7 @@ import { createRustModuleBindingPolicy } from "./module-bindings.js";
 import { createRustSourceCallableAbiResolver } from "../../policy/ownership/source-callable-abi.js";
 import { createRustSourceProfileRegistry } from "../facts/source-profile-registry.js";
 import { createRustSourceTypeRegistry } from "../project-types/source-type-registry.js";
-import { isDenseDataArray } from "../../policy/model/closed-data.js";
+import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import {
   KindExportAssignment,
   KindFunctionDeclaration,
@@ -24,7 +24,7 @@ import type { RustAnalysisContext } from "./context.js";
 import type { RustFactWalk } from "./walk.js";
 import type { RustOperationsProviderOptions } from "../operations/provider/index.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
-import { rustStructuralObjectCarrierValue } from "../../policy/types/target-types.js";
+import { rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 import { rustLocationStorageFactKey } from "../facts/keys.js";
 import { rustTypedLocationStorageRootReference } from "../operations/typed-locations.js";
 import { selectRustAddressOfSourceOperation } from "../../policy/operations/typed-location-source.js";

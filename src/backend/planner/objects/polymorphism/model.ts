@@ -16,7 +16,7 @@ import {
   isRustUnitCarrier,
   isRustNeverCarrier,
   rustSourceTypeCarrierValue,
-} from "../../../../policy/types/target-types.js";
+} from "../../../../target-model/types/index.js";
 import type {
   RustExpr,
   RustFunctionParam,
@@ -219,7 +219,7 @@ export function projectOwnMethodProperties(
     if (context.input.program.source.ast.hasModifierKind(member, "static")) {
       continue;
     }
-    const implementation = context.input.program.source.navigation.callableImplementation(member);
+    const implementation = context.input.program.sourceNavigation.callableImplementation(member);
     const declaration = implementation.kind === "resolved"
       ? implementation.implementation.declaration
       : member;

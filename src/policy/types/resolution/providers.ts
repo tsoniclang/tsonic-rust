@@ -11,7 +11,7 @@ import {
   rustStringTargetType,
   rustVecTargetType,
   substituteRustTargetTypeParameters,
-} from "../target-types.js";
+} from "../../../target-model/types/index.js";
 import { denseDefined } from "./project.js";
 import { mergeProviderDeclarationIdentities } from "../../evidence/selected-source.js";
 import { providerVirtualDeclarationFactKey } from "@tsonic/tsts";

@@ -7,9 +7,12 @@ import { compileRustTarget } from "../../../dist/backend/compile.js";
 import { composeRustProviderSemantics } from "../../../dist/providers/packages/semantics.js";
 import { createRustTargetConfiguration } from "../../../dist/options/rust-target-options.js";
 import {
-  planCargoManifest,
+  planCargoManifest as planSealedCargoManifest,
   planRustCargoProject,
 } from "../../../dist/backend/planner/project/cargo.js";
+import {
+  analyzeRustRuntimeReferences,
+} from "../../../dist/analysis/runtime/index.js";
 import { printCargoManifest } from "../../../dist/print/project/manifest.js";
 import {
   fakeCompileInput,
@@ -43,6 +46,20 @@ const generatedConfiguration = Object.freeze({
   outputType: "lib",
   project: Object.freeze({ kind: "generated" }),
 });
+const noRuntimeReferences = Object.freeze({
+  cargoDependencies: Object.freeze([]),
+  activeCrates: Object.freeze([]),
+});
+
+function planCargoManifest(configuration, runtimeReferences) {
+  const analysis = analyzeRustRuntimeReferences(runtimeReferences);
+  return analysis.kind === "rejected"
+    ? { manifest: undefined, diagnostics: analysis.diagnostics }
+    : {
+        manifest: planSealedCargoManifest(configuration, analysis.plan),
+        diagnostics: [],
+      };
+}
 
 function compile(input) {
   const configuration = createRustTargetConfiguration(
@@ -275,10 +292,10 @@ test("user-owned Cargo mode emits sources without creating or mutating the manif
     dirname(paths.projectFilePath),
     paths.targetOutputRoot,
   );
-  const plan = planRustCargoProject(configuration, [{ kind: "unowned", include: "ignored" }]);
+  const plan = planRustCargoProject(configuration, noRuntimeReferences);
   assert.deepEqual(plan, {
-    project: { kind: "user-owned", manifestPath },
-    diagnostics: [],
+    kind: "user-owned",
+    manifestPath,
   });
   assert.equal(readFileSync(manifestPath, "utf8"), manifestText);
 });

@@ -10,12 +10,12 @@ import type {
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustSourcePolicyContext } from "../../policy/model/context.js";
-import { isDenseDataArray } from "../../policy/model/closed-data.js";
+import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import type { RustProviderSemantics } from "../../providers/packages/model.js";
 import {
   createRustNamePlan,
 } from "../names/plan.js";
-import type { RustNamePlan } from "../../policy/names/model.js";
+import type { RustNamePlan } from "../../target-model/names/model.js";
 import {
   createRustPlanBuilder,
 } from "../facts/plan-store.js";
@@ -48,7 +48,6 @@ import {
   createRustSafetyApplicationFactIndex,
 } from "../safety/application-index.js";
 import type { RustSafetyApplicationFactIndex } from "../safety/application-index.js";
-import type { RustTargetAnalysisQueries } from "./model.js";
 import {
   createRustObjectRepresentationPlanRegistry,
   type RustObjectRepresentationPlanRegistry,
@@ -78,7 +77,6 @@ export interface RustAnalysisContext extends RustSourcePolicyContext {
   readonly runtimeValueUses: RustRuntimeValueUsePlan;
   readonly names: RustNamePlan;
   readonly diagnostics: TargetDiagnostic[];
-  readonly analysis: RustTargetAnalysisQueries;
   semantics(sourceFile: SourceFile): SourceFileSemantics;
   semanticsFor(node: Node): SourceFileSemantics;
 }
@@ -134,14 +132,6 @@ export function createRustAnalysisContext(
       sourceFiles,
     }),
     diagnostics: [],
-    analysis: Object.freeze({
-      getEnumMemberConstant(node: Node) {
-        const value = input.source.semantics.forNode(node).types.constantValue(node);
-        return typeof value === "number" || typeof value === "string"
-          ? { value }
-          : undefined;
-      },
-    }),
     semantics: input.source.semantics.forFile,
     semanticsFor: input.source.semantics.forNode,
   });

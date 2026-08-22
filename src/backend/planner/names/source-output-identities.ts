@@ -6,7 +6,9 @@ import type {
 import type { TargetCompilationPaths } from "@tsonic/target-api";
 import type { TargetSourcePackageGraph } from "@tsonic/target-api";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import { rustReservedIdentifiers } from "../../../policy/names/identifiers.js";
+import {
+  rustModuleSegmentName,
+} from "../../../target-model/names/identifiers.js";
 
 export interface RustSourceFileOutputIdentity {
   readonly fileName: string;
@@ -117,7 +119,7 @@ export function planRustSourceOutputIdentities(
     seenSourcePaths.set(sourcePathIdentity, fileName);
     const localComponent = sourcePackage.componentId === rootPackage.componentId;
     const localSegments = (packageCountByComponent.get(sourcePackage.componentId) ?? 0) > 1
-      ? [rustModuleSegmentBase(sourcePackage.name ?? "package"), ...sourceSegments]
+      ? [rustModuleSegmentName(sourcePackage.name ?? "package"), ...sourceSegments]
       : sourceSegments;
     sourcePaths.push({
       fileName,
@@ -215,7 +217,7 @@ export function rustModuleNameForSourcePath(
   const segments = sourceModuleSegments(relativeSourcePath);
   return segments === undefined
     ? undefined
-    : segments.map(rustModuleSegmentBase).join("::");
+    : segments.map(rustModuleSegmentName).join("::");
 }
 
 export function allocateRustSupportModuleName(
@@ -233,7 +235,7 @@ export function allocateRustSupportModuleName(
       usedNames.add(topLevelName);
     }
   }
-  const baseName = rustModuleSegmentBase(preferredName);
+  const baseName = rustModuleSegmentName(preferredName);
   let candidate = baseName;
   let suffix = 2;
   while (usedNames.has(candidate)) {
@@ -259,7 +261,7 @@ export function allocateRustComponentSupportModuleName(
       usedNames.add(topLevelName);
     }
   }
-  const baseName = rustModuleSegmentBase(preferredName);
+  const baseName = rustModuleSegmentName(preferredName);
   let candidate = baseName;
   let suffix = 2;
   while (usedNames.has(candidate)) {
@@ -297,7 +299,7 @@ function assignRustModuleSegmentNames(
 ): void {
   const groups = new Map<string, { sourceName: string; node: ModuleSegmentNode }[]>();
   for (const [sourceName, child] of node.children) {
-    const base = rustModuleSegmentBase(sourceName);
+    const base = rustModuleSegmentName(sourceName);
     const group = groups.get(base) ?? [];
     group.push({ sourceName, node: child });
     groups.set(base, group);
@@ -365,25 +367,6 @@ function resolveModuleSegmentNode(
   return node;
 }
 
-function rustModuleSegmentBase(sourceName: string): string {
-  let value = sourceName
-    .replace(/([a-z0-9])([A-Z])/gu, "$1_$2")
-    .replace(/([A-Z]+)([A-Z][a-z])/gu, "$1_$2")
-    .toLowerCase()
-    .replace(/[^a-z0-9_]/gu, "_")
-    .replace(/_+/gu, "_")
-    .replace(/^_+|_+$/gu, "") || "module";
-  if (/^[0-9]/u.test(value) || value === "main" || value === "lib" || value === "mod" ||
-    value.startsWith("__tsonic") || rustReservedIdentifiers.has(value)) {
-    value = `${value}_module`;
-  }
-  return value.length <= 120 ? value : value.slice(0, 120).replace(/_+$/u, "");
-}
-
-export function rustModuleSegmentName(sourceName: string): string {
-  return rustModuleSegmentBase(sourceName);
-}
-
 function compareNames(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
@@ -439,7 +422,7 @@ function externalSourcePackageCrateNames(
         ));
         return undefined;
       }
-      const base = rustModuleSegmentBase((names as string[]).sort(compareNames).join("_"));
+      const base = rustModuleSegmentName((names as string[]).sort(compareNames).join("_"));
       return { component, base };
     })
     .filter((entry): entry is NonNullable<typeof entry> => entry !== undefined);

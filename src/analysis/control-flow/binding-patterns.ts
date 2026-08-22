@@ -1,5 +1,5 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import { isDenseDataArray } from "../../policy/model/closed-data.js";
+import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import {
   BindingElement_IsRest,
   BindingElement_PropertyName,
@@ -13,7 +13,7 @@ import {
   Node_Initializer,
   Node_Name,
 } from "@tsonic/target-api/source";
-import { rustTargetTypeRefEquals } from "../../policy/types/equality.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import {
   rustBindingProjectionFactKey,
@@ -31,7 +31,7 @@ import {
   rustStructuralObjectCarrierValue,
   rustStructuralObjectTargetType,
   rustTupleTargetType,
-} from "../../policy/types/target-types.js";
+} from "../../target-model/types/index.js";
 import type { RustAnalysisContext } from "../program/context.js";
 import type {
   RustSourceObjectField,

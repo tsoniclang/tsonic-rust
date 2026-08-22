@@ -1,7 +1,7 @@
-import { closedMetadataEquals } from "../../policy/model/closed-data.js";
-import { defineRustPlanKey } from "../../policy/model/keys.js";
-import { rustTargetTypeRefEquals } from "../../policy/types/equality.js";
-import type { RustPlanKey } from "../../policy/model/keys.js";
+import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
+import { defineRustPlanKey } from "../../target-model/facts/keys.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import type { RustPlanKey } from "../../target-model/facts/keys.js";
 import type {
   RustBindingProjectionFact,
   RustContextualValueConversionFact,

@@ -34,7 +34,7 @@ import {
   isRustStringCarrier,
   rustOptionElementCarrier,
   rustSourcePrimitiveTargetType,
-} from "../../policy/types/target-types.js";
+} from "../../target-model/types/index.js";
 import {
   rustModuleBindingFactKey,
   rustMutatedBindingFactKey,
@@ -46,12 +46,12 @@ import {
   rustTargetOperationResultCarrier,
 } from "../facts/keys.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
-import { parseSourceBigIntLiteral } from "../../policy/types/literals.js";
+import { parseSourceBigIntLiteral } from "../../target-model/syntax/literals.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
-import { rustSelectedOperationKey } from "../../policy/model/selections.js";
+import { rustSelectedOperationKey } from "../../target-model/facts/selections.js";
 import { rustTargetOperationSupportsAssignment, rustTargetOperationText } from "../facts/target-operation.js";
-import { rustTargetTypeRefEquals } from "../../policy/types/equality.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { selectedSourceLiteralIsRepresentable } from "../../policy/types/selected-numeric-literal.js";
 import { setCarrierFact, setRustOperationFact } from "./project-calls.js";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";

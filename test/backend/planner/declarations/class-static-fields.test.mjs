@@ -178,7 +178,7 @@ export function invalid(): () => void {
   });
   assert.equal(unsupportedDefault.result.artifacts.length, 0);
   assert.ok(unsupportedDefault.result.diagnostics.some((diagnostic) =>
-    diagnostic.code === "RUST_UNSUPPORTED_AST" &&
+    diagnostic.code === "RUST_CALLABLE_CONTRACT_CLOSURE_REJECTED" &&
     diagnostic.message.includes("requires an exact Rust Default implementation")));
 });
 

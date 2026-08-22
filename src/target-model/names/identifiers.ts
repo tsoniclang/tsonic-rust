@@ -50,6 +50,29 @@ export function rustScreamingSnakeIdentifier(sourceName: string): string {
   return rustTargetIdentifier(/^[0-9]/u.test(value) ? `VALUE_${value}` : value);
 }
 
+export function rustModuleSegmentName(sourceName: string): string {
+  let value = sourceName
+    .replace(/([a-z0-9])([A-Z])/gu, "$1_$2")
+    .replace(/([A-Z]+)([A-Z][a-z])/gu, "$1_$2")
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/gu, "_")
+    .replace(/_+/gu, "_")
+    .replace(/^_+|_+$/gu, "") || "module";
+  if (
+    /^[0-9]/u.test(value) ||
+    value === "main" ||
+    value === "lib" ||
+    value === "mod" ||
+    value.startsWith("__tsonic") ||
+    rustReservedIdentifiers.has(value)
+  ) {
+    value = `${value}_module`;
+  }
+  return value.length <= 120
+    ? value
+    : value.slice(0, 120).replace(/_+$/u, "");
+}
+
 function rustIdentifierWords(sourceName: string): string[] {
   const value = sourceName.startsWith("r#") ? sourceName.slice(2) : sourceName;
   return value

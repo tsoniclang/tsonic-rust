@@ -8,7 +8,7 @@ import type {
   ProviderModuleResolution,
   SourceDeclarationProvider,
 } from "@tsonic/tsts";
-import { materializeClosedMetadata } from "../../policy/model/closed-data.js";
+import { materializeClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import type { RustTargetConfiguration } from "../../target-model/configuration/model.js";
 import type {
   RustProviderModuleDefinition,

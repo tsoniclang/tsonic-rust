@@ -2,8 +2,8 @@ import { asNode } from "../../evidence/selected-source.js";
 import { denseDefined } from "./project.js";
 import { resolveRustCallableEvidence } from "./source.js";
 import { resolveRustTargetType } from "./target.js";
-import { rustOptionTargetType, rustSourcePrimitiveTargetType, rustStringTargetType } from "../target-types.js";
-import { rustTargetTypeRefEquals } from "../equality.js";
+import { rustOptionTargetType, rustSourcePrimitiveTargetType, rustStringTargetType } from "../../../target-model/types/index.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { sourceNodesEqual } from "@tsonic/target-api/source";
 import { sourcePrimitiveFactKey } from "@tsonic/tsts";
 import type {

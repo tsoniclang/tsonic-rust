@@ -1,10 +1,11 @@
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustProjectTypeDefinition } from "../../../policy/types/project-types.js";
-import { rustPascalCaseIdentifier } from "../../../policy/names/identifiers.js";
-import type { RustSourceFileOutputIdentity } from "../names/source-output-identities.js";
+import type { RustProjectTypeDefinition } from "../../../analysis/project-types/type-policy.js";
+import { rustPascalCaseIdentifier } from "../../../target-model/names/identifiers.js";
 import type { RustPlanningContext } from "../context.js";
 import type { RustSourcePackageComponentPlan } from "./source-package-components.js";
-import type { RustErrorDomain } from "../../target-ast/nodes.js";
+import type {
+  RustErrorDomain,
+} from "../../../target-model/operations/error-boundary.js";
 
 export interface RustExternalSourcePackageError {
   readonly componentId: string;
@@ -58,16 +59,15 @@ export type RustProgramErrorRoute =
 
 export function planRustSourcePackageErrors(
   input: RustPlanningContext,
-  identitiesByFileName: ReadonlyMap<string, RustSourceFileOutputIdentity>,
   components: readonly RustSourcePackageComponentPlan[],
 ): {
   readonly plan?: RustSourcePackageErrorPlan;
   readonly diagnostics: readonly TargetDiagnostic[];
 } {
   const diagnostics: TargetDiagnostic[] = [];
-  const componentIdByFileName = new Map([...identitiesByFileName].map(
-    ([fileName, identity]) => [fileName, identity.componentId] as const,
-  ));
+  const componentIdByFileName = new Map(components.flatMap((component) =>
+    [...component.sourceFileNames].map((fileName) =>
+      [fileName, component.componentId] as const)));
   const componentIdByDefinition = new Map<RustProjectTypeDefinition, string>();
   const definitionsByComponentId = new Map<string, RustProjectTypeDefinition[]>();
   for (const definition of input.program.projectTypes.programErrorDefinitions) {

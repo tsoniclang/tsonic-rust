@@ -5,7 +5,7 @@ import {
   rustJsErrorTargetType,
   rustOptionTargetType,
   rustStringTargetType,
-} from "./target-types.js";
+} from "../../target-model/types/index.js";
 import type { RustSourceProfileRegistry } from "./source-profile.js";
 
 export interface RustExternalProjectField {

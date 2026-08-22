@@ -3,7 +3,7 @@ import {
   isRustProgramErrorCarrier,
   isRustNumericCarrier,
   rustOptionElementCarrier,
-} from "../../../policy/types/target-types.js";
+} from "../../../target-model/types/index.js";
 import {
   rustTargetOperationResultCarrier,
   rustTargetOperationFactKey,
@@ -17,10 +17,10 @@ import { asNode } from "../../../policy/evidence/selected-source.js";
 import { selectRustFlowReadProjection } from "../../../policy/types/value-carrier-reconciliation.js";
 import { recordRustFlowReadProjection } from "../../facts/value-carrier-queries.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
-import { rustCallableProtocol, rustStructuralObjectCarrierValue } from "../../../policy/types/target-types.js";
-import { rustRuntimeCarrierKey, rustSelectedOperationKey } from "../../../policy/model/selections.js";
+import { rustCallableProtocol, rustStructuralObjectCarrierValue } from "../../../target-model/types/index.js";
+import { rustRuntimeCarrierKey, rustSelectedOperationKey } from "../../../target-model/facts/selections.js";
 import { rustTargetOperationText } from "../../facts/target-operation.js";
-import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectedSourceLiteralIsRepresentable, selectedSourceNumericLiteralOperationId } from "../../../policy/types/selected-numeric-literal.js";
 import { selectJsSurfaceOperation } from "../../../policy/operations/js-surface.js";
 import { selectRustOptionalChain } from "../../../policy/operations/optional-chains.js";

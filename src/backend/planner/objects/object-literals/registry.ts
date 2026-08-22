@@ -7,7 +7,7 @@ import {
 } from "../polymorphism/model.js";
 import { allocateMemberFieldName, planContractImplementation } from "./contracts.js";
 import { allocateRustSyntheticTypeName } from "../../names/synthetic.js";
-import { rustCallableProtocol, rustSourceTypeCarrierValue } from "../../../../policy/types/target-types.js";
+import { rustCallableProtocol, rustSourceTypeCarrierValue } from "../../../../target-model/types/index.js";
 import { rustFallibleFactKey, rustObjectLiteralMethodAdapterFactKey } from "../../../../analysis/facts/keys.js";
 import { rustLintAttributes } from "../../../target-ast/normalization/lint-policy.js";
 import { rustProjectInterfaceContracts } from "../../../../analysis/project-types/type-policy.js";

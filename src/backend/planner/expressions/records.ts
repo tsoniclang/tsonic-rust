@@ -18,7 +18,7 @@ import {
   rustOptionElementCarrier,
   rustSourceTypeCarrierValue,
   rustStructuralMethodStorageCarrier,
-} from "../../../policy/types/target-types.js";
+} from "../../../target-model/types/index.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { diagnosticInput, sourceTypePath } from "../program/plan-context.js";
 import { expressionCarrier, requireExpressionCarrier, rustOperationFact } from "./fundamentals.js";
@@ -28,12 +28,12 @@ import {
   SpreadAssignment_Expression,
 } from "@tsonic/target-api/source";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
-import { parseSourceIntegerLiteral } from "../../../policy/types/literals.js";
+import { parseSourceIntegerLiteral } from "../../../target-model/syntax/literals.js";
 import { planExpression } from "./entry.js";
 import { planRustBoundProjectMethodCallable } from "./properties.js";
 import { rustObjectLiteralRequiresDispatchImplementation } from "../objects/object-literal-implementations.js";
 import { rustProjectStateMarker, rustProjectStateType } from "../objects/polymorphism/names.js";
-import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { tupleRustClosureArguments } from "../../target-ast/expressions.js";
 import type { Node } from "@tsonic/tsts";

@@ -1,7 +1,7 @@
 import { isRustCVariadicArgumentCarrier } from "../c-variadic.js";
 import { isRustFinalizedArrayInput, isRustFinalizedSliceInput, isRustFinalizedSourceInput, isRustFinalizedTaggedArrayInput, sourceInput } from "./conversions.js";
-import { rustSliceRefTargetType, rustStringTargetType } from "../../../policy/types/target-types.js";
-import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
+import { rustSliceRefTargetType, rustStringTargetType } from "../../../target-model/types/index.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectRustSourceValueConversion } from "../../../policy/conversions/selection.js";
 import type {
   RustArgumentMode,

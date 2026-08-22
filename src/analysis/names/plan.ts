@@ -1,11 +1,11 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { SourceProgramNavigation } from "@tsonic/target-api/source";
-import type { RustNamePlan } from "../../policy/names/model.js";
+import type { RustNamePlan } from "../../target-model/names/model.js";
 import {
   rustPascalCaseIdentifier,
   rustScreamingSnakeIdentifier,
   rustSnakeCaseIdentifier,
-} from "../../policy/names/identifiers.js";
+} from "../../target-model/names/identifiers.js";
 import { Node_Initializer } from "@tsonic/target-api/source";
 import type { RustRuntimeValueUsePlan } from "../program/runtime-value-uses.js";
 

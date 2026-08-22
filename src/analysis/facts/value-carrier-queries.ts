@@ -2,8 +2,8 @@ import type { ExtensionFactSubject } from "@tsonic/tsts";
 import type {
   RustPlanQueries,
   RustPlanWriter,
-} from "../../policy/model/selections.js";
-import { rustTargetTypeRefEquals } from "../../policy/types/equality.js";
+} from "../../target-model/facts/selections.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type {
   RustAppliedValueCarrierReconciliation,

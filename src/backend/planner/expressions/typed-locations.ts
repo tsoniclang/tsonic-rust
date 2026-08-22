@@ -7,7 +7,7 @@ import {
   ElementAccessExpression_ArgumentExpression,
   Node_Expression,
 } from "@tsonic/target-api/source";
-import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type {
   RustTargetOperationFact,
@@ -23,7 +23,7 @@ import {
 import {
   isRustCopyCarrier,
   rustCarrierSupportsClone,
-} from "../../../policy/types/target-types.js";
+} from "../../../target-model/types/index.js";
 import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import {
@@ -49,7 +49,6 @@ import {
   writeRustStoredObjectField,
 } from "../objects/project-storage.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { rustSourceReferenceCanMove } from "../../../policy/ownership/source-value-lifetime.js";
 
 export type RustExpressionPlanner = (
   node: Node,
@@ -157,7 +156,7 @@ export function planRustValueRead(
 ): RustExpr {
   const carrier = context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
   return rustReadRequiresClone(carrier) &&
-      !rustSourceReferenceCanMove(node, context)
+      !context.input.program.valueLifetimes.canMove(node)
     ? { kind: "method-call", receiver: value, method: "clone", args: [] }
     : value;
 }
@@ -322,7 +321,7 @@ function rustCapturedBinding(
   context: RustPlanContext,
 ): import("../program/plan-context.js").RustCapturedBinding | undefined {
   const declaration = context.input.program.facts.getFact(node, rustSourceBindingFactKey)
-    ?.sourceDeclaration ?? context.input.program.source.navigation.sourceReferenceFor(node)?.declaration;
+    ?.sourceDeclaration ?? context.input.program.sourceNavigation.sourceReferenceFor(node)?.declaration;
   return declaration === undefined
     ? undefined
     : rustCapturedBindingForDeclaration(declaration, context);

@@ -1,13 +1,13 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
-import { closedMetadataKey, isDenseDataArray } from "../../policy/model/closed-data.js";
-import { allocateRustGeneratedName } from "../../policy/names/generated.js";
-import type { RustNamePlan } from "../../policy/names/model.js";
-import { rustTargetTypeRefEquals } from "../../policy/types/equality.js";
+import { closedMetadataKey, isDenseDataArray } from "../../target-model/metadata/closed-data.js";
+import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
+import type { RustNamePlan } from "../../target-model/names/model.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import {
   rustTargetTypeParameterNames,
   substituteRustTargetTypeParameters,
-} from "../../policy/types/target-types.js";
+} from "../../target-model/types/index.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
 
 export interface RustSourceCallableSpecializationVariant {

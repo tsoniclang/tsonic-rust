@@ -1,4 +1,3 @@
-import type { Node } from "@tsonic/tsts";
 import type {
   TargetArtifactContract,
   TargetArtifactDependency,
@@ -8,80 +7,22 @@ import type {
   RustType,
   RustTypeParameter,
 } from "../../target-ast/nodes.js";
-import { closedMetadataKey } from "../../../policy/model/closed-data.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 
 export type RustArtifactFacet =
-  | "source-callable-surface"
   | "source-file-implementation"
   | "source-file-public-surface";
 
-export interface RustSourceCallableContract {
-  readonly sourceDeclaration: Node;
-  readonly sourceTypeArguments?: readonly TargetTypeRef[];
-  readonly name: string;
-  readonly isAsync: boolean;
-  readonly errorType?: RustType;
-  readonly typeParameters: readonly RustTypeParameter[];
-  readonly parameters: readonly RustFunctionParam[];
-  readonly returnType?: RustType;
+export interface RustArtifactSnapshot {
+  readonly kind: "source-file";
+  readonly owner: string;
 }
-
-export type RustArtifactSnapshot =
-  | {
-      readonly kind: "source-callable";
-      readonly contract: RustSourceCallableContract;
-    }
-  | {
-      readonly kind: "source-file";
-      readonly owner: string;
-    };
 
 export interface RustArtifactContractCandidate {
   readonly owner: string;
   readonly contract: TargetArtifactContract<RustArtifactFacet>;
   readonly dependencies: readonly TargetArtifactDependency<RustArtifactFacet>[];
   readonly artifact: RustArtifactSnapshot;
-}
-
-export function rustSourceCallableContractCandidate(
-  owner: string,
-  callable: RustSourceCallableContract,
-): RustArtifactContractCandidate {
-  return {
-    owner,
-    contract: {
-      facets: [{
-        facet: "source-callable-surface",
-        value: rustSourceCallableSurface(callable),
-      }],
-    },
-    dependencies: Object.freeze([]),
-    artifact: Object.freeze({
-      kind: "source-callable",
-      contract: callable,
-    }),
-  };
-}
-
-export function rustSourceCallableSurface(
-  callable: RustSourceCallableContract,
-): string {
-  return rustFunctionSurface({
-    name: callable.name,
-    isAsync: callable.isAsync,
-    ...(callable.errorType === undefined ? {} : { errorType: callable.errorType }),
-    typeParameters: callable.typeParameters,
-    parameters: callable.parameters,
-    identityParts: [
-      callable.sourceTypeArguments === undefined
-        ? "open-source-callable"
-        : `closed-source-callable:${closedMetadataKey(callable.sourceTypeArguments)}`,
-    ],
-    ...(callable.returnType === undefined
-      ? {}
-      : { returnType: callable.returnType }),
-  });
 }
 
 export function rustFunctionSurface(
@@ -92,7 +33,6 @@ export function rustFunctionSurface(
     readonly typeParameters: readonly RustTypeParameter[];
     readonly parameters: readonly RustFunctionParam[];
     readonly returnType?: RustType;
-    readonly identityParts?: readonly string[];
   },
 ): string {
   return encodeRustContractParts([
@@ -102,7 +42,6 @@ export function rustFunctionSurface(
     callable.errorType === undefined
       ? "infallible"
       : encodeRustContractParts(["fallible", closedMetadataKey(callable.errorType)]),
-    ...(callable.identityParts ?? []),
     ...callable.typeParameters.map((parameter) =>
       encodeRustContractParts([
         "type-parameter",

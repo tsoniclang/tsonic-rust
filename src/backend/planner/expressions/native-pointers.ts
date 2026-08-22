@@ -3,7 +3,7 @@ import type {
 } from "@tsonic/tsts";
 import {
   rustTargetTypeRefEquals,
-} from "../../../policy/types/equality.js";
+} from "../../../target-model/types/equality.js";
 import type {
   RustTargetOperationFact,
 } from "../../../analysis/facts/keys.js";

@@ -5,7 +5,7 @@ import { selectJsSurfaceOperation } from "../../../dist/policy/operations/js-sur
 import {
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
-} from "../../../dist/policy/types/target-types.js";
+} from "../../../dist/target-model/types/index.js";
 import {
   acmeTestingPackage,
   artifactText,

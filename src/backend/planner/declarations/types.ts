@@ -4,7 +4,7 @@ import {
   isValidRustIdentifier,
   rustProjectTypeHasPublicImplementationAbi,
 } from "../program/plan-context.js";
-import { isRustIntegerCarrier, isRustStringCarrier, rustCarrierSupportsClone } from "../../../policy/types/target-types.js";
+import { isRustIntegerCarrier, isRustStringCarrier, rustCarrierSupportsClone } from "../../../target-model/types/index.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { Node_Type } from "@tsonic/target-api/source";
 import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
@@ -50,7 +50,7 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
       ));
       return undefined;
     }
-    const constant = context.input.program.analysis.getEnumMemberConstant(member);
+    const constant = context.input.program.enumMemberConstants.forMember(member);
     const value = constant?.value;
     if (typeof value !== "number" || !Number.isInteger(value)) {
       context.diagnostics.push(missingFactDiagnostic(

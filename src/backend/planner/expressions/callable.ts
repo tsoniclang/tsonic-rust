@@ -13,7 +13,7 @@ import {
   isRustUnitCarrier,
   rustCallableProtocol,
   rustClosureProtocol,
-} from "../../../policy/types/target-types.js";
+} from "../../../target-model/types/index.js";
 import {
   KindArrayBindingPattern,
   KindFunctionExpression,
@@ -41,7 +41,7 @@ import { planExpression } from "./entry.js";
 import { planRustBindingPattern } from "../bindings/patterns.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import { rustOptionDefaultValue } from "../option-default.js";
-import { rustTargetTypeRefEquals } from "../../../policy/types/equality.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
@@ -289,6 +289,7 @@ export function planCallableExpression(
   }
   const closureContext: RustPlanContext = {
     ...context,
+    callableDeclaration: node,
     controlFlow: { nextLoopId: 0 },
     controlTargets: undefined,
     completionBoundary: undefined,
@@ -304,7 +305,7 @@ export function planCallableExpression(
       capture.carrier,
       nativeClosureProtocol === undefined ? ["clone", "static"] : ["clone"],
       capture.reference,
-      context,
+      closureContext,
     )) {
       return undefined;
     }

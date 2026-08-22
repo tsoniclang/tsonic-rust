@@ -23,20 +23,20 @@ import {
   rustCallableTargetType,
   rustSourcePrimitiveTargetType,
   rustUnitTargetType,
-} from "../../policy/types/target-types.js";
+} from "../../target-model/types/index.js";
 import { appendRustDiagnostic, rustOperationContext, rustResolutionContext } from "../program/walk.js";
 import { applySelectedProjectSourceCall, applySelectedSourceCallArguments, recordTargetOperation, setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
 import { declarationIsModuleScoped } from "../callables/closures.js";
-import { isDenseDataArray } from "../../policy/model/closed-data.js";
+import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { prepareRustDeferredCheckedCall } from "../operations/provider/index.js";
 import { readRustSourceNativePointerOperation, readRustSourceSafetyBuilder, readRustSourceUnsafeContext } from "../../policy/safety/source-explicit-safety.js";
 import { recordExportAssignmentFacts, resolveTypeNodeCarrier } from "../control-flow/statements.js";
 import { resolveExpressionCarrier } from "./carriers.js";
 import { resolveRustExactNullishValueCarrier, resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { rustPolicyTargetDiagnostic } from "../../policy/operations/contracts.js";
-import { rustRuntimeCarrierKey, rustSelectedCallKey } from "../../policy/model/selections.js";
+import { rustRuntimeCarrierKey, rustSelectedCallKey } from "../../target-model/facts/selections.js";
 import { rustSourceParameterContractCarrier } from "../../policy/ownership/source-callable-abi.js";
-import { rustTargetTypeRefEquals } from "../../policy/types/equality.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { tryFlowMarkerCall } from "../declarations/types-and-bindings.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";

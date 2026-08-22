@@ -1,7 +1,7 @@
 import { asRecord, requireExactKeys, requireRustIdentifier, requireRustPath, validateCarrier, validateValueConversion } from "./carriers.js";
 import { isRustFallibleErrorBoundary } from "../../../target-model/operations/error-boundary.js";
 import { rustProviderOperationFormAcceptsTargetTypeArguments, rustProviderOperationFormContractViolation } from "../../../policy/operations/forms.js";
-import { rustTargetTypeParameterNames, isRustUnitCarrier } from "../../../policy/types/target-types.js";
+import { rustTargetTypeParameterNames, isRustUnitCarrier } from "../../../target-model/types/index.js";
 import { validateOperationForm } from "./forms.js";
 import type { ExportRecord, Fail, MemberRecord, SignatureRecord } from "./model.js";
 import type { RustProviderOperationForm } from "../../../target-model/operations/model.js";
