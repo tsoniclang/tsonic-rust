@@ -183,3 +183,20 @@ form), and cargo crate contributions. Concrete names live only in row data;
 the generic matcher contains no per-name branching. See
 `src/public/provider.ts` and the `@acme/*` fixtures under
 `test/helpers/rust-session.mjs`.
+
+Provider evaluation is observable by default. A provider may add
+`evaluation: "pure"` only when repeating the selected operation with stable
+inputs has no observable difference. This lets Rust analysis safely select
+representations such as evaluating an immutable collection bound once:
+
+```ts
+for (let index = 0; index < values.size; index++) {
+  consume(index);
+}
+```
+
+Purity is independent of fallibility and safety, and cannot be combined with
+a constructor, source callback, setter, or any target input declared writable.
+The provider contract is retained in the finalized operation ABI; planners
+consume that ABI rather than inferring purity from a member name or emitted
+Rust path.

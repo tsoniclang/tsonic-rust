@@ -26,6 +26,8 @@ export function rustPostCheckOperationKind(
 // spelling.
 export type RustArgumentMode = "value" | "ref" | "mut-ref";
 
+export type RustOperationEvaluationEffect = "observable" | "pure";
+
 export type RustProviderTypeRequirement =
   | "clone"
   | "copy"
@@ -263,6 +265,7 @@ export interface RustProviderOperationTemplate<
   readonly compileTimeSourceArgumentIndexes?: readonly number[];
   readonly isAsync: boolean;
   readonly isFallible: boolean;
+  readonly evaluation?: "pure";
   readonly errorBoundary: RustErrorBoundary;
   readonly errorCarrier?: TargetTypeRef;
   readonly isUnsafe?: boolean;

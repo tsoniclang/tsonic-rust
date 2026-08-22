@@ -475,6 +475,7 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
       ...(selectedParameterCarriers === undefined ? {} : { parameterCarriers: selectedParameterCarriers }),
       isAsync: false,
       isFallible: row.fallible === true,
+      ...(row.shape.evaluation === undefined ? {} : { evaluation: row.shape.evaluation }),
       errorBoundary: row.fallible === true ? "provider-native" : "none",
       ...(row.fallible === true ? { errorCarrier: rustJsErrorTargetType() } : {}),
       ...(discardResult || row.shape.resultConversion === undefined

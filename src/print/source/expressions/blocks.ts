@@ -333,7 +333,8 @@ export function printRustLetInitializer(
       ? rustFormatWidth
       : rustFormatWidth - 4;
     const continuationPacksMoreSource =
-      !continuation.includes("\n") && compactContinuationWidth <= compactContinuationLimit &&
+      !initializerHasNestedCollectionInvocation &&
+        !continuation.includes("\n") && compactContinuationWidth <= compactContinuationLimit &&
         !bindingLineOwnsMultiSelectorChainBase ||
       longBindingPrefix &&
         (initializerHasNestedCollectionInvocation ||

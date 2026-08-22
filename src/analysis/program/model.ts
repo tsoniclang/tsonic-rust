@@ -31,6 +31,9 @@ import type {
   RustSourcePackageComponentClassifications,
 } from "./source-package-components.js";
 import type {
+  RustCountedLoopRepresentationPlan,
+} from "../control-flow/counted-loop-representations.js";
+import type {
   RustProviderSemantics,
 } from "../../providers/packages/model.js";
 
@@ -73,6 +76,7 @@ export interface RustTargetProgram {
   readonly enumMemberConstants: RustEnumMemberConstantIndex;
   readonly sourcePackageFacades: RustSourcePackageFacadeClassifications;
   readonly sourcePackageComponents: RustSourcePackageComponentClassifications;
+  readonly countedLoops: RustCountedLoopRepresentationPlan;
 }
 
 export type AnalyzeRustTargetProgramResult = TargetStageResult<RustTargetProgram>;

@@ -526,7 +526,12 @@ export function planProjectClassConstructor(
       ...applyFallibleShape(
         { statements },
         fallible
-          ? { fallible: true, hasReturnValue: true, errorType: constructorErrorType! }
+          ? {
+              fallible: true,
+              hasReturnValue: true,
+              errorType: constructorErrorType!,
+              inferErrorTypeFromReturnType: true,
+            }
           : { fallible: false, hasReturnValue: true },
       ),
     },
@@ -630,7 +635,12 @@ export function planProjectClassConstructor(
         },
       ],
     }, fallible
-      ? { fallible: true, hasReturnValue: true, errorType: constructorErrorType! }
+      ? {
+          fallible: true,
+          hasReturnValue: true,
+          errorType: constructorErrorType!,
+          inferErrorTypeFromReturnType: true,
+        }
       : { fallible: false, hasReturnValue: true }),
   };
   return { initialize, construct };

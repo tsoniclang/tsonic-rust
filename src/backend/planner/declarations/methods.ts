@@ -272,6 +272,7 @@ export function planProjectMethod(
                   fallible: true,
                   hasReturnValue: !isRustUnitCarrier(generatorFact.returnType),
                   errorType: rustErrorType(bodyErrorBoundary!),
+                  inferErrorTypeFromReturnType: false,
                 },
               ),
             }],
@@ -288,6 +289,7 @@ export function planProjectMethod(
           fallible: true,
           hasReturnValue: returnType !== undefined,
           errorType: rustErrorType(callableErrorBoundary!),
+          inferErrorTypeFromReturnType: true,
         }
       : { fallible: false, hasReturnValue: returnType !== undefined },
   );

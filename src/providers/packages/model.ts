@@ -48,6 +48,7 @@ interface RustProviderOperationDefinitionBase<
   readonly typeRequirements?: readonly RustProviderTypeParameterRequirement[];
   readonly targetTypeArguments?: readonly TargetTypeRef[];
   readonly resultConversion?: RustValueConversion;
+  readonly evaluation?: "pure";
   // Async provider operations produce future carriers that must be awaited.
   readonly isAsync?: boolean;
   // Exact target invocation safety. This does not grant a lexical unsafe

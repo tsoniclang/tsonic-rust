@@ -19,6 +19,7 @@ import {
 } from "@tsonic/target-api/source";
 import {
   planRustMutableProjectReceiver,
+  planRustNonConsumingValue,
   planRustPromotedStorageLocation,
   planRustPromotedStorageWrite,
 } from "../expressions/typed-locations.js";
@@ -27,7 +28,11 @@ import {
 } from "../../../analysis/facts/keys.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { diagnosticInput } from "../program/plan-context.js";
-import { isRustAssignmentOperator } from "../../../target-model/syntax/tokens.js";
+import {
+  isRustAssignmentOperator,
+  rustStringPushMethod,
+  rustStringPushStrMethod,
+} from "../../../target-model/syntax/tokens.js";
 import { isRustStringCarrier } from "../../../target-model/types/index.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planExpression, sourceFieldSelectedOperationMatches, sourceUnionFieldSelectedOperationMatches } from "../expressions/index.js";
@@ -553,17 +558,13 @@ export function planExpressionAsStatement(
         );
       }
       if (operator === "+=" && isRustStringCarrier(fact.resultCarrier)) {
-        if (fact.writeStrategy === "in-place-string-append") {
-          return [{
-            kind: "expr",
-            expr: {
-              kind: "method-call",
-              receiver: target,
-              receiverMode: "mut-ref",
-              method: "push_str",
-              args: [{ kind: "reference", expr: value, mutable: false }],
-            },
-          }];
+        if (fact.writeStrategy === "in-place-string-append-parts" ||
+          fact.writeStrategy === "in-place-string-append-value") {
+          return planInPlaceStringAppend(
+            target,
+            planRustNonConsumingValue(valueNode, value, context),
+            fact.writeStrategy === "in-place-string-append-parts",
+          );
         }
         if (context.syntheticNames === undefined) {
           context.diagnostics.push(missingFactDiagnostic(
@@ -662,4 +663,52 @@ export function planExpressionAsStatement(
   return planned === undefined
     ? undefined
     : [{ kind: "let", name: "_", mutable: false, init: planned }];
+}
+
+function planInPlaceStringAppend(
+  target: RustExpr,
+  value: RustExpr,
+  flattenParts: boolean,
+): readonly RustStmt[] {
+  const parts = flattenParts && value.kind === "string-concat"
+    ? value.parts
+    : [value];
+  return parts.map((part) => {
+    const character = (part.kind === "string-literal" ||
+        part.kind === "str-literal")
+      ? singleUnicodeScalar(part.value)
+      : undefined;
+    return {
+      kind: "expr" as const,
+      expr: {
+        kind: "method-call" as const,
+        receiver: target,
+        receiverMode: "mut-ref" as const,
+        method: character === undefined
+          ? rustStringPushStrMethod
+          : rustStringPushMethod,
+        args: [character === undefined
+          ? planStringAppendArgument(part)
+          : { kind: "char-literal" as const, value: character }],
+      },
+    };
+  });
+}
+
+function singleUnicodeScalar(value: string): string | undefined {
+  const characters = Array.from(value);
+  return characters.length === 1 ? characters[0] : undefined;
+}
+
+function planStringAppendArgument(value: RustExpr): RustExpr {
+  if (value.kind === "owned-string-from-borrowed-str") {
+    return value.expression;
+  }
+  if (value.kind === "string-literal") {
+    return { kind: "str-literal", value: value.value };
+  }
+  if (value.kind === "str-literal" || value.kind === "reference") {
+    return value;
+  }
+  return { kind: "reference", expr: value };
 }

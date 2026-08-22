@@ -229,10 +229,13 @@ export function main(): void {}
   });
 
   assert.deepEqual(result.diagnostics, []);
+  const moduleSource = artifactText(result, "src/index.rs");
   assert.match(
-    artifactText(result, "src/index.rs"),
+    moduleSource,
     /pub fn module_init\(\) -> Result<\(\), rt::TsonicError>[\s\S]*?json_parse\("1"\)\?/u,
   );
+  assert.match(moduleSource, /Ok\(\(\)\)/u);
+  assert.doesNotMatch(moduleSource, /Ok::<\(\), rt::TsonicError>\(\(\)\)/u);
   assert.match(
     artifactText(result, "src/main.rs"),
     /fallible_module_proof::initialize\(\)\?;/u,

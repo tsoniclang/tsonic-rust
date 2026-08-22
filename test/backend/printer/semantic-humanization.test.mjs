@@ -359,3 +359,266 @@ export function forwards(): int32 { return risky(false); }
   assert.match(output, /risky\(false\)/u);
   assert.doesNotMatch(output, /ModuleCell|Callable|thread_local!/u);
 });
+
+test("sealed lifetime, append, and counted-loop plans remove only proven Rust costs", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    target: {
+      id: "rust",
+      options: { outputType: "bin", crateName: "sealed_human_performance" },
+    },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+function inspect(value: string): number { return value.length; }
+
+function returnAfterRead(value: string): string {
+  void inspect(value);
+  return value;
+}
+
+function returnThroughAssertion(value: string): string {
+  void inspect(value);
+  return (value as string);
+}
+
+function returnAcrossFinally(value: string): string {
+  try {
+    return value;
+  } finally {
+    void value.length;
+  }
+}
+
+function returnAcrossCatch(value: string): string {
+  try {
+    return value;
+  } catch {
+    return value;
+  }
+}
+
+function returnAcrossArrayIteration(values: string[]): string[] {
+  for (const value of values) {
+    if (value.length > 0) return values;
+  }
+  return values;
+}
+
+function returnAcrossSwitch(value: string, fallback: string): string {
+  switch (value) {
+    case "x": return value;
+    default: return fallback;
+  }
+}
+
+function appendPart(part: string): string {
+  let output = "";
+  output += "/";
+  output += "'";
+  output += "🙂";
+  output += " " + part;
+  return output;
+}
+
+function failPart(): string {
+  throw new Error("append failure");
+}
+
+function appendFailure(): string {
+  let output = "base";
+  try {
+    output += "prefix" + failPart();
+  } catch {}
+  return output;
+}
+
+function combine(values: string[]): string {
+  let output = "";
+  for (let index = 0; index < values.length; index++) {
+    output += values[index]!;
+  }
+  return output;
+}
+
+function mapOrdinalTotal(values: Map<string, string>): number {
+  let total = 0;
+  for (let index = 0; index < values.size; index++) {
+    total += index;
+  }
+  return total;
+}
+
+function scalarBoundTotal(limit: int32): number {
+  let total = 0;
+  for (let index = 0; index < limit; index++) {
+    total += index;
+    void inspect("x");
+  }
+  return total;
+}
+
+function mutatingArrayBound(values: string[]): number {
+  let total = 0;
+  for (let index = 0; index < values.length; index++) {
+    total += index;
+    if (index === 0) values.push("added");
+  }
+  return total;
+}
+
+function aliasedArrayBound(values: string[]): number {
+  const alias = values;
+  let total = 0;
+  for (let index = 0; index < values.length; index++) {
+    total += index;
+    if (index === 0) alias.push("added");
+  }
+  return total;
+}
+
+let externallyAliasedValues: string[] = [];
+
+function growExternallyAliasedValues(): void {
+  externallyAliasedValues.push("added");
+}
+
+function externallyMutatedArrayBound(values: string[]): number {
+  let total = 0;
+  for (let index = 0; index < values.length; index++) {
+    total += index;
+    if (index === 0) growExternallyAliasedValues();
+  }
+  return total;
+}
+
+function selfAppend(value: string): string {
+  value += value;
+  return value;
+}
+
+function unstableBound(limit: number): number {
+  let total = 0;
+  for (let index = 0; index < limit; index++) {
+    total += index;
+    limit -= 1;
+  }
+  return total;
+}
+
+export function main(): void {
+  const first = returnAfterRead("value");
+  const asserted = returnThroughAssertion("asserted");
+  const second = returnAcrossFinally("retained");
+  const caught = returnAcrossCatch("caught");
+  const iterated = returnAcrossArrayIteration(["iterated"]);
+  const switched = returnAcrossSwitch("x", "fallback");
+  const appended = appendPart("a");
+  const failedAppend = appendFailure();
+  const combined = combine(["a", "b"]);
+  const values = new Map<string, string>();
+  values.set("a", "1");
+  values.set("b", "2");
+  const mapTotal = mapOrdinalTotal(values);
+  externallyAliasedValues = ["a"];
+  if (first !== "value" || asserted !== "asserted" ||
+      second !== "retained" || caught !== "caught" ||
+      iterated[0] !== "iterated" || switched !== "x" ||
+      appended !== "/'🙂 a" || failedAppend !== "base" || combined !== "ab" ||
+      mapTotal !== 1 || scalarBoundTotal(3) !== 3 ||
+      mutatingArrayBound(["a"]) !== 1 || aliasedArrayBound(["a"]) !== 1 ||
+      externallyMutatedArrayBound(externallyAliasedValues) !== 1 ||
+      selfAppend("x") !== "xx" || unstableBound(4) !== 1) {
+    throw new Error("sealed Rust humanization mismatch");
+  }
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const output = artifactText(result, "src/index.rs");
+  const returnAfterStart = output.indexOf("fn return_after_read(");
+  const assertionStart = output.indexOf("fn return_through_assertion(");
+  const finallyStart = output.indexOf("fn return_across_finally(");
+  const catchStart = output.indexOf("fn return_across_catch(");
+  const iterationReturnStart = output.indexOf("fn return_across_array_iteration(");
+  const switchReturnStart = output.indexOf("fn return_across_switch(");
+  const appendStart = output.indexOf("fn append_part(");
+  const appendFailureStart = output.indexOf("fn append_failure(");
+  const combineStart = output.indexOf("fn combine(");
+  const mapStart = output.indexOf("fn map_ordinal_total(");
+  const scalarStart = output.indexOf("fn scalar_bound_total(");
+  const mutatingStart = output.indexOf("fn mutating_array_bound(");
+  const aliasedStart = output.indexOf("fn aliased_array_bound(");
+  const externallyMutatedStart = output.indexOf("fn externally_mutated_array_bound(");
+  const selfAppendStart = output.indexOf("fn self_append(");
+  const unstableStart = output.indexOf("fn unstable_bound(");
+  assert.ok(returnAfterStart >= 0 && assertionStart > returnAfterStart &&
+    finallyStart > assertionStart &&
+    catchStart > finallyStart && iterationReturnStart > catchStart &&
+    switchReturnStart > iterationReturnStart && appendStart > switchReturnStart &&
+    appendFailureStart > appendStart);
+  assert.ok(combineStart > appendFailureStart && mapStart > combineStart);
+  assert.ok(scalarStart > mapStart && mutatingStart > scalarStart &&
+    aliasedStart > mutatingStart &&
+    externallyMutatedStart > aliasedStart && selfAppendStart > externallyMutatedStart &&
+    unstableStart > selfAppendStart);
+  const returnAfterOutput = output.slice(returnAfterStart, assertionStart);
+  const assertionOutput = output.slice(assertionStart, finallyStart);
+  const finallyOutput = output.slice(finallyStart, catchStart);
+  const catchOutput = output.slice(catchStart, iterationReturnStart);
+  const iterationReturnOutput = output.slice(iterationReturnStart, switchReturnStart);
+  const switchReturnOutput = output.slice(switchReturnStart, appendStart);
+  const appendOutput = output.slice(appendStart, appendFailureStart);
+  const appendFailureOutput = output.slice(appendFailureStart, combineStart);
+  const combineOutput = output.slice(combineStart, mapStart);
+  const mapOutput = output.slice(mapStart, scalarStart);
+  const scalarOutput = output.slice(scalarStart, mutatingStart);
+  const mutatingOutput = output.slice(mutatingStart, aliasedStart);
+  const aliasedOutput = output.slice(aliasedStart, externallyMutatedStart);
+  const externallyMutatedOutput = output.slice(externallyMutatedStart, selfAppendStart);
+  const selfAppendOutput = output.slice(selfAppendStart, unstableStart);
+  assert.match(returnAfterOutput, /inspect\(value\.clone\(\)\)/u);
+  assert.equal(returnAfterOutput.match(/value\.clone\(\)/gu)?.length, 1);
+  assert.match(assertionOutput, /inspect\(value\.clone\(\)\)/u);
+  assert.equal(assertionOutput.match(/value\.clone\(\)/gu)?.length, 1);
+  assert.match(finallyOutput, /value\.clone\(\)/u);
+  assert.match(catchOutput, /value\.clone\(\)/u);
+  assert.match(iterationReturnOutput, /values\.clone\(\)/u);
+  assert.match(switchReturnOutput, /value\.clone\(\)/u);
+  assert.match(output, /output\.push\('\/'\);/u);
+  assert.match(output, /output\.push\('\\''\);/u);
+  assert.match(output, /output\.push\('🙂'\);/u);
+  assert.match(output, /output\.push\(' '\);/u);
+  assert.match(output, /output\.push_str\(&/u);
+  assert.doesNotMatch(output, /push_str\(&String::from/u);
+  assert.doesNotMatch(appendOutput, /push_str\(&[^;]*\.clone\(\)/u);
+  assert.doesNotMatch(appendOutput, /output\.push_str\(&format!/u);
+  assert.match(appendFailureOutput, /output\.push_str\(&format!/u);
+  assert.doesNotMatch(appendFailureOutput, /output\.push_str\("prefix"\)/u);
+  assert.match(selfAppendOutput, /format!\("\{\}\{\}"/u);
+  assert.doesNotMatch(appendOutput, /output\.clone\(\)\s*\}/u);
+  assert.doesNotMatch(combineOutput, /Ok\(output\.clone\(\)\)/u);
+  assert.doesNotMatch(selfAppendOutput, /value\.clone\(\)\s*\}/u);
+  assert.match(
+    combineOutput,
+    /for index_range(?:_\d+)? in 0\.\.[^{]+\{\s*let index = index_range(?:_\d+)? as f64;/u,
+  );
+  assert.match(
+    mapOutput,
+    /for index_range(?:_\d+)? in 0\.\.[^{]+\{\s*let index = index_range(?:_\d+)? as f64;/u,
+  );
+  assert.match(
+    scalarOutput,
+    /for index_range(?:_\d+)? in 0\.\.[^{]+\{\s*let index = index_range(?:_\d+)? as f64;/u,
+  );
+  assert.doesNotMatch(combineOutput, /let mut index: f64 = 0\.0;\s*while index </u);
+  assert.match(mutatingOutput, /let mut index: f64 = 0\.0;[\s\S]*?while index </u);
+  assert.match(aliasedOutput, /let mut index: f64 = 0\.0;[\s\S]*?while index </u);
+  assert.match(externallyMutatedOutput, /let mut index: f64 = 0\.0;[\s\S]*?while index </u);
+  assert.match(output, /fn unstable_bound[\s\S]*?let mut index: f64 = 0\.0;[\s\S]*?while index < limit/u);
+  assert.doesNotMatch(output, /Ok::<_, rt::TsonicError>\(output\)/u);
+  validateGeneratedProject("sealed-human-performance", result.artifacts, { run: true });
+});
