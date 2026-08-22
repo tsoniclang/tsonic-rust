@@ -2,6 +2,21 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRustSourceProfileRegistry } from "../../../dist/analysis/facts/source-profile-registry.js";
 import { rustSourceProfileOwnerId } from "../../../dist/source/profiles/declarations.js";
+import {
+  rustJsSurfaceSourceProfileContributions,
+  rustNativeSourceProfileContributions,
+} from "../../../dist/source/profiles/declarations.js";
+import { jsRegExpSourceProfileDeclarations } from "@tsonic/js-source-profile";
+
+test("only the Rust JS surface composes the canonical RegExp declaration contract", () => {
+  const nativeText = declarationText(rustNativeSourceProfileContributions());
+  const jsText = declarationText(rustJsSurfaceSourceProfileContributions());
+
+  assert.equal(nativeText.includes(jsRegExpSourceProfileDeclarations), false);
+  assert.equal(jsText.split(jsRegExpSourceProfileDeclarations).length - 1, 1);
+  assert.equal((jsText.match(/interface RegExp \{/gu) ?? []).length, 1);
+  assert.equal((jsText.match(/interface RegExpConstructor \{/gu) ?? []).length, 1);
+});
 
 function sourceFile(fileName) {
   return { fileName };
@@ -19,6 +34,10 @@ const ast = {
     return node.source ?? node;
   },
 };
+
+function declarationText(contributions) {
+  return (contributions.declarations ?? []).map((item) => item.text).join("\n");
+}
 
 test("source profile provenance is tied to one exact compiler source file", () => {
   const native = sourceFile(`/project/.tsonic/source-profiles/${rustSourceProfileOwnerId}/rust-globals.d.ts`);

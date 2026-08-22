@@ -11,6 +11,9 @@ import type { RustFinalizedOperationAbi } from "./finalized-operation-abi.js";
 import { rustValueConversionIsFallible } from "../../target-model/conversions/contracts.js";
 
 export function rustTargetOperationText(fact: RustTargetOperationFact): string {
+  if (fact.kind === "regexp-create") {
+    return fact.targetOperation;
+  }
   if (fact.kind === "provider-operation") {
     const target = fact.abi.target;
     if (target.form === "call" || target.form === "call-c-variadic" || target.form === "path" || target.form === "static" || target.form === "free-call" ||

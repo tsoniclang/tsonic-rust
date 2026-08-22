@@ -3,6 +3,7 @@ import {
   typescriptNoLibUtilityDeclarations,
 } from "@tsonic/target-api/provider";
 import type { TargetSourceProfileContributions } from "@tsonic/target-api/provider";
+import { jsRegExpSourceProfileDeclarations } from "@tsonic/js-source-profile";
 import { rustTargetId } from "../../target-model/identities/target.js";
 
 export const rustSourceProfileOwnerId = rustTargetId;
@@ -22,7 +23,6 @@ interface IArguments {
 interface Boolean {}
 interface Number {}
 interface String {}
-interface RegExp {}
 
 interface Error {
   name: string;
@@ -128,6 +128,7 @@ interface ReadonlyArray<T> extends Iterable<T> {
 
 const rustJsSurfaceProfileDeclarations = `
 ${sharedNoLibDeclarations}
+${jsRegExpSourceProfileDeclarations}
 
 interface Object {
   hasOwnProperty(key: PropertyKey): boolean;
@@ -189,7 +190,6 @@ declare function isFinite(value: number): boolean;
 interface String {
   readonly length: number;
   readonly [index: number]: string;
-  split(separator: string | RegExp, limit?: number): string[];
   startsWith(value: string, position?: number): boolean;
   endsWith(value: string, endPosition?: number): boolean;
   includes(value: string, position?: number): boolean;
@@ -209,11 +209,6 @@ interface String {
   indexOf(searchString: string, position?: number): number;
   lastIndexOf(searchString: string, position?: number): number;
   at(index: number): string | undefined;
-  match(regexp: RegExp): RegExpMatchArray | null;
-  matchAll(regexp: RegExp): IterableIterator<RegExpMatchArray>;
-  replace(searchValue: string | RegExp, replaceValue: string): string;
-  replaceAll(searchValue: string | RegExp, replaceValue: string): string;
-  search(regexp: string | RegExp): number;
   concat(...strings: string[]): string;
   repeat(count: number): string;
   padStart(maxLength: number, fillString?: string): string;
@@ -302,30 +297,6 @@ interface ArrayLike<T> {
   readonly length: number;
   readonly [index: number]: T;
 }
-
-interface RegExp {
-  readonly source: string;
-  readonly flags: string;
-  readonly global: boolean;
-  readonly ignoreCase: boolean;
-  readonly multiline: boolean;
-  lastIndex: number;
-  test(value: string): boolean;
-  exec(value: string): RegExpExecArray | null;
-}
-interface RegExpExecArray extends Array<string> {
-  index: number;
-  input: string;
-}
-interface RegExpMatchArray extends Array<string> {
-  index?: number;
-  input?: string;
-}
-interface RegExpConstructor {
-  new (pattern: string | RegExp, flags?: string): RegExp;
-  (pattern: string | RegExp, flags?: string): RegExp;
-}
-declare var RegExp: RegExpConstructor;
 
 interface ReadonlyMap<K, V> extends Iterable<[K, V]> {
   readonly size: number;

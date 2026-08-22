@@ -414,14 +414,3 @@ export function declarationIsModuleScoped(
   }
   return false;
 }
-
-// --- RegExp constant lane ----------------------------------------------------
-
-// Compile-time mirror of the runtime RegExp parser contract: a faithful
-// TypeScript port of `rust-js/crates/tsonic_rust_js/src/regexp/parser.rs`
-// (`parse_flags` + `parse_pattern`). The returned violation string is the
-// engine's exact construction-time error message, and the acceptance
-// decision is held equal to the engine by the shared corpus at
-// `rust-js/tests/oracle/regexp-acceptance-corpus.json`.
-
-// Mirrors `MAX_QUANTIFIER_BOUND` in parser.rs.

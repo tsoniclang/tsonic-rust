@@ -18,6 +18,7 @@ import { acceptSelectedCall, checkedCallIsConstruction, instantiateSelectedCallT
 import { closedMetadataKey } from "../../../../target-model/metadata/closed-data.js";
 import { mapRustSourceMarkerCall } from "./deferred.js";
 import { mapSelectedRegExpConstruction } from "../values.js";
+import { jsRegExpSourceProfileIdentity } from "@tsonic/js-source-profile";
 import { providerIdentityText, providerOperationFact, rejectSelectedOperation, selectedArgumentMatchScore } from "../result.js";
 import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution.js";
 import { rustOptionalChainFactKey } from "../../../facts/keys.js";
@@ -184,7 +185,10 @@ export function selectRustCheckedCall(
       return rejectSelectedOperation(request.source.call, context, "RUST_JS_SURFACE_REQUIRED", "The selected call belongs to the explicit JavaScript source profile, which is not active.");
     }
     if (checkedCallIsConstruction(request, context)) {
-      if (selectedSourceMember.ownerName === "RegExpConstructor") {
+      if (
+        selectedSourceMember.ownerName ===
+          jsRegExpSourceProfileIdentity.owners.regExpConstructor
+      ) {
         return mapSelectedRegExpConstruction(request, context, options);
       }
       const typeArgumentCarriers = (request.source.sourceSelectedMethodTypeArguments ?? []).map((argument) =>

@@ -1,12 +1,21 @@
 import { acceptRustPolicy } from "../../../policy/operations/contracts.js";
-import { asNode, resolveSelectedProviderDeclaration } from "../../../policy/evidence/selected-source.js";
+import { resolveSelectedProviderDeclaration } from "../../../policy/evidence/selected-source.js";
 import { mapProviderCheckedOperation } from "./conversions.js";
 import { rejectSelectedOperation } from "./result.js";
 import { rustSelectedOperationKey } from "../../../target-model/facts/selections.js";
-import { rustStringTargetType } from "../../../target-model/types/index.js";
+import {
+  rustJsRegExpTargetId,
+  rustStringTargetType,
+} from "../../../target-model/types/index.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustTargetOperationFactKey } from "../../facts/keys.js";
-import { selectedCallArgumentNodes, selectedCallCalleeDeclaration, selectedCallCalleeSymbol } from "./operators.js";
+import {
+  selectedCallArgumentCarriers,
+  selectedCallCalleeDeclaration,
+  selectedCallCalleeSymbol,
+} from "./operators.js";
 import { selectRustProviderExport } from "../../../policy/operations/provider-selection.js";
+import { checkedCallIsConstruction } from "./calls/instantiation.js";
 import type {
   RustCheckedCallSelectionInput,
   RustCheckedCallSelectionResult,
@@ -86,34 +95,87 @@ export function mapSelectedRegExpConstruction(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedCallSelectionResult> {
-  const [patternNode, flagsNode] = selectedCallArgumentNodes(request).map((argument) => asNode(argument, context));
-  const ast = context.ast;
-  const pattern = patternNode !== undefined && ast.kindName(patternNode) === "KindStringLiteral"
-    ? ast.text(patternNode)
-    : undefined;
-  const flags = flagsNode === undefined
-    ? ""
-    : ast.kindName(flagsNode) === "KindStringLiteral" ? ast.text(flagsNode) : undefined;
-  if (pattern === undefined || flags === undefined) {
-    return rejectSelectedOperation(request.source.call, context, "RUST_REGEXP_DYNAMIC_UNSUPPORTED", "Rust RegExp construction requires TSTS-selected RegExp constructor evidence and compile-time string pattern/flags.");
+  const sourceArguments = request.source.sourceArguments;
+  if (sourceArguments.length < 1 || sourceArguments.length > 2) {
+    return rejectSelectedOperation(
+      request.source.call,
+      context,
+      "RUST_REGEXP_SELECTED_ARITY_INVALID",
+      "Selected RegExp construction must provide one pattern argument and at most one flags argument.",
+    );
   }
-  const violation = options.regExpSubsetViolation(pattern, flags);
-  if (violation !== undefined) {
-    return rejectSelectedOperation(request.source.call, context, "RUST_REGEXP_UNSUPPORTED", violation);
+  const [patternCarrier, flagsCarrier] = selectedCallArgumentCarriers(
+    request,
+    context,
+    options,
+  );
+  if (patternCarrier === undefined) {
+    return rejectSelectedOperation(
+      request.source.call,
+      context,
+      "RUST_REGEXP_PATTERN_CARRIER_NOT_PROVEN",
+      "Selected RegExp construction has no finalized pattern argument carrier.",
+    );
   }
+  const stringCarrier = rustStringTargetType();
+  const patternKind = rustTargetTypeRefEquals(patternCarrier, stringCarrier)
+    ? "string"
+    : patternCarrier.kind === "target-named" &&
+        patternCarrier.id === rustJsRegExpTargetId
+      ? "regexp"
+      : undefined;
+  if (patternKind === undefined) {
+    return rejectSelectedOperation(
+      request.source.call,
+      context,
+      "RUST_REGEXP_PATTERN_CARRIER_UNSUPPORTED",
+      "Selected RegExp pattern argument is neither the exact JS string carrier nor the exact RegExp carrier.",
+    );
+  }
+  if (sourceArguments.length === 2 &&
+    (flagsCarrier === undefined ||
+      !rustTargetTypeRefEquals(flagsCarrier, stringCarrier))) {
+    return rejectSelectedOperation(
+      request.source.call,
+      context,
+      "RUST_REGEXP_FLAGS_CARRIER_NOT_PROVEN",
+      "Selected RegExp flags argument has no finalized JS string carrier.",
+    );
+  }
+  const invocation = checkedCallIsConstruction(request, context)
+    ? "construct"
+    : "call";
   const resultCarrier: TargetTypeRef = { kind: "target-named", id: "rust.js.JsRegExp" };
+  const operationId = `tsonic.rust.js.regexp.create.${invocation}.${patternKind}.${flagsCarrier === undefined ? "default-flags" : "explicit-flags"}`;
+  const targetOperation = patternKind === "string"
+    ? "js_abi::JsRegExp::new"
+    : invocation === "construct"
+      ? "js_abi::JsRegExp::construct_from_regexp"
+      : "js_abi::JsRegExp::call_from_regexp";
+  const targetName = patternKind === "string"
+    ? "new"
+    : invocation === "construct"
+      ? "construct_from_regexp"
+      : "call_from_regexp";
   const fact: RustTargetOperationFact = {
     kind: "regexp-create",
-    operationId: "tsonic.rust.js.regexp.create",
-    pattern,
-    flags,
+    operationId,
+    targetOperation,
+    input: {
+      kind: "selected-call",
+      invocation,
+      patternKind,
+      patternCarrier,
+      ...(flagsCarrier === undefined ? {} : { flagsCarrier }),
+    },
+    resultCarrier,
   };
   const evidence = [{ message: "rust selected RegExp constructor" }];
   context.facts.set(request.source.call, rustTargetOperationFactKey, fact, evidence);
   context.facts.set(request.source.call, rustSelectedOperationKey, {
     operationId: fact.operationId,
-    operationKind: "constructor",
-    targetOperation: "js_abi::JsRegExp::new",
+    operationKind: invocation === "construct" ? "constructor" : "method",
+    targetOperation,
     resultType: resultCarrier,
     provenance: {
       sourceExpression: request.source.call,
@@ -128,12 +190,13 @@ export function mapSelectedRegExpConstruction(
     selectedSignature: {
       member: {
         id: fact.operationId,
-        sourceName: "constructor",
-        targetName: "JsRegExp::new",
-        kind: "constructor",
+        sourceName: invocation === "construct" ? "constructor" : "call",
+        targetName,
+        kind: invocation === "construct" ? "constructor" : "method",
+        ...(invocation === "call" ? { static: true } : {}),
         parameters: [
-          { name: "pattern", type: rustStringTargetType(), passingMode: "by-value" },
-          { name: "flags", type: rustStringTargetType(), passingMode: "by-value" },
+          { name: "pattern", type: patternCarrier, passingMode: "by-value" },
+          { name: "flags", type: stringCarrier, passingMode: "by-value", optional: true },
         ],
         returnType: resultCarrier,
       },

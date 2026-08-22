@@ -1,39 +1,30 @@
-import { appendRustDiagnostic } from "../program/walk.js";
-import { rustRegExpSubsetViolation } from "../../policy/regexp/subset.js";
 import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
-import type { Node } from "@tsonic/tsts";
+import type { AstRegularExpressionLiteralSyntax, Node } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-
-function appendRegExpDiagnostic(walk: RustFactWalk, expression: Node, violation: string): void {
-  appendRustDiagnostic(
-    walk,
-    "RUST_REGEXP_UNSUPPORTED",
-    `RegExp construct outside the oracle-proven subset: ${violation}.`,
-    expression,
-    ["target.capability=rust.js.regexp"],
-  );
-}
 
 export function resolveRegExpCreation(
   walk: RustFactWalk,
   expression: Node,
-  pattern: string,
-  flags: string,
+  syntax: AstRegularExpressionLiteralSyntax,
 ): TargetTypeRef | undefined {
   if (!walk.jsEnabled) {
     return undefined;
   }
-  const violation = rustRegExpSubsetViolation(pattern, flags);
-  if (violation !== undefined) {
-    appendRegExpDiagnostic(walk, expression, violation);
-    return undefined;
-  }
+  const resultCarrier: TargetTypeRef = {
+    kind: "target-named",
+    id: "rust.js.JsRegExp",
+  };
   setRustOperationFact(walk, expression, {
     kind: "regexp-create",
-    operationId: "tsonic.rust.js.regexp.create",
-    pattern,
-    flags,
+    operationId: "tsonic.rust.js.regexp.create.literal",
+    targetOperation: "js_abi::JsRegExp::new",
+    input: {
+      kind: "literal",
+      pattern: syntax.pattern,
+      flags: syntax.flags,
+    },
+    resultCarrier,
   });
-  return setCarrierFact(walk, expression, { kind: "target-named", id: "rust.js.JsRegExp" });
+  return setCarrierFact(walk, expression, resultCarrier);
 }

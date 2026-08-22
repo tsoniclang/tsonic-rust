@@ -18,7 +18,6 @@ import { recordFutureValueFacts, recordResourceManagementFacts } from "../resour
 import { recordRustObjectLiteralMethodAdapterFacts } from "../objects/method-adapters.js";
 import { resolveRustExternalProjectBase } from "../../policy/types/external-project-types.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
-import { rustRegExpSubsetViolation } from "../../policy/regexp/subset.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustAnalysisContext } from "./context.js";
 import type { RustFactWalk } from "./walk.js";
@@ -68,7 +67,6 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     providerRows,
     providerTypes: providerSemantics.types,
     jsEnabled,
-    regExpSubsetViolation: rustRegExpSubsetViolation,
     sourceProfiles,
     sourceTypes,
     resolveProjectUnionCarrier(memberCarriers) {

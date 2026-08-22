@@ -810,3 +810,30 @@ test("sealed Rust project-type queries never re-enter source navigation", () => 
   );
   assert.match(text, /RUST_PROJECT_MEMBER_IMPLEMENTATION_BUDGET_EXCEEDED/u);
 });
+
+test("RegExp classification consumes structured TSTS evidence without target parsing", () => {
+  const walk = readFileSync(
+    join(sourceRoot, "analysis/program/walk.ts"),
+    "utf8",
+  );
+  const literal = readFileSync(
+    join(sourceRoot, "analysis/expressions/regexp.ts"),
+    "utf8",
+  );
+  const constructor = readFileSync(
+    join(sourceRoot, "analysis/operations/provider/values.ts"),
+    "utf8",
+  );
+  const product = `${walk}\n${literal}\n${constructor}`;
+  assert.match(walk, /ast\.regularExpressionLiteral\(expression\)/u);
+  assert.match(constructor, /selectedCallArgumentCarriers/u);
+  assert.doesNotMatch(
+    product,
+    /\b(?:ast\.text|lastIndexOf|literalText|rustRegExpSubsetViolation|regExpSubsetViolation)\b/u,
+  );
+  assert.equal(
+    sourceFiles.some(({ path }) =>
+      path.endsWith("/policy/regexp/subset.ts")),
+    false,
+  );
+});

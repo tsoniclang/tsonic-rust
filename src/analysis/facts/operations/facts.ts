@@ -467,12 +467,26 @@ export type RustTargetOperationFact =
         | { readonly kind: "program" };
     }
   | {
-      // Compile-validated constant RegExp construction (literal or
-      // new RegExp with literal arguments).
       readonly kind: "regexp-create";
       readonly operationId: string;
-      readonly pattern: string;
-      readonly flags: string;
+      readonly targetOperation:
+        | "js_abi::JsRegExp::new"
+        | "js_abi::JsRegExp::call_from_regexp"
+        | "js_abi::JsRegExp::construct_from_regexp";
+      readonly input:
+        | {
+            readonly kind: "literal";
+            readonly pattern: string;
+            readonly flags: string;
+          }
+        | {
+            readonly kind: "selected-call";
+            readonly invocation: "call" | "construct";
+            readonly patternKind: "string" | "regexp";
+            readonly patternCarrier: TargetTypeRef;
+            readonly flagsCarrier?: TargetTypeRef;
+          };
+      readonly resultCarrier: TargetTypeRef;
     }
   | { readonly kind: "option-none"; readonly operationId: string }
   | { readonly kind: "option-wrap"; readonly operationId: string }
@@ -581,6 +595,7 @@ export function rustTargetOperationResultCarrier(fact: RustTargetOperationFact):
     case "source-accessor":
     case "source-union-field":
     case "source-call":
+    case "regexp-create":
     case "source-enum-member":
     case "record-literal":
     case "record-index-literal":

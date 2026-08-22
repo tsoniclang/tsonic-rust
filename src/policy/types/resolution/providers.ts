@@ -28,6 +28,13 @@ import type { RustProviderTypeRow } from "../../../providers/packages/model.js";
 import type { RustSourceProfileRegistry } from "../source-profile.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { jsRegExpSourceProfileIdentity } from "@tsonic/js-source-profile";
+
+const regExpOwner = jsRegExpSourceProfileIdentity.owners.regExp;
+const regExpResultOwners = new Set<string>([
+  jsRegExpSourceProfileIdentity.owners.regExpExecArray,
+  jsRegExpSourceProfileIdentity.owners.regExpMatchArray,
+]);
 
 export function resolveProviderTypeIdentity(
   subjects: readonly ExtensionFactSubject[],
@@ -169,10 +176,10 @@ export function resolveSourceProfileCarrier(
   if (options.jsEnabled && name === "Date") {
     return rustJsDateTargetType();
   }
-  if (options.jsEnabled && name === "RegExp") {
+  if (options.jsEnabled && name === regExpOwner) {
     return { kind: "target-named", id: "rust.js.JsRegExp" };
   }
-  if (options.jsEnabled && (name === "RegExpExecArray" || name === "RegExpMatchArray")) {
+  if (options.jsEnabled && regExpResultOwners.has(name)) {
     return { kind: "target-named", id: "rust.js.JsRegExpMatch" };
   }
   if (!context.currentSemantics.types.isTypeReference(type)) {
@@ -278,10 +285,10 @@ export function resolveSourceProfileCarrierFromArguments(
   if (options.jsEnabled && name === "Date") {
     return rustJsDateTargetType();
   }
-  if (options.jsEnabled && name === "RegExp") {
+  if (options.jsEnabled && name === regExpOwner) {
     return { kind: "target-named", id: "rust.js.JsRegExp" };
   }
-  if (options.jsEnabled && (name === "RegExpExecArray" || name === "RegExpMatchArray")) {
+  if (options.jsEnabled && regExpResultOwners.has(name)) {
     return { kind: "target-named", id: "rust.js.JsRegExpMatch" };
   }
   return undefined;

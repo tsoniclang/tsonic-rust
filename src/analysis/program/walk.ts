@@ -170,15 +170,17 @@ export function selectExpressionOperation(
     return;
   }
   if (kind === "KindRegularExpressionLiteral") {
-    const literalText = ast.text(expression);
-    const lastSlash = literalText.lastIndexOf("/");
-    if (literalText.startsWith("/") && lastSlash > 0) {
-      resolveRegExpCreation(
+    const syntax = ast.regularExpressionLiteral(expression);
+    if (syntax === undefined) {
+      appendRustDiagnostic(
         walk,
+        "RUST_REGEXP_LITERAL_EVIDENCE_MISSING",
+        "Regular-expression literal has no exact structured TSTS syntax evidence.",
         expression,
-        literalText.slice(1, lastSlash),
-        literalText.slice(lastSlash + 1),
+        ["source.evidence=regexp-literal-syntax"],
       );
+    } else {
+      resolveRegExpCreation(walk, expression, syntax);
     }
     return;
   }

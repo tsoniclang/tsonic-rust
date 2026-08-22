@@ -2,7 +2,11 @@ import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { applyRustValueConversion, finishProviderOperationExpression, planProviderOperationExpression } from "../conversions.js";
 import { planRustCallArguments } from "../input-shaping.js";
 import { diagnosticInput } from "../../program/plan-context.js";
-import { effectiveMemberResultCarrier, planOptionalChainExpression } from "../special.js";
+import {
+  effectiveMemberResultCarrier,
+  planOptionalChainExpression,
+  planRegExpCreate,
+} from "../special.js";
 import { isDenseDataArray } from "../../../../target-model/metadata/closed-data.js";
 import {
   KindPropertyAccessExpression,
@@ -43,6 +47,7 @@ function planCallExpressionInner(node: Node, context: RustPlanContext): RustExpr
       fact?.kind === "provider-operation" ||
       fact?.kind === "object-shape-projection" ||
       fact?.kind === "default-value" ||
+      fact?.kind === "regexp-create" ||
       fact?.kind === "typed-location"
     ? fact.resultCarrier
     : undefined;
@@ -75,6 +80,9 @@ function planCallExpressionInner(node: Node, context: RustPlanContext): RustExpr
   const callee = Node_Expression(context.input.program.source.ast, node);
   if (fact?.kind === "typed-location") {
     return planRustTypedLocationCall(node, fact, context, planExpression);
+  }
+  if (fact?.kind === "regexp-create") {
+    return planRegExpCreate(node, context);
   }
   if (fact !== undefined && fact.kind === "flow-marker") {
     const args = planRustCallArguments(node, context);

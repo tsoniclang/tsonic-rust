@@ -9,7 +9,7 @@ import { applyRustFallibleResultExpression } from "../types/fallible-shape.js";
 import { diagnosticInput, registerAliasFromPath, rustActiveErrorType } from "../program/plan-context.js";
 import { expressionCarrier, providerSelectedCallMatches, requireExpressionCarrier, rustOperationFact } from "./fundamentals.js";
 import { finishProviderOperationExpression, planProviderOperationExpression } from "./conversions.js";
-import { planRustCallArguments } from "./input-shaping.js";
+import { applyRustArgumentMode, planRustCallArguments } from "./input-shaping.js";
 import {
   KindCallExpression,
   KindPropertyAccessExpression,
@@ -22,8 +22,10 @@ import { planSelectedSourceCall } from "./calls/source.js";
 import { readRustStructuralObjectMethodStorage } from "../objects/project-storage.js";
 import { requireProviderArgumentPassingFacts } from "./calls/arguments.js";
 import { rustOptionElementCarrier, rustOptionTargetType, rustStructuralMethodStorageCarrier } from "../../../target-model/types/index.js";
+import { rustStringTargetType } from "../../../target-model/types/index.js";
 import { rustTargetOperationIsFallible } from "../../../analysis/facts/target-operation.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustBorrowedStringView } from "../../target-ast/expressions.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustOptionalChainFact } from "../../../analysis/facts/keys.js";
@@ -40,6 +42,18 @@ export function planRegExpCreate(node: Node, context: RustPlanContext): RustExpr
     ));
     return undefined;
   }
+  if (!requireExpressionCarrier(
+    node,
+    fact.resultCarrier,
+    context,
+    "rust.backend.regexp-result-carrier",
+  )) {
+    return undefined;
+  }
+  const arguments_ = planRegExpCreateArguments(node, fact, context);
+  if (arguments_ === undefined) {
+    return undefined;
+  }
   const activeErrorType = rustActiveErrorType(context);
   if (activeErrorType === undefined) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -49,20 +63,117 @@ export function planRegExpCreate(node: Node, context: RustPlanContext): RustExpr
     ));
     return undefined;
   }
-  registerAliasFromPath(context, "js_abi::JsRegExp::new");
+  registerAliasFromPath(context, fact.targetOperation);
   return {
     kind: "try",
     resultErrorType: activeErrorType,
     operandErrorType: { kind: "named", path: "js_abi::JsError" },
     expr: {
       kind: "call",
-      path: "js_abi::JsRegExp::new",
-      args: [
-        { kind: "str-literal", value: fact.pattern },
-        { kind: "str-literal", value: fact.flags },
-      ],
+      path: fact.targetOperation,
+      args: arguments_,
     },
   };
+}
+
+function planRegExpCreateArguments(
+  node: Node,
+  fact: Extract<NonNullable<ReturnType<typeof rustOperationFact>>, { readonly kind: "regexp-create" }>,
+  context: RustPlanContext,
+): readonly RustExpr[] | undefined {
+  if (fact.input.kind === "literal") {
+    return [
+      { kind: "str-literal", value: fact.input.pattern },
+      { kind: "str-literal", value: fact.input.flags },
+    ];
+  }
+  if (!selectedRegExpCallMatches(node, fact, context)) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.regexp-selected-signature",
+      "RegExp construction conflicts with its finalized selected call and target operation facts.",
+    ));
+    return undefined;
+  }
+  const sourceArguments = context.input.program.source.ast.arguments(node);
+  const expectedArgumentCount = fact.input.flagsCarrier === undefined ? 1 : 2;
+  if (sourceArguments.length !== expectedArgumentCount) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.regexp-source-arguments",
+      `RegExp construction has ${sourceArguments.length} source arguments but its finalized fact requires ${expectedArgumentCount}.`,
+    ));
+    return undefined;
+  }
+  const planned = planRustCallArguments(node, context);
+  const patternNode = sourceArguments[0];
+  if (planned === undefined || patternNode === undefined || planned[0] === undefined ||
+    !requireExpressionCarrier(
+      patternNode,
+      fact.input.patternCarrier,
+      context,
+      "rust.backend.regexp-pattern-carrier",
+    )) {
+    return undefined;
+  }
+  const pattern = fact.input.patternKind === "string"
+    ? rustBorrowedStringView(planned[0])
+    : applyRustArgumentMode(context, planned[0], "ref", patternNode);
+  const flagsNode = sourceArguments[1];
+  const flags = fact.input.flagsCarrier === undefined
+    ? { kind: "str-literal" as const, value: "" }
+    : flagsNode === undefined || planned[1] === undefined ||
+        !requireExpressionCarrier(
+          flagsNode,
+          fact.input.flagsCarrier,
+          context,
+          "rust.backend.regexp-flags-carrier",
+        )
+      ? undefined
+      : rustBorrowedStringView(planned[1]);
+  if (flags === undefined) {
+    return undefined;
+  }
+  return fact.input.patternKind === "string"
+    ? [pattern, flags]
+    : [
+        pattern,
+        flags,
+        {
+          kind: "bool-literal",
+          value: fact.input.flagsCarrier !== undefined,
+        },
+      ];
+}
+
+function selectedRegExpCallMatches(
+  node: Node,
+  fact: Extract<NonNullable<ReturnType<typeof rustOperationFact>>, { readonly kind: "regexp-create" }>,
+  context: RustPlanContext,
+): boolean {
+  if (fact.input.kind !== "selected-call") {
+    return false;
+  }
+  const selected = context.input.program.facts.getSelectedTargetCall(node);
+  const operation = context.input.program.facts.getSelectedTargetOperation(node);
+  const [patternParameter, flagsParameter] = selected?.member.parameters ?? [];
+  return selected !== undefined &&
+    selected.member.id === fact.operationId &&
+    selected.member.kind === (fact.input.invocation === "construct" ? "constructor" : "method") &&
+    selected.member.parameters.length === 2 &&
+    patternParameter !== undefined &&
+    rustTargetTypeRefEquals(patternParameter.type, fact.input.patternCarrier) &&
+    flagsParameter !== undefined &&
+    flagsParameter.optional === true &&
+    rustTargetTypeRefEquals(flagsParameter.type, rustStringTargetType()) &&
+    selected.member.returnType !== undefined &&
+    rustTargetTypeRefEquals(selected.member.returnType, fact.resultCarrier) &&
+    operation !== undefined &&
+    operation.operationId === fact.operationId &&
+    operation.operationKind === (fact.input.invocation === "construct" ? "constructor" : "method") &&
+    operation.targetOperation === fact.targetOperation &&
+    operation.resultType !== undefined &&
+    rustTargetTypeRefEquals(operation.resultType, fact.resultCarrier);
 }
 
 export function planNewExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
