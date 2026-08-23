@@ -52,9 +52,10 @@ test("complete RegExp operations consume selected JS-source-profile evidence", (
   assert.match(source, /construct_from_regexp_with_flags/u);
   assert.match(source, /match_result/u);
   assert.match(source, /match_all_for_string/u);
-  assert.match(source, /replace_with/u);
-  assert.match(source, /replace_all_for_string_with/u);
+  assert.match(source, /try_replace_with/u);
+  assert.match(source, /try_replace_all_for_string_with/u);
   assert.match(source, /replacement_arguments/u);
+  assert.match(source, /regexp_replacement_argument_rest/u);
   assert.match(source, /JsRegExp::escape/u);
 });
 

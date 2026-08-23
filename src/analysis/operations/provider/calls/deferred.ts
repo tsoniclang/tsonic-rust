@@ -212,7 +212,9 @@ export function finalizeRustPreparedCheckedCall(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedCallSelectionResult> {
-  const template = callbackFallible
+  const callbackRequiresFallibleTarget =
+    prepared.callback.argumentAdapter === "js-regexp-replacement";
+  const template = callbackFallible || callbackRequiresFallibleTarget
     ? callbackFallibleTemplate(prepared)
     : prepared.template;
   return acceptSelectedCall(
