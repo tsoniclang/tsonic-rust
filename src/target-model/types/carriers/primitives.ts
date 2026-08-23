@@ -137,10 +137,3 @@ export function rustFutureOutputCarrier(carrier: TargetTypeRef | undefined): Tar
     ? carrier.typeArguments?.[0]
     : undefined;
 }
-
-export function hasExactObjectKeys(value: object, expected: readonly string[]): boolean {
-  const actual = Object.keys(value).sort();
-  const selected = [...expected].sort();
-  return actual.length === selected.length &&
-    actual.every((key, index) => key === selected[index]);
-}

@@ -171,6 +171,16 @@ export function isDenseDataArray(value: unknown): value is readonly unknown[] {
   return true;
 }
 
+export function hasExactObjectKeys(
+  value: object,
+  expected: readonly string[],
+): boolean {
+  const actual = Object.keys(value).sort();
+  const selected = [...expected].sort();
+  return actual.length === selected.length &&
+    actual.every((key, index) => key === selected[index]);
+}
+
 function isMetadataRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   if (typeof value !== "object" || value === null) {
     return false;

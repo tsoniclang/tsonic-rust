@@ -17,7 +17,6 @@ import { acceptRustPolicy } from "../../../../policy/operations/contracts.js";
 import { acceptSelectedCall, checkedCallIsConstruction, instantiateSelectedCallTemplate, selectedCallReceiverValueCarrier, selectRustOptionalCallResult, substituteProviderOperationForm } from "./instantiation.js";
 import { closedMetadataKey } from "../../../../target-model/metadata/closed-data.js";
 import { mapRustSourceMarkerCall } from "./deferred.js";
-import { mapSelectedRegExpConstruction } from "../values.js";
 import { providerIdentityText, providerOperationFact, rejectSelectedOperation, selectedArgumentMatchScore } from "../result.js";
 import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution.js";
 import { rustOptionalChainFactKey } from "../../../facts/keys.js";
@@ -28,6 +27,7 @@ import { selectJsSurfaceConstructorBySourceOwner, selectJsSurfaceOperation } fro
 import { selectRustGeneratorSourceCall } from "../../../../policy/types/generator-source-profile.js";
 import { selectRustProviderOperation } from "../../../../policy/operations/provider-selection.js";
 import { sourceCallMarkerByIdentity } from "../model.js";
+import { mapSelectedStringRegExpProtocolCall } from "../regexp-protocols.js";
 import type {
   RustCheckedCallSelectionInput,
   RustCheckedCallSelectionResult,
@@ -55,7 +55,26 @@ export function selectRustCheckedCall(
   if (providerEvidence.kind === "conflict") {
     return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_PROVIDER_EVIDENCE_CONFLICT", "Checked call carries conflicting selected provider declaration identities.");
   }
-  if (providerEvidence.kind === "selected") {
+  const selectedSourceMember = resolveSelectedSourceProfileMember(
+    context,
+    request.sourceSelectedDeclaration,
+    options.sourceProfiles,
+  );
+  const calleeSourceMember = resolveSelectedSourceProfileMember(
+    context,
+    selectedCallCalleeDeclaration(request),
+    options.sourceProfiles,
+  );
+  if (selectedSourceMember === undefined && calleeSourceMember !== undefined) {
+    return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_SOURCE_DECLARATION_MISSING", "Checked source-profile call has callee evidence but no exact selected declaration evidence.");
+  }
+  if (selectedSourceMember !== undefined && calleeSourceMember !== undefined &&
+    (selectedSourceMember.profile !== calleeSourceMember.profile ||
+      selectedSourceMember.ownerName !== calleeSourceMember.ownerName ||
+      selectedSourceMember.memberName !== calleeSourceMember.memberName)) {
+    return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_SOURCE_EVIDENCE_CONFLICT", "Checked source-profile call carries conflicting selected and callee declaration identities.");
+  }
+  if (providerEvidence.kind === "selected" && selectedSourceMember === undefined) {
     const provider = providerEvidence.identity;
     const sourceMarker = provider.exportId === undefined
       ? undefined
@@ -103,25 +122,6 @@ export function selectRustCheckedCall(
     });
   }
 
-  const selectedSourceMember = resolveSelectedSourceProfileMember(
-    context,
-    request.sourceSelectedDeclaration,
-    options.sourceProfiles,
-  );
-  const calleeSourceMember = resolveSelectedSourceProfileMember(
-    context,
-    selectedCallCalleeDeclaration(request),
-    options.sourceProfiles,
-  );
-  if (selectedSourceMember === undefined && calleeSourceMember !== undefined) {
-    return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_SOURCE_DECLARATION_MISSING", "Checked source-profile call has callee evidence but no exact selected declaration evidence.");
-  }
-  if (selectedSourceMember !== undefined && calleeSourceMember !== undefined &&
-    (selectedSourceMember.profile !== calleeSourceMember.profile ||
-      selectedSourceMember.ownerName !== calleeSourceMember.ownerName ||
-      selectedSourceMember.memberName !== calleeSourceMember.memberName)) {
-    return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_SOURCE_EVIDENCE_CONFLICT", "Checked source-profile call carries conflicting selected and callee declaration identities.");
-  }
   if (selectedSourceMember?.ownerName === "ErrorConstructor" &&
     selectedSourceMember.memberName === "constructor" && checkedCallIsConstruction(request, context)) {
     if (selectedCallArgumentNodes(request).length !== 1) {
@@ -184,9 +184,6 @@ export function selectRustCheckedCall(
       return rejectSelectedOperation(request.source.call, context, "RUST_JS_SURFACE_REQUIRED", "The selected call belongs to the explicit JavaScript source profile, which is not active.");
     }
     if (checkedCallIsConstruction(request, context)) {
-      if (selectedSourceMember.ownerName === "RegExpConstructor") {
-        return mapSelectedRegExpConstruction(request, context, options);
-      }
       const typeArgumentCarriers = (request.source.sourceSelectedMethodTypeArguments ?? []).map((argument) =>
         resolveRustTargetTypeRef(argument.explicitTypeNode ?? argument.selectedType, context, options));
       const argumentCarriers = selectedCallArgumentCarriers(request, context, options);
@@ -228,6 +225,16 @@ export function selectRustCheckedCall(
         argument.explicitTypeNode === undefined
           ? undefined
           : resolveRustTargetTypeRef(argument.explicitTypeNode, context, options));
+    const regexpProtocol = mapSelectedStringRegExpProtocolCall(
+      request,
+      selectedSourceMember.ownerName,
+      selectedSourceMember.memberName,
+      context,
+      options,
+    );
+    if (regexpProtocol !== undefined) {
+      return regexpProtocol;
+    }
     const special = mapSelectedJsSpecialCall(
       request,
       selectedSourceMember.ownerName,

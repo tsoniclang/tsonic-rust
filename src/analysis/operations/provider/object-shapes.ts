@@ -1,5 +1,4 @@
 import {
-  rustJsArrayTargetType,
   rustJsErrorTargetType,
   rustJsValueTargetType,
   rustOptionTargetType,
@@ -56,42 +55,6 @@ export function mapSelectedJsSpecialCall(
       context,
       options,
     );
-  }
-  if (ownerName === "String" && memberName === "match") {
-    const [argument] = selectedCallArgumentNodes(request);
-    const creation = argument === undefined
-      ? undefined
-      : context.facts.resolve(argument, rustTargetOperationFactKey);
-    if (creation === undefined || creation.kind !== "regexp-create") {
-      return rejectSelectedOperation(
-        request.source.call,
-        context,
-        "RUST_REGEXP_MATCH_PATTERN_NOT_FINALIZED",
-        "Rust String.match requires an inline RegExp whose checked construction fact finalizes the result shape.",
-      );
-    }
-    const global = creation.flags.includes("g");
-    const resultCarrier: TargetTypeRef = global
-      ? rustOptionTargetType(rustJsArrayTargetType(rustStringTargetType()))
-      : rustOptionTargetType({ kind: "target-named", id: "rust.js.JsRegExpMatch" });
-    return acceptSelectedCall(request, {
-      kind: "provider-operation",
-      operationId: `tsonic.rust.js.String.match.${global ? "global" : "first"}`,
-      operationKind: "method",
-      target: {
-        form: "arg-receiver-method",
-        name: global ? "match_strings" : "match_first",
-        argModes: ["ref"],
-      },
-      parameterCarriers: [{ kind: "target-named", id: "rust.js.JsRegExp" }],
-      resultCarrier,
-      isAsync: false,
-      isFallible: true,
-      errorBoundary: "provider-native",
-      errorCarrier: rustJsErrorTargetType(),
-    }, [{ kind: "target-named", id: "rust.js.JsRegExp" }], context, options, {
-      sourceName: memberName,
-    });
   }
   if (ownerName !== "JSON" || memberName !== "stringify" || selectedCallArgumentNodes(request).length !== 3) {
     return undefined;

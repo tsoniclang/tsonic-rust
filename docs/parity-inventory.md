@@ -29,10 +29,13 @@ document and the lane list from drifting.
   String.fromCodePoint; String.matchAll call, fallibility lowering, and result
   consumption for constant patterns. UTF-16 results that Rust strings cannot
   represent fail closed.
-- RegExp: constant literals and new RegExp with literal arguments over the
-  oracle-proven subset; test, replace, split, search, global match with
-  null coalescing; regexp property reads; exec/match result consumption and
-  matchAll result consumption through the exact selected match-array carrier.
+- RegExp: constant and dynamic construction; complete ECMAScript grammar and
+  flags; test, exec, match, matchAll, replace, replaceAll, search, split,
+  writable lastIndex, named groups, indices, replacement callbacks, and
+  well-known RegExp protocols. Exact exec/match result consumption and matchAll result consumption use
+  selected result carriers. Native `string` calls retain native result carriers
+  and fail precisely if an exact result contains an unpaired UTF-16 surrogate;
+  explicitly selected `JsString` calls retain exact UTF-16 results.
 - Math: all source-profile constants and functions, including trigonometric,
   hyperbolic, logarithmic, rounding, bit-conversion, variadic hypot/min/max,
   pow, and random operations; operations whose Rust primitives differ from
@@ -87,9 +90,6 @@ document and the lane list from drifting.
 ## Hard-rejected by architecture
 
 - Open reflection and dynamic member access; eval and embedded engines.
-- Dynamic RegExp patterns and constructs outside the oracle subset (lazy
-  quantifiers, backreferences, lookaround, named groups, word-boundary
-  assertions, unicode property escapes, flags d s u v y).
 - JSON replacer functions and custom toJSON dispatch.
 - Process termination side effects beyond exit(code).
 

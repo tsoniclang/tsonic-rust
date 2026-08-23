@@ -597,7 +597,11 @@ export function printFittedCall(
     } else if (argument.kind === "unary" &&
       (argument.operand.kind === "call" ||
         argument.operand.kind === "associated-call" ||
-        argument.operand.kind === "method-call") &&
+        argument.operand.kind === "method-call" ||
+        argument.operand.kind === "try" &&
+          (argument.operand.expr.kind === "call" ||
+            argument.operand.expr.kind === "associated-call" ||
+            argument.operand.expr.kind === "method-call")) &&
       printRustExpr(argument.operand).length > rustNestedCallWidth) {
       const nested = printNestedCallArgument(
         argument.operand,

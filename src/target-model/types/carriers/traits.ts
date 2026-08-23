@@ -1,6 +1,6 @@
-import { isRustBigIntCarrier, isRustNullCarrier, isRustStringCarrier, isRustUndefinedCarrier, isRustUnitCarrier } from "./js.js";
+import { isRustBigIntCarrier, isRustJsStringCarrier, isRustNullCarrier, isRustStringCarrier, isRustUndefinedCarrier, isRustUnitCarrier } from "./js.js";
 import { isRustIntegerCarrier, rustPrimitiveTypeName } from "./primitives.js";
-import { rustBigIntTargetId, rustCallableTargetId, rustJsArrayTargetId, rustJsDateTargetId, rustJsErrorTargetId, rustJsMapTargetId, rustJsRegExpMatchTargetId, rustJsRegExpTargetId, rustJsSetTargetId, rustJsValueTargetId, rustLocationTargetId, rustNullTargetId, rustOptionTargetId, rustProgramErrorTargetId, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustStringTargetId, rustStructuralObjectCarrierValue, rustUndefinedTargetId } from "./source-types.js";
+import { rustBigIntTargetId, rustCallableTargetId, rustJsArrayTargetId, rustJsDateTargetId, rustJsErrorTargetId, rustJsMapTargetId, rustJsRegExpExecArrayTargetId, rustJsRegExpIndicesTargetId, rustJsRegExpMatchArrayTargetId, rustJsRegExpNamedGroupsTargetId, rustJsRegExpNamedIndicesTargetId, rustJsRegExpStringIteratorTargetId, rustJsRegExpTargetId, rustJsSetTargetId, rustJsStringTargetId, rustJsValueTargetId, rustLocationTargetId, rustNullTargetId, rustOptionTargetId, rustProgramErrorTargetId, rustRegExpExecArrayTargetId, rustRegExpIndicesTargetId, rustRegExpMatchArrayTargetId, rustRegExpNamedGroupsTargetId, rustRegExpNamedIndicesTargetId, rustRegExpStringIteratorTargetId, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustStringTargetId, rustStructuralObjectCarrierValue, rustUndefinedTargetId } from "./source-types.js";
 import { rustFixedArrayCarrierValue, rustNamedTypeCarrierValue } from "./native.js";
 import type { RustNamedTypeCarrierValue } from "./native.js";
 import type { TargetTypeRef } from "../model.js";
@@ -226,6 +226,7 @@ export function rustNamedTypeSupportsTrait(
 
 export function rustCarrierSupportsJsEquality(carrier: TargetTypeRef | undefined): boolean {
   return carrier?.kind === "source-primitive" || isRustStringCarrier(carrier) ||
+    isRustJsStringCarrier(carrier) ||
     isRustBigIntCarrier(carrier) || isRustNullCarrier(carrier) ||
     isRustUndefinedCarrier(carrier) ||
     isRustJsStrictEqualityCarrier(carrier);
@@ -244,6 +245,7 @@ const rustJsStrictEqualityTargetIds: ReadonlySet<string> = new Set([
 
 const rustUnconditionallyCloneTargetIds: ReadonlySet<string> = new Set([
   rustStringTargetId,
+  rustJsStringTargetId,
   rustBigIntTargetId,
   rustCallableTargetId,
   rustLocationTargetId,
@@ -255,13 +257,25 @@ const rustUnconditionallyCloneTargetIds: ReadonlySet<string> = new Set([
   rustJsSetTargetId,
   rustJsDateTargetId,
   rustJsRegExpTargetId,
-  rustJsRegExpMatchTargetId,
+  rustRegExpExecArrayTargetId,
+  rustRegExpMatchArrayTargetId,
+  rustRegExpIndicesTargetId,
+  rustRegExpNamedGroupsTargetId,
+  rustRegExpNamedIndicesTargetId,
+  rustRegExpStringIteratorTargetId,
+  rustJsRegExpExecArrayTargetId,
+  rustJsRegExpMatchArrayTargetId,
+  rustJsRegExpIndicesTargetId,
+  rustJsRegExpNamedGroupsTargetId,
+  rustJsRegExpNamedIndicesTargetId,
+  rustJsRegExpStringIteratorTargetId,
   rustJsErrorTargetId,
   rustProgramErrorTargetId,
 ]);
 
 const rustUnconditionallyDefaultTargetIds: ReadonlySet<string> = new Set([
   rustStringTargetId,
+  rustJsStringTargetId,
   rustNullTargetId,
   rustUndefinedTargetId,
   rustJsArrayTargetId,

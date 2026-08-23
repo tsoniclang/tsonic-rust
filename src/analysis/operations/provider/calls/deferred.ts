@@ -2,6 +2,11 @@ import { acceptRustPolicy } from "../../../../policy/operations/contracts.js";
 import { acceptSelectedCall, mapSelectedTargetTypeArguments, selectRustOptionalCallResult } from "./instantiation.js";
 import { defaultValueFactKey, flowStateFactKey } from "@tsonic/tsts";
 import { finalizeRustCallbackOperation } from "../callbacks.js";
+import {
+  applyRustRegExpReplacementCallbackConversion,
+  finalizeRustRegExpReplacementCallbackContract,
+  selectedRustRegExpReplacementCallbackEvidence,
+} from "../regexp-replacement-callback.js";
 import { rejectSelectedOperation } from "../result.js";
 import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution.js";
 import { rustSelectedCallKey, rustSelectedOperationKey } from "../../../../target-model/facts/selections.js";
@@ -20,6 +25,8 @@ import type { Node, ProviderDeclarationIdentity, SourceCallMarkerKind } from "@t
 import type { RustOperationsProviderOptions } from "../model.js";
 import type { RustProviderOperationTemplate, RustTargetOperationFact } from "../../../facts/keys.js";
 import type { RustTargetMember, TargetTypeRef } from "../../../../target-model/types/model.js";
+import type { RustRegExpReplacementCallbackContract } from "../regexp-replacement-callback.js";
+import { rustJsStringTargetType, rustStringTargetType } from "../../../../target-model/types/index.js";
 
 export interface RustPreparedDeferredCheckedCall {
   readonly sourceName: string;
@@ -28,6 +35,7 @@ export interface RustPreparedDeferredCheckedCall {
   readonly template: RustProviderOperationTemplate;
   readonly parameterCarriers: readonly TargetTypeRef[];
   readonly resultCarrier: TargetTypeRef;
+  readonly replacementCallback?: RustRegExpReplacementCallbackContract;
 }
 
 export function prepareRustDeferredCheckedCall(
@@ -44,6 +52,23 @@ export function prepareRustDeferredCheckedCall(
   ) => TargetTypeRef | undefined,
 ): RustPolicySelection<RustPreparedDeferredCheckedCall> {
   const arguments_ = selectedCallArgumentNodes(request);
+  const replacementEvidence = deferred.callback.argumentAdapter?.kind === "regexp-replacement"
+    ? selectedRustRegExpReplacementCallbackEvidence(
+        request,
+        deferred.callback.sourceArgumentIndex,
+        deferred.callback.argumentAdapter.lane,
+        context,
+        options,
+      )
+    : undefined;
+  if (deferred.callback.argumentAdapter !== undefined && replacementEvidence === undefined) {
+    return rejectSelectedOperation(
+      request.source.call,
+      context,
+      "RUST_REGEXP_REPLACEMENT_CALLBACK_CONTRACT_MISSING",
+      "Selected RegExp replacement callback has no closed lane-specific argument-vector contract from exact callable evidence.",
+    );
+  }
   if (arguments_.length !== deferred.parameterCarriers.length) {
     return rejectSelectedOperation(
       request.source.call,
@@ -134,6 +159,10 @@ export function prepareRustDeferredCheckedCall(
       `Selected callback call '${deferred.sourceName}' did not finalize every callback parameter carrier.`,
     );
   }
+  const callbackCarrier = parameterCarriers[deferred.callback.sourceArgumentIndex];
+  const replacementCallback = replacementEvidence === undefined || callbackCarrier === undefined
+    ? undefined
+    : finalizeRustRegExpReplacementCallbackContract(replacementEvidence, callbackCarrier);
   const optionalResult = selectRustOptionalCallResult(
     request,
     finalized.fact.resultCarrier,
@@ -157,6 +186,7 @@ export function prepareRustDeferredCheckedCall(
     template: finalized.fact,
     parameterCarriers: parameterCarriers as readonly TargetTypeRef[],
     resultCarrier: optionalResult.resultCarrier,
+    ...(replacementCallback === undefined ? {} : { replacementCallback }),
   });
 }
 
@@ -167,9 +197,27 @@ export function finalizeRustPreparedCheckedCall(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedCallSelectionResult> {
-  const template = callbackFallible
+  let template = callbackFallible
     ? callbackFallibleTemplate(prepared)
     : prepared.template;
+  if (prepared.replacementCallback !== undefined) {
+    const target = applyRustRegExpReplacementCallbackConversion(
+      template.target,
+      prepared.callback.sourceArgumentIndex,
+      prepared.parameterCarriers.length,
+      prepared.replacementCallback,
+      callbackFallible,
+    );
+    if (target === undefined) {
+      return rejectSelectedOperation(
+        request.source.call,
+        context,
+        "RUST_REGEXP_REPLACEMENT_CALLBACK_ABI_INVALID",
+        "Selected RegExp replacement callback cannot attach its finalized conversion to the target operation form.",
+      );
+    }
+    template = { ...template, target };
+  }
   return acceptSelectedCall(
     request,
     template,
@@ -224,6 +272,43 @@ export function mapRustSourceMarkerCall(
 ): RustPolicySelection<RustCheckedCallSelectionResult> {
   if (markerName === "default-value") {
     return mapRustDefaultValueCall(request, provider, context, options);
+  }
+  if (markerName === "js-string") {
+    if (provider.exportName === undefined) {
+      return rejectSelectedOperation(
+        request.source.call,
+        context,
+        "RUST_JS_STRING_MARKER_IDENTITY_INCOMPLETE",
+        "The exact jsstr marker requires its selected provider export name.",
+      );
+    }
+    const arguments_ = selectedCallArgumentNodes(request);
+    if (arguments_.length !== 1) {
+      return rejectSelectedOperation(
+        request.source.call,
+        context,
+        "RUST_JS_STRING_MARKER_ARITY_INVALID",
+        "The exact jsstr marker requires one selected native string argument.",
+      );
+    }
+    return acceptSelectedCall(request, {
+      kind: "provider-operation",
+      operationId: "tsonic.rust.js.jsstr",
+      operationKind: "method",
+      target: {
+        form: "call",
+        path: "js_abi::js_string_from_utf8",
+        argModes: ["value"],
+      },
+      parameterCarriers: [rustStringTargetType()],
+      resultCarrier: rustJsStringTargetType(),
+      isAsync: false,
+      isFallible: false,
+      errorBoundary: "none",
+    }, [rustStringTargetType()], context, options, {
+      sourceName: provider.exportName,
+      providerDeclaration: provider,
+    });
   }
   const typedLocation = selectRustTypedLocationCall(
     request,

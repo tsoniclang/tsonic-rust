@@ -1,9 +1,12 @@
-import { hasExactObjectKeys } from "./primitives.js";
-import { isDenseDataArray } from "../../metadata/closed-data.js";
+import {
+  hasExactObjectKeys,
+  isDenseDataArray,
+} from "../../metadata/closed-data.js";
 import { isRustTargetTypeRef } from "../equality.js";
 import type { TargetTypeRef } from "../model.js";
 
 export const rustStringTargetId = "rust.std.String";
+export const rustJsStringTargetId = "rust.js.JsString";
 export const rustBigIntTargetId = "rust.runtime.BigInt";
 export const rustOptionTargetId = "rust.std.Option";
 export const rustLocationTargetId = "rust.runtime.Location";
@@ -22,7 +25,18 @@ export const rustJsMapTargetId = "rust.js.JsMap";
 export const rustJsSetTargetId = "rust.js.JsSet";
 export const rustJsDateTargetId = "rust.js.JsDate";
 export const rustJsRegExpTargetId = "rust.js.JsRegExp";
-export const rustJsRegExpMatchTargetId = "rust.js.JsRegExpMatch";
+export const rustRegExpExecArrayTargetId = "rust.js.RegExpExecArray";
+export const rustRegExpMatchArrayTargetId = "rust.js.RegExpMatchArray";
+export const rustRegExpIndicesTargetId = "rust.js.RegExpIndices";
+export const rustRegExpNamedGroupsTargetId = "rust.js.RegExpNamedGroups";
+export const rustRegExpNamedIndicesTargetId = "rust.js.RegExpNamedIndices";
+export const rustRegExpStringIteratorTargetId = "rust.js.RegExpStringIterator";
+export const rustJsRegExpExecArrayTargetId = "rust.js.JsRegExpExecArray";
+export const rustJsRegExpMatchArrayTargetId = "rust.js.JsRegExpMatchArray";
+export const rustJsRegExpIndicesTargetId = "rust.js.JsRegExpIndices";
+export const rustJsRegExpNamedGroupsTargetId = "rust.js.JsRegExpNamedGroups";
+export const rustJsRegExpNamedIndicesTargetId = "rust.js.JsRegExpNamedIndices";
+export const rustJsRegExpStringIteratorTargetId = "rust.js.JsRegExpStringIterator";
 export const rustNamedTypeCarrierName = "named-type";
 export const rustStructuralObjectCarrierName = "structural-object";
 export const rustSourceUnionCarrierName = "source-union";

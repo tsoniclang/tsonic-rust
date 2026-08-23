@@ -380,6 +380,62 @@ test("unary expressions expand long nested calls before outer attachment", () =>
   );
 });
 
+test("unary fallible calls retain rustfmt's attached outer-call layout", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "call",
+            path: "acme_testing::check",
+            args: [{
+              kind: "unary",
+              operator: "!",
+              operand: {
+                kind: "try",
+                errorDomain: "runtime",
+                expr: {
+                  kind: "call",
+                  path: "js_abi::regexp_test_native",
+                  args: [
+                    {
+                      kind: "reference",
+                      expr: {
+                        kind: "try",
+                        errorDomain: "runtime",
+                        expr: {
+                          kind: "call",
+                          path: "js_abi::regexp_new_native",
+                          args: [
+                            { kind: "str-literal", value: "ab+c" },
+                            { kind: "str-literal", value: "i" },
+                          ],
+                        },
+                      },
+                    },
+                    { kind: "str-literal", value: "XYZ" },
+                  ],
+                },
+              },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /acme_testing::check\(!js_abi::regexp_test_native\(\n {8}&js_abi::regexp_new_native\("ab\+c", "i"\)\?,\n {8}"XYZ",\n {4}\)\?\);/u,
+  );
+});
+
 test("unary block arguments remain attached to their outer calls", () => {
   const source = printRustSourceFile({
     headerComment,

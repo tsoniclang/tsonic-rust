@@ -29,6 +29,7 @@
     "esModuleInterop": true,
     "paths": {
       "@tsonic/tsts": ["../tsonic/packages/tsts/dist/src/index.d.ts"],
+      "@tsonic/js-source-profile": ["../tsonic/packages/js-source-profile/dist/index.d.ts"],
       "@tsonic/target-api": ["../tsonic/packages/target-api/dist/public/index.d.ts"],
       "@tsonic/target-api/*": ["../tsonic/packages/target-api/dist/public/*.d.ts"],
       "@tsonic/source-core": ["../tsonic/packages/source-core/dist/public/index.d.ts"],

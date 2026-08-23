@@ -34,6 +34,7 @@ export function createRustSession({
   surfaces = [],
   entryPoint = "index.ts",
   sourcePackages,
+  compilerOptions = {},
 } = {}) {
   const pack = createRustTargetPack();
   target = surfaces.length === 0 || target.surfaces !== undefined
@@ -121,6 +122,7 @@ export function createRustSession({
       noLib: true,
       strictNullChecks: true,
       target: "es2022",
+      ...compilerOptions,
     },
     extensionHostOptions: {
       extensions: composition.extensions,

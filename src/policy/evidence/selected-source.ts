@@ -11,6 +11,7 @@ import type {
 import type { RustSourcePolicyContext } from "../model/context.js";
 import { rustPolicyNode } from "../model/context.js";
 import type { RustSourceProfileRegistry } from "../types/source-profile.js";
+import { jsSourceSemanticsIdentity } from "@tsonic/js-source-profile";
 
 export interface RustSelectedSourceMemberIdentity {
   readonly profile: "native" | "js";
@@ -187,6 +188,17 @@ export function resolveSelectedSourceProfileMember(
   sourceProfiles: RustSourceProfileRegistry,
 ): RustSelectedSourceMemberIdentity | undefined {
   const declaration = rustPolicyNode(context, declarationSubject);
+  const provider = context.facts.get(
+    declarationSubject,
+    providerVirtualDeclarationFactKey,
+  );
+  if (provider?.providerId === jsSourceSemanticsIdentity.providerId) {
+    const ownerName = provider.exportName;
+    const memberName = provider.memberName;
+    return declaration !== undefined && ownerName !== undefined && memberName !== undefined
+      ? { profile: "js", ownerName, memberName, declaration }
+      : undefined;
+  }
   const profile = declaration === undefined
     ? undefined
     : sourceProfiles.profileForNode(declaration, context.ast);
@@ -211,10 +223,46 @@ export function resolveSelectedSourceProfileMember(
     ? "index"
     : context.ast.is.IsConstructSignatureDeclaration(declaration)
       ? "constructor"
-      : context.ast.text(context.ast.name(declaration));
+      : context.ast.is.IsCallSignatureDeclaration(declaration)
+        ? "call"
+        : selectedSourceProfileMemberName(context, declaration);
   return ownerName.length > 0 && memberName.length > 0
     ? { profile, ownerName, memberName, declaration }
     : undefined;
+}
+
+function selectedSourceProfileMemberName(
+  context: RustSourcePolicyContext,
+  declaration: Node,
+): string {
+  const name = context.ast.name(declaration);
+  if (name === undefined) {
+    return "";
+  }
+  if (!context.ast.is.IsComputedPropertyName(name)) {
+    return context.ast.text(name);
+  }
+  const selected = context.semanticsFor(declaration).operations.wellKnownSymbol(name);
+  if (selected === undefined) {
+    return "";
+  }
+  switch (selected.kind) {
+    case "async-dispose": return "@@asyncDispose";
+    case "async-iterator": return "@@asyncIterator";
+    case "dispose": return "@@dispose";
+    case "has-instance": return "@@hasInstance";
+    case "is-concat-spreadable": return "@@isConcatSpreadable";
+    case "iterator": return "@@iterator";
+    case "match": return "@@match";
+    case "match-all": return "@@matchAll";
+    case "replace": return "@@replace";
+    case "search": return "@@search";
+    case "species": return "@@species";
+    case "split": return "@@split";
+    case "to-primitive": return "@@toPrimitive";
+    case "to-string-tag": return "@@toStringTag";
+    case "unscopables": return "@@unscopables";
+  }
 }
 
 export function resolveSelectedSourceProfilePropertyMembers(
@@ -261,6 +309,13 @@ export function resolveSelectedJsSourceExportName(
   declarationSubject: ExtensionFactSubject | undefined,
   sourceProfiles: RustSourceProfileRegistry,
 ): string | undefined {
+  const provider = context.facts.get(
+    declarationSubject,
+    providerVirtualDeclarationFactKey,
+  );
+  if (provider?.providerId === jsSourceSemanticsIdentity.providerId) {
+    return provider.exportName;
+  }
   const declaration = rustPolicyNode(context, declarationSubject);
   if (declaration === undefined || sourceProfiles.profileForNode(declaration, context.ast) !== "js") {
     return undefined;

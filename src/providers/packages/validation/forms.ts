@@ -99,10 +99,16 @@ export function validateOperationForm(
       requireRustIdentifier(form.name, `${label}.target.name`, fail);
       return;
     case "arg-receiver-method":
-      requireExactKeys(record, ["form", "name", "argModes"], `${label}.target`, fail);
+      requireExactKeys(record, ["form", "name", "argModes", "argConversions"], `${label}.target`, fail);
       requireRustIdentifier(form.name, `${label}.target.name`, fail);
       validateModes(form.argModes, label, parameterCarriers?.length, fail);
+      validateArgumentMetadata(form, definition, label, parameterCarriers, fail);
+      if (form.argConversions?.[0] !== undefined) {
+        fail(`${label}.target.argConversions[0] cannot convert the receiver argument`);
+      }
       return;
+    case "arg-structural-method":
+      fail(`${label}.target.arg-structural-method is compiler-owned and cannot be declared by a provider package`);
     case "index":
       requireExactKeys(record, ["form", "indexConversion"], `${label}.target`, fail);
       if (form.indexConversion !== undefined) {
@@ -220,7 +226,9 @@ function expandValidationAlias(
 }
 
 function validateArgumentMetadata(
-  form: Extract<RustProviderOperationForm, { readonly form: "call" | "free-call" | "receiver-method" }>,
+  form: Extract<RustProviderOperationForm, {
+    readonly form: "call" | "free-call" | "receiver-method" | "arg-receiver-method";
+  }>,
   definition: RustProviderPackageDefinition,
   label: string,
   parameterCarriers: readonly TargetTypeRef[] | undefined,
@@ -233,7 +241,9 @@ function validateArgumentMetadata(
   }
   for (const [targetIndex, conversion] of (form.argConversions ?? []).entries()) {
     if (conversion !== undefined) {
-      const sourceIndex = form.argOrder?.[targetIndex] ?? targetIndex;
+      const sourceIndex = "argOrder" in form
+        ? form.argOrder?.[targetIndex] ?? targetIndex
+        : targetIndex;
       validateValueConversion(
         conversion,
         definition,
@@ -244,7 +254,7 @@ function validateArgumentMetadata(
       );
     }
   }
-  if (form.argOrder !== undefined) {
+  if ("argOrder" in form && form.argOrder !== undefined) {
     if (parameterCount !== undefined && form.argOrder.length !== parameterCount) {
       fail(`${label}.target.argOrder must contain exactly ${parameterCount} parameter indexes`);
     }

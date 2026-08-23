@@ -19,7 +19,7 @@ import {
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { collectVariableDeclarations, planResourceManagedBody, resourceDisposalReceiverMode, resourceFactForPlanning } from "./resources.js";
 import { createRustLoopTarget, withRustControlTarget } from "./control-flow.js";
-import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath } from "../program/plan-context.js";
+import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustActiveErrorType } from "../program/plan-context.js";
 import { isRustUnitCarrier } from "../../../target-model/types/index.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planBlockLike } from "./core.js";
@@ -456,12 +456,45 @@ export function planForOfStatement(
       ? { kind: "method-call", receiver: nonConsumingIterable, method: "iter_values", args: [] }
       : fact.lowering.kind === "receiver-method"
         ? { kind: "method-call", receiver: nonConsumingIterable, method: fact.lowering.name, args: [] }
+      : fact.lowering.kind === "fallible-owned"
+        ? { kind: "method-call", receiver: nonConsumingIterable, method: "iterator", args: [] }
       : iterable;
+  let loopBinding = binding;
+  let loopBindingMutable = bindingMutable;
+  if (fact.lowering.kind === "fallible-owned") {
+    const activeErrorType = rustActiveErrorType(context);
+    if (context.syntheticNames === undefined || activeErrorType === undefined) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, node),
+        "rust.backend.fallible-iteration-context",
+        "Fallible JavaScript iteration requires a finalized fallible context and hygienic local-name state.",
+      ));
+      return undefined;
+    }
+    loopBinding = allocateRustSyntheticName(context.syntheticNames, "fallible_item");
+    loopBindingMutable = false;
+    body = {
+      statements: [
+        {
+          kind: "let",
+          name: binding,
+          mutable: bindingMutable,
+          init: {
+            kind: "try",
+            resultErrorType: activeErrorType,
+            operandErrorType: { kind: "named", path: "js_abi::JsError" },
+            expr: { kind: "path", path: loopBinding },
+          },
+        },
+        ...body.statements,
+      ],
+    };
+  }
   return [{
     kind: "for",
     ...(target.used.value ? { label: target.label } : {}),
-    binding,
-    ...(bindingMutable ? { bindingMutable: true } : {}),
+    binding: loopBinding,
+    ...(loopBindingMutable ? { bindingMutable: true } : {}),
     iterable: targetIterable,
     body,
   }];

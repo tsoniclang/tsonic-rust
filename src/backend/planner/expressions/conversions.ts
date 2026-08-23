@@ -2,6 +2,7 @@ import {
   isRustCopyCarrier,
   isRustNeverCarrier,
   rustCarrierSupportsClone,
+  rustCallableProtocol,
   rustPrimitiveTypeName,
   rustSourceUnionCarrierValue,
 } from "../../../target-model/types/index.js";
@@ -42,6 +43,7 @@ import {
   applyFinalizedRustArgumentMode,
   applyRustArgumentMode,
 } from "./input-shaping.js";
+import { invokeRustStructuralObjectMethod } from "../objects/project-storage.js";
 
 export function applyRustValueConversion(
   context: RustPlanContext,
@@ -131,6 +133,76 @@ export function lowerRustValueConversion(
       return { kind: "owned-string-from-borrowed-str", expression: source };
     case "copy-from-reference":
       return { kind: "dereference", pointer: source };
+    case "js-argument-vector-callback": {
+      const names = context.syntheticNames ?? createRustSyntheticNameState(
+        context.input.program.source.ast,
+        node ?? context.sourceFile,
+        [],
+      );
+      const callbackName = allocateRustSyntheticName(names, "replacement_callback");
+      const argumentsName = allocateRustSyntheticName(names, "replacement_arguments");
+      const argumentsExpression: RustExpr = { kind: "path", path: argumentsName };
+      const callbackArguments: RustExpr[] = [];
+      for (const [index, projection] of contract.projections.entries()) {
+        const path = projection === "native-string"
+          ? "js_abi::regexp_replacement_argument_string_native"
+          : projection === "exact-string"
+            ? "js_abi::regexp_replacement_argument_string"
+            : projection === "value"
+              ? "js_abi::regexp_replacement_argument_value"
+              : "js_abi::regexp_replacement_argument_rest";
+        registerAliasFromPath(context, path);
+        const projected: RustExpr = {
+          kind: "call",
+          path,
+          args: [
+            { kind: "reference", expr: argumentsExpression },
+            { kind: "int-literal", text: String(index) },
+          ],
+        };
+        if (projection !== "native-string") {
+          callbackArguments.push(projected);
+          continue;
+        }
+        const activeErrorType = rustActiveErrorType(context);
+        if (activeErrorType === undefined) {
+          context.diagnostics.push(unsupportedConstructDiagnostic(
+            diagnosticInput(context, node ?? context.sourceFile),
+            "rust.backend.regexp-callback-native-string",
+            "A native RegExp callback projection requires a finalized fallible lowering context.",
+          ));
+          return undefined;
+        }
+        callbackArguments.push({
+          kind: "try",
+          expr: projected,
+          resultErrorType: activeErrorType,
+          operandErrorType: rustTargetRuntimeErrorType,
+        });
+      }
+      const callbackExpression: RustExpr = { kind: "path", path: callbackName };
+      const invocation: RustExpr = rustCallableProtocol(contract.source) === undefined
+        ? { kind: "invoke", callee: callbackExpression, args: callbackArguments }
+        : {
+            kind: "method-call",
+            receiver: callbackExpression,
+            method: "call",
+            args: [{ kind: "tuple-literal", elements: callbackArguments }],
+          };
+      const body = contract.sourceFallible || contract.lane === "exact"
+        ? invocation
+        : { kind: "call" as const, path: "Ok", args: [invocation] };
+      return {
+        kind: "block",
+        bindings: [{ name: callbackName, value: source }],
+        value: {
+          kind: "closure",
+          move: true,
+          params: [{ name: argumentsName, byRefCopy: false }],
+          body,
+        },
+      };
+    }
     case "source-union-variant": {
       const union = rustSourceUnionCarrierValue(contract.target);
       const typePath = union === undefined ? undefined : sourceTypePath(context, union);
@@ -151,6 +223,8 @@ export function lowerRustValueConversion(
         args: [source],
       };
     }
+    case "option-some":
+      return { kind: "call", path: "Some", args: [source] };
     case "option-map": {
       const valueName = allocateRustSyntheticName(
         context.syntheticNames ?? createRustSyntheticNameState(
@@ -392,6 +466,19 @@ export function planProviderOperationExpression(
             ...(concreteTargetTypeArguments === undefined ? {} : { typeArguments: concreteTargetTypeArguments }),
             ...(receiverMode === undefined ? {} : { receiverMode }),
           });
+    case "arg-structural-method": {
+      if (receiver === undefined || fact.abi.targetReceiver.kind !== "input") {
+        return undefined;
+      }
+      return scoped(invokeRustStructuralObjectMethod(
+        fact.abi.targetReceiver.input.parameterCarrier,
+        receiver,
+        form.storageIndex,
+        args,
+        fact.resultCarrier,
+        context,
+      ));
+    }
     case "receiver-method":
       return receiver === undefined
         ? undefined

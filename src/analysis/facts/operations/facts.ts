@@ -152,6 +152,7 @@ export type RustTargetOperationFact =
         | { readonly kind: "js-array" }
         | { readonly kind: "receiver-method"; readonly name: string }
         | { readonly kind: "owned" }
+        | { readonly kind: "fallible-owned" }
         | { readonly kind: "async-generator" };
     }
   | {

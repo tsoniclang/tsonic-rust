@@ -1,5 +1,6 @@
 import { rustSourceSemanticsModules } from "../../../source/profiles/source-modules.js";
 import { tsonicCoreSourceSemanticsModules } from "@tsonic/source-core";
+import { jsSourceSemanticsModules } from "@tsonic/js-source-profile";
 import type { RustProjectMethodPropertyPlanRegistry } from "../../project-types/method-properties.js";
 import type { RustProjectMethodDispatchPlanRegistry } from "../../project-types/method-dispatch.js";
 import type { RustProjectTypePolicy } from "../../project-types/type-policy.js";
@@ -12,6 +13,7 @@ import type { RustTargetTypeResolutionOptions } from "../../../policy/types/reso
 export const sourceCallMarkerByIdentity = new Map(
   [
     ...tsonicCoreSourceSemanticsModules(),
+    ...jsSourceSemanticsModules(),
     ...rustSourceSemanticsModules(),
   ].flatMap((module) =>
     module.exports
@@ -27,7 +29,6 @@ export interface RustOperationsProviderOptions {
   readonly providerRows: readonly RustProviderOperationRow[];
   readonly providerTypes: readonly import("../../../providers/packages/model.js").RustProviderTypeRow[];
   readonly jsEnabled: boolean;
-  readonly regExpSubsetViolation: (pattern: string, flags: string) => string | undefined;
   readonly sourceProfiles: RustSourceProfileRegistry;
   readonly sourceTypes: RustSourceTypeRegistry;
   readonly resolveProjectUnionCarrier: RustTargetTypeResolutionOptions["resolveProjectUnionCarrier"];

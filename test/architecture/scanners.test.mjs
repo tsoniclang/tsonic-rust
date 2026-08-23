@@ -438,7 +438,8 @@ test("optional chains consume exact TSTS evidence through one finalized Option f
   );
   assert.match(semantics, /selectedMemberReceiverCarrier\(request, context, options\)/u);
   assert.match(semantics, /selectRustOptionalChain\(\{/u);
-  assert.match(semantics, /request\.sourceReceiverDeclaration \?\? request\.receiver/u);
+  assert.match(semantics, /sourceGuardCarrier = resolveRustTargetTypeRef\(\s*request\.receiver,/u);
+  assert.doesNotMatch(semantics, /sourceReceiverDeclaration/u);
   assert.match(semantics, /request\.optionalChain/u);
   assert.match(semantics, /selectedMemberReceiverCarrier\(request, context, options\)/u);
   assert.match(semantics, /rustOptionalChainFactKey/u);

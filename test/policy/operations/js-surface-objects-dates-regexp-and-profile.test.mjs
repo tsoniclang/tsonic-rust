@@ -90,6 +90,58 @@ export function exact(value: string, month: int32): boolean {
   assert.match(text, /to_utc_string/u);
 });
 
+test("explicit JsString selects the exact UTF-16 lane while native strings stay native", () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+import { jsstr } from "@tsonic/js/lang.js";
+import type { JsString } from "@tsonic/js/types.js";
+
+export function exact(input: string): string {
+  const value: JsString = jsstr(input);
+  const first: JsString = value.charAt(0);
+  const matched: JsRegExpExecArray | null = /./.exec(value);
+  return (matched?.[0] ?? first).toWellFormed();
+}
+
+export function native(input: string): boolean {
+  return /abc/.test(input) && input.replace(/bc/, "x") === "ax";
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /js_abi::js_string_from_utf8\(input\)/u);
+  assert.match(text, /js_exact_string::char_at\(&value, 0\.0\)/u);
+  assert.match(text, /\.exec\(&value\)\?/u);
+  assert.match(text, /js_exact_string::to_well_formed/u);
+  assert.match(text, /js_abi::regexp_test_native\([^;]*&input\)\?/su);
+  assert.match(text, /string_replace_regexp_native/u);
+});
+
+test("native and exact strings are not implicitly interchangeable", () => {
+  const harness = createRustSession({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+import { jsstr } from "@tsonic/js/lang.js";
+import type { JsString } from "@tsonic/js/types.js";
+
+const native: string = "value";
+const exact: JsString = jsstr(native);
+export const invalidExact: JsString = native;
+export const invalidNative: string = exact;
+`,
+    },
+  });
+  const diagnostics = rustSourceDiagnostics(harness, ["/src/index.ts"]);
+
+  assert.equal((diagnostics.match(/TS2322/gu) ?? []).length, 2, diagnostics);
+});
+
 test("closed object projections lower from exact structural facts", () => {
   const { result } = compileRust({
     surfaces: ["js"],
@@ -183,9 +235,9 @@ export function aliases(): boolean {
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /let same_date: js_abi::JsDate = date\.clone\(\);/u);
   assert.match(text, /let same_pattern: js_abi::JsRegExp = pattern\.clone\(\);/u);
-  assert.match(text, /same_pattern\.test\("1"\)\?/u);
+  assert.match(text, /js_abi::regexp_test_native\(&same_pattern, "1"\)\?/u);
   assert.match(text, /same_date == date/u);
-  assert.match(text, /i32_to_f64\(pattern\.last_index\(\)\) == 1\.0/u);
+  assert.match(text, /pattern\.last_index\(\) == 1\.0/u);
 });
 
 test("js surface contributes the rust-js cargo dependency", () => {
@@ -237,7 +289,7 @@ export function read(): string {
   }]);
 });
 
-test("constant new RegExp lowers through the oracle-proven engine", () => {
+test("constant new RegExp lowers through the complete runtime engine", () => {
   const { result } = compileRust({
     surfaces: ["js"],
     files: {
@@ -250,7 +302,7 @@ export function probe(text: string): boolean {
     },
   });
   assert.deepEqual(result.diagnostics, []);
-  assert.match(artifactText(result, "src/index.rs"), /js_abi::JsRegExp::new\("\\\\d\+", ""\)\?/u);
+  assert.match(artifactText(result, "src/index.rs"), /js_abi::regexp_from_string_native\("\\\\d\+"\)\?/u);
 });
 
 test("readonly arrays retain shared JS identity while exposing only read operations", () => {

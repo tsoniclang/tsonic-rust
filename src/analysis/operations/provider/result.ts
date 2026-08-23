@@ -13,7 +13,10 @@ import {
   rustPostCheckUnaryPlusOperationId,
 } from "../../facts/keys.js";
 import { acceptRustPolicy, rejectRustPolicy } from "../../../policy/operations/contracts.js";
-import { asNode } from "../../../policy/evidence/selected-source.js";
+import {
+  asNode,
+  resolveSelectedSourceProfilePropertyMembers,
+} from "../../../policy/evidence/selected-source.js";
 import { selectRustFlowReadProjection } from "../../../policy/types/value-carrier-reconciliation.js";
 import { recordRustFlowReadProjection } from "../../facts/value-carrier-queries.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
@@ -91,7 +94,19 @@ export function selectedMemberReceiverCarrier(
     options,
   );
   if (selectedCarrier === undefined) {
-    return undefined;
+    const selectedSourceProfileMember = resolveSelectedSourceProfilePropertyMembers(
+      context,
+      request.expression,
+      request.sourceSelectedSymbol,
+      request.sourceSelectedDeclaration,
+      options.sourceProfiles,
+    );
+    if (selectedSourceProfileMember === undefined || sourceCarrier === undefined) {
+      return undefined;
+    }
+    return request.optionalChain === true
+      ? rustOptionElementCarrier(sourceCarrier)
+      : sourceCarrier;
   }
   if (sourceCarrier === undefined) {
     const receiverKind = context.ast.kindName(receiver);
@@ -191,16 +206,22 @@ export function acceptRustMemberOperation(
   if (request.optionalChain !== true) {
     return acceptRustOperation(request.expression, fact, context, provenance, innerResultCarrier);
   }
+  const sourceGuardCarrier = resolveRustTargetTypeRef(
+    request.receiver,
+    context,
+    options,
+  );
+  const selectedGuardCarrier = selectedMemberReceiverCarrier(
+    request,
+    context,
+    options,
+  );
   const selection = selectRustOptionalChain({
     expression: request.expression,
     guard: request.receiver,
     operationKind,
-    sourceGuardCarrier: resolveRustTargetTypeRef(
-      request.sourceReceiverDeclaration ?? request.receiver,
-      context,
-      options,
-    ),
-    selectedGuardCarrier: selectedMemberReceiverCarrier(request, context, options),
+    sourceGuardCarrier,
+    selectedGuardCarrier,
     innerResultCarrier,
   });
   if (selection.kind === "rejected") {

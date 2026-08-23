@@ -1,7 +1,9 @@
 import {
   rustFixedArrayCarrierValue,
   rustJsDateTargetType,
+  rustJsErrorTargetType,
   rustJsMapTargetType,
+  rustJsRegExpTargetType,
   rustJsSetTargetType,
 } from "../../../target-model/types/index.js";
 import { resolveCarrierRef } from "./selection.js";
@@ -15,7 +17,8 @@ interface JsConstructorRowData {
   readonly typeArgumentCount: number;
   readonly argumentCount: number;
   readonly path: string;
-  readonly result: "map" | "set" | "date";
+  readonly result: "map" | "set" | "date" | "regexp";
+  readonly fallible?: true;
   readonly params?: readonly (JsCarrierRef | undefined)[];
   readonly argModes?: readonly ("value" | "ref" | "mut-ref")[];
   readonly inputShape?: "js-array-of-element" | "fixed-array-of-element";
@@ -30,6 +33,19 @@ const jsConstructorRows: readonly JsConstructorRowData[] = [
   { className: "Date", sourceOwnerName: "DateConstructor", typeArgumentCount: 0, argumentCount: 0, path: "js_abi::JsDate::new", result: "date" },
   { className: "Date", sourceOwnerName: "DateConstructor", typeArgumentCount: 0, argumentCount: 1, path: "js_abi::JsDate::from_millis", result: "date", params: [{ ref: "float64" }] },
   { className: "Date", sourceOwnerName: "DateConstructor", typeArgumentCount: 0, argumentCount: 1, path: "js_abi::JsDate::from_string", result: "date", params: [{ ref: "string" }], argModes: ["ref"] },
+  { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 0, path: "js_abi::regexp_empty_native", result: "regexp", fallible: true, variant: "empty" },
+  { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 1, path: "js_abi::regexp_from_string_native", result: "regexp", fallible: true, params: [{ ref: "string" }], argModes: ["ref"], variant: "native" },
+  { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 1, path: "js_abi::regexp_from_exact", result: "regexp", fallible: true, params: [{ ref: "js-string" }], argModes: ["ref"], variant: "exact" },
+  { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 1, path: "js_abi::regexp_from_undefined_native", result: "regexp", fallible: true, params: [{ ref: "undefined" }], variant: "undefined" },
+  { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 1, path: "js_abi::regexp_construct_from_regexp_native", result: "regexp", fallible: true, params: [{ ref: "regexp" }], argModes: ["ref"], variant: "regexp" },
+  { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 2, path: "js_abi::regexp_from_string_with_flags_native", result: "regexp", fallible: true, params: [{ ref: "string" }, { ref: "string" }], argModes: ["ref", "ref"], variant: "native-flags" },
+  { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 2, path: "js_abi::regexp_from_string_with_undefined_flags_native", result: "regexp", fallible: true, params: [{ ref: "string" }, { ref: "undefined" }], argModes: ["ref", "value"], variant: "native-undefined-flags" },
+  { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 2, path: "js_abi::regexp_from_exact_with_flags", result: "regexp", fallible: true, params: [{ ref: "js-string" }, { ref: "string" }], argModes: ["ref", "ref"], variant: "exact-flags" },
+  { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 2, path: "js_abi::regexp_from_exact_with_undefined_flags", result: "regexp", fallible: true, params: [{ ref: "js-string" }, { ref: "undefined" }], argModes: ["ref", "value"], variant: "exact-undefined-flags" },
+  { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 2, path: "js_abi::regexp_from_undefined_with_flags_native", result: "regexp", fallible: true, params: [{ ref: "undefined" }, { ref: "string" }], argModes: ["value", "ref"], variant: "undefined-flags" },
+  { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 2, path: "js_abi::regexp_from_undefined_with_undefined_flags_native", result: "regexp", fallible: true, params: [{ ref: "undefined" }, { ref: "undefined" }], variant: "undefined-undefined-flags" },
+  { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 2, path: "js_abi::regexp_construct_from_regexp_with_flags_native", result: "regexp", fallible: true, params: [{ ref: "regexp" }, { ref: "string" }], argModes: ["ref", "ref"], variant: "regexp-flags" },
+  { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 2, path: "js_abi::regexp_construct_from_regexp_with_undefined_flags_native", result: "regexp", fallible: true, params: [{ ref: "regexp" }, { ref: "undefined" }], argModes: ["ref", "value"], variant: "regexp-undefined-flags" },
 ];
 
 export interface JsConstructorRequest {
@@ -54,8 +70,10 @@ export function selectJsSurfaceConstructor(request: JsConstructorRequest): JsOpe
   } else if (rows[0]!.result === "set") {
     const [value] = typeArguments;
     resultCarrier = value !== undefined ? rustJsSetTargetType(value) : undefined;
-  } else {
+  } else if (rows[0]!.result === "date") {
     resultCarrier = rustJsDateTargetType();
+  } else {
+    resultCarrier = rustJsRegExpTargetType();
   }
   if (resultCarrier === undefined) {
     return undefined;
@@ -95,8 +113,9 @@ export function selectJsSurfaceConstructor(request: JsConstructorRequest): JsOpe
       resultCarrier,
       parameterCarriers,
       isAsync: false,
-      isFallible: false,
-      errorBoundary: "none",
+      isFallible: row.fallible === true,
+      errorBoundary: row.fallible === true ? "provider-native" : "none",
+      ...(row.fallible === true ? { errorCarrier: rustJsErrorTargetType() } : {}),
     },
     resultCarrier,
     parameterCarriers,

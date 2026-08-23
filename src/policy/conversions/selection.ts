@@ -41,7 +41,8 @@ export function selectRustSourceValueConversion(
       sourceOptionElement,
       targetOptionElement,
     );
-    if (elementConversion === undefined || elementConversion.kind === "option-map") {
+    if (elementConversion === undefined || elementConversion.kind === "option-map" ||
+      elementConversion.kind === "option-some") {
       return undefined;
     }
     return { kind: "option-map", elementConversion };

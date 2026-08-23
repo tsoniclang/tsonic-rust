@@ -8,6 +8,7 @@ import {
   rustBigIntTargetType,
   rustCallableTargetType,
   rustJsArrayTargetType,
+  rustJsStringTargetType,
   rustLocationTargetType,
   rustNullTargetType,
   rustNeverTargetType,
@@ -24,7 +25,7 @@ import {
 } from "../../../target-model/types/index.js";
 import { asNode } from "../../evidence/selected-source.js";
 import { denseDefined, resolveProjectSourceCarrier } from "./project.js";
-import { functionPointerFactKey, pointerFactKey } from "@tsonic/tsts";
+import { functionPointerFactKey, pointerFactKey, sourceMarkerFactKey } from "@tsonic/tsts";
 import { instantiateProviderTargetType, providerCarrierFromRelations, resolveOwnedSourceProfileTypeName, resolveProviderTypeIdentity, resolveSourceProfileCarrierFromArguments } from "./providers.js";
 import { resolveCallableType, resolveSourcePrimitive, resolveSourceTypeParameter } from "./callables.js";
 import { resolveReferencedDeclarationType, resolveRustAuthoredTargetType, resolveRustTupleElementTargetTypeWithState, rustParameterLaneTargetType } from "./tuples.js";
@@ -48,6 +49,12 @@ export function resolveRustTargetTypeRef(
 ): TargetTypeRef | undefined {
   if (subject === undefined) {
     return undefined;
+  }
+  const marker = context.facts.resolve(subject, sourceMarkerFactKey) ??
+    context.facts.get(subject, sourceMarkerFactKey);
+  if (marker?.kind === "type-marker" && marker.marker === "js-string" ||
+    marker?.kind === "call-marker" && marker.marker === "js-string") {
+    return rustJsStringTargetType();
   }
   const fixedArray = context.facts.resolve(subject, tsonicFixedArrayFactKey) ??
     context.facts.get(subject, tsonicFixedArrayFactKey);

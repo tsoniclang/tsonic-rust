@@ -5,16 +5,39 @@ import {
   rustCarrierSupportsJsEquality,
   isRustBoolCarrier,
   isRustIntegerCarrier,
-  isRustJsArrayCarrier,
+  rustJsArrayLikeElementTargetType,
   isRustSourceStringConvertibleCarrier,
   rustJsValueTargetType,
   rustJsErrorTargetType,
+  rustJsStringTargetId,
+  rustJsStringTargetType,
   rustStringTargetId,
   rustVecTargetType,
   isRustNumericCarrier,
   isRustStringCarrier,
   rustJsDateTargetId,
+  rustJsRegExpExecArrayTargetType,
+  rustJsRegExpIndicesTargetType,
+  rustJsRegExpMatchArrayTargetType,
+  rustJsRegExpNamedGroupsTargetId,
+  rustJsRegExpNamedGroupsTargetType,
+  rustJsRegExpNamedIndicesTargetId,
+  rustJsRegExpNamedIndicesTargetType,
+  rustJsRegExpStringIteratorTargetId,
+  rustJsRegExpStringIteratorTargetType,
+  rustJsRegExpTargetId,
+  rustJsRegExpTargetType,
+  rustRegExpExecArrayTargetType,
+  rustRegExpIndicesTargetType,
+  rustRegExpMatchArrayTargetType,
+  rustRegExpNamedGroupsTargetId,
+  rustRegExpNamedGroupsTargetType,
+  rustRegExpNamedIndicesTargetId,
+  rustRegExpNamedIndicesTargetType,
+  rustRegExpStringIteratorTargetId,
+  rustRegExpStringIteratorTargetType,
   rustJsArrayTargetType,
+  isRustCallableCarrier,
   rustClosureTargetType,
   rustNullTargetType,
   rustOptionTargetType,
@@ -46,9 +69,9 @@ function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readon
     return { lane: "string", bindings: { receiver: carrier.referent } };
   }
   if (carrier?.kind === "target-named") {
-    if (isRustJsArrayCarrier(carrier)) {
-      const element = carrier.typeArguments?.[0];
-      return element === undefined ? undefined : { lane: "js-array", bindings: { element, receiver: carrier } };
+    const arrayElement = rustJsArrayLikeElementTargetType(carrier);
+    if (arrayElement !== undefined) {
+      return { lane: "js-array", bindings: { element: arrayElement, receiver: carrier } };
     }
     const mapTypes = getRustJsMapTargetTypes(carrier);
     if (mapTypes !== undefined) {
@@ -61,9 +84,27 @@ function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readon
     if (carrier.id === rustJsDateTargetId) {
       return { lane: "date", bindings: { receiver: carrier } };
     }
+    if (carrier.id === rustJsRegExpTargetId) {
+      return { lane: "regexp", bindings: { receiver: carrier } };
+    }
+    if (carrier.id === rustRegExpNamedGroupsTargetId ||
+      carrier.id === rustJsRegExpNamedGroupsTargetId) {
+      return { lane: "regexp-named-groups", bindings: { receiver: carrier } };
+    }
+    if (carrier.id === rustRegExpNamedIndicesTargetId ||
+      carrier.id === rustJsRegExpNamedIndicesTargetId) {
+      return { lane: "regexp-named-indices", bindings: { receiver: carrier } };
+    }
+    if (carrier.id === rustRegExpStringIteratorTargetId ||
+      carrier.id === rustJsRegExpStringIteratorTargetId) {
+      return { lane: "regexp-string-iterator", bindings: { receiver: carrier } };
+    }
   }
   if (isRustStringCarrier(carrier)) {
     return { lane: "string", bindings: { receiver: carrier } };
+  }
+  if (carrier?.kind === "target-named" && carrier.id === rustJsStringTargetId) {
+    return { lane: "js-string", bindings: { receiver: carrier } };
   }
   if (isRustNumericCarrier(carrier)) {
     return { lane: "number", bindings: { receiver: carrier } };
@@ -99,11 +140,8 @@ function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readon
   if (carrier === undefined && ownerName === "ObjectConstructor") {
     return { lane: "object", bindings: {} };
   }
-  if (carrier?.kind === "target-named" && carrier.id === "rust.js.JsRegExp") {
-    return { lane: "regexp", bindings: { receiver: carrier } };
-  }
-  if (carrier?.kind === "target-named" && carrier.id === "rust.js.JsRegExpMatch") {
-    return { lane: "regexp-match", bindings: { receiver: carrier } };
+  if (carrier === undefined && ownerName === "RegExpConstructor") {
+    return { lane: "regexp", bindings: {} };
   }
   return undefined;
 }
@@ -161,16 +199,66 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
       return rustJsValueTargetType();
     case "string-array":
       return rustJsArrayTargetType(rustStringTargetType());
-    case "regexp-match":
-      return { kind: "target-named", id: "rust.js.JsRegExpMatch" };
-    case "option-of-regexp-match":
-      return rustOptionTargetType({ kind: "target-named", id: "rust.js.JsRegExpMatch" });
-    case "regexp-match-vec":
-      return rustVecTargetType({ kind: "target-named", id: "rust.js.JsRegExpMatch" });
+    case "js-string-array":
+      return rustJsArrayTargetType(rustJsStringTargetType());
+    case "regexp":
+      return rustJsRegExpTargetType();
+    case "regexp-exec-array":
+      return rustRegExpExecArrayTargetType();
+    case "regexp-match-array":
+      return rustRegExpMatchArrayTargetType();
+    case "regexp-indices":
+      return rustRegExpIndicesTargetType();
+    case "regexp-named-groups":
+      return rustRegExpNamedGroupsTargetType();
+    case "regexp-named-indices":
+      return rustRegExpNamedIndicesTargetType();
+    case "regexp-string-iterator":
+      return rustRegExpStringIteratorTargetType();
+    case "js-regexp-exec-array":
+      return rustJsRegExpExecArrayTargetType();
+    case "js-regexp-match-array":
+      return rustJsRegExpMatchArrayTargetType();
+    case "js-regexp-indices":
+      return rustJsRegExpIndicesTargetType();
+    case "js-regexp-named-groups":
+      return rustJsRegExpNamedGroupsTargetType();
+    case "js-regexp-named-indices":
+      return rustJsRegExpNamedIndicesTargetType();
+    case "js-regexp-string-iterator":
+      return rustJsRegExpStringIteratorTargetType();
+    case "regexp-index-pair":
+      return regexpIndexPairTargetType();
+    case "option-of-regexp-exec-array":
+      return rustOptionTargetType(rustRegExpExecArrayTargetType());
+    case "option-of-regexp-match-array":
+      return rustOptionTargetType(rustRegExpMatchArrayTargetType());
+    case "option-of-regexp-indices":
+      return rustOptionTargetType(rustRegExpIndicesTargetType());
+    case "option-of-regexp-named-groups":
+      return rustOptionTargetType(rustRegExpNamedGroupsTargetType());
+    case "option-of-regexp-named-indices":
+      return rustOptionTargetType(rustRegExpNamedIndicesTargetType());
+    case "option-of-js-regexp-exec-array":
+      return rustOptionTargetType(rustJsRegExpExecArrayTargetType());
+    case "option-of-js-regexp-match-array":
+      return rustOptionTargetType(rustJsRegExpMatchArrayTargetType());
+    case "option-of-js-regexp-indices":
+      return rustOptionTargetType(rustJsRegExpIndicesTargetType());
+    case "option-of-js-regexp-named-groups":
+      return rustOptionTargetType(rustJsRegExpNamedGroupsTargetType());
+    case "option-of-js-regexp-named-indices":
+      return rustOptionTargetType(rustJsRegExpNamedIndicesTargetType());
+    case "option-of-regexp-index-pair":
+      return rustOptionTargetType(regexpIndexPairTargetType());
     case "option-of-string":
       return rustOptionTargetType(rustStringTargetType());
+    case "option-of-js-string":
+      return rustOptionTargetType(rustJsStringTargetType());
     case "option-of-string-array":
       return rustOptionTargetType(rustJsArrayTargetType(rustStringTargetType()));
+    case "option-of-js-string-array":
+      return rustOptionTargetType(rustJsArrayTargetType(rustJsStringTargetType()));
     case "element-array":
       return bindings.element === undefined ? undefined : rustJsArrayTargetType(bindings.element);
     case "option-of-float64":
@@ -195,6 +283,10 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
       return rustUnitTargetType();
     case "string":
       return rustStringTargetType();
+    case "js-string":
+      return rustJsStringTargetType();
+    case "undefined":
+      return rustUndefinedTargetType();
     case "element":
       return bindings.element;
     case "option-of-element":
@@ -226,6 +318,16 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
     case "argument":
       return bindings.arguments?.[reference.index];
   }
+}
+
+function regexpIndexPairTargetType(): TargetTypeRef {
+  return {
+    kind: "tuple",
+    elements: [
+      rustSourcePrimitiveTargetType("float64"),
+      rustSourcePrimitiveTargetType("float64"),
+    ],
+  };
 }
 
 function arrayCallbackCarrier(
@@ -369,6 +471,8 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
       (candidate.selectedMethodTypeArgumentArity === undefined ||
         candidate.selectedMethodTypeArgumentArity ===
           (request.selectedMethodTypeArgumentCarriers?.length ?? 0)) &&
+      (candidate.callback === undefined ||
+        isRustCallableCarrier(argumentCarriers[candidate.callback.sourceArgumentIndex])) &&
       carrierRequirementsMatch(candidate.requirements, bindings, request) &&
       (candidate.firstArgCarrierId === undefined
         ? firstArgumentId(request) === undefined || !jsOperationRows.some((other) =>
@@ -415,12 +519,25 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
   const { row, parameterCarriers } = selected;
   const discardResult = request.resultUse === "discarded" &&
     row.shape.op === "operation" && row.shape.discardedTarget !== undefined;
-  const target = materializeVariadicTarget(
+  const materializedTarget = materializeVariadicTarget(
     discardResult && row.shape.op === "operation"
       ? row.shape.discardedTarget!
       : row.shape.target,
     bindings.element,
   );
+  const target = row.authoredPropertyKey !== true
+    ? materializedTarget
+    : request.authoredPropertyKey === undefined ||
+        request.authoredPropertyKey.length === 0 ||
+        materializedTarget?.form !== "free-call"
+      ? undefined
+      : {
+          ...materializedTarget,
+          trailingArguments: [
+            ...(materializedTarget.trailingArguments ?? []),
+            { kind: "string" as const, value: request.authoredPropertyKey },
+          ],
+        };
   if (target === undefined) {
     return undefined;
   }
