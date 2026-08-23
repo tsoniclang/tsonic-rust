@@ -169,17 +169,18 @@ export function lowerRustValueConversion(
             args: [{ kind: "tuple-literal", elements: callbackArguments }],
           };
       return {
-        kind: "match",
-        expression: source,
-        arms: [{
-          pattern: { kind: "binding", name: callbackName },
-          expression: {
+        kind: "invoke",
+        callee: {
+          kind: "closure",
+          params: [{ name: callbackName, byRefCopy: false }],
+          body: {
             kind: "closure",
             move: true,
             params: [{ name: argumentsName, byRefCopy: false }],
             body: invocation,
           },
-        }],
+        },
+        args: [source],
       };
     }
     case "source-union-variant": {
