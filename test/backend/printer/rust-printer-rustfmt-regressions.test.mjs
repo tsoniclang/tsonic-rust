@@ -359,3 +359,97 @@ test("near-width nested calls move below typed bindings before expansion", () =>
     /let digest: js_abi::JsString =\n {12}tsonic_rust_js::abi::js_string_from_utf8\(mac\.digest_string\(\n {16}&tsonic_rust_js::abi::js_string_to_utf8\(&js_abi::JsString::from\("hex"\)\),\n {12}\)\?\);/u,
   );
 });
+
+test("multiline block call arguments use their expanded argument depth", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "let",
+          name: "replaced",
+          mutable: false,
+          init: {
+            kind: "method-call",
+            receiver: { kind: "path", path: "expression" },
+            method: "try_replace_with",
+            args: [{ kind: "reference", expr: { kind: "path", path: "input" } }, {
+              kind: "block",
+              bindings: [{
+                name: "replacement_callback",
+                value: {
+                  kind: "associated-call",
+                  owner: {
+                    kind: "named",
+                    path: "rt::Callable",
+                    typeArguments: [{
+                      kind: "tuple",
+                      elements: [
+                        { kind: "named", path: "js_abi::JsString" },
+                        { kind: "named", path: "js_abi::JsValue" },
+                        { kind: "named", path: "js_abi::JsValue" },
+                      ],
+                    }, {
+                      kind: "named",
+                      path: "rt::TsonicResult",
+                      typeArguments: [{ kind: "named", path: "js_abi::JsString" }],
+                    }],
+                  },
+                  method: "new",
+                  args: [{
+                    kind: "closure",
+                    move: true,
+                    params: [{ name: "arguments", byRefCopy: false }],
+                    body: { kind: "path", path: "Ok(arguments.0)" },
+                  }],
+                },
+              }],
+              value: {
+                kind: "closure",
+                move: true,
+                params: [{ name: "replacement_arguments", byRefCopy: false }],
+                body: {
+                  kind: "method-call",
+                  receiver: { kind: "path", path: "replacement_callback" },
+                  method: "call",
+                  args: [{
+                    kind: "tuple-literal",
+                    elements: [{
+                      kind: "call",
+                      path: "js_abi::regexp_replacement_argument_string",
+                      args: [{
+                        kind: "reference",
+                        expr: { kind: "path", path: "replacement_arguments" },
+                      }, { kind: "int-literal", text: "0" }],
+                    }, {
+                      kind: "call",
+                      path: "js_abi::regexp_replacement_argument_value",
+                      args: [{
+                        kind: "reference",
+                        expr: { kind: "path", path: "replacement_arguments" },
+                      }, { kind: "int-literal", text: "1" }],
+                    }],
+                  }],
+                },
+              },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /\.try_replace_with\(&input, \{\n {8}let replacement_callback = rt::Callable/u,
+  );
+  assert.match(
+    source,
+    /\n {8}move \|replacement_arguments\| \{\n {12}replacement_callback\.call/u,
+  );
+  assert.match(source, /\n {4}\}\);/u);
+});

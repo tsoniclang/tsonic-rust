@@ -287,7 +287,7 @@ export function printFittedCall(
         return appendToLastLine(
           `${prefix}${printRustExprFitted(
             trailingClosure,
-            inlineArgumentDepth,
+            depth,
             column + prefix.length,
           )}`,
           ")",
