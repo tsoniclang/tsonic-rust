@@ -32,10 +32,10 @@ export function probe(dir: string, file: string): boolean {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.doesNotMatch(text, /use tsonic_rust_node::path as node_path;/u);
-  assert.match(text, /pub fn probe\(dir: String, file: String\)/u);
-  assert.match(text, /tsonic_rust_node::path::join\(&\[dir\.as_str\(\), file\.as_str\(\)\]\)/u);
-  assert.match(text, /tsonic_rust_node::path::dirname\(&full\)/u);
-  assert.match(text, /tsonic_rust_node::path::basename\(&full, None\)/u);
+  assert.match(text, /pub fn probe\(dir: js_abi::JsString, file: js_abi::JsString\)/u);
+  assert.match(text, /tsonic_rust_node::path::join\(&\[[\s\S]*?js_string_to_utf8\(&dir\)\.as_str\(\),[\s\S]*?js_string_to_utf8\(&file\)\.as_str\(\),?[\s\S]*?\]\)/u);
+  assert.match(text, /tsonic_rust_node::path::dirname\(&tsonic_rust_js::abi::js_string_to_utf8\([\s\S]*?&full/u);
+  assert.match(text, /tsonic_rust_node::path::basename\([\s\S]*?js_string_to_utf8\(&full\),[\s\S]*?None/u);
   assert.match(text, /tsonic_rust_node::os::platform\(\)/u);
   assert.match(text, /tsonic_rust_node::os::eol\(\)/u);
   assert.doesNotMatch(text, /tsonic_rust_node::os::eol\(\)\.to_string\(\)/u);
@@ -166,9 +166,9 @@ export function appendSeparator(value: string): string {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn owned_separator\(\) -> String \{[\s\S]*String::from\(tsonic_rust_node::path::sep\(\)\)/u);
-  assert.match(text, /ends_with_at_end\(value, tsonic_rust_node::path::sep\(\)\)/u);
-  assert.match(text, /format!\("\{\}\{\}", value, tsonic_rust_node::path::sep\(\)\)/u);
+  assert.match(text, /pub fn owned_separator\(\) -> js_abi::JsString \{[\s\S]*js_string_from_utf8\(String::from\(tsonic_rust_node::path::sep\(\)\)\)/u);
+  assert.match(text, /ends_with_at_end\([\s\S]*value,[\s\S]*&tsonic_rust_js::abi::js_string_from_utf8\(String::from\(tsonic_rust_node::path::sep\(\)\)\)/u);
+  assert.match(text, /js_abi::JsString::concat\(&\[[\s\S]*?value,[\s\S]*?JsString::from\(String::from\(tsonic_rust_node::path::sep\(\)\)\),?[\s\S]*?\]\)/u);
   assert.doesNotMatch(text, /sep\(\)\.to_string\(\)/u);
 });
 
@@ -196,10 +196,10 @@ export function verify(value: boolean): void {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /tsonic_rust_node::assert::ok\(value, None\)\?/u);
-  assert.match(text, /tsonic_rust_node::assert::ok_with_message\(value, "value must be true"\)\?/u);
+  assert.match(text, /tsonic_rust_node::assert::ok_with_message\([\s\S]*?value,[\s\S]*?js_string_to_utf8\(&js_abi::JsString::from\("value must be true"\)\)[\s\S]*?\)\?/u);
   assert.match(
     text,
-    /tsonic_rust_node::assert::ok_with_message\(\s*sum_is_four\(2\.0, 2\.0\),\s*"nested operations must be finalized",\s*\)\?/u,
+    /tsonic_rust_node::assert::ok_with_message\([\s\S]*?sum_is_four\(2\.0, 2\.0\),[\s\S]*?js_string_to_utf8\(&js_abi::JsString::from\([\s\S]*?"nested operations must be finalized",?[\s\S]*?\)\)[\s\S]*?\)\?/u,
   );
 });
 
@@ -223,10 +223,10 @@ export function render(label: string, count: number, ok: boolean): string {
   const text = artifactText(result, "src/index.rs");
   assert.match(
     text,
-    /tsonic_rust_node::util::format\(\s*"%s:%d:%s",\s*&\[\s*tsonic_rust_js::abi::js_value_from_string\(&label\),\s*tsonic_rust_js::abi::JsValue::from\(count\),\s*tsonic_rust_js::abi::JsValue::from\(ok\),\s*\]\s*,?\s*\)/su,
+    /tsonic_rust_node::util::format\(\s*&tsonic_rust_js::abi::js_string_to_utf8\(&js_abi::JsString::from\("%s:%d:%s"\)\),\s*&\[\s*tsonic_rust_js::abi::clone_js_value\(&tsonic_rust_js::abi::js_value_from_string\(\s*&label,?\s*\)\),\s*tsonic_rust_js::abi::clone_js_value\(&tsonic_rust_js::abi::JsValue::from\(count\)\),\s*tsonic_rust_js::abi::clone_js_value\(&tsonic_rust_js::abi::JsValue::from\(ok\)\),\s*\]\s*,?\s*\)/su,
   );
-  assert.match(text, /tsonic_rust_node::util::format\("%s", &\[\]\)/u);
-  assert.match(text, /format!\("\{\}\{\}\{\}", output, label, tsonic_rust_node::util::format\("%s", &\[\]\)\)/u);
+  assert.match(text, /tsonic_rust_node::util::format\([\s\S]*?js_string_to_utf8\(&js_abi::JsString::from\("%s"\)\),[\s\S]*?&\[\],[\s\S]*?\)/u);
+  assert.match(text, /js_abi::JsString::concat\(&\[[\s\S]*?output,[\s\S]*?label[\s\S]*?js_string_from_utf8\(tsonic_rust_node::util::format/u);
 });
 
 test("declared-but-unsupported node APIs diagnose deterministically", async () => {
@@ -293,7 +293,8 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /js_value_from_string\(&label\)/u);
+  assert.match(text, /js_value_from_string\(\s*&label,?\s*\)/u);
+  assert.match(text, /JsValue::from\(3\.0\)/u);
   assert.match(text, /clone_js_value\(&parsed\)/u);
   const run = validateGeneratedProject("node-provider-bin", result.artifacts, { run: true });
   assert.equal(run.status, 0);

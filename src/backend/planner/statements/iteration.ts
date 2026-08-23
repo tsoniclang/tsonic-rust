@@ -20,7 +20,7 @@ import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { collectVariableDeclarations, planResourceManagedBody, resourceDisposalReceiverMode, resourceFactForPlanning } from "./resources.js";
 import { createRustLoopTarget, withRustControlTarget } from "./control-flow.js";
 import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustActiveErrorType } from "../program/plan-context.js";
-import { isRustUnitCarrier } from "../../../target-model/types/index.js";
+import { isRustJsStringCarrier, isRustUnitCarrier } from "../../../target-model/types/index.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planBlockLike } from "./core.js";
 import { planRustBindingPattern } from "../bindings/patterns.js";
@@ -28,6 +28,7 @@ import { planRustNonConsumingValue } from "../expressions/typed-locations.js";
 import { rustMutatedBindingFactKey, rustSourceBindingFactKey, rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { validateRustFinalizedOperationAbi } from "../../../analysis/facts/finalized-operation-abi.js";
+import { rustJsStringLiteral } from "../../target-ast/expressions.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustAssignmentOperationFact } from "./core.js";
 import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
@@ -569,12 +570,18 @@ export function planForInStatement(
   if (fact.lowering.kind === "dense-index-keys") {
     const lengthName = allocateRustSyntheticName(context.syntheticNames, "for_in_length");
     const indexName = allocateRustSyntheticName(context.syntheticNames, "for_in_index");
-    const activation = activateForInBinding(binding, {
+    const nativeKey: RustExpr = {
       kind: "method-call",
       receiver: { kind: "path", path: indexName },
       method: "to_string",
       args: [],
-    });
+    };
+    const activation = activateForInBinding(
+      binding,
+      isRustJsStringCarrier(fact.elementCarrier)
+        ? { kind: "call", path: "js_abi::JsString::from", args: [nativeKey] }
+        : nativeKey,
+    );
     return [{
       kind: "scope",
       body: {
@@ -620,7 +627,10 @@ export function planForInStatement(
       }
     : {
         kind: "slice-literal",
-        elements: fact.lowering.keys.map((key) => ({ kind: "string-literal", value: key })),
+        elements: fact.lowering.keys.map((key) =>
+          isRustJsStringCarrier(fact.elementCarrier)
+            ? rustJsStringLiteral(key)
+            : { kind: "string-literal", value: key }),
       };
   return [{
     kind: "scope",

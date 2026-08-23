@@ -75,6 +75,10 @@ export type RustValueConversionContract = RustValueConversionContractBase & (
       readonly lowering: "option-some";
     }
   | {
+      readonly lowering: "option-some-map";
+      readonly element: RustValueConversionContract;
+    }
+  | {
       readonly lowering: "owned-string-from-borrowed-str";
     }
   | {
@@ -141,6 +145,20 @@ export function rustValueConversionContract(
           fallible: false,
         }
       : undefined;
+  }
+  if (value.kind === "option-some-map") {
+    const element = rustValueConversionContract(value.elementConversion);
+    return element === undefined
+      ? undefined
+      : {
+          category: element.category,
+          lowering: "option-some-map",
+          sourceMode: element.sourceMode,
+          source: element.source,
+          target: rustOptionTargetType(element.target),
+          element,
+          fallible: element.fallible,
+        };
   }
   if (value.kind === "option-map") {
     const element = rustValueConversionContract(value.elementConversion);
@@ -326,6 +344,8 @@ export function rustValueConversionIdentity(value: RustValueConversion): string 
             ? `js-argument-vector-callback.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}.${value.projections.join(".")}`
           : value.kind === "option-some"
             ? `option-some.${JSON.stringify(value.element)}`
+            : value.kind === "option-some-map"
+              ? `option-some-map.${rustValueConversionIdentity(value.elementConversion)}`
             : `option-map.${rustValueConversionIdentity(value.elementConversion)}`;
 }
 
@@ -357,6 +377,7 @@ export function substituteRustValueConversion(
         ...value,
         element: substituteRustTargetTypeParameters(value.element, substitutions),
       });
+    case "option-some-map":
     case "option-map":
       return Object.freeze({
         ...value,

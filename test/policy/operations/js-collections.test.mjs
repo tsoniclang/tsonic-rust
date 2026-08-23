@@ -224,7 +224,7 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /let values: js_abi::JsMap<String, Item> = js_abi::JsMap::new\(\);/u);
+  assert.match(source, /let values: js_abi::JsMap<js_abi::JsString, Item> = js_abi::JsMap::new\(\);/u);
   assert.equal(validateGeneratedProject("js-map-project-values", result.artifacts, { run: true }).status, 0);
 });
 

@@ -1,26 +1,22 @@
 import {
   KindIdentifier,
   KindNewExpression,
-  KindParenthesizedExpression,
   KindVariableDeclaration,
   Node_Expression,
-  Node_Initializer,
 } from "@tsonic/target-api/source";
 import {
   rustAsyncFunctionFactKey,
   rustFallibleFactKey,
   rustFutureValueFactKey,
-  rustMutatedBindingFactKey,
   rustResourceManagementFactKey,
   rustSelfModeFactKey,
-  rustSourceCallEffectsFactKey,
   rustTargetOperationFactKey,
 } from "../facts/keys.js";
 import { appendRustDiagnostic, rustOperationContext } from "../program/walk.js";
 import { collectDescendantsOfKind } from "../operations/inputs.js";
-import { isRustProgramErrorCarrier, rustStringTargetType } from "../../target-model/types/index.js";
+import { isRustProgramErrorCarrier } from "../../target-model/types/index.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
-import { rustFutureValueForOperation, rustFutureValueMatchesCarrier } from "../facts/future-values.js";
+import { rustFutureValueForSubject, rustFutureValueMatchesCarrier } from "../facts/future-values.js";
 import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
 import { selectRustResourceManagement } from "./management.js";
 import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
@@ -76,70 +72,47 @@ export function recordResourceManagementFacts(
 }
 
 export function recordFutureValueFacts(walk: RustFactWalk, sourceFiles: readonly SourceFile[]): void {
-  const resolving = new Set<Node>();
   const resolve = (node: Node): RustFutureValueFact | undefined => {
     const existing = walk.context.facts.get(node, rustFutureValueFactKey) ??
       walk.context.facts.resolve(node, rustFutureValueFactKey);
-    if (existing !== undefined || resolving.has(node)) {
+    if (existing !== undefined) {
       return existing;
     }
-    resolving.add(node);
-    try {
-      const operation = walk.context.facts.get(node, rustTargetOperationFactKey) ??
-        walk.context.facts.resolve(node, rustTargetOperationFactKey);
-      const effects = operation?.kind === "source-call"
-        ? walk.context.facts.get(node, rustSourceCallEffectsFactKey) ??
-          walk.context.facts.resolve(node, rustSourceCallEffectsFactKey)
-        : undefined;
-      let fact = rustFutureValueForOperation(operation, effects);
-      if (fact === undefined) {
-        const kind = walk.context.ast.kindName(node);
-        if (kind === KindParenthesizedExpression || kind === "KindAsExpression" ||
-          kind === "KindTypeAssertionExpression") {
-          const operand = Node_Expression(walk.context.ast, node);
-          fact = operand === undefined ? undefined : resolve(operand);
-        } else if (kind === KindVariableDeclaration) {
-          const initializer = Node_Initializer(walk.context.ast, node);
-          fact = walk.context.facts.get(node, rustMutatedBindingFactKey) !== undefined || initializer === undefined
-            ? undefined
-            : resolve(initializer);
-        } else if (kind === KindIdentifier) {
-          const declaration = walk.context.source.navigation.sourceReferenceFor(node)?.declaration;
-          fact = declaration === undefined ? undefined : resolve(declaration);
-        }
-      }
-      if (fact === undefined) {
-        return undefined;
-      }
-      let carrier = walk.context.facts.get(node, rustRuntimeCarrierKey)?.carrier ??
-        walk.context.facts.resolve(node, rustRuntimeCarrierKey)?.carrier;
-      if (carrier === undefined && walk.context.ast.kindName(node) === KindIdentifier) {
-        const declaration = walk.context.source.navigation.sourceReferenceFor(node)?.declaration;
-        const declarationCarrier = declaration === undefined
-          ? undefined
-          : walk.context.facts.get(declaration, rustRuntimeCarrierKey)?.carrier ??
-            walk.context.facts.resolve(declaration, rustRuntimeCarrierKey)?.carrier;
-        if (declarationCarrier !== undefined) {
-          carrier = setCarrierFact(walk, node, declarationCarrier);
-        }
-      }
-      if (!rustFutureValueMatchesCarrier(fact, carrier)) {
-        appendRustDiagnostic(
-          walk,
-          "RUST_FUTURE_VALUE_CARRIER_CONFLICT",
-          "First-class future evidence conflicts with the exact runtime carrier of this value.",
-          node,
-          ["target.capability=rust.async.future-value"],
-        );
-        return undefined;
-      }
-      walk.context.facts.set(node, rustFutureValueFactKey, fact, [
-        { message: "rust exact future value" },
-      ]);
-      return fact;
-    } finally {
-      resolving.delete(node);
+    const fact = rustFutureValueForSubject(node, {
+      ast: walk.context.ast,
+      facts: walk.context.facts,
+      sourceDeclarationFor: (reference) =>
+        walk.context.source.navigation.sourceReferenceFor(reference)?.declaration,
+    });
+    if (fact === undefined) {
+      return undefined;
     }
+    let carrier = walk.context.facts.get(node, rustRuntimeCarrierKey)?.carrier ??
+      walk.context.facts.resolve(node, rustRuntimeCarrierKey)?.carrier;
+    if (carrier === undefined && walk.context.ast.kindName(node) === KindIdentifier) {
+      const declaration = walk.context.source.navigation.sourceReferenceFor(node)?.declaration;
+      const declarationCarrier = declaration === undefined
+        ? undefined
+        : walk.context.facts.get(declaration, rustRuntimeCarrierKey)?.carrier ??
+          walk.context.facts.resolve(declaration, rustRuntimeCarrierKey)?.carrier;
+      if (declarationCarrier !== undefined) {
+        carrier = setCarrierFact(walk, node, declarationCarrier);
+      }
+    }
+    if (!rustFutureValueMatchesCarrier(fact, carrier)) {
+      appendRustDiagnostic(
+        walk,
+        "RUST_FUTURE_VALUE_CARRIER_CONFLICT",
+        "First-class future evidence conflicts with the exact runtime carrier of this value.",
+        node,
+        ["target.capability=rust.async.future-value"],
+      );
+      return undefined;
+    }
+    walk.context.facts.set(node, rustFutureValueFactKey, fact, [
+      { message: "rust exact future value" },
+    ]);
+    return fact;
   };
   for (const sourceFile of sourceFiles) {
     const visit = (node: Node): void => {
@@ -168,7 +141,7 @@ export function recordThrowFacts(walk: RustFactWalk, statement: Node, sourceFile
     constructor.operationId === "tsonic.rust.error.constructor") {
     const [message] = ast.arguments(expression);
     if (message !== undefined) {
-      resolveExpressionCarrier(walk, message, sourceFile, rustStringTargetType());
+      resolveExpressionCarrier(walk, message, sourceFile, undefined);
     }
     setRustOperationFact(walk, statement, {
       kind: "throw-op",

@@ -83,7 +83,7 @@ export function mapSelectedJsSpecialCall(
       path: "js_abi::json_stringify_with_indent",
       argModes: ["ref"],
       argOrder: [0],
-      trailingArguments: [{ kind: "string", value: indent }],
+      trailingArguments: [{ kind: "js-string", value: indent }],
     },
     parameterCarriers: [rustJsValueTargetType()],
     compileTimeSourceArgumentIndexes: [1, 2],

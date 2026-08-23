@@ -349,7 +349,7 @@ function constantIsValid(value: RustProviderConstantArgument): boolean {
     return hasExactKeys(value, ["kind", "value"], ["kind", "value"]) &&
       typeof value.value === "number" && Number.isFinite(value.value);
   }
-  if (value.kind === "string") {
+  if (value.kind === "string" || value.kind === "js-string") {
     return hasExactKeys(value, ["kind", "value"], ["kind", "value"]) && typeof value.value === "string";
   }
   if (value.kind === "boolean") {

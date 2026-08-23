@@ -179,6 +179,23 @@ export function rustInvocationHasNestedExpandedCollection(expression: RustExpr):
   }) === true;
 }
 
+export function rustInvocationContainsCollectionLiteral(expression: RustExpr): boolean {
+  const selected = rustTransparentInvocationOperand(expression);
+  if (selected.kind === "vec-literal" || selected.kind === "slice-literal") {
+    return true;
+  }
+  if (selected.kind === "call" || selected.kind === "associated-call" ||
+    selected.kind === "method-call" || selected.kind === "invoke") {
+    return selected.args.some(rustInvocationContainsCollectionLiteral) ||
+      (selected.kind === "method-call"
+        ? rustInvocationContainsCollectionLiteral(selected.receiver)
+        : selected.kind === "invoke"
+          ? rustInvocationContainsCollectionLiteral(selected.callee)
+          : false);
+  }
+  return false;
+}
+
 function rustTransparentInvocationOperand(expression: RustExpr): RustExpr {
   if (expression.kind === "bottom") {
     return rustTransparentInvocationOperand(expression.expression);

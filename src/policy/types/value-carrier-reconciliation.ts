@@ -11,7 +11,10 @@ import {
   rustOptionElementCarrier,
 } from "../../target-model/types/index.js";
 import type { RustProjectTypePolicy } from "./project-types.js";
-import { selectRustSourceValueConversion } from "../conversions/selection.js";
+import {
+  selectRustSourceResultRepresentationConversion,
+  selectRustSourceValueConversion,
+} from "../conversions/selection.js";
 
 export type RustValueCarrierReconciliation =
   | { readonly kind: "identity" }
@@ -36,6 +39,21 @@ export function selectRustFlowReadProjection(
 ): RustFlowReadProjectionSelection {
   if (rustTargetTypeRefEquals(sourceCarrier, selectedCarrier)) {
     return { kind: "identity" };
+  }
+  const representationConversion = selectRustSourceResultRepresentationConversion(
+    sourceCarrier,
+    selectedCarrier,
+  );
+  if (representationConversion !== undefined) {
+    return {
+      kind: "projection",
+      fact: {
+        kind: "representation-conversion",
+        sourceCarrier,
+        selectedCarrier,
+        conversion: representationConversion,
+      },
+    };
   }
   if (isRustProgramErrorCarrier(sourceCarrier)) {
     const selectedDefinition = projectTypes.definitionForCarrier(selectedCarrier);

@@ -75,7 +75,7 @@ export function main(): void {
   assert.match(source, /tsonic_rust_node::process::hrtime_since_number/u);
   assert.match(source, /tsonic_rust_node::process::memory_usage/u);
   assert.match(source, /tsonic_rust_node::process::stdout/u);
-  assert.match(source, /\.write_string\(""\)/u);
+  assert.match(source, /\.write_string\(\s*&tsonic_rust_js::abi::js_string_to_utf8\(\s*&js_abi::JsString::from\(""\),?\s*\),?\s*\)/u);
   assert.match(source, /\.write_buffer\(/u);
   assert.match(source, /\.heap_total/u);
   const run = validateGeneratedProject("node-process-parity-20260817", result.artifacts, { run: true });

@@ -241,3 +241,121 @@ test("rustfmt-stable calls, closures, conditionals, and borrowed fallible chains
   );
   assert.doesNotMatch(source, /rt::Callable::<\n/u);
 });
+
+test("typed bindings move a fitting fallible constructor chain to the continuation line", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "let",
+          name: "joined",
+          mutable: false,
+          type: { kind: "named", path: "js_abi::JsString" },
+          init: {
+            kind: "try",
+            errorDomain: "runtime",
+            expr: {
+              kind: "method-call",
+              receiver: {
+                kind: "try",
+                errorDomain: "runtime",
+                expr: {
+                  kind: "associated-call",
+                  owner: { kind: "named", path: "js_abi::JsRegExp" },
+                  method: "new",
+                  args: [
+                    { kind: "str-literal", value: "\\s+" },
+                    { kind: "str-literal", value: "g" },
+                  ],
+                },
+              },
+              method: "replace",
+              args: [
+                { kind: "path", path: "value" },
+                {
+                  kind: "reference",
+                  expr: {
+                    kind: "associated-call",
+                    owner: { kind: "named", path: "js_abi::JsString" },
+                    method: "from",
+                    args: [{ kind: "str-literal", value: "-" }],
+                  },
+                },
+              ],
+            },
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /let joined: js_abi::JsString =\n {8}js_abi::JsRegExp::new\("\\\\s\+", "g"\)\?\.replace\(value, &js_abi::JsString::from\("-"\)\)\?;/u,
+  );
+});
+
+test("near-width nested calls move below typed bindings before expansion", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "if",
+          condition: { kind: "bool-literal", value: true },
+          then: {
+            statements: [{
+              kind: "let",
+              name: "digest",
+              mutable: false,
+              type: { kind: "named", path: "js_abi::JsString" },
+              init: {
+                kind: "call",
+                path: "tsonic_rust_js::abi::js_string_from_utf8",
+                args: [{
+                  kind: "try",
+                  errorDomain: "runtime",
+                  expr: {
+                    kind: "method-call",
+                    receiver: { kind: "path", path: "mac" },
+                    method: "digest_string",
+                    args: [{
+                      kind: "reference",
+                      expr: {
+                        kind: "call",
+                        path: "tsonic_rust_js::abi::js_string_to_utf8",
+                        args: [{
+                          kind: "reference",
+                          expr: {
+                            kind: "associated-call",
+                            owner: { kind: "named", path: "js_abi::JsString" },
+                            method: "from",
+                            args: [{ kind: "str-literal", value: "hex" }],
+                          },
+                        }],
+                      },
+                    }],
+                  },
+                }],
+              },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /let digest: js_abi::JsString =\n {12}tsonic_rust_js::abi::js_string_from_utf8\(mac\.digest_string\(\n {16}&tsonic_rust_js::abi::js_string_to_utf8\(&js_abi::JsString::from\("hex"\)\),\n {12}\)\?\);/u,
+  );
+});

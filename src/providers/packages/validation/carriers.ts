@@ -177,13 +177,15 @@ export function validateValueConversion(
     if (!isRustTargetTypeRef(conversion.element)) {
       fail(`${where}.element is not a closed Rust target type`);
     }
-  } else if (conversion.kind === "option-map") {
+  } else if (conversion.kind === "option-some-map" || conversion.kind === "option-map") {
     requireExactKeys(asRecord(conversion), ["kind", "elementConversion"], where, fail);
     validateValueConversion(
       conversion.elementConversion,
       definition,
       `${where}.elementConversion`,
-      rustOptionElementCarrier(expectedSource),
+      conversion.kind === "option-map"
+        ? rustOptionElementCarrier(expectedSource)
+        : expectedSource,
       rustOptionElementCarrier(expectedTarget),
       fail,
     );

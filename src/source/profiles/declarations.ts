@@ -117,6 +117,8 @@ interface AsyncDisposable {
 const rustNativeProfileDeclarations = `
 ${sharedNoLibDeclarations}
 
+interface RegExp {}
+
 interface Array<T> extends Iterable<T> {
   [index: number]: T;
 }

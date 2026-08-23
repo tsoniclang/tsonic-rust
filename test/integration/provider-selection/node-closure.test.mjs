@@ -40,14 +40,14 @@ export function probe(): string {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /tsonic_rust_node::buffer::Buffer::from_string_enc\("hi", "utf8"\)\?/u);
+  assert.match(text, /tsonic_rust_node::buffer::Buffer::from_string_enc\(\s*&tsonic_rust_js::abi::js_string_to_utf8\(&js_abi::JsString::from\("hi"\)\),\s*&tsonic_rust_js::abi::js_string_to_utf8\(&js_abi::JsString::from\("utf8"\)\),?\s*\)\?/u);
   assert.match(text, /tsonic_rust_runtime::conversions::usize_to_i32\(buf\.len\(\)\)\?/u);
-  assert.match(text, /tsonic_rust_node::url::Url::parse\(\s*"https:\/\/example\.com\/a\?b=1",\s*None,?\s*\)\?/u);
-  assert.match(text, /tsonic_rust_node::url::UrlSearchParams::new_from\("x=1"\)\?/u);
-  assert.match(text, /h\.update_str_owned\("abc"\)\?/u);
-  assert.match(text, /h\.digest_string\("hex"\)\?/u);
+  assert.match(text, /tsonic_rust_node::url::Url::parse\(\s*&tsonic_rust_js::abi::js_string_to_utf8\(\s*&js_abi::JsString::from\(\s*"https:\/\/example\.com\/a\?b=1",?\s*\),?\s*\),\s*None,?\s*\)\?/u);
+  assert.match(text, /tsonic_rust_node::url::UrlSearchParams::new_from\(\s*&tsonic_rust_js::abi::js_string_to_utf8\(\s*&js_abi::JsString::from\("x=1"\),?\s*\),?\s*\)\?/u);
+  assert.match(text, /h\.update_str_owned\(\s*&tsonic_rust_js::abi::js_string_to_utf8\(\s*&js_abi::JsString::from\("abc"\),?\s*\),?\s*\)\?/u);
+  assert.match(text, /h\.digest_string\(\s*&tsonic_rust_js::abi::js_string_to_utf8\(\s*&js_abi::JsString::from\("hex"\),?\s*\),?\s*\)\?/u);
   assert.match(text, /tsonic_rust_runtime::conversions::u32_to_i32\(tsonic_rust_node::process::pid\(\)\)\?/u);
-  assert.match(text, /rt::option_coalesce\(\s*tsonic_rust_node::process::env_get\("PATH"\),\s*std::convert::identity,/u);
+  assert.match(text, /js_abi::JsString::from\(rt::option_coalesce\(\s*tsonic_rust_node::process::env_get\(\s*&tsonic_rust_js::abi::js_string_to_utf8\(\s*&js_abi::JsString::from\("PATH"\),?\s*\),?\s*\),\s*std::convert::identity,/u);
 });
 
 test("portable Node boundaries lower through exact selected provider evidence", async () => {
@@ -281,9 +281,9 @@ export async function roundtrip(dir: string, file: string): Promise<int32> {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub async fn roundtrip\(dir: String, file: String\) -> Result<i32, rt::TsonicError> \{/u);
-  assert.match(text, /tsonic_rust_node::fs_promises::mkdir_async\(&dir, true\)\.await\?/u);
-  assert.match(text, /tsonic_rust_node::fs_promises::read_file_string_async\(&file, "utf8"\)\.await\?/u);
+  assert.match(text, /pub async fn roundtrip\(\s*dir: js_abi::JsString,\s*file: js_abi::JsString,?\s*\) -> Result<i32, rt::TsonicError> \{/u);
+  assert.match(text, /tsonic_rust_node::fs_promises::mkdir_async\(&tsonic_rust_js::abi::js_string_to_utf8\(&dir\), true\)\s*\.await\?/u);
+  assert.match(text, /tsonic_rust_node::fs_promises::read_file_string_async\([\s\S]*?js_string_to_utf8\(&file\),[\s\S]*?js_string_to_utf8\(&js_abi::JsString::from\("utf8"\)\)[\s\S]*?\)\s*\.await\?/u);
   validateGeneratedProject("r7-async-fs-lib", result.artifacts);
 });
 
@@ -332,8 +332,9 @@ export function read(name: string): string {
   });
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /tsonic_rust_node::process::env_get\(&name\)/u);
+  assert.match(text, /let value: Option<String>\s*=\s*tsonic_rust_node::process::env_get\(\s*&tsonic_rust_js::abi::js_string_to_utf8\(\s*&name,?\s*\),?\s*\)/u);
   assert.match(text, /value\.is_none\(\)/u);
+  assert.match(text, /tsonic_rust_js::abi::js_string_from_utf8\(rt::option_coalesce\(\s*value\.clone\(\)/u);
 });
 
 test("unsupported node APIs fail closed with deterministic diagnostics", async () => {

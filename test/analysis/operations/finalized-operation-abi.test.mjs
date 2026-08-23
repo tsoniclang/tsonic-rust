@@ -15,12 +15,16 @@ import {
 import {
   rustProviderOperationFormDeclaresWritableInput,
 } from "../../../dist/policy/operations/forms.js";
+import {
+  reconcileSelectedProviderOperationResult,
+} from "../../../dist/analysis/operations/provider/calls/instantiation.js";
 
 const bool = { kind: "source-primitive", name: "bool" };
 const float64 = { kind: "source-primitive", name: "float64" };
 const int32 = { kind: "source-primitive", name: "int32" };
 const isize = { kind: "source-primitive", name: "native-int" };
 const jsValue = { kind: "target-named", id: "rust.js.JsValue" };
+const jsString = { kind: "target-named", id: "rust.js.JsString" };
 const providerError = { kind: "target-named", id: "rust.test.ProviderError" };
 const string = { kind: "target-named", id: "rust.std.String" };
 const sourceNullish = { kind: "target-specific", target: "rust", name: "source-nullish" };
@@ -291,7 +295,7 @@ test("provider methods finalize receiver, source order, passing modes, conversio
     },
     sourceReceiverCarrier: string,
     sourceArgumentCarriers: [int32],
-    declaredSourceArgumentCarriers: [int32],
+    selectedParameterCarriers: [int32],
     resultCarrier: bool,
     isAsync: false,
     isFallible: false,
@@ -339,6 +343,42 @@ test("provider methods finalize receiver, source order, passing modes, conversio
   });
 });
 
+test("provider inputs preserve exact source carriers and own their selected-parameter bridge", () => {
+  const abi = finalizeRustProviderOperationAbi({
+    operationKind: "method",
+    form: { form: "call", path: "node_path::normalize", argModes: ["ref"] },
+    sourceArgumentCarriers: [jsString],
+    selectedParameterCarriers: [string],
+    resultCarrier: string,
+    isAsync: false,
+    isFallible: false,
+  });
+
+  assert.ok(abi);
+  assert.deepEqual(abi.sourceArguments[0], {
+    sourceIndex: 0,
+    carrier: jsString,
+    selectedParameterCarrier: string,
+    mode: "ref",
+    role: "parameter",
+    disposition: "runtime",
+  });
+  assert.deepEqual(abi.targetArguments[0], {
+    source: { kind: "argument", sourceIndex: 0 },
+    sourceCarrier: jsString,
+    conversion: {
+      kind: "semantic",
+      conversion: { kind: "semantic-conversion", id: "native-string-from-js-string" },
+      sourceCarrier: jsString,
+      targetCarrier: string,
+      fallible: false,
+    },
+    mode: "ref",
+    parameterCarrier: { kind: "reference", referent: string, mutable: false },
+  });
+  assert.equal(validateRustFinalizedOperationAbi(abi), true);
+});
+
 test("provider receivers distinguish runtime values from compile-time owner identities", () => {
   const owner = {
     kind: "target-specific",
@@ -384,10 +424,10 @@ test("compile-time source arguments must be declared explicitly and remain in th
       path: "js_abi::json_stringify_with_indent",
       argModes: ["ref"],
       argOrder: [0],
-      trailingArguments: [{ kind: "string", value: "  " }],
+      trailingArguments: [{ kind: "js-string", value: "  " }],
     },
     sourceArgumentCarriers: [jsValue, sourceNullish, float64],
-    declaredSourceArgumentCarriers: [jsValue],
+    selectedParameterCarriers: [jsValue],
     resultCarrier: string,
     isAsync: false,
     isFallible: true,
@@ -408,7 +448,119 @@ test("compile-time source arguments must be declared explicitly and remain in th
   ]);
   assert.equal(abi.targetArguments.length, 2);
   assert.deepEqual(abi.targetArguments[1], {
-    source: { kind: "constant", value: { kind: "string", value: "  " } },
+    source: { kind: "constant", value: { kind: "js-string", value: "  " } },
+  });
+});
+
+test("provider results retain exact source-selected semantics without rewriting target policy", () => {
+  const optionString = { kind: "target-named", id: "rust.std.Option", typeArguments: [string] };
+  const optionJsString = { kind: "target-named", id: "rust.std.Option", typeArguments: [jsString] };
+  const instantiation = {
+    template: {
+      kind: "provider-operation",
+      operationId: "acme.environment.get",
+      operationKind: "indexer",
+      target: { form: "call", path: "acme::environment_get", argModes: ["ref"] },
+      resultCarrier: optionString,
+      isAsync: false,
+      isFallible: false,
+      errorBoundary: "none",
+    },
+    substitutions: new Map(),
+  };
+
+  const reconciled = reconcileSelectedProviderOperationResult(instantiation, optionJsString);
+  assert.ok(reconciled);
+  assert.deepEqual(reconciled.template.resultCarrier, optionString);
+  assert.deepEqual(reconciled.template.sourceResultCarrier, optionJsString);
+  assert.equal(reconciled.template.resultConversion, undefined);
+  assert.equal(
+    reconcileSelectedProviderOperationResult(instantiation, int32)?.template.sourceResultCarrier,
+    undefined,
+  );
+  const explicitlyConverted = {
+    ...instantiation,
+    template: {
+      ...instantiation.template,
+      resultCarrier: int32,
+      resultConversion: {
+        kind: "semantic-conversion",
+        id: "checked-usize-to-i32",
+      },
+    },
+  };
+  const explicitRepresentation = reconcileSelectedProviderOperationResult(
+    explicitlyConverted,
+    float64,
+  );
+  assert.ok(explicitRepresentation);
+  assert.deepEqual(explicitRepresentation.template.resultCarrier, int32);
+  assert.equal(explicitRepresentation.template.sourceResultCarrier, undefined);
+  assert.equal(
+    reconcileSelectedProviderOperationResult(explicitlyConverted, bool)?.template.sourceResultCarrier,
+    undefined,
+  );
+});
+
+test("provider setters retain distinct exact source and selected target carriers", () => {
+  const abi = finalizeRustProviderOperationAbi({
+    operationKind: "property-set",
+    form: { form: "field", name: "href" },
+    sourceReceiverCarrier: { kind: "target-named", id: "rust.node.Url" },
+    sourceArgumentCarriers: [jsString],
+    selectedParameterCarriers: [string],
+    resultCarrier: jsString,
+    isAsync: false,
+    isFallible: false,
+  });
+
+  assert.ok(abi);
+  assert.deepEqual(abi.sourceArguments[0], {
+    sourceIndex: 0,
+    carrier: jsString,
+    selectedParameterCarrier: string,
+    mode: "value",
+    role: "parameter",
+    disposition: "runtime",
+  });
+  assert.deepEqual(abi.targetArguments[0].conversion, {
+    kind: "semantic",
+    conversion: {
+      kind: "semantic-conversion",
+      id: "native-string-from-js-string",
+    },
+    sourceCarrier: jsString,
+    targetCarrier: string,
+    fallible: false,
+  });
+});
+
+test("provider setters compose source representation conversion before optional storage", () => {
+  const optionString = { kind: "target-named", id: "rust.std.Option", typeArguments: [string] };
+  const abi = finalizeRustProviderOperationAbi({
+    operationKind: "property-set",
+    form: { form: "field", name: "pathname" },
+    sourceReceiverCarrier: { kind: "target-named", id: "rust.node.Url" },
+    sourceArgumentCarriers: [jsString],
+    selectedParameterCarriers: [optionString],
+    resultCarrier: jsString,
+    isAsync: false,
+    isFallible: false,
+  });
+
+  assert.ok(abi);
+  assert.deepEqual(abi.targetArguments[0].conversion, {
+    kind: "semantic",
+    conversion: {
+      kind: "option-some-map",
+      elementConversion: {
+        kind: "semantic-conversion",
+        id: "native-string-from-js-string",
+      },
+    },
+    sourceCarrier: jsString,
+    targetCarrier: optionString,
+    fallible: false,
   });
 });
 
@@ -497,7 +649,7 @@ test("variadic value slices convert each source value exactly and always pass on
   const values = finalizeRustProviderOperationAbi({
     operationKind: "method",
     form,
-    sourceArgumentCarriers: [string, int32, bool],
+    sourceArgumentCarriers: [jsString, int32, bool],
     resultCarrier: string,
     isAsync: false,
     isFallible: false,
@@ -505,7 +657,7 @@ test("variadic value slices convert each source value exactly and always pass on
   const emptyTail = finalizeRustProviderOperationAbi({
     operationKind: "method",
     form,
-    sourceArgumentCarriers: [string],
+    sourceArgumentCarriers: [jsString],
     resultCarrier: string,
     isAsync: false,
     isFallible: false,
@@ -513,7 +665,7 @@ test("variadic value slices convert each source value exactly and always pass on
   const preserved = finalizeRustProviderOperationAbi({
     operationKind: "method",
     form,
-    sourceArgumentCarriers: [string, string, jsValue],
+    sourceArgumentCarriers: [jsString, jsString, jsValue],
     resultCarrier: string,
     isAsync: false,
     isFallible: false,
@@ -521,7 +673,7 @@ test("variadic value slices convert each source value exactly and always pass on
   const unsupported = finalizeRustProviderOperationAbi({
     operationKind: "method",
     form,
-    sourceArgumentCarriers: [string, unit],
+    sourceArgumentCarriers: [jsString, unit],
     resultCarrier: string,
     isAsync: false,
     isFallible: false,
@@ -529,7 +681,7 @@ test("variadic value slices convert each source value exactly and always pass on
   const compileTimeElement = finalizeRustProviderOperationAbi({
     operationKind: "method",
     form,
-    sourceArgumentCarriers: [string, int32],
+    sourceArgumentCarriers: [jsString, int32],
     compileTimeSourceArgumentIndexes: [1],
     resultCarrier: string,
     isAsync: false,
@@ -540,6 +692,8 @@ test("variadic value slices convert each source value exactly and always pass on
   assert.ok(emptyTail);
   assert.ok(preserved);
   assert.equal(values.targetArguments[0].mode, "ref");
+  assert.equal(values.targetArguments[0].conversion.kind, "semantic");
+  assert.equal(values.targetArguments[0].conversion.conversion.id, "native-string-from-js-string");
   assert.deepEqual(values.targetArguments[1].source, {
     kind: "argument-slice",
     sourceIndexes: [1, 2],
@@ -749,12 +903,44 @@ test("async ABI separates invocation, await fallibility, and post-await conversi
   assert.deepEqual(abi.result.futureCarrier, {
     kind: "target-named",
     id: "rust.core.Future",
-    typeArguments: [int32],
+    typeArguments: [isize],
   });
   assert.equal(validateRustFinalizedOperationAbi({
     ...abi,
     effects: { ...abi.effects, invocation: "fallible" },
   }), false);
+});
+
+test("async ABI converts native strings only after awaiting the exact native future", () => {
+  const abi = finalizeRustProviderOperationAbi({
+    operationKind: "method",
+    form: { form: "call", path: "acme::read_text" },
+    sourceArgumentCarriers: [],
+    resultCarrier: jsString,
+    resultConversion: { kind: "semantic-conversion", id: "js-string-from-native-string" },
+    isAsync: true,
+    isFallible: false,
+  });
+
+  assert.ok(abi);
+  assert.deepEqual(abi.result, {
+    kind: "async",
+    futureCarrier: {
+      kind: "target-named",
+      id: "rust.core.Future",
+      typeArguments: [string],
+    },
+    awaitedRawCarrier: string,
+    awaitedConversion: {
+      kind: "semantic",
+      conversion: { kind: "semantic-conversion", id: "js-string-from-native-string" },
+      sourceCarrier: string,
+      targetCarrier: jsString,
+      fallible: false,
+    },
+    awaitedCarrier: jsString,
+  });
+  assert.equal(validateRustFinalizedOperationAbi(abi), true);
 });
 
 test("runtime index setters finalize mutable receiver, index conversion, and value", () => {
@@ -767,7 +953,7 @@ test("runtime index setters finalize mutable receiver, index conversion, and val
     },
     sourceReceiverCarrier: vec,
     sourceArgumentCarriers: [int32, int32],
-    declaredSourceArgumentCarriers: [int32, int32],
+    selectedParameterCarriers: [int32, int32],
     resultCarrier: unit,
     isAsync: false,
     isFallible: false,
@@ -800,7 +986,7 @@ test("runtime method setters preserve the provider-declared receiver mode", () =
     form: { form: "receiver-method", name: "set_value" },
     sourceReceiverCarrier: { kind: "target-named", id: "acme.SharedCell" },
     sourceArgumentCarriers: [int32],
-    declaredSourceArgumentCarriers: [int32],
+    selectedParameterCarriers: [int32],
     resultCarrier: unit,
     isAsync: false,
     isFallible: false,
@@ -810,7 +996,7 @@ test("runtime method setters preserve the provider-declared receiver mode", () =
     form: { form: "receiver-method", name: "set_value", mutatesReceiver: true },
     sourceReceiverCarrier: { kind: "target-named", id: "acme.ExclusiveCell" },
     sourceArgumentCarriers: [int32],
-    declaredSourceArgumentCarriers: [int32],
+    selectedParameterCarriers: [int32],
     resultCarrier: unit,
     isAsync: false,
     isFallible: false,
@@ -942,7 +1128,7 @@ test("operation forms fail closed for missing discriminant data, unknown variant
   assert.equal(finalizeRustProviderOperationAbi({
     ...base,
     form: { form: "call", path: "acme::run" },
-    declaredSourceArgumentCarriers: sparseOne,
+    selectedParameterCarriers: sparseOne,
   }), undefined);
   assert.equal(finalizeRustProviderOperationAbi({
     ...base,

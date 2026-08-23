@@ -37,7 +37,9 @@ export function planBinaryExpression(node: Node, context: RustPlanContext): Rust
   const fact = rustOperationFact(node, context);
   if (fact?.kind === "program-error-type-test") {
     const leftNode = BinaryExpression_Left(context.input.program.source.ast, node);
-    const left = leftNode === undefined ? undefined : planExpression(leftNode, context);
+    const left = leftNode === undefined
+      ? undefined
+      : planExpressionBeforeValueProjections(leftNode, context, "value");
     if (leftNode === undefined || left === undefined ||
       !rustTargetTypeRefEquals(effectivePlannedExpressionCarrier(leftNode, context), fact.sourceCarrier) ||
       !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.program-error-type-test-carrier") ||
@@ -111,7 +113,9 @@ export function planBinaryExpression(node: Node, context: RustPlanContext): Rust
   if (fact !== undefined && fact.kind === "option-coalesce") {
     const leftNode = BinaryExpression_Left(context.input.program.source.ast, node);
     const rightNode = BinaryExpression_Right(context.input.program.source.ast, node);
-    const left = leftNode === undefined ? undefined : planExpression(leftNode, context);
+    const left = leftNode === undefined
+      ? undefined
+      : planExpressionBeforeValueProjections(leftNode, context, "value");
     const right = rightNode === undefined ? undefined : planExpression(rightNode, context);
     if (left === undefined || right === undefined ||
       !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.option-coalesce-carrier") ||

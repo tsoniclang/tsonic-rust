@@ -16,6 +16,7 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 export function createInputFactory(
   receiverCarrier: TargetTypeRef | undefined,
   argumentCarriers: readonly TargetTypeRef[],
+  selectedParameterCarriers?: readonly (TargetTypeRef | undefined)[],
 ) {
   const receiver = (mode: RustArgumentMode): RustFinalizedSourceInput | undefined =>
     receiverCarrier === undefined
@@ -26,10 +27,28 @@ export function createInputFactory(
     mode: RustArgumentMode,
     conversion?: RustValueConversion,
   ): RustFinalizedSourceInput | undefined => {
-    const carrier = argumentCarriers[sourceIndex];
-    return carrier === undefined
+    const sourceCarrier = argumentCarriers[sourceIndex];
+    if (sourceCarrier === undefined) {
+      return undefined;
+    }
+    const selectedCarrier = selectedParameterCarriers?.[sourceIndex] ?? sourceCarrier;
+    if (conversion !== undefined) {
+      return rustTargetTypeRefEquals(sourceCarrier, selectedCarrier)
+        ? sourceInput({ kind: "argument", sourceIndex }, sourceCarrier, mode, conversion)
+        : undefined;
+    }
+    const selectedConversion = rustTargetTypeRefEquals(sourceCarrier, selectedCarrier)
       ? undefined
-      : sourceInput({ kind: "argument", sourceIndex }, carrier, mode, conversion);
+      : selectRustSourceValueConversion(sourceCarrier, selectedCarrier);
+    return !rustTargetTypeRefEquals(sourceCarrier, selectedCarrier) && selectedConversion === undefined
+      ? undefined
+      : sourceInput(
+          { kind: "argument", sourceIndex },
+          sourceCarrier,
+          mode,
+          selectedConversion,
+          selectedCarrier,
+        );
   };
   const argumentTo = (
     sourceIndex: number,
@@ -40,11 +59,22 @@ export function createInputFactory(
     if (sourceCarrier === undefined) {
       return undefined;
     }
+    const selectedCarrier = selectedParameterCarriers?.[sourceIndex] ?? sourceCarrier;
+    if (!rustTargetTypeRefEquals(selectedCarrier, sourceCarrier) &&
+      !rustTargetTypeRefEquals(selectedCarrier, targetCarrier)) {
+      return undefined;
+    }
     const conversion = selectRustSourceValueConversion(sourceCarrier, targetCarrier);
     const identical = rustTargetTypeRefEquals(sourceCarrier, targetCarrier);
     return !identical && conversion === undefined
       ? undefined
-      : sourceInput({ kind: "argument", sourceIndex }, sourceCarrier, mode, conversion);
+      : sourceInput(
+          { kind: "argument", sourceIndex },
+          sourceCarrier,
+          mode,
+          conversion,
+          targetCarrier,
+        );
   };
   const sourceArgumentCarrier = (sourceIndex: number): TargetTypeRef | undefined =>
     argumentCarriers[sourceIndex];
@@ -458,6 +488,7 @@ export function finalizeTargetInputs(
 export function finalizeSourceArguments(
   operationKind: RustFinalizedOperationKind,
   carriers: readonly TargetTypeRef[],
+  selectedParameterCarriers: readonly (TargetTypeRef | undefined)[],
   mapping: {
     readonly targetReceiver: RustFinalizedOperationAbi["targetReceiver"];
     readonly targetArguments: readonly RustFinalizedTargetInput[];
@@ -504,15 +535,25 @@ export function finalizeSourceArguments(
     carriers.some((_carrier, index) => !runtime.has(index) && !compileTime.has(index))) {
     return undefined;
   }
-  return carriers.map((carrier, sourceIndex) => ({
-    sourceIndex,
-    carrier,
-    mode: modes.get(sourceIndex) ?? "value",
-    role: compileTime.has(sourceIndex)
-      ? "compile-time"
-      : (operationKind === "indexer" || operationKind === "index-set") && sourceIndex === 0
-        ? "index"
-        : "parameter",
-    disposition: compileTime.has(sourceIndex) ? "compile-time" : "runtime",
-  }));
+  if (carriers.some((_carrier, sourceIndex) =>
+    !compileTime.has(sourceIndex) && selectedParameterCarriers[sourceIndex] === undefined)) {
+    return undefined;
+  }
+  return carriers.map((carrier, sourceIndex): RustFinalizedSourceArgument => {
+    const compileTimeArgument = compileTime.has(sourceIndex);
+    return {
+      sourceIndex,
+      carrier,
+      ...(compileTimeArgument
+        ? {}
+        : { selectedParameterCarrier: selectedParameterCarriers[sourceIndex]! }),
+      mode: modes.get(sourceIndex) ?? "value",
+      role: compileTimeArgument
+        ? "compile-time"
+        : (operationKind === "indexer" || operationKind === "index-set") && sourceIndex === 0
+          ? "index"
+          : "parameter",
+      disposition: compileTimeArgument ? "compile-time" : "runtime",
+    };
+  });
 }

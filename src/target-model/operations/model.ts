@@ -42,6 +42,7 @@ export type RustProviderConstantArgument =
   | { readonly kind: "integer"; readonly value: number }
   | { readonly kind: "float64"; readonly value: number }
   | { readonly kind: "string"; readonly value: string }
+  | { readonly kind: "js-string"; readonly value: string }
   | { readonly kind: "boolean"; readonly value: boolean }
   | { readonly kind: "none" };
 
@@ -116,6 +117,10 @@ export type RustValueConversion =
   | {
       readonly kind: "option-some";
       readonly element: TargetTypeRef;
+    }
+  | {
+      readonly kind: "option-some-map";
+      readonly elementConversion: RustNonOptionValueConversion;
     }
   | {
       readonly kind: "option-map";

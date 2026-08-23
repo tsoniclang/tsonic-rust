@@ -25,6 +25,7 @@ export function runCargo(projectRoot, args) {
     encoding: "utf8",
     env: { ...process.env, CARGO_TERM_COLOR: "never" },
     timeout: 300_000,
+    maxBuffer: 64 * 1024 * 1024,
   });
   if (result.status !== 0) {
     throw new Error(`cargo ${args.join(" ")} failed in ${projectRoot}:\n${result.stdout}\n${result.stderr}`);

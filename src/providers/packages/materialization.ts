@@ -318,6 +318,7 @@ function materializeProviderValueConversion(
         ...conversion,
         element: materializeProviderCarrier(conversion.element, carrierPaths, carrierTraits),
       };
+    case "option-some-map":
     case "option-map":
       return {
         ...conversion,

@@ -1,4 +1,5 @@
 import {
+  rustOptionElementCarrier,
   rustCallableProtocol,
   rustStringTargetType,
   inferRustTargetTypeParameterBindings,
@@ -19,7 +20,6 @@ import { recordRustValueCarrierReconciliation, rustEffectiveValueCarrier } from 
 import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution.js";
 import { rustArgumentPassingKey, rustSelectedCallKey, rustSelectedOperationKey } from "../../../../target-model/facts/selections.js";
 import { rustArgumentPassingMode } from "../../../facts/parameter-passing.js";
-import { rustOptionElementCarrier } from "../../../../target-model/types/index.js";
 import { rustProviderGenericRequirementsAreSatisfied } from "../../../../policy/types/provider-generic-requirements.js";
 import { rustTargetOperationFactKey, rustPreparedOperationResultFactKey, rustOptionalChainFactKey } from "../../../facts/keys.js";
 import { rustTargetOperationText } from "../../../facts/target-operation.js";
@@ -27,7 +27,10 @@ import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality
 import { selectedCallArgumentNodes, selectedCallCalleeDeclaration, selectedCallCalleeSymbol, selectedSourceValueCarrier } from "../operators.js";
 import { selectRustOptionalChain } from "../../../../policy/operations/optional-chains.js";
 import { substituteRustValueConversion } from "../../../../target-model/conversions/contracts.js";
-import { selectRustSourceValueConversion } from "../../../../policy/conversions/selection.js";
+import {
+  selectRustSourceValueConversion,
+} from "../../../../policy/conversions/selection.js";
+import { reconcileSelectedProviderOperationResult } from "./result-reconciliation.js";
 import type {
   RustCheckedCallSelectionInput,
   RustCheckedCallSelectionResult,
@@ -142,26 +145,12 @@ export function instantiateSelectedCallTemplate(
     sourceResultCarrier: selectedResultCarrier,
     directTypeArguments,
   });
-  if (instantiation === undefined || selectedResultCarrier === undefined ||
-    instantiation.template.resultConversion !== undefined ||
-    rustTargetTypeRefEquals(instantiation.template.resultCarrier, selectedResultCarrier)) {
-    return instantiation;
-  }
-  const resultConversion = selectRustSourceValueConversion(
-    instantiation.template.resultCarrier,
-    selectedResultCarrier,
-  );
-  return resultConversion === undefined
-    ? instantiation
-    : {
-        ...instantiation,
-        template: {
-          ...instantiation.template,
-          resultCarrier: selectedResultCarrier,
-          resultConversion,
-        },
-      };
+  return instantiation === undefined
+    ? undefined
+    : reconcileSelectedProviderOperationResult(instantiation, selectedResultCarrier);
 }
+
+export { reconcileSelectedProviderOperationResult } from "./result-reconciliation.js";
 
 export function acceptSelectedCall(
   request: RustCheckedCallSelectionInput,
@@ -214,7 +203,12 @@ export function acceptSelectedCall(
   if (providerFormRequiresSourceReceiver(instantiatedTemplate.target) && selectedReceiverCarrier === undefined) {
     return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_RECEIVER_CARRIER_MISSING", `Selected call '${callIdentity.sourceName}' has no closed Rust receiver carrier.`);
   }
-  const fact = finalizeProviderOperationFact(instantiatedTemplate, sourceArguments.carriers, selectedReceiverCarrier);
+  const fact = finalizeProviderOperationFact(
+    instantiatedTemplate,
+    sourceArguments.carriers,
+    selectedReceiverCarrier,
+    sourceArguments.selectedParameterCarriers,
+  );
   if (fact === undefined) {
     return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_OPERATION_ABI_INCOMPLETE", `Selected call '${callIdentity.sourceName}' cannot finalize one total Rust operation ABI.`);
   }
@@ -352,6 +346,7 @@ type SelectedCallSourceCarriers =
   | {
       readonly kind: "resolved";
       readonly carriers: readonly TargetTypeRef[];
+      readonly selectedParameterCarriers: readonly TargetTypeRef[];
       readonly reconciliations: readonly {
         readonly sourceIndex: number;
         readonly reconciliation: RustAppliedValueCarrierReconciliation;
@@ -394,7 +389,9 @@ function selectedCallSourceCarriers(
     readonly sourceIndex: number;
     readonly reconciliation: RustAppliedValueCarrierReconciliation;
   }[] = [];
-  const actual = request.source.sourceArguments.map((sourceArgument, index) => {
+  const actual: (TargetTypeRef | undefined)[] = [];
+  const selectedParameterCarriers: (TargetTypeRef | undefined)[] = [];
+  for (const [index, sourceArgument] of request.source.sourceArguments.entries()) {
     const argument = sourceArgument.expression;
     const targetExpected = selectedCallArgumentTargetCarrier(fact.target, index);
     const expected = targetExpected ?? declaredBySourceIndex.get(index);
@@ -408,30 +405,35 @@ function selectedCallSourceCarriers(
         expected,
         options.projectTypes,
       );
-      if (reconciliation.kind === "conversion" || reconciliation.kind === "project-upcast") {
-        const targetFormSelectsStringBridge = fact.target.form === "call-str-slice" ||
-          fact.target.form === "free-call-str-slice";
-        if (reconciliation.kind === "project-upcast" || targetExpected === undefined ||
-          targetFormSelectsStringBridge) {
-          reconciliations.push({ sourceIndex: index, reconciliation });
-          effective = expected;
-        }
+      if (reconciliation.kind === "project-upcast" || reconciliation.kind === "conversion") {
+        reconciliations.push({ sourceIndex: index, reconciliation });
+        effective = expected;
       } else if (reconciliation.kind === "incompatible") {
         incompatibility ??= { kind: "incompatible", sourceIndex: index, actual: effective, expected };
       }
     }
-    return effective ?? expected;
-  });
+    actual[index] = effective ?? expected;
+    selectedParameterCarriers[index] = expected ?? effective;
+  }
   if (incompatibility !== undefined) {
     return incompatibility;
   }
-  if (actual.some((carrier) => carrier === undefined)) {
+  if (actual.some((carrier) => carrier === undefined) ||
+    runtimeIndexes.some((index) => selectedParameterCarriers[index] === undefined)) {
     return { kind: "missing" };
   }
+  const resolvedSelection = (): Extract<SelectedCallSourceCarriers, { readonly kind: "resolved" }> => ({
+    kind: "resolved",
+    carriers: actual as TargetTypeRef[],
+    selectedParameterCarriers: runtimeIndexes.map((index) => selectedParameterCarriers[index]!),
+    reconciliations,
+  });
   if (fact.target.form === "call-str-slice" || fact.target.form === "free-call-str-slice") {
     const stringCarrier = rustStringTargetType();
-    return actual.every((carrier) => carrier !== undefined && rustTargetTypeRefEquals(carrier, stringCarrier))
-      ? { kind: "resolved", carriers: actual as TargetTypeRef[], reconciliations }
+    return actual.every((carrier) => carrier !== undefined &&
+        (rustTargetTypeRefEquals(carrier, stringCarrier) ||
+          selectRustSourceValueConversion(carrier, stringCarrier) !== undefined))
+      ? resolvedSelection()
       : { kind: "incompatible", sourceIndex: 0 };
   }
   if (fact.target.form === "call-value-slice" || fact.target.form === "call-value-array" ||
@@ -440,7 +442,7 @@ function selectedCallSourceCarriers(
     if (actual.length < form.leadingArguments.length) {
       return { kind: "incompatible", sourceIndex: actual.length };
     }
-    return { kind: "resolved", carriers: actual as TargetTypeRef[], reconciliations };
+    return resolvedSelection();
   }
   if (fact.target.form === "receiver-tagged-array") {
     const form = fact.target;
@@ -465,7 +467,7 @@ function selectedCallSourceCarriers(
       return (exact.length > 0 ? exact : convertible).length !== 1;
     });
     return incompatible < 0
-      ? { kind: "resolved", carriers: actual as TargetTypeRef[], reconciliations }
+      ? resolvedSelection()
       : { kind: "incompatible", sourceIndex: incompatible };
   }
   if (fact.target.form === "call-c-variadic") {
@@ -477,10 +479,10 @@ function selectedCallSourceCarriers(
       sourceIndex >= form.fixedArgumentModes.length &&
       !isRustCVariadicArgumentCarrier(carrier));
     return incompatible < 0
-      ? { kind: "resolved", carriers: actual as TargetTypeRef[], reconciliations }
+      ? resolvedSelection()
       : { kind: "incompatible", sourceIndex: incompatible };
   }
-  return { kind: "resolved", carriers: actual as TargetTypeRef[], reconciliations };
+  return resolvedSelection();
 }
 
 function selectedCallArgumentTargetCarrier(
@@ -622,7 +624,7 @@ export function providerFormRequiresSourceReceiver(form: RustProviderOperationFo
     (form.form === "trait-call" && form.receiverMode !== undefined);
 }
 
-interface InstantiatedProviderOperationTemplate<
+export interface InstantiatedProviderOperationTemplate<
   OperationKind extends RustProviderFactOperationKind | RustRuntimeSetOperationKind = RustProviderFactOperationKind,
 > {
   readonly template: RustProviderOperationTemplate<OperationKind>;
@@ -809,13 +811,14 @@ export function finalizeProviderOperationFact(
   template: RustProviderOperationTemplate,
   sourceArgumentCarriers: readonly TargetTypeRef[],
   sourceReceiverCarrier: TargetTypeRef | undefined,
+  selectedParameterCarriers: readonly TargetTypeRef[],
 ): Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }> | undefined {
   const abi = finalizeRustProviderOperationAbi({
     operationKind: template.operationKind,
     form: template.target,
     ...(sourceReceiverCarrier === undefined ? {} : { sourceReceiverCarrier }),
     sourceArgumentCarriers,
-    declaredSourceArgumentCarriers: template.parameterCarriers,
+    selectedParameterCarriers,
     ...(template.compileTimeSourceArgumentIndexes === undefined
       ? {}
       : { compileTimeSourceArgumentIndexes: template.compileTimeSourceArgumentIndexes }),

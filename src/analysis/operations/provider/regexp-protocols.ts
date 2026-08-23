@@ -8,9 +8,8 @@ import {
   rustStructuralObjectCarrierValue,
   rustWellKnownSymbolSourceMemberKey,
 } from "../../../target-model/types/index.js";
-import { closedMetadataKey, isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
+import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { resolveRustDeclarationMemberKey } from "../../../policy/evidence/source-member-key.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
 import {
   acceptSelectedCall,
@@ -34,20 +33,13 @@ import type {
   RustProviderConstantArgument,
   RustValueConversion,
 } from "../../../target-model/operations/model.js";
-import type { RustSourceMemberKey, TargetTypeRef } from "../../../target-model/types/index.js";
-import type { Node, Type } from "@tsonic/tsts";
+import type { TargetTypeRef } from "../../../target-model/types/index.js";
 
 type RegExpProtocolSymbol = "match" | "match-all" | "replace" | "search" | "split";
 
 interface RegExpProtocolSelection {
   readonly operation: "match" | "matchAll" | "replace" | "replaceAll" | "search" | "split";
   readonly symbol: RegExpProtocolSymbol;
-}
-
-interface ResolvedProtocolCallable {
-  readonly carrier: TargetTypeRef;
-  readonly parameters: readonly TargetTypeRef[];
-  readonly result: TargetTypeRef;
 }
 
 interface ProtocolArgumentPlan {
@@ -67,28 +59,7 @@ export function mapSelectedStringRegExpProtocolCall(
   if (selection === undefined) {
     return undefined;
   }
-  const selectedParameter = request.source.sourceSelectedSignatureParameters[0];
-  const authoredTypeNode = selectedParameter?.authoredTypeNode;
-  if (selectedParameter === undefined || authoredTypeNode === undefined ||
-    context.ast.kindName(authoredTypeNode) !== "KindTypeLiteral") {
-    return undefined;
-  }
   const sourceKey = rustWellKnownSymbolSourceMemberKey(selection.symbol);
-  const selectedProtocol = resolveSelectedProtocolCallable(
-    selectedParameter.selectedType,
-    authoredTypeNode,
-    sourceKey,
-    context,
-    options,
-  );
-  if (selectedProtocol === undefined) {
-    return rejectSelectedOperation(
-      request.source.call,
-      context,
-      "RUST_REGEXP_PROTOCOL_SELECTION_INVALID",
-      "The checker-selected String RegExp protocol overload has no exact symbol-keyed callable contract.",
-    );
-  }
   const sourceArguments = request.source.sourceArguments;
   const protocolArgument = sourceArguments[0];
   const protocolCarrier = protocolArgument === undefined
@@ -102,6 +73,9 @@ export function mapSelectedStringRegExpProtocolCall(
     field.presence === "required" &&
     rustSourceMemberKeysEqual(field.sourceKey, sourceKey)) ?? [];
   const protocolField = protocolFieldMatches.length === 1 ? protocolFieldMatches[0] : undefined;
+  if (protocolField === undefined) {
+    return undefined;
+  }
   const actualCallableCarrier = protocolField === undefined
     ? undefined
     : rustStructuralMethodCallableCarrier(
@@ -112,14 +86,21 @@ export function mapSelectedStringRegExpProtocolCall(
   if (protocolCarrier === undefined || protocolShape === undefined ||
     rustStructuralObjectCarrierValue(protocolCarrier) === undefined ||
     !rustTargetTypeRefEquals(protocolShape.carrier, protocolCarrier) ||
-    protocolField === undefined || actualCallableCarrier === undefined ||
-    actualCallable === undefined ||
-    !rustTargetTypeRefEquals(actualCallableCarrier, selectedProtocol.carrier)) {
+    actualCallableCarrier === undefined ||
+    actualCallable === undefined) {
     return rejectSelectedOperation(
       request.source.call,
       context,
       "RUST_REGEXP_PROTOCOL_ARGUMENT_NOT_CLOSED",
       "The checker-selected String RegExp protocol argument does not resolve to one exact symbol-keyed generated object method.",
+    );
+  }
+  if (request.source.sourceSelectedSignatureParameters[0] === undefined) {
+    return rejectSelectedOperation(
+      request.source.call,
+      context,
+      "RUST_REGEXP_PROTOCOL_SELECTION_INVALID",
+      "The checker-selected String RegExp protocol overload has no exact selected protocol parameter evidence.",
     );
   }
   const receiverCarrier = selectedCallReceiverValueCarrier(request, context, options);
@@ -250,44 +231,6 @@ function selectedRegExpProtocol(
     case "split": return { operation: "split", symbol: "split" };
     default: return undefined;
   }
-}
-
-function resolveSelectedProtocolCallable(
-  selectedType: Type,
-  authoredTypeNode: Node,
-  expectedKey: RustSourceMemberKey,
-  context: RustOperationPolicyContext,
-  options: RustOperationsProviderOptions,
-): ResolvedProtocolCallable | undefined {
-  const members = context.ast.members(authoredTypeNode);
-  if (!isDenseDataArray(members) || members.length !== 1 || members[0] === undefined) {
-    return undefined;
-  }
-  const member = members[0];
-  const memberKey = resolveRustDeclarationMemberKey(member, "", context);
-  if (memberKey === undefined || !rustSourceMemberKeysEqual(memberKey, expectedKey)) {
-    return undefined;
-  }
-  const properties = context.currentSemantics.types.propertyInfos(selectedType);
-  if (!isDenseDataArray(properties)) {
-    return undefined;
-  }
-  const matches = properties.filter((property) => {
-    const declarations = [
-      ...context.currentSemantics.declarations.symbolDeclarations(property.symbol),
-      ...property.rootSymbols.flatMap((symbol) =>
-        context.currentSemantics.declarations.symbolDeclarations(symbol)),
-    ];
-    return declarations.includes(member);
-  });
-  const property = matches.length === 1 ? matches[0] : undefined;
-  const carrier = property === undefined || property.optional
-    ? undefined
-    : resolveRustTargetTypeRef(property.type, context, options);
-  const callable = rustCallableProtocol(carrier);
-  return carrier === undefined || callable === undefined
-    ? undefined
-    : { carrier, parameters: callable.parameters, result: callable.result };
 }
 
 function selectProtocolArgument(

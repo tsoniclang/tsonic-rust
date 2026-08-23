@@ -19,7 +19,7 @@ import {
 export function planRustFlowReadProjection(
   node: Node,
   expression: RustExpr,
-  fact: RustFlowReadProjectionFact,
+  fact: Exclude<RustFlowReadProjectionFact, { readonly kind: "representation-conversion" }>,
   context: RustPlanContext,
 ): RustExpr | undefined {
   const sourceCarrier = context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;

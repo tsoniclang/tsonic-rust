@@ -1,17 +1,8 @@
 import type { RustExpr } from "./nodes.js";
 
 export function rustJsStringLiteral(value: string): RustExpr {
-  const units = Array.from(
-    { length: value.length },
-    (_, index) => value.charCodeAt(index),
-  );
-  const hasUnpairedSurrogate = units.some((unit, index) =>
-    unit >= 0xd800 && unit <= 0xdbff
-      ? !(units[index + 1]! >= 0xdc00 && units[index + 1]! <= 0xdfff)
-      : unit >= 0xdc00 && unit <= 0xdfff &&
-        !(units[index - 1]! >= 0xd800 && units[index - 1]! <= 0xdbff)
-  );
-  return hasUnpairedSurrogate
+  const units = rustStringCodeUnits(value);
+  return rustStringHasUnpairedSurrogate(units)
     ? {
         kind: "call",
         path: "js_abi::JsString::from_units",
@@ -25,6 +16,50 @@ export function rustJsStringLiteral(value: string): RustExpr {
         path: "js_abi::JsString::from",
         args: [{ kind: "str-literal", value }],
       };
+}
+
+export function rustJsStringEqualsLiteral(
+  expression: RustExpr,
+  value: string,
+): RustExpr {
+  const units = rustStringCodeUnits(value);
+  return {
+    kind: "binary",
+    operator: "==",
+    left: rustStringHasUnpairedSurrogate(units)
+      ? {
+          kind: "method-call",
+          receiver: expression,
+          method: "units",
+          args: [],
+        }
+      : expression,
+    right: rustStringHasUnpairedSurrogate(units)
+      ? {
+          kind: "reference",
+          expr: {
+            kind: "slice-literal",
+            elements: units.map((unit) => ({ kind: "int-literal", text: String(unit) })),
+          },
+        }
+      : { kind: "str-literal", value },
+  };
+}
+
+function rustStringCodeUnits(value: string): readonly number[] {
+  return Array.from(
+    { length: value.length },
+    (_, index) => value.charCodeAt(index),
+  );
+}
+
+function rustStringHasUnpairedSurrogate(units: readonly number[]): boolean {
+  return units.some((unit, index) =>
+    unit >= 0xd800 && unit <= 0xdbff
+      ? !(units[index + 1]! >= 0xdc00 && units[index + 1]! <= 0xdfff)
+      : unit >= 0xdc00 && unit <= 0xdfff &&
+        !(units[index - 1]! >= 0xd800 && units[index - 1]! <= 0xdbff)
+  );
 }
 
 export function rustJsStringConcat(parts: readonly RustExpr[]): RustExpr {

@@ -179,6 +179,51 @@ test("typed let bindings keep a fitting call base before a fallible selector", (
   );
 });
 
+test("typed let bindings keep a compact referenced conversion before a fallible selector", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "let",
+          name: "symbolic",
+          mutable: false,
+          type: { kind: "primitive", name: "bool" },
+          init: {
+            kind: "method-call",
+            receiver: {
+              kind: "try",
+              expr: {
+                kind: "call",
+                path: "tsonic_rust_node::fs::lstat_sync",
+                args: [{
+                  kind: "reference",
+                  expr: {
+                    kind: "call",
+                    path: "tsonic_rust_js::abi::js_string_to_utf8",
+                    args: [{ kind: "reference", expr: { kind: "path", path: "file" } }],
+                  },
+                }],
+              },
+            },
+            method: "is_symbolic_link",
+            args: [],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /let symbolic: bool =\n        tsonic_rust_node::fs::lstat_sync\(&tsonic_rust_js::abi::js_string_to_utf8\(&file\)\)\?\n            \.is_symbolic_link\(\);/u,
+  );
+});
+
 test("typed let bindings move an expanded call base to one continuation", () => {
   const source = printRustSourceFile({
     headerComment,
@@ -228,6 +273,96 @@ test("typed let bindings move an expanded call base to one continuation", () => 
   assert.match(
     source,
     /let merged: tsonic_rust_node::buffer::Buffer =\n        tsonic_rust_node::buffer::Buffer::concat\(&js_abi::JsArray::from_dense\(vec!\[/u,
+  );
+});
+
+test("typed let bindings move direct fallible nested collections as one continuation", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "let",
+          name: "merged",
+          mutable: false,
+          type: { kind: "named", path: "tsonic_rust_node::buffer::Buffer" },
+          init: {
+            kind: "try",
+            expr: {
+              kind: "call",
+              path: "tsonic_rust_node::buffer::Buffer::concat",
+              args: [{
+                kind: "reference",
+                expr: {
+                  kind: "call",
+                  path: "js_abi::JsArray::from_dense",
+                  args: [{
+                    kind: "vec-literal",
+                    elements: [
+                      { kind: "call", path: "clone_first", args: [] },
+                      { kind: "call", path: "clone_second", args: [] },
+                    ],
+                  }],
+                },
+              }],
+            },
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /let merged: tsonic_rust_node::buffer::Buffer =\n {8}tsonic_rust_node::buffer::Buffer::concat\(&js_abi::JsArray::from_dense\(vec!\[/u,
+  );
+});
+
+test("typed let bindings keep nested fallible call openings before long constructor inputs", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "let",
+          name: "value",
+          mutable: false,
+          type: { kind: "named", path: "js_abi::JsValue" },
+          init: {
+            kind: "try",
+            expr: {
+              kind: "call",
+              path: "js_abi::json_parse",
+              args: [{
+                kind: "reference",
+                expr: {
+                  kind: "associated-call",
+                  owner: { kind: "named", path: "js_abi::JsString" },
+                  method: "from",
+                  args: [{
+                    kind: "str-literal",
+                    value: "{\"name\": \"tsonic\", \"count\": 3}",
+                  }],
+                },
+              }],
+            },
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /let value: js_abi::JsValue = js_abi::json_parse\(&js_abi::JsString::from\(\n {8}"\{\\"name\\": \\"tsonic\\", \\"count\\": 3\}",\n {4}\)\)\?;/u,
   );
 });
 
@@ -657,5 +792,46 @@ test("long struct field types use rustfmt-compatible continuation indentation", 
   assert.match(
     source,
     /dispatch_identity_identity_specialization_1_implementation:\n {8}rt::Callable<\(Identity, String\), String>,/u,
+  );
+});
+
+test("typed collection-call bindings expand exact-width vectors", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "let",
+          name: "values",
+          mutable: false,
+          type: {
+            kind: "named",
+            path: "js_abi::JsArray",
+            typeArguments: [{ kind: "named", path: "js_abi::JsString" }],
+          },
+          init: {
+            kind: "call",
+            path: "js_abi::JsArray::from_dense",
+            args: [{
+              kind: "vec-literal",
+              elements: ["a", "b"].map((value) => ({
+                kind: "call",
+                path: "js_abi::JsString::from",
+                args: [{ kind: "str-literal", value }],
+              })),
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /let values: js_abi::JsArray<js_abi::JsString> = js_abi::JsArray::from_dense\(vec!\[\n {8}js_abi::JsString::from\("a"\),\n {8}js_abi::JsString::from\("b"\),\n {4}\]\);/u,
   );
 });

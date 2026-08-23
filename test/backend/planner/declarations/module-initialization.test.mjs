@@ -232,7 +232,7 @@ export function main(): void {}
   const moduleSource = artifactText(result, "src/index.rs");
   assert.match(
     moduleSource,
-    /pub fn module_init\(\) -> Result<\(\), rt::TsonicError>[\s\S]*?json_parse\("1"\)\?/u,
+    /pub fn module_init\(\) -> Result<\(\), rt::TsonicError>[\s\S]*?json_parse\(&js_abi::JsString::from\("1"\)\)\?/u,
   );
   assert.match(moduleSource, /Ok\(\(\)\)/u);
   assert.doesNotMatch(moduleSource, /Ok::<\(\), rt::TsonicError>\(\(\)\)/u);

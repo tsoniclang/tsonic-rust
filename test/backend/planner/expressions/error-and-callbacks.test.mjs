@@ -198,7 +198,7 @@ export function roundtrip(text: string): string {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn roundtrip\(text: String\) -> Result<String, rt::TsonicError> \{/u);
+  assert.match(text, /pub fn roundtrip\(text: js_abi::JsString\) -> Result<js_abi::JsString, rt::TsonicError> \{/u);
   assert.match(text, /js_abi::json_parse\(&text\)\?/u);
   assert.match(text, /js_abi::json_stringify\(&value\)\?/u);
 });
@@ -220,8 +220,8 @@ export function load(path: string): string {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn load\(path: String\) -> Result<String, rt::TsonicError> \{/u);
-  assert.match(text, /tsonic_rust_node::fs::read_file_sync_string\(&path, "utf8"\)/u);
+  assert.match(text, /pub fn load\(path: js_abi::JsString\) -> Result<js_abi::JsString, rt::TsonicError> \{/u);
+  assert.match(text, /js_string_from_utf8\(tsonic_rust_node::fs::read_file_sync_string\([\s\S]*?js_string_to_utf8\(&path\)[\s\S]*?js_string_to_utf8\(&js_abi::JsString::from\("utf8"\)\)[\s\S]*?\)\?\)/u);
   assert.doesNotMatch(text, /Ok\(tsonic_rust_node::fs::read_file_sync_string/u);
 });
 
@@ -250,8 +250,8 @@ export function forwards(text: string): string {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn catches\(text: String\) -> String \{/u);
-  assert.match(text, /pub fn forwards\(text: String\) -> String \{/u);
+  assert.match(text, /pub fn catches\(text: js_abi::JsString\) -> js_abi::JsString \{/u);
+  assert.match(text, /pub fn forwards\(text: js_abi::JsString\) -> js_abi::JsString \{/u);
   assert.match(text, /catches\(text\)/u);
   assert.doesNotMatch(text, /pub fn (?:catches|forwards)[^{]+TsonicResult/u);
   assert.doesNotMatch(text, /catches\(text\)\?/u);
@@ -279,12 +279,12 @@ export function inspectJson(): boolean {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /let value: js_abi::JsValue = js_abi::json_parse\("\{\\"tag\\":\\"tsonic\\"\}"\)\?;/u);
+  assert.match(text, /let value: js_abi::JsValue\s*=\s*js_abi::json_parse\(\s*&js_abi::JsString::from\(\s*"\{\\"tag\\":\\"tsonic\\"\}",?\s*\),?\s*\)\?;/u);
   assert.match(
     text,
-    /let rendered: String = rt::option_coalesce\(\s*js_abi::json_stringify\(&value\)\?,\s*std::convert::identity,\s*\|\| String::from\(""\),\s*\);/u,
+    /let rendered: js_abi::JsString = rt::option_coalesce\(\s*js_abi::json_stringify\(&value\)\?,\s*std::convert::identity,\s*\|\| js_abi::JsString::from\(""\),\s*\);/u,
   );
-  assert.match(text, /ok = js_string::includes_from_start\(&rendered, "tsonic"\);/u);
+  assert.match(text, /ok = js_string::includes_from_start\(&rendered, &js_abi::JsString::from\("tsonic"\)\);/u);
 });
 
 test("awaited fallible project-source calls apply try after await", () => {
@@ -644,14 +644,14 @@ class DomainError extends Error {
   constructor(message: string) { super(message); }
 }
 
-const normalize = (value: string): string => value.replaceAll("a", "b");
+const normalize = (value: string): string => value.repeat(2);
 
 function fail(): void {
   throw new DomainError("domain");
 }
 
 export function main(): void {
-  check(normalize("a") === "b");
+  check(normalize("a") === "aa");
   try {
     fail();
   } catch (_error) {
@@ -666,7 +666,7 @@ export function main(): void {
   const source = artifactText(result, "src/index.rs");
   assert.match(
     source,
-    /js_string::replace_all\(value, "a", "b"\)\.map_err\(rt::TsonicError::from\)/u,
+    /js_string::repeat\(value, 2\.0\)\.map_err\(rt::TsonicError::from\)/u,
   );
   assert.equal(validateGeneratedProject("concise-program-error", result.artifacts, { run: true }).status, 0);
 });

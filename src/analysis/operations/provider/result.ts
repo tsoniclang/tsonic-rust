@@ -2,7 +2,12 @@ import {
   isRustDefinitelyNullishCarrier,
   isRustProgramErrorCarrier,
   isRustNumericCarrier,
+  rustBigIntTargetType,
+  rustJsStringTargetType,
+  rustNullTargetType,
   rustOptionElementCarrier,
+  rustSourcePrimitiveTargetType,
+  rustStringTargetType,
 } from "../../../target-model/types/index.js";
 import {
   rustTargetOperationResultCarrier,
@@ -15,7 +20,10 @@ import {
 import { acceptRustPolicy, rejectRustPolicy } from "../../../policy/operations/contracts.js";
 import { asNode } from "../../../policy/evidence/selected-source.js";
 import { selectRustFlowReadProjection } from "../../../policy/types/value-carrier-reconciliation.js";
-import { recordRustFlowReadProjection } from "../../facts/value-carrier-queries.js";
+import {
+  recordRustFlowReadProjection,
+  rustEffectiveValueCarrier,
+} from "../../facts/value-carrier-queries.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
 import { rustCallableProtocol, rustStructuralObjectCarrierValue } from "../../../target-model/types/index.js";
 import { rustRuntimeCarrierKey, rustSelectedOperationKey } from "../../../target-model/facts/selections.js";
@@ -103,6 +111,11 @@ export function selectedMemberReceiverCarrier(
   const optionElement = rustOptionElementCarrier(sourceCarrier);
   if (request.optionalChain === true && optionElement !== undefined) {
     return optionElement;
+  }
+  const effectiveCarrier = rustEffectiveValueCarrier(context.facts, receiver);
+  if (effectiveCarrier !== undefined &&
+    rustTargetTypeRefEquals(effectiveCarrier, selectedCarrier)) {
+    return effectiveCarrier;
   }
   if (rustTargetTypeRefEquals(sourceCarrier, selectedCarrier)) {
     return sourceCarrier;
@@ -509,12 +522,32 @@ export function normalizeSelectedArgumentCarrier(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): TargetTypeRef | undefined {
-  const literal = normalizeSelectedLiteralCarrier(subject, actual, expected, context, options);
+  const node = asNode(subject, context);
+  let literal = normalizeSelectedLiteralCarrier(subject, actual, expected, context, options);
+  if (literal === undefined && node !== undefined) {
+    const kind = context.ast.kindName(node);
+    const intrinsic = kind === "KindNumericLiteral"
+      ? rustSourcePrimitiveTargetType("float64")
+      : kind === "KindTrueKeyword" || kind === "KindFalseKeyword"
+        ? rustSourcePrimitiveTargetType("bool")
+        : kind === "KindStringLiteral" || kind === "KindNoSubstitutionTemplateLiteral"
+          ? options.jsEnabled ? rustJsStringTargetType() : rustStringTargetType()
+          : kind === "KindBigIntLiteral"
+            ? rustBigIntTargetType()
+            : kind === "KindNullKeyword"
+              ? rustNullTargetType()
+              : undefined;
+    if (intrinsic !== undefined) {
+      context.facts.set(node, rustRuntimeCarrierKey, { carrier: intrinsic }, [
+        { message: "rust exact intrinsic literal carrier" },
+      ]);
+      literal = intrinsic;
+    }
+  }
   if (literal !== actual || (expected?.kind !== "function-pointer" && expected?.kind !== "closure" &&
     rustCallableProtocol(expected) === undefined)) {
     return literal;
   }
-  const node = asNode(subject, context);
   const kind = node === undefined ? "" : context.ast.kindName(node);
   return kind === "KindArrowFunction" || kind === "KindFunctionExpression"
     ? expected

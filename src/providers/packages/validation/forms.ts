@@ -335,10 +335,10 @@ function validateTrailingArguments(
       }
       continue;
     }
-    if (argument.kind === "string") {
+    if (argument.kind === "string" || argument.kind === "js-string") {
       requireExactKeys(record, ["kind", "value"], `${label}.target.trailingArguments[${index}]`, fail);
       if (typeof argument.value !== "string") {
-        fail(`${label}.target.trailingArguments[${index}] must contain a string`);
+        fail(`${label}.target.trailingArguments[${index}] must contain a string value`);
       }
       continue;
     }

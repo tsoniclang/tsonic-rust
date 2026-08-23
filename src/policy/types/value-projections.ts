@@ -17,6 +17,12 @@ export type RustOptionProjectionFact =
 
 export type RustFlowReadProjectionFact =
   | {
+      readonly kind: "representation-conversion";
+      readonly sourceCarrier: TargetTypeRef;
+      readonly selectedCarrier: TargetTypeRef;
+      readonly conversion: RustValueConversion;
+    }
+  | {
       readonly kind: "option-value";
       readonly sourceCarrier: TargetTypeRef;
       readonly selectedCarrier: TargetTypeRef;

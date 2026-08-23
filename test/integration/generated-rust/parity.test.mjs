@@ -108,7 +108,7 @@ export function primitive(name: string): string {
   assert.deepEqual(good.result.diagnostics, []);
   const text = artifactText(good.result, "src/index.rs");
   assert.match(text, /tsonic_rust_node::util::inspect\(&value\)/u);
-  assert.match(text, /tsonic_rust_node::util::inspect\(&tsonic_rust_js::abi::js_value_from_string\(&name\)\)/u);
+  assert.match(text, /tsonic_rust_js::abi::js_string_from_utf8\(\s*tsonic_rust_node::util::inspect\(\s*&tsonic_rust_js::abi::js_value_from_string\(&name\),?\s*\),?\s*\)/u);
 
   const badOptions = {
     surfaces: ["js"],

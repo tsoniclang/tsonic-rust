@@ -32,6 +32,7 @@ export {
   isRustJsArrayLikeCarrier,
   isRustJsStringCarrier,
   isRustJsValueCarrier,
+  isRustNativeStringCarrier,
   isRustNeverCarrier,
   isRustNullCarrier,
   isRustOptionCarrier,

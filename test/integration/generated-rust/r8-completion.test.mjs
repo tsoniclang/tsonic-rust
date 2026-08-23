@@ -49,7 +49,7 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn manifest_has\(path: String, needle: String\) -> Result<bool, rt::TsonicError>/u);
+  assert.match(text, /pub fn manifest_has\(\s*path: js_abi::JsString,\s*needle: js_abi::JsString,?\s*\) -> Result<bool, rt::TsonicError>/u);
   assert.match(text, /let xs: \[i32; 3\] = \[10, 20, 30\];/u);
   assert.match(text, /tsonic_rust_node::crypto::random_bytes\(tsonic_rust_runtime::conversions::i32_to_usize\(\s*16,?\s*\)\?\)\?/u);
   const run = validateGeneratedProject("r8-proof-bin", result.artifacts, { run: true });

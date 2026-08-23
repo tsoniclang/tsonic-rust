@@ -69,6 +69,7 @@ import { resolveCallLikeCarrier, resolveIdentifierCarrier } from "./references.j
 import { resolveExpressionCarrier } from "./carriers.js";
 import { resolveFunctionExpressionCarrier } from "../callables/closures.js";
 import { resolveRecordLiteralCarrier } from "./records.js";
+import { rustFutureValueForSubject } from "../facts/future-values.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { selectedSourceLiteralIsRepresentable, selectedSourceLiteralOperandIsRepresentable } from "../../policy/types/selected-numeric-literal.js";
@@ -242,7 +243,16 @@ export function resolveExpressionCarrierUncached(
       const operandCarrier = operand === undefined
         ? undefined
         : resolveExpressionCarrier(walk, operand, sourceFile, undefined);
-      const output = rustFutureOutputCarrier(operandCarrier);
+      const rawOutput = rustFutureOutputCarrier(operandCarrier);
+      const selectedFuture = operand === undefined
+        ? undefined
+        : rustFutureValueForSubject(operand, {
+            ast: walk.context.ast,
+            facts: walk.context.facts,
+            sourceDeclarationFor: (reference) =>
+              walk.context.source.navigation.sourceReferenceFor(reference)?.declaration,
+          });
+      const output = selectedFuture?.outputCarrier ?? rawOutput;
       if (output === undefined) {
         return undefined;
       }

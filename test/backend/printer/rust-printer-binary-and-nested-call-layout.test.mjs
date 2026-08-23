@@ -106,6 +106,47 @@ test("optional closure chains and nested struct arguments stay rustfmt-stable", 
   assert.match(source, /read\(Some\(Box \{\n        state: ObjectHandle::new\(a_deliberately_long_value_name_that_forces_nested_layout\),\n    \}\)\)\n    \.unwrap_or\(-1\)\n        == 7;/u);
 });
 
+test("comparisons continue after selectors on fitting call receivers", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      visibility: "public",
+      name: "proof",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "binary",
+            operator: "==",
+            left: {
+              kind: "method-call",
+              receiver: {
+                kind: "call",
+                path: "describe",
+                args: [
+                  { kind: "path", path: "a_deliberately_long_first_argument" },
+                  { kind: "path", path: "a_deliberately_long_second_argument" },
+                ],
+              },
+              method: "with",
+              args: [{
+                kind: "closure",
+                params: [{ name: "state", byRefCopy: false }],
+                body: { kind: "field", receiver: { kind: "path", path: "state" }, name: "text" },
+              }],
+            },
+            right: { kind: "string-literal", value: "rust!" },
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /describe\(\n {8}a_deliberately_long_first_argument,\n {8}a_deliberately_long_second_argument,\n {4}\)\n {4}\.with\(\|state\| state\.text\)\n {8}== String::from\("rust!"\);/u);
+});
+
 test("long logical chains use rustfmt-compatible operand-per-line layout", () => {
   const terms = Array.from({ length: 7 }, (_, index) => ({
     kind: "binary",
@@ -697,4 +738,148 @@ test("single long borrowed slice arguments stay attached to their call", () => {
 
   assert.match(text, /js_abi::console_log\(&\[\n        tsonic_rust_js::abi::js_value_from_string\(&label\),\n        tsonic_rust_js::abi::JsValue::from\(6\.0\),\n        tsonic_rust_js::abi::JsValue::from\(true\),\n    \]\);/u);
   assert.doesNotMatch(text, /js_abi::console_log\(\n/u);
+});
+
+test("nested referenced method arguments break at their exact inner call boundary", () => {
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "call",
+            path: "acme_testing::check",
+            args: [{
+              kind: "method-call",
+              receiver: { kind: "path", path: "params" },
+              method: "has",
+              args: [{
+                kind: "reference",
+                expr: {
+                  kind: "call",
+                  path: "tsonic_rust_js::abi::js_string_to_utf8",
+                  args: [{
+                    kind: "reference",
+                    expr: {
+                      kind: "call",
+                      path: "js_abi::JsString::from",
+                      args: [{ kind: "str-literal", value: "key" }],
+                    },
+                  }],
+                },
+              }],
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    text,
+    /acme_testing::check\(params\.has\(&tsonic_rust_js::abi::js_string_to_utf8\(\n {8}&js_abi::JsString::from\("key"\),\n {4}\)\)\);/u,
+  );
+});
+
+test("unary nested calls keep compact converted arguments on the call continuation", () => {
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "call",
+            path: "acme_testing::check",
+            args: [{
+              kind: "unary",
+              operator: "!",
+              operand: {
+                kind: "call",
+                path: "tsonic_rust_node::fs::exists_sync",
+                args: [{
+                  kind: "reference",
+                  expr: {
+                    kind: "call",
+                    path: "tsonic_rust_js::abi::js_string_to_utf8",
+                    args: [{ kind: "reference", expr: { kind: "path", path: "directory" } }],
+                  },
+                }],
+              },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    text,
+    /acme_testing::check\(!tsonic_rust_node::fs::exists_sync\(\n {8}&tsonic_rust_js::abi::js_string_to_utf8\(&directory\),\n {4}\)\);/u,
+  );
+});
+
+test("long method receivers own the break before compact referenced conversions", () => {
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "try",
+            expr: {
+              kind: "call",
+              path: "tsonic_rust_node::assert::ok",
+              args: [{
+                kind: "try",
+                expr: {
+                  kind: "method-call",
+                  receiver: {
+                    kind: "call",
+                    path: "tsonic_rust_node::process::stdout",
+                    args: [],
+                  },
+                  method: "write_string",
+                  args: [{
+                    kind: "reference",
+                    expr: {
+                      kind: "call",
+                      path: "tsonic_rust_js::abi::js_string_to_utf8",
+                      args: [{
+                        kind: "reference",
+                        expr: {
+                          kind: "call",
+                          path: "js_abi::JsString::from",
+                          args: [{ kind: "str-literal", value: "" }],
+                        },
+                      }],
+                    },
+                  }],
+                },
+              }, { kind: "none" }],
+            },
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    text,
+    /tsonic_rust_node::process::stdout\(\)\.write_string\(\n {12}&tsonic_rust_js::abi::js_string_to_utf8\(&js_abi::JsString::from\(""\)\),\n {8}\)\?,/u,
+  );
 });

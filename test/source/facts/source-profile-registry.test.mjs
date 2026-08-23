@@ -13,6 +13,7 @@ test("only the Rust JS surface composes the canonical RegExp declaration contrac
   const jsText = declarationText(rustJsSurfaceSourceProfileContributions());
 
   assert.equal(nativeText.includes(jsRegExpSourceProfileDeclarations), false);
+  assert.equal((nativeText.match(/interface RegExp \{\}/gu) ?? []).length, 1);
   assert.equal(jsText.split(jsRegExpSourceProfileDeclarations).length - 1, 1);
   assert.equal((jsText.match(/interface RegExp \{/gu) ?? []).length, 1);
   assert.equal((jsText.match(/interface RegExpConstructor \{/gu) ?? []).length, 1);

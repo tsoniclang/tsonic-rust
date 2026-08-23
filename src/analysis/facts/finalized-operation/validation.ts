@@ -136,7 +136,11 @@ export function validateRustFinalizedOperationAbi(candidate: unknown): candidate
   const expectedMapping = finalizeTargetInputs(
     abi.operationKind,
     abi.target,
-    createInputFactory(sourceReceiverCarrier, abi.sourceArguments.map((argument) => argument.carrier)),
+    createInputFactory(
+      sourceReceiverCarrier,
+      abi.sourceArguments.map((argument) => argument.carrier),
+      abi.sourceArguments.map((argument) => argument.selectedParameterCarrier),
+    ),
     abi.sourceArguments.length,
   );
   if (expectedMapping === undefined ||
@@ -159,7 +163,7 @@ export function validateRustFinalizedOperationAbi(candidate: unknown): candidate
     finalizedConversionIsValid(abi.result.awaitedConversion) &&
     rustTargetTypeRefEquals(abi.result.awaitedRawCarrier, abi.result.awaitedConversion.sourceCarrier) &&
     rustTargetTypeRefEquals(abi.result.awaitedCarrier, abi.result.awaitedConversion.targetCarrier) &&
-    rustTargetTypeRefEquals(abi.result.futureCarrier, rustFutureTargetType(abi.result.awaitedCarrier));
+    rustTargetTypeRefEquals(abi.result.futureCarrier, rustFutureTargetType(abi.result.awaitedRawCarrier));
 }
 
 function isRustFinalizedOperationAbiShape(value: unknown): value is RustFinalizedOperationAbi {
@@ -204,10 +208,21 @@ function isSourceReceiver(value: unknown): value is RustFinalizedOperationAbi["s
 }
 
 function isSourceArgument(value: unknown): value is RustFinalizedSourceArgument {
-  return isRecord(value) && hasExactKeys(value, ["sourceIndex", "carrier", "mode", "role", "disposition"]) &&
-    Number.isSafeInteger(value.sourceIndex) && (value.sourceIndex as number) >= 0 &&
-    isRustTargetTypeRef(value.carrier) && argumentModes.has(value.mode) && argumentRoles.has(value.role) &&
-    dispositions.has(value.disposition);
+  if (!isRecord(value) || !Number.isSafeInteger(value.sourceIndex) || (value.sourceIndex as number) < 0 ||
+    !isRustTargetTypeRef(value.carrier) || !argumentModes.has(value.mode) ||
+    !argumentRoles.has(value.role) || !dispositions.has(value.disposition)) {
+    return false;
+  }
+  return value.disposition === "runtime"
+    ? hasExactKeys(value, [
+        "sourceIndex",
+        "carrier",
+        "selectedParameterCarrier",
+        "mode",
+        "role",
+        "disposition",
+      ]) && isRustTargetTypeRef(value.selectedParameterCarrier)
+    : hasExactKeys(value, ["sourceIndex", "carrier", "mode", "role", "disposition"]);
 }
 
 function isTargetReceiver(value: unknown): value is RustFinalizedOperationAbi["targetReceiver"] {
@@ -303,6 +318,9 @@ function isFinalizedConversion(value: unknown): value is RustFinalizedValueConve
     (value.conversion.kind === "option-some" &&
       hasExactKeys(value.conversion, ["kind", "element"]) &&
       isRustTargetTypeRef(value.conversion.element)) ||
+    (value.conversion.kind === "option-some-map" &&
+      hasExactKeys(value.conversion, ["kind", "elementConversion"]) &&
+      isNonOptionValueConversion(value.conversion.elementConversion)) ||
     (value.conversion.kind === "option-map" &&
       hasExactKeys(value.conversion, ["kind", "elementConversion"]) &&
       isNonOptionValueConversion(value.conversion.elementConversion))) &&
@@ -348,6 +366,7 @@ function isProviderConstant(value: unknown): value is RustProviderConstantArgume
       return hasExactKeys(value, ["kind", "value"]) &&
         typeof value.value === "number" && Number.isFinite(value.value);
     case "string":
+    case "js-string":
       return hasExactKeys(value, ["kind", "value"]) && typeof value.value === "string";
     case "boolean":
       return hasExactKeys(value, ["kind", "value"]) && typeof value.value === "boolean";

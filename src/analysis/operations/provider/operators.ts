@@ -364,12 +364,17 @@ function mapSelectedAssignment(
     sourceArgumentCarriers.push(selectedIndex);
   }
   sourceArgumentCarriers.push(selectedRight);
+  if (selection.parameterCarriers === undefined ||
+    selection.parameterCarriers.length !== sourceArgumentCarriers.length ||
+    selection.parameterCarriers.some((carrier) => carrier === undefined)) {
+    return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_ASSIGNMENT_ABI_INCOMPLETE", "The selected JavaScript setter has no closed target parameter carriers.");
+  }
   const abi = finalizeRustProviderOperationAbi({
     operationKind,
     form: selection.fact.target,
     sourceReceiverCarrier: receiverCarrier,
     sourceArgumentCarriers,
-    declaredSourceArgumentCarriers: selection.parameterCarriers,
+    selectedParameterCarriers: selection.parameterCarriers as TargetTypeRef[],
     resultCarrier: rustUnitTargetType(),
     isAsync: false,
     isFallible: false,
@@ -446,7 +451,8 @@ function mapSelectedProviderAssignment(
     );
   }
   if (template === undefined || template.parameterCarriers === undefined ||
-    template.parameterCarriers.length !== sourceArguments.length) {
+    template.parameterCarriers.length !== sourceArguments.length ||
+    template.parameterCarriers.some((carrier) => carrier === undefined)) {
     return rejectSelectedOperation(
       request.expression,
       context,
@@ -465,9 +471,7 @@ function mapSelectedProviderAssignment(
   const finalizedSourceArgumentCarriers = sourceArgumentCarriers.filter(
     (carrier): carrier is TargetTypeRef => carrier !== undefined,
   );
-  if (finalizedSourceArgumentCarriers.length !== sourceArgumentCarriers.length ||
-    finalizedSourceArgumentCarriers.some((carrier, index) =>
-      !rustTargetTypeRefEquals(carrier, template.parameterCarriers?.[index]))) {
+  if (finalizedSourceArgumentCarriers.length !== sourceArgumentCarriers.length) {
     return rejectSelectedOperation(
       request.expression,
       context,
@@ -480,7 +484,7 @@ function mapSelectedProviderAssignment(
     form: template.target,
     ...(receiverCarrier === undefined ? {} : { sourceReceiverCarrier: receiverCarrier }),
     sourceArgumentCarriers: finalizedSourceArgumentCarriers,
-    declaredSourceArgumentCarriers: template.parameterCarriers,
+    selectedParameterCarriers: template.parameterCarriers as TargetTypeRef[],
     resultCarrier: template.resultCarrier,
     isAsync: template.isAsync,
     isFallible: template.isFallible,

@@ -34,7 +34,7 @@ import {
 } from "../expressions/index.js";
 import { isRustBoolCarrier } from "../../../target-model/types/index.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
-import { negateRustBooleanExpression } from "../../target-ast/expressions.js";
+import { negateRustBooleanExpression, rustJsStringEqualsLiteral } from "../../target-ast/expressions.js";
 import { planBlockLike, planStatementSequence } from "./core.js";
 import { planExpressionAsStatement } from "./expression-statements.js";
 import { planVariableStatement } from "./variable-declarations.js";
@@ -280,6 +280,22 @@ function switchGuardCondition(discriminantName: string, expression: RustExpr): R
   const discriminant: RustExpr = { kind: "path", path: discriminantName };
   if (expression.kind === "bool-literal") {
     return expression.value ? discriminant : negateRustBooleanExpression(discriminant);
+  }
+  if (expression.kind === "call" && expression.path === "js_abi::JsString::from" &&
+    expression.args.length === 1 && expression.args[0]?.kind === "str-literal") {
+    return rustJsStringEqualsLiteral(discriminant, expression.args[0].value);
+  }
+  if (expression.kind === "call" && expression.path === "js_abi::JsString::from_units" &&
+    expression.args.length === 1 && expression.args[0]?.kind === "vec-literal") {
+    return {
+      kind: "binary",
+      operator: "==",
+      left: { kind: "method-call", receiver: discriminant, method: "units", args: [] },
+      right: {
+        kind: "reference",
+        expr: { kind: "slice-literal", elements: expression.args[0].elements },
+      },
+    };
   }
   return {
     kind: "binary",

@@ -156,6 +156,10 @@ export function isRustStringCarrier(carrier: TargetTypeRef | undefined): boolean
     (carrier.id === rustStringTargetId || carrier.id === rustJsStringTargetId);
 }
 
+export function isRustNativeStringCarrier(carrier: TargetTypeRef | undefined): boolean {
+  return carrier?.kind === "target-named" && carrier.id === rustStringTargetId;
+}
+
 export function isRustJsStringCarrier(carrier: TargetTypeRef | undefined): boolean {
   return carrier?.kind === "target-named" && carrier.id === rustJsStringTargetId;
 }

@@ -54,7 +54,7 @@ export function timing(): boolean {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /js_abi::JsDate::from_string\(&js_abi::JsString::from\("1970-01-02T00:00:00.000Z"\)\)/u);
+  assert.match(text, /js_abi::JsDate::from_string\(\s*&js_abi::JsString::from\(\s*"1970-01-02T00:00:00.000Z",?\s*\),?\s*\)/u);
 });
 
 test("Boolean, Unicode string, and mutable UTC Date operations use exact runtime rows", () => {
@@ -126,7 +126,7 @@ export function project(): boolean {
   assert.match(text, /js_abi::JsArray::from_dense\(vec!\[/u);
   assert.match(text, /object_projection_value/u);
   assert.match(text, /\.with\(\|state\|/u);
-  assert.match(text, /\.as_str\(\) == "tail"/u);
+  assert.match(text, /\.with\(\|state\| state\.tail\.clone\(\)\)/u);
   assert.match(text, /record_getter/u);
 });
 

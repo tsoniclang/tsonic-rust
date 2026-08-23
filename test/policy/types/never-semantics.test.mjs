@@ -74,8 +74,8 @@ export async function chooseAsync(flag: boolean): Promise<int32> {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /fn stop\([^)]*message: String\) -> Result<\(\), rt::TsonicError>/u);
-  assert.match(source, /\.stop\(String::from\("sync"\)\)\?/u);
+  assert.match(source, /fn stop\([^)]*message: js_abi::JsString\) -> Result<\(\), rt::TsonicError>/u);
+  assert.match(source, /\.stop\(js_abi::JsString::from\("sync"\)\)\?/u);
   assert.match(source, /unreachable!/u);
   assert.match(source, /async fn stop_async\(\) -> Result<\(\), rt::TsonicError>/u);
   assert.match(source, /stop_async\(\)\.await\?/u);

@@ -30,8 +30,8 @@ import {
   isRustDefinitelyNullishCarrier,
   isRustNumericCarrier,
   isRustNullishSourceCarrier,
+  isRustNativeStringCarrier,
   isRustOptionCarrier,
-  isRustStringCarrier,
   rustOptionElementCarrier,
   rustSourcePrimitiveTargetType,
 } from "../../target-model/types/index.js";
@@ -142,6 +142,9 @@ export function resolveBinaryOperandCarriers(
       sourceFile,
       leftSemanticCarrier,
     );
+  }
+  if (operatorKind === KindQuestionQuestionToken) {
+    left = optionStorageOperandCarrier(walk, leftNode, left);
   }
   const initialRightExpectation = operatorKind === KindQuestionQuestionToken
     ? rustOptionElementCarrier(left) ?? expected
@@ -267,10 +270,10 @@ export function resolvePostCheckBinaryCarrier(
   const strictEquality = operatorKind === KindEqualsEqualsEqualsToken ||
     operatorKind === KindExclamationEqualsEqualsToken;
   const leftComparisonCarrier = strictEquality
-    ? strictEqualityOperandCarrier(walk, operands.leftNode, left)
+    ? optionStorageOperandCarrier(walk, operands.leftNode, left)
     : left;
   const rightComparisonCarrier = strictEquality
-    ? strictEqualityOperandCarrier(walk, operands.rightNode, right)
+    ? optionStorageOperandCarrier(walk, operands.rightNode, right)
     : right;
   const leftOptionElement = rustOptionElementCarrier(leftComparisonCarrier);
   const rightOptionElement = rustOptionElementCarrier(rightComparisonCarrier);
@@ -493,7 +496,7 @@ export function resolvePostCheckBinaryCarrier(
     }
   }
   const inPlaceStringAppend = fact?.kind === "operator-token" &&
-      fact.operator === "+=" && isRustStringCarrier(fact.resultCarrier)
+      fact.operator === "+=" && isRustNativeStringCarrier(fact.resultCarrier)
     ? inPlaceStringAppendDeclarationFor(walk, leftNode, operands.rightNode)
     : undefined;
   if (inPlaceStringAppend !== undefined && fact?.kind === "operator-token") {
@@ -636,7 +639,7 @@ function selectedOptionNullishRelationship(
     : "disjoint";
 }
 
-function strictEqualityOperandCarrier(
+function optionStorageOperandCarrier(
   walk: RustFactWalk,
   operand: Node,
   effectiveCarrier: TargetTypeRef | undefined,

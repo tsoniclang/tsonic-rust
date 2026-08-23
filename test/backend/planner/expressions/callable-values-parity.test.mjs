@@ -161,7 +161,7 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
   assert.doesNotMatch(source, /type TextTransform/u);
-  assert.match(source, /rt::Callable<\(String,\), rt::TsonicResult<String>>/u);
+  assert.match(source, /rt::Callable<\(js_abi::JsString,\), rt::TsonicResult<js_abi::JsString>>/u);
   validateGeneratedProject("callable-alias", result.artifacts, { run: true });
 });
 

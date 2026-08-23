@@ -1,11 +1,11 @@
 import { appendToLastLine, firstLine, renderedFits } from "../patterns.js";
 import { indentText, printRustType } from "../types.js";
-import { printRustAssociatedOwner, printRustSingleCollectionCallContinuation, rustMethodChain, rustMethodChainPrefersVerticalLayout } from "./chains.js";
+import { printFittedMethodChain, printRustAssociatedOwner, printRustSingleCollectionCallContinuation, rustMethodChain, rustMethodChainPrefersVerticalLayout } from "./chains.js";
 import { printRustClosureParams } from "./closure-params.js";
 import { printRustExpr } from "./core.js";
 import { printRustExprFitted } from "./fitted.js";
 import { rustCompactTrailingClosureWidth, rustFormatWidth, rustMethodChainWidth, rustNestedCallWidth, rustSingleLineConditionalWidth } from "../formatting.js";
-import { rustExpressionContainsExpandedStructLiteral, rustFormatArgumentCanShareLine, rustFormatArgumentIsAtomic, rustInvocationHasNestedExpandedCollection } from "./inspection.js";
+import { rustExpressionContainsExpandedCollectionLiteral, rustExpressionContainsExpandedStructLiteral, rustFormatArgumentCanShareLine, rustFormatArgumentIsAtomic, rustInvocationHasNestedExpandedCollection } from "./inspection.js";
 import { rustExpressionContainsStatementBlock } from "../../../backend/target-ast/expressions.js";
 import type { RustExpr, RustType } from "../../../backend/target-ast/nodes.js";
 
@@ -212,15 +212,29 @@ export function printRustLetInitializer(
   const flat = printRustExpr(initializer);
   const exactWidthInvocation = prefix.length + flat.length + 1 === rustFormatWidth &&
     rustLetInitializerUsesInvocationLayout(initializer);
+  const exactWidthCollectionInvocation = exactWidthInvocation &&
+    rustExpressionContainsExpandedCollectionLiteral(initializer);
   const complexStringConcat = initializer.kind === "string-concat" &&
     flat.length > rustNestedCallWidth &&
     !initializer.parts.every(rustFormatArgumentCanShareLine);
+  const flatContinuationIndent = indentText(depth + 1);
+  const flatCollectionContinuation =
+    (initializer.kind === "string-concat" ||
+      rustExpressionContainsExpandedCollectionLiteral(initializer)) &&
+    !rustLetInitializerUsesInvocationLayout(initializer) &&
+    !flat.includes("\n") &&
+    !renderedFits(`${flat};`, prefix.length) &&
+    renderedFits(`${flat};`, flatContinuationIndent.length);
+  if (flatCollectionContinuation) {
+    return `${prefix.trimEnd()}\n${flatContinuationIndent}${flat};`;
+  }
   if (!flat.includes("\n") && prefix.length + flat.length + 1 <= rustFormatWidth &&
     !exactWidthInvocation &&
     (initializer.kind !== "conditional" || flat.length <= rustSingleLineConditionalWidth) &&
     !rustExpressionContainsStatementBlock(initializer) &&
     !rustExpressionContainsExpandedStructLiteral(initializer) &&
     !rustMethodChainPrefersVerticalLayout(initializer) &&
+    !(rustMethodChain(initializer) !== undefined && flat.length > rustMethodChainWidth) &&
     !complexStringConcat &&
     !(rustMethodChain(initializer) !== undefined &&
       prefix.length + flat.length + 1 >= rustFormatWidth)) {
@@ -244,8 +258,39 @@ export function printRustLetInitializer(
       : prefix.length + chainBaseAtPrefix.length + 1 <= rustFormatWidth);
   const methodChainSelectorCount = methodChain?.steps.filter((step) =>
     step.kind === "method" || step.kind === "field" || step.kind === "await").length ?? 0;
-  const bindingLineOwnsMultiSelectorChainBase = bindingLineOwnsChainBase &&
-    methodChainSelectorCount > 1;
+  const fallibleChainFitsContinuation = methodChainSelectorCount === 1 &&
+    methodChain?.steps[0]?.kind === "try" &&
+    !renderedFits(`${flat};`, prefix.length) &&
+    renderedFits(`${flat};`, flatContinuationIndent.length);
+  if (fallibleChainFitsContinuation) {
+    return `${prefix.trimEnd()}\n${flatContinuationIndent}${flat};`;
+  }
+  const fallibleCallBaseOwnsContinuation = methodChainSelectorCount === 1 &&
+    methodChain?.steps[0]?.kind === "try" &&
+    !renderedFits(`${flat};`, prefix.length) &&
+    !renderedFits(`${flat};`, flatContinuationIndent.length) &&
+    prefix.length + firstLine(fittedAtPrefix).length + 1 > rustFormatWidth &&
+    renderedFits(
+      `${printRustExpr(methodChain.base)}?`,
+      flatContinuationIndent.length,
+    );
+  if (fallibleCallBaseOwnsContinuation) {
+    const continuation = printFittedMethodChain(
+      methodChain,
+      depth + 1,
+      flatContinuationIndent.length,
+      true,
+    );
+    return `${prefix.trimEnd()}\n${flatContinuationIndent}${continuation};`;
+  }
+  if (methodChainSelectorCount === 1 &&
+    (methodChain?.base.kind === "path" || methodChain?.base.kind === "try") &&
+    !renderedFits(`${flat};`, prefix.length) &&
+    renderedFits(`${flat};`, flatContinuationIndent.length)) {
+    return `${prefix.trimEnd()}\n${flatContinuationIndent}${flat};`;
+  }
+  const bindingLineOwnsSelectorChainBase = bindingLineOwnsChainBase &&
+    methodChainSelectorCount > 0;
   const initializerInvocation = initializer.kind === "try" &&
       (initializer.expr.kind === "call" || initializer.expr.kind === "invoke" ||
         initializer.expr.kind === "associated-call" || initializer.expr.kind === "method-call")
@@ -257,6 +302,18 @@ export function printRustLetInitializer(
     ? initializerInvocation.args
     : undefined;
   const trailingClosure = initializerArguments?.[initializerArguments.length - 1];
+  const initializerHasNestedInvocationArgument = initializerArguments?.some((argument) =>
+    argument.kind === "call" || argument.kind === "associated-call" ||
+    argument.kind === "method-call" || argument.kind === "try" ||
+    argument.kind === "reference" &&
+      (argument.expr.kind === "call" || argument.expr.kind === "associated-call" ||
+        argument.expr.kind === "method-call" || argument.expr.kind === "try")) === true;
+  const initializerHasLongNestedReferencedInvocationArgument = initializerArguments?.some(
+    (argument) => argument.kind === "reference" &&
+      (argument.expr.kind === "call" || argument.expr.kind === "associated-call" ||
+        argument.expr.kind === "method-call" || argument.expr.kind === "try") &&
+      printRustExpr(argument).length > rustNestedCallWidth,
+  ) === true;
   if (trailingClosure?.kind === "closure" || trailingClosure?.kind === "closure-block") {
     const continuationIndent = indentText(depth + 1);
     const continuation = trailingClosure.kind === "closure" &&
@@ -274,7 +331,7 @@ export function printRustLetInitializer(
     if (compactClosureOwnsContinuation &&
       renderedFits(continuation, continuationIndent.length) &&
       !continuation.includes("\n") && !renderedFits(flat, prefix.length + 1) &&
-      !bindingLineOwnsMultiSelectorChainBase) {
+      !bindingLineOwnsSelectorChainBase) {
       return `${prefix.trimEnd()}\n${continuationIndent}${continuation};`;
     }
     const continuationPacksMoreSource = continuation.split("\n").length <
@@ -305,6 +362,10 @@ export function printRustLetInitializer(
     return appendToLastLine(`${prefix}${fittedAtPrefix}`, ";");
   }
   if (fittedAtPrefix.includes("\n")) {
+    if (exactWidthCollectionInvocation &&
+      prefix.length + firstLine(fittedAtPrefix).length + 1 <= rustFormatWidth) {
+      return appendToLastLine(`${prefix}${fittedAtPrefix}`, ";");
+    }
     const continuationIndent = indentText(depth + 1);
     const continuation = printRustExprFitted(
       initializer,
@@ -333,16 +394,51 @@ export function printRustLetInitializer(
       ? rustFormatWidth
       : rustFormatWidth - 4;
     const continuationPacksMoreSource =
+      !bindingLineOwnsSelectorChainBase &&
+      continuation.split("\n").length < fittedAtPrefix.split("\n").length ||
+      initializerHasNestedInvocationArgument &&
+        !continuation.includes("\n") &&
+        (longBindingPrefix ||
+          prefix.length + firstLine(fittedAtPrefix).length + 1 >= rustFormatWidth - 5) ||
       !initializerHasNestedCollectionInvocation &&
         !continuation.includes("\n") && compactContinuationWidth <= compactContinuationLimit &&
-        !bindingLineOwnsMultiSelectorChainBase ||
+        !bindingLineOwnsSelectorChainBase && !exactWidthCollectionInvocation ||
       longBindingPrefix &&
         (initializerHasNestedCollectionInvocation ||
           !bindingLineOwnsChainBase && chainBaseIsInvocation &&
           chainBaseHasNestedCollectionInvocation && chainBaseAtPrefix?.includes("\n") === true) ||
-      longBindingPrefix && chainBaseAtPrefix?.includes("\n") === true &&
+      chainBaseAtPrefix?.includes("\n") === true &&
         chainBaseAtContinuation?.includes("\n") === false;
-    if (continuationPacksMoreSource && renderedFits(continuation, continuationIndent.length)) {
+    const bindingOwnsNestedInvocationExpansion =
+      initializerHasLongNestedReferencedInvocationArgument &&
+      fittedAtPrefix.includes("\n") &&
+      !continuation.includes("\n") &&
+      continuation.length > rustNestedCallWidth &&
+      prefix.length + firstLine(fittedAtPrefix).length + 1 <= rustFormatWidth;
+    if (bindingOwnsNestedInvocationExpansion) {
+      return appendToLastLine(`${prefix}${fittedAtPrefix}`, ";");
+    }
+    if (initializerHasNestedCollectionInvocation && continuation.includes("\n") &&
+      firstLine(continuation).length > firstLine(fittedAtPrefix).length &&
+      renderedFits(appendToLastLine(continuation, ";"), continuationIndent.length)) {
+      return appendToLastLine(
+        `${prefix.trimEnd()}\n${continuationIndent}${continuation}`,
+        ";",
+      );
+    }
+    if (continuationPacksMoreSource &&
+      renderedFits(appendToLastLine(continuation, ";"), continuationIndent.length)) {
+      return appendToLastLine(
+        `${prefix.trimEnd()}\n${continuationIndent}${continuation}`,
+        ";",
+      );
+    }
+    const nestedInvocationNeedsBindingContinuation =
+      initializerHasNestedInvocationArgument &&
+      initializerArguments?.length === 1 &&
+      prefix.length + firstLine(fittedAtPrefix).length >= rustFormatWidth - 2 &&
+      renderedFits(appendToLastLine(continuation, ";"), continuationIndent.length);
+    if (nestedInvocationNeedsBindingContinuation) {
       return appendToLastLine(
         `${prefix.trimEnd()}\n${continuationIndent}${continuation}`,
         ";",

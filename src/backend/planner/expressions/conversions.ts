@@ -44,6 +44,7 @@ import {
   applyRustArgumentMode,
 } from "./input-shaping.js";
 import { invokeRustStructuralObjectMethod } from "../objects/project-storage.js";
+import { rustJsStringLiteral } from "../../target-ast/expressions.js";
 
 export function applyRustValueConversion(
   context: RustPlanContext,
@@ -200,6 +201,25 @@ export function lowerRustValueConversion(
     }
     case "option-some":
       return { kind: "call", path: "Some", args: [source] };
+    case "option-some-map": {
+      const converted = lowerRustValueConversion(
+        contract.element,
+        source,
+        context,
+        node,
+      );
+      if (converted === undefined) {
+        return undefined;
+      }
+      return contract.element.fallible
+        ? {
+            kind: "method-call",
+            receiver: converted,
+            method: "map",
+            args: [{ kind: "path", path: "Some" }],
+          }
+        : { kind: "call", path: "Some", args: [converted] };
+    }
     case "option-map": {
       const valueName = allocateRustSyntheticName(
         context.syntheticNames ?? createRustSyntheticNameState(
@@ -244,7 +264,10 @@ export function lowerRustValueConversion(
   }
 }
 
-function providerConstantExpression(argument: RustProviderConstantArgument): RustExpr {
+function providerConstantExpression(
+  argument: RustProviderConstantArgument,
+  context: RustPlanContext,
+): RustExpr {
   switch (argument.kind) {
     case "integer":
       return { kind: "int-literal", text: String(argument.value) };
@@ -252,6 +275,9 @@ function providerConstantExpression(argument: RustProviderConstantArgument): Rus
       return { kind: "float-literal", text: rustFloat64ConstantText(argument.value) };
     case "string":
       return { kind: "str-literal", value: argument.value };
+    case "js-string":
+      context.usedAliases?.add("js_abi");
+      return { kind: "reference", expr: rustJsStringLiteral(argument.value) };
     case "boolean":
       return { kind: "bool-literal", value: argument.value };
     case "none":
@@ -684,7 +710,7 @@ export function planFinalizedTargetInput(
   overrides?: RustFinalizedInputPlanOverrides,
 ): RustExpr | undefined {
   if (isRustFinalizedConstantInput(input)) {
-    return providerConstantExpression(input.source.value);
+    return providerConstantExpression(input.source.value, context);
   }
   if (isRustFinalizedTaggedArrayInput(input)) {
     const elements: RustExpr[] = [];
@@ -787,11 +813,20 @@ export function planFinalizedSourceInput(
     input.sourceCarrier,
   );
   if (!directCarrierMatch && convertedCarrier !== undefined) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
+    const conflict = unsupportedConstructDiagnostic(
       diagnosticInput(context, sourceNode),
       "rust.backend.provider-operation-input-carrier",
       "Finalized Rust operation input conflicts with its independent source or selected call-argument carrier fact.",
-    ));
+    );
+    context.diagnostics.push({
+      ...conflict,
+      evidence: [
+        ...(conflict.evidence ?? []),
+        `source.carrier=${JSON.stringify(sourceCarrier)}`,
+        `source.transition=${JSON.stringify(convertedCarrier)}`,
+        `operation.input=${JSON.stringify(input.sourceCarrier)}`,
+      ],
+    });
     return undefined;
   }
   const inputOverride = overrides?.inputs.get(input);

@@ -408,6 +408,98 @@ test("calls expand matches whose scrutinee contains a statement block", () => {
   assert.doesNotMatch(source, /Some\(match \{/u);
 });
 
+test("calls keep a multiline match attached when its opening fits", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "call",
+            path: "Some",
+            args: [{
+              kind: "match",
+              expression: { kind: "path", path: "selected" },
+              arms: [{
+                pattern: {
+                  kind: "tuple-variant",
+                  path: "Some",
+                  elements: [{ kind: "binding", name: "value" }],
+                },
+                expression: { kind: "path", path: "value" },
+              }, {
+                pattern: { kind: "path", path: "None" },
+                expression: { kind: "int-literal", text: "0" },
+              }],
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /Some\(match selected \{/u);
+  assert.match(source, /\n {4}\}\);/u);
+  assert.doesNotMatch(source, /Some\(\n/u);
+});
+
+test("nested long callables give multiline matches their own argument slot", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "method-call",
+            receiver: { kind: "path", path: "values" },
+            method: "get_number",
+            args: [{
+              kind: "call",
+              path: "tsonic_rust_runtime::conversions::i32_to_f64",
+              args: [{
+                kind: "match",
+                expression: {
+                  kind: "method-call",
+                  receiver: { kind: "path", path: "index" },
+                  method: "as_ref",
+                  args: [],
+                },
+                arms: [{
+                  pattern: {
+                    kind: "tuple-variant",
+                    path: "Some",
+                    elements: [{ kind: "binding", name: "value" }],
+                  },
+                  expression: { kind: "unary", operator: "*", operand: { kind: "path", path: "value" } },
+                }, {
+                  pattern: { kind: "path", path: "None" },
+                  expression: { kind: "unreachable", message: "missing value" },
+                }],
+              }],
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /\.get_number\(tsonic_rust_runtime::conversions::i32_to_f64\(\n {8}match index\.as_ref\(\) \{/u,
+  );
+  assert.match(source, /\n {8}\},\n {4}\)\);/u);
+});
+
 test("two-selector method arguments retain rustfmt vertical layout", () => {
   const source = printRustSourceFile({
     headerComment,

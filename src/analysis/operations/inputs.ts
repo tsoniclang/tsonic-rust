@@ -39,7 +39,11 @@ import { recordProjectSourceBinding } from "../expressions/references.js";
 import { recordStatementFacts } from "../control-flow/statements.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { resolveRustTupleElementTargetType } from "../../policy/types/resolution.js";
-import { rustMutatedBindingFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
+import {
+  rustContextualValueConversionFactKey,
+  rustMutatedBindingFactKey,
+  rustTargetOperationFactKey,
+} from "../facts/keys.js";
 import { rustSelectedAssignmentValueCarrier } from "./operators.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { selectRustCheckedIteration } from "./provider/index.js";
@@ -173,11 +177,18 @@ export function recordSelectedOperationInputs(
         : fact?.kind === "provider-operation"
           ? finalizedProviderArgument?.carrier
           : selectedCall?.member.parameters[index]?.type;
+      const contextualSourceCarrier = walk.context.facts.get(
+        argument,
+        rustContextualValueConversionFactKey,
+      )?.sourceCarrier ?? walk.context.facts.resolve(
+        argument,
+        rustContextualValueConversionFactKey,
+      )?.sourceCarrier;
       resolveExpressionCarrier(
         walk,
         argument,
         sourceFile,
-        finalizedArgumentCarrier,
+        contextualSourceCarrier ?? finalizedArgumentCarrier,
       );
       if (fact?.kind !== "provider-operation") {
         continue;

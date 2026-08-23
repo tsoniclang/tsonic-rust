@@ -1,7 +1,6 @@
-import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
-import type { RustArgumentMode, RustProviderOperationForm, RustValueConversion } from "../keys.js";
+import type { RustArgumentMode, RustValueConversion } from "../keys.js";
 import type { RustFinalizedArrayInput, RustFinalizedConstantInput, RustFinalizedSliceInput, RustFinalizedSourceInput, RustFinalizedTaggedArrayInput, RustFinalizedTargetInput, RustFinalizedValueConversion } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
@@ -46,8 +45,9 @@ export function sourceInput(
   sourceCarrier: TargetTypeRef,
   mode: RustArgumentMode,
   conversion: RustValueConversion | undefined,
+  targetCarrier?: TargetTypeRef,
 ): RustFinalizedSourceInput | undefined {
-  const finalized = finalizeValueConversion(conversion, sourceCarrier, undefined);
+  const finalized = finalizeValueConversion(conversion, sourceCarrier, targetCarrier);
   const parameterCarrier = finalized === undefined ? undefined : carrierAfterMode(finalized.targetCarrier, mode);
   return finalized === undefined || parameterCarrier === undefined ? undefined : {
     source,
@@ -110,26 +110,4 @@ export function carrierAfterMode(carrier: TargetTypeRef, mode: RustArgumentMode)
     referent: carrier,
     mutable: mode === "mut-ref",
   };
-}
-
-export function declaredCarriersMatch(
-  source: readonly TargetTypeRef[],
-  runtimeSourceIndexes: readonly number[],
-  declared: readonly (TargetTypeRef | undefined)[] | undefined,
-  form: RustProviderOperationForm,
-): boolean {
-  if (form.form === "call-c-variadic") {
-    return declared !== undefined && isDenseDataArray(source) &&
-      isDenseDataArray(runtimeSourceIndexes) && isDenseDataArray(declared) &&
-      runtimeSourceIndexes.length === source.length &&
-      runtimeSourceIndexes.every((sourceIndex, index) => sourceIndex === index) &&
-      declared.length === form.fixedArgumentModes.length &&
-      source.length >= declared.length &&
-      declared.every((carrier, index) => carrier === undefined ||
-        rustTargetTypeRefEquals(source[index]!, carrier));
-  }
-  return declared === undefined || (isDenseDataArray(source) && isDenseDataArray(runtimeSourceIndexes) &&
-    isDenseDataArray(declared) && runtimeSourceIndexes.length === declared.length &&
-    declared.every((carrier, index) => carrier === undefined ||
-      rustTargetTypeRefEquals(source[runtimeSourceIndexes[index]!], carrier)));
 }

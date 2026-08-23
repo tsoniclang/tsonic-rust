@@ -517,13 +517,38 @@ export function printFittedMethodChain(
   const flatChain = printRustMethodChain(chain);
   const selectedBreakBeforeFirstSelector = breakBeforeFirstSelector ||
     rustMethodChainBreaksReceiverForClosure(chain, flatChain, column);
-  let rendered = !flatBase.includes("\n") && renderedFits(flatBase, column) &&
-      !rustExpressionContainsExpandedStructLiteral(chain.base)
-    ? flatBase
-    : printRustExprFitted(chain.base, depth, column);
+  const expandedCallBase = chain.base.kind === "call" && chain.base.args.length > 1 &&
+      (!renderedFits(flatBase, column) || flatBase.length > rustNestedCallWidth)
+    ? printFittedCall(
+        printRustDirectCallTarget(chain.base),
+        chain.base.args,
+        depth,
+        column,
+        true,
+      )
+    : chain.base.kind === "associated-call" && chain.base.args.length > 1 &&
+        (!renderedFits(flatBase, column) || flatBase.length > rustNestedCallWidth)
+      ? printFittedCall(
+          printRustAssociatedCallTarget(
+            chain.base,
+            printRustAssociatedOwner(chain.base.owner),
+          ),
+          chain.base.args,
+          depth,
+          column,
+          true,
+        )
+      : undefined;
+  let rendered = expandedCallBase ?? (
+    !flatBase.includes("\n") && renderedFits(flatBase, column) &&
+        !rustExpressionContainsExpandedStructLiteral(chain.base)
+      ? flatBase
+      : printRustExprFitted(chain.base, depth, column)
+  );
   const selectedContinuationIndent = rendered.includes("\n")
     ? indentText(depth)
     : continuationIndent;
+  const selectedContinuationDepth = rendered.includes("\n") ? depth : depth + 1;
   const breakBeforeFirstField = selectedBreakBeforeFirstSelector;
   let emittedCall = false;
   let emittedField = false;
@@ -535,7 +560,7 @@ export function printFittedMethodChain(
     if (step.kind === "await") {
       rendered = emittedCall || rendered.includes("\n") ||
           column + lastLineLength(rendered) + ".await".length >= rustMethodChainWidth
-        ? `${rendered}\n${selectedContinuationIndent}.await`
+        ? `${rendered}\n${continuationIndent}.await`
         : appendToLastLine(rendered, ".await");
       continue;
     }
@@ -574,7 +599,7 @@ export function printFittedMethodChain(
       : printFittedCall(
           `.${printRustCallMember(step.name, step.typeArguments)}`,
           step.args,
-          depth + 1,
+          selectedContinuationDepth,
           selectedContinuationIndent.length + 1,
           false,
           false,

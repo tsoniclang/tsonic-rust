@@ -27,6 +27,7 @@ function structuralShape(sourceType, declaration, symbol, resultCarrier = int32C
     fields: [{
       declarations: [declaration],
       symbols: [symbol],
+      sourceKey: { kind: "property", name: "value" },
       sourceName: "value",
       sourceType: {},
       storageIndex: 0,

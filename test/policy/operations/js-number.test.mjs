@@ -3,8 +3,8 @@ import { test } from "node:test";
 
 import { selectJsSurfaceOperation } from "../../../dist/policy/operations/js-surface.js";
 import {
+  rustJsStringTargetType,
   rustSourcePrimitiveTargetType,
-  rustStringTargetType,
 } from "../../../dist/target-model/types/index.js";
 import {
   acmeTestingPackage,
@@ -21,7 +21,7 @@ test("Number rows select only exact source and carrier contracts", () => {
     ownerName: "NumberConstructor",
     memberName: "parseInt",
     operationKind: "call",
-    argumentCarriers: [rustStringTargetType(), int32],
+    argumentCarriers: [rustJsStringTargetType(), int32],
   })?.fact.operationId, "tsonic.rust.js.NumberConstructor.parseInt.call.int32-radix");
 
   assert.equal(selectJsSurfaceOperation({
@@ -75,7 +75,7 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /js_abi::number_parse_int_radix\("ff", 16\.0\)/u);
+  assert.match(source, /js_abi::number_parse_int_radix\(&js_abi::JsString::from\("ff"\), 16\.0\)/u);
   assert.match(source, /js_abi::number_to_fixed_digits\(value, 2\.0\)\?/u);
   assert.match(source, /js_abi::number_to_string_radix\(integer, 16\.0\)\?/u);
   assert.match(source, /js_abi::NUMBER_MAX_VALUE/u);

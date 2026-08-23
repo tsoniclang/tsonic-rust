@@ -425,8 +425,6 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
         candidate.selectedMethodTypeArgumentArity ===
           (request.selectedMethodTypeArgumentCarriers?.length ?? 0)) &&
       carrierRequirementsMatch(candidate.requirements, bindings, request) &&
-      (candidate.callback === undefined ||
-        rustCallbackProtocol(argumentCarriers[candidate.callback.sourceArgumentIndex]) !== undefined) &&
       (candidate.firstArgCarrierId === undefined
         ? firstArgumentId(request) === undefined || !jsOperationRows.some((other) =>
             other.owner === candidate.owner && other.member === candidate.member &&
@@ -437,6 +435,14 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
     }
     const parameterCarriers = (candidate.shape.params ?? []).map((reference) =>
       reference === undefined ? undefined : resolveCarrierRef(reference, bindings));
+    if (candidate.callback !== undefined && !callbackCandidateMatches(
+      candidate.callback.sourceArgumentIndex,
+      parameterCarriers,
+      argumentCarriers,
+      request.argumentMatchScore,
+    )) {
+      return [];
+    }
     if ((candidate.variadic !== true && parameterCarriers.length !== argumentCarriers.length) ||
       (candidate.variadic === true && argumentCarriers.length < parameterCarriers.length)) {
       return [];
@@ -559,6 +565,21 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
     ...(selectedParameterCarriers === undefined ? {} : { parameterCarriers: selectedParameterCarriers }),
     ...(callback === undefined ? {} : { callback }),
   };
+}
+
+function callbackCandidateMatches(
+  sourceArgumentIndex: number,
+  parameterCarriers: readonly (TargetTypeRef | undefined)[],
+  argumentCarriers: readonly (TargetTypeRef | undefined)[],
+  relationScore: JsOperationRequest["argumentMatchScore"],
+): boolean {
+  const expected = parameterCarriers[sourceArgumentIndex];
+  const actual = argumentCarriers[sourceArgumentIndex];
+  if (expected === undefined || rustCallbackProtocol(expected) === undefined) {
+    return false;
+  }
+  return rustCallbackProtocol(actual) !== undefined ||
+    relationScore?.(expected, actual, sourceArgumentIndex) !== undefined;
 }
 
 function carrierRequirementsMatch(

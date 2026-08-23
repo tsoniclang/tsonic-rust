@@ -20,6 +20,9 @@ export const rustFlowReadProjectionFactKey: RustPlanKey<RustFlowReadProjectionFa
     left.kind === right.kind &&
     rustTargetTypeRefEquals(left.sourceCarrier, right.sourceCarrier) &&
     rustTargetTypeRefEquals(left.selectedCarrier, right.selectedCarrier) &&
+    (left.kind !== "representation-conversion" ||
+      (right.kind === "representation-conversion" &&
+        closedMetadataEquals(left.conversion, right.conversion))) &&
     (left.kind !== "project-downcast" ||
       (right.kind === "project-downcast" &&
         rustTargetTypeRefEquals(left.dispatchCarrier, right.dispatchCarrier))) &&

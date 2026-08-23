@@ -1,6 +1,5 @@
 import { createInputFactory, finalizeSourceArguments, finalizeTargetInputs } from "./inputs.js";
 import {
-  declaredCarriersMatch,
   finalizeValueConversion,
   isRustFinalizedArrayInput,
   isRustFinalizedSliceInput,
@@ -15,6 +14,7 @@ import { rustFutureTargetType, rustTargetTypeParameterNames } from "../../../tar
 import { rustProviderOperationFormAcceptsTargetTypeArguments, rustProviderOperationFormContractViolation } from "../../../policy/operations/forms.js";
 import type { FinalizeRustProviderOperationAbiOptions, RustFinalizedOperationAbiFor, RustFinalizedOperationResult, RustFinalizedTargetInput } from "./model.js";
 import type { RustFinalizedOperationKind } from "../../../target-model/operations/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function finalizeRustProviderOperationAbi<OperationKind extends RustFinalizedOperationKind>(
   options: FinalizeRustProviderOperationAbiOptions<OperationKind>,
@@ -23,9 +23,9 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
     (options.sourceReceiverCarrier !== undefined && !isRustTargetTypeRef(options.sourceReceiverCarrier)) ||
     !isDenseDataArray(options.sourceArgumentCarriers) ||
     options.sourceArgumentCarriers.some((carrier) => !isRustTargetTypeRef(carrier)) ||
-    (options.declaredSourceArgumentCarriers !== undefined &&
-      (!isDenseDataArray(options.declaredSourceArgumentCarriers) ||
-        options.declaredSourceArgumentCarriers.some((carrier) => carrier !== undefined && !isRustTargetTypeRef(carrier)))) ||
+    (options.selectedParameterCarriers !== undefined &&
+      (!isDenseDataArray(options.selectedParameterCarriers) ||
+        options.selectedParameterCarriers.some((carrier) => !isRustTargetTypeRef(carrier)))) ||
     (options.compileTimeSourceArgumentIndexes !== undefined &&
       (!isDenseDataArray(options.compileTimeSourceArgumentIndexes) ||
         new Set(options.compileTimeSourceArgumentIndexes).size !== options.compileTimeSourceArgumentIndexes.length ||
@@ -58,15 +58,23 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
   ) !== undefined) {
     return undefined;
   }
-  if (!declaredCarriersMatch(
-    options.sourceArgumentCarriers,
-    runtimeSourceIndexes,
-    options.declaredSourceArgumentCarriers,
-    options.form,
-  )) {
+  if (options.selectedParameterCarriers !== undefined &&
+    options.selectedParameterCarriers.length !== runtimeSourceIndexes.length) {
     return undefined;
   }
-  const input = createInputFactory(options.sourceReceiverCarrier, options.sourceArgumentCarriers);
+  const selectedParameterCarriers = options.sourceArgumentCarriers.map(
+    (carrier, sourceIndex): TargetTypeRef | undefined => {
+      const runtimeIndex = runtimeSourceIndexes.indexOf(sourceIndex);
+      return runtimeIndex < 0
+        ? undefined
+        : options.selectedParameterCarriers?.[runtimeIndex] ?? carrier;
+    },
+  );
+  const input = createInputFactory(
+    options.sourceReceiverCarrier,
+    options.sourceArgumentCarriers,
+    selectedParameterCarriers,
+  );
   const mapping = finalizeTargetInputs(
     options.operationKind,
     options.form,
@@ -89,6 +97,7 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
   const sourceArguments = finalizeSourceArguments(
     options.operationKind,
     options.sourceArgumentCarriers,
+    selectedParameterCarriers,
     mapping,
     options.compileTimeSourceArgumentIndexes,
   );
@@ -102,7 +111,7 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
   const result: RustFinalizedOperationResult = options.isAsync
     ? {
         kind: "async",
-        futureCarrier: rustFutureTargetType(options.resultCarrier),
+        futureCarrier: rustFutureTargetType(resultConversion.sourceCarrier),
         awaitedRawCarrier: resultConversion.sourceCarrier,
         awaitedConversion: resultConversion,
         awaitedCarrier: options.resultCarrier,

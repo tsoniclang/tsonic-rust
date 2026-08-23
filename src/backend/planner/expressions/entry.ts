@@ -70,12 +70,16 @@ export function planExpression(
   let flowSelected = planned;
   if (flowRead !== undefined) {
     if (rustTargetTypeRefEquals(currentCarrier, flowRead.sourceCarrier)) {
-      const selected = planRustFlowReadProjection(
-        node,
-        planRustNonConsumingValue(node, flowSelected, context),
-        flowRead,
-        context,
-      );
+      const sourceValue = planRustNonConsumingValue(node, flowSelected, context);
+      const selected = flowRead.kind === "representation-conversion"
+        ? applyRustValueConversion(
+            context,
+            sourceValue,
+            flowRead.conversion,
+            node,
+            false,
+          )
+        : planRustFlowReadProjection(node, sourceValue, flowRead, context);
       if (selected === undefined) {
         return undefined;
       }

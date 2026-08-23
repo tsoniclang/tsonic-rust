@@ -33,7 +33,7 @@ import {
   rustStringPushMethod,
   rustStringPushStrMethod,
 } from "../../../target-model/syntax/tokens.js";
-import { isRustStringCarrier } from "../../../target-model/types/index.js";
+import { isRustJsStringCarrier, isRustStringCarrier } from "../../../target-model/types/index.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planExpression, sourceFieldSelectedOperationMatches, sourceUnionFieldSelectedOperationMatches } from "../expressions/index.js";
 import { planRuntimeSetStatement, selectedOperatorMatches } from "./iteration.js";
@@ -42,7 +42,7 @@ import { planRustSourceUnionFieldProjection } from "../expressions/unions.js";
 import { readRustProjectDispatchedField, writeRustProjectDispatchedField } from "../objects/project-objects.js";
 import { planRustProjectFieldDispatchRoles } from "../objects/project-field-dispatch.js";
 import { readRustStoredObjectField, writeRustStoredObjectField } from "../objects/project-storage.js";
-import { rustStringConcat } from "../../target-ast/expressions.js";
+import { rustJsStringConcat, rustStringConcat } from "../../target-ast/expressions.js";
 import { planRustDirectStorage } from "../expressions/updates/target.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustAssignmentOperationFact } from "./core.js";
@@ -472,7 +472,7 @@ export function planExpressionAsStatement(
                 sourceField.dispatch.read,
                 dispatchReadRole!,
               );
-          const concatenated = rustStringConcat([
+          const concatenated = stringConcatForCarrier(fact.resultCarrier, [
             { kind: "path", path: currentName },
             value,
           ]);
@@ -575,7 +575,7 @@ export function planExpressionAsStatement(
           return undefined;
         }
         const currentName = allocateRustSyntheticName(context.syntheticNames, "current");
-        const concatenated = rustStringConcat([
+        const concatenated = stringConcatForCarrier(fact.resultCarrier, [
           { kind: "path", path: currentName },
           value,
         ]);
@@ -663,6 +663,15 @@ export function planExpressionAsStatement(
   return planned === undefined
     ? undefined
     : [{ kind: "let", name: "_", mutable: false, init: planned }];
+}
+
+function stringConcatForCarrier(
+  carrier: RustAssignmentOperationFact["resultCarrier"],
+  parts: readonly RustExpr[],
+): RustExpr {
+  return isRustJsStringCarrier(carrier)
+    ? rustJsStringConcat(parts)
+    : rustStringConcat(parts);
 }
 
 function planInPlaceStringAppend(

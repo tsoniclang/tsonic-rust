@@ -87,10 +87,14 @@ export function resolveExpressionCarrier(
     const optionalChain = facts.get(expression, rustOptionalChainFactKey) ??
       facts.resolve(expression, rustOptionalChainFactKey);
     const selectedOperationOwnsResult = selectedOperation !== undefined || targetOperation !== undefined;
-    const flowCarrier = selectedOperationOwnsResult &&
-        (optionalChain !== undefined || rustOptionElementCarrier(carrier) === undefined)
-      ? carrier
-      : applyFlowReadLane(walk, expression, carrier);
+    const providerOwnsSourceResult = targetOperation?.kind === "provider-operation" &&
+      targetOperation.sourceResultCarrier !== undefined &&
+      walk.context.source.navigation.expressionResultUse(expression) === "consumed";
+    const flowCarrier = optionalChain === undefined &&
+      (providerOwnsSourceResult || !selectedOperationOwnsResult ||
+        rustOptionElementCarrier(carrier) !== undefined)
+      ? applyFlowReadLane(walk, expression, carrier)
+      : carrier;
     return applyOptionLane(walk, expression, flowCarrier, expected);
   };
   const existing = facts.get(expression, rustRuntimeCarrierKey) ??
@@ -235,17 +239,24 @@ function applyFlowReadLane(
     }
     return existing.selectedCarrier;
   }
-  const selectedSource = selectedFlowReadSource(walk, expression);
-  if (selectedSource === undefined) {
+  const operation = walk.context.facts.get(expression, rustTargetOperationFactKey) ??
+    walk.context.facts.resolve(expression, rustTargetOperationFactKey);
+  const providerSelectedCarrier = operation?.kind === "provider-operation"
+    ? operation.sourceResultCarrier
+    : undefined;
+  const selectedSource = providerSelectedCarrier === undefined
+    ? selectedFlowReadSource(walk, expression)
+    : undefined;
+  if (providerSelectedCarrier === undefined && selectedSource === undefined) {
     return sourceCarrier;
   }
-  const selectedCarrier = resolveSelectedFlowReadCarrier(
-    walk,
-    expression,
-    selectedSource.declaration,
-    selectedSource.type,
-    sourceCarrier,
-  );
+  const selectedCarrier = providerSelectedCarrier ?? resolveSelectedFlowReadCarrier(
+      walk,
+      expression,
+      selectedSource!.declaration,
+      selectedSource!.type,
+      sourceCarrier,
+    );
   if (selectedCarrier === undefined) {
     appendRustDiagnostic(
       walk,

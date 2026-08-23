@@ -11,6 +11,7 @@ import {
   rustStructuralMethodStorageCarrier,
   rustStructuralObjectCarrierValue,
   rustJsStringTargetType,
+  rustStringTargetType,
 } from "../../../../target-model/types/index.js";
 import { acceptProjectSourceCall, mapSelectedJsSpecialCall } from "../object-shapes.js";
 import { acceptRustPolicy } from "../../../../policy/operations/contracts.js";
@@ -31,6 +32,8 @@ import { selectRustProviderOperation } from "../../../../policy/operations/provi
 import { sourceCallMarkerByIdentity } from "../model.js";
 import { mapSelectedStringRegExpProtocolCall } from "../regexp-protocols.js";
 import { selectedRustRegExpReplacementCallbackContract } from "../regexp-replacement-callback.js";
+import { rustNativeStringFromJsStringConversion } from "../../../../target-model/conversions/model.js";
+import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import type {
   RustCheckedCallSelectionInput,
   RustCheckedCallSelectionResult,
@@ -127,7 +130,8 @@ export function selectRustCheckedCall(
   }
   if (selectedSourceMember?.ownerName === "ErrorConstructor" &&
     selectedSourceMember.memberName === "constructor" && checkedCallIsConstruction(request, context)) {
-    if (selectedCallArgumentNodes(request).length !== 1) {
+    const messageCarrier = selectedCallArgumentCarriers(request, context, options)[0];
+    if (selectedCallArgumentNodes(request).length !== 1 || messageCarrier === undefined) {
       return rejectSelectedOperation(
         request.source.call,
         context,
@@ -135,18 +139,38 @@ export function selectRustCheckedCall(
         "Rust Error construction currently requires one checked string message argument.",
       );
     }
+    const nativeStringCarrier = rustStringTargetType();
+    const messageConversion = rustTargetTypeRefEquals(messageCarrier, nativeStringCarrier)
+      ? undefined
+      : rustTargetTypeRefEquals(messageCarrier, rustJsStringTargetType())
+        ? rustNativeStringFromJsStringConversion
+        : undefined;
+    if (!rustTargetTypeRefEquals(messageCarrier, nativeStringCarrier) &&
+      messageConversion === undefined) {
+      return rejectSelectedOperation(
+        request.source.call,
+        context,
+        "RUST_ERROR_MESSAGE_CARRIER_UNSUPPORTED",
+        "The selected Error constructor message argument has no exact Rust string representation.",
+      );
+    }
     const resultCarrier = rustJsErrorTargetType();
     return acceptSelectedCall(request, {
       kind: "provider-operation",
       operationId: "tsonic.rust.error.constructor",
       operationKind: "constructor",
-      target: { form: "call", path: "rt::JsError::error", argModes: ["ref"] },
-      parameterCarriers: [rustJsStringTargetType()],
+      target: {
+        form: "call",
+        path: "rt::JsError::error",
+        argModes: ["ref"],
+        ...(messageConversion === undefined ? {} : { argConversions: [messageConversion] }),
+      },
+      parameterCarriers: [messageCarrier],
       resultCarrier,
       isAsync: false,
       isFallible: false,
       errorBoundary: "none",
-    }, [rustJsStringTargetType()], context, options, {
+    }, [messageCarrier], context, options, {
       sourceName: "Error",
     });
   }

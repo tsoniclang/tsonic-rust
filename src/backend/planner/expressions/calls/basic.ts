@@ -25,6 +25,7 @@ import { rustSourceCallEffectsFactKey } from "../../../../analysis/facts/keys.js
 import { rustJsStringTargetType } from "../../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
+import { rustJsStringEqualsLiteral, rustJsStringLiteral } from "../../../target-ast/expressions.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
@@ -335,10 +336,7 @@ function planObjectShapeProjectionCall(
   switch (fact.projection) {
     case "keys":
       value = rustObjectProjectionArray(
-        fact.fields.map((field) => ({
-          kind: "string-literal" as const,
-          value: field.sourceName,
-        })),
+        fact.fields.map((field) => rustJsStringLiteral(field.sourceName)),
         context,
       );
       break;
@@ -376,7 +374,7 @@ function planObjectShapeProjectionCall(
           : {
               kind: "tuple-literal",
               elements: [
-                { kind: "string-literal", value: field.sourceName },
+                rustJsStringLiteral(field.sourceName),
                 converted,
               ],
             });
@@ -393,17 +391,11 @@ function planObjectShapeProjectionCall(
         ));
         return undefined;
       }
-      const comparisons = fact.fields.map<RustExpr>((field) => ({
-        kind: "binary",
-        operator: "==",
-        left: {
-          kind: "method-call",
-          receiver: { kind: "path", path: keyName! },
-          method: "as_str",
-          args: [],
-        },
-        right: { kind: "str-literal", value: field.sourceName },
-      }));
+      const comparisons = fact.fields.map<RustExpr>((field) =>
+        rustJsStringEqualsLiteral(
+          { kind: "path", path: keyName! },
+          field.sourceName,
+        ));
       value = comparisons.length === 0
         ? { kind: "bool-literal", value: false }
         : comparisons.slice(1).reduce<RustExpr>(

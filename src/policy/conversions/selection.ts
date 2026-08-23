@@ -43,13 +43,23 @@ export function selectRustSourceValueConversion(
 ): RustValueConversion | undefined {
   const sourceOptionElement = rustOptionElementCarrier(source);
   const targetOptionElement = rustOptionElementCarrier(target);
+  if (sourceOptionElement === undefined && targetOptionElement !== undefined) {
+    if (rustTargetTypeRefEquals(source, targetOptionElement)) {
+      return { kind: "option-some", element: source };
+    }
+    const elementConversion = selectRustSourceValueConversion(source, targetOptionElement);
+    return elementConversion === undefined || elementConversion.kind === "option-map" ||
+        elementConversion.kind === "option-some" || elementConversion.kind === "option-some-map"
+      ? undefined
+      : { kind: "option-some-map", elementConversion };
+  }
   if (sourceOptionElement !== undefined && targetOptionElement !== undefined) {
     const elementConversion = selectRustSourceValueConversion(
       sourceOptionElement,
       targetOptionElement,
     );
     if (elementConversion === undefined || elementConversion.kind === "option-map" ||
-      elementConversion.kind === "option-some") {
+      elementConversion.kind === "option-some" || elementConversion.kind === "option-some-map") {
       return undefined;
     }
     return { kind: "option-map", elementConversion };
@@ -131,4 +141,32 @@ export function selectRustSourceValueConversion(
       rustNumericPromotionKind(source.name, target.name) === target.name
     ? { kind: "numeric-promotion", source: source.name, target: target.name }
     : undefined;
+}
+
+export function selectRustSourceResultRepresentationConversion(
+  source: TargetTypeRef,
+  target: TargetTypeRef,
+): RustValueConversion | undefined {
+  const sourceOptionElement = rustOptionElementCarrier(source);
+  const targetOptionElement = rustOptionElementCarrier(target);
+  if (sourceOptionElement !== undefined && targetOptionElement !== undefined) {
+    const elementConversion = selectRustSourceResultRepresentationConversion(
+      sourceOptionElement,
+      targetOptionElement,
+    );
+    return elementConversion === undefined || elementConversion.kind === "option-map" ||
+        elementConversion.kind === "option-some" || elementConversion.kind === "option-some-map"
+      ? undefined
+      : { kind: "option-map", elementConversion };
+  }
+  if (rustTargetTypeRefEquals(source, nativeStringCarrier) &&
+    rustTargetTypeRefEquals(target, stringCarrier)) {
+    return rustJsStringFromNativeStringConversion;
+  }
+  if (rustTargetTypeRefEquals(source, stringCarrier) &&
+      rustTargetTypeRefEquals(target, nativeStringCarrier)
+  ) {
+    return rustNativeStringFromJsStringConversion;
+  }
+  return undefined;
 }

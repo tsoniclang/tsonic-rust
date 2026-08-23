@@ -1,7 +1,7 @@
 import { acceptRustMemberOperation, acceptRustOperation, normalizeSelectedOperationInputCarrier, providerIdentityText, providerOperationFact, rejectSelectedOperation, sourceLiteralIsRepresentableAsPrimitive } from "./result.js";
 import { acceptRustPolicy } from "../../../policy/operations/contracts.js";
 import { asNode } from "../../../policy/evidence/selected-source.js";
-import { finalizeProviderOperationFact, instantiateProviderOperationTemplate, providerFormRequiresSourceReceiver } from "./calls/instantiation.js";
+import { finalizeProviderOperationFact, instantiateProviderOperationTemplate, providerFormRequiresSourceReceiver, reconcileSelectedProviderOperationResult } from "./calls/instantiation.js";
 import { isRustNullishSourceCarrier, rustOptionElementCarrier } from "../../../target-model/types/index.js";
 import { selectRustValueCarrierReconciliation } from "../../../policy/types/value-carrier-reconciliation.js";
 import { recordRustValueCarrierReconciliation, rustEffectiveValueCarrier } from "../../facts/value-carrier-queries.js";
@@ -22,7 +22,7 @@ import type {
   RustPolicySelection,
   RustTargetOperationSelection,
 } from "../../../policy/operations/contracts.js";
-import type { ExtensionFactSubject, Node, ProviderDeclarationIdentity } from "@tsonic/tsts";
+import type { ExtensionFactSubject, Node, ProviderDeclarationIdentity, Type } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { RustProviderFactOperationKind, RustProviderOperationTemplate, RustTargetOperationFact } from "../../facts/keys.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
@@ -233,6 +233,9 @@ export function mapProviderCheckedOperation(
     return rejectSelectedOperation(expression, context, "RUST_PROVIDER_OPERATION_AMBIGUOUS", `Selected provider declaration '${providerIdentityText(identity)}' matches ${selection.rows.length} Rust operation rows.`);
   }
   const template = providerOperationFact(selection.row);
+  const selectedResultCarrier = memberRequest === undefined
+    ? undefined
+    : selectedProviderMemberStorageCarrier(memberRequest, context, options);
   const fact = finalizeProviderOperationFromSubjects(
     template,
     sourceReceiver,
@@ -240,6 +243,8 @@ export function mapProviderCheckedOperation(
     context,
     options,
     selectedReceiverCarrier,
+    undefined,
+    selectedResultCarrier,
   );
   if (fact === undefined) {
     return rejectSelectedOperation(expression, context, "RUST_SELECTED_OPERATION_ABI_INCOMPLETE", `Selected provider declaration '${providerIdentityText(identity)}' cannot finalize one total Rust operation ABI.`);
@@ -271,6 +276,27 @@ export function mapProviderCheckedOperation(
       );
 }
 
+function selectedProviderMemberStorageCarrier(
+  request: RustCheckedPropertySelectionInput,
+  context: RustOperationPolicyContext,
+  options: RustOperationsProviderOptions,
+): TargetTypeRef | undefined {
+  const selectedTypes: readonly (Type | undefined)[] = [
+    ...(request.accessMode === "write"
+      ? []
+      : [request.sourceReadType]),
+    ...(request.accessMode === "read"
+      ? []
+      : [request.sourceWriteType]),
+  ];
+  const carriers = selectedTypes.map((selectedType) =>
+    resolveRustTargetTypeRef(selectedType, context, options));
+  return carriers.length > 0 && carriers.every((carrier) =>
+      carrier !== undefined && rustTargetTypeRefEquals(carrier, carriers[0]))
+    ? carriers[0]
+    : undefined;
+}
+
 export function finalizeProviderOperationFromSubjects(
   template: RustProviderOperationTemplate,
   sourceReceiver: ExtensionFactSubject | undefined,
@@ -279,6 +305,7 @@ export function finalizeProviderOperationFromSubjects(
   options: RustOperationsProviderOptions,
   selectedReceiverCarrier?: TargetTypeRef,
   selectedArgumentCarriers?: readonly (TargetTypeRef | undefined)[],
+  selectedResultCarrier?: TargetTypeRef,
 ): Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }> | undefined {
   const rawArgumentCarriers = sourceArguments.map((argument, index) =>
     selectedArgumentCarriers?.[index] ??
@@ -287,10 +314,14 @@ export function finalizeProviderOperationFromSubjects(
   const rawReceiverCarrier = selectedReceiverCarrier ?? (sourceReceiver === undefined
     ? undefined
     : resolveRustTargetTypeRef(sourceReceiver, context, options));
-  const instantiation = instantiateProviderOperationTemplate(template, {
+  const rawInstantiation = instantiateProviderOperationTemplate(template, {
     sourceReceiverCarrier: rawReceiverCarrier,
     sourceParameterCarriers: rawArgumentCarriers,
+    sourceResultCarrier: selectedResultCarrier,
   });
+  const instantiation = rawInstantiation === undefined
+    ? undefined
+    : reconcileSelectedProviderOperationResult(rawInstantiation, selectedResultCarrier);
   if (instantiation === undefined) {
     return undefined;
   }
@@ -314,5 +345,14 @@ export function finalizeProviderOperationFromSubjects(
   if (providerFormRequiresSourceReceiver(instantiatedTemplate.target) && sourceReceiverCarrier === undefined) {
     return undefined;
   }
-  return finalizeProviderOperationFact(instantiatedTemplate, sourceArgumentCarriers as TargetTypeRef[], sourceReceiverCarrier);
+  const selectedParameterCarriers = instantiatedTemplate.parameterCarriers ?? sourceArgumentCarriers;
+  if (selectedParameterCarriers.some((carrier) => carrier === undefined)) {
+    return undefined;
+  }
+  return finalizeProviderOperationFact(
+    instantiatedTemplate,
+    sourceArgumentCarriers as TargetTypeRef[],
+    sourceReceiverCarrier,
+    selectedParameterCarriers as TargetTypeRef[],
+  );
 }
