@@ -19,7 +19,8 @@ import { rustTargetRuntimeErrorType } from "../types/error-boundary.js";
 import { effectivePlannedExpressionCarrier, expressionCarrier, requireExpressionCarrier, rustOperationFact, rustPartialOrderingTest, selectedOperationMatches } from "./fundamentals.js";
 import { isRustBinaryOperator } from "../../../target-model/syntax/tokens.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
-import { negateRustBooleanExpression, rustBorrowedStringView, rustJsStringConcat, rustStringConcat } from "../../target-ast/expressions.js";
+import { negateRustBooleanExpression, rustBorrowedStringView, rustStringConcat } from "../../target-ast/expressions.js";
+import { planRustJsStringConcat } from "./js-strings.js";
 import { planExpression, planExpressionBeforeValueProjections } from "./entry.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
 import { planRustProgramErrorTypeTest } from "./error-operations.js";
@@ -434,7 +435,7 @@ export function planBinaryExpression(node: Node, context: RustPlanContext): Rust
         }
       }
     }
-    return jsStringResult ? rustJsStringConcat(parts) : rustStringConcat(parts);
+    return jsStringResult ? planRustJsStringConcat(parts, context) : rustStringConcat(parts);
   }
   if (fact.kind === "operator-call") {
     return planRustOperatorCallExpression(

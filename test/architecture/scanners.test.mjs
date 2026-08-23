@@ -208,6 +208,22 @@ test("no product dependency on analysis files", () => {
   }
 });
 
+test("planner-owned JS string constructors register their runtime alias centrally", () => {
+  const plannerRoot = join(sourceRoot, "backend/planner");
+  const helper = join(plannerRoot, "expressions/js-strings.ts");
+  for (const path of collectFiles(plannerRoot, ".ts")) {
+    if (path === helper) {
+      continue;
+    }
+    const text = readFileSync(path, "utf8");
+    assert.doesNotMatch(
+      text,
+      /import[^;]*\b(?:rustJsStringLiteral|rustJsStringConcat)\b[^;]*from "[^"]*target-ast\/expressions\.js"/su,
+      `${path} bypasses the planner-owned JS string alias contract`,
+    );
+  }
+});
+
 test("no Node-as-surface registration", async () => {
   const { createRustTargetPack } = await import("../../dist/index.js");
   const pack = createRustTargetPack();

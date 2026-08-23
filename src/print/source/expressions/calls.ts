@@ -21,6 +21,7 @@ export function printFittedCall(
   forceExpanded = false,
   preferNestedBreak = false,
   inlineArgumentDepth = depth,
+  forceTrailingClosureBlock = false,
 ): string {
   const flatArguments = arguments_.map(printRustExpr).join(", ");
   const flat = `${callable}(${flatArguments})`;
@@ -239,8 +240,9 @@ export function printFittedCall(
             trailingClosure,
             depth,
             column + prefix.length,
-            arguments_.length > 1 && flatArguments.length > rustNestedCallWidth &&
-              !rustFormatArgumentCanShareLine(trailingClosure.body),
+            forceTrailingClosureBlock ||
+              arguments_.length > 1 && flatArguments.length > rustNestedCallWidth &&
+                !rustFormatArgumentCanShareLine(trailingClosure.body),
           )
         : printRustExprFitted(
             trailingClosure,
@@ -800,8 +802,7 @@ export function printFittedCall(
   } else if (!forceExpanded && !arguments_.some(rustExpressionContainsStatementBlock) &&
     !arguments_.some(rustExpressionContainsPreferredVerticalMethodChain) &&
     !arguments_.some(rustExpressionContainsExpandedStructLiteral) &&
-    !flat.includes("\n") && renderedFits(flat, column) &&
-    (arguments_.length <= 1 || flatArguments.length <= rustNestedCallWidth)) {
+    !flat.includes("\n") && renderedFits(flat, column)) {
     return flat;
   }
   const argumentIndent = indentText(depth + 1);

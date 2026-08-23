@@ -28,7 +28,7 @@ import { planRustNonConsumingValue } from "../expressions/typed-locations.js";
 import { rustMutatedBindingFactKey, rustSourceBindingFactKey, rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { validateRustFinalizedOperationAbi } from "../../../analysis/facts/finalized-operation-abi.js";
-import { rustJsStringLiteral } from "../../target-ast/expressions.js";
+import { planRustJsStringLiteral } from "../expressions/js-strings.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustAssignmentOperationFact } from "./core.js";
 import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
@@ -629,7 +629,7 @@ export function planForInStatement(
         kind: "slice-literal",
         elements: fact.lowering.keys.map((key) =>
           isRustJsStringCarrier(fact.elementCarrier)
-            ? rustJsStringLiteral(key)
+            ? planRustJsStringLiteral(key, context)
             : { kind: "string-literal", value: key }),
       };
   return [{

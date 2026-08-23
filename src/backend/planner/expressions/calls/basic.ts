@@ -25,7 +25,8 @@ import { rustSourceCallEffectsFactKey } from "../../../../analysis/facts/keys.js
 import { rustJsStringTargetType } from "../../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
-import { rustJsStringEqualsLiteral, rustJsStringLiteral } from "../../../target-ast/expressions.js";
+import { rustJsStringEqualsLiteral } from "../../../target-ast/expressions.js";
+import { planRustJsStringLiteral } from "../js-strings.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
@@ -336,7 +337,7 @@ function planObjectShapeProjectionCall(
   switch (fact.projection) {
     case "keys":
       value = rustObjectProjectionArray(
-        fact.fields.map((field) => rustJsStringLiteral(field.sourceName)),
+        fact.fields.map((field) => planRustJsStringLiteral(field.sourceName, context)),
         context,
       );
       break;
@@ -374,7 +375,7 @@ function planObjectShapeProjectionCall(
           : {
               kind: "tuple-literal",
               elements: [
-                rustJsStringLiteral(field.sourceName),
+                planRustJsStringLiteral(field.sourceName, context),
                 converted,
               ],
             });

@@ -453,3 +453,125 @@ test("multiline block call arguments use their expanded argument depth", () => {
   );
   assert.match(source, /\n {4}\}\);/u);
 });
+
+test("fitting multi-argument calls remain rustfmt-compact", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "call",
+            path: "js_string::includes_from_start",
+            args: [{
+              kind: "reference",
+              expr: { kind: "path", path: "name" },
+            }, {
+              kind: "reference",
+              expr: {
+                kind: "associated-call",
+                owner: { kind: "named", path: "js_abi::JsString" },
+                method: "from",
+                args: [{ kind: "str-literal", value: "son" }],
+              },
+            }],
+          },
+        }, {
+          kind: "expr",
+          expr: {
+            kind: "unary",
+            operator: "!",
+            operand: {
+              kind: "call",
+              path: "js_string::includes_from_start",
+              args: [{
+                kind: "reference",
+                expr: { kind: "path", path: "name" },
+              }, {
+                kind: "reference",
+                expr: {
+                  kind: "associated-call",
+                  owner: { kind: "named", path: "js_abi::JsString" },
+                  method: "from",
+                  args: [{ kind: "str-literal", value: "son" }],
+                },
+              }],
+            },
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /js_string::includes_from_start\(&name, &js_abi::JsString::from\("son"\)\);/u,
+  );
+  assert.match(
+    source,
+    /!js_string::includes_from_start\(&name, &js_abi::JsString::from\("son"\)\);/u,
+  );
+});
+
+test("binary call operands blockify trailing closures before splitting operators", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "if",
+          condition: {
+            kind: "binary",
+            operator: "||",
+            left: { kind: "path", path: "failed" },
+            right: {
+              kind: "binary",
+              operator: "!=",
+              left: {
+                kind: "call",
+                path: "rt::option_coalesce",
+                args: [{
+                  kind: "method-call",
+                  receiver: { kind: "path", path: "map" },
+                  method: "get",
+                  args: [{
+                    kind: "reference",
+                    expr: { kind: "int-literal", text: "1" },
+                  }],
+                }, {
+                  kind: "path",
+                  path: "std::convert::identity",
+                }, {
+                  kind: "closure",
+                  params: [],
+                  body: {
+                    kind: "associated-call",
+                    owner: { kind: "named", path: "js_abi::JsString" },
+                    method: "from",
+                    args: [{ kind: "str-literal", value: "" }],
+                  },
+                }],
+              },
+              right: { kind: "str-literal", value: "uno" },
+            },
+          },
+          then: { statements: [] },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /\|\| rt::option_coalesce\(map\.get\(&1\), std::convert::identity, \|\| \{\n {12}js_abi::JsString::from\(""\)\n {8}\}\) != "uno"/u,
+  );
+});

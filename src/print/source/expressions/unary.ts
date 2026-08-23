@@ -16,7 +16,9 @@ export function printFittedUnaryInvocation(
   if (operand.kind !== "call" && operand.kind !== "associated-call") {
     return undefined;
   }
-  if (printRustExpr(operand).length <= rustNestedCallWidth) {
+  const flatOperand = printRustExpr(operand);
+  if (flatOperand.length <= rustNestedCallWidth ||
+    renderedFits(`${expression.operator}${flatOperand}`, column)) {
     return undefined;
   }
   const callable = operand.kind === "call"

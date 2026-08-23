@@ -42,7 +42,8 @@ import { planRustSourceUnionFieldProjection } from "../expressions/unions.js";
 import { readRustProjectDispatchedField, writeRustProjectDispatchedField } from "../objects/project-objects.js";
 import { planRustProjectFieldDispatchRoles } from "../objects/project-field-dispatch.js";
 import { readRustStoredObjectField, writeRustStoredObjectField } from "../objects/project-storage.js";
-import { rustJsStringConcat, rustStringConcat } from "../../target-ast/expressions.js";
+import { rustStringConcat } from "../../target-ast/expressions.js";
+import { planRustJsStringConcat } from "../expressions/js-strings.js";
 import { planRustDirectStorage } from "../expressions/updates/target.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustAssignmentOperationFact } from "./core.js";
@@ -475,7 +476,7 @@ export function planExpressionAsStatement(
           const concatenated = stringConcatForCarrier(fact.resultCarrier, [
             { kind: "path", path: currentName },
             value,
-          ]);
+          ], context);
           const written = sourceField.dispatch === undefined
             ? writeRustStoredObjectField(
                 sourceField.storage,
@@ -578,7 +579,7 @@ export function planExpressionAsStatement(
         const concatenated = stringConcatForCarrier(fact.resultCarrier, [
           { kind: "path", path: currentName },
           value,
-        ]);
+        ], context);
         const promotedLocation = planRustPromotedStorageLocation(
           left,
           context,
@@ -668,9 +669,10 @@ export function planExpressionAsStatement(
 function stringConcatForCarrier(
   carrier: RustAssignmentOperationFact["resultCarrier"],
   parts: readonly RustExpr[],
+  context: RustPlanContext,
 ): RustExpr {
   return isRustJsStringCarrier(carrier)
-    ? rustJsStringConcat(parts)
+    ? planRustJsStringConcat(parts, context)
     : rustStringConcat(parts);
 }
 

@@ -629,11 +629,18 @@ export function printRustExprFitted(
           grammarPosition,
         );
       }
+      const leftCallHasTrailingClosure =
+        (expression.left.kind === "call" || expression.left.kind === "associated-call") &&
+        (expression.left.args[expression.left.args.length - 1]?.kind === "closure" ||
+          expression.left.args[expression.left.args.length - 1]?.kind === "closure-block");
+      const forceLeftTrailingClosureBlock = leftCallHasTrailingClosure &&
+        !renderedFits(flat, column);
       const expandedLeftCall = expression.left.kind === "call" &&
           expression.left.args.length > 1 &&
           !rustExpressionContainsStatementBlock(expression.left) &&
-          rustBinaryCallAllowsArgumentExpansion(expression.left) &&
+          (rustBinaryCallAllowsArgumentExpansion(expression.left) || leftCallHasTrailingClosure) &&
           (rustBinaryOperandPrefersExpandedCall(expression.left) ||
+            forceLeftTrailingClosureBlock ||
             !renderedFits(printRustExpr(expression.left), column))
         ? printFittedCall(
             printRustDirectCallTarget(expression.left),
@@ -641,12 +648,16 @@ export function printRustExprFitted(
             depth,
             column,
             true,
+            false,
+            depth,
+            forceLeftTrailingClosureBlock,
           )
         : expression.left.kind === "associated-call" &&
             expression.left.args.length > 1 &&
             !rustExpressionContainsStatementBlock(expression.left) &&
-            rustBinaryCallAllowsArgumentExpansion(expression.left) &&
+            (rustBinaryCallAllowsArgumentExpansion(expression.left) || leftCallHasTrailingClosure) &&
             (rustBinaryOperandPrefersExpandedCall(expression.left) ||
+              forceLeftTrailingClosureBlock ||
               !renderedFits(printRustExpr(expression.left), column))
           ? printFittedCall(
               printRustAssociatedCallTarget(
@@ -657,6 +668,9 @@ export function printRustExprFitted(
               depth,
               column,
               true,
+              false,
+              depth,
+              forceLeftTrailingClosureBlock,
             )
           : undefined;
       const renderedLeft = expandedLeftCall ?? (expression.left.kind === "try" &&

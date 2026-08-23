@@ -26,9 +26,10 @@ import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js"
 import { isFloatCarrier, rustTypeFromCarrierInContext } from "../types/render.js";
 import { isRustBigIntCarrier, isRustIntegerCarrier, isRustJsStringCarrier, isRustStringCarrier } from "../../../target-model/types/index.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
-import { negateRustBooleanExpression, rustJsStringConcat, rustJsStringLiteral, rustStringConcat } from "../../target-ast/expressions.js";
+import { negateRustBooleanExpression, rustStringConcat } from "../../target-ast/expressions.js";
 import { parseSourceBigIntLiteral, parseSourceIntegerLiteral } from "../../../target-model/syntax/literals.js";
 import { planExpression } from "./entry.js";
+import { planRustJsStringConcat, planRustJsStringLiteral } from "./js-strings.js";
 import { planRustFallibleReturnExpression } from "../statements/completion-exits.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
 import { requireProviderArgumentPassingFacts } from "./calls/arguments.js";
@@ -140,7 +141,7 @@ export function planTemplateExpression(node: Node, context: RustPlanContext): Ru
   }
   const jsStringResult = isRustJsStringCarrier(fact.resultCarrier);
   const stringLiteral = (value: string): RustExpr => jsStringResult
-    ? rustJsStringLiteral(value)
+    ? planRustJsStringLiteral(value, context)
     : { kind: "string-literal", value };
   const asJsString = (value: RustExpr): RustExpr => ({
     kind: "call",
@@ -187,7 +188,7 @@ export function planTemplateExpression(node: Node, context: RustPlanContext): Ru
     }
     parts.push(stringLiteral(context.input.program.source.ast.text(literalNode)));
   }
-  return jsStringResult ? rustJsStringConcat(parts) : rustStringConcat(parts);
+  return jsStringResult ? planRustJsStringConcat(parts, context) : rustStringConcat(parts);
 }
 
 export function planDeleteExpression(node: Node, context: RustPlanContext): RustExpr | undefined {

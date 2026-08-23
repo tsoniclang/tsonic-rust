@@ -19,6 +19,7 @@ import { applyRustProviderEvaluationScope, planRustProviderEvaluationScope } fro
 import { diagnosticInput, registerAliasFromPath, rustActiveErrorType, sourceTypePath } from "../program/plan-context.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planExpression } from "./entry.js";
+import { planRustJsStringLiteral } from "./js-strings.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
 import { rustBinaryOperatorTraitPath } from "../../../target-model/syntax/tokens.js";
 import { rustBottomExpression } from "../types/fallible-shape.js";
@@ -44,7 +45,6 @@ import {
   applyRustArgumentMode,
 } from "./input-shaping.js";
 import { invokeRustStructuralObjectMethod } from "../objects/project-storage.js";
-import { rustJsStringLiteral } from "../../target-ast/expressions.js";
 
 export function applyRustValueConversion(
   context: RustPlanContext,
@@ -276,8 +276,10 @@ function providerConstantExpression(
     case "string":
       return { kind: "str-literal", value: argument.value };
     case "js-string":
-      context.usedAliases?.add("js_abi");
-      return { kind: "reference", expr: rustJsStringLiteral(argument.value) };
+      return {
+        kind: "reference",
+        expr: planRustJsStringLiteral(argument.value, context),
+      };
     case "boolean":
       return { kind: "bool-literal", value: argument.value };
     case "none":
