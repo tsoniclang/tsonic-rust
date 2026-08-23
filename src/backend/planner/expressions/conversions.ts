@@ -134,6 +134,17 @@ export function lowerRustValueConversion(
     case "copy-from-reference":
       return { kind: "dereference", pointer: source };
     case "js-argument-vector-callback": {
+      const activeErrorType = contract.lane === "native"
+        ? rustActiveErrorType(context)
+        : undefined;
+      if (contract.lane === "native" && activeErrorType === undefined) {
+        context.diagnostics.push(unsupportedConstructDiagnostic(
+          diagnosticInput(context, node ?? context.sourceFile),
+          "rust.backend.regexp-callback-native-string",
+          "A native RegExp callback projection requires a finalized fallible lowering context.",
+        ));
+        return undefined;
+      }
       const names = context.syntheticNames ?? createRustSyntheticNameState(
         context.input.program.source.ast,
         node ?? context.sourceFile,
@@ -164,19 +175,10 @@ export function lowerRustValueConversion(
           callbackArguments.push(projected);
           continue;
         }
-        const activeErrorType = rustActiveErrorType(context);
-        if (activeErrorType === undefined) {
-          context.diagnostics.push(unsupportedConstructDiagnostic(
-            diagnosticInput(context, node ?? context.sourceFile),
-            "rust.backend.regexp-callback-native-string",
-            "A native RegExp callback projection requires a finalized fallible lowering context.",
-          ));
-          return undefined;
-        }
         callbackArguments.push({
           kind: "try",
           expr: projected,
-          resultErrorType: activeErrorType,
+          resultErrorType: activeErrorType!,
           operandErrorType: rustTargetRuntimeErrorType,
         });
       }
@@ -191,7 +193,12 @@ export function lowerRustValueConversion(
           };
       const body = contract.sourceFallible || contract.lane === "exact"
         ? invocation
-        : { kind: "call" as const, path: "Ok", args: [invocation] };
+        : {
+            kind: "call" as const,
+            path: "Ok",
+            typeArguments: [{ kind: "infer" as const }, activeErrorType!],
+            args: [invocation],
+          };
       return {
         kind: "block",
         bindings: [{ name: callbackName, value: source }],

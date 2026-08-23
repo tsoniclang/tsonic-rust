@@ -27,6 +27,18 @@ export function printFittedCall(
     return flat;
   }
   const soleArgument = arguments_[0];
+  if (soleArgument?.kind === "invoke" &&
+    (forceExpanded || flat.includes("\n") || !renderedFits(flat, column))) {
+    const nestedWrapper = printFittedNestedCallWrapper(
+      callable,
+      soleArgument,
+      depth,
+      column,
+    );
+    if (nestedWrapper !== undefined) {
+      return nestedWrapper;
+    }
+  }
   const soleNestedClosureCall = soleArgument?.kind === "call" ||
       soleArgument?.kind === "associated-call"
     ? soleArgument.args.length === 1 &&
@@ -199,7 +211,8 @@ export function printFittedCall(
     }
   }
   if (arguments_.length > 1 &&
-    (trailingClosure?.kind === "block" || trailingClosure?.kind === "match" ||
+    (trailingClosure?.kind === "block" || trailingClosure?.kind === "evaluate-then" ||
+      trailingClosure?.kind === "match" ||
       trailingClosure?.kind === "conditional")) {
     const preceding = arguments_.slice(0, -1).map(printRustExpr);
     if (preceding.every((argument) => !argument.includes("\n"))) {

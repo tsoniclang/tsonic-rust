@@ -28,6 +28,7 @@ import { selectRustGeneratorSourceCall } from "../../../../policy/types/generato
 import { selectRustProviderOperation } from "../../../../policy/operations/provider-selection.js";
 import { sourceCallMarkerByIdentity } from "../model.js";
 import { mapSelectedStringRegExpProtocolCall } from "../regexp-protocols.js";
+import { selectedRustRegExpReplacementCallbackEvidence } from "../regexp-replacement-callback.js";
 import type {
   RustCheckedCallSelectionInput,
   RustCheckedCallSelectionResult,
@@ -254,6 +255,18 @@ export function selectRustCheckedCall(
       selectedMethodTypeArgumentCarriers,
       authoredMethodTypeArgumentCarriers,
       argumentMatchScore: selectedArgumentMatchScore(selectedCallArgumentNodes(request), context, options),
+      resolveCallbackArgumentCarrier: (callback) => {
+        const adapter = callback.argumentAdapter;
+        return adapter?.kind === "regexp-replacement"
+          ? selectedRustRegExpReplacementCallbackEvidence(
+              request,
+              callback.sourceArgumentIndex,
+              adapter.lane,
+              context,
+              options,
+            )?.sourceCarrier
+          : undefined;
+      },
       carrierSupportsProjectIdentity: (carrier) =>
         options.projectTypes.definitionForCarrier(carrier) !== undefined,
       resultUse: context.source.navigation.expressionResultUse(request.source.call),

@@ -1,4 +1,5 @@
 import {
+  rustClosureTargetType,
   rustJsArrayTargetType,
   rustJsStringTargetType,
   rustJsValueTargetType,
@@ -20,6 +21,7 @@ import type { Type } from "@tsonic/tsts";
 
 export interface RustRegExpReplacementCallbackEvidence {
   readonly lane: "native" | "exact";
+  readonly sourceCarrier: TargetTypeRef;
   readonly projections: readonly (
     | "native-string"
     | "exact-string"
@@ -52,7 +54,10 @@ export function selectedRustRegExpReplacementCallbackEvidence(
 export function finalizeRustRegExpReplacementCallbackContract(
   evidence: RustRegExpReplacementCallbackEvidence,
   sourceCarrier: TargetTypeRef,
-): RustRegExpReplacementCallbackContract {
+): RustRegExpReplacementCallbackContract | undefined {
+  if (!rustTargetTypeRefEquals(evidence.sourceCarrier, sourceCarrier)) {
+    return undefined;
+  }
   return Object.freeze({
     ...evidence,
     sourceCarrier,
@@ -117,6 +122,7 @@ function replacementCallbackEvidence(
     return undefined;
   }
   const projections: RustRegExpReplacementCallbackEvidence["projections"][number][] = [];
+  const parameterCarriers: TargetTypeRef[] = [];
   for (const [index, parameter] of callable.parameters.entries()) {
     if (parameter.parameterKind === "rest") {
       if (index !== callable.parameters.length - 1 ||
@@ -124,20 +130,27 @@ function replacementCallbackEvidence(
         return undefined;
       }
       projections.push("rest-values");
+      parameterCarriers.push(rustJsArrayTargetType(rustJsValueTargetType()));
       continue;
     }
     const carrier = resolveRustTargetTypeRef(parameter.type, context, options);
     if (index === 0 && carrier !== undefined &&
       rustTargetTypeRefEquals(carrier, expectedString)) {
       projections.push(lane === "native" ? "native-string" : "exact-string");
+      parameterCarriers.push(expectedString);
       continue;
     }
     if (!isDynamic(parameter.type, context)) {
       return undefined;
     }
     projections.push("value");
+    parameterCarriers.push(rustJsValueTargetType());
   }
-  return Object.freeze({ lane, projections: Object.freeze(projections) });
+  return Object.freeze({
+    lane,
+    sourceCarrier: rustClosureTargetType(parameterCarriers, expectedString),
+    projections: Object.freeze(projections),
+  });
 }
 
 function isCanonicalReplacementCallback(

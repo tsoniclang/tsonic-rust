@@ -44,6 +44,22 @@ export function main(): void {
   const exactExecuted = /(.)/du.exec(exact);
   check(exactExecuted?.[0]?.length === 2);
   check(exactExecuted?.input.length === 2);
+  const exactReplacement: JsString = exact.replace(
+    /./gu,
+    (whole, _offset, _input) => whole,
+  );
+  check(exactReplacement.length === 2);
+
+  const callbackReplacement = "a1".replace(
+    /([a-z])(\\d)/,
+    (whole, _letter, _digit, _offset, _input) => "[" + whole + "]",
+  );
+  check(callbackReplacement === "[a1]");
+  const allReplacement = "a1b2".replaceAll(
+    /\\d/g,
+    (whole, _offset, _input) => "[" + whole + "]",
+  );
+  check(allReplacement === "a[1]b[2]");
 }
 `,
     },
@@ -57,6 +73,9 @@ export function main(): void {
   assert.match(source, /js_abi::js_string_from_utf8/u);
   assert.match(source, /js_exact_string::char_at/u);
   assert.match(source, /\.exec\(&exact\)/u);
+  assert.match(source, /string_try_replace_regexp_native_with/u);
+  assert.match(source, /string_try_replace_all_regexp_native_with/u);
+  assert.match(source, /string_replace_regexp_with/u);
   assert.match(source, /\.len\(\)/u);
   assert.equal(validateGeneratedProject("regexp-result-consumption", result.artifacts, { run: true }).status, 0);
 });

@@ -1,4 +1,7 @@
-import { jsRegExpSourceProfileIdentity } from "@tsonic/js-source-profile";
+import {
+  jsRegExpSourceProfileIdentity,
+  jsSourceSemanticsIdentity,
+} from "@tsonic/js-source-profile";
 import {
   rustJsRegExpTargetId,
   rustJsStringTargetId,
@@ -23,6 +26,7 @@ type StringLane = "native" | "exact";
 
 interface StringLanePolicy {
   readonly lane: StringLane;
+  readonly sourceOwner: string;
   readonly carrierId: string;
   readonly value: Extract<JsCarrierRef, { readonly ref: "string" | "js-string" }>;
   readonly array: Extract<JsCarrierRef, { readonly ref: "string-array" | "js-string-array" }>;
@@ -51,6 +55,7 @@ interface StringLanePolicy {
 
 const native: StringLanePolicy = {
   lane: "native",
+  sourceOwner: owners.string,
   carrierId: rustStringTargetId,
   value: { ref: "string" },
   array: { ref: "string-array" },
@@ -79,6 +84,7 @@ const native: StringLanePolicy = {
 
 const exact: StringLanePolicy = {
   lane: "exact",
+  sourceOwner: jsSourceSemanticsIdentity.typeExport,
   carrierId: rustJsStringTargetId,
   value: { ref: "js-string" },
   array: { ref: "js-string-array" },
@@ -203,27 +209,42 @@ function regexpMethodRows(policy: StringLanePolicy): readonly JsOperationRowData
 }
 
 function stringRegExpRows(policy: StringLanePolicy): readonly JsOperationRowData[] {
+  const nativeLane = policy.lane === "native";
   const lane = policy.lane === "native" ? "string" : "js-string";
   const suffix = policy.pathSuffix;
   const call = (path: string, argModes: readonly ("value" | "ref" | "mut-ref")[]): RustProviderOperationForm => ({ form: "free-call", path: `js_abi::${path}${suffix}`, receiverMode: "ref", argModes });
-  const callbackTarget = call("string_try_replace_regexp_with", ["ref", "value"]);
+  const callbackTarget: RustProviderOperationForm = {
+    form: "free-call",
+    path: nativeLane
+      ? "js_abi::string_try_replace_regexp_native_with"
+      : "js_abi::string_try_replace_regexp_with",
+    receiverMode: "ref",
+    argModes: ["ref", "value"],
+  };
   const replaceCallbackTarget = policy.lane === "native"
     ? callbackTarget
     : call("string_replace_regexp_with", ["ref", "value"]);
-  const callbackAllTarget = call("string_try_replace_all_regexp_with", ["ref", "value"]);
+  const callbackAllTarget: RustProviderOperationForm = {
+    form: "free-call",
+    path: nativeLane
+      ? "js_abi::string_try_replace_all_regexp_native_with"
+      : "js_abi::string_try_replace_all_regexp_with",
+    receiverMode: "ref",
+    argModes: ["ref", "value"],
+  };
   const replaceAllCallbackTarget = policy.lane === "native"
     ? callbackAllTarget
     : call("string_replace_all_regexp_with", ["ref", "value"]);
   return [
-    { owner: owners.string, member: stringMembers.match, operationKind: "call", lane, firstArgCarrierId: rustJsRegExpTargetId, fallible: true, shape: { op: "operation", operationKind: "method", target: call("string_match_regexp", ["ref"]), result: policy.optionMatchArray, sourceResult: policy.matchArray, sourceAbsence: "null", params: [{ ref: "regexp" }] } },
-    { owner: owners.string, member: stringMembers.matchAll, operationKind: "call", lane, firstArgCarrierId: rustJsRegExpTargetId, fallible: true, shape: { op: "operation", operationKind: "method", target: call("string_match_all_regexp", ["ref"]), result: policy.iterator, params: [{ ref: "regexp" }] } },
-    { owner: owners.string, member: stringMembers.replace, operationKind: "call", lane, variant: `${policy.lane}-regexp-string`, firstArgCarrierId: rustJsRegExpTargetId, fallible: true, shape: { op: "operation", operationKind: "method", target: call("string_replace_regexp", ["ref", "ref"]), result: policy.value, params: [{ ref: "regexp" }, policy.value] } },
-    { owner: owners.string, member: stringMembers.replace, operationKind: "call", lane, variant: `${policy.lane}-regexp-callback`, firstArgCarrierId: rustJsRegExpTargetId, fallible: true, callback: callback(policy.lane, callbackTarget), shape: { op: "operation", operationKind: "method", target: replaceCallbackTarget, result: policy.value, params: [{ ref: "regexp" }, { ref: "argument", index: 1 }] } },
-    { owner: owners.string, member: stringMembers.replaceAll, operationKind: "call", lane, variant: `${policy.lane}-regexp-string`, firstArgCarrierId: rustJsRegExpTargetId, fallible: true, shape: { op: "operation", operationKind: "method", target: call("string_replace_all_regexp", ["ref", "ref"]), result: policy.value, params: [{ ref: "regexp" }, policy.value] } },
-    { owner: owners.string, member: stringMembers.replaceAll, operationKind: "call", lane, variant: `${policy.lane}-regexp-callback`, firstArgCarrierId: rustJsRegExpTargetId, fallible: true, callback: callback(policy.lane, callbackAllTarget), shape: { op: "operation", operationKind: "method", target: replaceAllCallbackTarget, result: policy.value, params: [{ ref: "regexp" }, { ref: "argument", index: 1 }] } },
-    { owner: owners.string, member: stringMembers.search, operationKind: "call", lane, firstArgCarrierId: rustJsRegExpTargetId, fallible: true, shape: { op: "operation", operationKind: "method", target: call("string_search_regexp", ["ref"]), result: { ref: "float64" }, params: [{ ref: "regexp" }] } },
-    { owner: owners.string, member: stringMembers.split, operationKind: "call", lane, variant: `${policy.lane}-regexp-default`, firstArgCarrierId: rustJsRegExpTargetId, fallible: true, shape: { op: "operation", operationKind: "method", target: call("string_split_regexp", ["ref"]), result: policy.array, params: [{ ref: "regexp" }] } },
-    { owner: owners.string, member: stringMembers.split, operationKind: "call", lane, variant: `${policy.lane}-regexp-limit`, firstArgCarrierId: rustJsRegExpTargetId, fallible: true, shape: { op: "operation", operationKind: "method", target: call("string_split_regexp_with_limit", ["ref", "value"]), result: policy.array, params: [{ ref: "regexp" }, { ref: "float64" }] } },
+    { owner: policy.sourceOwner, member: stringMembers.match, operationKind: "call", lane, firstArgCarrierId: rustJsRegExpTargetId, fallible: true, shape: { op: "operation", operationKind: "method", target: call("string_match_regexp", ["ref"]), result: policy.optionMatchArray, sourceResult: policy.matchArray, sourceAbsence: "null", params: [{ ref: "regexp" }] } },
+    { owner: policy.sourceOwner, member: stringMembers.matchAll, operationKind: "call", lane, firstArgCarrierId: rustJsRegExpTargetId, fallible: true, shape: { op: "operation", operationKind: "method", target: call("string_match_all_regexp", ["ref"]), result: policy.iterator, params: [{ ref: "regexp" }] } },
+    { owner: policy.sourceOwner, member: stringMembers.replace, operationKind: "call", lane, variant: `${policy.lane}-regexp-string`, firstArgCarrierId: rustJsRegExpTargetId, fallible: true, shape: { op: "operation", operationKind: "method", target: call("string_replace_regexp", ["ref", "ref"]), result: policy.value, params: [{ ref: "regexp" }, policy.value] } },
+    { owner: policy.sourceOwner, member: stringMembers.replace, operationKind: "call", lane, variant: `${policy.lane}-regexp-callback`, firstArgCarrierId: rustJsRegExpTargetId, fallible: true, callback: callback(policy.lane, callbackTarget), shape: { op: "operation", operationKind: "method", target: replaceCallbackTarget, result: policy.value, params: [{ ref: "regexp" }, { ref: "argument", index: 1 }] } },
+    { owner: policy.sourceOwner, member: stringMembers.replaceAll, operationKind: "call", lane, variant: `${policy.lane}-regexp-string`, firstArgCarrierId: rustJsRegExpTargetId, fallible: true, shape: { op: "operation", operationKind: "method", target: call("string_replace_all_regexp", ["ref", "ref"]), result: policy.value, params: [{ ref: "regexp" }, policy.value] } },
+    { owner: policy.sourceOwner, member: stringMembers.replaceAll, operationKind: "call", lane, variant: `${policy.lane}-regexp-callback`, firstArgCarrierId: rustJsRegExpTargetId, fallible: true, callback: callback(policy.lane, callbackAllTarget), shape: { op: "operation", operationKind: "method", target: replaceAllCallbackTarget, result: policy.value, params: [{ ref: "regexp" }, { ref: "argument", index: 1 }] } },
+    { owner: policy.sourceOwner, member: stringMembers.search, operationKind: "call", lane, firstArgCarrierId: rustJsRegExpTargetId, fallible: true, shape: { op: "operation", operationKind: "method", target: call("string_search_regexp", ["ref"]), result: { ref: "float64" }, params: [{ ref: "regexp" }] } },
+    { owner: policy.sourceOwner, member: stringMembers.split, operationKind: "call", lane, variant: `${policy.lane}-regexp-default`, firstArgCarrierId: rustJsRegExpTargetId, fallible: true, shape: { op: "operation", operationKind: "method", target: call("string_split_regexp", ["ref"]), result: policy.array, params: [{ ref: "regexp" }] } },
+    { owner: policy.sourceOwner, member: stringMembers.split, operationKind: "call", lane, variant: `${policy.lane}-regexp-limit`, firstArgCarrierId: rustJsRegExpTargetId, fallible: true, shape: { op: "operation", operationKind: "method", target: call("string_split_regexp_with_limit", ["ref", "value"]), result: policy.array, params: [{ ref: "regexp" }, { ref: "float64" }] } },
   ];
 }
 
@@ -236,10 +257,10 @@ function directStringCallbackRows(policy: StringLanePolicy): readonly JsOperatio
   const fallibleReplaceTarget: RustProviderOperationForm = { form: "free-call", path: `${module}::try_replace_with`, receiverMode: "ref", argModes: ["ref", "value"] };
   const fallibleReplaceAllTarget: RustProviderOperationForm = { form: "free-call", path: `${module}::try_replace_all_with`, receiverMode: "ref", argModes: ["ref", "value"] };
   return [
-    { owner: owners.string, member: stringMembers.replace, operationKind: "call", lane, variant: `${policy.lane}-string`, firstArgCarrierId: policy.carrierId, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: `${module}::replace`, receiverMode: "ref", argModes: ["ref", "ref"] }, result: policy.value, params: [policy.value, policy.value] } },
-    { owner: owners.string, member: stringMembers.replace, operationKind: "call", lane, variant: `${policy.lane}-string-callback`, firstArgCarrierId: policy.carrierId, ...(baseFallible ? { fallible: true as const } : {}), callback: callback(policy.lane, fallibleReplaceTarget), shape: { op: "operation", operationKind: "method", target: replaceTarget, result: policy.value, params: [policy.value, { ref: "argument", index: 1 }] } },
-    { owner: owners.string, member: stringMembers.replaceAll, operationKind: "call", lane, variant: `${policy.lane}-string`, firstArgCarrierId: policy.carrierId, ...(baseFallible ? { fallible: true as const } : {}), shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: `${module}::replace_all`, receiverMode: "ref", argModes: ["ref", "ref"] }, result: policy.value, params: [policy.value, policy.value] } },
-    { owner: owners.string, member: stringMembers.replaceAll, operationKind: "call", lane, variant: `${policy.lane}-string-callback`, firstArgCarrierId: policy.carrierId, ...(baseFallible ? { fallible: true as const } : {}), callback: callback(policy.lane, fallibleReplaceAllTarget), shape: { op: "operation", operationKind: "method", target: replaceAllTarget, result: policy.value, params: [policy.value, { ref: "argument", index: 1 }] } },
+    { owner: policy.sourceOwner, member: stringMembers.replace, operationKind: "call", lane, variant: `${policy.lane}-string`, firstArgCarrierId: policy.carrierId, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: `${module}::replace`, receiverMode: "ref", argModes: ["ref", "ref"] }, result: policy.value, params: [policy.value, policy.value] } },
+    { owner: policy.sourceOwner, member: stringMembers.replace, operationKind: "call", lane, variant: `${policy.lane}-string-callback`, firstArgCarrierId: policy.carrierId, ...(baseFallible ? { fallible: true as const } : {}), callback: callback(policy.lane, fallibleReplaceTarget), shape: { op: "operation", operationKind: "method", target: replaceTarget, result: policy.value, params: [policy.value, { ref: "argument", index: 1 }] } },
+    { owner: policy.sourceOwner, member: stringMembers.replaceAll, operationKind: "call", lane, variant: `${policy.lane}-string`, firstArgCarrierId: policy.carrierId, ...(baseFallible ? { fallible: true as const } : {}), shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: `${module}::replace_all`, receiverMode: "ref", argModes: ["ref", "ref"] }, result: policy.value, params: [policy.value, policy.value] } },
+    { owner: policy.sourceOwner, member: stringMembers.replaceAll, operationKind: "call", lane, variant: `${policy.lane}-string-callback`, firstArgCarrierId: policy.carrierId, ...(baseFallible ? { fallible: true as const } : {}), callback: callback(policy.lane, fallibleReplaceAllTarget), shape: { op: "operation", operationKind: "method", target: replaceAllTarget, result: policy.value, params: [policy.value, { ref: "argument", index: 1 }] } },
   ];
 }
 

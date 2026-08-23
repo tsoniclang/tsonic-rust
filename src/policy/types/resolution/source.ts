@@ -50,10 +50,7 @@ export function resolveRustTargetTypeRef(
   if (subject === undefined) {
     return undefined;
   }
-  const marker = context.facts.resolve(subject, sourceMarkerFactKey) ??
-    context.facts.get(subject, sourceMarkerFactKey);
-  if (marker?.kind === "type-marker" && marker.marker === "js-string" ||
-    marker?.kind === "call-marker" && marker.marker === "js-string") {
+  if (resolveRustSourceMarker(subject, context) === "js-string") {
     return rustJsStringTargetType();
   }
   const fixedArray = context.facts.resolve(subject, tsonicFixedArrayFactKey) ??
@@ -126,6 +123,25 @@ export function resolveRustTargetTypeRef(
     ? subject as Type
     : context.semanticsFor(node).types.expressionType(node);
   return resolveRustTargetType(type, context, options, new Set<object>());
+}
+
+function resolveRustSourceMarker(
+  subject: ExtensionFactSubject,
+  context: RustTargetTypeResolutionContext,
+): string | undefined {
+  const node = asNode(subject, context);
+  const subjects = node === undefined
+    ? [subject, ...context.currentSemantics.facts.typeSubjects(subject as Type)]
+    : [subject];
+  const markers = new Set<string>();
+  for (const candidate of subjects) {
+    const marker = context.facts.resolve(candidate, sourceMarkerFactKey) ??
+      context.facts.get(candidate, sourceMarkerFactKey);
+    if (marker !== undefined) {
+      markers.add(marker.marker);
+    }
+  }
+  return markers.size === 1 ? markers.values().next().value : undefined;
 }
 
 export function resolveRustTargetTypeSyntax(

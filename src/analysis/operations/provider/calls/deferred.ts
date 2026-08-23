@@ -163,6 +163,14 @@ export function prepareRustDeferredCheckedCall(
   const replacementCallback = replacementEvidence === undefined || callbackCarrier === undefined
     ? undefined
     : finalizeRustRegExpReplacementCallbackContract(replacementEvidence, callbackCarrier);
+  if (replacementEvidence !== undefined && replacementCallback === undefined) {
+    return rejectSelectedOperation(
+      request.source.call,
+      context,
+      "RUST_REGEXP_REPLACEMENT_CALLBACK_CARRIER_CONFLICT",
+      "Selected RegExp replacement callback carrier conflicts with its exact callable evidence.",
+    );
+  }
   const optionalResult = selectRustOptionalCallResult(
     request,
     finalized.fact.resultCarrier,

@@ -21,6 +21,9 @@ export interface JsOperationRequest {
     actual: TargetTypeRef | undefined,
     index: number,
   ) => number | undefined;
+  readonly resolveCallbackArgumentCarrier?: (
+    callback: RustCallbackOperationTemplate,
+  ) => TargetTypeRef | undefined;
   readonly carrierSupportsProjectIdentity?: (carrier: TargetTypeRef) => boolean;
   readonly resultUse?: "consumed" | "discarded";
   readonly authoredPropertyKey?: string;

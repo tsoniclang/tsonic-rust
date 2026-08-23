@@ -463,6 +463,21 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
   };
   const argumentCarriers = request.argumentCarriers ?? [];
   const matches = jsOperationRows.flatMap((candidate) => {
+    const callback = candidate.callback;
+    const callbackArgumentIndex = callback?.sourceArgumentIndex;
+    const callbackArgumentCarrier = callback === undefined
+      ? undefined
+      : argumentCarriers[callback.sourceArgumentIndex] ??
+        request.resolveCallbackArgumentCarrier?.(callback);
+    const candidateArgumentCarriers = callbackArgumentIndex === undefined ||
+        callbackArgumentCarrier === undefined ||
+        argumentCarriers[callbackArgumentIndex] === callbackArgumentCarrier
+      ? argumentCarriers
+      : argumentCarriers.map((carrier, index) =>
+          index === callbackArgumentIndex ? callbackArgumentCarrier : carrier);
+    const candidateBindings = candidateArgumentCarriers === argumentCarriers
+      ? bindings
+      : { ...bindings, arguments: candidateArgumentCarriers };
     if (!(
       candidate.owner === request.ownerName &&
       candidate.member === request.memberName &&
@@ -471,9 +486,8 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
       (candidate.selectedMethodTypeArgumentArity === undefined ||
         candidate.selectedMethodTypeArgumentArity ===
           (request.selectedMethodTypeArgumentCarriers?.length ?? 0)) &&
-      (candidate.callback === undefined ||
-        isRustCallableCarrier(argumentCarriers[candidate.callback.sourceArgumentIndex])) &&
-      carrierRequirementsMatch(candidate.requirements, bindings, request) &&
+      (candidate.callback === undefined || isRustCallableCarrier(callbackArgumentCarrier)) &&
+      carrierRequirementsMatch(candidate.requirements, candidateBindings, request) &&
       (candidate.firstArgCarrierId === undefined
         ? firstArgumentId(request) === undefined || !jsOperationRows.some((other) =>
             other.owner === candidate.owner && other.member === candidate.member &&
@@ -483,15 +497,15 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
       return [];
     }
     const parameterCarriers = (candidate.shape.params ?? []).map((reference) =>
-      reference === undefined ? undefined : resolveCarrierRef(reference, bindings));
-    if ((candidate.variadic !== true && parameterCarriers.length !== argumentCarriers.length) ||
-      (candidate.variadic === true && argumentCarriers.length < parameterCarriers.length)) {
+      reference === undefined ? undefined : resolveCarrierRef(reference, candidateBindings));
+    if ((candidate.variadic !== true && parameterCarriers.length !== candidateArgumentCarriers.length) ||
+      (candidate.variadic === true && candidateArgumentCarriers.length < parameterCarriers.length)) {
       return [];
     }
     const argumentScores = parameterCarriers.map((carrier, index) =>
           jsArgumentCarrierMatchScore(
             carrier,
-            argumentCarriers[index],
+            candidateArgumentCarriers[index],
             index,
             request.argumentMatchScore,
           ));
