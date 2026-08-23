@@ -352,8 +352,8 @@ export function rustBinaryOperandPrefersExpandedCall(expression: RustExpr): bool
       rustFormatArgumentIsAtomic(trailing.body)
     ? call.args.slice(0, -1)
     : call.args;
-  return selectionArguments.some((argument) =>
-      rustExpressionContainsTry(argument) || rustExpressionContainsClosure(argument)) &&
+  return (selectionArguments.some(rustExpressionContainsClosure) ||
+      call.args.length >= 3 && selectionArguments.some(rustExpressionContainsTry)) &&
     printRustExpr(expression).length > rustNestedCallWidth;
 }
 

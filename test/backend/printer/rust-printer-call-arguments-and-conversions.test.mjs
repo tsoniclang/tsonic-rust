@@ -274,6 +274,63 @@ test("fallible calls on the left of comparisons expand their arguments before th
   assert.match(source, /divide\(\n {12}rt::BigInt::from_decimal_literal\("7"\),\n {12}rt::BigInt::from_decimal_literal\("3"\),\n {8}\)\? ==/u);
 });
 
+test("fitting fallible call operands stay compact before a comparison break", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "call",
+            path: "acme_testing::check",
+            args: [{
+              kind: "binary",
+              operator: "==",
+              left: {
+                kind: "try",
+                expr: {
+                  kind: "call",
+                  path: "js_abi::string_search_regexp_native",
+                  args: [{ kind: "str-literal", value: "hello" }, {
+                    kind: "reference",
+                    mutable: false,
+                    expr: {
+                      kind: "try",
+                      expr: {
+                        kind: "call",
+                        path: "js_abi::regexp_new_native",
+                        args: [
+                          { kind: "str-literal", value: "z" },
+                          { kind: "str-literal", value: "" },
+                        ],
+                      },
+                    },
+                  }],
+                },
+              },
+              right: {
+                kind: "unary",
+                operator: "-",
+                operand: { kind: "float-literal", text: "1234.0" },
+              },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /string_search_regexp_native\("hello", &js_abi::regexp_new_native\("z", ""\)\?\)\?\n {12}== -1234\.0/u,
+  );
+});
+
 test("long calls on the left of comparisons expand before the operator", () => {
   const source = printRustSourceFile({
     headerComment,
