@@ -730,6 +730,66 @@ test("method chains inside expanded call comparisons use argument indentation", 
   assert.match(source, /acme_testing::check\(\n        pair\.load\(\)\n            \.addLeft/u);
 });
 
+test("expanded call comparisons break short receiver chains before the first selector", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "call",
+            path: "require_value",
+            args: [{
+              kind: "binary",
+              operator: "==",
+              left: {
+                kind: "method-call",
+                receiver: {
+                  kind: "method-call",
+                  receiver: { kind: "path", path: "executed" },
+                  method: "as_ref",
+                  args: [],
+                },
+                method: "map",
+                args: [{
+                  kind: "closure",
+                  params: [{ name: "optional_receiver_2", byRefCopy: false }],
+                  body: {
+                    kind: "method-call",
+                    receiver: { kind: "path", path: "optional_receiver_2" },
+                    method: "required_group",
+                    args: [{ kind: "float-literal", text: "0.0" }],
+                  },
+                }],
+              },
+              right: {
+                kind: "call",
+                path: "Some",
+                args: [{
+                  kind: "call",
+                  path: "String::from",
+                  args: [{ kind: "string-literal", value: "ab12" }],
+                }],
+              },
+            }, {
+              kind: "call",
+              path: "String::from",
+              args: [{ kind: "string-literal", value: "exec whole match" }],
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /require_value\(\n {8}executed\n {12}\.as_ref\(\)\n {12}\.map/u);
+});
+
 test("every fitted call layout preserves exact call-site type arguments", () => {
   const errorType = { kind: "named", path: "rt::TsonicError" };
   const expandedValue = {
