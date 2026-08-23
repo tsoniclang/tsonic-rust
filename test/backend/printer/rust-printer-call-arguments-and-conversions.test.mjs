@@ -847,6 +847,67 @@ test("expanded call comparisons break short receiver chains before the first sel
   assert.match(source, /require_value\(\n {8}executed\n {12}\.as_ref\(\)\n {12}\.map/u);
 });
 
+test("expanded call arguments keep fitting optional closure chains attached", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "let",
+          name: "letter",
+          mutable: false,
+          init: {
+            kind: "call",
+            path: "rt::option_coalesce",
+            args: [{
+              kind: "method-call",
+              receiver: {
+                kind: "method-call",
+                receiver: {
+                  kind: "method-call",
+                  receiver: { kind: "path", path: "item" },
+                  method: "groups",
+                  args: [],
+                },
+                method: "as_ref",
+                args: [],
+              },
+              method: "and_then",
+              args: [{
+                kind: "closure",
+                params: [{ name: "optional_receiver_13", byRefCopy: false }],
+                body: {
+                  kind: "call",
+                  path: "js_abi::regexp_named_groups_get_native",
+                  args: [
+                    { kind: "path", path: "optional_receiver_13" },
+                    { kind: "str-literal", value: "letter" },
+                  ],
+                },
+              }],
+            }, { kind: "path", path: "std::convert::identity" }, {
+              kind: "closure",
+              params: [],
+              body: {
+                kind: "call",
+                path: "String::from",
+                args: [{ kind: "str-literal", value: "" }],
+              },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /item\.groups\(\)\.as_ref\(\)\.and_then\(\|optional_receiver_13\| \{/u);
+  assert.doesNotMatch(source, /item\n\s+\.groups/u);
+});
+
 test("every fitted call layout preserves exact call-site type arguments", () => {
   const errorType = { kind: "named", path: "rt::TsonicError" };
   const expandedValue = {

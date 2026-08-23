@@ -1,7 +1,7 @@
 import { appendToLastLine, firstLine, renderedFits } from "../patterns.js";
 import { expressionIsRightHandBlock, printOperand, RustPrecedence } from "./precedence.js";
 import { indentText } from "../types.js";
-import { printFittedMethodChain, printRustAssociatedOwner, printRustVerticalMethodChainSlot, rustMethodChain, rustMethodChainBreaksReceiverWhenExpanded, rustMethodChainContainsClosure, rustMethodChainFirstSegmentWidth, rustMethodChainPrefersVerticalLayout } from "./chains.js";
+import { printFittedMethodChain, printRustAssociatedOwner, printRustVerticalMethodChainSlot, rustMethodCallKeepsTrailingClosureAttached, rustMethodChain, rustMethodChainBreaksReceiverWhenExpanded, rustMethodChainContainsClosure, rustMethodChainFirstSegmentWidth, rustMethodChainPrefersVerticalLayout } from "./chains.js";
 import { printRustAssociatedCallTarget, printRustDirectCallTarget, printRustMethodCallTarget } from "./callable.js";
 import { printFittedNestedCallWrapper, printNestedCallArgument } from "./nested-calls.js";
 import { printRustClosureFitted } from "./blocks.js";
@@ -689,17 +689,22 @@ export function printFittedCall(
     }
   }
   const renderedArguments = arguments_.map((argument) => {
-    const rendered = printRustVerticalMethodChainSlot(
-      argument,
-      depth + 1,
-      argumentIndent.length + 1,
-      indentText(depth + 2),
-    ) ?? printRustExprFitted(
-        argument,
-        depth + 1,
-        argumentIndent.length + 1,
-        indentText(depth + 2),
-      );
+    const argumentColumn = argumentIndent.length + 1;
+    const attachedClosureChain = argument.kind === "method-call" &&
+      rustMethodCallKeepsTrailingClosureAttached(argument, depth + 1, argumentColumn);
+    const rendered = attachedClosureChain
+      ? printRustExprFitted(argument, depth + 1, argumentColumn)
+      : printRustVerticalMethodChainSlot(
+          argument,
+          depth + 1,
+          argumentColumn,
+          indentText(depth + 2),
+        ) ?? printRustExprFitted(
+          argument,
+          depth + 1,
+          argumentColumn,
+          indentText(depth + 2),
+        );
     return appendToLastLine(`${argumentIndent}${rendered}`, ",");
   });
   return [
