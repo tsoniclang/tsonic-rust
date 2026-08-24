@@ -92,7 +92,10 @@ export function rustExpressionUsesTryInCurrentRegion(expression: RustExpr): bool
     case "return-expression":
       return expression.expr !== undefined && rustExpressionUsesTryInCurrentRegion(expression.expr);
     case "struct-literal":
-      return expression.fields.some((field) => rustExpressionUsesTryInCurrentRegion(field.value));
+      return expression.fields.some((field) =>
+        rustExpressionUsesTryInCurrentRegion(field.value)) ||
+        (expression.base !== undefined &&
+          rustExpressionUsesTryInCurrentRegion(expression.base));
     case "tuple-literal":
       return expression.elements.some(rustExpressionUsesTryInCurrentRegion);
     case "closure":

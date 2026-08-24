@@ -41,7 +41,10 @@ export function rustExpressionContainsExpandedStructLiteral(expression: RustExpr
         return value === field.name ? field.name : `${field.name}: ${value}`;
       }).join(", ");
       return expression.fields.length > 2 || compactFields.length > rustStructLiteralWidth ||
-        expression.fields.some((field) => rustExpressionContainsExpandedStructLiteral(field.value));
+        expression.fields.some((field) =>
+          rustExpressionContainsExpandedStructLiteral(field.value)) ||
+        (expression.base !== undefined &&
+          rustExpressionContainsExpandedStructLiteral(expression.base));
     }
     case "call":
     case "invoke":
@@ -158,7 +161,9 @@ export function rustExpressionContainsExpandedCollectionLiteral(expression: Rust
       return rustExpressionContainsExpandedCollectionLiteral(expression.body);
     case "struct-literal":
       return expression.fields.some((field) =>
-        rustExpressionContainsExpandedCollectionLiteral(field.value));
+        rustExpressionContainsExpandedCollectionLiteral(field.value)) ||
+        (expression.base !== undefined &&
+          rustExpressionContainsExpandedCollectionLiteral(expression.base));
     default:
       return false;
   }

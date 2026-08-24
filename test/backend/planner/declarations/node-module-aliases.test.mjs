@@ -33,7 +33,7 @@ export function main(): void {
   const file = join(process.cwd(), "node-module-alias-proof.txt");
   writeFileSync(file, "alias", "utf8");
   ok(readFileSync(file, "utf8") === "alias");
-  rmSync(file, true);
+  rmSync(file);
 
   strictOk(Buffer.from("ok", "utf8").toString("utf8") === "ok");
   nodeStrictOk(createHash("sha256").update("alias").digest("hex").length === 64);

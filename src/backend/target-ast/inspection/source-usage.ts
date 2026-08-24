@@ -175,6 +175,9 @@ export function rustExpressionChildren(expression: RustExpr): readonly RustExpr[
     case "return-expression":
       return expression.expr === undefined ? [] : [expression.expr];
     case "struct-literal":
-      return expression.fields.map((field) => field.value);
+      return [
+        ...expression.fields.map((field) => field.value),
+        ...(expression.base === undefined ? [] : [expression.base]),
+      ];
   }
 }

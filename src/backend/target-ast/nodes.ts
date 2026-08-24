@@ -116,7 +116,12 @@ export type RustExpr =
     }
   | { readonly kind: "return-expression"; readonly expr?: RustExpr }
   | { readonly kind: "unreachable"; readonly message: string }
-  | { readonly kind: "struct-literal"; readonly path: string; readonly fields: readonly { readonly name: string; readonly value: RustExpr }[] }
+  | {
+      readonly kind: "struct-literal";
+      readonly path: string;
+      readonly fields: readonly { readonly name: string; readonly value: RustExpr }[];
+      readonly base?: RustExpr;
+    }
   | { readonly kind: "tuple-literal"; readonly elements: readonly RustExpr[] };
 
 export type {

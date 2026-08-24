@@ -471,6 +471,9 @@ function finalizeRustExpressionStyle(expression: RustExpr): RustExpr {
           ...field,
           value: finalizeRustExpressionStyle(field.value),
         })),
+        ...(expression.base === undefined
+          ? {}
+          : { base: finalizeRustExpressionStyle(expression.base) }),
       };
       break;
     case "tuple-literal":

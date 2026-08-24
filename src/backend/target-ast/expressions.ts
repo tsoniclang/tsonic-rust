@@ -204,6 +204,9 @@ export function rustExpressionContainsStatementBlock(expression: RustExpr): bool
     case "return-expression":
       return expression.expr !== undefined && rustExpressionContainsStatementBlock(expression.expr);
     case "struct-literal":
-      return expression.fields.some((field) => rustExpressionContainsStatementBlock(field.value));
+      return expression.fields.some((field) =>
+        rustExpressionContainsStatementBlock(field.value)) ||
+        (expression.base !== undefined &&
+          rustExpressionContainsStatementBlock(expression.base));
   }
 }

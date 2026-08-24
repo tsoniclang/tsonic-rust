@@ -37,6 +37,7 @@ import type { RustFactWalk } from "../program/walk.js";
 import type { RustTargetOperationFact } from "../facts/keys.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustProjectTypeDefinition } from "../project-types/type-policy.js";
+import { resolveProviderRecordLiteral } from "./provider-records.js";
 
 function projectRecordMemberImplementation(
   walk: RustFactWalk,
@@ -94,6 +95,11 @@ export function resolveRecordLiteralCarrier(
   expected: TargetTypeRef | undefined,
 ): TargetTypeRef | undefined {
   const { ast } = walk.context;
+  const semantics = walk.context.semanticsFor(expression);
+  const sourceType = semantics.types.expressionType(expression);
+  if (sourceType === undefined) {
+    return undefined;
+  }
   const properties = requireDenseSourceNodes(walk, ast.properties(expression), "Object literal contains an undefined or non-data property slot.");
   if (properties === undefined) {
     return undefined;
@@ -136,8 +142,25 @@ export function resolveRecordLiteralCarrier(
       }
     }
   }
+  const providerLiteral = resolveProviderRecordLiteral(
+    walk,
+    expression,
+    sourceFile,
+    expected,
+    properties,
+  );
+  if (providerLiteral.kind === "selected") {
+    return providerLiteral.carrier;
+  }
+  if (providerLiteral.kind === "rejected") {
+    return undefined;
+  }
+  const contextualSelection = semantics.types.contextualValueSelection(expression);
+  const selectedSourceType = contextualSelection.kind === "selected"
+    ? contextualSelection.type
+    : sourceType;
   const selectedExpected = expected ?? resolveRustTargetTypeRef(
-    walk.context.semanticsFor(expression).types.expressionType(expression),
+    selectedSourceType,
     rustResolutionContext(walk, expression),
     walk.operationOptions,
   );

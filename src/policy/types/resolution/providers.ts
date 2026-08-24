@@ -33,6 +33,7 @@ import { rustProviderGenericRequirementsAreSatisfied } from "../provider-generic
 import { rustProviderOperationOwnerMatches } from "../../operations/provider-selection.js";
 import type {
   ExtensionFactSubject,
+  Node,
   ProviderDeclarationIdentity,
   Symbol,
   Type,
@@ -57,6 +58,15 @@ const regExpResultCarrierByOwner = new Map<string, () => TargetTypeRef>([
   [regExpIdentity.owners.jsRegExpNamedGroups, rustJsRegExpNamedGroupsTargetType],
   [regExpIdentity.owners.jsRegExpNamedIndices, rustJsRegExpNamedIndicesTargetType],
 ]);
+
+export type RustProviderObjectLiteralConstructionSelection =
+  | { readonly kind: "not-applicable" }
+  | {
+    readonly kind: "selected";
+    readonly carrier: TargetTypeRef;
+    readonly typeRow: RustProviderTypeRow;
+  }
+  | { readonly kind: "conflict" };
 
 export function resolveProviderTypeIdentity(
   subjects: readonly ExtensionFactSubject[],
@@ -95,6 +105,44 @@ export function providerCarrierFromRelations(
     return undefined;
   }
   return relations[0];
+}
+
+export function selectRustProviderObjectLiteralConstruction(
+  expression: Node,
+  expected: TargetTypeRef | undefined,
+  context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions,
+): RustProviderObjectLiteralConstructionSelection {
+  if (!context.ast.is.IsObjectLiteralExpression(expression)) {
+    return { kind: "not-applicable" };
+  }
+  const contextual = context.currentSemantics.types.contextualValueSelection(expression);
+  if (contextual.kind !== "selected") {
+    return { kind: "not-applicable" };
+  }
+  const identity = resolveProviderTypeIdentity(
+    context.currentSemantics.facts.typeSubjects(contextual.type),
+    context,
+  );
+  if (identity === undefined) {
+    return { kind: "not-applicable" };
+  }
+  const typeRow = providerCarrierFromRelations(identity, options);
+  if (typeRow?.objectLiteralConstruction?.kind !== "struct-default") {
+    return { kind: "not-applicable" };
+  }
+  const carrier = instantiateTargetType(
+    typeRow,
+    contextual.type,
+    context,
+    options,
+    new Set(),
+  );
+  if (carrier === undefined ||
+    (expected !== undefined && !rustTargetTypeRefEquals(carrier, expected))) {
+    return { kind: "conflict" };
+  }
+  return { kind: "selected", carrier, typeRow };
 }
 
 export function instantiateTargetType(

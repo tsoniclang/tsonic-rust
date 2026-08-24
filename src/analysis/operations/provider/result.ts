@@ -20,6 +20,7 @@ import {
 import { selectRustFlowReadProjection } from "../../../policy/types/value-carrier-reconciliation.js";
 import { recordRustFlowReadProjection } from "../../facts/value-carrier-queries.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
+import { selectRustProviderObjectLiteralConstruction } from "../../../policy/types/resolution/providers.js";
 import { rustCallableProtocol, rustStructuralObjectCarrierValue } from "../../../target-model/types/index.js";
 import { rustRuntimeCarrierKey, rustSelectedOperationKey } from "../../../target-model/facts/selections.js";
 import { rustTargetOperationText } from "../../facts/target-operation.js";
@@ -119,6 +120,12 @@ export function selectedMemberReceiverCarrier(
   if (request.optionalChain === true && optionElement !== undefined) {
     return optionElement;
   }
+  if (
+    optionElement !== undefined &&
+    rustTargetTypeRefEquals(optionElement, selectedCarrier)
+  ) {
+    return optionElement;
+  }
   if (rustTargetTypeRefEquals(sourceCarrier, selectedCarrier)) {
     return sourceCarrier;
   }
@@ -149,9 +156,7 @@ export function selectedMemberReceiverCarrier(
     return selectedCarrier;
   }
   if (optionElement !== undefined) {
-    return rustTargetTypeRefEquals(optionElement, selectedCarrier)
-      ? optionElement
-      : undefined;
+    return undefined;
   }
   const refinement = context.source.semantics.selectValueTypeRefinement(receiver);
   if (refinement.kind === "resolved" && refinement.refinement.kind === "exact") {
@@ -530,12 +535,23 @@ export function normalizeSelectedArgumentCarrier(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): TargetTypeRef | undefined {
+  const node = asNode(subject, context);
+  if (node !== undefined) {
+    const providerObjectLiteral = selectRustProviderObjectLiteralConstruction(
+      node,
+      expected,
+      context,
+      options,
+    );
+    if (providerObjectLiteral.kind === "selected") {
+      return providerObjectLiteral.carrier;
+    }
+  }
   const literal = normalizeSelectedLiteralCarrier(subject, actual, expected, context, options);
   if (literal !== actual || (expected?.kind !== "function-pointer" && expected?.kind !== "closure" &&
     rustCallableProtocol(expected) === undefined)) {
     return literal;
   }
-  const node = asNode(subject, context);
   const kind = node === undefined ? "" : context.ast.kindName(node);
   return kind === "KindArrowFunction" || kind === "KindFunctionExpression"
     ? expected

@@ -1,6 +1,7 @@
 import { appendToLastLine, escapeRustString, firstLine, lastLine, lastLineLength, printRustMatchExpression, printRustPattern, remainingLines, renderedFits, rustExpressionContainsTry } from "../patterns.js";
 import { expressionIsRightHandBlock, expressionIsStatementBlockOperand, expressionNeedsParentheses, expressionPrecedence, printBinaryOperand, printFittedBinaryOperand, printOperand, RustPrecedence } from "./precedence.js";
 import { indentText } from "../types.js";
+import { printExpandedBinaryLeftCall } from "./binary-calls.js";
 import { printFittedCall } from "./calls.js";
 import { printFittedLeftAssociativeBinaryChain, printFittedLogicalChain, printFittedMethodChain, rustBinaryOperandPrefersExpandedCall, rustExpandedMethodClosureOpeningWidth, rustMethodCallKeepsTrailingClosureAttached, rustMethodChain, rustMethodChainBreaksReceiverForClosure, rustMethodChainBreaksReceiverWhenExpanded, rustMethodChainContainsClosure, rustMethodChainFirstMethodRequiresExpansion, rustMethodChainPrefersVerticalLayout, rustMethodChainRequiresVerticalLayout } from "./chains.js";
 import { printRustAssociatedCallTarget, printRustCallMember, printRustDirectCallTarget, printRustMethodCallTarget } from "./callable.js";
@@ -22,6 +23,7 @@ export function printRustExprFitted(
   column: number,
   methodChainContinuationIndent?: string,
   grammarPosition: RustExpressionGrammarPosition = "expression",
+  layoutRegion: "default" | "logical-chain-operand" = "default",
 ): string {
   const flat = printRustExpr(expression);
   switch (expression.kind) {
@@ -32,6 +34,7 @@ export function printRustExprFitted(
         column,
         methodChainContinuationIndent,
         grammarPosition,
+        layoutRegion,
       );
     case "owned-string-from-borrowed-str":
       return printFittedCall("String::from", [expression.expression], depth, column);
@@ -595,34 +598,30 @@ export function printRustExprFitted(
           grammarPosition,
         );
       }
-      const expandedLeftCall = expression.left.kind === "call" &&
-          expression.left.args.length > 1 &&
-          !rustExpressionContainsStatementBlock(expression.left) &&
-          rustBinaryCallAllowsArgumentExpansion(expression.left) &&
-          (rustBinaryOperandPrefersExpandedCall(expression.left) ||
-            !renderedFits(printRustExpr(expression.left), column))
-        ? printFittedCall(
+      const expandedLeftCall = expression.left.kind === "call"
+        ? printExpandedBinaryLeftCall(
+            expression.left,
             printRustDirectCallTarget(expression.left),
-            expression.left.args,
+            expression.operator,
+            expression.right,
             depth,
             column,
-            true,
+            layoutRegion !== "logical-chain-operand",
+            rustBinaryOperandPrefersExpandedCall(expression.left),
           )
-        : expression.left.kind === "associated-call" &&
-            expression.left.args.length > 1 &&
-            !rustExpressionContainsStatementBlock(expression.left) &&
-            rustBinaryCallAllowsArgumentExpansion(expression.left) &&
-            (rustBinaryOperandPrefersExpandedCall(expression.left) ||
-              !renderedFits(printRustExpr(expression.left), column))
-          ? printFittedCall(
+        : expression.left.kind === "associated-call"
+          ? printExpandedBinaryLeftCall(
+              expression.left,
               printRustAssociatedCallTarget(
                 expression.left,
                 printRustAssociatedCallOwner(expression.left),
               ),
-              expression.left.args,
+              expression.operator,
+              expression.right,
               depth,
               column,
-              true,
+              layoutRegion !== "logical-chain-operand",
+              rustBinaryOperandPrefersExpandedCall(expression.left),
             )
           : undefined;
       const renderedLeft = expandedLeftCall ?? (expression.left.kind === "try" &&
@@ -836,6 +835,15 @@ export function printRustExprFitted(
         );
         return appendToLastLine(`${prefix}${value}`, ",");
       });
+      if (expression.base !== undefined) {
+        const prefix = `${fieldIndent}..`;
+        const base = printRustExprFitted(
+          expression.base,
+          depth + 1,
+          prefix.length,
+        );
+        fields.push(`${prefix}${base}`);
+      }
       return [
         `${expression.path} {`,
         ...fields,
@@ -845,12 +853,4 @@ export function printRustExprFitted(
     default:
       return flat;
   }
-}
-
-function rustBinaryCallAllowsArgumentExpansion(
-  expression: Extract<RustExpr, { readonly kind: "call" | "associated-call" }>,
-): boolean {
-  const trailing = expression.args[expression.args.length - 1];
-  return trailing?.kind !== "closure-block" &&
-    (trailing?.kind !== "closure" || rustFormatArgumentIsAtomic(trailing.body));
 }
