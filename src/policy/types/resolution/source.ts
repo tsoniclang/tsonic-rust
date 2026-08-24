@@ -8,6 +8,7 @@ import {
   rustBigIntTargetType,
   rustCallableTargetType,
   rustJsArrayTargetType,
+  rustJsStringTargetType,
   rustLocationTargetType,
   rustNullTargetType,
   rustNeverTargetType,
@@ -24,7 +25,7 @@ import {
 } from "../../../target-model/types/index.js";
 import { asNode } from "../../evidence/selected-source.js";
 import { denseDefined, resolveProjectSourceCarrier } from "./project.js";
-import { functionPointerFactKey, pointerFactKey } from "@tsonic/tsts";
+import { functionPointerFactKey, pointerFactKey, sourceMarkerFactKey } from "@tsonic/tsts";
 import { instantiateProviderTargetType, providerCarrierFromRelations, resolveOwnedSourceProfileTypeName, resolveProviderTypeIdentity, resolveSourceProfileCarrierFromArguments } from "./providers.js";
 import { resolveCallableType, resolveSourcePrimitive, resolveSourceTypeParameter } from "./callables.js";
 import { resolveReferencedDeclarationType, resolveRustAuthoredTargetType, resolveRustTupleElementTargetTypeWithState, rustParameterLaneTargetType } from "./tuples.js";
@@ -48,6 +49,9 @@ export function resolveRustTargetTypeRef(
 ): TargetTypeRef | undefined {
   if (subject === undefined) {
     return undefined;
+  }
+  if (resolveRustSourceMarker(subject, context) === "js-string") {
+    return rustJsStringTargetType();
   }
   const fixedArray = context.facts.resolve(subject, tsonicFixedArrayFactKey) ??
     context.facts.get(subject, tsonicFixedArrayFactKey);
@@ -119,6 +123,25 @@ export function resolveRustTargetTypeRef(
     ? subject as Type
     : context.semanticsFor(node).types.expressionType(node);
   return resolveRustTargetType(type, context, options, new Set<object>());
+}
+
+function resolveRustSourceMarker(
+  subject: ExtensionFactSubject,
+  context: RustTargetTypeResolutionContext,
+): string | undefined {
+  const node = asNode(subject, context);
+  const subjects = node === undefined
+    ? [subject, ...context.currentSemantics.facts.typeSubjects(subject as Type)]
+    : [subject];
+  const markers = new Set<string>();
+  for (const candidate of subjects) {
+    const marker = context.facts.resolve(candidate, sourceMarkerFactKey) ??
+      context.facts.get(candidate, sourceMarkerFactKey);
+    if (marker !== undefined) {
+      markers.add(marker.marker);
+    }
+  }
+  return markers.size === 1 ? markers.values().next().value : undefined;
 }
 
 export function resolveRustTargetTypeSyntax(

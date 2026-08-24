@@ -21,8 +21,12 @@ export interface JsOperationRequest {
     actual: TargetTypeRef | undefined,
     index: number,
   ) => number | undefined;
+  readonly resolveCallbackArgumentCarrier?: (
+    callback: RustCallbackOperationTemplate,
+  ) => TargetTypeRef | undefined;
   readonly carrierSupportsProjectIdentity?: (carrier: TargetTypeRef) => boolean;
   readonly resultUse?: "consumed" | "discarded";
+  readonly authoredPropertyKey?: string;
 }
 
 export interface JsOperationSelection {
@@ -32,7 +36,24 @@ export interface JsOperationSelection {
   readonly callback?: RustCallbackOperationTemplate;
 }
 
-export type JsLane = "js-array" | "string" | "map" | "set" | "date" | "json" | "math" | "number" | "boolean" | "global" | "console" | "object" | "regexp" | "regexp-match";
+export type JsLane =
+  | "js-array"
+  | "string"
+  | "js-string"
+  | "map"
+  | "set"
+  | "date"
+  | "json"
+  | "math"
+  | "number"
+  | "boolean"
+  | "global"
+  | "console"
+  | "object"
+  | "regexp"
+  | "regexp-named-groups"
+  | "regexp-named-indices"
+  | "regexp-string-iterator";
 
 export type JsCarrierRef =
   | { readonly ref: "cb-array-from-map"; readonly arity: 0 | 1 | 2 }
@@ -54,14 +75,41 @@ export type JsCarrierRef =
   | { readonly ref: "bool" }
   | { readonly ref: "unit" }
   | { readonly ref: "string-array" }
-  | { readonly ref: "regexp-match" }
-  | { readonly ref: "option-of-regexp-match" }
-  | { readonly ref: "regexp-match-vec" }
+  | { readonly ref: "js-string-array" }
+  | { readonly ref: "regexp" }
+  | { readonly ref: "regexp-exec-array" }
+  | { readonly ref: "regexp-match-array" }
+  | { readonly ref: "regexp-indices" }
+  | { readonly ref: "regexp-named-groups" }
+  | { readonly ref: "regexp-named-indices" }
+  | { readonly ref: "regexp-string-iterator" }
+  | { readonly ref: "js-regexp-exec-array" }
+  | { readonly ref: "js-regexp-match-array" }
+  | { readonly ref: "js-regexp-indices" }
+  | { readonly ref: "js-regexp-named-groups" }
+  | { readonly ref: "js-regexp-named-indices" }
+  | { readonly ref: "js-regexp-string-iterator" }
+  | { readonly ref: "regexp-index-pair" }
+  | { readonly ref: "option-of-regexp-exec-array" }
+  | { readonly ref: "option-of-regexp-match-array" }
+  | { readonly ref: "option-of-regexp-indices" }
+  | { readonly ref: "option-of-regexp-named-groups" }
+  | { readonly ref: "option-of-regexp-named-indices" }
+  | { readonly ref: "option-of-js-regexp-exec-array" }
+  | { readonly ref: "option-of-js-regexp-match-array" }
+  | { readonly ref: "option-of-js-regexp-indices" }
+  | { readonly ref: "option-of-js-regexp-named-groups" }
+  | { readonly ref: "option-of-js-regexp-named-indices" }
+  | { readonly ref: "option-of-regexp-index-pair" }
   | { readonly ref: "option-of-string" }
+  | { readonly ref: "option-of-js-string" }
   | { readonly ref: "option-of-string-array" }
+  | { readonly ref: "option-of-js-string-array" }
   | { readonly ref: "element-array" }
   | { readonly ref: "option-of-float64" }
   | { readonly ref: "string" }
+  | { readonly ref: "js-string" }
+  | { readonly ref: "undefined" }
   | { readonly ref: "element" }
   | { readonly ref: "option-of-element" }
   | { readonly ref: "receiver" }
@@ -93,6 +141,7 @@ export interface JsOperationRowData {
   readonly fallible?: boolean;
   readonly variadic?: true;
   readonly firstArgCarrierId?: string;
+  readonly authoredPropertyKey?: true;
   readonly shape:
     | {
         readonly op: "operation";
@@ -126,7 +175,13 @@ export function defineJsOperationRows(rows: readonly JsOperationRowData[]): read
         `Pure JavaScript operation row '${row.owner}.${row.member}' cannot construct identity, invoke a source callback, or declare writable source inputs.`,
       );
     }
-    const operation = `${row.owner}|${row.member}|${row.operationKind}|${row.lane}`;
+    const operation = [
+      row.owner,
+      row.member,
+      row.operationKind,
+      row.lane,
+      row.firstArgCarrierId ?? "",
+    ].join("|");
     const variant = row.variant ?? "";
     const identity = `${operation}|${variant}`;
     if (identities.has(identity)) {

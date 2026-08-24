@@ -12,6 +12,7 @@ required_dist_outputs=(
   "packages/source-core/dist/public/index.d.ts"
   "packages/source-core/dist/public/extension.d.ts"
   "packages/source-core/dist/public/facts.d.ts"
+  "packages/js-source-profile/dist/index.d.ts"
   "packages/target-api/dist/public/index.d.ts"
   "packages/target-api/dist/public/artifacts.d.ts"
   "packages/target-api/dist/public/provider.d.ts"
@@ -36,6 +37,7 @@ cat > "$CANONICAL_TSCONFIG" <<EOF
   "compilerOptions": {
     "paths": {
       "@tsonic/tsts": ["$TSONIC_ROOT/packages/tsts/dist/src/index.d.ts"],
+      "@tsonic/js-source-profile": ["$TSONIC_ROOT/packages/js-source-profile/dist/index.d.ts"],
       "@tsonic/target-api": ["$TSONIC_ROOT/packages/target-api/dist/public/index.d.ts"],
       "@tsonic/target-api/*": ["$TSONIC_ROOT/packages/target-api/dist/public/*.d.ts"],
       "@tsonic/source-core": ["$TSONIC_ROOT/packages/source-core/dist/public/index.d.ts"],

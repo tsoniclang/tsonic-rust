@@ -1,7 +1,7 @@
 import { appendToLastLine, firstLine, renderedFits } from "../patterns.js";
 import { expressionIsRightHandBlock, printOperand, RustPrecedence } from "./precedence.js";
 import { indentText } from "../types.js";
-import { printFittedMethodChain, printRustAssociatedOwner, printRustVerticalMethodChainSlot, rustMethodChain, rustMethodChainBreaksReceiverWhenExpanded, rustMethodChainContainsClosure, rustMethodChainFirstSegmentWidth, rustMethodChainPrefersVerticalLayout } from "./chains.js";
+import { printFittedMethodChain, printRustAssociatedOwner, printRustVerticalMethodChainSlot, rustMethodCallKeepsTrailingClosureAttached, rustMethodChain, rustMethodChainBreaksReceiverWhenExpanded, rustMethodChainContainsClosure, rustMethodChainFirstSegmentWidth, rustMethodChainPrefersVerticalLayout } from "./chains.js";
 import { printRustAssociatedCallTarget, printRustDirectCallTarget, printRustMethodCallTarget } from "./callable.js";
 import { printFittedNestedCallWrapper, printNestedCallArgument } from "./nested-calls.js";
 import { printRustClosureFitted } from "./blocks.js";
@@ -27,6 +27,18 @@ export function printFittedCall(
     return flat;
   }
   const soleArgument = arguments_[0];
+  if (soleArgument?.kind === "invoke" &&
+    (forceExpanded || flat.includes("\n") || !renderedFits(flat, column))) {
+    const nestedWrapper = printFittedNestedCallWrapper(
+      callable,
+      soleArgument,
+      depth,
+      column,
+    );
+    if (nestedWrapper !== undefined) {
+      return nestedWrapper;
+    }
+  }
   const soleNestedClosureCall = soleArgument?.kind === "call" ||
       soleArgument?.kind === "associated-call"
     ? soleArgument.args.length === 1 &&
@@ -199,7 +211,8 @@ export function printFittedCall(
     }
   }
   if (arguments_.length > 1 &&
-    (trailingClosure?.kind === "block" || trailingClosure?.kind === "match" ||
+    (trailingClosure?.kind === "block" || trailingClosure?.kind === "evaluate-then" ||
+      trailingClosure?.kind === "match" ||
       trailingClosure?.kind === "conditional")) {
     const preceding = arguments_.slice(0, -1).map(printRustExpr);
     if (preceding.every((argument) => !argument.includes("\n"))) {
@@ -597,7 +610,11 @@ export function printFittedCall(
     } else if (argument.kind === "unary" &&
       (argument.operand.kind === "call" ||
         argument.operand.kind === "associated-call" ||
-        argument.operand.kind === "method-call") &&
+        argument.operand.kind === "method-call" ||
+        argument.operand.kind === "try" &&
+          (argument.operand.expr.kind === "call" ||
+            argument.operand.expr.kind === "associated-call" ||
+            argument.operand.expr.kind === "method-call")) &&
       printRustExpr(argument.operand).length > rustNestedCallWidth) {
       const nested = printNestedCallArgument(
         argument.operand,
@@ -672,17 +689,22 @@ export function printFittedCall(
     }
   }
   const renderedArguments = arguments_.map((argument) => {
-    const rendered = printRustVerticalMethodChainSlot(
-      argument,
-      depth + 1,
-      argumentIndent.length + 1,
-      indentText(depth + 2),
-    ) ?? printRustExprFitted(
-        argument,
-        depth + 1,
-        argumentIndent.length + 1,
-        indentText(depth + 2),
-      );
+    const argumentColumn = argumentIndent.length + 1;
+    const attachedClosureChain = argument.kind === "method-call" &&
+      rustMethodCallKeepsTrailingClosureAttached(argument, depth + 1, argumentColumn);
+    const rendered = attachedClosureChain
+      ? printRustExprFitted(argument, depth + 1, argumentColumn)
+      : printRustVerticalMethodChainSlot(
+          argument,
+          depth + 1,
+          argumentColumn,
+          indentText(depth + 2),
+        ) ?? printRustExprFitted(
+          argument,
+          depth + 1,
+          argumentColumn,
+          indentText(depth + 2),
+        );
     return appendToLastLine(`${argumentIndent}${rendered}`, ",");
   });
   return [

@@ -1,19 +1,7 @@
-import { appendRustDiagnostic } from "../program/walk.js";
-import { rustRegExpSubsetViolation } from "../../policy/regexp/subset.js";
 import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-
-function appendRegExpDiagnostic(walk: RustFactWalk, expression: Node, violation: string): void {
-  appendRustDiagnostic(
-    walk,
-    "RUST_REGEXP_UNSUPPORTED",
-    `RegExp construct outside the oracle-proven subset: ${violation}.`,
-    expression,
-    ["target.capability=rust.js.regexp"],
-  );
-}
 
 export function resolveRegExpCreation(
   walk: RustFactWalk,
@@ -22,11 +10,6 @@ export function resolveRegExpCreation(
   flags: string,
 ): TargetTypeRef | undefined {
   if (!walk.jsEnabled) {
-    return undefined;
-  }
-  const violation = rustRegExpSubsetViolation(pattern, flags);
-  if (violation !== undefined) {
-    appendRegExpDiagnostic(walk, expression, violation);
     return undefined;
   }
   setRustOperationFact(walk, expression, {

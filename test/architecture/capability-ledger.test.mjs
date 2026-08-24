@@ -2,42 +2,6 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { compileRust, nodejsCapability } from "../helpers/rust-session.mjs";
 
-// Capability ledger: every unsupported lane must diagnose deterministically.
-// Rows name the capability, a minimal repro, and the required behavior.
-const unsupportedLanes = [
-  {
-    capability: "RegExp constructs outside the oracle-proven subset",
-    surfaces: ["js"],
-    files: { "index.ts": "export function f(text: string): boolean {\n  const pattern = /x(?=y)/;\n  return pattern.test(text);\n}\n" },
-    finalizedDiagnostic: {
-      code: "RUST_REGEXP_UNSUPPORTED",
-      message: "RegExp construct outside the oracle-proven subset: lookahead `(?=` is not supported.",
-    },
-  },
-];
-
-for (const lane of unsupportedLanes) {
-  test(`unsupported lane stays fail-closed: ${lane.capability}`, async () => {
-    if (lane.finalizedDiagnostic !== undefined) {
-      const { result } = compileRust({
-        files: lane.files,
-        ...(lane.surfaces === undefined ? {} : { surfaces: lane.surfaces }),
-      });
-      assert.deepEqual(result.artifacts, []);
-      assert.deepEqual(result.diagnostics.map(({ code, message }) => ({ code, message })), [lane.finalizedDiagnostic]);
-      return;
-    }
-    const { result } = compileRust({
-      files: lane.files,
-      ...(lane.surfaces === undefined ? {} : { surfaces: lane.surfaces }),
-    });
-    assert.equal(result.artifacts.length, 0, "unsupported lanes must not emit artifacts");
-    assert.ok(result.diagnostics.length > 0, "unsupported lanes must diagnose");
-    assert.ok(result.diagnostics.every((diagnostic) =>
-      typeof diagnostic.code === "string" && diagnostic.code.startsWith("RUST_")));
-  });
-}
-
 test("capability ledger: supported lanes compile a representative program", async () => {
   const { result } = compileRust({
     surfaces: ["js"],

@@ -354,7 +354,12 @@ export function printRustExprFitted(
         depth,
         column,
       );
-      if (hasClosure && (!verticalLayout ||
+      const containingExpressionRequiresReceiverBreak =
+        methodChainContinuationIndent !== undefined && verticalLayout && chain !== undefined &&
+        chain.steps.filter((step) =>
+          step.kind === "method" || step.kind === "field" || step.kind === "await").length > 1 &&
+        rustMethodChainContainsClosure(chain);
+      if (hasClosure && !containingExpressionRequiresReceiverBreak && (!verticalLayout ||
           (expandedClosureOpening !== undefined &&
             expandedClosureOpening <= rustMethodChainWidth)) &&
         rustMethodCallKeepsTrailingClosureAttached(expression, depth, column)) {
@@ -375,6 +380,7 @@ export function printRustExprFitted(
           depth,
           column,
           firstStep?.kind === "field" && !attachFirstMethodAfterField ||
+            containingExpressionRequiresReceiverBreak ||
             rustMethodChainBreaksReceiverWhenExpanded(chain) ||
             rustMethodChainBreaksReceiverForClosure(chain, flat, column) ||
             column > indentText(depth + 1).length,

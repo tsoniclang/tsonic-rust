@@ -212,6 +212,7 @@ export function rustProjectTypeHasPublicImplementationAbi(
 // surface crates. Capability crates contribute their aliases as row data.
 export const rustRuntimeAliasImports: ReadonlyMap<string, { readonly path: string; readonly alias: string }> = new Map([
   ["js_abi", { path: "tsonic_rust_js::abi", alias: "js_abi" }],
+  ["js_exact_string", { path: "tsonic_rust_js::exact_string", alias: "js_exact_string" }],
   ["js_string", { path: "tsonic_rust_js::string", alias: "js_string" }],
   ["rt", { path: "tsonic_rust_runtime", alias: "rt" }],
 ]);

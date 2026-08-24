@@ -294,6 +294,20 @@ export function printRustLetInitializer(
       return `${prefix.trimEnd()}\n${continuationIndent}${continuation};`;
     }
   }
+  if ((trailingClosure?.kind === "block" || trailingClosure?.kind === "evaluate-then") &&
+    fittedAtPrefix.includes("\n")) {
+    const continuationIndent = indentText(depth + 1);
+    const continuation = printRustExprFitted(
+      initializer,
+      depth + 1,
+      continuationIndent.length,
+    );
+    if (continuation.includes("\n") &&
+      continuation.split("\n").length < fittedAtPrefix.split("\n").length &&
+      renderedFits(continuation, continuationIndent.length)) {
+      return `${prefix.trimEnd()}\n${continuationIndent}${continuation};`;
+    }
+  }
   const directCallOpeningFits = (initializer.kind === "call" ||
       initializer.kind === "invoke" || initializer.kind === "associated-call") &&
     trailingClosure?.kind === "closure" &&

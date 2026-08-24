@@ -13,9 +13,14 @@ import { rustExpressionContainsStatementBlock } from "../../../backend/target-as
 import { rustFormatWidth, rustMethodChainWidth, rustNestedCallWidth, rustNestedClosureOpeningWidth } from "../formatting.js";
 import type { RustExpr } from "../../../backend/target-ast/nodes.js";
 
+type RustNestedInvocation = Extract<
+  RustExpr,
+  { readonly kind: "call" | "associated-call" | "invoke" }
+>;
+
 export function printFittedNestedCallWrapper(
   outerCallable: string,
-  nested: Extract<RustExpr, { readonly kind: "call" | "associated-call" }>,
+  nested: RustNestedInvocation,
   depth: number,
   column: number,
 ): string | undefined {
@@ -25,12 +30,7 @@ export function printFittedNestedCallWrapper(
   if (soleNestedArgument?.kind === "try") {
     const argumentIndent = indentText(depth + 1);
     const flatArgument = printRustExpr(soleNestedArgument);
-    const nestedCallable = nested.kind === "call"
-      ? printRustDirectCallTarget(nested)
-      : printRustAssociatedCallTarget(
-          nested,
-          printRustAssociatedOwner(nested.owner),
-        );
+    const nestedCallable = printRustNestedInvocationTarget(nested);
     const opening = `${outerCallable}(${nestedCallable}(`;
     if (renderedFits(opening, column) &&
       renderedFits(`${flatArgument},`, argumentIndent.length)) {
@@ -42,9 +42,7 @@ export function printFittedNestedCallWrapper(
     }
   }
   if (nested.args.length > 1) {
-    const nestedCallable = nested.kind === "call"
-      ? printRustDirectCallTarget(nested)
-      : printRustAssociatedCallTarget(nested, printRustAssociatedOwner(nested.owner));
+    const nestedCallable = printRustNestedInvocationTarget(nested);
     const renderedNested = printFittedCall(
       nestedCallable,
       nested.args,
@@ -56,6 +54,9 @@ export function printFittedNestedCallWrapper(
     if (renderedNested.includes("\n")) {
       return attached;
     }
+  }
+  if (nested.kind === "invoke") {
+    return undefined;
   }
   const singleArgumentChain = collectNestedCallExpressionChain(nested);
   if (singleArgumentChain !== undefined && singleArgumentChain.arguments.length === 1) {
@@ -241,6 +242,20 @@ export function printFittedNestedCallWrapper(
     `${indentText(depth)})`,
   ].join("\n");
   return renderedFits(expanded, column) ? expanded : undefined;
+}
+
+function printRustNestedInvocationTarget(expression: RustNestedInvocation): string {
+  switch (expression.kind) {
+    case "call":
+      return printRustDirectCallTarget(expression);
+    case "associated-call":
+      return printRustAssociatedCallTarget(
+        expression,
+        printRustAssociatedOwner(expression.owner),
+      );
+    case "invoke":
+      return printOperand(expression.callee, RustPrecedence.Postfix, false);
+  }
 }
 
 function collectNestedClosureCallChain(

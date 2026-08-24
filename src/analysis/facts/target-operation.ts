@@ -33,6 +33,9 @@ export function rustTargetOperationText(fact: RustTargetOperationFact): string {
     if (target.form === "trait-associated-value") {
       return `${target.traitPath}::${target.name}`;
     }
+    if (target.form === "arg-structural-method") {
+      return `structural-method[${target.storageIndex}]`;
+    }
     return target.name;
   }
   if (fact.kind === "operator-token" || fact.kind === "operator-call") {
@@ -112,6 +115,9 @@ export function rustTargetOperationIsFallible(
   }
   if (fact.kind === "regexp-create") {
     return true;
+  }
+  if (fact.kind === "iteration") {
+    return fact.iterationKind !== "for-in" && fact.lowering.kind === "fallible-owned";
   }
   if (fact.kind === "source-conversion") {
     return rustValueConversionIsFallible(fact.conversion);

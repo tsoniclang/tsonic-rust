@@ -1,122 +1,94 @@
-// The compile-time RegExp validator must EQUAL the rust-js runtime parser
-// contract. The shared, engine-generated corpus at
-// rust-js/tests/oracle/regexp-acceptance-corpus.json records JsRegExp::new's
-// construction-time verdict for every pattern/flags pair; the validator's
-// acceptance decision is asserted against every entry.
-import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { rustRegExpSubsetViolation } from "../../../dist/policy/regexp/subset.js";
+import test from "node:test";
+
 import {
   artifactText,
-  assertRustTargetRejection,
   compileRust,
+  createRustSession,
+  rustSourceDiagnostics,
 } from "../../helpers/rust-session.mjs";
 
-const corpusPath = fileURLToPath(
-  new URL("../../../../rust-js/tests/oracle/regexp-acceptance-corpus.json", import.meta.url),
-);
-const corpus = JSON.parse(readFileSync(corpusPath, "utf8"));
-
-test("corpus is engine-generated and non-trivial", () => {
-  assert.ok(Array.isArray(corpus));
-  assert.ok(corpus.length >= 100, `corpus has ${corpus.length} entries`);
-  assert.ok(corpus.some((entry) => entry.accepted === true));
-  assert.ok(corpus.some((entry) => entry.accepted === false));
-});
-
-test("compile-time validator equals the engine acceptance on every corpus entry", () => {
-  for (const entry of corpus) {
-    const { pattern, flags, accepted } = entry;
-    const violation = rustRegExpSubsetViolation(pattern, flags);
-    if (accepted) {
-      assert.equal(
-        violation,
-        undefined,
-        `validator rejects /${pattern}/${flags} (\`${violation}\`) but the engine accepts it`,
-      );
-    } else {
-      assert.notEqual(
-        violation,
-        undefined,
-        `validator accepts /${pattern}/${flags} but the engine rejects it (\`${entry.reason}\`)`,
-      );
-    }
-  }
-});
-
-test("validator violation text matches the engine rejection reason on every corpus entry", () => {
-  for (const entry of corpus) {
-    if (entry.accepted) {
-      continue;
-    }
-    assert.equal(
-      rustRegExpSubsetViolation(entry.pattern, entry.flags),
-      entry.reason,
-      `violation text drifted for /${entry.pattern}/${entry.flags}`,
-    );
-  }
-});
-
-// Reviewer probes: each engine-rejected pattern must fail closed at compile
-// time even when constructed inside a try block.
-const rejectedProbes = [
-  "{",
-  "}",
-  "+a",
-  "^*",
-  "a{1001}",
-  "a{2,1}",
-  "a{1,2}?",
-  "[z-a]",
-  "[\\d-x]",
-  "[a-\\n]",
-  "\\e",
-  "\\A",
-  "\\01",
-];
-
-test("reviewer probes fail closed as compiled constants", () => {
-  for (const probe of rejectedProbes) {
-    const literal = JSON.stringify(probe);
-    const options = {
-      surfaces: ["js"],
-      files: {
-        "index.ts": `
-export function f(s: string): boolean {
-  try {
-    const re = new RegExp(${literal});
-    return re.test(s);
-  } catch {
-    return false;
-  }
-}
-`,
-      },
-    };
-    const violation = rustRegExpSubsetViolation(probe, "");
-    assert.notEqual(violation, undefined, `new RegExp(${literal}) must violate the runtime oracle contract`);
-    assertRustTargetRejection(options, [{
-      code: "RUST_REGEXP_UNSUPPORTED",
-      message: violation,
-    }]);
-  }
-});
-
-test("backspace class [\\b] compiles clean", () => {
-  const { result } = compileRust({
+test("TSTS rejects invalid authored RegExp literals before Rust planning", () => {
+  const harness = createRustSession({
     surfaces: ["js"],
     files: {
       "index.ts": `
-export function probe(text: string): boolean {
-  const re = /[\\b]/;
-  return re.test(text);
+export function invalid(value: string): boolean {
+  return /[z-a]/.test(value);
 }
 `,
     },
   });
+  const diagnostics = rustSourceDiagnostics(harness, ["/src/index.ts"]);
+
+  assert.match(diagnostics, /TS1517/u);
+});
+
+test("dynamic RegExp construction is validated by the complete runtime engine", () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+export function dynamic(pattern: string, flags: string, value: string): boolean {
+  return new RegExp(pattern, flags).test(value);
+}
+`,
+    },
+  });
+
   assert.deepEqual(result.diagnostics, []);
-  assert.ok(result.artifacts.length > 0);
-  assert.match(artifactText(result, "src/index.rs"), /JsRegExp::new\("\[\\\\b\]", ""\)\?/u);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /js_abi::regexp_from_string_with_flags_native\(&pattern, &flags\)\?/u);
+  assert.match(source, /js_abi::regexp_test_native\(/u);
+  assert.doesNotMatch(source, /REGEXP_UNSUPPORTED|subset|validator/u);
+});
+
+test("complete ECMAScript RegExp syntax lowers without a target-owned subset", () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    compilerOptions: { target: "es2024" },
+    files: {
+      "index.ts": `
+export function complete(value: string): boolean {
+  const lookbehind = /(?<=prefix)(?<word>\\p{Letter}+)/dgu;
+  const unicodeSets = /[\\p{ASCII}&&\\p{Letter}]/v;
+  return lookbehind.test(value) || unicodeSets.test(value);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /regexp_new_native/u);
+  assert.match(source, /\(\?<word>/u);
+  assert.match(source, /dgu/u);
+  assert.match(source, /\\p\{ASCII\}/u);
+});
+
+test("native and exact RegExp inputs select distinct result carriers", () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+import { jsstr } from "@tsonic/js/lang.js";
+import type { JsString } from "@tsonic/js/types.js";
+
+export function lanes(value: string): string {
+  const native = /./.exec(value);
+  const exact: JsString = jsstr(value);
+  const exactMatch = /./.exec(exact);
+  return (native?.[0] ?? "") + RegExp.escape(exact.charAt(0)) +
+    (exactMatch?.[0] ?? exact).toWellFormed();
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /regexp_exec_native/u);
+  assert.match(source, /\.exec\(&exact\)\?/u);
+  assert.match(source, /regexp_escape_exact_native/u);
+  assert.match(source, /js_exact_string::to_well_formed/u);
 });

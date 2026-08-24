@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import {
   acmeTestingPackage,
   artifactText,
-  assertRustTargetRejection,
   compileRust,
   nodejsCapability,
 } from "../../helpers/rust-session.mjs";
@@ -111,30 +110,6 @@ export function main(): void {
     validateGeneratedProject("source-fixed-array", result.artifacts, { run: true }).status,
     0,
   );
-});
-
-test("RegExp outside the oracle subset stays hard-rejected", async () => {
-  const fixtures = [
-    { source: "export function f(s: string): boolean {\n  return /a(?<name>b)/.test(s);\n}\n" },
-    {
-      source: "export function f(p: string, s: string): boolean {\n  const r = new RegExp(p);\n  return r.test(s);\n}\n",
-      sourceMessage: "Rust RegExp construction requires TSTS-selected RegExp constructor evidence and compile-time string pattern/flags.",
-    },
-    { source: "export function f(s: string): string {\n  return s.replace(/(a)\\1/, \"b\");\n}\n" },
-  ];
-  for (const fixture of fixtures) {
-    const options = { surfaces: ["js"], files: { "index.ts": fixture.source } };
-    if (fixture.sourceMessage !== undefined) {
-      assertRustTargetRejection(options, [{
-        code: "RUST_REGEXP_DYNAMIC_UNSUPPORTED",
-        message: fixture.sourceMessage,
-      }]);
-      continue;
-    }
-    const { result } = compileRust(options);
-    assert.equal(result.artifacts.length, 0, "unsupported RegExp must not emit artifacts");
-    assert.ok(result.diagnostics.length > 0);
-  }
 });
 
 test("discriminated object unions consume exact selected narrowing evidence", () => {

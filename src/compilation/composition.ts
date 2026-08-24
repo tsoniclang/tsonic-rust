@@ -11,6 +11,10 @@ import type {
 import { rustCompilerProviderSpecifierPrefix } from "../providers/compiler/session.js";
 import { rustJsSurfaceSourceProfileContributions } from "../source/profiles/declarations.js";
 import { rustRuntimeCrateReference } from "./runtime-references.js";
+import {
+  createJsSourceSemanticsExtension,
+  jsSourceSemanticsModules,
+} from "@tsonic/js-source-profile";
 
 export const rustTargetProvider: TargetProviderDescriptor = Object.freeze({
   id: "rust-provider",
@@ -26,6 +30,12 @@ export const rustTargetSurfaces: readonly TargetSurfaceImplementation[] = Object
     id: "js",
     displayName: "JavaScript surface",
     sourceProfileContributions: rustJsSurfaceSourceProfileContributions,
+    sourceCompilerContributions() {
+      return Object.freeze({
+        semanticsModules: jsSourceSemanticsModules(),
+        extensions: Object.freeze([createJsSourceSemanticsExtension()]),
+      });
+    },
     runtimeContributions(context: TargetRuntimeContributionContext): TargetRuntimeContributions {
       return Object.freeze({
         references: Object.freeze([

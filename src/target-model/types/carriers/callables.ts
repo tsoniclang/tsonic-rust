@@ -1,11 +1,7 @@
-import { rustAsyncGeneratorTargetId, rustCallableTargetId, rustGeneratorTargetId, rustIteratorResultTargetId, rustLocationTargetId, rustOptionTargetId } from "./source-types.js";
-import { rustOptionElementCarrier } from "./js.js";
+import { rustAsyncGeneratorTargetId, rustCallableTargetId, rustGeneratorTargetId, rustIteratorResultTargetId, rustLocationTargetId } from "./source-types.js";
+import { rustOptionElementCarrier, rustOptionTargetType } from "./optional.js";
 import { rustTupleTargetType, rustUnitTargetType } from "./native.js";
 import type { TargetTypeRef } from "../model.js";
-
-export function rustOptionTargetType(value: TargetTypeRef): TargetTypeRef {
-  return { kind: "target-named", id: rustOptionTargetId, typeArguments: [value] };
-}
 
 export function rustLocationTargetType(pointee: TargetTypeRef): TargetTypeRef {
   return { kind: "target-named", id: rustLocationTargetId, typeArguments: [pointee] };
@@ -20,6 +16,13 @@ export function rustCallableTargetType(
     id: rustCallableTargetId,
     typeArguments: [rustTupleTargetType(parameters), result],
   };
+}
+
+export function isRustCallableCarrier(
+  carrier: TargetTypeRef | undefined,
+): boolean {
+  return carrier?.kind === "closure" || carrier?.kind === "function-pointer" ||
+    carrier?.kind === "target-named" && carrier.id === rustCallableTargetId;
 }
 
 export function rustCallableProtocol(

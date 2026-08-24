@@ -592,6 +592,7 @@ export function providerFormRequiresSourceReceiver(form: RustProviderOperationFo
     form.form === "receiver-value-array" ||
     form.form === "receiver-tagged-array" ||
     form.form === "arg-receiver-method" ||
+    form.form === "arg-structural-method" ||
     (form.form === "trait-call" && form.receiverMode !== undefined);
 }
 
@@ -754,6 +755,17 @@ export function substituteProviderOperationForm(
           inputCarrier: substituteRustTargetTypeParameters(alternative.inputCarrier, substitutions),
         })),
       };
+    case "arg-structural-method":
+    case "arg-receiver-method":
+      return form.argConversions === undefined
+        ? form
+        : {
+            ...form,
+            argConversions: form.argConversions.map((conversion) =>
+              conversion === undefined
+                ? undefined
+                : substituteRustValueConversion(conversion, substitutions)),
+          };
     case "trait-call":
     case "trait-associated-value":
       return {

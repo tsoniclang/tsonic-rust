@@ -185,12 +185,37 @@ export function finalizeTargetInputs(
       const receiver = input.argument(0, "ref");
       const sourceReceiver = input.receiver(form.argModes?.[0] ?? "value");
       const rest = indexes.slice(1).map((index, targetIndex) =>
-        input.argument(index, form.argModes?.[targetIndex + 1] ?? "value"));
+        input.argument(
+          index,
+          form.argModes?.[targetIndex + 1] ?? "value",
+          form.argConversions?.[targetIndex + 1],
+        ));
       return receiver === undefined || sourceReceiver === undefined || rest.some((entry) => entry === undefined)
         ? undefined
         : {
             targetReceiver: { kind: "input", input: receiver },
             targetArguments: [sourceReceiver, ...rest as RustFinalizedSourceInput[]],
+          };
+    }
+    case "arg-structural-method": {
+      const receiver = input.argument(0, "value");
+      const sourceReceiver = input.receiver(form.argModes[0]!);
+      const rest = indexes.slice(1).map((index, targetIndex) =>
+        input.argument(
+          index,
+          form.argModes[targetIndex + 1]!,
+          form.argConversions?.[targetIndex + 1],
+        ));
+      return receiver === undefined || sourceReceiver === undefined ||
+          rest.some((entry) => entry === undefined)
+        ? undefined
+        : {
+            targetReceiver: { kind: "input", input: receiver },
+            targetArguments: [
+              sourceReceiver,
+              ...rest as RustFinalizedSourceInput[],
+              ...constants(form.trailingArguments),
+            ],
           };
     }
     case "binary-operator": {

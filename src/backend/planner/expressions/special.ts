@@ -49,14 +49,14 @@ export function planRegExpCreate(node: Node, context: RustPlanContext): RustExpr
     ));
     return undefined;
   }
-  registerAliasFromPath(context, "js_abi::JsRegExp::new");
+  registerAliasFromPath(context, "js_abi::regexp_new_native");
   return {
     kind: "try",
     resultErrorType: activeErrorType,
     operandErrorType: { kind: "named", path: "js_abi::JsError" },
     expr: {
       kind: "call",
-      path: "js_abi::JsRegExp::new",
+      path: "js_abi::regexp_new_native",
       args: [
         { kind: "str-literal", value: fact.pattern },
         { kind: "str-literal", value: fact.flags },

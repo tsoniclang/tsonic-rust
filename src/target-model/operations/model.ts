@@ -96,10 +96,27 @@ export type RustNonOptionValueConversion =
       readonly kind: "bottom-coercion";
       readonly source: TargetTypeRef;
       readonly target: TargetTypeRef;
+    }
+  | {
+      readonly kind: "js-argument-vector-callback";
+      readonly lane: "native" | "exact";
+      readonly source: TargetTypeRef;
+      readonly target: TargetTypeRef;
+      readonly projections: readonly (
+        | "native-string"
+        | "exact-string"
+        | "value"
+        | "rest-values"
+      )[];
+      readonly sourceFallible: boolean;
     };
 
 export type RustValueConversion =
   | RustNonOptionValueConversion
+  | {
+      readonly kind: "option-some";
+      readonly element: TargetTypeRef;
+    }
   | {
       readonly kind: "option-map";
       readonly elementConversion: RustNonOptionValueConversion;
@@ -194,6 +211,16 @@ export type RustProviderOperationForm =
       readonly form: "arg-receiver-method";
       readonly name: string;
       readonly argModes?: readonly RustArgumentMode[];
+      readonly argConversions?: readonly (RustValueConversion | undefined)[];
+    }
+  | {
+      // Calls the exact selected symbol-keyed method stored on the first
+      // argument. The source receiver becomes the callable's first argument.
+      readonly form: "arg-structural-method";
+      readonly storageIndex: number;
+      readonly argModes: readonly RustArgumentMode[];
+      readonly argConversions?: readonly (RustValueConversion | undefined)[];
+      readonly trailingArguments?: readonly RustProviderConstantArgument[];
     }
   | { readonly form: "field"; readonly name: string }
   | {
@@ -275,6 +302,10 @@ export interface RustCallbackOperationTemplate {
   readonly shape: "direct" | "map" | "reduce";
   readonly sourceArgumentIndex: number;
   readonly accumulatorArgumentIndex?: number;
+  readonly argumentAdapter?: {
+    readonly kind: "regexp-replacement";
+    readonly lane: "native" | "exact";
+  };
   readonly fallibleTarget: RustProviderOperationForm;
 }
 

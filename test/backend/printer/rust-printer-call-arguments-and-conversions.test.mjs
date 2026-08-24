@@ -274,6 +274,63 @@ test("fallible calls on the left of comparisons expand their arguments before th
   assert.match(source, /divide\(\n {12}rt::BigInt::from_decimal_literal\("7"\),\n {12}rt::BigInt::from_decimal_literal\("3"\),\n {8}\)\? ==/u);
 });
 
+test("fitting fallible call operands stay compact before a comparison break", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "call",
+            path: "acme_testing::check",
+            args: [{
+              kind: "binary",
+              operator: "==",
+              left: {
+                kind: "try",
+                expr: {
+                  kind: "call",
+                  path: "js_abi::string_search_regexp_native",
+                  args: [{ kind: "str-literal", value: "hello" }, {
+                    kind: "reference",
+                    mutable: false,
+                    expr: {
+                      kind: "try",
+                      expr: {
+                        kind: "call",
+                        path: "js_abi::regexp_new_native",
+                        args: [
+                          { kind: "str-literal", value: "z" },
+                          { kind: "str-literal", value: "" },
+                        ],
+                      },
+                    },
+                  }],
+                },
+              },
+              right: {
+                kind: "unary",
+                operator: "-",
+                operand: { kind: "float-literal", text: "1234.0" },
+              },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /string_search_regexp_native\("hello", &js_abi::regexp_new_native\("z", ""\)\?\)\?\n {12}== -1234\.0/u,
+  );
+});
+
 test("long calls on the left of comparisons expand before the operator", () => {
   const source = printRustSourceFile({
     headerComment,
@@ -377,6 +434,62 @@ test("unary expressions expand long nested calls before outer attachment", () =>
   assert.match(
     source,
     /acme_testing::check\(!rt::option_coalesce\(\n {8}includes\(None\),\n {8}std::convert::identity,\n {8}\|\| false,\n {4}\)\);/u,
+  );
+});
+
+test("unary fallible calls retain rustfmt's attached outer-call layout", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "call",
+            path: "acme_testing::check",
+            args: [{
+              kind: "unary",
+              operator: "!",
+              operand: {
+                kind: "try",
+                errorDomain: "runtime",
+                expr: {
+                  kind: "call",
+                  path: "js_abi::regexp_test_native",
+                  args: [
+                    {
+                      kind: "reference",
+                      expr: {
+                        kind: "try",
+                        errorDomain: "runtime",
+                        expr: {
+                          kind: "call",
+                          path: "js_abi::regexp_new_native",
+                          args: [
+                            { kind: "str-literal", value: "ab+c" },
+                            { kind: "str-literal", value: "i" },
+                          ],
+                        },
+                      },
+                    },
+                    { kind: "str-literal", value: "XYZ" },
+                  ],
+                },
+              },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /acme_testing::check\(!js_abi::regexp_test_native\(\n {8}&js_abi::regexp_new_native\("ab\+c", "i"\)\?,\n {8}"XYZ",\n {4}\)\?\);/u,
   );
 });
 
@@ -672,6 +785,127 @@ test("method chains inside expanded call comparisons use argument indentation", 
   });
 
   assert.match(source, /acme_testing::check\(\n        pair\.load\(\)\n            \.addLeft/u);
+});
+
+test("expanded call comparisons break short receiver chains before the first selector", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "expr",
+          expr: {
+            kind: "call",
+            path: "require_value",
+            args: [{
+              kind: "binary",
+              operator: "==",
+              left: {
+                kind: "method-call",
+                receiver: {
+                  kind: "method-call",
+                  receiver: { kind: "path", path: "executed" },
+                  method: "as_ref",
+                  args: [],
+                },
+                method: "map",
+                args: [{
+                  kind: "closure",
+                  params: [{ name: "optional_receiver_2", byRefCopy: false }],
+                  body: {
+                    kind: "method-call",
+                    receiver: { kind: "path", path: "optional_receiver_2" },
+                    method: "required_group",
+                    args: [{ kind: "float-literal", text: "0.0" }],
+                  },
+                }],
+              },
+              right: {
+                kind: "call",
+                path: "Some",
+                args: [{
+                  kind: "call",
+                  path: "String::from",
+                  args: [{ kind: "string-literal", value: "ab12" }],
+                }],
+              },
+            }, {
+              kind: "call",
+              path: "String::from",
+              args: [{ kind: "string-literal", value: "exec whole match" }],
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /require_value\(\n {8}executed\n {12}\.as_ref\(\)\n {12}\.map/u);
+});
+
+test("expanded call arguments keep fitting optional closure chains attached", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      name: "proof",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "let",
+          name: "letter",
+          mutable: false,
+          init: {
+            kind: "call",
+            path: "rt::option_coalesce",
+            args: [{
+              kind: "method-call",
+              receiver: {
+                kind: "method-call",
+                receiver: {
+                  kind: "method-call",
+                  receiver: { kind: "path", path: "item" },
+                  method: "groups",
+                  args: [],
+                },
+                method: "as_ref",
+                args: [],
+              },
+              method: "and_then",
+              args: [{
+                kind: "closure",
+                params: [{ name: "optional_receiver_13", byRefCopy: false }],
+                body: {
+                  kind: "call",
+                  path: "js_abi::regexp_named_groups_get_native",
+                  args: [
+                    { kind: "path", path: "optional_receiver_13" },
+                    { kind: "str-literal", value: "letter" },
+                  ],
+                },
+              }],
+            }, { kind: "path", path: "std::convert::identity" }, {
+              kind: "closure",
+              params: [],
+              body: {
+                kind: "call",
+                path: "String::from",
+                args: [{ kind: "str-literal", value: "" }],
+              },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /item\.groups\(\)\.as_ref\(\)\.and_then\(\|optional_receiver_13\| \{/u);
+  assert.doesNotMatch(source, /item\n\s+\.groups/u);
 });
 
 test("every fitted call layout preserves exact call-site type arguments", () => {

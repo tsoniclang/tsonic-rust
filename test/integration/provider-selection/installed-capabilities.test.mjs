@@ -186,7 +186,7 @@ test("simulated installed layout resolves target runtime crates end to end", { t
   const metadata = execFileSync("cargo", [
     "metadata", "--format-version", "1", "--offline",
     "--manifest-path", resolve(consumerRoot, "Cargo.toml"),
-  ], { encoding: "utf8" });
+  ], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   const packages = JSON.parse(metadata).packages;
   for (const [crate, expectedManifest] of [
     ["tsonic_rust_node", nodeManifest],

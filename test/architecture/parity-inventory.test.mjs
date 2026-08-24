@@ -1,12 +1,19 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { jsOperationRows } from "../../dist/policy/operations/js-surface/rows.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const inventory = readFileSync(join(root, "docs/parity-inventory.md"), "utf8");
-const rows = readFileSync(join(root, "src/policy/operations/js-surface/rows.ts"), "utf8");
+const operationTableRoot = join(root, "src/policy/operations/js-surface");
+const operationTables = readdirSync(operationTableRoot)
+  .filter((name) => name === "rows.ts" || name.endsWith("-rows.ts"))
+  .sort()
+  .map((name) => readFileSync(join(operationTableRoot, name), "utf8"))
+  .join("\n");
+const operationMembers = new Set(jsOperationRows.map((row) => row.member));
 
 test("inventory wording is timeless", () => {
   for (const banned of [/\bcurrently\b/iu, /\bpending\b/iu, /\bfuture\b/iu, /\blater\b/iu, /\bR1[0-9]\b/u, /\bslice label\b|\bnext slice\b/iu]) {
@@ -17,7 +24,7 @@ test("inventory wording is timeless", () => {
 test("implemented row members exist in the operation tables", () => {
   const members = ["findLastIndex", "symmetricDifference", "isDisjointFrom", "matchAll", "exec", "lastIndex", "toJSON", "parse", "UTC", "parseInt", "toFixed"];
   for (const member of members) {
-    assert.ok(rows.includes(`member: "${member}"`), member);
+    assert.ok(operationMembers.has(member), member);
   }
 });
 
@@ -67,10 +74,10 @@ test("implemented lanes with row members exist in the operation tables", () => {
       continue;
     }
     if (lane.rowMember !== undefined) {
-      assert.ok(rows.includes(`member: "${lane.rowMember}"`), `${lane.lane}: no row for member ${lane.rowMember}`);
+      assert.ok(operationMembers.has(lane.rowMember), `${lane.lane}: no row for member ${lane.rowMember}`);
     }
     if (lane.rowFactory !== undefined) {
-      assert.ok(rows.includes(`function ${lane.rowFactory}(`), `${lane.lane}: no row factory ${lane.rowFactory}`);
+      assert.ok(operationTables.includes(`function ${lane.rowFactory}(`), `${lane.lane}: no row factory ${lane.rowFactory}`);
     }
   }
 });

@@ -10,6 +10,10 @@ import type {
 import {
   isRustNeverCarrier,
   isRustNumericCarrier,
+  rustCallableProtocol,
+  rustClosureProtocol,
+  rustJsArrayTargetType,
+  rustJsStringTargetType,
   rustNeverTargetType,
   rustOptionTargetType,
   rustJsValueTargetType,
@@ -32,6 +36,7 @@ const float64Carrier = rustSourcePrimitiveTargetType("float64");
 const usizeCarrier = rustSourcePrimitiveTargetType("native-uint");
 const isizeCarrier = rustSourcePrimitiveTargetType("native-int");
 const stringCarrier = rustStringTargetType();
+const exactStringCarrier = rustJsStringTargetType();
 const jsValueCarrier = rustJsValueTargetType();
 
 interface RustValueConversionContractBase {
@@ -63,6 +68,20 @@ export type RustValueConversionContract = RustValueConversionContractBase & (
       readonly element: RustValueConversionContract;
     }
   | {
+      readonly lowering: "option-some";
+    }
+  | {
+      readonly lowering: "js-argument-vector-callback";
+      readonly lane: "native" | "exact";
+      readonly projections: readonly (
+        | "native-string"
+        | "exact-string"
+        | "value"
+        | "rest-values"
+      )[];
+      readonly sourceFallible: boolean;
+    }
+  | {
       readonly lowering: "owned-string-from-borrowed-str";
     }
   | {
@@ -73,6 +92,59 @@ export type RustValueConversionContract = RustValueConversionContractBase & (
 export function rustValueConversionContract(
   value: RustValueConversion,
 ): RustValueConversionContract | undefined {
+  if (value.kind === "js-argument-vector-callback") {
+    const source = callbackProtocol(value.source);
+    const target = rustClosureProtocol(value.target);
+    const vectorCarrier = rustJsArrayTargetType(jsValueCarrier);
+    const expectedString = value.lane === "native" ? stringCarrier : exactStringCarrier;
+    const stringProjection = value.lane === "native" ? "native-string" : "exact-string";
+    const restIndexes = value.projections.flatMap((projection, index) =>
+      projection === "rest-values" ? [index] : []);
+    const projectionsMatch = value.projections.length === source?.parameters.length &&
+      value.projections.every((projection, index) => {
+        const parameter = source?.parameters[index];
+        const expected = projection === stringProjection
+          ? expectedString
+          : projection === "value"
+            ? jsValueCarrier
+            : projection === "rest-values" ? vectorCarrier : undefined;
+        return parameter !== undefined && expected !== undefined &&
+          rustTargetTypeRefEquals(parameter, expected);
+      });
+    return source === undefined || target === undefined ||
+        !rustTargetTypeRefEquals(source.result, expectedString) ||
+        target.parameters.length !== 1 ||
+        !rustTargetTypeRefEquals(target.parameters[0], vectorCarrier) ||
+        !rustTargetTypeRefEquals(target.result, expectedString) ||
+        !projectionsMatch || restIndexes.length > 1 ||
+        (restIndexes.length === 1 && restIndexes[0] !== value.projections.length - 1) ||
+        value.projections.some((projection, index) =>
+          (projection === "native-string" || projection === "exact-string") && index !== 0)
+      ? undefined
+      : {
+          category: "exact",
+          lowering: "js-argument-vector-callback",
+          sourceMode: "value",
+          source: value.source,
+          target: value.target,
+          lane: value.lane,
+          projections: value.projections,
+          sourceFallible: value.sourceFallible,
+          fallible: false,
+        };
+  }
+  if (value.kind === "option-some") {
+    return isRustTargetTypeRef(value.element)
+      ? {
+          category: "exact",
+          lowering: "option-some",
+          sourceMode: "value",
+          source: value.element,
+          target: rustOptionTargetType(value.element),
+          fallible: false,
+        }
+      : undefined;
+  }
   if (value.kind === "option-map") {
     const element = rustValueConversionContract(value.elementConversion);
     return element === undefined
@@ -247,6 +319,10 @@ export function rustValueConversionIdentity(value: RustValueConversion): string 
           ? `source-union-variant.${value.variantName}.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}`
           : value.kind === "bottom-coercion"
             ? `bottom-coercion.${JSON.stringify(value.target)}`
+            : value.kind === "js-argument-vector-callback"
+              ? `js-argument-vector-callback.${value.lane}.${value.sourceFallible}.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}.${value.projections.join(".")}`
+            : value.kind === "option-some"
+              ? `option-some.${JSON.stringify(value.element)}`
             : `option-map.${rustValueConversionIdentity(value.elementConversion)}`;
 }
 
@@ -267,10 +343,16 @@ export function substituteRustValueConversion(
       });
     case "source-union-variant":
     case "bottom-coercion":
+    case "js-argument-vector-callback":
       return Object.freeze({
         ...value,
         source: substituteRustTargetTypeParameters(value.source, substitutions),
         target: substituteRustTargetTypeParameters(value.target, substitutions),
+      });
+    case "option-some":
+      return Object.freeze({
+        ...value,
+        element: substituteRustTargetTypeParameters(value.element, substitutions),
       });
     case "option-map":
       return Object.freeze({
@@ -284,4 +366,13 @@ export function substituteRustValueConversion(
     case "numeric-promotion":
       return value;
   }
+}
+
+function callbackProtocol(
+  carrier: TargetTypeRef,
+): { readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef } | undefined {
+  if (carrier.kind === "closure" || carrier.kind === "function-pointer") {
+    return { parameters: carrier.args, result: carrier.result };
+  }
+  return rustCallableProtocol(carrier);
 }
