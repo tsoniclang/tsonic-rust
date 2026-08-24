@@ -1,6 +1,7 @@
 import { appendToLastLine, escapeRustString, firstLine, lastLine, lastLineLength, printRustMatchExpression, printRustPattern, remainingLines, renderedFits, rustExpressionContainsTry } from "../patterns.js";
 import { expressionIsRightHandBlock, expressionIsStatementBlockOperand, expressionNeedsParentheses, expressionPrecedence, printBinaryOperand, printFittedBinaryOperand, printOperand, RustPrecedence } from "./precedence.js";
 import { indentText } from "../types.js";
+import { printExpandedBinaryLeftCall } from "./binary-calls.js";
 import { printFittedCall } from "./calls.js";
 import { printFittedLeftAssociativeBinaryChain, printFittedLogicalChain, printFittedMethodChain, rustBinaryOperandPrefersExpandedCall, rustExpandedMethodClosureOpeningWidth, rustMethodCallKeepsTrailingClosureAttached, rustMethodChain, rustMethodChainBreaksReceiverForClosure, rustMethodChainBreaksReceiverWhenExpanded, rustMethodChainContainsClosure, rustMethodChainFirstMethodRequiresExpansion, rustMethodChainPrefersVerticalLayout, rustMethodChainRequiresVerticalLayout } from "./chains.js";
 import { printRustAssociatedCallTarget, printRustCallMember, printRustDirectCallTarget, printRustMethodCallTarget } from "./callable.js";
@@ -606,6 +607,7 @@ export function printRustExprFitted(
             depth,
             column,
             layoutRegion !== "logical-chain-operand",
+            rustBinaryOperandPrefersExpandedCall(expression.left),
           )
         : expression.left.kind === "associated-call"
           ? printExpandedBinaryLeftCall(
@@ -619,6 +621,7 @@ export function printRustExprFitted(
               depth,
               column,
               layoutRegion !== "logical-chain-operand",
+              rustBinaryOperandPrefersExpandedCall(expression.left),
             )
           : undefined;
       const renderedLeft = expandedLeftCall ?? (expression.left.kind === "try" &&
@@ -850,60 +853,4 @@ export function printRustExprFitted(
     default:
       return flat;
   }
-}
-
-function rustBinaryCallAllowsArgumentExpansion(
-  expression: Extract<RustExpr, { readonly kind: "call" | "associated-call" }>,
-): boolean {
-  const trailing = expression.args[expression.args.length - 1];
-  return trailing?.kind !== "closure-block" &&
-    (trailing?.kind !== "closure" || rustFormatArgumentIsAtomic(trailing.body));
-}
-
-function printExpandedBinaryLeftCall(
-  expression: Extract<RustExpr, { readonly kind: "call" | "associated-call" }>,
-  callable: string,
-  operator: string,
-  right: RustExpr,
-  depth: number,
-  column: number,
-  preserveOperatorAttachment: boolean,
-): string | undefined {
-  if (expression.args.length <= 1 ||
-    rustExpressionContainsStatementBlock(expression)) {
-    return undefined;
-  }
-  const flatLeft = printRustExpr(expression);
-  const leftRequiresExpansion = rustBinaryCallAllowsArgumentExpansion(expression) &&
-    (rustBinaryOperandPrefersExpandedCall(expression) ||
-      !renderedFits(flatLeft, column));
-  if (!leftRequiresExpansion && !preserveOperatorAttachment) {
-    return undefined;
-  }
-  const renderedRight = printBinaryOperand(right, operator, true);
-  const candidate = printFittedCall(
-    callable,
-    expression.args,
-    depth,
-    column,
-    true,
-    false,
-    depth,
-    preserveOperatorAttachment
-      ? {
-          trailingContinuationWidth: ` ${operator} ${renderedRight}`.length,
-        }
-      : undefined,
-  );
-  if (leftRequiresExpansion) {
-    return candidate;
-  }
-  const trailing = expression.args[expression.args.length - 1];
-  if (trailing?.kind !== "closure" || candidate.includes("\n") === false ||
-    renderedRight.includes("\n") ||
-    renderedFits(`${flatLeft} ${operator} ${renderedRight}`, column)) {
-    return undefined;
-  }
-  const joined = appendToLastLine(candidate, ` ${operator} ${renderedRight}`);
-  return renderedFits(joined, column) ? candidate : undefined;
 }
