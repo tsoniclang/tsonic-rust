@@ -320,7 +320,9 @@ function rustExpressionReferencesModuleAlias(expression: RustExpr, alias: string
     case "struct-literal":
       return rustPathReferencesModuleAlias(expression.path, alias) ||
         expression.fields.some((field) =>
-          rustExpressionReferencesModuleAlias(field.value, alias));
+          rustExpressionReferencesModuleAlias(field.value, alias)) ||
+        (expression.base !== undefined &&
+          rustExpressionReferencesModuleAlias(expression.base, alias));
   }
 }
 

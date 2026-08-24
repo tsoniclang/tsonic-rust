@@ -66,7 +66,11 @@ export function providerOperationRowIdentity(row: RustProviderOperationRow): str
 }
 
 export function providerTypeRowIdentity(row: RustProviderTypeRow): string {
-  return `${providerExportRowIdentity(row)}\0${row.sourceTypeParameters.join("\0")}\0${JSON.stringify(row.targetCarrier)}`;
+  return `${providerExportRowIdentity(row)}\0${row.sourceTypeParameters.join("\0")}\0${JSON.stringify({
+    targetCarrier: row.targetCarrier,
+    typeRequirements: row.typeRequirements,
+    objectLiteralConstruction: row.objectLiteralConstruction,
+  })}`;
 }
 
 export function providerBinaryEpilogueIdentity(row: RustProviderBinaryEpilogueRow): string {

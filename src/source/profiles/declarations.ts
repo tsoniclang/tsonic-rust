@@ -186,6 +186,8 @@ declare function parseInt(value: string, radix?: number): number;
 declare function parseFloat(value: string): number;
 declare function isNaN(value: number): boolean;
 declare function isFinite(value: number): boolean;
+declare function encodeURIComponent(value: string): string;
+declare function decodeURIComponent(value: string): string;
 
 interface String {
   readonly length: number;

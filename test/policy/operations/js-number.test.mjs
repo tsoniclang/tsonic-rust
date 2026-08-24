@@ -39,6 +39,20 @@ test("Number rows select only exact source and carrier contracts", () => {
     receiverCarrier: float64,
     argumentCarriers: [int32],
   }), undefined);
+
+  assert.equal(selectJsSurfaceOperation({
+    ownerName: "Global",
+    memberName: "encodeURIComponent",
+    operationKind: "call",
+    argumentCarriers: [rustStringTargetType()],
+  })?.fact.operationId, "tsonic.rust.js.Global.encodeURIComponent.call");
+
+  assert.equal(selectJsSurfaceOperation({
+    ownerName: "Global",
+    memberName: "decodeURIComponent",
+    operationKind: "call",
+    argumentCarriers: [rustStringTargetType()],
+  })?.fact.operationId, "tsonic.rust.js.Global.decodeURIComponent.call");
 });
 
 test("generated Rust proves exact Number parsing formatting and constants", { timeout: 300_000 }, () => {
@@ -68,6 +82,9 @@ export function main(): void {
   check(Number.MIN_VALUE > 0 && Number.MIN_VALUE < Number.EPSILON);
   check(Number.isNaN(Number.NaN));
   check(Number.NEGATIVE_INFINITY < 0 && Number.POSITIVE_INFINITY > 0);
+  const encoded = encodeURIComponent("a b/🙂");
+  check(encoded === "a%20b%2F%F0%9F%99%82");
+  check(decodeURIComponent(encoded) === "a b/🙂");
 }
 `,
     },
@@ -79,5 +96,7 @@ export function main(): void {
   assert.match(source, /js_abi::number_to_fixed_digits\(value, 2\.0\)\?/u);
   assert.match(source, /js_abi::number_to_string_radix\(integer, 16\.0\)\?/u);
   assert.match(source, /js_abi::NUMBER_MAX_VALUE/u);
+  assert.match(source, /js_abi::encode_uri_component/u);
+  assert.match(source, /js_abi::decode_uri_component/u);
   assert.equal(validateGeneratedProject("js-number", result.artifacts, { run: true }).status, 0);
 });

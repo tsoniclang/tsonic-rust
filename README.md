@@ -137,16 +137,12 @@ exact inherited method bodies can link without widening the TypeScript API.
 
 ## Explicitly unsupported (fail-closed, classified)
 
-Each unsupported lane requires a contract that does not exist. RegExp constructs outside the
-oracle-proven subset (constant patterns with classes, quantifiers,
-anchors, alternation, and groups under flags i/g/m, proven against 217
-committed Node oracle vectors plus a 157-entry engine-generated
-acceptance corpus that pins compile-time validation to the runtime
-parser contract — see the rust-js JS parity inventory
-(docs/js-parity.md); lazy quantifiers, backreferences, lookaround,
-named groups, word boundaries, and dynamic patterns reject
-deterministically). Every unsupported lane diagnoses
-deterministically; see `test/architecture/capability-ledger.test.mjs`.
+Every unsupported lane requires a contract that does not exist and diagnoses
+deterministically; see `test/architecture/capability-ledger.test.mjs`. RegExp
+is no longer such a lane: constant and dynamic construction use the complete
+runtime ECMAScript engine, including lookaround, named groups, indices, and
+replacement callbacks. The exact supported JS/Node inventory is maintained in
+`docs/parity-inventory.md`.
 
 ## Build and test
 
@@ -183,6 +179,26 @@ form), and cargo crate contributions. Concrete names live only in row data;
 the generic matcher contains no per-name branching. See
 `src/public/provider.ts` and the `@acme/*` fixtures under
 `test/helpers/rust-session.mjs`.
+
+Provider-backed interfaces accept contextual object literals only when their
+type row opts into `objectLiteralConstruction: { kind: "struct-default" }`.
+Each authored property must resolve through exact readable and writable
+provider member rows to one native field carrier. Those paired field rows are
+the provider's complete native construction inventory. The planner emits a
+plain struct when every field is supplied and uses `Default::default()` only
+to complete omitted fields:
+
+```ts
+declare function configure(options: Options): void;
+configure({ enabled: true });
+```
+
+```rust
+configure(Options {
+    enabled: Some(true),
+    ..Default::default()
+})?;
+```
 
 Provider evaluation is observable by default. A provider may add
 `evaluation: "pure"` only when repeating the selected operation with stable

@@ -338,6 +338,19 @@ export type RustTargetOperationFact =
       readonly resultCarrier: TargetTypeRef;
     }
   | {
+      readonly kind: "provider-record-literal";
+      readonly operationId: string;
+      readonly resultCarrier: TargetTypeRef;
+      readonly completion: "complete" | "default";
+      readonly fields: readonly {
+        readonly property: Node;
+        readonly expression: Node;
+        readonly providerMemberId: string;
+        readonly targetName: string;
+        readonly storageCarrier: TargetTypeRef;
+      }[];
+    }
+  | {
       // Object literal lowering to a generated record struct: field order and
       // carriers come from the finalized shape declaration.
       readonly kind: "record-literal";
@@ -585,6 +598,7 @@ export function rustTargetOperationResultCarrier(fact: RustTargetOperationFact):
     case "source-union-field":
     case "source-call":
     case "source-enum-member":
+    case "provider-record-literal":
     case "record-literal":
     case "record-index-literal":
     case "tuple-literal":

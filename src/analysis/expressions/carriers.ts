@@ -187,6 +187,16 @@ export function resolveExpressionCarrier(
   }
 }
 
+export function resolveExpressionCarrierBeforeFlowReadProjection(
+  walk: RustFactWalk,
+  expression: Node,
+  sourceFile: SourceFile,
+  expected: TargetTypeRef | undefined,
+): TargetTypeRef | undefined {
+  const resolved = resolveExpressionCarrier(walk, expression, sourceFile, expected);
+  return walk.context.facts.getRuntimeCarrierFact(expression)?.carrier ?? resolved;
+}
+
 function rustExpressionResolutionExpectation(
   ast: AstReader,
   expression: Node,

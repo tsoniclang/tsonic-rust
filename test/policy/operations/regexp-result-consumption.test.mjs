@@ -60,6 +60,12 @@ export function main(): void {
     (whole, _offset, _input) => "[" + whole + "]",
   );
   check(allReplacement === "a[1]b[2]");
+
+  const named = /(?<word>[a-z]+)/.exec("alpha");
+  check(named !== null);
+  if (named !== null && named.groups !== undefined) {
+    check(named.groups["word"] === "alpha");
+  }
 }
 `,
     },
@@ -76,6 +82,7 @@ export function main(): void {
   assert.match(source, /string_try_replace_regexp_native_with/u);
   assert.match(source, /string_try_replace_all_regexp_native_with/u);
   assert.match(source, /string_replace_regexp_with/u);
+  assert.match(source, /regexp_named_groups_get_native/u);
   assert.match(source, /\.len\(\)/u);
   assert.equal(validateGeneratedProject("regexp-result-consumption", result.artifacts, { run: true }).status, 0);
 });

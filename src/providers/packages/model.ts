@@ -81,6 +81,9 @@ export interface RustProviderTypeDefinition {
   readonly exportId: string;
   readonly targetCarrier: TargetTypeRef;
   readonly typeRequirements?: readonly RustProviderTypeParameterRequirement[];
+  readonly objectLiteralConstruction?: {
+    readonly kind: "struct-default";
+  };
 }
 
 export interface RustProviderTypeRow extends RustProviderTypeDefinition {

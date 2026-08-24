@@ -160,6 +160,34 @@ export function main(): void {
   assert.equal(validateGeneratedProject("non-null-projection", result.artifacts, { run: true }).status, 0);
 });
 
+test("nullish coalescing consumes the raw optional result before flow projection", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "indexed_nullish_proof" } },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+import type { int32 } from "@tsonic/core/types.js";
+
+function selected(values: string[], index: int32): string {
+  return values[index] ?? "fallback";
+}
+
+export function main(): void {
+  check(selected(["zero", "one"], 1) === "one");
+  check(selected(["zero", "one"], 4) === "fallback");
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /rt::option_coalesce\([\s\S]*get_number/u);
+  assert.equal(validateGeneratedProject("indexed-nullish-proof", result.artifacts, { run: true }).status, 0);
+});
+
 test("arrow and function-expression callbacks share one exact block-body contract", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     surfaces: ["js"],

@@ -546,7 +546,7 @@ function validateTypeRelations(
 ): void {
   const relatedExports = new Set<string>();
   for (const relation of definition.types ?? []) {
-    requireExactKeys(asRecord(relation), ["exportId", "targetCarrier", "typeRequirements"], "type relation", fail);
+    requireExactKeys(asRecord(relation), ["exportId", "targetCarrier", "typeRequirements", "objectLiteralConstruction"], "type relation", fail);
     requireNonEmpty(relation.exportId, "type relation export id", fail);
     const exported = exportsById.get(relation.exportId)?.declaration;
     if (exported === undefined) {
@@ -558,6 +558,14 @@ function validateTypeRelations(
     relatedExports.add(relation.exportId);
     if (!isRustTargetTypeRef(relation.targetCarrier)) {
       fail(`export '${relation.exportId}' has an invalid closed Rust target carrier`);
+    }
+    if (relation.objectLiteralConstruction !== undefined && (
+      !isClosedMetadata(relation.objectLiteralConstruction) ||
+      Object.keys(relation.objectLiteralConstruction).length !== 1 ||
+      relation.objectLiteralConstruction.kind !== "struct-default" ||
+      relation.targetCarrier.kind !== "target-named"
+    )) {
+      fail(`export '${relation.exportId}' has an invalid Rust object-literal construction contract`);
     }
     const sourceTypeParameters = new Set(
       (exported.typeParameters ?? []).map((parameter) => parameter.name),

@@ -20,6 +20,9 @@ export function printFittedCall(
   forceExpanded = false,
   preferNestedBreak = false,
   inlineArgumentDepth = depth,
+  layout?: {
+    readonly trailingContinuationWidth?: number;
+  },
 ): string {
   const flatArguments = arguments_.map(printRustExpr).join(", ");
   const flat = `${callable}(${flatArguments})`;
@@ -180,8 +183,10 @@ export function printFittedCall(
             depth,
             column + prefix.length,
           );
+      const trailingContinuationWidth = layout?.trailingContinuationWidth ?? 0;
       if (trailingClosure.kind === "closure" &&
-        firstLine(renderedClosure).length + column + prefix.length > rustFormatWidth) {
+        firstLine(renderedClosure).length + column + prefix.length + 1 +
+          trailingContinuationWidth > rustFormatWidth) {
         const blockClosure = printRustClosureFitted(
           trailingClosure,
           depth,

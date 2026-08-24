@@ -32,6 +32,15 @@ function functionExport(moduleSpecifier, name = "run") {
   };
 }
 
+function interfaceExport(moduleSpecifier, name = "Options") {
+  return {
+    id: `${moduleSpecifier}::${name}`,
+    name,
+    kind: "interface",
+    members: [],
+  };
+}
+
 function definition(overrides = {}) {
   return {
     id: "acme-validation",
@@ -266,6 +275,49 @@ test("provider operation carriers are closed and renderable", () => {
       item.label,
     );
   }
+});
+
+test("provider type metadata admits only the closed native struct construction contract", () => {
+  const moduleSpecifier = "@acme/validation";
+  const exported = interfaceExport(moduleSpecifier);
+  const base = {
+    modules: [{
+      moduleSpecifier,
+      providerModuleId: "acme.validation",
+      exports: [exported],
+    }],
+    operations: [],
+    carrierPaths: { "acme.Options": "acme_validation::Options" },
+    types: [{
+      exportId: exported.id,
+      targetCarrier: { kind: "target-named", id: "acme.Options" },
+      objectLiteralConstruction: { kind: "struct-default" },
+    }],
+  };
+  assert.doesNotThrow(() => createRustProviderPackage(definition(base)));
+
+  for (const objectLiteralConstruction of [
+    { kind: "guess" },
+    { kind: "struct-default", fallback: true },
+  ]) {
+    assert.throws(
+      () => createRustProviderPackage(definition({
+        ...base,
+        types: [{ ...base.types[0], objectLiteralConstruction }],
+      })),
+      /invalid Rust object-literal construction contract/u,
+    );
+  }
+  assert.throws(
+    () => createRustProviderPackage(definition({
+      ...base,
+      types: [{
+        ...base.types[0],
+        targetCarrier: int32Carrier,
+      }],
+    })),
+    /invalid Rust object-literal construction contract/u,
+  );
 });
 
 test("provider carriers distinguish owned vectors from nested unsized slices", () => {

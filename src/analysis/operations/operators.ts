@@ -47,7 +47,10 @@ import {
 } from "../facts/keys.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { parseSourceBigIntLiteral } from "../../target-model/syntax/literals.js";
-import { resolveExpressionCarrier } from "../expressions/carriers.js";
+import {
+  resolveExpressionCarrier,
+  resolveExpressionCarrierBeforeFlowReadProjection,
+} from "../expressions/carriers.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { rustSelectedOperationKey } from "../../target-model/facts/selections.js";
 import { rustTargetOperationSupportsAssignment, rustTargetOperationText } from "../facts/target-operation.js";
@@ -124,10 +127,21 @@ export function resolveBinaryOperandCarriers(
     );
     return { left, right, leftNode, rightNode, operatorKind };
   }
-  let left = resolveExpressionCarrier(
-    walk,
-    leftNode,
-    sourceFile,
+  const resolveLeft = (expectation: TargetTypeRef | undefined): TargetTypeRef | undefined =>
+    operatorKind === KindQuestionQuestionToken
+      ? resolveExpressionCarrierBeforeFlowReadProjection(
+          walk,
+          leftNode,
+          sourceFile,
+          expectation,
+        )
+      : resolveExpressionCarrier(
+          walk,
+          leftNode,
+          sourceFile,
+          expectation,
+        );
+  let left = resolveLeft(
     undefined,
   );
   if (left === undefined) {
@@ -136,12 +150,7 @@ export function resolveBinaryOperandCarriers(
       rustResolutionContext(walk, leftNode),
       walk.operationOptions,
     );
-    left = resolveExpressionCarrier(
-      walk,
-      leftNode,
-      sourceFile,
-      leftSemanticCarrier,
-    );
+    left = resolveLeft(leftSemanticCarrier);
   }
   const initialRightExpectation = operatorKind === KindQuestionQuestionToken
     ? rustOptionElementCarrier(left) ?? expected
@@ -158,7 +167,7 @@ export function resolveBinaryOperandCarriers(
     initialRightExpectation,
   );
   if (left === undefined && right !== undefined) {
-    left = resolveExpressionCarrier(walk, leftNode, sourceFile, right);
+    left = resolveLeft(right);
   }
   if (right === undefined && left !== undefined &&
     (operatorKind !== KindEqualsToken || useAssignmentReadCarrier)) {

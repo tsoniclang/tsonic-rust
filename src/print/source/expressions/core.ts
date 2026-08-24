@@ -154,16 +154,18 @@ export function printRustExpr(expression: RustExpr): string {
       return `(${elements}${expression.elements.length === 1 ? "," : ""})`;
     }
     case "struct-literal": {
-      if (expression.fields.length === 0) {
+      if (expression.fields.length === 0 && expression.base === undefined) {
         return `${expression.path} {}`;
       }
-      const fields = expression.fields
+      const members = expression.fields
         .map((field) => {
           const value = printRustExpr(field.value);
           return value === field.name ? field.name : `${field.name}: ${value}`;
-        })
-        .join(", ");
-      return `${expression.path} { ${fields} }`;
+        });
+      if (expression.base !== undefined) {
+        members.push(`..${printRustExpr(expression.base)}`);
+      }
+      return `${expression.path} { ${members.join(", ")} }`;
     }
 
   }
@@ -230,7 +232,10 @@ export function rustExpressionContainsClosure(expression: RustExpr): boolean {
     case "return-expression":
       return expression.expr !== undefined && rustExpressionContainsClosure(expression.expr);
     case "struct-literal":
-      return expression.fields.some((field) => rustExpressionContainsClosure(field.value));
+      return expression.fields.some((field) =>
+        rustExpressionContainsClosure(field.value)) ||
+        (expression.base !== undefined &&
+          rustExpressionContainsClosure(expression.base));
     default:
       return false;
   }
@@ -307,7 +312,9 @@ export function rustExpressionContainsPreferredVerticalMethodChain(expression: R
       return rustExpressionContainsPreferredVerticalMethodChain(expression.body);
     case "struct-literal":
       return expression.fields.some((field) =>
-        rustExpressionContainsPreferredVerticalMethodChain(field.value));
+        rustExpressionContainsPreferredVerticalMethodChain(field.value)) ||
+        (expression.base !== undefined &&
+          rustExpressionContainsPreferredVerticalMethodChain(expression.base));
     default:
       return false;
   }

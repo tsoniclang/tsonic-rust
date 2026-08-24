@@ -5,7 +5,9 @@ import {
   artifactText,
   assertRustTargetRejection,
   compileRust,
+  createRustSession,
   nodejsCapability,
+  rustSourceDiagnostics,
 } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
@@ -105,9 +107,15 @@ import {
 } from "node:fs";
 import { relative, sep } from "node:path";
 
-export function probe(root: string, bytes: Buffer): string {
+export function probe(
+  root: string,
+  bytes: Buffer,
+  mode: number,
+  maxRetries: number,
+  retryDelay: number,
+): string {
   const temporary = mkdtempSync(root);
-  mkdirSync(temporary, true);
+  mkdirSync(temporary, { recursive: true, mode });
   const separator = sep;
   const file = temporary + separator + "payload.bin";
   writeFileSync(file, bytes);
@@ -119,9 +127,14 @@ export function probe(root: string, bytes: Buffer): string {
   const symbolic = lstatSync(file).isSymbolicLink();
   const relativePath = relative(temporary, file);
   const result = text + digest;
-  rmSync(temporary, true);
+  rmSync(temporary, { recursive: true, force: true, maxRetries, retryDelay });
   if (symbolic) return relativePath;
   return result;
+}
+
+export function defaultedOptions(path: string): void {
+  mkdirSync(path, { recursive: true });
+  rmSync(path, { recursive: true, force: true });
 }
 `,
     },
@@ -138,7 +151,42 @@ export function probe(root: string, bytes: Buffer): string {
   assert.match(text, /\.update_buffer_owned\(/u);
   assert.match(text, /\.digest_string\(/u);
   assert.match(text, /\.is_symbolic_link\(\)/u);
+  assert.match(
+    text,
+    /MakeDirectoryOptions\s*\{\s*recursive:\s*Some\(true\),\s*mode:\s*Some\(mode\),\s*\}/u,
+  );
+  assert.match(
+    text,
+    /RmOptions\s*\{\s*recursive:\s*Some\(true\),\s*force:\s*Some\(true\),\s*max_retries:\s*Some\(max_retries\),\s*retry_delay_ms:\s*Some\(retry_delay\),\s*\}/u,
+  );
+  assert.match(
+    text,
+    /MakeDirectoryOptions\s*\{\s*recursive:\s*Some\(true\),\s*\.\.Default::default\(\)\s*\}/u,
+  );
+  assert.match(
+    text,
+    /RmOptions\s*\{\s*recursive:\s*Some\(true\),\s*force:\s*Some\(true\),\s*\.\.Default::default\(\)\s*\}/u,
+  );
   validateGeneratedProject("node-portable-contracts", result.artifacts);
+});
+
+test("provider-private boolean filesystem overloads are absent", async () => {
+  const diagnostics = rustSourceDiagnostics(createRustSession({
+    surfaces: ["js"],
+    capabilities: [await nodejsCapability()],
+    files: {
+      "index.ts": `
+import { mkdirSync, rmSync } from "node:fs";
+
+export function invalid(path: string): void {
+  mkdirSync(path, true);
+  rmSync(path, true);
+}
+`,
+    },
+  }));
+
+  assert.equal([...diagnostics.matchAll(/TS2559/gu)].length, 2);
 });
 
 test("borrowed provider strings materialize ownership only in owned contexts", async () => {

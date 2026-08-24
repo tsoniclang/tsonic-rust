@@ -34,6 +34,7 @@ import { planRustBoundProjectMethodCallable } from "./properties.js";
 import { rustObjectLiteralRequiresDispatchImplementation } from "../objects/object-literal-implementations.js";
 import { rustProjectStateMarker, rustProjectStateType } from "../objects/polymorphism/names.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustEffectiveValueCarrier } from "../../../analysis/facts/value-carrier-queries.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { tupleRustClosureArguments } from "../../target-ast/expressions.js";
 import type { Node } from "@tsonic/tsts";
@@ -44,6 +45,9 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
+  if (fact?.kind === "provider-record-literal") {
+    return planProviderRecordLiteral(node, fact, context);
+  }
   if (fact?.kind === "record-index-literal") {
     return planProjectIndexRecordLiteral(node, fact, context);
   }
@@ -608,6 +612,76 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
     : bindings.length === 0
       ? constructed
       : { kind: "block", bindings, value: constructed };
+}
+
+function planProviderRecordLiteral(
+  node: Node,
+  fact: Extract<
+    RustTargetOperationFact,
+    { readonly kind: "provider-record-literal" }
+  >,
+  context: RustPlanContext,
+): RustExpr | undefined {
+  if (!requireExpressionCarrier(
+    node,
+    fact.resultCarrier,
+    context,
+    "rust.backend.provider-record-literal-carrier",
+  )) {
+    return undefined;
+  }
+  const type = rustTypeFromCarrierInContext(fact.resultCarrier, context);
+  const properties = context.input.program.source.ast.properties(node);
+  if (
+    type?.kind !== "named" ||
+    properties.length !== fact.fields.length ||
+    fact.fields.some((field, index) => field.property !== properties[index]) ||
+    new Set(fact.fields.map((field) => field.targetName)).size !== fact.fields.length
+  ) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.provider-record-literal",
+      "Provider object-literal syntax conflicts with its finalized native struct construction fact.",
+    ));
+    return undefined;
+  }
+  const fields = fact.fields.map((field) => {
+    const carrier = rustEffectiveValueCarrier(
+      context.input.program.facts,
+      field.expression,
+    );
+    const value = planExpression(field.expression, context);
+    return carrier === undefined ||
+        !rustTargetTypeRefEquals(carrier, field.storageCarrier) ||
+        value === undefined
+      ? undefined
+      : { name: field.targetName, value };
+  });
+  if (fields.some((field) => field === undefined)) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.provider-record-field",
+      "Provider object-literal field values conflict with their finalized storage carriers.",
+    ));
+    return undefined;
+  }
+  return {
+    kind: "struct-literal",
+    path: type.path,
+    fields: fields as readonly {
+      readonly name: string;
+      readonly value: RustExpr;
+    }[],
+    ...(fact.completion === "default"
+      ? {
+          base: {
+            kind: "call" as const,
+            path: "Default::default",
+            args: [],
+          },
+        }
+      : {}),
+  };
 }
 
 function planProjectIndexRecordLiteral(
