@@ -210,6 +210,7 @@ function printFittedLogicalOperand(
       selectedColumn,
       undefined,
       grammarPosition,
+      "logical-chain-operand",
     );
   return parenthesized ? `(${rendered})` : rendered;
 }
