@@ -595,26 +595,34 @@ export function printRustExprFitted(
           grammarPosition,
         );
       }
-      const expandedLeftCall = expression.left.kind === "call"
-        ? printExpandedBinaryLeftCall(
-            expression.left,
+      const expandedLeftCall = expression.left.kind === "call" &&
+          expression.left.args.length > 1 &&
+          !rustExpressionContainsStatementBlock(expression.left) &&
+          rustBinaryCallAllowsArgumentExpansion(expression.left) &&
+          (rustBinaryOperandPrefersExpandedCall(expression.left) ||
+            !renderedFits(printRustExpr(expression.left), column))
+        ? printFittedCall(
             printRustDirectCallTarget(expression.left),
-            expression.operator,
-            expression.right,
+            expression.left.args,
             depth,
             column,
+            true,
           )
-        : expression.left.kind === "associated-call"
-          ? printExpandedBinaryLeftCall(
-              expression.left,
+        : expression.left.kind === "associated-call" &&
+            expression.left.args.length > 1 &&
+            !rustExpressionContainsStatementBlock(expression.left) &&
+            rustBinaryCallAllowsArgumentExpansion(expression.left) &&
+            (rustBinaryOperandPrefersExpandedCall(expression.left) ||
+              !renderedFits(printRustExpr(expression.left), column))
+          ? printFittedCall(
               printRustAssociatedCallTarget(
                 expression.left,
                 printRustAssociatedCallOwner(expression.left),
               ),
-              expression.operator,
-              expression.right,
+              expression.left.args,
               depth,
               column,
+              true,
             )
           : undefined;
       const renderedLeft = expandedLeftCall ?? (expression.left.kind === "try" &&
@@ -854,46 +862,4 @@ function rustBinaryCallAllowsArgumentExpansion(
   const trailing = expression.args[expression.args.length - 1];
   return trailing?.kind !== "closure-block" &&
     (trailing?.kind !== "closure" || rustFormatArgumentIsAtomic(trailing.body));
-}
-
-function printExpandedBinaryLeftCall(
-  expression: Extract<RustExpr, { readonly kind: "call" | "associated-call" }>,
-  callable: string,
-  operator: string,
-  right: RustExpr,
-  depth: number,
-  column: number,
-): string | undefined {
-  if (expression.args.length <= 1 ||
-    rustExpressionContainsStatementBlock(expression)) {
-    return undefined;
-  }
-  const flatLeft = printRustExpr(expression);
-  const leftRequiresExpansion = rustBinaryCallAllowsArgumentExpansion(expression) &&
-    (rustBinaryOperandPrefersExpandedCall(expression) ||
-      !renderedFits(flatLeft, column));
-  const renderedRight = printBinaryOperand(right, operator, true);
-  const candidate = printFittedCall(
-    callable,
-    expression.args,
-    depth,
-    column,
-    true,
-    false,
-    depth,
-    {
-      trailingContinuationWidth: ` ${operator} ${renderedRight}`.length,
-    },
-  );
-  if (leftRequiresExpansion) {
-    return candidate;
-  }
-  const trailing = expression.args[expression.args.length - 1];
-  if (trailing?.kind !== "closure" || candidate.includes("\n") === false ||
-    renderedRight.includes("\n") ||
-    renderedFits(`${flatLeft} ${operator} ${renderedRight}`, column)) {
-    return undefined;
-  }
-  const joined = appendToLastLine(candidate, ` ${operator} ${renderedRight}`);
-  return renderedFits(joined, column) ? candidate : undefined;
 }

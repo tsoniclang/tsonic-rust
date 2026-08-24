@@ -394,7 +394,7 @@ test("long calls on the left of comparisons expand before the operator", () => {
   );
 });
 
-test("trailing closures expand to preserve comparison attachment", () => {
+test("comparison operators continue after fitted trailing-closure calls", () => {
   const source = printRustSourceFile({
     headerComment,
     items: [{
@@ -443,7 +443,7 @@ test("trailing closures expand to preserve comparison attachment", () => {
 
   assert.match(
     source,
-    /rt::option_coalesce\(parts\.get_number\(0\.0\), std::convert::identity, \|\| \{\n {12}String::from\(""\)\n {8}\}\) == "a",/u,
+    /rt::option_coalesce\(parts\.get_number\(0\.0\), std::convert::identity, \|\| String::from\(""\)\)\n {12}== "a",/u,
   );
 });
 
