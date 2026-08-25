@@ -11,7 +11,7 @@ export function printRustPattern(pattern: RustPattern): string {
     case "wildcard":
       return "_";
     case "binding":
-      return pattern.name;
+      return `${pattern.mode === "ref" ? "ref " : pattern.mode === "ref-mut" ? "ref mut " : ""}${pattern.mutable === true ? "mut " : ""}${pattern.name}${pattern.subpattern === undefined ? "" : ` @ ${printRustPattern(pattern.subpattern)}`}`;
     case "path":
       return pattern.path;
     case "tuple": {
@@ -20,6 +20,28 @@ export function printRustPattern(pattern: RustPattern): string {
     }
     case "tuple-variant":
       return `${pattern.path}(${pattern.elements.map(printRustPattern).join(", ")})`;
+    case "struct": {
+      const fields = pattern.fields.map((field) => {
+        const selected = printRustPattern(field.pattern);
+        return selected === field.name ? field.name : `${field.name}: ${selected}`;
+      });
+      if (pattern.rest) fields.push("..");
+      return `${pattern.path} { ${fields.join(", ")} }`;
+    }
+    case "slice": {
+      const elements = [
+        ...pattern.prefix.map(printRustPattern),
+        ...(pattern.rest === undefined ? [] : [`${printRustPattern(pattern.rest)} @ ..`]),
+        ...pattern.suffix.map(printRustPattern),
+      ];
+      return `[${elements.join(", ")}]`;
+    }
+    case "reference":
+      return `&${pattern.mutable ? "mut " : ""}${printRustPattern(pattern.pattern)}`;
+    case "or":
+      return pattern.patterns.map(printRustPattern).join(" | ");
+    case "literal":
+      return printRustExpr(pattern.expression);
   }
 }
 

@@ -61,11 +61,11 @@ export function finalizeRustRegExpReplacementCallbackContract(
   return Object.freeze({
     ...evidence,
     sourceCarrier,
-    targetCarrier: {
-      kind: "closure" as const,
-      args: [rustJsArrayTargetType(rustJsValueTargetType())],
+    targetCarrier: rustClosureTargetType({
+      callTrait: "fn-mut",
+      parameters: [rustJsArrayTargetType(rustJsValueTargetType())],
       result: stringCarrier(evidence.lane),
-    },
+    }),
   });
 }
 
@@ -148,7 +148,11 @@ function replacementCallbackEvidence(
   }
   return Object.freeze({
     lane,
-    sourceCarrier: rustClosureTargetType(parameterCarriers, expectedString),
+    sourceCarrier: rustClosureTargetType({
+      callTrait: "fn-mut",
+      parameters: parameterCarriers,
+      result: expectedString,
+    }),
     projections: Object.freeze(projections),
   });
 }

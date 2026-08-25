@@ -1,6 +1,10 @@
 import { acceptRustPolicy } from "../../../../policy/operations/contracts.js";
-import { acceptSelectedCall, mapSelectedTargetTypeArguments, selectRustOptionalCallResult } from "./instantiation.js";
-import { defaultValueFactKey, flowStateFactKey } from "@tsonic/tsts";
+import {
+  acceptSelectedCall,
+  selectedCallSingleTypeGenerics,
+  selectRustOptionalCallResult,
+} from "./instantiation.js";
+import { defaultValueFactKey } from "@tsonic/tsts";
 import { finalizeRustCallbackOperation } from "../callbacks.js";
 import {
   applyRustRegExpReplacementCallbackConversion,
@@ -10,7 +14,6 @@ import {
 import { rejectSelectedOperation } from "../result.js";
 import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution.js";
 import { rustSelectedCallKey, rustSelectedOperationKey } from "../../../../target-model/facts/selections.js";
-import { rustTargetOperationFactKey } from "../../../facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { selectedCallArgumentNodes, selectedCallCalleeDeclaration, selectedCallCalleeSymbol } from "../operators.js";
 import { selectRustTypedLocationCall } from "../../typed-locations.js";
@@ -23,10 +26,14 @@ import type {
 } from "../../../../policy/operations/contracts.js";
 import type { Node, ProviderDeclarationIdentity, SourceCallMarkerKind } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "../model.js";
-import type { RustProviderOperationTemplate, RustTargetOperationFact } from "../../../facts/keys.js";
+import {
+  rustTargetOperationFactKey,
+  type RustProviderOperationTemplate,
+  type RustTargetOperationFact,
+} from "../../../facts/keys.js";
 import type { RustTargetMember, TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustRegExpReplacementCallbackContract } from "../regexp-replacement-callback.js";
-import { rustJsStringTargetType, rustStringTargetType } from "../../../../target-model/types/index.js";
+import { rustJsStringTargetType, rustStringTargetType, rustTypeArgument } from "../../../../target-model/types/index.js";
 
 export interface RustPreparedDeferredCheckedCall {
   readonly sourceName: string;
@@ -257,13 +264,13 @@ function replaceRustInferCarrier(
   template: TargetTypeRef,
   replacement: TargetTypeRef,
 ): TargetTypeRef {
-  if (template.kind === "opaque" && template.id === "tsonic.rust.infer") {
+  if (template.kind === "inference-variable") {
     return replacement;
   }
   if (template.kind === "function-pointer" || template.kind === "closure") {
     return {
       ...template,
-      args: template.args.map((argument) =>
+      parameters: template.parameters.map((argument) =>
         replaceRustInferCarrier(argument, replacement)),
       result: replaceRustInferCarrier(template.result, replacement),
     };
@@ -328,70 +335,12 @@ export function mapRustSourceMarkerCall(
   if (typedLocation !== undefined) {
     return typedLocation;
   }
-  if (
-    markerName !== "shared-borrow" &&
-    markerName !== "mutable-borrow" &&
-    markerName !== "move"
-  ) {
-    return rejectSelectedOperation(
-      request.source.call,
-      context,
-      "RUST_SOURCE_MARKER_UNSUPPORTED",
-      `Rust does not support selected source marker '${markerName}' in this operation lane.`,
-    );
-  }
-  const flow = context.facts.resolve(request.source.call, flowStateFactKey) ??
-    context.facts.get(request.source.call, flowStateFactKey);
-  const expectedState = markerName === "shared-borrow"
-    ? "borrowed-shared"
-    : markerName === "mutable-borrow" ? "borrowed-mut" : "moved";
-  if (flow?.state !== expectedState) {
-    return rejectSelectedOperation(
-      request.source.call,
-      context,
-      "RUST_FLOW_MARKER_FACT_NOT_PROVEN",
-      `Selected Rust flow marker '${markerName}' requires finalized TSTS flow state '${expectedState}'.`,
-    );
-  }
-  const [argument] = selectedCallArgumentNodes(request);
-  const carrier = resolveRustTargetTypeRef(request.source.sourceResultType ?? argument, context, options) ??
-    resolveRustTargetTypeRef(argument, context, options);
-  if (argument === undefined || carrier === undefined) {
-    return rejectSelectedOperation(
-      request.source.call,
-      context,
-      "RUST_FLOW_MARKER_CARRIER_NOT_PROVEN",
-      `Selected Rust flow marker '${markerName}' has no closed target carrier from TSTS evidence.`,
-    );
-  }
-  const fact: RustTargetOperationFact = {
-    kind: "flow-marker",
-    operationId: `tsonic.rust.flow.${expectedState}`,
-    state: expectedState,
-  };
-  const evidence = [{ message: `rust selected flow marker ${markerName}` }];
-  context.facts.set(request.source.call, rustTargetOperationFactKey, fact, evidence);
-  return acceptRustPolicy({
-    selectedSignature: {
-      member: {
-        id: fact.operationId,
-        sourceName: markerName,
-        targetName: "marker",
-        kind: "method",
-        parameters: [{ name: "value", type: carrier, passingMode: "by-value" }],
-        returnType: carrier,
-        providerDeclaration: provider,
-      },
-      providerDeclaration: provider,
-      ...(request.source.selectedSignature === undefined ? {} : { sourceSignature: request.source.selectedSignature }),
-      ...(request.sourceSelectedDeclaration === undefined ? {} : { sourceDeclaration: request.sourceSelectedDeclaration }),
-      ...(selectedCallCalleeSymbol(request) === undefined ? {} : { sourceCalleeSymbol: selectedCallCalleeSymbol(request) }),
-      ...(selectedCallCalleeDeclaration(request) === undefined ? {} : { sourceCalleeDeclaration: selectedCallCalleeDeclaration(request) }),
-      ...(request.source.sourceResultType === undefined ? {} : { sourceReturnType: request.source.sourceResultType }),
-      sourceArgumentBindings: request.source.sourceArgumentBindings,
-      sourceSelectedSignatureParameters: request.source.sourceSelectedSignatureParameters,
-    },
-  }, evidence);
+  return rejectSelectedOperation(
+    request.source.call,
+    context,
+    "RUST_SOURCE_MARKER_UNSUPPORTED",
+    `Rust does not support selected source marker '${markerName}' in this operation lane.`,
+  );
 }
 
 function mapRustDefaultValueCall(
@@ -405,16 +354,31 @@ function mapRustDefaultValueCall(
     context.facts.get(request.source.call, defaultValueFactKey);
   const resultCarrier = resolveRustTargetTypeRef(sourceFact?.type, context, options);
   const sourceTypeArguments = request.source.sourceSelectedMethodTypeArguments;
-  const targetTypeArguments = mapSelectedTargetTypeArguments(request, context, options);
+  const selectedTypeCarrier = sourceTypeArguments?.[0] === undefined
+    ? undefined
+    : resolveRustTargetTypeRef(
+        sourceTypeArguments[0].explicitTypeNode ?? sourceTypeArguments[0].selectedType,
+        context,
+        options,
+      );
   if (sourceArguments.length !== 0 || sourceFact === undefined || resultCarrier === undefined ||
     sourceTypeArguments?.length !== 1 ||
-    targetTypeArguments === undefined || targetTypeArguments.length !== 1 ||
-    !rustTargetTypeRefEquals(targetTypeArguments[0], resultCarrier)) {
+    sourceTypeArguments[0]?.typeParameter === undefined ||
+    !rustTargetTypeRefEquals(selectedTypeCarrier, resultCarrier)) {
     return rejectSelectedOperation(
       request.source.call,
       context,
       "RUST_DEFAULT_VALUE_EVIDENCE_NOT_PROVEN",
       "defaultValue<T>() requires one exact source-core type fact, one matching selected type argument, no arguments, and one matching Rust result carrier.",
+    );
+  }
+  const memberGenerics = selectedCallSingleTypeGenerics(request, context);
+  if (memberGenerics === undefined) {
+    return rejectSelectedOperation(
+      request.source.call,
+      context,
+      "RUST_DEFAULT_VALUE_GENERIC_CONTRACT_NOT_PROVEN",
+      "defaultValue<T>() has no exact selected source type-parameter contract.",
     );
   }
   const operationId = "tsonic.rust.default-value";
@@ -446,14 +410,14 @@ function mapRustDefaultValueCall(
     kind: "method",
     static: true,
     parameters: [],
+    generics: memberGenerics,
     returnType: resultCarrier,
-    typeParameters: [{ name: sourceTypeArguments[0]!.typeParameterName }],
     providerDeclaration: provider,
   };
   const selectedSignature = {
     member,
     providerDeclaration: provider,
-    targetTypeArguments,
+    targetGenericArguments: [rustTypeArgument(resultCarrier)],
     ...(request.source.selectedSignature === undefined
       ? {}
       : { sourceSignature: request.source.selectedSignature }),

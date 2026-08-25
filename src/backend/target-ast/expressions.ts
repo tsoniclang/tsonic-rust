@@ -107,15 +107,15 @@ export function tupleRustClosureArguments(
       ? {
           kind: "dereference" as const,
           pointer: {
-            kind: "field" as const,
+            kind: "tuple-field" as const,
             receiver: { kind: "path" as const, path: argumentName },
-            name: String(index),
+            index,
           },
         }
       : {
-          kind: "field" as const,
+          kind: "tuple-field" as const,
           receiver: { kind: "path" as const, path: argumentName },
-          name: String(index),
+          index,
         },
   }));
   const body = expression.kind === "closure"
@@ -181,6 +181,7 @@ export function rustExpressionContainsStatementBlock(expression: RustExpr): bool
       return rustExpressionContainsStatementBlock(expression.receiver) ||
         expression.args.some(rustExpressionContainsStatementBlock);
     case "field":
+    case "tuple-field":
       return rustExpressionContainsStatementBlock(expression.receiver);
     case "index":
       return rustExpressionContainsStatementBlock(expression.receiver) ||

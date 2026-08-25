@@ -52,16 +52,22 @@ import {
   rustGeneratorFactKey,
   rustModuleBindingFactKey,
   rustSourceCallableReturnFactKey,
+  rustSourceParameterAbiFactKey,
 } from "../facts/keys.js";
 import { appendRustDiagnostic, boolCarrier, rustResolutionContext } from "../program/walk.js";
 import { collectDescendantsOfKind, recordForOfFacts } from "../operations/inputs.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { reconcileRequiredCarrier, resolveExpressionCarrier } from "../expressions/carriers.js";
-import { recordBindingPatternFacts } from "../declarations/types-and-bindings.js";
+import {
+  recordBindingPatternFacts,
+  rustArgumentModeForSourceContract,
+  validateOwnershipExpressionAgainstContract,
+} from "../declarations/types-and-bindings.js";
 import { recordCallableValueSignatureForDeclaration } from "../callables/signatures.js";
 import { recordThrowFacts } from "../resources/suspension.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
+import { rustSourceOwnershipContractForType } from "../../policy/ownership/source-callable-abi.js";
 import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
@@ -116,52 +122,81 @@ export function recordVariableStatementFacts(walk: RustFactWalk, statement: Node
     return;
   }
   for (const declaration of declarationSlots as readonly Node[]) {
-    recordCallableValueSignatureForDeclaration(walk, declaration);
-    const nativeCallable = moduleLevel
-      ? walk.context.facts.get(declaration, rustModuleBindingFactKey) ??
-        walk.context.facts.resolve(declaration, rustModuleBindingFactKey)
-      : undefined;
-    if (nativeCallable?.storage === "native-callable") {
-      recordNativeModuleFunctionBodyFacts(
+    recordVariableDeclarationFacts(walk, declaration, sourceFile, moduleLevel);
+  }
+}
+
+function recordVariableDeclarationFacts(
+  walk: RustFactWalk,
+  declaration: Node,
+  sourceFile: SourceFile,
+  moduleLevel: boolean,
+): void {
+  recordCallableValueSignatureForDeclaration(walk, declaration);
+  const nativeCallable = moduleLevel
+    ? walk.context.facts.get(declaration, rustModuleBindingFactKey) ??
+      walk.context.facts.resolve(declaration, rustModuleBindingFactKey)
+    : undefined;
+  if (nativeCallable?.storage === "native-callable") {
+    recordNativeModuleFunctionBodyFacts(
+      walk,
+      nativeCallable.callableDeclaration,
+      sourceFile,
+    );
+    return;
+  }
+  const annotated = resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, declaration));
+  const predeclared = walk.context.facts.get(declaration, rustRuntimeCarrierKey)?.carrier ??
+    walk.context.facts.resolve(declaration, rustRuntimeCarrierKey)?.carrier;
+  const initializer = Node_Initializer(walk.context.ast, declaration);
+  const initializerCarrier = initializer === undefined
+    ? undefined
+    : resolveExpressionCarrier(walk, initializer, sourceFile, annotated ?? predeclared);
+  if (initializer !== undefined) {
+    const annotatedContract = rustSourceOwnershipContractForTypeNode(walk, declaration);
+    if (annotatedContract !== "ordinary") {
+      validateOwnershipExpressionAgainstContract(
         walk,
-        nativeCallable.callableDeclaration,
-        sourceFile,
+        initializer,
+        rustArgumentModeForSourceContract(annotatedContract),
+        annotatedContract,
       );
-      continue;
-    }
-    const annotated = resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, declaration));
-    const predeclared = walk.context.facts.get(declaration, rustRuntimeCarrierKey)?.carrier ??
-      walk.context.facts.resolve(declaration, rustRuntimeCarrierKey)?.carrier;
-    const initializer = Node_Initializer(walk.context.ast, declaration);
-    const initializerCarrier = initializer === undefined
-      ? undefined
-      : resolveExpressionCarrier(walk, initializer, sourceFile, annotated ?? predeclared);
-    const effective = annotated ?? initializerCarrier ?? predeclared;
-    if (effective !== undefined) {
-      setCarrierFact(walk, declaration, effective);
-      const name = Node_Name(walk.context.ast, declaration);
-      const nameKind = name === undefined ? "" : walk.context.ast.kindName(name);
-      if (name !== undefined && (nameKind === KindArrayBindingPattern || nameKind === KindObjectBindingPattern) &&
-        !recordBindingPatternFacts(walk, name, effective)) {
-        appendRustDiagnostic(
-          walk,
-          "RUST_BINDING_PATTERN_NOT_CLOSED",
-          "Binding pattern has no total Rust projection from its exact finalized source carrier.",
-          name,
-          ["target.capability=rust.binding-pattern"],
-        );
-      }
-      const declarationKind = walk.context.ast.variableDeclarationKind(declaration);
-      if (moduleLevel && (declarationKind === "const" || declarationKind === "let" || declarationKind === "var")) {
-        walk.context.facts.set(
-          declaration,
-          rustModuleBindingFactKey,
-          walk.moduleBindings.classifyValue(declaration, declarationKind, effective),
-          [{ message: "rust finalized project module binding storage" }],
-        );
-      }
     }
   }
+  const effective = annotated ?? initializerCarrier ?? predeclared;
+  if (effective === undefined) return;
+  setCarrierFact(walk, declaration, effective);
+  const name = Node_Name(walk.context.ast, declaration);
+  const nameKind = name === undefined ? "" : walk.context.ast.kindName(name);
+  if (name !== undefined && (nameKind === KindArrayBindingPattern || nameKind === KindObjectBindingPattern) &&
+    !recordBindingPatternFacts(walk, name, effective)) {
+    appendRustDiagnostic(
+      walk,
+      "RUST_BINDING_PATTERN_NOT_CLOSED",
+      "Binding pattern has no total Rust projection from its exact finalized source carrier.",
+      name,
+      ["target.capability=rust.binding-pattern"],
+    );
+  }
+  const declarationKind = walk.context.ast.variableDeclarationKind(declaration);
+  if (moduleLevel && (declarationKind === "const" || declarationKind === "let" || declarationKind === "var")) {
+    walk.context.facts.set(
+      declaration,
+      rustModuleBindingFactKey,
+      walk.moduleBindings.classifyValue(declaration, declarationKind, effective),
+      [{ message: "rust finalized project module binding storage" }],
+    );
+  }
+}
+
+function rustSourceOwnershipContractForTypeNode(
+  walk: RustFactWalk,
+  declaration: Node,
+): import("../../target-model/operations/model.js").RustSourceParameterContract {
+  return rustSourceOwnershipContractForType(
+    Node_Type(walk.context.ast, declaration),
+    rustResolutionContext(walk, declaration),
+  );
 }
 
 export function recordExportAssignmentFacts(
@@ -274,14 +309,41 @@ export function recordStatementFacts(
   if (kind === KindReturnStatement) {
     const expression = Node_Expression(walk.context.ast, statement);
     if (expression !== undefined) {
+      const returnContract = walk.currentCallableDeclaration === undefined
+        ? undefined
+        : walk.context.facts.get(
+            walk.currentCallableDeclaration,
+            rustSourceCallableReturnFactKey,
+          ) ?? walk.context.facts.resolve(
+            walk.currentCallableDeclaration,
+            rustSourceCallableReturnFactKey,
+          );
+      const returnMode = returnContract?.sourceContract === "shared-reference"
+        ? "ref"
+        : returnContract?.sourceContract === "mutable-reference"
+          ? "mut-ref"
+          : "value";
+      validateOwnershipExpressionAgainstContract(
+        walk,
+        expression,
+        returnMode,
+        returnContract?.sourceContract,
+      );
       const resolved = resolveExpressionCarrier(
         walk,
         expression,
         sourceFile,
         returnCarrier,
       );
-      if (returnCarrier !== undefined && resolved !== undefined &&
-        !reconcileRequiredCarrier(walk, expression, resolved, returnCarrier)) {
+      const resolvedAbiCarrier = walk.context.facts.get(
+        expression,
+        rustSourceParameterAbiFactKey,
+      )?.parameterCarrier ?? walk.context.facts.resolve(
+        expression,
+        rustSourceParameterAbiFactKey,
+      )?.parameterCarrier ?? resolved;
+      if (returnCarrier !== undefined && resolvedAbiCarrier !== undefined &&
+        !reconcileRequiredCarrier(walk, expression, resolvedAbiCarrier, returnCarrier)) {
         appendRustDiagnostic(
           walk,
           "RUST_RETURN_CARRIER_MISMATCH",
@@ -365,15 +427,7 @@ export function recordStatementFacts(
     const initializer = ForStatement_Initializer(walk.context.ast, statement);
     if (initializer !== undefined) {
       for (const declaration of collectDescendantsOfKind(walk, initializer, KindVariableDeclaration)) {
-        const annotated = resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, declaration));
-        const declarationInitializer = Node_Initializer(walk.context.ast, declaration);
-        const initializerCarrier = declarationInitializer === undefined
-          ? undefined
-          : resolveExpressionCarrier(walk, declarationInitializer, sourceFile, annotated);
-        const effective = annotated ?? initializerCarrier;
-        if (effective !== undefined) {
-          setCarrierFact(walk, declaration, effective);
-        }
+        recordVariableDeclarationFacts(walk, declaration, sourceFile, false);
       }
     }
     const condition = ForStatement_Condition(walk.context.ast, statement);

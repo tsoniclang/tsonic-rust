@@ -61,12 +61,12 @@ export function selectRustSourceValueConversion(
       variantName: matchingUnionVariants[0]!.name,
     });
   }
-  if (source.kind === "pointer" && target.kind === "pointer" &&
-    source.mutability === "mut" && target.mutability === "const" &&
-    rustTargetTypeRefEquals(source.pointee, target.pointee)) {
+  if (source.kind === "raw-pointer" && target.kind === "raw-pointer" &&
+    source.mutable && !target.mutable &&
+    rustTargetTypeRefEquals(source.target, target.target)) {
     return Object.freeze({
       kind: "raw-pointer-mut-to-const",
-      pointee: source.pointee,
+      pointee: source.target,
     });
   }
   if (rustTargetTypeRefEquals(target, jsValueCarrier)) {

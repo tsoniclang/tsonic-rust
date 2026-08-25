@@ -1,251 +1,191 @@
-import {
-  hasInnerKind,
-  isRecord,
-  normalizeAbi,
-  requireArray,
-  requireBoolean,
-  requireInnerRecord,
-  requireRecord,
-  requireString,
-} from "../rustdoc-schema.js";
-import { normalizeTraitDispatch, normalizeTypeParameters } from "./normalization.js";
-import type { RustCompilerType, RustCompilerTypeRequirement } from "../model.js";
-import type { RustdocDocument } from "../rustdoc-schema.js";
+import type {
+  RustCompilerAssociatedConstraint,
+  RustCompilerBound,
+  RustCompilerConstExpression,
+  RustCompilerGenericArgument,
+  RustCompilerGenericParameter,
+  RustCompilerGenerics,
+  RustCompilerLifetime,
+  RustCompilerTraitReference,
+  RustCompilerType,
+} from "../model.js";
 
-export function normalizeType(
-  document: RustdocDocument,
-  raw: unknown,
-  resolvingAliases: ReadonlySet<string> = new Set(),
-): RustCompilerType {
-  const type = requireRecord(raw, "Rust type");
-  if (typeof type.primitive === "string") {
-    return Object.freeze({ kind: "primitive", name: type.primitive });
-  }
-  if (typeof type.generic === "string") {
-    return Object.freeze(type.generic === "Self"
-      ? { kind: "self" as const }
-      : { kind: "generic" as const, name: type.generic });
-  }
-  if (Array.isArray(type.tuple)) {
-    return Object.freeze({ kind: "tuple", elements: Object.freeze(type.tuple.map((element) => normalizeType(document, element, resolvingAliases))) });
-  }
-  if (type.slice !== undefined) {
-    return Object.freeze({ kind: "slice", element: normalizeType(document, type.slice, resolvingAliases) });
-  }
-  if (isRecord(type.array)) {
-    const length = Number(type.array.len);
-    if (!Number.isSafeInteger(length) || length < 0) {
-      throw new Error(`Rust array length '${String(type.array.len)}' is not a non-negative integer.`);
-    }
-    return Object.freeze({ kind: "array", element: normalizeType(document, type.array.type, resolvingAliases), length });
-  }
-  if (isRecord(type.borrowed_ref)) {
-    const lifetime = type.borrowed_ref.lifetime;
-    if (lifetime !== null && typeof lifetime !== "string") {
-      throw new Error("Rust reference lifetime has no stable rustdoc representation.");
-    }
-    return Object.freeze({
-      kind: "reference",
-      mutable: type.borrowed_ref.is_mutable === true,
-      ...(lifetime === null ? {} : { lifetime }),
-      target: normalizeType(document, type.borrowed_ref.type, resolvingAliases),
-    });
-  }
-  if (isRecord(type.raw_pointer)) {
-    return Object.freeze({
-      kind: "raw-pointer",
-      mutable: type.raw_pointer.is_mutable === true,
-      target: normalizeType(document, type.raw_pointer.type, resolvingAliases),
-    });
-  }
-  if (isRecord(type.function_pointer)) {
-    const signature = requireRecord(type.function_pointer.sig, "Rust function pointer signature");
-    if (signature.is_c_variadic !== false) {
-      throw new Error("Variadic Rust function-pointer types have no closed source signature.");
-    }
-    const genericParameters = requireArray(
-      type.function_pointer.generic_params,
-      "Rust function pointer generic parameters",
-    );
-    if (genericParameters.length !== 0) {
-      throw new Error("Generic Rust function-pointer types have no closed source signature.");
-    }
-    const header = requireRecord(
-      type.function_pointer.header,
-      "Rust function pointer header",
-    );
-    const inputs = requireArray(signature.inputs, "Rust function pointer inputs").map(
-      (input, index) => {
-        if (!Array.isArray(input) || input.length !== 2) {
-          throw new Error(`Rust function pointer input ${index} has an invalid rustdoc shape.`);
+export interface RustCompilerSubstitutions {
+  readonly types: ReadonlyMap<string, RustCompilerType>;
+  readonly lifetimes: ReadonlyMap<string, RustCompilerLifetime>;
+  readonly consts: ReadonlyMap<string, RustCompilerConstExpression>;
+}
+
+export const emptyRustCompilerSubstitutions: RustCompilerSubstitutions = Object.freeze({
+  types: new Map(),
+  lifetimes: new Map(),
+  consts: new Map(),
+});
+
+export function substituteRustCompilerGenerics(
+  generics: RustCompilerGenerics,
+  substitutions: RustCompilerSubstitutions,
+): RustCompilerGenerics {
+  return Object.freeze({
+    parameters: Object.freeze(generics.parameters.map((parameter) =>
+      substituteRustCompilerGenericParameter(parameter, substitutions))),
+    wherePredicates: Object.freeze(generics.wherePredicates.map((predicate) => {
+      if (predicate.kind === "lifetime") {
+        return Object.freeze({
+          ...predicate,
+          lifetime: substituteRustCompilerLifetime(predicate.lifetime, substitutions),
+          outlives: Object.freeze(predicate.outlives.map((lifetime) =>
+            substituteRustCompilerLifetime(lifetime, substitutions))),
+        });
+      }
+      if (predicate.kind === "equality") {
+        const projection = substituteRustCompilerType(predicate.projection, substitutions);
+        if (projection.kind !== "associated-type") {
+          throw new Error("Rust generic equality substitution changed its projection kind.");
         }
-        return normalizeType(document, input[1], resolvingAliases);
-      },
-    );
-    return Object.freeze({
-      kind: "function-pointer",
-      parameters: Object.freeze(inputs),
-      result: signature.output === null
-        ? Object.freeze({ kind: "unit" as const })
-        : normalizeType(document, signature.output, resolvingAliases),
-      abi: normalizeAbi(header.abi, "Rust function pointer ABI"),
-      unsafe: requireBoolean(
-        header.is_unsafe,
-        "Rust function pointer safety",
-      ),
-    });
-  }
-  if (isRecord(type.qualified_path)) {
-    const qualified = type.qualified_path;
-    const associatedArguments = normalizePathArguments(
-      document,
-      qualified.args,
-      resolvingAliases,
-    );
-    if (associatedArguments.length !== 0) {
-      throw new Error("Generic associated Rust types have no closed provider type contract.");
-    }
-    return Object.freeze({
-      kind: "associated-type",
-      owner: normalizeType(document, qualified.self_type, resolvingAliases),
-      trait: normalizeTraitDispatch(document, qualified.trait, resolvingAliases),
-      name: requireString(qualified.name, "Rust associated type name"),
-    });
-  }
-  if (isRecord(type.resolved_path)) {
-    const id = String(type.resolved_path.id);
-    const pathRecord = requireRecord(document.paths[id], `Rust resolved path '${id}'`);
-    const path = requireArray(pathRecord.path, `Rust resolved path '${id}' segments`);
-    if (path.some((segment) => typeof segment !== "string") || path.length < 2) {
-      throw new Error(`Rust resolved path '${id}' has no canonical crate-qualified path.`);
-    }
-    const args = normalizePathArguments(document, type.resolved_path.args, resolvingAliases);
-    const resolvedItem = document.index[id];
-    if (isRecord(resolvedItem) && hasInnerKind(resolvedItem, "type_alias")) {
-      if (resolvingAliases.has(id)) {
-        throw new Error(`Rust type alias '${id}' is recursively referenced while computing its canonical target type.`);
+        return Object.freeze({
+          ...predicate,
+          projection,
+          value: substituteRustCompilerType(predicate.value, substitutions),
+        });
       }
-      const alias = requireInnerRecord(resolvedItem, "type_alias", `Rust type alias '${id}'`);
-      const generics = requireRecord(alias.generics, `Rust type alias '${id}' generics`);
-      const parameters = normalizeTypeParameters(document, generics);
-      if (parameters.length !== args.length) {
-        throw new Error(`Rust type alias '${id}' received ${args.length} type arguments for ${parameters.length} parameters.`);
-      }
-      const nextResolving = new Set(resolvingAliases);
-      nextResolving.add(id);
-      const target = normalizeType(document, alias.type, nextResolving);
-      return substituteRustCompilerType(
-        target,
-        new Map(parameters.map((parameter, index) => [parameter.name, args[index]!])),
-      );
-    }
-    return Object.freeze({
-      kind: "path",
-      crateName: path[0] as string,
-      modulePath: Object.freeze((path.slice(1, -1) as string[])),
-      name: path[path.length - 1] as string,
-      typeArguments: args,
-    });
-  }
-  throw new Error(`Rust type has no supported closed representation.`);
+      return Object.freeze({
+        ...predicate,
+        type: substituteRustCompilerType(predicate.type, substitutions),
+        bounds: Object.freeze(predicate.bounds.map((bound) =>
+          substituteRustCompilerBound(bound, substitutions))),
+      });
+    })),
+  });
 }
 
-
-export function normalizePathArguments(
-  document: RustdocDocument,
-  raw: unknown,
-  resolvingAliases: ReadonlySet<string>,
-): readonly RustCompilerType[] {
-  if (raw === null || raw === undefined) {
-    return Object.freeze([]);
+function substituteRustCompilerGenericParameter(
+  parameter: RustCompilerGenericParameter,
+  substitutions: RustCompilerSubstitutions,
+): RustCompilerGenericParameter {
+  if (parameter.kind === "lifetime") {
+    return Object.freeze({
+      ...parameter,
+      bounds: Object.freeze(parameter.bounds.map((lifetime) =>
+        substituteRustCompilerLifetime(lifetime, substitutions))),
+    });
   }
-  const args = requireRecord(raw, "Rust path arguments");
-  const angle = isRecord(args.angle_bracketed) ? args.angle_bracketed : undefined;
-  if (angle === undefined) {
-    throw new Error(`Rust parenthesized path arguments are not supported.`);
+  if (parameter.kind === "type") {
+    return Object.freeze({
+      ...parameter,
+      bounds: Object.freeze(parameter.bounds.map((bound) =>
+        substituteRustCompilerBound(bound, substitutions))),
+      ...(parameter.defaultType === undefined
+        ? {}
+        : { defaultType: substituteRustCompilerType(parameter.defaultType, substitutions) }),
+    });
   }
-  const result: RustCompilerType[] = [];
-  for (const rawArgument of requireArray(angle.args, "Rust path type arguments")) {
-    const argument = requireRecord(rawArgument, "Rust path type argument");
-    if (argument.type === undefined) {
-      throw new Error(`Rust lifetime and const path arguments are not supported.`);
-    }
-    result.push(normalizeType(document, argument.type, resolvingAliases));
-  }
-  if (requireArray(angle.constraints, "Rust path associated constraints").length > 0) {
-    throw new Error(`Rust associated type constraints are not supported.`);
-  }
-  return Object.freeze(result);
+  return Object.freeze({
+    ...parameter,
+    type: substituteRustCompilerType(parameter.type, substitutions),
+    ...(parameter.defaultValue === undefined
+      ? {}
+        : { defaultValue: substituteRustCompilerConstExpression(parameter.defaultValue, substitutions) }),
+  });
 }
-
 
 export function substituteRustCompilerType(
   type: RustCompilerType,
-  bindings: ReadonlyMap<string, RustCompilerType>,
+  substitutions: RustCompilerSubstitutions,
 ): RustCompilerType {
   switch (type.kind) {
     case "unit":
+    case "never":
     case "primitive":
-    case "self":
       return type;
-    case "generic":
-      return bindings.get(type.name) ?? type;
+    case "type-parameter":
+      return substitutions.types.get(type.identity.itemId) ?? type;
+    case "self":
+      return substitutions.types.get(type.owner.itemId) ?? type;
     case "tuple":
       return Object.freeze({
         kind: "tuple",
-        elements: Object.freeze(type.elements.map((element) => substituteRustCompilerType(element, bindings))),
+        elements: Object.freeze(type.elements.map((element) => substituteRustCompilerType(element, substitutions))),
       });
     case "array":
       return Object.freeze({
         kind: "array",
-        element: substituteRustCompilerType(type.element, bindings),
-        length: type.length,
+        element: substituteRustCompilerType(type.element, substitutions),
+        length: substituteRustCompilerConstExpression(type.length, substitutions),
       });
     case "slice":
-      return Object.freeze({
-        kind: "slice",
-        element: substituteRustCompilerType(type.element, bindings),
-      });
+      return Object.freeze({ kind: "slice", element: substituteRustCompilerType(type.element, substitutions) });
     case "reference":
+      return Object.freeze({
+        kind: "reference",
+        mutable: type.mutable,
+        lifetime: substituteRustCompilerLifetime(type.lifetime, substitutions),
+        target: substituteRustCompilerType(type.target, substitutions),
+      });
     case "raw-pointer":
       return Object.freeze({
-        kind: type.kind,
+        kind: "raw-pointer",
         mutable: type.mutable,
-        ...(type.kind === "reference" && type.lifetime !== undefined
-          ? { lifetime: type.lifetime }
-          : {}),
-        target: substituteRustCompilerType(type.target, bindings),
+        target: substituteRustCompilerType(type.target, substitutions),
       });
     case "function-pointer":
       return Object.freeze({
         ...type,
-        parameters: Object.freeze(type.parameters.map((parameter) =>
-          substituteRustCompilerType(parameter, bindings))),
-        result: substituteRustCompilerType(type.result, bindings),
+        parameters: Object.freeze(type.parameters.map((parameter) => substituteRustCompilerType(parameter, substitutions))),
+        result: substituteRustCompilerType(type.result, substitutions),
       });
-    case "path":
+    case "trait-object":
+      return Object.freeze({
+        kind: "trait-object",
+        principal: substituteRustCompilerTrait(type.principal, substitutions),
+        autoTraits: Object.freeze(type.autoTraits.map((trait) => substituteRustCompilerTrait(trait, substitutions))),
+        lifetime: substituteRustCompilerLifetime(type.lifetime, substitutions),
+      });
+    case "opaque":
       return Object.freeze({
         ...type,
-        typeArguments: Object.freeze(type.typeArguments.map((argument) =>
-          substituteRustCompilerType(argument, bindings))),
+        bounds: Object.freeze(type.bounds.map((bound) => substituteRustCompilerBound(bound, substitutions))),
+        captures: Object.freeze(type.captures.map((capture) => substituteRustCompilerArgument(capture, substitutions))),
       });
     case "associated-type":
       return Object.freeze({
         ...type,
-        owner: substituteRustCompilerType(type.owner, bindings),
-        trait: Object.freeze({
-          ...type.trait,
-          typeArguments: Object.freeze(type.trait.typeArguments.map((argument) =>
-            substituteRustCompilerType(argument, bindings))),
-        }),
+        owner: substituteRustCompilerType(type.owner, substitutions),
+        trait: substituteRustCompilerTrait(type.trait, substitutions),
+        arguments: Object.freeze(type.arguments.map((argument) => substituteRustCompilerArgument(argument, substitutions))),
+      });
+    case "path":
+      return Object.freeze({
+        ...type,
+        arguments: Object.freeze(type.arguments.map((argument) => substituteRustCompilerArgument(argument, substitutions))),
       });
   }
 }
 
+export function substituteRustCompilerArgument(
+  argument: RustCompilerGenericArgument,
+  substitutions: RustCompilerSubstitutions,
+): RustCompilerGenericArgument {
+  switch (argument.kind) {
+    case "lifetime":
+      return Object.freeze({ kind: "lifetime", value: substituteRustCompilerLifetime(argument.value, substitutions) });
+    case "type":
+      return Object.freeze({ kind: "type", value: substituteRustCompilerType(argument.value, substitutions) });
+    case "const":
+      return Object.freeze({ kind: "const", value: substituteRustCompilerConstExpression(argument.value, substitutions) });
+  }
+}
+
+export function rustCompilerTypeArguments(
+  arguments_: readonly RustCompilerGenericArgument[],
+): readonly RustCompilerType[] {
+  return Object.freeze(arguments_.flatMap((argument) => argument.kind === "type" ? [argument.value] : []));
+}
 
 export function rustStaticValueCanBeCopied(type: RustCompilerType): boolean {
   switch (type.kind) {
     case "unit":
+    case "never":
     case "primitive":
     case "raw-pointer":
     case "function-pointer":
@@ -255,17 +195,220 @@ export function rustStaticValueCanBeCopied(type: RustCompilerType): boolean {
     case "array":
       return rustStaticValueCanBeCopied(type.element);
     case "reference":
-      return type.mutable === false;
-    case "generic":
+      return !type.mutable;
+    case "type-parameter":
     case "self":
     case "associated-type":
+    case "trait-object":
+    case "opaque":
     case "slice":
     case "path":
       return false;
   }
 }
 
+export function rustCompilerTypeSemanticKey(type: RustCompilerType): string {
+  switch (type.kind) {
+    case "unit":
+    case "never":
+      return type.kind;
+    case "primitive":
+      return `primitive:${field(type.name)}`;
+    case "type-parameter":
+      return `parameter:${field(type.identity.itemId)}`;
+    case "self":
+      return `self:${field(type.owner.itemId)}`;
+    case "tuple":
+      return `tuple:${list(type.elements.map(rustCompilerTypeSemanticKey))}`;
+    case "array":
+      return `array:${field(rustCompilerTypeSemanticKey(type.element))}:${field(rustCompilerConstSemanticKey(type.length))}`;
+    case "slice":
+      return `slice:${field(rustCompilerTypeSemanticKey(type.element))}`;
+    case "reference":
+      return `reference:${type.mutable ? "mut" : "shared"}:${field(rustCompilerLifetimeSemanticKey(type.lifetime))}:${field(rustCompilerTypeSemanticKey(type.target))}`;
+    case "raw-pointer":
+      return `raw:${type.mutable ? "mut" : "const"}:${field(rustCompilerTypeSemanticKey(type.target))}`;
+    case "function-pointer":
+      return `fn:${type.safety}:${field(type.abi)}:${type.variadic ? "variadic" : "fixed"}:${field(rustCompilerBinderSemanticKey(type.binder))}:${list(type.parameters.map(rustCompilerTypeSemanticKey))}:${field(rustCompilerTypeSemanticKey(type.result))}`;
+    case "trait-object":
+      return `dyn:${field(rustCompilerTraitSemanticKey(type.principal))}:${list(type.autoTraits.map(rustCompilerTraitSemanticKey))}:${field(rustCompilerLifetimeSemanticKey(type.lifetime))}`;
+    case "opaque":
+      return `opaque:${field(type.identity.itemId)}:${list(type.bounds.map(rustCompilerBoundSemanticKey))}:${list(type.captures.map(rustCompilerArgumentSemanticKey))}`;
+    case "associated-type":
+      return `associated:${field(rustCompilerTypeSemanticKey(type.owner))}:${field(rustCompilerTraitSemanticKey(type.trait))}:${field(type.item.itemId)}:${list(type.arguments.map(rustCompilerArgumentSemanticKey))}`;
+    case "path":
+      return `path:${field(type.identity.itemId)}:${list(type.arguments.map(rustCompilerArgumentSemanticKey))}`;
+  }
+}
 
-export function typeRequirementKey(requirement: RustCompilerTypeRequirement): string {
-  return typeof requirement === "string" ? requirement : `trait:${requirement.path}`;
+export function rustCompilerTypesEqual(left: RustCompilerType, right: RustCompilerType): boolean {
+  return rustCompilerTypeSemanticKey(left) === rustCompilerTypeSemanticKey(right);
+}
+
+export function rustCompilerTraitSemanticKey(trait: RustCompilerTraitReference): string {
+  return `trait:${field(trait.identity.itemId)}:${list(trait.arguments.map(rustCompilerArgumentSemanticKey))}:${list(trait.associatedConstraints.map(rustCompilerConstraintSemanticKey))}`;
+}
+
+function substituteRustCompilerLifetime(
+  lifetime: RustCompilerLifetime,
+  substitutions: RustCompilerSubstitutions,
+): RustCompilerLifetime {
+  return lifetime.kind === "parameter"
+    ? substitutions.lifetimes.get(lifetime.identity.itemId) ?? lifetime
+    : lifetime;
+}
+
+export function substituteRustCompilerConstExpression(
+  expression: RustCompilerConstExpression,
+  substitutions: RustCompilerSubstitutions,
+): RustCompilerConstExpression {
+  switch (expression.kind) {
+    case "literal":
+    case "inferred":
+      return expression;
+    case "parameter":
+      return substitutions.consts.get(expression.identity.itemId) ?? expression;
+    case "item":
+      return expression;
+    case "unary":
+      return Object.freeze({
+        ...expression,
+        operand: substituteRustCompilerConstExpression(expression.operand, substitutions),
+      });
+    case "binary":
+      return Object.freeze({
+        ...expression,
+        left: substituteRustCompilerConstExpression(expression.left, substitutions),
+        right: substituteRustCompilerConstExpression(expression.right, substitutions),
+      });
+  }
+}
+
+function substituteRustCompilerTrait(
+  trait: RustCompilerTraitReference,
+  substitutions: RustCompilerSubstitutions,
+): RustCompilerTraitReference {
+  return Object.freeze({
+    ...trait,
+    arguments: Object.freeze(trait.arguments.map((argument) => substituteRustCompilerArgument(argument, substitutions))),
+    associatedConstraints: Object.freeze(trait.associatedConstraints.map((constraint) =>
+      substituteRustCompilerConstraint(constraint, substitutions))),
+  });
+}
+
+function substituteRustCompilerConstraint(
+  constraint: RustCompilerAssociatedConstraint,
+  substitutions: RustCompilerSubstitutions,
+): RustCompilerAssociatedConstraint {
+  return constraint.kind === "equality"
+    ? Object.freeze({
+        ...constraint,
+        arguments: Object.freeze(constraint.arguments.map((argument) => substituteRustCompilerArgument(argument, substitutions))),
+        type: substituteRustCompilerType(constraint.type, substitutions),
+      })
+    : Object.freeze({
+        ...constraint,
+        arguments: Object.freeze(constraint.arguments.map((argument) => substituteRustCompilerArgument(argument, substitutions))),
+        bounds: Object.freeze(constraint.bounds.map((bound) => substituteRustCompilerBound(bound, substitutions))),
+      });
+}
+
+export function substituteRustCompilerBound(
+  bound: RustCompilerBound,
+  substitutions: RustCompilerSubstitutions,
+): RustCompilerBound {
+  switch (bound.kind) {
+    case "trait":
+      return Object.freeze({ ...bound, trait: substituteRustCompilerTrait(bound.trait, substitutions) });
+    case "lifetime-outlives":
+      return Object.freeze({
+        ...bound,
+        longer: substituteRustCompilerLifetime(bound.longer, substitutions),
+        shorter: substituteRustCompilerLifetime(bound.shorter, substitutions),
+      });
+    case "type-outlives":
+      return Object.freeze({
+        ...bound,
+        type: substituteRustCompilerType(bound.type, substitutions),
+        lifetime: substituteRustCompilerLifetime(bound.lifetime, substitutions),
+      });
+    case "associated-equality": {
+      const projection = substituteRustCompilerType(bound.projection, substitutions);
+      if (projection.kind !== "associated-type") throw new Error("Rust associated projection substitution changed its kind.");
+      return Object.freeze({
+        ...bound,
+        projection,
+        value: substituteRustCompilerType(bound.value, substitutions),
+      });
+    }
+    case "precise-capture":
+      return Object.freeze({
+        ...bound,
+        captures: Object.freeze(bound.captures.map((capture) => substituteRustCompilerArgument(capture, substitutions))),
+      });
+  }
+}
+
+export function rustCompilerLifetimeSemanticKey(lifetime: RustCompilerLifetime): string {
+  switch (lifetime.kind) {
+    case "static": return "static";
+    case "parameter": return `parameter:${field(lifetime.identity.itemId)}`;
+    case "bound": return `bound:${field(lifetime.binderId)}:${field(lifetime.parameterId)}`;
+    case "elided": return `elided:${field(lifetime.ownerId)}:${field(lifetime.position)}`;
+  }
+}
+
+export function rustCompilerConstSemanticKey(expression: RustCompilerConstExpression): string {
+  switch (expression.kind) {
+    case "literal": return `literal:${expression.literalKind}:${field(String(expression.value))}`;
+    case "parameter": return `parameter:${field(expression.identity.itemId)}`;
+    case "item": return `item:${field(expression.identity.itemId)}`;
+    case "inferred": return "inferred";
+    case "unary": return `unary:${expression.operator}:${field(rustCompilerConstSemanticKey(expression.operand))}`;
+    case "binary": return `binary:${expression.operator}:${field(rustCompilerConstSemanticKey(expression.left))}:${field(rustCompilerConstSemanticKey(expression.right))}`;
+  }
+}
+
+export function rustCompilerArgumentSemanticKey(argument: RustCompilerGenericArgument): string {
+  switch (argument.kind) {
+    case "lifetime": return `lifetime:${field(rustCompilerLifetimeSemanticKey(argument.value))}`;
+    case "type": return `type:${field(rustCompilerTypeSemanticKey(argument.value))}`;
+    case "const": return `const:${field(rustCompilerConstSemanticKey(argument.value))}`;
+  }
+}
+
+function rustCompilerConstraintSemanticKey(constraint: RustCompilerAssociatedConstraint): string {
+  return constraint.kind === "equality"
+    ? `equality:${field(constraint.item.itemId)}:${list(constraint.arguments.map(rustCompilerArgumentSemanticKey))}:${field(rustCompilerTypeSemanticKey(constraint.type))}`
+    : `bounds:${field(constraint.item.itemId)}:${list(constraint.arguments.map(rustCompilerArgumentSemanticKey))}:${list(constraint.bounds.map(rustCompilerBoundSemanticKey))}`;
+}
+
+export function rustCompilerBoundSemanticKey(bound: RustCompilerBound): string {
+  switch (bound.kind) {
+    case "trait": return `trait:${bound.polarity}:${field(rustCompilerBinderSemanticKey(bound.binder))}:${field(rustCompilerTraitSemanticKey(bound.trait))}`;
+    case "lifetime-outlives": return `outlives:${field(rustCompilerLifetimeSemanticKey(bound.longer))}:${field(rustCompilerLifetimeSemanticKey(bound.shorter))}`;
+    case "type-outlives": return `valid-for:${field(rustCompilerTypeSemanticKey(bound.type))}:${field(rustCompilerLifetimeSemanticKey(bound.lifetime))}`;
+    case "associated-equality": return `associated:${field(rustCompilerTypeSemanticKey(bound.projection))}:${field(rustCompilerTypeSemanticKey(bound.value))}`;
+    case "precise-capture": return `capture:${list(bound.captures.map(rustCompilerArgumentSemanticKey))}`;
+  }
+}
+
+function rustCompilerBinderSemanticKey(
+  binder: import("../model.js").RustCompilerBinder | undefined,
+): string {
+  return binder === undefined
+    ? "none"
+    : `binder:${field(binder.id)}:${list(binder.lifetimes.map((parameter) =>
+        `${field(rustCompilerLifetimeSemanticKey(parameter.identity))}:${list(
+          parameter.bounds.map(rustCompilerLifetimeSemanticKey),
+        )}`,
+      ))}`;
+}
+
+function list(values: readonly string[]): string {
+  return values.map(field).join(":");
+}
+
+function field(value: string): string {
+  return `${value.length}:${value}`;
 }

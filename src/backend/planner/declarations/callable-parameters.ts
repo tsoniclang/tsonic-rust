@@ -15,7 +15,6 @@ import {
 import type { RustFunctionParam, RustStmt } from "../../target-ast/nodes.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import {
-  requireRustCarrierRequirements,
   requireRustLocationValueCarrier,
 } from "../types/generic-requirements.js";
 import { planRustBindingPattern } from "../bindings/patterns.js";
@@ -58,7 +57,6 @@ export function planRustCallableParameters(
   callable: Node,
   context: RustPlanContext,
   syntheticNames: RustSyntheticNameState,
-  options: { readonly requireStatic: boolean },
 ): RustCallableParameterPlan | undefined {
   const { ast } = context.input.program.source;
   const params: RustFunctionParam[] = [];
@@ -92,10 +90,6 @@ export function planRustCallableParameters(
       ));
       return undefined;
     }
-    if (options.requireStatic && parameterCarrier !== undefined &&
-      !requireRustCarrierRequirements(parameterCarrier, ["static"], parameter, context)) {
-      return undefined;
-    }
     const sourceCarrier = context.input.program.facts.getRuntimeCarrierFact(parameter)?.carrier;
     const locationStorage = rustLocationStorageForDeclaration(parameter, context);
     if (pattern !== undefined &&
@@ -119,7 +113,7 @@ export function planRustCallableParameters(
       return undefined;
     }
     const ownedBinding = parameterCarrier !== undefined &&
-      parameterCarrier.kind !== "pointer" &&
+      parameterCarrier.kind !== "raw-pointer" &&
       parameterCarrier.kind !== "reference";
     const objectRepresentation = context.input.program.objectRepresentations.representationFor(
       context.input.program.projectTypes.definitionForCarrier(parameterCarrier),
@@ -134,6 +128,7 @@ export function planRustCallableParameters(
           parameter,
           rustMutatedBindingFactKey,
         ) !== undefined ||
+        context.input.program.ownership.bindingRequiresMutable(parameter) ||
         ownedBinding && referentMutationRequiresMutableBinding &&
           context.input.program.facts.getFact(
             parameter,
@@ -181,7 +176,7 @@ export function planRustCallableParameters(
         mutable: false,
         init: {
           kind: "call",
-          path: "rt::Location::allocate",
+          path: "rt::OwnedLocation::allocate",
           args: [{ kind: "path", path: parameterName }],
         },
       },

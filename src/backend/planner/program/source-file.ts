@@ -6,18 +6,19 @@ import {
   KindExportAssignment,
   KindExportDeclaration,
   KindVariableStatement,
+  Node_Expression,
   Node_Initializer,
 } from "@tsonic/target-api/source";
 import {
   rustFallibleFactKey,
   rustModuleBindingFactKey,
 } from "../../../analysis/facts/keys.js";
-import {
-  rustCarrierSupportsClone,
-} from "../../../target-model/types/index.js";
+import { rustCloneTrait } from "../../../target-model/types/index.js";
 import {
   createRustSourceFile,
+  emptyRustAstGenerics,
 } from "../../target-ast/nodes.js";
+import { rustDocHiddenAttribute } from "../../target-ast/attributes.js";
 import { rustItemsReferenceModuleAlias } from "../../target-ast/inspection/source-module-usage.js";
 import type {
   RustItem,
@@ -25,6 +26,7 @@ import type {
 } from "../../target-ast/nodes.js";
 import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
 import type { RustPlanningContext } from "../context.js";
+import { rustSealedCarrierSupportsTrait } from "../ownership/traits.js";
 import {
   missingFactDiagnostic,
   unsupportedConstructDiagnostic,
@@ -46,6 +48,10 @@ import {
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planBlockLike, planStatement } from "../statements/index.js";
+import {
+  planRustNativeTraitDeclaration,
+  planRustNativeTraitImplementations,
+} from "../declarations/native-traits.js";
 import { applyFallibleShape } from "../types/fallible-shape.js";
 import {
   createRustSyntheticNameState,
@@ -171,7 +177,7 @@ export function planRustSourceFile(
         name,
         visibility: sourcePublic || implementationPublic ? "public" : "crate",
         ...(implementationPublic && !sourcePublic
-          ? { attrs: ["#[doc(hidden)]"] }
+          ? { attrs: [rustDocHiddenAttribute] }
           : {}),
       };
     }),
@@ -280,7 +286,7 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
           }, initializationContext);
           const type = rustTypeFromCarrierInContext(binding.value.carrier, initializationContext);
           if (value === undefined || type === undefined ||
-            !rustCarrierSupportsClone(binding.value.carrier)) {
+            !rustSealedCarrierSupportsTrait(binding.value.carrier, rustCloneTrait, initializationContext)) {
             context.diagnostics.push(unsupportedConstructDiagnostic(
               diagnosticInput(context, statement),
               "rust.backend.hoisted-callable-value",
@@ -355,12 +361,19 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
         statement,
         initializationContext,
       );
-      const planned = definition !== undefined && context.input.program.projectTypes.isPolymorphic(definition)
+      const representation = context.input.program.objectRepresentations.representationFor(definition);
+      const planned = representation?.kind === "open-hierarchy" ||
+          representation?.kind === "closed-hierarchy"
         ? planPolymorphicClassDeclaration(statement, context)
         : planClassDeclaration(statement, context);
-      if (planned !== undefined && classInitialization !== undefined) {
+      const nativeTraitImplementations = planned === undefined
+        ? undefined
+        : planRustNativeTraitImplementations(statement, context);
+      if (planned !== undefined && nativeTraitImplementations !== undefined &&
+        classInitialization !== undefined) {
         items.push(...classInitialization.items);
         items.push(...planned);
+        items.push(...nativeTraitImplementations);
         initializationStatements.push(...classInitialization.initialization);
       } else {
         ensureTopLevelPlanningDiagnostic(
@@ -375,9 +388,12 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
     if (kind === "KindInterfaceDeclaration") {
       const diagnosticCount = context.diagnostics.length;
       const definition = context.input.program.projectTypes.definitionForDeclaration(statement);
-      const planned = definition !== undefined && context.input.program.projectTypes.isPolymorphic(definition)
-        ? planPolymorphicInterfaceDeclaration(statement, context)
-        : planInterfaceDeclaration(statement, context);
+      const planned = context.input.program.declarationContracts
+        .forDeclaration(statement)?.unsafeTrait === true
+        ? planRustNativeTraitDeclaration(statement, context)
+        : context.input.program.objectRepresentations.requiresDynamicDispatch(definition)
+          ? planPolymorphicInterfaceDeclaration(statement, context)
+          : planInterfaceDeclaration(statement, context);
       if (planned !== undefined) {
         items.push(...planned);
       } else {
@@ -420,6 +436,13 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
       }
       continue;
     }
+    if (kind === "KindExpressionStatement") {
+      const expression = Node_Expression(ast, statement);
+      if (expression !== undefined &&
+        context.input.program.declarationContracts.isCompileTimeApplicationExpression(expression)) {
+        continue;
+      }
+    }
     const planned = planStatement(statement, initializationContext);
     if (planned !== undefined) {
       initializationStatements.push(...planned);
@@ -440,9 +463,8 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
     kind: "function",
     name: initializationFunctionName,
     visibility: "public",
-    attrs: [
-      "#[doc(hidden)]",
-    ],
+    attrs: [rustDocHiddenAttribute],
+    generics: emptyRustAstGenerics,
     ...(asynchronous ? { isAsync: true } : {}),
     ...(errorBoundary === undefined ? {} : { errorType: rustErrorType(errorBoundary) }),
     params: [],
@@ -500,7 +522,7 @@ function planDefaultExportAssignment(
     ));
     return undefined;
   }
-  if (!rustCarrierSupportsClone(binding.valueCarrier)) {
+  if (!rustSealedCarrierSupportsTrait(binding.valueCarrier, rustCloneTrait, context)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       { ast, sourceFile: context.sourceFile, node: declaration },
       "rust.backend.default-export-carrier",
@@ -594,7 +616,7 @@ function planTopLevelVariableStatement(
       }, context);
       const rustType = rustTypeFromCarrierInContext(binding.value.carrier, context);
       if (value === undefined || rustType === undefined ||
-        !rustCarrierSupportsClone(binding.value.carrier)) {
+        !rustSealedCarrierSupportsTrait(binding.value.carrier, rustCloneTrait, context)) {
         context.diagnostics.push(unsupportedConstructDiagnostic(
           { ast, sourceFile: context.sourceFile, node: declaration },
           "rust.backend.module-callable-value",
@@ -650,7 +672,25 @@ function planTopLevelVariableStatement(
       });
       continue;
     }
-    if (!rustCarrierSupportsClone(binding.valueCarrier)) {
+    if (binding.storage === "native-static") {
+      const attrs = [
+        ...(isUpperSnakeName(name) ? [] : [rustLintAttributes.nonUpperCaseGlobal]),
+        ...(rustSourceItemIsPubliclyReachable(context, name)
+          ? []
+          : [rustLintAttributes.deadCode]),
+      ];
+      items.push({
+        kind: "static",
+        name,
+        visibility,
+        ...(attrs.length === 0 ? {} : { attrs }),
+        type: rustType,
+        mutable: true,
+        value,
+      });
+      continue;
+    }
+    if (!rustSealedCarrierSupportsTrait(binding.valueCarrier, rustCloneTrait, context)) {
       context.diagnostics.push(unsupportedConstructDiagnostic(
         { ast, sourceFile: context.sourceFile, node: declaration },
         "rust.backend.module-binding-carrier",

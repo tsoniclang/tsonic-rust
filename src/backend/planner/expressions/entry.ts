@@ -1,6 +1,4 @@
 import {
-  isRustCopyCarrier,
-  rustCarrierSupportsClone,
   rustOptionElementCarrier,
   rustSourceTypeCarrierValue,
 } from "../../../target-model/types/index.js";
@@ -24,10 +22,11 @@ import { allocateRustSyntheticName, createRustSyntheticNameState } from "../name
 import { applyRustValueConversion } from "./conversions.js";
 import { diagnosticInput, sourceTypePath } from "../program/plan-context.js";
 import { findRustUpdateSourceAccessor } from "./updates/source.js";
-import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
+import { missingFactDiagnostic } from "../diagnostics.js";
 import { planExpressionInner } from "./dispatch.js";
 import { planRustFlowReadProjection } from "./flow-reads.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
+import { planRustSealedOwnedRead } from "../ownership/reads.js";
 import { planRustProjectDowncast } from "../objects/project-downcasts.js";
 import { rustProjectObjectDispatchField, rustProjectObjectIdentityField } from "../objects/project-objects.js";
 import { rustSelectedAccessorRequiresUnsafe, rustSelectedCallRequiresUnsafe, tryPlanRustExplicitSafetyExpression } from "../safety/explicit-safety.js";
@@ -186,24 +185,15 @@ export function planExpressionBeforeValueProjections(
   resultUse: RustExpressionResultUse,
 ): RustExpr | undefined {
   const override = context.expressionOverrides?.get(node);
-  if (override === undefined || override.valueForm !== "storage" ||
-    isRustCopyCarrier(override.carrier)) {
+  if (override === undefined || override.valueForm !== "storage") {
     return override?.expression ?? planRawExpression(node, context, resultUse);
   }
-  if (!rustCarrierSupportsClone(override.carrier)) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.preconstruction-field-read",
-      "A preconstruction field value must be Copy or Clone when read before the complete object exists.",
-    ));
-    return undefined;
-  }
-  return {
-    kind: "method-call",
-    receiver: override.expression,
-    method: "clone",
-    args: [],
-  };
+  return planRustSealedOwnedRead(
+    node,
+    override.expression,
+    context,
+    "rust.backend.preconstruction-field-read",
+  );
 }
 
 export function planRawExpression(
@@ -295,11 +285,16 @@ function applyRustContextualValueConversion(
 function rustExpressionUnsafeRequirement(
   node: Node,
   context: RustPlanContext,
-): "call" | "accessor" | "provider-operation" | undefined {
+): "call" | "accessor" | "native-union-field" | "provider-operation" | undefined {
   if (rustSelectedCallRequiresUnsafe(node, context.input)) {
     return "call";
   }
   const operation = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
+  if (((operation?.kind === "source-field" && operation.fieldLayout === "native-union") ||
+      operation?.kind === "source-union-field") &&
+    (operation.accessMode === "read" || operation.accessMode === "read-write")) {
+    return "native-union-field";
+  }
   if (operation?.kind === "source-accessor" &&
     rustSelectedAccessorRequiresUnsafe(node, "getter", context.input)) {
     return "accessor";

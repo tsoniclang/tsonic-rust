@@ -15,14 +15,17 @@ import {
   type RustBindingProjectionFact,
 } from "../../../analysis/facts/keys.js";
 import {
-  isRustCopyCarrier,
   isRustJsArrayCarrier,
   isRustVecCarrier,
-  rustCarrierSupportsClone,
+  rustCloneTrait,
   rustFixedArrayCarrierValue,
   rustStructuralObjectCarrierValue,
   rustTupleTargetType,
 } from "../../../target-model/types/index.js";
+import {
+  rustSealedCarrierSupportsTrait,
+  rustSealedOwnedCarrierReadKind,
+} from "../ownership/traits.js";
 import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
 import {
   createRustStructuralObjectFromCarrier,
@@ -167,7 +170,7 @@ function planBindingProjection(
 ): RustExpr | undefined {
   switch (fact.projection.kind) {
     case "object-field":
-      if (!isRustCopyCarrier(fact.projectedCarrier) && !rustCarrierSupportsClone(fact.projectedCarrier)) {
+      if (rustSealedOwnedCarrierReadKind(fact.projectedCarrier, context) === undefined) {
         return rejectClone(node, context);
       }
       return readRustStoredObjectField(
@@ -191,7 +194,11 @@ function planBindingProjection(
       return ownedProjection(indexExpression(source, fact.projection.index), fact.projectedCarrier, node, context);
     case "vec-element": {
       if (fact.projection.checked) {
-        if (!rustCarrierSupportsClone(fact.sourceCarrier.kind === "array" ? fact.sourceCarrier.element : undefined)) {
+        if (!rustSealedCarrierSupportsTrait(
+          fact.sourceCarrier.kind === "array" ? fact.sourceCarrier.element : undefined,
+          rustCloneTrait,
+          context,
+        )) {
           return rejectClone(node, context);
         }
         return {
@@ -258,7 +265,7 @@ function planObjectRest(
   }
   const values: RustExpr[] = [];
   for (const field of fields) {
-    if (!isRustCopyCarrier(field.carrier) && !rustCarrierSupportsClone(field.carrier)) {
+    if (rustSealedOwnedCarrierReadKind(field.carrier, context) === undefined) {
       return rejectClone(node, context);
     }
     const value = readRustStoredObjectField(
@@ -354,7 +361,7 @@ function planVecRest(
   const start = fact.projection.kind === "vec-rest" ? fact.projection.start : 0;
   if (!isRustVecCarrier(fact.sourceCarrier) || !isRustVecCarrier(fact.bindingCarrier) ||
     !rustTargetTypeRefEquals(fact.sourceCarrier.element, fact.bindingCarrier.element) ||
-    !rustCarrierSupportsClone(fact.sourceCarrier.element)) {
+    !rustSealedCarrierSupportsTrait(fact.sourceCarrier.element, rustCloneTrait, context)) {
     return rejectProjection(node, context, "Vector rest projection has incompatible or non-cloneable finalized carriers.");
   }
   return {
@@ -418,7 +425,10 @@ function normalizeBindingValue(
   const result = (value: RustExpr): RustExpr => ({
     kind: "call",
     path: "Ok",
-    typeArguments: [{ kind: "infer" }, activeErrorType],
+    genericArguments: [
+      { kind: "type", type: { kind: "infer" } },
+      { kind: "type", type: activeErrorType },
+    ],
     args: [value],
   });
   return {
@@ -443,10 +453,11 @@ function ownedProjection(
   node: Node,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  if (isRustCopyCarrier(carrier)) {
+  const read = rustSealedOwnedCarrierReadKind(carrier, context);
+  if (read === "copy") {
     return value;
   }
-  if (!rustCarrierSupportsClone(carrier)) {
+  if (read !== "clone") {
     return rejectClone(node, context);
   }
   return { kind: "method-call", receiver: value, method: "clone", args: [] };

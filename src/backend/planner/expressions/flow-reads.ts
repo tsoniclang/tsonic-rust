@@ -1,9 +1,5 @@
 import type { Node } from "@tsonic/tsts";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import {
-  isRustCopyCarrier,
-  rustCarrierSupportsClone,
-} from "../../../target-model/types/index.js";
 import type { RustFlowReadProjectionFact } from "../../../analysis/facts/keys.js";
 import type { RustExpr } from "../../target-ast/nodes.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
@@ -15,6 +11,7 @@ import {
   allocateRustSyntheticName,
   createRustSyntheticNameState,
 } from "../names/synthetic.js";
+import { rustSealedReadKind } from "../ownership/reads.js";
 
 export function planRustFlowReadProjection(
   node: Node,
@@ -33,11 +30,12 @@ export function planRustFlowReadProjection(
     return undefined;
   }
   if (fact.kind === "option-value") {
-    if (!rustCarrierSupportsClone(fact.selectedCarrier)) {
+    const readKind = rustSealedReadKind(node, context);
+    if (readKind === undefined || readKind === "borrowed") {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, node),
         "rust.backend.flow-read-projection-clone",
-        "A narrowed optional Rust value requires a selected carrier with a proven non-consuming clone contract.",
+        "A narrowed optional Rust value has no sealed owned-read disposition.",
       ));
       return undefined;
     }
@@ -47,12 +45,9 @@ export function planRustFlowReadProjection(
     );
     return {
       kind: "match",
-      expression: {
-        kind: "method-call",
-        receiver: expression,
-        method: "as_ref",
-        args: [],
-      },
+      expression: readKind === "move"
+        ? expression
+        : { kind: "method-call", receiver: expression, method: "as_ref", args: [] },
       arms: [
         {
           pattern: {
@@ -60,17 +55,19 @@ export function planRustFlowReadProjection(
             path: "Some",
             elements: [{ kind: "binding", name: valueName }],
           },
-          expression: isRustCopyCarrier(fact.selectedCarrier)
-            ? {
-                kind: "dereference",
-                pointer: { kind: "path", path: valueName },
-              }
-            : {
-                kind: "method-call",
-                receiver: { kind: "path", path: valueName },
-                method: "clone",
-                args: [],
-              },
+          expression: readKind === "move"
+            ? { kind: "path", path: valueName }
+            : readKind === "copy"
+              ? {
+                  kind: "dereference",
+                  pointer: { kind: "path", path: valueName },
+                }
+              : {
+                  kind: "method-call",
+                  receiver: { kind: "path", path: valueName },
+                  method: "clone",
+                  args: [],
+                },
         },
         {
           pattern: { kind: "path", path: "None" },

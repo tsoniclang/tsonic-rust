@@ -1,5 +1,5 @@
 import type { RustRuntimeReferencePlan } from "../../../analysis/runtime/index.js";
-import type { RustTargetConfiguration } from "../../../target-model/configuration/model.js";
+import type { RustTargetConfigurationInput } from "../../../target-model/configuration/model.js";
 import type { CargoManifestPlan } from "../../artifact-model/project/cargo.js";
 
 export type RustCargoProjectPlan =
@@ -7,7 +7,7 @@ export type RustCargoProjectPlan =
   | { readonly kind: "user-owned"; readonly manifestPath: string };
 
 export function planRustCargoProject(
-  configuration: RustTargetConfiguration,
+  configuration: RustTargetConfigurationInput,
   runtimeReferences: RustRuntimeReferencePlan,
 ): RustCargoProjectPlan {
   return configuration.project.kind === "generated"
@@ -22,7 +22,7 @@ export function planRustCargoProject(
 }
 
 export function planCargoManifest(
-  configuration: RustTargetConfiguration,
+  configuration: RustTargetConfigurationInput,
   runtimeReferences: RustRuntimeReferencePlan,
 ): CargoManifestPlan {
   return Object.freeze({

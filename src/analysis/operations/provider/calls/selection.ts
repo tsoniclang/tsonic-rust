@@ -6,7 +6,7 @@ import {
 } from "../../../../policy/evidence/selected-source.js";
 import {
   rustJsErrorTargetType,
-  rustCallableProtocol,
+  rustCallableSignature,
   rustStructuralMethodCallableCarrier,
   rustStructuralMethodStorageCarrier,
   rustStructuralObjectCarrierValue,
@@ -38,6 +38,7 @@ import type {
 import type { Node } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "../model.js";
 import type { RustSelectedTargetSignature, RustTargetMember, TargetTypeRef } from "../../../../target-model/types/model.js";
+import { emptyRustGenerics } from "../../../../target-model/semantics/index.js";
 
 export function selectRustCheckedCall(
   request: RustCheckedCallSelectionInput,
@@ -477,7 +478,7 @@ function acceptRuntimeCallableCarrierCall(
   sourceDeclaration?: Node,
   optionalGuard?: RustOptionalCallGuard,
 ): RustPolicySelection<RustCheckedCallSelectionResult> | undefined {
-  const protocol = runtimeCallableProtocol(calleeCarrier);
+  const protocol = rustCallableSignature(calleeCarrier);
   if (calleeCarrier === undefined || protocol === undefined) {
     return undefined;
   }
@@ -510,6 +511,7 @@ function acceptRuntimeCallableCarrierCall(
     targetName: "call",
     kind: "method",
     parameters: parameterPlan.parameters,
+    generics: emptyRustGenerics,
     returnType: protocol.result,
   };
   const selectedSignature = {
@@ -595,17 +597,6 @@ function runtimeCallableTargetParameters(
   };
 }
 
-function runtimeCallableProtocol(
-  carrier: TargetTypeRef | undefined,
-): {
-  readonly parameters: readonly TargetTypeRef[];
-  readonly result: TargetTypeRef;
-} | undefined {
-  if (carrier?.kind === "function-pointer") {
-    return { parameters: carrier.args, result: carrier.result };
-  }
-  return rustCallableProtocol(carrier);
-}
 
 function selectedImplicitSuperConstructorClass(
   request: RustCheckedCallSelectionInput,

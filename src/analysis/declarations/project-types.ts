@@ -11,8 +11,15 @@ import {
   rustSourceCallableReturnFactKey,
 } from "../facts/keys.js";
 import { appendRustDiagnostic } from "../program/walk.js";
-import { recordCallableReturnFact, recordCallableSuspensionFacts } from "../callables/signatures.js";
-import { recordParameterAbiFacts } from "./types-and-bindings.js";
+import {
+  recordCallableSuspensionFacts,
+  recordCallableTypeSignatureFacts,
+  rustImplicitCallableReceiverLifetime,
+} from "../callables/signatures.js";
+import {
+  rustArgumentModeForSourceContract,
+  validateOwnershipExpressionAgainstContract,
+} from "./types-and-bindings.js";
 import { recordStatementFacts, resolveTypeNodeCarrier } from "../control-flow/statements.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
@@ -24,6 +31,8 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustAnalysisContext } from "../program/context.js";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { rustSourceOwnershipContractForType } from "../../policy/ownership/source-callable-abi.js";
+import { rustResolutionContext } from "../program/walk.js";
 
 export function recordMethodSelfModeFacts(walk: RustFactWalk, sourceFiles: readonly SourceFile[]): void {
   const { ast } = walk.context;
@@ -78,21 +87,18 @@ export function recordClassSignatureFacts(walk: RustFactWalk, declaration: Node)
       memberKind === "KindGetAccessor" || memberKind === "KindSetAccessor") {
       if (memberKind !== "KindConstructor") {
         recordCallableSuspensionFacts(walk, member);
-        recordCallableReturnFact(walk, member);
-        if (memberKind === "KindSetAccessor" &&
-          walk.context.facts.get(member, rustSourceCallableReturnFactKey) === undefined) {
-          walk.context.facts.set(member, rustSourceCallableReturnFactKey, {
-            returnCarrier: rustUnitTargetType(),
-          }, [{ message: "rust setter unit return carrier" }]);
-        }
       }
-      const parameters = requireDenseSourceNodes(walk, ast.parameters(member), "Class callable contains an undefined or non-data parameter slot.");
-      if (parameters === undefined) {
-        return;
-      }
-      for (const parameter of parameters) {
-        recordParameterAbiFacts(walk, parameter);
-      }
+      const instanceMember = memberKind !== "KindConstructor" &&
+        !ast.hasModifierKind(member, "static");
+      recordCallableTypeSignatureFacts(walk, member, {
+        recordReturn: memberKind !== "KindConstructor",
+        ...(memberKind === "KindSetAccessor"
+          ? { returnCarrier: rustUnitTargetType() }
+          : {}),
+        ...(instanceMember
+          ? { receiverLifetime: rustImplicitCallableReceiverLifetime(walk, member) }
+          : {}),
+      });
     }
   }
 }
@@ -153,6 +159,16 @@ export function recordClassBodyFacts(walk: RustFactWalk, declaration: Node, sour
         resolveTypeNodeCarrier(walk, Node_Type(ast, member));
       if (initializer !== undefined && fieldCarrier !== undefined) {
         resolveExpressionCarrier(walk, initializer, sourceFile, fieldCarrier);
+        const sourceContract = rustSourceOwnershipContractForType(
+          Node_Type(ast, member),
+          rustResolutionContext(walk, member),
+        );
+        validateOwnershipExpressionAgainstContract(
+          walk,
+          initializer,
+          rustArgumentModeForSourceContract(sourceContract),
+          sourceContract === "ordinary" ? undefined : sourceContract,
+        );
       }
       continue;
     }
@@ -239,18 +255,9 @@ export function recordInterfaceFacts(walk: RustFactWalk, declaration: Node): voi
       walk.context.facts.set(member, rustSelfModeFactKey, { mode: "ref" }, [
         { message: "rust reference-backed project interface method self mode" },
       ]);
-      recordCallableReturnFact(walk, member);
-      const parameters = requireDenseSourceNodes(
-        walk,
-        ast.parameters(member),
-        "Interface method contains an undefined or non-data parameter slot.",
-      );
-      if (parameters === undefined) {
-        return;
-      }
-      for (const parameter of parameters) {
-        recordParameterAbiFacts(walk, parameter);
-      }
+      recordCallableTypeSignatureFacts(walk, member, {
+        receiverLifetime: rustImplicitCallableReceiverLifetime(walk, member),
+      });
     }
   }
 }

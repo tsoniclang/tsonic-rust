@@ -82,10 +82,10 @@ function rustCallbackProtocol(
   carrier: TargetTypeRef | undefined,
 ): { readonly representation: "closure" | "function-pointer" | "callable"; readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef } | undefined {
   if (carrier?.kind === "closure") {
-    return { representation: "closure", parameters: carrier.args, result: carrier.result };
+    return { representation: "closure", parameters: carrier.parameters, result: carrier.result };
   }
   if (carrier?.kind === "function-pointer") {
-    return { representation: "function-pointer", parameters: carrier.args, result: carrier.result };
+    return { representation: "function-pointer", parameters: carrier.parameters, result: carrier.result };
   }
   const callable = rustCallableProtocol(carrier);
   return callable === undefined
@@ -97,7 +97,7 @@ function rustCallbackCarrierMatchesTemplate(
   template: TargetTypeRef,
   actual: TargetTypeRef,
 ): boolean {
-  if (template.kind === "opaque" && template.id === "tsonic.rust.infer") {
+  if (template.kind === "inference-variable") {
     return true;
   }
   const templateProtocol = rustCallbackProtocol(template);

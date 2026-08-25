@@ -1,17 +1,36 @@
-import { asRecord, requireExactKeys, requireRustIdentifier, requireRustPath, validateCarrier, validateValueConversion } from "./carriers.js";
+import { asRecord, requireExactKeys, requireRustIdentifier, validateCarrier, validateRustBound, validateRustGenerics, validateValueConversion } from "./carriers.js";
 import { isRustFallibleErrorBoundary } from "../../../target-model/operations/error-boundary.js";
 import {
   rustProviderOperationFormAcceptsTargetTypeArguments,
   rustProviderOperationFormContractViolation,
   rustProviderOperationFormDeclaresWritableInput,
+  rustProviderOperationFormPassesSourceArgumentByReference,
 } from "../../../policy/operations/forms.js";
-import { rustTargetTypeParameterNames, isRustUnitCarrier } from "../../../target-model/types/index.js";
+import {
+  rustGenericArgumentAssociatedProjectionKeys,
+  isRustUnitCarrier,
+  rustGenericArgumentOpenIdentityKeys,
+  rustGenericsAssociatedProjectionKeys,
+  rustGenericsDeclaredParameterIdentities,
+  rustGenericsOpenGenericIdentityKeys,
+  rustGenericParameterIdentity,
+  rustTargetTypeAssociatedProjectionKeys,
+  rustTargetTypeOpenGenericIdentityKeys,
+  rustTraitAssociatedProjectionKeys,
+  rustTraitOpenGenericIdentityKeys,
+} from "../../../target-model/types/index.js";
 import { validateOperationForm } from "./forms.js";
 import type { ExportRecord, Fail, MemberRecord, SignatureRecord } from "./model.js";
 import type { RustProviderOperationForm } from "../../../target-model/operations/model.js";
 import type { RustProviderPackageDefinition } from "../model.js";
 import type { RustProviderTypeParameterRequirement } from "../../../target-model/operations/model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { isRustGenericArgumentValue } from "../../../target-model/types/equality.js";
+import {
+  rustBoundSemanticKey,
+  rustSemanticIdentityKey,
+  rustTypeSemanticKey,
+} from "../../../target-model/semantics/index.js";
 
 export function validateOperationRows(
   definition: RustProviderPackageDefinition,
@@ -24,7 +43,7 @@ export function validateOperationRows(
   for (const row of definition.operations) {
     requireExactKeys(asRecord(row), [
       "exportId", "memberId", "signatureId", "operationKind", "target", "resultCarrier",
-      "parameterCarriers", "receiverCarrier", "typeParameters", "typeRequirements", "targetTypeArguments", "resultConversion", "evaluation", "isAsync", "isFallible", "errorBoundary", "errorCarrier", "isUnsafe", "immediateCallback",
+      "parameterCarriers", "receiverCarrier", "targetReceiver", "sourceGenericBindings", "targetInferenceParameters", "targetGenerics", "targetCallableGenerics", "typeRequirements", "targetGenericArguments", "resultConversion", "evaluation", "isAsync", "isFallible", "errorBoundary", "errorCarrier", "isUnsafe", "immediateCallback",
     ], `operation row '${String((row as { readonly memberId?: unknown; readonly exportId?: unknown }).memberId ?? row.exportId)}'`, fail);
     const label = row.memberId ?? row.exportId;
     if (row.operationKind !== "method" && row.operationKind !== "constructor" &&
@@ -120,28 +139,85 @@ export function validateOperationRows(
     if (row.receiverCarrier !== undefined) {
       validateCarrier(row.receiverCarrier, definition, `${label}.receiverCarrier`, fail);
     }
-    const typeParameterNames = new Set<string>();
-    for (const [index, name] of (row.typeParameters ?? []).entries()) {
-      requireRustIdentifier(name, `${label}.typeParameters[${index}]`, fail);
-      if (typeParameterNames.has(name)) {
-        fail(`${label}.typeParameters contains duplicate '${name}'`);
+    if (row.targetReceiver !== undefined) {
+      requireExactKeys(
+        asRecord(row.targetReceiver),
+        ["type", "explicit"],
+        `${label}.targetReceiver`,
+        fail,
+      );
+      validateCarrier(row.targetReceiver.type, definition, `${label}.targetReceiver.type`, fail);
+      if (typeof row.targetReceiver.explicit !== "boolean") {
+        fail(`${label}.targetReceiver.explicit must be boolean`);
       }
-      typeParameterNames.add(name);
+      if (row.operationKind !== "method") {
+        fail(`${label}.targetReceiver is valid only for method operations`);
+      }
+    }
+    const typeParameterNames = validateSourceGenericBindings(
+      row.sourceGenericBindings ?? [],
+      `${label}.sourceGenericBindings`,
+      fail,
+      definition,
+    );
+    if ((row.sourceGenericBindings ?? []).some((binding) =>
+      binding.target.kind === "semantic-parameter")) {
+      fail(`${label}.sourceGenericBindings cannot declare type-only semantic parameters`);
+    }
+    const inferredGenericIdentities = validateTargetOpenGenericParameters(
+      row.targetInferenceParameters ?? [],
+      `${label}.targetInferenceParameters`,
+      fail,
+      definition,
+    );
+    if (row.targetGenerics !== undefined) {
+      validateRustGenerics(row.targetGenerics, definition, `${label}.targetGenerics`, fail);
+      validateTargetGenericParameterMapping(
+        row.targetGenerics,
+        row.sourceGenericBindings ?? [],
+        inferredGenericIdentities,
+        `${label}.targetGenerics`,
+        fail,
+      );
+    }
+    if (row.targetCallableGenerics !== undefined) {
+      validateRustGenerics(
+        row.targetCallableGenerics,
+        definition,
+        `${label}.targetCallableGenerics`,
+        fail,
+      );
+      if (row.targetGenerics === undefined) {
+        fail(`${label}.targetCallableGenerics requires targetGenerics`);
+      } else {
+        validateCallableGenericsSubset(
+          row.targetCallableGenerics,
+          row.targetGenerics,
+          `${label}.targetCallableGenerics`,
+          fail,
+        );
+      }
     }
     validateTypeParameterRequirements(
       row.typeRequirements,
       typeParameterNames,
+      definition,
       `${label}.typeRequirements`,
       fail,
     );
-    if (row.targetTypeArguments !== undefined && (
-      !Array.isArray(row.targetTypeArguments) || row.targetTypeArguments.length === 0 ||
+    if (row.targetGenericArguments !== undefined && (
+      !Array.isArray(row.targetGenericArguments) || row.targetGenericArguments.length === 0 ||
       !rustProviderOperationFormAcceptsTargetTypeArguments(row.target)
     )) {
-      fail(`${label}.targetTypeArguments requires a non-empty native call or method type-argument list`);
+      fail(`${label}.targetGenericArguments requires a non-empty native call or method generic-argument list`);
     }
-    for (const [index, carrier] of (row.targetTypeArguments ?? []).entries()) {
-      validateCarrier(carrier, definition, `${label}.targetTypeArguments[${index}]`, fail);
+    for (const [index, argument] of (row.targetGenericArguments ?? []).entries()) {
+      if (!isRustGenericArgumentValue(argument)) {
+        fail(`${label}.targetGenericArguments[${index}] is not one closed Rust generic argument`);
+      }
+      if (argument.kind === "type") {
+        validateCarrier(argument.value, definition, `${label}.targetGenericArguments[${index}].value`, fail);
+      }
     }
     for (const [index, carrier] of (row.parameterCarriers ?? []).entries()) {
       validateCarrier(
@@ -149,28 +225,87 @@ export function validateOperationRows(
         definition,
         `${label}.parameterCarriers[${index}]`,
         fail,
-        { allowImmediateClosure: row.immediateCallback?.sourceArgumentIndex === index },
+        {
+          allowImmediateClosure: row.immediateCallback?.sourceArgumentIndex === index,
+          allowUnsized: rustProviderOperationFormPassesSourceArgumentByReference(
+            row.target,
+            index,
+            carrier,
+          ),
+        },
       );
     }
-    const referencedTypeParameters = new Set([
-      ...rustTargetTypeParameterNames(row.resultCarrier),
-      ...(row.receiverCarrier === undefined ? [] : rustTargetTypeParameterNames(row.receiverCarrier)),
-      ...(row.parameterCarriers ?? []).flatMap((carrier) => rustTargetTypeParameterNames(carrier)),
-      ...(row.targetTypeArguments ?? []).flatMap((carrier) => rustTargetTypeParameterNames(carrier)),
-      ...operationFormCarriers(row.target).flatMap((carrier) => rustTargetTypeParameterNames(carrier)),
+    const referencedGenericIdentities = new Set([
+      ...rustTargetTypeOpenGenericIdentityKeys(row.resultCarrier),
+      ...(row.receiverCarrier === undefined ? [] : rustTargetTypeOpenGenericIdentityKeys(row.receiverCarrier)),
+      ...(row.targetReceiver === undefined ? [] : rustTargetTypeOpenGenericIdentityKeys(row.targetReceiver.type)),
+      ...(row.parameterCarriers ?? []).flatMap(rustTargetTypeOpenGenericIdentityKeys),
+      ...(row.targetGenericArguments ?? []).flatMap(rustGenericArgumentOpenIdentityKeys),
+      ...(row.targetGenerics === undefined
+        ? []
+        : rustGenericsOpenGenericIdentityKeys(row.targetGenerics)),
+      ...(row.targetCallableGenerics === undefined
+        ? []
+        : rustGenericsOpenGenericIdentityKeys(row.targetCallableGenerics)),
+      ...operationFormCarriers(row.target).flatMap(rustTargetTypeOpenGenericIdentityKeys),
+      ...(row.target.form === "trait-call" || row.target.form === "trait-associated-value"
+        ? rustTraitOpenGenericIdentityKeys(row.target.trait)
+        : []),
       ...(row.immediateCallback === undefined
         ? []
         : operationFormCarriers(row.immediateCallback.fallibleTarget)
-            .flatMap((carrier) => rustTargetTypeParameterNames(carrier))),
+            .flatMap(rustTargetTypeOpenGenericIdentityKeys)),
     ]);
-    for (const name of referencedTypeParameters) {
-      if (!typeParameterNames.has(name)) {
-        fail(`${label} carrier references undeclared operation type parameter '${name}'`);
+    const sourceGenericIdentityByKey = new Map((row.sourceGenericBindings ?? []).flatMap((binding) => {
+      if (binding.target.kind !== "generic-parameter") return [];
+      const identity = rustGenericParameterIdentity(binding.target.parameter);
+      return identity === undefined ? [] : [[identity.identityKey, binding.sourceName] as const];
+    }));
+    for (const identityKey of referencedGenericIdentities) {
+      if (!sourceGenericIdentityByKey.has(identityKey) && !inferredGenericIdentities.has(identityKey)) {
+        fail(`${label} carrier references undeclared operation target generic parameter '${identityKey}'`);
       }
     }
-    for (const name of typeParameterNames) {
-      if (!referencedTypeParameters.has(name)) {
-        fail(`${label}.typeParameters declares unused operation type parameter '${name}'`);
+    for (const identityKey of inferredGenericIdentities) {
+      if (!referencedGenericIdentities.has(identityKey)) {
+        fail(`${label}.targetInferenceParameters declares unused target parameter '${identityKey}'`);
+      }
+    }
+    for (const [identityKey, sourceName] of sourceGenericIdentityByKey) {
+      if (!referencedGenericIdentities.has(identityKey)) {
+        fail(`${label}.sourceGenericBindings declares unused '${sourceName}' target parameter '${identityKey}'`);
+      }
+    }
+    const referencedAssociatedProjections = new Set([
+      ...rustTargetTypeAssociatedProjectionKeys(row.resultCarrier),
+      ...(row.receiverCarrier === undefined
+        ? []
+        : rustTargetTypeAssociatedProjectionKeys(row.receiverCarrier)),
+      ...(row.targetReceiver === undefined
+        ? []
+        : rustTargetTypeAssociatedProjectionKeys(row.targetReceiver.type)),
+      ...(row.parameterCarriers ?? []).flatMap(rustTargetTypeAssociatedProjectionKeys),
+      ...(row.targetGenericArguments ?? []).flatMap(rustGenericArgumentAssociatedProjectionKeys),
+      ...(row.targetGenerics === undefined
+        ? []
+        : rustGenericsAssociatedProjectionKeys(row.targetGenerics)),
+      ...(row.targetCallableGenerics === undefined
+        ? []
+        : rustGenericsAssociatedProjectionKeys(row.targetCallableGenerics)),
+      ...operationFormCarriers(row.target).flatMap(rustTargetTypeAssociatedProjectionKeys),
+      ...(row.target.form === "trait-call" || row.target.form === "trait-associated-value"
+        ? rustTraitAssociatedProjectionKeys(row.target.trait)
+        : []),
+      ...(row.immediateCallback === undefined
+        ? []
+        : operationFormCarriers(row.immediateCallback.fallibleTarget)
+            .flatMap(rustTargetTypeAssociatedProjectionKeys)),
+    ]);
+    for (const binding of row.sourceGenericBindings ?? []) {
+      if (binding.target.kind !== "associated-type") continue;
+      const key = rustTypeSemanticKey(binding.target.projection);
+      if (!referencedAssociatedProjections.has(key)) {
+        fail(`${label}.sourceGenericBindings declares unused associated type '${binding.sourceName}'`);
       }
     }
     if (row.resultConversion !== undefined) {
@@ -191,9 +326,238 @@ export function validateOperationRows(
   }
 }
 
+export function validateTargetGenericParameterMapping(
+  generics: import("../../../target-model/semantics/index.js").RustGenerics,
+  sourceBindings: readonly import("../../../target-model/operations/model.js").RustProviderSourceGenericBinding[],
+  inferredIdentities: ReadonlySet<string>,
+  where: string,
+  fail: Fail,
+): void {
+  const declared = rustGenericsDeclaredParameterIdentities(generics);
+  const source = {
+    lifetimes: new Set<string>(),
+    types: new Set<string>(),
+    consts: new Set<string>(),
+  };
+  const declaredAll = new Set([
+    ...declared.lifetimes,
+    ...declared.types,
+    ...declared.consts,
+  ]);
+  const defaulted = new Set(generics.parameters.flatMap((parameter) => {
+    const hasDefault = parameter.kind === "type"
+      ? parameter.defaultType !== undefined
+      : parameter.kind === "const" && parameter.defaultValue !== undefined;
+    if (!hasDefault) return [];
+    const argument = parameter.kind === "lifetime"
+      ? { kind: "lifetime" as const, value: parameter.identity }
+      : parameter.kind === "type"
+        ? {
+            kind: "type" as const,
+            value: {
+              kind: "type-parameter" as const,
+              identity: parameter.identity,
+              displayName: parameter.displayName,
+            },
+          }
+        : {
+            kind: "const" as const,
+            value: {
+              kind: "parameter" as const,
+              identity: parameter.identity,
+              displayName: parameter.displayName,
+            },
+          };
+    const identity = rustGenericParameterIdentity(argument);
+    return identity === undefined ? [] : [identity.identityKey];
+  }));
+  for (const identity of inferredIdentities) {
+    if (!declaredAll.has(identity)) {
+      fail(`${where} marks undeclared target parameter '${identity}' as target-inferred or implicit`);
+    }
+  }
+  for (const binding of sourceBindings) {
+    if (binding.target.kind === "semantic-parameter") {
+      continue;
+    }
+    if (binding.target.kind === "associated-type") {
+      for (const identity of rustTargetTypeOpenGenericIdentityKeys(binding.target.projection)) {
+        if (!declaredAll.has(identity)) {
+          fail(`${where} associated source binding references undeclared target generic parameter '${identity}'`);
+        }
+      }
+      continue;
+    }
+    const identity = rustGenericParameterIdentity(binding.target.parameter);
+    if (identity === undefined) continue;
+    const selected = identity.kind === "lifetime"
+      ? source.lifetimes
+      : identity.kind === "type"
+        ? source.types
+        : source.consts;
+    selected.add(identity.identityKey);
+    if (inferredIdentities.has(identity.identityKey)) {
+      fail(`${where} maps target parameter '${identity.identityKey}' from both source and target inference`);
+    }
+  }
+  for (const kind of ["lifetimes", "types", "consts"] as const) {
+    for (const identity of source[kind]) {
+      if (!declared[kind].has(identity)) {
+        fail(`${where} has no declared ${kind.slice(0, -1)} parameter for source mapping '${identity}'`);
+      }
+    }
+    for (const identity of declared[kind]) {
+      if (!source[kind].has(identity) && !inferredIdentities.has(identity) &&
+        !defaulted.has(identity)) {
+        fail(`${where} declares unmapped ${kind.slice(0, -1)} parameter '${identity}'`);
+      }
+    }
+  }
+  for (const identity of rustGenericsOpenGenericIdentityKeys(generics)) {
+    if (!declaredAll.has(identity)) {
+      fail(`${where} references undeclared target generic parameter '${identity}'`);
+    }
+  }
+}
+
+export function validateTargetOpenGenericParameters(
+  parameters: readonly import("../../../target-model/semantics/index.js").RustGenericArgument[],
+  where: string,
+  fail: Fail,
+  definition: RustProviderPackageDefinition,
+): ReadonlySet<string> {
+  if (!Array.isArray(parameters)) {
+    fail(`${where} must be a dense array`);
+    return new Set();
+  }
+  const identities = new Set<string>();
+  for (const [index, parameter] of parameters.entries()) {
+    if (!isRustGenericArgumentValue(parameter)) {
+      fail(`${where}[${index}] is not one exact Rust generic parameter argument`);
+      continue;
+    }
+    if (parameter.kind === "type") {
+      validateCarrier(parameter.value, definition, `${where}[${index}].value`, fail);
+    }
+    const identity = rustGenericParameterIdentity(parameter);
+    if (identity === undefined) {
+      fail(`${where}[${index}] must identify an open lifetime, type, or const parameter`);
+      continue;
+    }
+    if (identities.has(identity.identityKey)) {
+      fail(`${where} contains duplicate target identity '${identity.identityKey}'`);
+    }
+    identities.add(identity.identityKey);
+  }
+  return identities;
+}
+
+function validateCallableGenericsSubset(
+  callable: import("../../../target-model/semantics/index.js").RustGenerics,
+  operation: import("../../../target-model/semantics/index.js").RustGenerics,
+  where: string,
+  fail: Fail,
+): void {
+  const available = rustGenericsDeclaredParameterIdentities(operation);
+  const selected = rustGenericsDeclaredParameterIdentities(callable);
+  for (const kind of ["lifetimes", "types", "consts"] as const) {
+    for (const identity of selected[kind]) {
+      if (!available[kind].has(identity)) {
+        fail(`${where} references target ${kind.slice(0, -1)} parameter '${identity}' outside operation generics`);
+      }
+    }
+  }
+}
+
+export function validateSourceGenericBindings(
+  bindings: readonly import("../../../target-model/operations/model.js").RustProviderSourceGenericBinding[],
+  where: string,
+  fail: Fail,
+  definition: RustProviderPackageDefinition,
+): Set<string> {
+  if (!Array.isArray(bindings)) {
+    fail(`${where} must be a dense array`);
+    return new Set();
+  }
+  const names = new Set<string>();
+  const identities = new Set<string>();
+  for (const [index, binding] of bindings.entries()) {
+    const label = `${where}[${index}]`;
+    const record = asRecord(binding);
+    requireExactKeys(record, ["sourceName", "target"], label, fail);
+    requireRustIdentifier(binding.sourceName, `${label}.sourceName`, fail);
+    if (names.has(binding.sourceName)) {
+      fail(`${where} contains duplicate source name '${binding.sourceName}'`);
+    }
+    names.add(binding.sourceName);
+    const target = asRecord(binding.target);
+    if (binding.target.kind !== "generic-parameter" && binding.target.kind !== "associated-type" &&
+      binding.target.kind !== "semantic-parameter") {
+      fail(`${label}.target.kind must be 'generic-parameter', 'associated-type', or 'semantic-parameter'`);
+      continue;
+    }
+    if (binding.target.kind === "semantic-parameter") {
+      requireExactKeys(target, ["kind", "role"], `${label}.target`, fail);
+      if (binding.target.role !== "callable-result") {
+        fail(`${label}.target.role must be 'callable-result'`);
+        continue;
+      }
+      const key = `semantic:${binding.target.role}`;
+      if (identities.has(key)) {
+        fail(`${where} contains duplicate semantic parameter role '${binding.target.role}'`);
+      }
+      identities.add(key);
+      continue;
+    }
+    if (binding.target.kind === "associated-type") {
+      requireExactKeys(target, ["kind", "projection"], `${label}.target`, fail);
+      if (binding.target.projection.kind !== "associated-type") {
+        fail(`${label}.target.projection must be one exact Rust associated type`);
+        continue;
+      }
+      validateCarrier(
+        binding.target.projection,
+        definition,
+        `${label}.target.projection`,
+        fail,
+      );
+      const key = `associated:${rustTypeSemanticKey(binding.target.projection)}`;
+      if (identities.has(key)) {
+        fail(`${where} contains duplicate associated type projection '${key}'`);
+      }
+      identities.add(key);
+      continue;
+    }
+    requireExactKeys(target, ["kind", "parameter"], `${label}.target`, fail);
+    const argument = binding.target.parameter;
+    if (!isRustGenericArgumentValue(argument)) {
+      fail(`${label}.target.parameter must be one exact Rust generic parameter argument`);
+      continue;
+    }
+    const identity = argument.kind === "lifetime" && argument.value.kind === "parameter"
+      ? argument.value.identity
+      : argument.kind === "type" && argument.value.kind === "type-parameter"
+        ? argument.value.identity
+        : argument.kind === "const" && argument.value.kind === "parameter"
+          ? argument.value.identity
+          : undefined;
+    if (identity === undefined) {
+      fail(`${label}.target.parameter must identify a lifetime, type, or const parameter`);
+      continue;
+    }
+    const identityKey = rustSemanticIdentityKey(identity);
+    if (identities.has(identityKey)) {
+      fail(`${where} contains duplicate target generic parameter identity '${identityKey}'`);
+    }
+    identities.add(identityKey);
+  }
+  return names;
+}
+
 export function validateTypeParameterRequirements(
   requirements: readonly RustProviderTypeParameterRequirement[] | undefined,
   typeParameterNames: ReadonlySet<string>,
+  definition: RustProviderPackageDefinition,
   where: string,
   fail: Fail,
 ): void {
@@ -211,15 +575,13 @@ export function validateTypeParameterRequirements(
     seen.add(requirement.name);
     previous = requirement.name;
     const keys = requirement.requirements.map((entry, index) => {
-      if (entry === "clone" || entry === "copy") {
-        return entry;
-      }
-      requireExactKeys(asRecord(entry), ["kind", "path"], `${where}.${requirement.name}.requirements[${index}]`, fail);
-      if (entry.kind !== "trait") {
-        fail(`${where}.${requirement.name}.requirements[${index}].kind must be 'trait'`);
-      }
-      requireRustPath(entry.path, `${where}.${requirement.name}.requirements[${index}].path`, fail);
-      return `trait:${entry.path}`;
+      validateRustBound(
+        entry,
+        definition,
+        `${where}.${requirement.name}.requirements[${index}]`,
+        fail,
+      );
+      return rustBoundSemanticKey(entry);
     });
     if (keys.length === 0 || new Set(keys).size !== keys.length ||
       keys.some((entry, index) => index > 0 && entry < keys[index - 1]!)) {
@@ -291,9 +653,26 @@ function operationFormCarriers(form: RustProviderOperationForm): readonly Target
     ];
   }
   if (form.form === "trait-call" || form.form === "trait-associated-value") {
-    return [form.owner, ...form.traitTypeArguments];
+    return [form.owner, ...traitCarriers(form.trait)];
   }
   return [];
+}
+
+function traitCarriers(
+  trait: import("../../../target-model/semantics/index.js").RustTraitRef,
+): readonly TargetTypeRef[] {
+  const selected: TargetTypeRef[] = [];
+  const visitArgument = (
+    argument: import("../../../target-model/semantics/index.js").RustGenericArgument,
+  ): void => {
+    if (argument.kind === "type") selected.push(argument.value);
+  };
+  trait.arguments.forEach(visitArgument);
+  for (const constraint of trait.associatedConstraints) {
+    constraint.arguments.forEach(visitArgument);
+    if (constraint.kind === "equality") selected.push(constraint.type);
+  }
+  return selected;
 }
 
 function validateOperationParameters(

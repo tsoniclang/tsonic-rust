@@ -1,5 +1,7 @@
 import type { RustProjectFieldDispatchPlan } from "../../../analysis/project-types/field-dispatch.js";
-import type { RustType } from "../../target-ast/nodes.js";
+import type { RustReceiver, RustType } from "../../target-ast/nodes.js";
+import { rustReferenceReceiver } from "../../target-ast/builders.js";
+import { rustSharedSelfReceiver } from "./polymorphism/model.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import {
   diagnosticInput,
@@ -11,11 +13,11 @@ import {
 
 export type RustPlannedProjectFieldDispatchRole =
   | {
-      readonly selfMode: "ref" | "rc";
+      readonly receiver: RustReceiver;
       readonly fallible: false;
     }
   | {
-      readonly selfMode: "ref" | "rc";
+      readonly receiver: RustReceiver;
       readonly fallible: true;
       readonly resultErrorType: RustType;
       readonly operandErrorType: RustType;
@@ -33,10 +35,10 @@ export function planRustProjectFieldDispatchRoles(
   const fallible = plan.read.fallible || plan.write?.fallible === true;
   if (!fallible) {
     return {
-      read: { selfMode: plan.read.selfMode, fallible: false },
+      read: { receiver: projectFieldReceiver(plan.read), fallible: false },
       ...(plan.write === undefined
         ? {}
-        : { write: { selfMode: plan.write.selfMode, fallible: false } }),
+        : { write: { receiver: projectFieldReceiver(plan.write), fallible: false } }),
     };
   }
   const resultErrorType = rustActiveErrorType(context);
@@ -61,15 +63,23 @@ export function planRustProjectFieldDispatchRoles(
   const role = (
     value: RustProjectFieldDispatchPlan["read"],
   ): RustPlannedProjectFieldDispatchRole => value.fallible
-    ? {
-        selfMode: value.selfMode,
+      ? {
+        receiver: projectFieldReceiver(value),
         fallible: true,
         resultErrorType,
         operandErrorType,
       }
-    : { selfMode: value.selfMode, fallible: false };
+    : { receiver: projectFieldReceiver(value), fallible: false };
   return {
     read: role(plan.read),
     ...(plan.write === undefined ? {} : { write: role(plan.write) }),
   };
+}
+
+export function projectFieldReceiver(
+  role: RustProjectFieldDispatchPlan["read"],
+): RustReceiver {
+  return role.selfMode === "rc"
+    ? rustSharedSelfReceiver()
+    : rustReferenceReceiver(false);
 }

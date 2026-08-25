@@ -19,7 +19,7 @@ import {
 } from "../facts/keys.js";
 import {
   rustOptionElementCarrier,
-  rustCallableProtocol,
+  rustCallableSignature,
   rustCallableTargetType,
   rustSourcePrimitiveTargetType,
   rustUnitTargetType,
@@ -37,7 +37,12 @@ import { rustPolicyTargetDiagnostic } from "../../policy/operations/contracts.js
 import { rustRuntimeCarrierKey, rustSelectedCallKey } from "../../target-model/facts/selections.js";
 import { rustSourceParameterContractCarrier } from "../../policy/ownership/source-callable-abi.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { tryFlowMarkerCall } from "../declarations/types-and-bindings.js";
+import { tryRustOwnershipMarkerCall } from "../declarations/types-and-bindings.js";
+import {
+  rustSourceOwnershipOperationFactKey,
+  rustSourcePointerOperationFactKey,
+} from "../../source/semantics/facts.js";
+import type { RustSourcePointerOperationFact } from "../../source/semantics/model.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustSelectedTargetSignature, TargetTypeRef } from "../../target-model/types/model.js";
@@ -191,9 +196,15 @@ export function resolveCallLikeCarrier(
     return sharedMarkerCarrier.carrier;
   }
   const callArguments = ast.arguments(expression);
-  const flowHandled = tryFlowMarkerCall(walk, expression, callArguments, sourceFile, expected);
-  if (flowHandled !== undefined) {
-    return flowHandled.carrier;
+  const ownershipHandled = tryRustOwnershipMarkerCall(
+    walk,
+    expression,
+    callArguments,
+    sourceFile,
+    expected,
+  );
+  if (ownershipHandled !== undefined) {
+    return ownershipHandled.carrier;
   }
   const deferred = walk.deferredCallbackCalls.get(expression);
   if (deferred !== undefined) {
@@ -262,6 +273,8 @@ export function isSharedSourceMarkerOperation(
 ): boolean {
   const sourceFacts = walk.context.source.sourceFacts;
   return readRustSourceNativePointerOperation(sourceFacts, expression) !== undefined ||
+    sourceFacts.getFact(expression, rustSourcePointerOperationFactKey) !== undefined ||
+    sourceFacts.getFact(expression, rustSourceOwnershipOperationFactKey) !== undefined ||
     readRustSourceUnsafeContext(sourceFacts, expression) !== undefined ||
     readRustSourceSafetyBuilder(sourceFacts, expression) !== undefined;
 }
@@ -277,6 +290,13 @@ function resolveSharedSourceMarkerCarrier(
   expected: TargetTypeRef | undefined,
 ): RustSharedSourceMarkerCarrierResolution {
   const sourceFacts = walk.context.source.sourceFacts;
+  const rustPointer = sourceFacts.getFact(expression, rustSourcePointerOperationFactKey);
+  if (rustPointer !== undefined) {
+    return {
+      handled: true,
+      ...resolvedRustPointerCarrier(walk, expression, sourceFile, rustPointer),
+    };
+  }
   const nativePointer = readRustSourceNativePointerOperation(
     sourceFacts,
     expression,
@@ -322,6 +342,159 @@ function resolveSharedSourceMarkerCarrier(
   return { handled: false };
 }
 
+function resolvedRustPointerCarrier(
+  walk: RustFactWalk,
+  expression: Node,
+  sourceFile: SourceFile,
+  source: RustSourcePointerOperationFact,
+): { readonly carrier?: TargetTypeRef } {
+  if (source.kind === "restore-exposed-address") {
+    return resolvedRestoredPointerCarrier(walk, expression, sourceFile, source);
+  }
+  const pointerCarrier = resolveExpressionCarrier(
+    walk,
+    source.pointerExpression,
+    sourceFile,
+    undefined,
+  );
+  if (pointerCarrier?.kind !== "raw-pointer" ||
+    (source.kind === "expose-address" && pointerCarrier.mutable !== source.mutable)) {
+    appendRustDiagnostic(
+      walk,
+      "RUST_POINTER_OPERATION_NOT_MAPPED",
+      `Rust '${source.kind}' requires one exact native-pointer operand carrier.`,
+      expression,
+      ["target.capability=rust.pointer.exact-operand"],
+    );
+    return {};
+  }
+  if (source.kind !== "expose-address" && source.explicitPointeeTypeNode !== undefined) {
+    const explicitPointee = resolveRustTargetTypeRef(
+      source.explicitPointeeTypeNode,
+      rustResolutionContext(walk, source.explicitPointeeTypeNode),
+      walk.operationOptions,
+    );
+    if (!rustTargetTypeRefEquals(explicitPointee, pointerCarrier.target)) {
+      appendRustDiagnostic(
+        walk,
+        "RUST_POINTER_POINTEE_CONFLICT",
+        "The authored Rust pointee type conflicts with the exact selected pointer carrier.",
+        expression,
+        ["target.capability=rust.pointer.exact-pointee"],
+      );
+      return {};
+    }
+  }
+  if (source.kind === "expose-address") {
+    const resultCarrier = rustSourcePrimitiveTargetType("native-uint");
+    setRustOperationFact(walk, expression, {
+      kind: "native-pointer",
+      operationId: "tsonic.rust.pointer.expose-address",
+      operation: "expose-address",
+      safety: "safe",
+      pointerExpression: source.pointerExpression,
+      pointerCarrier,
+      pointeeCarrier: pointerCarrier.target,
+      resultCarrier,
+    });
+    return { carrier: setCarrierFact(walk, expression, resultCarrier) };
+  }
+  if (source.kind === "read-volatile") {
+    const resultCarrier = pointerCarrier.target;
+    setRustOperationFact(walk, expression, {
+      kind: "native-pointer",
+      operationId: "tsonic.rust.pointer.read-volatile",
+      operation: "read-volatile",
+      safety: "requires-unsafe",
+      pointerExpression: source.pointerExpression,
+      pointerCarrier,
+      pointeeCarrier: pointerCarrier.target,
+      resultCarrier,
+    });
+    return { carrier: setCarrierFact(walk, expression, resultCarrier) };
+  }
+  const valueCarrier = resolveExactNativePointerOperandCarrier(
+    walk,
+    source.valueExpression,
+    sourceFile,
+    pointerCarrier.target,
+  );
+  if (!pointerCarrier.mutable || valueCarrier === undefined ||
+    !rustTargetTypeRefEquals(valueCarrier, pointerCarrier.target)) {
+    appendRustDiagnostic(
+      walk,
+      "RUST_POINTER_WRITE_VALUE_CONFLICT",
+      "Rust volatile write requires a mutable pointer and an exact pointee value carrier.",
+      expression,
+      ["target.capability=rust.pointer.exact-write"],
+    );
+    return {};
+  }
+  const resultCarrier = rustUnitTargetType();
+  setRustOperationFact(walk, expression, {
+    kind: "native-pointer",
+    operationId: "tsonic.rust.pointer.write-volatile",
+    operation: "write-volatile",
+    safety: "requires-unsafe",
+    pointerExpression: source.pointerExpression,
+    pointerCarrier,
+    pointeeCarrier: pointerCarrier.target,
+    valueExpression: source.valueExpression,
+    valueCarrier,
+    resultCarrier,
+  });
+  return { carrier: setCarrierFact(walk, expression, resultCarrier) };
+}
+
+function resolvedRestoredPointerCarrier(
+  walk: RustFactWalk,
+  expression: Node,
+  sourceFile: SourceFile,
+  source: Extract<RustSourcePointerOperationFact, { readonly kind: "restore-exposed-address" }>,
+): { readonly carrier?: TargetTypeRef } {
+  const expectedAddress = rustSourcePrimitiveTargetType("native-uint");
+  const addressCarrier = resolveExactNativePointerOperandCarrier(
+    walk,
+    source.addressExpression,
+    sourceFile,
+    expectedAddress,
+  );
+  const pointeeCarrier = source.explicitPointeeTypeNode === undefined
+    ? undefined
+    : resolveRustTargetTypeRef(
+        source.explicitPointeeTypeNode,
+        rustResolutionContext(walk, source.explicitPointeeTypeNode),
+        walk.operationOptions,
+      );
+  if (!rustTargetTypeRefEquals(addressCarrier, expectedAddress) || pointeeCarrier === undefined) {
+    appendRustDiagnostic(
+      walk,
+      "RUST_POINTER_RESTORATION_EVIDENCE_MISSING",
+      "Restoring exposed Rust pointer provenance requires exact native-uint input and an explicit pointee type.",
+      expression,
+      ["target.capability=rust.pointer.exact-provenance-restoration"],
+    );
+    return {};
+  }
+  const resultCarrier: Extract<TargetTypeRef, { readonly kind: "raw-pointer" }> = {
+    kind: "raw-pointer",
+    mutable: source.mutable,
+    target: pointeeCarrier,
+  };
+  setRustOperationFact(walk, expression, {
+    kind: "native-pointer",
+    operationId: "tsonic.rust.pointer.restore-exposed-address",
+    operation: "restore-exposed-address",
+    safety: "safe",
+    addressExpression: source.addressExpression,
+    addressCarrier: expectedAddress,
+    pointerCarrier: resultCarrier,
+    pointeeCarrier,
+    resultCarrier,
+  });
+  return { carrier: setCarrierFact(walk, expression, resultCarrier) };
+}
+
 function resolvedNativePointerCarrier(
   walk: RustFactWalk,
   expression: Node,
@@ -334,7 +507,7 @@ function resolvedNativePointerCarrier(
     sourceFile,
     undefined,
   );
-  if (pointerCarrier?.kind !== "pointer") {
+  if (pointerCarrier?.kind !== "raw-pointer") {
     appendRustDiagnostic(
       walk,
       "RUST_NATIVE_POINTER_OPERATION_NOT_MAPPED",
@@ -350,7 +523,7 @@ function resolvedNativePointerCarrier(
       rustResolutionContext(walk, source.explicitPointeeTypeNode),
       walk.operationOptions,
     );
-    if (!rustTargetTypeRefEquals(explicitPointee, pointerCarrier.pointee)) {
+    if (!rustTargetTypeRefEquals(explicitPointee, pointerCarrier.target)) {
       appendRustDiagnostic(
         walk,
         "RUST_NATIVE_POINTER_POINTEE_CONFLICT",
@@ -365,14 +538,15 @@ function resolvedNativePointerCarrier(
   let fact: Extract<RustTargetOperationFact, { readonly kind: "native-pointer" }>;
   switch (source.operation) {
     case "load":
-      resultCarrier = pointerCarrier.pointee;
+      resultCarrier = pointerCarrier.target;
       fact = {
         kind: "native-pointer",
         operationId: "tsonic.rust.native-pointer.load",
         operation: source.operation,
+        safety: "requires-unsafe",
         pointerExpression: source.pointerExpression,
         pointerCarrier,
-        pointeeCarrier: pointerCarrier.pointee,
+        pointeeCarrier: pointerCarrier.target,
         resultCarrier,
       };
       break;
@@ -381,9 +555,10 @@ function resolvedNativePointerCarrier(
         walk,
         source.valueExpression,
         sourceFile,
-        pointerCarrier.pointee,
+        pointerCarrier.target,
       );
-      if (!rustTargetTypeRefEquals(valueCarrier, pointerCarrier.pointee)) {
+      if (valueCarrier === undefined ||
+        !rustTargetTypeRefEquals(valueCarrier, pointerCarrier.target)) {
         appendRustDiagnostic(
           walk,
           "RUST_NATIVE_POINTER_STORE_VALUE_CONFLICT",
@@ -398,9 +573,10 @@ function resolvedNativePointerCarrier(
         kind: "native-pointer",
         operationId: "tsonic.rust.native-pointer.store",
         operation: source.operation,
+        safety: "requires-unsafe",
         pointerExpression: source.pointerExpression,
         pointerCarrier,
-        pointeeCarrier: pointerCarrier.pointee,
+        pointeeCarrier: pointerCarrier.target,
         valueExpression: source.valueExpression,
         valueCarrier,
         resultCarrier,
@@ -415,7 +591,8 @@ function resolvedNativePointerCarrier(
         sourceFile,
         nativeIntCarrier,
       );
-      if (!rustTargetTypeRefEquals(offsetCarrier, nativeIntCarrier)) {
+      if (offsetCarrier === undefined ||
+        !rustTargetTypeRefEquals(offsetCarrier, nativeIntCarrier)) {
         appendRustDiagnostic(
           walk,
           "RUST_NATIVE_POINTER_OFFSET_TYPE_CONFLICT",
@@ -430,9 +607,10 @@ function resolvedNativePointerCarrier(
         kind: "native-pointer",
         operationId: "tsonic.rust.native-pointer.offset",
         operation: source.operation,
+        safety: "requires-unsafe",
         pointerExpression: source.pointerExpression,
         pointerCarrier,
-        pointeeCarrier: pointerCarrier.pointee,
+        pointeeCarrier: pointerCarrier.target,
         offsetExpression: source.offsetExpression,
         offsetCarrier,
         resultCarrier,
@@ -473,9 +651,7 @@ function applySelectedRuntimeCallableCall(
   selectedSignature: RustSelectedTargetSignature,
 ): TargetTypeRef | undefined {
   const carrier = selectedSignature.sourceCallableCarrier;
-  const callable = carrier?.kind === "function-pointer"
-    ? { parameters: carrier.args, result: carrier.result }
-    : rustCallableProtocol(carrier);
+  const callable = rustCallableSignature(carrier);
   const bindings = selectedSignature.sourceArgumentBindings;
   const memberParameters = selectedSignature.member.parameters;
   const sourceParameterIndexes = selectedSignature.sourceCallableParameterIndexes;
@@ -489,7 +665,8 @@ function applySelectedRuntimeCallableCall(
     !isDenseDataArray(callArguments) ||
     callArguments.some((argument) => argument === undefined) ||
     (selectedSignature.sourceSelectedMethodTypeArguments?.length ?? 0) !== 0 ||
-    (selectedSignature.targetTypeArguments?.length ?? 0) !== 0 ||
+    (selectedSignature.targetGenericArguments?.length ?? 0) !== 0 ||
+    selectedSignature.member.generics.parameters.length !== 0 ||
     callable.parameters.length !== memberParameters.length ||
     sourceParameterIndexes.length !== memberParameters.length ||
     sourceParameterIndexes.some((index) => !Number.isSafeInteger(index) || index < 0 ||
@@ -548,6 +725,7 @@ function applySelectedRuntimeCallableCall(
       ? undefined
       : {
           form,
+          sourceContract: "ordinary" as const,
           valueCarrier,
           parameterCarrier,
           mode: "value" as const,

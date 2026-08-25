@@ -23,7 +23,10 @@ import {
 } from "@tsonic/target-api/source";
 import { createRustTargetPack } from "../../../dist/index.js";
 import { analyzeRustTargetProgram } from "../../../dist/analysis/program/index.js";
-import { createRustTargetConfiguration } from "../../../dist/options/rust-target-options.js";
+import {
+  createRustTargetConfigurationInput,
+  sealRustTargetConfiguration,
+} from "../../../dist/options/rust-target-options.js";
 import { composeRustProviderSemantics } from "../../../dist/providers/packages/semantics.js";
 
 export function createRustSession({
@@ -337,11 +340,16 @@ export function analyzeRust(options) {
       runtimeReferences: runtime.references,
       paths: harness.paths,
     });
-    const configuration = createRustTargetConfiguration(
+    const configurationInput = createRustTargetConfigurationInput(
       harness.target,
       "/src",
       harness.paths.targetOutputRoot,
     );
+    const configuration = sealRustTargetConfiguration(configurationInput, Object.freeze({
+      edition: configurationInput.edition,
+      compilerIdentity: "rust-session-test-harness",
+      enabledLanguageFeatures: Object.freeze([]),
+    }));
     const analysis = analyzeRustTargetProgram(Object.freeze({
       input,
       configuration,

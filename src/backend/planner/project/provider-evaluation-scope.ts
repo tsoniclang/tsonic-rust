@@ -118,6 +118,7 @@ export function planRustProviderEvaluationScope(
   const mutableLocations: { readonly name: string; readonly ownerName: string }[] = [];
   const sourceValues = new Map<Node, RustExpr>();
   const inputOverrides = new Map<RustFinalizedSourceInput, RustExpr>();
+  const inputsBySlot = providerSourceInputsBySlot(fact);
   const nameRoot = receiverNode ?? argumentNodes.find((node): node is Node => node !== undefined) ??
     context.sourceFile;
   const syntheticNames = context.syntheticNames ??
@@ -149,13 +150,27 @@ export function planRustProviderEvaluationScope(
     if (value === undefined) {
       return { kind: "failed" };
     }
+    const sharedReference = sharedReferenceStabilization(
+      inputsBySlot.get(slot.key) ?? [],
+      slot.node,
+      context,
+    );
+    const bindingValue: RustExpr = sharedReference === "borrow"
+      ? { kind: "reference", expr: value }
+      : value;
     const name = allocateRustSyntheticName(syntheticNames, `operation_input_${index}`);
     bindings.push({
       name,
-      value,
+      value: bindingValue,
       ...(mutable?.kind === "owned" ? { mutable: true } : {}),
     });
-    sourceValues.set(slot.node, { kind: "path", path: name });
+    const path: RustExpr = { kind: "path", path: name };
+    sourceValues.set(slot.node, path);
+    if (sharedReference !== undefined) {
+      for (const input of inputsBySlot.get(slot.key) ?? []) {
+        inputOverrides.set(input, path);
+      }
+    }
   }
   return {
     kind: "selected",
@@ -197,13 +212,7 @@ function providerInputStabilizationKeys(
   preplannedInputs: ReadonlyMap<RustFinalizedSourceInput, RustExpr> | undefined,
 ): ReadonlySet<string> {
   const keys = new Set<string>();
-  const inputsBySlot = new Map<string, RustFinalizedSourceInput[]>();
-  for (const input of providerSourceInputs(fact)) {
-    const key = providerSourceInputKey(input);
-    const inputs = inputsBySlot.get(key) ?? [];
-    inputs.push(input);
-    inputsBySlot.set(key, inputs);
-  }
+  const inputsBySlot = providerSourceInputsBySlot(fact);
   const preplannedKeys = new Set([...inputsBySlot]
     .filter(([, inputs]) => inputs.length > 0 && inputs.every((input) =>
       preplannedInputs?.has(input) === true))
@@ -274,9 +283,47 @@ function providerInputUsesExistingBorrow(
   if (context.expressionOverrides?.get(node)?.valueForm === "shared-reference") {
     return true;
   }
+  const sourceCarrier = context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
+  if (sourceCarrier?.kind === "reference" && !sourceCarrier.mutable &&
+    rustTargetTypeRefEquals(sourceCarrier, input.parameterCarrier)) {
+    return true;
+  }
   const sourceParameter = context.input.program.facts.getFact(node, rustSourceParameterAbiFactKey);
   return sourceParameter?.mode === input.mode &&
     rustTargetTypeRefEquals(sourceParameter.parameterCarrier, input.parameterCarrier);
+}
+
+function providerSourceInputsBySlot(
+  fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }>,
+): ReadonlyMap<string, RustFinalizedSourceInput[]> {
+  const result = new Map<string, RustFinalizedSourceInput[]>();
+  for (const input of providerSourceInputs(fact)) {
+    const key = providerSourceInputKey(input);
+    const inputs = result.get(key) ?? [];
+    inputs.push(input);
+    result.set(key, inputs);
+  }
+  return result;
+}
+
+function sharedReferenceStabilization(
+  inputs: readonly RustFinalizedSourceInput[],
+  node: Node,
+  context: RustPlanContext,
+): "existing" | "borrow" | undefined {
+  if (inputs.length === 0 || inputs.some((input) =>
+    input.mode !== "ref" || input.conversion.kind !== "identity")) {
+    return undefined;
+  }
+  if (inputs.every((input) => providerInputUsesExistingBorrow(input, node, context))) {
+    return "existing";
+  }
+  return inputs.every((input) =>
+    input.parameterCarrier.kind === "reference" &&
+    !input.parameterCarrier.mutable &&
+    rustTargetTypeRefEquals(input.parameterCarrier.target, input.sourceCarrier))
+    ? "borrow"
+    : undefined;
 }
 
 function expressionHasEffects(
@@ -545,11 +592,11 @@ function providerMutableLocationNode(
     sourceNode,
     rustTargetOperationFactKey,
   );
-  if (operation?.kind !== "flow-marker") {
+  if (operation?.kind !== "ownership-marker") {
     return sourceNode;
   }
   const arguments_ = [...context.input.program.source.ast.arguments(sourceNode)];
-  if (operation.state === "borrowed-mut" &&
+  if (operation.operation === "mutable-borrow" &&
     arguments_.length === 1 && arguments_[0] !== undefined) {
     return arguments_[0];
   }

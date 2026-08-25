@@ -269,11 +269,11 @@ export function shift(p: Point, dx: int32): Point {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /#\[doc\(hidden\)\][\s\S]*pub struct PointState \{\s*pub x: i32,\s*pub y: i32,/u);
-  assert.match(text, /#\[derive\(Clone, Debug, PartialEq\)\]\npub struct Point \{\s*#\[doc\(hidden\)\]\s*pub state: rt::ObjectHandle<PointState>,/u);
+  assert.match(text, /#\[derive\(Clone, Debug, PartialEq\)\]\npub struct Point \{\s*#\[doc\(hidden\)\]\s*pub state: rt::LocalObjectHandle<PointState>,/u);
   assert.doesNotMatch(text, /derive\([^\n]*Copy/u);
   assert.match(text, /let record_x = 0;/u);
   assert.match(text, /let record_y = 0;/u);
-  assert.match(text, /state: rt::ObjectHandle::new\(PointState \{\s*x: record_x,\s*y: record_y,/u);
+  assert.match(text, /state: rt::LocalObjectHandle::new\(PointState \{\s*x: record_x,\s*y: record_y,/u);
   assert.match(text, /p\.state\.with\(\|state\| state\.x\) \+ dx/u);
   assert.doesNotMatch(text, /p\.clone\(\)\.state\.with/u);
 });
@@ -357,8 +357,8 @@ export function main(): void {
     artifactText(result, "src/shapes.rs"),
     /pub\(crate\) struct LabelXShape \{\s*pub label: String,\s*pub x: f64,/u,
   );
-  assert.match(text, /rt::ObjectHandle<crate::shapes::LabelXShape>/u);
-  assert.match(text, /rt::ObjectHandle::new\(crate::shapes::LabelXShape \{/u);
+  assert.match(text, /rt::LocalObjectHandle<crate::shapes::LabelXShape>/u);
+  assert.match(text, /rt::LocalObjectHandle::new\(crate::shapes::LabelXShape \{/u);
   assert.doesNotMatch(text, /state\.\d/u);
   const run = validateGeneratedProject("inferred-object-bin", result.artifacts, { run: true });
   assert.equal(run.status, 0);

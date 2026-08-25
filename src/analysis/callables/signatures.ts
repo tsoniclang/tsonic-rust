@@ -12,6 +12,7 @@ import {
   Node_Initializer,
   Node_Name,
   Node_Type,
+  sourceNodeIdentity,
   VariableDeclarationList_Declarations,
   VariableStatement_DeclarationList,
 } from "@tsonic/target-api/source";
@@ -24,23 +25,32 @@ import {
 } from "../facts/keys.js";
 import {
   rustFutureOutputCarrier,
+  rustFutureTargetType,
+  rustAsyncCallableTargetType,
   getRustGeneratorProtocol,
   rustOptionTargetType,
   rustCallableProtocol,
   rustClosureProtocol,
   rustCallableTargetType,
+  rustCallableTargetTypeWithSignature,
+  rustInferredLifetime,
 } from "../../target-model/types/index.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
-import { recordBindingPatternFacts, recordDefaultParameterInitializerFacts, recordParameterAbiFacts, resolveParameterAbi, setParameterAbiFact } from "../declarations/types-and-bindings.js";
+import { recordBindingPatternFacts, recordDefaultParameterInitializerFacts, recordResolvedParameterAbiFacts, resolveParameterAbi, setParameterAbiFact } from "../declarations/types-and-bindings.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
-import { resolveRustContextualParameterAbi } from "../../policy/ownership/source-callable-abi.js";
+import {
+  resolveRustContextualParameterAbi,
+  rustSourceOwnershipContractForType,
+} from "../../policy/ownership/source-callable-abi.js";
+import { resolveRustCallableLifetimeElision } from "../../policy/ownership/lifetime-elision.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
 import { setCarrierFact } from "../operations/project-calls.js";
 import type { ExtensionFactSubject, Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustLifetimeRef } from "../../target-model/semantics/index.js";
 
 function promiseInnerCarrier(
   walk: RustFactWalk,
@@ -59,15 +69,101 @@ export function recordFunctionSignatureFacts(walk: RustFactWalk, declaration: No
   recordCallableTypeSignatureFacts(walk, declaration);
 }
 
-function recordCallableTypeSignatureFacts(walk: RustFactWalk, declaration: Node): void {
-  recordCallableReturnFact(walk, declaration);
+export function recordCallableTypeSignatureFacts(
+  walk: RustFactWalk,
+  declaration: Node,
+  options: {
+    readonly recordReturn?: boolean;
+    readonly returnCarrier?: TargetTypeRef;
+    readonly receiverLifetime?: RustLifetimeRef;
+  } = {},
+): void {
   const parameters = requireDenseSourceNodes(walk, walk.context.ast.parameters(declaration), "Function declaration contains an undefined or non-data parameter slot.");
   if (parameters === undefined) {
     return;
   }
-  for (const parameter of parameters) {
-    recordParameterAbiFacts(walk, parameter);
+  const parameterAbis = parameters.map((parameter) => resolveParameterAbi(walk, parameter));
+  for (const [index, parameter] of parameters.entries()) {
+    if (parameterAbis[index] !== undefined) continue;
+    appendRustDiagnostic(
+      walk,
+      "RUST_PARAMETER_CARRIER_UNSUPPORTED",
+      "Parameter type has no closed Rust runtime carrier under the selected source-profile and surface policy.",
+      parameter,
+      ["target.capability=rust.callable.parameter-carrier"],
+    );
   }
+  if (parameterAbis.some((abi) => abi === undefined)) {
+    return;
+  }
+  const closedParameterAbis = parameterAbis as import("../../policy/ownership/source-callable-abi.js").RustSourceParameterAbi[];
+  const returnPlan = options.recordReturn === false
+    ? undefined
+    : resolveCallableReturnPlan(walk, declaration, options.returnCarrier);
+  if (options.recordReturn !== false && returnPlan === undefined) {
+    return;
+  }
+  const explicitReceiverLifetime = sourceThisParameterLifetime(
+    walk,
+    parameters,
+    closedParameterAbis,
+  );
+  const elision = returnPlan === undefined
+    ? undefined
+    : resolveRustCallableLifetimeElision({
+        parameters: closedParameterAbis.map((abi) => abi.parameterCarrier),
+        result: returnPlan.returnCarrier,
+        ...((options.receiverLifetime ?? explicitReceiverLifetime) === undefined
+          ? {}
+          : { receiverLifetime: options.receiverLifetime ?? explicitReceiverLifetime }),
+      });
+  if (elision?.kind === "rejected") {
+    appendRustDiagnostic(
+      walk,
+      "RUST_CALLABLE_RETURN_LIFETIME_ELISION_AMBIGUOUS",
+      elision.reason === "no-input-lifetime"
+        ? "An elided Rust return reference has no input lifetime to which it can be tied."
+        : "An elided Rust return reference has more than one possible input lifetime.",
+      Node_Type(walk.context.ast, declaration) ?? declaration,
+      ["target.capability=rust.lifetime-elision"],
+    );
+    return;
+  }
+  for (const [index, parameter] of parameters.entries()) {
+    recordResolvedParameterAbiFacts(walk, parameter, closedParameterAbis[index]!);
+  }
+  if (returnPlan !== undefined && elision?.kind === "resolved") {
+    walk.context.facts.set(declaration, rustSourceCallableReturnFactKey, {
+      returnCarrier: elision.result,
+      sourceContract: returnPlan.sourceContract,
+    }, [{ message: "rust finalized source callable return carrier" }]);
+  }
+}
+
+export function rustImplicitCallableReceiverLifetime(
+  walk: RustFactWalk,
+  declaration: Node,
+): RustLifetimeRef {
+  const occurrence = sourceNodeIdentity(walk.context.ast, declaration) ?? [
+    walk.context.ast.getPath(walk.context.ast.getSourceFile(declaration)),
+    walk.context.ast.pos(declaration),
+    walk.context.ast.end(declaration),
+  ].join(":");
+  return rustInferredLifetime(`source-method-receiver\0${occurrence}`);
+}
+
+function sourceThisParameterLifetime(
+  walk: RustFactWalk,
+  parameters: readonly Node[],
+  abis: readonly import("../../policy/ownership/source-callable-abi.js").RustSourceParameterAbi[],
+): RustLifetimeRef | undefined {
+  const index = parameters.findIndex((parameter) => {
+    const name = Node_Name(walk.context.ast, parameter);
+    return name !== undefined && walk.context.ast.kindName(name) === "KindIdentifier" &&
+      walk.context.ast.text(name) === "this";
+  });
+  const carrier = index < 0 ? undefined : abis[index]?.parameterCarrier;
+  return carrier?.kind === "reference" ? carrier.lifetime : undefined;
 }
 
 export function recordNestedCallableTypeSignatureFacts(walk: RustFactWalk, sourceFile: SourceFile): void {
@@ -209,15 +305,19 @@ function finalizedNativeCallableValue(
     return undefined;
   }
   const closed = parameterAbis as import("../facts/keys.js").RustSourceParameterAbiFact[];
+  const asynchronous = walk.context.facts.get(callableDeclaration, rustAsyncFunctionFactKey) ??
+    walk.context.facts.resolve(callableDeclaration, rustAsyncFunctionFactKey);
+  const callableResultCarrier = asynchronous === undefined
+    ? resultCarrier
+    : rustFutureTargetType(resultCarrier);
   return {
     name: valueName,
-    carrier: rustCallableTargetType(
-      closed.map((abi) => abi.parameterCarrier),
-      resultCarrier,
-    ),
+    carrier: asynchronous === undefined
+      ? rustCallableTargetType(closed.map((abi) => abi.parameterCarrier), resultCarrier)
+      : rustAsyncCallableTargetType(closed.map((abi) => abi.parameterCarrier), resultCarrier),
     parameterCarriers: closed.map((abi) => abi.parameterCarrier),
     argumentModes: closed.map((abi) => abi.mode),
-    resultCarrier,
+    resultCarrier: callableResultCarrier,
   };
 }
 
@@ -298,10 +398,16 @@ function recordCallableValueSignatureFacts(
     const nativeSignature = resolveAuthoredCallableValueSignature(walk, expression);
     if (nativeSignature !== undefined) {
       recordCallableValueSignaturePlan(walk, expression, nativeSignature);
-      setCarrierFact(walk, declaration, rustCallableTargetType(
-        nativeSignature.parameters.map(({ abi }) => abi.parameterCarrier),
-        nativeSignature.returnCarrier,
-      ));
+      const carrier = nativeSignature.asynchronous
+        ? rustAsyncCallableTargetType(
+            nativeSignature.parameters.map(({ abi }) => abi.parameterCarrier),
+            nativeSignature.bodyReturnCarrier,
+          )
+        : rustCallableTargetType(
+            nativeSignature.parameters.map(({ abi }) => abi.parameterCarrier),
+            nativeSignature.bodyReturnCarrier,
+          );
+      setCarrierFact(walk, declaration, carrier);
       return;
     }
   }
@@ -315,7 +421,7 @@ function recordCallableValueSignatureFacts(
   const callable = rustCallableProtocol(selectedCarrier);
   const closure = rustClosureProtocol(selectedCarrier);
   const parameterCarriers = selectedCarrier?.kind === "function-pointer"
-    ? selectedCarrier.args
+    ? selectedCarrier.parameters
     : closure?.parameters ?? callable?.parameters;
   const returnCarrier = selectedCarrier?.kind === "function-pointer"
     ? selectedCarrier.result
@@ -356,13 +462,24 @@ function recordCallableValueSignatureFacts(
     }
     parameterAbis.push(parameterAbi);
   }
+  const bodyReturnCarrier = callable?.asynchronous
+    ? rustFutureOutputCarrier(returnCarrier)
+    : returnCarrier;
+  if (bodyReturnCarrier === undefined) return;
   walk.context.facts.set(expression, rustSourceCallableReturnFactKey, {
-    returnCarrier,
+    returnCarrier: bodyReturnCarrier,
+    sourceContract: rustSourceOwnershipContractForType(
+      Node_Type(ast, expression),
+      rustResolutionContext(walk, expression),
+    ),
   }, [{ message: "rust finalized callable-value return carrier" }]);
   const runtimeParameterCarriers = parameterAbis.map((abi) => abi.parameterCarrier);
-  const runtimeCarrier = selectedCarrier.kind === "function-pointer" || selectedCarrier.kind === "closure"
-    ? { ...selectedCarrier, args: runtimeParameterCarriers, result: returnCarrier }
-    : rustCallableTargetType(runtimeParameterCarriers, returnCarrier);
+  const runtimeCarrier = rustCallableTargetTypeWithSignature(
+    selectedCarrier,
+    runtimeParameterCarriers,
+    returnCarrier,
+  );
+  if (runtimeCarrier === undefined) return;
   setCarrierFact(walk, declaration, runtimeCarrier);
 }
 
@@ -371,7 +488,8 @@ interface RustCallableValueSignaturePlan {
     readonly declaration: Node;
     readonly abi: import("../../policy/ownership/source-callable-abi.js").RustSourceParameterAbi;
   }[];
-  readonly returnCarrier: TargetTypeRef;
+  readonly asynchronous: boolean;
+  readonly bodyReturnCarrier: TargetTypeRef;
 }
 
 function resolveAuthoredCallableValueSignature(
@@ -379,8 +497,7 @@ function resolveAuthoredCallableValueSignature(
   expression: Node,
 ): RustCallableValueSignaturePlan | undefined {
   const { ast } = walk.context;
-  if (ast.hasModifierKind(expression, "async") ||
-    walk.context.semanticsFor(expression).operations.generator(expression) !== undefined) {
+  if (walk.context.semanticsFor(expression).operations.generator(expression) !== undefined) {
     return undefined;
   }
   const parameters = ast.parameters(expression);
@@ -390,20 +507,56 @@ function resolveAuthoredCallableValueSignature(
   const parameterAbis = (parameters as readonly Node[]).map((parameter) =>
     resolveParameterAbi(walk, parameter));
   const sourceReturn = selectedSourceCallableReturn(walk, expression);
-  const returnCarrier = resolveRustTargetTypeRef(
+  const declaredReturnCarrier = resolveRustTargetTypeRef(
     Node_Type(ast, expression) ?? sourceReturn,
     rustResolutionContext(walk, expression),
     walk.operationOptions,
   );
-  if (returnCarrier === undefined || parameterAbis.some((abi) => abi === undefined)) {
+  const asynchronous = ast.hasModifierKind(expression, "async");
+  const bodyReturnCarrier = asynchronous
+    ? rustFutureOutputCarrier(declaredReturnCarrier)
+    : declaredReturnCarrier;
+  if (declaredReturnCarrier === undefined || bodyReturnCarrier === undefined ||
+    parameterAbis.some((abi) => abi === undefined)) {
+    return undefined;
+  }
+  const closedParameterAbis = parameterAbis as import("../../policy/ownership/source-callable-abi.js").RustSourceParameterAbi[];
+  const elision = resolveRustCallableLifetimeElision({
+    parameters: closedParameterAbis.map((abi) => abi.parameterCarrier),
+    result: bodyReturnCarrier,
+    ...(sourceThisParameterLifetime(
+      walk,
+      parameters as readonly Node[],
+      closedParameterAbis,
+    ) === undefined
+      ? {}
+      : {
+          receiverLifetime: sourceThisParameterLifetime(
+            walk,
+            parameters as readonly Node[],
+            closedParameterAbis,
+          ),
+        }),
+  });
+  if (elision.kind === "rejected") {
+    appendRustDiagnostic(
+      walk,
+      "RUST_CALLABLE_RETURN_LIFETIME_ELISION_AMBIGUOUS",
+      elision.reason === "no-input-lifetime"
+        ? "An elided Rust return reference has no input lifetime to which it can be tied."
+        : "An elided Rust return reference has more than one possible input lifetime.",
+      Node_Type(ast, expression) ?? expression,
+      ["target.capability=rust.lifetime-elision"],
+    );
     return undefined;
   }
   return {
+    asynchronous,
     parameters: (parameters as readonly Node[]).map((declaration, index) => ({
       declaration,
-      abi: parameterAbis[index]!,
+      abi: closedParameterAbis[index]!,
     })),
-    returnCarrier,
+    bodyReturnCarrier: elision.result,
   };
 }
 
@@ -420,7 +573,11 @@ function recordCallableValueSignaturePlan(
     }
   }
   walk.context.facts.set(expression, rustSourceCallableReturnFactKey, {
-    returnCarrier: signature.returnCarrier,
+    returnCarrier: signature.bodyReturnCarrier,
+    sourceContract: rustSourceOwnershipContractForType(
+      Node_Type(walk.context.ast, expression),
+      rustResolutionContext(walk, expression),
+    ),
   }, [{ message: "rust finalized authored callable-value return carrier" }]);
 }
 
@@ -483,19 +640,30 @@ function selectedSourceCallableReturn(walk: RustFactWalk, declaration: Node) {
     : undefined;
 }
 
-export function recordCallableReturnFact(walk: RustFactWalk, declaration: Node): void {
+function resolveCallableReturnPlan(
+  walk: RustFactWalk,
+  declaration: Node,
+  override: TargetTypeRef | undefined,
+): {
+  readonly returnCarrier: TargetTypeRef;
+  readonly sourceContract: import("../../target-model/operations/model.js").RustSourceParameterContract;
+} | undefined {
   const generator = walk.context.facts.get(declaration, rustGeneratorFactKey);
   const asynchronous = walk.context.facts.get(declaration, rustAsyncFunctionFactKey);
   const sourceReturn = selectedSourceCallableReturn(walk, declaration);
-  const carrier = generator?.carrier ?? asynchronous?.outputCarrier ??
+  const carrier = override ?? generator?.carrier ?? asynchronous?.outputCarrier ??
     resolveRustTargetTypeRef(
       Node_Type(walk.context.ast, declaration) ?? sourceReturn,
       rustResolutionContext(walk, declaration),
       walk.operationOptions,
     );
-  if (carrier !== undefined) {
-    walk.context.facts.set(declaration, rustSourceCallableReturnFactKey, {
-      returnCarrier: carrier,
-    }, [{ message: "rust finalized source callable return carrier" }]);
-  }
+  return carrier === undefined
+    ? undefined
+    : {
+        returnCarrier: carrier,
+        sourceContract: rustSourceOwnershipContractForType(
+          Node_Type(walk.context.ast, declaration),
+          rustResolutionContext(walk, declaration),
+        ),
+      };
 }

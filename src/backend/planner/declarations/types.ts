@@ -4,20 +4,28 @@ import {
   isValidRustIdentifier,
   rustProjectTypeHasPublicImplementationAbi,
 } from "../program/plan-context.js";
-import { isRustIntegerCarrier, isRustStringCarrier, rustCarrierSupportsClone } from "../../../target-model/types/index.js";
+import { isRustIntegerCarrier, isRustStringCarrier, rustCloneTrait } from "../../../target-model/types/index.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { Node_Type } from "@tsonic/target-api/source";
 import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
 import { rustProjectObjectLayout } from "../../../analysis/project-types/object-layout.js";
 import { rustProjectObjectStateField, rustProjectObjectType } from "../objects/project-objects.js";
-import { rustProjectStateType, rustProjectStateMarker, rustProjectTypeParameters } from "../objects/polymorphism/names.js";
+import { rustProjectGenerics, rustProjectStateType, rustProjectStateMarker } from "../objects/polymorphism/names.js";
 import { rustTypeAliasDeclarationFactKey } from "../../../analysis/facts/keys.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import type { Node } from "@tsonic/tsts";
 import type { PlannedProjectObjectField } from "./classes.js";
 import type { RustItem, RustStructField } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
+import { rustSealedCarrierSupportsTrait } from "../ownership/traits.js";
 import { rustProjectImplementationVisibility } from "../objects/project-storage-abi.js";
+import { rustDocHiddenAttribute, rustDeriveAttribute } from "../../target-ast/attributes.js";
+import { rustGenerics, rustTypeGenericArguments } from "../../target-ast/builders.js";
+import type { RustAttribute } from "../../target-ast/attributes.js";
+import {
+  planRustExplicitTraitImplementations,
+  rustExplicitRepresentationAttributes,
+} from "./explicit-contracts.js";
 
 export function planEnumDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
   const { ast } = context.input.program.source;
@@ -30,7 +38,7 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
     ));
     return undefined;
   }
-  const variants: { name: string; discriminant?: string }[] = [];
+  const variants: Extract<RustItem, { readonly kind: "enum" }>["variants"][number][] = [];
   const discriminants = new Map<number, string>();
   for (const member of ast.members(node)) {
     if (member === undefined) {
@@ -70,8 +78,20 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
       return undefined;
     }
     discriminants.set(value, memberName);
-    variants.push({ name: memberName, discriminant: String(value) });
+    variants.push({
+      name: memberName,
+      discriminant: { kind: "integer", value: BigInt(value) },
+      fields: { kind: "unit" },
+    });
   }
+  const enumType = { kind: "named" as const, path: enumName };
+  const explicitTraitImplementations = planRustExplicitTraitImplementations(
+    node,
+    enumType,
+    rustGenerics(),
+    context,
+  );
+  if (explicitTraitImplementations === undefined) return undefined;
   return [{
     kind: "enum",
     name: enumName,
@@ -79,12 +99,14 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
         rustProjectTypeHasPublicImplementationAbi(context, enumName)
       ? "public"
       : "crate",
-    ...(rustProjectTypeHasPublicImplementationAbi(context, enumName)
-      ? {}
-      : { attrs: [rustLintAttributes.deadCode] }),
-    derives: ["Clone", "Copy", "Debug", "PartialEq"],
+    attrs: [rustDeriveAttribute("Clone", "Copy", "Debug", "PartialEq"),
+      ...rustExplicitRepresentationAttributes(node, context),
+      ...(rustProjectTypeHasPublicImplementationAbi(context, enumName)
+        ? []
+        : [rustLintAttributes.deadCode])],
+    generics: rustGenerics(),
     variants,
-  }];
+  }, ...explicitTraitImplementations];
 }
 
 export function planInterfaceDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
@@ -102,6 +124,14 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
   const exported = ast.hasModifierKind(node, "export");
   const publiclyReachable = rustProjectTypeHasPublicImplementationAbi(context, interfaceName);
   const storageVisibility = rustProjectImplementationVisibility(publiclyReachable);
+  if (context.input.program.declarationContracts.forDeclaration(node)?.unsafeTrait === true) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.unsafe-trait-representation",
+      "An explicit unsafe Rust trait requires an interface selected for trait representation, not record representation.",
+    ));
+    return undefined;
+  }
   if (ast.extendsHeritageElements(node).length > 0) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
@@ -118,7 +148,15 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
     ));
     return undefined;
   }
-  const typeParams = rustProjectTypeParameters(definition);
+  const generics = rustProjectGenerics(definition, context);
+  if (generics === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.record-generics",
+      "Interface declaration has no exact renderable Rust generic contract.",
+    ));
+    return undefined;
+  }
   const stateType = rustProjectStateType(
     context.input.program.projectTypes.openCarrier(definition),
     context,
@@ -175,7 +213,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
       if (indexLayout === undefined || keyCarrier === undefined || valueCarrier === undefined ||
         keyType === undefined || valueType === undefined || targetName === undefined ||
         (!isRustStringCarrier(keyCarrier) && !isRustIntegerCarrier(keyCarrier)) ||
-        !rustCarrierSupportsClone(valueCarrier)) {
+        !rustSealedCarrierSupportsTrait(valueCarrier, rustCloneTrait, context)) {
         context.diagnostics.push(unsupportedConstructDiagnostic(
           diagnosticInput(context, member),
           "rust.backend.record-index-carrier",
@@ -188,7 +226,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
         type: {
           kind: "named",
           path: "std::collections::HashMap",
-          typeArguments: [keyType, valueType],
+          genericArguments: rustTypeGenericArguments([keyType, valueType]),
         },
         visibility: storageVisibility,
       };
@@ -254,17 +292,35 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
       ? []
       : [rustLintAttributes.deadCode]),
   ];
+  const openType = rustTypeFromCarrierInContext(
+    context.input.program.projectTypes.openCarrier(definition),
+    context,
+  );
+  if (openType === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.interface-open-carrier",
+      "Interface declaration has no renderable open Rust carrier.",
+    ));
+    return undefined;
+  }
+  const explicitTraitImplementations = planRustExplicitTraitImplementations(
+    node,
+    openType,
+    generics,
+    context,
+  );
+  if (explicitTraitImplementations === undefined) return undefined;
   return [{
     kind: "struct",
     name: definition.stateName,
     visibility: storageVisibility,
     attrs: [
-      ...(publiclyReachable ? ["#[doc(hidden)]"] : []),
+      ...(publiclyReachable ? [rustDocHiddenAttribute] : []),
       rustLintAttributes.deadCode,
     ],
-    derives: [],
-    ...(typeParams.length === 0 ? {} : { typeParams }),
-    fields: [
+    generics,
+    fields: { kind: "named", fields: [
       ...fields.map((field) => ({
         name: field.targetName,
         type: field.type,
@@ -277,23 +333,26 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
             name: stateMarker.name,
             type: stateMarker.type,
             visibility: storageVisibility,
-            ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
+            ...(publiclyReachable ? { attrs: [rustDocHiddenAttribute] } : {}),
           }]),
-    ],
+    ] },
   }, {
     kind: "struct",
     name: interfaceName,
-    ...(interfaceAttributes.length === 0 ? {} : { attrs: interfaceAttributes }),
+    attrs: [
+      rustDeriveAttribute("Clone", "Debug", "PartialEq"),
+      ...rustExplicitRepresentationAttributes(node, context),
+      ...interfaceAttributes,
+    ],
     visibility: exported || publiclyReachable ? "public" : "crate",
-    derives: ["Clone", "Debug", "PartialEq"],
-    ...(typeParams.length === 0 ? {} : { typeParams }),
-    fields: [{
+    generics,
+    fields: { kind: "named", fields: [{
       name: rustProjectObjectStateField,
       type: stateCarrier,
       visibility: storageVisibility,
-      ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
-    }],
-  }];
+      ...(publiclyReachable ? { attrs: [rustDocHiddenAttribute] } : {}),
+    }] },
+  }, ...explicitTraitImplementations];
 }
 
 export function planTypeAliasDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
@@ -331,23 +390,26 @@ export function planTypeAliasDeclaration(node: Node, context: RustPlanContext): 
         rustProjectTypeHasPublicImplementationAbi(context, aliasName)
       ? "public"
       : "crate",
-    ...(rustProjectTypeHasPublicImplementationAbi(context, aliasName)
-      ? {}
-      : { attrs: [rustLintAttributes.deadCode] }),
-    derives: fact.kind === "string-literal"
-      ? ["Clone", "Copy", "Debug", "PartialEq"]
-      : ["Clone", "Debug", "PartialEq"],
+    attrs: [
+      rustDeriveAttribute(...(fact.kind === "string-literal"
+        ? ["Clone", "Copy", "Debug", "PartialEq"]
+        : ["Clone", "Debug", "PartialEq"])),
+      ...(rustProjectTypeHasPublicImplementationAbi(context, aliasName)
+        ? []
+        : [rustLintAttributes.deadCode]),
+    ],
+    generics: rustGenerics(),
     variants: fact.variants.map((variant, index) => ({
       name: variant.name,
-      ...(fact.kind === "runtime"
-        ? { fields: [runtimeVariantTypes[index]!] }
-        : {}),
+      fields: fact.kind === "runtime"
+        ? { kind: "tuple" as const, fields: [{ type: runtimeVariantTypes[index]!, visibility: "private" as const }] }
+        : { kind: "unit" as const },
     })),
   }];
 }
 
-export function structAttributes(typeName: string): readonly string[] | undefined {
-  const attrs: string[] = [];
+export function structAttributes(typeName: string): readonly RustAttribute[] | undefined {
+  const attrs: RustAttribute[] = [];
   if (!/^[A-Z][A-Za-z0-9]*$/u.test(typeName)) {
     attrs.push(rustLintAttributes.nonCamelCaseType);
   }

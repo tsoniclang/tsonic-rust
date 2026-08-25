@@ -1,18 +1,24 @@
-import { compareText, digestText, typeRequirementKey } from "./utilities.js";
+import { compareText, digestText, genericParameterIdentity } from "./utilities.js";
 import type {
   RustCompilerDependency,
   RustCompilerFunction,
-  RustCompilerTypeParameter,
+  RustCompilerGenerics,
   RustCompilerTypeTraits,
 } from "../model/model.js";
 import type { ProjectionContext } from "./model.js";
 import type { RustNamedTypeTraitContract } from "../../../target-model/types/model.js";
 import type { RustProviderModuleDefinition, RustProviderOperationDefinition } from "../../packages/model.js";
 import type { RustProviderTypeParameterRequirement } from "../../../target-model/operations/model.js";
+import {
+  rustBoundSemanticKey,
+} from "../../../target-model/semantics/index.js";
+import { targetBoundFor, targetTraitFor } from "./types.js";
+import {
+  rustNamedTypeTraitImplementationSemanticKey,
+  rustNamedTypeTraitRequirementSemanticKey,
+} from "../../../target-model/types/index.js";
 
-export function operationRow(
-  operation: RustProviderOperationDefinition,
-): RustProviderOperationDefinition {
+export function operationRow(operation: RustProviderOperationDefinition): RustProviderOperationDefinition {
   return Object.freeze(operation);
 }
 
@@ -43,7 +49,7 @@ export function recordCarrierTraits(
   contract: RustNamedTypeTraitContract,
 ): void {
   const existing = traits.get(id);
-  if (existing !== undefined && JSON.stringify(existing) !== JSON.stringify(contract)) {
+  if (existing !== undefined && traitContractKey(existing) !== traitContractKey(contract)) {
     throw new Error(`Rust compiler target carrier '${id}' has conflicting native trait contracts.`);
   }
   traits.set(id, contract);
@@ -51,47 +57,55 @@ export function recordCarrierTraits(
 
 export function projectCompilerTraitContract(
   contract: RustCompilerTypeTraits,
+  context: ProjectionContext,
 ): RustNamedTypeTraitContract {
   const implementations = contract.implementations.map((implementation) => Object.freeze({
-    traitPath: compilerRequirementTraitPath(implementation.trait),
+    trait: targetTraitFor(implementation.trait, context, "result"),
     requirements: Object.freeze(implementation.requirements.map((requirement) => Object.freeze({
       typeArgumentIndex: requirement.typeArgumentIndex,
-      traitPath: compilerRequirementTraitPath(requirement.requirement),
-    })).sort((left, right) =>
-      left.typeArgumentIndex - right.typeArgumentIndex || compareText(left.traitPath, right.traitPath))),
+      trait: targetTraitFor(requirement.trait, context, "result"),
+    })).sort((left, right) => compareText(
+      rustNamedTypeTraitRequirementSemanticKey(left),
+      rustNamedTypeTraitRequirementSemanticKey(right),
+    ))),
   })).sort((left, right) => compareText(
-    `${left.traitPath}\0${JSON.stringify(left.requirements)}`,
-    `${right.traitPath}\0${JSON.stringify(right.requirements)}`,
+    rustNamedTypeTraitImplementationSemanticKey(left),
+    rustNamedTypeTraitImplementationSemanticKey(right),
   ));
   return Object.freeze({ implementations: Object.freeze(implementations) });
 }
 
-function compilerRequirementTraitPath(
-  requirement: RustCompilerTypeParameter["requirements"][number],
-): string {
-  return requirement === "clone"
-    ? "core::clone::Clone"
-    : requirement === "copy"
-      ? "core::marker::Copy"
-      : requirement.path;
-}
-
 export function typeRequirements(
-  parameters: readonly RustCompilerTypeParameter[],
+  generics: RustCompilerGenerics,
   allowedTypeParameters: readonly string[],
+  context: ProjectionContext,
 ): { readonly typeRequirements?: readonly RustProviderTypeParameterRequirement[] } {
   const allowed = new Set(allowedTypeParameters);
-  const requirements = parameters
-    .filter((parameter) => allowed.has(parameter.name) && parameter.requirements.length > 0)
-    .map((parameter) => Object.freeze({
-      name: parameter.name,
-      requirements: Object.freeze([...parameter.requirements]
-        .sort((left, right) => compareText(typeRequirementKey(left), typeRequirementKey(right)))),
-    }))
-    .sort((left, right) => compareText(left.name, right.name));
-  return requirements.length === 0
-    ? {}
-    : { typeRequirements: Object.freeze(requirements) };
+  const requirements = generics.parameters.flatMap((parameter) => {
+    if (parameter.kind !== "type") return [];
+    const name = context.genericNames?.get(parameter.identity.itemId) ?? parameter.displayName;
+    if (!allowed.has(name)) return [];
+    const bounds = [
+      ...parameter.bounds,
+      ...generics.wherePredicates.flatMap((predicate) =>
+        predicate.kind === "type" && predicate.type.kind === "type-parameter" &&
+            predicate.type.identity.itemId === parameter.identity.itemId
+          ? predicate.bounds
+          : []),
+    ];
+    const requirementsByIdentity = new Map(bounds.map((bound) => {
+      const requirement = targetBoundFor(bound, context, "parameter");
+      return [rustBoundSemanticKey(requirement), requirement] as const;
+    }));
+    const requirements = [...requirementsByIdentity.entries()]
+      .sort(([left], [right]) => compareText(left, right))
+      .map(([, requirement]) => requirement);
+    return requirements.length === 0 ? [] : [Object.freeze({
+      name,
+      requirements: Object.freeze(requirements),
+    })];
+  }).sort((left, right) => compareText(left.name, right.name));
+  return requirements.length === 0 ? {} : { typeRequirements: Object.freeze(requirements) };
 }
 
 export function compilerModuleSpecifier(alias: string, modulePath: readonly string[]): string {
@@ -101,13 +115,9 @@ export function compilerModuleSpecifier(alias: string, modulePath: readonly stri
 
 export function compilerModulePathFromSpecifier(alias: string, specifier: string): readonly string[] | undefined {
   const prefix = `@tsonic/rust/crates/${alias}/`;
-  if (!specifier.startsWith(prefix) || !specifier.endsWith(".js")) {
-    return undefined;
-  }
+  if (!specifier.startsWith(prefix) || !specifier.endsWith(".js")) return undefined;
   const raw = specifier.slice(prefix.length, -3);
-  if (raw === "index") {
-    return Object.freeze([]);
-  }
+  if (raw === "index") return Object.freeze([]);
   const segments = raw.split("/");
   return segments.length > 0 && segments.every((segment) => /^[A-Za-z_][A-Za-z0-9_]*$/u.test(segment))
     ? Object.freeze(segments)
@@ -126,10 +136,7 @@ export function compilerExportId(dependency: RustCompilerDependency, modulePath:
   return `${dependency.packageId}::${[...modulePath, name].join("::")}`;
 }
 
-export function compilerTargetTypeId(
-  dependency: RustCompilerDependency,
-  canonicalPath: readonly string[],
-): string {
+export function compilerTargetTypeId(dependency: RustCompilerDependency, canonicalPath: readonly string[]): string {
   return `rust.cargo.${digestText(dependency.packageId).slice(0, 24)}.${canonicalPath.join(".")}`;
 }
 
@@ -137,24 +144,27 @@ export function rustPath(crateName: string, modulePath: readonly string[], ...ta
   return [crateName, ...modulePath, ...tail].join("::");
 }
 
-export function targetTraitPath(path: string, context: ProjectionContext): string {
-  const segments = path.split("::");
-  if (segments[0] === context.dependency.crateName) {
-    segments[0] = context.dependency.targetCrateName;
-  }
-  return segments.join("::");
-}
-
 export function functionSignatureDigest(fn: RustCompilerFunction): string {
-  return digestText(JSON.stringify(fn)).slice(0, 24);
+  return digestText([
+    fn.identity.itemId,
+    fn.name,
+    fn.safety,
+    fn.abi,
+    fn.variadic ? "variadic" : "fixed",
+    ...fn.enclosingGenerics.parameters.map(genericParameterIdentity),
+    ...fn.generics.parameters.map(genericParameterIdentity),
+  ].join("\0")).slice(0, 24);
 }
 
 export function providerFunctionPointerAbi(abi: string): string {
-  if (abi === "Rust") {
-    return "target-default";
-  }
-  if (abi === "C" || abi === "system") {
-    return abi;
-  }
+  if (abi === "Rust") return "target-default";
+  if (abi === "C" || abi === "system") return abi;
   throw new Error(`Rust function pointer ABI '${abi}' has no source contract.`);
+}
+
+function traitContractKey(contract: RustNamedTypeTraitContract): string {
+  return contract.implementations
+    .map(rustNamedTypeTraitImplementationSemanticKey)
+    .sort(compareText)
+    .join("\0");
 }

@@ -41,6 +41,9 @@ export function createRustProjectTypePolicyRegistry(): RustProjectTypePolicyRegi
     openCarrier(definition) {
       return requireCurrent().openCarrier(definition);
     },
+    genericsForDefinition(definition) {
+      return requireCurrent().genericsForDefinition(definition);
+    },
     heritageForDefinition(definition) {
       return requireCurrent().heritageForDefinition(definition);
     },

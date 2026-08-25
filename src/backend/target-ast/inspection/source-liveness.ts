@@ -1,5 +1,6 @@
 import type { RustBlock, RustExpr, RustStmt } from "../nodes.js";
 import { rustLintAttributes } from "../normalization/lint-policy.js";
+import { rustAttributeKey, type RustAttribute } from "../attributes.js";
 import {
   firstAccessesInStatements,
   firstDirectPathAccessInStatements,
@@ -103,6 +104,7 @@ function finalizeRustNestedStatementLiveness(
             }),
       };
     case "let":
+    case "let-pattern":
     case "expr":
     case "assign":
     case "return":
@@ -295,10 +297,11 @@ function isBranchBindingDeclaration(
 }
 
 function appendRustAttribute(
-  attrs: readonly string[] | undefined,
-  attribute: string,
-): readonly string[] {
-  return attrs?.includes(attribute) === true
+  attrs: readonly RustAttribute[] | undefined,
+  attribute: RustAttribute,
+): readonly RustAttribute[] {
+  const key = rustAttributeKey(attribute);
+  return attrs?.some((value) => rustAttributeKey(value) === key) === true
     ? attrs
     : [...attrs ?? [], attribute];
 }

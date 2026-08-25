@@ -8,7 +8,8 @@ import type {
   RustSourceFileModel,
   RustStructField,
   RustType,
-  RustTypeParameter,
+  RustGenericArgument,
+  RustGenerics,
   RustVisibility,
 } from "../../target-ast/nodes.js";
 import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
@@ -18,6 +19,8 @@ import {
 } from "../program/plan-context.js";
 import {
   rustTypeFromCarrierInContext,
+  rustAstGenericArgumentFromSemanticInContext,
+  rustAstGenericsFromSemanticInContext,
 } from "../types/render.js";
 import {
   rustOptionTargetType,
@@ -61,14 +64,19 @@ export function planRustStructuralShapeModule(
     const visibility: RustVisibility = publicShapeNames.has(definition.targetName)
       ? "public"
       : "crate";
-    const typeParams: readonly RustTypeParameter[] = definition.typeParameterNames.map((name) => ({
-      name,
-      bounds: [],
-    }));
-    const aliasTypeArguments: readonly RustType[] = definition.typeParameterNames.map((name) => ({
-      kind: "named",
-      path: name,
-    }));
+    const generics = rustAstGenericsFromSemanticInContext(definition.generics, context);
+    const aliasGenericArguments = definition.genericArguments.map((argument) =>
+      rustAstGenericArgumentFromSemanticInContext(argument, context));
+    if (generics === undefined || aliasGenericArguments.some((argument) => argument === undefined)) {
+      diagnostics.push({
+        code: "RUST_STRUCTURAL_SHAPE_GENERICS_MISSING",
+        category: "error",
+        source: "tsonic-rust",
+        message: `Structural shape '${definition.targetName}' has no exact renderable mixed-generic contract.`,
+        evidence: ["target.capability=rust.backend.structural-shapes.generics"],
+      });
+      return undefined;
+    }
     const callableAliases: RustItem[] = [];
     const fields: RustStructField[] = [];
     for (const field of definition.fields) {
@@ -106,8 +114,8 @@ export function planRustStructuralShapeModule(
           ? structuralCallableAlias(
               callableAliases,
               `${definition.targetName}${rustPascalCaseIdentifier(field.sourceName)}Method`,
-              typeParams,
-              aliasTypeArguments,
+              generics,
+              aliasGenericArguments as readonly RustGenericArgument[],
               renderedStorageType,
               visibility,
             )
@@ -173,8 +181,8 @@ export function planRustStructuralShapeModule(
       const getterAlias = structuralCallableAlias(
         callableAliases,
         `${definition.targetName}${rustPascalCaseIdentifier(field.sourceName)}Getter`,
-        typeParams,
-        aliasTypeArguments,
+        generics,
+        aliasGenericArguments as readonly RustGenericArgument[],
         getterType,
         visibility,
       );
@@ -197,8 +205,8 @@ export function planRustStructuralShapeModule(
         const setterAlias = structuralCallableAlias(
           callableAliases,
           `${definition.targetName}${rustPascalCaseIdentifier(field.sourceName)}Setter`,
-          typeParams,
-          aliasTypeArguments,
+          generics,
+          aliasGenericArguments as readonly RustGenericArgument[],
           setterType,
           visibility,
         );
@@ -215,9 +223,8 @@ export function planRustStructuralShapeModule(
       name: definition.targetName,
       visibility,
       attrs: [rustLintAttributes.deadCode],
-      derives: [],
-      ...(typeParams.length === 0 ? {} : { typeParams }),
-      fields,
+      generics,
+      fields: { kind: "named", fields },
     });
   }
   const uses: RustItem[] = [...usedAliases]
@@ -234,8 +241,8 @@ export function planRustStructuralShapeModule(
 function structuralCallableAlias(
   aliases: RustItem[],
   name: string,
-  typeParams: readonly RustTypeParameter[],
-  typeArguments: readonly RustType[],
+  generics: RustGenerics,
+  genericArguments: readonly RustGenericArgument[],
   target: RustType,
   visibility: RustVisibility,
 ): RustType {
@@ -243,12 +250,14 @@ function structuralCallableAlias(
     kind: "type-alias",
     name,
     visibility,
-    ...(typeParams.length === 0 ? {} : { typeParams }),
+    generics,
     target,
   });
   return {
     kind: "named",
     path: name,
-    ...(typeArguments.length === 0 ? {} : { typeArguments }),
+    ...(genericArguments.length === 0
+      ? {}
+      : { genericArguments }),
   };
 }

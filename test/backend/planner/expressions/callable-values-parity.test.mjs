@@ -54,7 +54,7 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /rt::Callable<\(i32,\), rt::TsonicResult<i32>>/u);
+  assert.match(source, /rt::OwnedLocalCallable<\(i32,\), rt::TsonicResult<i32>>/u);
   assert.match(source, /action\.call\(\(value,\)\)/u);
   validateGeneratedProject("callable-value", result.artifacts, { run: true });
 });
@@ -95,9 +95,9 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /fn invoke\([^)]*Callable<\(i32,\), rt::TsonicResult<i32>>[^)]*\) -> Result<i32, rt::TsonicError>/u);
+  assert.match(source, /fn invoke\([^)]*OwnedLocalCallable<\(i32,\), rt::TsonicResult<i32>>[^)]*\) -> Result<i32, rt::TsonicError>/u);
   assert.match(source, /action\.call\(\(value,\)\)/u);
-  assert.match(source, /rt::Callable::<\(i32,\), rt::TsonicResult<i32>>::new/u);
+  assert.match(source, /rt::OwnedLocalCallable::<\(i32,\), rt::TsonicResult<i32>>::new/u);
   validateGeneratedProject("callable-throw", result.artifacts, { run: true });
 });
 
@@ -133,7 +133,7 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /fn parse_positive\(value: i32\) -> Result<i32, rt::TsonicError>/u);
-  assert.doesNotMatch(source, /rt::Callable<\(i32,\), rt::TsonicResult<i32>>/u);
+  assert.doesNotMatch(source, /rt::OwnedLocalCallable<\(i32,\), rt::TsonicResult<i32>>/u);
   assert.match(source, /Err\(rt::TsonicError::from\(rt::JsError::error\("negative"\)\)\)/u);
   validateGeneratedProject("callable-top-level", result.artifacts, { run: true });
 });
@@ -161,7 +161,7 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
   assert.doesNotMatch(source, /type TextTransform/u);
-  assert.match(source, /rt::Callable<\(String,\), rt::TsonicResult<String>>/u);
+  assert.match(source, /rt::OwnedLocalCallable<\(String,\), rt::TsonicResult<String>>/u);
   validateGeneratedProject("callable-alias", result.artifacts, { run: true });
 });
 
@@ -227,8 +227,8 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /rt::Location::allocate\(seed\)/u);
-  assert.match(source, /rt::Callable::<\(\), rt::TsonicResult<i32>>::new/u);
+  assert.match(source, /rt::OwnedLocation::allocate\(seed\)/u);
+  assert.match(source, /rt::OwnedLocalCallable::<\(\), rt::TsonicResult<i32>>::new/u);
   validateGeneratedProject("callable-capture", result.artifacts, { run: true });
 });
 
@@ -447,7 +447,7 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   assert.match(
     artifactText(result, "src/index.rs"),
-    /rt::Callable::<\(i32,\), rt::TsonicResult<i32>>::recursive/u,
+    /rt::OwnedLocalCallable::<\(i32,\), rt::TsonicResult<i32>>::recursive/u,
   );
   validateGeneratedProject("callable-recursive", result.artifacts, { run: true });
 });
@@ -542,4 +542,82 @@ export function main(): void {
   assert.match(source, /value\.unwrap_or_else\(\|\| fallback\(base\)\)/u);
   assert.doesNotMatch(source, /unnecessary_lazy_evaluations|let_and_return/u);
   validateGeneratedProject("callable-complete", result.artifacts, { run: true });
+});
+
+test("async callable values use the exact owned local async carrier", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "async_callable_value" } },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+import type { int32 } from "@tsonic/core/types.js";
+
+async function invoke(action: (value: int32) => Promise<int32>, value: int32): Promise<int32> {
+  return await action(value);
+}
+
+export async function main(): Promise<void> {
+  const increment = async (value: int32): Promise<int32> => {
+    await Promise.resolve();
+    return value + 1;
+  };
+  check((await invoke(increment, 4)) === 5);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  assert.match(
+    artifactText(result, "src/index.rs"),
+    /rt::OwnedLocalAsyncCallable<\(i32,\), rt::TsonicResult<i32>>/u,
+  );
+  validateGeneratedProject("async-callable-value", result.artifacts, { run: true });
+});
+
+test("non-async callable values may return an already-created future", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "future_callable_value" } },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+import type { int32 } from "@tsonic/core/types.js";
+
+export async function main(): Promise<void> {
+  const increment = (value: int32): Promise<int32> => Promise.resolve(value + 1);
+  check((await increment(8)) === 9);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  assert.match(
+    artifactText(result, "src/index.rs"),
+    /rt::OwnedLocalAsyncCallable<\(i32,\), rt::TsonicResult<i32>>/u,
+  );
+  validateGeneratedProject("future-callable-value", result.artifacts, { run: true });
+});
+
+test("non-async future callables reject synchronous failure outside the future", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+export const parse = (value: int32): Promise<int32> => {
+  if (value < 0) {
+    throw new Error("negative");
+  }
+  return Promise.resolve(value);
+};
+`,
+    },
+  });
+
+  assert.ok(result.diagnostics.some((diagnostic) =>
+    diagnostic.category === "rust.backend.async-callable-synchronous-failure"));
+  assert.equal(result.artifacts.length, 0);
 });

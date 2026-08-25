@@ -307,6 +307,89 @@ export function rejected(value: float32): int32 {
     code === "RUST_CALL_ARGUMENT_CONVERSION_UNSUPPORTED"), JSON.stringify(variadic.result.diagnostics));
 });
 
+test("compiler provider enforces exact callable traits and future execution bounds", { timeout: 300_000 }, () => {
+  const project = createUserCargoProject();
+  const accepted = compileRustThroughTargetPack({
+    target: {
+      id: "rust",
+      options: {
+        outputType: "bin",
+        crateName: "compiler_provider_proof",
+        projectFile: project.manifestPath,
+      },
+    },
+    files: {
+      "index.ts": `
+import { captureMove, move } from "@tsonic/rust/lang.js";
+import type { Owned } from "@tsonic/rust/types.js";
+import { require_fn, require_fn_mut, require_fn_once, require_local_future, require_send_static_future } from "@tsonic/rust/crates/widget_alias/index.js";
+
+function consume(_value: Owned<string>): void {}
+
+async function localWork(): Promise<void> {
+  await Promise.resolve();
+}
+
+export function main(): void {
+  require_fn((): void => {});
+  let count = 0;
+  require_fn_mut((): void => { count += 1; });
+  let message = "once";
+  require_fn_once(captureMove((): void => consume(move(message))));
+  require_local_future(localWork());
+  require_send_static_future(localWork());
+}
+`,
+    },
+  });
+  assert.deepEqual(accepted.result.diagnostics, []);
+  writeGeneratedArtifacts(project.root, accepted.result.artifacts);
+  const run = runCargo(project.manifestPath, ["run", "--quiet", "--locked"]);
+  assert.equal(run.status, 0, run.stderr);
+
+  const wrongCallTrait = compileRustThroughTargetPack({
+    target: { id: "rust", options: { projectFile: project.manifestPath } },
+    files: {
+      "index.ts": `
+import { captureMove, move } from "@tsonic/rust/lang.js";
+import type { Owned } from "@tsonic/rust/types.js";
+import { require_fn } from "@tsonic/rust/crates/widget_alias/index.js";
+function consume(_value: Owned<string>): void {}
+export function rejected(): void {
+  let message = "once";
+  require_fn(captureMove((): void => consume(move(message))));
+}
+`,
+    },
+  });
+  assert.equal(wrongCallTrait.result.artifacts.length, 0);
+  assert.ok(wrongCallTrait.result.diagnostics.some(({ code }) =>
+    code === "RUST_CLOSURE_CALL_TRAIT_NOT_SATISFIED"), JSON.stringify(wrongCallTrait.result.diagnostics));
+
+  const borrowedFuture = compileRustThroughTargetPack({
+    target: { id: "rust", options: { projectFile: project.manifestPath } },
+    files: {
+      "index.ts": `
+import { own, ref } from "@tsonic/rust/lang.js";
+import type { Life, Ref } from "@tsonic/rust/types.js";
+import { require_send_static_future } from "@tsonic/rust/crates/widget_alias/index.js";
+async function borrowed<L extends Life>(value: Ref<string, L>): Promise<void> {
+  await Promise.resolve();
+  own(value);
+}
+export function rejected(): void {
+  const value = "borrowed";
+  require_send_static_future(borrowed(ref(value)));
+}
+`,
+    },
+  });
+  assert.equal(borrowedFuture.result.artifacts.length, 0);
+  assert.ok(borrowedFuture.result.diagnostics.some(({ code }) =>
+    code === "RUST_PROVIDER_GENERIC_LIFETIME_REQUIREMENT_NOT_PROVEN"),
+  JSON.stringify(borrowedFuture.result.diagnostics));
+});
+
 test("dependency-closure mutation after snapshot is rejected before rustdoc reuse", { timeout: 300_000 }, () => {
   const copiedCrate = uniquePath("mutable-crate");
   cpSync(fixtureCrate, copiedCrate, { recursive: true });

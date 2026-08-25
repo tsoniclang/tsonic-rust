@@ -1,5 +1,6 @@
 import { appendToLastLine, firstLine, renderedFits } from "../patterns.js";
-import { indentText, printRustType } from "../types.js";
+import { indentText, printRustGenericArguments, printRustType } from "../types.js";
+import { printRustAttribute } from "../attributes.js";
 import { printRustAssociatedOwner, printRustSingleCollectionCallContinuation, rustMethodChain, rustMethodChainPrefersVerticalLayout } from "./chains.js";
 import { printRustClosureParams } from "./closure-params.js";
 import { printRustExpr } from "./core.js";
@@ -35,7 +36,7 @@ export function printRustClosureFitted(
     const bindings = expression.body.bindings.flatMap((binding) => {
       const prefix = `${indent}let ${binding.mutable === true ? "mut " : ""}${binding.name}${binding.type === undefined ? "" : `: ${printRustType(binding.type)}`} = `;
       return [
-        ...(binding.attrs ?? []).map((attribute) => `${indent}${attribute}`),
+        ...(binding.attrs ?? []).map((attribute) => `${indent}${printRustAttribute(attribute, "outer", depth + 1)}`),
         printRustLetInitializer(prefix, binding.value, depth + 1),
       ];
     });
@@ -71,12 +72,12 @@ export function printRustBlockExpressionInlineContents(
   expression: Extract<RustExpr, { readonly kind: "block" }>,
 ): string {
   const bindings = expression.bindings.map((binding) => {
-    const attributes = binding.attrs?.join(" ") ?? "";
+    const attributes = binding.attrs?.map((attribute) => printRustAttribute(attribute)).join(" ") ?? "";
     const declaration = `let ${binding.mutable === true ? "mut " : ""}${binding.name}${binding.type === undefined ? "" : `: ${printRustType(binding.type)}`} = ${printRustExpr(binding.value)};`;
     return attributes.length === 0 ? declaration : `${attributes} ${declaration}`;
   });
   return [
-    ...(expression.innerAttrs ?? []),
+    ...(expression.innerAttrs ?? []).map((attribute) => printRustAttribute(attribute, "inner")),
     ...bindings,
     printRustExpr(expression.value),
   ].join(" ");
@@ -107,7 +108,7 @@ export function printRustBlockExpressionLines(
   const bindings = expression.bindings.flatMap((binding) => {
     const prefix = `${indent}let ${binding.mutable === true ? "mut " : ""}${binding.name}${binding.type === undefined ? "" : `: ${printRustType(binding.type)}`} = `;
     return [
-      ...(binding.attrs ?? []).map((attribute) => `${indent}${attribute}`),
+      ...(binding.attrs ?? []).map((attribute) => `${indent}${printRustAttribute(attribute, "outer", depth)}`),
       printRustLetInitializer(prefix, binding.value, depth),
     ];
   });
@@ -119,7 +120,7 @@ export function printRustBlockExpressionLines(
     "statement",
   );
   return [
-    ...(expression.innerAttrs ?? []).map((attribute) => `${indent}${attribute}`),
+    ...(expression.innerAttrs ?? []).map((attribute) => `${indent}${printRustAttribute(attribute, "inner", depth)}`),
     ...bindings,
     `${indent}${value}`,
   ];
@@ -146,26 +147,17 @@ export function printRustAssociatedCallOwnerFitted(
 
 export function printRustAssociatedOwnerFitted(
   owner: RustType,
-  depth: number,
+  _depth: number,
   column: number,
 ): string {
-  if (owner.kind !== "named" || owner.typeArguments === undefined || owner.typeArguments.length === 0) {
+  if (owner.kind !== "named" || owner.genericArguments === undefined || owner.genericArguments.length === 0) {
     return printRustType(owner);
   }
   const flat = printRustAssociatedOwner(owner);
   if (renderedFits(flat, column) && column + flat.length + 1 < rustFormatWidth) {
     return flat;
   }
-  const argumentIndent = indentText(depth + 1);
-  const arguments_ = owner.typeArguments.map((argument) => {
-    const rendered = printRustTypeFitted(argument, depth + 1, argumentIndent.length);
-    return appendToLastLine(`${argumentIndent}${rendered}`, ",");
-  });
-  return [
-    `${owner.path}::<`,
-    ...arguments_,
-    `${indentText(depth)}>`,
-  ].join("\n");
+  return `${owner.path}${printRustGenericArguments(owner.genericArguments, true)}`;
 }
 
 export function printRustTypeFitted(
@@ -188,17 +180,6 @@ export function printRustTypeFitted(
           ",",
         )),
       `${indentText(depth)})`,
-    ].join("\n");
-  }
-  if (type.kind === "named" && type.typeArguments !== undefined && type.typeArguments.length > 0) {
-    const argumentIndent = indentText(depth + 1);
-    return [
-      `${type.path}<`,
-      ...type.typeArguments.map((argument) => {
-        const rendered = printRustTypeFitted(argument, depth + 1, argumentIndent.length);
-        return appendToLastLine(`${argumentIndent}${rendered}`, ",");
-      }),
-      `${indentText(depth)}>`,
     ].join("\n");
   }
   return flat;

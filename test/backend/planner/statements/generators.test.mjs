@@ -22,8 +22,8 @@ export function* exchange(seed: int32): Generator<int32, int32, int32> {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /pub fn exchange\(seed: i32\) -> rt::Generator<i32, i32, i32>/u);
-  assert.match(source, /rt::Generator::new\(move \|generator(?:_\d+)?\| async move \{/u);
+  assert.match(source, /pub fn exchange\(seed: i32\) -> rt::OwnedGenerator<i32, i32, i32>/u);
+  assert.match(source, /rt::OwnedGenerator::new\(move \|generator(?:_\d+)?\| async move \{/u);
   assert.match(source, /let resumed: i32 = match generator(?:_\d+)?\.yield_value\(seed\)\.await \{/u);
   assert.match(source, /rt::GeneratorResume::Next/u);
   assert.match(source, /rt::GeneratorResume::Return/u);
@@ -47,8 +47,8 @@ export async function* exchange(seed: int32): AsyncGenerator<int32, int32, int32
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /pub fn exchange\(seed: i32\) -> rt::AsyncGenerator<i32, i32, i32>/u);
-  assert.match(source, /rt::AsyncGenerator::new\(move \|generator(?:_\d+)?\| async move \{/u);
+  assert.match(source, /pub fn exchange\(seed: i32\) -> rt::OwnedAsyncGenerator<i32, i32, i32>/u);
+  assert.match(source, /rt::OwnedAsyncGenerator::new\(move \|generator(?:_\d+)?\| async move \{/u);
 });
 
 test("generated sync and async generator declarations pass Cargo", { timeout: 300_000 }, () => {
@@ -464,7 +464,7 @@ export function run(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /pub fn items\(\) -> rt::Generator<i32, \(\), \(\)>/u);
+  assert.match(source, /pub fn items\(\) -> rt::OwnedGenerator<i32, \(\), \(\)>/u);
   validateGeneratedProject("static-generator-method", result.artifacts);
 });
 

@@ -5,7 +5,10 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { compileRustTarget } from "../../../dist/backend/compile.js";
 import { composeRustProviderSemantics } from "../../../dist/providers/packages/semantics.js";
-import { createRustTargetConfiguration } from "../../../dist/options/rust-target-options.js";
+import {
+  createRustTargetConfigurationInput,
+  sealRustTargetConfiguration,
+} from "../../../dist/options/rust-target-options.js";
 import {
   planCargoManifest as planSealedCargoManifest,
   planRustCargoProject,
@@ -62,11 +65,16 @@ function planCargoManifest(configuration, runtimeReferences) {
 }
 
 function compile(input) {
-  const configuration = createRustTargetConfiguration(
+  const configurationInput = createRustTargetConfigurationInput(
     input.target,
     dirname(input.paths.projectFilePath),
     input.paths.targetOutputRoot,
   );
+  const configuration = sealRustTargetConfiguration(configurationInput, Object.freeze({
+    edition: configurationInput.edition,
+    compilerIdentity: "cargo-project-test-harness",
+    enabledLanguageFeatures: Object.freeze([]),
+  }));
   const result = compileRustTarget(Object.freeze({
     input,
     configuration,
@@ -287,7 +295,7 @@ test("user-owned Cargo mode emits sources without creating or mutating the manif
     targetOutputRoot: resolve(repositoryRoot, "out/rust"),
   };
 
-  const configuration = createRustTargetConfiguration(
+  const configuration = createRustTargetConfigurationInput(
     { id: "rust", options: { projectFile: manifestPath } },
     dirname(paths.projectFilePath),
     paths.targetOutputRoot,
@@ -319,7 +327,7 @@ test("user-owned Cargo mode rejects missing, non-Cargo, and generated-output man
     [insideOutput, /must not point inside generated target output root/u],
   ]) {
     assert.throws(
-      () => createRustTargetConfiguration(
+      () => createRustTargetConfigurationInput(
         { id: "rust", options: { projectFile: configured } },
         dirname(paths.projectFilePath),
         paths.targetOutputRoot,

@@ -24,6 +24,10 @@ import {
 } from "../../program/plan-context.js";
 import { applyRustFallibleResultExpression } from "../../types/fallible-shape.js";
 import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js";
+import { emptyRustAstGenerics } from "../../../target-ast/nodes.js";
+import { rustReferenceReceiver } from "../../../target-ast/builders.js";
+import { projectFieldReceiver } from "../project-field-dispatch.js";
+import { rustSharedSelfReceiver } from "../polymorphism/model.js";
 
 export function planContractImplementation(
   contract: import("../../../../analysis/project-types/type-policy.js").RustProjectInterfaceContract,
@@ -81,6 +85,7 @@ export function planContractImplementation(
           stateField.targetName,
           field.carrier,
           representation,
+          context,
         )
       : {
           kind: "method-call",
@@ -108,7 +113,8 @@ export function planContractImplementation(
     functions.push({
       name: read,
       visibility: "private",
-      selfParam: dispatch.read.selfMode,
+      generics: emptyRustAstGenerics,
+      receiver: projectFieldReceiver(dispatch.read),
       params: [],
       returnType: field.type,
       ...(dispatch.read.fallible ? { errorType: fieldErrorType! } : {}),
@@ -152,7 +158,8 @@ export function planContractImplementation(
       functions.push({
         name: write!,
         visibility: "private",
-        selfParam: dispatch.write.selfMode,
+        generics: emptyRustAstGenerics,
+        receiver: projectFieldReceiver(dispatch.write),
         params: [{ name: "value", type: field.type }],
         ...(dispatch.write.fallible ? { errorType: fieldErrorType! } : {}),
         body: dispatch.write.fallible
@@ -301,7 +308,8 @@ export function planContractImplementation(
         functions.push({
           name: variant.virtualSlot,
           visibility: "private",
-          selfParam: "rc",
+          generics: method.generics,
+          receiver: rustSharedSelfReceiver(),
           params: method.parameters,
           ...(method.returnType === undefined ? {} : { returnType: method.returnType }),
           ...(method.errorType === undefined ? {} : { errorType: method.errorType }),
@@ -364,7 +372,8 @@ export function planContractImplementation(
       functions.push({
         name: variant.virtualSlot,
         visibility: "private",
-        selfParam: "rc",
+        generics: method.generics,
+        receiver: rustSharedSelfReceiver(),
         params: method.parameters,
         ...(method.returnType === undefined ? {} : { returnType: method.returnType }),
         ...(method.errorType === undefined ? {} : { errorType: method.errorType }),
@@ -416,7 +425,8 @@ export function planContractImplementation(
       functions.push({
         name: write,
         visibility: "private",
-        selfParam: "ref",
+        generics: emptyRustAstGenerics,
+        receiver: rustReferenceReceiver(false),
         params: [{ name: "value", type: override.callableType }],
         body: {
           statements: [{
@@ -429,9 +439,14 @@ export function planContractImplementation(
   }
   return {
     kind: "impl",
+    generics: emptyRustAstGenerics,
     trait,
     target: rootType,
+    polarity: "positive",
+    safety: "safe",
     functions,
+    associatedTypes: [],
+    associatedConstants: [],
   };
 }
 

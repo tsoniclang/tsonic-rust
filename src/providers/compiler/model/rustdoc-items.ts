@@ -1,4 +1,7 @@
-import type { RustCompilerDependency } from "./model.js";
+import type {
+  RustCompilerDependency,
+  RustCompilerItemIdentity,
+} from "./model.js";
 import {
   hasInnerKind,
   isRecord,
@@ -9,6 +12,7 @@ import {
   type RustdocDocument,
 } from "./rustdoc-schema.js";
 import { canonicalPathKey } from "./rustdoc-types.js";
+import { createHash } from "node:crypto";
 
 export interface ResolvedRustdocItem {
   readonly document: RustdocDocument;
@@ -22,6 +26,59 @@ export type RustdocItemResolver = (
   dependency: RustCompilerDependency,
   id: unknown,
 ) => ResolvedRustdocItem;
+
+export function resolveRustdocItem(
+  document: RustdocDocument,
+  dependency: RustCompilerDependency,
+  id: unknown,
+  resolveItem?: RustdocItemResolver,
+): ResolvedRustdocItem {
+  if (resolveItem !== undefined) return resolveItem(document, dependency, id);
+  return Object.freeze({
+    document,
+    dependency,
+    item: itemById(document, id),
+  });
+}
+
+const resolvedRustdocPathItemsByDocument = new WeakMap<
+  RustdocDocument,
+  Map<string, readonly string[]>
+>();
+
+export function resolveRustdocCanonicalItem(
+  document: RustdocDocument,
+  dependency: RustCompilerDependency,
+  canonicalPath: readonly string[],
+  kinds: readonly string[],
+  resolveItem?: RustdocItemResolver,
+): ResolvedRustdocItem | undefined {
+  let resolvedPaths = resolvedRustdocPathItemsByDocument.get(document);
+  if (resolvedPaths === undefined) {
+    resolvedPaths = new Map();
+    resolvedRustdocPathItemsByDocument.set(document, resolvedPaths);
+  }
+  const lookupKey = `${canonicalPath.join("\0")}\0${[...kinds].sort().join("\0")}`;
+  let ids = resolvedPaths.get(lookupKey);
+  if (ids === undefined) {
+    const selected = Object.entries(document.paths)
+      .filter(([, raw]) => isRecord(raw) && typeof raw.kind === "string" &&
+        kinds.includes(raw.kind) && Array.isArray(raw.path) &&
+        raw.path.length === canonicalPath.length &&
+        raw.path.every((segment, index) => segment === canonicalPath[index]))
+      .map(([id]) => id)
+      .sort();
+    ids = Object.freeze(selected);
+    resolvedPaths.set(lookupKey, ids);
+  }
+  if (ids.length === 0) return undefined;
+  if (ids.length !== 1) {
+    throw new Error(
+      `Rust item '${canonicalPath.join("::")}' has ${ids.length} exact compiler identities for ${kinds.join("/")}.`,
+    );
+  }
+  return resolveRustdocItem(document, dependency, ids[0]!, resolveItem);
+}
 
 export function isGlobUse(item: Readonly<Record<string, unknown>>): boolean {
   if (!hasInnerKind(item, "use")) {
@@ -135,6 +192,7 @@ export function authoredPublicKind(
     "module",
     "static",
     "struct",
+    "trait",
     "type_alias",
     "union",
   ]) {
@@ -153,6 +211,17 @@ export function canonicalItemId(dependency: RustCompilerDependency, item: Readon
   return `${dependency.packageId}#${String(id)}`;
 }
 
+export function compilerAssociatedSourceExportName(
+  itemId: string,
+  displayName: string,
+): string {
+  const readableName = /^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(displayName)
+    ? displayName
+    : "AssociatedType";
+  const digest = createHash("sha256").update(itemId).digest("hex").slice(0, 12);
+  return `RustAssociated${readableName}_${digest}`;
+}
+
 export function canonicalItemPath(
   document: RustdocDocument,
   item: Readonly<Record<string, unknown>>,
@@ -167,4 +236,75 @@ export function canonicalItemPath(
     throw new Error(`Rust item '${String(id)}' has no canonical crate-qualified path.`);
   }
   return Object.freeze(segments as string[]);
+}
+
+export function canonicalCompilerItemIdentity(
+  document: RustdocDocument,
+  dependency: RustCompilerDependency,
+  item: Readonly<Record<string, unknown>>,
+): RustCompilerItemIdentity {
+  return Object.freeze({
+    itemId: canonicalItemId(dependency, item),
+    canonicalPath: canonicalItemPath(document, item),
+  });
+}
+
+export function ownedCompilerItemIdentity(
+  dependency: RustCompilerDependency,
+  owner: RustCompilerItemIdentity,
+  item: Readonly<Record<string, unknown>>,
+): RustCompilerItemIdentity {
+  const name = typeof item.name === "string" && item.name.length > 0
+    ? item.name
+    : undefined;
+  if (name === undefined) {
+    throw new Error("Rust owned item has no stable declared name.");
+  }
+  return Object.freeze({
+    itemId: canonicalItemId(dependency, item),
+    canonicalPath: Object.freeze([...owner.canonicalPath, name]),
+  });
+}
+
+export function anonymousOwnedCompilerItemIdentity(
+  dependency: RustCompilerDependency,
+  owner: RustCompilerItemIdentity,
+  item: Readonly<Record<string, unknown>>,
+  role: string,
+): RustCompilerItemIdentity {
+  const itemId = canonicalItemId(dependency, item);
+  return Object.freeze({
+    itemId,
+    canonicalPath: Object.freeze([...owner.canonicalPath, `<${role}:${itemId}>`]),
+  });
+}
+
+export function compilerItemIdentityById(
+  document: RustdocDocument,
+  dependency: RustCompilerDependency,
+  id: unknown,
+): RustCompilerItemIdentity {
+  const local = document.index[String(id)];
+  if (isRecord(local)) {
+    return canonicalCompilerItemIdentity(document, dependency, local);
+  }
+  const path = requireRecord(document.paths[String(id)], `Rust item '${String(id)}' canonical identity`);
+  const segments = requireArray(path.path, `Rust item '${String(id)}' canonical identity path`);
+  if (segments.length < 2 || segments.some((segment) => typeof segment !== "string")) {
+    throw new Error(`Rust item '${String(id)}' has no canonical crate-qualified identity.`);
+  }
+  return Object.freeze({
+    itemId: `${dependency.packageId}#${String(id)}`,
+    canonicalPath: Object.freeze(segments as string[]),
+  });
+}
+
+export function derivedCompilerItemIdentity(
+  owner: RustCompilerItemIdentity,
+  role: string,
+): RustCompilerItemIdentity {
+  return Object.freeze({
+    itemId: `${owner.itemId}::${role}`,
+    canonicalPath: Object.freeze([...owner.canonicalPath, `<${role}>`]),
+  });
 }

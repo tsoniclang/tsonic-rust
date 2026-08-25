@@ -10,6 +10,7 @@ import {
   rustJsArrayConcatItemTargetType,
   rustJsArrayTargetType,
   rustSourcePrimitiveTargetType,
+  rustInferenceVariableTargetType,
 } from "../../../target-model/types/index.js";
 import { defineJsOperationRows } from "./model.js";
 import { exactJsStringOperationRows } from "./exact-string-rows.js";
@@ -21,7 +22,10 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 const zeroArgument = { kind: "integer", value: 0 } as const;
 const oneArgument = { kind: "integer", value: 1 } as const;
 const noneArgument = { kind: "none" } as const;
-export const rustInferCarrier: TargetTypeRef = { kind: "opaque", id: "tsonic.rust.infer" };
+export const rustInferCarrier: TargetTypeRef = rustInferenceVariableTargetType(
+  "tsonic.rust.js-surface",
+  "element",
+);
 const jsNumberArgumentRows = [
   { variant: "float64", carrier: { ref: "float64" } as const, conversion: undefined },
   { variant: "int32", carrier: { ref: "int32" } as const, conversion: rustInt32ToFloat64ValueConversion },

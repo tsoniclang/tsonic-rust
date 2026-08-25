@@ -4,9 +4,12 @@ import {
 import type {
   SourceSemanticsModule,
 } from "@tsonic/tsts";
+import {
+  rustLangModule,
+  rustTypesModule,
+} from "../semantics/identity.js";
 
-export const rustTypesModule = "@tsonic/rust/types.js";
-export const rustLangModule = "@tsonic/rust/lang.js";
+export { rustLangModule, rustTypesModule } from "../semantics/identity.js";
 
 const rustPrimitiveAliases = [
   sourcePrimitive("bool", "bool", "boolean"),
@@ -26,12 +29,6 @@ const rustPrimitiveAliases = [
   sourcePrimitive("f64", "float64", "number", true, 64),
 ] satisfies SourceSemanticsModule["exports"];
 
-const rustFlowAliases = [
-  { kind: "call-marker", exportName: "borrow", marker: "shared-borrow" },
-  { kind: "call-marker", exportName: "borrowMut", marker: "mutable-borrow" },
-  { kind: "call-marker", exportName: "move", marker: "move" },
-] satisfies SourceSemanticsModule["exports"];
-
 export function rustSourceSemanticsModules(): readonly SourceSemanticsModule[] {
   return [
     {
@@ -45,8 +42,7 @@ export function rustSourceSemanticsModules(): readonly SourceSemanticsModule[] {
       moduleSpecifier: rustLangModule,
       packageName: "@tsonic/rust",
       subpath: "lang.js",
-      capabilities: ["call-marker"],
-      exports: rustFlowAliases,
+      exports: [],
     },
   ];
 }

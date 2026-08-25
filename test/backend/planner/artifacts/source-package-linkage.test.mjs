@@ -277,7 +277,7 @@ class InternalModel {
   assert.match(source, /pub struct Model \{\s+#\[doc\(hidden\)\]\s+pub identity: rt::ObjectIdentity,\s+#\[doc\(hidden\)\]\s+pub dispatch:/u);
   assert.match(source, /#\[doc\(hidden\)\]\s+pub fn initialize_state/u);
   assert.match(source, /#\[doc\(hidden\)\][\s\S]*pub struct InternalModelState \{\s+pub value: i32,/u);
-  assert.match(source, /pub struct InternalModel \{\s+#\[doc\(hidden\)\]\s+pub state: rt::ObjectRef<InternalModelState>,/u);
+  assert.match(source, /pub struct InternalModel \{\s+#\[doc\(hidden\)\]\s+pub state: rt::LocalObjectRef<InternalModelState>,/u);
   validateGeneratedProject("public-class-storage-lib", result.artifacts);
 });
 

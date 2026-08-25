@@ -1,4 +1,5 @@
 import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
+import { rustJsRegExpTargetType } from "../../target-model/types/index.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -18,5 +19,5 @@ export function resolveRegExpCreation(
     pattern,
     flags,
   });
-  return setCarrierFact(walk, expression, { kind: "target-named", id: "rust.js.JsRegExp" });
+  return setCarrierFact(walk, expression, rustJsRegExpTargetType());
 }

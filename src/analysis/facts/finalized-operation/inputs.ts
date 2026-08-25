@@ -1,6 +1,11 @@
 import { isRustCVariadicArgumentCarrier } from "../c-variadic.js";
 import { isRustFinalizedArrayInput, isRustFinalizedSliceInput, isRustFinalizedSourceInput, isRustFinalizedTaggedArrayInput, sourceInput } from "./conversions.js";
-import { rustSliceRefTargetType, rustStringTargetType } from "../../../target-model/types/index.js";
+import {
+  rustInferredLifetime,
+  rustReferenceTargetType,
+  rustSliceRefTargetType,
+  rustStringTargetType,
+} from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectRustSourceValueConversion } from "../../../policy/conversions/selection.js";
 import type {
@@ -81,6 +86,10 @@ export function finalizeTargetInputs(
     case "marker":
     case "path":
       return sourceArgumentCount === 0 ? { targetReceiver: none, targetArguments: [] } : undefined;
+    case "static-reference":
+      return operationKind === "property" && sourceArgumentCount === 0
+        ? { targetReceiver: none, targetArguments: [] }
+        : undefined;
     case "static": {
       if (operationKind === "property" && sourceArgumentCount === 0) {
         return { targetReceiver: none, targetArguments: [] };
@@ -95,6 +104,13 @@ export function finalizeTargetInputs(
       return args === undefined ? undefined : {
         targetReceiver: none,
         targetArguments: [...args, ...constants(form.trailingArguments)],
+      };
+    }
+    case "struct-variant": {
+      const args = mappedArguments(undefined, undefined, undefined);
+      return args === undefined ? undefined : {
+        targetReceiver: none,
+        targetArguments: args,
       };
     }
     case "call-c-variadic": {
@@ -140,7 +156,8 @@ export function finalizeTargetInputs(
         targetArguments: args,
       };
     }
-    case "field": {
+    case "field":
+    case "tuple-field": {
       const receiver = input.receiver(operationKind === "property-set" ? "mut-ref" : "ref");
       if (receiver === undefined) {
         return undefined;
@@ -251,11 +268,12 @@ export function finalizeTargetInputs(
       if (closed.some((entry) => !rustTargetTypeRefEquals(entry.sourceCarrier, stringCarrier))) {
         return undefined;
       }
-      const elementCarrier = closed[0]?.parameterCarrier ?? {
-        kind: "reference",
-        referent: stringCarrier,
-        mutable: false,
-      } as const;
+      const elementCarrier = closed[0]?.parameterCarrier ??
+        rustReferenceTargetType(
+          stringCarrier,
+          false,
+          rustInferredLifetime("finalized-operation-input\0shared"),
+        );
       return {
         targetReceiver: none,
         targetArguments: [{
@@ -278,11 +296,12 @@ export function finalizeTargetInputs(
       if (closed.some((entry) => !rustTargetTypeRefEquals(entry.sourceCarrier, stringCarrier))) {
         return undefined;
       }
-      const elementCarrier = closed[0]?.parameterCarrier ?? {
-        kind: "reference",
-        referent: stringCarrier,
-        mutable: false,
-      } as const;
+      const elementCarrier = closed[0]?.parameterCarrier ??
+        rustReferenceTargetType(
+          stringCarrier,
+          false,
+          rustInferredLifetime("finalized-operation-input\0shared"),
+        );
       return {
         targetReceiver: none,
         targetArguments: [

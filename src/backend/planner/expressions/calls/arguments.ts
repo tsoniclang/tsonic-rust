@@ -1,11 +1,14 @@
 import {
-  isRustCopyCarrier,
+  rustCopyTrait,
   isRustVecCarrier,
-  rustCallableProtocol,
+  instantiateRustCallableSignature,
   rustFixedArrayCarrierValue,
+  rustGenericSubstitutionsForArguments,
   rustSliceElementCarrier,
-  substituteRustTargetTypeParameters,
+  substituteRustTargetGenerics,
 } from "../../../../target-model/types/index.js";
+import { rustSealedCarrierSupportsTrait } from "../../ownership/traits.js";
+import { rustGenericArgumentSemanticKey } from "../../../../target-model/semantics/index.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
 import { diagnosticInput } from "../../program/plan-context.js";
 import { isDenseDataArray } from "../../../../target-model/metadata/closed-data.js";
@@ -32,6 +35,7 @@ import type { RustExpr } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustSelectedTargetSignature as SelectedTargetSignatureFact, TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
+import { rustSealedExpressionCarrier } from "../expression-carriers.js";
 
 export function shapeRustSourceCallParameters(
   argumentNodes: readonly Node[],
@@ -285,7 +289,42 @@ function shapeRustSourceCallInput(
     ));
     return undefined;
   }
-  const sourceCarrier = context.input.program.facts.getRuntimeCarrierFact(argumentNode)?.carrier;
+  const targetOperation = context.input.program.facts.getFact(
+    argumentNode,
+    rustTargetOperationFactKey,
+  );
+  const exactReferenceMarker = targetOperation?.kind === "ownership-marker" &&
+    (targetOperation.lowering === "shared-reference" ||
+      targetOperation.lowering === "mutable-reference");
+  if (exactReferenceMarker) {
+    const expectedLowering = parameter.mode === "ref"
+      ? "shared-reference"
+      : parameter.mode === "mut-ref"
+        ? "mutable-reference"
+        : undefined;
+    const finalizedReferenceMatches = input.explicitReferenceCarrier !== undefined &&
+      rustTargetTypeRefEquals(
+        input.explicitReferenceCarrier,
+        targetOperation.resultCarrier,
+      );
+    const inputMatchesResult = rustTargetTypeRefEquals(
+      parameter.parameterCarrier,
+      targetOperation.resultCarrier,
+    );
+    if (input.sourceForm === "value" &&
+      targetOperation.lowering === expectedLowering &&
+      rustTargetTypeRefEquals(input.carrier, parameter.parameterCarrier) &&
+      (finalizedReferenceMatches || inputMatchesResult)) {
+      return argument;
+    }
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, argumentNode),
+      "rust.backend.source-call-reference-marker",
+      `Project-source argument ${input.sourceArgumentIndex} carries an explicit reference operation that conflicts with parameter ${parameterIndex}'s exact selected ABI.`,
+    ));
+    return undefined;
+  }
+  const sourceCarrier = rustSealedExpressionCarrier(argumentNode, context);
   const convertedCarrier = rustValueCarrierTransitionTarget(
     context.input.program.facts,
     argumentNode,
@@ -295,6 +334,7 @@ function shapeRustSourceCallInput(
     sourceCarrier,
     convertedCarrier,
     argument,
+    context,
   );
   if (selectedInput === undefined) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -307,8 +347,27 @@ function shapeRustSourceCallInput(
   if (parameter.mode === "value") {
     return selectedInput;
   }
+  const sourceContract = context.input.program.ownership.sourceContractFor(argumentNode);
+  const sourceReferenceTarget = sourceContract?.kind === "shared-reference" ||
+      sourceContract?.kind === "mutable-reference"
+    ? sourceContract.target
+    : undefined;
+  if (parameter.parameterCarrier.kind === "reference" &&
+    rustTargetTypeRefEquals(sourceReferenceTarget, parameter.parameterCarrier.target) &&
+    (parameter.mode === "ref" &&
+        (sourceContract?.kind === "shared-reference" ||
+          sourceContract?.kind === "mutable-reference") ||
+      parameter.mode === "mut-ref" &&
+        sourceContract?.kind === "mutable-reference" &&
+        parameter.parameterCarrier.mutable)) {
+    return selectedInput;
+  }
+  if (rustTargetTypeRefEquals(input.carrier, parameter.parameterCarrier) ||
+    rustTargetTypeRefEquals(sourceCarrier, parameter.parameterCarrier)) {
+    return selectedInput;
+  }
   if (parameter.parameterCarrier.kind !== "reference" ||
-    !rustTargetTypeRefEquals(parameter.parameterCarrier.referent, input.carrier) &&
+    !rustTargetTypeRefEquals(parameter.parameterCarrier.target, input.carrier) &&
     !(isRustVecCarrier(input.carrier) &&
       rustTargetTypeRefEquals(
         rustSliceElementCarrier(parameter.parameterCarrier),
@@ -334,6 +393,7 @@ function resolveFinalizedRustSpreadInput(
   sourceCarrier: TargetTypeRef | undefined,
   convertedCarrier: TargetTypeRef | undefined,
   sourceExpression: RustExpr,
+  context: RustPlanContext,
 ): RustExpr | undefined {
   if (sourceCarrier === undefined) {
     return undefined;
@@ -369,7 +429,8 @@ function resolveFinalizedRustSpreadInput(
         receiver: sourceExpression,
         index: { kind: "int-literal", text: String(input.spreadElementIndex) },
       };
-  return fixedArray !== undefined && !isRustCopyCarrier(element)
+  return fixedArray !== undefined &&
+      !rustSealedCarrierSupportsTrait(element, rustCopyTrait, context)
     ? { kind: "method-call", receiver: selected, method: "clone", args: [] }
     : selected;
 }
@@ -442,14 +503,21 @@ export function sourceCallSelectedMemberMatches(
 ): boolean {
   const member = selected.member;
   const sourceTypeArguments = selected.sourceSelectedMethodTypeArguments ?? [];
-  const targetTypeArguments = fact.targetTypeArguments ?? [];
-  if (sourceTypeArguments.length !== targetTypeArguments.length) {
+  const targetGenericArguments = fact.targetGenericArguments ?? [];
+  const selectedGenericArguments = selected.targetGenericArguments ?? [];
+  if (sourceTypeArguments.length !== member.generics.parameters.length ||
+    member.generics.parameters.length !== targetGenericArguments.length ||
+    selectedGenericArguments.length !== targetGenericArguments.length ||
+    selectedGenericArguments.some((argument, index) =>
+      rustGenericArgumentSemanticKey(argument) !==
+        rustGenericArgumentSemanticKey(targetGenericArguments[index]!))) {
     return false;
   }
-  const substitutions = new Map<string, TargetTypeRef>();
-  for (let index = 0; index < sourceTypeArguments.length; index += 1) {
-    substitutions.set(sourceTypeArguments[index]!.typeParameterName, targetTypeArguments[index]!);
-  }
+  const substitutions = rustGenericSubstitutionsForArguments(
+    member.generics,
+    targetGenericArguments,
+  );
+  if (substitutions === undefined) return false;
   const expectedKind = fact.target.form === "constructor" ? "constructor" : "method";
   const expectedTargetName = fact.target.form === "constructor"
     ? fact.target.name
@@ -460,7 +528,7 @@ export function sourceCallSelectedMemberMatches(
         : fact.target.name;
   const selectedReturn = member.returnType === undefined
     ? undefined
-    : substituteRustTargetTypeParameters(member.returnType, substitutions);
+    : substituteRustTargetGenerics(member.returnType, substitutions);
   const identityMatches = member.id === fact.operationId &&
     member.kind === expectedKind &&
     member.targetName === expectedTargetName &&
@@ -469,14 +537,16 @@ export function sourceCallSelectedMemberMatches(
     return false;
   }
   const callable = fact.target.form === "callable" || fact.target.form === "structural-method"
-    ? rustCallableProtocol(fact.target.form === "callable"
-        ? fact.target.carrier
-        : fact.target.callableCarrier)
+    ? instantiateRustCallableSignature(
+        fact.target.form === "callable"
+          ? fact.target.carrier
+          : fact.target.callableCarrier,
+        fact.parameters.map((parameter) => parameter.parameterCarrier),
+      )
     : undefined;
   if (callable !== undefined) {
     return callable.parameters.length === fact.parameters.length &&
       callable.parameters.every((carrier, index) =>
-        fact.parameters[index]?.mode === "value" &&
         rustTargetTypeRefEquals(carrier, fact.parameters[index]?.parameterCarrier));
   }
   return isDenseDataArray(member.parameters) && member.parameters.length === fact.parameters.length &&
@@ -487,7 +557,7 @@ export function sourceCallSelectedMemberMatches(
           ? "ref"
           : "value";
       return rustTargetTypeRefEquals(
-        substituteRustTargetTypeParameters(parameter.type, substitutions),
+        substituteRustTargetGenerics(parameter.type, substitutions),
         fact.parameters[index]?.parameterCarrier,
       ) && mode === fact.parameters[index]?.mode;
     });

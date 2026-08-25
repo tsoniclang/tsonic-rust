@@ -6,8 +6,6 @@ import type {
   RustTargetOperationFact,
 } from "../../../analysis/facts/keys.js";
 import {
-  isRustCopyCarrier,
-  rustCarrierSupportsClone,
   rustOptionElementCarrier,
   rustSourceTypeCarrierValue,
 } from "../../../target-model/types/index.js";
@@ -23,6 +21,7 @@ import {
   allocateRustSyntheticName,
   createRustSyntheticNameState,
 } from "../names/synthetic.js";
+import { rustSealedOwnedCarrierReadKind } from "../ownership/traits.js";
 
 type RustProjectTypeTestFact = Extract<
   RustTargetOperationFact,
@@ -122,7 +121,7 @@ function planRustNonConsumingProjectValue(
   context: RustPlanContext,
 ): RustExpr {
   const carrier = context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
-  return !isRustCopyCarrier(carrier) && rustCarrierSupportsClone(carrier) &&
+  return rustSealedOwnedCarrierReadKind(carrier, context) === "clone" &&
       expression.kind === "method-call" && expression.method === "clone" &&
       expression.args.length === 0
     ? expression.receiver

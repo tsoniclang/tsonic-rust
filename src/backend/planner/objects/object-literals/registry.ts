@@ -1,13 +1,16 @@
 import {
   projectCallableShape,
   projectOwnMethods,
-  projectTypeSubstitutions,
+  projectGenericSubstitutions,
   rustFunctionTypesMatch,
   rustProjectMethodPropertyCallableType,
 } from "../polymorphism/model.js";
 import { allocateMemberFieldName, planContractImplementation } from "./contracts.js";
 import { allocateRustSyntheticTypeName } from "../../names/synthetic.js";
-import { rustCallableProtocol, rustSourceTypeCarrierValue } from "../../../../target-model/types/index.js";
+import {
+  rustCallableProtocol,
+  rustSourceTypeCarrierValue,
+} from "../../../../target-model/types/index.js";
 import { rustFallibleFactKey, rustObjectLiteralMethodAdapterFactKey } from "../../../../analysis/facts/keys.js";
 import { rustLintAttributes } from "../../../target-ast/normalization/lint-policy.js";
 import { rustProjectInterfaceContracts } from "../../../../analysis/project-types/type-policy.js";
@@ -28,6 +31,8 @@ import {
 } from "../../program/plan-context.js";
 import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js";
 import type { RustSyntheticNameState } from "../../names/synthetic.js";
+import { emptyRustAstGenerics } from "../../../target-ast/nodes.js";
+import { rustTypeGenericArguments } from "../../../target-ast/builders.js";
 
 export function createImplementationPlan(
   expression: Node,
@@ -122,7 +127,7 @@ export function createImplementationPlan(
     const result = (type: RustType): RustType => ({
       kind: "named",
       path: "Result",
-      typeArguments: [type, errorType],
+      genericArguments: rustTypeGenericArguments([type, errorType]),
     });
     accessors.push({
       storageIndex: field.storageIndex,
@@ -131,11 +136,11 @@ export function createImplementationPlan(
         fieldName: allocateMemberFieldName(methodFieldNames, "property_getter"),
         callableType: {
           kind: "named",
-          path: "rt::Callable",
-          typeArguments: [{
+          path: "rt::OwnedLocalCallable",
+          genericArguments: rustTypeGenericArguments([{
             kind: "tuple",
             elements: [wrapperType],
-          }, result(valueType)],
+          }, result(valueType)]),
         },
       },
       ...(roles.has("set")
@@ -144,11 +149,11 @@ export function createImplementationPlan(
               fieldName: allocateMemberFieldName(methodFieldNames, "property_setter"),
               callableType: {
                 kind: "named" as const,
-                path: "rt::Callable",
-                typeArguments: [{
+                path: "rt::OwnedLocalCallable",
+                genericArguments: rustTypeGenericArguments([{
                   kind: "tuple" as const,
                   elements: [wrapperType, valueType],
-                }, result({ kind: "unit" })],
+                }, result({ kind: "unit" })]),
               },
             },
           }
@@ -178,7 +183,7 @@ export function createImplementationPlan(
       ? {
           kind: "named",
           path: "Result",
-          typeArguments: [resultType, errorType!],
+          genericArguments: rustTypeGenericArguments([resultType, errorType!]),
         }
       : resultType;
     implementations.push({
@@ -188,14 +193,14 @@ export function createImplementationPlan(
       fieldName: allocateMemberFieldName(methodFieldNames, "method_implementation"),
       callableType: {
         kind: "named",
-        path: "rt::Callable",
-        typeArguments: [{
+        path: "rt::OwnedLocalCallable",
+        genericArguments: rustTypeGenericArguments([{
           kind: "tuple",
           elements: [wrapperType, ...(parameterTypes as RustType[])],
-        }, callableResultType],
+        }, callableResultType]),
       },
       parameterCount: implementation.parameters.length,
-      typeParameterSubstitutions: implementation.typeParameterSubstitutions,
+      genericSubstitutions: implementation.genericSubstitutions,
       ...(errorType === undefined ? {} : { errorType }),
     });
   }
@@ -275,21 +280,13 @@ export function createImplementationPlan(
     if (owner === undefined || ownerRelation?.kind !== "related" || variant === undefined) {
       return undefined;
     }
-    const substitutions = new Map(projectTypeSubstitutions(owner, ownerRelation.targetType));
-    variant.sourceTypeParameterNames.forEach((name, index) => {
-      const target = variant.targetTypeArguments[index];
-      if (target !== undefined) {
-        substitutions.set(name, target);
-      }
-    });
+    const substitutions = projectGenericSubstitutions(owner, ownerRelation.targetType);
+    if (substitutions === undefined) return undefined;
     const shape = projectCallableShape(
       dispatch.contractMethod,
-      { ...context, typeParameterSubstitutions: substitutions },
+      { ...context, genericSubstitutions: substitutions },
       {
-        methodTypeArgumentSubstitutions: new Map(
-          variant.sourceTypeParameterNames.map((name, index) =>
-            [name, variant.targetTypeArguments[index]!] as const),
-        ),
+        methodGenericSubstitutions: variant.specialization,
       },
     );
     if (shape === undefined || shape.params.length !== dispatch.parameters.length ||
@@ -325,6 +322,7 @@ export function createImplementationPlan(
       contractMethod: dispatch.contractMethod,
       variant,
       implementation,
+      generics: shape.generics,
       parameters: shape.params.map((parameter, index) => usedContractParameters.has(index)
         ? parameter
         : { ...parameter, name: parameter.name.startsWith("_") ? parameter.name : `_${parameter.name}` }),
@@ -355,18 +353,18 @@ export function createImplementationPlan(
       : context.input.program.projectTypes.relationship(fact.resultCarrier, owner);
     const variants = context.input.program.projectMethodDispatch.variantsForMember(contractMethod);
     const variant = variants.length === 1 ? variants[0] : undefined;
-    const shape = owner === undefined || ownerRelation?.kind !== "related" || variant === undefined
+    const substitutions = owner !== undefined && ownerRelation?.kind === "related"
+      ? projectGenericSubstitutions(owner, ownerRelation.targetType)
+      : undefined;
+    const shape = substitutions === undefined || variant === undefined
       ? undefined
       : projectCallableShape(
           contractMethod,
           {
             ...context,
-            typeParameterSubstitutions: projectTypeSubstitutions(
-              owner,
-              ownerRelation.targetType,
-            ),
+            genericSubstitutions: substitutions,
           },
-          { methodTypeArgumentSubstitutions: new Map() },
+          { methodGenericSubstitutions: variant.specialization },
         );
     if (source === undefined || callable === undefined || callableType === undefined ||
       variant === undefined || shape === undefined ||
@@ -406,6 +404,7 @@ export function createImplementationPlan(
       contractMethod,
       variant,
       implementation,
+      generics: shape.generics,
       parameters: shape.params,
       ...(override === undefined ? {} : { override }),
       ...(shape.returnType === undefined ? {} : { returnType: shape.returnType }),
@@ -445,8 +444,8 @@ export function createImplementationPlan(
     name: stateName,
     visibility: "private",
     attrs: [rustLintAttributes.deadCode],
-    derives: [],
-    fields: [
+    generics: emptyRustAstGenerics,
+    fields: { kind: "named", fields: [
       ...finalizedStateFields.map((field): RustStructField => ({
         name: field.targetName,
         type: field.type,
@@ -457,11 +456,11 @@ export function createImplementationPlan(
         type: {
           kind: "named",
           path: "Option",
-          typeArguments: [override.callableType],
+          genericArguments: rustTypeGenericArguments([override.callableType]),
         },
         visibility: "private",
       })),
-    ],
+    ] },
   };
   const accessorFields = accessors.flatMap((accessor): RustStructField[] => [
     {
@@ -482,8 +481,8 @@ export function createImplementationPlan(
     name: rootName,
     visibility: "private",
     attrs: [rustLintAttributes.deadCode],
-    derives: [],
-    fields: [{
+    generics: emptyRustAstGenerics,
+    fields: { kind: "named", fields: [{
       name: rustProjectObjectIdentityField,
       type: { kind: "named", path: "rt::ObjectIdentity" },
       visibility: "private",
@@ -491,15 +490,15 @@ export function createImplementationPlan(
       name: rustProjectObjectStateField,
       type: {
         kind: "named",
-        path: "rt::ObjectHandle",
-        typeArguments: [stateType],
+        path: "rt::LocalObjectHandle",
+        genericArguments: rustTypeGenericArguments([stateType]),
       },
       visibility: "private",
     }, ...implementations.map((implementation): RustStructField => ({
       name: implementation.fieldName,
       type: implementation.callableType,
       visibility: "private",
-    })), ...accessorFields],
+    })), ...accessorFields] },
   };
   return Object.freeze({
     expression,

@@ -4,6 +4,63 @@ import type { RustFinalizedOperationAbiFor } from "../finalized-operation-abi.js
 import type { RustOperationSymbol, RustOperatorToken } from "../../../target-model/syntax/tokens.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
+export type RustNativePointerOperationFact =
+  | {
+      readonly kind: "native-pointer";
+      readonly operationId: string;
+      readonly operation: "load" | "read-volatile";
+      readonly safety: "requires-unsafe";
+      readonly pointerExpression: Node;
+      readonly pointerCarrier: Extract<TargetTypeRef, { readonly kind: "raw-pointer" }>;
+      readonly pointeeCarrier: TargetTypeRef;
+      readonly resultCarrier: TargetTypeRef;
+    }
+  | {
+      readonly kind: "native-pointer";
+      readonly operationId: string;
+      readonly operation: "store" | "write-volatile";
+      readonly safety: "requires-unsafe";
+      readonly pointerExpression: Node;
+      readonly pointerCarrier: Extract<TargetTypeRef, { readonly kind: "raw-pointer" }>;
+      readonly pointeeCarrier: TargetTypeRef;
+      readonly valueExpression: Node;
+      readonly valueCarrier: TargetTypeRef;
+      readonly resultCarrier: TargetTypeRef;
+    }
+  | {
+      readonly kind: "native-pointer";
+      readonly operationId: string;
+      readonly operation: "offset" | "offset-bytes";
+      readonly safety: "requires-unsafe";
+      readonly pointerExpression: Node;
+      readonly pointerCarrier: Extract<TargetTypeRef, { readonly kind: "raw-pointer" }>;
+      readonly pointeeCarrier: TargetTypeRef;
+      readonly offsetExpression: Node;
+      readonly offsetCarrier: TargetTypeRef;
+      readonly resultCarrier: TargetTypeRef;
+    }
+  | {
+      readonly kind: "native-pointer";
+      readonly operationId: string;
+      readonly operation: "expose-address";
+      readonly safety: "safe";
+      readonly pointerExpression: Node;
+      readonly pointerCarrier: Extract<TargetTypeRef, { readonly kind: "raw-pointer" }>;
+      readonly pointeeCarrier: TargetTypeRef;
+      readonly resultCarrier: TargetTypeRef;
+    }
+  | {
+      readonly kind: "native-pointer";
+      readonly operationId: string;
+      readonly operation: "restore-exposed-address";
+      readonly safety: "safe";
+      readonly addressExpression: Node;
+      readonly addressCarrier: TargetTypeRef;
+      readonly pointerCarrier: Extract<TargetTypeRef, { readonly kind: "raw-pointer" }>;
+      readonly pointeeCarrier: TargetTypeRef;
+      readonly resultCarrier: TargetTypeRef;
+    };
+
 export type RustTargetOperationFact =
   | {
       readonly kind: "operator-token";
@@ -210,6 +267,7 @@ export type RustTargetOperationFact =
       readonly accessMode: "read" | "write" | "read-write";
       readonly receiverCarrier: TargetTypeRef;
       readonly storage: "project-object" | "object-handle";
+      readonly fieldLayout: "ordinary" | "native-union";
       readonly storageIndex: number;
       readonly valueSemantics:
         | { readonly kind: "stored" }
@@ -276,6 +334,7 @@ export type RustTargetOperationFact =
   | {
       readonly kind: "source-union-field";
       readonly operationId: string;
+      readonly accessMode: "read" | "write" | "read-write";
       readonly unionCarrier: TargetTypeRef;
       readonly selectedVariantIndexes: readonly number[];
       readonly variants: readonly {
@@ -325,9 +384,9 @@ export type RustTargetOperationFact =
             readonly form: "constructor";
             readonly name: string;
             readonly typeCarrier: TargetTypeRef;
-          };
+      };
       readonly parameters: readonly RustSourceCallParameterPlan[];
-      readonly targetTypeArguments?: readonly TargetTypeRef[];
+      readonly targetGenericArguments?: readonly import("../../../target-model/semantics/index.js").RustGenericArgument[];
       readonly resultCarrier: TargetTypeRef;
     }
   | {
@@ -506,11 +565,32 @@ export type RustTargetOperationFact =
       readonly resultCarrier: TargetTypeRef;
     }
   | {
-      // Rust-owned flow operation selected from a finalized neutral source
-      // marker fact. The call lowers to its argument with the Rust passing shape.
-      readonly kind: "flow-marker";
+      readonly kind: "ownership-marker";
       readonly operationId: string;
-      readonly state: "borrowed-shared" | "borrowed-mut" | "moved";
+      readonly operation:
+        | "shared-borrow"
+        | "mutable-borrow"
+        | "move"
+        | "clone"
+        | "own"
+        | "load"
+        | "store"
+        | "replace"
+        | "take"
+        | "capture-move";
+      readonly operandCarrier: TargetTypeRef;
+      readonly resultCarrier: TargetTypeRef;
+      readonly lowering:
+        | "identity"
+        | "shared-reference"
+        | "mutable-reference"
+        | "clone"
+        | "to-owned"
+        | "dereference-copy"
+        | "store"
+        | "replace"
+        | "take"
+        | "capture-move";
     }
   | {
       readonly kind: "typed-location";
@@ -520,19 +600,7 @@ export type RustTargetOperationFact =
       readonly locationCarrier: TargetTypeRef;
       readonly resultCarrier: TargetTypeRef;
     }
-  | {
-      readonly kind: "native-pointer";
-      readonly operationId: string;
-      readonly operation: "load" | "store" | "offset";
-      readonly pointerExpression: Node;
-      readonly pointerCarrier: Extract<TargetTypeRef, { readonly kind: "pointer" }>;
-      readonly pointeeCarrier: TargetTypeRef;
-      readonly valueExpression?: Node;
-      readonly valueCarrier?: TargetTypeRef;
-      readonly offsetExpression?: Node;
-      readonly offsetCarrier?: TargetTypeRef;
-      readonly resultCarrier: TargetTypeRef;
-    };
+  | RustNativePointerOperationFact;
 
 export type RustTypedLocationOperationKind =
   | "address-of"

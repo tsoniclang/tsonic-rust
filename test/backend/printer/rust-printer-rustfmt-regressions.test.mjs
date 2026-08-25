@@ -176,7 +176,7 @@ test("rustfmt-stable calls, closures, conditionals, and borrowed fallible chains
               kind: "associated-call",
               owner: {
                 kind: "named",
-                path: "rt::Callable",
+                path: "rt::OwnedLocalCallable",
                 typeArguments: [{
                   kind: "tuple",
                   elements: [
@@ -237,7 +237,7 @@ test("rustfmt-stable calls, closures, conditionals, and borrowed fallible chains
   );
   assert.match(
     source,
-    /rt::Callable::<\(i32, Option<String>\), rt::TsonicResult<String>>::new\(/u,
+    /rt::OwnedLocalCallable::<\(i32, Option<String>\), rt::TsonicResult<String>>::new\(/u,
   );
-  assert.doesNotMatch(source, /rt::Callable::<\n/u);
+  assert.doesNotMatch(source, /rt::OwnedLocalCallable::<\n/u);
 });

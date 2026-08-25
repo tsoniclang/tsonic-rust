@@ -1,5 +1,6 @@
 export type RustPrimitiveTypeName =
   | "bool"
+  | "char"
   | "i8"
   | "u8"
   | "i16"
@@ -11,6 +12,7 @@ export type RustPrimitiveTypeName =
   | "i128"
   | "u128"
   | "f32"
+  | "f16"
   | "f64"
   | "isize"
   | "usize";

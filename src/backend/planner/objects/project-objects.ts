@@ -1,9 +1,11 @@
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustAssignmentOperator } from "../../../target-model/syntax/tokens.js";
-import { isRustCopyCarrier } from "../../../target-model/types/index.js";
+import { rustCopyTrait } from "../../../target-model/types/index.js";
 import type { RustExpr, RustType } from "../../target-ast/nodes.js";
 import type { RustObjectRepresentation } from "../../../analysis/project-types/object-representation.js";
 import type { RustPlannedProjectFieldDispatchRole } from "./project-field-dispatch.js";
+import type { RustPlanContext } from "../program/plan-context.js";
+import { rustSealedCarrierSupportsTrait } from "../ownership/traits.js";
 
 export const rustProjectObjectStateField = "state";
 export const rustProjectObjectIdentityField = "identity";
@@ -22,7 +24,7 @@ export function rustProjectObjectType(
   return {
     kind: "named",
     path,
-    typeArguments: [stateType],
+    genericArguments: [{ kind: "type", type: stateType }],
   };
 }
 
@@ -59,7 +61,7 @@ export function createRustStructuralObject(
 ): RustExpr {
   return {
     kind: "call",
-    path: "rt::ObjectHandle::new",
+    path: "rt::LocalObjectHandle::new",
     args: [{ kind: "struct-literal", path: statePath, fields }],
   };
 }
@@ -69,11 +71,13 @@ export function readRustProjectObjectField(
   storagePath: string | readonly string[],
   resultCarrier: TargetTypeRef,
   representation: RustObjectRepresentation,
+  context: RustPlanContext,
 ): RustExpr {
   if (representation.kind === "value") {
     return rustProjectObjectValueRead(
       rustProjectObjectDirectPath(receiver, storagePath),
       resultCarrier,
+      context,
     );
   }
   const field = rustProjectObjectStatePath(storagePath);
@@ -88,7 +92,7 @@ export function readRustProjectObjectField(
     args: [{
       kind: "closure",
       params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
-      body: isRustCopyCarrier(resultCarrier)
+      body: rustSealedCarrierSupportsTrait(resultCarrier, rustCopyTrait, context)
         ? field
         : { kind: "method-call", receiver: field, method: "clone", args: [] },
     }],
@@ -99,6 +103,7 @@ export function readRustStructuralObjectField(
   receiver: RustExpr,
   storagePath: string | readonly string[],
   resultCarrier: TargetTypeRef,
+  context: RustPlanContext,
 ): RustExpr {
   const field = rustStructuralObjectStatePath(storagePath);
   return {
@@ -108,7 +113,7 @@ export function readRustStructuralObjectField(
     args: [{
       kind: "closure",
       params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
-      body: isRustCopyCarrier(resultCarrier)
+      body: rustSealedCarrierSupportsTrait(resultCarrier, rustCopyTrait, context)
         ? field
         : { kind: "method-call", receiver: field, method: "clone", args: [] },
     }],
@@ -303,13 +308,14 @@ export function readRustProjectObjectIndex(
   key: RustExpr,
   resultCarrier: TargetTypeRef,
   representation: RustObjectRepresentation,
+  context: RustPlanContext,
 ): RustExpr {
   if (representation.kind === "value") {
     return rustProjectObjectValueRead({
       kind: "index",
       receiver: rustProjectObjectDirectPath(receiver, storageName),
       index: { kind: "reference", expr: key },
-    }, resultCarrier);
+    }, resultCarrier, context);
   }
   const value: RustExpr = {
     kind: "index",
@@ -327,7 +333,7 @@ export function readRustProjectObjectIndex(
     args: [{
       kind: "closure",
       params: [{ name: rustProjectObjectStateBinding, byRefCopy: false }],
-      body: isRustCopyCarrier(resultCarrier)
+      body: rustSealedCarrierSupportsTrait(resultCarrier, rustCopyTrait, context)
         ? value
         : { kind: "method-call", receiver: value, method: "clone", args: [] },
     }],
@@ -561,22 +567,23 @@ function rustProjectObjectDirectPath(
 function rustProjectObjectValueRead(
   field: RustExpr,
   resultCarrier: TargetTypeRef,
+  context: RustPlanContext,
 ): RustExpr {
-  return isRustCopyCarrier(resultCarrier)
+  return rustSealedCarrierSupportsTrait(resultCarrier, rustCopyTrait, context)
     ? field
     : { kind: "method-call", receiver: field, method: "clone", args: [] };
 }
 
 function rustSharedObjectCarrierPath(
   representation: RustObjectRepresentation,
-): "rt::ObjectHandle" | "rt::ObjectRef" | undefined {
+): "rt::LocalObjectHandle" | "rt::LocalObjectRef" | undefined {
   switch (representation.kind) {
     case "shared-immutable":
-      return "rt::ObjectRef";
+      return "rt::LocalObjectRef";
     case "shared-mutable":
     case "closed-hierarchy":
     case "open-hierarchy":
-      return "rt::ObjectHandle";
+      return "rt::LocalObjectHandle";
     case "value":
       return undefined;
   }
@@ -595,7 +602,10 @@ function rustStructuralObjectStatePath(
 export function readRustProjectDispatchedField(
   receiver: RustExpr,
   readSlot: string,
-  role: RustPlannedProjectFieldDispatchRole = { selfMode: "ref", fallible: false },
+  role: RustPlannedProjectFieldDispatchRole = {
+    receiver: { kind: "reference", mutable: false },
+    fallible: false,
+  },
 ): RustExpr {
   const dispatch: RustExpr = {
     kind: "field",
@@ -604,7 +614,7 @@ export function readRustProjectDispatchedField(
   };
   const call: RustExpr = {
     kind: "method-call",
-    receiver: role.selfMode === "rc"
+    receiver: role.receiver.kind === "typed"
       ? { kind: "method-call", receiver: dispatch, method: "clone", args: [] }
       : dispatch,
     method: readSlot,
@@ -631,8 +641,8 @@ export function writeRustProjectDispatchedField(
     readonly read: RustPlannedProjectFieldDispatchRole;
     readonly write: RustPlannedProjectFieldDispatchRole;
   } = {
-    read: { selfMode: "ref", fallible: false },
-    write: { selfMode: "ref", fallible: false },
+    read: { receiver: { kind: "reference", mutable: false }, fallible: false },
+    write: { receiver: { kind: "reference", mutable: false }, fallible: false },
   },
 ): RustExpr {
   const selectedReceiver: RustExpr = { kind: "path", path: receiverBinding };
@@ -651,7 +661,7 @@ export function writeRustProjectDispatchedField(
   };
   const writeCall: RustExpr = {
     kind: "method-call",
-    receiver: roles.write.selfMode === "rc"
+    receiver: roles.write.receiver.kind === "typed"
       ? { kind: "method-call", receiver: dispatch, method: "clone", args: [] }
       : dispatch,
     method: writeSlot,

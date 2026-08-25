@@ -138,12 +138,12 @@ export function area(shape: Shape): int32 {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   const shapes = artifactText(result, "src/shapes.rs");
-  assert.match(text, /pub enum Shape \{\n    Variant0\(rt::ObjectHandle<crate::shapes::KindRadiusShape>\),\n    Variant1\(rt::ObjectHandle<crate::shapes::KindSizeShape>\),\n\}/u);
+  assert.match(text, /pub enum Shape \{\n    Variant0\(rt::LocalObjectHandle<crate::shapes::KindRadiusShape>\),\n    Variant1\(rt::LocalObjectHandle<crate::shapes::KindSizeShape>\),\n\}/u);
   assert.match(shapes, /pub struct KindRadiusShape \{\s*pub kind: String,\s*pub radius: i32,/u);
   assert.match(shapes, /pub struct KindSizeShape \{\s*pub kind: String,\s*pub size: i32,/u);
   assert.match(
     text,
-    /Shape::Variant0\(\{\s*let record_kind = String::from\("circle"\);\s*let record_radius = 1;\s*rt::ObjectHandle::new\(crate::shapes::KindRadiusShape \{\s*kind: record_kind,\s*radius: record_radius,/u,
+    /Shape::Variant0\(\{\s*let record_kind = String::from\("circle"\);\s*let record_radius = 1;\s*rt::LocalObjectHandle::new\(crate::shapes::KindRadiusShape \{\s*kind: record_kind,\s*radius: record_radius,/u,
   );
   assert.match(text, /match &shape/u);
   assert.match(text, /unreachable!\("TSTS-selected source refinement excluded this union variant"\)/u);
@@ -172,9 +172,9 @@ export function added(value: int32): Event {
   assert.match(shapes, /pub struct KindValueShape2 \{\s*pub kind: String,\s*pub value: u8,/u);
   assert.match(
     text,
-    /Event::Variant0\(\{\s*let record_kind = String::from\("added"\);\s*let record_value = value;\s*rt::ObjectHandle::new\(crate::shapes::KindValueShape \{\s*kind: record_kind,\s*value: record_value,/u,
+    /Event::Variant0\(\{\s*let record_kind = String::from\("added"\);\s*let record_value = value;\s*rt::LocalObjectHandle::new\(crate::shapes::KindValueShape \{\s*kind: record_kind,\s*value: record_value,/u,
   );
-  assert.doesNotMatch(text, /Event::Variant1\(rt::ObjectHandle::new\(crate::shapes::KindValueShape2/u);
+  assert.doesNotMatch(text, /Event::Variant1\(rt::LocalObjectHandle::new\(crate::shapes::KindValueShape2/u);
 });
 
 test("fixed-array indexing accepts only exact in-range integer literal indexes", async () => {

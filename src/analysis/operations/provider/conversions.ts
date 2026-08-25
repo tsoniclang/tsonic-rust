@@ -6,7 +6,7 @@ import { isRustNullishSourceCarrier, rustOptionElementCarrier } from "../../../t
 import { selectRustValueCarrierReconciliation } from "../../../policy/types/value-carrier-reconciliation.js";
 import { recordRustValueCarrierReconciliation, rustEffectiveValueCarrier } from "../../facts/value-carrier-queries.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
-import { rustCallableProtocol, rustTargetTypeContainsTypeParameter } from "../../../target-model/types/index.js";
+import { rustCallableProtocol, rustTargetTypeOpenGenericIdentityKeys } from "../../../target-model/types/index.js";
 import { rustSelectedOperationKey } from "../../../target-model/facts/selections.js";
 import { rustTargetOperationFactKey, rustProjectDowncastFactKey } from "../../facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -34,11 +34,7 @@ export function selectRustCheckedConversion(
 ): RustPolicySelection<RustCheckedConversionSelectionResult> {
   if (request.conversionKind === "call-argument") {
     const targetCarrier = request.targetParameter.type;
-    const selectedTypeParameterNames = new Set(
-      request.selectedSignature.sourceSelectedMethodTypeArguments?.map((argument) => argument.typeParameterName) ?? [],
-    );
-    if (selectedTypeParameterNames.size > 0 &&
-      rustTargetTypeContainsTypeParameter(targetCarrier, selectedTypeParameterNames)) {
+    if (rustTargetTypeOpenGenericIdentityKeys(targetCarrier).length > 0) {
       return acceptRustPolicy({}, [
         { message: "rust deferred the selected generic source-call argument carrier to post-check target substitution" },
       ]);
@@ -66,14 +62,24 @@ export function selectRustCheckedConversion(
       ]);
     }
     if (targetCarrier.kind === "reference" && sourceCarrier !== undefined &&
-      rustTargetTypeRefEquals(targetCarrier.referent, sourceCarrier)) {
+      rustTargetTypeRefEquals(targetCarrier.target, sourceCarrier)) {
       return acceptRustPolicy({ convertedType: targetCarrier }, [
         { message: "rust selected call argument borrows into the selected target reference carrier" },
       ]);
     }
     const reconciliation = sourceCarrier === undefined
       ? undefined
-      : selectRustValueCarrierReconciliation(sourceCarrier, targetCarrier, options.projectTypes);
+      : selectRustValueCarrierReconciliation(
+          sourceCarrier,
+          targetCarrier,
+          options.projectTypes,
+          options.sourceGenerics,
+        );
+    if (reconciliation?.kind === "identity") {
+      return acceptRustPolicy({ convertedType: targetCarrier }, [
+        { message: "rust selected call argument uses an exact lifetime-safe carrier coercion" },
+      ]);
+    }
     if (reconciliation?.kind === "project-upcast") {
       recordRustValueCarrierReconciliation(context.facts, request.expression, reconciliation);
       return acceptRustPolicy({ convertedType: targetCarrier }, [
@@ -118,10 +124,16 @@ export function selectRustCheckedConversion(
       "Checked source assertion has no closed source and target Rust carriers from TSTS evidence.",
     );
   }
-  const identity = rustTargetTypeRefEquals(sourceCarrier, targetCarrier);
-  const reconciliation = identity
+  const exactIdentity = rustTargetTypeRefEquals(sourceCarrier, targetCarrier);
+  const reconciliation = exactIdentity
     ? { kind: "identity" as const }
-    : selectRustValueCarrierReconciliation(sourceCarrier, targetCarrier, options.projectTypes);
+    : selectRustValueCarrierReconciliation(
+        sourceCarrier,
+        targetCarrier,
+        options.projectTypes,
+        options.sourceGenerics,
+      );
+  const identity = reconciliation.kind === "identity";
   const projectUpcast = reconciliation.kind === "project-upcast";
   if (projectUpcast) {
     recordRustValueCarrierReconciliation(context.facts, request.expression, reconciliation);
@@ -198,7 +210,7 @@ function selectProjectDowncast(
   const sourceDefinition = options.projectTypes.definitionForCarrier(dispatchCarrier);
   const targetDefinition = options.projectTypes.definitionForCarrier(targetCarrier);
   const relationship = sourceDefinition === undefined || targetDefinition === undefined ||
-      targetDefinition.kind !== "class" || targetDefinition.typeParameterNames.length !== 0
+      targetDefinition.kind !== "class" || targetDefinition.genericArguments.length !== 0
     ? { kind: "unrelated" as const }
     : options.projectTypes.relationship(targetCarrier, sourceDefinition);
   if (sourceDefinition === undefined || relationship.kind !== "related" ||
@@ -314,5 +326,10 @@ export function finalizeProviderOperationFromSubjects(
   if (providerFormRequiresSourceReceiver(instantiatedTemplate.target) && sourceReceiverCarrier === undefined) {
     return undefined;
   }
-  return finalizeProviderOperationFact(instantiatedTemplate, sourceArgumentCarriers as TargetTypeRef[], sourceReceiverCarrier);
+  return finalizeProviderOperationFact(
+    instantiatedTemplate,
+    sourceArgumentCarriers as TargetTypeRef[],
+    sourceReceiverCarrier,
+    instantiation.typeRequirements,
+  );
 }

@@ -7,6 +7,7 @@ import {
   type RustItem,
   type RustSourceFileModel,
 } from "../../target-ast/nodes.js";
+import { rustDocHiddenAttribute } from "../../target-ast/attributes.js";
 import { rustPublicSignatureTypeNames } from "../../target-ast/normalization/source-style.js";
 import type { RustPlanningContext } from "../context.js";
 import { planRustStructuralShapeModule } from "../objects/structural-shapes.js";
@@ -139,7 +140,7 @@ export function planRustSourcePackageCrateContent(
           kind: "mod-decl" as const,
           name: component.programModuleName,
           visibility: "public" as const,
-          attrs: ["#[doc(hidden)]"],
+          attrs: [rustDocHiddenAttribute],
         }]),
     ...(structuralShapeModel === undefined
       ? []
@@ -150,7 +151,7 @@ export function planRustSourcePackageCrateContent(
             ? "public" as const
             : "crate" as const,
           ...(structuralShapeNames.size > 0
-            ? { attrs: ["#[doc(hidden)]"] }
+            ? { attrs: [rustDocHiddenAttribute] }
             : {}),
         }]),
     ...(initializerFacadeModel === undefined
@@ -159,7 +160,7 @@ export function planRustSourcePackageCrateContent(
           kind: "mod-decl" as const,
           name: initializerFacadeModuleName,
           visibility: "public" as const,
-          attrs: ["#[doc(hidden)]"],
+          attrs: [rustDocHiddenAttribute],
         }]),
     ...[...topLevelModuleNames].sort(compareNames).map((name): RustItem => {
       const sourcePublic = publicTopLevelModuleNames.has(name);
@@ -169,7 +170,7 @@ export function planRustSourcePackageCrateContent(
         name,
         visibility: sourcePublic || implementationPublic ? "public" : "crate",
         ...(implementationPublic && !sourcePublic
-          ? { attrs: ["#[doc(hidden)]"] }
+          ? { attrs: [rustDocHiddenAttribute] }
           : {}),
       };
     }),
@@ -519,7 +520,7 @@ function planSyntheticModuleArtifacts(
               name,
               visibility: sourcePublic || implementationPublic ? "public" : "crate",
               ...(implementationPublic && !sourcePublic
-                ? { attrs: ["#[doc(hidden)]"] }
+                ? { attrs: [rustDocHiddenAttribute] }
                 : {}),
             };
           }),

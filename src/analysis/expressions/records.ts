@@ -609,7 +609,7 @@ export function resolveRecordLiteralCarrier(
       const selectedCallable = rustCallableProtocol(selectedCallableCarrier);
       const selectedClosure = rustClosureProtocol(selectedCallableCarrier);
       const selectedParameterCarriers = selectedCallableCarrier?.kind === "function-pointer"
-        ? selectedCallableCarrier.args
+        ? selectedCallableCarrier.parameters
         : selectedCallable?.parameters ?? selectedClosure?.parameters;
       const selectedResultCarrier = selectedCallableCarrier?.kind === "function-pointer"
         ? selectedCallableCarrier.result
@@ -680,10 +680,11 @@ export function resolveRecordLiteralCarrier(
         selectedResultCarrier === undefined) {
         return undefined;
       }
-      const methodCarrier = rustClosureTargetType(
-        [resultCarrier, ...selectedParameterCarriers],
-        selectedResultCarrier,
-      );
+      const methodCarrier = rustClosureTargetType({
+        callTrait: "fn-mut",
+        parameters: [resultCarrier, ...selectedParameterCarriers],
+        result: selectedResultCarrier,
+      });
       if (resolveFunctionExpressionCarrier(walk, property, sourceFile, methodCarrier, {
         leadingParameters: [{ kind: "this", carrier: resultCarrier }],
         preserveSourceParameterForms: true,
@@ -728,7 +729,7 @@ export function resolveRecordLiteralCarrier(
       const selectedCallable = rustCallableProtocol(selectedMemberCarrier);
       const selectedClosure = rustClosureProtocol(selectedMemberCarrier);
       const selectedParameterCarriers = selectedMemberCarrier?.kind === "function-pointer"
-        ? selectedMemberCarrier.args
+        ? selectedMemberCarrier.parameters
         : selectedCallable?.parameters ?? selectedClosure?.parameters;
       const selectedResultCarrier = selectedMemberCarrier?.kind === "function-pointer"
         ? selectedMemberCarrier.result
@@ -740,10 +741,11 @@ export function resolveRecordLiteralCarrier(
         selectedResultCarrier === undefined) {
         return undefined;
       }
-      const methodCarrier = rustClosureTargetType(
-        [resultCarrier, ...selectedParameterCarriers],
-        selectedResultCarrier,
-      );
+      const methodCarrier = rustClosureTargetType({
+        callTrait: "fn-mut",
+        parameters: [resultCarrier, ...selectedParameterCarriers],
+        result: selectedResultCarrier,
+      });
       if (resolveFunctionExpressionCarrier(walk, initializer, sourceFile, methodCarrier, {
         leadingParameters: [{
           kind: initializerKind === KindFunctionExpression ? "this" : "receiver",

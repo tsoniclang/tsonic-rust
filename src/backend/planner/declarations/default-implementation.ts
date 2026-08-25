@@ -1,29 +1,35 @@
 import type {
+  RustGenerics,
   RustImplFunction,
   RustItem,
   RustType,
-  RustTypeParameter,
 } from "../../target-ast/nodes.js";
 
 export function rustDefaultImplementation(
   target: RustType,
-  typeParams: readonly RustTypeParameter[] | undefined,
+  generics: RustGenerics,
   constructor: RustImplFunction,
 ): RustItem | undefined {
   if (constructor.name !== "new" || constructor.visibility !== "public" ||
-    constructor.params.length !== 0 || (constructor.typeParams?.length ?? 0) > 0 ||
+    constructor.params.length !== 0 || constructor.generics.parameters.length > 0 ||
     constructor.isAsync === true ||
     constructor.isUnsafe === true || constructor.errorType !== undefined) {
     return undefined;
   }
   return {
     kind: "impl",
-    ...(typeParams === undefined || typeParams.length === 0 ? {} : { typeParams }),
+    generics,
     trait: { kind: "named", path: "Default" },
     target,
+    polarity: "positive",
+    safety: "safe",
+    attrs: [],
+    associatedTypes: [],
+    associatedConstants: [],
     functions: [{
       name: "default",
-      visibility: "public",
+      visibility: "private",
+      generics: { parameters: [], wherePredicates: [] },
       params: [],
       returnType: { kind: "named", path: "Self" },
       body: {

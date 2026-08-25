@@ -159,6 +159,9 @@ export function selectExpressionOperation(
   const semantics = walk.context.semantics(sourceFile);
   const context = rustOperationContext(walk, expression);
   const kind = ast.kindName(expression);
+  if (walk.context.declarationApplications.operationForExpression(expression) !== undefined) {
+    return;
+  }
   if (kind === KindIdentifier) {
     const reference = walk.context.source.navigation.sourceReferenceFor(expression);
     recordPolicySelection(walk, expression, selectRustCheckedValue({

@@ -1,4 +1,4 @@
-import type { RustBlock, RustExpr, RustStmt } from "../nodes.js";
+import type { RustBlock, RustExpr, RustPattern, RustStmt } from "../nodes.js";
 
 export function rustBlockReferencesPath(block: RustBlock, path: string): boolean {
   return rustStatementsReferencePath(block.statements, path);
@@ -12,17 +12,46 @@ export function rustStatementsReferencePath(
     if (rustStatementReferencesPath(statement, path)) {
       return true;
     }
-    if (statement.kind === "let" && statement.name === path) {
+    if (statement.kind === "let" && statement.name === path ||
+      statement.kind === "let-pattern" && rustPatternBindsPath(statement.pattern, path)) {
       return false;
     }
   }
   return false;
 }
 
+export function rustPatternBindsPath(pattern: RustPattern, path: string): boolean {
+  switch (pattern.kind) {
+    case "wildcard":
+    case "path":
+    case "literal":
+      return false;
+    case "binding":
+      return pattern.name === path ||
+        (pattern.subpattern !== undefined && rustPatternBindsPath(pattern.subpattern, path));
+    case "tuple":
+      return pattern.elements.some((element) => rustPatternBindsPath(element, path));
+    case "tuple-variant":
+      return pattern.elements.some((element) => rustPatternBindsPath(element, path));
+    case "struct":
+      return pattern.fields.some((field) => rustPatternBindsPath(field.pattern, path));
+    case "slice":
+      return pattern.prefix.some((element) => rustPatternBindsPath(element, path)) ||
+        (pattern.rest !== undefined && rustPatternBindsPath(pattern.rest, path)) ||
+        pattern.suffix.some((element) => rustPatternBindsPath(element, path));
+    case "reference":
+      return rustPatternBindsPath(pattern.pattern, path);
+    case "or":
+      return pattern.patterns.some((element) => rustPatternBindsPath(element, path));
+  }
+}
+
 export function rustStatementReferencesPath(statement: RustStmt, path: string): boolean {
   switch (statement.kind) {
     case "let":
       return statement.init !== undefined && rustExpressionReferencesPath(statement.init, path);
+    case "let-pattern":
+      return rustExpressionReferencesPath(statement.init, path);
     case "expr":
     case "tail":
       return rustExpressionReferencesPath(statement.expr, path);
@@ -150,6 +179,7 @@ export function rustExpressionChildren(expression: RustExpr): readonly RustExpr[
     case "method-call":
       return [expression.receiver, ...expression.args];
     case "field":
+    case "tuple-field":
       return [expression.receiver];
     case "index":
       return [expression.receiver, expression.index];

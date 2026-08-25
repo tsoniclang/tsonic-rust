@@ -28,8 +28,20 @@ import { rustLocationStorageFactKey } from "../facts/keys.js";
 import { rustTypedLocationStorageRootReference } from "../operations/typed-locations.js";
 import { selectRustAddressOfSourceOperation } from "../../policy/operations/typed-location-source.js";
 import { rustProjectCallableTargetName } from "../facts/source-member-name.js";
+import {
+  resolveRustConstExpression,
+  resolveRustLifetime,
+} from "../../policy/types/resolution/rust-semantics.js";
+import { rustSourceGenericParameterFactKey } from "../../source/semantics/facts.js";
+import {
+  analyzeRustDeclarationContracts,
+  type RustDeclarationContractIndex,
+} from "../declarations/declaration-applications.js";
 
-export function analyzeRustProgram(context: RustAnalysisContext): void {
+export function analyzeRustProgram(
+  context: RustAnalysisContext,
+  dialect: import("../../target-model/semantics/index.js").RustDialect,
+): RustDeclarationContractIndex | undefined {
   const { ast } = context;
   const rawSourceFiles: readonly (SourceFile | undefined)[] = context.source.sourceFiles;
   if (!isDenseDataArray(rawSourceFiles) || rawSourceFiles.some((sourceFile) => sourceFile === undefined)) {
@@ -47,6 +59,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   );
   const sourceTypes = createRustSourceTypeRegistry();
   const sourceCallableAbi = createRustSourceCallableAbiResolver();
+  let finalizedDeclarationContracts: RustDeclarationContractIndex | undefined;
   const projectSourceFiles = [...context.sourceFiles]
     .sort((left, right) => ast.getFileName(left).localeCompare(ast.getFileName(right)));
   for (const sourceFile of projectSourceFiles) {
@@ -69,6 +82,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     jsEnabled,
     sourceProfiles,
     sourceTypes,
+    sourceGenerics: context.sourceGenerics,
     resolveProjectUnionCarrier(memberCarriers) {
       return finalizedProjectTypes?.commonSupertype(memberCarriers);
     },
@@ -76,6 +90,17 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     projectTypes: context.projectTypes,
     projectMethodDispatch: context.projectMethodDispatch,
     projectMethodProperties: context.projectMethodProperties,
+    projectTypeRequiresDynamicDispatch(definition) {
+      return context.objectRepresentations.requiresDynamicDispatch(definition);
+    },
+    projectFieldLayout(declaration) {
+      const owner = declaration === undefined
+        ? undefined
+        : finalizedProjectTypes?.definitionContainingDeclaration(declaration);
+      return finalizedDeclarationContracts?.forDeclaration(owner?.declaration)?.nativeUnion === true
+        ? "native-union"
+        : "ordinary";
+    },
   };
   const walk: RustFactWalk = {
     context,
@@ -100,13 +125,27 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   for (const sourceFile of projectSourceFiles) {
     sourceTypes.registerSourceFile(sourceFile, ast);
   }
+  context.sourceGenerics.register({
+    ast,
+    sourceFiles: projectSourceFiles,
+    facts: context.facts,
+    names: context.names,
+    report(diagnostic) {
+      context.diagnostics.push(diagnostic);
+    },
+  });
+  if (context.diagnostics.length > 0) return;
   const projectTypes = context.projectTypes.initialize({
     ast,
     names: context.names,
     navigation: context.source.navigation,
     sourceFiles: projectSourceFiles,
+    sourceGenerics: context.sourceGenerics,
     externallyExtensible(declaration) {
       return externallyExtensibleDeclarations.has(declaration);
+    },
+    requiresTraitRepresentation(declaration) {
+      return context.declarationApplications.requiresTraitRepresentation(declaration);
     },
     targetNameForCallable(declaration) {
       return rustProjectCallableTargetName(declaration, context);
@@ -121,6 +160,31 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
         rustResolutionContext(walk, heritage),
         operationOptions,
       );
+    },
+    resolveSelectedGenericArgument(authoredTypeNode, selectedType, parameter, heritage) {
+      if (parameter.argument.kind === "type") {
+        const value = resolveRustTargetTypeRef(
+          authoredTypeNode ?? selectedType,
+          rustResolutionContext(walk, heritage),
+          operationOptions,
+        );
+        return value === undefined ? undefined : Object.freeze({ kind: "type", value });
+      }
+      if (parameter.argument.kind === "lifetime") {
+        const value = authoredTypeNode === undefined
+          ? undefined
+          : resolveRustLifetime(authoredTypeNode, rustResolutionContext(walk, heritage));
+        return value === undefined ? undefined : Object.freeze({ kind: "lifetime", value });
+      }
+      const parameterFact = context.facts.resolve(
+        parameter.declaration,
+        rustSourceGenericParameterFactKey,
+      ) ?? context.facts.get(parameter.declaration, rustSourceGenericParameterFactKey);
+      const constNode = authoredTypeNode ?? parameterFact?.defaultType;
+      const value = constNode === undefined
+        ? undefined
+        : resolveRustConstExpression(constNode, rustResolutionContext(walk, heritage));
+      return value === undefined ? undefined : Object.freeze({ kind: "const", value });
     },
     resolveExternalHeritage(edge) {
       return resolveRustExternalProjectBase(edge, ast, sourceProfiles);
@@ -139,6 +203,52 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   if (projectTypes.issues.length > 0) {
     return;
   }
+  context.sourceGenerics.initialize({
+    ast,
+    sourceFiles: projectSourceFiles,
+    facts: context.facts,
+    names: context.names,
+    providerTypes: providerSemantics.types,
+    resolveType(node) {
+      return resolveRustTargetTypeRef(
+        node,
+        rustResolutionContext(walk, node),
+        operationOptions,
+      );
+    },
+    resolveLifetime(node) {
+      return resolveRustLifetime(node, rustResolutionContext(walk, node));
+    },
+    resolveConst(node) {
+      return resolveRustConstExpression(node, rustResolutionContext(walk, node));
+    },
+    report(diagnostic) {
+      context.diagnostics.push(diagnostic);
+    },
+  });
+  if (context.diagnostics.length > 0) {
+    return;
+  }
+  const declarationContracts = analyzeRustDeclarationContracts({
+    ast,
+    applications: context.declarationApplications,
+    dialect,
+    navigation: context.source.navigation,
+    projectTypes,
+    providerTypes: providerSemantics.types,
+    resolveType(node) {
+      return resolveRustTargetTypeRef(
+        node,
+        rustResolutionContext(walk, node),
+        operationOptions,
+      );
+    },
+  });
+  if (declarationContracts.kind === "rejected") {
+    context.diagnostics.push(...declarationContracts.diagnostics);
+    return undefined;
+  }
+  finalizedDeclarationContracts = declarationContracts.index;
   const promotedStorageDeclarations = new Set<Node>();
   const collectPromotedStorage = (node: Node): void => {
     const operation = selectRustAddressOfSourceOperation(
@@ -165,17 +275,28 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   for (const sourceFile of projectSourceFiles) {
     collectPromotedStorage(sourceFile);
   }
-  context.objectRepresentations.initialize({
+  const objectRepresentations = context.objectRepresentations.initialize({
     ast,
     navigation: context.source.navigation,
     projectTypes,
     sourceFiles: projectSourceFiles,
+    declarationContracts: declarationContracts.index,
     hasPromotedStorage(declaration) {
       return promotedStorageDeclarations.has(declaration) ||
         context.facts.get(declaration, rustLocationStorageFactKey) !== undefined ||
-        context.facts.resolve(declaration, rustLocationStorageFactKey) !== undefined;
+      context.facts.resolve(declaration, rustLocationStorageFactKey) !== undefined;
     },
   });
+  for (const issue of objectRepresentations.issues) {
+    appendRustDiagnostic(
+      walk,
+      issue.code,
+      issue.message,
+      issue.node,
+      ["target.capability=rust.project-types.explicit-native-value"],
+    );
+  }
+  if (objectRepresentations.issues.length > 0) return;
   for (const sourceFile of projectSourceFiles) {
     for (const statement of ast.statements(sourceFile) as readonly Node[]) {
       const kind = ast.kindName(statement);
@@ -241,6 +362,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     ast,
     names: context.names,
     projectTypes,
+    sourceGenerics: context.sourceGenerics,
   });
   for (const issue of callableSpecializations.issues) {
     appendRustDiagnostic(
@@ -254,9 +376,9 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   for (const request of callableSpecializations.projectMethodRequests) {
     const registration = context.projectMethodDispatch.record(
       request.declaration,
-      request.targetTypeArguments,
-      ast,
+      request.targetGenericArguments,
       projectTypes,
+      context.sourceGenerics,
     );
     if (registration.kind === "rejected") {
       appendRustDiagnostic(
@@ -272,6 +394,10 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     ast,
     names: context.names,
     projectTypes,
+    sourceGenerics: context.sourceGenerics,
+    requiresDynamicDispatch(definition) {
+      return context.objectRepresentations.requiresDynamicDispatch(definition);
+    },
   });
   context.projectMethodProperties.initialize({
     ast,
@@ -283,6 +409,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     facts: walk.context.facts,
     projectTypes: walk.context.projectTypes,
     projectMethodDispatch: walk.context.projectMethodDispatch,
+    sourceGenerics: walk.context.sourceGenerics,
     expressions: walk.objectLiteralMethodExpressions,
   })) {
     appendRustDiagnostic(
@@ -313,6 +440,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     structuralObjects,
     sourceTypes.structuralFieldImplementations(),
     (fileName) => sourcePackageComponentByFile.get(fileName)!,
+    context.sourceGenerics,
   );
   context.projectFieldDispatch.initialize({
     ast,
@@ -324,6 +452,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   recordFallibilityFacts(walk, projectSourceFiles);
   recordResourceManagementFacts(walk, projectSourceFiles);
   recordFutureValueFacts(walk, projectSourceFiles);
+  return declarationContracts.index;
 }
 
 function collectExternallyExtensibleDeclarations(

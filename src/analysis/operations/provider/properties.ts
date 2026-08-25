@@ -143,6 +143,7 @@ function selectExternalProjectFieldAccess(
     accessMode: request.accessMode,
     receiverCarrier: selectedReceiverCarrier,
     storage: "project-object",
+    fieldLayout: options.projectFieldLayout(externalField.field.declaration),
     storageIndex: externalField.field.storageIndex,
     valueSemantics: { kind: "stored" },
     resultCarrier: externalField.field.carrier,
@@ -436,13 +437,13 @@ export function selectRustCheckedPropertyAccess(
       const ownerCarrier = ownerRelationship?.kind === "related"
         ? ownerRelationship.targetType
         : undefined;
-      const readSlot = owner !== undefined && options.projectTypes.isPolymorphic(owner)
+      const readSlot = options.projectTypeRequiresDynamicDispatch(owner)
         ? options.projectTypes.memberSlotName(declaration, "read")
         : undefined;
       const writeSlot = readSlot === undefined
         ? undefined
         : options.projectTypes.memberSlotName(declaration, "write");
-      if (owner !== undefined && options.projectTypes.isPolymorphic(owner) &&
+      if (options.projectTypeRequiresDynamicDispatch(owner) &&
         (readSlot === undefined || writeSlot === undefined || ownerCarrier === undefined)) {
         return rejectSelectedOperation(
           request.expression,
@@ -458,6 +459,7 @@ export function selectRustCheckedPropertyAccess(
         accessMode: request.accessMode,
         receiverCarrier: selectedReceiverCarrier,
         storage: "project-object",
+        fieldLayout: options.projectFieldLayout(declaration),
         storageIndex,
         valueSemantics: { kind: "stored" },
         resultCarrier,
@@ -757,7 +759,7 @@ function selectProjectSourceAccessor(
     );
   }
   const dispatch = !staticAccess && typeDefinition !== undefined &&
-      options.projectTypes.isPolymorphic(typeDefinition) &&
+      options.projectTypeRequiresDynamicDispatch(typeDefinition) &&
       receiverRelationship?.kind === "related"
     ? { ownerCarrier: receiverRelationship.targetType }
     : undefined;

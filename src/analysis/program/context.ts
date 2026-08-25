@@ -56,6 +56,14 @@ import {
   createRustRuntimeValueUsePlan,
   type RustRuntimeValueUsePlan,
 } from "./runtime-value-uses.js";
+import {
+  createRustSourceGenericRegistry,
+  type RustSourceGenericRegistry,
+} from "../declarations/source-generics.js";
+import {
+  createRustDeclarationApplicationIndex,
+  type RustDeclarationApplicationIndex,
+} from "../declarations/declaration-applications.js";
 
 export interface RustAnalysisContext extends RustSourcePolicyContext {
   readonly target: TargetSelection;
@@ -71,9 +79,11 @@ export interface RustAnalysisContext extends RustSourcePolicyContext {
   readonly projectMethodProperties: RustProjectMethodPropertyPlanRegistry;
   readonly projectFieldDispatch: RustProjectFieldDispatchPlanRegistry;
   readonly sourceCallableSpecializations: RustSourceCallableSpecializationPlanRegistry;
+  readonly sourceGenerics: RustSourceGenericRegistry;
   readonly structuralShapes: RustStructuralShapePlanRegistry;
   readonly providerSemantics: RustProviderSemantics;
   readonly safetyApplications: RustSafetyApplicationFactIndex;
+  readonly declarationApplications: RustDeclarationApplicationIndex;
   readonly runtimeValueUses: RustRuntimeValueUsePlan;
   readonly names: RustNamePlan;
   readonly diagnostics: TargetDiagnostic[];
@@ -101,10 +111,17 @@ export function createRustAnalysisContext(
     sourceFacts: input.source.sourceFacts,
     navigation: input.source.navigation,
   });
+  const declarationApplications = createRustDeclarationApplicationIndex({
+    ast,
+    sourceFiles,
+    sourceFacts: input.source.sourceFacts,
+    navigation: input.source.navigation,
+  });
   const runtimeValueUses = createRustRuntimeValueUsePlan({
     ast,
     navigation: input.source.navigation,
     safetyApplications,
+    declarationApplications,
   });
   return Object.freeze({
     source: input.source,
@@ -121,9 +138,11 @@ export function createRustAnalysisContext(
     projectMethodProperties: createRustProjectMethodPropertyPlanRegistry(),
     projectFieldDispatch: createRustProjectFieldDispatchPlanRegistry(),
     sourceCallableSpecializations: createRustSourceCallableSpecializationPlanRegistry(),
+    sourceGenerics: createRustSourceGenericRegistry(),
     structuralShapes: createRustStructuralShapePlanRegistry(),
     providerSemantics,
     safetyApplications,
+    declarationApplications,
     runtimeValueUses,
     names: createRustNamePlan({
       ast,

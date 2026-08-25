@@ -1,9 +1,17 @@
 import { rustSourcePrimitiveTargetType } from "../../../target-model/types/index.js";
 import type { ProviderDeclarationModel, ProviderTypeExpression } from "@tsonic/tsts";
-import type { RustCompilerDependency, RustCompilerType, RustCompilerStandardTypeLocation } from "../model/model.js";
+import type {
+  RustCompilerDependency,
+  RustCompilerGenericParameter,
+  RustCompilerGenerics,
+  RustCompilerItemIdentity,
+  RustCompilerStandardItemLocation,
+} from "../model/model.js";
+import type { RustCompilerSubstitutions } from "../model/rustdoc-types.js";
 import type { RustNamedTypeTraitContract } from "../../../target-model/types/model.js";
 import type { RustProviderModuleDefinition, RustProviderOperationDefinition, RustProviderTypeDefinition } from "../../packages/model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustGenericArgument } from "../../../target-model/semantics/index.js";
 
 export interface RustCompilerProviderProjection {
   readonly declarationModel: ProviderDeclarationModel;
@@ -15,6 +23,10 @@ export interface RustCompilerProviderProjection {
 }
 
 export interface ProjectionOwner {
+  readonly providerPackageId: string;
+  readonly providerId: string;
+  readonly providerVersion: string;
+  readonly compilationSnapshotId: string;
   readonly providerModuleId: string;
   readonly moduleSpecifier: string;
 }
@@ -26,17 +38,24 @@ export interface ProjectionContext {
   readonly imports: Map<string, Set<string>>;
   readonly carrierPaths: Map<string, string>;
   readonly carrierTraits: Map<string, RustNamedTypeTraitContract>;
-  readonly standardTypes: ReadonlyMap<string, RustCompilerStandardTypeLocation>;
+  readonly standardItems: ReadonlyMap<string, RustCompilerStandardItemLocation>;
   readonly localStandardTypeNames: ReadonlyMap<string, string>;
-  readonly defaultTypeBindings?: ReadonlyMap<string, RustCompilerType>;
+  readonly defaultTypeBindings?: RustCompilerSubstitutions;
+  readonly genericNames?: ReadonlyMap<string, string>;
+  readonly genericParameters?: ReadonlyMap<string, RustCompilerGenericParameter>;
+  readonly genericScopeId?: string;
   readonly currentType?: {
     readonly exportId: string;
+    readonly identity: RustCompilerItemIdentity;
     readonly name: string;
     readonly carrier: TargetTypeRef;
     readonly sourceType: ProviderTypeExpression;
+    readonly genericParameters: readonly RustCompilerGenericParameter[];
+    readonly generics: RustCompilerGenerics;
     readonly typeParameters: readonly string[];
     readonly canonicalPath: readonly string[];
     readonly targetPath: readonly string[];
+    readonly targetInferenceParameters?: readonly RustGenericArgument[];
   };
 }
 

@@ -53,13 +53,13 @@ test("classes lower to reference-backed object wrappers with fact-backed members
   );
   assert.match(
     text,
-    /pub\(crate\) struct CounterRoot \{\s+identity: rt::ObjectIdentity,\s+state: rt::ObjectHandle<CounterState>,/u,
+    /pub\(crate\) struct CounterRoot \{\s+identity: rt::ObjectIdentity,\s+state: rt::LocalObjectHandle<CounterState>,/u,
   );
   assert.doesNotMatch(text, /derive\([^\n]*Copy/u);
   assert.match(text, /impl Counter \{/u);
   assert.match(text, /let field_value: i32 = value;/u);
   assert.match(text, /pub fn initialize_state\(value: i32\) -> CounterState/u);
-  assert.match(text, /state: rt::ObjectHandle::new\(state\)/u);
+  assert.match(text, /state: rt::LocalObjectHandle::new\(state\)/u);
   assert.match(text, /fn exact_counter_add/u);
   assert.match(
     text,
@@ -605,12 +605,12 @@ test("flow markers erase into finalized argument modes", () => {
     files: {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
-import { borrow, move } from "@tsonic/rust/lang.js";
+import { move, ref } from "@tsonic/rust/lang.js";
 import { Vector, magnitude, consume } from "@acme/vectors";
 
 export function drive(): int32 {
   const v = new Vector(3, 4);
-  const m = magnitude(borrow(v));
+  const m = magnitude(ref(v));
   return m + consume(move(v));
 }
 `,
@@ -629,12 +629,12 @@ test("flow markers mismatching argument modes fail closed", () => {
     files: {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
-import { borrow } from "@tsonic/rust/lang.js";
+import { ref } from "@tsonic/rust/lang.js";
 import { Vector, consume } from "@acme/vectors";
 
 export function bad(): int32 {
   const v = new Vector(1, 2);
-  return consume(borrow(v));
+  return consume(ref(v));
 }
 `,
     },

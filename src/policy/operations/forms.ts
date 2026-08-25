@@ -7,7 +7,11 @@ import type {
 import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
 import { isRustBinaryOperator, rustBinaryOperatorTraitPath } from "../../target-model/syntax/tokens.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
-import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import {
+  isRustTargetTypeRef,
+  isRustTraitReference,
+  rustTargetTypeRefEquals,
+} from "../../target-model/types/equality.js";
 
 const rustIdentifierPattern = /^(?:r#)?[A-Za-z_][A-Za-z0-9_]*$/u;
 const rustPathPattern = /^(?:r#)?[A-Za-z_][A-Za-z0-9_]*(?:::(?:r#)?[A-Za-z_][A-Za-z0-9_]*)*$/u;
@@ -18,7 +22,9 @@ export function rustProviderOperationFormAcceptsTargetTypeArguments(
 ): boolean {
   return form.form === "call" || form.form === "free-call" || form.form === "method" ||
     form.form === "receiver-method" || form.form === "arg-method" ||
-    form.form === "arg-receiver-method" || form.form === "trait-call";
+    form.form === "arg-receiver-method" || form.form === "trait-call" ||
+    form.form === "struct-variant" || form.form === "path" ||
+    form.form === "trait-associated-value";
 }
 
 export function rustProviderOperationFormDeclaresWritableInput(
@@ -56,6 +62,75 @@ export function rustProviderOperationFormDeclaresWritableInput(
     case "call-str-slice":
     case "path":
     case "static":
+    case "static-reference":
+    case "tuple-field":
+    case "struct-variant":
+    case "method":
+    case "arg-method":
+    case "field":
+    case "index":
+    case "binary-operator":
+    case "trait-associated-value":
+      return false;
+  }
+}
+
+export function rustProviderOperationFormPassesSourceArgumentByReference(
+  form: RustProviderOperationForm,
+  sourceArgumentIndex: number,
+  sourceCarrier: import("../../target-model/types/model.js").TargetTypeRef,
+): boolean {
+  if (!Number.isSafeInteger(sourceArgumentIndex) || sourceArgumentIndex < 0) {
+    return false;
+  }
+  const isReferenceMode = (mode: RustArgumentMode | undefined): boolean =>
+    mode === "ref" || mode === "mut-ref";
+  const reorderedMode = (
+    argModes: readonly RustArgumentMode[] | undefined,
+    argOrder: readonly number[] | undefined,
+  ): RustArgumentMode | undefined => {
+    const targetIndex = argOrder === undefined
+      ? sourceArgumentIndex
+      : argOrder.indexOf(sourceArgumentIndex);
+    return targetIndex < 0 ? undefined : argModes?.[targetIndex] ?? "value";
+  };
+
+  switch (form.form) {
+    case "call":
+    case "free-call":
+    case "receiver-method":
+      return isReferenceMode(reorderedMode(form.argModes, form.argOrder));
+    case "call-c-variadic":
+      return isReferenceMode(form.fixedArgumentModes[sourceArgumentIndex] ?? "value");
+    case "call-str-slice":
+    case "free-call-str-slice":
+      return true;
+    case "call-value-slice":
+    case "call-value-array":
+    case "receiver-value-array":
+      return sourceArgumentIndex < form.leadingArguments.length &&
+        isReferenceMode(form.leadingArguments[sourceArgumentIndex]?.mode);
+    case "receiver-tagged-array": {
+      if (sourceArgumentIndex < form.leadingArguments.length) {
+        return isReferenceMode(form.leadingArguments[sourceArgumentIndex]?.mode);
+      }
+      const alternatives = form.alternatives.filter((alternative) =>
+        rustTargetTypeRefEquals(alternative.inputCarrier, sourceCarrier));
+      return alternatives.length === 1 && isReferenceMode(alternatives[0]?.mode);
+    }
+    case "arg-receiver-method":
+      return sourceArgumentIndex === 0 ||
+        isReferenceMode(form.argModes?.[sourceArgumentIndex] ?? "value");
+    case "arg-structural-method":
+      return sourceArgumentIndex > 0 && isReferenceMode(form.argModes[sourceArgumentIndex]);
+    case "trait-call":
+      return isReferenceMode(form.argModes?.[sourceArgumentIndex] ?? "value");
+    case "marker":
+    case "path":
+    case "static":
+    case "static-reference":
+    case "tuple-field":
+    case "struct-variant":
     case "method":
     case "arg-method":
     case "field":
@@ -128,6 +203,21 @@ export function rustProviderOperationFormContractViolation(
             (operationKind === "property-set" && runtimeSourceIndexes.length === 1))
         ? undefined
         : "static form must be one closed Rust path with the exact property read/write arity";
+    case "static-reference":
+      return hasExactKeys(form, ["form", "path", "mutable"], ["form", "path", "mutable"]) &&
+        typeof form.path === "string" && rustPathPattern.test(form.path) &&
+        typeof form.mutable === "boolean" && operationKind === "property" &&
+        runtimeSourceIndexes.length === 0
+        ? undefined
+        : "static-reference form must be one zero-argument property read with exact mutability";
+    case "struct-variant":
+      return hasExactKeys(form, ["form", "path", "fields"], ["form", "path", "fields"]) &&
+        typeof form.path === "string" && rustPathPattern.test(form.path) &&
+        isDenseDataArray(form.fields) && form.fields.length === runtimeSourceIndexes.length &&
+        form.fields.every((field) => typeof field === "string" && rustIdentifierPattern.test(field)) &&
+        new Set(form.fields).size === form.fields.length && operationKind === "method"
+        ? undefined
+        : "struct-variant form must contain one path and one unique field per runtime argument";
     case "call-str-slice":
       return hasExactKeys(form, ["form", "path"], ["form", "path"]) && typeof form.path === "string" && rustPathPattern.test(form.path)
         ? undefined
@@ -215,6 +305,13 @@ export function rustProviderOperationFormContractViolation(
             (operationKind === "property-set" && runtimeSourceIndexes.length === 1))
         ? undefined
         : "field form must contain one Rust identifier with the exact property read/write arity";
+    case "tuple-field":
+      return hasExactKeys(form, ["form", "index"], ["form", "index"]) &&
+        Number.isSafeInteger(form.index) && form.index >= 0 &&
+        ((operationKind === "property" && runtimeSourceIndexes.length === 0) ||
+          (operationKind === "property-set" && runtimeSourceIndexes.length === 1))
+        ? undefined
+        : "tuple-field form must contain one non-negative index with exact property read/write arity";
     case "arg-receiver-method": {
       if (!hasExactKeys(form, ["form", "name", "argModes", "argConversions"], ["form", "name"]) ||
         typeof form.name !== "string" || !rustIdentifierPattern.test(form.name)) {
@@ -271,11 +368,10 @@ export function rustProviderOperationFormContractViolation(
     case "trait-call":
       return hasExactKeys(
         form,
-        ["form", "owner", "traitPath", "traitTypeArguments", "method", "receiverMode", "argModes"],
-        ["form", "owner", "traitPath", "traitTypeArguments", "method"],
-      ) && isRustTargetTypeRef(form.owner) && typeof form.traitPath === "string" &&
-        rustPathPattern.test(form.traitPath) && Array.isArray(form.traitTypeArguments) &&
-        form.traitTypeArguments.every(isRustTargetTypeRef) && typeof form.method === "string" &&
+        ["form", "owner", "trait", "method", "receiverMode", "argModes"],
+        ["form", "owner", "trait", "method"],
+      ) && isRustTargetTypeRef(form.owner) && isRustTraitReference(form.trait) &&
+        typeof form.method === "string" &&
         rustIdentifierPattern.test(form.method) &&
         (form.receiverMode === undefined || modes.has(form.receiverMode)) &&
         validateModes(form.argModes) === undefined
@@ -284,11 +380,10 @@ export function rustProviderOperationFormContractViolation(
     case "trait-associated-value":
       return hasExactKeys(
         form,
-        ["form", "owner", "traitPath", "traitTypeArguments", "name"],
-        ["form", "owner", "traitPath", "traitTypeArguments", "name"],
-      ) && isRustTargetTypeRef(form.owner) && typeof form.traitPath === "string" &&
-        rustPathPattern.test(form.traitPath) && Array.isArray(form.traitTypeArguments) &&
-        form.traitTypeArguments.every(isRustTargetTypeRef) && typeof form.name === "string" &&
+        ["form", "owner", "trait", "name"],
+        ["form", "owner", "trait", "name"],
+      ) && isRustTargetTypeRef(form.owner) && isRustTraitReference(form.trait) &&
+        typeof form.name === "string" &&
         rustIdentifierPattern.test(form.name) &&
         runtimeSourceIndexes.length === 0 &&
         (operationKind === "property" || operationKind === "method")

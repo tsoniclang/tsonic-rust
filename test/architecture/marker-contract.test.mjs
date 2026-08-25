@@ -18,11 +18,12 @@ function sourceFiles(directory) {
   });
 }
 
-test("Rust source modules expose only the approved native aliases", () => {
+test("Rust source modules expose the canonical primitive and explicit semantic contracts", () => {
   const modules = source("src/source/profiles/source-modules.ts");
+  const identity = source("src/source/semantics/identity.ts");
+  const types = source("src/source/semantics/declarations/types.ts");
+  const operations = source("src/source/semantics/declarations/operations.ts");
   const primitiveAliases = [...modules.matchAll(/sourcePrimitive\("([^"]+)",\s*"([^"]+)"/gu)]
-    .map((match) => [match[1], match[2]]);
-  const callAliases = [...modules.matchAll(/exportName:\s*"([^"]+)",\s*marker:\s*"([^"]+)"/gu)]
     .map((match) => [match[1], match[2]]);
 
   assert.deepEqual(primitiveAliases, [
@@ -42,14 +43,44 @@ test("Rust source modules expose only the approved native aliases", () => {
     ["f32", "float32"],
     ["f64", "float64"],
   ]);
-  assert.deepEqual(callAliases, [
-    ["borrow", "shared-borrow"],
-    ["borrowMut", "mutable-borrow"],
+  for (const [property, exportName] of [
+    ["life", "Life"],
+    ["staticLifetime", "Static"],
+    ["owned", "Owned"],
+    ["sharedReference", "Ref"],
+    ["mutableReference", "Mut"],
+    ["outlives", "Outlives"],
+    ["validFor", "ValidFor"],
+    ["constParameter", "Const"],
+    ["dynamicTrait", "Dyn"],
+    ["captureSet", "Capture"],
+    ["opaqueType", "Impl"],
+    ["maybeSized", "MaybeSized"],
+    ["functionPointer", "FnPtr"],
+    ["rustChar", "char"],
+  ]) {
+    assert.match(identity, new RegExp(`${property}:\\s*"${exportName}"`, "u"));
+  }
+  for (const [property, exportName] of [
+    ["sharedBorrow", "ref"],
+    ["mutableBorrow", "mut"],
     ["move", "move"],
-  ]);
+    ["clone", "clone"],
+    ["own", "own"],
+    ["load", "load"],
+    ["store", "store"],
+    ["replace", "replace"],
+    ["take", "take"],
+    ["captureMove", "captureMove"],
+  ]) {
+    assert.match(identity, new RegExp(`${property}:\\s*"${exportName}"`, "u"));
+  }
+  assert.match(types, /rustSemanticTypeDeclarations/u);
+  assert.match(operations, /rustSemanticOperationDeclarations/u);
+  assert.doesNotMatch(`${identity}\n${types}\n${operations}`, /["']borrowMut["']|["']borrow["']/u);
   assert.doesNotMatch(
     modules,
-    /sourcePrimitive\("char"|marker:\s*"(?:pointer|function-pointer)"/u,
+    /sourcePrimitive\("char"/u,
   );
 });
 
@@ -98,7 +129,7 @@ test("Rust-flavoured flow aliases are imported only from the Rust module", () =>
     const text = source(file);
     assert.doesNotMatch(
       text,
-      /import\s*\{[^}]*\b(?:borrow|borrowMut)\b[^}]*\}\s*from\s*"@tsonic\/core\/lang\.js"/u,
+      /import\s*\{[^}]*\b(?:ref|mut)\b[^}]*\}\s*from\s*"@tsonic\/core\/lang\.js"/u,
     );
   }
 });

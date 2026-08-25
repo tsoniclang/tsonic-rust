@@ -1,6 +1,10 @@
 import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
+import {
+  rustInferredLifetime,
+  rustReferenceTargetType,
+} from "../../../target-model/types/index.js";
 import type { RustArgumentMode, RustProviderOperationForm, RustValueConversion } from "../keys.js";
 import type { RustFinalizedArrayInput, RustFinalizedConstantInput, RustFinalizedSliceInput, RustFinalizedSourceInput, RustFinalizedTaggedArrayInput, RustFinalizedTargetInput, RustFinalizedValueConversion } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
@@ -105,11 +109,11 @@ export function carrierAfterMode(carrier: TargetTypeRef, mode: RustArgumentMode)
   if (mode === "value") {
     return carrier;
   }
-  return {
-    kind: "reference",
-    referent: carrier,
-    mutable: mode === "mut-ref",
-  };
+  return rustReferenceTargetType(
+    carrier,
+    mode === "mut-ref",
+    rustInferredLifetime(`finalized-operation-input\0${mode}`),
+  );
 }
 
 export function declaredCarriersMatch(

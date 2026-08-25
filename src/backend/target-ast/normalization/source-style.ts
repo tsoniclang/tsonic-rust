@@ -7,10 +7,18 @@ import type {
   RustStmt,
   RustTraitFunction,
   RustType,
+  RustGenericArgument,
+  RustTypeBound,
 } from "../nodes.js";
+import type { RustAttribute } from "../attributes.js";
+import { rustAttributeKey } from "../attributes.js";
 import { finalizeRustBlockLiveness } from "../inspection/source-liveness.js";
 import { rustLintAttributes } from "./lint-policy.js";
 import { rustBlockReferencesPath } from "../inspection/source-usage.js";
+import {
+  maxWritesInStatements,
+  rustStatementsReadPath,
+} from "../inspection/source-dataflow.js";
 
 export function finalizeRustSourceStyle(
   model: RustSourceFileModel,
@@ -44,9 +52,10 @@ function finalizeRustItemStyle(
   publicTypes: ReadonlySet<string>,
 ): RustItem {
   if (item.kind === "function") {
-    const attrs = item.params.length <= 7
+    let attrs = item.params.length <= 7
       ? item.attrs
       : appendRustAttribute(item.attrs, rustLintAttributes.tooManyArguments);
+    attrs = rustWriteOnlyParameterAttributes(attrs, item.params, item.body);
     return { ...item, attrs, body: finalizeRustFunctionBodyStyle(item.body) };
   }
   if (item.kind === "trait") {
@@ -63,14 +72,14 @@ function finalizeRustItemStyle(
         finalizeRustImplFunctionStyle(fn, item.trait === undefined, publicOwner)),
     };
   }
-  if (item.kind === "const" || item.kind === "thread-local") {
+  if (item.kind === "const" || item.kind === "static" || item.kind === "thread-local") {
     return { ...item, value: finalizeRustExpressionStyle(item.value) };
   }
   return item;
 }
 
 function finalizeRustTraitFunctionStyle(fn: RustTraitFunction): RustTraitFunction {
-  const argumentCount = fn.params.length + (fn.selfParam === undefined ? 0 : 1);
+  const argumentCount = fn.params.length + (fn.receiver === undefined ? 0 : 1);
   return argumentCount <= 7
     ? fn
     : { ...fn, attrs: appendRustAttribute(fn.attrs, rustLintAttributes.tooManyArguments) };
@@ -82,19 +91,36 @@ function finalizeRustImplFunctionStyle(
   publicOwner: boolean,
 ): RustImplFunction {
   let attrs = fn.attrs;
-  const argumentCount = fn.params.length + (fn.selfParam === undefined ? 0 : 1);
+  const argumentCount = fn.params.length + (fn.receiver === undefined ? 0 : 1);
   if (inherent && argumentCount > 7) {
     attrs = appendRustAttribute(attrs, rustLintAttributes.tooManyArguments);
   }
-  if (inherent && fn.name === "to_string" && fn.selfParam !== undefined &&
+  if (inherent && fn.name === "to_string" && fn.receiver !== undefined &&
     fn.params.length === 0 && fn.returnType?.kind === "string") {
     attrs = appendRustAttribute(attrs, rustLintAttributes.inherentToString);
   }
   if (inherent && publicOwner && fn.visibility === "public" && fn.name === "next" &&
-    fn.selfParam !== undefined && fn.params.length === 0) {
+    fn.receiver !== undefined && fn.params.length === 0) {
     attrs = appendRustAttribute(attrs, rustLintAttributes.shouldImplementTrait);
   }
+  attrs = rustWriteOnlyParameterAttributes(attrs, fn.params, fn.body);
   return { ...fn, attrs, body: finalizeRustFunctionBodyStyle(fn.body) };
+}
+
+function rustWriteOnlyParameterAttributes(
+  initial: readonly RustAttribute[] | undefined,
+  parameters: readonly import("../nodes.js").RustFunctionParam[],
+  body: RustBlock,
+): readonly RustAttribute[] | undefined {
+  const hasWriteOnlyParameter = parameters.some((parameter) =>
+    parameter.name !== "_" && !parameter.name.startsWith("_") &&
+    maxWritesInStatements(body.statements, parameter.name) > 0 &&
+    !rustStatementsReadPath(body.statements, parameter.name));
+  if (!hasWriteOnlyParameter) return initial;
+  return appendRustAttribute(
+    appendRustAttribute(initial, rustLintAttributes.unobservedParameterVariable),
+    rustLintAttributes.unobservedParameterAssignment,
+  );
 }
 
 function finalizeRustFunctionBodyStyle(block: RustBlock): RustBlock {
@@ -114,6 +140,8 @@ function finalizeRustStatementStyle(statement: RustStmt): RustStmt {
       return statement.init === undefined
         ? statement
         : { ...statement, init: finalizeRustExpressionStyle(statement.init) };
+    case "let-pattern":
+      return { ...statement, init: finalizeRustExpressionStyle(statement.init) };
     case "expr":
       return { ...statement, expr: finalizeRustExpressionStyle(statement.expr) };
     case "assign":
@@ -299,6 +327,7 @@ function rustStatementMayContinueLoop(statement: RustStmt, label: string | undef
     case "for":
       return label !== undefined && rustBlockMayContinueLoop(statement.body, label);
     case "let":
+    case "let-pattern":
     case "expr":
     case "assign":
     case "return":
@@ -403,6 +432,7 @@ function finalizeRustExpressionStyle(expression: RustExpr): RustExpr {
       };
       break;
     case "field":
+    case "tuple-field":
       result = { ...expression, receiver: finalizeRustExpressionStyle(expression.receiver) };
       break;
     case "index":
@@ -524,23 +554,32 @@ function publicSignatureTypes(
   switch (item.kind) {
     case "function":
       return item.visibility === "public"
-        ? [...item.params.map((parameter) => parameter.type), ...optionalType(item.returnType)]
+        ? [
+            ...rustGenericsTypes(item.generics),
+            ...item.params.map((parameter) => parameter.type),
+            ...optionalType(item.returnType),
+          ]
         : [];
     case "const":
+    case "static":
     case "thread-local":
       return item.visibility === "public" ? [item.type] : [];
     case "struct":
       return publicTypes.has(item.name)
-        ? item.fields.filter((field) => field.visibility === "public").map((field) => field.type)
+        ? [...rustGenericsTypes(item.generics), ...rustStructFieldTypes(item.fields, true)]
         : [];
     case "enum":
       return publicTypes.has(item.name)
-        ? item.variants.flatMap((variant) => variant.fields ?? [])
+        ? [
+            ...rustGenericsTypes(item.generics),
+            ...item.variants.flatMap((variant) => rustStructFieldTypes(variant.fields, false)),
+          ]
         : [];
     case "trait":
       return publicTypes.has(item.name)
         ? [
-            ...(item.superTraits ?? []),
+            ...item.superTraits.flatMap(rustBoundTypes),
+            ...rustGenericsTypes(item.generics),
             ...item.functions.flatMap((fn) => [
               ...fn.params.map((parameter) => parameter.type),
               ...optionalType(fn.returnType),
@@ -557,7 +596,24 @@ function publicSignatureTypes(
           : [])
         : [];
     case "type-alias":
-      return publicTypes.has(item.name) ? [item.target] : [];
+      return publicTypes.has(item.name)
+        ? [...rustGenericsTypes(item.generics), item.target]
+        : [];
+    case "union":
+      return publicTypes.has(item.name)
+        ? [
+            ...rustGenericsTypes(item.generics),
+            ...item.fields.filter((field) => field.visibility === "public").map((field) => field.type),
+          ]
+        : [];
+    case "extern-block":
+      return [
+        ...item.functions.flatMap((fn) => [
+          ...fn.params.map((parameter) => parameter.type),
+          ...optionalType(fn.returnType),
+        ]),
+        ...item.statics.map((entry) => entry.type),
+      ];
     case "mod-decl":
     case "use":
       return [];
@@ -585,9 +641,16 @@ function rustTypeNames(type: RustType): readonly string[] {
     case "infer":
       return [];
     case "named":
-      return [type.path, ...(type.typeArguments?.flatMap(rustTypeNames) ?? [])];
+      return [type.path, ...(type.genericArguments?.flatMap(rustGenericArgumentTypeNames) ?? [])];
+    case "qualified":
+      return [
+        ...rustTypeNames(type.owner),
+        ...optionalType(type.trait).flatMap(rustTypeNames),
+        ...(type.genericArguments?.flatMap(rustGenericArgumentTypeNames) ?? []),
+      ];
     case "trait-object":
-      return rustTypeNames(type.trait);
+    case "opaque":
+      return type.bounds.flatMap(rustBoundTypes).flatMap(rustTypeNames);
     case "reference":
       return rustTypeNames(type.referent);
     case "raw-pointer":
@@ -601,18 +664,91 @@ function rustTypeNames(type: RustType): readonly string[] {
       return type.elements.flatMap(rustTypeNames);
     case "primitive":
     case "string":
-    case "str-ref":
+    case "str":
     case "unit":
     case "never":
       return [];
   }
 }
 
+function rustStructFieldTypes(
+  fields: import("../nodes.js").RustStructFields,
+  publicOnly: boolean,
+): readonly RustType[] {
+  if (fields.kind === "unit") return [];
+  return fields.fields
+    .filter((field) => !publicOnly || field.visibility === "public")
+    .map((field) => field.type);
+}
+
+function rustGenericArgumentTypeNames(argument: RustGenericArgument): readonly string[] {
+  return rustGenericArgumentTypes(argument).flatMap(rustTypeNames);
+}
+
+function rustGenericArgumentTypes(argument: RustGenericArgument): readonly RustType[] {
+  switch (argument.kind) {
+    case "lifetime":
+    case "const":
+      return [];
+    case "type":
+      return [argument.type];
+    case "associated-equality":
+      return [
+        argument.type,
+        ...(argument.genericArguments?.flatMap(rustGenericArgumentTypes) ?? []),
+      ];
+    case "associated-bounds":
+      return [
+        ...argument.bounds.flatMap(rustBoundTypes),
+        ...(argument.genericArguments?.flatMap(rustGenericArgumentTypes) ?? []),
+      ];
+  }
+}
+
+function rustBoundTypes(bound: RustTypeBound): readonly RustType[] {
+  switch (bound.kind) {
+    case "lifetime":
+      return [];
+    case "precise-capture":
+      return bound.captures.flatMap(rustGenericArgumentTypes);
+    case "trait":
+      return [bound.trait];
+    case "callable-trait":
+      return [...bound.parameters, bound.result];
+  }
+}
+
+function rustGenericsTypes(
+  generics: import("../nodes.js").RustGenerics,
+): readonly RustType[] {
+  return [
+    ...generics.parameters.flatMap((parameter): readonly RustType[] => {
+      switch (parameter.kind) {
+        case "lifetime": return [];
+        case "type":
+          return [
+            ...parameter.bounds.flatMap(rustBoundTypes),
+            ...optionalType(parameter.defaultType),
+          ];
+        case "const": return [parameter.type];
+      }
+    }),
+    ...generics.wherePredicates.flatMap((predicate): readonly RustType[] => {
+      switch (predicate.kind) {
+        case "lifetime": return [];
+        case "type": return [predicate.type, ...predicate.bounds.flatMap(rustBoundTypes)];
+        case "equality": return [predicate.projection, predicate.value];
+      }
+    }),
+  ];
+}
+
 function appendRustAttribute(
-  attrs: readonly string[] | undefined,
-  attribute: string,
-): readonly string[] {
-  return attrs?.includes(attribute) === true
+  attrs: readonly RustAttribute[] | undefined,
+  attribute: RustAttribute,
+): readonly RustAttribute[] {
+  const key = rustAttributeKey(attribute);
+  return attrs?.some((value) => rustAttributeKey(value) === key) === true
     ? attrs
     : [...attrs ?? [], attribute];
 }

@@ -1,4 +1,5 @@
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { rustTypeSemanticKey } from "../../target-model/semantics/index.js";
 import type { RustArgumentMode, RustValueConversion } from "../../target-model/operations/model.js";
 import type {
   RustAssignmentOperator,
@@ -526,11 +527,5 @@ export function selectRustEquivalentAssignment(
 }
 
 export function rustOperatorCarrierKey(carrier: TargetTypeRef): string {
-  if (carrier.kind === "source-primitive") {
-    return carrier.name;
-  }
-  if (carrier.kind === "target-named") {
-    return carrier.id;
-  }
-  return carrier.kind;
+  return rustTypeSemanticKey(carrier);
 }

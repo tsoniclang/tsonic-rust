@@ -1,12 +1,15 @@
-import { isRustCopyCarrier } from "../../../../target-model/types/index.js";
+import { rustCopyTrait } from "../../../../target-model/types/index.js";
 import { rustProjectMemberIsPrivate } from "../../../../analysis/project-types/member-privacy.js";
-import type { RustExpr, RustImplFunction, RustItem, RustType } from "../../../target-ast/nodes.js";
+import { emptyRustAstGenerics, type RustExpr, type RustImplFunction, type RustItem, type RustType } from "../../../target-ast/nodes.js";
+import { rustDocHiddenAttribute } from "../../../target-ast/attributes.js";
+import { rustReferenceReceiver } from "../../../target-ast/builders.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
 import { diagnosticInput } from "../../program/plan-context.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
+import { rustSealedCarrierSupportsTrait } from "../../ownership/traits.js";
 import { rustProjectImplementationVisibility } from "../project-storage-abi.js";
 import type { ProjectClassStateLayer } from "./model.js";
-import { rustProjectTypeParameters } from "./names.js";
+import { rustProjectGenerics } from "./names.js";
 
 export function planProjectPrivateStateAccessors(
   stateType: RustType,
@@ -42,14 +45,15 @@ export function planProjectPrivateStateAccessors(
     functions.push({
       name: readName,
       visibility,
-      ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
-      selfParam: "ref",
+      ...(publiclyReachable ? { attrs: [rustDocHiddenAttribute] } : {}),
+      generics: emptyRustAstGenerics,
+      receiver: rustReferenceReceiver(false),
       params: [],
       returnType: field.type,
       body: {
         statements: [{
           kind: "tail",
-          expr: isRustCopyCarrier(field.carrier)
+          expr: rustSealedCarrierSupportsTrait(field.carrier, rustCopyTrait, context)
             ? fieldExpression
             : { kind: "method-call", receiver: fieldExpression, method: "clone", args: [] },
         }],
@@ -59,8 +63,9 @@ export function planProjectPrivateStateAccessors(
       functions.push({
         name: writeName,
         visibility,
-        ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
-        selfParam: "mut-ref",
+        ...(publiclyReachable ? { attrs: [rustDocHiddenAttribute] } : {}),
+        generics: emptyRustAstGenerics,
+        receiver: rustReferenceReceiver(true),
         params: [{ name: "value", type: field.type }],
         body: {
           statements: [{
@@ -76,12 +81,23 @@ export function planProjectPrivateStateAccessors(
       });
     }
   }
+  const generics = rustProjectGenerics(layer.definition, context);
+  if (generics === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, layer.definition.declaration),
+      "rust.backend.private-field-generics",
+      "Private project-state accessors have no exact renderable Rust generic contract.",
+    ));
+    return undefined;
+  }
   return [{
     kind: "impl",
-    ...(rustProjectTypeParameters(layer.definition).length === 0
-      ? {}
-      : { typeParams: rustProjectTypeParameters(layer.definition) }),
+    generics,
     target: stateType,
+    polarity: "positive",
+    safety: "safe",
     functions,
+    associatedTypes: [],
+    associatedConstants: [],
   }];
 }

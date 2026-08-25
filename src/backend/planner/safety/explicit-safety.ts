@@ -13,6 +13,7 @@ import type {
 import type {
   RustExpr,
 } from "../../target-ast/nodes.js";
+import type { RustAttribute } from "../../target-ast/attributes.js";
 import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
 import type {
   RustPlanContext,
@@ -158,15 +159,15 @@ export function rustSafetyAttributesForDeclaration(
   declaration: Node,
   isUnsafe: boolean,
   input: RustPlanningContext,
-): readonly string[] {
+): readonly RustAttribute[] {
   let hasExplicitUnsafeContext = false;
   let hasNativePointerOperation = false;
   walkSubtree(declaration, input, (node) => {
     const operation = input.program.safetyApplications.operationForSubject(node);
     hasExplicitUnsafeContext ||= operation?.kind === "unsafe-context";
-    hasNativePointerOperation ||=
-      input.program.facts.getFact(node, rustTargetOperationFactKey)?.kind ===
-        "native-pointer";
+    const targetOperation = input.program.facts.getFact(node, rustTargetOperationFactKey);
+    hasNativePointerOperation ||= targetOperation?.kind === "native-pointer" &&
+      targetOperation.safety === "requires-unsafe";
   });
   return [
     ...(isUnsafe ? [rustLintAttributes.missingSafetyDoc] : []),

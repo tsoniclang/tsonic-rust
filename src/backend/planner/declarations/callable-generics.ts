@@ -1,53 +1,63 @@
 import type { Node } from "@tsonic/tsts";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustTypeParameter } from "../../target-ast/nodes.js";
-import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
-import { diagnosticInput, isValidRustIdentifier } from "../program/plan-context.js";
+import type {
+  RustBound,
+  RustGenericParameter,
+  RustGenerics as RustSemanticGenerics,
+  RustSemanticIdentity,
+} from "../../../target-model/semantics/index.js";
+import {
+  rustBoundSemanticKey,
+  rustSemanticIdentitiesEqual,
+} from "../../../target-model/semantics/index.js";
+import {
+  emptyRustGenericSubstitutions,
+  mergeRustGenericSubstitutions,
+  rustCloneTrait,
+  rustDefaultTrait,
+  rustGenericParameterIdentityKey,
+  rustSendTrait,
+  rustSyncTrait,
+  rustUnpinTrait,
+  substituteRustGenerics,
+} from "../../../target-model/types/index.js";
+import type { RustGenericSubstitutions } from "../../../target-model/types/index.js";
+import type { RustGenerics } from "../../target-ast/nodes.js";
+import { missingFactDiagnostic } from "../diagnostics.js";
+import { diagnosticInput } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
+import { rustAstGenericsFromSemanticInContext } from "../types/render.js";
+import type { RustGenericRequirement } from "../../../analysis/callables/generic-requirements.js";
 
 export interface RustCallableGenericPlan {
   readonly context: RustPlanContext;
-  readonly sourceTypeParameterNames: readonly string[];
-  finalizeTypeParameters(): readonly RustTypeParameter[];
+  finalizeGenerics(): RustGenerics;
 }
 
 export function planRustCallableGenerics(
   declaration: Node,
   context: RustPlanContext,
-  specialization?: ReadonlyMap<string, TargetTypeRef>,
+  specialization?: RustGenericSubstitutions,
 ): RustCallableGenericPlan | undefined {
-  const sourceTypeParameterNames: string[] = [];
-  const targetTypeParameters: RustTypeParameter[] = [];
-  for (const typeParameter of context.input.program.source.ast.typeParameters(declaration)) {
-    if (typeParameter === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, declaration),
-        "rust.backend.type-parameter",
-        "Callable declaration contains an undefined type-parameter slot.",
-      ));
-      return undefined;
-    }
-    const sourceNameNode = context.input.program.source.ast.name(typeParameter);
-    const sourceName = sourceNameNode === undefined ? "" : context.input.program.source.ast.text(sourceNameNode);
-    const targetName = context.input.program.names.nameForDeclaration(typeParameter) ?? "";
-    if (sourceName.length === 0 || !isValidRustIdentifier(targetName)) {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        diagnosticInput(context, typeParameter),
-        "rust.backend.generics",
-        "Callable type parameters require exact source identity and valid Rust target names.",
-      ));
-      return undefined;
-    }
-    sourceTypeParameterNames.push(sourceName);
-    targetTypeParameters.push({ name: targetName, bounds: [] });
+  const sourceContract = context.input.program.sourceGenerics.contractFor(declaration);
+  if (sourceContract === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, declaration),
+      "rust.backend.source-generic-contract",
+      "Callable declaration has no exact sealed source-generic contract.",
+    ));
+    return undefined;
   }
-  const contract = context.input.program.callableGenericRequirements.contractFor(
-    declaration,
-  );
-  if (contract === undefined ||
-    contract.typeParameters.length !== targetTypeParameters.length ||
-    contract.typeParameters.some((parameter, index) =>
-      parameter.name !== targetTypeParameters[index]?.name)) {
+  const sourceTypeParameters = sourceContract.parameters.filter((parameter) =>
+    parameter.parameter.kind === "type");
+  const inferred = context.input.program.callableGenericRequirements.contractFor(declaration);
+  if (inferred === undefined || inferred.typeParameters.length !== sourceTypeParameters.length ||
+    inferred.typeParameters.some((parameter, index) => {
+      const sourceParameter = sourceTypeParameters[index]?.parameter;
+      return sourceParameter?.kind !== "type" || !rustSemanticIdentitiesEqual(
+        parameter.identity,
+        sourceParameter.identity,
+      );
+    })) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, declaration),
       "rust.backend.callable-generic-contract",
@@ -57,56 +67,133 @@ export function planRustCallableGenerics(
   }
 
   if (specialization !== undefined) {
-    if (specialization.size !== sourceTypeParameterNames.length ||
-      sourceTypeParameterNames.some((name) => !specialization.has(name))) {
+    const requiredTypeIdentities = sourceContract.parameters.flatMap((parameter) => {
+      const semantic = parameter.parameter;
+      const identity = rustGenericParameterIdentityKey(semantic);
+      return semantic.kind === "type" && identity !== undefined ? [identity] : [];
+    });
+    const requiredConstIdentities = sourceContract.parameters.flatMap((parameter) => {
+      const semantic = parameter.parameter;
+      const identity = rustGenericParameterIdentityKey(semantic);
+      return semantic.kind === "const" && identity !== undefined ? [identity] : [];
+    });
+    if (specialization.lifetimes.size !== 0 ||
+      specialization.types.size !== requiredTypeIdentities.length ||
+      specialization.consts.size !== requiredConstIdentities.length ||
+      requiredTypeIdentities.some((identity) => !specialization.types.has(identity)) ||
+      requiredConstIdentities.some((identity) => !specialization.consts.has(identity))) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, declaration),
         "rust.backend.callable-specialization",
-        "Callable specialization does not cover the exact declared source type parameters.",
+        "Finite source-callable specialization must cover exactly the callable's type and const parameters while preserving lifetime parameters.",
       ));
       return undefined;
     }
-    const substitutions = new Map(context.typeParameterSubstitutions ?? []);
-    for (const [name, carrier] of specialization) {
-      substitutions.set(name, carrier);
+    const substitutions = mergeRustGenericSubstitutions(
+      context.genericSubstitutions ?? emptyRustGenericSubstitutions,
+      specialization,
+    );
+    if (substitutions === undefined) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, declaration),
+        "rust.backend.callable-specialization-conflict",
+        "Finite source-callable specialization conflicts with the enclosing exact Rust generic substitution.",
+      ));
+      return undefined;
+    }
+    const specializedGenerics = substituteRustGenerics(
+      mergeInferredRequirements(sourceContract.generics, inferred.typeParameters),
+      substitutions,
+      { omitSubstitutedParameters: true },
+    );
+    const renderedSpecialized = rustAstGenericsFromSemanticInContext(
+      specializedGenerics,
+      { ...context, genericSubstitutions: substitutions },
+    );
+    if (renderedSpecialized === undefined) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, declaration),
+        "rust.backend.callable-specialization-rendering",
+        "Finite source-callable specialization cannot render its retained lifetime contract.",
+      ));
+      return undefined;
     }
     return {
       context: {
         ...context,
         callableDeclaration: declaration,
-        typeParameterSubstitutions: substitutions,
+        genericSubstitutions: substitutions,
       },
-      sourceTypeParameterNames: Object.freeze(sourceTypeParameterNames),
-      finalizeTypeParameters: () => Object.freeze([]),
+      finalizeGenerics: () => renderedSpecialized,
     };
   }
 
-  const finalizedTypeParameters = Object.freeze(targetTypeParameters.map(
-    (parameter, index): RustTypeParameter => ({
-      ...parameter,
-      bounds: contract.typeParameters[index]!.requirements.map((requirement) =>
-        requirement === "static"
-          ? { kind: "lifetime" as const, name: "static" }
-          : {
-              kind: "trait" as const,
-              path: requirement === "clone" ? "Clone" : "Default",
-            }),
-    }),
-  ));
+  const semanticGenerics = mergeInferredRequirements(
+    sourceContract.generics,
+    inferred.typeParameters,
+  );
+  const rendered = rustAstGenericsFromSemanticInContext(semanticGenerics, context);
+  if (rendered === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, declaration),
+      "rust.backend.generic-rendering",
+      "Callable generic parameters, defaults, or where predicates cannot be rendered from their sealed Rust semantics.",
+    ));
+    return undefined;
+  }
   return {
     context: { ...context, callableDeclaration: declaration },
-    sourceTypeParameterNames: Object.freeze(sourceTypeParameterNames),
-    finalizeTypeParameters: () => finalizedTypeParameters,
+    finalizeGenerics: () => rendered,
   };
 }
 
-export function rustCallableSpecialization(
-  sourceTypeParameterNames: readonly string[],
-  targetTypeArguments: readonly TargetTypeRef[],
-): ReadonlyMap<string, TargetTypeRef> | undefined {
-  if (sourceTypeParameterNames.length !== targetTypeArguments.length) {
-    return undefined;
-  }
-  return new Map(sourceTypeParameterNames.map((name, index) =>
-    [name, targetTypeArguments[index]!] as const));
+function mergeInferredRequirements(
+  generics: RustSemanticGenerics,
+  requirements: readonly {
+    readonly identity: RustSemanticIdentity;
+    readonly requirements: readonly RustGenericRequirement[];
+  }[],
+): RustSemanticGenerics {
+  const parameters = generics.parameters.map((parameter): RustGenericParameter => {
+    if (parameter.kind !== "type") return parameter;
+    const selected = requirements.find((candidate) =>
+      rustSemanticIdentitiesEqual(candidate.identity, parameter.identity));
+    if (selected === undefined || selected.requirements.length === 0) return parameter;
+    const inferredBounds: RustBound[] = selected.requirements.map((requirement): RustBound =>
+      requirement === "static"
+        ? {
+            kind: "type-outlives",
+            type: {
+              kind: "type-parameter",
+              identity: parameter.identity,
+              displayName: parameter.displayName,
+            },
+            lifetime: { kind: "static" },
+          }
+        : {
+            kind: "trait",
+            trait: requirement === "clone"
+              ? rustCloneTrait
+              : requirement === "default"
+                ? rustDefaultTrait
+                : requirement === "send"
+                  ? rustSendTrait
+                  : requirement === "sync"
+                    ? rustSyncTrait
+                    : rustUnpinTrait,
+            polarity: "required",
+          });
+    const existing = new Set(parameter.bounds.map(rustBoundSemanticKey));
+    return Object.freeze({
+      ...parameter,
+      bounds: Object.freeze([
+        ...parameter.bounds,
+        ...inferredBounds.filter((bound) => !existing.has(rustBoundSemanticKey(bound))),
+      ]),
+    });
+  });
+  return Object.freeze({
+    parameters: Object.freeze(parameters),
+    wherePredicates: generics.wherePredicates,
+  });
 }

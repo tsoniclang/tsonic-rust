@@ -135,8 +135,8 @@ export function main(): void {
     artifactText(result, "src/shapes.rs"),
     /pub\(crate\) struct LabelRightShape \{\s*pub label: String,\s*pub right: i32,/u,
   );
-  assert.match(source, /let remaining: rt::ObjectHandle<crate::shapes::LabelRightShape> =/u);
-  assert.match(source, /rt::ObjectHandle::new\(crate::shapes::LabelRightShape \{/u);
+  assert.match(source, /let remaining: rt::LocalObjectHandle<crate::shapes::LabelRightShape> =/u);
+  assert.match(source, /rt::LocalObjectHandle::new\(crate::shapes::LabelRightShape \{/u);
   assert.doesNotMatch(source, /\.with\(\|state\| state\.\d+\.clone\(\)\)\s*\.clone\(\)/u);
   assert.equal(validateGeneratedProject("binding-object-rest", result.artifacts, { run: true }).status, 0);
 });

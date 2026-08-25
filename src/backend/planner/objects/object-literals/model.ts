@@ -1,12 +1,13 @@
 import { createImplementationPlan } from "./registry.js";
 import { rustTargetOperationFactKey } from "../../../../analysis/facts/keys.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
-import type { RustFunctionParam, RustItem, RustType } from "../../../target-ast/nodes.js";
+import type { RustFunctionParam, RustGenerics, RustItem, RustType } from "../../../target-ast/nodes.js";
 import type { RustObjectLiteralMethodParameterAbi, RustObjectLiteralMethodParameterAdapter, RustObjectLiteralValueAdapter } from "../../../../analysis/facts/keys.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustSyntheticNameState } from "../../names/synthetic.js";
 import type { RustProjectMethodDispatchVariant } from "../../../../analysis/project-types/method-dispatch.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
+import type { RustGenericSubstitutionEntries } from "../../../../target-model/types/index.js";
 
 export type RustObjectLiteralMethodImplementationPlan = {
   readonly kind: "authored";
@@ -15,7 +16,7 @@ export type RustObjectLiteralMethodImplementationPlan = {
   readonly fieldName: string;
   readonly callableType: RustType;
   readonly parameterCount: number;
-  readonly typeParameterSubstitutions: readonly (readonly [string, TargetTypeRef])[];
+  readonly genericSubstitutions: RustGenericSubstitutionEntries;
   readonly errorType?: RustType;
 } | {
   readonly kind: "spread";
@@ -40,6 +41,7 @@ export interface RustObjectLiteralMethodDispatchPlan {
   readonly contractMethod: Node;
   readonly variant: RustProjectMethodDispatchVariant;
   readonly implementation: RustObjectLiteralMethodImplementationPlan;
+  readonly generics: RustGenerics;
   readonly parameters: readonly RustFunctionParam[];
   readonly adapter?: {
     readonly parameterAbis: readonly RustObjectLiteralMethodParameterAbi[];

@@ -352,7 +352,7 @@ export function planRustBoundProjectMethodCallable(
   );
   if (callable === undefined || callableType === undefined ||
     receiverDefinition === undefined || context.syntheticNames === undefined ||
-    (context.input.program.projectTypes.isPolymorphic(receiverDefinition)
+    (context.input.program.objectRepresentations.requiresDynamicDispatch(receiverDefinition)
       ? variant === undefined
       : !isValidRustIdentifier(targetName ?? ""))) {
     return undefined;
@@ -366,7 +366,8 @@ export function planRustBoundProjectMethodCallable(
     receiver: { kind: "path" as const, path: argumentsName },
     name: String(index),
   }));
-  const invocation: RustExpr = context.input.program.projectTypes.isPolymorphic(receiverDefinition)
+  const invocation: RustExpr = context.input.program.objectRepresentations
+    .requiresDynamicDispatch(receiverDefinition)
     ? {
         kind: "method-call",
         receiver: {

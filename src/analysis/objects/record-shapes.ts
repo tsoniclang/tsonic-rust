@@ -90,7 +90,7 @@ export function resolveProjectIndexRecordLiteral(
 ): TargetTypeRef | undefined {
   if (definition.kind !== "interface" || layout.indexSignatures.length !== 1 ||
     layout.fields.length !== 0 ||
-    walk.context.projectTypes.isPolymorphic(definition)) {
+    walk.context.objectRepresentations.requiresDynamicDispatch(definition)) {
     return undefined;
   }
   const index = layout.indexSignatures[0]!;
@@ -139,7 +139,8 @@ export function resolveProjectIndexRecordLiteral(
         ? rustProjectObjectLayout(sourceDefinition.declaration, walk.context.ast)
         : undefined;
       const sourceIndex = sourceLayout?.indexSignatures.length === 1 &&
-          sourceLayout.fields.length === 0 && !walk.context.projectTypes.isPolymorphic(sourceDefinition!)
+          sourceLayout.fields.length === 0 &&
+            !walk.context.objectRepresentations.requiresDynamicDispatch(sourceDefinition!)
         ? sourceLayout.indexSignatures[0]
         : undefined;
       const sourceDeclaredKey = sourceIndex === undefined
@@ -233,10 +234,11 @@ export function resolveObjectLiteralMethodCarrier(
       resolveParameterAbi(walk, parameter)?.parameterCarrier);
     const returnCarrier = resolveTypeNodeCarrier(walk, authoredReturnType);
     if (returnCarrier !== undefined && !parameterCarriers.some((carrier) => carrier === undefined)) {
-      return rustClosureTargetType(
-        parameterCarriers as readonly TargetTypeRef[],
-        returnCarrier,
-      );
+      return rustClosureTargetType({
+        callTrait: "fn-mut",
+        parameters: parameterCarriers as readonly TargetTypeRef[],
+        result: returnCarrier,
+      });
     }
   }
   const selected = resolveRustTargetTypeRef(
@@ -261,10 +263,11 @@ export function resolveObjectLiteralMethodCarrier(
         walk.context.facts.resolve(parameter, rustSourceParameterAbiFactKey) ??
         resolveParameterAbi(walk, parameter))?.parameterCarrier);
     if (!parameterCarriers.some((carrier) => carrier === undefined)) {
-      return rustClosureTargetType(
-        parameterCarriers as readonly TargetTypeRef[],
-        returnCarrier,
-      );
+      return rustClosureTargetType({
+        callTrait: "fn-mut",
+        parameters: parameterCarriers as readonly TargetTypeRef[],
+        result: returnCarrier,
+      });
     }
   }
   return resolveRustTargetTypeRef(

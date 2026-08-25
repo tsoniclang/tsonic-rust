@@ -8,8 +8,17 @@ import type {
   ProviderModuleResolution,
   SourceDeclarationProvider,
 } from "@tsonic/tsts";
-import { materializeClosedMetadata } from "../../target-model/metadata/closed-data.js";
-import type { RustTargetConfiguration } from "../../target-model/configuration/model.js";
+import {
+  closedMetadataEquals,
+  closedMetadataKey,
+  materializeClosedMetadata,
+} from "../../target-model/metadata/closed-data.js";
+import type { RustTargetConfigurationInput } from "../../target-model/configuration/model.js";
+import {
+  rustGenericsSemanticKey,
+  rustTypeSemanticKey,
+  type RustDialect,
+} from "../../target-model/semantics/index.js";
 import type {
   RustProviderModuleDefinition,
   RustProviderOperationDefinition,
@@ -51,17 +60,23 @@ type RustCompilerProviderDiagnosticCode = keyof typeof rustCompilerProviderDiagn
 
 export interface RustCompilerProviderSession {
   readonly sourceProviders: readonly SourceDeclarationProvider[];
+  readonly dialect: RustDialect;
   semantics(): RustProviderSemantics;
   close(): void;
 }
 
 export function createRustCompilerProviderSession(
   context: {
-    readonly configuration: RustTargetConfiguration;
+    readonly configuration: RustTargetConfigurationInput;
   },
   worker: RustCompilerWorkerClient = createRustCompilerWorkerClient(),
 ): RustCompilerProviderSession {
   const standardSnapshot = worker.standardSnapshot();
+  const dialect: RustDialect = Object.freeze({
+    edition: context.configuration.edition,
+    compilerIdentity: standardSnapshot.compiler.rustcVerboseVersion,
+    enabledLanguageFeatures: Object.freeze([]),
+  });
   const standardSnapshotLease = createCompilerSnapshotLease(standardSnapshot);
   const standardVersion = compilerProviderVersion(standardSnapshot.digest);
   const standardRegistry = createProjectionRegistry({
@@ -91,6 +106,7 @@ export function createRustCompilerProviderSession(
   const project = context.configuration.project;
   if (project.kind === "generated") {
     return createCompilerProviderSessionResult({
+      dialect,
       sourceProviders: Object.freeze([standardProvider]),
       registries: Object.freeze([standardRegistry]),
       snapshotLeases: Object.freeze([standardSnapshotLease]),
@@ -123,6 +139,7 @@ export function createRustCompilerProviderSession(
     }),
   ];
   return createCompilerProviderSessionResult({
+    dialect,
     sourceProviders: Object.freeze(sourceProviders),
     registries: Object.freeze([standardRegistry, registry]),
     snapshotLeases: Object.freeze([standardSnapshotLease, snapshotLease]),
@@ -134,6 +151,7 @@ export function createRustCompilerProviderSession(
 }
 
 function createCompilerProviderSessionResult(options: {
+  readonly dialect: RustDialect;
   readonly sourceProviders: readonly SourceDeclarationProvider[];
   readonly registries: readonly ProjectionRegistry[];
   readonly snapshotLeases: readonly CompilerSnapshotLease[];
@@ -143,6 +161,7 @@ function createCompilerProviderSessionResult(options: {
   let semantics: RustProviderSemantics | undefined;
   return Object.freeze({
     sourceProviders: options.sourceProviders,
+    dialect: options.dialect,
     semantics(): RustProviderSemantics {
       if (state === "closed") {
         throw new Error("Rust compiler-provider session is closed.");
@@ -275,6 +294,10 @@ function createCompilerProvider(
           ...(requestedExports === undefined ? {} : { requestedExports }),
         });
         const projection = projectRustCompilerModule(module, {
+          providerPackageId: options.packageId,
+          providerId,
+          providerVersion: options.providerVersion,
+          compilationSnapshotId: snapshot.digest,
           providerModuleId: expectedModuleId,
           moduleSpecifier: resolution.moduleSpecifier,
         });
@@ -353,7 +376,7 @@ function createProjectionRegistry(options: {
       }
       for (const [id, traits] of projection.carrierTraits) {
         const existing = carrierTraits.get(id);
-        if (existing !== undefined && JSON.stringify(existing) !== JSON.stringify(traits)) {
+        if (existing !== undefined && !closedMetadataEquals(existing, traits)) {
           throw new Error(`Rust compiler-provider carrier '${id}' has conflicting native trait contracts.`);
         }
         carrierTraits.set(id, traits);
@@ -491,7 +514,7 @@ function addExact<T>(
   kind: string,
 ): void {
   const existing = map.get(identity);
-  if (existing !== undefined && JSON.stringify(existing) !== JSON.stringify(value)) {
+  if (existing !== undefined && !closedMetadataEquals(existing, value)) {
     throw new Error(`Rust compiler-provider ${kind} '${identity}' has conflicting projections.`);
   }
   map.set(identity, value);
@@ -502,7 +525,7 @@ function providerOperationIdentity(row: RustProviderOperationDefinition): string
 }
 
 function providerTypeIdentity(row: RustProviderTypeDefinition): string {
-  return `${row.exportId}\0${JSON.stringify(row.targetCarrier)}`;
+  return `${row.exportId}\0${row.targetDeclarationKind}\0${row.targetTraitKind ?? ""}\0${row.targetTraitSafety ?? ""}\0${String(row.targetTraitRequiresImplementationItems ?? "")}\0${closedMetadataKey(row.targetImplicitParameters)}\0${closedMetadataKey(row.semanticRoles)}\0${rustGenericsSemanticKey(row.targetGenerics)}\0${rustTypeSemanticKey(row.targetCarrier)}`;
 }
 
 function providerDiagnostic(

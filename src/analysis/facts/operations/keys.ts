@@ -112,6 +112,16 @@ export type RustModuleBindingFact =
       readonly declarationKind: "const" | "let" | "var";
       readonly storage: "module-cell";
       readonly valueCarrier: TargetTypeRef;
+    }
+  | {
+      readonly declarationKind: "let" | "var";
+      readonly storage: "native-static";
+      readonly valueCarrier: TargetTypeRef;
+    }
+  | {
+      readonly declarationKind: "const" | "let" | "var";
+      readonly storage: "thread-local-cell";
+      readonly valueCarrier: TargetTypeRef;
     };
 
 export const rustModuleBindingFactKey: RustPlanKey<RustModuleBindingFact> = defineRustPlanKey(

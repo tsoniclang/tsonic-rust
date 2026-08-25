@@ -3,12 +3,14 @@ import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js"
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { RustNamePlan } from "../../../target-model/names/model.js";
 import type { RustProjectTypeDefinition } from "../../../policy/types/project-types.js";
+import type { RustSourceGenericIndex } from "../../../policy/types/source-generics.js";
 
 export function projectDefinition(
   declaration: Node,
   sourceFile: SourceFile,
   ast: AstReader,
   namePlan: RustNamePlan,
+  sourceGenerics: RustSourceGenericIndex,
   usedNames: Set<string>,
 ): RustProjectTypeDefinition | undefined {
   const kindName = ast.kindName(declaration);
@@ -24,18 +26,13 @@ export function projectDefinition(
   const sourceName = nameNode === undefined ? "" : ast.text(nameNode);
   const targetName = namePlan.nameForDeclaration(declaration);
   const fileName = ast.getFileName(sourceFile);
-  const rawParameters = ast.typeParameters(declaration);
-  const parameters = denseNodes(rawParameters);
-  const sourceTypeParameterNames = parameters?.map((parameter) => {
-    const name = ast.name(parameter);
-    return name === undefined ? "" : ast.text(name);
-  });
-  const targetParameterNames = parameters?.map((parameter) =>
-    namePlan.nameForDeclaration(parameter));
+  const parameters = denseNodes(ast.typeParameters(declaration));
+  const identityContract = sourceGenerics.identityContractFor(declaration);
   return sourceName.length === 0 || targetName === undefined || fileName.length === 0 ||
-      parameters === undefined || sourceTypeParameterNames === undefined ||
-      sourceTypeParameterNames.some((name) => name.length === 0) ||
-      targetParameterNames === undefined || targetParameterNames.some((name) => name === undefined)
+      parameters === undefined || identityContract === undefined ||
+      identityContract.parameters.length !== parameters.length ||
+      identityContract.parameters.some((parameter, index) =>
+        parameter.declaration !== parameters[index])
     ? undefined
     : (() => {
         const stateName = allocateGeneratedName(
@@ -56,8 +53,7 @@ export function projectDefinition(
         sourceName,
         targetName,
         kind,
-        typeParameterNames: Object.freeze(sourceTypeParameterNames),
-        targetTypeParameterNames: Object.freeze(targetParameterNames as string[]),
+        genericArguments: identityContract.arguments,
         stateName,
         dispatchName,
         ...(rootName === undefined ? {} : { rootName }),

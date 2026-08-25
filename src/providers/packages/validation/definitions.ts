@@ -1,10 +1,23 @@
-import { asRecord, requireExactKeys, requireNonEmpty, requireRustIdentifier, requireRustPath, rustSourcePrimitiveHasCarrier, validateCarrier } from "./carriers.js";
+import { asRecord, requireExactKeys, requireNonEmpty, requireRustIdentifier, requireRustPath, rustSourcePrimitiveHasCarrier, validateCarrier, validateRustGenerics } from "./carriers.js";
 import { builtInTargetCarrierIds } from "./model.js";
 import { isClosedMetadata } from "../../../target-model/metadata/closed-data.js";
 import { isRustFallibleErrorBoundary } from "../../../target-model/operations/error-boundary.js";
-import { isRustNamedTypeTraitContract } from "../../../target-model/types/index.js";
+import {
+  isRustNamedTypeTraitContract,
+  rustGenericParameterIdentity,
+  rustTargetTypeAssociatedProjectionKeys,
+  rustTargetTypeOpenGenericIdentityKeys,
+} from "../../../target-model/types/index.js";
+import { rustTypeSemanticKey } from "../../../target-model/semantics/index.js";
+import { rustSemanticIdentityItemId } from "../../../target-model/semantics/index.js";
 import { isRustTargetTypeRef } from "../../../target-model/types/equality.js";
-import { validateOperationRows, validateTypeParameterRequirements } from "./operations.js";
+import {
+  validateOperationRows,
+  validateSourceGenericBindings,
+  validateTargetGenericParameterMapping,
+  validateTargetOpenGenericParameters,
+  validateTypeParameterRequirements,
+} from "./operations.js";
 import type {
   ProviderExportDeclaration,
   ProviderMemberDeclaration,
@@ -546,8 +559,30 @@ function validateTypeRelations(
 ): void {
   const relatedExports = new Set<string>();
   for (const relation of definition.types ?? []) {
-    requireExactKeys(asRecord(relation), ["exportId", "targetCarrier", "typeRequirements", "objectLiteralConstruction"], "type relation", fail);
+    requireExactKeys(asRecord(relation), ["exportId", "targetDeclarationKind", "targetTraitKind", "targetTraitSafety", "targetTraitRequiresImplementationItems", "sourceGenericBindings", "targetImplicitParameters", "semanticRoles", "targetGenerics", "targetCarrier", "typeRequirements", "objectLiteralConstruction"], "type relation", fail);
     requireNonEmpty(relation.exportId, "type relation export id", fail);
+    if (relation.targetDeclarationKind !== "struct" &&
+      relation.targetDeclarationKind !== "enum" &&
+      relation.targetDeclarationKind !== "union" &&
+      relation.targetDeclarationKind !== "trait" &&
+      relation.targetDeclarationKind !== "type-alias") {
+      fail(`export '${relation.exportId}' has invalid target declaration kind '${String(relation.targetDeclarationKind)}'`);
+    }
+    if (relation.targetDeclarationKind === "trait") {
+      if (relation.targetTraitKind !== "ordinary" && relation.targetTraitKind !== "auto") {
+        fail(`trait export '${relation.exportId}' has no exact ordinary/auto trait kind`);
+      }
+      if (relation.targetTraitSafety !== "safe" && relation.targetTraitSafety !== "unsafe") {
+        fail(`trait export '${relation.exportId}' has no exact safe/unsafe trait contract`);
+      }
+      if (typeof relation.targetTraitRequiresImplementationItems !== "boolean") {
+        fail(`trait export '${relation.exportId}' has no exact implementation-item requirement contract`);
+      }
+    } else if (relation.targetTraitKind !== undefined || relation.targetTraitSafety !== undefined) {
+      fail(`non-trait export '${relation.exportId}' cannot declare target trait contracts`);
+    } else if (relation.targetTraitRequiresImplementationItems !== undefined) {
+      fail(`non-trait export '${relation.exportId}' cannot declare implementation-item requirements`);
+    }
     const exported = exportsById.get(relation.exportId)?.declaration;
     if (exported === undefined) {
       fail(`type relation targets undeclared exportId '${relation.exportId}'`);
@@ -559,26 +594,79 @@ function validateTypeRelations(
     if (!isRustTargetTypeRef(relation.targetCarrier)) {
       fail(`export '${relation.exportId}' has an invalid closed Rust target carrier`);
     }
+    validateTypeSemanticRoles(relation, fail);
+    validateRustGenerics(
+      relation.targetGenerics,
+      definition,
+      `export '${relation.exportId}'.targetGenerics`,
+      fail,
+    );
+    const implicitTargetIdentities = validateTargetOpenGenericParameters(
+      relation.targetImplicitParameters ?? [],
+      `export '${relation.exportId}'.targetImplicitParameters`,
+      fail,
+      definition,
+    );
+    validateTargetGenericParameterMapping(
+      relation.targetGenerics,
+      relation.sourceGenericBindings,
+      implicitTargetIdentities,
+      `export '${relation.exportId}'.targetGenerics`,
+      fail,
+    );
     if (relation.objectLiteralConstruction !== undefined && (
       !isClosedMetadata(relation.objectLiteralConstruction) ||
       Object.keys(relation.objectLiteralConstruction).length !== 1 ||
       relation.objectLiteralConstruction.kind !== "struct-default" ||
-      relation.targetCarrier.kind !== "target-named"
+      relation.targetCarrier.kind !== "path"
     )) {
       fail(`export '${relation.exportId}' has an invalid Rust object-literal construction contract`);
     }
-    const sourceTypeParameters = new Set(
-      (exported.typeParameters ?? []).map((parameter) => parameter.name),
+    const sourceTypeParameters = validateSourceGenericBindings(
+      relation.sourceGenericBindings,
+      `export '${relation.exportId}'.sourceGenericBindings`,
+      fail,
+      definition,
     );
+    const declaredTypeParameters = (exported.typeParameters ?? []).map((parameter) => parameter.name);
+    if (declaredTypeParameters.length !== relation.sourceGenericBindings.length ||
+      declaredTypeParameters.some((name, index) =>
+        name !== relation.sourceGenericBindings[index]?.sourceName)) {
+      fail(`export '${relation.exportId}' source generic parameters do not exactly match its declaration`);
+    }
     validateTypeParameterRequirements(
       relation.typeRequirements,
       sourceTypeParameters,
+      definition,
       `export '${relation.exportId}' type requirements`,
       fail,
     );
-    for (const parameter of targetCarrierTypeParameters(relation.targetCarrier)) {
-      if (!sourceTypeParameters.has(parameter)) {
-        fail(`export '${relation.exportId}' target carrier references undeclared source type parameter '${parameter}'`);
+    const declaredTargetIdentities = new Map(relation.sourceGenericBindings.flatMap((binding) => {
+      if (binding.target.kind !== "generic-parameter") return [];
+      const identity = rustGenericParameterIdentity(binding.target.parameter);
+      return identity === undefined ? [] : [[identity.identityKey, binding.sourceName] as const];
+    }));
+    const referencedTargetIdentities = new Set(
+      rustTargetTypeOpenGenericIdentityKeys(relation.targetCarrier),
+    );
+    for (const identityKey of referencedTargetIdentities) {
+      if (!declaredTargetIdentities.has(identityKey)) {
+        fail(`export '${relation.exportId}' target carrier references undeclared target generic parameter '${identityKey}'`);
+      }
+    }
+    for (const [identityKey, sourceName] of declaredTargetIdentities) {
+      if (!referencedTargetIdentities.has(identityKey)) {
+        fail(`export '${relation.exportId}' source parameter '${sourceName}' has no target generic use '${identityKey}'`);
+      }
+    }
+    const referencedAssociatedProjections = new Set(
+      rustTargetTypeAssociatedProjectionKeys(relation.targetCarrier),
+    );
+    for (const binding of relation.sourceGenericBindings) {
+      if (binding.target.kind !== "associated-type") continue;
+      const projectionKey = rustTypeSemanticKey(binding.target.projection);
+      if (!referencedAssociatedProjections.has(projectionKey)) {
+        fail(`export '${relation.exportId}' source parameter '${binding.sourceName}' has no target associated-type use '${projectionKey}'`);
       }
     }
     for (const targetTypeId of targetCarrierNamedIds(relation.targetCarrier)) {
@@ -589,21 +677,75 @@ function validateTypeRelations(
   }
 }
 
-function targetCarrierTypeParameters(carrier: TargetTypeRef): readonly string[] {
-  const names = new Set<string>();
-  walkTargetCarrier(carrier, (candidate) => {
-    if (candidate.kind === "type-parameter") {
-      names.add(candidate.name);
+function validateTypeSemanticRoles(
+  relation: NonNullable<RustProviderPackageDefinition["types"]>[number],
+  fail: Fail,
+): void {
+  if (relation.semanticRoles === undefined) return;
+  if (!Array.isArray(relation.semanticRoles)) {
+    fail(`export '${relation.exportId}' semanticRoles must be a dense array`);
+    return;
+  }
+  const kinds = new Set<string>();
+  for (const role of relation.semanticRoles) {
+    if (role.kind !== "pin-wrapper" && role.kind !== "callable-trait") {
+      fail(`export '${relation.exportId}' has unknown semantic role '${String(role.kind)}'`);
+      continue;
     }
-  });
-  return [...names].sort();
+    if (kinds.has(role.kind)) {
+      fail(`export '${relation.exportId}' repeats semantic role '${role.kind}'`);
+    }
+    kinds.add(role.kind);
+    if (role.kind === "pin-wrapper") {
+      requireExactKeys(asRecord(role), ["kind", "pointerArgumentIndex"], `export '${relation.exportId}' semantic role`, fail);
+      if (!Number.isSafeInteger(role.pointerArgumentIndex) || role.pointerArgumentIndex < 0 ||
+        relation.targetCarrier.kind !== "path" ||
+        relation.targetCarrier.arguments[role.pointerArgumentIndex] === undefined ||
+        relation.targetCarrier.arguments[role.pointerArgumentIndex]?.kind !== "type") {
+        fail(`export '${relation.exportId}' pin-wrapper role must select one exact target type argument`);
+      }
+      continue;
+    }
+    requireExactKeys(
+      asRecord(role),
+      ["kind", "callTrait", "parameterTupleSourceName", "resultSourceName"],
+      `export '${relation.exportId}' semantic role`,
+      fail,
+    );
+    if (role.callTrait !== "fn" && role.callTrait !== "fn-mut" && role.callTrait !== "fn-once") {
+      fail(`export '${relation.exportId}' callable-trait role has an invalid call trait`);
+    }
+    requireRustIdentifier(
+      role.parameterTupleSourceName,
+      `export '${relation.exportId}' callable argument tuple source name`,
+      fail,
+    );
+    requireRustIdentifier(
+      role.resultSourceName,
+      `export '${relation.exportId}' callable result source name`,
+      fail,
+    );
+    const argumentBinding = relation.sourceGenericBindings.find((binding) =>
+      binding.sourceName === role.parameterTupleSourceName);
+    const resultBinding = relation.sourceGenericBindings.find((binding) =>
+      binding.sourceName === role.resultSourceName);
+    if (argumentBinding?.target.kind !== "generic-parameter" ||
+      argumentBinding.target.parameter.kind !== "type") {
+      fail(`export '${relation.exportId}' callable-trait role must select one exact target argument-tuple parameter`);
+    }
+    if (resultBinding?.target.kind !== "semantic-parameter" ||
+      resultBinding.target.role !== "callable-result") {
+      fail(`export '${relation.exportId}' callable-trait role must select one exact callable-result semantic parameter`);
+    }
+  }
 }
 
 function targetCarrierNamedIds(carrier: TargetTypeRef): readonly string[] {
   const ids = new Set<string>();
   walkTargetCarrier(carrier, (candidate) => {
-    if (candidate.kind === "target-named") {
-      ids.add(candidate.id);
+    if (candidate.kind === "path") {
+      const itemId = rustSemanticIdentityItemId(candidate.identity);
+      if (itemId !== undefined) ids.add(itemId);
     }
   });
   return [...ids].sort();
@@ -615,10 +757,23 @@ function walkTargetCarrier(
 ): void {
   visit(carrier);
   switch (carrier.kind) {
-    case "target-named":
-      for (const argument of carrier.typeArguments ?? []) walkTargetCarrier(argument, visit);
+    case "path":
+      for (const argument of carrier.arguments) {
+        if (argument.kind === "type") walkTargetCarrier(argument.value, visit);
+      }
+      for (const implementation of carrier.traitImplementations) {
+        for (const argument of implementation.trait.arguments) {
+          if (argument.kind === "type") walkTargetCarrier(argument.value, visit);
+        }
+        for (const requirement of implementation.requirements) {
+          for (const argument of requirement.trait.arguments) {
+            if (argument.kind === "type") walkTargetCarrier(argument.value, visit);
+          }
+        }
+      }
       return;
     case "array":
+    case "sequence":
     case "slice":
       walkTargetCarrier(carrier.element, visit);
       return;
@@ -626,24 +781,43 @@ function walkTargetCarrier(
       for (const element of carrier.elements) walkTargetCarrier(element, visit);
       return;
     case "reference":
-      walkTargetCarrier(carrier.referent, visit);
-      return;
-    case "pointer":
-      walkTargetCarrier(carrier.pointee, visit);
+    case "raw-pointer":
+      walkTargetCarrier(carrier.target, visit);
       return;
     case "function-pointer":
     case "closure":
-      for (const argument of carrier.args) walkTargetCarrier(argument, visit);
+      for (const argument of carrier.parameters) walkTargetCarrier(argument, visit);
       walkTargetCarrier(carrier.result, visit);
       return;
     case "associated-type":
       walkTargetCarrier(carrier.owner, visit);
+      for (const argument of carrier.arguments) {
+        if (argument.kind === "type") walkTargetCarrier(argument.value, visit);
+      }
+      return;
+    case "trait-object":
+      for (const argument of carrier.principal.arguments) {
+        if (argument.kind === "type") walkTargetCarrier(argument.value, visit);
+      }
+      return;
+    case "opaque":
+      for (const bound of carrier.bounds) {
+        if (bound.kind === "type-outlives") walkTargetCarrier(bound.type, visit);
+        if (bound.kind === "associated-equality") {
+          walkTargetCarrier(bound.projection, visit);
+          walkTargetCarrier(bound.value, visit);
+        }
+      }
       return;
     case "source-primitive":
+    case "primitive":
+    case "never":
+    case "unit":
+    case "str":
+    case "self":
     case "type-parameter":
-    case "opaque":
-    case "lifetime":
-    case "target-specific":
+    case "inference-variable":
+    case "source-carrier":
       return;
   }
 }

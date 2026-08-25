@@ -9,6 +9,7 @@ import {
   Node_Initializer,
   Node_Name,
   Node_Type,
+  sourceNodeIdentity,
 } from "@tsonic/target-api/source";
 import {
   rustMutatedBindingFactKey,
@@ -18,18 +19,29 @@ import {
   rustTypeAliasDeclarationFactKey,
 } from "../facts/keys.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
-import { flowStateFactKey } from "@tsonic/tsts";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { recordRustBindingPatternFacts } from "../control-flow/binding-patterns.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { rustSourceUnionTargetType } from "../../target-model/types/index.js";
+import {
+  isRustCopyCarrier,
+  rustCarrierSupportsClone,
+  rustCarrierSupportsTrait,
+  rustDefaultTrait,
+  rustInferredLifetime,
+  rustReferenceTargetType,
+  rustToOwnedTrait,
+  rustUnitTargetType,
+} from "../../target-model/types/index.js";
+import { rustSourceOwnershipOperationFactKey } from "../../source/semantics/facts.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
 import { sourceTypeCarrierForDeclaration } from "../operations/inputs.js";
 import type { Node, SourceFile, Type } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { rustSourceOwnershipContractForType } from "../../policy/ownership/source-callable-abi.js";
 
 export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
   const variants = walk.sourceTypes.enumVariantsForDeclaration(declaration);
@@ -46,9 +58,6 @@ export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
     return;
   }
   const { ast } = walk.context;
-  if (ast.typeParameters(declaration).length !== 0) {
-    return;
-  }
   const nameNode = ast.name(declaration);
   const typeName = nameNode === undefined ? "" : ast.text(nameNode);
   const fileName = ast.getFileName(ast.getSourceFile(declaration));
@@ -204,18 +213,11 @@ export function resolveParameterAbi(walk: RustFactWalk, parameter: Node) {
   );
 }
 
-export function recordParameterAbiFacts(walk: RustFactWalk, parameter: Node): void {
-  const parameterAbi = resolveParameterAbi(walk, parameter);
-  if (parameterAbi === undefined) {
-    appendRustDiagnostic(
-      walk,
-      "RUST_PARAMETER_CARRIER_UNSUPPORTED",
-      "Parameter type has no closed Rust runtime carrier under the selected source-profile and surface policy.",
-      parameter,
-      ["target.capability=rust.callable.parameter-carrier"],
-    );
-    return;
-  }
+export function recordResolvedParameterAbiFacts(
+  walk: RustFactWalk,
+  parameter: Node,
+  parameterAbi: import("../../policy/ownership/source-callable-abi.js").RustSourceParameterAbi,
+): void {
   setCarrierFact(walk, parameter, parameterAbi.valueCarrier);
   setParameterAbiFact(walk, parameter, parameterAbi);
   if (!recordDefaultParameterInitializerFacts(walk, parameter, parameterAbi)) {
@@ -284,6 +286,7 @@ export function setParameterAbiFact(
 ): void {
   walk.context.facts.set(parameter, rustSourceParameterAbiFactKey, {
     form: abi.form,
+    sourceContract: abi.sourceContract,
     valueCarrier: abi.valueCarrier,
     parameterCarrier: abi.parameterCarrier,
     mode: abi.mode,
@@ -340,7 +343,8 @@ export function recordBindingWrite(walk: RustFactWalk, target: Node | undefined,
   }
   if (kind === KindCallExpression) {
     const fact = walk.context.facts.get(target, rustTargetOperationFactKey);
-    if (fact !== undefined && fact.kind === "flow-marker") {
+    if (fact !== undefined && fact.kind === "ownership-marker" &&
+      fact.operation === "mutable-borrow") {
       recordBindingWrite(walk, ast.arguments(target)[0], "referent");
     }
     return;
@@ -372,74 +376,276 @@ export function recordAssignmentWrite(
   recordBindingWrite(walk, target);
 }
 
-// --- Source-core flow markers ----------------------------------------------
+// --- Explicit Rust ownership markers ---------------------------------------
 
-interface FlowMarkerResolution {
+interface OwnershipMarkerResolution {
   readonly carrier: TargetTypeRef | undefined;
 }
 
-// The generic source-semantics extension records flowStateFactKey on neutral
-// sharedBorrow/mutableBorrow/move operations (including exact Rust aliases).
-// This target converts those source facts into Rust-owned operation facts.
-// Flow operations erase at emission because the consuming position's finalized
-// Rust argument mode owns the passing shape. Non-flow source markers are
-// rejected by the checked source-call operation provider, which is the sole
-// owner of marker legality.
-export function tryFlowMarkerCall(
+export function tryRustOwnershipMarkerCall(
   walk: RustFactWalk,
   expression: Node,
   callArguments: readonly (Node | undefined)[],
   sourceFile: SourceFile,
   expected: TargetTypeRef | undefined,
-): FlowMarkerResolution | undefined {
+): OwnershipMarkerResolution | undefined {
   const facts = walk.context.facts;
-  const flow = facts.get(expression, flowStateFactKey);
-  if (flow === undefined) {
+  const source = facts.get(expression, rustSourceOwnershipOperationFactKey);
+  if (source === undefined) {
     return undefined;
   }
-  const [argument] = callArguments;
+  const argument = source.valueExpression ?? callArguments[0];
   const argumentCarrier = argument === undefined
     ? undefined
     : resolveExpressionCarrier(walk, argument, sourceFile, expected);
-  if (flow.state !== "moved" && flow.state !== "borrowed-shared" && flow.state !== "borrowed-mut") {
+  if (argumentCarrier === undefined) {
+    return { carrier: undefined };
+  }
+  const replacementCarrier = source.replacementExpression === undefined
+    ? undefined
+    : resolveExpressionCarrier(
+        walk,
+        source.replacementExpression,
+        sourceFile,
+        argumentCarrier.kind === "reference" ? argumentCarrier.target : undefined,
+      );
+  if ((source.kind === "store" || source.kind === "replace") &&
+    (argumentCarrier.kind !== "reference" || !argumentCarrier.mutable ||
+      replacementCarrier === undefined ||
+      !rustTargetTypeRefEquals(replacementCarrier, argumentCarrier.target))) {
+    appendRustDiagnostic(
+      walk,
+      "RUST_MUTABLE_REFERENCE_REPLACEMENT_NOT_PROVEN",
+      `Rust '${source.kind}' requires one exact mutable-reference destination and a replacement with the same target carrier.`,
+      expression,
+      ["target.capability=rust.ownership.mutable-reference-write"],
+    );
+    return { carrier: undefined };
+  }
+  const borrowedTarget = argumentCarrier.kind === "reference"
+    ? argumentCarrier.target
+    : argumentCarrier;
+  const inferredBorrowLifetime = rustInferredLifetime(
+    `source-borrow\0${sourceNodeIdentity(walk.context.ast, expression) ?? [
+      walk.context.ast.getPath(sourceFile),
+      walk.context.ast.pos(expression),
+      walk.context.ast.end(expression),
+    ].join(":")}`,
+  );
+  const sharedBorrowLifetime = expected?.kind === "reference" && !expected.mutable &&
+      rustTargetTypeRefEquals(expected.target, borrowedTarget)
+    ? expected.lifetime
+    : inferredBorrowLifetime;
+  const mutableBorrowLifetime = expected?.kind === "reference" && expected.mutable &&
+      rustTargetTypeRefEquals(expected.target, borrowedTarget)
+    ? expected.lifetime
+    : inferredBorrowLifetime;
+  const resultCarrier = source.kind === "shared-borrow"
+    ? rustReferenceTargetType(borrowedTarget, false, sharedBorrowLifetime)
+    : source.kind === "mutable-borrow"
+      ? argumentCarrier.kind === "reference" && !argumentCarrier.mutable
+        ? undefined
+        : rustReferenceTargetType(borrowedTarget, true, mutableBorrowLifetime)
+      : source.kind === "load" && argumentCarrier.kind === "reference"
+        ? argumentCarrier.target
+        : (source.kind === "replace" || source.kind === "take") &&
+            argumentCarrier.kind === "reference"
+          ? argumentCarrier.target
+        : source.kind === "store"
+          ? rustUnitTargetType()
+          : source.kind === "own" && argumentCarrier.kind === "reference"
+            ? argumentCarrier.target
+            : argumentCarrier;
+  if (resultCarrier === undefined) {
+    appendRustDiagnostic(
+      walk,
+      "RUST_MUTABLE_REBORROW_REQUIRES_MUTABLE_REFERENCE",
+      "Rust mutable reborrow requires an exact mutable-reference operand.",
+      expression,
+      ["target.capability=rust.ownership.reborrow"],
+    );
+    return { carrier: undefined };
+  }
+  const lowering = source.kind === "shared-borrow"
+    ? "shared-reference" as const
+    : source.kind === "mutable-borrow"
+      ? "mutable-reference" as const
+      : source.kind === "move"
+        ? "identity" as const
+        : source.kind === "clone"
+          ? rustCarrierSupportsClone(argumentCarrier) ? "clone" as const : undefined
+          : source.kind === "own"
+            ? argumentCarrier.kind === "reference" &&
+                rustCarrierSupportsTrait(argumentCarrier.target, rustToOwnedTrait)
+              ? "to-owned" as const
+              : undefined
+            : source.kind === "load"
+              ? isRustCopyCarrier(resultCarrier)
+                ? "dereference-copy" as const
+                : undefined
+              : source.kind === "store"
+                ? "store" as const
+                : source.kind === "replace"
+                  ? "replace" as const
+                  : source.kind === "take"
+                    ? argumentCarrier.kind === "reference" && argumentCarrier.mutable &&
+                        rustCarrierSupportsTrait(resultCarrier, rustDefaultTrait)
+                      ? "take" as const
+                      : undefined
+                    : "capture-move" as const;
+  if (lowering === undefined) {
+    appendRustDiagnostic(
+      walk,
+      "RUST_OWNERSHIP_MARKER_TRAIT_NOT_PROVEN",
+      `Rust '${source.kind}' has no exact trait proof for its finalized carrier.`,
+      expression,
+      ["target.capability=rust.ownership.explicit-operation"],
+    );
     return { carrier: undefined };
   }
   setRustOperationFact(walk, expression, {
-    kind: "flow-marker",
-    operationId: `tsonic.rust.flow.${flow.state}`,
-    state: flow.state,
+    kind: "ownership-marker",
+    operationId: `tsonic.rust.ownership.${source.kind}`,
+    operation: source.kind,
+    operandCarrier: argumentCarrier,
+    resultCarrier,
+    lowering,
   });
-  if (argumentCarrier !== undefined) {
-    setCarrierFact(walk, expression, argumentCarrier);
-  }
-  return { carrier: argumentCarrier };
+  setCarrierFact(walk, expression, resultCarrier);
+  return { carrier: resultCarrier };
 }
 
-export function validateFlowMarkerAgainstMode(
+export function validateOwnershipExpressionAgainstContract(
   walk: RustFactWalk,
   argument: Node,
   mode: "value" | "ref" | "mut-ref",
-): void {
-  const flow = walk.context.facts.resolve(argument, flowStateFactKey) ??
-    walk.context.facts.get(argument, flowStateFactKey);
+  sourceContract?: import("../../target-model/operations/model.js").RustSourceParameterContract,
+): boolean {
   const rustFact = walk.context.facts.get(argument, rustTargetOperationFactKey);
-  const markerState = rustFact !== undefined && rustFact.kind === "flow-marker" ? rustFact.state : flow?.state;
-  if (markerState === undefined) {
-    return;
+  const operation = rustFact?.kind === "ownership-marker" ? rustFact.operation : undefined;
+  const declaration = walk.context.source.navigation.sourceReferenceFor(argument)?.declaration;
+  const declaredContract = declaration === undefined
+    ? "ordinary"
+    : rustOwnershipContractForDeclaration(walk, declaration);
+  const expectedContract = sourceContract ?? declaredContract;
+  const declarationKind = declaration === undefined
+    ? undefined
+    : walk.context.ast.kindName(declaration);
+  const directOwnedRvalue = mode === "value" &&
+    (declaredContract === "owned" || expectedContract === "owned") &&
+    operation === undefined &&
+    (declarationKind === undefined || !isOwnedStorageDeclaration(declarationKind));
+  const directReference = operation === undefined &&
+    ((mode === "ref" && declaredContract === "shared-reference") ||
+      (mode === "mut-ref" && declaredContract === "mutable-reference"));
+  if (directReference || directOwnedRvalue) {
+    return true;
   }
-  const compatible =
-    (markerState === "moved" && mode === "value") ||
-    (markerState === "borrowed-shared" && mode === "ref") ||
-    (markerState === "borrowed-mut" && mode === "mut-ref");
+  const ownedResultRequired = mode === "value" &&
+    (declaredContract === "owned" || expectedContract === "owned");
+  const compatible = mode === "ref"
+    ? operation === "shared-borrow"
+    : mode === "mut-ref"
+      ? operation === "mutable-borrow"
+      : ownedResultRequired
+        ? operation === "move" || operation === "clone" || operation === "own" ||
+          operation === "replace" || operation === "take"
+        : operation === undefined || operation === "move" || operation === "clone" ||
+          operation === "own" || operation === "load" || operation === "replace" ||
+          operation === "take" || operation === "capture-move";
   if (!compatible) {
+    const requiredOperation = mode === "ref"
+      ? "shared-borrow"
+      : mode === "mut-ref"
+        ? "mutable-borrow"
+        : ownedResultRequired
+          ? "an ownership-producing operation"
+          : "a value-producing operation";
     appendRustDiagnostic(
       walk,
-      "RUST_FLOW_MARKER_MISMATCH",
-      `Flow marker state '${markerState}' does not match the finalized argument mode '${mode}' for this position.`,
+      "RUST_OWNERSHIP_MARKER_MISMATCH",
+      `Rust source contract '${expectedContract}' requires explicit ${requiredOperation} with finalized value mode '${mode}', but received '${operation ?? "no operation"}'.`,
       argument,
-      ["target.capability=rust.source.flow-marker"],
+      ["target.capability=rust.ownership.explicit-operation"],
     );
+    return false;
   }
+  return true;
+}
+
+export function rustOwnershipContractForStorageExpression(
+  walk: RustFactWalk,
+  expression: Node | undefined,
+): import("../../target-model/operations/model.js").RustSourceParameterContract {
+  if (expression === undefined) return "ordinary";
+  const declaration = storageDeclarationForExpression(walk, expression);
+  return declaration === undefined
+    ? "ordinary"
+    : rustOwnershipContractForDeclaration(walk, declaration);
+}
+
+function rustOwnershipContractForDeclaration(
+  walk: RustFactWalk,
+  declaration: Node,
+): import("../../target-model/operations/model.js").RustSourceParameterContract {
+  const sourceFile = walk.context.ast.getSourceFile(declaration);
+  if (sourceFile === undefined || !walk.context.sourceFiles.includes(sourceFile)) {
+    return "ordinary";
+  }
+  const authored = rustSourceOwnershipContractForType(
+    Node_Type(walk.context.ast, declaration),
+    rustResolutionContext(walk, declaration),
+  );
+  if (authored !== "ordinary") return authored;
+  const initializer = Node_Initializer(walk.context.ast, declaration);
+  const operation = initializer === undefined
+    ? undefined
+    : walk.context.facts.get(initializer, rustTargetOperationFactKey);
+  if (operation?.kind !== "ownership-marker") return "ordinary";
+  if (operation.operation === "shared-borrow") return "shared-reference";
+  if (operation.operation === "mutable-borrow") return "mutable-reference";
+  return operation.operation === "move" || operation.operation === "clone" ||
+      operation.operation === "own" || operation.operation === "replace" ||
+      operation.operation === "take"
+    ? "owned"
+    : "ordinary";
+}
+
+export function rustArgumentModeForSourceContract(
+  contract: import("../../target-model/operations/model.js").RustSourceParameterContract,
+): "value" | "ref" | "mut-ref" {
+  return contract === "shared-reference"
+    ? "ref"
+    : contract === "mutable-reference"
+      ? "mut-ref"
+      : "value";
+}
+
+function storageDeclarationForExpression(
+  walk: RustFactWalk,
+  expression: Node,
+): Node | undefined {
+  const reference = walk.context.source.navigation.sourceReferenceFor(expression);
+  if (reference?.declaration !== undefined) return reference.declaration;
+  const sourceFile = walk.context.ast.getSourceFile(expression);
+  if (sourceFile === undefined || !walk.context.source.semantics.includes(sourceFile)) {
+    return undefined;
+  }
+  const semantics = walk.context.source.semantics.forNode(expression);
+  const kind = walk.context.ast.kindName(expression);
+  if (kind === KindPropertyAccessExpression) {
+    return semantics.operations.propertyAccess(expression)?.selectedDeclaration;
+  }
+  if (kind === KindElementAccessExpression) {
+    return semantics.operations.elementAccess(expression)?.selectedDeclaration;
+  }
+  return undefined;
+}
+
+function isOwnedStorageDeclaration(kind: string): boolean {
+  return kind === "KindVariableDeclaration" || kind === "KindBindingElement" ||
+    kind === "KindParameter" || kind === "KindPropertyDeclaration" ||
+    kind === "KindPropertySignature";
 }
 
 // --- Error model -------------------------------------------------------------

@@ -4,7 +4,9 @@ import {
   getRustGeneratorProtocol,
   getRustIteratorResultProtocol,
   rustIteratorResultTargetType,
+  rustJsErrorTargetId,
   rustSourcePrimitiveTargetType,
+  rustTypeIdentityItemId,
 } from "../../target-model/types/index.js";
 
 export interface RustGeneratorSourceCallRequest {
@@ -89,7 +91,8 @@ export function selectRustGeneratorSourceCall(
   if (request.memberName === "throw") {
     const errorCarrier = request.argumentCarriers[0];
     if (request.selectedParameterCount !== 1 || request.argumentCarriers.length !== 1 ||
-      errorCarrier?.kind !== "target-named" || errorCarrier.id !== "rust.runtime.JsError") {
+      errorCarrier === undefined ||
+      rustTypeIdentityItemId(errorCarrier) !== rustJsErrorTargetId) {
       return rejected("Generator.throw requires one exact closed Rust JsError carrier.");
     }
     return resolved({

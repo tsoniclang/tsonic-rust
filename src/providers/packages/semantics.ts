@@ -2,11 +2,23 @@ import {
   canonicalizeProviderOperationRow,
   materializeProviderBinaryEpilogueRow,
   materializeProviderCarrier,
+  materializeProviderGenericArgument,
+  materializeProviderGenerics,
   materializeProviderOperationRow,
+  materializeProviderSourceGenericBinding,
+  materializeProviderTypeRequirements,
 } from "./materialization.js";
 import { rustProviderBindingProviderId } from "./source-provider.js";
 import { validateProviderPackageDefinition } from "./validation.js";
-import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
+import {
+  closedMetadataEquals,
+  closedMetadataKey,
+  snapshotClosedMetadata,
+} from "../../target-model/metadata/closed-data.js";
+import {
+  rustGenericsSemanticKey,
+  rustTypeSemanticKey,
+} from "../../target-model/semantics/index.js";
 import { rustBuiltInSourceTypeSemantics } from "../builtins/source-types.js";
 import type { RustNamedTypeTraitContract } from "../../target-model/types/model.js";
 import { rustProviderPolicyContributionKind } from "./model.js";
@@ -47,7 +59,7 @@ export function mergeExactRows<T>(
   for (const row of rows) {
     const identity = identityOf(row);
     const existing = byIdentity.get(identity);
-    if (existing !== undefined && JSON.stringify(existing) !== JSON.stringify(row)) {
+    if (existing !== undefined && !closedMetadataEquals(existing, row)) {
       throw new Error(`Rust provider ${kind} '${identity}' has conflicting definitions.`);
     }
     byIdentity.set(identity, snapshotClosedMetadata(row));
@@ -66,11 +78,20 @@ export function providerOperationRowIdentity(row: RustProviderOperationRow): str
 }
 
 export function providerTypeRowIdentity(row: RustProviderTypeRow): string {
-  return `${providerExportRowIdentity(row)}\0${row.sourceTypeParameters.join("\0")}\0${JSON.stringify({
-    targetCarrier: row.targetCarrier,
-    typeRequirements: row.typeRequirements,
-    objectLiteralConstruction: row.objectLiteralConstruction,
-  })}`;
+  return [
+    providerExportRowIdentity(row),
+    row.targetDeclarationKind,
+    row.targetTraitKind ?? "",
+    row.targetTraitSafety ?? "",
+    String(row.targetTraitRequiresImplementationItems ?? ""),
+    closedMetadataKey(row.sourceGenericBindings),
+    closedMetadataKey(row.targetImplicitParameters),
+    closedMetadataKey(row.semanticRoles),
+    rustGenericsSemanticKey(row.targetGenerics),
+    rustTypeSemanticKey(row.targetCarrier),
+    closedMetadataKey(row.typeRequirements),
+    closedMetadataKey(row.objectLiteralConstruction),
+  ].join("\0");
 }
 
 export function providerBinaryEpilogueIdentity(row: RustProviderBinaryEpilogueRow): string {
@@ -134,7 +155,7 @@ export function collectRustProviderSemanticsFromDefinitions(
     }
     for (const [carrierId, traits] of Object.entries(carrierTraitRows)) {
       const existing = carrierTraits.get(carrierId);
-      if (existing !== undefined && JSON.stringify(existing) !== JSON.stringify(traits)) {
+      if (existing !== undefined && !closedMetadataEquals(existing, traits)) {
         throw new Error(`Rust provider carrier '${carrierId}' has conflicting native trait contracts.`);
       }
       carrierTraits.set(carrierId, snapshotClosedMetadata(traits));
@@ -146,15 +167,71 @@ export function collectRustProviderSemanticsFromDefinitions(
       }
       types.push(Object.freeze({
         ...type,
-        targetCarrier: materializeProviderCarrier(type.targetCarrier, carrierPathRows, carrierTraitRows),
+        sourceGenericBindings: Object.freeze(type.sourceGenericBindings.map((binding) =>
+          materializeProviderSourceGenericBinding(
+            binding,
+            carrierPathRows,
+            carrierTraitRows,
+            {
+              providerPackageId: definition.id,
+              providerId,
+              providerVersion: definition.version,
+            },
+          ))),
+        ...(type.targetImplicitParameters === undefined
+          ? {}
+          : {
+              targetImplicitParameters: Object.freeze(type.targetImplicitParameters.map((argument) =>
+                materializeProviderGenericArgument(
+                  argument,
+                  carrierPathRows,
+                  carrierTraitRows,
+                  {
+                    providerPackageId: definition.id,
+                    providerId,
+                    providerVersion: definition.version,
+                  },
+                ))),
+            }),
+        targetGenerics: materializeProviderGenerics(
+          type.targetGenerics,
+          carrierPathRows,
+          carrierTraitRows,
+          {
+            providerPackageId: definition.id,
+            providerId,
+            providerVersion: definition.version,
+          },
+        ),
+        targetCarrier: materializeProviderCarrier(
+          type.targetCarrier,
+          carrierPathRows,
+          carrierTraitRows,
+          {
+            providerPackageId: definition.id,
+            providerId,
+            providerVersion: definition.version,
+          },
+        ),
+        ...(type.typeRequirements === undefined
+          ? {}
+          : {
+              typeRequirements: materializeProviderTypeRequirements(
+                type.typeRequirements,
+                carrierPathRows,
+                carrierTraitRows,
+                {
+                  providerPackageId: definition.id,
+                  providerId,
+                  providerVersion: definition.version,
+                },
+              ),
+            }),
         providerPackageId: definition.id,
         providerId,
         providerVersion: definition.version,
         providerModuleId: owner.module.providerModuleId,
         moduleSpecifier: owner.module.moduleSpecifier,
-        sourceTypeParameters: Object.freeze(
-          (owner.exported.typeParameters ?? []).map((parameter) => parameter.name),
-        ),
       }));
     }
     const aliases = new Map((definition.aliasImports ?? []).map((entry) => [entry.alias, entry.path]));
@@ -193,7 +270,33 @@ export function collectRustProviderSemanticsFromDefinitions(
     carrierTraits: canonicalCarrierTraits,
     types: Object.freeze(types.map((row) => snapshotClosedMetadata({
       ...row,
-      targetCarrier: materializeProviderCarrier(row.targetCarrier, canonicalCarrierPaths, canonicalCarrierTraits),
+      ...(row.targetImplicitParameters === undefined
+        ? {}
+        : {
+            targetImplicitParameters: Object.freeze(row.targetImplicitParameters.map((argument) =>
+              materializeProviderGenericArgument(
+                argument,
+                canonicalCarrierPaths,
+                canonicalCarrierTraits,
+                row,
+              ))),
+          }),
+      targetCarrier: materializeProviderCarrier(
+        row.targetCarrier,
+        canonicalCarrierPaths,
+        canonicalCarrierTraits,
+        row,
+      ),
+      ...(row.typeRequirements === undefined
+        ? {}
+        : {
+            typeRequirements: materializeProviderTypeRequirements(
+              row.typeRequirements,
+              canonicalCarrierPaths,
+              canonicalCarrierTraits,
+              row,
+            ),
+          }),
     }))),
     binaryEpilogues: Object.freeze(binaryEpilogues),
   });
@@ -214,7 +317,7 @@ export function mergeRustProviderSemantics(
     }
     for (const [id, traits] of Object.entries(input.carrierTraits)) {
       const existing = carrierTraits.get(id);
-      if (existing !== undefined && JSON.stringify(existing) !== JSON.stringify(traits)) {
+      if (existing !== undefined && !closedMetadataEquals(existing, traits)) {
         throw new Error(`Rust provider carrier '${id}' has conflicting native trait contracts.`);
       }
       carrierTraits.set(id, snapshotClosedMetadata(traits));
@@ -232,7 +335,29 @@ export function mergeRustProviderSemantics(
   const types = mergeExactRows(
     inputs.flatMap((input) => input.types).map((row) => snapshotClosedMetadata({
       ...row,
-      targetCarrier: materializeProviderCarrier(row.targetCarrier, canonicalCarrierPaths, canonicalCarrierTraits),
+      ...(row.targetImplicitParameters === undefined
+        ? {}
+        : {
+            targetImplicitParameters: Object.freeze(row.targetImplicitParameters.map((argument) =>
+              materializeProviderGenericArgument(
+                argument,
+                canonicalCarrierPaths,
+                canonicalCarrierTraits,
+                row,
+              ))),
+          }),
+      targetGenerics: materializeProviderGenerics(
+        row.targetGenerics,
+        canonicalCarrierPaths,
+        canonicalCarrierTraits,
+        row,
+      ),
+      targetCarrier: materializeProviderCarrier(
+        row.targetCarrier,
+        canonicalCarrierPaths,
+        canonicalCarrierTraits,
+        row,
+      ),
     })),
     providerTypeRowIdentity,
     "type",

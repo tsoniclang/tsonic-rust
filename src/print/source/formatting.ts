@@ -1,6 +1,7 @@
 import type { RustType } from "../../backend/target-ast/nodes.js";
 
 export const rustFormatWidth = 100;
+export const rustAttributeFunctionWidth = 70;
 export const rustSingleLineConditionalWidth = 50;
 export const rustStructLiteralWidth = 18;
 export const rustNestedCallWidth = 60;

@@ -2,17 +2,28 @@ import {
   hasExactObjectKeys,
   isDenseDataArray,
 } from "../../metadata/closed-data.js";
-import { isRustTargetTypeRef } from "../equality.js";
+import { isRustGenericArgumentValue, isRustTargetTypeRef } from "../equality.js";
 import type { TargetTypeRef } from "../model.js";
+import { rustSourceCarrierTargetType } from "../constructors.js";
+import { rustBuiltinIdentity } from "../../semantics/index.js";
+import type { RustGenericArgument } from "../../semantics/index.js";
 
 export const rustStringTargetId = "rust.std.String";
 export const rustJsStringTargetId = "rust.js.JsString";
 export const rustBigIntTargetId = "rust.runtime.BigInt";
 export const rustOptionTargetId = "rust.std.Option";
-export const rustLocationTargetId = "rust.runtime.Location";
-export const rustCallableTargetId = "rust.runtime.Callable";
-export const rustGeneratorTargetId = "rust.runtime.Generator";
-export const rustAsyncGeneratorTargetId = "rust.runtime.AsyncGenerator";
+export const rustOwnedLocationTargetId = "rust.runtime.OwnedLocation";
+export const rustBorrowedLocationTargetId = "rust.runtime.BorrowedLocation";
+export const rustOwnedLocalCallableTargetId = "rust.runtime.OwnedLocalCallable";
+export const rustBorrowedLocalCallableTargetId = "rust.runtime.BorrowedLocalCallable";
+export const rustThreadedCallableTargetId = "rust.runtime.ThreadedCallable";
+export const rustOwnedLocalAsyncCallableTargetId = "rust.runtime.OwnedLocalAsyncCallable";
+export const rustBorrowedLocalAsyncCallableTargetId = "rust.runtime.BorrowedLocalAsyncCallable";
+export const rustThreadedAsyncCallableTargetId = "rust.runtime.ThreadedAsyncCallable";
+export const rustOwnedGeneratorTargetId = "rust.runtime.OwnedGenerator";
+export const rustBorrowedGeneratorTargetId = "rust.runtime.BorrowedGenerator";
+export const rustOwnedAsyncGeneratorTargetId = "rust.runtime.OwnedAsyncGenerator";
+export const rustBorrowedAsyncGeneratorTargetId = "rust.runtime.BorrowedAsyncGenerator";
 export const rustIteratorResultTargetId = "rust.runtime.IteratorResult";
 export const rustNullTargetId = "rust.runtime.Null";
 export const rustUndefinedTargetId = "rust.runtime.Undefined";
@@ -46,7 +57,7 @@ export interface RustSourceTypeCarrierValue {
   readonly fileName: string;
   readonly typeName: string;
   readonly shape: "object" | "enum";
-  readonly typeArguments: readonly TargetTypeRef[];
+  readonly genericArguments: readonly RustGenericArgument[];
 }
 
 export interface RustStructuralObjectFieldCarrierValue {
@@ -81,46 +92,49 @@ export function rustSourceTypeCarrier(
   fileName: string,
   typeName: string,
   shape: "object" | "enum",
-  typeArguments: readonly TargetTypeRef[] = [],
+  genericArguments: readonly RustGenericArgument[] = [],
 ): TargetTypeRef {
-  return {
-    kind: "target-specific",
-    target: "rust",
-    name: "source-type",
-    value: { fileName, typeName, shape, typeArguments },
-  };
+  return rustSourceCarrierTargetType(
+    rustBuiltinIdentity("source-type", "tsonic-runtime"),
+    Object.freeze({
+      fileName,
+      typeName,
+      shape,
+      genericArguments: Object.freeze([...genericArguments]),
+    }),
+  );
 }
 export function rustSourceTypeCarrierValue(
   carrier: TargetTypeRef | undefined,
 ): RustSourceTypeCarrierValue | undefined {
-  if (carrier?.kind !== "target-specific" || carrier.target !== "rust" || carrier.name !== "source-type") {
+  if (!isSourceCarrierKind(carrier, "source-type")) {
     return undefined;
   }
-  const value = carrier.value;
+  const value = carrier.payload;
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return undefined;
   }
   const keys = Object.keys(value).sort();
-  if (keys.length !== 4 || keys[0] !== "fileName" || keys[1] !== "shape" ||
-    keys[2] !== "typeArguments" || keys[3] !== "typeName") {
+  if (keys.length !== 4 || keys[0] !== "fileName" || keys[1] !== "genericArguments" ||
+    keys[2] !== "shape" || keys[3] !== "typeName") {
     return undefined;
   }
   const candidate = value as {
     readonly fileName?: unknown;
     readonly typeName?: unknown;
     readonly shape?: unknown;
-    readonly typeArguments?: unknown;
+    readonly genericArguments?: unknown;
   };
   return typeof candidate.fileName === "string" && candidate.fileName.length > 0 &&
     typeof candidate.typeName === "string" && candidate.typeName.length > 0 &&
     (candidate.shape === "object" || candidate.shape === "enum") &&
-    isDenseDataArray(candidate.typeArguments) &&
-    candidate.typeArguments.every((argument) => isRustTargetTypeRef(argument))
+    isDenseDataArray(candidate.genericArguments) &&
+    candidate.genericArguments.every((argument) => isRustGenericArgumentValue(argument))
     ? {
         fileName: candidate.fileName,
         typeName: candidate.typeName,
         shape: candidate.shape,
-        typeArguments: candidate.typeArguments as readonly TargetTypeRef[],
+        genericArguments: candidate.genericArguments as readonly RustGenericArgument[],
       }
     : undefined;
 }
@@ -132,22 +146,19 @@ export function rustStructuralObjectTargetType(
   const canonicalFields = Object.freeze(
     [...fields].sort((left, right) => left.sourceName.localeCompare(right.sourceName)),
   );
-  return {
-    kind: "target-specific",
-    target: "rust",
-    name: rustStructuralObjectCarrierName,
-    value: { ownerFileName, fields: canonicalFields },
-  };
+  return rustSourceCarrierTargetType(
+    rustBuiltinIdentity(rustStructuralObjectCarrierName, "tsonic-runtime"),
+    Object.freeze({ ownerFileName, fields: canonicalFields }),
+  );
 }
 
 export function rustStructuralObjectCarrierValue(
   carrier: TargetTypeRef | undefined,
 ): RustStructuralObjectCarrierValue | undefined {
-  if (carrier?.kind !== "target-specific" || carrier.target !== "rust" ||
-    carrier.name !== rustStructuralObjectCarrierName) {
+  if (!isSourceCarrierKind(carrier, rustStructuralObjectCarrierName)) {
     return undefined;
   }
-  const value = carrier.value;
+  const value = carrier.payload;
   if (typeof value !== "object" || value === null || Array.isArray(value) ||
     !hasExactObjectKeys(value, ["fields", "ownerFileName"])) {
     return undefined;
@@ -204,22 +215,19 @@ export function rustSourceUnionTargetType(
   typeName: string,
   variants: readonly RustSourceUnionVariantCarrierValue[],
 ): TargetTypeRef {
-  return {
-    kind: "target-specific",
-    target: "rust",
-    name: rustSourceUnionCarrierName,
-    value: { fileName, typeName, variants },
-  };
+  return rustSourceCarrierTargetType(
+    rustBuiltinIdentity(rustSourceUnionCarrierName, "tsonic-runtime"),
+    Object.freeze({ fileName, typeName, variants: Object.freeze([...variants]) }),
+  );
 }
 
 export function rustSourceUnionCarrierValue(
   carrier: TargetTypeRef | undefined,
 ): RustSourceUnionCarrierValue | undefined {
-  if (carrier?.kind !== "target-specific" || carrier.target !== "rust" ||
-    carrier.name !== rustSourceUnionCarrierName) {
+  if (!isSourceCarrierKind(carrier, rustSourceUnionCarrierName)) {
     return undefined;
   }
-  const value = carrier.value;
+  const value = carrier.payload;
   if (typeof value !== "object" || value === null || Array.isArray(value) ||
     !hasExactObjectKeys(value, ["fileName", "typeName", "variants"])) {
     return undefined;
@@ -250,4 +258,14 @@ export function rustSourceUnionCarrierValue(
     typeName: candidate.typeName,
     variants: Object.freeze(variants),
   };
+}
+
+function isSourceCarrierKind(
+  carrier: TargetTypeRef | undefined,
+  itemId: string,
+): carrier is Extract<TargetTypeRef, { readonly kind: "source-carrier" }> {
+  return carrier?.kind === "source-carrier" &&
+    carrier.identity.kind === "builtin" &&
+    carrier.identity.namespace === "tsonic-runtime" &&
+    carrier.identity.itemId === itemId;
 }

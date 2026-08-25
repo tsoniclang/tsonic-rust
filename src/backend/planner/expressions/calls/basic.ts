@@ -43,6 +43,7 @@ function planCallExpressionInner(node: Node, context: RustPlanContext): RustExpr
       fact?.kind === "provider-operation" ||
       fact?.kind === "object-shape-projection" ||
       fact?.kind === "default-value" ||
+      fact?.kind === "ownership-marker" ||
       fact?.kind === "typed-location"
     ? fact.resultCarrier
     : undefined;
@@ -76,23 +77,70 @@ function planCallExpressionInner(node: Node, context: RustPlanContext): RustExpr
   if (fact?.kind === "typed-location") {
     return planRustTypedLocationCall(node, fact, context, planExpression);
   }
-  if (fact !== undefined && fact.kind === "flow-marker") {
+  if (fact !== undefined && fact.kind === "ownership-marker") {
     const args = planRustCallArguments(node, context);
-    if (args === undefined || args.length !== 1) {
+    const requiredArguments = fact.operation === "store" || fact.operation === "replace" ? 2 : 1;
+    if (args === undefined || args.length !== requiredArguments) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, node),
-        "rust.backend.flow-marker",
-        "Flow marker call requires exactly one finalized argument expression.",
+        "rust.backend.ownership-marker",
+        `Rust '${fact.operation}' requires exactly ${requiredArguments} finalized argument expression${requiredArguments === 1 ? "" : "s"}.`,
       ));
       return undefined;
     }
-    // Flow marker calls erase to their argument; passing shape comes from the
-    // consuming position's finalized argument modes.
-    const [argument] = args;
+    const [argument, replacement] = args;
     const [argumentNode] = context.input.program.source.ast.arguments(node);
-    return fact.state === "moved" && argumentNode !== undefined
-      ? planRustNonConsumingValue(argumentNode, argument!, context)
-      : argument;
+    if (argument === undefined || argumentNode === undefined) return undefined;
+    const value = planRustNonConsumingValue(argumentNode, argument, context);
+    const argumentOperation = rustOperationFact(argumentNode, context);
+    const immediateSharedBorrow = argumentOperation?.kind === "ownership-marker" &&
+        argumentOperation.operation === "shared-borrow" &&
+        argumentOperation.lowering === "shared-reference" &&
+        value.kind === "reference" && value.mutable !== true
+      ? value.expr
+      : undefined;
+    switch (fact.lowering) {
+      case "identity":
+        return value;
+      case "shared-reference":
+        return { kind: "reference", expr: value };
+      case "mutable-reference":
+        return { kind: "reference", expr: value, mutable: true };
+      case "clone":
+        return { kind: "method-call", receiver: value, method: "clone", args: [] };
+      case "to-owned":
+        return {
+          kind: "method-call",
+          receiver: immediateSharedBorrow ?? value,
+          method: "to_owned",
+          args: [],
+        };
+      case "dereference-copy":
+        return immediateSharedBorrow ?? { kind: "dereference", pointer: value };
+      case "store":
+        return replacement === undefined
+          ? undefined
+          : {
+              kind: "assignment",
+              operator: "=",
+              target: { kind: "dereference", pointer: value },
+              value: replacement,
+            };
+      case "replace":
+        return replacement === undefined
+          ? undefined
+          : {
+              kind: "call",
+              path: "core::mem::replace",
+              args: [value, replacement],
+            };
+      case "take":
+        return { kind: "call", path: "core::mem::take", args: [value] };
+      case "capture-move":
+        return argument.kind === "closure" || argument.kind === "closure-block"
+          ? { ...argument, move: true }
+          : argument;
+    }
   }
   if (fact !== undefined && fact.kind === "object-shape-projection") {
     return planObjectShapeProjectionCall(node, fact, context);
@@ -200,9 +248,11 @@ function planRustDefaultValueCall(
     selected.member.kind !== "method" || selected.member.static !== true ||
     selected.member.parameters.length !== 0 || selected.member.returnType === undefined ||
     !rustTargetTypeRefEquals(selected.member.returnType, fact.resultCarrier) ||
-    selected.member.typeParameters?.length !== 1 ||
-    selected.targetTypeArguments?.length !== 1 ||
-    !rustTargetTypeRefEquals(selected.targetTypeArguments[0], fact.resultCarrier) ||
+    selected.member.generics.parameters.length !== 1 ||
+    selected.member.generics.parameters[0]?.kind !== "type" ||
+    selected.targetGenericArguments?.length !== 1 ||
+    selected.targetGenericArguments[0]?.kind !== "type" ||
+    !rustTargetTypeRefEquals(selected.targetGenericArguments[0].value, fact.resultCarrier) ||
     operation === undefined || operation.operationId !== fact.operationId ||
     operation.operationKind !== "method" || operation.targetOperation !== "Default::default" ||
     operation.resultType === undefined ||

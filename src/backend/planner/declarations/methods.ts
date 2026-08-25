@@ -20,19 +20,21 @@ import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagno
 import { Node_Type } from "@tsonic/target-api/source";
 import { planBlockLike } from "../statements/index.js";
 import { planExpression } from "../expressions/index.js";
-import { planRustCallableGenerics, rustCallableSpecialization } from "./callable-generics.js";
+import { planRustCallableGenerics } from "./callable-generics.js";
 import { planRustCallableParameterPrelude, planRustCallableParameters } from "./callable-parameters.js";
 import { projectOwnMethods } from "../objects/polymorphism/model.js";
 import { readRustProjectMethodOverride } from "../objects/project-objects.js";
 import { resolveRustCallableBodyReturnType } from "./callable-body-return.js";
 import { rustDeclarationRequiresUnsafe, rustSafetyAttributesForDeclaration } from "../safety/explicit-safety.js";
-import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
+import { rustExplicitLifetimeContractAttributes, rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
 import { rustReturnTypeFromCarrierInContext } from "../types/render.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustProjectTypeDefinition } from "../../../analysis/project-types/type-policy.js";
-import type { RustType, RustImplFunction, RustStmt } from "../../target-ast/nodes.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustImplFunction, RustStmt } from "../../target-ast/nodes.js";
+import type { RustGenericSubstitutions } from "../../../target-model/types/index.js";
+import { rustExplicitDeclarationContract } from "./explicit-contracts.js";
+import { rustGeneratorExecutionCarrier } from "../ownership/execution-carriers.js";
 
 export function planProjectMethod(
   member: Node,
@@ -40,12 +42,13 @@ export function planProjectMethod(
   options?: {
     readonly targetName?: string;
     readonly safetyPlacement?: "getter" | "setter";
-    readonly typeArgumentSubstitutions?: ReadonlyMap<string, TargetTypeRef>;
+    readonly genericSpecialization?: RustGenericSubstitutions;
     readonly fallibleBoundary?: import("../program/source-package-errors.js").RustSourcePackageErrorBoundary;
   },
 ): RustImplFunction | undefined {
   let context = outerContext;
   const { ast } = context.input.program.source;
+  const explicitContract = rustExplicitDeclarationContract(member, context);
   const sourceMethodName = options?.targetName ??
     context.input.program.projectTypes.callableTargetName(member);
   const isUnsafe = rustDeclarationRequiresUnsafe(
@@ -79,7 +82,7 @@ export function planProjectMethod(
   const genericPlan = planRustCallableGenerics(
     member,
     context,
-    options?.typeArgumentSubstitutions,
+    options?.genericSpecialization,
   );
   if (genericPlan === undefined) {
     return undefined;
@@ -87,9 +90,7 @@ export function planProjectMethod(
   context = genericPlan.context;
   const generatorFact = context.input.program.facts.getFact(member, rustGeneratorFactKey);
   const syntheticNames = context.syntheticNames ?? createRustSyntheticNameState(ast, member, []);
-  const parameterPlan = planRustCallableParameters(member, context, syntheticNames, {
-    requireStatic: generatorFact !== undefined,
-  });
+  const parameterPlan = planRustCallableParameters(member, context, syntheticNames);
   if (parameterPlan === undefined) {
     return undefined;
   }
@@ -232,35 +233,35 @@ export function planProjectMethod(
       return undefined;
     }
     context.usedAliases?.add("rt");
-    const generatorReturnType = isStatic
-      ? returnType
-      : borrowedGeneratorType(returnType, generatorFact.kind);
-    if (generatorReturnType === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, member),
-        "rust.backend.instance-generator-carrier",
-        "Instance generator method has no lifetime-bound Rust generator return carrier.",
-      ));
-      return undefined;
-    }
-    const typeParams = genericPlan.finalizeTypeParameters();
+    const executionCarrier = rustGeneratorExecutionCarrier(
+      member,
+      returnType,
+      generatorFact.kind,
+      context,
+    );
+    if (executionCarrier === undefined) return undefined;
+    const generics = genericPlan.finalizeGenerics();
+    const itemAttributes = [
+      ...methodAttributes,
+      ...rustExplicitLifetimeContractAttributes(generics),
+    ];
     return {
       name: methodName,
       ...(isUnsafe ? { isUnsafe: true } : {}),
+      ...(explicitContract?.abi === undefined ? {} : { abi: explicitContract.abi }),
+      ...(explicitContract?.variadic === true ? { variadic: true } : {}),
       visibility: !ast.hasModifierKind(member, "private") && !ast.hasModifierKind(member, "protected") ? "public" : "private",
-      ...(methodAttributes.length === 0 ? {} : { attrs: methodAttributes }),
-      ...(isStatic ? {} : { selfParam: selfMode!.mode }),
-      ...(typeParams.length === 0 ? {} : { typeParams }),
+      ...(itemAttributes.length === 0 ? {} : { attrs: itemAttributes }),
+      ...(isStatic ? {} : { receiver: { kind: "reference" as const, mutable: selfMode!.mode === "mut-ref" } }),
+      generics,
       params,
-      returnType: generatorReturnType,
+      returnType: executionCarrier.returnType,
       body: {
         statements: [...parameterStatements, {
           kind: "tail",
           expr: {
             kind: "call",
-            path: generatorFact.kind === "sync"
-              ? isStatic ? "rt::Generator::new" : "rt::BorrowedGenerator::new"
-              : isStatic ? "rt::AsyncGenerator::new" : "rt::BorrowedAsyncGenerator::new",
+            path: executionCarrier.constructorPath,
             args: [{
               kind: "closure-block",
               params: [{ name: generatorControllerName!, mutable: false }],
@@ -281,7 +282,11 @@ export function planProjectMethod(
       },
     };
   }
-  const typeParams = genericPlan.finalizeTypeParameters();
+  const generics = genericPlan.finalizeGenerics();
+  const itemAttributes = [
+    ...methodAttributes,
+    ...rustExplicitLifetimeContractAttributes(generics),
+  ];
   const finalizedBody = applyFallibleShape(
     applyRustTailShape({ statements: [...parameterStatements, ...body.statements] }, returnType !== undefined),
     fallible
@@ -302,14 +307,16 @@ export function planProjectMethod(
   return {
     name: methodName,
     ...(isUnsafe ? { isUnsafe: true } : {}),
+    ...(explicitContract?.abi === undefined ? {} : { abi: explicitContract.abi }),
+    ...(explicitContract?.variadic === true ? { variadic: true } : {}),
     visibility: !ast.hasModifierKind(member, "private") && !ast.hasModifierKind(member, "protected") ? "public" : "private",
-    ...(methodAttributes.length === 0 ? {} : { attrs: methodAttributes }),
+    ...(itemAttributes.length === 0 ? {} : { attrs: itemAttributes }),
     ...(callableErrorBoundary === undefined
       ? {}
       : { errorType: rustErrorType(callableErrorBoundary) }),
     ...(sourceAsync ? { isAsync: true } : {}),
-    ...(isStatic ? {} : { selfParam: selfMode!.mode }),
-    ...(typeParams.length === 0 ? {} : { typeParams }),
+    ...(isStatic ? {} : { receiver: { kind: "reference" as const, mutable: selfMode!.mode === "mut-ref" } }),
+    generics,
     params,
     ...(returnType === undefined ? {} : { returnType }),
     body: {
@@ -385,16 +392,9 @@ export function planProjectMethodVariants(
   }
   const methods: RustImplFunction[] = [];
   for (const variant of variants) {
-    const specialization = rustCallableSpecialization(
-      variant.sourceTypeParameterNames,
-      variant.targetTypeArguments,
-    );
-    if (specialization === undefined) {
-      return undefined;
-    }
     const method = planProjectMethod(member, context, {
       targetName: variant.targetName,
-      typeArgumentSubstitutions: specialization,
+      genericSpecialization: variant.specialization,
     });
     if (method === undefined) {
       return undefined;
@@ -420,19 +420,4 @@ export function planProjectStaticMethods(
     methods.push(...planned);
   }
   return methods;
-}
-
-function borrowedGeneratorType(
-  type: RustType | undefined,
-  kind: "sync" | "async",
-): RustType | undefined {
-  if (type?.kind !== "named" ||
-    type.path !== (kind === "sync" ? "rt::Generator" : "rt::AsyncGenerator")) {
-    return undefined;
-  }
-  return {
-    ...type,
-    path: kind === "sync" ? "rt::BorrowedGenerator" : "rt::BorrowedAsyncGenerator",
-    lifetimeArguments: ["_"],
-  };
 }

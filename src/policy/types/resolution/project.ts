@@ -1,12 +1,18 @@
 import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
-import { rustSourceTypeCarrier, rustSourceTypeCarrierValue } from "../../../target-model/types/index.js";
+import {
+  rustGenericSubstitutionsForArguments,
+  rustSourceTypeCarrier,
+  rustSourceTypeCarrierValue,
+  substituteRustTargetGenerics,
+} from "../../../target-model/types/index.js";
 import type { Node, Symbol } from "@tsonic/tsts";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustGenericArgument } from "../../../target-model/semantics/index.js";
 
 export function resolveProjectSourceCarrier(
   symbol: Symbol | undefined,
-  typeArguments: readonly TargetTypeRef[],
+  genericArguments: readonly RustGenericArgument[],
   context: RustTargetTypeResolutionContext,
   options: RustTargetTypeResolutionOptions,
   selectedDeclaration?: Node,
@@ -31,11 +37,22 @@ export function resolveProjectSourceCarrier(
         sourceType.fileName,
         sourceType.typeName,
         sourceType.shape,
-        typeArguments,
+        genericArguments,
       );
     }
-    if (carrier !== undefined && typeArguments.length === 0) {
-      return carrier;
+    if (carrier !== undefined) {
+      const contract = context.sourceGenerics.contractFor(declaration);
+      if (contract === undefined) {
+        if (genericArguments.length === 0) return carrier;
+        continue;
+      }
+      const substitutions = rustGenericSubstitutionsForArguments(
+        contract.generics,
+        genericArguments,
+      );
+      if (substitutions !== undefined) {
+        return substituteRustTargetGenerics(carrier, substitutions);
+      }
     }
   }
   return undefined;

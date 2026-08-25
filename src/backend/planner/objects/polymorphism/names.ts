@@ -1,10 +1,18 @@
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
 import { rustSourceTypeCarrierValue } from "../../../../target-model/types/index.js";
-import type { RustExpr, RustType, RustTypeParameter } from "../../../target-ast/nodes.js";
+import type {
+  RustExpr,
+  RustGenericArgument,
+  RustGenerics,
+  RustType,
+} from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { sourceModuleItemPath } from "../../program/plan-context.js";
-import { rustTypeFromCarrierInContext } from "../../types/render.js";
+import {
+  rustAstGenericArgumentFromSemanticInContext,
+  rustAstGenericsFromSemanticInContext,
+} from "../../types/render.js";
 
 export function rustProjectDispatchTraitName(
   definition: RustProjectTypeDefinition,
@@ -21,16 +29,14 @@ export function rustProjectRootName(
   return definition.rootName;
 }
 
-export function rustProjectTypeParameters(
+export function rustProjectGenerics(
   definition: RustProjectTypeDefinition,
-): readonly RustTypeParameter[] {
-  return definition.targetTypeParameterNames.map((name) => ({
-    name,
-    bounds: [
-      { kind: "trait", path: "Clone" },
-      { kind: "lifetime", name: "static" },
-    ],
-  }));
+  context: RustPlanContext,
+): RustGenerics | undefined {
+  const semantic = context.input.program.projectTypes.genericsForDefinition(definition);
+  return semantic === undefined
+    ? undefined
+    : rustAstGenericsFromSemanticInContext(semantic, context);
 }
 
 export function rustProjectDispatchTraitType(
@@ -62,7 +68,24 @@ export function rustProjectStateMarker(
   readonly type: RustType;
   readonly value: RustExpr;
 } | undefined {
-  if (definition.targetTypeParameterNames.length === 0) {
+  const semantic = context.input.program.projectTypes.genericsForDefinition(definition);
+  const rendered = semantic === undefined ? undefined : rustProjectGenerics(definition, context);
+  if (semantic === undefined || rendered === undefined) {
+    return undefined;
+  }
+  const markerElements = rendered.parameters.flatMap((parameter): readonly RustType[] => {
+    if (parameter.kind === "const") return [];
+    if (parameter.kind === "lifetime") {
+      return [{
+        kind: "reference",
+        lifetime: { kind: "named", name: parameter.name },
+        mutable: false,
+        referent: { kind: "unit" },
+      }];
+    }
+    return [{ kind: "named", path: parameter.name }];
+  });
+  if (markerElements.length === 0) {
     return undefined;
   }
   return {
@@ -70,12 +93,12 @@ export function rustProjectStateMarker(
     type: {
       kind: "named",
       path: "std::marker::PhantomData",
-      typeArguments: [{
-        kind: "tuple",
-        elements: definition.targetTypeParameterNames.map((name) => ({
-          kind: "named",
-          path: name,
-        })),
+      genericArguments: [{
+        kind: "type",
+        type: {
+          kind: "tuple",
+          elements: markerElements,
+        },
       }],
     },
     value: { kind: "path", path: "std::marker::PhantomData" },
@@ -93,19 +116,19 @@ function rustProjectGeneratedType(
     ? undefined
     : sourceModuleItemPath(context, value.fileName, generatedName(definition));
   if (value === undefined || definition === undefined || path === undefined ||
-    value.typeArguments.length !== definition.typeParameterNames.length) {
+    value.genericArguments.length !== definition.genericArguments.length) {
     return undefined;
   }
-  const typeArguments = value.typeArguments.map((argument) =>
-    rustTypeFromCarrierInContext(argument, context));
-  if (typeArguments.some((argument) => argument === undefined)) {
+  const genericArguments = value.genericArguments.map((argument) =>
+    rustAstGenericArgumentFromSemanticInContext(argument, context));
+  if (genericArguments.some((argument) => argument === undefined)) {
     return undefined;
   }
   return {
     kind: "named",
     path,
-    ...(typeArguments.length === 0
+    ...(genericArguments.length === 0
       ? {}
-      : { typeArguments: typeArguments as readonly RustType[] }),
+      : { genericArguments: genericArguments as readonly RustGenericArgument[] }),
   };
 }

@@ -2,8 +2,18 @@ import { asNode } from "../../evidence/selected-source.js";
 import { denseDefined } from "./project.js";
 import { resolveRustCallableEvidence } from "./source.js";
 import { resolveRustTargetType } from "./target.js";
-import { rustOptionTargetType, rustSourcePrimitiveTargetType, rustStringTargetType } from "../../../target-model/types/index.js";
+import {
+  rustCallableProtocol,
+  rustClosureTargetType,
+  rustOptionTargetType,
+  rustSourcePrimitiveTargetType,
+  rustStringTargetType,
+  substituteRustLifetime,
+  substituteRustTargetGenerics,
+  type RustGenericSubstitutions,
+} from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustSemanticIdentityKey } from "../../../target-model/semantics/index.js";
 import { sourceNodesEqual } from "@tsonic/target-api/source";
 import { sourcePrimitiveFactKey } from "@tsonic/tsts";
 import type {
@@ -14,6 +24,13 @@ import type {
 } from "@tsonic/tsts";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type {
+  RustBinder,
+  RustLifetimeRef,
+} from "../../../target-model/semantics/index.js";
+import { rustTypeParameterTargetType } from "../../../target-model/types/constructors.js";
+import { rustSourceNodeIdentity } from "./rust-semantics.js";
+import { rustSourceGenericParameterFactKey } from "../../../source/semantics/facts.js";
 
 export function resolveCallableType(
   type: Type,
@@ -26,15 +43,87 @@ export function resolveCallableType(
     return undefined;
   }
   const declaration = callable.result.declaration;
-  if (declaration !== undefined && context.ast.typeParameters(declaration).length > 0) {
-    return undefined;
-  }
-  return resolveRustCallableEvidence(
+  const selected = resolveRustCallableEvidence(
     callable,
     context,
     options,
     resolving,
   );
+  const typeParameters = declaration === undefined
+    ? []
+    : context.ast.typeParameters(declaration);
+  if (typeParameters.length === 0) return selected;
+  const protocol = rustCallableProtocol(selected);
+  const higherRanked = declaration === undefined
+    ? undefined
+    : resolveHigherRankedCallableBinder(declaration, context);
+  return protocol === undefined || higherRanked === undefined
+    ? undefined
+    : rustClosureTargetType({
+        binder: higherRanked.binder,
+        callTrait: "fn",
+        parameters: protocol.parameters.map((parameter) =>
+          substituteRustTargetGenerics(parameter, higherRanked.substitutions)),
+        result: substituteRustTargetGenerics(protocol.result, higherRanked.substitutions),
+      });
+}
+
+function resolveHigherRankedCallableBinder(
+  declaration: Node,
+  context: RustTargetTypeResolutionContext,
+): {
+  readonly binder: RustBinder;
+  readonly substitutions: RustGenericSubstitutions;
+} | undefined {
+  const contract = context.sourceGenerics.contractFor(declaration);
+  if (contract === undefined || contract.parameters.length === 0) return undefined;
+  const binderId = rustSemanticIdentityKey(
+    rustSourceNodeIdentity(declaration, context, "higher-ranked-callable"),
+  );
+  const lifetimeBindings: {
+    readonly parameter: Extract<
+      (typeof contract.parameters)[number]["parameter"],
+      { readonly kind: "lifetime" }
+    >;
+    readonly identityKey: string;
+    readonly bound: Extract<RustLifetimeRef, { readonly kind: "bound" }>;
+  }[] = [];
+  for (const entry of contract.parameters) {
+    const parameter = entry.parameter;
+    if (parameter.kind !== "lifetime" || parameter.identity.kind !== "parameter") {
+      return undefined;
+    }
+    const identityKey = rustSemanticIdentityKey(parameter.identity.identity);
+    lifetimeBindings.push(Object.freeze({
+      parameter,
+      identityKey,
+      bound: Object.freeze({
+        kind: "bound",
+        binderId,
+        parameterId: identityKey,
+        displayName: parameter.identity.displayName,
+      }),
+    }));
+  }
+  const substitutions: RustGenericSubstitutions = Object.freeze({
+    lifetimes: new Map(lifetimeBindings.map((entry) => [entry.identityKey, entry.bound])),
+    types: new Map(),
+    consts: new Map(),
+    associatedTypes: new Map(),
+  });
+  return Object.freeze({
+    binder: Object.freeze({
+      id: binderId,
+      lifetimes: Object.freeze(lifetimeBindings.map(({ parameter, bound }) =>
+        Object.freeze({
+          kind: "lifetime",
+          identity: bound,
+          bounds: Object.freeze(parameter.bounds.map((lifetime) =>
+            substituteRustLifetime(lifetime, substitutions))),
+        }))),
+    }),
+    substitutions,
+  });
 }
 
 export function resolveSourceTypeParameter(
@@ -53,8 +142,18 @@ export function resolveSourceTypeParameter(
   if (declaration === undefined || context.ast.kindName(declaration) !== "KindTypeParameter") {
     return undefined;
   }
+  const genericFact = context.facts.resolve(declaration, rustSourceGenericParameterFactKey) ??
+    context.facts.get(declaration, rustSourceGenericParameterFactKey);
+  if (genericFact?.kind !== "type") {
+    return undefined;
+  }
   const name = context.ast.text(context.ast.name(declaration));
-  return name.length === 0 ? undefined : { kind: "type-parameter", name };
+  return name.length === 0
+    ? undefined
+    : rustTypeParameterTargetType(
+        rustSourceNodeIdentity(declaration, context, "type-parameter"),
+        name,
+      );
 }
 
 export function resolveSourcePrimitive(

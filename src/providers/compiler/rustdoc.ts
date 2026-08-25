@@ -10,7 +10,7 @@ import {
 } from "./snapshot/rustdoc-artifact.js";
 import { normalizeModule } from "./model/rustdoc-model.js";
 import {
-  collectModuleStandardTypeLocations,
+  collectModuleStandardItemLocations,
   loadStandardLibraryContext,
   loadStandardLibraryCrateDocument,
   resolveStandardLibraryItem,
@@ -41,7 +41,7 @@ export function loadRustCompilerModule(options: {
     : undefined);
   const model = Object.freeze({
     ...normalized,
-    standardTypeLocations: Object.freeze(collectModuleStandardTypeLocations(
+    standardItemLocations: Object.freeze(collectModuleStandardItemLocations(
       normalized,
       standardLibrary,
     )),

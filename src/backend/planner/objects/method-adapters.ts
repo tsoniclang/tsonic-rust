@@ -6,9 +6,7 @@ import type {
 } from "../../../analysis/facts/keys.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import {
-  isRustCopyCarrier,
   isRustVecCarrier,
-  rustCarrierSupportsClone,
 } from "../../../target-model/types/index.js";
 import type { RustExpr, RustStmt, RustType } from "../../target-ast/nodes.js";
 import {
@@ -24,6 +22,7 @@ import {
   allocateRustSyntheticName,
   createRustSyntheticNameState,
 } from "../names/synthetic.js";
+import { rustSealedOwnedCarrierReadKind } from "../ownership/traits.js";
 
 export function planRustObjectLiteralMethodArguments(
   method: RustObjectLiteralMethodDispatchPlan,
@@ -63,7 +62,7 @@ export function planRustObjectLiteralMethodArguments(
         const expression = parameterExpression(contractParameterIndex);
         const logical = expression === undefined
           ? undefined
-          : readObjectLiteralLogicalParameter(expression, source);
+          : readObjectLiteralLogicalParameter(expression, source, context);
         const adapted = logical === undefined
           ? undefined
           : applyRustObjectLiteralValueAdapter(
@@ -126,7 +125,10 @@ export function planRustObjectLiteralMethodArguments(
         ? {
             kind: "named",
             path: "Result",
-            typeArguments: [targetType, rustTargetRuntimeErrorType],
+            genericArguments: [
+              { kind: "type", type: targetType },
+              { kind: "type", type: rustTargetRuntimeErrorType },
+            ],
           }
         : targetType;
       if (raw.fallible) {
@@ -136,7 +138,7 @@ export function planRustObjectLiteralMethodArguments(
         kind: "method-call",
         receiver: mapped,
         method: "collect",
-        typeArguments: [collectionType],
+        genericArguments: [{ kind: "type", type: collectionType }],
         args: [],
       };
       const activeErrorType = rustActiveErrorType(context);
@@ -170,7 +172,7 @@ export function planRustObjectLiteralMethodArguments(
       adaptedArguments.push(adapted);
       continue;
     }
-    const logical = readObjectLiteralLogicalParameter(sourceExpression, adapter.source);
+    const logical = readObjectLiteralLogicalParameter(sourceExpression, adapter.source, context);
     const adapted = logical === undefined
       ? undefined
       : applyRustObjectLiteralValueAdapter(
@@ -221,15 +223,17 @@ export function planRustObjectLiteralMethodArguments(
 function readObjectLiteralLogicalParameter(
   expression: RustExpr,
   abi: RustObjectLiteralMethodParameterAbi,
+  context: RustPlanContext,
 ): RustExpr | undefined {
   if (abi.mode === "value") {
     return expression;
   }
   const value: RustExpr = { kind: "dereference", pointer: expression };
-  if (isRustCopyCarrier(abi.valueCarrier)) {
+  const read = rustSealedOwnedCarrierReadKind(abi.valueCarrier, context);
+  if (read === "copy") {
     return value;
   }
-  return rustCarrierSupportsClone(abi.valueCarrier)
+  return read === "clone"
     ? { kind: "method-call", receiver: value, method: "clone", args: [] }
     : undefined;
 }

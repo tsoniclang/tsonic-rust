@@ -1,6 +1,6 @@
 import { appendToLastLine, firstLine, lastLine, lastLineLength, remainingLines, renderedFits, rustExpressionContainsTry } from "../patterns.js";
 import { expressionIsStatementBlockOperand, expressionPrecedence, operatorPrecedence, printFittedBinaryOperand, printOperand, RustPrecedence } from "./precedence.js";
-import { indentText, printRustType } from "../types.js";
+import { indentText, printRustGenericArguments, printRustType } from "../types.js";
 import { printFittedCall } from "./calls.js";
 import { printRustAssociatedCallTarget, printRustCallMember, printRustDirectCallTarget, printRustMethodCallTarget } from "./callable.js";
 import { printRustExpr, rustExpressionContainsClosure } from "./core.js";
@@ -8,7 +8,7 @@ import { printRustExprFitted } from "./fitted.js";
 import { rustExpressionContainsExpandedStructLiteral, rustFormatArgumentIsAtomic } from "./inspection.js";
 import { rustExpressionContainsStatementBlock } from "../../../backend/target-ast/expressions.js";
 import { rustFormatWidth, rustInlineClosureFieldReceiverWidth, rustInlineFieldReceiverWidth, rustMethodChainWidth, rustNestedCallWidth } from "../formatting.js";
-import type { RustExpr, RustType } from "../../../backend/target-ast/nodes.js";
+import type { RustExpr, RustGenericArgument, RustType } from "../../../backend/target-ast/nodes.js";
 import type { RustExpressionGrammarPosition } from "./precedence.js";
 
 export function printRustSingleCollectionCallContinuation(
@@ -63,10 +63,10 @@ export function printRustFlatLetInitializer(
 }
 
 export function printRustAssociatedOwner(owner: RustType): string {
-  if (owner.kind !== "named" || owner.typeArguments === undefined || owner.typeArguments.length === 0) {
+  if (owner.kind !== "named" || owner.genericArguments === undefined || owner.genericArguments.length === 0) {
     return printRustType(owner);
   }
-  return `${owner.path}::<${owner.typeArguments.map(printRustType).join(", ")}>`;
+  return `${owner.path}${printRustGenericArguments(owner.genericArguments, true)}`;
 }
 
 export function printFittedLogicalChain(
@@ -237,7 +237,7 @@ type RustMethodChainStep =
   | {
       readonly kind: "method";
       readonly name: string;
-      readonly typeArguments?: readonly RustType[];
+      readonly genericArguments?: readonly RustGenericArgument[];
       readonly args: readonly RustExpr[];
     }
   | { readonly kind: "field"; readonly name: string }
@@ -303,7 +303,7 @@ export function rustMethodCallKeepsTrailingClosureAttached(
     return false;
   }
   const receiver = printOperand(expression.receiver, RustPrecedence.Postfix, false);
-  const method = printRustCallMember(expression.method, expression.typeArguments);
+  const method = printRustCallMember(expression.method, expression.genericArguments);
   const prefix = `${receiver}.${method}(${preceding.length === 0 ? "" : `${preceding.join(", ")}, `}`;
   const renderedClosure = printRustExprFitted(
     trailing,
@@ -363,7 +363,7 @@ export function rustMethodChainBreaksReceiverWhenExpanded(chain: RustMethodChain
   const selectorCount = chain.steps.filter((step) =>
     step.kind === "method" || step.kind === "field" || step.kind === "await").length;
   const firstSelectorWidth = first?.kind === "method"
-    ? printRustCallMember(first.name, first.typeArguments).length + 1
+    ? printRustCallMember(first.name, first.genericArguments).length + 1
     : first?.kind === "field"
       ? first.name.length + 1
       : first?.kind === "await" ? ".await".length
@@ -391,7 +391,7 @@ export function rustMethodChainFirstSegmentWidth(chain: RustMethodChain): number
       width += step.name.length + 1;
       continue;
     }
-    return width + printRustCallMember(step.name, step.typeArguments).length +
+    return width + printRustCallMember(step.name, step.genericArguments).length +
       step.args.map(printRustExpr).join(", ").length + 3;
   }
   return width;
@@ -407,7 +407,7 @@ export function rustMethodChainFirstMethodRequiresExpansion(
   }
   const continuationIndent = indentText(depth + 1);
   return printFittedCall(
-    `.${printRustCallMember(firstMethod.name, firstMethod.typeArguments)}`,
+    `.${printRustCallMember(firstMethod.name, firstMethod.genericArguments)}`,
     firstMethod.args,
     depth + 1,
     continuationIndent.length + 1,
@@ -437,7 +437,7 @@ function rustMethodChainLastSelectorWidth(chain: RustMethodChain): number {
   if (selector.kind === "await") {
     return ".await".length;
   }
-  return printRustCallMember(selector.name, selector.typeArguments).length +
+  return printRustCallMember(selector.name, selector.genericArguments).length +
     selector.args.map(printRustExpr).join(", ").length + 3;
 }
 
@@ -451,7 +451,7 @@ function printRustMethodChain(chain: RustMethodChain): string {
     } else if (step.kind === "field") {
       rendered += `.${step.name}`;
     } else {
-      rendered += `.${printRustCallMember(step.name, step.typeArguments)}(${step.args.map(printRustExpr).join(", ")})`;
+      rendered += `.${printRustCallMember(step.name, step.genericArguments)}(${step.args.map(printRustExpr).join(", ")})`;
     }
   }
   return rendered;
@@ -481,9 +481,9 @@ function collectRustMethodChain(expression: RustExpr, steps: RustMethodChainStep
     steps.push({
       kind: "method",
       name: expression.method,
-      ...(expression.typeArguments === undefined
+      ...(expression.genericArguments === undefined
         ? {}
-        : { typeArguments: expression.typeArguments }),
+        : { genericArguments: expression.genericArguments }),
       args: expression.args,
     });
     return base;
@@ -556,7 +556,7 @@ export function printFittedMethodChain(
       continue;
     }
     const inlineMethod = printFittedCall(
-      `.${printRustCallMember(step.name, step.typeArguments)}`,
+      `.${printRustCallMember(step.name, step.genericArguments)}`,
       step.args,
       depth,
       selectedContinuationIndent.length + 1,
@@ -568,12 +568,12 @@ export function printFittedMethodChain(
       !rendered.includes("\n") &&
       (forceAttachFirstSelector ||
         (inlineMethod.includes("\n")
-          ? renderedFits(`${rendered}.${printRustCallMember(step.name, step.typeArguments)}(`, column)
+          ? renderedFits(`${rendered}.${printRustCallMember(step.name, step.genericArguments)}(`, column)
           : renderedFits(`${rendered}${inlineMethod}`, column)));
     const method = inlineFirstMethod
       ? inlineMethod
       : printFittedCall(
-          `.${printRustCallMember(step.name, step.typeArguments)}`,
+          `.${printRustCallMember(step.name, step.genericArguments)}`,
           step.args,
           depth + 1,
           selectedContinuationIndent.length + 1,

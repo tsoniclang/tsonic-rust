@@ -45,6 +45,8 @@ import {
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
   rustUnitTargetType,
+  rustPathTypeMatches,
+  rustTypeIdentityItemId,
 } from "../../../target-model/types/index.js";
 import { jsOperationRows, rustInferCarrier } from "./rows.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -64,11 +66,11 @@ interface JsLaneBindings {
 }
 
 function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readonly lane: JsLane; readonly bindings: JsLaneBindings } | undefined {
-  if (carrier?.kind === "reference" && carrier.referent.kind === "target-named" && carrier.referent.id === rustStringTargetId) {
+  if (carrier?.kind === "reference" && rustPathTypeMatches(carrier.target, rustStringTargetId)) {
     // Borrowed string parameters (&str) share the string lane.
-    return { lane: "string", bindings: { receiver: carrier.referent } };
+    return { lane: "string", bindings: { receiver: carrier.target } };
   }
-  if (carrier?.kind === "target-named") {
+  if (carrier?.kind === "path") {
     const arrayElement = rustJsArrayLikeElementTargetType(carrier);
     if (arrayElement !== undefined) {
       return { lane: "js-array", bindings: { element: arrayElement, receiver: carrier } };
@@ -81,29 +83,29 @@ function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readon
     if (setValue !== undefined) {
       return { lane: "set", bindings: { setValue, receiver: carrier } };
     }
-    if (carrier.id === rustJsDateTargetId) {
+    if (rustPathTypeMatches(carrier, rustJsDateTargetId)) {
       return { lane: "date", bindings: { receiver: carrier } };
     }
-    if (carrier.id === rustJsRegExpTargetId) {
+    if (rustPathTypeMatches(carrier, rustJsRegExpTargetId)) {
       return { lane: "regexp", bindings: { receiver: carrier } };
     }
-    if (carrier.id === rustRegExpNamedGroupsTargetId ||
-      carrier.id === rustJsRegExpNamedGroupsTargetId) {
+    if (rustPathTypeMatches(carrier, rustRegExpNamedGroupsTargetId) ||
+      rustPathTypeMatches(carrier, rustJsRegExpNamedGroupsTargetId)) {
       return { lane: "regexp-named-groups", bindings: { receiver: carrier } };
     }
-    if (carrier.id === rustRegExpNamedIndicesTargetId ||
-      carrier.id === rustJsRegExpNamedIndicesTargetId) {
+    if (rustPathTypeMatches(carrier, rustRegExpNamedIndicesTargetId) ||
+      rustPathTypeMatches(carrier, rustJsRegExpNamedIndicesTargetId)) {
       return { lane: "regexp-named-indices", bindings: { receiver: carrier } };
     }
-    if (carrier.id === rustRegExpStringIteratorTargetId ||
-      carrier.id === rustJsRegExpStringIteratorTargetId) {
+    if (rustPathTypeMatches(carrier, rustRegExpStringIteratorTargetId) ||
+      rustPathTypeMatches(carrier, rustJsRegExpStringIteratorTargetId)) {
       return { lane: "regexp-string-iterator", bindings: { receiver: carrier } };
     }
   }
   if (isRustStringCarrier(carrier)) {
     return { lane: "string", bindings: { receiver: carrier } };
   }
-  if (carrier?.kind === "target-named" && carrier.id === rustJsStringTargetId) {
+  if (rustPathTypeMatches(carrier, rustJsStringTargetId)) {
     return { lane: "js-string", bindings: { receiver: carrier } };
   }
   if (isRustNumericCarrier(carrier)) {
@@ -154,7 +156,11 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
       const args = [source, rustSourcePrimitiveTargetType("float64")].slice(0, reference.arity);
       return result === undefined || args.some((argument) => argument === undefined)
         ? undefined
-        : rustClosureTargetType(args as TargetTypeRef[], result);
+        : rustClosureTargetType({
+            callTrait: "fn-mut",
+            parameters: args as TargetTypeRef[],
+            result,
+          });
     }
     case "cb-array-predicate":
       return arrayCallbackCarrier(bindings, reference.arity, rustSourcePrimitiveTargetType("bool"));
@@ -170,10 +176,11 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
       const args = [bindings.element, bindings.element].slice(0, reference.arity);
       return args.some((argument) => argument === undefined)
         ? undefined
-        : rustClosureTargetType(
-            args as TargetTypeRef[],
-            rustSourcePrimitiveTargetType("float64"),
-          );
+        : rustClosureTargetType({
+            callTrait: "fn-mut",
+            parameters: args as TargetTypeRef[],
+            result: rustSourcePrimitiveTargetType("float64"),
+          });
     }
     case "cb-array-reduce":
       return arrayReduceCallbackCarrier(bindings, reference.arity, rustInferCarrier);
@@ -185,13 +192,21 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
       const args = [bindings.mapValue, bindings.mapKey, bindings.receiver].slice(0, reference.arity);
       return args.some((argument) => argument === undefined)
         ? undefined
-        : rustClosureTargetType(args as TargetTypeRef[], rustUnitTargetType());
+        : rustClosureTargetType({
+            callTrait: "fn-mut",
+            parameters: args as TargetTypeRef[],
+            result: rustUnitTargetType(),
+          });
     }
     case "cb-set-for-each": {
       const args = [bindings.setValue, bindings.setValue, bindings.receiver].slice(0, reference.arity);
       return args.some((argument) => argument === undefined)
         ? undefined
-        : rustClosureTargetType(args as TargetTypeRef[], rustUnitTargetType());
+        : rustClosureTargetType({
+            callTrait: "fn-mut",
+            parameters: args as TargetTypeRef[],
+            result: rustUnitTargetType(),
+          });
     }
     case "int32":
       return rustSourcePrimitiveTargetType("int32");
@@ -338,7 +353,11 @@ function arrayCallbackCarrier(
   const args = [bindings.element, rustSourcePrimitiveTargetType("float64"), bindings.receiver].slice(0, arity);
   return args.some((argument) => argument === undefined)
     ? undefined
-    : rustClosureTargetType(args as TargetTypeRef[], result);
+    : rustClosureTargetType({
+        callTrait: "fn-mut",
+        parameters: args as TargetTypeRef[],
+        result,
+      });
 }
 
 function arrayReduceCallbackCarrier(
@@ -354,7 +373,11 @@ function arrayReduceCallbackCarrier(
   ].slice(0, arity);
   return args.some((argument) => argument === undefined)
     ? undefined
-    : rustClosureTargetType(args as TargetTypeRef[], accumulator);
+    : rustClosureTargetType({
+        callTrait: "fn-mut",
+        parameters: args as TargetTypeRef[],
+        result: accumulator,
+      });
 }
 
 function copyStyleOf(carrier: TargetTypeRef | undefined): { readonly kind: "method"; readonly name: "copied" | "cloned" } {
@@ -399,8 +422,7 @@ function materializeVariadicTarget(
   if (target.form !== "receiver-value-array" && target.form !== "call-value-array") {
     return target;
   }
-  const resolvedElementCarrier = target.elementCarrier.kind === "opaque" &&
-    target.elementCarrier.id === "tsonic.rust.infer"
+  const resolvedElementCarrier = target.elementCarrier.kind === "inference-variable"
     ? elementCarrier
     : target.elementCarrier;
   return resolvedElementCarrier === undefined
@@ -409,27 +431,32 @@ function materializeVariadicTarget(
 }
 
 function materializeInferredCarrier(carrier: TargetTypeRef, inferred: TargetTypeRef): TargetTypeRef {
-  if (carrier.kind === "opaque" && carrier.id === "tsonic.rust.infer") {
+  if (carrier.kind === "inference-variable") {
     return inferred;
   }
   switch (carrier.kind) {
-    case "target-named":
-      return carrier.typeArguments === undefined
-        ? carrier
-        : { ...carrier, typeArguments: carrier.typeArguments.map((argument) => materializeInferredCarrier(argument, inferred)) };
+    case "path":
+      return {
+        ...carrier,
+        arguments: carrier.arguments.map((argument) => argument.kind === "type"
+          ? { ...argument, value: materializeInferredCarrier(argument.value, inferred) }
+          : argument),
+      };
     case "array":
+    case "sequence":
+    case "slice":
       return { ...carrier, element: materializeInferredCarrier(carrier.element, inferred) };
     case "tuple":
       return { ...carrier, elements: carrier.elements.map((element) => materializeInferredCarrier(element, inferred)) };
     case "reference":
-      return { ...carrier, referent: materializeInferredCarrier(carrier.referent, inferred) };
-    case "pointer":
-      return { ...carrier, pointee: materializeInferredCarrier(carrier.pointee, inferred) };
+      return { ...carrier, target: materializeInferredCarrier(carrier.target, inferred) };
+    case "raw-pointer":
+      return { ...carrier, target: materializeInferredCarrier(carrier.target, inferred) };
     case "function-pointer":
     case "closure":
       return {
         ...carrier,
-        args: carrier.args.map((argument) => materializeInferredCarrier(argument, inferred)),
+        parameters: carrier.parameters.map((argument) => materializeInferredCarrier(argument, inferred)),
         result: materializeInferredCarrier(carrier.result, inferred),
       };
     case "associated-type":
@@ -441,7 +468,7 @@ function materializeInferredCarrier(carrier: TargetTypeRef, inferred: TargetType
 
 function firstArgumentId(request: JsOperationRequest): string | undefined {
   const carrier = request.argumentCarriers?.[0];
-  return carrier?.kind === "target-named" ? carrier.id : undefined;
+  return rustTypeIdentityItemId(carrier);
 }
 
 export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperationSelection | undefined {
@@ -654,16 +681,16 @@ function jsArgumentCarrierMatchScore(
       ? undefined
       : relationScore?.(expected, actual, index);
   }
-  if (expected === undefined || (expected.kind === "opaque" && expected.id === "tsonic.rust.infer")) {
+  if (expected === undefined || expected.kind === "inference-variable") {
     return 0;
   }
   if (expected.kind === "closure" && actual.kind === "closure") {
-    if (expected.args.length !== actual.args.length) {
+    if (expected.parameters.length !== actual.parameters.length) {
       return relationScore?.(expected, actual, index);
     }
     const scores = [
-      ...expected.args.map((argument, argumentIndex) =>
-        jsArgumentCarrierMatchScore(argument, actual.args[argumentIndex], index, relationScore)),
+      ...expected.parameters.map((argument, argumentIndex) =>
+        jsArgumentCarrierMatchScore(argument, actual.parameters[argumentIndex], index, relationScore)),
       jsArgumentCarrierMatchScore(expected.result, actual.result, index, relationScore),
     ];
     return scores.some((score) => score === undefined)

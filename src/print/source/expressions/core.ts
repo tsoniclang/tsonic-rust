@@ -5,7 +5,7 @@ import { printRustAssociatedOwner, rustMethodChainPrefersVerticalLayout } from "
 import { printRustAssociatedCallTarget, printRustDirectCallTarget, printRustMethodCallTarget } from "./callable.js";
 import { printRustBlockStatements } from "../blocks.js";
 import { printRustClosureParams } from "./closure-params.js";
-import { printRustType } from "../types.js";
+import { printRustGenericArguments, printRustType } from "../types.js";
 import type { RustExpr } from "../../../backend/target-ast/nodes.js";
 
 export function printRustExpr(expression: RustExpr): string {
@@ -88,9 +88,12 @@ export function printRustExpr(expression: RustExpr): string {
     }
     case "field": {
       const receiver = printOperand(expression.receiver, RustPrecedence.Postfix, false);
-      const nestedTupleField = /^[0-9]+$/u.test(expression.name) &&
-        expression.receiver.kind === "field" && /^[0-9]+$/u.test(expression.receiver.name);
-      return `${nestedTupleField ? `(${receiver})` : receiver}.${expression.name}`;
+      return `${receiver}.${expression.name}`;
+    }
+    case "tuple-field": {
+      const receiver = printOperand(expression.receiver, RustPrecedence.Postfix, false);
+      const nestedTupleField = expression.receiver.kind === "tuple-field";
+      return `${nestedTupleField ? `(${receiver})` : receiver}.${expression.index}`;
     }
     case "index": {
       return `${printOperand(expression.receiver, RustPrecedence.Postfix, false)}[${printRustExpr(expression.index)}]`;
@@ -155,7 +158,7 @@ export function printRustExpr(expression: RustExpr): string {
     }
     case "struct-literal": {
       if (expression.fields.length === 0 && expression.base === undefined) {
-        return `${expression.path} {}`;
+        return `${expression.path}${printRustGenericArguments(expression.genericArguments)} {}`;
       }
       const members = expression.fields
         .map((field) => {
@@ -165,7 +168,7 @@ export function printRustExpr(expression: RustExpr): string {
       if (expression.base !== undefined) {
         members.push(`..${printRustExpr(expression.base)}`);
       }
-      return `${expression.path} { ${members.join(", ")} }`;
+      return `${expression.path}${printRustGenericArguments(expression.genericArguments)} { ${members.join(", ")} }`;
     }
 
   }
@@ -211,6 +214,7 @@ export function rustExpressionContainsClosure(expression: RustExpr): boolean {
       return rustExpressionContainsClosure(expression.receiver) ||
         expression.args.some(rustExpressionContainsClosure);
     case "field":
+    case "tuple-field":
       return rustExpressionContainsClosure(expression.receiver);
     case "index":
       return rustExpressionContainsClosure(expression.receiver) || rustExpressionContainsClosure(expression.index);
@@ -284,6 +288,7 @@ export function rustExpressionContainsPreferredVerticalMethodChain(expression: R
       return rustExpressionContainsPreferredVerticalMethodChain(expression.callee) ||
         expression.args.some(rustExpressionContainsPreferredVerticalMethodChain);
     case "field":
+    case "tuple-field":
       return rustExpressionContainsPreferredVerticalMethodChain(expression.receiver);
     case "index":
       return rustExpressionContainsPreferredVerticalMethodChain(expression.receiver) ||

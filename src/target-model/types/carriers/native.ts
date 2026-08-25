@@ -1,10 +1,26 @@
-import {
-  hasExactObjectKeys,
-  isDenseDataArray,
-} from "../../metadata/closed-data.js";
-import { isRustTargetTypeRef } from "../equality.js";
-import { rustBigIntTargetId, rustNamedTypeCarrierName, rustNeverCarrierName, rustNullTargetId, rustStringTargetId, rustUndefinedTargetId } from "./source-types.js";
 import type { SourcePrimitiveKind } from "@tsonic/tsts";
+import type { RustSemanticIdentity, RustTraitRef } from "../../semantics/index.js";
+import {
+  rustBuiltinIdentity,
+  rustSemanticIdentityKey,
+  rustTraitSemanticKey,
+} from "../../semantics/index.js";
+import {
+  rustBuiltinPathTargetType,
+  rustFixedArrayType,
+  rustInferredLifetime,
+  rustPathTargetType,
+  rustPathTypeArguments,
+  rustReferenceTargetType,
+  rustSequenceTargetType,
+} from "../constructors.js";
+import { isRustTargetTypeRef, isRustTraitReference } from "../equality.js";
+import {
+  rustBigIntTargetId,
+  rustNullTargetId,
+  rustStringTargetId,
+  rustUndefinedTargetId,
+} from "./source-types.js";
 import type {
   RustNamedTypeTraitContract,
   RustNamedTypeTraitImplementation,
@@ -13,43 +29,58 @@ import type {
 } from "../model.js";
 
 export function rustSourcePrimitiveTargetType(kind: SourcePrimitiveKind): TargetTypeRef {
-  return { kind: "source-primitive", name: kind };
+  return Object.freeze({ kind: "source-primitive", name: kind });
 }
 
 export function rustStringTargetType(): TargetTypeRef {
-  return { kind: "target-named", id: rustStringTargetId };
+  return rustBuiltinPathTargetType(rustStringTargetId, "String");
 }
 
 export function rustBorrowedStrTargetType(): TargetTypeRef {
-  return {
-    kind: "reference",
-    referent: rustStringTargetType(),
-    mutable: false,
-  };
+  return rustReferenceTargetType(
+    { kind: "str" },
+    false,
+    rustInferredLifetime("policy\0borrowed-str"),
+  );
 }
 
 export function rustBigIntTargetType(): TargetTypeRef {
-  return { kind: "target-named", id: rustBigIntTargetId };
+  return rustBuiltinPathTargetType(
+    rustBigIntTargetId,
+    "rt::BigInt",
+    [],
+    "tsonic-runtime",
+  );
 }
 
 export function rustUnitTargetType(): TargetTypeRef {
-  return { kind: "tuple", elements: [] };
+  return Object.freeze({ kind: "unit" });
 }
 
 export function rustNeverTargetType(): TargetTypeRef {
-  return { kind: "target-specific", target: "rust", name: rustNeverCarrierName };
+  return Object.freeze({ kind: "never" });
 }
 
 export function rustUndefinedTargetType(): TargetTypeRef {
-  return { kind: "target-named", id: rustUndefinedTargetId };
+  return rustBuiltinPathTargetType(
+    rustUndefinedTargetId,
+    "rt::Undefined",
+    [],
+    "tsonic-runtime",
+  );
 }
 
 export function rustNullTargetType(): TargetTypeRef {
-  return { kind: "target-named", id: rustNullTargetId };
+  return rustBuiltinPathTargetType(
+    rustNullTargetId,
+    "rt::Null",
+    [],
+    "tsonic-runtime",
+  );
 }
 
 export function rustVecTargetType(element: TargetTypeRef): TargetTypeRef {
-  return { kind: "array", element };
+  return rustSequenceTargetType(element);
 }
 
 export function rustTupleTargetType(elements: readonly TargetTypeRef[]): TargetTypeRef {
@@ -58,7 +89,7 @@ export function rustTupleTargetType(elements: readonly TargetTypeRef[]): TargetT
     element.kind === "source-primitive" && element.name === first.name)) {
     return rustFixedArrayTargetType(first, elements.length);
   }
-  return { kind: "tuple", elements };
+  return Object.freeze({ kind: "tuple", elements: Object.freeze([...elements]) });
 }
 
 export interface RustFixedArrayCarrierValue {
@@ -67,7 +98,7 @@ export interface RustFixedArrayCarrierValue {
 }
 
 export interface RustNamedTypeCarrierValue {
-  readonly id: string;
+  readonly identity: RustSemanticIdentity;
   readonly path: string;
   readonly traits: RustNamedTypeTraitContract;
   readonly typeArguments: readonly TargetTypeRef[];
@@ -82,143 +113,158 @@ export function rustNamedTargetType(
   path: string,
   typeArguments: readonly TargetTypeRef[] = [],
   traits: RustNamedTypeTraitContract = rustMoveOnlyNamedTypeTraits,
+  identity: RustSemanticIdentity = rustBuiltinIdentity(id),
 ): TargetTypeRef {
-  return {
-    kind: "target-specific",
-    target: "rust",
-    name: rustNamedTypeCarrierName,
-    value: { id, path, traits, typeArguments },
-  };
+  return rustPathTargetType({
+    identity,
+    displayPath: Object.freeze(path.split("::")),
+    arguments: Object.freeze(typeArguments.map((value) => ({ kind: "type" as const, value }))),
+    traitImplementations: traits.implementations,
+  });
 }
 
-export function rustNamedTypeCarrierValue(carrier: TargetTypeRef | undefined): RustNamedTypeCarrierValue | undefined {
-  if (carrier?.kind !== "target-specific" || carrier.target !== "rust" || carrier.name !== rustNamedTypeCarrierName) {
-    return undefined;
-  }
-  const value = carrier.value;
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return undefined;
-  }
-  const keys = Object.keys(value).sort();
-  if (keys.length !== 4 || keys[0] !== "id" || keys[1] !== "path" || keys[2] !== "traits" ||
-    keys[3] !== "typeArguments") {
-    return undefined;
-  }
-  const candidate = value as {
-    readonly id?: unknown;
-    readonly path?: unknown;
-    readonly traits?: unknown;
-    readonly typeArguments?: unknown;
-  };
-  if (typeof candidate.id !== "string" || candidate.id.length === 0 ||
-    typeof candidate.path !== "string" || candidate.path.length === 0 ||
-    !isRustNamedTypeTraitContract(candidate.traits) ||
-    !isDenseDataArray(candidate.typeArguments) ||
-    candidate.typeArguments.some((argument) => !isRustTargetTypeRef(argument))) {
-    return undefined;
-  }
-  const typeArguments = candidate.typeArguments as readonly TargetTypeRef[];
-  if (candidate.traits.implementations.some((implementation) =>
-    implementation.requirements.some((requirement) => requirement.typeArgumentIndex >= typeArguments.length))) {
-    return undefined;
-  }
+export function rustNamedTypeCarrierValue(
+  carrier: TargetTypeRef | undefined,
+): RustNamedTypeCarrierValue | undefined {
+  if (carrier?.kind !== "path") return undefined;
+  const typeArguments = rustPathTypeArguments(carrier);
+  if (typeArguments === undefined) return undefined;
   return {
-    id: candidate.id,
-    path: candidate.path,
-    traits: candidate.traits,
+    identity: carrier.identity,
+    path: carrier.displayPath.join("::"),
+    traits: { implementations: carrier.traitImplementations },
     typeArguments,
   };
 }
 
 export function isRustNamedTypeTraitContract(value: unknown): value is RustNamedTypeTraitContract {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return false;
-  }
-  const keys = Object.keys(value).sort();
-  if (keys.length !== 1 || keys[0] !== "implementations") {
-    return false;
-  }
-  const candidate = value as { readonly implementations?: unknown };
-  if (!isDenseDataArray(candidate.implementations)) {
-    return false;
-  }
+  if (!isPlainRecord(value) || !hasExactKeys(value, ["implementations"])) return false;
+  const implementations = value.implementations;
+  if (!Array.isArray(implementations)) return false;
   let previousIdentity: string | undefined;
-  for (const implementation of candidate.implementations) {
-    if (typeof implementation !== "object" || implementation === null || Array.isArray(implementation) ||
-      !hasExactObjectKeys(implementation, ["requirements", "traitPath"])) {
-      return false;
-    }
-    const selected = implementation as Partial<RustNamedTypeTraitImplementation>;
-    if (!isRustTraitPath(selected.traitPath) || !isDenseDataArray(selected.requirements)) {
+  for (const implementation of implementations) {
+    if (!isPlainRecord(implementation) ||
+      !hasExactKeys(implementation, ["requirements", "trait"]) ||
+      !isRustTraitReference(implementation.trait) ||
+      !Array.isArray(implementation.requirements)) {
       return false;
     }
     let previousRequirementIdentity: string | undefined;
-    for (const requirement of selected.requirements) {
-      if (typeof requirement !== "object" || requirement === null || Array.isArray(requirement) ||
-        !hasExactObjectKeys(requirement, ["traitPath", "typeArgumentIndex"])) {
+    for (const requirement of implementation.requirements) {
+      if (!isPlainRecord(requirement) ||
+        !hasExactKeys(requirement, ["trait", "typeArgumentIndex"]) ||
+        !Number.isSafeInteger(requirement.typeArgumentIndex) ||
+        (requirement.typeArgumentIndex as number) < 0 ||
+        !isRustTraitReference(requirement.trait)) {
         return false;
       }
-      const condition = requirement as Partial<RustNamedTypeTraitRequirement>;
-      if (!Number.isSafeInteger(condition.typeArgumentIndex) || condition.typeArgumentIndex! < 0 ||
-        !isRustTraitPath(condition.traitPath)) {
+      const requirementIdentity = rustNamedTypeTraitRequirementSemanticKey(
+        requirement as unknown as RustNamedTypeTraitRequirement,
+      );
+      if (previousRequirementIdentity !== undefined &&
+        previousRequirementIdentity >= requirementIdentity) {
         return false;
       }
-      const identity = `${String(condition.typeArgumentIndex).padStart(12, "0")}\0${condition.traitPath}`;
-      if (previousRequirementIdentity !== undefined && previousRequirementIdentity >= identity) {
-        return false;
-      }
-      previousRequirementIdentity = identity;
+      previousRequirementIdentity = requirementIdentity;
     }
-    const identity = `${selected.traitPath}\0${JSON.stringify(selected.requirements)}`;
-    if (previousIdentity !== undefined && previousIdentity >= identity) {
+    const implementationIdentity = rustNamedTypeTraitImplementationSemanticKey(
+      implementation as unknown as RustNamedTypeTraitImplementation,
+    );
+    if (previousIdentity !== undefined && previousIdentity >= implementationIdentity) {
       return false;
     }
-    previousIdentity = identity;
+    previousIdentity = implementationIdentity;
   }
-  const implementations = candidate.implementations as readonly RustNamedTypeTraitImplementation[];
-  return implementations
-    .filter((implementation) => implementation.traitPath === "core::marker::Copy")
-    .every((copy) => implementations.some((clone) =>
-      clone.traitPath === "core::clone::Clone" && clone.requirements.every((requirement) =>
-        copy.requirements.some((candidate) =>
+  const typedImplementations = implementations as readonly RustNamedTypeTraitImplementation[];
+  return typedImplementations
+    .filter((implementation) => isExactRustTrait(implementation.trait, "core::marker::Copy"))
+    .every((copyImplementation) => typedImplementations.some((cloneImplementation) =>
+      isExactRustTrait(cloneImplementation.trait, "core::clone::Clone") &&
+      cloneImplementation.requirements.every((requirement) =>
+        copyImplementation.requirements.some((candidate) =>
           candidate.typeArgumentIndex === requirement.typeArgumentIndex &&
-          rustTraitPathImplies(candidate.traitPath, requirement.traitPath)))));
+          rustTraitImplies(candidate.trait, requirement.trait)))));
 }
 
-function rustTraitPathImplies(actual: string, required: string): boolean {
-  return actual === required ||
-    actual === "core::marker::Copy" && required === "core::clone::Clone";
+export function rustNamedTypeTraitRequirementSemanticKey(
+  requirement: RustNamedTypeTraitRequirement,
+): string {
+  return [
+    String(requirement.typeArgumentIndex).padStart(12, "0"),
+    rustTraitSemanticKey(requirement.trait),
+  ].join("\0");
 }
 
-function isRustTraitPath(value: unknown): value is string {
-  return typeof value === "string" &&
-    /^[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)+$/u.test(value);
+export function rustNamedTypeTraitImplementationSemanticKey(
+  implementation: RustNamedTypeTraitImplementation,
+): string {
+  return [
+    rustTraitSemanticKey(implementation.trait),
+    ...implementation.requirements.map(rustNamedTypeTraitRequirementSemanticKey),
+  ].join("\0");
 }
 
-export function rustFixedArrayTargetType(element: TargetTypeRef, length: number): TargetTypeRef {
-  return {
-    kind: "target-specific",
-    target: "rust",
-    name: "fixed-array",
-    value: { element, length },
-  };
+export function rustTraitReference(
+  path: string,
+  identity: RustSemanticIdentity = rustBuiltinIdentity(path),
+): RustTraitRef {
+  return Object.freeze({
+    identity,
+    displayPath: Object.freeze(path.split("::")),
+    arguments: Object.freeze([]),
+    associatedConstraints: Object.freeze([]),
+  });
 }
 
-export function rustFixedArrayCarrierValue(carrier: TargetTypeRef | undefined): RustFixedArrayCarrierValue | undefined {
-  if (carrier?.kind !== "target-specific" || carrier.target !== "rust" || carrier.name !== "fixed-array") {
+function rustTraitImplies(actual: RustTraitRef, required: RustTraitRef): boolean {
+  return rustSemanticIdentityKey(actual.identity) === rustSemanticIdentityKey(required.identity) ||
+    isExactRustTrait(actual, "core::marker::Copy") &&
+      isExactRustTrait(required, "core::clone::Clone");
+}
+
+function isExactRustTrait(trait: RustTraitRef, path: string): boolean {
+  return rustSemanticIdentityKey(trait.identity) ===
+    rustSemanticIdentityKey(rustBuiltinIdentity(path));
+}
+
+export function rustFixedArrayTargetType(
+  element: TargetTypeRef,
+  length: number,
+): TargetTypeRef {
+  if (!Number.isSafeInteger(length) || length < 0) {
+    throw new Error(`Rust fixed-array length must be a non-negative safe integer; received ${String(length)}.`);
+  }
+  return rustFixedArrayType(element, { kind: "literal", literalKind: "integer", value: BigInt(length) });
+}
+
+export function rustFixedArrayCarrierValue(
+  carrier: TargetTypeRef | undefined,
+): RustFixedArrayCarrierValue | undefined {
+  if (carrier?.kind !== "array" || carrier.length.kind !== "literal" ||
+    carrier.length.literalKind !== "integer" ||
+    typeof carrier.length.value !== "bigint" || carrier.length.value < 0n ||
+    carrier.length.value > BigInt(Number.MAX_SAFE_INTEGER) ||
+    !isRustTargetTypeRef(carrier.element)) {
     return undefined;
   }
-  const value = carrier.value;
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return undefined;
-  }
-  const keys = Object.keys(value).sort();
-  if (keys.length !== 2 || keys[0] !== "element" || keys[1] !== "length") {
-    return undefined;
-  }
-  const length = (value as { readonly length?: unknown }).length;
-  const element = (value as { readonly element?: unknown }).element;
-  return Number.isSafeInteger(length) && (length as number) >= 0 && isRustTargetTypeRef(element)
-    ? { element: element as TargetTypeRef, length: length as number }
-    : undefined;
+  return { element: carrier.element, length: Number(carrier.length.value) };
 }
+
+function isPlainRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === "object" && value !== null && !Array.isArray(value) &&
+    (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
+}
+
+function hasExactKeys(
+  value: Readonly<Record<string, unknown>>,
+  expected: readonly string[],
+): boolean {
+  const actual = Object.keys(value).sort();
+  const selected = [...expected].sort();
+  return actual.length === selected.length && actual.every((key, index) => key === selected[index]);
+}
+
+export type {
+  RustNamedTypeTraitImplementation,
+  RustNamedTypeTraitRequirement,
+};

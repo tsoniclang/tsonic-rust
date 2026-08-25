@@ -9,6 +9,7 @@ import type {
   RustProjectTypeDefinition,
   RustProjectTypePolicy,
 } from "./type-policy.js";
+import type { RustDeclarationContractIndex } from "../declarations/declaration-applications.js";
 
 export type RustObjectRepresentationKind =
   | "value"
@@ -28,10 +29,20 @@ export interface RustObjectRepresentation {
 
 export interface RustObjectRepresentationPlan {
   readonly representations: readonly RustObjectRepresentation[];
+  readonly issues: readonly RustObjectRepresentationIssue[];
   representationFor(
     definition: RustProjectTypeDefinition | undefined,
   ): RustObjectRepresentation | undefined;
+  requiresDynamicDispatch(
+    definition: RustProjectTypeDefinition | undefined,
+  ): boolean;
   methodSelfMode(member: Node): "ref" | "mut-ref";
+}
+
+export interface RustObjectRepresentationIssue {
+  readonly code: string;
+  readonly message: string;
+  readonly node: Node;
 }
 
 export interface RustObjectRepresentationAnalysisInput {
@@ -39,6 +50,7 @@ export interface RustObjectRepresentationAnalysisInput {
   readonly navigation: SourceProgramNavigation;
   readonly projectTypes: RustProjectTypePolicy;
   readonly sourceFiles: readonly SourceFile[];
+  readonly declarationContracts: RustDeclarationContractIndex;
   readonly hasPromotedStorage: (declaration: Node) => boolean;
 }
 
@@ -70,8 +82,14 @@ export function createRustObjectRepresentationPlanRegistry(): RustObjectRepresen
     get representations() {
       return requireCurrent().representations;
     },
+    get issues() {
+      return requireCurrent().issues;
+    },
     representationFor(definition: RustProjectTypeDefinition | undefined) {
       return requireCurrent().representationFor(definition);
+    },
+    requiresDynamicDispatch(definition: RustProjectTypeDefinition | undefined) {
+      return requireCurrent().requiresDynamicDispatch(definition);
     },
     methodSelfMode(member: Node) {
       return requireCurrent().methodSelfMode(member);
@@ -84,7 +102,8 @@ export function createRustObjectRepresentationPlan(
 ): RustObjectRepresentationPlan {
   const origins = collectProjectObjectOrigins(input);
   const mutatingMethods = collectMutatingProjectMethods(input);
-  const representations = input.projectTypes.definitions.map((definition) => {
+  const issues: RustObjectRepresentationIssue[] = [];
+  const representations: readonly RustObjectRepresentation[] = input.projectTypes.definitions.map((definition) => {
     const creationFlows = origins.get(definition) ?? [];
     const promotedStorage = creationFlows.some((flow) =>
       flow.aliasDeclarations.some(input.hasPromotedStorage));
@@ -102,7 +121,28 @@ export function createRustObjectRepresentationPlan(
       flow.hasUnclassifiedUse || flow.storedOutsideBinding);
     const aliasedMutableValue = mutable && creationFlows.some((flow) =>
       flow.bindingAliased);
-    const kind: RustObjectRepresentationKind = input.projectTypes.isPolymorphic(definition)
+    const declarationContract = input.declarationContracts.forDeclaration(
+      definition.declaration,
+    );
+    const explicitlyNativeValue = definition.kind === "class" && (
+      declarationContract?.nativeUnion === true ||
+      (declarationContract?.representations.length ?? 0) > 0 ||
+      input.ast.members(definition.declaration).some((member) =>
+        member !== undefined &&
+        input.declarationContracts.forDeclaration(member)?.nativeDrop === true)
+    );
+    if (explicitlyNativeValue && (identityObserved || hasIncompleteFlow ||
+      promotedStorage || aliasedMutableValue)) {
+      issues.push(Object.freeze({
+        code: "RUST_EXPLICIT_NATIVE_VALUE_ALIAS_CONFLICT",
+        message:
+          "An explicit Rust layout, union, or Drop contract requires by-value representation, but the exact source flow observes shared identity, unresolved aliasing, or promoted location storage.",
+        node: definition.declaration,
+      }));
+    }
+    const kind: RustObjectRepresentationKind = explicitlyNativeValue
+      ? "value"
+      : input.projectTypes.isPolymorphic(definition)
       ? "open-hierarchy"
       : definition.kind !== "class"
         ? "shared-mutable"
@@ -130,8 +170,13 @@ export function createRustObjectRepresentationPlan(
     [representation.definition, representation] as const));
   return Object.freeze({
     representations: Object.freeze(representations),
+    issues: Object.freeze(issues),
     representationFor(definition: RustProjectTypeDefinition | undefined) {
       return definition === undefined ? undefined : byDefinition.get(definition);
+    },
+    requiresDynamicDispatch(definition: RustProjectTypeDefinition | undefined) {
+      const kind = definition === undefined ? undefined : byDefinition.get(definition)?.kind;
+      return kind === "open-hierarchy" || kind === "closed-hierarchy";
     },
     methodSelfMode(member: Node) {
       const owner = input.projectTypes.definitionContainingDeclaration(member);

@@ -18,7 +18,7 @@ import type { RustSafetyApplicationFactIndex } from "../safety/application-index
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
 import type { RustModuleInitializationPlan } from "./module-initialization-facts.js";
 import type { RustTargetConfiguration } from "../../target-model/configuration/model.js";
-import type { RustValueLifetimePlan } from "./value-lifetimes.js";
+import type { RustOwnershipAnalysis } from "../ownership/index.js";
 import type { RustRuntimeReferencePlan } from "../runtime/index.js";
 import type { RustBinaryEpiloguePlan } from "../runtime/index.js";
 import type {
@@ -36,6 +36,8 @@ import type {
 import type {
   RustProviderSemantics,
 } from "../../providers/packages/model.js";
+import type { RustSourceGenericIndex } from "../../policy/types/source-generics.js";
+import type { RustDeclarationContractIndex } from "../declarations/declaration-applications.js";
 
 export interface RustTargetAnalysisRequest {
   readonly input: TargetCompileInput;
@@ -64,8 +66,10 @@ export interface RustTargetProgram {
   readonly projectMethodProperties: RustProjectMethodPropertyPlan;
   readonly projectFieldDispatch: RustProjectFieldDispatchQueries;
   readonly sourceCallableSpecializations: RustSourceCallableSpecializationPlan;
+  readonly sourceGenerics: RustSourceGenericIndex;
+  readonly declarationContracts: RustDeclarationContractIndex;
   readonly callableGenericRequirements: RustCallableGenericRequirementIndex;
-  readonly valueLifetimes: RustValueLifetimePlan;
+  readonly ownership: RustOwnershipAnalysis;
   readonly structuralShapes: RustStructuralShapePlan;
   readonly runtimeReferences: RustRuntimeReferencePlan;
   readonly binaryEpilogues: readonly RustBinaryEpiloguePlan[];

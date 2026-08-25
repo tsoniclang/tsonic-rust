@@ -56,6 +56,7 @@ export function rustExpressionContainsExpandedStructLiteral(expression: RustExpr
       return rustExpressionContainsExpandedStructLiteral(expression.receiver) ||
         expression.args.some(rustExpressionContainsExpandedStructLiteral);
     case "field":
+    case "tuple-field":
       return rustExpressionContainsExpandedStructLiteral(expression.receiver);
     case "index":
       return rustExpressionContainsExpandedStructLiteral(expression.receiver) ||
@@ -134,6 +135,7 @@ export function rustExpressionContainsExpandedCollectionLiteral(expression: Rust
       return rustExpressionContainsExpandedCollectionLiteral(expression.receiver) ||
         expression.args.some(rustExpressionContainsExpandedCollectionLiteral);
     case "field":
+    case "tuple-field":
       return rustExpressionContainsExpandedCollectionLiteral(expression.receiver);
     case "index":
       return rustExpressionContainsExpandedCollectionLiteral(expression.receiver) ||
@@ -219,6 +221,7 @@ export function rustFormatArgumentCanShareLine(expression: RustExpr): boolean {
       return rustFormatArgumentCanShareLine(expression.receiver) &&
         expression.args.every(rustFormatArgumentCanShareLine);
     case "field":
+    case "tuple-field":
       return rustFormatArgumentCanShareLine(expression.receiver);
     case "index":
       return rustFormatArgumentCanShareLine(expression.receiver) &&

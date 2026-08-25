@@ -34,7 +34,7 @@ export function selectedSourceLiteralIsRepresentable(
     const value = selectedNumericLiteralValue(node, ast);
     return value !== undefined && Number.isFinite(value);
   }
-  const value = selectedIntegerLiteralValue(node, ast);
+  const value = selectedSourceIntegerLiteralValue(node, ast);
   const ranges: Readonly<Partial<Record<SourcePrimitiveName, readonly [bigint, bigint]>>> = {
     int8: [-128n, 127n],
     uint8: [0n, 255n],
@@ -115,7 +115,7 @@ function selectedNumericLiteralValue(
   return Number.isFinite(value) ? sign * value : undefined;
 }
 
-function selectedIntegerLiteralValue(
+export function selectedSourceIntegerLiteralValue(
   node: Node,
   ast: AstReader,
 ): bigint | undefined {

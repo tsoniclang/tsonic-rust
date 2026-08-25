@@ -2,7 +2,11 @@ import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js
 import { defineRustPlanKey } from "../../target-model/facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustArgumentMode, RustProviderOperationForm } from "../../target-model/operations/model.js";
+import type {
+  RustArgumentMode,
+  RustProviderOperationForm,
+  RustSourceParameterContract,
+} from "../../target-model/operations/model.js";
 import type { RustFallibleErrorBoundary } from "../../target-model/operations/error-boundary.js";
 import type { RustPlanKey } from "../../target-model/facts/keys.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -117,6 +121,7 @@ export const rustResourceManagementFactKey: RustPlanKey<RustResourceManagementFa
 
 export interface RustSourceParameterAbiFact {
   readonly form: "required" | "optional" | "default" | "rest";
+  readonly sourceContract: RustSourceParameterContract;
   readonly valueCarrier: TargetTypeRef;
   readonly parameterCarrier: TargetTypeRef;
   readonly mode: RustArgumentMode;
@@ -127,8 +132,10 @@ export const rustSourceParameterAbiFactKey: RustPlanKey<RustSourceParameterAbiFa
 
 export interface RustSourceCallableReturnFact {
   readonly returnCarrier: TargetTypeRef;
+  readonly sourceContract: RustSourceParameterContract;
 }
 
 export const rustSourceCallableReturnFactKey: RustPlanKey<RustSourceCallableReturnFact> =
   defineRustPlanKey("sourceCallableReturn", (left, right) =>
+    left.sourceContract === right.sourceContract &&
     rustTargetTypeRefEquals(left.returnCarrier, right.returnCarrier));

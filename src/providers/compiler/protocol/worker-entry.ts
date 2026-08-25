@@ -18,6 +18,10 @@ import type {
   RustCompilerWorkerResponse,
 } from "./protocol.js";
 import { loadRustCompilerModule } from "../rustdoc.js";
+import {
+  parseRustCompilerWireText,
+  stringifyRustCompilerWireValue,
+} from "./wire-codec.js";
 
 const pollMilliseconds = 20;
 const ownerPollMilliseconds = 1_000;
@@ -128,7 +132,7 @@ function getStandardLibrarySnapshot(): ReturnType<typeof createRustCompilerStand
 }
 
 function parseRequest(text: string): RustCompilerWorkerRequest {
-  const value = JSON.parse(text) as unknown;
+  const value = parseRustCompilerWireText(text);
   if (!isRecord(value) || value.protocolVersion !== rustCompilerProviderProtocolVersion ||
     typeof value.id !== "string" || value.id.length === 0 ||
     (value.kind !== "snapshot" && value.kind !== "standard-snapshot" && value.kind !== "module")) {
@@ -180,7 +184,7 @@ function requireOption(options: ReadonlyMap<string, string>, name: string): stri
 
 function writeJsonAtomically(path: string, value: unknown): void {
   const temporaryPath = `${path}.${process.pid}.${randomUUID()}.tmp`;
-  writeFileSync(temporaryPath, JSON.stringify(value));
+  writeFileSync(temporaryPath, stringifyRustCompilerWireValue(value));
   renameSync(temporaryPath, path);
 }
 

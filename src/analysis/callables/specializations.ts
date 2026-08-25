@@ -1,25 +1,30 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
-import { closedMetadataKey, isDenseDataArray } from "../../target-model/metadata/closed-data.js";
+import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
-import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import type { TargetTypeRef } from "../../target-model/types/model.js";
 import {
-  rustTargetTypeParameterNames,
-  substituteRustTargetTypeParameters,
+  rustGenericArgumentOpenIdentityKeys,
+  rustGenericParameterIdentityKey,
+  rustGenericSubstitutionsForArguments,
+  substituteRustGenericArgument,
 } from "../../target-model/types/index.js";
+import { rustGenericArgumentSemanticKey } from "../../target-model/semantics/index.js";
+import type { RustGenericArgument, RustGenerics } from "../../target-model/semantics/index.js";
+import type { RustGenericSubstitutions } from "../../target-model/types/index.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
+import type { RustSourceGenericIndex } from "../../policy/types/source-generics.js";
 
 export interface RustSourceCallableSpecializationVariant {
   readonly declaration: Node;
-  readonly sourceTypeParameterNames: readonly string[];
-  readonly targetTypeArguments: readonly TargetTypeRef[];
+  readonly sourceGenerics: RustGenerics;
+  readonly targetGenericArguments: readonly RustGenericArgument[];
+  readonly specialization: RustGenericSubstitutions;
   readonly targetName: string;
 }
 
 export interface RustProjectMethodSpecializationRequest {
   readonly declaration: Node;
-  readonly targetTypeArguments: readonly TargetTypeRef[];
+  readonly targetGenericArguments: readonly RustGenericArgument[];
 }
 
 export interface RustSourceCallableSpecializationIssue {
@@ -34,7 +39,7 @@ export interface RustSourceCallableSpecializationPlan {
   variantsForCallable(declaration: Node): readonly RustSourceCallableSpecializationVariant[];
   variantForCall(
     declaration: Node,
-    targetTypeArguments: readonly TargetTypeRef[],
+    targetGenericArguments: readonly RustGenericArgument[],
   ): RustSourceCallableSpecializationVariant | undefined;
 }
 
@@ -48,21 +53,24 @@ export interface RustSourceCallableSpecializationPlanRegistry
     readonly subject: Node;
     readonly caller?: Node;
     readonly callee: Node;
-    readonly targetTypeArguments: readonly TargetTypeRef[];
+    readonly targetGenericArguments: readonly RustGenericArgument[];
     readonly ast: AstReader;
+    readonly sourceGenerics: RustSourceGenericIndex;
   }): RustSourceCallableSpecializationRegistration;
   recordProjectMethodCall(input: {
     readonly subject: Node;
     readonly caller?: Node;
     readonly declaration: Node;
-    readonly targetTypeArguments: readonly TargetTypeRef[];
+    readonly targetGenericArguments: readonly RustGenericArgument[];
     readonly ast: AstReader;
     readonly projectTypes: RustProjectTypePolicy;
+    readonly sourceGenerics: RustSourceGenericIndex;
   }): RustSourceCallableSpecializationRegistration;
   initialize(input: {
     readonly ast: AstReader;
     readonly names: RustNamePlan;
     readonly projectTypes: RustProjectTypePolicy;
+    readonly sourceGenerics: RustSourceGenericIndex;
   }): RustSourceCallableSpecializationPlan;
   seal(): RustSourceCallableSpecializationPlan;
 }
@@ -71,13 +79,14 @@ interface SourceCallEdge {
   readonly subject: Node;
   readonly caller?: Node;
   readonly callee: Node;
-  readonly targetTypeArguments: readonly TargetTypeRef[];
+  readonly targetGenericArguments: readonly RustGenericArgument[];
 }
 
 interface MutableSpecializationVariant {
   readonly declaration: Node;
-  readonly sourceTypeParameterNames: readonly string[];
-  readonly targetTypeArguments: readonly TargetTypeRef[];
+  readonly sourceGenerics: RustGenerics;
+  readonly targetGenericArguments: readonly RustGenericArgument[];
+  readonly specialization: RustGenericSubstitutions;
   targetName?: string;
 }
 
@@ -85,7 +94,7 @@ interface ProjectMethodEdge {
   readonly subject: Node;
   readonly caller?: Node;
   readonly declaration: Node;
-  readonly targetTypeArguments: readonly TargetTypeRef[];
+  readonly targetGenericArguments: readonly RustGenericArgument[];
 }
 
 export function createRustSourceCallableSpecializationPlanRegistry(): RustSourceCallableSpecializationPlanRegistry {
@@ -103,15 +112,18 @@ export function createRustSourceCallableSpecializationPlanRegistry(): RustSource
       if (current !== undefined) {
         throw new Error("Rust source-callable specialization requests cannot be recorded after initialization.");
       }
-      const names = callableTypeParameterNames(input.callee, input.ast);
-      if (names === undefined || names.length !== input.targetTypeArguments.length) {
-        return rejected("Selected project-source call type arguments do not match the exact callee declaration arity.");
+      const contract = input.sourceGenerics.contractFor(input.callee);
+      if (contract === undefined || rustGenericSubstitutionsForArguments(
+        contract.generics,
+        input.targetGenericArguments,
+      ) === undefined) {
+        return rejected("Selected project-source call arguments do not match the exact mixed-generic callee contract.");
       }
       sourceCalls.push(Object.freeze({
         subject: input.subject,
         ...(input.caller === undefined ? {} : { caller: input.caller }),
         callee: input.callee,
-        targetTypeArguments: Object.freeze([...input.targetTypeArguments]),
+        targetGenericArguments: Object.freeze([...input.targetGenericArguments]),
       }));
       return accepted;
     },
@@ -120,15 +132,18 @@ export function createRustSourceCallableSpecializationPlanRegistry(): RustSource
         throw new Error("Rust project-method specialization requests cannot be recorded after initialization.");
       }
       const owner = input.projectTypes.definitionContainingDeclaration(input.declaration);
-      const names = callableTypeParameterNames(input.declaration, input.ast);
-      if (owner === undefined || names === undefined || names.length !== input.targetTypeArguments.length) {
-        return rejected("Selected project method has no exact owner or matching type-parameter arity.");
+      const contract = input.sourceGenerics.contractFor(input.declaration);
+      if (owner === undefined || contract === undefined || rustGenericSubstitutionsForArguments(
+        contract.generics,
+        input.targetGenericArguments,
+      ) === undefined) {
+        return rejected("Selected project method has no exact owner or matching mixed-generic contract.");
       }
       projectMethodCalls.push(Object.freeze({
         subject: input.subject,
         ...(input.caller === undefined ? {} : { caller: input.caller }),
         declaration: input.declaration,
-        targetTypeArguments: Object.freeze([...input.targetTypeArguments]),
+        targetGenericArguments: Object.freeze([...input.targetGenericArguments]),
       }));
       return accepted;
     },
@@ -158,8 +173,8 @@ export function createRustSourceCallableSpecializationPlanRegistry(): RustSource
     variantsForCallable(declaration) {
       return requireCurrent().variantsForCallable(declaration);
     },
-    variantForCall(declaration, targetTypeArguments) {
-      return requireCurrent().variantForCall(declaration, targetTypeArguments);
+    variantForCall(declaration, targetGenericArguments) {
+      return requireCurrent().variantForCall(declaration, targetGenericArguments);
     },
   };
   return Object.freeze(registry);
@@ -172,9 +187,14 @@ function createRustSourceCallableSpecializationPlan(
     readonly ast: AstReader;
     readonly names: RustNamePlan;
     readonly projectTypes: RustProjectTypePolicy;
+    readonly sourceGenerics: RustSourceGenericIndex;
   },
 ): RustSourceCallableSpecializationPlan {
-  const required = requiredCallableSpecializations(sourceCalls, projectMethodCalls, input.ast);
+  const required = requiredCallableSpecializations(
+    sourceCalls,
+    projectMethodCalls,
+    input.sourceGenerics,
+  );
   const variants = new Map<Node, MutableSpecializationVariant[]>();
   const methodRequests: RustProjectMethodSpecializationRequest[] = [];
   const issues: RustSourceCallableSpecializationIssue[] = [];
@@ -189,55 +209,68 @@ function createRustSourceCallableSpecializationPlan(
   };
   const addCallableVariant = (
     declaration: Node,
-    targetTypeArguments: readonly TargetTypeRef[],
+    targetGenericArguments: readonly RustGenericArgument[],
     subject: Node,
   ): boolean => {
-    const parameterNames = callableTypeParameterNames(declaration, input.ast);
-    if (parameterNames === undefined || parameterNames.length !== targetTypeArguments.length) {
-      addIssue(subject, "A required Rust source-callable specialization conflicts with its exact declaration arity.");
+    const contract = input.sourceGenerics.contractFor(declaration);
+    const complete = contract === undefined
+      ? undefined
+      : rustGenericSubstitutionsForArguments(contract.generics, targetGenericArguments);
+    if (contract === undefined || complete === undefined) {
+      addIssue(subject, "A required Rust source-callable specialization conflicts with its exact mixed-generic declaration contract.");
       return false;
     }
     const owner = input.projectTypes.definitionContainingDeclaration(declaration);
-    const allowedOpenNames = new Set(owner?.typeParameterNames ?? []);
-    const unresolved = new Set(targetTypeArguments.flatMap(rustTargetTypeParameterNames));
-    if ([...unresolved].some((name) => !allowedOpenNames.has(name))) {
+    const allowedOpenIdentities = new Set(
+      owner?.genericArguments.flatMap(rustGenericArgumentOpenIdentityKeys) ?? [],
+    );
+    const unresolved = new Set(targetGenericArguments
+      .filter((argument) => argument.kind !== "lifetime")
+      .flatMap(rustGenericArgumentOpenIdentityKeys));
+    if ([...unresolved].some((identity) => !allowedOpenIdentities.has(identity))) {
       return false;
     }
     const existing = variants.get(declaration) ?? [];
-    if (existing.some((variant) => targetTypeRefListsEqual(
-      variant.targetTypeArguments,
-      targetTypeArguments,
+    if (existing.some((variant) => specializationArgumentsEqual(
+      variant.targetGenericArguments,
+      targetGenericArguments,
     ))) {
       return false;
     }
     existing.push({
       declaration,
-      sourceTypeParameterNames: Object.freeze(parameterNames),
-      targetTypeArguments: Object.freeze([...targetTypeArguments]),
+      sourceGenerics: contract.generics,
+      targetGenericArguments: Object.freeze([...targetGenericArguments]),
+      specialization: specializationOnly(complete),
     });
     variants.set(declaration, existing);
     return true;
   };
   const addMethodRequest = (
     declaration: Node,
-    targetTypeArguments: readonly TargetTypeRef[],
+    targetGenericArguments: readonly RustGenericArgument[],
     subject: Node,
   ): boolean => {
     const owner = input.projectTypes.definitionContainingDeclaration(declaration);
-    const allowedOpenNames = new Set(owner?.typeParameterNames ?? []);
-    const unresolved = new Set(targetTypeArguments.flatMap(rustTargetTypeParameterNames));
-    if (owner === undefined || [...unresolved].some((name) => !allowedOpenNames.has(name))) {
+    const allowedOpenIdentities = new Set(
+      owner?.genericArguments.flatMap(rustGenericArgumentOpenIdentityKeys) ?? [],
+    );
+    const unresolved = new Set(targetGenericArguments
+      .filter((argument) => argument.kind !== "lifetime")
+      .flatMap(rustGenericArgumentOpenIdentityKeys));
+    if (owner === undefined || [...unresolved].some((identity) =>
+      !allowedOpenIdentities.has(identity))) {
       return false;
     }
     if (methodRequests.some((request) => request.declaration === declaration &&
-      targetTypeRefListsEqual(request.targetTypeArguments, targetTypeArguments))) {
+      specializationArgumentsEqual(request.targetGenericArguments, targetGenericArguments))) {
       return false;
     }
     methodRequests.push(Object.freeze({
       declaration,
-      targetTypeArguments: Object.freeze([...targetTypeArguments]),
+      targetGenericArguments: Object.freeze([...targetGenericArguments]),
     }));
-    addCallableVariant(declaration, targetTypeArguments, subject);
+    addCallableVariant(declaration, targetGenericArguments, subject);
     return true;
   };
 
@@ -245,15 +278,17 @@ function createRustSourceCallableSpecializationPlan(
     if (!required.has(edge.callee)) {
       continue;
     }
-    const callerNames = callableTypeParameterNameSet(edge.caller, input.ast);
-    if (edge.caller === undefined || !targetArgumentsUseNames(edge.targetTypeArguments, callerNames)) {
-      addCallableVariant(edge.callee, edge.targetTypeArguments, edge.subject);
+    const callerIdentities = callableSpecializationIdentitySet(edge.caller, input.sourceGenerics);
+    if (edge.caller === undefined ||
+      !targetArgumentsUseIdentities(edge.targetGenericArguments, callerIdentities)) {
+      addCallableVariant(edge.callee, edge.targetGenericArguments, edge.subject);
     }
   }
   for (const edge of projectMethodCalls) {
-    const callerNames = callableTypeParameterNameSet(edge.caller, input.ast);
-    if (edge.caller === undefined || !targetArgumentsUseNames(edge.targetTypeArguments, callerNames)) {
-      addMethodRequest(edge.declaration, edge.targetTypeArguments, edge.subject);
+    const callerIdentities = callableSpecializationIdentitySet(edge.caller, input.sourceGenerics);
+    if (edge.caller === undefined ||
+      !targetArgumentsUseIdentities(edge.targetGenericArguments, callerIdentities)) {
+      addMethodRequest(edge.declaration, edge.targetGenericArguments, edge.subject);
     }
   }
 
@@ -265,9 +300,8 @@ function createRustSourceCallableSpecializationPlan(
         continue;
       }
       for (const callerVariant of variants.get(edge.caller) ?? []) {
-        const substitutions = variantSubstitutions(callerVariant);
-        const arguments_ = edge.targetTypeArguments.map((argument) =>
-          substituteRustTargetTypeParameters(argument, substitutions));
+        const arguments_ = edge.targetGenericArguments.map((argument) =>
+          substituteRustGenericArgument(argument, callerVariant.specialization));
         changed = addCallableVariant(edge.callee, arguments_, edge.subject) || changed;
       }
     }
@@ -276,9 +310,8 @@ function createRustSourceCallableSpecializationPlan(
         continue;
       }
       for (const callerVariant of variants.get(edge.caller) ?? []) {
-        const substitutions = variantSubstitutions(callerVariant);
-        const arguments_ = edge.targetTypeArguments.map((argument) =>
-          substituteRustTargetTypeParameters(argument, substitutions));
+        const arguments_ = edge.targetGenericArguments.map((argument) =>
+          substituteRustGenericArgument(argument, callerVariant.specialization));
         changed = addMethodRequest(edge.declaration, arguments_, edge.subject) || changed;
       }
     }
@@ -327,8 +360,8 @@ function createRustSourceCallableSpecializationPlan(
       "en",
     );
     return fileOrder || input.ast.pos(left.declaration) - input.ast.pos(right.declaration) ||
-      closedMetadataKey(left.targetTypeArguments).localeCompare(
-        closedMetadataKey(right.targetTypeArguments),
+      closedMetadataKey(specializationArguments(left.targetGenericArguments)).localeCompare(
+        closedMetadataKey(specializationArguments(right.targetGenericArguments)),
         "en",
       );
   });
@@ -344,10 +377,13 @@ function createRustSourceCallableSpecializationPlan(
           variant.targetName !== undefined,
       ));
     },
-    variantForCall(declaration, targetTypeArguments) {
+    variantForCall(declaration, targetGenericArguments) {
       const matches = (variants.get(declaration) ?? []).filter((variant) =>
         variant.targetName !== undefined &&
-        targetTypeRefListsEqual(variant.targetTypeArguments, targetTypeArguments));
+        specializationArgumentsEqual(
+          variant.targetGenericArguments,
+          targetGenericArguments,
+        ));
       return matches.length === 1
         ? matches[0] as RustSourceCallableSpecializationVariant
         : undefined;
@@ -359,12 +395,13 @@ function createRustSourceCallableSpecializationPlan(
 function requiredCallableSpecializations(
   sourceCalls: readonly SourceCallEdge[],
   projectMethodCalls: readonly ProjectMethodEdge[],
-  ast: AstReader,
+  sourceGenerics: RustSourceGenericIndex,
 ): Set<Node> {
   const required = new Set<Node>();
   for (const edge of projectMethodCalls) {
-    const names = callableTypeParameterNameSet(edge.caller, ast);
-    if (edge.caller !== undefined && targetArgumentsUseNames(edge.targetTypeArguments, names)) {
+    const identities = callableSpecializationIdentitySet(edge.caller, sourceGenerics);
+    if (edge.caller !== undefined &&
+      targetArgumentsUseIdentities(edge.targetGenericArguments, identities)) {
       required.add(edge.caller);
     }
   }
@@ -375,8 +412,9 @@ function requiredCallableSpecializations(
       if (!required.has(edge.callee) || edge.caller === undefined) {
         continue;
       }
-      const names = callableTypeParameterNameSet(edge.caller, ast);
-      if (targetArgumentsUseNames(edge.targetTypeArguments, names) && !required.has(edge.caller)) {
+      const identities = callableSpecializationIdentitySet(edge.caller, sourceGenerics);
+      if (targetArgumentsUseIdentities(edge.targetGenericArguments, identities) &&
+        !required.has(edge.caller)) {
         required.add(edge.caller);
         changed = true;
       }
@@ -462,58 +500,59 @@ function callableIsExternallyReachable(declaration: Node, ast: AstReader): boole
   return owner !== undefined && ast.hasModifierKind(owner, "export");
 }
 
-function callableTypeParameterNames(
-  declaration: Node,
-  ast: AstReader,
-): readonly string[] | undefined {
-  const parameters = ast.typeParameters(declaration);
-  if (!isDenseDataArray(parameters) || parameters.some((parameter) => parameter === undefined)) {
-    return undefined;
-  }
-  const names = (parameters as readonly Node[]).map((parameter) => {
-    const name = ast.name(parameter);
-    return name === undefined ? "" : ast.text(name);
-  });
-  return names.some((name) => name.length === 0) ? undefined : Object.freeze(names);
-}
-
-function callableTypeParameterNameSet(
+function callableSpecializationIdentitySet(
   declaration: Node | undefined,
-  ast: AstReader,
+  sourceGenerics: RustSourceGenericIndex,
 ): ReadonlySet<string> {
-  return new Set(declaration === undefined
-    ? []
-    : callableTypeParameterNames(declaration, ast) ?? []);
+  const contract = sourceGenerics.contractFor(declaration);
+  return new Set(contract?.parameters.flatMap((entry) => {
+    const parameter = entry.parameter;
+    return parameter.kind === "lifetime"
+      ? []
+      : [rustGenericParameterIdentityKey(parameter)].filter(
+          (identity): identity is string => identity !== undefined,
+        );
+  }) ?? []);
 }
 
-function targetArgumentsUseNames(
-  targetTypeArguments: readonly TargetTypeRef[],
-  names: ReadonlySet<string>,
+function targetArgumentsUseIdentities(
+  targetGenericArguments: readonly RustGenericArgument[],
+  identities: ReadonlySet<string>,
 ): boolean {
-  return targetTypeArguments.some((argument) =>
-    rustTargetTypeParameterNames(argument).some((name) => names.has(name)));
-}
-
-function variantSubstitutions(
-  variant: Pick<
-    MutableSpecializationVariant,
-    "sourceTypeParameterNames" | "targetTypeArguments"
-  >,
-): ReadonlyMap<string, TargetTypeRef> {
-  return new Map(variant.sourceTypeParameterNames.map((name, index) =>
-    [name, variant.targetTypeArguments[index]!] as const));
+  return targetGenericArguments.some((argument) => argument.kind !== "lifetime" &&
+    rustGenericArgumentOpenIdentityKeys(argument).some((identity) =>
+      identities.has(identity)));
 }
 
 function variantKey(variant: MutableSpecializationVariant): string {
-  return closedMetadataKey(variant.targetTypeArguments);
+  return closedMetadataKey(specializationArguments(variant.targetGenericArguments));
 }
 
-function targetTypeRefListsEqual(
-  left: readonly TargetTypeRef[],
-  right: readonly TargetTypeRef[],
+function specializationArgumentsEqual(
+  left: readonly RustGenericArgument[],
+  right: readonly RustGenericArgument[],
 ): boolean {
-  return left.length === right.length && left.every((entry, index) =>
-    rustTargetTypeRefEquals(entry, right[index]));
+  const leftSpecialized = specializationArguments(left);
+  const rightSpecialized = specializationArguments(right);
+  return leftSpecialized.length === rightSpecialized.length && leftSpecialized.every((entry, index) =>
+    rustGenericArgumentSemanticKey(entry) === rustGenericArgumentSemanticKey(rightSpecialized[index]!));
+}
+
+function specializationArguments(
+  arguments_: readonly RustGenericArgument[],
+): readonly RustGenericArgument[] {
+  return arguments_.filter((argument) => argument.kind !== "lifetime");
+}
+
+function specializationOnly(
+  substitutions: RustGenericSubstitutions,
+): RustGenericSubstitutions {
+  return Object.freeze({
+    lifetimes: new Map(),
+    types: substitutions.types,
+    consts: substitutions.consts,
+    associatedTypes: substitutions.associatedTypes,
+  });
 }
 
 function rejected(reason: string): RustSourceCallableSpecializationRegistration {

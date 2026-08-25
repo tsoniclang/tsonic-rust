@@ -7,8 +7,20 @@ import {
 } from "../../target-model/names/identifiers.js";
 import {
   rustStructuralObjectCarrierValue,
-  rustTargetTypeParameterNames,
+  inferRustTargetGenericSubstitutions,
+  rustGenericsDeclaredParameterIdentities,
+  rustGenericsOpenGenericIdentityKeys,
+  rustGenericParameterIdentityKey,
+  rustTargetTypeOpenGenericIdentityKeys,
 } from "../../target-model/types/index.js";
+import type {
+  RustGenericArgument,
+  RustGenerics,
+} from "../../target-model/semantics/index.js";
+import type {
+  RustGenericParameterIdentitySets,
+} from "../../target-model/types/generic-substitution.js";
+import type { RustSourceGenericIndex } from "../../policy/types/source-generics.js";
 import type {
   RustSourceObjectShape,
   RustStructuralFieldImplementation,
@@ -33,7 +45,9 @@ export interface RustStructuralShapeDefinition {
   readonly ownerFileName: string;
   readonly componentId: string;
   readonly targetName: string;
-  readonly typeParameterNames: readonly string[];
+  readonly generics: RustGenerics;
+  readonly genericArguments: readonly RustGenericArgument[];
+  readonly genericIdentities: RustGenericParameterIdentitySets;
   readonly fields: readonly RustStructuralShapeField[];
 }
 
@@ -49,6 +63,7 @@ export interface RustStructuralShapePlanRegistry extends RustStructuralShapePlan
     shapes: readonly RustSourceObjectShape[],
     implementations: readonly RustStructuralFieldImplementation[],
     componentForFile: (fileName: string) => string,
+    sourceGenerics: RustSourceGenericIndex,
   ): RustStructuralShapePlan;
   isInitialized(): boolean;
   seal(): RustStructuralShapePlan;
@@ -67,11 +82,17 @@ export function createRustStructuralShapePlanRegistry(): RustStructuralShapePlan
       shapes: readonly RustSourceObjectShape[],
       implementations: readonly RustStructuralFieldImplementation[],
       componentForFile: (fileName: string) => string,
+      sourceGenerics: RustSourceGenericIndex,
     ) {
       if (current !== undefined) {
         throw new Error("Rust structural shape plan can be initialized only once.");
       }
-      current = createRustStructuralShapePlan(shapes, implementations, componentForFile);
+      current = createRustStructuralShapePlan(
+        shapes,
+        implementations,
+        componentForFile,
+        sourceGenerics,
+      );
       return current;
     },
     isInitialized() {
@@ -99,6 +120,7 @@ export function createRustStructuralShapePlan(
   shapes: readonly RustSourceObjectShape[],
   implementations: readonly RustStructuralFieldImplementation[],
   componentForFile: (fileName: string) => string,
+  sourceGenerics: RustSourceGenericIndex,
 ): RustStructuralShapePlan {
   const uniqueByKey = new Map<string, TargetTypeRef>();
   for (const shape of shapes) {
@@ -126,6 +148,10 @@ export function createRustStructuralShapePlan(
       const usedTypeNames = usedTypeNamesByComponent.get(componentId) ?? new Set<string>();
       usedTypeNamesByComponent.set(componentId, usedTypeNames);
       const usedFieldNames = new Set<string>();
+      const genericContract = structuralShapeGenericContract(carrier, sourceGenerics);
+      if (genericContract === undefined) {
+        throw new Error("Rust structural shape has no exact source-generic closure.");
+      }
       const fields = structural.fields.map((field, storageIndex): RustStructuralShapeField => {
         const targetName = allocateSnakeName(
           usedFieldNames,
@@ -169,7 +195,9 @@ export function createRustStructuralShapePlan(
         ownerFileName: structural.ownerFileName,
         componentId,
         targetName: allocatePascalName(usedTypeNames, preferredShapeName(fields)),
-        typeParameterNames: rustTargetTypeParameterNames(carrier),
+        generics: genericContract.generics,
+        genericArguments: genericContract.arguments,
+        genericIdentities: rustGenericsDeclaredParameterIdentities(genericContract.generics),
         fields: Object.freeze(fields),
       });
     });
@@ -182,9 +210,16 @@ export function createRustStructuralShapePlan(
         return undefined;
       }
       const definition = byKey.get(closedMetadataKey(carrier));
-      return definition !== undefined && rustTargetTypeRefEquals(definition.carrier, carrier)
-        ? definition
-        : undefined;
+      if (definition !== undefined && rustTargetTypeRefEquals(definition.carrier, carrier)) {
+        return definition;
+      }
+      const matches = definitions.filter((candidate) =>
+        inferRustTargetGenericSubstitutions(
+          candidate.carrier,
+          carrier,
+          candidate.genericIdentities,
+        ) !== undefined);
+      return matches.length === 1 ? matches[0] : undefined;
     },
     fieldName(carrier: TargetTypeRef, storageIndex: number) {
       return Number.isSafeInteger(storageIndex) && storageIndex >= 0
@@ -200,6 +235,49 @@ export function createRustStructuralShapePlan(
         ? definition.fields[storageIndex]
         : undefined;
     },
+  });
+}
+
+function structuralShapeGenericContract(
+  carrier: TargetTypeRef,
+  sourceGenerics: RustSourceGenericIndex,
+): { readonly generics: RustGenerics; readonly arguments: readonly RustGenericArgument[] } | undefined {
+  const required = new Set(rustTargetTypeOpenGenericIdentityKeys(carrier));
+  const parameters: import("../../target-model/semantics/index.js").RustGenericParameter[] = [];
+  const arguments_: RustGenericArgument[] = [];
+  const predicates: import("../../target-model/semantics/index.js").RustWherePredicate[] = [];
+  const selected = new Set<string>();
+  for (const contract of sourceGenerics.allContracts()) {
+    const identityContract = sourceGenerics.identityContractFor(contract.declaration);
+    if (identityContract === undefined || identityContract.arguments.length !== contract.parameters.length) {
+      return undefined;
+    }
+    for (let index = 0; index < contract.parameters.length; index += 1) {
+      const parameter = contract.parameters[index]!.parameter;
+      const identity = rustGenericParameterIdentityKey(parameter);
+      if (identity === undefined || !required.has(identity) || selected.has(identity)) continue;
+      const argument = identityContract.arguments[index];
+      if (argument === undefined || argument.kind !== parameter.kind) return undefined;
+      selected.add(identity);
+      parameters.push(parameter);
+      arguments_.push(argument);
+    }
+    const relevantPredicates = contract.generics.wherePredicates.filter((predicate) =>
+      rustGenericsOpenGenericIdentityKeys({
+        parameters: Object.freeze([]),
+        wherePredicates: Object.freeze([predicate]),
+      }).every((identity) => required.has(identity)));
+    for (const predicate of relevantPredicates) {
+      if (!predicates.includes(predicate)) predicates.push(predicate);
+    }
+  }
+  if (selected.size !== required.size) return undefined;
+  return Object.freeze({
+    generics: Object.freeze({
+      parameters: Object.freeze(parameters),
+      wherePredicates: Object.freeze(predicates),
+    }),
+    arguments: Object.freeze(arguments_),
   });
 }
 

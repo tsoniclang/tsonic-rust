@@ -12,17 +12,32 @@ import {
   providerExportDeclarationsForSemanticsModule,
 } from "@tsonic/source-core/extension";
 import {
-  rustSourceSemanticsModules,
+  analyzeRustSourceSemantics,
+} from "../semantics/analysis/index.js";
+import {
+  rustSemanticOperationDeclarations,
+  rustSemanticTypeDeclarations,
+} from "../semantics/declarations/index.js";
+import {
+  rustLangModule,
+  rustSourceProviderVersion,
+  rustSourceNativeUintExportId,
+  rustSourceSemanticsExtensionId,
+  rustSourceTypeExportIds,
+  rustSourceVirtualModulesProviderId,
   rustTypesModule,
+} from "../semantics/identity.js";
+import {
+  rustSourceSemanticsModules,
 } from "../profiles/source-modules.js";
 
-export const rustSourceSemanticsExtensionId =
-  "tsonic.rust.source-semantics";
-export const rustSourceVirtualModulesProviderId =
-  "tsonic.rust.source-virtual-modules";
-export const rustSourceProviderVersion = "0.0.1";
-export const rustConstPointerExport = "constPtr";
-export const rustMutPointerExport = "mutPtr";
+export {
+  rustSourceProviderVersion,
+  rustSourceSemanticsExtensionId,
+  rustSourceVirtualModulesProviderId,
+};
+export const rustConstPointerExport = rustSourceTypeExportIds.constPointer;
+export const rustMutPointerExport = rustSourceTypeExportIds.mutablePointer;
 
 export function createRustSourceSemanticsExtension(
   additionalProviders: readonly SourceDeclarationProvider[] = [],
@@ -44,6 +59,29 @@ export function createRustSourceSemanticsExtension(
           displayName: "Tsonic Rust source alias modules",
           virtualDirectory: "rust-source",
           modules: rustSourceSemanticsModules(),
+          importsForModule(module) {
+            if (module.moduleSpecifier === rustTypesModule) {
+              return [{
+                moduleSpecifier: "@tsonic/core/types.js",
+                namedImports: [{ exportedName: "FunctionPointer", kind: "type" }],
+                typeOnly: true,
+              }];
+            }
+            if (module.moduleSpecifier === rustLangModule) {
+              return [{
+                moduleSpecifier: rustTypesModule,
+                namedImports: [
+                  ...Object.values(rustSourceTypeExportIds),
+                  rustSourceNativeUintExportId,
+                ].map((exportedName) => ({
+                  exportedName,
+                  kind: "type" as const,
+                })),
+                typeOnly: true,
+              }];
+            }
+            return [];
+          },
           exportsForModule: rustProviderExportsForModule,
           evidenceMessage:
             "Rust target supplies source alias semantics as a complete virtual module.",
@@ -63,6 +101,9 @@ export function createRustSourceSemanticsExtension(
         context.registerSourceDeclarationProvider(provider);
       }
     },
+    analyzeSource(context): void {
+      analyzeRustSourceSemantics(context);
+    },
   };
 }
 
@@ -73,8 +114,11 @@ function rustProviderExportsForModule(
   return module.moduleSpecifier === rustTypesModule
     ? [
         ...semantics,
+        ...rustSemanticTypeDeclarations(),
         nativePointerProviderDeclaration(rustConstPointerExport),
         nativePointerProviderDeclaration(rustMutPointerExport),
       ]
-    : semantics;
+    : module.moduleSpecifier === rustLangModule
+      ? [...semantics, ...rustSemanticOperationDeclarations()]
+      : semantics;
 }

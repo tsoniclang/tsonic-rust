@@ -37,11 +37,11 @@ export function bothMissing(): boolean {
 
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
-  assert.match(output, /pub fn replace<T>\(pointer: rt::Location<T>, value: T\) -> T/u);
+  assert.match(output, /pub fn replace<T>\(pointer: rt::OwnedLocation<T>, value: T\) -> T/u);
   assert.match(output, /pointer\.store\(value\);\s*pointer\.load\(\)/u);
-  assert.match(output, /pub fn same<T>\(left: Option<rt::Location<T>>, right: Option<rt::Location<T>>\) -> bool/u);
-  assert.match(output, /rt::Location::<T>::same\(left\.as_ref\(\), right\.as_ref\(\)\)/u);
-  assert.match(output, /rt::Location::<i32>::same\(\s*Option::<rt::Location<i32>>::None\.as_ref\(\),\s*Option::<rt::Location<i32>>::None\.as_ref\(\),?\s*\)/u);
+  assert.match(output, /pub fn same<T>\(left: Option<rt::OwnedLocation<T>>, right: Option<rt::OwnedLocation<T>>\) -> bool/u);
+  assert.match(output, /rt::OwnedLocation::<T>::same\(left\.as_ref\(\), right\.as_ref\(\)\)/u);
+  assert.match(output, /rt::OwnedLocation::<i32>::same\(\s*Option::<rt::OwnedLocation<i32>>::None\.as_ref\(\),\s*Option::<rt::OwnedLocation<i32>>::None\.as_ref\(\),?\s*\)/u);
   assert.doesNotMatch(output, /(?:left|right)\.clone\(\)/u);
   assert.doesNotMatch(output, /equalPointer|loadPointer|storePointer/u);
 });
@@ -69,8 +69,8 @@ export function retainFunction<T>(
 
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
-  assert.match(output, /pub fn retain_raw<T: 'static>\(value: \*const T\) -> rt::Location<\*const T>/u);
-  assert.match(output, /pub fn retain_function<T: 'static>\(value: fn\(T\) -> T\) -> rt::Location<fn\(T\) -> T>/u);
+  assert.match(output, /pub fn retain_raw<T: 'static>\(value: \*const T\) -> rt::OwnedLocation<\*const T>/u);
+  assert.match(output, /pub fn retain_function<T: 'static>\(value: fn\(T\) -> T\) -> rt::OwnedLocation<fn\(T\) -> T>/u);
   assert.doesNotMatch(output, /retain_(?:raw|function)<T: Clone/u);
   validateGeneratedProject("typed-location-pointer-generics", result.artifacts);
 });
@@ -127,8 +127,8 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
-  assert.match(output, /rt::Location::allocate\(false\)/u);
-  assert.match(output, /rt::Location::allocate\(String::from\(""\)\)/u);
+  assert.match(output, /rt::OwnedLocation::allocate\(false\)/u);
+  assert.match(output, /rt::OwnedLocation::allocate\(String::from\(""\)\)/u);
   assert.match(output, /\.store\(/u);
   validateGeneratedProject("captured-future-writes", result.artifacts, { run: true });
 });
@@ -227,11 +227,11 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
-  assert.match(output, /let local: rt::Location<i32> = rt::Location::allocate\(1\);/u);
-  assert.match(output, /fn allocate_generic<T: Clone \+ 'static>\(value: T\) -> rt::Location<T>/u);
+  assert.match(output, /let local: rt::OwnedLocation<i32> = rt::OwnedLocation::allocate\(1\);/u);
+  assert.match(output, /fn allocate_generic<T: Clone \+ 'static>\(value: T\) -> rt::OwnedLocation<T>/u);
   assert.match(output, /\.project_member\(/u);
   assert.match(output, /\.project_index\(/u);
-  assert.match(output, /rt::Location::<i32>::same/u);
+  assert.match(output, /rt::OwnedLocation::<i32>::same/u);
   const run = validateGeneratedProject("typed-location-proof-bin", result.artifacts, { run: true });
   assert.equal(run.status, 0);
 });
@@ -391,15 +391,15 @@ export function publicValue<V>(value: V): Pointer<V> {
   assert.deepEqual(result.diagnostics, []);
   assert.match(
     artifactText(result, "src/storage.rs"),
-    /pub fn allocate_value<T: Clone \+ 'static>\(value: T\) -> rt::Location<T>/u,
+    /pub fn allocate_value<T: Clone \+ 'static>\(value: T\) -> rt::OwnedLocation<T>/u,
   );
   assert.match(
     artifactText(result, "src/middle.rs"),
-    /pub fn forward_value<U: Clone \+ 'static>\(value: U\) -> rt::Location<U>/u,
+    /pub fn forward_value<U: Clone \+ 'static>\(value: U\) -> rt::OwnedLocation<U>/u,
   );
   assert.match(
     artifactText(result, "src/index.rs"),
-    /pub fn public_value<V: Clone \+ 'static>\(value: V\) -> rt::Location<V>/u,
+    /pub fn public_value<V: Clone \+ 'static>\(value: V\) -> rt::OwnedLocation<V>/u,
   );
   validateGeneratedProject("typed-location-transitive-contract-lib", result.artifacts);
 });
@@ -457,14 +457,14 @@ test("promoted storage preserves selected mutable provider arguments", { timeout
     files: {
       "index.ts": `
 import { addressOf, loadPointer } from "@tsonic/core/lang.js";
-import { borrowMut } from "@tsonic/rust/lang.js";
+import { mut } from "@tsonic/rust/lang.js";
 import { Vector, scale } from "@acme/vectors";
 import { check } from "@acme/testing";
 
 export function main(): void {
   let value = new Vector(3, 4);
   const alias = addressOf(value);
-  scale(borrowMut(value), 2);
+  scale(mut(value), 2);
   check(loadPointer(alias).x === 6);
   check(loadPointer(alias).y === 8);
 }
@@ -491,7 +491,7 @@ test("multiple promoted mutable inputs require disjoint storage roots", { timeou
     files: {
       "index.ts": `
 import { addressOf, loadPointer } from "@tsonic/core/lang.js";
-import { borrowMut } from "@tsonic/rust/lang.js";
+import { mut } from "@tsonic/rust/lang.js";
 import { Vector, mutateBoth } from "@acme/vectors";
 import { check } from "@acme/testing";
 
@@ -500,7 +500,7 @@ export function main(): void {
   let right = new Vector(3, 4);
   const leftAlias = addressOf(left);
   const rightAlias = addressOf(right);
-  mutateBoth(borrowMut(left), borrowMut(right));
+  mutateBoth(mut(left), mut(right));
   check(loadPointer(leftAlias).x === 2);
   check(loadPointer(rightAlias).y === 5);
 }
@@ -520,7 +520,7 @@ export function main(): void {
     files: {
       "index.ts": `
 import { addressOf } from "@tsonic/core/lang.js";
-import { borrowMut } from "@tsonic/rust/lang.js";
+import { mut } from "@tsonic/rust/lang.js";
 import { Vector, mutateBoth } from "@acme/vectors";
 
 class Pair {
@@ -537,7 +537,7 @@ export function reject(): void {
   let pair = new Pair(new Vector(1, 2), new Vector(3, 4));
   addressOf(pair.left);
   addressOf(pair.right);
-  mutateBoth(borrowMut(pair.left), borrowMut(pair.right));
+  mutateBoth(mut(pair.left), mut(pair.right));
 }
 `,
     },
@@ -650,5 +650,5 @@ export function run(value: int32): int32 {
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /fn load_pointer\(value: i32\) -> i32/u);
   assert.match(output, /load_pointer\(value\)/u);
-  assert.doesNotMatch(output, /rt::Location/u);
+  assert.doesNotMatch(output, /rt::OwnedLocation/u);
 });

@@ -2,11 +2,26 @@ import type { RustExpr, RustStmt } from "../nodes.js";
 import {
   rustExpressionChildren,
   rustExpressionReferencesPath,
+  rustPatternBindsPath,
   rustStatementReferencesPath,
   rustStatementsReferencePath,
 } from "./source-usage.js";
 
 type FirstAccess = "read" | "write" | "exit" | "none";
+
+export function rustStatementsReadPath(
+  statements: readonly RustStmt[],
+  path: string,
+): boolean {
+  for (const statement of statements) {
+    if (rustStatementReadsPath(statement, path)) return true;
+    if (statement.kind === "let" && statement.name === path ||
+      statement.kind === "let-pattern" && rustPatternBindsPath(statement.pattern, path)) {
+      return false;
+    }
+  }
+  return false;
+}
 
 export function firstDirectPathAccessInStatements(
   statements: readonly RustStmt[],
@@ -17,6 +32,9 @@ export function firstDirectPathAccessInStatements(
       return statement.init !== undefined && rustExpressionReferencesPath(statement.init, path)
         ? "read"
         : "none";
+    }
+    if (statement.kind === "let-pattern" && rustPatternBindsPath(statement.pattern, path)) {
+      return rustExpressionReferencesPath(statement.init, path) ? "read" : "none";
     }
     if (statement.kind === "assign" && statement.target.kind === "path" &&
       statement.target.path === path) {
@@ -48,7 +66,8 @@ export function maxWritesInStatements(
   let writes = 0;
   for (const statement of statements) {
     writes = cappedWriteCount(writes + maxWritesInStatement(statement, path));
-    if (writes === 2 || statement.kind === "let" && statement.name === path) {
+    if (writes === 2 || statement.kind === "let" && statement.name === path ||
+      statement.kind === "let-pattern" && rustPatternBindsPath(statement.pattern, path)) {
       break;
     }
   }
@@ -73,6 +92,8 @@ function maxWritesInStatement(statement: RustStmt, path: string): number {
   switch (statement.kind) {
     case "let":
       return statement.init === undefined ? 0 : maxWritesInExpression(statement.init, path);
+    case "let-pattern":
+      return maxWritesInExpression(statement.init, path);
     case "expr":
     case "tail":
       return maxWritesInExpression(statement.expr, path);
@@ -154,6 +175,112 @@ function maxWritesInStatement(statement: RustStmt, path: string): number {
             : maxWritesInStatements(statement.finallyClause.body.statements, path)) +
           maxDispatchPreludeWrites(statement.dispatchTargets, path),
       );
+  }
+}
+
+function rustStatementReadsPath(statement: RustStmt, path: string): boolean {
+  switch (statement.kind) {
+    case "let":
+      return statement.init !== undefined && rustExpressionReadsPath(statement.init, path);
+    case "let-pattern":
+      return rustExpressionReadsPath(statement.init, path);
+    case "expr":
+    case "tail":
+      return rustExpressionReadsPath(statement.expr, path);
+    case "assign":
+      return (statement.operator === "="
+        ? rustAssignmentPlaceReadsPath(statement.target, path)
+        : rustExpressionReadsPath(statement.target, path)) ||
+        rustExpressionReadsPath(statement.value, path);
+    case "return":
+      return statement.expr !== undefined && rustExpressionReadsPath(statement.expr, path);
+    case "if":
+      return rustExpressionReadsPath(statement.condition, path) ||
+        rustStatementsReadPath(statement.then.statements, path) ||
+        (statement.else !== undefined && rustStatementsReadPath(statement.else.statements, path));
+    case "loop":
+      return rustStatementsReadPath(statement.body.statements, path);
+    case "while":
+      return rustExpressionReadsPath(statement.condition, path) ||
+        rustStatementsReadPath(statement.body.statements, path);
+    case "while-let-some":
+    case "if-let-some":
+      return rustExpressionReadsPath(statement.expression, path) ||
+        (statement.binding !== path && rustStatementsReadPath(statement.body.statements, path));
+    case "for":
+      return rustExpressionReadsPath(statement.iterable, path) ||
+        (statement.binding !== path && rustStatementsReadPath(statement.body.statements, path));
+    case "break":
+    case "continue":
+      return false;
+    case "completion-exit":
+      return statement.expr !== undefined && rustExpressionReadsPath(statement.expr, path);
+    case "resource-scope":
+      return rustStatementsReadPath(statement.body.statements, path) ||
+        rustStatementsReadPath(statement.cleanup.statements, path) ||
+        statement.dispatchTargets.some((target) =>
+          target.continuePrelude !== undefined && rustStatementsReadPath(target.continuePrelude, path));
+    case "index-assign":
+      return rustAssignmentPlaceReadsPath(statement.receiver, path) ||
+        rustExpressionReadsPath(statement.index, path) ||
+        rustExpressionReadsPath(statement.value, path);
+    case "scope":
+    case "unsafe-scope":
+      return rustStatementsReadPath(statement.body.statements, path);
+    case "throw":
+      return rustExpressionReadsPath(statement.error, path);
+    case "try-scope":
+      return rustStatementsReadPath(statement.body.statements, path) ||
+        (statement.catchClause !== undefined && statement.catchClause.binding !== path &&
+          rustStatementsReadPath(statement.catchClause.body.statements, path)) ||
+        (statement.finallyClause !== undefined &&
+          rustStatementsReadPath(statement.finallyClause.body.statements, path)) ||
+        statement.dispatchTargets.some((target) =>
+          target.continuePrelude !== undefined && rustStatementsReadPath(target.continuePrelude, path));
+  }
+}
+
+function rustExpressionReadsPath(expression: RustExpr, path: string): boolean {
+  if (expression.kind === "path") return expression.path === path;
+  if (expression.kind === "assignment") {
+    return (expression.operator === "="
+      ? rustAssignmentPlaceReadsPath(expression.target, path)
+      : rustExpressionReadsPath(expression.target, path)) ||
+      rustExpressionReadsPath(expression.value, path);
+  }
+  if (expression.kind === "closure") {
+    return !expression.params.some((parameter) => parameter.name === path) &&
+      rustExpressionReadsPath(expression.body, path);
+  }
+  if (expression.kind === "closure-block") {
+    return !expression.params.some((parameter) => parameter.name === path) &&
+      rustStatementsReadPath(expression.body.statements, path);
+  }
+  if (expression.kind === "block") {
+    for (const binding of expression.bindings) {
+      if (rustExpressionReadsPath(binding.value, path)) return true;
+      if (binding.name === path) return false;
+    }
+    return rustExpressionReadsPath(expression.value, path);
+  }
+  return rustExpressionChildren(expression).some((child) =>
+    rustExpressionReadsPath(child, path));
+}
+
+function rustAssignmentPlaceReadsPath(expression: RustExpr, path: string): boolean {
+  switch (expression.kind) {
+    case "path":
+      return false;
+    case "field":
+    case "tuple-field":
+      return rustAssignmentPlaceReadsPath(expression.receiver, path);
+    case "index":
+      return rustAssignmentPlaceReadsPath(expression.receiver, path) ||
+        rustExpressionReadsPath(expression.index, path);
+    case "dereference":
+      return rustExpressionReadsPath(expression.pointer, path);
+    default:
+      return rustExpressionReadsPath(expression, path);
   }
 }
 
@@ -247,6 +374,7 @@ function rustPlaceIsRootedAtPath(expression: RustExpr, path: string): boolean {
     case "path":
       return expression.path === path;
     case "field":
+    case "tuple-field":
       return rustPlaceIsRootedAtPath(expression.receiver, path);
     case "index":
       return rustPlaceIsRootedAtPath(expression.receiver, path);
@@ -274,6 +402,8 @@ function firstAccessesInStatement(
         ? replaceNone(initializer, new Set<FirstAccess>(["exit"]))
         : initializer;
     }
+    case "let-pattern":
+      return firstAccessesInExpression(statement.init, path);
     case "expr":
       return firstAccessesInExpression(statement.expr, path);
     case "assign":

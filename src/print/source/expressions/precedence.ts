@@ -72,6 +72,7 @@ export function expressionPrecedence(expression: RustExpr): RustPrecedence {
     case "method-call":
     case "invoke":
     case "field":
+    case "tuple-field":
     case "index":
     case "await":
       return RustPrecedence.Postfix;

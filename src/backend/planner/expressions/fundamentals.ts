@@ -41,6 +41,7 @@ import type { RustExpr, RustType } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustSelectedTargetOperation as TargetOperationFact, TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
+import { rustSealedExpressionCarrier } from "./expression-carriers.js";
 
 export function rustCallableConstructionType(
   carrier: TargetTypeRef,
@@ -214,8 +215,7 @@ export function planDeleteExpression(node: Node, context: RustPlanContext): Rust
 }
 
 export function expressionCarrier(node: Node, context: RustPlanContext): TargetTypeRef | undefined {
-  return context.expressionOverrides?.get(node)?.carrier ??
-    context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
+  return rustSealedExpressionCarrier(node, context);
 }
 
 function rustPartialComparison(left: RustExpr, right: RustExpr): RustExpr {
@@ -321,6 +321,7 @@ export function effectivePlannedExpressionCarrier(
   context: RustPlanContext,
 ): TargetTypeRef | undefined {
   return context.expressionOverrides?.get(node)?.carrier ??
+    context.input.program.ownership.executionCarrierFor(node) ??
     rustEffectiveValueCarrier(context.input.program.facts, node);
 }
 

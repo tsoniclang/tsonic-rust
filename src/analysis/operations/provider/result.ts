@@ -308,9 +308,17 @@ export function providerOperationTemplate<
     resultCarrier: row.resultCarrier,
     ...(row.parameterCarriers === undefined ? {} : { parameterCarriers: row.parameterCarriers }),
     ...(row.receiverCarrier === undefined ? {} : { receiverCarrier: row.receiverCarrier }),
-    ...(row.typeParameters === undefined ? {} : { typeParameters: row.typeParameters }),
+    ...(row.targetReceiver === undefined ? {} : { targetReceiver: row.targetReceiver }),
+    ...(row.sourceGenericBindings === undefined ? {} : { sourceGenericBindings: row.sourceGenericBindings }),
+    ...(row.targetInferenceParameters === undefined
+      ? {}
+      : { targetInferenceParameters: row.targetInferenceParameters }),
+    ...(row.targetGenerics === undefined ? {} : { targetGenerics: row.targetGenerics }),
+    ...(row.targetCallableGenerics === undefined
+      ? {}
+      : { targetCallableGenerics: row.targetCallableGenerics }),
     ...(row.typeRequirements === undefined ? {} : { typeRequirements: row.typeRequirements }),
-    ...(row.targetTypeArguments === undefined ? {} : { targetTypeArguments: row.targetTypeArguments }),
+    ...(row.targetGenericArguments === undefined ? {} : { targetGenericArguments: row.targetGenericArguments }),
     ...(row.resultConversion === undefined ? {} : { resultConversion: row.resultConversion }),
     isAsync: row.isAsync === true,
     isFallible: row.isFallible === true,
@@ -578,7 +586,7 @@ export function selectedArgumentMatchScore(
     if ((expected.kind === "function-pointer" || expected.kind === "closure" || callable !== undefined) &&
       (kind === "KindArrowFunction" || kind === "KindFunctionExpression")) {
       const parameterCount = expected.kind === "function-pointer" || expected.kind === "closure"
-        ? expected.args.length
+        ? expected.parameters.length
         : callable!.parameters.length;
       return context.ast.parameters(node).length === parameterCount ? 1 : undefined;
     }
@@ -589,8 +597,10 @@ export function selectedArgumentMatchScore(
       actual,
       expected,
       options.projectTypes,
+      options.sourceGenerics,
     );
-    if (reconciliation.kind === "conversion" || reconciliation.kind === "project-upcast") {
+    if (reconciliation.kind === "identity" || reconciliation.kind === "conversion" ||
+      reconciliation.kind === "project-upcast") {
       return 1;
     }
     return expected.kind === "source-primitive" && isRustNumericCarrier(expected) &&

@@ -28,7 +28,8 @@ import {
   mergeRustProviderSemantics,
 } from "../providers/packages/semantics.js";
 import {
-  createRustTargetConfiguration,
+  createRustTargetConfigurationInput,
+  sealRustTargetConfiguration,
 } from "../options/rust-target-options.js";
 import { rustRuntimeCrateReference } from "./runtime-references.js";
 
@@ -43,15 +44,19 @@ type RustCompilationSessionState =
 export function createRustCompilationSession(
   context: TargetCompilationSessionContext,
 ): TargetCompilationSession {
-  const configuration = createRustTargetConfiguration(
+  const configurationInput = createRustTargetConfigurationInput(
     context.target,
     context.projectDirectory,
     context.paths.targetOutputRoot,
   );
   const capturedProviderSemantics = composeRustProviderSemantics(context.capabilities);
   const compilerProviderSession = createRustCompilerProviderSession({
-    configuration,
+    configuration: configurationInput,
   });
+  const configuration = sealRustTargetConfiguration(
+    configurationInput,
+    compilerProviderSession.dialect,
+  );
   const jsEnabled = context.selectedSurfaceIds.includes(rustJsSourceProfileOwnerId);
   let state: RustCompilationSessionState = "created";
   return Object.freeze({

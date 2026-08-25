@@ -23,13 +23,19 @@ import {
   rustRegExpStringIteratorTargetType,
   rustStringTargetType,
   rustVecTargetType,
-  substituteRustTargetTypeParameters,
+  rustGenericParameterIdentity,
+  rustClosureTargetType,
+  substituteRustTargetGenerics,
 } from "../../../target-model/types/index.js";
+import { rustTypeSemanticKey } from "../../../target-model/semantics/index.js";
 import { denseDefined } from "./project.js";
 import { mergeProviderDeclarationIdentities } from "../../evidence/selected-source.js";
 import { providerVirtualDeclarationFactKey } from "@tsonic/tsts";
 import { resolveRustTargetType } from "./target.js";
-import { rustProviderGenericRequirementsAreSatisfied } from "../provider-generic-requirements.js";
+import {
+  resolveRustProviderGenericRequirements,
+  rustResolvedProviderTypeRequirementsAreSatisfied,
+} from "../provider-generic-requirements.js";
 import { rustProviderOperationOwnerMatches } from "../../operations/provider-selection.js";
 import type {
   ExtensionFactSubject,
@@ -42,6 +48,7 @@ import type { RustProviderTypeRow } from "../../../providers/packages/model.js";
 import type { RustSourceProfileRegistry } from "../source-profile.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustGenericArgument } from "../../../target-model/semantics/index.js";
 import { jsRegExpSourceProfileIdentity } from "@tsonic/js-source-profile";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 
@@ -152,6 +159,11 @@ export function instantiateTargetType(
   options: RustTargetTypeResolutionOptions,
   resolving: Set<object>,
 ): TargetTypeRef | undefined {
+  if (base.sourceGenericBindings.some((binding) =>
+    binding.target.kind === "generic-parameter" &&
+    binding.target.parameter.kind !== "type")) {
+    return undefined;
+  }
   const rawArguments = context.currentSemantics.types.isTypeReference(type)
     ? context.currentSemantics.types.typeArguments(type)
     : [];
@@ -164,23 +176,102 @@ export function instantiateTargetType(
   if (targetArguments.some((argument) => argument === undefined)) {
     return undefined;
   }
-  return instantiateProviderTargetType(base, targetArguments as TargetTypeRef[]);
+  return instantiateProviderTargetType(
+    base,
+    (targetArguments as TargetTypeRef[]).map((value) => Object.freeze({
+      kind: "type" as const,
+      value,
+    })),
+    context.sourceGenerics,
+  );
 }
 
 export function instantiateProviderTargetType(
   relation: RustProviderTypeRow,
-  arguments_: readonly TargetTypeRef[],
+  arguments_: readonly RustGenericArgument[],
+  sourceGenerics: import("../source-generics.js").RustSourceGenericIndex,
 ): TargetTypeRef | undefined {
-  if (relation.sourceTypeParameters.length !== arguments_.length) {
+  if (relation.sourceGenericBindings.length !== arguments_.length) {
     return undefined;
   }
-  const substitutions = new Map(
-    relation.sourceTypeParameters.map((name, index) => [name, arguments_[index]!] as const),
+  const lifetimeSubstitutions = new Map<string, import("../../../target-model/semantics/index.js").RustLifetimeRef>();
+  const typeSubstitutions = new Map<string, TargetTypeRef>();
+  const constSubstitutions = new Map<string, import("../../../target-model/semantics/index.js").RustConstExpr>();
+  const associatedTypeSubstitutions = new Map<string, TargetTypeRef>();
+  const requirementsByName = new Map<string, TargetTypeRef>();
+  for (const [index, binding] of relation.sourceGenericBindings.entries()) {
+    const argument = arguments_[index];
+    if (argument === undefined) {
+      return undefined;
+    }
+    if (binding.target.kind === "associated-type") {
+      if (argument.kind !== "type") return undefined;
+      const projection = substituteRustTargetGenerics(binding.target.projection, {
+        lifetimes: lifetimeSubstitutions,
+        types: typeSubstitutions,
+        consts: constSubstitutions,
+        associatedTypes: associatedTypeSubstitutions,
+      });
+      if (projection.kind !== "associated-type") return undefined;
+      const projectionKey = rustTypeSemanticKey(projection);
+      const existing = associatedTypeSubstitutions.get(projectionKey);
+      if (existing !== undefined && !rustTargetTypeRefEquals(existing, argument.value)) {
+        return undefined;
+      }
+      associatedTypeSubstitutions.set(projectionKey, argument.value);
+      requirementsByName.set(binding.sourceName, argument.value);
+      continue;
+    }
+    if (binding.target.kind === "semantic-parameter") {
+      if (argument.kind !== "type") return undefined;
+      requirementsByName.set(binding.sourceName, argument.value);
+      continue;
+    }
+    const identity = rustGenericParameterIdentity(binding.target.parameter);
+    if (identity === undefined || argument.kind !== identity.kind) return undefined;
+    switch (argument.kind) {
+      case "lifetime":
+        lifetimeSubstitutions.set(identity.identityKey, argument.value);
+        break;
+      case "type":
+        typeSubstitutions.set(identity.identityKey, argument.value);
+        requirementsByName.set(binding.sourceName, argument.value);
+        break;
+      case "const":
+        constSubstitutions.set(identity.identityKey, argument.value);
+        break;
+    }
+  }
+  const substitutions = {
+    lifetimes: lifetimeSubstitutions,
+    types: typeSubstitutions,
+    consts: constSubstitutions,
+    associatedTypes: associatedTypeSubstitutions,
+  };
+  const requirements = resolveRustProviderGenericRequirements(
+    relation.typeRequirements,
+    requirementsByName,
+    substitutions,
   );
-  if (!rustProviderGenericRequirementsAreSatisfied(relation.typeRequirements, substitutions)) {
+  if (requirements === undefined ||
+    !rustResolvedProviderTypeRequirementsAreSatisfied(requirements, sourceGenerics)) {
     return undefined;
   }
-  return substituteRustTargetTypeParameters(relation.targetCarrier, substitutions);
+  const targetCarrier = substituteRustTargetGenerics(relation.targetCarrier, substitutions);
+  const callableRole = relation.semanticRoles?.find((role) => role.kind === "callable-trait");
+  if (callableRole === undefined) return targetCarrier;
+  const argumentBySourceName = new Map(relation.sourceGenericBindings.map((binding, index) =>
+    [binding.sourceName, arguments_[index]] as const));
+  const parameterTuple = argumentBySourceName.get(callableRole.parameterTupleSourceName);
+  const result = argumentBySourceName.get(callableRole.resultSourceName);
+  return parameterTuple?.kind === "type" && parameterTuple.value.kind === "tuple" &&
+      result?.kind === "type"
+    ? rustClosureTargetType({
+        callTrait: callableRole.callTrait,
+        parameters: parameterTuple.value.elements,
+        result: result.value,
+      })
+    : undefined;
 }
 
 export function resolveOwnedSourceProfileTypeName(

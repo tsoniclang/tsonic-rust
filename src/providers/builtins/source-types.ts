@@ -15,6 +15,10 @@ import type {
   RustProviderSemantics,
   RustProviderTypeRow,
 } from "../packages/model.js";
+import {
+  rustRawPointerTargetType,
+  rustTypeParameterTargetType,
+} from "../../target-model/types/constructors.js";
 
 const nativePointerType = pointerType(
   "tsonic-source-core",
@@ -66,18 +70,41 @@ function pointerType(
   exportId: string,
   mutability: "const" | "mut",
 ): RustProviderTypeRow {
+  const parameterIdentity = Object.freeze({
+    kind: "provider" as const,
+    providerId,
+    providerVersion,
+    compilationSnapshotId: `${providerId}@${providerVersion}`,
+    itemId: `${moduleSpecifier}:${exportId}:type-parameter:T`,
+  });
+  const parameterType = rustTypeParameterTargetType(parameterIdentity, "T");
   return Object.freeze({
     exportId,
-    targetCarrier: Object.freeze({
-      kind: "pointer",
-      pointee: Object.freeze({ kind: "type-parameter", name: "T" }),
-      mutability,
-    }),
+    targetDeclarationKind: "type-alias",
+    targetCarrier: rustRawPointerTargetType(
+      parameterType,
+      mutability === "mut",
+    ),
     providerPackageId,
     providerId,
     providerVersion,
     providerModuleId: moduleSpecifier,
     moduleSpecifier,
-    sourceTypeParameters: Object.freeze(["T"]),
+    sourceGenericBindings: Object.freeze([Object.freeze({
+      sourceName: "T",
+      target: Object.freeze({
+        kind: "generic-parameter" as const,
+        parameter: Object.freeze({ kind: "type" as const, value: parameterType }),
+      }),
+    })]),
+    targetGenerics: Object.freeze({
+      parameters: Object.freeze([Object.freeze({
+        kind: "type" as const,
+        identity: parameterIdentity,
+        displayName: "T",
+        bounds: Object.freeze([]),
+      })]),
+      wherePredicates: Object.freeze([]),
+    }),
   });
 }

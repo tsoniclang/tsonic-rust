@@ -7,15 +7,24 @@ import {
   isRustFinalizedTaggedArrayInput,
   rustFinalizedTargetInputMayMutateSource,
 } from "./conversions.js";
-import { closedMetadataEquals, isClosedMetadata } from "../../../target-model/metadata/closed-data.js";
+import { closedMetadataEquals, isClosedMetadata, isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
 import { createInputFactory, finalizeTargetInputs } from "./inputs.js";
 import { isRustErrorBoundary } from "../../../target-model/operations/error-boundary.js";
-import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { rustFutureTargetType, rustSliceRefTargetType, rustTargetTypeParameterNames } from "../../../target-model/types/index.js";
+import { isRustBoundValue, isRustGenericArgumentValue, isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import {
+  rustBoundOpenGenericIdentityKeys,
+  rustFutureTargetType,
+  rustGenericArgumentOpenIdentityKeys,
+  rustSliceRefTargetType,
+  rustTargetTypeOpenGenericIdentityKeys,
+} from "../../../target-model/types/index.js";
+import { rustBoundSemanticKey } from "../../../target-model/semantics/index.js";
 import { rustProviderOperationFormAcceptsTargetTypeArguments, rustProviderOperationFormContractViolation } from "../../../policy/operations/forms.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import type { RustFinalizedOperationAbi, RustFinalizedOperationResult, RustFinalizedSourceArgument, RustFinalizedSourceArgumentRole, RustFinalizedSourceInput, RustFinalizedTargetInput, RustFinalizedValueConversion } from "./model.js";
 import type { RustProviderConstantArgument, RustValueConversion } from "../keys.js";
+import type { RustResolvedProviderTypeParameterRequirement } from "../../../target-model/operations/model.js";
+import type { RustBound } from "../../../target-model/semantics/index.js";
 
 export function validateRustFinalizedOperationAbi(candidate: unknown): candidate is RustFinalizedOperationAbi {
   if (!isClosedMetadata(candidate) || !isRustFinalizedOperationAbiShape(candidate)) {
@@ -28,7 +37,7 @@ export function validateRustFinalizedOperationAbi(candidate: unknown): candidate
     abi.sourceArguments.length,
     abi.sourceArguments.filter((argument) => argument.disposition === "runtime").map((argument) => argument.sourceIndex),
   ) !== undefined ||
-    (abi.targetTypeArguments.length > 0 &&
+    (abi.targetGenericArguments.length > 0 &&
       !rustProviderOperationFormAcceptsTargetTypeArguments(abi.target)) ||
     (abi.effects.evaluation !== "observable" && abi.effects.evaluation !== "pure") ||
     (abi.effects.invocation !== "infallible" && abi.effects.invocation !== "fallible") ||
@@ -170,22 +179,97 @@ function isRustFinalizedOperationAbiShape(value: unknown): value is RustFinalize
     "sourceArguments",
     "targetReceiver",
     "targetArguments",
-    "targetTypeArguments",
+    "targetGenericArguments",
+    "typeRequirements",
     "result",
     "effects",
   ]) || !operationKinds.has(value.operationKind) || !isRecord(value.target) ||
     !Array.isArray(value.sourceArguments) || !Array.isArray(value.targetArguments) ||
-    !Array.isArray(value.targetTypeArguments)) {
+    !Array.isArray(value.targetGenericArguments) ||
+    !validateRustResolvedProviderTypeRequirements(value.typeRequirements)) {
     return false;
   }
   if (!isSourceReceiver(value.sourceReceiver) ||
     !value.sourceArguments.every(isSourceArgument) ||
     !isTargetReceiver(value.targetReceiver) ||
     !value.targetArguments.every(isTargetInput) ||
-    !value.targetTypeArguments.every((carrier) =>
-      isRustTargetTypeRef(carrier) && rustTargetTypeParameterNames(carrier).length === 0) ||
+    !value.targetGenericArguments.every((argument) =>
+      isRustGenericArgumentValue(argument) && rustGenericArgumentOpenIdentityKeys(argument).length === 0) ||
     !isOperationResult(value.result) || !isEffects(value.effects)) {
     return false;
+  }
+  return providerRequirementSourcesExist(
+    value.sourceReceiver,
+    value.sourceArguments,
+    value.typeRequirements,
+  );
+}
+
+function providerRequirementSourcesExist(
+  sourceReceiver: RustFinalizedOperationAbi["sourceReceiver"],
+  sourceArguments: RustFinalizedOperationAbi["sourceArguments"],
+  requirements: readonly RustResolvedProviderTypeParameterRequirement[],
+): boolean {
+  const sourceArgumentIndexes = new Set(sourceArguments.map((argument) =>
+    argument.sourceIndex));
+  return requirements.every((requirement) => requirement.sourceInputs.every((source) =>
+    source.kind === "receiver"
+      ? sourceReceiver.kind === "receiver"
+      : sourceArgumentIndexes.has(source.sourceIndex)));
+}
+
+export function validateRustResolvedProviderTypeRequirements(
+  value: unknown,
+): value is readonly RustResolvedProviderTypeParameterRequirement[] {
+  if (!isDenseDataArray(value)) return false;
+  const names = new Set<string>();
+  let previousName = "";
+  for (const row of value) {
+    if (!isRecord(row) || !hasExactKeys(row, [
+      "sourceName",
+      "carrier",
+      "sourceInputs",
+      "requirements",
+    ]) ||
+      typeof row.sourceName !== "string" || row.sourceName.length === 0 ||
+      names.has(row.sourceName) || previousName > row.sourceName ||
+      !isRustTargetTypeRef(row.carrier) ||
+      rustTargetTypeOpenGenericIdentityKeys(row.carrier).length !== 0 ||
+      !isResolvedProviderRequirementSourceInputs(row.sourceInputs) ||
+      !isDenseDataArray(row.requirements) || row.requirements.length === 0 ||
+      !row.requirements.every((bound) =>
+        isRustBoundValue(bound) && rustBoundOpenGenericIdentityKeys(bound).length === 0)) {
+      return false;
+    }
+    const requirements = row.requirements as readonly RustBound[];
+    const keys = requirements.map(rustBoundSemanticKey);
+    if (new Set(keys).size !== keys.length ||
+      keys.some((key, index) => index > 0 && key < keys[index - 1]!)) {
+      return false;
+    }
+    names.add(row.sourceName);
+    previousName = row.sourceName;
+  }
+  return true;
+}
+
+function isResolvedProviderRequirementSourceInputs(value: unknown): boolean {
+  if (!isDenseDataArray(value)) return false;
+  let receiverSeen = false;
+  let previousArgument = -1;
+  for (const source of value) {
+    if (!isRecord(source)) return false;
+    if (source.kind === "receiver") {
+      if (receiverSeen || previousArgument >= 0 || !hasExactKeys(source, ["kind"])) return false;
+      receiverSeen = true;
+      continue;
+    }
+    if (source.kind !== "argument" || !hasExactKeys(source, ["kind", "sourceIndex"]) ||
+      !Number.isSafeInteger(source.sourceIndex) || (source.sourceIndex as number) < 0 ||
+      (source.sourceIndex as number) <= previousArgument) {
+      return false;
+    }
+    previousArgument = source.sourceIndex as number;
   }
   return true;
 }

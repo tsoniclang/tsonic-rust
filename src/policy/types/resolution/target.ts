@@ -97,7 +97,10 @@ export function resolveRustTargetType(
       ? undefined
       : resolveProjectSourceCarrier(
           symbol,
-          resolvedSourceTypeArguments as readonly TargetTypeRef[],
+          (resolvedSourceTypeArguments as readonly TargetTypeRef[]).map((value) => ({
+            kind: "type" as const,
+            value,
+          })),
           context,
           options,
         );
@@ -148,7 +151,7 @@ export function resolveRustTargetType(
             authoredTypeRoot,
           )
         );
-      return elements.length > 0 && elements.every((element) => element !== undefined)
+      return elements.every((element) => element !== undefined)
         ? rustTupleTargetType(elements as TargetTypeRef[])
         : undefined;
     }

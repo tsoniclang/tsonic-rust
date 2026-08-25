@@ -4,9 +4,7 @@ import {
   KindClassStaticBlockDeclaration,
   Node_Initializer,
 } from "@tsonic/target-api/source";
-import {
-  rustCarrierSupportsClone,
-} from "../../../target-model/types/index.js";
+import { rustCloneTrait } from "../../../target-model/types/index.js";
 import { rustProjectStaticFieldStorage } from "../../../analysis/project-types/object-layout.js";
 import type { RustItem, RustStmt } from "../../target-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
@@ -15,6 +13,7 @@ import { planBlockLike } from "../statements/index.js";
 import { planRustModuleCell } from "../project/module-storage.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
+import { rustSealedCarrierSupportsTrait } from "../ownership/traits.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 
 export interface PlannedRustClassInitialization {
@@ -79,7 +78,7 @@ export function planRustClassInitialization(
       ));
       return undefined;
     }
-    if (!rustCarrierSupportsClone(carrier)) {
+    if (!rustSealedCarrierSupportsTrait(carrier, rustCloneTrait, context)) {
       context.diagnostics.push(unsupportedConstructDiagnostic(
         diagnosticInput(context, member),
         "rust.backend.static-field-carrier",

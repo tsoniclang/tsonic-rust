@@ -29,12 +29,14 @@ import {
   rustOptionTargetType,
   isRustVecCarrier,
   rustJsArrayTargetType,
+  rustFixedArrayCarrierValue,
+  rustJsArrayLikeElementTargetType,
   rustSourcePrimitiveTargetType,
   rustVecTargetType,
 } from "../../target-model/types/index.js";
 import { appendMalformedSourceAst } from "../declarations/project-types.js";
 import { appendRustDiagnostic, recordPolicySelection, rustOperationContext, rustResolutionContext } from "../program/walk.js";
-import { recordBindingPatternFacts, recordBindingWrite, validateFlowMarkerAgainstMode } from "../declarations/types-and-bindings.js";
+import { recordBindingPatternFacts, recordBindingWrite, validateOwnershipExpressionAgainstContract } from "../declarations/types-and-bindings.js";
 import { recordProjectSourceBinding } from "../expressions/references.js";
 import { recordStatementFacts } from "../control-flow/statements.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
@@ -186,7 +188,7 @@ export function recordSelectedOperationInputs(
       if (mode === undefined) {
         continue;
       }
-      validateFlowMarkerAgainstMode(walk, argument, mode);
+      validateOwnershipExpressionAgainstContract(walk, argument, mode);
       if (mode === "mut-ref") {
         recordBindingWrite(walk, argument, "referent");
       }
@@ -273,19 +275,23 @@ export function resolveArrayLiteralCarrier(
   const lane: "native" | "js" = walk.jsEnabled ? "js" : "native";
   if (expected !== undefined && isRustVecCarrier(expected)) {
     expectedElement = expected.element;
-  } else if (expected?.kind === "target-named" && isRustJsArrayCarrier(expected)) {
-    expectedElement = expected.typeArguments?.[0];
+  } else if (isRustJsArrayCarrier(expected)) {
+    expectedElement = rustJsArrayLikeElementTargetType(expected);
   }
-  if (expected?.kind === "target-specific" && expected.name === "fixed-array") {
-    const value = expected.value as { element: TargetTypeRef; length: number };
-    if (presentElements.length !== value.length) {
+  const fixedArray = rustFixedArrayCarrierValue(expected);
+  if (fixedArray !== undefined) {
+    if (presentElements.length !== fixedArray.length) {
       return undefined;
     }
     for (const element of presentElements) {
-      resolveExpressionCarrier(walk, element, sourceFile, value.element);
+      resolveExpressionCarrier(walk, element, sourceFile, fixedArray.element);
     }
     setRustOperationFact(walk, expression, { kind: "fixed-array-literal", operationId: "tsonic.rust.fixed-array.literal" });
-    return setCarrierFact(walk, expression, expected);
+    return setCarrierFact(walk, expression, {
+      kind: "array",
+      element: fixedArray.element,
+      length: { kind: "literal", literalKind: "integer", value: BigInt(fixedArray.length) },
+    });
   }
   if (expectedElement === undefined) {
     for (const element of presentElements) {

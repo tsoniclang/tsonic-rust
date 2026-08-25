@@ -3,7 +3,10 @@ import assert from "node:assert/strict";
 import { dirname } from "node:path";
 import { compileRustTarget } from "../../../dist/backend/compile.js";
 import { composeRustProviderSemantics } from "../../../dist/providers/packages/semantics.js";
-import { createRustTargetConfiguration } from "../../../dist/options/rust-target-options.js";
+import {
+  createRustTargetConfigurationInput,
+  sealRustTargetConfiguration,
+} from "../../../dist/options/rust-target-options.js";
 import {
   fakeCompileInput,
   fakeSourceFile,
@@ -13,11 +16,16 @@ import {
 const providerSemantics = composeRustProviderSemantics([]);
 
 function compile(input) {
-  const configuration = createRustTargetConfiguration(
+  const configurationInput = createRustTargetConfigurationInput(
     input.target,
     dirname(input.paths.projectFilePath),
     input.paths.targetOutputRoot,
   );
+  const configuration = sealRustTargetConfiguration(configurationInput, Object.freeze({
+    edition: configurationInput.edition,
+    compilerIdentity: "fail-closed-test-harness",
+    enabledLanguageFeatures: Object.freeze([]),
+  }));
   const result = compileRustTarget(Object.freeze({
     input,
     configuration,

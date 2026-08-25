@@ -4,7 +4,10 @@ import {
   rustIsizeToInt32ValueConversion,
   rustUsizeToInt32ValueConversion,
 } from "../../../target-model/conversions/model.js";
-import { rustJsStringTargetId } from "../../../target-model/types/index.js";
+import {
+  rustJsStringTargetId,
+  rustJsStringTargetType,
+} from "../../../target-model/types/index.js";
 import type { JsOperationRowData } from "./model.js";
 
 const owner = jsSourceSemanticsIdentity.typeExport;
@@ -259,7 +262,7 @@ export const exactJsStringOperationRows: readonly JsOperationRowData[] = Object.
         name: "concat_values",
         receiverMode: "ref",
         leadingArguments: [],
-        elementCarrier: { kind: "target-named", id: rustJsStringTargetId },
+        elementCarrier: rustJsStringTargetType(),
       },
       result: { ref: "js-string" },
     },

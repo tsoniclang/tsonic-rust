@@ -3,13 +3,12 @@ import type {
   Node,
   ProviderDeclarationIdentity,
   ResolvedSourceIterationInfo,
-  SourceFile,
   Symbol,
   Type,
 } from "@tsonic/tsts";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustSourcePolicyContext } from "../model/context.js";
+import type { RustTargetTypeResolutionContext } from "../types/resolution.js";
 import type { RustPlanWriter } from "../../target-model/facts/selections.js";
 import type {
   RustSelectedTargetOperation,
@@ -31,10 +30,8 @@ type ResolvedSourcePropertyAccessInfo = NonNullable<
   ReturnType<SourceFileSemantics["operations"]["propertyAccess"]>
 >;
 
-export interface RustOperationPolicyContext extends RustSourcePolicyContext {
+export interface RustOperationPolicyContext extends RustTargetTypeResolutionContext {
   readonly facts: RustPlanWriter;
-  readonly currentSourceFile: SourceFile;
-  readonly currentSemantics: SourceFileSemantics;
   readonly extensionId: "tsonic.rust.policy";
 }
 

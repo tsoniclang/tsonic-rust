@@ -62,6 +62,24 @@ export function createRustModuleBindingPolicy(
       declarationKind: "const" | "let" | "var",
       valueCarrier: TargetTypeRef,
     ): Exclude<RustModuleBindingFact, { readonly storage: "native-callable" }> {
+      const controls = context.declarationApplications.forDeclaration(declaration)
+        .flatMap((occurrence) => occurrence.fact.kind === "application"
+          ? [occurrence.fact.application.operation]
+          : []);
+      if (controls.includes("mutable-static")) {
+        return {
+          declarationKind: declarationKind === "const" ? "let" : declarationKind,
+          storage: "native-static",
+          valueCarrier,
+        };
+      }
+      if (controls.includes("thread-local")) {
+        return {
+          declarationKind,
+          storage: "thread-local-cell",
+          valueCarrier,
+        };
+      }
       const initializer = Node_Initializer(context.ast, declaration);
       const initializerKind = initializer === undefined
         ? undefined

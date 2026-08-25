@@ -5,38 +5,24 @@ import type {
   ProviderDeclarationIdentity,
   ResolvedSourceCallInfo,
   Signature,
-  SourcePrimitiveKind,
   Symbol,
   Type,
 } from "@tsonic/tsts";
+import type {
+  RustGenericArgument,
+  RustGenerics,
+  RustConditionalTraitRequirement,
+  RustTraitImplementationEvidence,
+  RustTypeRef,
+} from "../semantics/index.js";
 
-export type RustTargetTypeRef =
-  | { readonly kind: "source-primitive"; readonly name: SourcePrimitiveKind }
-  | { readonly kind: "target-named"; readonly id: string; readonly typeArguments?: readonly RustTargetTypeRef[] }
-  | { readonly kind: "type-parameter"; readonly name: string }
-  | { readonly kind: "array"; readonly element: RustTargetTypeRef; readonly rank?: number }
-  | { readonly kind: "slice"; readonly element: RustTargetTypeRef }
-  | { readonly kind: "tuple"; readonly elements: readonly RustTargetTypeRef[] }
-  | { readonly kind: "reference"; readonly referent: RustTargetTypeRef; readonly mutable: boolean; readonly lifetime?: string }
-  | { readonly kind: "pointer"; readonly pointee: RustTargetTypeRef; readonly mutability?: "const" | "mut" | "target-defined" }
-  | { readonly kind: "function-pointer"; readonly args: readonly RustTargetTypeRef[]; readonly result: RustTargetTypeRef; readonly abi?: readonly string[]; readonly isUnsafe?: boolean }
-  | { readonly kind: "closure"; readonly args: readonly RustTargetTypeRef[]; readonly result: RustTargetTypeRef }
-  | { readonly kind: "opaque"; readonly id: string }
-  | { readonly kind: "associated-type"; readonly owner: RustTargetTypeRef; readonly name: string }
-  | { readonly kind: "lifetime"; readonly name: string }
-  | { readonly kind: "target-specific"; readonly target: "rust"; readonly name: string; readonly value?: unknown };
+export type RustTargetTypeRef = RustTypeRef;
 
 export type TargetTypeRef = RustTargetTypeRef;
 
-export interface RustNamedTypeTraitRequirement {
-  readonly typeArgumentIndex: number;
-  readonly traitPath: string;
-}
+export type RustNamedTypeTraitRequirement = RustConditionalTraitRequirement;
 
-export interface RustNamedTypeTraitImplementation {
-  readonly traitPath: string;
-  readonly requirements: readonly RustNamedTypeTraitRequirement[];
-}
+export type RustNamedTypeTraitImplementation = RustTraitImplementationEvidence;
 
 export interface RustNamedTypeTraitContract {
   readonly implementations: readonly RustNamedTypeTraitImplementation[];
@@ -50,10 +36,6 @@ export interface RustTargetParameter {
   readonly paramsArray?: boolean;
 }
 
-export interface RustTargetTypeParameter {
-  readonly name: string;
-}
-
 export interface RustTargetMember {
   readonly id: string;
   readonly sourceName: string;
@@ -62,7 +44,7 @@ export interface RustTargetMember {
   readonly static?: boolean;
   readonly parameters: readonly RustTargetParameter[];
   readonly returnType?: RustTargetTypeRef;
-  readonly typeParameters?: readonly RustTargetTypeParameter[];
+  readonly generics: RustGenerics;
   readonly providerDeclaration?: ProviderDeclarationIdentity;
 }
 
@@ -83,7 +65,7 @@ export interface RustSelectedTargetSignature {
     readonly receiverCarrier: RustTargetTypeRef;
     readonly storageIndex: number;
   };
-  readonly targetTypeArguments?: readonly RustTargetTypeRef[];
+  readonly targetGenericArguments?: readonly RustGenericArgument[];
   readonly providerDeclaration?: ProviderDeclarationIdentity;
   readonly argumentConversions?: readonly RustTargetCallArgumentSlot[];
   readonly sourceSignature?: Signature;

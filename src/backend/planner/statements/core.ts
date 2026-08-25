@@ -31,6 +31,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustBlock, RustStmt } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
+import { planRustFixedMutableLoanStatements } from "./fixed-index-loans.js";
 
 export type RustAssignmentOperationFact = Extract<
   RustTargetOperationFact,
@@ -135,6 +136,10 @@ export function planStatementSequence(
   diagnosticNode: Node,
   context: RustPlanContext,
 ): RustBlock | undefined {
+  const fixedMutableLoanStatements = planRustFixedMutableLoanStatements(children, context);
+  if (fixedMutableLoanStatements.size > 0) {
+    context = { ...context, fixedMutableLoanStatements };
+  }
   const statements: RustStmt[] = [];
   let failed = false;
   for (let index = 0; index < children.length; index += 1) {

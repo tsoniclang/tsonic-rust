@@ -7,6 +7,7 @@ import type { RustFinalizedValueConversion } from "./finalized-operation-abi.js"
 import type { RustPlanKey } from "../../target-model/facts/keys.js";
 import type { RustSourceParameterAbiFact } from "./callables-and-resources.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustGenericSubstitutionEntries } from "../../target-model/types/index.js";
 
 export type RustObjectLiteralValueAdapter =
   | {
@@ -40,6 +41,7 @@ export type RustObjectLiteralValueAdapter =
 
 export interface RustObjectLiteralMethodParameterAbi {
   readonly form: RustSourceParameterAbiFact["form"];
+  readonly sourceContract: RustSourceParameterAbiFact["sourceContract"];
   readonly valueCarrier: TargetTypeRef;
   readonly parameterCarrier: TargetTypeRef;
   readonly mode: RustArgumentMode;
@@ -82,7 +84,7 @@ export type RustObjectLiteralMethodParameterAdapter =
 export interface RustObjectLiteralMethodAdapterFact {
   readonly implementations: readonly {
     readonly sourceCallable: Node;
-    readonly typeParameterSubstitutions: readonly (readonly [string, TargetTypeRef])[];
+    readonly genericSubstitutions: RustGenericSubstitutionEntries;
     readonly parameters: readonly RustObjectLiteralMethodParameterAbi[];
     readonly returnCarrier: TargetTypeRef;
   }[];
@@ -111,12 +113,12 @@ function objectLiteralMethodAdapterFactEquals(
       return candidate !== undefined && implementation.sourceCallable === candidate.sourceCallable &&
         closedMetadataEquals(
           {
-            typeParameterSubstitutions: implementation.typeParameterSubstitutions,
+            genericSubstitutions: implementation.genericSubstitutions,
             parameters: implementation.parameters,
             returnCarrier: implementation.returnCarrier,
           },
           {
-            typeParameterSubstitutions: candidate.typeParameterSubstitutions,
+            genericSubstitutions: candidate.genericSubstitutions,
             parameters: candidate.parameters,
             returnCarrier: candidate.returnCarrier,
           },

@@ -18,17 +18,25 @@ import type {
 } from "../facts/keys.js";
 import { rustValueConversionIsFallible } from "../../target-model/conversions/contracts.js";
 import {
-  inferRustTargetTypeParameterBindings,
+  emptyRustGenericSubstitutions,
+  inferRustTargetGenericSubstitutions,
   isRustCopyCarrier,
   isRustVecCarrier,
   rustCallableProtocol,
   rustCarrierSupportsClone,
   rustClosureProtocol,
+  mergeRustGenericSubstitutions,
+  rustGenericSubstitutionEntries,
+  rustGenericSubstitutionsForOpenArguments,
+  rustGenericsDeclaredParameterIdentities,
   rustOptionElementCarrier,
   rustSourceTypeCarrierValue,
-  rustTargetTypeContainsTypeParameter,
-  substituteRustTargetTypeParameters,
+  substituteRustTargetGenerics,
 } from "../../target-model/types/index.js";
+import type { RustGenericSubstitutions } from "../../target-model/types/index.js";
+import { rustGenericParameterIdentityKey } from "../../target-model/types/index.js";
+import type { RustSourceGenericIndex } from "../../policy/types/source-generics.js";
+import type { RustGenericArgument, RustGenerics } from "../../target-model/semantics/index.js";
 import type { RustProjectMethodDispatchPlan } from "../project-types/method-dispatch.js";
 import type {
   RustProjectTypeDefinition,
@@ -47,6 +55,7 @@ export function recordRustObjectLiteralMethodAdapterFacts(input: {
   readonly facts: RustPlanBuilder;
   readonly projectTypes: RustProjectTypePolicy;
   readonly projectMethodDispatch: RustProjectMethodDispatchPlan;
+  readonly sourceGenerics: RustSourceGenericIndex;
   readonly expressions: readonly Node[];
 }): readonly RustObjectLiteralMethodAdapterIssue[] {
   const issues: RustObjectLiteralMethodAdapterIssue[] = [];
@@ -78,6 +87,7 @@ function createObjectLiteralMethodAdapterFact(
     readonly facts: RustPlanBuilder;
     readonly projectTypes: RustProjectTypePolicy;
     readonly projectMethodDispatch: RustProjectMethodDispatchPlan;
+    readonly sourceGenerics: RustSourceGenericIndex;
   },
   expression: Node,
   operation: Extract<RustTargetOperationFact, { readonly kind: "record-literal" }>,
@@ -95,12 +105,20 @@ function createObjectLiteralMethodAdapterFact(
       continue;
     }
     const sourceCallable = contribution.expression;
-    const sourceTypeParameterNames = sourceCallableTypeParameterNames(input, sourceCallable);
-    const sourceParameters = sourceCallableParameterAbis(input, sourceCallable, new Map());
-    const sourceReturnCarrier = sourceCallableReturnCarrier(input, sourceCallable, new Map());
-    if (sourceTypeParameterNames === undefined) {
+    const sourceGenericContract = input.sourceGenerics.contractFor(sourceCallable);
+    const sourceParameters = sourceCallableParameterAbis(
+      input,
+      sourceCallable,
+      emptyRustGenericSubstitutions,
+    );
+    const sourceReturnCarrier = sourceCallableReturnCarrier(
+      input,
+      sourceCallable,
+      emptyRustGenericSubstitutions,
+    );
+    if (sourceGenericContract === undefined) {
       return reject(
-        "The authored object-literal method has no dense, named type-parameter contract.",
+        "The authored object-literal method has no exact mixed-generic contract.",
         sourceCallable,
       );
     }
@@ -128,13 +146,19 @@ function createObjectLiteralMethodAdapterFact(
         );
       }
       for (const variant of input.projectMethodDispatch.variantsForMember(contractMethod)) {
-        const contractSubstitutions = projectOwnerTypeSubstitutions(owner, relationship.targetType);
-        variant.sourceTypeParameterNames.forEach((name, index) => {
-          const target = variant.targetTypeArguments[index];
-          if (target !== undefined) {
-            contractSubstitutions.set(name, target);
-          }
-        });
+        const ownerSubstitutions = projectOwnerGenericSubstitutions(
+          owner,
+          relationship.targetType,
+        );
+        const contractSubstitutions = ownerSubstitutions === undefined
+          ? undefined
+          : mergeRustGenericSubstitutions(ownerSubstitutions, variant.specialization);
+        if (contractSubstitutions === undefined) {
+          return reject(
+            "The selected object-literal method owner and specialization facts conflict.",
+            contractMethod,
+          );
+        }
         const contractParameters = sourceCallableParameterAbis(
           input,
           contractMethod,
@@ -152,13 +176,13 @@ function createObjectLiteralMethodAdapterFact(
           );
         }
         const sourceSubstitutions = inferObjectLiteralImplementationSubstitutions(
-          sourceTypeParameterNames,
+          sourceGenericContract.generics,
           sourceParameters,
           sourceReturnCarrier,
           contractParameters,
           contractReturnCarrier,
-          variant.sourceTypeParameterNames,
-          variant.targetTypeArguments,
+          variant.sourceGenerics,
+          variant.targetGenericArguments,
         );
         if (sourceSubstitutions === undefined) {
           return reject(
@@ -168,7 +192,7 @@ function createObjectLiteralMethodAdapterFact(
         }
         const implementationParameters = sourceParameters.map((parameter) =>
           substituteObjectLiteralParameterAbi(parameter, sourceSubstitutions));
-        const implementationReturnCarrier = substituteRustTargetTypeParameters(
+        const implementationReturnCarrier = substituteRustTargetGenerics(
           sourceReturnCarrier,
           sourceSubstitutions,
         );
@@ -176,11 +200,13 @@ function createObjectLiteralMethodAdapterFact(
           contractParameters,
           implementationParameters,
           input.projectTypes,
+          input.sourceGenerics,
         );
         const resultAdapter = selectObjectLiteralValueAdapter(
           implementationReturnCarrier,
           contractReturnCarrier,
           input.projectTypes,
+          input.sourceGenerics,
         );
         if (parameterAdapters === undefined || resultAdapter === undefined) {
           return reject(
@@ -188,8 +214,7 @@ function createObjectLiteralMethodAdapterFact(
             contractMethod,
           );
         }
-        const substitutions = Object.freeze(sourceTypeParameterNames.map((name) =>
-          Object.freeze([name, sourceSubstitutions.get(name)!] as const)));
+        const substitutions = rustGenericSubstitutionEntries(sourceSubstitutions);
         const implementationKey = closedMetadataKey({
           substitutions,
           parameters: implementationParameters,
@@ -201,7 +226,7 @@ function createObjectLiteralMethodAdapterFact(
           implementationIndex = implementations.length;
           implementations.push(Object.freeze({
             sourceCallable,
-            typeParameterSubstitutions: substitutions,
+            genericSubstitutions: substitutions,
             parameters: Object.freeze(implementationParameters),
             returnCarrier: implementationReturnCarrier,
           }));
@@ -230,25 +255,10 @@ function createObjectLiteralMethodAdapterFact(
       });
 }
 
-function sourceCallableTypeParameterNames(
-  input: { readonly ast: AstReader },
-  callable: Node,
-): readonly string[] | undefined {
-  const parameters = input.ast.typeParameters(callable);
-  if (!isDenseDataArray(parameters) || parameters.some((parameter) => parameter === undefined)) {
-    return undefined;
-  }
-  const names = (parameters as readonly Node[]).map((parameter) => {
-    const name = input.ast.name(parameter);
-    return name === undefined ? "" : input.ast.text(name);
-  });
-  return names.some((name) => name.length === 0) ? undefined : Object.freeze(names);
-}
-
 function sourceCallableParameterAbis(
   input: { readonly ast: AstReader; readonly facts: RustPlanBuilder },
   callable: Node,
-  substitutions: ReadonlyMap<string, TargetTypeRef>,
+  substitutions: RustGenericSubstitutions,
 ): RustObjectLiteralMethodParameterAbi[] | undefined {
   const parameters = input.ast.parameters(callable);
   if (!isDenseDataArray(parameters) || parameters.some((parameter) => parameter === undefined)) {
@@ -267,7 +277,7 @@ function sourceCallableParameterAbis(
 function sourceCallableReturnCarrier(
   input: { readonly facts: RustPlanBuilder },
   callable: Node,
-  substitutions: ReadonlyMap<string, TargetTypeRef>,
+  substitutions: RustGenericSubstitutions,
 ): TargetTypeRef | undefined {
   const fact = input.facts.get(callable, rustSourceCallableReturnFactKey) ??
     input.facts.resolve(callable, rustSourceCallableReturnFactKey);
@@ -283,68 +293,60 @@ function sourceCallableReturnCarrier(
   const returnCarrier = fact?.returnCarrier ?? operationReturn;
   return returnCarrier === undefined
     ? undefined
-    : substituteRustTargetTypeParameters(returnCarrier, substitutions);
+    : substituteRustTargetGenerics(returnCarrier, substitutions);
 }
 
 function substituteObjectLiteralParameterAbi(
   abi: RustObjectLiteralMethodParameterAbi,
-  substitutions: ReadonlyMap<string, TargetTypeRef>,
+  substitutions: RustGenericSubstitutions,
 ): RustObjectLiteralMethodParameterAbi {
   return Object.freeze({
     form: abi.form,
-    valueCarrier: substituteRustTargetTypeParameters(abi.valueCarrier, substitutions),
-    parameterCarrier: substituteRustTargetTypeParameters(abi.parameterCarrier, substitutions),
+    sourceContract: abi.sourceContract,
+    valueCarrier: substituteRustTargetGenerics(abi.valueCarrier, substitutions),
+    parameterCarrier: substituteRustTargetGenerics(abi.parameterCarrier, substitutions),
     mode: abi.mode,
   });
 }
 
-function projectOwnerTypeSubstitutions(
+function projectOwnerGenericSubstitutions(
   owner: RustProjectTypeDefinition,
   carrier: TargetTypeRef,
-): Map<string, TargetTypeRef> {
+): RustGenericSubstitutions | undefined {
   const value = rustSourceTypeCarrierValue(carrier);
-  return new Map(owner.typeParameterNames.map((name, index) =>
-    [name, value?.typeArguments[index] ?? { kind: "type-parameter", name }] as const));
+  return value === undefined
+    ? undefined
+    : rustGenericSubstitutionsForOpenArguments(
+        owner.genericArguments,
+        value.genericArguments,
+      );
 }
 
 function inferObjectLiteralImplementationSubstitutions(
-  sourceTypeParameterNames: readonly string[],
+  sourceGenerics: RustGenerics,
   sourceParameters: readonly RustObjectLiteralMethodParameterAbi[],
   sourceReturnCarrier: TargetTypeRef,
   contractParameters: readonly RustObjectLiteralMethodParameterAbi[],
   contractReturnCarrier: TargetTypeRef,
-  contractTypeParameterNames: readonly string[],
-  contractTypeArguments: readonly TargetTypeRef[],
-): ReadonlyMap<string, TargetTypeRef> | undefined {
-  if (sourceTypeParameterNames.length === 0) {
-    return new Map();
-  }
-  const selectedNames = new Set(sourceTypeParameterNames);
-  const inferred = new Map<string, TargetTypeRef>();
-  if (sourceTypeParameterNames.length === contractTypeParameterNames.length &&
-    contractTypeParameterNames.length === contractTypeArguments.length) {
-    sourceTypeParameterNames.forEach((name, index) => {
-      const target = contractTypeArguments[index];
-      if (target !== undefined) {
-        inferred.set(name, target);
-      }
-    });
-  }
+  contractGenerics: RustGenerics,
+  contractArguments: readonly RustGenericArgument[],
+): RustGenericSubstitutions | undefined {
+  let inferred = initialGenericSubstitutions(
+    sourceGenerics,
+    contractGenerics,
+    contractArguments,
+  );
+  if (inferred === undefined) return undefined;
+  const parameters = rustGenericsDeclaredParameterIdentities(sourceGenerics);
   const merge = (pattern: TargetTypeRef, actual: TargetTypeRef): boolean => {
-    if (!rustTargetTypeContainsTypeParameter(pattern, selectedNames)) {
-      return true;
-    }
-    const candidate = inferRustTargetTypeParameterBindings(pattern, actual, selectedNames);
-    if (candidate === undefined) {
-      return false;
-    }
-    for (const [name, carrier] of candidate) {
-      const existing = inferred.get(name);
-      if (existing !== undefined && !rustTargetTypeRefEquals(existing, carrier)) {
-        return false;
-      }
-      inferred.set(name, carrier);
-    }
+    const candidate = inferRustTargetGenericSubstitutions(
+      pattern,
+      actual,
+      parameters,
+      inferred,
+    );
+    if (candidate === undefined) return false;
+    inferred = candidate;
     return true;
   };
   for (const [index, source] of sourceParameters.entries()) {
@@ -357,17 +359,49 @@ function inferObjectLiteralImplementationSubstitutions(
       return undefined;
     }
   }
-  if (!merge(sourceReturnCarrier, contractReturnCarrier) ||
-    sourceTypeParameterNames.some((name) => !inferred.has(name))) {
+  if (!merge(sourceReturnCarrier, contractReturnCarrier)) return undefined;
+  const complete = inferred;
+  if (complete === undefined ||
+    [...parameters.lifetimes].some((identity) => !complete.lifetimes.has(identity)) ||
+    [...parameters.types].some((identity) => !complete.types.has(identity)) ||
+    [...parameters.consts].some((identity) => !complete.consts.has(identity)) ||
+    [...parameters.associatedTypes].some((identity) => !complete.associatedTypes.has(identity))) {
     return undefined;
   }
-  return inferred;
+  return complete;
+}
+
+function initialGenericSubstitutions(
+  source: RustGenerics,
+  contract: RustGenerics,
+  contractArguments: readonly RustGenericArgument[],
+): RustGenericSubstitutions | undefined {
+  if (source.parameters.length !== contract.parameters.length ||
+    contract.parameters.length !== contractArguments.length ||
+    source.parameters.some((parameter, index) =>
+      parameter.kind !== contract.parameters[index]?.kind ||
+      parameter.kind !== contractArguments[index]?.kind)) return undefined;
+  const lifetimes = new Map<string, Extract<RustGenericArgument, { readonly kind: "lifetime" }>["value"]>();
+  const types = new Map<string, TargetTypeRef>();
+  const consts = new Map<string, Extract<RustGenericArgument, { readonly kind: "const" }>["value"]>();
+  const associatedTypes = new Map<string, TargetTypeRef>();
+  for (let index = 0; index < source.parameters.length; index += 1) {
+    const parameter = source.parameters[index]!;
+    const argument = contractArguments[index]!;
+    const identity = rustGenericParameterIdentityKey(parameter);
+    if (identity === undefined || parameter.kind !== argument.kind) return undefined;
+    if (argument.kind === "lifetime") lifetimes.set(identity, argument.value);
+    else if (argument.kind === "type") types.set(identity, argument.value);
+    else consts.set(identity, argument.value);
+  }
+  return Object.freeze({ lifetimes, types, consts, associatedTypes });
 }
 
 function selectObjectLiteralParameterAdapters(
   contractParameters: readonly RustObjectLiteralMethodParameterAbi[],
   implementationParameters: readonly RustObjectLiteralMethodParameterAbi[],
   projectTypes: RustProjectTypePolicy,
+  sourceGenerics: RustSourceGenericIndex,
 ): RustObjectLiteralMethodParameterAdapter[] | undefined {
   const adapters: RustObjectLiteralMethodParameterAdapter[] = [];
   for (const [implementationIndex, target] of implementationParameters.entries()) {
@@ -385,6 +419,7 @@ function selectObjectLiteralParameterAdapters(
           sourceRest.parameterCarrier.element,
           targetElementCarrier,
           projectTypes,
+          sourceGenerics,
         );
         if (elementAdapter === undefined) {
           return undefined;
@@ -402,7 +437,12 @@ function selectObjectLiteralParameterAdapters(
         return undefined;
       }
       const elementAdapters = remaining.map((source) =>
-        selectObjectLiteralValueAdapter(source.valueCarrier, targetElementCarrier, projectTypes));
+        selectObjectLiteralValueAdapter(
+          source.valueCarrier,
+          targetElementCarrier,
+          projectTypes,
+          sourceGenerics,
+        ));
       if (elementAdapters.some((adapter) => adapter === undefined)) {
         return undefined;
       }
@@ -427,6 +467,7 @@ function selectObjectLiteralParameterAdapters(
       source.parameterCarrier,
       target.parameterCarrier,
       projectTypes,
+      sourceGenerics,
     );
     if (runtimeAdapter !== undefined &&
       (source.mode === target.mode || source.mode === "mut-ref" && target.mode === "ref")) {
@@ -449,7 +490,12 @@ function selectObjectLiteralParameterAdapters(
       : target.valueCarrier;
     const logicalAdapter = targetLogicalCarrier === undefined
       ? undefined
-      : selectObjectLiteralValueAdapter(source.valueCarrier, targetLogicalCarrier, projectTypes);
+      : selectObjectLiteralValueAdapter(
+          source.valueCarrier,
+          targetLogicalCarrier,
+          projectTypes,
+          sourceGenerics,
+        );
     if (logicalAdapter === undefined) {
       return undefined;
     }
@@ -468,6 +514,7 @@ function selectObjectLiteralValueAdapter(
   sourceCarrier: TargetTypeRef,
   targetCarrier: TargetTypeRef,
   projectTypes: RustProjectTypePolicy,
+  sourceGenerics: RustSourceGenericIndex,
 ): RustObjectLiteralValueAdapter | undefined {
   if (rustTargetTypeRefEquals(sourceCarrier, targetCarrier)) {
     return Object.freeze({ kind: "identity", sourceCarrier, targetCarrier });
@@ -475,18 +522,33 @@ function selectObjectLiteralValueAdapter(
   const sourceOption = rustOptionElementCarrier(sourceCarrier);
   const targetOption = rustOptionElementCarrier(targetCarrier);
   if (targetOption !== undefined && sourceOption === undefined) {
-    const element = selectObjectLiteralValueAdapter(sourceCarrier, targetOption, projectTypes);
+    const element = selectObjectLiteralValueAdapter(
+      sourceCarrier,
+      targetOption,
+      projectTypes,
+      sourceGenerics,
+    );
     return element === undefined
       ? undefined
       : Object.freeze({ kind: "option-some", sourceCarrier, targetCarrier, element });
   }
   if (sourceOption !== undefined && targetOption !== undefined) {
-    const element = selectObjectLiteralValueAdapter(sourceOption, targetOption, projectTypes);
+    const element = selectObjectLiteralValueAdapter(
+      sourceOption,
+      targetOption,
+      projectTypes,
+      sourceGenerics,
+    );
     return element === undefined
       ? undefined
       : Object.freeze({ kind: "option-map", sourceCarrier, targetCarrier, element });
   }
-  const selected = selectRustValueCarrierReconciliation(sourceCarrier, targetCarrier, projectTypes);
+  const selected = selectRustValueCarrierReconciliation(
+    sourceCarrier,
+    targetCarrier,
+    projectTypes,
+    sourceGenerics,
+  );
   switch (selected.kind) {
     case "identity":
       return Object.freeze({ kind: "identity", sourceCarrier, targetCarrier });

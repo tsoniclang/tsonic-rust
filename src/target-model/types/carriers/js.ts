@@ -1,155 +1,222 @@
-import { rustBigIntTargetId, rustJsArrayConcatItemTargetId, rustJsArrayTargetId, rustJsDateTargetId, rustJsErrorTargetId, rustJsMapTargetId, rustJsRegExpExecArrayTargetId, rustJsRegExpIndicesTargetId, rustJsRegExpMatchArrayTargetId, rustJsRegExpNamedGroupsTargetId, rustJsRegExpNamedIndicesTargetId, rustJsRegExpStringIteratorTargetId, rustJsRegExpTargetId, rustJsSetTargetId, rustJsStringTargetId, rustJsValueTargetId, rustNeverCarrierName, rustNullTargetId, rustProgramErrorTargetId, rustRegExpExecArrayTargetId, rustRegExpIndicesTargetId, rustRegExpMatchArrayTargetId, rustRegExpNamedGroupsTargetId, rustRegExpNamedIndicesTargetId, rustRegExpStringIteratorTargetId, rustStringTargetId, rustUndefinedTargetId } from "./source-types.js";
+import {
+  rustBigIntTargetId,
+  rustJsArrayConcatItemTargetId,
+  rustJsArrayTargetId,
+  rustJsDateTargetId,
+  rustJsErrorTargetId,
+  rustJsMapTargetId,
+  rustJsRegExpExecArrayTargetId,
+  rustJsRegExpIndicesTargetId,
+  rustJsRegExpMatchArrayTargetId,
+  rustJsRegExpNamedGroupsTargetId,
+  rustJsRegExpNamedIndicesTargetId,
+  rustJsRegExpStringIteratorTargetId,
+  rustJsRegExpTargetId,
+  rustJsSetTargetId,
+  rustJsStringTargetId,
+  rustJsValueTargetId,
+  rustNullTargetId,
+  rustProgramErrorTargetId,
+  rustRegExpExecArrayTargetId,
+  rustRegExpIndicesTargetId,
+  rustRegExpMatchArrayTargetId,
+  rustRegExpNamedGroupsTargetId,
+  rustRegExpNamedIndicesTargetId,
+  rustRegExpStringIteratorTargetId,
+  rustStringTargetId,
+  rustUndefinedTargetId,
+} from "./source-types.js";
+import {
+  rustBuiltinPathTargetType,
+  rustPathTypeArguments,
+  rustPathTypeMatches,
+  rustTypeIdentityItemId,
+} from "../constructors.js";
 import { rustOptionTargetType } from "./optional.js";
 import type { TargetTypeRef } from "../model.js";
 
+const runtimePathById: Readonly<Record<string, string>> = Object.freeze({
+  [rustJsValueTargetId]: "js_abi::JsValue",
+  [rustJsStringTargetId]: "js_abi::JsString",
+  [rustJsErrorTargetId]: "rt::JsError",
+  [rustProgramErrorTargetId]: "rt::TsonicError",
+  [rustJsArrayTargetId]: "js_abi::JsArray",
+  [rustJsArrayConcatItemTargetId]: "js_abi::JsArrayConcatItem",
+  [rustJsMapTargetId]: "js_abi::JsMap",
+  [rustJsSetTargetId]: "js_abi::JsSet",
+  [rustJsDateTargetId]: "js_abi::JsDate",
+  [rustJsRegExpTargetId]: "js_abi::JsRegExp",
+  [rustRegExpExecArrayTargetId]: "js_abi::RegExpExecArray",
+  [rustRegExpMatchArrayTargetId]: "js_abi::RegExpMatchArray",
+  [rustRegExpIndicesTargetId]: "js_abi::RegExpIndices",
+  [rustRegExpNamedGroupsTargetId]: "js_abi::RegExpNamedGroups",
+  [rustRegExpNamedIndicesTargetId]: "js_abi::RegExpNamedIndices",
+  [rustRegExpStringIteratorTargetId]: "js_abi::RegExpStringIterator",
+  [rustJsRegExpExecArrayTargetId]: "js_abi::JsRegExpExecArray",
+  [rustJsRegExpMatchArrayTargetId]: "js_abi::JsRegExpMatchArray",
+  [rustJsRegExpIndicesTargetId]: "js_abi::JsRegExpIndices",
+  [rustJsRegExpNamedGroupsTargetId]: "js_abi::JsRegExpNamedGroups",
+  [rustJsRegExpNamedIndicesTargetId]: "js_abi::JsRegExpNamedIndices",
+  [rustJsRegExpStringIteratorTargetId]: "js_abi::JsRegExpStringIterator",
+});
+
+function runtimeTargetType(
+  id: string,
+  typeArguments: readonly TargetTypeRef[] = [],
+): TargetTypeRef {
+  const path = runtimePathById[id];
+  if (path === undefined) {
+    throw new Error(`Missing exact Rust runtime path for '${id}'.`);
+  }
+  return rustBuiltinPathTargetType(id, path, typeArguments, "tsonic-runtime");
+}
+
 export function rustJsValueTargetType(): TargetTypeRef {
-  return { kind: "target-named", id: rustJsValueTargetId };
+  return runtimeTargetType(rustJsValueTargetId);
 }
 
 export function rustJsStringTargetType(): TargetTypeRef {
-  return { kind: "target-named", id: rustJsStringTargetId };
+  return runtimeTargetType(rustJsStringTargetId);
 }
 
 export function rustJsErrorTargetType(): TargetTypeRef {
-  return { kind: "target-named", id: rustJsErrorTargetId };
+  return runtimeTargetType(rustJsErrorTargetId);
 }
 
 export function rustProgramErrorTargetType(): TargetTypeRef {
-  return { kind: "target-named", id: rustProgramErrorTargetId };
+  return runtimeTargetType(rustProgramErrorTargetId);
 }
 
 export function isRustProgramErrorCarrier(carrier: TargetTypeRef | undefined): boolean {
-  return carrier?.kind === "target-named" && carrier.id === rustProgramErrorTargetId;
+  return rustPathTypeMatches(carrier, rustProgramErrorTargetId);
 }
 
 export function rustJsArrayTargetType(element: TargetTypeRef): TargetTypeRef {
-  return { kind: "target-named", id: rustJsArrayTargetId, typeArguments: [element] };
+  return runtimeTargetType(rustJsArrayTargetId, [element]);
 }
 
 export function rustJsArrayConcatItemTargetType(element: TargetTypeRef): TargetTypeRef {
-  return { kind: "target-named", id: rustJsArrayConcatItemTargetId, typeArguments: [element] };
+  return runtimeTargetType(rustJsArrayConcatItemTargetId, [element]);
 }
 
 export function rustJsMapTargetType(key: TargetTypeRef, value: TargetTypeRef): TargetTypeRef {
-  return { kind: "target-named", id: rustJsMapTargetId, typeArguments: [key, value] };
+  return runtimeTargetType(rustJsMapTargetId, [key, value]);
 }
 
 export function rustJsSetTargetType(value: TargetTypeRef): TargetTypeRef {
-  return { kind: "target-named", id: rustJsSetTargetId, typeArguments: [value] };
+  return runtimeTargetType(rustJsSetTargetId, [value]);
 }
 
 export function getRustJsMapTargetTypes(
   carrier: TargetTypeRef | undefined,
 ): { readonly key: TargetTypeRef; readonly value: TargetTypeRef } | undefined {
-  if (carrier?.kind !== "target-named" || carrier.id !== rustJsMapTargetId ||
-    carrier.typeArguments?.length !== 2) {
-    return undefined;
-  }
-  const [key, value] = carrier.typeArguments;
-  return key === undefined || value === undefined ? undefined : { key, value };
+  const argumentsList = rustPathTypeMatches(carrier, rustJsMapTargetId)
+    ? rustPathTypeArguments(carrier)
+    : undefined;
+  const [key, value] = argumentsList ?? [];
+  return argumentsList?.length === 2 && key !== undefined && value !== undefined
+    ? { key, value }
+    : undefined;
 }
 
 export function getRustJsSetElementTargetType(
   carrier: TargetTypeRef | undefined,
 ): TargetTypeRef | undefined {
-  return carrier?.kind === "target-named" && carrier.id === rustJsSetTargetId &&
-    carrier.typeArguments?.length === 1
-    ? carrier.typeArguments[0]
+  const argumentsList = rustPathTypeMatches(carrier, rustJsSetTargetId)
+    ? rustPathTypeArguments(carrier)
     : undefined;
+  return argumentsList?.length === 1 ? argumentsList[0] : undefined;
 }
 
 export function rustJsDateTargetType(): TargetTypeRef {
-  return { kind: "target-named", id: rustJsDateTargetId };
+  return runtimeTargetType(rustJsDateTargetId);
 }
 
 export function rustJsRegExpTargetType(): TargetTypeRef {
-  return { kind: "target-named", id: rustJsRegExpTargetId };
+  return runtimeTargetType(rustJsRegExpTargetId);
 }
 
 export function rustRegExpExecArrayTargetType(): TargetTypeRef {
-  return { kind: "target-named", id: rustRegExpExecArrayTargetId };
+  return runtimeTargetType(rustRegExpExecArrayTargetId);
 }
 
 export function rustRegExpMatchArrayTargetType(): TargetTypeRef {
-  return { kind: "target-named", id: rustRegExpMatchArrayTargetId };
+  return runtimeTargetType(rustRegExpMatchArrayTargetId);
 }
 
 export function rustRegExpIndicesTargetType(): TargetTypeRef {
-  return { kind: "target-named", id: rustRegExpIndicesTargetId };
+  return runtimeTargetType(rustRegExpIndicesTargetId);
 }
 
 export function rustRegExpNamedGroupsTargetType(): TargetTypeRef {
-  return { kind: "target-named", id: rustRegExpNamedGroupsTargetId };
+  return runtimeTargetType(rustRegExpNamedGroupsTargetId);
 }
 
 export function rustRegExpNamedIndicesTargetType(): TargetTypeRef {
-  return { kind: "target-named", id: rustRegExpNamedIndicesTargetId };
+  return runtimeTargetType(rustRegExpNamedIndicesTargetId);
 }
 
 export function rustRegExpStringIteratorTargetType(): TargetTypeRef {
-  return { kind: "target-named", id: rustRegExpStringIteratorTargetId };
+  return runtimeTargetType(rustRegExpStringIteratorTargetId);
 }
 
 export function rustJsRegExpExecArrayTargetType(): TargetTypeRef {
-  return { kind: "target-named", id: rustJsRegExpExecArrayTargetId };
+  return runtimeTargetType(rustJsRegExpExecArrayTargetId);
 }
 
 export function rustJsRegExpMatchArrayTargetType(): TargetTypeRef {
-  return { kind: "target-named", id: rustJsRegExpMatchArrayTargetId };
+  return runtimeTargetType(rustJsRegExpMatchArrayTargetId);
 }
 
 export function rustJsRegExpIndicesTargetType(): TargetTypeRef {
-  return { kind: "target-named", id: rustJsRegExpIndicesTargetId };
+  return runtimeTargetType(rustJsRegExpIndicesTargetId);
 }
 
 export function rustJsRegExpNamedGroupsTargetType(): TargetTypeRef {
-  return { kind: "target-named", id: rustJsRegExpNamedGroupsTargetId };
+  return runtimeTargetType(rustJsRegExpNamedGroupsTargetId);
 }
 
 export function rustJsRegExpNamedIndicesTargetType(): TargetTypeRef {
-  return { kind: "target-named", id: rustJsRegExpNamedIndicesTargetId };
+  return runtimeTargetType(rustJsRegExpNamedIndicesTargetId);
 }
 
 export function rustJsRegExpStringIteratorTargetType(): TargetTypeRef {
-  return { kind: "target-named", id: rustJsRegExpStringIteratorTargetId };
+  return runtimeTargetType(rustJsRegExpStringIteratorTargetId);
 }
 
-export function isRustVecCarrier(carrier: TargetTypeRef | undefined): carrier is Extract<TargetTypeRef, { kind: "array" }> {
-  return carrier?.kind === "array";
+export function isRustVecCarrier(
+  carrier: TargetTypeRef | undefined,
+): carrier is Extract<TargetTypeRef, { readonly kind: "sequence" }> {
+  return carrier?.kind === "sequence";
 }
 
 export function isRustJsArrayCarrier(
   carrier: TargetTypeRef | undefined,
-): carrier is TargetTypeRef & {
-  readonly kind: "target-named";
-  readonly id: typeof rustJsArrayTargetId;
-  readonly typeArguments?: readonly TargetTypeRef[];
-} {
-  return carrier?.kind === "target-named" && carrier.id === rustJsArrayTargetId;
+): carrier is Extract<TargetTypeRef, { readonly kind: "path" }> {
+  return rustPathTypeMatches(carrier, rustJsArrayTargetId);
 }
 
 export function rustJsArrayLikeElementTargetType(
   carrier: TargetTypeRef | undefined,
 ): TargetTypeRef | undefined {
-  if (carrier?.kind !== "target-named") {
-    return undefined;
+  const id = rustTypeIdentityItemId(carrier);
+  if (id === rustJsArrayTargetId) {
+    const argumentsList = rustPathTypeArguments(carrier);
+    return argumentsList?.length === 1 ? argumentsList[0] : undefined;
   }
-  if (carrier.id === rustJsArrayTargetId) {
-    return carrier.typeArguments?.length === 1 ? carrier.typeArguments[0] : undefined;
+  if (id === rustRegExpExecArrayTargetId || id === rustRegExpMatchArrayTargetId) {
+    return rustBuiltinPathTargetType(rustStringTargetId, "String");
   }
-  if (carrier.id === rustRegExpExecArrayTargetId || carrier.id === rustRegExpMatchArrayTargetId) {
-    return { kind: "target-named", id: rustStringTargetId };
-  }
-  if (carrier.id === rustJsRegExpExecArrayTargetId || carrier.id === rustJsRegExpMatchArrayTargetId) {
+  if (id === rustJsRegExpExecArrayTargetId || id === rustJsRegExpMatchArrayTargetId) {
     return rustJsStringTargetType();
   }
-  return carrier.id === rustRegExpIndicesTargetId || carrier.id === rustJsRegExpIndicesTargetId
+  return id === rustRegExpIndicesTargetId || id === rustJsRegExpIndicesTargetId
     ? {
         kind: "tuple",
-        elements: [
+        elements: Object.freeze([
           { kind: "source-primitive", name: "float64" },
           { kind: "source-primitive", name: "float64" },
-        ],
+        ]),
       }
     : undefined;
 }
@@ -158,12 +225,9 @@ export function rustJsArrayLikeIterationElementTargetType(
   carrier: TargetTypeRef | undefined,
 ): TargetTypeRef | undefined {
   const element = rustJsArrayLikeElementTargetType(carrier);
-  if (element === undefined || carrier?.kind !== "target-named") {
-    return undefined;
-  }
-  return rustRegExpResultArrayTargetIds.has(carrier.id)
-    ? rustOptionTargetType(element)
-    : element;
+  const id = rustTypeIdentityItemId(carrier);
+  if (element === undefined || id === undefined) return undefined;
+  return rustRegExpResultArrayTargetIds.has(id) ? rustOptionTargetType(element) : element;
 }
 
 const rustRegExpResultArrayTargetIds: ReadonlySet<string> = new Set([
@@ -180,36 +244,35 @@ export function isRustJsArrayLikeCarrier(carrier: TargetTypeRef | undefined): bo
 }
 
 export function isRustJsValueCarrier(carrier: TargetTypeRef | undefined): boolean {
-  return carrier?.kind === "target-named" && carrier.id === rustJsValueTargetId;
+  return rustPathTypeMatches(carrier, rustJsValueTargetId);
 }
 
 export function isRustStringCarrier(carrier: TargetTypeRef | undefined): boolean {
-  return carrier?.kind === "target-named" && carrier.id === rustStringTargetId;
+  return rustPathTypeMatches(carrier, rustStringTargetId);
 }
 
 export function isRustJsStringCarrier(carrier: TargetTypeRef | undefined): boolean {
-  return carrier?.kind === "target-named" && carrier.id === rustJsStringTargetId;
+  return rustPathTypeMatches(carrier, rustJsStringTargetId);
 }
 
 export function isRustBigIntCarrier(carrier: TargetTypeRef | undefined): boolean {
-  return carrier?.kind === "target-named" && carrier.id === rustBigIntTargetId;
+  return rustPathTypeMatches(carrier, rustBigIntTargetId);
 }
 
 export function isRustUnitCarrier(carrier: TargetTypeRef | undefined): boolean {
-  return carrier?.kind === "tuple" && carrier.elements.length === 0;
+  return carrier?.kind === "unit";
 }
 
 export function isRustNeverCarrier(carrier: TargetTypeRef | undefined): boolean {
-  return carrier?.kind === "target-specific" && carrier.target === "rust" &&
-    carrier.name === rustNeverCarrierName && carrier.value === undefined;
+  return carrier?.kind === "never";
 }
 
 export function isRustUndefinedCarrier(carrier: TargetTypeRef | undefined): boolean {
-  return carrier?.kind === "target-named" && carrier.id === rustUndefinedTargetId;
+  return rustPathTypeMatches(carrier, rustUndefinedTargetId);
 }
 
 export function isRustNullCarrier(carrier: TargetTypeRef | undefined): boolean {
-  return carrier?.kind === "target-named" && carrier.id === rustNullTargetId;
+  return rustPathTypeMatches(carrier, rustNullTargetId);
 }
 
 export function isRustBoolCarrier(carrier: TargetTypeRef | undefined): boolean {

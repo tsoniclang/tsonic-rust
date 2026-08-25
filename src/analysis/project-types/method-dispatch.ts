@@ -1,6 +1,4 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { closedMetadataKey, isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
@@ -8,12 +6,20 @@ import type {
   RustProjectTypeDefinition,
   RustProjectTypePolicy,
 } from "./type-policy.js";
-import { rustTargetTypeParameterNames } from "../../target-model/types/index.js";
+import {
+  rustGenericArgumentOpenIdentityKeys,
+  rustGenericSubstitutionsForArguments,
+} from "../../target-model/types/index.js";
+import { rustGenericArgumentSemanticKey } from "../../target-model/semantics/index.js";
+import type { RustGenericArgument, RustGenerics } from "../../target-model/semantics/index.js";
+import type { RustGenericSubstitutions } from "../../target-model/types/index.js";
+import type { RustSourceGenericIndex } from "../../policy/types/source-generics.js";
 
 export interface RustProjectMethodDispatchVariant {
   readonly declaration: Node;
-  readonly sourceTypeParameterNames: readonly string[];
-  readonly targetTypeArguments: readonly TargetTypeRef[];
+  readonly sourceGenerics: RustGenerics;
+  readonly targetGenericArguments: readonly RustGenericArgument[];
+  readonly specialization: RustGenericSubstitutions;
   readonly virtualSlot: string;
   readonly exactSlot: string;
 }
@@ -26,29 +32,34 @@ export interface RustProjectMethodDispatchPlan {
   variantsForMember(declaration: Node): readonly RustProjectMethodDispatchVariant[];
   variantForMember(
     declaration: Node,
-    targetTypeArguments: readonly TargetTypeRef[],
+    targetGenericArguments: readonly RustGenericArgument[],
   ): RustProjectMethodDispatchVariant | undefined;
 }
 
 export interface RustProjectMethodDispatchPlanRegistry extends RustProjectMethodDispatchPlan {
   record(
     declaration: Node,
-    targetTypeArguments: readonly TargetTypeRef[],
-    ast: AstReader,
+    targetGenericArguments: readonly RustGenericArgument[],
     projectTypes: RustProjectTypePolicy,
+    sourceGenerics: RustSourceGenericIndex,
   ): RustProjectMethodDispatchRegistration;
   initialize(input: {
     readonly ast: AstReader;
     readonly names: RustNamePlan;
     readonly projectTypes: RustProjectTypePolicy;
+    readonly sourceGenerics: RustSourceGenericIndex;
+    readonly requiresDynamicDispatch: (
+      definition: RustProjectTypeDefinition | undefined,
+    ) => boolean;
   }): RustProjectMethodDispatchPlan;
   seal(): RustProjectMethodDispatchPlan;
 }
 
 interface PendingVariant {
   readonly declaration: Node;
-  readonly sourceTypeParameterNames: readonly string[];
-  readonly targetTypeArguments: readonly TargetTypeRef[];
+  readonly sourceGenerics: RustGenerics;
+  readonly targetGenericArguments: readonly RustGenericArgument[];
+  readonly specialization: RustGenericSubstitutions;
 }
 
 export function createRustProjectMethodDispatchPlanRegistry(): RustProjectMethodDispatchPlanRegistry {
@@ -61,26 +72,25 @@ export function createRustProjectMethodDispatchPlanRegistry(): RustProjectMethod
     return current;
   };
   const registry: RustProjectMethodDispatchPlanRegistry = {
-    record(declaration, targetTypeArguments, ast, projectTypes) {
+    record(declaration, targetGenericArguments, projectTypes, sourceGenerics) {
       if (current !== undefined) {
         throw new Error("Rust project method dispatch requests cannot be recorded after initialization.");
       }
       const owner = projectTypes.definitionContainingDeclaration(declaration);
-      const parameters = denseNodes(ast.typeParameters(declaration));
-      if (owner === undefined || parameters === undefined) {
-        return { kind: "rejected", reason: "Selected project method has no exact owner or dense type-parameter list." };
+      const contract = sourceGenerics.contractFor(declaration);
+      const complete = contract === undefined
+        ? undefined
+        : rustGenericSubstitutionsForArguments(contract.generics, targetGenericArguments);
+      if (owner === undefined || contract === undefined || complete === undefined) {
+        return { kind: "rejected", reason: "Selected project method has no exact owner or matching mixed-generic contract." };
       }
-      const sourceTypeParameterNames = parameters.map((parameter) => {
-        const name = ast.name(parameter);
-        return name === undefined ? "" : ast.text(name);
-      });
-      if (sourceTypeParameterNames.some((name) => name.length === 0) ||
-        sourceTypeParameterNames.length !== targetTypeArguments.length) {
-        return { kind: "rejected", reason: "Selected project method type arguments do not match its exact declaration arity." };
-      }
-      const openNames = new Set(targetTypeArguments.flatMap((argument) =>
-        rustTargetTypeParameterNames(argument)));
-      if ([...openNames].some((name) => !owner.typeParameterNames.includes(name))) {
+      const openIdentities = new Set(targetGenericArguments
+        .filter((argument) => argument.kind !== "lifetime")
+        .flatMap(rustGenericArgumentOpenIdentityKeys));
+      const ownerIdentities = new Set(owner.genericArguments.flatMap(
+        rustGenericArgumentOpenIdentityKeys,
+      ));
+      if ([...openIdentities].some((identity) => !ownerIdentities.has(identity))) {
         return {
           kind: "rejected",
           reason: "Rust dynamic dispatch requires a finite method specialization; this call retains a type parameter outside the receiver contract.",
@@ -88,8 +98,9 @@ export function createRustProjectMethodDispatchPlanRegistry(): RustProjectMethod
       }
       addPending(pending, {
         declaration,
-        sourceTypeParameterNames: Object.freeze(sourceTypeParameterNames),
-        targetTypeArguments: Object.freeze([...targetTypeArguments]),
+        sourceGenerics: contract.generics,
+        targetGenericArguments: Object.freeze([...targetGenericArguments]),
+        specialization: specializationOnly(complete),
       });
       return { kind: "accepted" };
     },
@@ -106,8 +117,8 @@ export function createRustProjectMethodDispatchPlanRegistry(): RustProjectMethod
     variantsForMember(declaration) {
       return requireCurrent().variantsForMember(declaration);
     },
-    variantForMember(declaration, targetTypeArguments) {
-      return requireCurrent().variantForMember(declaration, targetTypeArguments);
+    variantForMember(declaration, targetGenericArguments) {
+      return requireCurrent().variantForMember(declaration, targetGenericArguments);
     },
   };
   return Object.freeze(registry);
@@ -119,6 +130,10 @@ function createRustProjectMethodDispatchPlan(
     readonly ast: AstReader;
     readonly names: RustNamePlan;
     readonly projectTypes: RustProjectTypePolicy;
+    readonly sourceGenerics: RustSourceGenericIndex;
+    readonly requiresDynamicDispatch: (
+      definition: RustProjectTypeDefinition | undefined,
+    ) => boolean;
   },
 ): RustProjectMethodDispatchPlan {
   const pending: PendingVariant[] = recorded.map((variant) => ({ ...variant }));
@@ -133,26 +148,37 @@ function createRustProjectMethodDispatchPlan(
         continue;
       }
       const implementation = selected.implementation.declaration;
-      const parameters = denseNodes(input.ast.typeParameters(implementation));
-      const names = parameters?.map((parameter) => {
-        const name = input.ast.name(parameter);
-        return name === undefined ? "" : input.ast.text(name);
-      });
-      if (names === undefined || names.some((name) => name.length === 0) ||
-        names.length !== variant.targetTypeArguments.length) {
+      const contract = input.sourceGenerics.contractFor(implementation);
+      const identity = input.sourceGenerics.identityContractFor(implementation);
+      if (contract === undefined || identity === undefined ||
+        contract.parameters.length !== variant.targetGenericArguments.length) {
         continue;
       }
+      const arguments_ = contract.parameters.map((parameter, index) =>
+        parameter.parameter.kind === "lifetime"
+          ? identity.arguments[index]
+          : variant.targetGenericArguments[index]);
+      if (arguments_.some((argument) => argument === undefined) ||
+        arguments_.some((argument, index) => argument!.kind !== contract.parameters[index]!.parameter.kind)) {
+        continue;
+      }
+      const complete = rustGenericSubstitutionsForArguments(
+        contract.generics,
+        arguments_ as readonly RustGenericArgument[],
+      );
+      if (complete === undefined) continue;
       addPending(pending, {
         declaration: implementation,
-        sourceTypeParameterNames: Object.freeze(names),
-        targetTypeArguments: variant.targetTypeArguments,
+        sourceGenerics: contract.generics,
+        targetGenericArguments: Object.freeze(arguments_ as readonly RustGenericArgument[]),
+        specialization: specializationOnly(complete),
       });
     }
   }
 
   const byMember = new WeakMap<Node, readonly RustProjectMethodDispatchVariant[]>();
   for (const definition of input.projectTypes.definitions) {
-    if (!input.projectTypes.isPolymorphic(definition)) {
+    if (!input.requiresDynamicDispatch(definition)) {
       continue;
     }
     const members = denseNodes(input.ast.members(definition.declaration)) ?? [];
@@ -164,7 +190,9 @@ function createRustProjectMethodDispatchPlan(
         continue;
       }
       const sourceParameters = denseNodes(input.ast.typeParameters(member));
-      if (sourceParameters === undefined) {
+      const sourceContract = input.sourceGenerics.contractFor(member);
+      if (sourceParameters === undefined || sourceContract === undefined ||
+        sourceParameters.length !== sourceContract.parameters.length) {
         continue;
       }
       const baseVirtual = input.projectTypes.memberSlotName(member, "virtual");
@@ -172,11 +200,15 @@ function createRustProjectMethodDispatchPlan(
       if (baseVirtual === undefined || baseExact === undefined) {
         continue;
       }
-      if (sourceParameters.length === 0) {
+      const sourceIdentityContract = input.sourceGenerics.identityContractFor(member);
+      if (sourceContract.parameters.every((parameter) => parameter.parameter.kind === "lifetime")) {
+        if (sourceIdentityContract === undefined ||
+          sourceIdentityContract.arguments.length !== sourceContract.parameters.length) continue;
         byMember.set(member, Object.freeze([Object.freeze({
           declaration: member,
-          sourceTypeParameterNames: Object.freeze([]),
-          targetTypeArguments: Object.freeze([]),
+          sourceGenerics: sourceContract.generics,
+          targetGenericArguments: sourceIdentityContract.arguments,
+          specialization: emptySpecialization(),
           virtualSlot: baseVirtual,
           exactSlot: baseExact,
         })]));
@@ -189,8 +221,9 @@ function createRustProjectMethodDispatchPlan(
         const ordinal = index + 1;
         return Object.freeze({
           declaration: member,
-          sourceTypeParameterNames: candidate.sourceTypeParameterNames,
-          targetTypeArguments: candidate.targetTypeArguments,
+          sourceGenerics: candidate.sourceGenerics,
+          targetGenericArguments: candidate.targetGenericArguments,
+          specialization: candidate.specialization,
           virtualSlot: allocateRustGeneratedName(
             usedNames,
             `${baseVirtual}_specialization_${ordinal}`,
@@ -208,9 +241,12 @@ function createRustProjectMethodDispatchPlan(
     variantsForMember(declaration) {
       return byMember.get(declaration) ?? Object.freeze([]);
     },
-    variantForMember(declaration, targetTypeArguments) {
+    variantForMember(declaration, targetGenericArguments) {
       const matches = (byMember.get(declaration) ?? []).filter((variant) =>
-        targetTypeRefListsEqual(variant.targetTypeArguments, targetTypeArguments));
+        specializationArgumentsEqual(
+          variant.targetGenericArguments,
+          targetGenericArguments,
+        ));
       return matches.length === 1 ? matches[0] : undefined;
     },
   };
@@ -244,22 +280,53 @@ function projectDispatchUsedNames(
 
 function addPending(pending: PendingVariant[], candidate: PendingVariant): void {
   if (pending.some((variant) => variant.declaration === candidate.declaration &&
-    targetTypeRefListsEqual(variant.targetTypeArguments, candidate.targetTypeArguments))) {
+    specializationArgumentsEqual(
+      variant.targetGenericArguments,
+      candidate.targetGenericArguments,
+    ))) {
     return;
   }
   pending.push(candidate);
 }
 
 function variantKey(variant: PendingVariant): string {
-  return closedMetadataKey(variant.targetTypeArguments);
+  return closedMetadataKey(specializationArguments(variant.targetGenericArguments));
 }
 
-function targetTypeRefListsEqual(
-  left: readonly TargetTypeRef[],
-  right: readonly TargetTypeRef[],
+function specializationArgumentsEqual(
+  left: readonly RustGenericArgument[],
+  right: readonly RustGenericArgument[],
 ): boolean {
-  return left.length === right.length && left.every((entry, index) =>
-    rustTargetTypeRefEquals(entry, right[index]));
+  const leftSpecialized = specializationArguments(left);
+  const rightSpecialized = specializationArguments(right);
+  return leftSpecialized.length === rightSpecialized.length && leftSpecialized.every((entry, index) =>
+    rustGenericArgumentSemanticKey(entry) === rustGenericArgumentSemanticKey(rightSpecialized[index]!));
+}
+
+function specializationArguments(
+  arguments_: readonly RustGenericArgument[],
+): readonly RustGenericArgument[] {
+  return arguments_.filter((argument) => argument.kind !== "lifetime");
+}
+
+function specializationOnly(
+  substitutions: RustGenericSubstitutions,
+): RustGenericSubstitutions {
+  return Object.freeze({
+    lifetimes: new Map(),
+    types: substitutions.types,
+    consts: substitutions.consts,
+    associatedTypes: substitutions.associatedTypes,
+  });
+}
+
+function emptySpecialization(): RustGenericSubstitutions {
+  return Object.freeze({
+    lifetimes: new Map(),
+    types: new Map(),
+    consts: new Map(),
+    associatedTypes: new Map(),
+  });
 }
 
 function denseNodes(values: readonly (Node | undefined)[]): readonly Node[] | undefined {

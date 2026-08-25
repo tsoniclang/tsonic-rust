@@ -57,6 +57,8 @@ function closedMetadataKeyValidated(value: unknown): string {
       return value ? "true" : "false";
     case "number":
       return `n:${String(value)}`;
+    case "bigint":
+      return `i:${String(value)}`;
     case "string":
       return `s:${value.length}:${value}`;
     case "object": {
@@ -72,7 +74,8 @@ function closedMetadataKeyValidated(value: unknown): string {
 }
 
 function validateClosedMetadata(value: unknown, active: WeakSet<object>): boolean {
-  if (value === null || value === undefined || typeof value === "string" || typeof value === "boolean") {
+  if (value === null || value === undefined || typeof value === "string" ||
+    typeof value === "boolean" || typeof value === "bigint") {
     return true;
   }
   if (typeof value === "number") {
@@ -108,7 +111,8 @@ function cloneClosedMetadata(
   path: string,
   freeze: boolean,
 ): unknown {
-  if (value === null || value === undefined || typeof value === "string" || typeof value === "boolean") {
+  if (value === null || value === undefined || typeof value === "string" ||
+    typeof value === "boolean" || typeof value === "bigint") {
     return value;
   }
   if (typeof value === "number") {

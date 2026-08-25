@@ -1,4 +1,4 @@
-import { appendToLastLine, firstLine, lastLine, lastLineLength, remainingLines, renderedFits } from "./patterns.js";
+import { appendToLastLine, firstLine, lastLine, lastLineLength, printRustPattern, remainingLines, renderedFits } from "./patterns.js";
 import { indentText, printRustType } from "./types.js";
 import { printFittedCall } from "./expressions/calls.js";
 import { printRustAssociatedCallTarget, printRustDirectCallTarget } from "./expressions/callable.js";
@@ -7,11 +7,13 @@ import { printRustAssociatedCallOwner, printRustLetInitializer, printRustTypeFit
 import { printRustExpr } from "./expressions/core.js";
 import { printRustExprFitted } from "./expressions/fitted.js";
 import { rustFormatWidth, rustNestedCallWidth } from "./formatting.js";
+import { printRustAttribute } from "./attributes.js";
+import type { RustAttribute } from "../../backend/target-ast/attributes.js";
 import type { RustBlock, RustExpr, RustStmt } from "../../backend/target-ast/nodes.js";
 
 export function printRustBlockStatements(block: RustBlock, depth: number): string {
   return [
-    ...(block.innerAttrs ?? []).map((attribute) => `${indentText(depth)}${attribute}`),
+    ...(block.innerAttrs ?? []).map((attribute) => `${indentText(depth)}${printRustAttribute(attribute, "inner", depth)}`),
     ...block.statements.map((statement) => printRustStmt(statement, depth)),
   ].join("\n");
 }
@@ -27,7 +29,7 @@ function printRustStmt(statement: RustStmt, depth: number): string {
   switch (statement.kind) {
     case "let": {
       const mutability = statement.mutable ? "mut " : "";
-      const attributes = statement.attrs?.map((attribute) => `${indent}${attribute}\n`).join("") ?? "";
+      const attributes = statement.attrs?.map((attribute) => `${indent}${printRustAttribute(attribute, "outer", depth)}\n`).join("") ?? "";
       const typeSuffix = statement.type === undefined ? "" : `: ${printRustType(statement.type)}`;
       if (statement.init === undefined) {
         return `${attributes}${indent}let ${mutability}${statement.name}${typeSuffix};`;
@@ -67,6 +69,11 @@ function printRustStmt(statement: RustStmt, depth: number): string {
       }
       const prefix = `${indent}let ${mutability}${statement.name}${typeSuffix} = `;
       return `${attributes}${printRustLetInitializer(prefix, statement.init, depth)}`;
+    }
+    case "let-pattern": {
+      const prefix = `${indent}let ${printRustPattern(statement.pattern)} = `;
+      const initializer = printRustExprFitted(statement.init, depth, prefix.length);
+      return appendToLastLine(`${prefix}${initializer}`, ";");
     }
     case "expr": {
       return `${indent}${printRustStatementExpr(statement.expr, depth, indent.length + 1)};`;
@@ -233,11 +240,11 @@ function printRustStmt(statement: RustStmt, depth: number): string {
 }
 
 function printRustStatementAttributes(
-  attrs: readonly string[] | undefined,
+  attrs: readonly RustAttribute[] | undefined,
   depth: number,
 ): string {
   const indent = indentText(depth);
-  return attrs?.map((attribute) => `${indent}${attribute}\n`).join("") ?? "";
+  return attrs?.map((attribute) => `${indent}${printRustAttribute(attribute, "outer", depth)}\n`).join("") ?? "";
 }
 
 export function collectNestedCallExpressionChain(

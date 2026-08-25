@@ -5,6 +5,9 @@ import type {
   RustType,
   RustVisibility,
 } from "../../target-ast/nodes.js";
+import type { RustAttribute } from "../../target-ast/attributes.js";
+import { emptyRustAstGenerics } from "../../target-ast/nodes.js";
+import { rustTypeGenericArguments } from "../../target-ast/builders.js";
 import {
   allocateRustSyntheticName,
   allocateRustSyntheticTypeName,
@@ -22,9 +25,9 @@ export function planRustHoistedModuleCell(
   value: RustExpr,
   visibility: RustVisibility,
   syntheticNames: RustSyntheticNameState,
-  attrs: readonly string[] = [],
+  attrs: readonly RustAttribute[] = [],
 ): readonly RustItem[] {
-  const callableAlias = type.kind === "named" && type.path === "rt::Callable"
+  const callableAlias = isOwnedLocalCallableType(type)
     ? allocateRustSyntheticTypeName(syntheticNames, `${name}_callable`)
     : undefined;
   const storedType: RustType = callableAlias === undefined
@@ -37,6 +40,7 @@ export function planRustHoistedModuleCell(
           kind: "type-alias" as const,
           name: callableAlias,
           visibility: "private" as const,
+          generics: emptyRustAstGenerics,
           target: type,
         }]),
     {
@@ -47,7 +51,7 @@ export function planRustHoistedModuleCell(
       type: {
         kind: "named" as const,
         path: "rt::ModuleCell",
-        typeArguments: [storedType],
+        genericArguments: rustTypeGenericArguments([storedType]),
       },
       value: {
         kind: "call" as const,
@@ -65,11 +69,11 @@ export function planRustModuleCell(
   value: RustExpr,
   visibility: RustVisibility,
   syntheticNames: RustSyntheticNameState,
-  attrs: readonly string[] = [],
+  attrs: readonly RustAttribute[] = [],
 ): PlannedRustModuleCell {
   const cellName = allocateRustSyntheticName(syntheticNames, "module_binding");
   const valueName = allocateRustSyntheticName(syntheticNames, "module_value");
-  const callableAlias = type.kind === "named" && type.path === "rt::Callable"
+  const callableAlias = isOwnedLocalCallableType(type)
     ? allocateRustSyntheticTypeName(syntheticNames, `${name}_callable`)
     : undefined;
   const storedType: RustType = callableAlias === undefined
@@ -83,6 +87,7 @@ export function planRustModuleCell(
             kind: "type-alias" as const,
             name: callableAlias,
             visibility: "private" as const,
+            generics: emptyRustAstGenerics,
             target: type,
           }]),
       {
@@ -93,7 +98,7 @@ export function planRustModuleCell(
         type: {
           kind: "named",
           path: "rt::ModuleCell",
-          typeArguments: [storedType],
+          genericArguments: rustTypeGenericArguments([storedType]),
         },
         value: { kind: "call", path: "rt::ModuleCell::new", args: [] },
         constInitializer: true,
@@ -113,6 +118,11 @@ export function planRustModuleCell(
       },
     },
   };
+}
+
+function isOwnedLocalCallableType(type: RustType): boolean {
+  return type.kind === "named" &&
+    (type.path === "rt::OwnedLocalCallable" || type.path === "rt::OwnedLocalAsyncCallable");
 }
 
 export function rustModuleCellAccess(

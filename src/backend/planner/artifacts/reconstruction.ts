@@ -319,6 +319,7 @@ function rustSourceFileItemNames(model: RustSourceFileModel): readonly string[] 
       case "use":
         return [];
     }
+    return [];
   }));
 }
 

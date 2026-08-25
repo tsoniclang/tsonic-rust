@@ -15,9 +15,11 @@ import {
   writeRustProjectObjectField,
   writeRustProjectPrivateField,
 } from "../project-objects.js";
-import { rustProjectDispatchTraitType, rustProjectTypeParameters } from "./names.js";
+import { rustProjectDispatchTraitType, rustProjectGenerics } from "./names.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr, RustImplFunction, RustItem, RustType } from "../../../target-ast/nodes.js";
+import { emptyRustAstGenerics, type RustExpr, type RustImplFunction, type RustItem, type RustType } from "../../../target-ast/nodes.js";
+import { rustReferenceReceiver } from "../../../target-ast/builders.js";
+import { projectFieldReceiver } from "../project-field-dispatch.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import {
   rustErrorBoundaryForProjectMember,
@@ -27,6 +29,7 @@ import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js"
 import { applyRustFallibleResultExpression } from "../../types/fallible-shape.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
+import type { RustGenericArgument } from "../../../../target-model/semantics/index.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { ProjectClassStateLayer } from "./model.js";
 import type { RustObjectRepresentation } from "../../../../analysis/project-types/object-representation.js";
@@ -46,16 +49,17 @@ export function planProjectRootImplementations(
     return undefined;
   }
   const items: RustItem[] = [];
-  const typeParams = rustProjectTypeParameters(concrete);
+  const generics = rustProjectGenerics(concrete, context);
+  if (generics === undefined) return undefined;
   const methodImplementations = new Map<Node, RustImplFunction[]>();
   const accessorImplementations = new Map<Node, RustImplFunction>();
   const implementationFor = (
     implementation: Node,
-    targetTypeArguments: readonly TargetTypeRef[],
+    targetGenericArguments: readonly RustGenericArgument[],
   ): RustImplFunction | undefined => {
     const variant = context.input.program.projectMethodDispatch.variantForMember(
       implementation,
-      targetTypeArguments,
+      targetGenericArguments,
     );
     if (variant === undefined) {
       return undefined;
@@ -120,10 +124,14 @@ export function planProjectRootImplementations(
     }
     items.push({
       kind: "impl",
-      ...(typeParams.length === 0 ? {} : { typeParams }),
+      generics,
       trait: traitType,
       target: rootType,
+      polarity: "positive",
+      safety: "safe",
       functions,
+      associatedTypes: [],
+      associatedConstants: [],
     });
   }
   const helpers = [
@@ -135,9 +143,13 @@ export function planProjectRootImplementations(
     ? items
     : [{
         kind: "impl",
-        ...(typeParams.length === 0 ? {} : { typeParams }),
+        generics,
         target: rootType,
+        polarity: "positive",
+        safety: "safe",
         functions: helpers,
+        associatedTypes: [],
+        associatedConstants: [],
       }, ...items];
 }
 
@@ -151,7 +163,7 @@ function planRootContractFunctions(
   representation: RustObjectRepresentation,
   implementationFor: (
     implementation: Node,
-    targetTypeArguments: readonly TargetTypeRef[],
+    targetGenericArguments: readonly RustGenericArgument[],
   ) => RustImplFunction | undefined,
   accessorImplementationFor: (
     accessor: Node,
@@ -214,6 +226,7 @@ function planRootContractFunctions(
                   storagePath,
                   field.carrier,
                   representation,
+                  context,
                 );
             return expression === undefined ? undefined : { expression };
           })()
@@ -256,7 +269,8 @@ function planRootContractFunctions(
     functions.push({
       name: read,
       visibility: "private",
-      selfParam: dispatch.read.selfMode,
+      generics: emptyRustAstGenerics,
+      receiver: projectFieldReceiver(dispatch.read),
       params: [],
       returnType: field.type,
       ...(dispatch.read.fallible ? { errorType: fieldErrorType! } : {}),
@@ -313,7 +327,8 @@ function planRootContractFunctions(
       functions.push({
         name: write!,
         visibility: "private",
-        selfParam: dispatch.write.selfMode,
+        generics: emptyRustAstGenerics,
+        receiver: projectFieldReceiver(dispatch.write),
         params: [{ name: "value", type: field.type }],
         ...(dispatch.write.fallible ? { errorType: fieldErrorType! } : {}),
         body: dispatch.write.fallible
@@ -392,7 +407,7 @@ function planRootContractFunctions(
       }
       const virtualImplementationMethod = implementationFor(
         virtualImplementation,
-        variant.targetTypeArguments,
+        variant.targetGenericArguments,
       );
       const virtualMethod = virtualImplementationMethod === undefined
         ? undefined
@@ -421,7 +436,7 @@ function planRootContractFunctions(
       if (contract.kind === "class") {
         const exactImplementationMethod = implementationFor(
           member,
-          variant.targetTypeArguments,
+          variant.targetGenericArguments,
         );
         const exactMethod = exactImplementationMethod === undefined
           ? undefined
@@ -482,7 +497,8 @@ function planRootContractFunctions(
           functions.push({
             name: write,
             visibility: "private",
-            selfParam: "ref",
+            generics: emptyRustAstGenerics,
+            receiver: rustReferenceReceiver(false),
             params: [{ name: "value", type: property.callableType }],
             body: {
               statements: [{

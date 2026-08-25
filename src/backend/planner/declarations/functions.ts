@@ -15,10 +15,8 @@ import {
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustReturnTypeFromCarrierInContext } from "../types/render.js";
 import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustGeneratorFactKey, rustSourceCallableReturnFactKey } from "../../../analysis/facts/keys.js";
-import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import {
   planRustCallableGenerics,
-  rustCallableSpecialization,
 } from "./callable-generics.js";
 import type {
   RustSourceCallableSpecializationVariant,
@@ -37,7 +35,9 @@ import { resolveRustCallableBodyReturnType } from "./callable-body-return.js";
 import { rustDeclarationRequiresUnsafe } from "../safety/explicit-safety.js";
 import { rustSafetyAttributesForDeclaration } from "../safety/explicit-safety.js";
 import { applyFallibleShape } from "../types/fallible-shape.js";
-import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
+import { rustExplicitLifetimeContractAttributes, rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
+import { rustExplicitDeclarationContract } from "./explicit-contracts.js";
+import { rustGeneratorExecutionCarrier } from "../ownership/execution-carriers.js";
 
 export { applyRustTailShape, rustBlockTerminates } from "../statements/block-flow.js";
 
@@ -45,6 +45,12 @@ export function planFunctionDeclarations(
   node: Node,
   outerContext: RustPlanContext,
 ): readonly RustItem[] | undefined {
+  const explicitContract = rustExplicitDeclarationContract(node, outerContext);
+  if (outerContext.input.program.source.ast.body(node) === undefined &&
+    explicitContract?.abi !== undefined) {
+    const item = planRustExternFunction(node, explicitContract.abi, outerContext);
+    return item === undefined ? undefined : Object.freeze([item]);
+  }
   const specializations = outerContext.input.program.sourceCallableSpecializations;
   if (!specializations.requiresSpecialization(node)) {
     const item = planRustFunctionItem({
@@ -91,6 +97,90 @@ export function planNativeModuleFunction(
   }, outerContext);
 }
 
+function planRustExternFunction(
+  node: Node,
+  abi: import("../../../target-model/semantics/index.js").RustAbi,
+  context: RustPlanContext,
+): RustItem | undefined {
+  const { ast } = context.input.program.source;
+  const contract = rustExplicitDeclarationContract(node, context);
+  const name = context.input.program.names.functionNameForDeclaration(node) ?? "";
+  if (!isValidRustIdentifier(name) || abi === "Rust" || ast.hasModifierKind(node, "async") ||
+    context.input.program.facts.getFact(node, rustGeneratorFactKey) !== undefined) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.extern-declaration",
+      "A bodyless Rust extern declaration requires a valid name, a non-Rust ABI, and a synchronous non-generator signature.",
+    ));
+    return undefined;
+  }
+  const genericPlan = planRustCallableGenerics(node, context);
+  if (genericPlan === undefined) return undefined;
+  const generics = genericPlan.finalizeGenerics();
+  if (generics.parameters.length !== 0 || generics.wherePredicates.length !== 0) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.extern-generics",
+      "Foreign Rust declarations cannot carry source generic parameters or where predicates.",
+    ));
+    return undefined;
+  }
+  const syntheticNames = createRustSyntheticNameState(ast, node, []);
+  const parameterPlan = planRustCallableParameters(node, genericPlan.context, syntheticNames);
+  if (parameterPlan === undefined || parameterPlan.prelude.length !== 0) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.extern-parameter-abi",
+      "Foreign Rust declarations require direct parameters with no generated source-ABI prelude.",
+    ));
+    return undefined;
+  }
+  const returnCarrier = context.input.program.facts.getFact(
+    node,
+    rustSourceCallableReturnFactKey,
+  )?.returnCarrier;
+  const returnType = isRustUnitCarrier(returnCarrier)
+    ? undefined
+    : rustReturnTypeFromCarrierInContext(returnCarrier, context);
+  if (!isRustUnitCarrier(returnCarrier) && returnType === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, Node_Type(ast, node) ?? node),
+      "rust.backend.extern-return-carrier",
+      "Foreign Rust declaration has no exact renderable return carrier.",
+    ));
+    return undefined;
+  }
+  const requiresUnsafe = rustDeclarationRequiresUnsafe(node, "declaration", context.input);
+  const edition = context.input.program.configuration.dialect.edition;
+  if (edition === "2021" && !requiresUnsafe) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.extern-safe-item-dialect",
+      "Rust 2021 cannot express an independently safe foreign item; select requiresUnsafe or Rust 2024.",
+    ));
+    return undefined;
+  }
+  const attrs = rustSafetyAttributesForDeclaration(node, requiresUnsafe, context.input);
+  return {
+    kind: "extern-block",
+    ...(attrs.length === 0 ? {} : { attrs }),
+    abi,
+    safety: edition === "2024" ? "unsafe" : "safe",
+    functions: [{
+      name,
+      visibility: ast.hasModifierKind(node, "export") ? "public" : "crate",
+      safety: edition === "2024"
+        ? requiresUnsafe ? "unsafe" : "safe"
+        : "inherited",
+      generics,
+      params: parameterPlan.params,
+      ...(returnType === undefined ? {} : { returnType }),
+      ...(contract?.variadic === true ? { variadic: true } : {}),
+    }],
+    statics: [],
+  };
+}
+
 function planRustFunctionItem(
   source: {
     readonly callableDeclaration: Node;
@@ -103,6 +193,10 @@ function planRustFunctionItem(
 ): RustItem | undefined {
   const node = source.callableDeclaration;
   const { ast } = outerContext.input.program.source;
+  const explicitContract = rustExplicitDeclarationContract(
+    source.nameDeclaration,
+    outerContext,
+  );
   const isAsync = ast.hasModifierKind(node, "async");
   const generatorFact = outerContext.input.program.facts.getFact(node, rustGeneratorFactKey);
   const isUnsafe = rustDeclarationRequiresUnsafe(
@@ -142,29 +236,14 @@ function planRustFunctionItem(
     ));
     return undefined;
   }
-  const specialization = source.specialization === undefined
-    ? undefined
-    : rustCallableSpecialization(
-        source.specialization.sourceTypeParameterNames,
-        source.specialization.targetTypeArguments,
-      );
-  if (source.specialization !== undefined && specialization === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.callable-specialization",
-      "Callable specialization does not match its exact source type-parameter arity.",
-    ));
-    return undefined;
-  }
+  const specialization = source.specialization?.specialization;
   const genericPlan = planRustCallableGenerics(node, context, specialization);
   if (genericPlan === undefined) {
     return undefined;
   }
   context = genericPlan.context;
   const syntheticNames = createRustSyntheticNameState(ast, node, []);
-  const parameterPlan = planRustCallableParameters(node, context, syntheticNames, {
-    requireStatic: generatorFact !== undefined,
-  });
+  const parameterPlan = planRustCallableParameters(node, context, syntheticNames);
   if (parameterPlan === undefined) {
     return undefined;
   }
@@ -207,14 +286,6 @@ function planRustFunctionItem(
       "rust.backend.function",
       "Functions require a body.",
     ));
-    return undefined;
-  }
-  if (generatorFact !== undefined && ![
-    generatorFact.yieldType,
-    generatorFact.returnType,
-    generatorFact.nextType,
-  ].every((carrier) =>
-    requireRustCarrierRequirements(carrier, ["static"], node, context))) {
     return undefined;
   }
   if (generatorFact !== undefined && fallible) {
@@ -292,27 +363,40 @@ function planRustFunctionItem(
       ));
       return undefined;
     }
+    const executionCarrier = rustGeneratorExecutionCarrier(
+      node,
+      returnType,
+      generatorFact.kind,
+      context,
+    );
+    if (executionCarrier === undefined) return undefined;
     context.usedAliases?.add("rt");
-    const finalizedTypeParams = genericPlan.finalizeTypeParameters();
+    const generics = genericPlan.finalizeGenerics();
+    const itemAttributes = [
+      ...declarationAttributes,
+      ...rustExplicitLifetimeContractAttributes(generics),
+    ];
     const item: Extract<RustItem, { readonly kind: "function" }> = {
       kind: "function",
       name,
       visibility: isExported || rustSourceItemIsPubliclyReachable(outerContext, name)
         ? "public"
         : "crate",
-      ...(declarationAttributes.length === 0
+      ...(itemAttributes.length === 0
         ? {}
-        : { attrs: declarationAttributes }),
+        : { attrs: itemAttributes }),
       ...(isUnsafe ? { isUnsafe: true } : {}),
-      ...(finalizedTypeParams.length === 0 ? {} : { typeParams: finalizedTypeParams }),
+      ...(explicitContract?.abi === undefined ? {} : { abi: explicitContract.abi }),
+      ...(explicitContract?.variadic === true ? { variadic: true } : {}),
+      generics,
       params,
-      ...(returnType === undefined ? {} : { returnType }),
+      returnType: executionCarrier.returnType,
       body: {
         statements: [...parameterStatements, {
           kind: "tail",
           expr: {
             kind: "call",
-            path: generatorFact.kind === "sync" ? "rt::Generator::new" : "rt::AsyncGenerator::new",
+            path: executionCarrier.constructorPath,
             args: [{
               kind: "closure-block",
               params: [{ name: generatorControllerName!, mutable: false }],
@@ -342,24 +426,28 @@ function planRustFunctionItem(
     ));
     return undefined;
   }
-  const finalizedTypeParams = genericPlan.finalizeTypeParameters();
+  const generics = genericPlan.finalizeGenerics();
+  const itemAttributes = [
+    ...declarationAttributes,
+    ...rustExplicitLifetimeContractAttributes(generics),
+  ];
   const item: Extract<RustItem, { readonly kind: "function" }> = {
     kind: "function",
     name,
     visibility: isExported || rustSourceItemIsPubliclyReachable(outerContext, name)
       ? "public"
       : "crate",
-    ...(declarationAttributes.length === 0
+    ...(itemAttributes.length === 0
       ? {}
-      : { attrs: declarationAttributes }),
+      : { attrs: itemAttributes }),
     ...(isAsync ? { isAsync: true } : {}),
     ...(isUnsafe ? { isUnsafe: true } : {}),
+    ...(explicitContract?.abi === undefined ? {} : { abi: explicitContract.abi }),
+    ...(explicitContract?.variadic === true ? { variadic: true } : {}),
     ...(callableErrorBoundary === undefined
       ? {}
       : { errorType: rustErrorType(callableErrorBoundary) }),
-    ...(finalizedTypeParams.length === 0
-      ? {}
-      : { typeParams: finalizedTypeParams }),
+    generics,
     params,
     ...(returnType === undefined ? {} : { returnType }),
     body: {

@@ -84,8 +84,8 @@ test("generated lint exceptions have one explicit policy owner", () => {
     assert.doesNotMatch(text, /#!?\[allow\(/u, `${path} emits an unowned Rust lint exception`);
   }
   const policy = readFileSync(join(sourceRoot, "backend/target-ast/normalization/lint-policy.ts"), "utf8");
-  assert.doesNotMatch(policy, /#!?\[allow\((?![^\]\n]*reason = )[^\]\n]*\)\]/u);
-  assert.match(policy, /reason = /u);
+  assert.match(policy, /reason: string,[\s\S]+Object\.freeze\(\{ kind: "lint", level, lint: name, reason \}\)/u);
+  assert.doesNotMatch(policy, /:\s*lint\(\s*"[^"]+"\s*,\s*"[^"]+"\s*\)/u);
 });
 
 test("Rust compiler reflection remains isolated from semantic and backend layers", () => {
@@ -298,8 +298,9 @@ test("source profile identity comes from the registered compiler SourceFile, nev
 
 test("selected source operation identity is never reconstructed through checker queries", () => {
   const semanticFiles = sourceFiles.filter(({ path }) =>
-    path.includes("/analysis/") || path.includes("/policy/") ||
-    path.includes("/target-model/"));
+    path.startsWith(`${join(sourceRoot, "analysis")}/`) ||
+    path.startsWith(`${join(sourceRoot, "policy")}/`) ||
+    path.startsWith(`${join(sourceRoot, "target-model")}/`));
   const forbidden = [
     /getResolvedSignature\s*\(/u,
     /getPropertyOfType\s*\(/u,
@@ -327,6 +328,7 @@ test("selected source operation identity is never reconstructed through checker 
   assert.deepEqual(broadCatchOwners, [
     "target-model/metadata/closed-data.ts|isClosedMetadata",
     "target-model/types/equality.ts|isRustTargetTypeRef",
+    "target-model/types/equality.ts|isRustTraitReference",
   ]);
 
   for (const { path, text } of semanticFiles) {
@@ -721,7 +723,6 @@ test("backend operation facts cannot override runtime carriers or selected sourc
     "rust.backend.tuple-literal-carrier",
     "rust.backend.array-literal-carrier",
     "rust.backend.record-literal-carrier",
-    "rust.backend.closure-carrier",
     "rust.backend.await-carrier",
   ];
   assert.match(expressions, /function requireExpressionCarrier\(/u);
@@ -730,6 +731,7 @@ test("backend operation facts cannot override runtime carriers or selected sourc
   }
   assert.match(expressions, /sourceCallEffectsMatch\(fact, sourceCallEffects\)/u);
   assert.match(expressions, /providerSelectedCallMatches\(node, fact, context\)/u);
+  assert.match(expressions, /rustCallableExecutionCarrier\(/u);
   assert.doesNotMatch(expressions, /convertedCarrier === undefined\s*\?\s*rustTargetTypeRefEquals\(sourceCarrier/u);
 });
 
@@ -776,8 +778,8 @@ test("project-source backend calls require the exact finalized selected member A
   assert.match(selectedGate, /member\.targetName === expectedTargetName/u);
   assert.match(selectedGate, /member\.parameters\.length === fact\.parameters\.length/u);
   assert.match(selectedGate, /sourceSelectedMethodTypeArguments/u);
-  assert.match(selectedGate, /substituteRustTargetTypeParameters\(parameter\.type, substitutions\)/u);
-  assert.match(selectedGate, /fact\.targetTypeArguments/u);
+  assert.match(selectedGate, /substituteRustTargetGenerics\(parameter\.type, substitutions\)/u);
+  assert.match(selectedGate, /fact\.targetGenericArguments/u);
   assert.match(selectedGate, /fact\.parameters\[index\]\?\.parameterCarrier/u);
   assert.match(selectedGate, /mode === fact\.parameters\[index\]\?\.mode/u);
   assert.doesNotMatch(selectedGate, /sourceName ===|memberName|includes\(|toLowerCase/u);
@@ -859,4 +861,179 @@ test("sealed Rust project-type queries never re-enter source navigation", () => 
     /definitions\.filter\([\s\S]*\.length\s*\*\s*contractMembers\.size/u,
   );
   assert.match(text, /RUST_PROJECT_MEMBER_IMPLEMENTATION_BUDGET_EXCEEDED/u);
+});
+
+test("Rust ownership and lifetime policy is sealed before backend planning", () => {
+  for (const { path, text } of sourceFiles) {
+    if (!path.includes("/backend/") && !path.includes("/print/")) {
+      continue;
+    }
+    assert.doesNotMatch(
+      text,
+      /from ["'][^"']*analysis\/ownership\//u,
+      `${path} imports mutable ownership-analysis implementation`,
+    );
+    assert.doesNotMatch(
+      text,
+      /rustSource(?:OwnershipOperation|GenericParameter|TypeContract|Declaration)FactKey/u,
+      `${path} consumes unsealed Rust source-semantic facts`,
+    );
+    assert.doesNotMatch(
+      text,
+      /\b(?:checker|factResolver)\s*\./u,
+      `${path} re-enters source semantics while planning or printing`,
+    );
+  }
+
+  const ownershipReaders = collectFiles(join(sourceRoot, "backend/planner/ownership"), ".ts")
+    .map((path) => readFileSync(path, "utf8"))
+    .join("\n");
+  assert.match(ownershipReaders, /program\.ownership\./u);
+  assert.doesNotMatch(ownershipReaders, /sourceNavigation\.|sourceFacts|facts\.get/u);
+});
+
+test("Rust public ownership surface has one canonical spelling", () => {
+  const identity = readFileSync(join(sourceRoot, "source/semantics/identity.ts"), "utf8");
+  const declarations = collectFiles(join(sourceRoot, "source/semantics/declarations"), ".ts")
+    .map((path) => readFileSync(path, "utf8"))
+    .join("\n");
+  const publicSurface = `${identity}\n${declarations}`;
+
+  assert.match(identity, /sharedBorrow:\s*"ref"/u);
+  assert.match(identity, /mutableBorrow:\s*"mut"/u);
+  assert.doesNotMatch(publicSurface, /["']borrowMut["']|["']borrow["']/u);
+});
+
+test("Rust semantic identity never uses display spelling as equality", () => {
+  const semanticFiles = [
+    ...collectFiles(join(sourceRoot, "target-model/semantics"), ".ts"),
+    ...collectFiles(join(sourceRoot, "analysis/ownership"), ".ts"),
+  ];
+  for (const path of semanticFiles) {
+    const text = readFileSync(path, "utf8");
+    assert.doesNotMatch(
+      text,
+      /(?:displayName|displayPath)\s*===|===\s*(?:[^;\n]*\.)?(?:displayName|displayPath)/u,
+      `${path} uses diagnostic spelling as semantic equality`,
+    );
+  }
+
+  const identity = readFileSync(join(sourceRoot, "target-model/semantics/identity.ts"), "utf8");
+  const lifetimes = readFileSync(join(sourceRoot, "target-model/semantics/keys.ts"), "utf8");
+  assert.match(identity, /rustSemanticIdentityKey/u);
+  assert.match(lifetimes, /rustLifetimeSemanticKey/u);
+  assert.doesNotMatch(lifetimes, /displayName/u);
+});
+
+test("ordinary Rust project objects are never silently promoted to threaded carriers", () => {
+  const analysis = collectFiles(join(sourceRoot, "analysis/ownership"), ".ts")
+    .map((path) => readFileSync(path, "utf8"))
+    .join("\n");
+  const objectRepresentation = readFileSync(
+    join(sourceRoot, "analysis/project-types/object-representation.ts"),
+    "utf8",
+  );
+  const projectObjects = readFileSync(
+    join(sourceRoot, "backend/planner/objects/project-objects.ts"),
+    "utf8",
+  );
+
+  assert.doesNotMatch(analysis, /projectObjectExecutionDomain|threadedProjectDefinition/u);
+  assert.doesNotMatch(objectRepresentation, /executionDomain/u);
+  assert.doesNotMatch(projectObjects, /ThreadedObject(?:Handle|Ref)/u);
+  assert.match(projectObjects, /LocalObject(?:Handle|Ref)/u);
+});
+
+test("runtime carrier names encode storage and execution contracts", () => {
+  const carrierFiles = [
+    "target-model/types/carriers/callables.ts",
+    "target-model/types/carriers/native.ts",
+    "backend/planner/ownership/execution-carriers.ts",
+  ].map((path) => readFileSync(join(sourceRoot, path), "utf8")).join("\n");
+
+  for (const required of [
+    "BorrowedLocalCallable",
+    "OwnedLocalCallable",
+    "ThreadedCallable",
+    "BorrowedLocalAsyncCallable",
+    "OwnedLocalAsyncCallable",
+    "ThreadedAsyncCallable",
+    "BorrowedLocation",
+    "OwnedLocation",
+    "BorrowedGenerator",
+    "OwnedGenerator",
+    "BorrowedAsyncGenerator",
+    "OwnedAsyncGenerator",
+  ]) {
+    assert.match(carrierFiles, new RegExp(`\\b${required}\\b`, "u"));
+  }
+  assert.doesNotMatch(carrierFiles, /\brt::Callable\b|\brt::Location\b|\brt::GeneratorRuntime\b/u);
+});
+
+test("Rust ownership algorithms consume semantic identities rather than concrete carrier names", () => {
+  const semanticPolicy = [
+    ...collectFiles(join(sourceRoot, "analysis/ownership"), ".ts"),
+    ...collectFiles(join(sourceRoot, "backend/planner/ownership"), ".ts"),
+    ...collectFiles(join(sourceRoot, "policy/ownership"), ".ts"),
+  ];
+  for (const path of semanticPolicy) {
+    const text = readFileSync(path, "utf8");
+    assert.doesNotMatch(
+      text,
+      /["'`]\s*(?:std::)?(?:Box|Rc|Arc|Mutex|RefCell|Pin)(?:::|<|["'`])/u,
+      `${path} branches on a concrete Rust carrier name`,
+    );
+  }
+});
+
+test("Rust semantic contracts have no compatibility or dual-format reader", () => {
+  const semanticRoots = [
+    join(sourceRoot, "source/semantics"),
+    join(sourceRoot, "target-model/semantics"),
+    join(sourceRoot, "analysis/ownership"),
+    join(sourceRoot, "analysis/declarations"),
+  ];
+  for (const path of semanticRoots.flatMap((root) => collectFiles(root, ".ts"))) {
+    const text = readFileSync(path, "utf8");
+    assert.doesNotMatch(
+      text,
+      /\b(?:legacy|deprecated|compatibility|compat(?:ible)?\s+(?:reader|path)|old[- ]or[- ]new)\b/iu,
+      `${path} contains a compatibility semantic path`,
+    );
+  }
+});
+
+test("new Rust semantics use structured target nodes and attributes only", () => {
+  const nodes = readFileSync(join(sourceRoot, "backend/target-ast/nodes.ts"), "utf8");
+  const attributes = readFileSync(join(sourceRoot, "backend/target-ast/attributes.ts"), "utf8");
+  const printer = readFileSync(join(sourceRoot, "print/source/attributes.ts"), "utf8");
+
+  assert.doesNotMatch(nodes, /kind:\s*["'](?:raw|snippet|verbatim)["']/u);
+  assert.doesNotMatch(nodes, /readonly\s+(?:code|source|snippet):\s*string/u);
+  assert.match(nodes, /readonly attrs\?: readonly RustAttribute\[\]/u);
+  assert.match(attributes, /export type RustAttribute\s*=/u);
+  assert.doesNotMatch(attributes, /export type RustAttribute\s*=\s*string/u);
+  assert.match(printer, /switch \(attribute\.kind\)/u);
+});
+
+test("unsafe declaration, lexical, trait, implementation, and operation controls stay independent", () => {
+  const declarations = readFileSync(
+    join(sourceRoot, "analysis/declarations/declaration-applications.ts"),
+    "utf8",
+  );
+  const pointerFacts = readFileSync(
+    join(sourceRoot, "analysis/facts/operations/facts.ts"),
+    "utf8",
+  );
+  const explicitSafety = readFileSync(
+    join(sourceRoot, "backend/planner/safety/explicit-safety.ts"),
+    "utf8",
+  );
+
+  assert.match(declarations, /unsafeTrait = hasApplication\(byOperation, "unsafe-trait"\)/u);
+  assert.match(declarations, /operation === "unsafe-impl" \? "unsafe" : "safe"/u);
+  assert.doesNotMatch(declarations, /nativeUnion\s*\?\s*[^:;\n]*unsafe|abi\s*===?[^;\n]*unsafe/u);
+  assert.match(pointerFacts, /operation: "expose-address"[\s\S]*safety: "safe"/u);
+  assert.match(pointerFacts, /operation: "load" \| "read-volatile"[\s\S]*safety: "requires-unsafe"/u);
+  assert.match(explicitSafety, /explicitUnsafeContextDepth/u);
 });

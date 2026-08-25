@@ -51,9 +51,11 @@ import {
 import type {
   RustTargetTypeResolutionOptions,
 } from "../../policy/types/resolution.js";
+import { rustTypeArgument } from "../../target-model/types/index.js";
 import {
   selectRustTypedLocationSourceOperation,
 } from "../../policy/operations/typed-location-source.js";
+import { selectedCallSingleTypeGenerics } from "./provider/calls/instantiation.js";
 import type {
   RustSafeTypedLocationSourceFact,
 } from "../../policy/operations/typed-location-source.js";
@@ -185,6 +187,25 @@ function acceptRustTypedLocationCall(
       plan.reason,
     );
   }
+  const selectedTypeArguments = request.source.sourceSelectedMethodTypeArguments ?? [];
+  if (selectedTypeArguments.length !== 1 ||
+    selectedTypeArguments[0]?.typeParameter === undefined) {
+    return rejectRustTypedLocation(
+      request.source.call,
+      context,
+      "RUST_POINTER_GENERIC_CONTRACT_NOT_PROVEN",
+      `Selected '${sourceOperation.operation}' operation has no exact single-type-parameter contract.`,
+    );
+  }
+  const memberGenerics = selectedCallSingleTypeGenerics(request, context);
+  if (memberGenerics === undefined) {
+    return rejectRustTypedLocation(
+      request.source.call,
+      context,
+      "RUST_POINTER_GENERIC_CONTRACT_NOT_PROVEN",
+      `Selected '${sourceOperation.operation}' operation has no exact Rust type-parameter contract.`,
+    );
+  }
   const evidence = [{
     message: `rust selected exact typed-location operation ${sourceOperation.operation}`,
   }];
@@ -227,6 +248,7 @@ function acceptRustTypedLocationCall(
       type,
       passingMode: "by-value",
     })),
+    generics: memberGenerics,
     returnType: resultCarrier,
     providerDeclaration: provider,
   };
@@ -256,7 +278,7 @@ function acceptRustTypedLocationCall(
           sourceSelectedMethodTypeArguments:
             request.source.sourceSelectedMethodTypeArguments,
         }),
-    targetTypeArguments: [pointeeCarrier],
+    targetGenericArguments: [rustTypeArgument(pointeeCarrier)],
   };
   context.facts.set(request.source.call, rustSelectedCallKey, selectedSignature, evidence);
   return acceptRustPolicy({ selectedSignature }, evidence);

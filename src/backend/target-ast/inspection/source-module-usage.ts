@@ -1,214 +1,280 @@
 import type {
   RustBlock,
+  RustConstExpression,
   RustExpr,
-  RustFunctionParam,
+  RustGenericArgument,
+  RustGenerics,
   RustImplFunction,
   RustItem,
   RustPattern,
   RustStmt,
+  RustStructFields,
   RustTraitFunction,
   RustType,
-  RustTypeParameter,
+  RustTypeBound,
 } from "../nodes.js";
 
 export function rustItemsReferenceModuleAlias(
   items: readonly RustItem[],
   alias: string,
 ): boolean {
-  return items.some((item) => rustItemReferencesModuleAlias(item, alias));
+  return items.some((item) => itemReferencesAlias(item, alias));
 }
 
-function rustItemReferencesModuleAlias(item: RustItem, alias: string): boolean {
+function itemReferencesAlias(item: RustItem, alias: string): boolean {
   switch (item.kind) {
     case "function":
-      return rustTypeParametersReferenceModuleAlias(item.typeParams, alias) ||
-        rustFunctionParametersReferenceModuleAlias(item.params, alias) ||
-        rustOptionalTypeReferencesModuleAlias(item.returnType, alias) ||
-        rustOptionalTypeReferencesModuleAlias(item.errorType, alias) ||
-        rustBlockReferencesModuleAlias(item.body, alias);
+      return genericsReferenceAlias(item.generics, alias) ||
+        item.params.some((parameter) => typeReferencesAlias(parameter.type, alias)) ||
+        optionalTypeReferencesAlias(item.returnType, alias) ||
+        optionalTypeReferencesAlias(item.errorType, alias) ||
+        blockReferencesAlias(item.body, alias);
     case "const":
+    case "static":
     case "thread-local":
-      return rustTypeReferencesModuleAlias(item.type, alias) ||
-        rustExpressionReferencesModuleAlias(item.value, alias);
+      return typeReferencesAlias(item.type, alias) || expressionReferencesAlias(item.value, alias);
     case "mod-decl":
       return false;
-    case "struct":
-      return rustTypeParametersReferenceModuleAlias(item.typeParams, alias) ||
-        item.fields.some((field) => rustTypeReferencesModuleAlias(field.type, alias));
-    case "trait":
-      return rustTypeParametersReferenceModuleAlias(item.typeParams, alias) ||
-        item.superTraits?.some((type) =>
-          rustTypeReferencesModuleAlias(type, alias)) === true ||
-        item.functions.some((fn) => rustTraitFunctionReferencesModuleAlias(fn, alias));
-    case "impl":
-      return rustTypeParametersReferenceModuleAlias(item.typeParams, alias) ||
-        rustOptionalTypeReferencesModuleAlias(item.trait, alias) ||
-        rustTypeReferencesModuleAlias(item.target, alias) ||
-        item.functions.some((fn) => rustImplFunctionReferencesModuleAlias(fn, alias));
-    case "enum":
-      return item.variants.some((variant) =>
-        variant.fields?.some((type) =>
-          rustTypeReferencesModuleAlias(type, alias)) === true);
-    case "type-alias":
-      return rustTypeParametersReferenceModuleAlias(item.typeParams, alias) ||
-        rustTypeReferencesModuleAlias(item.target, alias);
     case "use":
-      return rustPathReferencesModuleAlias(item.path, alias);
+      return pathReferencesAlias(item.path, alias);
+    case "struct":
+      return genericsReferenceAlias(item.generics, alias) ||
+        structFieldsReferenceAlias(item.fields, alias);
+    case "union":
+      return genericsReferenceAlias(item.generics, alias) ||
+        item.fields.some((field) => typeReferencesAlias(field.type, alias));
+    case "enum":
+      return genericsReferenceAlias(item.generics, alias) ||
+        item.variants.some((variant) =>
+          structFieldsReferenceAlias(variant.fields, alias) ||
+          (variant.discriminant !== undefined &&
+            constExpressionReferencesAlias(variant.discriminant, alias)));
+    case "type-alias":
+      return genericsReferenceAlias(item.generics, alias) ||
+        typeReferencesAlias(item.target, alias);
+    case "trait":
+      return genericsReferenceAlias(item.generics, alias) ||
+        item.superTraits.some((bound) => boundReferencesAlias(bound, alias)) ||
+        item.functions.some((fn) => traitFunctionReferencesAlias(fn, alias)) ||
+        item.associatedTypes.some((entry) =>
+          genericsReferenceAlias(entry.generics, alias) ||
+          entry.bounds.some((bound) => boundReferencesAlias(bound, alias)) ||
+          optionalTypeReferencesAlias(entry.value, alias)) ||
+        item.associatedConstants.some((entry) =>
+          typeReferencesAlias(entry.type, alias) ||
+          (entry.value !== undefined && expressionReferencesAlias(entry.value, alias)));
+    case "impl":
+      return genericsReferenceAlias(item.generics, alias) ||
+        optionalTypeReferencesAlias(item.trait, alias) ||
+        typeReferencesAlias(item.target, alias) ||
+        item.functions.some((fn) => implFunctionReferencesAlias(fn, alias)) ||
+        item.associatedTypes.some((entry) =>
+          genericsReferenceAlias(entry.generics, alias) ||
+          entry.bounds.some((bound) => boundReferencesAlias(bound, alias)) ||
+          optionalTypeReferencesAlias(entry.value, alias)) ||
+        item.associatedConstants.some((entry) =>
+          typeReferencesAlias(entry.type, alias) ||
+          (entry.value !== undefined && expressionReferencesAlias(entry.value, alias)));
+    case "extern-block":
+      return item.functions.some((fn) => traitFunctionReferencesAlias(fn, alias)) ||
+        item.statics.some((entry) => typeReferencesAlias(entry.type, alias));
   }
 }
 
-function rustTraitFunctionReferencesModuleAlias(
-  fn: RustTraitFunction,
-  alias: string,
-): boolean {
-  return rustFunctionParametersReferenceModuleAlias(fn.params, alias) ||
-    rustOptionalTypeReferencesModuleAlias(fn.returnType, alias) ||
-    rustOptionalTypeReferencesModuleAlias(fn.errorType, alias);
+function traitFunctionReferencesAlias(fn: RustTraitFunction, alias: string): boolean {
+  return genericsReferenceAlias(fn.generics, alias) ||
+    receiverReferencesAlias(fn.receiver, alias) ||
+    fn.params.some((parameter) => typeReferencesAlias(parameter.type, alias)) ||
+    optionalTypeReferencesAlias(fn.returnType, alias) ||
+    optionalTypeReferencesAlias(fn.errorType, alias) ||
+    (fn.body !== undefined && blockReferencesAlias(fn.body, alias));
 }
 
-function rustImplFunctionReferencesModuleAlias(
-  fn: RustImplFunction,
-  alias: string,
-): boolean {
-  return rustTypeParametersReferenceModuleAlias(fn.typeParams, alias) ||
-    rustFunctionParametersReferenceModuleAlias(fn.params, alias) ||
-    rustOptionalTypeReferencesModuleAlias(fn.returnType, alias) ||
-    rustOptionalTypeReferencesModuleAlias(fn.errorType, alias) ||
-    rustBlockReferencesModuleAlias(fn.body, alias);
+function implFunctionReferencesAlias(fn: RustImplFunction, alias: string): boolean {
+  return genericsReferenceAlias(fn.generics, alias) ||
+    receiverReferencesAlias(fn.receiver, alias) ||
+    fn.params.some((parameter) => typeReferencesAlias(parameter.type, alias)) ||
+    optionalTypeReferencesAlias(fn.returnType, alias) ||
+    optionalTypeReferencesAlias(fn.errorType, alias) ||
+    blockReferencesAlias(fn.body, alias);
 }
 
-function rustFunctionParametersReferenceModuleAlias(
-  parameters: readonly RustFunctionParam[],
+function receiverReferencesAlias(
+  receiver: RustImplFunction["receiver"] | RustTraitFunction["receiver"],
   alias: string,
 ): boolean {
-  return parameters.some((parameter) =>
-    rustTypeReferencesModuleAlias(parameter.type, alias));
+  return receiver?.kind === "typed" && typeReferencesAlias(receiver.type, alias);
 }
 
-function rustTypeParametersReferenceModuleAlias(
-  parameters: readonly RustTypeParameter[] | undefined,
-  alias: string,
-): boolean {
-  return parameters?.some((parameter) =>
-    parameter.bounds.some((bound) =>
-      bound.kind === "trait" && rustPathReferencesModuleAlias(bound.path, alias))) === true;
+function genericsReferenceAlias(generics: RustGenerics, alias: string): boolean {
+  return generics.parameters.some((parameter) => {
+    switch (parameter.kind) {
+      case "lifetime": return false;
+      case "type":
+        return parameter.bounds.some((bound) => boundReferencesAlias(bound, alias)) ||
+          optionalTypeReferencesAlias(parameter.defaultType, alias);
+      case "const":
+        return typeReferencesAlias(parameter.type, alias) ||
+          (parameter.defaultValue !== undefined &&
+            constExpressionReferencesAlias(parameter.defaultValue, alias));
+    }
+  }) || generics.wherePredicates.some((predicate) =>
+    predicate.kind === "type" &&
+      (typeReferencesAlias(predicate.type, alias) ||
+        predicate.bounds.some((bound) => boundReferencesAlias(bound, alias))));
 }
 
-function rustOptionalTypeReferencesModuleAlias(
-  type: RustType | undefined,
-  alias: string,
-): boolean {
-  return type !== undefined && rustTypeReferencesModuleAlias(type, alias);
+function boundReferencesAlias(bound: RustTypeBound, alias: string): boolean {
+  switch (bound.kind) {
+    case "lifetime": return false;
+    case "trait": return typeReferencesAlias(bound.trait, alias);
+    case "callable-trait":
+      return bound.parameters.some((parameter) => typeReferencesAlias(parameter, alias)) ||
+        typeReferencesAlias(bound.result, alias);
+    case "precise-capture":
+      return bound.captures.some((capture) => genericArgumentReferencesAlias(capture, alias));
+  }
 }
 
-function rustTypeReferencesModuleAlias(type: RustType, alias: string): boolean {
+function genericArgumentReferencesAlias(argument: RustGenericArgument, alias: string): boolean {
+  switch (argument.kind) {
+    case "lifetime": return false;
+    case "type": return typeReferencesAlias(argument.type, alias);
+    case "const": return constExpressionReferencesAlias(argument.expression, alias);
+    case "associated-equality":
+      return typeReferencesAlias(argument.type, alias) ||
+        genericArgumentsReferenceAlias(argument.genericArguments, alias);
+    case "associated-bounds":
+      return argument.bounds.some((bound) => boundReferencesAlias(bound, alias)) ||
+        genericArgumentsReferenceAlias(argument.genericArguments, alias);
+  }
+}
+
+function constExpressionReferencesAlias(value: RustConstExpression, alias: string): boolean {
+  switch (value.kind) {
+    case "integer":
+    case "boolean":
+    case "character":
+    case "inferred":
+      return false;
+    case "path":
+      return pathReferencesAlias(value.path, alias) ||
+        genericArgumentsReferenceAlias(value.genericArguments, alias);
+    case "unary":
+      return constExpressionReferencesAlias(value.operand, alias);
+    case "binary":
+      return constExpressionReferencesAlias(value.left, alias) ||
+        constExpressionReferencesAlias(value.right, alias);
+  }
+}
+
+function optionalTypeReferencesAlias(type: RustType | undefined, alias: string): boolean {
+  return type !== undefined && typeReferencesAlias(type, alias);
+}
+
+function typeReferencesAlias(type: RustType, alias: string): boolean {
   switch (type.kind) {
     case "infer":
     case "primitive":
     case "string":
-    case "str-ref":
+    case "str":
     case "unit":
     case "never":
       return false;
     case "named":
-      return rustPathReferencesModuleAlias(type.path, alias) ||
-        type.typeArguments?.some((argument) =>
-          rustTypeReferencesModuleAlias(argument, alias)) === true;
+      return pathReferencesAlias(type.path, alias) ||
+        genericArgumentsReferenceAlias(type.genericArguments, alias);
+    case "qualified":
+      return typeReferencesAlias(type.owner, alias) ||
+        optionalTypeReferencesAlias(type.trait, alias) ||
+        genericArgumentsReferenceAlias(type.genericArguments, alias);
     case "trait-object":
-      return rustTypeReferencesModuleAlias(type.trait, alias);
-    case "reference":
-      return rustTypeReferencesModuleAlias(type.referent, alias);
-    case "raw-pointer":
-      return rustTypeReferencesModuleAlias(type.pointee, alias);
+    case "opaque":
+      return type.bounds.some((bound) => boundReferencesAlias(bound, alias));
+    case "reference": return typeReferencesAlias(type.referent, alias);
+    case "raw-pointer": return typeReferencesAlias(type.pointee, alias);
     case "fixed-array":
-    case "slice":
-      return rustTypeReferencesModuleAlias(type.element, alias);
+      return typeReferencesAlias(type.element, alias) ||
+        constExpressionReferencesAlias(type.length, alias);
+    case "slice": return typeReferencesAlias(type.element, alias);
     case "function-pointer":
-      return type.parameters.some((parameter) =>
-        rustTypeReferencesModuleAlias(parameter, alias)) ||
-        rustTypeReferencesModuleAlias(type.result, alias);
+      return type.parameters.some((parameter) => typeReferencesAlias(parameter, alias)) ||
+        typeReferencesAlias(type.result, alias);
     case "tuple":
-      return type.elements.some((element) =>
-        rustTypeReferencesModuleAlias(element, alias));
+      return type.elements.some((element) => typeReferencesAlias(element, alias));
   }
 }
 
-function rustBlockReferencesModuleAlias(block: RustBlock, alias: string): boolean {
-  return block.statements.some((statement) =>
-    rustStatementReferencesModuleAlias(statement, alias));
+function structFieldsReferenceAlias(fields: RustStructFields, alias: string): boolean {
+  return fields.kind !== "unit" &&
+    fields.fields.some((field) => typeReferencesAlias(field.type, alias));
 }
 
-function rustStatementReferencesModuleAlias(statement: RustStmt, alias: string): boolean {
+function blockReferencesAlias(block: RustBlock, alias: string): boolean {
+  return block.statements.some((statement) => statementReferencesAlias(statement, alias));
+}
+
+function statementReferencesAlias(statement: RustStmt, alias: string): boolean {
   switch (statement.kind) {
     case "let":
-      return rustOptionalTypeReferencesModuleAlias(statement.type, alias) ||
-        (statement.init !== undefined &&
-          rustExpressionReferencesModuleAlias(statement.init, alias));
+      return optionalTypeReferencesAlias(statement.type, alias) ||
+        (statement.init !== undefined && expressionReferencesAlias(statement.init, alias));
+    case "let-pattern":
+      return patternReferencesAlias(statement.pattern, alias) ||
+        expressionReferencesAlias(statement.init, alias);
     case "expr":
-    case "tail":
-      return rustExpressionReferencesModuleAlias(statement.expr, alias);
+    case "tail": return expressionReferencesAlias(statement.expr, alias);
     case "assign":
-      return rustExpressionReferencesModuleAlias(statement.target, alias) ||
-        rustExpressionReferencesModuleAlias(statement.value, alias);
+      return expressionReferencesAlias(statement.target, alias) ||
+        expressionReferencesAlias(statement.value, alias);
     case "return":
-      return statement.expr !== undefined &&
-        rustExpressionReferencesModuleAlias(statement.expr, alias);
+      return statement.expr !== undefined && expressionReferencesAlias(statement.expr, alias);
     case "if":
-      return rustExpressionReferencesModuleAlias(statement.condition, alias) ||
-        rustBlockReferencesModuleAlias(statement.then, alias) ||
-        (statement.else !== undefined &&
-          rustBlockReferencesModuleAlias(statement.else, alias));
-    case "loop":
-      return rustBlockReferencesModuleAlias(statement.body, alias);
+      return expressionReferencesAlias(statement.condition, alias) ||
+        blockReferencesAlias(statement.then, alias) ||
+        (statement.else !== undefined && blockReferencesAlias(statement.else, alias));
+    case "loop": return blockReferencesAlias(statement.body, alias);
     case "while":
-      return rustExpressionReferencesModuleAlias(statement.condition, alias) ||
-        rustBlockReferencesModuleAlias(statement.body, alias);
+      return expressionReferencesAlias(statement.condition, alias) ||
+        blockReferencesAlias(statement.body, alias);
     case "while-let-some":
     case "if-let-some":
-      return rustExpressionReferencesModuleAlias(statement.expression, alias) ||
-        rustBlockReferencesModuleAlias(statement.body, alias);
+      return expressionReferencesAlias(statement.expression, alias) ||
+        blockReferencesAlias(statement.body, alias);
     case "for":
-      return rustExpressionReferencesModuleAlias(statement.iterable, alias) ||
-        rustBlockReferencesModuleAlias(statement.body, alias);
+      return expressionReferencesAlias(statement.iterable, alias) ||
+        blockReferencesAlias(statement.body, alias);
     case "break":
-    case "continue":
-      return false;
+    case "continue": return false;
     case "completion-exit":
       return alias === "rt" ||
-        statement.expr !== undefined &&
-          rustExpressionReferencesModuleAlias(statement.expr, alias);
+        (statement.expr !== undefined && expressionReferencesAlias(statement.expr, alias));
     case "resource-scope":
-      return alias === "rt" ||
-        rustTypeReferencesModuleAlias(statement.returnType, alias) ||
-        rustBlockReferencesModuleAlias(statement.body, alias) ||
-        rustBlockReferencesModuleAlias(statement.cleanup, alias) ||
+      return alias === "rt" || typeReferencesAlias(statement.returnType, alias) ||
+        blockReferencesAlias(statement.body, alias) ||
+        blockReferencesAlias(statement.cleanup, alias) ||
         statement.dispatchTargets.some((target) =>
-          target.continuePrelude?.some((value) =>
-            rustStatementReferencesModuleAlias(value, alias)) === true);
+          target.continuePrelude?.some((entry) => statementReferencesAlias(entry, alias)) === true);
     case "index-assign":
-      return rustExpressionReferencesModuleAlias(statement.receiver, alias) ||
-        rustExpressionReferencesModuleAlias(statement.index, alias) ||
-        rustExpressionReferencesModuleAlias(statement.value, alias);
+      return expressionReferencesAlias(statement.receiver, alias) ||
+        expressionReferencesAlias(statement.index, alias) ||
+        expressionReferencesAlias(statement.value, alias);
     case "scope":
-    case "unsafe-scope":
-      return rustBlockReferencesModuleAlias(statement.body, alias);
-    case "throw":
-      return rustExpressionReferencesModuleAlias(statement.error, alias);
+    case "unsafe-scope": return blockReferencesAlias(statement.body, alias);
+    case "throw": return expressionReferencesAlias(statement.error, alias);
     case "try-scope":
-      return alias === "rt" ||
-        rustTypeReferencesModuleAlias(statement.returnType, alias) ||
-        rustBlockReferencesModuleAlias(statement.body, alias) ||
+      return alias === "rt" || typeReferencesAlias(statement.returnType, alias) ||
+        blockReferencesAlias(statement.body, alias) ||
         (statement.catchClause !== undefined &&
-          rustBlockReferencesModuleAlias(statement.catchClause.body, alias)) ||
+          blockReferencesAlias(statement.catchClause.body, alias)) ||
         (statement.finallyClause !== undefined &&
-          rustBlockReferencesModuleAlias(statement.finallyClause.body, alias)) ||
+          blockReferencesAlias(statement.finallyClause.body, alias)) ||
         statement.dispatchTargets.some((target) =>
-          target.continuePrelude?.some((value) =>
-            rustStatementReferencesModuleAlias(value, alias)) === true);
+          target.continuePrelude?.some((entry) => statementReferencesAlias(entry, alias)) === true);
   }
 }
 
-function rustExpressionReferencesModuleAlias(expression: RustExpr, alias: string): boolean {
+function expressionReferencesAlias(expression: RustExpr, alias: string): boolean {
   switch (expression.kind) {
     case "int-literal":
     case "float-literal":
@@ -217,132 +283,124 @@ function rustExpressionReferencesModuleAlias(expression: RustExpr, alias: string
     case "char-literal":
     case "string-literal":
     case "str-literal":
-    case "unreachable":
-      return false;
-    case "path":
-      return rustPathReferencesModuleAlias(expression.path, alias);
+    case "unreachable": return false;
+    case "path": return pathReferencesAlias(expression.path, alias);
     case "bottom":
     case "numeric-cast":
     case "unsafe":
     case "owned-string-from-borrowed-str":
-      return rustExpressionReferencesModuleAlias(expression.expression, alias);
-    case "unary":
-      return rustExpressionReferencesModuleAlias(expression.operand, alias);
-    case "dereference":
-      return rustExpressionReferencesModuleAlias(expression.pointer, alias);
+      return expressionReferencesAlias(expression.expression, alias);
+    case "unary": return expressionReferencesAlias(expression.operand, alias);
+    case "dereference": return expressionReferencesAlias(expression.pointer, alias);
     case "binary":
-      return rustExpressionReferencesModuleAlias(expression.left, alias) ||
-        rustExpressionReferencesModuleAlias(expression.right, alias);
+      return expressionReferencesAlias(expression.left, alias) ||
+        expressionReferencesAlias(expression.right, alias);
     case "range":
-      return rustExpressionReferencesModuleAlias(expression.start, alias) ||
-        rustExpressionReferencesModuleAlias(expression.end, alias);
+      return expressionReferencesAlias(expression.start, alias) ||
+        expressionReferencesAlias(expression.end, alias);
     case "conditional":
-      return rustExpressionReferencesModuleAlias(expression.condition, alias) ||
-        rustExpressionReferencesModuleAlias(expression.whenTrue, alias) ||
-        rustExpressionReferencesModuleAlias(expression.whenFalse, alias);
+      return expressionReferencesAlias(expression.condition, alias) ||
+        expressionReferencesAlias(expression.whenTrue, alias) ||
+        expressionReferencesAlias(expression.whenFalse, alias);
     case "match":
-      return rustExpressionReferencesModuleAlias(expression.expression, alias) ||
+      return expressionReferencesAlias(expression.expression, alias) ||
         expression.arms.some((arm) =>
-          rustPatternReferencesModuleAlias(arm.pattern, alias) ||
-          rustExpressionReferencesModuleAlias(arm.expression, alias));
+          patternReferencesAlias(arm.pattern, alias) ||
+          expressionReferencesAlias(arm.expression, alias));
     case "matches":
-      return rustExpressionReferencesModuleAlias(expression.expression, alias) ||
-        rustPatternReferencesModuleAlias(expression.pattern, alias);
+      return expressionReferencesAlias(expression.expression, alias) ||
+        patternReferencesAlias(expression.pattern, alias);
     case "assignment":
-      return rustExpressionReferencesModuleAlias(expression.target, alias) ||
-        rustExpressionReferencesModuleAlias(expression.value, alias);
+      return expressionReferencesAlias(expression.target, alias) ||
+        expressionReferencesAlias(expression.value, alias);
     case "call":
-      return rustPathReferencesModuleAlias(expression.path, alias) ||
-        expression.typeArguments?.some((argument) =>
-          rustTypeReferencesModuleAlias(argument, alias)) === true ||
-        expression.args.some((argument) =>
-          rustExpressionReferencesModuleAlias(argument, alias));
+      return pathReferencesAlias(expression.path, alias) ||
+        genericArgumentsReferenceAlias(expression.genericArguments, alias) ||
+        expression.args.some((argument) => expressionReferencesAlias(argument, alias));
     case "invoke":
-      return rustExpressionReferencesModuleAlias(expression.callee, alias) ||
-        expression.args.some((argument) =>
-          rustExpressionReferencesModuleAlias(argument, alias));
+      return expressionReferencesAlias(expression.callee, alias) ||
+        expression.args.some((argument) => expressionReferencesAlias(argument, alias));
     case "associated-value":
-      return rustTypeReferencesModuleAlias(expression.owner, alias) ||
-        rustOptionalTypeReferencesModuleAlias(expression.trait, alias);
+      return typeReferencesAlias(expression.owner, alias) ||
+        optionalTypeReferencesAlias(expression.trait, alias);
     case "associated-call":
-      return rustTypeReferencesModuleAlias(expression.owner, alias) ||
-        rustOptionalTypeReferencesModuleAlias(expression.trait, alias) ||
-        expression.typeArguments?.some((argument) =>
-          rustTypeReferencesModuleAlias(argument, alias)) === true ||
-        expression.args.some((argument) =>
-          rustExpressionReferencesModuleAlias(argument, alias));
+      return typeReferencesAlias(expression.owner, alias) ||
+        optionalTypeReferencesAlias(expression.trait, alias) ||
+        genericArgumentsReferenceAlias(expression.genericArguments, alias) ||
+        expression.args.some((argument) => expressionReferencesAlias(argument, alias));
     case "method-call":
-      return rustExpressionReferencesModuleAlias(expression.receiver, alias) ||
-        expression.typeArguments?.some((argument) =>
-          rustTypeReferencesModuleAlias(argument, alias)) === true ||
-        expression.args.some((argument) =>
-          rustExpressionReferencesModuleAlias(argument, alias));
+      return expressionReferencesAlias(expression.receiver, alias) ||
+        genericArgumentsReferenceAlias(expression.genericArguments, alias) ||
+        expression.args.some((argument) => expressionReferencesAlias(argument, alias));
     case "field":
-      return rustExpressionReferencesModuleAlias(expression.receiver, alias);
+    case "tuple-field": return expressionReferencesAlias(expression.receiver, alias);
     case "index":
-      return rustExpressionReferencesModuleAlias(expression.receiver, alias) ||
-        rustExpressionReferencesModuleAlias(expression.index, alias);
+      return expressionReferencesAlias(expression.receiver, alias) ||
+        expressionReferencesAlias(expression.index, alias);
     case "block":
       return expression.bindings.some((binding) =>
-        rustOptionalTypeReferencesModuleAlias(binding.type, alias) ||
-        rustExpressionReferencesModuleAlias(binding.value, alias)) ||
-        rustExpressionReferencesModuleAlias(expression.value, alias);
+        optionalTypeReferencesAlias(binding.type, alias) ||
+        expressionReferencesAlias(binding.value, alias)) ||
+        expressionReferencesAlias(expression.value, alias);
     case "evaluate-then":
-      return rustExpressionReferencesModuleAlias(expression.effect, alias) ||
-        rustExpressionReferencesModuleAlias(expression.value, alias);
+      return expressionReferencesAlias(expression.effect, alias) ||
+        expressionReferencesAlias(expression.value, alias);
     case "string-concat":
-      return expression.parts.some((part) =>
-        rustExpressionReferencesModuleAlias(part, alias));
+      return expression.parts.some((part) => expressionReferencesAlias(part, alias));
     case "format-write":
-      return rustExpressionReferencesModuleAlias(expression.writer, alias) ||
-        expression.args.some((argument) =>
-          rustExpressionReferencesModuleAlias(argument, alias));
-    case "reference":
-      return rustExpressionReferencesModuleAlias(expression.expr, alias);
+      return expressionReferencesAlias(expression.writer, alias) ||
+        expression.args.some((argument) => expressionReferencesAlias(argument, alias));
+    case "reference": return expressionReferencesAlias(expression.expr, alias);
     case "vec-literal":
     case "slice-literal":
     case "tuple-literal":
-      return expression.elements.some((element) =>
-        rustExpressionReferencesModuleAlias(element, alias));
-    case "closure":
-      return rustExpressionReferencesModuleAlias(expression.body, alias);
-    case "closure-block":
-      return rustBlockReferencesModuleAlias(expression.body, alias);
+      return expression.elements.some((element) => expressionReferencesAlias(element, alias));
+    case "closure": return expressionReferencesAlias(expression.body, alias);
+    case "closure-block": return blockReferencesAlias(expression.body, alias);
     case "await":
-      return rustExpressionReferencesModuleAlias(expression.expr, alias);
-    case "try":
-      return rustExpressionReferencesModuleAlias(expression.expr, alias) ||
-        rustTypeReferencesModuleAlias(expression.resultErrorType, alias) ||
-        rustTypeReferencesModuleAlias(expression.operandErrorType, alias);
+    case "try": return expressionReferencesAlias(expression.expr, alias);
     case "return-expression":
-      return expression.expr !== undefined &&
-        rustExpressionReferencesModuleAlias(expression.expr, alias);
+      return expression.expr !== undefined && expressionReferencesAlias(expression.expr, alias);
     case "struct-literal":
-      return rustPathReferencesModuleAlias(expression.path, alias) ||
-        expression.fields.some((field) =>
-          rustExpressionReferencesModuleAlias(field.value, alias)) ||
-        (expression.base !== undefined &&
-          rustExpressionReferencesModuleAlias(expression.base, alias));
+      return pathReferencesAlias(expression.path, alias) ||
+        genericArgumentsReferenceAlias(expression.genericArguments, alias) ||
+        expression.fields.some((field) => expressionReferencesAlias(field.value, alias)) ||
+        (expression.base !== undefined && expressionReferencesAlias(expression.base, alias));
   }
 }
 
-function rustPatternReferencesModuleAlias(pattern: RustPattern, alias: string): boolean {
+function genericArgumentsReferenceAlias(
+  values: readonly RustGenericArgument[] | undefined,
+  alias: string,
+): boolean {
+  return values?.some((value) => genericArgumentReferencesAlias(value, alias)) === true;
+}
+
+function patternReferencesAlias(pattern: RustPattern, alias: string): boolean {
   switch (pattern.kind) {
-    case "wildcard":
+    case "wildcard": return false;
     case "binding":
-      return false;
-    case "path":
-      return rustPathReferencesModuleAlias(pattern.path, alias);
+      return pattern.subpattern !== undefined && patternReferencesAlias(pattern.subpattern, alias);
+    case "path": return pathReferencesAlias(pattern.path, alias);
     case "tuple":
-      return pattern.elements.some((element) =>
-        rustPatternReferencesModuleAlias(element, alias));
+      return pattern.elements.some((entry) => patternReferencesAlias(entry, alias));
+    case "or":
+      return pattern.patterns.some((entry) => patternReferencesAlias(entry, alias));
     case "tuple-variant":
-      return rustPathReferencesModuleAlias(pattern.path, alias) ||
-        pattern.elements.some((element) =>
-          rustPatternReferencesModuleAlias(element, alias));
+      return pathReferencesAlias(pattern.path, alias) ||
+        pattern.elements.some((entry) => patternReferencesAlias(entry, alias));
+    case "struct":
+      return pathReferencesAlias(pattern.path, alias) ||
+        pattern.fields.some((field) => patternReferencesAlias(field.pattern, alias));
+    case "slice":
+      return pattern.prefix.some((entry) => patternReferencesAlias(entry, alias)) ||
+        (pattern.rest !== undefined && patternReferencesAlias(pattern.rest, alias)) ||
+        pattern.suffix.some((entry) => patternReferencesAlias(entry, alias));
+    case "reference": return patternReferencesAlias(pattern.pattern, alias);
+    case "literal": return expressionReferencesAlias(pattern.expression, alias);
   }
 }
 
-function rustPathReferencesModuleAlias(path: string, alias: string): boolean {
+function pathReferencesAlias(path: string, alias: string): boolean {
   return path === alias || path.startsWith(`${alias}::`);
 }

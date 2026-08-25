@@ -1,5 +1,9 @@
 import type { TargetSelection } from "@tsonic/target-api";
-import type { RustTargetConfiguration } from "../target-model/configuration/model.js";
+import type {
+  RustTargetConfiguration,
+  RustTargetConfigurationInput,
+} from "../target-model/configuration/model.js";
+import type { RustDialect } from "../target-model/semantics/index.js";
 import type { RustEdition, RustOutputType } from "../target-model/project/model.js";
 import { resolveRustProjectConfiguration } from "./rust-user-project.js";
 
@@ -36,11 +40,11 @@ function validateRustTargetOptionKeys(target: TargetSelection): void {
   }
 }
 
-export function createRustTargetConfiguration(
+export function createRustTargetConfigurationInput(
   target: TargetSelection,
   projectDirectory: string,
   targetOutputRoot: string,
-): RustTargetConfiguration {
+): RustTargetConfigurationInput {
   validateRustTargetOptionKeys(target);
   return Object.freeze({
     crateName: readRustCrateName(target),
@@ -51,6 +55,16 @@ export function createRustTargetConfiguration(
       projectDirectory,
       targetOutputRoot,
     ),
+  });
+}
+
+export function sealRustTargetConfiguration(
+  input: RustTargetConfigurationInput,
+  dialect: RustDialect,
+): RustTargetConfiguration {
+  return Object.freeze({
+    ...input,
+    dialect,
   });
 }
 

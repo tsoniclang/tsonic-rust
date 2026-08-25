@@ -2,6 +2,12 @@ import type { Node, SourcePrimitiveKind } from "@tsonic/tsts";
 import type { RustBinaryOperator } from "../syntax/tokens.js";
 import type { RustErrorBoundary } from "./error-boundary.js";
 import type { TargetTypeRef } from "../types/model.js";
+import type {
+  RustBound,
+  RustGenericArgument,
+  RustGenerics,
+  RustTraitRef,
+} from "../semantics/index.js";
 
 export const rustExtensionId = "tsonic.rust";
 
@@ -28,14 +34,46 @@ export type RustArgumentMode = "value" | "ref" | "mut-ref";
 
 export type RustOperationEvaluationEffect = "observable" | "pure";
 
-export type RustProviderTypeRequirement =
-  | "clone"
-  | "copy"
-  | { readonly kind: "trait"; readonly path: string };
+export type RustProviderTypeRequirement = RustBound;
 
 export interface RustProviderTypeParameterRequirement {
   readonly name: string;
   readonly requirements: readonly RustProviderTypeRequirement[];
+}
+
+export interface RustResolvedProviderTypeParameterRequirement {
+  readonly sourceName: string;
+  readonly carrier: TargetTypeRef;
+  readonly sourceInputs: readonly RustResolvedProviderRequirementSourceInput[];
+  readonly requirements: readonly RustProviderTypeRequirement[];
+}
+
+export type RustResolvedProviderRequirementSourceInput =
+  | { readonly kind: "receiver" }
+  | { readonly kind: "argument"; readonly sourceIndex: number };
+
+export type RustProviderSourceGenericTarget =
+  | {
+      readonly kind: "generic-parameter";
+      readonly parameter: RustGenericArgument;
+    }
+  | {
+      readonly kind: "associated-type";
+      readonly projection: Extract<TargetTypeRef, { readonly kind: "associated-type" }>;
+    }
+  | {
+      readonly kind: "semantic-parameter";
+      readonly role: "callable-result";
+    };
+
+export interface RustProviderSourceGenericBinding {
+  readonly sourceName: string;
+  readonly target: RustProviderSourceGenericTarget;
+}
+
+export interface RustProviderReceiverContract {
+  readonly type: TargetTypeRef;
+  readonly explicit: boolean;
 }
 
 export type RustProviderConstantArgument =
@@ -197,6 +235,17 @@ export type RustProviderOperationForm =
     }
   | { readonly form: "path"; readonly path: string }
   | { readonly form: "static"; readonly path: string }
+  | {
+      readonly form: "static-reference";
+      readonly path: string;
+      readonly mutable: boolean;
+    }
+  | { readonly form: "tuple-field"; readonly index: number }
+  | {
+      readonly form: "struct-variant";
+      readonly path: string;
+      readonly fields: readonly string[];
+    }
   | { readonly form: "method"; readonly name: string }
   | {
       // Static helper lowering to a method on the first argument
@@ -247,8 +296,7 @@ export type RustProviderOperationForm =
   | {
       readonly form: "trait-call";
       readonly owner: TargetTypeRef;
-      readonly traitPath: string;
-      readonly traitTypeArguments: readonly TargetTypeRef[];
+      readonly trait: RustTraitRef;
       readonly method: string;
       readonly receiverMode?: RustArgumentMode;
       readonly argModes?: readonly RustArgumentMode[];
@@ -256,8 +304,7 @@ export type RustProviderOperationForm =
   | {
       readonly form: "trait-associated-value";
       readonly owner: TargetTypeRef;
-      readonly traitPath: string;
-      readonly traitTypeArguments: readonly TargetTypeRef[];
+      readonly trait: RustTraitRef;
       readonly name: string;
     }
   | {
@@ -285,9 +332,13 @@ export interface RustProviderOperationTemplate<
   readonly sourceAbsenceCarrier?: TargetTypeRef;
   readonly parameterCarriers?: readonly (TargetTypeRef | undefined)[];
   readonly receiverCarrier?: TargetTypeRef;
-  readonly typeParameters?: readonly string[];
+  readonly targetReceiver?: RustProviderReceiverContract;
+  readonly sourceGenericBindings?: readonly RustProviderSourceGenericBinding[];
+  readonly targetInferenceParameters?: readonly RustGenericArgument[];
+  readonly targetGenerics?: RustGenerics;
+  readonly targetCallableGenerics?: RustGenerics;
   readonly typeRequirements?: readonly RustProviderTypeParameterRequirement[];
-  readonly targetTypeArguments?: readonly TargetTypeRef[];
+  readonly targetGenericArguments?: readonly RustGenericArgument[];
   readonly resultConversion?: RustValueConversion;
   readonly compileTimeSourceArgumentIndexes?: readonly number[];
   readonly isAsync: boolean;
@@ -320,6 +371,12 @@ export type RustProviderFactOperationKind = "method" | "constructor" | "property
 export type RustRuntimeSetOperationKind = "property-set" | "index-set";
 export type RustFinalizedOperationKind = RustProviderFactOperationKind | RustRuntimeSetOperationKind;
 
+export type RustSourceParameterContract =
+  | "ordinary"
+  | "owned"
+  | "shared-reference"
+  | "mutable-reference";
+
 export interface RustOptionalChainFact {
   readonly expression: Node;
   readonly guard: Node;
@@ -333,6 +390,7 @@ export interface RustOptionalChainFact {
 
 export interface RustSourceCallParameterPlan {
   readonly form: "required" | "optional" | "default" | "rest";
+  readonly sourceContract: RustSourceParameterContract;
   readonly valueCarrier: TargetTypeRef;
   readonly parameterCarrier: TargetTypeRef;
   readonly mode: RustArgumentMode;
@@ -341,6 +399,7 @@ export interface RustSourceCallParameterPlan {
     readonly sourceForm: "value" | "spread-element" | "spread-sequence";
     readonly sourceParameterForm: "parameter" | "rest-element" | "rest-sequence";
     readonly carrier: TargetTypeRef;
+    readonly explicitReferenceCarrier?: TargetTypeRef;
     readonly spreadElementIndex?: number;
   }[];
 }

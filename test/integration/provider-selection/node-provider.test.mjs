@@ -396,7 +396,7 @@ export function main(): void {
   assert.match(source, /response\.end_buffer\(/u);
   assert.match(source, /server\s*\.listen\(/u);
   assert.match(source, /tsonic_rust_node::timers::set_interval_callable/u);
-  assert.match(source, /rt::Callable::<[^;]+rt::TsonicResult<\(\)>>/u);
+  assert.match(source, /rt::OwnedLocalCallable::<[^;]+rt::TsonicResult<\(\)>>/u);
   const main = artifactText(result, "src/main.rs");
   assert.match(main, /tsonic_rust_node::run_event_loop\(\)\?/u);
   validateGeneratedProject("node-server-contract", result.artifacts);
@@ -421,7 +421,7 @@ export function register(
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /handler: rt::Callable<[\s\S]*?rt::TsonicResult<\(\)>,?\s*>/u);
+  assert.match(source, /handler: rt::OwnedLocalCallable<[\s\S]*?rt::TsonicResult<\(\)>,?\s*>/u);
   assert.match(source, /tsonic_rust_node::http::create_server_callable\(handler\)/u);
   assert.doesNotMatch(source, /handler\.clone\(\)/u);
   validateGeneratedProject("node-retained-callback", result.artifacts);

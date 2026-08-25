@@ -238,7 +238,7 @@ export function printRustExprFitted(
       );
     case "associated-call":
       {
-        const method = printRustCallMember(expression.method, expression.typeArguments);
+        const method = printRustCallMember(expression.method, expression.genericArguments);
         const owner = printRustAssociatedCallOwnerFitted(
           expression,
           depth,
@@ -301,7 +301,7 @@ export function printRustExprFitted(
         selectorCount === 2 &&
         firstMethodRequiresExpansion &&
         renderedFits(
-          `${printRustExpr(chain.base)}.${firstStep.name}.${printRustCallMember(secondStep.name, secondStep.typeArguments)}(`,
+          `${printRustExpr(chain.base)}.${firstStep.name}.${printRustCallMember(secondStep.name, secondStep.genericArguments)}(`,
           column,
         );
       if (chain !== undefined && selectorCount === 1 && !hasClosure &&
@@ -783,7 +783,7 @@ export function printRustExprFitted(
         return appendToLastLine(`(${rendered}`, ",)");
       }
       if (expression.kind !== "tuple-literal" && expression.elements.length === 1 &&
-        onlyElement !== undefined && rustExpressionContainsStatementBlock(onlyElement)) {
+        onlyElement !== undefined) {
         const opening = expression.kind === "vec-literal" ? "vec![" : "[";
         const rendered = printRustExprFitted(
           onlyElement,

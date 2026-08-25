@@ -16,7 +16,7 @@ import type {
 import { createRustModuleInitializationPlan } from "./module-initialization-facts.js";
 import { analyzeRustProviderErrorCarriers } from "./provider-errors.js";
 import { analyzeRustCallableGenericRequirements } from "../callables/generic-requirements.js";
-import { analyzeRustValueLifetimes } from "./value-lifetimes.js";
+import { analyzeRustOwnership } from "../ownership/index.js";
 import {
   analyzeRustBinaryEpilogues,
   analyzeRustRuntimeReferences,
@@ -60,8 +60,8 @@ export function analyzeRustTargetProgram(
     jsEnabled,
     rootPublishesLibrary,
   );
-  analyzeRustProgram(context);
-  if (context.diagnostics.length > 0) {
+  const declarationContracts = analyzeRustProgram(context, configuration.dialect);
+  if (context.diagnostics.length > 0 || declarationContracts === undefined) {
     return rejectedTargetStage(context.diagnostics);
   }
 
@@ -79,11 +79,29 @@ export function analyzeRustTargetProgram(
 
   const moduleInitialization = createRustModuleInitializationPlan(context);
   const facts = context.facts.seal();
+  const projectTypes = context.projectTypes.seal();
+  const sourceGenerics = context.sourceGenerics.seal();
+  const sourceObjectRepresentations = context.objectRepresentations.seal();
+  const ownership = analyzeRustOwnership({
+    ast: context.ast,
+    sourceFiles: context.sourceFiles,
+    navigation: context.source.navigation,
+    facts,
+    sourceGenerics,
+    providerTypes: providerSemantics.types,
+    projectTypes,
+    objectRepresentations: sourceObjectRepresentations,
+    declarationContracts,
+  });
+  if (ownership.kind === "rejected") {
+    return rejectedTargetStage(ownership.diagnostics);
+  }
   const callableGenericRequirements = analyzeRustCallableGenericRequirements(
     context.source,
     context.sourceFiles,
     facts,
-    context.names,
+    context.sourceGenerics,
+    ownership.analysis,
   );
   if (callableGenericRequirements.kind === "rejected") {
     return rejectedTargetStage(callableGenericRequirements.diagnostics);
@@ -99,18 +117,16 @@ export function analyzeRustTargetProgram(
     sourceNavigation: snapshotTargetPlanningSourceNavigation(context.source),
     sourceFiles: context.sourceFiles,
     facts,
-    projectTypes: context.projectTypes.seal(),
-    objectRepresentations: context.objectRepresentations.seal(),
+    projectTypes,
+    objectRepresentations: sourceObjectRepresentations,
     projectMethodDispatch: context.projectMethodDispatch.seal(),
     projectMethodProperties: context.projectMethodProperties.seal(),
     projectFieldDispatch: context.projectFieldDispatch.seal(),
     sourceCallableSpecializations: context.sourceCallableSpecializations.seal(),
+    sourceGenerics,
+    declarationContracts,
     callableGenericRequirements: callableGenericRequirements.index,
-    valueLifetimes: analyzeRustValueLifetimes({
-      ast: context.ast,
-      sourceFiles: context.sourceFiles,
-      navigation: context.source.navigation,
-    }),
+    ownership: ownership.analysis,
     structuralShapes: context.structuralShapes.seal(),
     runtimeReferences: runtimeReferences.plan,
     binaryEpilogues,

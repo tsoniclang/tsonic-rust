@@ -18,5 +18,5 @@ export function isRustCVariadicArgumentCarrier(
   if (carrier.kind === "source-primitive") {
     return cVariadicSourcePrimitives.has(carrier.name);
   }
-  return carrier.kind === "pointer" || carrier.kind === "function-pointer";
+  return carrier.kind === "raw-pointer" || carrier.kind === "function-pointer";
 }

@@ -21,6 +21,8 @@ import type {
   RustStmt,
   RustType,
 } from "../../../target-ast/nodes.js";
+import { emptyRustAstGenerics } from "../../../target-ast/nodes.js";
+import { rustDocHiddenAttribute } from "../../../target-ast/attributes.js";
 import { rustLintAttributes } from "../../../target-ast/normalization/lint-policy.js";
 import {
   missingFactDiagnostic,
@@ -144,7 +146,7 @@ export function planProjectClassConstructor(
         constructorSignature,
         context,
       )
-    : planRustCallableParameters(constructor, context, syntheticNames, { requireStatic: false });
+    : planRustCallableParameters(constructor, context, syntheticNames);
   if (parameterPlan === undefined) {
     return undefined;
   }
@@ -515,11 +517,12 @@ export function planProjectClassConstructor(
       ? {}
       : {
           attrs: [
-            ...(publishesImplementationAbi ? ["#[doc(hidden)]"] : []),
+            ...(publishesImplementationAbi ? [rustDocHiddenAttribute] : []),
             ...initializationSafetyAttributes,
           ],
         }),
     params: parameterPlan.params,
+    generics: emptyRustAstGenerics,
     ...(constructorErrorType === undefined ? {} : { errorType: constructorErrorType }),
     returnType: stateType,
     body: {
@@ -557,6 +560,7 @@ export function planProjectClassConstructor(
       ];
       return attrs.length === 0 ? {} : { attrs };
     })(),
+    generics: emptyRustAstGenerics,
     params: parameterPlan.params,
     ...(constructorErrorType === undefined ? {} : { errorType: constructorErrorType }),
     returnType: wrapperType,
@@ -608,7 +612,7 @@ export function planProjectClassConstructor(
                   name: rustProjectObjectStateField,
                   value: {
                     kind: "call",
-                    path: "rt::ObjectHandle::new",
+                    path: "rt::LocalObjectHandle::new",
                     args: [{ kind: "path", path: stateName }],
                   },
                 },

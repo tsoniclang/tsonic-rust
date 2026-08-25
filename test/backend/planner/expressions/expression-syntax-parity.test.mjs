@@ -251,7 +251,7 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /values\.map\(\|value\| value \+ 1\)/u);
-  assert.match(source, /Callable::<\(i32,\), rt::TsonicResult<i32>>::recursive/u);
+  assert.match(source, /OwnedLocalCallable::<\(i32,\), rt::TsonicResult<i32>>::recursive/u);
   validateGeneratedProject("named-callable-expression", result.artifacts, { run: true });
 });
 

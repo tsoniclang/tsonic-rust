@@ -1,7 +1,12 @@
 import { allocateRustGeneratedName as allocateGeneratedName, rustGeneratedNameComponent } from "../../../target-model/names/generated.js";
 import { compareProjectDefinitions, definitionKey, denseNodes, heritageKindIssue, projectDefinition, projectMemberNames, sourceFileIdentifierNames } from "./helpers.js";
 import { rustPascalCaseIdentifier, rustScreamingSnakeIdentifier, rustSnakeCaseIdentifier } from "../../../target-model/names/identifiers.js";
-import { rustSourceTypeCarrier, rustSourceTypeCarrierValue, substituteRustTargetTypeParameters } from "../../../target-model/types/index.js";
+import {
+  rustGenericSubstitutionsForOpenArguments,
+  rustSourceTypeCarrier,
+  rustSourceTypeCarrierValue,
+  substituteRustTargetGenerics,
+} from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { Node, Signature, SourceFile } from "@tsonic/tsts";
 import type {
@@ -9,6 +14,7 @@ import type {
 } from "@tsonic/target-api/source";
 import type { RustExternalProjectBase } from "../../../policy/types/external-project-types.js";
 import type { RustProjectConstructorSignature, RustProjectDowncastRoute, RustProjectHeritageEdge, RustProjectMemberSlotCandidate, RustProjectMemberSlotRole, RustProjectTypeDefinition, RustProjectTypeIssue, RustProjectTypePolicy, RustProjectTypePolicyHost, RustProjectTypeRelationship } from "../../../policy/types/project-types.js";
+import type { RustGenericArgument } from "../../../target-model/semantics/index.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function createRustProjectTypePolicy(
@@ -24,7 +30,14 @@ export function createRustProjectTypePolicy(
     const usedNames = sourceFileIdentifierNames(sourceFile, host.ast, host.names);
     usedModuleNamesBySourceFile.set(sourceFile, usedNames);
     for (const statement of denseNodes(host.ast.statements(sourceFile)) ?? []) {
-      const definition = projectDefinition(statement, sourceFile, host.ast, host.names, usedNames);
+      const definition = projectDefinition(
+        statement,
+        sourceFile,
+        host.ast,
+        host.names,
+        host.sourceGenerics,
+        usedNames,
+      );
       if (definition === undefined) {
         continue;
       }
@@ -63,7 +76,7 @@ export function createRustProjectTypePolicy(
       if (target === undefined) {
         const externalBase = host.resolveExternalHeritage(edge);
         if (externalBase !== undefined && definition.kind === "class" &&
-          definition.typeParameterNames.length === 0 &&
+          definition.genericArguments.length === 0 &&
           externalBaseByDeclaration.get(definition.declaration) === undefined) {
           externalBaseByDeclaration.set(definition.declaration, externalBase);
           continue;
@@ -84,7 +97,10 @@ export function createRustProjectTypePolicy(
         });
         continue;
       }
-      if (edge.selectedTypeArguments.length !== target.typeParameterNames.length ||
+      const targetGenericContract = host.sourceGenerics.identityContractFor(target.declaration);
+      if (targetGenericContract === undefined ||
+        targetGenericContract.parameters.length !== target.genericArguments.length ||
+        edge.selectedTypeArguments.length !== target.genericArguments.length ||
         edge.typeArguments.length > edge.selectedTypeArguments.length) {
         issues.push({
           node: edge.heritage,
@@ -93,8 +109,17 @@ export function createRustProjectTypePolicy(
         });
         continue;
       }
-      const arguments_ = edge.selectedTypeArguments.map((selectedType, index) =>
-        host.resolveSelectedType(edge.typeArguments[index], selectedType, edge.heritage));
+      const arguments_ = edge.selectedTypeArguments.map((selectedType, index) => {
+        const parameter = targetGenericContract.parameters[index];
+        return parameter === undefined
+          ? undefined
+          : host.resolveSelectedGenericArgument(
+              edge.typeArguments[index],
+              selectedType,
+              parameter,
+              edge.heritage,
+            );
+      });
       if (arguments_.some((argument) => argument === undefined)) {
         issues.push({
           node: edge.heritage,
@@ -112,7 +137,7 @@ export function createRustProjectTypePolicy(
           target.fileName,
           target.sourceName,
           "object",
-          arguments_ as readonly TargetTypeRef[],
+          arguments_ as readonly RustGenericArgument[],
         ),
       }));
     }
@@ -124,14 +149,17 @@ export function createRustProjectTypePolicy(
     const definition = value === undefined
       ? undefined
       : byKey.get(definitionKey(value.fileName, value.typeName));
-    if (value === undefined || definition === undefined || value.typeArguments.length !== definition.typeParameterNames.length) {
+    if (value === undefined || definition === undefined ||
+      value.genericArguments.length !== definition.genericArguments.length) {
       return undefined;
     }
-    const substitutions = new Map(
-      definition.typeParameterNames.map((name, index) => [name, value.typeArguments[index]!] as const),
+    const substitutions = rustGenericSubstitutionsForOpenArguments(
+      definition.genericArguments,
+      value.genericArguments,
     );
+    if (substitutions === undefined) return undefined;
     const project = (heritageByDeclaration.get(definition.declaration) ?? []).map((edge) =>
-      substituteRustTargetTypeParameters(edge.targetType, substitutions));
+      substituteRustTargetGenerics(edge.targetType, substitutions));
     const external = externalBaseByDeclaration.get(definition.declaration);
     return Object.freeze(external === undefined
       ? project
@@ -143,7 +171,7 @@ export function createRustProjectTypePolicy(
       definition.fileName,
       definition.sourceName,
       "object",
-      definition.typeParameterNames.map((name) => ({ kind: "type-parameter", name })),
+      definition.genericArguments,
     );
 
   const relationship = (
@@ -206,8 +234,9 @@ export function createRustProjectTypePolicy(
   }
   for (const definition of definitions) {
     if (definition.kind === "interface" &&
-      (denseNodes(host.ast.members(definition.declaration)) ?? []).some((member) =>
-        host.ast.kindName(member) === "KindMethodSignature")) {
+      (host.requiresTraitRepresentation(definition.declaration) ||
+        (denseNodes(host.ast.members(definition.declaration)) ?? []).some((member) =>
+          host.ast.kindName(member) === "KindMethodSignature"))) {
       polymorphic.add(definition);
     }
   }
@@ -556,7 +585,7 @@ export function createRustProjectTypePolicy(
     const targets = sourceComponent === undefined
       ? []
       : orderedDefinitions
-          .filter((target) => target.kind === "class" && target.typeParameterNames.length === 0)
+          .filter((target) => target.kind === "class" && target.genericArguments.length === 0)
           .filter((target) =>
             host.sourcePackageComponentForFile(target.fileName) === sourceComponent)
           .filter((target) => relationship(openCarrier(target), source).kind === "related");
@@ -648,6 +677,9 @@ export function createRustProjectTypePolicy(
     definitionContainingDeclaration,
     definitionForCarrier,
     openCarrier,
+    genericsForDefinition(definition) {
+      return host.sourceGenerics.contractFor(definition.declaration)?.generics;
+    },
     heritageForDefinition(definition) {
       return heritageByDeclaration.get(definition.declaration) ?? Object.freeze([]);
     },
@@ -707,13 +739,16 @@ export function createRustProjectTypePolicy(
         return undefined;
       }
       const value = rustSourceTypeCarrierValue(selected.targetType);
-      if (value === undefined || value.typeArguments.length !== owner.typeParameterNames.length) {
+      if (value === undefined || value.genericArguments.length !== owner.genericArguments.length) {
         return undefined;
       }
-      return substituteRustTargetTypeParameters(
-        declaredCarrier,
-        new Map(owner.typeParameterNames.map((name, index) => [name, value.typeArguments[index]!] as const)),
+      const substitutions = rustGenericSubstitutionsForOpenArguments(
+        owner.genericArguments,
+        value.genericArguments,
       );
+      return substitutions === undefined
+        ? undefined
+        : substituteRustTargetGenerics(declaredCarrier, substitutions);
     },
     isPolymorphic(definition) {
       return polymorphic.has(definition);

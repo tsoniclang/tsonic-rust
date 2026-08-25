@@ -331,6 +331,17 @@ export function planExpressionAsStatement(
         );
       }
       if (storageOverride?.valueForm !== "storage" && sourceField?.kind === "source-field") {
+        if (sourceField.fieldLayout === "native-union" && operator !== "=" &&
+          (context.explicitUnsafeContextDepth ?? 0) === 0) {
+          context.diagnostics.push({
+            code: "RUST_NATIVE_UNION_FIELD_UNSAFE_CONTEXT_REQUIRED",
+            category: "error",
+            source: "tsonic-rust",
+            message: "Reading a native Rust union field during compound assignment requires an explicit unsafeContext() source region.",
+            sourceNode: left,
+          });
+          return undefined;
+        }
         if (!sourceFieldSelectedOperationMatches(left, sourceField, context)) {
           context.diagnostics.push(missingFactDiagnostic(
             diagnosticInput(context, left),
@@ -453,6 +464,23 @@ export function planExpressionAsStatement(
         const value = planExpression(valueNode, context);
         if (value === undefined) {
           return undefined;
+        }
+        if (fact.kind === "operator-token" && operator === "=" &&
+          sourceField.dispatch === undefined &&
+          ast.kindName(receiverNode) === KindIdentifier && plannedReceiver?.kind === "path" &&
+          ast.kindName(valueNode) === KindIdentifier && value.kind === "path") {
+          const direct = writeRustStoredObjectField(
+            sourceField.storage,
+            sourceField.receiverCarrier,
+            plannedReceiver,
+            sourceField.storageIndex,
+            operator,
+            value,
+            context,
+          );
+          if (direct !== undefined) {
+            return [{ kind: "expr", expr: direct }];
+          }
         }
         const valueName = allocateRustSyntheticName(context.syntheticNames, "value");
         if (operator === "+=" && isRustStringCarrier(fact.resultCarrier)) {

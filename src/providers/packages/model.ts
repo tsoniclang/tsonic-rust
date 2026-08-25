@@ -3,6 +3,8 @@ import type { RustFallibleErrorBoundary } from "../../target-model/operations/er
 import type { RustNamedTypeTraitContract } from "../../target-model/types/model.js";
 import type {
   RustProviderOperationForm,
+  RustProviderReceiverContract,
+  RustProviderSourceGenericBinding,
   RustProviderTypeParameterRequirement,
   RustValueConversion,
 } from "../../target-model/operations/model.js";
@@ -11,6 +13,7 @@ import type {
   TargetCapabilityImplementation,
 } from "@tsonic/target-api/provider";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustGenericArgument, RustGenerics } from "../../target-model/semantics/index.js";
 
 export interface RustProviderModuleDefinition {
   readonly moduleSpecifier: string;
@@ -44,9 +47,13 @@ interface RustProviderOperationDefinitionBase<
   readonly resultCarrier: TargetTypeRef;
   readonly parameterCarriers?: readonly TargetTypeRef[];
   readonly receiverCarrier?: TargetTypeRef;
-  readonly typeParameters?: readonly string[];
+  readonly targetReceiver?: RustProviderReceiverContract;
+  readonly sourceGenericBindings?: readonly RustProviderSourceGenericBinding[];
+  readonly targetInferenceParameters?: readonly RustGenericArgument[];
+  readonly targetGenerics?: RustGenerics;
+  readonly targetCallableGenerics?: RustGenerics;
   readonly typeRequirements?: readonly RustProviderTypeParameterRequirement[];
-  readonly targetTypeArguments?: readonly TargetTypeRef[];
+  readonly targetGenericArguments?: readonly RustGenericArgument[];
   readonly resultConversion?: RustValueConversion;
   readonly evaluation?: "pure";
   // Async provider operations produce future carriers that must be awaited.
@@ -79,6 +86,14 @@ export type RustProviderOperationDefinition<
 
 export interface RustProviderTypeDefinition {
   readonly exportId: string;
+  readonly targetDeclarationKind: "struct" | "enum" | "union" | "trait" | "type-alias";
+  readonly targetTraitKind?: "ordinary" | "auto";
+  readonly targetTraitSafety?: "safe" | "unsafe";
+  readonly targetTraitRequiresImplementationItems?: boolean;
+  readonly sourceGenericBindings: readonly RustProviderSourceGenericBinding[];
+  readonly targetImplicitParameters?: readonly RustGenericArgument[];
+  readonly semanticRoles?: readonly RustProviderTypeSemanticRole[];
+  readonly targetGenerics: RustGenerics;
   readonly targetCarrier: TargetTypeRef;
   readonly typeRequirements?: readonly RustProviderTypeParameterRequirement[];
   readonly objectLiteralConstruction?: {
@@ -86,13 +101,24 @@ export interface RustProviderTypeDefinition {
   };
 }
 
+export type RustProviderTypeSemanticRole =
+  | {
+      readonly kind: "pin-wrapper";
+      readonly pointerArgumentIndex: number;
+    }
+  | {
+      readonly kind: "callable-trait";
+      readonly callTrait: "fn" | "fn-mut" | "fn-once";
+      readonly parameterTupleSourceName: string;
+      readonly resultSourceName: string;
+    };
+
 export interface RustProviderTypeRow extends RustProviderTypeDefinition {
   readonly providerPackageId: string;
   readonly providerId: string;
   readonly providerVersion: string;
   readonly providerModuleId: string;
   readonly moduleSpecifier: string;
-  readonly sourceTypeParameters: readonly string[];
 }
 
 export type RustProviderOperationRow<
@@ -185,7 +211,7 @@ export interface RustProviderPackageDefinition {
   // Rust module aliases used by this capability's operation row paths
   // (e.g. acme_db_ext -> acme_db::ext). Emitted as use items.
   readonly aliasImports?: readonly { readonly alias: string; readonly path: string }[];
-  // Rendered Rust paths for this capability's target-named carriers
+  // Rendered Rust paths for this capability's native path carriers
   // (e.g. acme.db.Row -> acme_db::Row).
   readonly carrierPaths?: Readonly<Record<string, string>>;
   // Exact native trait guarantees for rendered named carriers. Missing rows

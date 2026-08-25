@@ -1,6 +1,7 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceProgramNavigation } from "@tsonic/target-api/source";
 import type { RustSafetyApplicationFactIndex } from "../safety/application-index.js";
+import type { RustDeclarationApplicationIndex } from "../declarations/declaration-applications.js";
 
 export interface RustRuntimeValueUsePlan {
   hasFirstClassUse(declaration: Node): boolean;
@@ -11,6 +12,7 @@ export function createRustRuntimeValueUsePlan(input: {
   readonly ast: AstReader;
   readonly navigation: SourceProgramNavigation;
   readonly safetyApplications: RustSafetyApplicationFactIndex;
+  readonly declarationApplications: RustDeclarationApplicationIndex;
 }): RustRuntimeValueUsePlan {
   const firstClassUseByDeclaration = new WeakMap<Node, boolean>();
   const earlyRuntimeUseByDeclaration = new WeakMap<Node, boolean>();
@@ -23,6 +25,9 @@ export function createRustRuntimeValueUsePlan(input: {
       const observed = input.navigation.declarationUses(declaration).some(
         (use) => use.kind === "first-class" &&
           !input.safetyApplications.isCompileTimeApplicationReference(
+            declaration,
+            use.reference,
+          ) && !input.declarationApplications.isCompileTimeApplicationReference(
             declaration,
             use.reference,
           ),
@@ -41,7 +46,14 @@ export function createRustRuntimeValueUsePlan(input: {
         ? true
         : input.navigation.declarationUses(declaration).some((use) => {
             if (use.kind === "source-linkage" || use.kind === "type-only" ||
-              input.ast.getSourceFile(use.reference) !== declarationFile) {
+              input.ast.getSourceFile(use.reference) !== declarationFile ||
+              input.safetyApplications.isCompileTimeApplicationReference(
+                declaration,
+                use.reference,
+              ) || input.declarationApplications.isCompileTimeApplicationReference(
+                declaration,
+                use.reference,
+              )) {
               return false;
             }
             const range = input.ast.authoredRange(use.reference);

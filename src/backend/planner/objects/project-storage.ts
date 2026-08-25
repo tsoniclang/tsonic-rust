@@ -105,7 +105,8 @@ export function rustDirectProjectFieldStoragePath(
   context: RustPlanContext,
 ): readonly string[] | undefined {
   const definition = context.input.program.projectTypes.definitionForCarrier(receiverCarrier);
-  if (definition === undefined || context.input.program.projectTypes.isPolymorphic(definition)) {
+  if (definition === undefined ||
+    context.input.program.objectRepresentations.requiresDynamicDispatch(definition)) {
     return undefined;
   }
   const external = context.input.program.projectTypes.externalBaseForDefinition(definition)?.fields ?? [];
@@ -144,13 +145,13 @@ export function readRustStoredObjectField(
           resultCarrier,
           context,
         )
-      : readRustStructuralObjectField(receiver, field.targetName, resultCarrier);
+      : readRustStructuralObjectField(receiver, field.targetName, resultCarrier, context);
   }
   const path = rustDirectProjectFieldStoragePath(receiverCarrier, storageIndex, context);
   const representation = rustProjectObjectRepresentation(receiverCarrier, context);
   return path === undefined || representation === undefined
     ? undefined
-    : readRustProjectObjectField(receiver, path, resultCarrier, representation);
+    : readRustProjectObjectField(receiver, path, resultCarrier, representation, context);
 }
 
 export function readRustStructuralObjectMethodStorage(
@@ -170,6 +171,7 @@ export function readRustStructuralObjectMethodStorage(
     receiver,
     field.targetName,
     storageCarrier,
+    context,
   );
 }
 
@@ -221,6 +223,7 @@ export function invokeRustStructuralObjectMethod(
     receiverPath,
     field.targetName,
     rawStorageCarrier,
+    context,
   );
   return {
     kind: "block",
@@ -369,6 +372,7 @@ function readRustStructuralObjectProperty(
     receiverPath,
     field.targetName,
     storedCarrier,
+    context,
   );
   const absentGetterValue: RustExpr = field.presence === "optional"
     ? storedValue
@@ -399,6 +403,7 @@ function readRustStructuralObjectProperty(
         receiverPath,
         field.property.getterTargetName,
         getterCarrier,
+        context,
       ),
       arms: [{
         pattern: {
@@ -495,6 +500,7 @@ function writeRustStructuralObjectProperty(
       receiverPath,
       field.property.setterTargetName,
       setterCarrier,
+      context,
     ),
     arms: [{
       pattern: {

@@ -4,8 +4,8 @@ import type {
 } from "@tsonic/target-api/artifacts";
 import type {
   RustFunctionParam,
+  RustGenerics,
   RustType,
-  RustTypeParameter,
 } from "../../target-ast/nodes.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 
@@ -29,8 +29,11 @@ export function rustFunctionSurface(
   callable: {
     readonly name: string;
     readonly isAsync: boolean;
+    readonly isUnsafe: boolean;
+    readonly abi?: import("../../../target-model/semantics/index.js").RustAbi;
+    readonly variadic: boolean;
     readonly errorType?: RustType;
-    readonly typeParameters: readonly RustTypeParameter[];
+    readonly generics: RustGenerics;
     readonly parameters: readonly RustFunctionParam[];
     readonly returnType?: RustType;
   },
@@ -39,19 +42,13 @@ export function rustFunctionSurface(
     "source-callable",
     callable.name,
     callable.isAsync ? "async" : "sync",
+    callable.isUnsafe ? "unsafe" : "safe",
+    callable.abi === undefined ? "rust-abi" : `abi:${callable.abi}`,
+    callable.variadic ? "variadic" : "fixed-arity",
     callable.errorType === undefined
       ? "infallible"
       : encodeRustContractParts(["fallible", closedMetadataKey(callable.errorType)]),
-    ...callable.typeParameters.map((parameter) =>
-      encodeRustContractParts([
-        "type-parameter",
-        parameter.name,
-        ...parameter.bounds.map((bound) =>
-          encodeRustContractParts([
-            bound.kind,
-            bound.kind === "trait" ? bound.path : bound.name,
-          ])),
-      ])),
+    encodeRustContractParts(["generics", closedMetadataKey(callable.generics)]),
     ...callable.parameters.map((parameter, index) =>
       encodeRustContractParts([
         "parameter",

@@ -33,9 +33,10 @@ contextual object literals, closed string-literal union aliases as
 unit-variant enums, discriminated object unions as payload enums with
 TSTS-selected narrowing, tuples with constant indexing, `readonly T[]` as `&[T]`
 and mutable array parameters as `&mut [T]`, null-only unions as `Option<T>`
-with `??` coalescing, passthrough generic functions, Rust-flavoured
-`borrow`/`borrowMut`/`move` flow aliases validated against finalized
-argument modes, async/await with await-only future discipline, a
+with `??` coalescing, passthrough generic functions, explicit Rust
+`ref`/`mut`/`move`/`clone`/`own` ownership operations validated by the
+sealed place, loan, move, drop, capture, and suspension analysis,
+async/await with await-only future discipline, a
 naming policy that preserves every user-authored identifier verbatim with
 scoped lint allowances (snake_case exists only for compiler-generated
 temporaries; provider and library identity is always row metadata emitted
@@ -50,21 +51,25 @@ uses keep owned `String`. Homogeneous primitive tuple annotations carry
 compile-time-proven length and lower to `[T; N]` with literal construction
 and constant in-range indexing; dynamic indexing fails closed.
 
-The aliases are owned by `@tsonic/rust/lang.js`: `borrow` selects the neutral
-shared-borrow meaning, `borrowMut` selects mutable-borrow, and `move` selects
-move. Neutral code uses `sharedBorrow` and `mutableBorrow` from
-`@tsonic/core/lang.js`. Safe typed-location facts are converted once at the
-Rust-owned policy boundary and lower to the runtime-owned `Location<T>`
-carrier. Local, parameter, member, and index projections preserve stable
-alias identity; unsupported escape, root, and overlapping mutable-borrow
-shapes fail closed. The backend never reads neutral pointer facts or marker
-spellings.
+The Rust-only operations are owned by `@tsonic/rust/lang.js`: `ref` creates a
+shared loan, `mut` creates an exclusive loan, `move` transfers native
+ownership, `clone` invokes an exactly proven `Clone` implementation, and
+`captureMove` independently selects Rust closure capture-by-move. Source
+positions use `Owned<T>`, `Ref<T, L>`, and `Mut<T, L>` from
+`@tsonic/rust/types.js` when native ownership or lifetime behavior must be
+explicit. Ordinary TypeScript remains automatic and does not acquire native
+move semantics merely by assigning or passing a value. Safe typed-location
+facts are converted once at the Rust-owned policy boundary. Local, parameter,
+member, and index projections preserve exact place identity; unavailable,
+overlapping, escaping, or unproven native operations fail before planning.
+The backend consumes the sealed analysis and never reads marker spellings.
 
 Generated source files participate in the shared target-artifact contract
-graph through Rust-owned public-surface and implementation facets. If Rust
-planning strengthens a callable contract—for example, `allocatePointer<T>`
-adds `T: Clone + 'static`—every exact source-call dependent is reconstructed
-to a fixed point before any Cargo project is published.
+graph through Rust-owned public-surface and implementation facets. If analysis
+changes a public callable contract, every exact source-call dependent is
+reconstructed to a fixed point before any Cargo project is published. Native
+trait and lifetime bounds come only from authored contracts or exact provider
+requirements; planning never adds blanket `Clone` or `'static` bounds.
 
 JS surface (selected explicitly with `surfaces: ["js"]`): dense `Vec<T>` and sparse
 `JsArray<T>` lanes with callback iteration (map/filter/reduce/some/every as

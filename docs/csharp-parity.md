@@ -108,11 +108,12 @@ only non-`Copy` values. The backend never derives an index contract from the
 
 The detailed surface inventory in `docs/parity-lanes.json` is closed by an
 implemented row, a shared hard rejection, or an exact Rust target limit.
-Rust-only APIs whose signatures require a source lifetime or higher-kinded
-associated-type projection stay precisely rejected: TypeScript has no source
-type that can express those contracts. The provider does support owned custom
-receivers, copied borrowed values, owned strings, and compiler-resolved
-concrete associated types.
+Rust-only APIs may expose exact lifetime, ownership, const-generic, trait-bound,
+associated-type, and custom-receiver contracts through the Rust source
+semantics modules. The compiler accepts only contracts represented by selected
+provider identities and sealed Rust facts; an unexpressed higher-kinded or
+lifetime relation rejects rather than being inferred from a Rust path or a
+source spelling.
 
 Object-literal method syntax and direct callable-valued properties are already
 closed through the same selected contextual contract. For example:

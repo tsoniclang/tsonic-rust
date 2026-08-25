@@ -13,7 +13,7 @@ import { rustValueConversionIsFallible } from "../../target-model/conversions/co
 export function rustTargetOperationText(fact: RustTargetOperationFact): string {
   if (fact.kind === "provider-operation") {
     const target = fact.abi.target;
-    if (target.form === "call" || target.form === "call-c-variadic" || target.form === "path" || target.form === "static" || target.form === "free-call" ||
+    if (target.form === "call" || target.form === "call-c-variadic" || target.form === "path" || target.form === "static" || target.form === "static-reference" || target.form === "struct-variant" || target.form === "free-call" ||
       target.form === "call-str-slice" || target.form === "free-call-str-slice" ||
       target.form === "call-value-slice" || target.form === "call-value-array") {
       return target.path;
@@ -28,14 +28,15 @@ export function rustTargetOperationText(fact: RustTargetOperationFact): string {
       return target.operator;
     }
     if (target.form === "trait-call") {
-      return `${target.traitPath}::${target.method}`;
+      return `${target.trait.displayPath.join("::")}::${target.method}`;
     }
     if (target.form === "trait-associated-value") {
-      return `${target.traitPath}::${target.name}`;
+      return `${target.trait.displayPath.join("::")}::${target.name}`;
     }
     if (target.form === "arg-structural-method") {
       return `structural-method[${target.storageIndex}]`;
     }
+    if (target.form === "tuple-field") return `.${target.index}`;
     return target.name;
   }
   if (fact.kind === "operator-token" || fact.kind === "operator-call") {
@@ -70,7 +71,7 @@ export function rustTargetOperationIsDirectLocation(fact: RustTargetOperationFac
     return true;
   }
   return fact.kind === "provider-operation" &&
-    (fact.abi.target.form === "field" || fact.abi.target.form === "index" ||
+    (fact.abi.target.form === "field" || fact.abi.target.form === "tuple-field" || fact.abi.target.form === "index" ||
       fact.abi.target.form === "static");
 }
 

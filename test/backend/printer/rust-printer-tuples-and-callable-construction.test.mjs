@@ -110,7 +110,7 @@ test("long nested callable construction gives the outer call its own break", () 
               kind: "associated-call",
               owner: {
                 kind: "named",
-                path: "rt::Callable",
+                path: "rt::OwnedLocalCallable",
                 typeArguments: [{
                   kind: "tuple",
                   elements: [
@@ -137,7 +137,7 @@ test("long nested callable construction gives the outer call its own break", () 
 
   assert.match(
     source,
-    /call_detached_format\(\n {8}rt::Callable::<\(i32, String\), rt::TsonicResult<String>>::new\(/u,
+    /call_detached_format\(\n {8}rt::OwnedLocalCallable::<\(i32, String\), rt::TsonicResult<String>>::new\(/u,
   );
 });
 
@@ -159,7 +159,7 @@ test("long outer callable construction keeps block callbacks attached", () => {
               kind: "associated-call",
               owner: {
                 kind: "named",
-                path: "rt::Callable",
+                path: "rt::OwnedLocalCallable",
                 typeArguments: [
                   { kind: "unit" },
                   { kind: "named", path: "rt::TsonicResult<()>" },
@@ -189,6 +189,6 @@ test("long outer callable construction keeps block callbacks attached", () => {
 
   assert.match(
     source,
-    /set_timeout_callable\(rt::Callable::<\(\), rt::TsonicResult<\(\)>>::new\(\n {8}\|_callable_arguments\| \{/u,
+    /set_timeout_callable\(rt::OwnedLocalCallable::<\(\), rt::TsonicResult<\(\)>>::new\(\n {8}\|_callable_arguments\| \{/u,
   );
 });

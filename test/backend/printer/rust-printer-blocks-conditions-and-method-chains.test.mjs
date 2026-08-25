@@ -37,7 +37,7 @@ test("an outer call stays attached to an expanded associated call", () => {
               kind: "associated-call",
               owner: {
                 kind: "named",
-                path: "rt::Location",
+                path: "rt::OwnedLocation",
                 typeArguments: [{ kind: "primitive", name: "i32" }],
               },
               method: "same",
@@ -49,7 +49,7 @@ test("an outer call stays attached to an expanded associated call", () => {
     }],
   });
 
-  assert.match(source, /acme_testing::check\(rt::Location::<i32>::same\(\n        Some\(first\.clone\(\)\)\.as_ref\(\),\n        Some\(firstAgain\.clone\(\)\)\.as_ref\(\),\n    \)\);/u);
+  assert.match(source, /acme_testing::check\(rt::OwnedLocation::<i32>::same\(\n        Some\(first\.clone\(\)\)\.as_ref\(\),\n        Some\(firstAgain\.clone\(\)\)\.as_ref\(\),\n    \)\);/u);
 });
 
 test("a single block argument stays attached to its outer call", () => {
@@ -719,7 +719,7 @@ test("typed bindings retain overflowing struct openings and expand their fields"
               name: "__tsonic_state",
               value: {
                 kind: "call",
-                path: "rt::ObjectHandle::new",
+                path: "rt::LocalObjectHandle::new",
                 args: [{
                   kind: "tuple-literal",
                   elements: [
@@ -736,5 +736,5 @@ test("typed bindings retain overflowing struct openings and expand their fields"
     }],
   });
 
-  assert.match(source, /let pair: Pair<i32> = Pair \{\n        __tsonic_state: rt::ObjectHandle::new/u);
+  assert.match(source, /let pair: Pair<i32> = Pair \{\n        __tsonic_state: rt::LocalObjectHandle::new/u);
 });

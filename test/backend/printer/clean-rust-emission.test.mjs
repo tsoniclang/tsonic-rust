@@ -53,7 +53,7 @@ export function main(): void {
   assert.match(source, /const CURRENT_VALUE: i32 = 40;/u);
   assert.match(source, /#\[doc\(hidden\)\][\s\S]*pub struct BuildResultState \{\s*pub output_dir: String,\s*pub pages_built: i32,/u);
   assert.match(source, /pub struct BuildResult/u);
-  assert.match(source, /#\[doc\(hidden\)\]\s*pub state: rt::ObjectRef<BuildResultState>/u);
+  assert.match(source, /#\[doc\(hidden\)\]\s*pub state: rt::LocalObjectRef<BuildResultState>/u);
   assert.match(source, /pub fn page_label\([^)]*prefix_text: String/u);
   assert.match(source, /pub fn build_site\(site_dir: String\) -> BuildResult/u);
   assert.match(source, /pub fn select_used\(_unused_value: i32, used_value: i32\) -> i32/u);
@@ -167,7 +167,7 @@ export function readEntry(): string {
   assert.match(shapes, /pub struct EntryShape \{/u);
   assert.match(
     shapes,
-    /pub entry: rt::ObjectHandle<OutputDirPagesBuiltShape>,/u,
+    /pub entry: rt::LocalObjectHandle<OutputDirPagesBuiltShape>,/u,
   );
   assert.match(shapes, /pub struct ValueShape \{/u);
   assert.match(shapes, /pub struct ValueShape2 \{/u);

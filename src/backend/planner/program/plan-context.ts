@@ -4,6 +4,7 @@ import type { RustPlanningContext } from "../context.js";
 import type { RustGeneratorFact, RustSourceBindingFact } from "../../../analysis/facts/keys.js";
 import { rustModuleBindingFactKey } from "../../../analysis/facts/keys.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustGenericSubstitutions } from "../../../target-model/types/index.js";
 import type { RustSyntheticNameState } from "../names/synthetic.js";
 import type { RustObjectLiteralImplementationRegistry } from "../objects/object-literal-implementations.js";
 import {
@@ -12,7 +13,7 @@ import {
   type RustSourcePackageErrorPlan,
 } from "./source-package-errors.js";
 import { rustSourceItemIdentity } from "./source-package-facades.js";
-import type { RustBlock, RustErrorDomain, RustExpr, RustType } from "../../target-ast/nodes.js";
+import type { RustBlock, RustErrorDomain, RustExpr, RustStmt, RustType } from "../../target-ast/nodes.js";
 import {
   isValidRustIdentifier,
   rustSnakeCaseIdentifier,
@@ -107,7 +108,8 @@ export interface RustPlanContext {
   readonly capturedBindings?: readonly RustCapturedBinding[];
   readonly projectDispatchRoot?: RustExpr;
   readonly objectLiteralImplementations?: RustObjectLiteralImplementationRegistry;
-  readonly typeParameterSubstitutions?: ReadonlyMap<string, import("../../../target-model/types/model.js").TargetTypeRef>;
+  readonly genericSubstitutions?: RustGenericSubstitutions;
+  readonly fixedMutableLoanStatements?: ReadonlyMap<Node, readonly RustStmt[]>;
 }
 
 export function rustErrorBoundaryForDeclaration(

@@ -30,7 +30,9 @@ import {
   rustOptionTargetType,
   rustCallableProtocol,
   rustClosureProtocol,
-  rustCallableTargetType,
+  rustCallableTargetTypeWithSignature,
+  rustFutureOutputCarrier,
+  rustFutureTargetType,
 } from "../../target-model/types/index.js";
 import { recordBindingPatternFacts, recordDefaultParameterInitializerFacts, setParameterAbiFact } from "../declarations/types-and-bindings.js";
 import { recordStatementFacts, resolveTypeNodeCarrier } from "../control-flow/statements.js";
@@ -71,35 +73,34 @@ export function resolveFunctionExpressionCarrier(
       )
     : undefined);
   const resolvedSourceCallable = sourceSelected?.kind === "function-pointer"
-    ? { parameters: sourceSelected.args, result: sourceSelected.result }
+    ? { parameters: sourceSelected.parameters, result: sourceSelected.result }
     : rustClosureProtocol(sourceSelected) ?? rustCallableProtocol(sourceSelected);
-  const fallbackParameterCarriers = resolvedSourceCallable?.parameters.map((carrier, index) =>
+  const sourceParameterCarriers = resolvedSourceCallable?.parameters.map((carrier, index) =>
     Node_Initializer(ast, parameters[index]) === undefined
       ? carrier
       : rustOptionTargetType(carrier));
   const selectedExpected = expected ?? (sourceSelected === undefined ||
-      resolvedSourceCallable === undefined || fallbackParameterCarriers === undefined
+      resolvedSourceCallable === undefined || sourceParameterCarriers === undefined
     ? undefined
-    : sourceSelected.kind === "function-pointer" || sourceSelected.kind === "closure"
-    ? {
-        ...sourceSelected,
-        args: fallbackParameterCarriers,
-        result: resolvedSourceCallable.result,
-      }
-    : rustCallableTargetType(fallbackParameterCarriers, resolvedSourceCallable.result));
+    : rustCallableTargetTypeWithSignature(
+        sourceSelected,
+        sourceParameterCarriers,
+        resolvedSourceCallable.result,
+      ));
   if (selectedExpected === undefined || (selectedExpected.kind !== "function-pointer" &&
     rustClosureProtocol(selectedExpected) === undefined &&
     rustCallableProtocol(selectedExpected) === undefined)) {
     return undefined;
   }
-  if (ast.hasModifierKind(expression, "async") ||
-    walk.context.semanticsFor(expression).operations.generator(expression) !== undefined) {
+  const asynchronous = ast.hasModifierKind(expression, "async");
+  if (walk.context.semanticsFor(expression).operations.generator(expression) !== undefined ||
+    (asynchronous && selectedExpected.kind === "function-pointer")) {
     return undefined;
   }
   const callable = rustCallableProtocol(selectedExpected);
   const closure = rustClosureProtocol(selectedExpected);
   const selectedParameters = selectedExpected.kind === "function-pointer"
-    ? selectedExpected.args
+    ? selectedExpected.parameters
     : closure?.parameters ?? callable?.parameters;
   const selectedResult = selectedExpected.kind === "function-pointer"
     ? selectedExpected.result
@@ -130,7 +131,7 @@ export function resolveFunctionExpressionCarrier(
     const sourceParameterCarrier = resolvedSourceCallable?.parameters[index];
     const targetParameterCarrier = targetParameterCarriers[index];
     if (targetParameterCarrier === undefined ||
-      (targetParameterCarrier.kind === "opaque" && targetParameterCarrier.id === "tsonic.rust.infer")) {
+      targetParameterCarrier.kind === "inference-variable") {
       return undefined;
     }
     const finalizedAbi = walk.context.facts.get(parameter, rustSourceParameterAbiFactKey) ??
@@ -172,9 +173,12 @@ export function resolveFunctionExpressionCarrier(
   }
   const finalizedReturn = walk.context.facts.get(expression, rustSourceCallableReturnFactKey)?.returnCarrier ??
     walk.context.facts.resolve(expression, rustSourceCallableReturnFactKey)?.returnCarrier;
-  const selectedResultExpectation = selectedResult.kind === "opaque" && selectedResult.id === "tsonic.rust.infer"
+  const selectedCallableResultExpectation = selectedResult.kind === "inference-variable"
     ? resolveTypeNodeCarrier(walk, Node_Type(ast, expression))
     : selectedResult;
+  const selectedResultExpectation = asynchronous
+    ? rustFutureOutputCarrier(selectedCallableResultExpectation)
+    : selectedCallableResultExpectation;
   if (finalizedReturn !== undefined && selectedResultExpectation !== undefined &&
     !rustTargetTypeRefEquals(finalizedReturn, selectedResultExpectation)) {
     return undefined;
@@ -186,10 +190,15 @@ export function resolveFunctionExpressionCarrier(
     if (resultExpectation === undefined) {
       return undefined;
     }
-    const recursiveCarrier: TargetTypeRef = selectedExpected.kind === "function-pointer" ||
-        selectedExpected.kind === "closure"
-      ? { ...selectedExpected, args: parameterCarriers, result: resultExpectation }
-      : rustCallableTargetType(parameterCarriers, resultExpectation);
+    const recursiveResultCarrier = asynchronous
+      ? rustFutureTargetType(resultExpectation)
+      : resultExpectation;
+    const recursiveCarrier = rustCallableTargetTypeWithSignature(
+      selectedExpected,
+      parameterCarriers,
+      recursiveResultCarrier,
+    );
+    if (recursiveCarrier === undefined) return undefined;
     setCarrierFact(walk, expression, recursiveCarrier);
     setCarrierFact(walk, expressionName, recursiveCarrier);
   }
@@ -230,9 +239,15 @@ export function resolveFunctionExpressionCarrier(
     ...leadingParameters.map((parameter) => parameter.carrier),
     ...parameterCarriers,
   ];
-  const closureCarrier: TargetTypeRef = selectedExpected.kind === "function-pointer" || selectedExpected.kind === "closure"
-    ? { ...selectedExpected, args: finalizedParameterCarriers, result: bodyCarrier }
-    : rustCallableTargetType(finalizedParameterCarriers, bodyCarrier);
+  const callableResultCarrier = asynchronous
+    ? rustFutureTargetType(bodyCarrier)
+    : bodyCarrier;
+  const closureCarrier = rustCallableTargetTypeWithSignature(
+    selectedExpected,
+    finalizedParameterCarriers,
+    callableResultCarrier,
+  );
+  if (closureCarrier === undefined) return undefined;
   const captures = collectRustClosureCaptures(walk, expression, body);
   if (captures === undefined) {
     return undefined;

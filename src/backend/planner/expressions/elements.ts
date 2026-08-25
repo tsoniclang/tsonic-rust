@@ -79,6 +79,7 @@ function planElementAccessInner(node: Node, context: RustPlanContext): RustExpr 
         { kind: "path", path: keyName },
         resultCarrier,
         representation,
+        context,
       ),
     };
   }

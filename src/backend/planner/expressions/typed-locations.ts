@@ -20,10 +20,6 @@ import {
   rustTargetOperationFactKey,
   rustTypedLocationPlanKey,
 } from "../../../analysis/facts/keys.js";
-import {
-  isRustCopyCarrier,
-  rustCarrierSupportsClone,
-} from "../../../target-model/types/index.js";
 import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import {
@@ -88,7 +84,7 @@ export function planRustTypedLocationCall(
         context,
       )
         ? undefined
-        : { kind: "call", path: "rt::Location::allocate", args: [initial] };
+        : { kind: "call", path: "rt::OwnedLocation::allocate", args: [initial] };
     }
     case "load": {
       const pointer = locationMethodReceiver(
@@ -154,9 +150,8 @@ export function planRustValueRead(
   value: RustExpr,
   context: RustPlanContext,
 ): RustExpr {
-  const carrier = context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
-  return rustReadRequiresClone(carrier) &&
-      !context.input.program.valueLifetimes.canMove(node)
+  const disposition = context.input.program.ownership.readDispositionFor(node);
+  return disposition?.kind === "clone"
     ? { kind: "method-call", receiver: value, method: "clone", args: [] }
     : value;
 }
@@ -164,24 +159,19 @@ export function planRustValueRead(
 export function planRustCaptureValue(
   node: Node,
   path: string,
-  storage: "value" | "location",
   context: RustPlanContext,
-): RustExpr {
+): RustExpr | undefined {
   const capturedPath = rustCapturedBinding(node, context)?.path ?? path;
-  if (storage === "location") {
-    return {
-      kind: "method-call",
-      receiver: { kind: "path", path: capturedPath },
-      method: "clone",
-      args: [],
-    };
-  }
-  const value = planRustIdentifierValue(node, path, context);
-  const carrier = context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
-  return !isRustCopyCarrier(carrier) && rustCarrierSupportsClone(carrier) &&
-      !(value.kind === "method-call" && value.method === "clone" && value.args.length === 0)
+  const capture = context.input.program.ownership.captureFor(node);
+  if (capture === undefined) return undefined;
+  const value: RustExpr = { kind: "path", path: capturedPath };
+  return capture.mode === "clone"
     ? { kind: "method-call", receiver: value, method: "clone", args: [] }
-    : value;
+    : capture.mode === "mutable"
+      ? { kind: "reference", expr: value, mutable: true }
+      : capture.mode === "shared"
+        ? { kind: "reference", expr: value }
+        : value;
 }
 
 export function planRustNonConsumingValue(
@@ -189,8 +179,8 @@ export function planRustNonConsumingValue(
   expression: RustExpr,
   context: RustPlanContext,
 ): RustExpr {
-  const carrier = context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
-  return rustReadRequiresClone(carrier) &&
+  const disposition = context.input.program.ownership.readDispositionFor(node);
+  return disposition?.kind === "clone" &&
       expression.kind === "method-call" && expression.method === "clone" &&
       expression.args.length === 0
     ? expression.receiver
@@ -232,10 +222,6 @@ export function planRustMutableProjectReceiver(
   return { kind: "reference", expr: target, mutable: true };
 }
 
-function rustReadRequiresClone(carrier: TargetTypeRef | undefined): boolean {
-  return !isRustCopyCarrier(carrier) && rustCarrierSupportsClone(carrier);
-}
-
 export function rustLocationStorageForReference(
   node: Node,
   context: RustPlanContext,
@@ -271,7 +257,8 @@ export function rustLocationStorageForReference(
   const moduleBinding = declaration === undefined
     ? undefined
     : context.input.program.facts.getFact(declaration, rustModuleBindingFactKey);
-  const valueCarrier = moduleBinding?.storage === "module-cell"
+  const valueCarrier = moduleBinding?.storage === "module-cell" ||
+      moduleBinding?.storage === "thread-local-cell"
     ? moduleBinding.valueCarrier
     : moduleBinding?.storage === "native-callable"
       ? moduleBinding.value?.carrier

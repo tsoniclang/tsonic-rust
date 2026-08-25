@@ -22,7 +22,7 @@ export interface RustModuleInitializationPlan {
 
 type RustModuleInitializationPlanInput = Pick<
   RustAnalysisContext,
-  "ast" | "sourceFiles" | "facts" | "projectTypes" | "safetyApplications"
+  "ast" | "sourceFiles" | "facts" | "projectTypes" | "safetyApplications" | "declarationApplications"
 >;
 
 export function createRustModuleInitializationPlan(
@@ -70,7 +70,7 @@ function classifyModuleInitialization(
             "Top-level variable declaration has no finalized Rust module-binding fact.",
           );
         }
-        if (binding.storage === "module-cell" ||
+        if (binding.storage === "module-cell" || binding.storage === "thread-local-cell" ||
           (binding.storage === "native-callable" && binding.value !== undefined)) {
           return { kind: "required" };
         }
@@ -105,8 +105,10 @@ function classifyModuleInitialization(
         );
       }
       const operation = input.safetyApplications.operationForExpression(expression);
+      const declarationOperation = input.declarationApplications.operationForExpression(expression);
       if (operation?.kind === "safety-builder" ||
-        (operation?.kind === "unsafe-context" && operation.fact.kind === "remaining-block")) {
+        (operation?.kind === "unsafe-context" && operation.fact.kind === "remaining-block") ||
+        declarationOperation !== undefined) {
         continue;
       }
     }

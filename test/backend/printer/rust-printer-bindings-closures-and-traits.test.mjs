@@ -641,7 +641,7 @@ test("long struct field types use rustfmt-compatible continuation indentation", 
         visibility: "private",
         type: {
           kind: "named",
-          path: "rt::Callable",
+          path: "rt::OwnedLocalCallable",
           typeArguments: [{
             kind: "tuple",
             elements: [
@@ -656,6 +656,6 @@ test("long struct field types use rustfmt-compatible continuation indentation", 
 
   assert.match(
     source,
-    /dispatch_identity_identity_specialization_1_implementation:\n {8}rt::Callable<\(Identity, String\), String>,/u,
+    /dispatch_identity_identity_specialization_1_implementation:\n {8}rt::OwnedLocalCallable<\(Identity, String\), String>,/u,
   );
 });

@@ -28,9 +28,13 @@ import { rustDeclarationRequiresUnsafe, rustSafetyAttributesForDeclaration } fro
 import { rustDefaultImplementation } from "./default-implementation.js";
 import { rustFallibleFactKey } from "../../../analysis/facts/keys.js";
 import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
+import { rustDocHiddenAttribute, rustDeriveAttribute } from "../../target-ast/attributes.js";
+import { rustGenerics, rustTypeGenericArguments } from "../../target-ast/builders.js";
 import { rustProjectObjectLayout } from "../../../analysis/project-types/object-layout.js";
-import { rustProjectStateType, rustProjectStateMarker, rustProjectTypeParameters } from "../objects/polymorphism/names.js";
+import { rustProjectGenerics, rustProjectStateType, rustProjectStateMarker } from "../objects/polymorphism/names.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
+import { rustCopyTrait } from "../../../target-model/types/index.js";
+import { rustSealedCarrierSupportsTrait } from "../ownership/traits.js";
 import { structAttributes } from "./types.js";
 import type {
   RustType,
@@ -48,6 +52,10 @@ import {
   rustProjectImplementationVisibility,
   rustProjectMemberStorageVisibility,
 } from "../objects/project-storage-abi.js";
+import {
+  planRustExplicitTraitImplementations,
+  rustExplicitRepresentationAttributes,
+} from "./explicit-contracts.js";
 
 export interface PlannedProjectObjectField {
   readonly declaration: Node;
@@ -131,8 +139,26 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     ));
     return undefined;
   }
-  const typeParams = rustProjectTypeParameters(definition);
+  const generics = rustProjectGenerics(definition, context);
+  if (generics === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.class-generics",
+      "Class declaration has no exact renderable Rust generic contract.",
+    ));
+    return undefined;
+  }
   const stateMarker = rustProjectStateMarker(definition, context);
+  const declarationContract = context.input.program.declarationContracts.forDeclaration(node);
+  const nativeUnion = declarationContract?.nativeUnion === true;
+  if (nativeUnion && representation.kind !== "value") {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.native-union-representation",
+      "A native Rust union requires exact by-value project representation; aliased object representation cannot encode one active union field.",
+    ));
+    return undefined;
+  }
 
   const layout = rustProjectObjectLayout(node, ast);
   if (layout?.kind !== "class") {
@@ -146,6 +172,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   const fields: PlannedProjectObjectField[] = [];
   const constructorMembers: Node[] = [];
   const methods: Node[] = [];
+  const dropMethods: Node[] = [];
   const accessors: { readonly declaration: Node; readonly role: "read" | "write" }[] = [];
   let failed = false;
   for (const member of ast.members(node)) {
@@ -224,7 +251,11 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
         }
         continue;
       }
-      methods.push(member);
+      if (context.input.program.declarationContracts.forDeclaration(member)?.nativeDrop === true) {
+        dropMethods.push(member);
+      } else {
+        methods.push(member);
+      }
       continue;
     }
     if (memberKind === "KindGetAccessor" || memberKind === "KindSetAccessor") {
@@ -253,6 +284,14 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     failed = true;
   }
   const constructorMember = constructorImplementations[0];
+  if (dropMethods.length > 0 && representation.kind !== "value") {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, dropMethods[0]!),
+      "rust.backend.drop-aliased-representation",
+      "Native Drop requires an exact by-value Rust representation; applying Drop to a cloneable alias wrapper would run cleanup once per alias rather than once per source object.",
+    ));
+    return undefined;
+  }
   const methodProperties = projectOwnMethodProperties(
     definition,
     context.input.program.projectTypes.openCarrier(definition),
@@ -266,22 +305,36 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     ));
     return undefined;
   }
-  const constructorFn = planConstructor(
-    node,
-    constructorMember,
-    className,
-    openType,
-    definition.stateName,
-    stateMarker,
-    fields,
-    methodProperties,
-    representation,
-    context,
-  );
-  if (failed || constructorFn === undefined) {
+  if (nativeUnion && (fields.length === 0 || methodProperties.length !== 0 ||
+    stateMarker !== undefined || fields.some((field) =>
+      !rustSealedCarrierSupportsTrait(field.carrier, rustCopyTrait, context)))) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.native-union-field-contract",
+      "A native Rust union requires at least one exact Copy field and cannot contain synthesized callable or object-state storage.",
+    ));
     return undefined;
   }
-  const implFunctions: RustImplFunction[] = [constructorFn];
+  const implicitConstructorFieldsAreInitialized = constructorMember !== undefined ||
+    fields.every((field) => field.initializer !== undefined);
+  const constructorFn = nativeUnion || !implicitConstructorFieldsAreInitialized
+    ? undefined
+    : planConstructor(
+        node,
+        constructorMember,
+        className,
+        openType,
+        definition.stateName,
+        stateMarker,
+        fields,
+        methodProperties,
+        representation,
+        context,
+      );
+  if (failed || (!nativeUnion && implicitConstructorFieldsAreInitialized && constructorFn === undefined)) {
+    return undefined;
+  }
+  const implFunctions: RustImplFunction[] = constructorFn === undefined ? [] : [constructorFn];
   for (const method of methods) {
     const planned = planProjectMethodVariants(method, context);
     if (planned === undefined) {
@@ -338,10 +391,10 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
       type: {
         kind: "named" as const,
         path: "Option",
-        typeArguments: [property.callableType],
+        genericArguments: rustTypeGenericArguments([property.callableType]),
       },
       visibility: storageVisibility,
-      ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
+      ...(publiclyReachable ? { attrs: [rustDocHiddenAttribute] } : {}),
     })),
     ...(stateMarker === undefined
       ? []
@@ -349,7 +402,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
           name: stateMarker.name,
           type: stateMarker.type,
           visibility: storageVisibility,
-          ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
+          ...(publiclyReachable ? { attrs: [rustDocHiddenAttribute] } : {}),
         }]),
   ];
   if (representation.kind !== "value" && stateCarrier === undefined) {
@@ -361,19 +414,18 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
         name: rustProjectObjectStateField,
         type: stateCarrier,
         visibility: storageVisibility,
-        ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
+        ...(publiclyReachable ? { attrs: [rustDocHiddenAttribute] } : {}),
       };
   const stateItem: RustItem = {
     kind: "struct",
     name: definition.stateName,
     visibility: storageVisibility,
     attrs: [
-      ...(publiclyReachable ? ["#[doc(hidden)]"] : []),
+      ...(publiclyReachable ? [rustDocHiddenAttribute] : []),
       rustLintAttributes.deadCode,
     ],
-    derives: [],
-    ...(typeParams.length === 0 ? {} : { typeParams }),
-    fields: valueFields,
+    generics,
+    fields: { kind: "named", fields: valueFields },
   };
   const structFields = representation.kind === "value"
     ? valueFields
@@ -383,28 +435,110 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   if (structFields === undefined) {
     return undefined;
   }
-  const structItem: RustItem = {
-    kind: "struct",
-    name: className,
-    ...(generatedStructAttributes.length === 0 ? {} : { attrs: generatedStructAttributes }),
-    visibility: exported || publiclyReachable ? "public" : "crate",
-    derives: ["Clone", "Debug", "PartialEq"],
-    ...(typeParams.length === 0 ? {} : { typeParams }),
-    fields: structFields,
-  };
-  const implementation: RustItem = {
+  const structItem: RustItem = nativeUnion
+    ? {
+        kind: "union",
+        name: className,
+        attrs: [
+          ...rustExplicitRepresentationAttributes(node, context),
+          ...generatedStructAttributes,
+        ],
+        visibility: exported || publiclyReachable ? "public" : "crate",
+        generics,
+        fields: structFields,
+      }
+    : {
+        kind: "struct",
+        name: className,
+        attrs: [
+          rustDeriveAttribute("Clone", "Debug", "PartialEq"),
+          ...rustExplicitRepresentationAttributes(node, context),
+          ...generatedStructAttributes,
+        ],
+        visibility: exported || publiclyReachable ? "public" : "crate",
+        generics,
+        fields: { kind: "named", fields: structFields },
+      };
+  const implementation: RustItem | undefined = implFunctions.length === 0 ? undefined : {
     kind: "impl",
-    ...(typeParams.length === 0 ? {} : { typeParams }),
+    generics,
     target: openType,
+    polarity: "positive",
+    safety: "safe",
     functions: implFunctions,
+    associatedTypes: [],
+    associatedConstants: [],
   };
-  const defaultImplementation = rustDefaultImplementation(openType, typeParams, constructorFn);
+  const defaultImplementation = constructorFn === undefined
+    ? undefined
+    : rustDefaultImplementation(openType, generics, constructorFn);
+  const dropImplementation = planRustDropImplementation(
+    dropMethods,
+    openType,
+    generics,
+    context,
+  );
+  if (dropImplementation === undefined && dropMethods.length > 0) return undefined;
+  const explicitTraitImplementations = planRustExplicitTraitImplementations(
+    node,
+    openType,
+    generics,
+    context,
+  );
+  if (explicitTraitImplementations === undefined) return undefined;
   return [
     ...(representation.kind === "value" ? [] : [stateItem]),
     structItem,
-    implementation,
+    ...(implementation === undefined ? [] : [implementation]),
     ...(defaultImplementation === undefined ? [] : [defaultImplementation]),
+    ...(dropImplementation === undefined ? [] : [dropImplementation]),
+    ...explicitTraitImplementations,
   ];
+}
+
+function planRustDropImplementation(
+  methods: readonly Node[],
+  target: RustType,
+  generics: import("../../target-ast/nodes.js").RustGenerics,
+  context: RustPlanContext,
+): RustItem | undefined {
+  if (methods.length === 0) return undefined;
+  if (methods.length !== 1) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, methods[1] ?? methods[0]!),
+      "rust.backend.drop-implementation-count",
+      "A Rust type may have exactly one explicit native Drop implementation.",
+    ));
+    return undefined;
+  }
+  const method = methods[0]!;
+  const planned = planProjectMethod(method, context, { targetName: "drop" });
+  if (planned === undefined) return undefined;
+  if (planned.params.length !== 0 || planned.returnType !== undefined ||
+    planned.errorType !== undefined || planned.isAsync === true ||
+    planned.isUnsafe === true || planned.abi !== undefined || planned.variadic === true) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(
+      diagnosticInput(context, method),
+      "rust.backend.drop-signature",
+      "A native Drop method must be a safe, synchronous, infallible, zero-parameter instance method returning void.",
+    ));
+    return undefined;
+  }
+  return {
+    kind: "impl",
+    generics,
+    trait: { kind: "named", path: "Drop" },
+    target,
+    polarity: "positive",
+    safety: "safe",
+    functions: [{
+      ...planned,
+      visibility: "private",
+      receiver: { kind: "reference", mutable: true },
+    }],
+    associatedTypes: [],
+    associatedConstants: [],
+  };
 }
 
 function planConstructor(
@@ -447,7 +581,7 @@ function planConstructor(
   );
   const parameterPlan = member === undefined
     ? { params: [], prelude: [] } satisfies RustCallableParameterPlan
-    : planRustCallableParameters(member, context, syntheticNames, { requireStatic: false });
+    : planRustCallableParameters(member, context, syntheticNames);
   if (parameterPlan === undefined) {
     return undefined;
   }
@@ -601,6 +735,7 @@ function planConstructor(
       : "private",
     ...(constructorAttributes.length === 0 ? {} : { attrs: constructorAttributes }),
     ...(errorBoundary === undefined ? {} : { errorType: rustErrorType(errorBoundary) }),
+    generics: rustGenerics(),
     params,
     returnType: classType,
     body: {

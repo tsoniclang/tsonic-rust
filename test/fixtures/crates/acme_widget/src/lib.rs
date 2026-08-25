@@ -1,11 +1,42 @@
 use std::collections::HashMap;
 use std::boxed::Box;
+use std::future::Future;
 use std::pin::Pin;
 use tsonic_rust_runtime::{TsonicError, TsonicResult};
 
 pub const ANSWER: i32 = 42;
 
 pub type Pair<T> = (T, T);
+
+pub type BorrowedPair<'a, T> = (&'a T, &'a T);
+
+pub struct FixedBuffer<T, const N: usize = 4> {
+    pub values: [T; N],
+}
+
+pub struct BorrowedValue<'a, T: ?Sized + 'a> {
+    pub value: &'a T,
+}
+
+#[repr(C)]
+pub struct CRecord {
+    pub tag: u8,
+    pub value: u32,
+}
+
+#[repr(transparent)]
+pub struct TransparentValue(pub u32);
+
+#[repr(C, align(16))]
+pub struct AlignedRecord {
+    pub value: u64,
+}
+
+#[repr(C, packed(2))]
+pub struct PackedRecord {
+    pub tag: u8,
+    pub value: u32,
+}
 
 pub enum Mode {
     Read,
@@ -65,8 +96,76 @@ pub trait Family {
     type Item<T>;
 }
 
+pub trait LendingFamily {
+    type Item<'a, T: 'a>
+    where
+        Self: 'a;
+}
+
+pub trait Handler {
+    fn handle(&self, value: i32) -> i32;
+}
+
+pub unsafe trait Trusted {}
+
+pub struct TrustedToken;
+
+unsafe impl Trusted for TrustedToken {}
+
 pub fn pass_family_item<F: Family, T>(value: F::Item<T>) -> F::Item<T> {
     value
+}
+
+pub fn choose_borrowed<'short, 'long: 'short, T: ?Sized + 'short>(
+    _left: &'short T,
+    right: &'long T,
+) -> &'short T {
+    right
+}
+
+pub fn apply_borrowed<T, F>(value: &T, callback: F) -> i32
+where
+    F: for<'a> Fn(&'a T) -> i32,
+{
+    callback(value)
+}
+
+pub fn invoke_handler(handler: &(dyn Handler + Send + Sync), value: i32) -> i32 {
+    handler.handle(value)
+}
+
+pub fn repeat_label<'a>(value: &'a str) -> impl Iterator<Item = &'a str> + use<'a> {
+    std::iter::repeat(value).take(2)
+}
+
+pub fn apply_generic_pointer<T>(value: T, callback: fn(T) -> T) -> T {
+    callback(value)
+}
+
+pub fn require_fn<F: Fn()>(callback: F) {
+    callback();
+}
+
+pub fn require_fn_mut<F: FnMut()>(mut callback: F) {
+    callback();
+}
+
+pub fn require_fn_once<F: FnOnce()>(callback: F) {
+    callback();
+}
+
+pub fn require_local_future<F>(future: F)
+where
+    F: Future<Output = ()>,
+{
+    drop(future);
+}
+
+pub fn require_send_static_future<F>(future: F)
+where
+    F: Future<Output = ()> + Send + 'static,
+{
+    drop(future);
 }
 
 pub trait Metric<T> {
@@ -284,3 +383,14 @@ pub mod factory {
         crate::Widget::new(value)
     }
 }
+
+pub mod first_identity {
+    pub struct SameName;
+}
+
+pub mod second_identity {
+    pub struct SameName;
+}
+
+pub use first_identity::SameName as FirstSameName;
+pub use second_identity::SameName as SecondSameName;

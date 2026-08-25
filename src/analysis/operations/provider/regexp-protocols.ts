@@ -249,7 +249,7 @@ function selectProtocolArgument(
     return { sourceCarrier, mode: "value" };
   }
   if (targetCarrier.kind === "reference" &&
-    rustTargetTypeRefEquals(sourceCarrier, targetCarrier.referent)) {
+    rustTargetTypeRefEquals(sourceCarrier, targetCarrier.target)) {
     return {
       sourceCarrier,
       mode: targetCarrier.mutable ? "mut-ref" : "ref",

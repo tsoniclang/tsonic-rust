@@ -70,9 +70,13 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
       widget.methods.find(({ name }) => name === "into_box_value")?.receiver?.kind,
       "custom",
     );
-    assert.match(
-      widget.unsupportedMembers.find(({ name }) => name === "pinned_count")?.reason ?? "",
-      /borrowed custom receiver with no lifetime-bearing source receiver contract/u,
+    assert.equal(
+      widget.methods.find(({ name }) => name === "pinned_count")?.receiver?.kind,
+      "custom",
+    );
+    assert.equal(
+      widget.unsupportedMembers.find(({ name }) => name === "pinned_count"),
+      undefined,
     );
     assert.ok(widget.methods.some(({ name, traitDispatch }) =>
       name === "measure" && traitDispatch?.path === "acme_widget::Metric"));
@@ -323,6 +327,200 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
         },
       ],
     );
+    const semanticModule = worker.module({
+      snapshot,
+      dependency,
+      modulePath: [],
+      requestedExports: [
+        "AlignedRecord",
+        "BorrowedPair",
+        "BorrowedValue",
+        "CRecord",
+        "FirstSameName",
+        "FixedBuffer",
+        "Handler",
+        "LendingFamily",
+        "PackedRecord",
+        "SecondSameName",
+        "TransparentValue",
+        "Trusted",
+        "TrustedToken",
+        "apply_borrowed",
+        "apply_generic_pointer",
+        "choose_borrowed",
+        "invoke_handler",
+        "repeat_label",
+        "require_fn",
+        "require_fn_mut",
+        "require_fn_once",
+        "require_local_future",
+        "require_send_static_future",
+      ],
+    });
+    assert.deepEqual(semanticModule.unsupportedExports, []);
+    const semanticExport = (name) => {
+      const selected = semanticModule.exports.find((candidate) => candidate.name === name);
+      assert.ok(selected, `missing reflected semantic export ${name}`);
+      return selected;
+    };
+    const borrowedPair = semanticExport("BorrowedPair");
+    assert.equal(borrowedPair.kind, "type-alias");
+    assert.deepEqual(borrowedPair.generics.parameters.map(({ kind }) => kind), ["lifetime", "type"]);
+    assert.equal(borrowedPair.type.kind, "tuple");
+    assert.deepEqual(borrowedPair.type.elements.map(({ kind }) => kind), ["reference", "reference"]);
+    assert.deepEqual(
+      borrowedPair.type.elements.map(({ lifetime }) => lifetime),
+      [
+        borrowedPair.generics.parameters[0].identity,
+        borrowedPair.generics.parameters[0].identity,
+      ],
+    );
+
+    const fixedBuffer = semanticExport("FixedBuffer");
+    assert.equal(fixedBuffer.kind, "struct");
+    assert.deepEqual(fixedBuffer.generics.parameters.map(({ kind }) => kind), ["type", "const"]);
+    assert.deepEqual(fixedBuffer.generics.parameters[1].defaultValue, {
+      kind: "literal",
+      literalKind: "integer",
+      value: 4n,
+    });
+    assert.equal(fixedBuffer.fields[0].type.kind, "array");
+    assert.deepEqual(
+      fixedBuffer.fields[0].type.length,
+      {
+        kind: "parameter",
+        identity: fixedBuffer.generics.parameters[1].identity,
+        displayName: "N",
+      },
+    );
+
+    const borrowedValue = semanticExport("BorrowedValue");
+    assert.equal(borrowedValue.kind, "struct");
+    assert.deepEqual(borrowedValue.generics.parameters.map(({ kind }) => kind), ["lifetime", "type"]);
+    assert.ok(borrowedValue.generics.parameters[1].bounds.some((bound) =>
+      bound.kind === "trait" && bound.polarity === "maybe"));
+    assert.ok(borrowedValue.generics.parameters[1].bounds.some((bound) =>
+      bound.kind === "type-outlives"));
+
+    assert.deepEqual(semanticExport("CRecord").layout, {
+      representation: "c",
+    });
+    assert.deepEqual(semanticExport("TransparentValue").layout, {
+      representation: "transparent",
+    });
+    assert.deepEqual(semanticExport("AlignedRecord").layout, {
+      representation: "c",
+      alignment: { kind: "literal", literalKind: "integer", value: 16n },
+    });
+    assert.deepEqual(semanticExport("PackedRecord").layout, {
+      representation: "c",
+      packed: { kind: "literal", literalKind: "integer", value: 2n },
+    });
+
+    const lendingFamily = semanticExport("LendingFamily");
+    assert.equal(lendingFamily.kind, "trait");
+    const lendingItem = lendingFamily.associatedTypes.find(({ name }) => name === "Item");
+    assert.deepEqual(lendingItem?.generics.parameters.map(({ kind }) => kind), ["lifetime", "type"]);
+    assert.ok(lendingItem?.generics.wherePredicates.some((predicate) =>
+      predicate.kind === "type" || predicate.kind === "lifetime"));
+
+    const trusted = semanticExport("Trusted");
+    assert.equal(trusted.kind, "trait");
+    assert.equal(trusted.safety, "unsafe");
+    assert.equal(trusted.implementationItemsRequired, false);
+    const trustedToken = semanticExport("TrustedToken");
+    assert.equal(trustedToken.kind, "struct");
+    assert.ok(trustedToken.traits.implementations.some(({ trait }) =>
+      trait.identity.itemId === trusted.identity.itemId));
+
+    const chooseBorrowed = semanticExport("choose_borrowed");
+    assert.equal(chooseBorrowed.kind, "function");
+    assert.deepEqual(chooseBorrowed.function.generics.parameters.map(({ kind }) => kind), [
+      "lifetime",
+      "lifetime",
+      "type",
+    ]);
+    assert.ok(chooseBorrowed.function.generics.wherePredicates.some((predicate) =>
+      predicate.kind === "lifetime"));
+
+    const applyBorrowed = semanticExport("apply_borrowed");
+    assert.equal(applyBorrowed.kind, "function");
+    const callbackPredicate = applyBorrowed.function.generics.wherePredicates.find((predicate) =>
+      predicate.kind === "type" && predicate.bounds.some((bound) => bound.kind === "trait"));
+    const callbackBound = callbackPredicate?.kind === "type"
+      ? callbackPredicate.bounds.find((bound) => bound.kind === "trait")
+      : undefined;
+    assert.equal(callbackBound?.kind, "trait");
+    assert.equal(callbackBound?.kind === "trait" ? callbackBound.binder?.lifetimes.length : undefined, 1);
+
+    const invokeHandler = semanticExport("invoke_handler");
+    assert.equal(invokeHandler.kind, "function");
+    const handlerReference = invokeHandler.function.parameters[0].type;
+    assert.equal(handlerReference.kind, "reference");
+    assert.equal(handlerReference.target.kind, "trait-object");
+    assert.equal(handlerReference.target.principal.identity.itemId, semanticExport("Handler").identity.itemId);
+    assert.deepEqual(
+      handlerReference.target.autoTraits.map(({ displayPath }) => displayPath.at(-1)).sort(),
+      ["Send", "Sync"],
+    );
+
+    const opaqueResult = semanticExport("repeat_label");
+    assert.equal(opaqueResult.kind, "function");
+    assert.equal(opaqueResult.function.result.kind, "opaque");
+    assert.ok(opaqueResult.function.result.captures.some((argument) => argument.kind === "lifetime"));
+
+    const functionPointer = semanticExport("apply_generic_pointer");
+    assert.equal(functionPointer.kind, "function");
+    assert.equal(functionPointer.function.parameters[1].type.kind, "function-pointer");
+    assert.deepEqual(functionPointer.function.parameters[1].type, {
+      kind: "function-pointer",
+      parameters: [{
+        kind: "type-parameter",
+        identity: functionPointer.function.generics.parameters[0].identity,
+        displayName: "T",
+      }],
+      result: {
+        kind: "type-parameter",
+        identity: functionPointer.function.generics.parameters[0].identity,
+        displayName: "T",
+      },
+      abi: "Rust",
+      safety: "safe",
+      variadic: false,
+    });
+
+    const requiredTraitNames = (name) => {
+      const selected = semanticExport(name);
+      assert.equal(selected.kind, "function");
+      const parameter = selected.function.generics.parameters[0];
+      assert.equal(parameter.kind, "type");
+      return parameter.bounds
+        .filter((bound) => bound.kind === "trait")
+        .map((bound) => bound.trait.displayPath.at(-1));
+    };
+    assert.deepEqual(requiredTraitNames("require_fn"), ["Fn"]);
+    assert.deepEqual(requiredTraitNames("require_fn_mut"), ["FnMut"]);
+    assert.deepEqual(requiredTraitNames("require_fn_once"), ["FnOnce"]);
+    assert.deepEqual(requiredTraitNames("require_local_future"), ["Future"]);
+    assert.deepEqual(
+      requiredTraitNames("require_send_static_future").sort(),
+      ["Future", "Send"],
+    );
+    const sendStaticFuture = semanticExport("require_send_static_future");
+    assert.ok(sendStaticFuture.function.generics.parameters[0].bounds.some((bound) =>
+      bound.kind === "type-outlives" && bound.lifetime.kind === "static"));
+
+    assert.notEqual(
+      semanticExport("FirstSameName").identity.itemId,
+      semanticExport("SecondSameName").identity.itemId,
+    );
+    const semanticProjection = projectRustCompilerModule(semanticModule, {
+      providerModuleId: compilerProviderModuleId(dependency, []),
+      moduleSpecifier: "@tsonic/rust/crates/widget_alias/index.js",
+    });
+    assert.equal(semanticProjection.declarationModel.exports.length > 0, true);
+    assert.equal(semanticProjection.operations.some(({ exportId }) =>
+      exportId.endsWith("::choose_borrowed")), true);
     const nestedModule = worker.module({
       snapshot,
       dependency,

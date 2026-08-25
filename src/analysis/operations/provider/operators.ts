@@ -39,6 +39,7 @@ import type { ExtensionFactSubject, Node, ProviderDeclarationIdentity } from "@t
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { RustOperatorToken, RustRuntimeSetOperationKind, RustTargetOperationFact } from "../../facts/keys.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { rustSemanticIdentityKey } from "../../../target-model/semantics/index.js";
 
 export function selectRustCheckedOperator(
   request: RustCheckedOperatorSelectionInput,
@@ -85,7 +86,7 @@ function selectRustProjectTypeTest(
   const sourceDefinition = options.projectTypes.definitionForCarrier(dispatchCarrier);
   const targetDefinition = options.projectTypes.definitionForDeclaration(request.sourceRightDeclaration);
   const targetCarrier = targetDefinition === undefined || targetDefinition.kind !== "class" ||
-      targetDefinition.typeParameterNames.length !== 0
+      targetDefinition.genericArguments.length !== 0
     ? undefined
     : options.projectTypes.openCarrier(targetDefinition);
   const programErrorVariant = targetDefinition === undefined
@@ -445,7 +446,7 @@ function mapSelectedProviderAssignment(
       `Selected provider declaration '${providerIdentityText(identity)}' requires a closed source receiver carrier for its Rust ${operationKind} operation.`,
     );
   }
-  if (template === undefined || template.parameterCarriers === undefined ||
+  if (instantiation === undefined || template === undefined || template.parameterCarriers === undefined ||
     template.parameterCarriers.length !== sourceArguments.length) {
     return rejectSelectedOperation(
       request.expression,
@@ -481,6 +482,7 @@ function mapSelectedProviderAssignment(
     ...(receiverCarrier === undefined ? {} : { sourceReceiverCarrier: receiverCarrier }),
     sourceArgumentCarriers: finalizedSourceArgumentCarriers,
     declaredSourceArgumentCarriers: template.parameterCarriers,
+    typeRequirements: instantiation.typeRequirements,
     resultCarrier: template.resultCarrier,
     isAsync: template.isAsync,
     isFallible: template.isFallible,
@@ -525,8 +527,8 @@ function rustCarrierIdentity(carrier: TargetTypeRef): string {
   if (carrier.kind === "source-primitive") {
     return carrier.name;
   }
-  if (carrier.kind === "target-named") {
-    return carrier.id;
+  if (carrier.kind === "path") {
+    return rustSemanticIdentityKey(carrier.identity);
   }
   return carrier.kind;
 }

@@ -1,9 +1,10 @@
 import {
+  isRustCallableCarrier,
   isRustNeverCarrier,
   rustCallableProtocol,
   rustFutureOutputCarrier,
   rustSourceTypeCarrierValue,
-  substituteRustTargetTypeParameters,
+  substituteRustGenericArgument,
 } from "../../../../target-model/types/index.js";
 import {
   diagnosticInput,
@@ -31,9 +32,12 @@ import {
   planRustVirtualProjectMethodCall,
 } from "../../objects/project-method-dispatch.js";
 import { rustSourceCallEffectsFactKey } from "../../../../analysis/facts/keys.js";
-import { rustTypeFromCarrierInContext } from "../../types/render.js";
+import {
+  rustAstGenericArgumentFromSemanticInContext,
+  rustTypeFromCarrierInContext,
+} from "../../types/render.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr, RustType } from "../../../target-ast/nodes.js";
+import type { RustExpr, RustGenericArgument as RustAstGenericArgument } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
 
@@ -104,28 +108,26 @@ export function planSelectedSourceCall(
     return undefined;
   }
   const sourceTypeArguments = selected.sourceSelectedMethodTypeArguments ?? [];
-  const targetTypeArgumentCarriers = (fact.targetTypeArguments ?? []).map((argument) =>
-    context.typeParameterSubstitutions === undefined
+  const targetGenericArguments = (fact.targetGenericArguments ?? []).map((argument) =>
+    context.genericSubstitutions === undefined
       ? argument
-      : substituteRustTargetTypeParameters(
-          argument,
-          context.typeParameterSubstitutions,
-        ));
-  if (sourceTypeArguments.length !== targetTypeArgumentCarriers.length) {
+      : substituteRustGenericArgument(argument, context.genericSubstitutions));
+  if (sourceTypeArguments.length !== targetGenericArguments.length) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
-      "rust.backend.source-call-type-arguments",
-      "Selected project-source call has inconsistent source and target type-argument evidence.",
+      "rust.backend.source-call-generic-arguments",
+      "Selected project-source call has inconsistent source and target generic-argument evidence.",
     ));
     return undefined;
   }
-  const targetTypeArguments = targetTypeArgumentCarriers.map((carrier) =>
-    rustTypeFromCarrierInContext(carrier, context));
-  if (targetTypeArguments.some((argument) => argument === undefined)) {
+  const targetAstGenericArguments = targetGenericArguments
+    .filter((argument) => argument.kind !== "lifetime")
+    .map((argument) => rustAstGenericArgumentFromSemanticInContext(argument, context));
+  if (targetAstGenericArguments.some((argument) => argument === undefined)) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
-      "rust.backend.source-call-type-arguments",
-      "Selected project-source call type arguments do not have exact Rust target types.",
+      "rust.backend.source-call-generic-arguments",
+      "Selected project-source call generic arguments do not have exact Rust target representations.",
     ));
     return undefined;
   }
@@ -137,7 +139,7 @@ export function planSelectedSourceCall(
   const callableSpecialization = requiresCallableSpecialization && selectedDeclaration !== undefined
     ? context.input.program.sourceCallableSpecializations.variantForCall(
         selectedDeclaration,
-        targetTypeArgumentCarriers,
+        targetGenericArguments,
       )
     : undefined;
   if (requiresCallableSpecialization && callableSpecialization === undefined) {
@@ -148,10 +150,10 @@ export function planSelectedSourceCall(
     ));
     return undefined;
   }
-  const callTypeArguments = targetTypeArguments.length === 0 ||
+  const callGenericArguments = targetAstGenericArguments.length === 0 ||
       callableSpecialization !== undefined
     ? undefined
-    : targetTypeArguments as readonly RustType[];
+    : targetAstGenericArguments as readonly RustAstGenericArgument[];
 
   let planned: RustExpr | undefined;
   switch (fact.target.form) {
@@ -165,7 +167,9 @@ export function planSelectedSourceCall(
         kind: "call",
         path,
         args: shaped,
-        ...(callTypeArguments === undefined ? {} : { typeArguments: callTypeArguments }),
+        ...(callGenericArguments === undefined
+          ? {}
+          : { genericArguments: callGenericArguments }),
       };
       break;
     }
@@ -185,7 +189,7 @@ export function planSelectedSourceCall(
           ? undefined
           : context.input.program.projectMethodDispatch.variantForMember(
               dispatchDeclaration,
-              targetTypeArgumentCarriers,
+              targetGenericArguments,
             );
         if (dispatchVariant === undefined) {
           context.diagnostics.push(missingFactDiagnostic(
@@ -257,7 +261,9 @@ export function planSelectedSourceCall(
             ? receiver
             : planRustNonConsumingValue(receiverNode, receiver, context),
           method: targetName,
-          ...(callTypeArguments === undefined ? {} : { typeArguments: callTypeArguments }),
+          ...(callGenericArguments === undefined
+            ? {}
+            : { genericArguments: callGenericArguments }),
           args: shaped,
           receiverMode: fact.target.mutatesSelf ? "mut-ref" : "ref",
         };
@@ -273,7 +279,9 @@ export function planSelectedSourceCall(
           kind: "call",
           path: `${typePath}::${targetName}`,
           args: shaped,
-          ...(callTypeArguments === undefined ? {} : { typeArguments: callTypeArguments }),
+          ...(callGenericArguments === undefined
+            ? {}
+            : { genericArguments: callGenericArguments }),
         };
       }
       break;
@@ -297,7 +305,8 @@ export function planSelectedSourceCall(
         break;
       }
       const callable = planRustNonConsumingValue(callee, plannedCallable, context);
-      if (fact.target.carrier.kind === "function-pointer") {
+      if (fact.target.carrier.kind === "function-pointer" ||
+        fact.target.carrier.kind === "closure") {
         planned = { kind: "invoke", callee: callable, args: shaped };
         break;
       }
@@ -368,7 +377,7 @@ export function planSelectedSourceCall(
     : fact.target.form === "structural-method"
       ? fact.target.callableCarrier
       : undefined;
-  const operandBoundary = rustCallableProtocol(callableCarrier) !== undefined
+  const operandBoundary = isRustCallableCarrier(callableCarrier)
     ? rustCurrentErrorBoundary(context)
     : selected.sourceDeclaration === undefined
       ? undefined

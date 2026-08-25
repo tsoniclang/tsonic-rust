@@ -327,6 +327,7 @@ function planRustSourceIndexUpdate(
       selectedKey,
       index.resultCarrier,
       representation,
+      context,
     ),
     write: (value) => writeRustProjectObjectIndex(
       receiver,

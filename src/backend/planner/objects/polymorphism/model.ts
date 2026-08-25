@@ -15,13 +15,18 @@ import type { RustProjectTypeDefinition } from "../../../../analysis/project-typ
 import {
   isRustUnitCarrier,
   isRustNeverCarrier,
+  rustGenericSubstitutionsForOpenArguments,
   rustSourceTypeCarrierValue,
 } from "../../../../target-model/types/index.js";
+import type { RustGenericSubstitutions } from "../../../../target-model/types/index.js";
 import type {
   RustExpr,
   RustFunctionParam,
+  RustGenerics,
+  RustReceiver,
   RustType,
 } from "../../../target-ast/nodes.js";
+import { rustTypedReceiver } from "../../../target-ast/builders.js";
 import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js";
 import {
   missingFactDiagnostic,
@@ -35,6 +40,7 @@ import {
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustReturnTypeFromCarrierInContext, rustTypeFromCarrierInContext } from "../../types/render.js";
 import { planRustCallableParameters } from "../../declarations/callable-parameters.js";
+import { planRustCallableGenerics } from "../../declarations/callable-generics.js";
 import { createRustSyntheticNameState } from "../../names/synthetic.js";
 import { rustDeclarationRequiresUnsafe } from "../../safety/explicit-safety.js";
 import { rustProjectStateType as rustProjectNamedStateType } from "./names.js";
@@ -52,6 +58,7 @@ export interface ProjectFieldPlan {
 }
 
 export interface ProjectCallableShape {
+  readonly generics: RustGenerics;
   readonly params: readonly RustFunctionParam[];
   readonly returnType?: RustType;
   readonly errorType?: RustType;
@@ -238,12 +245,15 @@ export function projectOwnMethodProperties(
     const relation = owner === undefined
       ? undefined
       : context.input.program.projectTypes.relationship(receiverCarrier, owner);
-    const shape = owner === undefined || relation?.kind !== "related"
+    const substitutions = owner !== undefined && relation?.kind === "related"
+      ? projectGenericSubstitutions(owner, relation.targetType)
+      : undefined;
+    const shape = substitutions === undefined
       ? undefined
       : projectCallableShape(declaration, {
           ...context,
-          typeParameterSubstitutions: projectTypeSubstitutions(owner, relation.targetType),
-        }, { methodTypeArgumentSubstitutions: new Map() });
+          genericSubstitutions: substitutions,
+        });
     const targetName = owner === undefined
       ? undefined
       : context.input.program.projectTypes.fieldStorageName(owner, declaration);
@@ -269,14 +279,23 @@ export function rustProjectMethodPropertyCallableType(
   const resultType = shape.returnType ?? { kind: "unit" as const };
   return {
     kind: "named",
-    path: "rt::Callable",
-    typeArguments: [{
-      kind: "tuple",
-      elements: shape.params.map((parameter) => parameter.type),
+    path: "rt::OwnedLocalCallable",
+    genericArguments: [{
+      kind: "type",
+      type: {
+        kind: "tuple",
+        elements: shape.params.map((parameter) => parameter.type),
+      },
     }, {
-      kind: "named",
-      path: "Result",
-      typeArguments: [resultType, shape.errorType!],
+      kind: "type",
+      type: {
+        kind: "named",
+        path: "Result",
+        genericArguments: [
+          { kind: "type", type: resultType },
+          { kind: "type", type: shape.errorType! },
+        ],
+      },
     }],
   };
 }
@@ -295,24 +314,11 @@ export function projectCallableShape(
   member: Node,
   context: RustPlanContext,
   options?: {
-    readonly methodTypeArgumentSubstitutions?: ReadonlyMap<string, TargetTypeRef>;
+    readonly methodGenericSubstitutions?: RustGenericSubstitutions;
     readonly safetyPlacement?: "declaration" | "getter" | "setter";
   },
 ): ProjectCallableShape | undefined {
-  const methodTypeArgumentSubstitutions = options?.methodTypeArgumentSubstitutions;
-  const methodTypeParameters = context.input.program.source.ast.typeParameters(member);
-  const methodTypeParameterNames = methodTypeParameters.map((parameter) => {
-    const name = parameter === undefined ? undefined : context.input.program.source.ast.name(parameter);
-    return name === undefined ? undefined : context.input.program.source.ast.text(name);
-  });
-  const methodSpecializationValid = methodTypeParameters.length === 0
-    ? methodTypeArgumentSubstitutions === undefined || methodTypeArgumentSubstitutions.size === 0
-    : methodTypeArgumentSubstitutions !== undefined &&
-      methodTypeArgumentSubstitutions.size === methodTypeParameters.length &&
-      methodTypeParameterNames.every((name) =>
-        name !== undefined && name.length > 0 && methodTypeArgumentSubstitutions.has(name));
-  if (!methodSpecializationValid ||
-    context.input.program.facts.getFact(member, rustGeneratorFactKey) !== undefined ||
+  if (context.input.program.facts.getFact(member, rustGeneratorFactKey) !== undefined ||
     context.input.program.facts.getFact(member, rustAsyncFunctionFactKey) !== undefined ||
     context.input.program.source.ast.hasModifierKind(member, "async")) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -322,15 +328,15 @@ export function projectCallableShape(
     ));
     return undefined;
   }
-  const substitutions = new Map(context.typeParameterSubstitutions ?? []);
-  for (const [name, carrier] of methodTypeArgumentSubstitutions ?? []) {
-    substitutions.set(name, carrier);
-  }
-  const selectedContext = substitutions.size === 0
-    ? context
-    : { ...context, typeParameterSubstitutions: substitutions };
+  const genericPlan = planRustCallableGenerics(
+    member,
+    context,
+    options?.methodGenericSubstitutions,
+  );
+  if (genericPlan === undefined) return undefined;
+  const selectedContext = genericPlan.context;
   const syntheticNames = createRustSyntheticNameState(selectedContext.input.program.source.ast, member, []);
-  const parameterPlan = planRustCallableParameters(member, selectedContext, syntheticNames, { requireStatic: false });
+  const parameterPlan = planRustCallableParameters(member, selectedContext, syntheticNames);
   const returnCarrier = selectedContext.input.program.facts.getFact(member, rustSourceCallableReturnFactKey)?.returnCarrier;
   if (parameterPlan === undefined || returnCarrier === undefined) {
     return undefined;
@@ -354,6 +360,7 @@ export function projectCallableShape(
     return undefined;
   }
   return {
+    generics: genericPlan.finalizeGenerics(),
     params: parameterPlan.params,
     ...(returnType === undefined ? {} : { returnType }),
     ...(errorBoundary === undefined ? {} : { errorType: rustErrorType(errorBoundary) }),
@@ -438,13 +445,17 @@ export function projectStateType(
     : rustProjectNamedStateType(state.carrier, context);
 }
 
-export function projectTypeSubstitutions(
+export function projectGenericSubstitutions(
   definition: RustProjectTypeDefinition,
   carrier: TargetTypeRef,
-): ReadonlyMap<string, TargetTypeRef> {
+): RustGenericSubstitutions | undefined {
   const value = rustSourceTypeCarrierValue(carrier);
-  return new Map(definition.typeParameterNames.map((name, index) =>
-    [name, value?.typeArguments[index] ?? { kind: "type-parameter", name }] as const));
+  return value === undefined
+    ? undefined
+    : rustGenericSubstitutionsForOpenArguments(
+        definition.genericArguments,
+        value.genericArguments,
+      );
 }
 
 export function rustFunctionTypesMatch(
@@ -460,7 +471,15 @@ export function rustFunctionTypesMatch(
 }
 
 export function rustRcType(inner: RustType): RustType {
-  return { kind: "named", path: "std::rc::Rc", typeArguments: [inner] };
+  return {
+    kind: "named",
+    path: "std::rc::Rc",
+    genericArguments: [{ kind: "type", type: inner }],
+  };
+}
+
+export function rustSharedSelfReceiver(): RustReceiver {
+  return rustTypedReceiver(rustRcType({ kind: "named", path: "Self" }));
 }
 
 export function cloneExpression(expression: RustExpr): RustExpr {

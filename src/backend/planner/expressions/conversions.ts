@@ -1,9 +1,9 @@
 import {
-  isRustCopyCarrier,
   isRustNeverCarrier,
-  rustCarrierSupportsClone,
   rustCallableProtocol,
+  rustPathTypeMatches,
   rustPrimitiveTypeName,
+  rustStringTargetId,
   rustSourceUnionCarrierValue,
 } from "../../../target-model/types/index.js";
 import {
@@ -25,7 +25,12 @@ import { rustBottomExpression } from "../types/fallible-shape.js";
 import { rustEffectiveValueCarrier, rustValueCarrierTransitionTarget } from "../../../analysis/facts/value-carrier-queries.js";
 import { rustFinalizedCarrierTransitionMatches } from "../../../analysis/facts/target-operation.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { rustTypeFromCarrierInContext } from "../types/render.js";
+import {
+  rustAstGenericArgumentFromSemanticInContext,
+  rustAstTraitFromSemanticInContext,
+  rustTypeFromCarrierInContext,
+} from "../types/render.js";
+import { planRustSealedOwnedRead } from "../ownership/reads.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import type {
   RustProviderConstantArgument,
@@ -34,7 +39,7 @@ import type {
   RustValueConversion,
 } from "../../../analysis/facts/keys.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr, RustType } from "../../target-ast/nodes.js";
+import type { RustExpr, RustGenericArgument } from "../../target-ast/nodes.js";
 import type { RustFinalizedInputPlanOverrides } from "../project/provider-evaluation-scope.js";
 import type { RustFinalizedSourceInput, RustFinalizedTargetInput, RustFinalizedValueConversion } from "../../../analysis/facts/finalized-operation-abi.js";
 import type { RustPlanContext } from "../program/plan-context.js";
@@ -196,7 +201,10 @@ export function lowerRustValueConversion(
         : {
             kind: "call" as const,
             path: "Ok",
-            typeArguments: [{ kind: "infer" as const }, activeErrorType!],
+            genericArguments: [
+              { kind: "type" as const, type: { kind: "infer" as const } },
+              { kind: "type" as const, type: activeErrorType! },
+            ],
             args: [invocation],
           };
       return {
@@ -382,19 +390,20 @@ export function planProviderOperationExpression(
   const receiverMode = fact.abi.targetReceiver.kind === "input"
     ? fact.abi.targetReceiver.input.mode
     : undefined;
-  const targetTypeArguments = fact.abi.targetTypeArguments.map((carrier) =>
-    rustTypeFromCarrierInContext(carrier, context));
-  if (targetTypeArguments.some((argument) => argument === undefined)) {
+  const targetGenericArguments = fact.abi.targetGenericArguments.map((argument) =>
+    rustAstGenericArgumentFromSemanticInContext(argument, context));
+  if (targetGenericArguments.some((argument) => argument === undefined)) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, operationNode),
       "rust.backend.provider-target-type-arguments",
-      "Provider operation target type arguments do not have exact Rust target types.",
+      "Provider operation generic arguments do not have exact Rust target syntax.",
     ));
     return undefined;
   }
-  const concreteTargetTypeArguments = targetTypeArguments.length === 0
-    ? undefined
-    : targetTypeArguments as readonly RustType[];
+  const concreteGenericArguments: readonly RustGenericArgument[] | undefined =
+    targetGenericArguments.length > 0
+      ? targetGenericArguments as readonly RustGenericArgument[]
+      : undefined;
   const scoped = (expression: RustExpr | undefined): RustExpr | undefined =>
     expression === undefined || evaluationScope.kind !== "selected"
       ? expression
@@ -423,7 +432,7 @@ export function planProviderOperationExpression(
         receiver: typedReceiver,
         method: form.name,
         args,
-        ...(concreteTargetTypeArguments === undefined ? {} : { typeArguments: concreteTargetTypeArguments }),
+        ...(concreteGenericArguments === undefined ? {} : { genericArguments: concreteGenericArguments }),
       });
     }
     case "call": {
@@ -432,7 +441,7 @@ export function planProviderOperationExpression(
         kind: "call",
         path: form.path,
         args,
-        ...(concreteTargetTypeArguments === undefined ? {} : { typeArguments: concreteTargetTypeArguments }),
+        ...(concreteGenericArguments === undefined ? {} : { genericArguments: concreteGenericArguments }),
       }, form.chain));
     }
     case "call-c-variadic":
@@ -441,7 +450,7 @@ export function planProviderOperationExpression(
         kind: "call",
         path: form.path,
         args,
-        ...(concreteTargetTypeArguments === undefined ? {} : { typeArguments: concreteTargetTypeArguments }),
+        ...(concreteGenericArguments === undefined ? {} : { genericArguments: concreteGenericArguments }),
       });
     case "call-value-slice":
     case "call-value-array":
@@ -453,11 +462,23 @@ export function planProviderOperationExpression(
     }
     case "path": {
       registerAliasFromPath(context, form.path);
-      return scoped(args.length === 0 ? { kind: "path", path: form.path } : undefined);
+      return scoped(args.length === 0 ? {
+        kind: "path",
+        path: form.path,
+        ...(concreteGenericArguments === undefined ? {} : { genericArguments: concreteGenericArguments }),
+      } : undefined);
     }
     case "static": {
       registerAliasFromPath(context, form.path);
       return scoped(args.length === 0 ? { kind: "path", path: form.path } : undefined);
+    }
+    case "static-reference": {
+      registerAliasFromPath(context, form.path);
+      return scoped(args.length === 0 ? {
+        kind: "reference",
+        mutable: form.mutable,
+        expr: { kind: "path", path: form.path },
+      } : undefined);
     }
     case "method":
     case "arg-receiver-method":
@@ -470,7 +491,7 @@ export function planProviderOperationExpression(
             receiver,
             method: form.name,
             args,
-            ...(concreteTargetTypeArguments === undefined ? {} : { typeArguments: concreteTargetTypeArguments }),
+            ...(concreteGenericArguments === undefined ? {} : { genericArguments: concreteGenericArguments }),
             ...(receiverMode === undefined ? {} : { receiverMode }),
           });
     case "arg-structural-method": {
@@ -495,7 +516,7 @@ export function planProviderOperationExpression(
               receiver,
               method: form.name,
               args,
-              ...(concreteTargetTypeArguments === undefined ? {} : { typeArguments: concreteTargetTypeArguments }),
+              ...(concreteGenericArguments === undefined ? {} : { genericArguments: concreteGenericArguments }),
               ...(receiverMode === undefined ? {} : { receiverMode }),
             },
             form.chain,
@@ -508,18 +529,35 @@ export function planProviderOperationExpression(
       if (options.resultUse === "storage") {
         return scoped(field);
       }
-      if (isRustCopyCarrier(fact.resultCarrier)) {
-        return scoped(field);
-      }
-      if (!rustCarrierSupportsClone(fact.resultCarrier)) {
-        context.diagnostics.push(unsupportedConstructDiagnostic(
-          diagnosticInput(context, operationNode),
-          "rust.backend.provider-field-read-ownership",
-          "A provider field read requires an exact Copy or Clone result-carrier contract.",
-        ));
-        return undefined;
-      }
-      return scoped({ kind: "method-call", receiver: field, method: "clone", args: [] });
+      const owned = planRustSealedOwnedRead(
+        operationNode,
+        field,
+        context,
+        "rust.backend.provider-field-read-ownership",
+      );
+      return owned === undefined ? undefined : scoped(owned);
+    }
+    case "tuple-field": {
+      if (receiver === undefined || args.length !== 0) return undefined;
+      const field: RustExpr = { kind: "tuple-field", receiver, index: form.index };
+      if (options.resultUse === "storage") return scoped(field);
+      const owned = planRustSealedOwnedRead(
+        operationNode,
+        field,
+        context,
+        "rust.backend.provider-tuple-field-read-ownership",
+      );
+      return owned === undefined ? undefined : scoped(owned);
+    }
+    case "struct-variant": {
+      if (args.length !== form.fields.length) return undefined;
+      registerAliasFromPath(context, form.path);
+      return scoped({
+        kind: "struct-literal",
+        path: form.path,
+        ...(concreteGenericArguments === undefined ? {} : { genericArguments: concreteGenericArguments }),
+        fields: form.fields.map((name, index) => ({ name, value: args[index]! })),
+      });
     }
     case "index": {
       if (receiver === undefined || args.length !== 1) {
@@ -547,45 +585,25 @@ export function planProviderOperationExpression(
     }
     case "trait-call": {
       const owner = rustTypeFromCarrierInContext(form.owner, context);
-      const traitTypeArguments = form.traitTypeArguments.map((argument) =>
-        rustTypeFromCarrierInContext(argument, context));
-      if (owner === undefined || traitTypeArguments.some((argument) => argument === undefined)) {
-        return undefined;
-      }
-      registerAliasFromPath(context, form.traitPath);
+      const trait = rustAstTraitFromSemanticInContext(form.trait, context);
+      if (owner === undefined || trait === undefined) return undefined;
       return scoped({
         kind: "associated-call",
         owner,
-        trait: {
-          kind: "named",
-          path: form.traitPath,
-          ...(traitTypeArguments.length === 0
-            ? {}
-            : { typeArguments: traitTypeArguments as readonly RustType[] }),
-        },
+        trait,
         method: form.method,
         args,
-        ...(concreteTargetTypeArguments === undefined ? {} : { typeArguments: concreteTargetTypeArguments }),
+        ...(concreteGenericArguments === undefined ? {} : { genericArguments: concreteGenericArguments }),
       });
     }
     case "trait-associated-value": {
       const owner = rustTypeFromCarrierInContext(form.owner, context);
-      const traitTypeArguments = form.traitTypeArguments.map((argument) =>
-        rustTypeFromCarrierInContext(argument, context));
-      if (owner === undefined || traitTypeArguments.some((argument) => argument === undefined) || args.length !== 0) {
-        return undefined;
-      }
-      registerAliasFromPath(context, form.traitPath);
+      const trait = rustAstTraitFromSemanticInContext(form.trait, context);
+      if (owner === undefined || trait === undefined || args.length !== 0) return undefined;
       return scoped({
         kind: "associated-value",
         owner,
-        trait: {
-          kind: "named",
-          path: form.traitPath,
-          ...(traitTypeArguments.length === 0
-            ? {}
-            : { typeArguments: traitTypeArguments as readonly RustType[] }),
-        },
+        trait,
         name: form.name,
       });
     }
@@ -752,8 +770,7 @@ export function planFinalizedTargetInput(
         return undefined;
       }
       const asTargetElement = element.parameterCarrier.kind === "reference" &&
-        element.parameterCarrier.referent.kind === "target-named" &&
-        element.parameterCarrier.referent.id === "rust.std.String"
+        rustPathTypeMatches(element.parameterCarrier.target, rustStringTargetId)
         ? planned.kind === "string-literal"
           ? { kind: "str-literal", value: planned.value } as RustExpr
           : planned.kind === "reference"

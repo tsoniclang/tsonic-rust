@@ -1,4 +1,5 @@
 import {
+  BinaryExpression_Right,
   ElementAccessExpression_ArgumentExpression,
   BinaryExpression_Left,
   BinaryExpression_OperatorToken,
@@ -50,7 +51,13 @@ import {
 } from "../facts/keys.js";
 import { appendRustDiagnostic, boolCarrier, rustResolutionContext, selectExpressionOperation } from "../program/walk.js";
 import { isRustAssignmentOperator } from "../../policy/operations/operator-rules.js";
-import { recordAssignmentWrite, recordBindingWrite } from "../declarations/types-and-bindings.js";
+import {
+  recordAssignmentWrite,
+  recordBindingWrite,
+  rustArgumentModeForSourceContract,
+  rustOwnershipContractForStorageExpression,
+  validateOwnershipExpressionAgainstContract,
+} from "../declarations/types-and-bindings.js";
 import { recordSelectedOperationInputs } from "../operations/inputs.js";
 import { resolveBinaryOperandCarriers } from "../operations/operators.js";
 import { resolveExpressionCarrierUncached } from "./value-resolution.js";
@@ -73,6 +80,9 @@ export function resolveExpressionCarrier(
   sourceFile: SourceFile,
   expected: TargetTypeRef | undefined,
 ): TargetTypeRef | undefined {
+  if (walk.context.declarationApplications.operationForExpression(expression) !== undefined) {
+    return undefined;
+  }
   const facts = walk.context.facts;
   const contextualExpected = rustExpressionResolutionExpectation(
     walk.context.ast,
@@ -446,7 +456,20 @@ function recordExpressionBindingEffects(walk: RustFactWalk, expression: Node): v
     const operatorToken = BinaryExpression_OperatorToken(ast, expression);
     const operatorKind = operatorToken === undefined ? "" : ast.kindName(operatorToken);
     if (isRustAssignmentOperator(operatorKind)) {
-      recordAssignmentWrite(walk, expression, BinaryExpression_Left(ast, expression));
+      const target = BinaryExpression_Left(ast, expression);
+      if (operatorKind === KindEqualsToken) {
+        const value = BinaryExpression_Right(ast, expression);
+        const contract = rustOwnershipContractForStorageExpression(walk, target);
+        if (value !== undefined) {
+          validateOwnershipExpressionAgainstContract(
+            walk,
+            value,
+            rustArgumentModeForSourceContract(contract),
+            contract,
+          );
+        }
+      }
+      recordAssignmentWrite(walk, expression, target);
     }
     return;
   }
@@ -640,6 +663,7 @@ function applyOptionLane(
       resolved,
       target,
       walk.context.projectTypes,
+      walk.context.sourceGenerics,
     );
     if (reconciliation.kind === "incompatible" && reconciliation.reason === "ambiguous") {
       appendRustDiagnostic(
@@ -651,7 +675,9 @@ function applyOptionLane(
       );
       return undefined;
     }
-    if (reconciliation.kind === "conversion" || reconciliation.kind === "project-upcast") {
+    if (reconciliation.kind === "identity") {
+      projected = target;
+    } else if (reconciliation.kind === "conversion" || reconciliation.kind === "project-upcast") {
       recordRustValueCarrierReconciliation(walk.context.facts, expression, reconciliation);
       projected = target;
       if (reconciliation.kind === "project-upcast" && !isRustOptionCarrier(expected)) {
@@ -707,6 +733,7 @@ export function reconcileRequiredCarrier(
     sourceCarrier,
     targetCarrier,
     walk.context.projectTypes,
+    walk.context.sourceGenerics,
   );
   if (reconciliation.kind === "incompatible") {
     return false;

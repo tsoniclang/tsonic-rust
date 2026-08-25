@@ -138,7 +138,7 @@ function selectDisposalAlternative(
       effects.async !== (alternative.kind === "async")) {
       return rejected("The selected project-source disposer has no exact Rust well-known method contract.");
     }
-    const polymorphic = options.projectTypes.isPolymorphic(owner);
+    const polymorphic = options.projectTypeRequiresDynamicDispatch(owner);
     const relationship = polymorphic
       ? options.projectTypes.relationship(resourceCarrier, owner)
       : undefined;

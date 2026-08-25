@@ -97,7 +97,7 @@ export function main(): void {
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /HashMap<String, i32>/u);
   assert.match(source, /method_override/u);
-  assert.match(source, /rt::Callable/u);
+  assert.match(source, /rt::OwnedLocalCallable/u);
   assert.equal(
     validateGeneratedProject("object-property-parity", result.artifacts, { run: true }).status,
     0,
@@ -202,7 +202,7 @@ export function main(): void {
   assert.match(source, /record_setter/u);
   assert.match(source, /property_getter/u);
   assert.match(source, /property_setter/u);
-  assert.match(shapes, /rt::Callable/u);
+  assert.match(shapes, /rt::OwnedLocalCallable/u);
   assert.equal(
     validateGeneratedProject("object-accessor-parity", result.artifacts, { run: true }).status,
     0,
@@ -363,10 +363,10 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
   const shapes = artifactText(result, "src/shapes.rs");
-  assert.match(source, /let record_method = Some\(\s*rt::Callable/u);
+  assert.match(source, /let record_method = Some\(\s*rt::OwnedLocalCallable/u);
   assert.match(source, /\.with\(\|state\| state\.read\.clone\(\)\)/u);
   assert.match(source, /\.as_ref\(\)\s*\.map\(\|optional_receiver\|/u);
-  assert.match(shapes, /Option<rt::Callable/u);
+  assert.match(shapes, /Option<rt::OwnedLocalCallable/u);
   assert.equal(
     validateGeneratedProject("optional-structural-methods", result.artifacts, { run: true }).status,
     0,

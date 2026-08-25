@@ -6,7 +6,9 @@ import { isRustCopyCarrier } from "../../../target-model/types/index.js";
 import { rustFixedArrayCarrierValue, rustSourcePrimitiveTargetType } from "../../../target-model/types/index.js";
 import { rustInt32ToUsizeValueConversion, rustUsizeToInt32ValueConversion } from "../../../target-model/conversions/model.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustSourceOwnershipOperationFactKey } from "../../../source/semantics/facts.js";
 import { selectedValueCarrier } from "./operators.js";
+import { selectedSourceIntegerLiteralValue } from "../../../policy/types/selected-numeric-literal.js";
 import type {
   RustCheckedElementSelectionInput,
   RustCheckedOperationSelectionResult,
@@ -116,6 +118,7 @@ export function selectStructuralSourceProperty(
     return acceptRustMemberOperation(request, "property", {
       kind: "source-union-field",
       operationId,
+      accessMode: request.accessMode,
       unionCarrier: receiverCarrier,
       selectedVariantIndexes,
       variants: sourceUnion.variants.map((variant, index) => ({
@@ -205,6 +208,7 @@ export function selectStructuralSourceProperty(
     accessMode: request.accessMode,
     receiverCarrier,
     storage: shape.storage,
+    fieldLayout: "ordinary",
     storageIndex: field.storageIndex,
     valueSemantics: field.accessor === undefined
       ? field.method === true ? { kind: "method" } : { kind: "stored" }
@@ -415,7 +419,14 @@ export function selectRustFixedArrayElementAccess(
       "The selected FixedArray index access has no exact fixed-array receiver carrier.",
     );
   }
-  const index = request.sourceSelectedElementIndex;
+  const authoredIndex = request.sourceSelectedElementIndex === undefined
+    ? selectedSourceIntegerLiteralValue(request.argument, context.ast)
+    : undefined;
+  const index = request.sourceSelectedElementIndex ??
+    (authoredIndex !== undefined && authoredIndex >= 0n &&
+        authoredIndex <= BigInt(Number.MAX_SAFE_INTEGER)
+      ? Number(authoredIndex)
+      : undefined);
   if (index !== undefined) {
     if (index < 0 || index >= fixedArray.length) {
       return rejectSelectedOperation(
@@ -431,7 +442,16 @@ export function selectRustFixedArrayElementAccess(
       index,
     }, context, options, elementProvenance(request), fixedArray.element);
   }
-  if (!isRustCopyCarrier(fixedArray.element)) {
+  if (authoredIndex !== undefined) {
+    return rejectSelectedOperation(
+      request.expression,
+      context,
+      "RUST_FIXED_ARRAY_INDEX_NOT_PROVEN",
+      "An authored fixed-array integer index is outside the finalized array bounds.",
+    );
+  }
+  if (!isRustCopyCarrier(fixedArray.element) &&
+    !fixedArrayElementIsBorrowedPlace(request.expression, context)) {
     return rejectSelectedOperation(
       request.expression,
       context,
@@ -445,25 +465,29 @@ export function selectRustFixedArrayElementAccess(
     context,
     options,
   );
-  const normalizedIndexCarrier = normalizeSelectedOperationInputCarrier(
-    request.argument,
-    dynamicIndexCarrier,
-    rustSourcePrimitiveTargetType("int32"),
-    context,
-    options,
-  );
+  const nativeIndexCarrier = rustSourcePrimitiveTargetType("native-uint");
+  const directNativeIndex = rustTargetTypeRefEquals(dynamicIndexCarrier, nativeIndexCarrier);
+  const normalizedIndexCarrier = directNativeIndex
+    ? nativeIndexCarrier
+    : normalizeSelectedOperationInputCarrier(
+        request.argument,
+        dynamicIndexCarrier,
+        rustSourcePrimitiveTargetType("int32"),
+        context,
+        options,
+      );
   if (
     normalizedIndexCarrier === undefined ||
     !rustTargetTypeRefEquals(
       normalizedIndexCarrier,
-      rustSourcePrimitiveTargetType("int32"),
+      directNativeIndex ? nativeIndexCarrier : rustSourcePrimitiveTargetType("int32"),
     )
   ) {
     return rejectSelectedOperation(
       request.expression,
       context,
       "RUST_FIXED_ARRAY_DYNAMIC_INDEX_CARRIER_UNSUPPORTED",
-      "Dynamic fixed-array element access requires an exact int32 index carrier; literal unions and other source carriers are not reconstructed from their spelling.",
+      "Dynamic fixed-array element access requires an exact int32 or native-uint index carrier; literal unions and other source carriers are not reconstructed from their spelling.",
     );
   }
   const template: RustProviderOperationTemplate = {
@@ -472,10 +496,12 @@ export function selectRustFixedArrayElementAccess(
     operationKind: "indexer",
     target: {
       form: "index",
-      indexConversion: rustInt32ToUsizeValueConversion,
+      ...(directNativeIndex ? {} : { indexConversion: rustInt32ToUsizeValueConversion }),
     },
     resultCarrier: fixedArray.element,
-    parameterCarriers: [rustSourcePrimitiveTargetType("int32")],
+    parameterCarriers: [directNativeIndex
+      ? nativeIndexCarrier
+      : rustSourcePrimitiveTargetType("int32")],
     evaluation: "pure",
     isAsync: false,
     isFallible: false,
@@ -506,4 +532,22 @@ export function selectRustFixedArrayElementAccess(
     options,
     elementProvenance(request),
   );
+}
+
+function fixedArrayElementIsBorrowedPlace(
+  expression: Node,
+  context: RustOperationPolicyContext,
+): boolean {
+  let current: Node | undefined = expression;
+  while (current !== undefined) {
+    const parent = context.ast.parent(current);
+    if (parent === undefined) return false;
+    const fact = context.facts.getFact(parent, rustSourceOwnershipOperationFactKey);
+    if (fact !== undefined) {
+      return fact.valueExpression === current &&
+        (fact.kind === "shared-borrow" || fact.kind === "mutable-borrow");
+    }
+    current = parent;
+  }
+  return false;
 }

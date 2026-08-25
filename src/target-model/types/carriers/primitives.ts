@@ -2,6 +2,15 @@ import { isRustNullCarrier, isRustUndefinedCarrier } from "./js.js";
 import type { RustPrimitiveTypeName } from "../../syntax/tokens.js";
 import type { SourcePrimitiveKind } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../model.js";
+import {
+  rustBuiltinPathTargetType,
+  rustInferredLifetime,
+  rustPathTypeArguments,
+  rustPathTypeMatches,
+  rustReferenceTargetType,
+  rustSourceCarrierTargetType,
+} from "../constructors.js";
+import { rustBuiltinIdentity } from "../../semantics/index.js";
 
 const rustPrimitiveNames: Readonly<Partial<Record<SourcePrimitiveKind, RustPrimitiveTypeName>>> = {
   char: "u16",
@@ -92,35 +101,47 @@ export function sameRustPrimitiveCarrier(left: TargetTypeRef | undefined, right:
 }
 
 export function rustSliceRefTargetType(element: TargetTypeRef): TargetTypeRef {
-  return { kind: "reference", referent: { kind: "slice", element }, mutable: false };
+  return rustReferenceTargetType(
+    { kind: "slice", element },
+    false,
+    rustInferredLifetime("policy\0shared-slice"),
+  );
 }
 
 export function isRustSliceRefCarrier(carrier: TargetTypeRef | undefined): carrier is Extract<TargetTypeRef, { kind: "reference" }> {
-  return carrier?.kind === "reference" && carrier.mutable === false && carrier.referent.kind === "slice";
+  return carrier?.kind === "reference" && carrier.mutable === false && carrier.target.kind === "slice";
 }
 
 export function rustSliceElementCarrier(carrier: TargetTypeRef | undefined): TargetTypeRef | undefined {
-  return carrier?.kind === "reference" && carrier.referent.kind === "slice" ? carrier.referent.element : undefined;
+  return carrier?.kind === "reference" && carrier.target.kind === "slice" ? carrier.target.element : undefined;
 }
 
 export function rustSliceMutRefTargetType(element: TargetTypeRef): TargetTypeRef {
-  return { kind: "reference", referent: { kind: "slice", element }, mutable: true };
+  return rustReferenceTargetType(
+    { kind: "slice", element },
+    true,
+    rustInferredLifetime("policy\0mutable-slice"),
+  );
 }
 
 export function isRustSliceMutRefCarrier(carrier: TargetTypeRef | undefined): boolean {
-  return carrier?.kind === "reference" && carrier.mutable && carrier.referent.kind === "slice";
+  return carrier?.kind === "reference" && carrier.mutable && carrier.target.kind === "slice";
 }
 
 export const rustFutureTargetId = "rust.core.Future";
 
 export function rustNullishSourceTargetType(): TargetTypeRef {
-  return { kind: "target-specific", target: "rust", name: "source-nullish" };
+  return rustSourceCarrierTargetType(
+    rustBuiltinIdentity("source-nullish", "tsonic-runtime"),
+    Object.freeze({ category: "source-nullish" }),
+  );
 }
 
 export function isRustNullishSourceCarrier(carrier: TargetTypeRef | undefined): boolean {
-  return carrier?.kind === "target-specific" &&
-    carrier.target === "rust" &&
-    carrier.name === "source-nullish";
+  return carrier?.kind === "source-carrier" &&
+    carrier.identity.kind === "builtin" &&
+    carrier.identity.namespace === "tsonic-runtime" &&
+    carrier.identity.itemId === "source-nullish";
 }
 
 export function isRustDefinitelyNullishCarrier(carrier: TargetTypeRef | undefined): boolean {
@@ -129,11 +150,11 @@ export function isRustDefinitelyNullishCarrier(carrier: TargetTypeRef | undefine
 }
 
 export function rustFutureTargetType(output: TargetTypeRef): TargetTypeRef {
-  return { kind: "target-named", id: rustFutureTargetId, typeArguments: [output] };
+  return rustBuiltinPathTargetType(rustFutureTargetId, "core::future::Future", [output]);
 }
 
 export function rustFutureOutputCarrier(carrier: TargetTypeRef | undefined): TargetTypeRef | undefined {
-  return carrier?.kind === "target-named" && carrier.id === rustFutureTargetId
-    ? carrier.typeArguments?.[0]
+  return rustPathTypeMatches(carrier, rustFutureTargetId)
+    ? rustPathTypeArguments(carrier)?.[0]
     : undefined;
 }

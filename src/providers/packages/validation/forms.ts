@@ -4,6 +4,7 @@ import type { Fail } from "./model.js";
 import type { RustProviderConstantArgument, RustProviderOperationForm } from "../../../target-model/operations/model.js";
 import type { RustProviderPackageDefinition } from "../index.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { isRustTraitReference } from "../../../target-model/types/equality.js";
 
 export function validateOperationForm(
   operationKind: RustProviderPackageDefinition["operations"][number]["operationKind"],
@@ -36,6 +37,21 @@ export function validateOperationForm(
     case "static":
       requireExactKeys(record, ["form", "path"], `${label}.target`, fail);
       requireRustPath(form.path, `${label}.target.path`, fail);
+      return;
+    case "static-reference":
+      requireExactKeys(record, ["form", "path", "mutable"], `${label}.target`, fail);
+      requireRustPath(form.path, `${label}.target.path`, fail);
+      if (typeof form.mutable !== "boolean") fail(`${label}.target.mutable must be boolean`);
+      return;
+    case "struct-variant":
+      requireExactKeys(record, ["form", "path", "fields"], `${label}.target`, fail);
+      requireRustPath(form.path, `${label}.target.path`, fail);
+      if (!Array.isArray(form.fields) || form.fields.length !== (parameterCarriers?.length ?? 0)) {
+        fail(`${label}.target.fields must exactly cover the selected variant parameters`);
+      }
+      for (const [index, field] of form.fields.entries()) {
+        requireRustIdentifier(field, `${label}.target.fields[${index}]`, fail);
+      }
       return;
     case "free-call-str-slice":
       requireExactKeys(record, ["form", "path", "receiverMode"], `${label}.target`, fail);
@@ -98,6 +114,12 @@ export function validateOperationForm(
       requireExactKeys(record, ["form", "name"], `${label}.target`, fail);
       requireRustIdentifier(form.name, `${label}.target.name`, fail);
       return;
+    case "tuple-field":
+      requireExactKeys(record, ["form", "index"], `${label}.target`, fail);
+      if (!Number.isSafeInteger(form.index) || form.index < 0) {
+        fail(`${label}.target.index must be a non-negative safe integer`);
+      }
+      return;
     case "arg-receiver-method":
       requireExactKeys(record, ["form", "name", "argModes", "argConversions"], `${label}.target`, fail);
       requireRustIdentifier(form.name, `${label}.target.name`, fail);
@@ -148,16 +170,13 @@ export function validateOperationForm(
     case "trait-call":
       requireExactKeys(
         record,
-        ["form", "owner", "traitPath", "traitTypeArguments", "method", "receiverMode", "argModes"],
+        ["form", "owner", "trait", "method", "receiverMode", "argModes"],
         `${label}.target`,
         fail,
       );
       validateCarrier(form.owner, definition, `${label}.target.owner`, fail);
-      requireRustPath(form.traitPath, `${label}.target.traitPath`, fail);
+      if (!isRustTraitReference(form.trait)) fail(`${label}.target.trait must be one exact Rust trait reference`);
       requireRustIdentifier(form.method, `${label}.target.method`, fail);
-      for (const [index, argument] of form.traitTypeArguments.entries()) {
-        validateCarrier(argument, definition, `${label}.target.traitTypeArguments[${index}]`, fail);
-      }
       if (form.receiverMode !== undefined && form.receiverMode !== "value" &&
         form.receiverMode !== "ref" && form.receiverMode !== "mut-ref") {
         fail(`${label}.target.receiverMode contains unsupported mode '${String(form.receiverMode)}'`);
@@ -167,16 +186,13 @@ export function validateOperationForm(
     case "trait-associated-value":
       requireExactKeys(
         record,
-        ["form", "owner", "traitPath", "traitTypeArguments", "name"],
+        ["form", "owner", "trait", "name"],
         `${label}.target`,
         fail,
       );
       validateCarrier(form.owner, definition, `${label}.target.owner`, fail);
-      requireRustPath(form.traitPath, `${label}.target.traitPath`, fail);
+      if (!isRustTraitReference(form.trait)) fail(`${label}.target.trait must be one exact Rust trait reference`);
       requireRustIdentifier(form.name, `${label}.target.name`, fail);
-      for (const [index, argument] of form.traitTypeArguments.entries()) {
-        validateCarrier(argument, definition, `${label}.target.traitTypeArguments[${index}]`, fail);
-      }
       return;
     case "receiver-method":
       requireExactKeys(record, ["form", "name", "argModes", "argConversions", "argOrder", "chain", "mutatesReceiver"], `${label}.target`, fail);

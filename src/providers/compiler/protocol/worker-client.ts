@@ -23,6 +23,10 @@ import type {
   RustCompilerWorkerRequest,
   RustCompilerWorkerResponse,
 } from "./protocol.js";
+import {
+  parseRustCompilerWireText,
+  stringifyRustCompilerWireValue,
+} from "./wire-codec.js";
 
 const startupTimeoutMilliseconds = 30_000;
 const requestTimeoutMilliseconds = 600_000;
@@ -160,7 +164,7 @@ function request(
   const requestPath = join(session.requestsDirectory, `${value.id}.json`);
   const temporaryPath = `${requestPath}.${randomUUID()}.tmp`;
   const responsePath = join(session.responsesDirectory, `${value.id}.json`);
-  writeFileSync(temporaryPath, JSON.stringify(value));
+  writeFileSync(temporaryPath, stringifyRustCompilerWireValue(value));
   renameSync(temporaryPath, requestPath);
   if (!waitForFile(responsePath, requestTimeoutMilliseconds, session.processId)) {
     terminateSession(session);
@@ -172,7 +176,7 @@ function request(
   } finally {
     unlinkSync(responsePath);
   }
-  const parsed = JSON.parse(responseText) as unknown;
+  const parsed = parseRustCompilerWireText(responseText);
   if (!isWorkerResponse(parsed) || parsed.id !== value.id) {
     throw new Error(`Rust compiler-provider worker emitted an invalid response for '${value.id}'.`);
   }
@@ -215,6 +219,11 @@ function waitForFile(path: string, timeoutMilliseconds: number, processId: numbe
 function isProcessAlive(processId: number): boolean {
   try {
     process.kill(processId, 0);
+    if (process.platform === "linux") {
+      const stat = readFileSync(`/proc/${processId}/stat`, "utf8");
+      const commandEnd = stat.lastIndexOf(")");
+      if (commandEnd < 0 || stat[commandEnd + 2] === "Z") return false;
+    }
     return true;
   } catch {
     return false;

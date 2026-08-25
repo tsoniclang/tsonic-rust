@@ -1,4 +1,5 @@
 import type { TargetTypeRef } from "../types/model.js";
+import type { RustGenericSubstitutions } from "../types/index.js";
 import {
   isRustTargetTypeRef,
   rustTargetTypeRefEquals,
@@ -17,12 +18,15 @@ import {
   rustNeverTargetType,
   rustOptionTargetType,
   rustJsValueTargetType,
+  rustInferredLifetime,
   rustPrimitiveTypeName,
   rustSourceUnionCarrierValue,
   rustSourcePrimitiveTargetType,
   rustBorrowedStrTargetType,
+  rustRawPointerTargetType,
+  rustReferenceTargetType,
   rustStringTargetType,
-  substituteRustTargetTypeParameters,
+  substituteRustTargetGenerics,
 } from "../types/index.js";
 import type { RustPrimitiveTypeName } from "../syntax/tokens.js";
 import { rustNumericPromotionKind } from "./numeric-promotion.js";
@@ -197,16 +201,8 @@ export function rustValueConversionContract(
       category: "exact",
       lowering: "identity",
       sourceMode: "value",
-      source: {
-        kind: "pointer",
-        pointee: value.pointee,
-        mutability: "mut",
-      },
-      target: {
-        kind: "pointer",
-        pointee: value.pointee,
-        mutability: "const",
-      },
+      source: rustRawPointerTargetType(value.pointee, true),
+      target: rustRawPointerTargetType(value.pointee, false),
       fallible: false,
     };
   }
@@ -218,11 +214,11 @@ export function rustValueConversionContract(
       category: "ownership",
       lowering: "copy-from-reference",
       sourceMode: "value",
-      source: {
-        kind: "reference",
-        referent: value.target,
-        mutable: false,
-      },
+      source: rustReferenceTargetType(
+        value.target,
+        false,
+        rustInferredLifetime("conversion\0copy-from-reference"),
+      ),
       target: value.target,
       fallible: false,
     };
@@ -326,40 +322,50 @@ export function rustValueConversionIdentity(value: RustValueConversion): string 
             : `option-map.${rustValueConversionIdentity(value.elementConversion)}`;
 }
 
-export function substituteRustValueConversion(
+export function substituteRustValueConversionGenerics(
   value: RustValueConversion,
-  substitutions: ReadonlyMap<string, TargetTypeRef>,
+  substitutions: RustGenericSubstitutions,
+): RustValueConversion {
+  return substituteRustValueConversionTypes(
+    value,
+    (type) => substituteRustTargetGenerics(type, substitutions),
+  );
+}
+
+function substituteRustValueConversionTypes(
+  value: RustValueConversion,
+  substitute: (type: TargetTypeRef) => TargetTypeRef,
 ): RustValueConversion {
   switch (value.kind) {
     case "copy-from-reference":
       return Object.freeze({
         ...value,
-        target: substituteRustTargetTypeParameters(value.target, substitutions),
+        target: substitute(value.target),
       });
     case "raw-pointer-mut-to-const":
       return Object.freeze({
         ...value,
-        pointee: substituteRustTargetTypeParameters(value.pointee, substitutions),
+        pointee: substitute(value.pointee),
       });
     case "source-union-variant":
     case "bottom-coercion":
     case "js-argument-vector-callback":
       return Object.freeze({
         ...value,
-        source: substituteRustTargetTypeParameters(value.source, substitutions),
-        target: substituteRustTargetTypeParameters(value.target, substitutions),
+        source: substitute(value.source),
+        target: substitute(value.target),
       });
     case "option-some":
       return Object.freeze({
         ...value,
-        element: substituteRustTargetTypeParameters(value.element, substitutions),
+        element: substitute(value.element),
       });
     case "option-map":
       return Object.freeze({
         ...value,
-        elementConversion: substituteRustValueConversion(
+        elementConversion: substituteRustValueConversionTypes(
           value.elementConversion,
-          substitutions,
+          substitute,
         ) as typeof value.elementConversion,
       });
     case "semantic-conversion":
@@ -372,7 +378,7 @@ function callbackProtocol(
   carrier: TargetTypeRef,
 ): { readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef } | undefined {
   if (carrier.kind === "closure" || carrier.kind === "function-pointer") {
-    return { parameters: carrier.args, result: carrier.result };
+    return { parameters: carrier.parameters, result: carrier.result };
   }
   return rustCallableProtocol(carrier);
 }

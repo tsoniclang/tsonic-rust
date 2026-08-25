@@ -15,6 +15,9 @@ import type {
 import type { RustExternalProjectBase, RustExternalProjectField } from "./external-project-types.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustGenericArgument, RustGenerics } from "../../target-model/semantics/index.js";
+import type { RustSourceGenericIndex } from "./source-generics.js";
+import type { RustSourceGenericParameterIdentityContract } from "./source-generics.js";
 
 export interface RustProjectTypeIssue {
   readonly node: Node;
@@ -43,8 +46,7 @@ export interface RustProjectTypeDefinition {
   readonly sourceName: string;
   readonly targetName: string;
   readonly kind: "class" | "interface";
-  readonly typeParameterNames: readonly string[];
-  readonly targetTypeParameterNames: readonly string[];
+  readonly genericArguments: readonly RustGenericArgument[];
   readonly stateName: string;
   readonly dispatchName: string;
   readonly rootName?: string;
@@ -91,6 +93,7 @@ export interface RustProjectTypePolicy {
   definitionContainingDeclaration(declaration: Node | undefined): RustProjectTypeDefinition | undefined;
   definitionForCarrier(carrier: TargetTypeRef | undefined): RustProjectTypeDefinition | undefined;
   openCarrier(definition: RustProjectTypeDefinition): TargetTypeRef;
+  genericsForDefinition(definition: RustProjectTypeDefinition): RustGenerics | undefined;
   heritageForDefinition(definition: RustProjectTypeDefinition): readonly RustProjectHeritageEdge[];
   externalBaseForDefinition(definition: RustProjectTypeDefinition): RustExternalProjectBase | undefined;
   externalFieldForReceiver(
@@ -152,7 +155,9 @@ export interface RustProjectTypePolicyHost {
   readonly names: RustNamePlan;
   readonly navigation: SourceProgramNavigation;
   readonly sourceFiles: readonly SourceFile[];
+  readonly sourceGenerics: RustSourceGenericIndex;
   externallyExtensible(declaration: Node): boolean;
+  requiresTraitRepresentation(declaration: Node): boolean;
   targetNameForCallable(declaration: Node): string | undefined;
   sourcePackageComponentForFile(fileName: string): string | undefined;
   resolveSelectedType(
@@ -160,6 +165,12 @@ export interface RustProjectTypePolicyHost {
     selectedType: Type,
     heritage: Node,
   ): TargetTypeRef | undefined;
+  resolveSelectedGenericArgument(
+    authoredTypeNode: Node | undefined,
+    selectedType: Type,
+    parameter: RustSourceGenericParameterIdentityContract,
+    heritage: Node,
+  ): RustGenericArgument | undefined;
   resolveExternalHeritage(edge: SourceDeclaredHeritageEdge): RustExternalProjectBase | undefined;
 }
 

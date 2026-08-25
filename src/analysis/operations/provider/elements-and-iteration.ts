@@ -15,6 +15,7 @@ import {
   rustJsRegExpStringIteratorTargetId,
   rustRegExpExecArrayTargetType,
   rustRegExpStringIteratorTargetId,
+  rustPathTypeMatches,
 } from "../../../target-model/types/index.js";
 import {
   KindArrayLiteralExpression,
@@ -143,7 +144,7 @@ export function selectRustCheckedElementAccess(
       : options.projectTypes.fieldStorageName(owner, index.declaration);
     if (index !== undefined) {
       if (owner?.kind !== "interface" || relationship?.kind !== "related" ||
-        options.projectTypes.isPolymorphic(owner) || keyCarrier === undefined ||
+        options.projectTypeRequiresDynamicDispatch(owner) || keyCarrier === undefined ||
         resultCarrier === undefined || selectedKeyCarrier === undefined ||
         storageName === undefined || !rustTargetTypeRefEquals(keyCarrier, selectedKeyCarrier)) {
         return rejectSelectedOperation(
@@ -189,10 +190,10 @@ export function selectRustCheckedElementAccess(
     );
   }
 
-  const nativeArrayReceiver = receiverCarrier?.kind === "array"
+  const nativeArrayReceiver = receiverCarrier?.kind === "sequence"
     ? receiverCarrier
-    : receiverCarrier?.kind === "reference" && receiverCarrier.referent.kind === "slice"
-      ? receiverCarrier.referent
+    : receiverCarrier?.kind === "reference" && receiverCarrier.target.kind === "slice"
+      ? receiverCarrier.target
       : undefined;
   if (sourceProfileIdentity?.profile === "native" &&
     (sourceProfileIdentity.ownerName === "Array" || sourceProfileIdentity.ownerName === "ReadonlyArray") &&
@@ -354,8 +355,8 @@ function rustPropertyKeyIterationLowering(
   ast: import("@tsonic/tsts").AstReader,
   options: RustOperationsProviderOptions,
 ): RustPropertyKeyIterationLowering | undefined {
-  if (iterable?.kind === "array" ||
-    (iterable?.kind === "reference" && iterable.referent.kind === "slice") ||
+  if (iterable?.kind === "sequence" ||
+    (iterable?.kind === "reference" && iterable.target.kind === "slice") ||
     rustFixedArrayCarrierValue(iterable) !== undefined) {
     return { kind: "dense-index-keys" };
   }
@@ -385,11 +386,11 @@ type RustIterableTargetPolicy =
     };
 
 function rustIterableTargetPolicy(iterable: TargetTypeRef | undefined): RustIterableTargetPolicy | undefined {
-  if (iterable?.kind === "array") {
+  if (iterable?.kind === "sequence") {
     return { kind: "borrowed", elementCarrier: iterable.element, input: "reference" };
   }
-  if (iterable?.kind === "reference" && iterable.referent.kind === "slice") {
-    return { kind: "borrowed", elementCarrier: iterable.referent.element, input: "direct" };
+  if (iterable?.kind === "reference" && iterable.target.kind === "slice") {
+    return { kind: "borrowed", elementCarrier: iterable.target.element, input: "direct" };
   }
   const fixed = rustFixedArrayCarrierValue(iterable);
   if (fixed !== undefined) {
@@ -412,14 +413,14 @@ function rustIterableTargetPolicy(iterable: TargetTypeRef | undefined): RustIter
   if (setElement !== undefined && rustCarrierSupportsClone(setElement)) {
     return { kind: "receiver-method", elementCarrier: setElement, method: "values" };
   }
-  if (iterable?.kind === "target-named") {
-    if (iterable.id === rustRegExpStringIteratorTargetId) {
+  if (iterable?.kind === "path") {
+    if (rustPathTypeMatches(iterable, rustRegExpStringIteratorTargetId)) {
       return {
         kind: "fallible-owned",
         elementCarrier: rustRegExpExecArrayTargetType(),
       };
     }
-    if (iterable.id === rustJsRegExpStringIteratorTargetId) {
+    if (rustPathTypeMatches(iterable, rustJsRegExpStringIteratorTargetId)) {
       return {
         kind: "fallible-owned",
         elementCarrier: rustJsRegExpExecArrayTargetType(),

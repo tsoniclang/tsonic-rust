@@ -387,7 +387,7 @@ test("provider carrier metadata canonicalizes after cross-provider composition",
   assert.deepEqual(separateCarrier, togetherCarrier);
 });
 
-test("runtime Callable is a built-in generic carrier and needs no provider-owned path", () => {
+test("the owned local callable is a built-in generic carrier and needs no provider-owned path", () => {
   const providerPackage = createRustProviderPackage(definition({
     operations: [{
       exportId: "@acme/validation::run",
@@ -402,7 +402,11 @@ test("runtime Callable is a built-in generic carrier and needs no provider-owned
 });
 
 test("provider immediate-callback metadata declares one exact fallible target ABI", () => {
-  const callbackCarrier = rustClosureTargetType([], { kind: "tuple", elements: [] });
+  const callbackCarrier = rustClosureTargetType({
+    callTrait: "fn-mut",
+    parameters: [],
+    result: { kind: "tuple", elements: [] },
+  });
   const callbackExport = {
     id: "@acme/validation::withCallback",
     name: "withCallback",
@@ -469,13 +473,21 @@ test("provider immediate-callback metadata fails closed on an inexact callback c
     },
     {
       label: "unknown callback field",
-      parameterCarriers: [rustClosureTargetType([], int32Carrier)],
+      parameterCarriers: [rustClosureTargetType({
+        callTrait: "fn-mut",
+        parameters: [],
+        result: int32Carrier,
+      })],
       immediateCallback: { sourceArgumentIndex: 0, fallibleTarget: { form: "call", path: "acme_validation::fallible" }, fallback: true },
       pattern: /unsupported field 'fallback'/u,
     },
     {
       label: "raw fallible target",
-      parameterCarriers: [rustClosureTargetType([], int32Carrier)],
+      parameterCarriers: [rustClosureTargetType({
+        callTrait: "fn-mut",
+        parameters: [],
+        result: int32Carrier,
+      })],
       immediateCallback: { sourceArgumentIndex: 0, fallibleTarget: { form: "call", path: "acme_validation::fallible\(\)" } },
       pattern: /not a closed Rust path/u,
     },

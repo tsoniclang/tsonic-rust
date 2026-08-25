@@ -6,11 +6,14 @@ import {
   projectOwnMethods,
 } from "./model.js";
 import { projectAccessorCallableShape, projectDowncastReturnType } from "./forwarders.js";
-import { rustCallableSpecialization } from "../../declarations/callable-generics.js";
 import { rustLintAttributes } from "../../../target-ast/normalization/lint-policy.js";
-import { rustProjectDispatchTraitName, rustProjectDispatchTraitType, rustProjectTypeParameters } from "./names.js";
+import { rustProjectDispatchTraitName, rustProjectDispatchTraitType, rustProjectGenerics } from "./names.js";
 import { rustProjectObjectIdentityField } from "../project-objects.js";
-import type { RustItem, RustTraitFunction, RustType } from "../../../target-ast/nodes.js";
+import { emptyRustAstGenerics, type RustItem, type RustTraitFunction, type RustType } from "../../../target-ast/nodes.js";
+import { rustDocHiddenAttribute } from "../../../target-ast/attributes.js";
+import { rustReferenceReceiver } from "../../../target-ast/builders.js";
+import { projectFieldReceiver } from "../project-field-dispatch.js";
+import { rustSharedSelfReceiver } from "./model.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import {
   rustErrorBoundaryForProjectMember,
@@ -24,18 +27,25 @@ import { rustProjectImplementationVisibility } from "../project-storage-abi.js";
 export function projectIdentityImplementations(
   definition: RustProjectTypeDefinition,
   wrapperType: RustType,
-): readonly RustItem[] {
-  const typeParams = rustProjectTypeParameters(definition);
+  context: RustPlanContext,
+): readonly RustItem[] | undefined {
+  const generics = rustProjectGenerics(definition, context);
+  if (generics === undefined) return undefined;
   return [
     {
       kind: "impl",
-      ...(typeParams.length === 0 ? {} : { typeParams }),
+      generics,
       trait: { kind: "named", path: "std::fmt::Debug" },
       target: wrapperType,
+      polarity: "positive",
+      safety: "safe",
+      associatedTypes: [],
+      associatedConstants: [],
       functions: [{
         name: "fmt",
         visibility: "private",
-        selfParam: "ref",
+        generics: emptyRustAstGenerics,
+        receiver: rustReferenceReceiver(false),
         params: [{
           name: "formatter",
           type: {
@@ -44,7 +54,7 @@ export function projectIdentityImplementations(
             referent: {
               kind: "named",
               path: "std::fmt::Formatter",
-              lifetimeArguments: ["_"],
+              genericArguments: [{ kind: "lifetime", lifetime: { kind: "inferred" } }],
             },
           },
         }],
@@ -64,13 +74,18 @@ export function projectIdentityImplementations(
     },
     {
       kind: "impl",
-      ...(typeParams.length === 0 ? {} : { typeParams }),
+      generics,
       trait: { kind: "named", path: "PartialEq" },
       target: wrapperType,
+      polarity: "positive",
+      safety: "safe",
+      associatedTypes: [],
+      associatedConstants: [],
       functions: [{
         name: "eq",
         visibility: "private",
-        selfParam: "ref",
+        generics: emptyRustAstGenerics,
+        receiver: rustReferenceReceiver(false),
         params: [{
           name: "other",
           type: {
@@ -103,10 +118,14 @@ export function projectIdentityImplementations(
     },
     {
       kind: "impl",
-      ...(typeParams.length === 0 ? {} : { typeParams }),
+      generics,
       trait: { kind: "named", path: "Eq" },
       target: wrapperType,
+      polarity: "positive",
+      safety: "safe",
       functions: [],
+      associatedTypes: [],
+      associatedConstants: [],
     },
   ];
 }
@@ -128,7 +147,8 @@ export function planProjectDispatchTrait(
     }
     functions.push({
       name: route.slot,
-      selfParam: "rc",
+      generics: emptyRustAstGenerics,
+      receiver: rustSharedSelfReceiver(),
       params: [],
       returnType,
     });
@@ -152,7 +172,8 @@ export function planProjectDispatchTrait(
     }
     functions.push({
       name: read,
-      selfParam: dispatch.read.selfMode,
+      generics: emptyRustAstGenerics,
+      receiver: projectFieldReceiver(dispatch.read),
       params: [],
       returnType: field.type,
       ...(dispatch.read.fallible
@@ -162,7 +183,8 @@ export function planProjectDispatchTrait(
     if (dispatch.write !== undefined) {
       functions.push({
         name: write!,
-        selfParam: dispatch.write.selfMode,
+        generics: emptyRustAstGenerics,
+        receiver: projectFieldReceiver(dispatch.write),
         params: [{ name: "value", type: field.type }],
         ...(dispatch.write.fallible
           ? { errorType: rustErrorType(fieldErrorBoundary!) }
@@ -187,7 +209,8 @@ export function planProjectDispatchTrait(
     }
     functions.push({
       name: slot,
-      selfParam: "rc",
+      generics: shape.generics,
+      receiver: rustSharedSelfReceiver(),
       params: shape.params.map((parameter) => ({ ...parameter, mutable: false })),
       ...(shape.returnType === undefined ? {} : { returnType: shape.returnType }),
       ...(shape.errorType === undefined ? {} : { errorType: shape.errorType }),
@@ -199,21 +222,16 @@ export function planProjectDispatchTrait(
       continue;
     }
     for (const variant of context.input.program.projectMethodDispatch.variantsForMember(member)) {
-      const specialization = rustCallableSpecialization(
-        variant.sourceTypeParameterNames,
-        variant.targetTypeArguments,
-      );
-      const shape = specialization === undefined
-        ? undefined
-        : projectCallableShape(member, context, {
-            methodTypeArgumentSubstitutions: specialization,
-          });
+      const shape = projectCallableShape(member, context, {
+        methodGenericSubstitutions: variant.specialization,
+      });
       if (shape === undefined) {
         return undefined;
       }
       const signature = (name: string): RustTraitFunction => ({
         name,
-        selfParam: "rc",
+        generics: shape.generics,
+        receiver: rustSharedSelfReceiver(),
         params: shape.params.map((parameter) => ({ ...parameter, mutable: false })),
         ...(shape.returnType === undefined ? {} : { returnType: shape.returnType }),
         ...(shape.errorType === undefined ? {} : { errorType: shape.errorType }),
@@ -242,7 +260,8 @@ export function planProjectDispatchTrait(
     }
     functions.push({
       name: write,
-      selfParam: "ref",
+      generics: emptyRustAstGenerics,
+      receiver: rustReferenceReceiver(false),
       params: [{ name: "value", type: property.callableType }],
     });
   }
@@ -251,19 +270,33 @@ export function planProjectDispatchTrait(
   if (superTraits.some((type) => type === undefined)) {
     return undefined;
   }
-  const typeParams = rustProjectTypeParameters(definition);
+  const generics = rustProjectGenerics(definition, context);
+  if (generics === undefined) return undefined;
   const publiclyReachable = context.input.program.projectTypes.programErrorVariant(definition) !== undefined ||
     rustProjectTypeHasPublicImplementationAbi(context, definition.targetName);
+  const explicitContract = context.input.program.declarationContracts.forDeclaration(
+    definition.declaration,
+  );
   return {
     kind: "trait",
     name: rustProjectDispatchTraitName(definition),
     visibility: rustProjectImplementationVisibility(publiclyReachable),
     attrs: [
-      ...(publiclyReachable ? ["#[doc(hidden)]"] : []),
+      ...(publiclyReachable ? [rustDocHiddenAttribute] : []),
       rustLintAttributes.deadCode,
+      ...(explicitContract?.unsafeTrait === true
+        ? [rustLintAttributes.missingSafetyDoc]
+        : []),
     ],
-    ...(typeParams.length === 0 ? {} : { typeParams }),
-    ...(superTraits.length === 0 ? {} : { superTraits: superTraits as readonly RustType[] }),
+    generics,
+    safety: explicitContract?.unsafeTrait === true ? "unsafe" : "safe",
+    auto: false,
+    superTraits: (superTraits as readonly RustType[]).map((trait) => ({
+      kind: "trait",
+      trait,
+    })),
     functions,
+    associatedTypes: [],
+    associatedConstants: [],
   };
 }

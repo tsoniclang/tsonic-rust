@@ -23,7 +23,8 @@ import {
   Node_Expression,
 } from "@tsonic/target-api/source";
 import { isRustAssignmentOperator } from "../../../target-model/syntax/tokens.js";
-import { isRustCopyCarrier, isRustStringCarrier } from "../../../target-model/types/index.js";
+import { isRustStringCarrier, rustCopyTrait } from "../../../target-model/types/index.js";
+import { rustSealedCarrierSupportsTrait } from "../ownership/traits.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { planRustMutableProjectReceiver, planRustSharedReceiver, planRustPromotedStorageLocation } from "../expressions/typed-locations.js";
 import { rustSelectedAccessorRequiresUnsafe } from "../safety/explicit-safety.js";
@@ -81,7 +82,8 @@ export function planRustSourceMethodPropertyAssignment(
   );
   const receiver: RustExpr = { kind: "path", path: receiverName };
   const replacement: RustExpr = { kind: "path", path: valueName };
-  const write = context.input.program.projectTypes.isPolymorphic(receiverDefinition)
+  const write = context.input.program.objectRepresentations
+    .requiresDynamicDispatch(receiverDefinition)
     ? {
         kind: "method-call" as const,
         receiver: {
@@ -292,7 +294,11 @@ export function planRustDirectOperatorCallAssignment(
   const locationPath: RustExpr = locationName === undefined
     ? target
     : { kind: "dereference", pointer: { kind: "path", path: locationName } };
-  const current = isRustCopyCarrier(assignment.resultCarrier)
+  const current = rustSealedCarrierSupportsTrait(
+    assignment.resultCarrier,
+    rustCopyTrait,
+    context,
+  )
     ? locationPath
     : { kind: "method-call", receiver: locationPath, method: "clone", args: [] } as RustExpr;
   const next = planRustCompoundAssignmentValue(
@@ -587,6 +593,7 @@ export function planRustSourceIndexAssignment(
         keyPath,
         index.resultCarrier,
         representation,
+        context,
       ),
     }, {
       name: valueName,

@@ -10,7 +10,8 @@ import {
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { diagnosticInput, isValidRustIdentifier, rustSourceBindingPath } from "../../program/plan-context.js";
 import { expressionCarrier } from "../fundamentals.js";
-import { isRustCopyCarrier } from "../../../../target-model/types/index.js";
+import { rustCopyTrait } from "../../../../target-model/types/index.js";
+import { rustSealedCarrierSupportsTrait } from "../../ownership/traits.js";
 import { isRustFinalizedSourceInput } from "../../../../analysis/facts/finalized-operation-abi.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
 import { mutateRustStoredObjectField } from "../../objects/project-storage.js";
@@ -39,6 +40,17 @@ export function planRustSourceFieldUpdate(
   returnsPrevious: boolean,
   context: RustPlanContext,
 ): RustExpr | undefined {
+  if (field.fieldLayout === "native-union" &&
+    (context.explicitUnsafeContextDepth ?? 0) === 0) {
+    context.diagnostics.push({
+      code: "RUST_NATIVE_UNION_FIELD_UNSAFE_CONTEXT_REQUIRED",
+      category: "error",
+      source: "tsonic-rust",
+      message: "Reading and updating a native Rust union field requires an explicit unsafeContext() source region.",
+      sourceNode: fieldExpression,
+    });
+    return undefined;
+  }
   if (!sourceFieldSelectedOperationMatches(fieldExpression, field, context)) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, fieldExpression),
@@ -348,7 +360,7 @@ export function planRustBorrowedUpdateLocation(
       name: locationName,
       value: { kind: "reference", expr: target, mutable: true },
     }],
-    read: isRustCopyCarrier(update.resultCarrier)
+    read: rustSealedCarrierSupportsTrait(update.resultCarrier, rustCopyTrait, context)
       ? dereference
       : { kind: "method-call", receiver: dereference, method: "clone", args: [] },
     write: (value) => ({
@@ -382,7 +394,11 @@ export function planRustUpdateValue(options: {
   const previous: RustExpr = { kind: "path", path: previousName };
   const next: RustExpr = { kind: "path", path: nextName };
   const reusable = (value: RustExpr, preserve: boolean): RustExpr =>
-    preserve && !isRustCopyCarrier(options.update.resultCarrier)
+    preserve && !rustSealedCarrierSupportsTrait(
+      options.update.resultCarrier,
+      rustCopyTrait,
+      options.context,
+    )
       ? { kind: "method-call", receiver: value, method: "clone", args: [] }
       : value;
   const nextValue: RustExpr = {

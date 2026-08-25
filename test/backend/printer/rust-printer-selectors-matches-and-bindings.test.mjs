@@ -513,7 +513,7 @@ test("long multiline let initializers reflow from their continuation column", ()
             kind: "associated-call",
             owner: {
               kind: "named",
-              path: "rt::Callable",
+              path: "rt::OwnedLocalCallable",
               typeArguments: [
                 { kind: "tuple", elements: [{ kind: "string" }] },
                 { kind: "string" },
@@ -551,7 +551,7 @@ test("long multiline let initializers reflow from their continuation column", ()
 
   assert.match(
     source,
-    /let textFunction =\n        rt::Callable::<\(String,\), String>::new\(move \|__tsonic_callable_arguments_5\| \{/u,
+    /let textFunction =\n        rt::OwnedLocalCallable::<\(String,\), String>::new\(move \|__tsonic_callable_arguments_5\| \{/u,
   );
 });
 
@@ -572,7 +572,7 @@ test("fitting callable closures move below long let bindings without expanding",
             kind: "associated-call",
             owner: {
               kind: "named",
-              path: "rt::Callable",
+              path: "rt::OwnedLocalCallable",
               typeArguments: [
                 { kind: "tuple", elements: [{ kind: "named", path: "TextReader" }] },
                 { kind: "string" },
@@ -596,7 +596,7 @@ test("fitting callable closures move below long let bindings without expanding",
 
   assert.match(
     source,
-    /let record_method_2 =\n        rt::Callable::<\(TextReader,\), String>::new\(\|object_this_2\| String::from\("seven"\)\);/u,
+    /let record_method_2 =\n        rt::OwnedLocalCallable::<\(TextReader,\), String>::new\(\|object_this_2\| String::from\("seven"\)\);/u,
   );
 });
 

@@ -81,7 +81,7 @@ export function run(value: int32): int32 { return apply(value); }
 
   assert.deepEqual(result.diagnostics, []);
   const api = artifactText(result, "src/api.rs");
-  assert.match(api, /pub type IncrementCallable = rt::Callable/u);
+  assert.match(api, /pub type IncrementCallable = rt::OwnedLocalCallable/u);
   assert.match(api, /ModuleCell<IncrementCallable>/u);
   assert.doesNotMatch(api, /type_complexity/u);
   assert.match(api, /pub static INCREMENT/u);
@@ -110,7 +110,7 @@ export const retained = [selected];
 
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
-  assert.match(output, /pub type SelectedCallable = rt::Callable/u);
+  assert.match(output, /pub type SelectedCallable = rt::OwnedLocalCallable/u);
   assert.match(output, /ModuleCell<SelectedCallable>/u);
   assert.doesNotMatch(output, /type_complexity/u);
   assert.match(output, /pub static SELECTED/u);

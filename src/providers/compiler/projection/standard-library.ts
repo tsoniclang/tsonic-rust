@@ -1,12 +1,10 @@
 import type {
   RustCompilerDependency,
-  RustCompilerFunction,
+  RustCompilerGenerics,
   RustCompilerModuleModel,
   RustCompilerProjectSnapshot,
   RustCompilerStandardLibrarySnapshot,
-  RustCompilerStandardTypeLocation,
-  RustCompilerType,
-  RustCompilerTypeParameter,
+  RustCompilerStandardItemLocation,
 } from "../model/model.js";
 import {
   verifyRustCompilerDependencySource,
@@ -22,6 +20,7 @@ import {
   authoredPublicCanonicalPath,
   authoredPublicKind,
   authoredPublicName,
+  canonicalCompilerItemIdentity,
   canonicalItemId,
   isGlobUse,
   rustdocPathIdentity,
@@ -36,14 +35,16 @@ import {
   requireInnerRecord,
   requireRecord,
   requireString,
+  rustdocItemStability,
   type RustdocDocument,
 } from "../model/rustdoc-schema.js";
 import {
   canonicalPathKey,
-  normalizeTypeParameterShape,
-  sourceVisibleTypeParameterCount,
+  normalizeGenerics,
   standardTypePathKind,
 } from "../model/rustdoc-types.js";
+import { visitRustCompilerModuleReferences } from "../model/references.js";
+import { sourceGenericParameterHasDefault } from "./utilities.js";
 
 export interface RustStandardLibraryContext {
   readonly snapshot: RustCompilerStandardLibrarySnapshot;
@@ -51,8 +52,8 @@ export interface RustStandardLibraryContext {
   readonly publicDocument: RustdocDocument;
   readonly documentsByCrate: Map<string, RustdocDocument>;
   readonly itemIdsByCanonicalIdentity: Map<string, ReadonlyMap<string, string>>;
-  readonly publicTypeAliasesByCrate: Map<string, Map<string, readonly string[]>>;
-  readonly typeLocationsByCanonicalPath: Map<string, RustCompilerStandardTypeLocation>;
+  readonly publicItemAliasesByCrate: Map<string, Map<string, readonly string[]>>;
+  readonly itemLocationsByCanonicalPath: Map<string, RustCompilerStandardItemLocation>;
 }
 
 const standardLibraryContexts = new Map<string, RustStandardLibraryContext>();
@@ -87,8 +88,8 @@ export function loadStandardLibraryContext(
     publicDocument,
     documentsByCrate: new Map([["std", publicDocument]]),
     itemIdsByCanonicalIdentity: new Map(),
-    publicTypeAliasesByCrate: new Map(),
-    typeLocationsByCanonicalPath: new Map(),
+    publicItemAliasesByCrate: new Map(),
+    itemLocationsByCanonicalPath: new Map(),
   };
   standardLibraryContexts.set(snapshot.digest, baseContext);
   return baseContext;
@@ -101,7 +102,13 @@ export function resolveStandardLibraryItem(
   id: unknown,
 ): ResolvedRustdocItem {
   const local = document.index[String(id)];
-  if (!isRecord(local)) {
+  const path = document.paths[String(id)];
+  const pathSegments = isRecord(path) && Array.isArray(path.path) &&
+      path.path.every((segment) => typeof segment === "string")
+    ? path.path as readonly string[]
+    : undefined;
+  if (!isRecord(local) ||
+    (pathSegments !== undefined && pathSegments[0] !== dependency.crateName)) {
     return resolveStandardLibraryCanonicalItem(context, document, id);
   }
   if (!hasInnerKind(local, "use")) {
@@ -206,45 +213,61 @@ function lookupStandardLibraryCanonicalItem(
   };
 }
 
-function standardTypeLocation(
+function standardItemLocation(
   context: RustStandardLibraryContext,
   canonicalPath: readonly string[],
-): RustCompilerStandardTypeLocation {
+  kind: "type" | "trait",
+): RustCompilerStandardItemLocation {
   const canonicalKey = canonicalPathKey(canonicalPath);
-  const cached = context.typeLocationsByCanonicalPath.get(canonicalKey);
+  const cached = context.itemLocationsByCanonicalPath.get(canonicalKey);
   if (cached !== undefined) {
+    if (cached.kind !== kind) {
+      throw new Error(`Rust standard item '${canonicalPath.join("::")}' was requested as both ${cached.kind} and ${kind}.`);
+    }
     return cached;
   }
   const [crateName, ...pathWithinCrate] = canonicalPath;
   const exportName = pathWithinCrate[pathWithinCrate.length - 1];
   if (crateName === undefined || exportName === undefined || pathWithinCrate.length < 1) {
-    throw new Error(`Rust standard-library type '${canonicalPath.join("::")}' has no crate-qualified identity.`);
+    throw new Error(`Rust standard-library item '${canonicalPath.join("::")}' has no crate-qualified identity.`);
   }
   const dependency = context.snapshot.dependencies.find((candidate) =>
     candidate.crateName === crateName);
   if (dependency === undefined) {
-    throw new Error(`Rust standard-library type '${canonicalPath.join("::")}' belongs to untracked sysroot crate '${crateName}'.`);
+    throw new Error(`Rust standard-library item '${canonicalPath.join("::")}' belongs to untracked sysroot crate '${crateName}'.`);
   }
   const document = loadStandardLibraryCrateDocument(context, dependency);
   const candidateIds = Object.entries(document.paths)
     .filter(([, candidate]) => isRecord(candidate) && Array.isArray(candidate.path) &&
       canonicalPathKey(candidate.path as string[]) === canonicalKey &&
-      standardTypePathKind(candidate.kind))
+      (kind === "trait" ? candidate.kind === "trait" : standardTypePathKind(candidate.kind)))
     .map(([id]) => id);
   if (candidateIds.length !== 1) {
     throw new Error(
-      `Rust standard-library type '${canonicalPath.join("::")}' has ${candidateIds.length} exact compiler type identities; expected one.`,
+      `Rust standard-library ${kind} '${canonicalPath.join("::")}' has ${candidateIds.length} exact compiler identities; expected one.`,
     );
   }
   const item = itemById(document, candidateIds[0]!);
-  const publicPath = preferredStandardLibraryPublicTypeAlias(context, canonicalPath);
+  const identity = Object.freeze({
+    kind,
+    canonicalPath: Object.freeze([...canonicalPath]),
+    targetId: `rust.std.${context.snapshot.digest.slice(0, 24)}.${digestText(canonicalPath.join("\0")).slice(0, 24)}`,
+  });
+  const publicPath = preferredStandardLibraryPublicItemAlias(context, canonicalPath, kind);
   if (publicPath === undefined) {
-    throw new Error(`Rust standard-library type '${canonicalPath.join("::")}' has no exact public module export.`);
+    const location: RustCompilerStandardItemLocation = Object.freeze({
+      ...identity,
+      sourceAvailability: "unavailable",
+    });
+    context.itemLocationsByCanonicalPath.set(canonicalKey, location);
+    return location;
   }
   const publicCrateName = publicPath[0]!;
   const publicExportName = publicPath[publicPath.length - 1]!;
-  const inner = requireRecord(item.inner, `Rust standard-library type '${exportName}' inner declaration`);
-  const declaration = isRecord(inner.struct)
+  const inner = requireRecord(item.inner, `Rust standard-library ${kind} '${exportName}' inner declaration`);
+  const declaration = isRecord(inner.trait)
+    ? inner.trait
+    : isRecord(inner.struct)
     ? inner.struct
     : isRecord(inner.enum)
       ? inner.enum
@@ -254,27 +277,78 @@ function standardTypeLocation(
           ? inner.type_alias
           : undefined;
   if (declaration === undefined) {
-    throw new Error(`Rust standard-library item '${canonicalPath.join("::")}' is not a supported type declaration.`);
+    throw new Error(`Rust standard-library item '${canonicalPath.join("::")}' is not a supported ${kind} declaration.`);
   }
-  const parameters = normalizeTypeParameterShape(
+  const itemIdentity = canonicalCompilerItemIdentity(document, dependency, item);
+  const generics = normalizeGenerics(
     document,
     requireRecord(declaration.generics, `Rust standard-library type '${exportName}' generics`),
+    {
+      dependency,
+      owner: itemIdentity,
+      resolveItem: (itemDocument, itemDependency, id) =>
+        resolveStandardLibraryItem(context, itemDocument, itemDependency, id),
+    },
   );
-  const location: RustCompilerStandardTypeLocation = Object.freeze({
-    canonicalPath: Object.freeze([...canonicalPath]),
+  const sourceStability = rustdocItemStability(item) ?? "stable";
+  const sourceGenericParameters = sourceStability === "unstable"
+    ? declaredSourceGenericParameters(generics)
+    : sourceVisibleStandardGenericParameters(context, generics);
+  const firstDefault = sourceGenericParameters.findIndex(sourceGenericParameterHasDefault);
+  if (firstDefault >= 0 && sourceGenericParameters.slice(firstDefault).some((parameter) =>
+    !sourceGenericParameterHasDefault(parameter))) {
+    throw new Error(
+      `Rust standard-library item '${canonicalPath.join("::")}' has a non-trailing default generic parameter.`,
+    );
+  }
+  const location: RustCompilerStandardItemLocation = Object.freeze({
+    ...identity,
+    sourceAvailability: "available",
     sourceModuleSpecifier: standardModuleSpecifier(publicCrateName, publicPath.slice(1, -1)),
     sourceExportName: publicExportName,
     targetPath: publicPath,
-    targetId: `rust.std.${context.snapshot.digest.slice(0, 24)}.${digestText(canonicalPath.join("\0")).slice(0, 24)}`,
-    sourceTypeArgumentCount: sourceVisibleTypeParameterCount(parameters),
+    sourceStability,
+    sourceGenericArgumentCount: sourceGenericParameters.length,
+    requiredSourceGenericArgumentCount: firstDefault < 0
+      ? sourceGenericParameters.length
+      : firstDefault,
   });
-  context.typeLocationsByCanonicalPath.set(canonicalKey, location);
+  context.itemLocationsByCanonicalPath.set(canonicalKey, location);
   return location;
 }
 
-function preferredStandardLibraryPublicTypeAlias(
+function sourceVisibleStandardGenericParameters(
+  context: RustStandardLibraryContext,
+  generics: RustCompilerGenerics,
+): readonly import("../model/model.js").RustCompilerGenericParameter[] {
+  const parameters = declaredSourceGenericParameters(generics);
+  const firstUnavailable = parameters.findIndex((parameter) =>
+    parameter.kind === "type" && sourceGenericParameterHasDefault(parameter) && parameter.bounds.some((bound) =>
+      bound.kind === "trait" && (() => {
+        const location = standardItemLocation(context, bound.trait.identity.canonicalPath, "trait");
+        return location.sourceAvailability === "unavailable" || location.sourceStability === "unstable";
+      })()));
+  if (firstUnavailable < 0) return Object.freeze(parameters);
+  if (parameters.slice(firstUnavailable).some((parameter) =>
+    !sourceGenericParameterHasDefault(parameter))) {
+    throw new Error(
+      "Rust standard-library source-inaccessible default generic parameters do not form a trailing suffix.",
+    );
+  }
+  return Object.freeze(parameters.slice(0, firstUnavailable));
+}
+
+function declaredSourceGenericParameters(
+  generics: RustCompilerGenerics,
+): readonly import("../model/model.js").RustCompilerGenericParameter[] {
+  return Object.freeze(generics.parameters.filter((parameter) =>
+    parameter.kind !== "type" || parameter.declarationKind === "explicit"));
+}
+
+function preferredStandardLibraryPublicItemAlias(
   context: RustStandardLibraryContext,
   canonicalPath: readonly string[],
+  kind: "type" | "trait",
 ): readonly string[] | undefined {
   const canonicalCrateName = canonicalPath[0];
   const dependencies = [...context.snapshot.dependencies].sort((left, right) => {
@@ -292,11 +366,12 @@ function preferredStandardLibraryPublicTypeAlias(
   });
   for (const dependency of dependencies) {
     const document = loadStandardLibraryCrateDocument(context, dependency);
-    const alias = standardLibraryPublicTypeAlias(
+    const alias = standardLibraryPublicItemAlias(
       context,
       dependency,
       document,
       canonicalPath,
+      kind,
     );
     if (alias !== undefined) {
       return alias;
@@ -325,18 +400,20 @@ export function loadStandardLibraryCrateDocument(
   return document;
 }
 
-function standardLibraryPublicTypeAlias(
+function standardLibraryPublicItemAlias(
   context: RustStandardLibraryContext,
   dependency: RustCompilerDependency,
   document: RustdocDocument,
   canonicalPath: readonly string[],
+  selectedKind: "type" | "trait",
 ): readonly string[] | undefined {
-  let aliases = context.publicTypeAliasesByCrate.get(dependency.crateName);
+  let aliases = context.publicItemAliasesByCrate.get(dependency.crateName);
   if (aliases === undefined) {
     aliases = new Map();
-    context.publicTypeAliasesByCrate.set(dependency.crateName, aliases);
+    context.publicItemAliasesByCrate.set(dependency.crateName, aliases);
   }
-  const canonicalKey = canonicalPathKey(canonicalPath);
+  const pathKey = canonicalPathKey(canonicalPath);
+  const canonicalKey = `${selectedKind}\0${pathKey}`;
   const cached = aliases.get(canonicalKey);
   if (cached !== undefined) {
     return cached;
@@ -381,13 +458,13 @@ function standardLibraryPublicTypeAlias(
         continue;
       }
       const name = authoredPublicName(authored);
-      const kind = authoredPublicKind(current.document, authored);
-      if (name === undefined || kind === undefined) {
+      const authoredKind = authoredPublicKind(current.document, authored);
+      if (name === undefined || authoredKind === undefined) {
         continue;
       }
-      if (standardTypePathKind(kind)) {
+      if (selectedKind === "trait" ? authoredKind === "trait" : standardTypePathKind(authoredKind)) {
         const selectedPath = authoredPublicCanonicalPath(current.document, authored);
-        if (selectedPath !== undefined && canonicalPathKey(selectedPath) === canonicalKey) {
+        if (selectedPath !== undefined && canonicalPathKey(selectedPath) === pathKey) {
           const alias = Object.freeze([dependency.targetCrateName, ...current.path, name]);
           const existing = aliases.get(canonicalKey);
           if (existing === undefined || comparePublicAliasPath(alias, existing) < 0) {
@@ -395,7 +472,7 @@ function standardLibraryPublicTypeAlias(
           }
         }
       }
-      if (kind !== "module") {
+      if (authoredKind !== "module") {
         continue;
       }
       const resolved = resolvePublicModuleForAliasSearch(
@@ -440,105 +517,25 @@ function comparePublicAliasPath(left: readonly string[], right: readonly string[
   return left.length - right.length || compareText(left.join("/"), right.join("/"));
 }
 
-export function collectModuleStandardTypeLocations(
-  module: Omit<RustCompilerModuleModel, "standardTypeLocations">,
+export function collectModuleStandardItemLocations(
+  module: Omit<RustCompilerModuleModel, "standardItemLocations">,
   context: RustStandardLibraryContext,
-): readonly RustCompilerStandardTypeLocation[] {
-  const selected = new Map<string, RustCompilerStandardTypeLocation>();
-  const selectCanonicalPath = (canonicalPath: readonly string[]): void => {
-    if (!context.snapshot.dependencies.some((dependency) =>
-      dependency.crateName === canonicalPath[0])) {
-      return;
+): readonly RustCompilerStandardItemLocation[] {
+  const selected = new Map<string, RustCompilerStandardItemLocation>();
+  const select = (canonicalPath: readonly string[], kind: "type" | "trait"): void => {
+    if (!context.snapshot.dependencies.some((dependency) => dependency.crateName === canonicalPath[0])) return;
+    const location = standardItemLocation(context, canonicalPath, kind);
+    const key = canonicalPathKey(location.canonicalPath);
+    const existing = selected.get(key);
+    if (existing !== undefined && existing.kind !== location.kind) {
+      throw new Error(`Rust standard item '${canonicalPath.join("::")}' has contradictory semantic kinds.`);
     }
-    const location = standardTypeLocation(context, canonicalPath);
-    selected.set(canonicalPathKey(location.canonicalPath), location);
+    selected.set(key, location);
   };
-  const visitType = (type: RustCompilerType): void => {
-    switch (type.kind) {
-      case "unit":
-      case "primitive":
-      case "generic":
-      case "self":
-        return;
-      case "tuple":
-        type.elements.forEach(visitType);
-        return;
-      case "array":
-      case "slice":
-        visitType(type.element);
-        return;
-      case "reference":
-      case "raw-pointer":
-        visitType(type.target);
-        return;
-      case "associated-type":
-        visitType(type.owner);
-        type.trait.typeArguments.forEach(visitType);
-        return;
-      case "function-pointer":
-        type.parameters.forEach(visitType);
-        visitType(type.result);
-        return;
-      case "path": {
-        selectCanonicalPath([type.crateName, ...type.modulePath, type.name]);
-        type.typeArguments.forEach(visitType);
-        return;
-      }
-    }
-  };
-  const visitParameters = (parameters: readonly RustCompilerTypeParameter[]): void => {
-    for (const parameter of parameters) {
-      if (parameter.defaultType !== undefined) {
-        visitType(parameter.defaultType);
-      }
-    }
-  };
-  const visitFunction = (fn: RustCompilerFunction): void => {
-    visitParameters(fn.typeParameters);
-    visitParameters(fn.typeRequirements);
-    if (fn.receiver?.kind === "custom") {
-      visitType(fn.receiver.type);
-    }
-    fn.parameters.forEach((parameter) => visitType(parameter.type));
-    visitType(fn.result);
-    fn.traitDispatch?.typeArguments.forEach(visitType);
-  };
-  for (const exported of module.exports) {
-    switch (exported.kind) {
-      case "constant":
-      case "static":
-        visitType(exported.type);
-        break;
-      case "function":
-        visitFunction(exported.function);
-        break;
-      case "type-alias":
-        visitParameters(exported.typeParameters);
-        visitType(exported.type);
-        break;
-      case "struct":
-      case "union":
-        selectCanonicalPath(exported.canonicalPath);
-        visitParameters(exported.typeParameters);
-        exported.fields.forEach((field) => visitType(field.type));
-        exported.methods.forEach(visitFunction);
-        exported.associatedConstants.forEach((constant) => {
-          visitType(constant.type);
-          constant.traitDispatch.typeArguments.forEach(visitType);
-        });
-        break;
-      case "enum":
-        selectCanonicalPath(exported.canonicalPath);
-        visitParameters(exported.typeParameters);
-        exported.variants.forEach((variant) => variant.fields.forEach(visitType));
-        exported.methods.forEach(visitFunction);
-        exported.associatedConstants.forEach((constant) => {
-          visitType(constant.type);
-          constant.traitDispatch.typeArguments.forEach(visitType);
-        });
-        break;
-    }
-  }
+  visitRustCompilerModuleReferences(module, {
+    type: (identity) => select(identity.canonicalPath, "type"),
+    trait: (identity) => select(identity.canonicalPath, "trait"),
+  });
   return Object.freeze([...selected.entries()]
     .sort(([left], [right]) => compareText(left, right))
     .map(([, location]) => location));

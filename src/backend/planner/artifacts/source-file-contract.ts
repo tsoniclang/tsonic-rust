@@ -49,8 +49,11 @@ function publicItemSurface(item: RustItem): readonly string[] {
         ? [rustFunctionSurface({
             name: item.name,
             isAsync: item.isAsync === true,
+            isUnsafe: item.isUnsafe === true,
+            ...(item.abi === undefined ? {} : { abi: item.abi }),
+            variadic: item.variadic === true,
             ...(item.errorType === undefined ? {} : { errorType: item.errorType }),
-            typeParameters: item.typeParams ?? [],
+            generics: item.generics,
             parameters: item.params,
             ...(item.returnType === undefined
               ? {}
@@ -58,32 +61,15 @@ function publicItemSurface(item: RustItem): readonly string[] {
           })]
         : [];
     case "const":
+    case "static":
     case "thread-local":
     case "enum":
+    case "union":
     case "type-alias":
       return item.visibility === "public" ? [closedMetadataKey(item)] : [];
     case "struct":
       return item.visibility === "public"
-        ? [encodeRustContractParts([
-            "struct",
-            item.name,
-            ...item.attrs ?? [],
-            ...item.derives,
-            ...(item.typeParams ?? []).map((parameter) =>
-              encodeRustContractParts([
-                "type-parameter",
-                parameter.name,
-                ...parameter.bounds.map((bound) =>
-                  bound.kind === "trait" ? bound.path : `'${bound.name}`),
-              ])),
-            ...item.fields.map((field) =>
-              encodeRustContractParts([
-                "field",
-                field.name,
-                field.visibility,
-                closedMetadataKey(field.type),
-              ])),
-          ])]
+        ? [closedMetadataKey(item)]
         : [];
     case "trait":
       return item.visibility === "public" ? [closedMetadataKey(item)] : [];
@@ -100,6 +86,8 @@ function publicItemSurface(item: RustItem): readonly string[] {
         : [];
     case "use":
       return [];
+    case "extern-block":
+      return [closedMetadataKey(item)];
   }
 }
 
@@ -111,7 +99,12 @@ function publicMethodSurface(
     "method",
     owner,
     method.name,
-    method.selfParam ?? "static",
+    method.isAsync === true ? "async" : "sync",
+    method.isUnsafe === true ? "unsafe" : "safe",
+    method.abi === undefined ? "rust-abi" : `abi:${method.abi}`,
+    method.variadic === true ? "variadic" : "fixed-arity",
+    method.receiver === undefined ? "static" : closedMetadataKey(method.receiver),
+    encodeRustContractParts(["generics", closedMetadataKey(method.generics)]),
     method.errorType === undefined
       ? "infallible"
       : encodeRustContractParts(["fallible", closedMetadataKey(method.errorType)]),

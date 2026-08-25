@@ -5,20 +5,24 @@ import {
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { sourceNodeIdentity } from "@tsonic/target-api/source";
 import type { TargetSourceProgram } from "@tsonic/target-api/source";
-import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import {
   getRustGeneratorProtocol,
   rustCarrierSupportsTrait,
-  rustClosureProtocol,
-  rustFixedArrayCarrierValue,
-  rustLocationTargetId,
-  rustNamedTypeCarrierValue,
-  rustOptionTargetId,
+  rustCloneTrait,
+  rustDefaultTrait,
+  rustSendTrait,
   rustSourceTypeCarrierValue,
+  rustSyncTrait,
+  rustUnpinTrait,
 } from "../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustSemanticIdentity } from "../../target-model/semantics/index.js";
+import {
+  rustSemanticIdentitiesEqual,
+  rustSemanticIdentityKey,
+} from "../../target-model/semantics/index.js";
 import {
   rustClosureCaptureFactKey,
   rustGeneratorFactKey,
@@ -28,10 +32,19 @@ import {
   rustTypedLocationPlanKey,
   rustYieldFactKey,
 } from "../facts/keys.js";
+import type { RustSourceGenericIndex } from "../../policy/types/source-generics.js";
+import type { RustOwnershipAnalysis } from "../ownership/model.js";
 
-export type RustGenericRequirement = "clone" | "default" | "static";
+export type RustGenericRequirement =
+  | "clone"
+  | "default"
+  | "send"
+  | "sync"
+  | "unpin"
+  | "static";
 
 export interface RustCallableTypeParameterRequirements {
+  readonly identity: RustSemanticIdentity;
   readonly name: string;
   readonly requirements: readonly RustGenericRequirement[];
 }
@@ -74,6 +87,9 @@ interface RequirementContractState extends RustCallableGenericRequirementContrac
 const requirementOrder: readonly RustGenericRequirement[] = [
   "clone",
   "default",
+  "send",
+  "sync",
+  "unpin",
   "static",
 ];
 
@@ -81,7 +97,8 @@ export function analyzeRustCallableGenericRequirements(
   source: TargetSourceProgram,
   sourceFiles: readonly SourceFile[],
   facts: RustPlanQueries,
-  names: RustNamePlan,
+  sourceGenerics: RustSourceGenericIndex,
+  ownership: RustOwnershipAnalysis,
 ): AnalyzeRustCallableGenericRequirementsResult {
   const ast = source.ast;
   const diagnostics: TargetDiagnostic[] = [];
@@ -139,7 +156,8 @@ export function analyzeRustCallableGenericRequirements(
         ast,
         declaration,
         facts,
-        names,
+        sourceGenerics,
+        ownership,
         idByDeclaration,
         implementationDeclaration,
         contractFor(candidate) {
@@ -209,7 +227,8 @@ interface ClassifyCallableInput {
   readonly ast: AstReader;
   readonly declaration: Node;
   readonly facts: RustPlanQueries;
-  readonly names: RustNamePlan;
+  readonly sourceGenerics: RustSourceGenericIndex;
+  readonly ownership: RustOwnershipAnalysis;
   readonly idByDeclaration: WeakMap<Node, string>;
   readonly implementationDeclaration: (declaration: Node) => Node;
   readonly contractFor: (declaration: Node) => RequirementContractState | undefined;
@@ -222,22 +241,25 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       readonly dependencies: readonly string[];
     }
   | { readonly kind: "rejected"; readonly reason: string } {
-  const { ast, declaration, facts, names } = input;
-  const typeParameterNodes = ast.typeParameters(declaration).filter(
-    (candidate): candidate is Node => candidate !== undefined,
-  );
-  const typeParameterNames = typeParameterNodes.map((parameter) =>
-    names.nameForDeclaration(parameter));
-  if (typeParameterNames.some((name) => name === undefined)) {
+  const { ast, declaration, facts } = input;
+  const sourceGenericContract = input.sourceGenerics.contractFor(declaration);
+  if (sourceGenericContract === undefined) {
     return {
       kind: "rejected",
-      reason: "A Rust callable type parameter has no exact target identity.",
+      reason: "A Rust callable has no exact sealed source-generic contract.",
     };
   }
-  const exactNames = typeParameterNames as string[];
-  const declared = new Set(exactNames);
-  const byParameter = new Map(exactNames.map((name) =>
-    [name, new Set<RustGenericRequirement>()] as const));
+  const exactParameters = sourceGenericContract.parameters.flatMap((parameter) =>
+    parameter.parameter.kind !== "type"
+      ? []
+      : [Object.freeze({
+          identity: parameter.parameter.identity,
+          name: parameter.parameter.displayName,
+        })]);
+  const declared = new Map(exactParameters.map((parameter) =>
+    [rustSemanticIdentityKey(parameter.identity), parameter] as const));
+  const byParameter = new Map(exactParameters.map((parameter) =>
+    [rustSemanticIdentityKey(parameter.identity), new Set<RustGenericRequirement>()] as const));
   const uses: RequirementUse[] = [];
   const dependencies = new Set<string>();
   const addUse = (
@@ -267,20 +289,29 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
   };
   const generator = facts.getFact(declaration, rustGeneratorFactKey);
   if (generator !== undefined) {
+    const execution = input.ownership.executionContractFor(declaration);
+    if (execution === undefined) {
+      return { kind: "rejected", reason: "A Rust generator has no sealed execution contract." };
+    }
+    const executionRequirements: RustGenericRequirement[] = [
+      ...(execution.lifetime.kind === "static" ? ["static" as const] : []),
+      ...(execution.requiresSend ? ["send" as const] : []),
+      ...(execution.requiresSync ? ["sync" as const] : []),
+    ];
     for (const parameter of ast.parameters(declaration)) {
       const error = parameter === undefined
         ? "A generator contains an undefined parameter slot."
         : addUse(
             parameter,
             facts.getFact(parameter, rustSourceParameterAbiFactKey)?.parameterCarrier,
-            ["static"],
+            executionRequirements,
           );
       if (error !== undefined) {
         return { kind: "rejected", reason: error };
       }
     }
     for (const carrier of [generator.yieldType, generator.returnType, generator.nextType]) {
-      const error = addUse(declaration, carrier, ["static"]);
+      const error = addUse(declaration, carrier, executionRequirements);
       if (error !== undefined) {
         return { kind: "rejected", reason: error };
       }
@@ -292,12 +323,15 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
     }
     const location = facts.getFact(node, rustLocationStorageFactKey);
     if (location !== undefined) {
-      const error = addUse(node, location.valueCarrier, ["clone", "static"]);
+      const error = addUse(node, location.valueCarrier, ["clone"]);
       if (error !== undefined) return error;
     }
     const typedLocation = facts.getFact(node, rustTypedLocationPlanKey);
-    if (typedLocation?.operation === "allocate") {
-      const error = addUse(node, typedLocation.pointeeCarrier, ["clone", "static"]);
+    if (typedLocation !== undefined &&
+      (typedLocation.operation === "address-of" ||
+        typedLocation.operation === "allocate" ||
+        typedLocation.operation === "load")) {
+      const error = addUse(node, typedLocation.pointeeCarrier, ["clone"]);
       if (error !== undefined) return error;
     }
     const operation = facts.getFact(node, rustTargetOperationFactKey);
@@ -307,15 +341,29 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
     }
     if (operation?.kind === "closure") {
       const captures = facts.getFact(node, rustClosureCaptureFactKey);
-      if (captures === undefined) {
+      const execution = input.ownership.executionContractFor(node);
+      if (captures === undefined || execution === undefined) {
         return "A Rust closure has no exact capture classification.";
       }
-      const required: readonly RustGenericRequirement[] =
-        rustClosureProtocol(operation.resultCarrier) === undefined
-          ? ["clone", "static"]
-          : ["clone"];
       for (const capture of captures.captures) {
-        const error = addUse(capture.reference, capture.carrier, required);
+        const selectedCapture = input.ownership.captureFor(capture.reference);
+        if (selectedCapture === undefined) {
+          return "A Rust closure capture has no sealed ownership classification.";
+        }
+        const required: RustGenericRequirement[] = [];
+        if (selectedCapture.mode === "clone") required.push("clone");
+        if (execution.storage === "owned") required.push("static");
+        if (execution.requiresSend) {
+          required.push(selectedCapture.sendProof !== undefined &&
+              rustSemanticIdentitiesEqual(
+                selectedCapture.sendProof.trait,
+                rustSyncTrait.identity,
+              )
+            ? "sync"
+            : "send");
+        }
+        if (execution.requiresSync) required.push("sync");
+        const error = addUse(capture.reference, selectedCapture.carrier, required);
         if (error !== undefined) return error;
       }
     }
@@ -337,9 +385,11 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
           selected.sourceDeclaration,
         );
         const calleeId = input.idByDeclaration.get(selectedDeclaration);
-          const targetTypeArguments = Object.freeze([
-            ...(operation.targetTypeArguments ?? []),
-          ]);
+        const targetTypeArguments = Object.freeze([
+          ...(operation.targetGenericArguments ?? [])
+            .filter((argument) => argument.kind === "type")
+            .map((argument) => argument.value),
+        ]);
         if (calleeId !== undefined) {
           dependencies.add(calleeId);
           const callee = input.contractFor(selectedDeclaration);
@@ -375,9 +425,12 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
     dependencies: Object.freeze([...dependencies]),
     contract: Object.freeze({
       declaration,
-      typeParameters: Object.freeze(exactNames.map((name) => Object.freeze({
-        name,
-        requirements: normalizeRequirements([...(byParameter.get(name) ?? [])]),
+      typeParameters: Object.freeze(exactParameters.map((parameter) => Object.freeze({
+        identity: parameter.identity,
+        name: parameter.name,
+        requirements: normalizeRequirements([
+          ...(byParameter.get(rustSemanticIdentityKey(parameter.identity)) ?? []),
+        ]),
       }))),
       uses: Object.freeze(uses),
     }),
@@ -390,7 +443,7 @@ function collectCallableDeclarations(
 ): readonly Node[] {
   const result: Node[] = [];
   const visit = (node: Node): void => {
-    if (isIndependentCallable(ast, node) && ast.body(node) !== undefined) {
+    if (isCallableContractOwner(ast, node)) {
       result.push(node);
     }
     ast.forEachChild(node, (child) => {
@@ -412,10 +465,20 @@ function isIndependentCallable(ast: AstReader, node: Node): boolean {
     kind === "KindSetAccessor";
 }
 
+function isCallableContractOwner(ast: AstReader, node: Node): boolean {
+  const kind = ast.kindName(node);
+  return isIndependentCallable(ast, node) ||
+    kind === "KindMethodSignature" ||
+    kind === "KindConstructSignature" ||
+    kind === "KindCallSignature" ||
+    kind === "KindFunctionType" ||
+    kind === "KindConstructorType";
+}
+
 function classifyCarrierRequirements(
   carrier: TargetTypeRef,
   required: readonly RustGenericRequirement[],
-  declared: ReadonlySet<string>,
+  declared: ReadonlyMap<string, { readonly identity: RustSemanticIdentity; readonly name: string }>,
   byParameter: Map<string, Set<RustGenericRequirement>>,
 ): boolean {
   for (const requirement of required) {
@@ -423,12 +486,22 @@ function classifyCarrierRequirements(
       if (!classifyStaticCarrier(carrier, declared, byParameter)) return false;
       continue;
     }
-    const traitPath = requirement === "clone"
-      ? "core::clone::Clone"
-      : "core::default::Default";
-    if (!rustCarrierSupportsTrait(carrier, traitPath, (name, selectedTrait) => {
-      if (!declared.has(name) || selectedTrait !== traitPath) return false;
-      byParameter.get(name)!.add(requirement);
+    const trait = requirement === "clone"
+      ? rustCloneTrait
+      : requirement === "default"
+        ? rustDefaultTrait
+        : requirement === "send"
+          ? rustSendTrait
+          : requirement === "sync"
+            ? rustSyncTrait
+            : rustUnpinTrait;
+    if (!rustCarrierSupportsTrait(carrier, trait, (identity, selectedTrait) => {
+      const key = rustSemanticIdentityKey(identity);
+      if (!declared.has(key) || !rustSemanticIdentitiesEqual(
+        selectedTrait.identity,
+        trait.identity,
+      )) return false;
+      byParameter.get(key)!.add(requirement);
       return true;
     })) {
       return false;
@@ -439,57 +512,57 @@ function classifyCarrierRequirements(
 
 function classifyStaticCarrier(
   carrier: TargetTypeRef,
-  declared: ReadonlySet<string>,
+  declared: ReadonlyMap<string, { readonly identity: RustSemanticIdentity; readonly name: string }>,
   byParameter: Map<string, Set<RustGenericRequirement>>,
 ): boolean {
   switch (carrier.kind) {
     case "type-parameter":
-      if (declared.has(carrier.name)) {
-        byParameter.get(carrier.name)!.add("static");
+      if (declared.has(rustSemanticIdentityKey(carrier.identity))) {
+        byParameter.get(rustSemanticIdentityKey(carrier.identity))!.add("static");
       }
       return true;
     case "array":
+    case "sequence":
       return classifyStaticCarrier(carrier.element, declared, byParameter);
     case "slice":
+    case "str":
       return false;
     case "tuple":
       return carrier.elements.every((element) =>
         classifyStaticCarrier(element, declared, byParameter));
-    case "target-named": {
-      const arguments_ = carrier.typeArguments ?? [];
-      if (carrier.id === rustOptionTargetId || carrier.id === rustLocationTargetId) {
-        return arguments_.every((argument) =>
-          classifyStaticCarrier(argument, declared, byParameter));
-      }
-      return !arguments_.some((argument) =>
-        containsDeclaredTypeParameter(argument, declared));
-    }
-    case "target-specific": {
-      const fixedArray = rustFixedArrayCarrierValue(carrier);
-      if (fixedArray !== undefined) {
-        return classifyStaticCarrier(fixedArray.element, declared, byParameter);
-      }
-      const named = rustNamedTypeCarrierValue(carrier);
-      if (named !== undefined) {
-        return !named.typeArguments.some((argument) =>
-          containsDeclaredTypeParameter(argument, declared));
-      }
+    case "path":
+      return carrier.arguments.every((argument) =>
+        argument.kind === "const" ||
+        (argument.kind === "lifetime"
+          ? argument.value.kind === "static"
+          : classifyStaticCarrier(argument.value, declared, byParameter)));
+    case "source-carrier": {
       const sourceType = rustSourceTypeCarrierValue(carrier);
-      return sourceType === undefined || !sourceType.typeArguments.some((argument) =>
-        containsDeclaredTypeParameter(argument, declared));
+      return sourceType === undefined || !sourceType.genericArguments.some((argument) =>
+        argument.kind === "type" && containsDeclaredTypeParameter(argument.value, declared));
     }
     case "reference":
-      return carrier.lifetime === "static" &&
-        classifyStaticCarrier(carrier.referent, declared, byParameter);
-    case "pointer":
-      return classifyStaticCarrier(carrier.pointee, declared, byParameter);
+      return carrier.lifetime.kind === "static" &&
+        classifyStaticCarrier(carrier.target, declared, byParameter);
+    case "raw-pointer":
+      return classifyStaticCarrier(carrier.target, declared, byParameter);
     case "function-pointer":
-      return carrier.args.every((argument) =>
+      return carrier.parameters.every((argument) =>
         classifyStaticCarrier(argument, declared, byParameter)) &&
         classifyStaticCarrier(carrier.result, declared, byParameter);
     case "closure":
+      return carrier.parameters.every((argument) =>
+        classifyStaticCarrier(argument, declared, byParameter)) &&
+        classifyStaticCarrier(carrier.result, declared, byParameter) &&
+        carrier.captures.every((capture) => capture.kind !== "lifetime" ||
+          capture.value.kind === "static");
+    case "trait-object":
+      return carrier.lifetime.kind === "static";
     case "associated-type":
+    case "opaque":
       return !containsDeclaredTypeParameter(carrier, declared);
+    case "inference-variable":
+      return false;
     default:
       return true;
   }
@@ -497,40 +570,39 @@ function classifyStaticCarrier(
 
 function containsDeclaredTypeParameter(
   carrier: TargetTypeRef,
-  declared: ReadonlySet<string>,
+  declared: ReadonlyMap<string, { readonly identity: RustSemanticIdentity; readonly name: string }>,
 ): boolean {
   switch (carrier.kind) {
     case "type-parameter":
-      return declared.has(carrier.name);
-    case "target-named":
-      return carrier.typeArguments?.some((argument) =>
-        containsDeclaredTypeParameter(argument, declared)) === true;
+      return declared.has(rustSemanticIdentityKey(carrier.identity));
+    case "path":
+      return carrier.arguments.some((argument) => argument.kind === "type" &&
+        containsDeclaredTypeParameter(argument.value, declared));
     case "array":
+    case "sequence":
     case "slice":
       return containsDeclaredTypeParameter(carrier.element, declared);
     case "tuple":
       return carrier.elements.some((element) =>
         containsDeclaredTypeParameter(element, declared));
     case "reference":
-      return containsDeclaredTypeParameter(carrier.referent, declared);
-    case "pointer":
-      return containsDeclaredTypeParameter(carrier.pointee, declared);
+    case "raw-pointer":
+      return containsDeclaredTypeParameter(carrier.target, declared);
     case "function-pointer":
     case "closure":
-      return carrier.args.some((argument) =>
+      return carrier.parameters.some((argument) =>
         containsDeclaredTypeParameter(argument, declared)) ||
         containsDeclaredTypeParameter(carrier.result, declared);
     case "associated-type":
-      return containsDeclaredTypeParameter(carrier.owner, declared);
-    case "target-specific": {
-      const fixedArray = rustFixedArrayCarrierValue(carrier);
-      if (fixedArray !== undefined) {
-        return containsDeclaredTypeParameter(fixedArray.element, declared);
-      }
-      const named = rustNamedTypeCarrierValue(carrier);
-      return named?.typeArguments.some((argument) =>
-        containsDeclaredTypeParameter(argument, declared)) === true;
-    }
+      return containsDeclaredTypeParameter(carrier.owner, declared) ||
+        carrier.arguments.some((argument) => argument.kind === "type" &&
+          containsDeclaredTypeParameter(argument.value, declared));
+    case "trait-object":
+      return carrier.principal.arguments.some((argument) => argument.kind === "type" &&
+        containsDeclaredTypeParameter(argument.value, declared));
+    case "opaque":
+      return carrier.captures.some((capture) => capture.kind === "type" &&
+        declared.has(rustSemanticIdentityKey(capture.identity)));
     default:
       return false;
   }
@@ -552,7 +624,13 @@ function rustRequirementDescription(
       ? "an exact Rust Clone implementation"
       : requirement === "default"
         ? "an exact Rust Default implementation"
-        : "an exact Rust 'static lifetime");
+        : requirement === "send"
+          ? "an exact Rust Send implementation"
+          : requirement === "sync"
+            ? "an exact Rust Sync implementation"
+            : requirement === "unpin"
+              ? "an exact Rust Unpin implementation"
+              : "an exact Rust 'static lifetime");
   if (descriptions.length <= 1) return descriptions[0] ?? "an exact Rust carrier contract";
   return `${descriptions.slice(0, -1).join(", ")} and ${descriptions[descriptions.length - 1]}`;
 }
@@ -566,6 +644,7 @@ function requirementContractsEqual(
     left.typeParameters.every((parameter, index) => {
       const other = right.typeParameters[index];
       return other !== undefined && parameter.name === other.name &&
+        rustSemanticIdentitiesEqual(parameter.identity, other.identity) &&
         stringListsEqual(parameter.requirements, other.requirements);
     }) &&
     left.uses.length === right.uses.length &&

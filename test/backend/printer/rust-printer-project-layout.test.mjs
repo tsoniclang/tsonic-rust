@@ -107,7 +107,7 @@ test("long tuple values use rustfmt-compatible element layout", () => {
 test("long typed bindings expand the type before attaching the initializer", () => {
   const callableType = {
     kind: "named",
-    path: "rt::Callable",
+    path: "rt::OwnedLocalCallable",
     typeArguments: [{
       kind: "tuple",
       elements: [
@@ -141,7 +141,7 @@ test("long typed bindings expand the type before attaching the initializer", () 
 
   assert.match(
     text,
-    /let aliasedHandle: rt::Callable<\n {8}\(\n {12}tsonic_rust_node::http::IncomingMessage,\n {12}tsonic_rust_node::http::ServerResponseHandle,\n {8}\),\n {8}rt::TsonicResult<\(\)>,\n {4}> = handler_factory;/u,
+    /let aliasedHandle: rt::OwnedLocalCallable<\n {8}\(\n {12}tsonic_rust_node::http::IncomingMessage,\n {12}tsonic_rust_node::http::ServerResponseHandle,\n {8}\),\n {8}rt::TsonicResult<\(\)>,\n {4}> = handler_factory;/u,
   );
 });
 

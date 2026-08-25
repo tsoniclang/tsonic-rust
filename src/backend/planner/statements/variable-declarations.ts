@@ -28,8 +28,12 @@ import { rustTypeFromCarrierInContext } from "../types/render.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
+import { rustSealedExpressionCarrier } from "../expressions/expression-carriers.js";
 
 export function planVariableStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
+  if (context.fixedMutableLoanStatements?.has(node) === true) {
+    return context.fixedMutableLoanStatements.get(node);
+  }
   const declarations = collectVariableDeclarations(node, context);
   if (declarations.length === 0) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -101,7 +105,7 @@ function planVariableDeclaration(
       return undefined;
     }
   }
-  const declarationCarrier = context.input.program.facts.getRuntimeCarrierFact(declaration)?.carrier;
+  const declarationCarrier = rustSealedExpressionCarrier(declaration, context);
   if (declarationCarrier === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, declaration),
@@ -114,7 +118,9 @@ function planVariableDeclaration(
     const renderedCarrier = locationStorage === undefined
       ? declarationCarrier
       : rustLocationTargetType(locationStorage.valueCarrier);
-    rustType = rustTypeFromCarrierInContext(renderedCarrier, context);
+    rustType = renderedCarrier.kind === "closure" && initializer !== undefined
+      ? undefined
+      : rustTypeFromCarrierInContext(renderedCarrier, context);
     if (rustType === undefined && initializer === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, declaration),
@@ -135,7 +141,7 @@ function planVariableDeclaration(
     ));
     return undefined;
   }
-  const ownedBinding = declarationCarrier.kind !== "pointer" && declarationCarrier.kind !== "reference";
+  const ownedBinding = declarationCarrier.kind !== "raw-pointer" && declarationCarrier.kind !== "reference";
   const resourceFact = context.input.program.facts.getFact(declaration, rustResourceManagementFactKey);
   const sourceUseSummary = context.input.program.sourceNavigation.declarationUseSummary(declaration);
   const objectRepresentation = context.input.program.objectRepresentations.representationFor(
@@ -147,6 +153,7 @@ function planVariableDeclaration(
   const mutable = locationStorage === undefined &&
     (sourceUseSummary.bindingWritten ||
       context.input.program.facts.getFact(declaration, rustMutatedBindingFactKey) !== undefined ||
+      context.input.program.ownership.bindingRequiresMutable(declaration) ||
       (objectRepresentation?.kind === "value" && sourceUseSummary.memberWritten) ||
       (ownedBinding && referentMutationRequiresMutableBinding &&
         context.input.program.facts.getFact(declaration, rustMutatedReferentFactKey) !== undefined) ||
@@ -167,7 +174,7 @@ function planVariableDeclaration(
         return undefined;
       }
       context.usedAliases?.add("rt");
-      init = { kind: "call", path: "rt::Location::allocate", args: [planned] };
+      init = { kind: "call", path: "rt::OwnedLocation::allocate", args: [planned] };
     }
   } else if (rustOptionElementCarrier(declarationCarrier) !== undefined && rustType !== undefined) {
     init = { kind: "associated-value", owner: rustType, name: "None" };

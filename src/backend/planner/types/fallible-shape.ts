@@ -64,6 +64,7 @@ export function rustExpressionUsesTryInCurrentRegion(expression: RustExpr): bool
       return rustExpressionUsesTryInCurrentRegion(expression.receiver) ||
         expression.args.some(rustExpressionUsesTryInCurrentRegion);
     case "field":
+    case "tuple-field":
       return rustExpressionUsesTryInCurrentRegion(expression.receiver);
     case "index":
       return rustExpressionUsesTryInCurrentRegion(expression.receiver) ||
@@ -150,7 +151,12 @@ function applyRustResultExpression(
     path: "Ok",
     ...(inferErrorTypeFromReturnType
       ? {}
-      : { typeArguments: [{ kind: "infer" as const }, boundary.errorType] }),
+      : {
+          genericArguments: [
+            { kind: "type" as const, type: { kind: "infer" as const } },
+            { kind: "type" as const, type: boundary.errorType },
+          ],
+        }),
     args: [expression],
   };
 }

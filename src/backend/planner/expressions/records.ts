@@ -18,6 +18,8 @@ import {
   rustOptionElementCarrier,
   rustSourceTypeCarrierValue,
   rustStructuralMethodStorageCarrier,
+  rustGenericSubstitutionsFromEntries,
+  mergeRustGenericSubstitutions,
 } from "../../../target-model/types/index.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { diagnosticInput, sourceTypePath } from "../program/plan-context.js";
@@ -276,9 +278,21 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
         if (implementation.kind !== "authored") {
           return undefined;
         }
+        const recordedSubstitutions = rustGenericSubstitutionsFromEntries(
+          implementation.genericSubstitutions,
+        );
+        const substitutions = recordedSubstitutions === undefined
+          ? undefined
+          : context.genericSubstitutions === undefined
+            ? recordedSubstitutions
+            : mergeRustGenericSubstitutions(
+                context.genericSubstitutions,
+                recordedSubstitutions,
+              );
+        if (substitutions === undefined) return undefined;
         const closure = planExpression(contribution.expression, {
           ...context,
-          typeParameterSubstitutions: new Map(implementation.typeParameterSubstitutions),
+          genericSubstitutions: substitutions,
         });
         if (closure === undefined) {
           return undefined;
@@ -551,7 +565,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
             name: rustProjectObjectStateField,
             value: {
               kind: "call",
-              path: "rt::ObjectHandle::new",
+              path: "rt::LocalObjectHandle::new",
               args: [{
                 kind: "struct-literal",
                 path: objectLiteralImplementation.stateName,
@@ -703,7 +717,7 @@ function planProjectIndexRecordLiteral(
   const stateType = rustProjectStateType(fact.resultCarrier, context);
   const properties = context.input.program.source.ast.properties(node);
   if (definition?.kind !== "interface" || representation === undefined ||
-    context.input.program.projectTypes.isPolymorphic(definition) ||
+    context.input.program.objectRepresentations.requiresDynamicDispatch(definition) ||
     wrapperType?.kind !== "named" || stateType?.kind !== "named" ||
     properties.length !== fact.contributions.length ||
     fact.contributions.some((contribution, index) => contribution.property !== properties[index])) {
