@@ -7,6 +7,7 @@ import {
   renameSync,
   rmSync,
   statSync,
+  symlinkSync,
 } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import {
@@ -51,6 +52,10 @@ export function buildInstalledLayout() {
   mkdirSync(stagingPackages, { recursive: true });
   try {
     for (const [sourceRoot, name, entries] of packages) {
+      if (name === "target-rust") {
+        symlinkSync(sourceRoot, resolve(stagingPackages, name), "dir");
+        continue;
+      }
       for (const entry of entries) {
         cpSync(resolve(sourceRoot, entry), resolve(stagingPackages, name, entry), {
           recursive: true,
@@ -96,6 +101,7 @@ function packageArtifactFilter(path) {
 
 function installedArtifactFingerprint(roots) {
   const hash = createHash("sha256");
+  hash.update("host-owned-target-peer-v1\0");
   for (const [root, entries] of roots) {
     for (const entry of entries) {
       for (const filePath of artifactFiles(resolve(root, entry))) {
