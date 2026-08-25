@@ -173,7 +173,7 @@ export function pick(pair: [int32, int32], flag: boolean): int32 {
   assert.deepEqual(result.artifacts, []);
   assert.deepEqual(result.diagnostics.map(({ code, message }) => ({ code, message })), [{
     code: "RUST_FIXED_ARRAY_DYNAMIC_INDEX_CARRIER_UNSUPPORTED",
-    message: "Dynamic fixed-array element access requires an exact int32 index carrier; literal unions and other source carriers are not reconstructed from their spelling.",
+    message: "Dynamic fixed-array element access requires an exact int32 or native-uint index carrier; literal unions and other source carriers are not reconstructed from their spelling.",
   }]);
 });
 
@@ -226,7 +226,7 @@ export function total(values: readonly int32[]): int32 {
   });
 
   assert.deepEqual(result.diagnostics, []);
-  assert.match(artifactText(result, "src/index.rs"), /for value in rt::iter_copied\(values\)/u);
+  assert.match(artifactText(result, "src/index.rs"), /for value in rt::iter_copied\(&values\)/u);
   validateGeneratedProject("selected-for-of", result.artifacts);
 });
 

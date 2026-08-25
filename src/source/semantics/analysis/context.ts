@@ -53,7 +53,43 @@ export function selectedRustProviderTypeDeclaration(
   const candidates: ProviderVirtualDeclarationFact[] = [];
   appendProviderFact(candidates, typeReference, context);
   appendProviderFact(candidates, typeName, context);
+  const localSymbol = context.checker.getSymbolAtLocation(typeName);
+  appendProviderFact(candidates, localSymbol, context);
+  appendProviderFact(
+    candidates,
+    context.checker.getResolvedSymbolOrNil(typeName),
+    context,
+  );
+  if (localSymbol !== undefined && isEsmAliasSymbol(localSymbol, context)) {
+    appendProviderFact(
+      candidates,
+      context.checker.getAliasedSymbol(localSymbol),
+      context,
+    );
+  }
   return oneProviderTypeIdentity(candidates);
+}
+
+function isEsmAliasSymbol(
+  symbol: import("@tsonic/tsts").Symbol,
+  context: RustSourceFileAnalysisContext,
+): boolean {
+  return context.checker.getSymbolDeclarations(symbol).some((declaration) => {
+    if (declaration === undefined) return false;
+    const parent = context.ast.parent(declaration);
+    return isEsmAliasDeclaration(declaration, context) ||
+      (parent !== undefined && parent !== null && isEsmAliasDeclaration(parent, context));
+  });
+}
+
+function isEsmAliasDeclaration(
+  node: Node,
+  context: Pick<RustSourceFileAnalysisContext, "ast">,
+): boolean {
+  return context.ast.is.IsImportClause(node) ||
+    context.ast.is.IsImportSpecifier(node) ||
+    context.ast.is.IsNamespaceImport(node) ||
+    context.ast.is.IsExportSpecifier(node);
 }
 
 export function selectedRustProviderCall(

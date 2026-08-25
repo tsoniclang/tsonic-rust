@@ -202,7 +202,7 @@ export function selectRustCheckedCall(
           "RUST_SELECTED_OPERATION_UNSUPPORTED",
           `The selected JavaScript constructor '${selectedSourceMember.ownerName}' has no closed Rust operation row for the selected argument carriers.`,
           [{
-            message: `arguments=${JSON.stringify(argumentCarriers)}; selectedTypeArguments=${JSON.stringify(typeArgumentCarriers)}`,
+            message: `arguments=${closedMetadataKey(argumentCarriers)}; selectedTypeArguments=${closedMetadataKey(typeArgumentCarriers)}`,
           }],
         );
       }
@@ -280,7 +280,7 @@ export function selectRustCheckedCall(
         "RUST_SELECTED_OPERATION_UNSUPPORTED",
         `The selected JavaScript call '${selectedSourceMember.ownerName}.${selectedSourceMember.memberName}' has no closed Rust operation row for the selected receiver and argument carriers.`,
         [{
-          message: `receiver=${JSON.stringify(receiverCarrier)}; arguments=${JSON.stringify(argumentCarriers)}; selectedTypeArguments=${JSON.stringify(selectedMethodTypeArgumentCarriers)}; authoredTypeArguments=${JSON.stringify(authoredMethodTypeArgumentCarriers)}`,
+          message: `receiver=${closedMetadataKey(receiverCarrier)}; arguments=${closedMetadataKey(argumentCarriers)}; selectedTypeArguments=${closedMetadataKey(selectedMethodTypeArgumentCarriers)}; authoredTypeArguments=${closedMetadataKey(authoredMethodTypeArgumentCarriers)}`,
         }],
       );
     }

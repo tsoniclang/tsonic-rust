@@ -12,6 +12,15 @@ export function fakeStatement({ pos = 0, end = 0, kindName = "ExpressionStatemen
 export function fakeAstReader(sourceFiles = []) {
   const sourceFileByNode = new Map();
   const parentByNode = new Map();
+  const kindByName = new Map();
+  const kind = (node) => {
+    const kindName = node?.kindName ?? "Unknown";
+    const existing = kindByName.get(kindName);
+    if (existing !== undefined) return existing;
+    const created = kindByName.size + 1;
+    kindByName.set(kindName, created);
+    return created;
+  };
   for (const sourceFile of sourceFiles) {
     sourceFileByNode.set(sourceFile, sourceFile);
     for (const statement of sourceFile.statements ?? []) {
@@ -26,6 +35,7 @@ export function fakeAstReader(sourceFiles = []) {
     },
     statements: (sourceFile) => sourceFile.statements ?? [],
     members: () => [],
+    kind,
     kindName: (node) => node.kindName,
     pos: (node) => node.pos,
     end: (node) => node.end,

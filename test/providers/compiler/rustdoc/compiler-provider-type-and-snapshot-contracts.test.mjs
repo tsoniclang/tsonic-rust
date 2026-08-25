@@ -34,8 +34,9 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../.
 const fixtureCrate = resolve(repositoryRoot, "test/fixtures/crates/acme_widget");
 const runtimeCrate = resolve(repositoryRoot, "../rust-runtime/crates/tsonic_rust_runtime");
 const testRoot = resolve(repositoryRoot, ".temp/compiler-provider-tests");
+const emptyGenerics = Object.freeze({ parameters: [], wherePredicates: [] });
 
-test("compiler provider rejects Rust scalar char instead of conflating it with neutral UTF-16 char", () => {
+test("compiler provider projects Rust scalar char through its exact source and target contracts", () => {
   const module = {
     protocolVersion: rustCompilerProviderProtocolVersion,
     projectDigest: "char-contract",
@@ -55,37 +56,64 @@ test("compiler provider rejects Rust scalar char instead of conflating it with n
     modulePath: [],
     exports: [{
       kind: "function",
-      id: "char_contract::identity",
+      identity: {
+        itemId: "char_contract::identity",
+        canonicalPath: ["char_contract", "identity"],
+      },
       name: "identity",
-      canonicalPath: ["char_contract", "identity"],
       targetPath: ["char_contract", "identity"],
       function: {
-        id: "char_contract::identity",
+        identity: {
+          itemId: "char_contract::identity",
+          canonicalPath: ["char_contract", "identity"],
+        },
         name: "identity",
         parameters: [{ name: "value", type: { kind: "primitive", name: "char" } }],
         result: { kind: "primitive", name: "char" },
-        typeParameters: [],
-        typeRequirements: [],
+        enclosingGenerics: emptyGenerics,
+        generics: emptyGenerics,
         asynchronous: false,
-        unsafe: false,
+        safety: "safe",
         abi: "Rust",
         variadic: false,
       },
     }],
+    implementations: [],
     unsupportedExports: [],
-    standardTypeLocations: [],
+    standardItemLocations: [],
   };
 
-  assert.throws(
-    () => projectRustCompilerModule(module, {
-      providerModuleId: "char_contract",
-      moduleSpecifier: "@tsonic/rust/crates/char_contract/index.js",
-    }),
-    /Rust primitive 'char' has no source primitive contract/u,
-  );
+  const projection = projectRustCompilerModule(module, {
+    providerModuleId: "char_contract",
+    moduleSpecifier: "@tsonic/rust/crates/char_contract/index.js",
+  });
+  const declaration = projection.declarationModel.exports.find(({ name }) => name === "identity");
+  assert.equal(declaration?.kind, "function");
+  assert.deepEqual(declaration?.kind === "function"
+    ? declaration.signatures[0]?.parameters[0]?.type
+    : undefined, {
+    kind: "provider-ref",
+    moduleSpecifier: "@tsonic/rust/types.js",
+    exportName: "char",
+  });
+  assert.deepEqual(declaration?.kind === "function"
+    ? declaration.signatures[0]?.returnType
+    : undefined, {
+    kind: "provider-ref",
+    moduleSpecifier: "@tsonic/rust/types.js",
+    exportName: "char",
+  });
+  assert.deepEqual(projection.operations[0]?.parameterCarriers, [{
+    kind: "primitive",
+    name: "char",
+  }]);
+  assert.deepEqual(projection.operations[0]?.resultCarrier, {
+    kind: "primitive",
+    name: "char",
+  });
 });
 
-test("compiler provider retains incomplete Rust enums as opaque native types", () => {
+test("compiler provider rejects incomplete Rust enums without an opaque fallback", () => {
   const dependency = {
     alias: "opaque_enum",
     packageId: "opaque-enum 1.0.0",
@@ -99,38 +127,39 @@ test("compiler provider retains incomplete Rust enums as opaque native types", (
     closurePackageIds: ["opaque-enum 1.0.0"],
     features: [],
   };
-  const projection = projectRustCompilerModule({
-    protocolVersion: rustCompilerProviderProtocolVersion,
-    projectDigest: "opaque-enum",
-    dependency,
-    modulePath: [],
-    exports: [{
-      kind: "enum",
-      id: "opaque_enum::Mode",
-      name: "Mode",
-      canonicalPath: ["opaque_enum", "Mode"],
-      targetPath: ["opaque_enum", "Mode"],
-      typeParameters: [],
-      variantsComplete: false,
-      variants: [],
-      methods: [],
-      associatedConstants: [],
-      unsupportedMembers: [{ kind: "variant", name: "Hidden", reason: "stripped by rustdoc" }],
-      traits: { implementations: [] },
-    }],
-    unsupportedExports: [],
-    standardTypeLocations: [],
-  }, {
-    providerModuleId: "opaque-enum",
-    moduleSpecifier: "@tsonic/rust/crates/opaque_enum/index.js",
-  });
-
-  assert.deepEqual(
-    projection.declarationModel.exports.map(({ kind, name }) => ({ kind, name })),
-    [{ kind: "class", name: "Mode" }],
+  assert.throws(
+    () => projectRustCompilerModule({
+      protocolVersion: rustCompilerProviderProtocolVersion,
+      projectDigest: "opaque-enum",
+      dependency,
+      modulePath: [],
+      exports: [{
+        kind: "enum",
+        identity: {
+          itemId: "opaque_enum::Mode",
+          canonicalPath: ["opaque_enum", "Mode"],
+        },
+        name: "Mode",
+        targetPath: ["opaque_enum", "Mode"],
+        generics: emptyGenerics,
+        variantsComplete: false,
+        variants: [],
+        methods: [],
+        associatedConstants: [],
+        associatedTypes: [],
+        unsupportedMembers: [{ kind: "variant", name: "Hidden", reason: "stripped by rustdoc" }],
+        traits: { implementations: [] },
+        layout: { representation: "rust" },
+      }],
+      implementations: [],
+      unsupportedExports: [],
+      standardItemLocations: [],
+    }, {
+      providerModuleId: "opaque-enum",
+      moduleSpecifier: "@tsonic/rust/crates/opaque_enum/index.js",
+    }),
+    /Mode\.Hidden: stripped by rustdoc/u,
   );
-  assert.deepEqual(projection.operations, []);
-  assert.deepEqual([...projection.carrierPaths.values()], ["opaque_enum::Mode"]);
 });
 
 test("standard-library metadata snapshots fail closed after exact artifact mutation", () => {
