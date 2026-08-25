@@ -17,7 +17,7 @@ import {
   sourceVisibleGenericParameters,
   uniqueText,
 } from "./utilities.js";
-import { sourceMethodIsInstance } from "./declarations.js";
+import { sourceMethodIsInstance } from "./declaration-members.js";
 import { rustSourceTypeExportIds } from "../../../source/semantics/identity.js";
 import { rustTypesModule } from "../../../source/profiles/source-modules.js";
 import type { ProjectionContext } from "./model.js";
