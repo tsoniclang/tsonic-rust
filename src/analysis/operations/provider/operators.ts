@@ -20,7 +20,8 @@ import {
   KindBigIntLiteral,
 } from "@tsonic/target-api/source";
 import { finalizeRustProviderOperationAbi } from "../../facts/finalized-operation-abi.js";
-import { instantiateProviderOperationTemplate, providerFormRequiresSourceReceiver } from "./calls/instantiation.js";
+import { providerFormRequiresSourceReceiver } from "./calls/instantiation.js";
+import { instantiateProviderOperationTemplate } from "./calls/provider-template-instantiation.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
 import { rustEffectiveValueCarrier } from "../../facts/value-carrier-queries.js";
 import { rustSourcePrimitiveTargetType, rustUnitTargetType } from "../../../target-model/types/index.js";
