@@ -1,9 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createRustProviderPackage } from "../../../dist/public/provider.js";
+import {
+  createRustProviderPackage,
+  rustUnitTargetType,
+} from "../../../dist/public/provider.js";
 
 const int32 = { kind: "source-primitive", name: "int32" };
-const unit = { kind: "tuple", elements: [] };
+const unit = rustUnitTargetType();
 
 function storeDefinition(operations, { readonlyProperty = false } = {}) {
   return {

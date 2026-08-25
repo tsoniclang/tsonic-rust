@@ -2,22 +2,16 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { createRustSourceTypeRegistry } from "../../../dist/analysis/project-types/source-type-registry.js";
+import { rustStructuralObjectTargetType } from "../../../dist/target-model/types/index.js";
 
 const int32Carrier = { kind: "source-primitive", name: "int32" };
 const float64Carrier = { kind: "source-primitive", name: "float64" };
-const receiverCarrier = {
-  kind: "target-specific",
-  target: "rust",
-  name: "structural-object",
-  value: {
-    fields: [{
-      sourceName: "value",
-      type: int32Carrier,
-      presence: "required",
-      readonly: false,
-    }],
-  },
-};
+const receiverCarrier = rustStructuralObjectTargetType("/src/source-type-registry.ts", [{
+  sourceName: "value",
+  type: int32Carrier,
+  presence: "required",
+  readonly: false,
+}]);
 
 function structuralShape(sourceType, declaration, symbol, resultCarrier = int32Carrier) {
   return {

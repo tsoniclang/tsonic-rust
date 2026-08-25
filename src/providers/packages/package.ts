@@ -1,6 +1,7 @@
 import { cargoCrateAttributeName, cargoPathReferenceKind, cargoRegistryPatchAttributeName } from "../../target-model/project/cargo-reference.js";
 import { collectRustProviderSemantics } from "./semantics.js";
-import { createRustProviderPackageSourceExtension, rustProviderBindingProviderId } from "./source-provider.js";
+import { createRustProviderPackageSourceExtension } from "./source-provider.js";
+import { rustProviderBindingProviderId } from "./identity.js";
 import { rustProviderPolicyContributionKind } from "./model.js";
 import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { validateProviderPackageDefinition } from "./validation.js";

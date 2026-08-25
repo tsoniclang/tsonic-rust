@@ -15,17 +15,39 @@ import {
 import {
   rustProviderOperationFormDeclaresWritableInput,
 } from "../../../dist/policy/operations/forms.js";
+import {
+  rustBorrowedStrTargetType,
+  rustFutureTargetType,
+  rustInferredLifetime,
+  rustJsArrayConcatItemTargetType,
+  rustJsArrayTargetType,
+  rustJsValueTargetType,
+  rustNamedTargetType,
+  rustNeverTargetType,
+  rustNullishSourceTargetType,
+  rustRawPointerTargetType,
+  rustReferenceTargetType,
+  rustStringTargetType,
+  rustTypeArgument,
+  rustTypeParameterTargetType,
+  rustUnitTargetType,
+} from "../../../dist/target-model/types/index.js";
 
 const bool = { kind: "source-primitive", name: "bool" };
 const float64 = { kind: "source-primitive", name: "float64" };
 const int32 = { kind: "source-primitive", name: "int32" };
 const isize = { kind: "source-primitive", name: "native-int" };
-const jsValue = { kind: "target-named", id: "rust.js.JsValue" };
-const providerError = { kind: "target-named", id: "rust.test.ProviderError" };
-const string = { kind: "target-named", id: "rust.std.String" };
-const sourceNullish = { kind: "target-specific", target: "rust", name: "source-nullish" };
-const unit = { kind: "tuple", elements: [] };
+const jsValue = rustJsValueTargetType();
+const providerError = rustNamedTargetType("rust.test.ProviderError", "acme::ProviderError");
+const string = rustStringTargetType();
+const sourceNullish = rustNullishSourceTargetType();
+const unit = rustUnitTargetType();
 const usize = { kind: "source-primitive", name: "native-uint" };
+const openTypeArgument = rustTypeArgument(rustTypeParameterTargetType({
+  kind: "generated",
+  artifactId: "finalized-operation-abi-test",
+  itemId: "T",
+}, "T"));
 
 test("provider calls retain closed target-only generic arguments", () => {
   const abi = finalizeRustProviderOperationAbi({
@@ -33,50 +55,42 @@ test("provider calls retain closed target-only generic arguments", () => {
     form: { form: "call", path: "core::mem::size_of" },
     sourceArgumentCarriers: [],
     resultCarrier: usize,
-    targetTypeArguments: [int32],
+    targetGenericArguments: [rustTypeArgument(int32)],
     isAsync: false,
     isFallible: false,
   });
 
   assert.ok(abi);
-  assert.deepEqual(abi.targetTypeArguments, [int32]);
+  assert.deepEqual(abi.targetGenericArguments, [rustTypeArgument(int32)]);
   assert.equal(validateRustFinalizedOperationAbi(abi), true);
   assert.equal(finalizeRustProviderOperationAbi({
     operationKind: "method",
     form: { form: "call", path: "core::mem::size_of" },
     sourceArgumentCarriers: [],
     resultCarrier: usize,
-    targetTypeArguments: [{ kind: "type-parameter", name: "T" }],
+    targetGenericArguments: [openTypeArgument],
     isAsync: false,
     isFallible: false,
   }), undefined);
   assert.equal(finalizeRustProviderOperationAbi({
-    operationKind: "property",
-    form: { form: "path", path: "acme::VALUE" },
+    operationKind: "indexer",
+    form: { form: "index" },
     sourceArgumentCarriers: [],
     resultCarrier: int32,
-    targetTypeArguments: [int32],
+    targetGenericArguments: [rustTypeArgument(int32)],
     isAsync: false,
     isFallible: false,
   }), undefined);
 });
 
 test("provider evaluation effects are conservative by default and require an exact pure opt-in", () => {
-  const array = {
-    kind: "target-named",
-    id: "rust.js.JsArray",
-    typeArguments: [int32],
-  };
+  const array = rustJsArrayTargetType(int32);
   const taggedForm = {
     form: "receiver-tagged-array",
     name: "mutating_values",
     receiverMode: "ref",
     leadingArguments: [],
-    elementCarrier: {
-      kind: "target-named",
-      id: "acme.MutableInput",
-      typeArguments: [int32],
-    },
+    elementCarrier: rustNamedTargetType("acme.MutableInput", "acme::MutableInput", [int32]),
     alternatives: [{
       inputCarrier: int32,
       mode: "mut-ref",
@@ -243,11 +257,7 @@ test("operation-form writability is one exhaustive structural policy", () => {
 });
 
 test("provider results preserve exact borrowed-string ownership conversion", () => {
-  const borrowedString = {
-    kind: "reference",
-    referent: string,
-    mutable: false,
-  };
+  const borrowedString = rustBorrowedStrTargetType();
   const abi = finalizeRustProviderOperationAbi({
     operationKind: "property",
     form: { form: "call", path: "acme::separator" },
@@ -340,17 +350,7 @@ test("provider methods finalize receiver, source order, passing modes, conversio
 });
 
 test("provider receivers distinguish runtime values from compile-time owner identities", () => {
-  const owner = {
-    kind: "target-specific",
-    target: "rust",
-    name: "named-type",
-    value: {
-      id: "rust.test.Environment",
-      path: "acme::Environment",
-      typeArguments: [],
-      traits: { implementations: [] },
-    },
-  };
+  const owner = rustNamedTargetType("rust.test.Environment", "acme::Environment");
   const abi = finalizeRustProviderOperationAbi({
     operationKind: "indexer",
     form: { form: "call", path: "acme::environment_get", argModes: ["ref"] },
@@ -589,7 +589,7 @@ test("variadic value arrays move each source value into one owned fixed Rust arr
     operationKind: "method",
     form,
     sourceArgumentCarriers: [int32, int32],
-    resultCarrier: { kind: "target-named", id: "rust.js.JsArray", typeArguments: [int32] },
+    resultCarrier: rustJsArrayTargetType(int32),
     isAsync: false,
     isFallible: false,
   });
@@ -597,7 +597,7 @@ test("variadic value arrays move each source value into one owned fixed Rust arr
     operationKind: "method",
     form,
     sourceArgumentCarriers: [],
-    resultCarrier: { kind: "target-named", id: "rust.js.JsArray", typeArguments: [int32] },
+    resultCarrier: rustJsArrayTargetType(int32),
     isAsync: false,
     isFallible: false,
   });
@@ -605,7 +605,7 @@ test("variadic value arrays move each source value into one owned fixed Rust arr
     operationKind: "method",
     form,
     sourceArgumentCarriers: [string],
-    resultCarrier: { kind: "target-named", id: "rust.js.JsArray", typeArguments: [int32] },
+    resultCarrier: rustJsArrayTargetType(int32),
     isAsync: false,
     isFallible: false,
   });
@@ -624,11 +624,7 @@ test("variadic value arrays move each source value into one owned fixed Rust arr
 });
 
 test("receiver value arrays move every variadic source value into one fixed Rust array", () => {
-  const receiver = {
-    kind: "target-named",
-    id: "rust.js.JsArray",
-    typeArguments: [int32],
-  };
+  const receiver = rustJsArrayTargetType(int32);
   const form = {
     form: "receiver-value-array",
     name: "push_many",
@@ -684,8 +680,8 @@ test("receiver value arrays move every variadic source value into one fixed Rust
 });
 
 test("tagged value arrays select one exact constructor for every variadic source value", () => {
-  const array = { kind: "target-named", id: "rust.js.JsArray", typeArguments: [int32] };
-  const tagged = { kind: "target-named", id: "rust.js.JsArrayConcatItem", typeArguments: [int32] };
+  const array = rustJsArrayTargetType(int32);
+  const tagged = rustJsArrayConcatItemTargetType(int32);
   const form = {
     form: "receiver-tagged-array",
     name: "concat",
@@ -746,11 +742,7 @@ test("async ABI separates invocation, await fallibility, and post-await conversi
   assert.equal(abi.result.kind, "async");
   assert.deepEqual(abi.result.awaitedRawCarrier, isize);
   assert.deepEqual(abi.result.awaitedCarrier, int32);
-  assert.deepEqual(abi.result.futureCarrier, {
-    kind: "target-named",
-    id: "rust.core.Future",
-    typeArguments: [int32],
-  });
+  assert.deepEqual(abi.result.futureCarrier, rustFutureTargetType(int32));
   assert.equal(validateRustFinalizedOperationAbi({
     ...abi,
     effects: { ...abi.effects, invocation: "fallible" },
@@ -758,7 +750,7 @@ test("async ABI separates invocation, await fallibility, and post-await conversi
 });
 
 test("runtime index setters finalize mutable receiver, index conversion, and value", () => {
-  const vec = { kind: "array", element: int32 };
+  const vec = rustJsArrayTargetType(int32);
   const abi = finalizeRustProviderOperationAbi({
     operationKind: "index-set",
     form: {
@@ -798,7 +790,7 @@ test("runtime method setters preserve the provider-declared receiver mode", () =
   const shared = finalizeRustProviderOperationAbi({
     operationKind: "property-set",
     form: { form: "receiver-method", name: "set_value" },
-    sourceReceiverCarrier: { kind: "target-named", id: "acme.SharedCell" },
+    sourceReceiverCarrier: rustNamedTargetType("acme.SharedCell", "acme::SharedCell"),
     sourceArgumentCarriers: [int32],
     declaredSourceArgumentCarriers: [int32],
     resultCarrier: unit,
@@ -808,7 +800,7 @@ test("runtime method setters preserve the provider-declared receiver mode", () =
   const exclusive = finalizeRustProviderOperationAbi({
     operationKind: "property-set",
     form: { form: "receiver-method", name: "set_value", mutatesReceiver: true },
-    sourceReceiverCarrier: { kind: "target-named", id: "acme.ExclusiveCell" },
+    sourceReceiverCarrier: rustNamedTargetType("acme.ExclusiveCell", "acme::ExclusiveCell"),
     sourceArgumentCarriers: [int32],
     declaredSourceArgumentCarriers: [int32],
     resultCarrier: unit,
@@ -851,7 +843,7 @@ test("finalized ABI validation is total and rejects every mutated closed-contrac
     { ...abi, target: { ...abi.target, argModes: [] } },
     { ...abi, target: { ...abi.target, argOrder: [0, 0] } },
     { ...abi, targetArguments: [{ ...abi.targetArguments[0], source: { kind: "argument", sourceIndex: 7 } }] },
-    { ...abi, targetTypeArguments: [{ kind: "type-parameter", name: "T" }] },
+    { ...abi, targetGenericArguments: [openTypeArgument] },
     { ...abi, result: { ...abi.result, unexpected: true } },
   ];
 
@@ -859,8 +851,8 @@ test("finalized ABI validation is total and rejects every mutated closed-contrac
     assert.doesNotThrow(() => validateRustFinalizedOperationAbi(malformed));
     assert.equal(validateRustFinalizedOperationAbi(malformed), false);
   }
-  const cyclicCarrier = { kind: "target-specific", target: "rust", name: "cycle" };
-  cyclicCarrier.value = cyclicCarrier;
+  const cyclicCarrier = { kind: "source-carrier", identity: { kind: "generated", artifactId: "cycle", itemId: "cycle" }, payload: {} };
+  cyclicCarrier.payload.cycle = cyclicCarrier;
   const cyclic = structuredClone(abi);
   cyclic.sourceArguments[0].carrier = cyclicCarrier;
   assert.doesNotThrow(() => validateRustFinalizedOperationAbi(cyclic));
@@ -891,7 +883,7 @@ test("operation finalization rejects unsafe constants and incomplete permutation
       trailingArguments: [{ kind: "integer", value: Number.MAX_SAFE_INTEGER + 1 }],
     },
   }), undefined);
-  const rawPointer = { kind: "pointer", pointee: int32, mutability: "const" };
+  const rawPointer = rustRawPointerTargetType(int32, false);
   const rawPointerReceiver = finalizeRustProviderOperationAbi({
     operationKind: "method",
     form: { form: "receiver-method", name: "write", mutatesReceiver: true },
@@ -902,11 +894,11 @@ test("operation finalization rejects unsafe constants and incomplete permutation
     isFallible: false,
   });
   assert.ok(rawPointerReceiver);
-  assert.deepEqual(rawPointerReceiver.targetReceiver.input.parameterCarrier, {
-    kind: "reference",
-    referent: rawPointer,
-    mutable: true,
-  });
+  assert.deepEqual(rawPointerReceiver.targetReceiver.input.parameterCarrier, rustReferenceTargetType(
+    rawPointer,
+    true,
+    rustInferredLifetime("finalized-operation-input\0mut-ref"),
+  ));
 });
 
 test("operation forms fail closed for missing discriminant data, unknown variants, and sparse arrays", () => {
@@ -967,7 +959,7 @@ test("finalized ABI rejects sparse arrays at every nested contract boundary", ()
   const malformed = [
     { ...abi, sourceArguments: sparse },
     { ...abi, targetArguments: Array(abi.targetArguments.length) },
-    { ...abi, targetTypeArguments: Array(1) },
+    { ...abi, targetGenericArguments: Array(1) },
     { ...abi, target: { ...abi.target, argModes: Array(1) } },
   ];
   for (const candidate of malformed) {
@@ -976,9 +968,9 @@ test("finalized ABI rejects sparse arrays at every nested contract boundary", ()
   }
 });
 
-test("target type references honor optional target-specific payloads and reject malformed children", () => {
+test("target type references preserve exact canonical structures and reject malformed children", () => {
   const sparseTypes = Array(1);
-  const payloadFree = { kind: "target-specific", target: "rust", name: "source-nullish" };
+  const payloadFree = rustNeverTargetType();
   const slice = { kind: "slice", element: int32 };
   assert.equal(isRustTargetTypeRef(payloadFree), true);
   assert.equal(rustTargetTypeRefEquals(payloadFree, { ...payloadFree }), true);
@@ -987,7 +979,7 @@ test("target type references honor optional target-specific payloads and reject 
   const malformed = [
     { kind: "target-named", id: "acme.Type", typeArguments: sparseTypes },
     { kind: "tuple", elements: sparseTypes },
-    { kind: "function-pointer", args: sparseTypes, result: unit },
+    { kind: "function-pointer", safety: "safe", abi: "Rust", parameters: sparseTypes, variadic: false, result: unit },
     { kind: "target-specific", target: "rust", name: "opaque", value: () => undefined },
     { kind: "target-specific", target: "", name: "opaque" },
     { kind: "target-specific", target: "csharp", name: "opaque" },

@@ -115,6 +115,11 @@ export function rustNamedTargetType(
   traits: RustNamedTypeTraitContract = rustMoveOnlyNamedTypeTraits,
   identity: RustSemanticIdentity = rustBuiltinIdentity(id),
 ): TargetTypeRef {
+  if (!isRustNamedTypeTraitContract(traits) || traits.implementations.some((implementation) =>
+    implementation.requirements.some((requirement) =>
+      requirement.typeArgumentIndex >= typeArguments.length))) {
+    throw new Error(`Rust named target type '${id}' has an invalid native trait contract for ${typeArguments.length} type arguments.`);
+  }
   return rustPathTargetType({
     identity,
     displayPath: Object.freeze(path.split("::")),

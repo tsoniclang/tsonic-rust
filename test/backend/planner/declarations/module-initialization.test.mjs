@@ -7,6 +7,7 @@ import {
   compileRust,
 } from "../../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
+import { rustProgramErrorTargetType } from "../../../../dist/target-model/types/index.js";
 
 test("binary module initialization preserves dependency and source evaluation order", () => {
   const { result } = compileRust({
@@ -311,7 +312,7 @@ test("a fallible provider epilogue makes binary completion explicitly fallible",
         requiredCrate: "acme_files",
         isFallible: true,
         errorBoundary: "provider-native",
-        errorCarrier: { kind: "target-named", id: "rust.runtime.JsError" },
+        errorCarrier: rustProgramErrorTargetType(),
       }],
     })],
     target: {

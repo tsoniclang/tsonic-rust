@@ -15,20 +15,26 @@ import {
 } from "../../../dist/backend/planner/expressions/index.js";
 import {
   isRustNamedTypeTraitContract,
+  rustCloneTrait,
+  rustCopyTrait,
+  rustJsValueTargetType,
   rustNamedTypeCarrierValue,
   rustNamedTargetType,
+  rustNullishSourceTargetType,
+  rustStringTargetType,
 } from "../../../dist/target-model/types/index.js";
+import { emptyRustGenerics } from "../../../dist/target-model/semantics/index.js";
 
 test("native trait contracts preserve exact conditional Copy and Clone semantics", () => {
   const traits = {
     implementations: [
       {
-        traitPath: "core::clone::Clone",
-        requirements: [{ typeArgumentIndex: 0, traitPath: "core::clone::Clone" }],
+        trait: rustCloneTrait,
+        requirements: [{ typeArgumentIndex: 0, trait: rustCloneTrait }],
       },
       {
-        traitPath: "core::marker::Copy",
-        requirements: [{ typeArgumentIndex: 0, traitPath: "core::marker::Copy" }],
+        trait: rustCopyTrait,
+        requirements: [{ typeArgumentIndex: 0, trait: rustCopyTrait }],
       },
     ],
   };
@@ -39,12 +45,12 @@ test("native trait contracts preserve exact conditional Copy and Clone semantics
     [{ kind: "source-primitive", name: "int32" }],
     traits,
   )));
-  assert.equal(rustNamedTypeCarrierValue(rustNamedTargetType(
+  assert.throws(() => rustNamedTargetType(
     "acme.Cell",
     "acme::Cell",
     [],
     traits,
-  )), undefined, "trait requirements cannot address a missing type argument");
+  ), /invalid native trait contract/u);
 });
 
 test("value-returning fallible bodies never synthesize an invalid Ok unit", () => {
@@ -122,17 +128,7 @@ test("fallible result expressions preserve conversion into the enclosing program
 });
 
 test("operation fact equality is structural and independent of metadata key order", () => {
-  const resultCarrier = {
-    kind: "target-specific",
-    target: "rust",
-    name: "named-type",
-    value: {
-      id: "acme.Value",
-      path: "acme::Value",
-      traits: { implementations: [] },
-      typeArguments: [],
-    },
-  };
+  const resultCarrier = rustNamedTargetType("acme.Value", "acme::Value");
   const abi = finalizeRustProviderOperationAbi({
     operationKind: "method",
     form: { form: "call", path: "acme::run" },
@@ -194,6 +190,7 @@ test("project-source call consumption requires exact selected member kind, targe
     kind: "method",
     parameters: [{ name: "value", type: int32, passingMode: "by-value" }],
     returnType: int32,
+    generics: emptyRustGenerics,
   };
   const selected = { member };
   assert.equal(sourceCallSelectedMemberMatches(fact, selected), true);
@@ -203,10 +200,10 @@ test("project-source call consumption requires exact selected member kind, targe
 });
 
 test("compile-time provider arguments never require runtime carrier or passing facts", () => {
-  const jsValue = { kind: "target-named", id: "rust.js.JsValue" };
-  const sourceNullish = { kind: "target-specific", target: "rust", name: "source-nullish" };
+  const jsValue = rustJsValueTargetType();
+  const sourceNullish = rustNullishSourceTargetType();
   const float64 = { kind: "source-primitive", name: "float64" };
-  const string = { kind: "target-named", id: "rust.std.String" };
+  const string = rustStringTargetType();
   const abi = finalizeRustProviderOperationAbi({
     operationKind: "method",
     form: {
@@ -223,7 +220,7 @@ test("compile-time provider arguments never require runtime carrier or passing f
     isAsync: false,
     isFallible: true,
     errorBoundary: "provider-native",
-    errorCarrier: { kind: "target-named", id: "rust.test.ProviderError" },
+    errorCarrier: rustNamedTargetType("rust.test.ProviderError", "acme::ProviderError"),
   });
   assert.ok(abi);
   const runtimeArgument = {};

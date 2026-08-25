@@ -1,4 +1,6 @@
 export { createRustProviderPackage } from "../providers/packages/package.js";
+export { rustProviderPathTargetType } from "../providers/packages/type-references.js";
+export type { RustProviderTypeOwner } from "../providers/packages/type-references.js";
 export type {
   RustProviderBinaryEpilogueDefinition,
   RustProviderBinaryEpilogueRow,
@@ -50,12 +52,31 @@ export {
   rustBorrowedStrTargetType,
   rustCallableTargetType,
   rustClosureTargetType,
+  rustJsValueTargetType,
   rustJsArrayConcatItemTargetType,
   rustJsArrayTargetType,
+  rustNamedTargetType,
   rustNeverTargetType,
+  rustNullishSourceTargetType,
   rustOptionTargetType,
+  rustRawPointerTargetType,
+  rustReferenceTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
+  rustTypeArgument,
+  rustTypeParameterTargetType,
   rustUnitTargetType,
   rustVecTargetType,
 } from "../target-model/types/index.js";
+export {
+  rustCloneTrait,
+  rustCopyTrait,
+  rustDefaultTrait,
+} from "../target-model/types/index.js";
+export { emptyRustGenerics } from "../target-model/semantics/index.js";
+export type {
+  RustGenericArgument,
+  RustGenerics,
+  RustTraitImplementationEvidence,
+  RustTraitRef,
+} from "../target-model/semantics/index.js";

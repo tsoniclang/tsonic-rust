@@ -30,7 +30,7 @@ import {
   mergeRustProviderSemantics,
   collectRustProviderSemanticsFromDefinitions,
 } from "../packages/semantics.js";
-import { rustProviderBindingProviderId } from "../packages/source-provider.js";
+import { rustProviderBindingProviderId } from "../packages/identity.js";
 import type {
   RustCompilerDependency,
   RustCompilerProjectSnapshot,

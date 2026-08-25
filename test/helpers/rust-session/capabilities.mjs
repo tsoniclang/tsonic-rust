@@ -9,7 +9,11 @@ import {
   statSync,
 } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
-import { createRustProviderPackage } from "../../../dist/public/provider.js";
+import {
+  createRustProviderPackage,
+  emptyRustGenerics,
+  rustProviderPathTargetType,
+} from "../../../dist/public/provider.js";
 import { dirname, relative, resolve } from "node:path";
 import { fixtureCratesRoot, packageRoot } from "./paths.mjs";
 import { int32Carrier, stringCarrier } from "./provider-core.mjs";
@@ -153,7 +157,11 @@ export function acmeSuperbunapiCapability() {
 // Second non-Node capability: async + fallible rows, a named carrier, and
 // a runtime crate contribution — proving composition scale is name-blind.
 export function acmeTelemetryCapability() {
-  const meterCarrier = { kind: "target-named", id: "acme.telemetry.Meter" };
+  const meterCarrier = rustProviderPathTargetType({
+    owner: { packageId: "@acme/rust-telemetry", packageVersion: "1.0.0" },
+    itemId: "acme.telemetry.Meter",
+    displayPath: "acme_telemetry::Meter",
+  });
   return createRustProviderPackage({
     id: "@acme/rust-telemetry",
     displayName: "Telemetry for Rust",
@@ -198,20 +206,29 @@ export function acmeTelemetryCapability() {
         },
       ],
     }],
-    types: [{ exportId: "telemetry::Meter", targetCarrier: { kind: "target-named", id: "acme.telemetry.Meter" } }],
+    types: [{
+      exportId: "telemetry::Meter",
+      targetDeclarationKind: "struct",
+      sourceGenericBindings: [],
+      targetGenerics: emptyRustGenerics,
+      targetCarrier: meterCarrier,
+    }],
     operations: [
       { exportId: "telemetry::createMeter", operationKind: "method", target: { form: "call", path: "acme_telemetry::create_meter", argModes: ["ref"] }, resultCarrier: meterCarrier, parameterCarriers: [stringCarrier], isFallible: true, errorBoundary: "source-program" },
       { exportId: "telemetry::Meter", memberId: "telemetry::Meter.record", operationKind: "method", target: { form: "receiver-method", name: "record", mutatesReceiver: true }, resultCarrier: int32Carrier, parameterCarriers: [{ kind: "source-primitive", name: "float64" }], isFallible: true, errorBoundary: "source-program", isAsync: true },
       { exportId: "telemetry::Meter", memberId: "telemetry::Meter.total", operationKind: "method", target: { form: "receiver-method", name: "total" }, resultCarrier: int32Carrier },
     ],
-    carrierPaths: { "acme.telemetry.Meter": "acme_telemetry::Meter" },
     crates: [{ crateName: "acme_telemetry", cargoPath: resolve(fixtureCratesRoot, "acme_telemetry") }],
   });
 }
 
 // Capability with a fallible property row and a formatter-like carrier.
 export function acmeLogsinkCapability() {
-  const sinkCarrier = { kind: "target-named", id: "acme.logsink.Sink" };
+  const sinkCarrier = rustProviderPathTargetType({
+    owner: { packageId: "@acme/rust-logsink", packageVersion: "1.0.0" },
+    itemId: "acme.logsink.Sink",
+    displayPath: "acme_logsink::Sink",
+  });
   return createRustProviderPackage({
     id: "@acme/rust-logsink",
     displayName: "Log sink for Rust",
@@ -233,14 +250,19 @@ export function acmeLogsinkCapability() {
         },
       ],
     }],
-    types: [{ exportId: "logsink::Sink", targetCarrier: { kind: "target-named", id: "acme.logsink.Sink" } }],
+    types: [{
+      exportId: "logsink::Sink",
+      targetDeclarationKind: "struct",
+      sourceGenericBindings: [],
+      targetGenerics: emptyRustGenerics,
+      targetCarrier: sinkCarrier,
+    }],
     operations: [
       { exportId: "logsink::openSink", operationKind: "method", target: { form: "call", path: "acme_logsink::open_sink" }, resultCarrier: sinkCarrier },
       { exportId: "logsink::openSinkNamed", operationKind: "method", target: { form: "call", path: "acme_logsink::openSinkNamed", argModes: ["ref"] }, resultCarrier: sinkCarrier, parameterCarriers: [stringCarrier] },
       { exportId: "logsink::Sink", memberId: "logsink::Sink.path", operationKind: "property", target: { form: "receiver-method", name: "path" }, resultCarrier: stringCarrier, isFallible: true, errorBoundary: "source-program" },
       { exportId: "logsink::Sink", memberId: "logsink::Sink.write", operationKind: "method", target: { form: "receiver-method", name: "write", argModes: ["ref"], mutatesReceiver: true }, resultCarrier: int32Carrier, parameterCarriers: [stringCarrier] },
     ],
-    carrierPaths: { "acme.logsink.Sink": "acme_logsink::Sink" },
     crates: [{ crateName: "acme_logsink", cargoPath: resolve(fixtureCratesRoot, "acme_logsink") }],
   });
 }

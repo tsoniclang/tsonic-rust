@@ -9,9 +9,13 @@ import {
 } from "../../helpers/rust-session.mjs";
 import { selectJsSurfaceOperation } from "../../../dist/policy/operations/js-surface.js";
 import {
+  rustJsArrayConcatItemTargetType,
   rustJsArrayTargetType,
+  rustJsValueTargetType,
+  rustOptionTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
+  rustUnitTargetType,
   rustUndefinedTargetType,
   rustVecTargetType,
 } from "../../../dist/target-model/types/index.js";
@@ -104,11 +108,7 @@ test("array index rows distinguish checked source and runtime result carriers", 
   assert.equal(selected?.fact.kind, "provider-operation");
   assert.deepEqual(selected?.fact.sourceResultCarrier, elementCarrier);
   assert.deepEqual(selected?.fact.sourceAbsenceCarrier, rustUndefinedTargetType());
-  assert.deepEqual(selected?.fact.resultCarrier, {
-    kind: "target-named",
-    id: "rust.std.Option",
-    typeArguments: [elementCarrier],
-  });
+  assert.deepEqual(selected?.fact.resultCarrier, rustOptionTargetType(elementCarrier));
 });
 
 test("unavailable argument carriers defer only when one operation row remains", () => {
@@ -149,10 +149,10 @@ test("console rows select one generic closed value-slice ABI", () => {
     form: "call-value-slice",
     path: "js_abi::console_log",
     leadingArguments: [],
-    elementCarrier: { kind: "target-named", id: "rust.js.JsValue" },
+    elementCarrier: rustJsValueTargetType(),
   });
   assert.equal(selection?.fact.parameterCarriers, undefined);
-  assert.deepEqual(selection?.fact.resultCarrier, { kind: "tuple", elements: [] });
+  assert.deepEqual(selection?.fact.resultCarrier, rustUnitTargetType());
 });
 
 test("Object.is lowers closed source values through exact JsValue conversions", () => {
@@ -368,11 +368,7 @@ test("Array concat tags exact scalar and array arguments while preserving the re
     name: "concat",
     receiverMode: "ref",
     leadingArguments: [],
-    elementCarrier: {
-      kind: "target-named",
-      id: "rust.js.JsArrayConcatItem",
-      typeArguments: [int32Carrier],
-    },
+    elementCarrier: rustJsArrayConcatItemTargetType(int32Carrier),
     alternatives: [
       { inputCarrier: int32Carrier, mode: "value", constructorPath: "js_abi::JsArrayConcatItem::Value" },
       { inputCarrier: arrayCarrier, mode: "value", constructorPath: "js_abi::JsArrayConcatItem::Array" },

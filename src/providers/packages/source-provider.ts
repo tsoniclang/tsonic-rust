@@ -13,6 +13,7 @@ import type {
   SourceDeclarationProvider,
 } from "@tsonic/tsts";
 import type { RustProviderPackageDefinition } from "./model.js";
+import { rustProviderBindingProviderId } from "./identity.js";
 
 export function createRustProviderPackageSourceExtension(definition: RustProviderPackageDefinition): CompilerExtension {
   return {
@@ -216,8 +217,4 @@ function rebaseProviderType(
     case "type-parameter":
       return type;
   }
-}
-
-export function rustProviderBindingProviderId(packageId: string): string {
-  return `tsonic.rust.provider-package.${packageId}.binding`;
 }

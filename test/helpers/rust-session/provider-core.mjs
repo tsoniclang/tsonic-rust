@@ -1,13 +1,25 @@
-import { createRustProviderPackage } from "../../../dist/public/provider.js";
+import {
+  createRustProviderPackage,
+  emptyRustGenerics,
+  rustNeverTargetType,
+  rustProviderPathTargetType,
+  rustSourcePrimitiveTargetType,
+  rustStringTargetType,
+  rustUnitTargetType,
+} from "../../../dist/public/provider.js";
 import { fixtureCratesRoot } from "./paths.mjs";
 import { resolve } from "node:path";
 
-export const stringCarrier = { kind: "target-named", id: "rust.std.String" };
-export const unitCarrier = { kind: "tuple", elements: [] };
-export const int32Carrier = { kind: "source-primitive", name: "int32" };
-export const boolCarrier = { kind: "source-primitive", name: "bool" };
-export const neverCarrier = { kind: "target-specific", target: "rust", name: "never" };
-export const storeCarrier = { kind: "target-named", id: "acme.platform.Store" };
+export const stringCarrier = rustStringTargetType();
+export const unitCarrier = rustUnitTargetType();
+export const int32Carrier = rustSourcePrimitiveTargetType("int32");
+export const boolCarrier = rustSourcePrimitiveTargetType("bool");
+export const neverCarrier = rustNeverTargetType();
+export const storeCarrier = rustProviderPathTargetType({
+  owner: { packageId: "acme-platform", packageVersion: "1.0.0" },
+  itemId: "acme.platform.Store",
+  displayPath: "acme_platform::Store",
+});
 
 export function acmeFilesPackage({ binaryEpilogues } = {}) {
   return createRustProviderPackage({
@@ -136,7 +148,13 @@ export function acmePlatformPackage({ includeHomeDir = true, includeSetters = fa
         },
       ],
     }],
-    types: [{ exportId: "@acme/platform::Store", targetCarrier: { kind: "target-named", id: "acme.platform.Store" } }],
+    types: [{
+      exportId: "@acme/platform::Store",
+      targetDeclarationKind: "struct",
+      sourceGenericBindings: [],
+      targetGenerics: emptyRustGenerics,
+      targetCarrier: storeCarrier,
+    }],
     operations: [
       {
         exportId: "@acme/platform::Env",
@@ -190,7 +208,6 @@ export function acmePlatformPackage({ includeHomeDir = true, includeSetters = fa
           ]
         : []),
     ].filter((row) => includeHomeDir || row.memberId !== "@acme/platform::Env.homeDir"),
-    carrierPaths: { "acme.platform.Store": "acme_platform::Store" },
     ...(binaryEpilogues === undefined ? {} : { binaryEpilogues }),
     crates: [{ crateName: "acme_platform", cargoPath: resolve(fixtureCratesRoot, "acme_platform") }],
   });

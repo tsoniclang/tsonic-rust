@@ -5,8 +5,9 @@ import {
   mergeProviderDeclarationIdentities,
   resolveSelectedProviderDeclaration,
 } from "../../../dist/policy/evidence/selected-source.js";
+import { rustUnitTargetType } from "../../../dist/target-model/types/index.js";
 
-const unit = { kind: "tuple", elements: [] };
+const unit = rustUnitTargetType();
 
 function row(overrides = {}) {
   return {

@@ -13,6 +13,12 @@ import {
   rustTargetOperationSupportsAssignment,
   rustTargetOperationText,
 } from "../../../dist/analysis/facts/target-operation.js";
+import { emptyRustGenerics } from "../../../dist/target-model/semantics/index.js";
+import {
+  rustSourcePrimitiveTargetType,
+  rustStringTargetType,
+  rustVecTargetType,
+} from "../../../dist/target-model/types/index.js";
 
 function createModel() {
   return createRustPlanBuilder({ getFact: () => undefined });
@@ -21,8 +27,8 @@ function createModel() {
 test("closed Rust carrier and conversion facts are allocation-independent", () => {
   const model = createModel();
   const subject = {};
-  const firstCarrier = { kind: "target-named", id: "rust.std.Vec", typeArguments: [{ kind: "source-primitive", name: "int32" }] };
-  const equivalentCarrier = { kind: "target-named", id: "rust.std.Vec", typeArguments: [{ kind: "source-primitive", name: "int32" }] };
+  const firstCarrier = rustVecTargetType(rustSourcePrimitiveTargetType("int32"));
+  const equivalentCarrier = rustVecTargetType(rustSourcePrimitiveTargetType("int32"));
 
   model.set(subject, rustRuntimeCarrierKey, { carrier: firstCarrier });
   assert.doesNotThrow(() => model.set(subject, rustRuntimeCarrierKey, { carrier: equivalentCarrier }));
@@ -45,14 +51,14 @@ test("selected operations compare target data structurally and source provenance
     operationId: "tsonic.rust.operator.concat.string",
     operationKind: "operator",
     targetOperation: "+",
-    resultType: { kind: "target-named", id: "rust.std.String" },
+    resultType: rustStringTargetType(),
     provenance: { sourceExpression },
   };
   const equivalent = {
     operationId: "tsonic.rust.operator.concat.string",
     operationKind: "operator",
     targetOperation: "+",
-    resultType: { kind: "target-named", id: "rust.std.String" },
+    resultType: rustStringTargetType(),
     provenance: { sourceExpression },
   };
 
@@ -74,6 +80,7 @@ test("selected calls preserve exact checker evidence while accepting equivalent 
     sourceName: "run",
     targetName: "acme::run",
     kind: "method",
+    generics: emptyRustGenerics,
     parameters: [{ name: "value", type: { kind: "source-primitive", name: "int32" }, passingMode: "value" }],
     returnType: { kind: "source-primitive", name: "int32" },
   };
@@ -115,7 +122,7 @@ test("one canonical operation projection serves selection and backend validation
   assert.equal(rustTargetOperationText({
     kind: "string-concat",
     operationId: "tsonic.rust.operator.concat.string",
-    resultCarrier: { kind: "target-named", id: "rust.std.String" },
+    resultCarrier: rustStringTargetType(),
   }), "+");
   assert.equal(rustTargetOperationText({
     kind: "source-conversion",

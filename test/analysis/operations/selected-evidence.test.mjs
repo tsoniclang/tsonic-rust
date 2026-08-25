@@ -31,7 +31,7 @@ const providerValuePackage = createRustProviderPackage({
     exportId: "@acme/environment::platform",
     operationKind: "property",
     target: { form: "call", path: "acme_environment::platform" },
-    resultCarrier: { kind: "target-named", id: "rust.std.String" },
+    resultCarrier: rustStringTargetType(),
   }],
   crates: [],
 });

@@ -1,4 +1,7 @@
 export { materializeProviderCarrier } from "./materialization.js";
+export { rustProviderBindingProviderId } from "./identity.js";
+export { rustProviderPathTargetType } from "./type-references.js";
+export type { RustProviderTypeOwner } from "./type-references.js";
 export { rustProviderPolicyContributionKind } from "./model.js";
 export type {
   RustProviderBinaryEpilogueDefinition,
@@ -34,4 +37,4 @@ export {
   mergeRustProviderSemantics,
   rustProviderPolicyContributionsOf,
 } from "./semantics.js";
-export { createRustProviderPackageSourceProvider, rustProviderBindingProviderId } from "./source-provider.js";
+export { createRustProviderPackageSourceProvider } from "./source-provider.js";

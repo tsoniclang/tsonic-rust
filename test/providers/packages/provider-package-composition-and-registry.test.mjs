@@ -2,9 +2,13 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   createRustProviderPackage,
+  emptyRustGenerics,
   rustInt32ToFloat64ValueConversion,
   rustCallableTargetType,
   rustClosureTargetType,
+  rustJsArrayConcatItemTargetType,
+  rustJsArrayTargetType,
+  rustProviderPathTargetType,
 } from "../../../dist/public/provider.js";
 import {
   collectRustProviderOperationRows,
@@ -173,7 +177,7 @@ test("generic value-slice forms require closed leading and element carriers", ()
     () => createRustProviderPackage(withOperations([
       operation({ ...base, elementCarrier: { kind: "target-named", id: "acme.Missing" } }),
     ])),
-    /without a Rust carrier path/u,
+    /not one canonical closed Rust target type/u,
   );
   assert.throws(
     () => createRustProviderPackage(withOperations([
@@ -208,13 +212,13 @@ test("generic value-array forms require closed paths and element carriers", () =
     () => createRustProviderPackage(definition({
       operations: [operation({ ...base, elementCarrier: { kind: "target-named", id: "acme.Missing" } })],
     })),
-    /without a Rust carrier path/u,
+    /not one canonical closed Rust target type/u,
   );
 });
 
 test("tagged-array forms require unique exact alternatives and closed constructors", () => {
-  const arrayCarrier = { kind: "target-named", id: "rust.js.JsArray", typeArguments: [int32Carrier] };
-  const taggedCarrier = { kind: "target-named", id: "rust.js.JsArrayConcatItem", typeArguments: [int32Carrier] };
+  const arrayCarrier = rustJsArrayTargetType(int32Carrier);
+  const taggedCarrier = rustJsArrayConcatItemTargetType(int32Carrier);
   const operation = (target) => ({
     exportId: "@acme/validation::run",
     operationKind: "method",
@@ -400,15 +404,26 @@ test("provider type relations remain target-owned and require closed Rust paths"
     kind: "class",
     members: [],
   };
+  const valueCarrier = rustProviderPathTargetType({
+    owner: { packageId: "acme-validation", packageVersion: "1.0.0" },
+    itemId: "acme.validation.Value",
+    displayPath: "acme_validation::Value",
+  });
+  const valueType = {
+    exportId: "@acme/validation::Value",
+    targetDeclarationKind: "struct",
+    sourceGenericBindings: [],
+    targetGenerics: emptyRustGenerics,
+    targetCarrier: valueCarrier,
+  };
   const valid = definition({
     modules: [{
       moduleSpecifier: "@acme/validation",
       providerModuleId: "acme.validation",
       exports: [valueExport],
     }],
-    types: [{ exportId: "@acme/validation::Value", targetCarrier: { kind: "target-named", id: "acme.validation.Value" } }],
+    types: [valueType],
     operations: [],
-    carrierPaths: { "acme.validation.Value": "acme_validation::Value" },
   });
   const providerPackage = createRustProviderPackage(valid);
   const provider = createRustProviderPackageSourceProvider(valid);
@@ -419,59 +434,25 @@ test("provider type relations remain target-owned and require closed Rust paths"
   assert.deepEqual(model.exports, [valueExport]);
   assert.equal(Object.hasOwn(model.exports[0], "targetIdentity"), false);
   assert.deepEqual(collectRustProviderSemantics(providerContext([providerPackage])).types, [{
-    exportId: "@acme/validation::Value",
-    targetCarrier: {
-      kind: "target-specific",
-      target: "rust",
-      name: "named-type",
-      value: {
-        id: "acme.validation.Value",
-        path: "acme_validation::Value",
-        traits: { implementations: [] },
-        typeArguments: [],
-      },
-    },
+    ...valueType,
     providerPackageId: "acme-validation",
     providerId: "tsonic.rust.provider-package.acme-validation.binding",
     providerVersion: "1.0.0",
     providerModuleId: "acme.validation",
     moduleSpecifier: "@acme/validation",
-    sourceTypeParameters: [],
   }]);
 
   assert.throws(
     () => createRustProviderPackage({
       ...valid,
-      types: [{ exportId: "@acme/validation::Value", targetCarrier: { kind: "target-named", id: "acme.validation.Value" }, target: "csharp" }],
+      types: [{ ...valueType, target: "csharp" }],
     }),
     /type relation has unsupported field 'target'/u,
   );
-  assert.throws(
-    () => createRustProviderPackage({ ...valid, carrierPaths: {} }),
-    /target type 'acme\.validation\.Value' has no closed Rust carrier path/u,
-  );
-  assert.throws(
-    () => createRustProviderPackage({
-      ...valid,
-      carrierTraits: {
-        "acme.validation.Missing": {
-          implementations: [{ traitPath: "core::clone::Clone", requirements: [] }],
-        },
-      },
-    }),
-    /carrier trait contract 'acme\.validation\.Missing' has no rendered carrier path/u,
-  );
-  assert.throws(
-    () => createRustProviderPackage({
-      ...valid,
-      carrierTraits: {
-        "acme.validation.Value": {
-          implementations: [{ traitPath: "core::marker::Copy", requirements: [] }],
-        },
-      },
-    }),
-    /invalid native trait contract/u,
-  );
+  assert.throws(() => createRustProviderPackage({
+    ...valid,
+    types: [{ ...valueType, targetCarrier: { ...valueCarrier, displayPath: [] } }],
+  }), /invalid closed Rust target carrier/u);
   assert.throws(
     () => createRustProviderPackage({ ...definition(), targetIdentities: { "@acme/validation::Value": "acme.validation.Value" } }),
     /unsupported field 'targetIdentities'/u,

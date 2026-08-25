@@ -536,7 +536,9 @@ export function validateOwnershipExpressionAgainstContract(
     operation === undefined &&
     (declarationKind === undefined || !isOwnedStorageDeclaration(declarationKind));
   const directReference = operation === undefined &&
-    ((mode === "ref" && declaredContract === "shared-reference") ||
+    ((declaredContract === "ordinary" && expectedContract === "ordinary" &&
+      (mode === "ref" || mode === "mut-ref")) ||
+      (mode === "ref" && declaredContract === "shared-reference") ||
       (mode === "mut-ref" && declaredContract === "mutable-reference"));
   if (directReference || directOwnedRvalue) {
     return true;

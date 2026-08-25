@@ -9,7 +9,6 @@ import {
   rustTargetTypeOpenGenericIdentityKeys,
 } from "../../../target-model/types/index.js";
 import { rustTypeSemanticKey } from "../../../target-model/semantics/index.js";
-import { rustSemanticIdentityItemId } from "../../../target-model/semantics/index.js";
 import { isRustTargetTypeRef } from "../../../target-model/types/equality.js";
 import {
   validateOperationRows,
@@ -743,9 +742,8 @@ function validateTypeSemanticRoles(
 function targetCarrierNamedIds(carrier: TargetTypeRef): readonly string[] {
   const ids = new Set<string>();
   walkTargetCarrier(carrier, (candidate) => {
-    if (candidate.kind === "path") {
-      const itemId = rustSemanticIdentityItemId(candidate.identity);
-      if (itemId !== undefined) ids.add(itemId);
+    if (candidate.kind === "path" && candidate.identity.kind === "builtin") {
+      ids.add(candidate.identity.itemId);
     }
   });
   return [...ids].sort();

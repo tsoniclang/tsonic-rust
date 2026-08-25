@@ -10,8 +10,16 @@ import {
   createRustSession,
   rustSourceDiagnostics,
 } from "../../helpers/rust-session.mjs";
-import { createRustProviderPackage } from "../../../dist/public/provider.js";
-import { collectRustProviderSemantics } from "../../../dist/providers/packages/index.js";
+import {
+  createRustProviderPackage,
+  rustCloneTrait,
+  rustProviderPathTargetType,
+} from "../../../dist/public/provider.js";
+import {
+  collectRustProviderSemantics,
+  collectRustProviderSemanticsFromDefinitions,
+  mergeRustProviderSemantics,
+} from "../../../dist/providers/packages/index.js";
 import { captureRustProviderContributions } from "../../helpers/provider-contributions.mjs";
 
 function providerContext(selectedCapabilities) {
@@ -35,8 +43,7 @@ export function load(path: string): string {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /acme_files::read_text\(path\)/u);
-  assert.doesNotMatch(source, /path\.clone\(\)/u);
+  assert.match(source, /acme_files::read_text\(path\.clone\(\)\)/u);
   const manifest = artifactText(result, "Cargo.toml");
   assert.match(manifest, /acme_files = \{ path = ".*acme_files" \}/u);
   assert.match(manifest, /tsonic_rust_runtime = \{ path = /u);
@@ -241,6 +248,12 @@ test("provider packages contribute cargo path dependencies through runtime contr
 });
 
 test("provider paths and named carriers materialize before facts reach the backend", () => {
+  const resultCarrier = rustProviderPathTargetType({
+    owner: { packageId: "acme-materialized", packageVersion: "1.0.0" },
+    itemId: "acme.materialized.Value",
+    displayPath: "acme_runtime::Value",
+    traitImplementations: [{ trait: rustCloneTrait, requirements: [] }],
+  });
   const providerPackage = createRustProviderPackage({
     id: "acme-materialized",
     displayName: "Acme materialized",
@@ -259,15 +272,9 @@ test("provider paths and named carriers materialize before facts reach the backe
       exportId: "acme.materialized::create",
       operationKind: "method",
       target: { form: "call", path: "api::create" },
-      resultCarrier: { kind: "target-named", id: "acme.materialized.Value" },
+      resultCarrier,
     }],
     aliasImports: [{ alias: "api", path: "acme_runtime::api" }],
-    carrierPaths: { "acme.materialized.Value": "acme_runtime::Value" },
-    carrierTraits: {
-      "acme.materialized.Value": {
-        implementations: [{ traitPath: "core::clone::Clone", requirements: [] }],
-      },
-    },
     crates: [],
   });
 
@@ -282,60 +289,62 @@ test("provider paths and named carriers materialize before facts reach the backe
     moduleSpecifier: "@acme/materialized",
   }]);
   assert.equal(semantics.operations[0].target.path, "acme_runtime::api::create");
-  assert.deepEqual(semantics.operations[0].resultCarrier, {
-    kind: "target-specific",
-    target: "rust",
-    name: "named-type",
-    value: {
-      id: "acme.materialized.Value",
-      path: "acme_runtime::Value",
-      traits: {
-        implementations: [{ traitPath: "core::clone::Clone", requirements: [] }],
-      },
-      typeArguments: [],
-    },
-  });
+  assert.deepEqual(semantics.operations[0].resultCarrier, resultCarrier);
 });
 
-test("conflicting provider carrier paths fail before operation facts are recorded", () => {
-  const packageWithPath = (id, moduleSpecifier, path) => createRustProviderPackage({
+test("provider path identity distinguishes owners and rejects contradictory exact rows", () => {
+  const definitionWithPath = (id, moduleSpecifier, path) => ({
     id,
     displayName: id,
     version: "1.0.0",
-    modules: [{ moduleSpecifier, providerModuleId: id, exports: [] }],
-    operations: [],
-    carrierPaths: { "acme.Shared": path },
-    crates: [],
-  });
-
-  assert.throws(
-    () => collectRustProviderSemantics(providerContext([
-      packageWithPath("acme-first", "@acme/first", "acme_first::Shared"),
-      packageWithPath("acme-second", "@acme/second", "acme_second::Shared"),
-    ])),
-    /conflicting target paths 'acme_first::Shared' and 'acme_second::Shared'/u,
-  );
-});
-
-test("conflicting provider carrier trait contracts fail before operation facts are recorded", () => {
-  const packageWithTraits = (id, moduleSpecifier, traits) => createRustProviderPackage({
-    id,
-    displayName: id,
-    version: "1.0.0",
-    modules: [{ moduleSpecifier, providerModuleId: id, exports: [] }],
-    operations: [],
-    carrierPaths: { "acme.Shared": "acme_shared::Shared" },
-    carrierTraits: { "acme.Shared": traits },
-    crates: [],
-  });
-
-  assert.throws(
-    () => collectRustProviderSemantics(providerContext([
-      packageWithTraits("acme-first", "@acme/first", {
-        implementations: [{ traitPath: "core::clone::Clone", requirements: [] }],
+    modules: [{
+      moduleSpecifier,
+      providerModuleId: id,
+      exports: [{
+        id: `${id}::create`,
+        name: "create",
+        kind: "function",
+        signatures: [{ id: `${id}::create()`, parameters: [], returnType: { kind: "opaque", id: "Shared" } }],
+      }],
+    }],
+    operations: [{
+      exportId: `${id}::create`,
+      operationKind: "method",
+      target: { form: "call", path: `${id.replaceAll("-", "_")}::create` },
+      resultCarrier: rustProviderPathTargetType({
+        owner: { packageId: id, packageVersion: "1.0.0" },
+        itemId: "acme.Shared",
+        displayPath: path,
       }),
-      packageWithTraits("acme-second", "@acme/second", { implementations: [] }),
-    ])),
-    /conflicting native trait contracts/u,
-  );
+    }],
+    crates: [],
+  });
+
+  assert.equal(collectRustProviderSemanticsFromDefinitions([
+    definitionWithPath("acme-first", "@acme/first", "acme_first::Shared"),
+    definitionWithPath("acme-second", "@acme/second", "acme_second::Shared"),
+  ]).operations.length, 2);
+  assert.throws(() => mergeRustProviderSemantics(
+    collectRustProviderSemanticsFromDefinitions([
+      definitionWithPath("acme-shared", "@acme/shared", "acme_shared::Shared"),
+    ]),
+    collectRustProviderSemanticsFromDefinitions([
+      definitionWithPath("acme-shared", "@acme/shared", "other::Shared"),
+    ]),
+  ), /conflicting definitions/u);
+});
+
+test("provider carrier trait guarantees are part of the exact carrier contract", () => {
+  const moveOnly = rustProviderPathTargetType({
+    owner: { packageId: "acme-shared", packageVersion: "1.0.0" },
+    itemId: "acme.Shared",
+    displayPath: "acme_shared::Shared",
+  });
+  const cloneable = rustProviderPathTargetType({
+    owner: { packageId: "acme-shared", packageVersion: "1.0.0" },
+    itemId: "acme.Shared",
+    displayPath: "acme_shared::Shared",
+    traitImplementations: [{ trait: rustCloneTrait, requirements: [] }],
+  });
+  assert.notDeepEqual(moveOnly, cloneable);
 });

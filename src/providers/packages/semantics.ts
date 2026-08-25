@@ -8,7 +8,7 @@ import {
   materializeProviderSourceGenericBinding,
   materializeProviderTypeRequirements,
 } from "./materialization.js";
-import { rustProviderBindingProviderId } from "./source-provider.js";
+import { rustProviderBindingProviderId } from "./identity.js";
 import { validateProviderPackageDefinition } from "./validation.js";
 import {
   closedMetadataEquals,

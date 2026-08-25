@@ -183,11 +183,6 @@ function printRustFunctionSignature(
     indentText(depth).length + flat.split("\n", 1)[0]!.length + terminalWidth < rustFormatWidth) {
     return flat;
   }
-  const flatParameters = `${opening}${parameters.join(", ")})`;
-  if (!includeBodySpacing && returnType !== undefined && whereClause.length === 0 &&
-    indentText(depth).length + flatParameters.length <= rustFormatWidth) {
-    return `${flatParameters}\n${indentText(depth + 1)}-> ${printRustType(returnType)}`;
-  }
   return [
     opening,
     ...parameters.map((parameter) => `${indentText(depth + 1)}${parameter},`),

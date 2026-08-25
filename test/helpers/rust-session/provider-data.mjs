@@ -1,9 +1,23 @@
-import { createRustProviderPackage } from "../../../dist/public/provider.js";
+import {
+  createRustProviderPackage,
+  emptyRustGenerics,
+  rustCloneTrait,
+  rustCopyTrait,
+  rustProviderPathTargetType,
+} from "../../../dist/public/provider.js";
 import { fixtureCratesRoot } from "./paths.mjs";
 import { int32Carrier, stringCarrier, unitCarrier } from "./provider-core.mjs";
 import { relative, resolve } from "node:path";
 
-export const vectorCarrier = { kind: "target-named", id: "acme.vectors.Vector" };
+export const vectorCarrier = rustProviderPathTargetType({
+  owner: { packageId: "acme-vectors", packageVersion: "1.0.0" },
+  itemId: "acme.vectors.Vector",
+  displayPath: "acme_vectors::Vector",
+  traitImplementations: [
+    { trait: rustCloneTrait, requirements: [] },
+    { trait: rustCopyTrait, requirements: [] },
+  ],
+});
 
 export function acmeVectorsPackage() {
   return createRustProviderPackage({
@@ -101,7 +115,13 @@ export function acmeVectorsPackage() {
         },
       ],
     }],
-    types: [{ exportId: "@acme/vectors::Vector", targetCarrier: { kind: "target-named", id: "acme.vectors.Vector" } }],
+    types: [{
+      exportId: "@acme/vectors::Vector",
+      targetDeclarationKind: "struct",
+      sourceGenericBindings: [],
+      targetGenerics: emptyRustGenerics,
+      targetCarrier: vectorCarrier,
+    }],
     operations: [
       {
         exportId: "@acme/vectors::Vector",
@@ -164,20 +184,15 @@ export function acmeVectorsPackage() {
         parameterCarriers: [vectorCarrier, vectorCarrier],
       },
     ],
-    carrierPaths: { "acme.vectors.Vector": "acme_vectors::Vector" },
-    carrierTraits: {
-      "acme.vectors.Vector": {
-        implementations: [
-          { traitPath: "core::clone::Clone", requirements: [] },
-          { traitPath: "core::marker::Copy", requirements: [] },
-        ],
-      },
-    },
     crates: [{ crateName: "acme_vectors", cargoPath: resolve(fixtureCratesRoot, "acme_vectors") }],
   });
 }
 
-export const dbCarrier = { kind: "target-named", id: "acme.db.Db" };
+export const dbCarrier = rustProviderPathTargetType({
+  owner: { packageId: "acme-db", packageVersion: "1.0.0" },
+  itemId: "acme.db.Db",
+  displayPath: "acme_db::Db",
+});
 
 export function acmeDbPackage() {
   return createRustProviderPackage({
@@ -218,7 +233,13 @@ export function acmeDbPackage() {
         },
       ],
     }],
-    types: [{ exportId: "@acme/db::Db", targetCarrier: { kind: "target-named", id: "acme.db.Db" } }],
+    types: [{
+      exportId: "@acme/db::Db",
+      targetDeclarationKind: "struct",
+      sourceGenericBindings: [],
+      targetGenerics: emptyRustGenerics,
+      targetCarrier: dbCarrier,
+    }],
     operations: [
       {
         exportId: "@acme/db::connect",
@@ -238,7 +259,6 @@ export function acmeDbPackage() {
         isAsync: true,
       },
     ],
-    carrierPaths: { "acme.db.Db": "acme_db::Db" },
     crates: [{ crateName: "acme_db", cargoPath: resolve(fixtureCratesRoot, "acme_db") }],
   });
 }
