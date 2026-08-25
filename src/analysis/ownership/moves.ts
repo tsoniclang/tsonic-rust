@@ -2,6 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import {
   BinaryExpression_Left,
+  ForInOrOfStatement_Initializer,
   Node_Expression,
   Node_Initializer,
   Node_Operand,
@@ -234,7 +235,8 @@ function collectMoveEvents(
         kind: "declare",
         place,
         initialized: kind === "KindParameter" || kind === "KindBindingElement" ||
-          Node_Initializer(input.ast, node) !== undefined,
+          Node_Initializer(input.ast, node) !== undefined ||
+          isIterationBindingDeclaration(node, input),
         node,
       });
     }
@@ -249,6 +251,24 @@ function collectMoveEvents(
     }
   }
   return new Map([...events].map(([index, selected]) => [index, Object.freeze(selected)]));
+}
+
+function isIterationBindingDeclaration(
+  node: Node,
+  input: RustOwnershipAnalysisInput,
+): boolean {
+  if (input.ast.kindName(node) !== "KindVariableDeclaration") {
+    return false;
+  }
+  const declarationList = input.ast.parent(node);
+  const iteration = declarationList === undefined
+    ? undefined
+    : input.ast.parent(declarationList);
+  const iterationKind = input.ast.kindName(iteration);
+  return declarationList !== undefined && iteration !== undefined &&
+    input.ast.kindName(declarationList) === "KindVariableDeclarationList" &&
+    (iterationKind === "KindForInStatement" || iterationKind === "KindForOfStatement") &&
+    ForInOrOfStatement_Initializer(input.ast, iteration) === declarationList;
 }
 
 function solveMoveStates(

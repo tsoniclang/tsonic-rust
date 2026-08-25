@@ -14,7 +14,7 @@ import {
 } from "../../../../target-model/types/index.js";
 import { acceptProjectSourceCall, mapSelectedJsSpecialCall } from "../object-shapes.js";
 import { acceptRustPolicy } from "../../../../policy/operations/contracts.js";
-import { acceptSelectedCall, checkedCallIsConstruction, instantiateSelectedCallTemplate, selectedCallReceiverValueCarrier, selectRustOptionalCallResult, substituteProviderOperationForm } from "./instantiation.js";
+import { acceptClosedSelectedCall, acceptInstantiatedSelectedCall, acceptSelectedCall, checkedCallIsConstruction, instantiateSelectedCallTemplate, selectedCallReceiverValueCarrier, selectRustOptionalCallResult, substituteProviderOperationForm } from "./instantiation.js";
 import { closedMetadataKey } from "../../../../target-model/metadata/closed-data.js";
 import { mapRustSourceMarkerCall } from "./deferred.js";
 import { providerIdentityText, providerOperationFact, rejectSelectedOperation, selectedArgumentMatchScore } from "../result.js";
@@ -118,7 +118,7 @@ export function selectRustCheckedCall(
         parameterCarriers: instantiation.template.parameterCarriers ?? [],
       });
     }
-    return acceptSelectedCall(request, instantiation.template, instantiation.template.parameterCarriers, context, options, {
+    return acceptInstantiatedSelectedCall(request, instantiation, instantiation.template.parameterCarriers, context, options, {
       sourceName: provider.memberName ?? provider.exportName ?? provider.exportId ?? provider.moduleSpecifier,
       providerDeclaration: provider,
     });
@@ -205,7 +205,7 @@ export function selectRustCheckedCall(
           }],
         );
       }
-      return acceptSelectedCall(request, selection.fact, selection.parameterCarriers ?? [], context, options, {
+      return acceptClosedSelectedCall(request, selection.fact, selection.parameterCarriers ?? [], context, options, {
         sourceName: selectedSourceMember.ownerName,
       });
     }
@@ -294,7 +294,7 @@ export function selectRustCheckedCall(
             parameterCarriers: selection.parameterCarriers ?? [],
           });
     }
-    return acceptSelectedCall(request, selection.fact, selection.parameterCarriers, context, options, {
+    return acceptClosedSelectedCall(request, selection.fact, selection.parameterCarriers, context, options, {
       sourceName: selectedSourceMember.memberName,
     });
   }

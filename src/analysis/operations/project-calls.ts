@@ -1,6 +1,7 @@
 import {
   isRustNumericCarrier,
   instantiateRustCallableSignature,
+  rustArrayLikeElementCarrier,
   rustCallableSignature,
   inferRustTargetGenericSubstitutions,
   rustGenericParameterIdentityKey,
@@ -197,7 +198,7 @@ export function applySelectedProjectSourceCall(
     const inputs = parameterInputs.map((binding) => {
       const baseCarrier = parameterAbi.form === "rest" &&
           binding.sourceParameterForm === "rest-element"
-        ? valueCarrier.kind === "array" ? valueCarrier.element : undefined
+        ? rustArrayLikeElementCarrier(valueCarrier)
         : parameterAbi.form === "optional" || parameterAbi.form === "default"
           ? parameterCarrier
           : valueCarrier;

@@ -10,6 +10,7 @@ test("field and closure method chains retain rustfmt vertical layout", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -51,6 +52,7 @@ test("compact field receivers stay attached before expanded closure calls", () =
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -96,6 +98,7 @@ test("let-bound index closures retain rustfmt's vertical method-chain layout", (
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -145,6 +148,7 @@ test("long indexes continue after one-line method-chain receivers", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -202,6 +206,7 @@ test("multiline method-call match arms use rustfmt block arms", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -256,6 +261,7 @@ test("direct fallible match arms stay in rustfmt expression form", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -296,6 +302,7 @@ test("long direct fallible match arms use rustfmt block form", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -347,6 +354,7 @@ test("calls expand matches whose scrutinee contains a statement block", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -413,6 +421,7 @@ test("two-selector method arguments retain rustfmt vertical layout", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -454,6 +463,7 @@ test("selectors after multiline call bases align with the base", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -501,6 +511,7 @@ test("long multiline let initializers reflow from their continuation column", ()
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -514,9 +525,12 @@ test("long multiline let initializers reflow from their continuation column", ()
             owner: {
               kind: "named",
               path: "rt::OwnedLocalCallable",
-              typeArguments: [
-                { kind: "tuple", elements: [{ kind: "string" }] },
-                { kind: "string" },
+              genericArguments: [
+                {
+                  kind: "type",
+                  type: { kind: "tuple", elements: [{ kind: "string" }] },
+                },
+                { kind: "type", type: { kind: "string" } },
               ],
             },
             method: "new",
@@ -560,6 +574,7 @@ test("fitting callable closures move below long let bindings without expanding",
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -573,9 +588,12 @@ test("fitting callable closures move below long let bindings without expanding",
             owner: {
               kind: "named",
               path: "rt::OwnedLocalCallable",
-              typeArguments: [
-                { kind: "tuple", elements: [{ kind: "named", path: "TextReader" }] },
-                { kind: "string" },
+              genericArguments: [
+                {
+                  kind: "type",
+                  type: { kind: "tuple", elements: [{ kind: "named", path: "TextReader" }] },
+                },
+                { kind: "type", type: { kind: "string" } },
               ],
             },
             method: "new",
@@ -606,6 +624,7 @@ test("field-led calls break before selectors when the final call fits there", ()
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -664,6 +683,7 @@ test("deep field-led calls keep their callable attached when arguments must expa
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],

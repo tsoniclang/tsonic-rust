@@ -1,5 +1,9 @@
 import { appendToLastLine, firstLine, renderedFits } from "../patterns.js";
-import { indentText, printRustGenericArguments, printRustType } from "../types.js";
+import {
+  indentText,
+  printRustGenericArgument,
+  printRustType,
+} from "../types.js";
 import { printRustAttribute } from "../attributes.js";
 import { printRustAssociatedOwner, printRustSingleCollectionCallContinuation, rustMethodChain, rustMethodChainPrefersVerticalLayout } from "./chains.js";
 import { printRustClosureParams } from "./closure-params.js";
@@ -147,7 +151,7 @@ export function printRustAssociatedCallOwnerFitted(
 
 export function printRustAssociatedOwnerFitted(
   owner: RustType,
-  _depth: number,
+  depth: number,
   column: number,
 ): string {
   if (owner.kind !== "named" || owner.genericArguments === undefined || owner.genericArguments.length === 0) {
@@ -157,7 +161,15 @@ export function printRustAssociatedOwnerFitted(
   if (renderedFits(flat, column) && column + flat.length + 1 < rustFormatWidth) {
     return flat;
   }
-  return `${owner.path}${printRustGenericArguments(owner.genericArguments, true)}`;
+  const argumentIndent = indentText(depth + 1);
+  return [
+    `${owner.path}::<`,
+    ...owner.genericArguments.map((argument) => appendToLastLine(
+      `${argumentIndent}${printRustGenericArgumentFitted(argument, depth + 1, argumentIndent.length)}`,
+      ",",
+    )),
+    `${indentText(depth)}>`,
+  ].join("\n");
 }
 
 export function printRustTypeFitted(
@@ -182,7 +194,29 @@ export function printRustTypeFitted(
       `${indentText(depth)})`,
     ].join("\n");
   }
+  if (type.kind === "named" && type.genericArguments !== undefined &&
+    type.genericArguments.length > 0) {
+    const argumentIndent = indentText(depth + 1);
+    return [
+      `${type.path}<`,
+      ...type.genericArguments.map((argument) => appendToLastLine(
+        `${argumentIndent}${printRustGenericArgumentFitted(argument, depth + 1, argumentIndent.length)}`,
+        ",",
+      )),
+      `${indentText(depth)}>`,
+    ].join("\n");
+  }
   return flat;
+}
+
+function printRustGenericArgumentFitted(
+  argument: import("../../../backend/target-ast/nodes.js").RustGenericArgument,
+  depth: number,
+  column: number,
+): string {
+  return argument.kind === "type"
+    ? printRustTypeFitted(argument.type, depth, column)
+    : printRustGenericArgument(argument);
 }
 
 export function printRustLetInitializer(

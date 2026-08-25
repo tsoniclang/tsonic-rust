@@ -317,6 +317,66 @@ export function acceptSelectedCall(
   if (instantiation === undefined) {
     return rejectSelectedOperation(request.source.call, context, "RUST_PROVIDER_TYPE_INSTANTIATION_NOT_PROVEN", `Selected call '${callIdentity.sourceName}' does not prove one closed instantiation of its Rust provider type parameters.`);
   }
+  return acceptInstantiatedSelectedCall(
+    request,
+    instantiation,
+    parameterCarriers,
+    context,
+    resolutionOptions,
+    callIdentity,
+  );
+}
+
+export function acceptClosedSelectedCall(
+  request: RustCheckedCallSelectionInput,
+  template: RustProviderOperationTemplate,
+  parameterCarriers: readonly (TargetTypeRef | undefined)[] | undefined,
+  context: RustOperationPolicyContext,
+  resolutionOptions: RustOperationsProviderOptions,
+  callIdentity: {
+    readonly sourceName: string;
+    readonly providerDeclaration?: ProviderDeclarationIdentity;
+  },
+): RustPolicySelection<RustCheckedCallSelectionResult> {
+  if ((template.sourceGenericBindings?.length ?? 0) !== 0 ||
+    (template.targetInferenceParameters?.length ?? 0) !== 0) {
+    return rejectSelectedOperation(
+      request.source.call,
+      context,
+      "RUST_CLOSED_OPERATION_TEMPLATE_OPEN",
+      `Selected call '${callIdentity.sourceName}' produced an open Rust operation where a source policy must produce one closed operation.`,
+    );
+  }
+  const instantiation = instantiateProviderOperationTemplate(template, {});
+  if (instantiation === undefined) {
+    return rejectSelectedOperation(
+      request.source.call,
+      context,
+      "RUST_CLOSED_OPERATION_REQUIREMENTS_NOT_PROVEN",
+      `Selected call '${callIdentity.sourceName}' produced a closed Rust operation whose exact type requirements are not proven.`,
+    );
+  }
+  return acceptInstantiatedSelectedCall(
+    request,
+    instantiation,
+    parameterCarriers,
+    context,
+    resolutionOptions,
+    callIdentity,
+  );
+}
+
+export function acceptInstantiatedSelectedCall(
+  request: RustCheckedCallSelectionInput,
+  instantiation: InstantiatedProviderOperationTemplate,
+  parameterCarriers: readonly (TargetTypeRef | undefined)[] | undefined,
+  context: RustOperationPolicyContext,
+  resolutionOptions: RustOperationsProviderOptions,
+  callIdentity: {
+    readonly sourceName: string;
+    readonly providerDeclaration?: ProviderDeclarationIdentity;
+  },
+): RustPolicySelection<RustCheckedCallSelectionResult> {
   const instantiatedTemplate = instantiation.template;
   const sourceArguments = selectedCallSourceCarriers(
     request,
@@ -758,7 +818,7 @@ export function providerFormRequiresSourceReceiver(form: RustProviderOperationFo
     (form.form === "trait-call" && form.receiverMode !== undefined);
 }
 
-interface InstantiatedProviderOperationTemplate<
+export interface InstantiatedProviderOperationTemplate<
   OperationKind extends RustProviderFactOperationKind | RustRuntimeSetOperationKind = RustProviderFactOperationKind,
 > {
   readonly template: RustProviderOperationTemplate<OperationKind>;

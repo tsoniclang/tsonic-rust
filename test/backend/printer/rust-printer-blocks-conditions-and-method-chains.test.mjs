@@ -24,6 +24,7 @@ test("an outer call stays attached to an expanded associated call", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       visibility: "public",
       name: "proof",
       params: [],
@@ -38,7 +39,7 @@ test("an outer call stays attached to an expanded associated call", () => {
               owner: {
                 kind: "named",
                 path: "rt::OwnedLocation",
-                typeArguments: [{ kind: "primitive", name: "i32" }],
+                genericArguments: [{ kind: "type", type: { kind: "primitive", name: "i32" } }],
               },
               method: "same",
               args: [optionalLocation("first"), optionalLocation("firstAgain")],
@@ -57,6 +58,7 @@ test("a single block argument stays attached to its outer call", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       visibility: "public",
       name: "run",
       params: [],
@@ -98,6 +100,7 @@ test("a trailing block argument stays attached after preceding arguments", () =>
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       visibility: "public",
       name: "run",
       params: [],
@@ -138,6 +141,7 @@ test("a trailing fitted closure stays attached after preceding arguments", () =>
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       visibility: "public",
       name: "run",
       params: [],
@@ -194,6 +198,7 @@ test("three-field struct literals use rustfmt-compatible vertical layout", () =>
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       visibility: "public",
       name: "new_item",
       params: [],
@@ -248,6 +253,7 @@ test("a fitted condition moves only its overflowing brace", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -289,6 +295,7 @@ test("a block-valued comparison chain keeps its body brace at statement indentat
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -325,9 +332,10 @@ test("conditional expressions move the brace after a multiline method chain", ()
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
-      params: [{ name: "value", type: { kind: "named", path: "Value", typeArguments: [] } }],
+      params: [{ name: "value", type: { kind: "named", path: "Value" } }],
       returnType: { kind: "string" },
       body: {
         statements: [{
@@ -351,6 +359,7 @@ test("short conditional initializers use rustfmt's single-line form", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "choose",
       visibility: "public",
       params: [{ name: "flag", type: { kind: "primitive", name: "bool" } }],
@@ -386,6 +395,7 @@ test("comparisons follow multiline arithmetic operands", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -417,6 +427,7 @@ test("long let-bound method chains stay attached to their receiver", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -458,10 +469,11 @@ test("long field-led method chains use rustfmt selector layout", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
-      params: [{ name: "value", type: { kind: "named", path: "Value", typeArguments: [] } }],
-      returnType: { kind: "named", path: "bool", typeArguments: [] },
+      params: [{ name: "value", type: { kind: "named", path: "Value" } }],
+      returnType: { kind: "named", path: "bool" },
       body: {
         statements: [{
           kind: "tail",
@@ -501,6 +513,7 @@ test("pure method chains keep the first fitting call attached to their receiver"
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -539,6 +552,7 @@ test("fitting collection chains keep their first argument-bearing call attached"
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -578,6 +592,7 @@ test("field-led calls stay attached when their argument list must expand", () =>
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -626,24 +641,46 @@ test("trait signatures count their semicolon and break before long return types"
       kind: "trait",
       name: "Contract",
       visibility: "crate",
-      typeParams: [],
+      generics: { parameters: [], wherePredicates: [] },
+      safety: "safe",
+      auto: false,
+      superTraits: [],
       functions: [{
         name: "__tsonic_downcast",
-        selfParam: "rc",
+        generics: { parameters: [], wherePredicates: [] },
+        receiver: {
+          kind: "typed",
+          type: {
+            kind: "named",
+            path: "std::rc::Rc",
+            genericArguments: [{ kind: "type", type: { kind: "named", path: "Self" } }],
+          },
+        },
         params: [],
         returnType: {
           kind: "named",
           path: "Option",
-          typeArguments: [{
-            kind: "named",
-            path: "std::rc::Rc",
-            typeArguments: [{
-              kind: "trait-object",
-              trait: { kind: "named", path: "__TsonicDispatch_Leaf", typeArguments: [] },
-            }],
+          genericArguments: [{
+            kind: "type",
+            type: {
+              kind: "named",
+              path: "std::rc::Rc",
+              genericArguments: [{
+                kind: "type",
+                type: {
+                  kind: "trait-object",
+                  bounds: [{
+                    kind: "trait",
+                    trait: { kind: "named", path: "__TsonicDispatch_Leaf" },
+                  }],
+                },
+              }],
+            },
           }],
         },
       }],
+      associatedTypes: [],
+      associatedConstants: [],
     }],
   });
 
@@ -658,6 +695,7 @@ test("one-field struct literals honor rustfmt's compact body limit", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       visibility: "public",
       name: "new_counter",
       params: [],
@@ -703,6 +741,7 @@ test("typed bindings retain overflowing struct openings and expand their fields"
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       visibility: "public",
       name: "new_pair",
       params: [],
@@ -711,7 +750,11 @@ test("typed bindings retain overflowing struct openings and expand their fields"
           kind: "let",
           name: "pair",
           mutable: false,
-          type: { kind: "named", path: "Pair", typeArguments: [{ kind: "named", path: "i32" }] },
+          type: {
+            kind: "named",
+            path: "Pair",
+            genericArguments: [{ kind: "type", type: { kind: "named", path: "i32" } }],
+          },
           init: {
             kind: "struct-literal",
             path: "Pair",

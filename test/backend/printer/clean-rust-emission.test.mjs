@@ -110,7 +110,8 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /struct Marker<T: Clone \+ 'static> \{/u);
+  assert.match(source, /struct Marker<T> \{/u);
+  assert.doesNotMatch(source, /struct Marker<T:/u);
   assert.match(source, /type_marker: std::marker::PhantomData<\(T,\)>/u);
   assert.match(source, /pub\(crate\) label: String,/u);
   assert.doesNotMatch(source, /ObjectHandle|ObjectRef/u);

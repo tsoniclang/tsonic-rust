@@ -9,6 +9,7 @@ test("optional closure chains and nested struct arguments stay rustfmt-stable", 
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       visibility: "public",
       name: "proof",
       params: [],
@@ -121,6 +122,7 @@ test("long logical chains use rustfmt-compatible operand-per-line layout", () =>
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -142,6 +144,7 @@ test("binary expressions place multiline match operands on a continuation line",
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "with_default",
       visibility: "public",
       params: [],
@@ -202,6 +205,7 @@ test("binary expressions join adjacent multiline match operands at the closing d
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "product",
       visibility: "public",
       params: [],
@@ -244,6 +248,7 @@ test("multiline mixed logical groups preserve source precedence", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -265,6 +270,7 @@ test("statement-valued expressions are parenthesized as binary operands", () => 
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -308,6 +314,7 @@ test("long assignments break after the assignment operator", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -352,6 +359,7 @@ test("multiline arithmetic assignments break after the assignment operator", () 
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -374,6 +382,7 @@ test("overflowing nested calls retain attached wrappers and jointly fitting argu
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -409,6 +418,7 @@ test("nested calls beyond rustfmt call width put each argument on its own line",
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -440,6 +450,7 @@ test("nested single-argument wrappers stay attached to the expanded inner call",
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -475,6 +486,7 @@ test("nested single-argument error wrappers expand at the exact innermost value"
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -510,6 +522,7 @@ test("fallible nested calls in comparisons use rustfmt-compatible wrapper layout
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -553,6 +566,7 @@ test("fallible comparison calls expand nested closure arguments at their selecte
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -609,6 +623,7 @@ test("long borrowed slices use rustfmt-compatible element layout", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -657,6 +672,7 @@ test("single long borrowed slice arguments stay attached to their call", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],

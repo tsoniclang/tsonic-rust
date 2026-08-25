@@ -532,8 +532,8 @@ function projectThisOverrides(
       if (selectedDefinition === ownerDefinition) {
         overrides.set(node, {
           carrier: ownerCarrier,
-          valueForm: "value",
-          expression: cloneExpression({ kind: "path", path: bindingName }),
+          valueForm: "clone-on-owned-read",
+          expression: { kind: "path", path: bindingName },
         });
       }
       return;

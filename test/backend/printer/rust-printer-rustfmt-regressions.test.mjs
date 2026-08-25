@@ -10,6 +10,7 @@ test("rustfmt-stable calls, closures, conditionals, and borrowed fallible chains
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -177,21 +178,30 @@ test("rustfmt-stable calls, closures, conditionals, and borrowed fallible chains
               owner: {
                 kind: "named",
                 path: "rt::OwnedLocalCallable",
-                typeArguments: [{
-                  kind: "tuple",
-                  elements: [
-                    { kind: "primitive", name: "i32" },
-                    {
-                      kind: "named",
-                      path: "Option",
-                      typeArguments: [{ kind: "string" }],
+                genericArguments: [
+                  {
+                    kind: "type",
+                    type: {
+                      kind: "tuple",
+                      elements: [
+                        { kind: "primitive", name: "i32" },
+                        {
+                          kind: "named",
+                          path: "Option",
+                          genericArguments: [{ kind: "type", type: { kind: "string" } }],
+                        },
+                      ],
                     },
-                  ],
-                }, {
-                  kind: "named",
-                  path: "rt::TsonicResult",
-                  typeArguments: [{ kind: "string" }],
-                }],
+                  },
+                  {
+                    kind: "type",
+                    type: {
+                      kind: "named",
+                      path: "rt::TsonicResult",
+                      genericArguments: [{ kind: "type", type: { kind: "string" } }],
+                    },
+                  },
+                ],
               },
               method: "new",
               args: [{

@@ -10,6 +10,7 @@ test("fallible tuple call arguments use rustfmt-compatible element layout", () =
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "invoke",
       visibility: "private",
       params: [],
@@ -52,6 +53,7 @@ test("short fallible tuple call arguments remain on one rustfmt line", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "invoke",
       visibility: "private",
       params: [],
@@ -97,6 +99,7 @@ test("long nested callable construction gives the outer call its own break", () 
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "invoke",
       visibility: "private",
       params: [],
@@ -111,16 +114,26 @@ test("long nested callable construction gives the outer call its own break", () 
               owner: {
                 kind: "named",
                 path: "rt::OwnedLocalCallable",
-                typeArguments: [{
-                  kind: "tuple",
-                  elements: [
-                    { kind: "primitive", name: "i32" },
-                    { kind: "named", path: "String" },
-                  ],
-                }, {
-                  kind: "named",
-                  path: "rt::TsonicResult<String>",
-                }],
+                genericArguments: [
+                  {
+                    kind: "type",
+                    type: {
+                      kind: "tuple",
+                      elements: [
+                        { kind: "primitive", name: "i32" },
+                        { kind: "named", path: "String" },
+                      ],
+                    },
+                  },
+                  {
+                    kind: "type",
+                    type: {
+                      kind: "named",
+                      path: "rt::TsonicResult",
+                      genericArguments: [{ kind: "type", type: { kind: "string" } }],
+                    },
+                  },
+                ],
               },
               method: "new",
               args: [{
@@ -146,6 +159,7 @@ test("long outer callable construction keeps block callbacks attached", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "invoke",
       visibility: "private",
       params: [],
@@ -160,9 +174,16 @@ test("long outer callable construction keeps block callbacks attached", () => {
               owner: {
                 kind: "named",
                 path: "rt::OwnedLocalCallable",
-                typeArguments: [
-                  { kind: "unit" },
-                  { kind: "named", path: "rt::TsonicResult<()>" },
+                genericArguments: [
+                  { kind: "type", type: { kind: "unit" } },
+                  {
+                    kind: "type",
+                    type: {
+                      kind: "named",
+                      path: "rt::TsonicResult",
+                      genericArguments: [{ kind: "type", type: { kind: "unit" } }],
+                    },
+                  },
                 ],
               },
               method: "new",
@@ -189,6 +210,6 @@ test("long outer callable construction keeps block callbacks attached", () => {
 
   assert.match(
     source,
-    /set_timeout_callable\(rt::OwnedLocalCallable::<\(\), rt::TsonicResult<\(\)>>::new\(\n {8}\|_callable_arguments\| \{/u,
+    /set_timeout_callable\(rt::OwnedLocalCallable::<\n {8}\(\),\n {8}rt::TsonicResult<\(\)>,\n {4}>::new\(\|_callable_arguments\| \{/u,
   );
 });

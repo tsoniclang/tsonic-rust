@@ -23,7 +23,7 @@ export { isValidRustIdentifier, rustReservedIdentifiers } from "../../../target-
 export interface RustEffectiveExpressionOverride {
   readonly expression: RustExpr;
   readonly carrier: TargetTypeRef;
-  readonly valueForm: "value" | "shared-reference" | "storage";
+  readonly valueForm: "value" | "shared-reference" | "storage" | "clone-on-owned-read";
 }
 
 export interface RustCapturedBinding {

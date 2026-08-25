@@ -195,7 +195,7 @@ function planBindingProjection(
     case "vec-element": {
       if (fact.projection.checked) {
         if (!rustSealedCarrierSupportsTrait(
-          fact.sourceCarrier.kind === "array" ? fact.sourceCarrier.element : undefined,
+          fact.sourceCarrier.kind === "sequence" ? fact.sourceCarrier.element : undefined,
           rustCloneTrait,
           context,
         )) {

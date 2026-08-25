@@ -185,8 +185,19 @@ export function planExpressionBeforeValueProjections(
   resultUse: RustExpressionResultUse,
 ): RustExpr | undefined {
   const override = context.expressionOverrides?.get(node);
-  if (override === undefined || override.valueForm !== "storage") {
-    return override?.expression ?? planRawExpression(node, context, resultUse);
+  if (override === undefined) {
+    return planRawExpression(node, context, resultUse);
+  }
+  if (override.valueForm === "clone-on-owned-read") {
+    return {
+      kind: "method-call",
+      receiver: override.expression,
+      method: "clone",
+      args: [],
+    };
+  }
+  if (override.valueForm !== "storage") {
+    return override.expression;
   }
   return planRustSealedOwnedRead(
     node,

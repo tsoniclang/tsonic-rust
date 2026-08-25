@@ -1,7 +1,9 @@
 import { printRustBlockStatements } from "./blocks.js";
 import { printRustExpr } from "./expressions/core.js";
 import { printRustExprFitted } from "./expressions/fitted.js";
+import { printRustTypeFitted } from "./expressions/blocks.js";
 import { printRustAttribute, printRustScopedAttribute } from "./attributes.js";
+import { appendToLastLine, firstLine, lastLineLength, renderedFits } from "./patterns.js";
 import {
   indentText,
   printRustConstExpression,
@@ -30,6 +32,7 @@ import type {
 import type { RustAttribute } from "../../backend/target-ast/attributes.js";
 import { validateRustSourceFileModel } from "../../backend/target-ast/validation.js";
 import { rustFormatWidth } from "./formatting.js";
+import type { RustFunctionParameterPrint } from "./formatting.js";
 
 export function printRustSourceFile(model: RustSourceFileModel): string {
   validateRustSourceFileModel(model);
@@ -46,8 +49,25 @@ export function printRustItem(item: RustItem): string {
       return `${attrs}${printRustVisibility(item.visibility)}mod ${item.name};`;
     case "use":
       return `${printRustVisibility(item.visibility ?? "private")}use ${item.path}${item.alias === undefined ? "" : ` as ${item.alias}`};`;
-    case "type-alias":
-      return `${attrs}${printRustVisibility(item.visibility)}type ${item.name}${printRustGenerics(item.generics)}${printRustWhereClause(item.generics)} = ${printRustType(item.target)};`;
+    case "type-alias": {
+      const declaration = `${printRustVisibility(item.visibility)}type ${item.name}${printRustGenerics(item.generics)}`;
+      const whereClause = printRustWhereClause(item.generics);
+      const prefix = `${declaration}${whereClause} =`;
+      const target = printRustType(item.target);
+      if (renderedFits(`${prefix} ${target};`, 0)) return `${attrs}${prefix} ${target};`;
+      const targetIndent = indentText(1);
+      if (!target.includes("\n") && renderedFits(`${target};`, targetIndent.length)) {
+        return `${attrs}${prefix}\n${targetIndent}${target};`;
+      }
+      const fitted = printRustTypeFitted(item.target, 0, lastLineLength(prefix) + 1);
+      if (lastLineLength(prefix) + 1 + firstLine(fitted).length <= rustFormatWidth) {
+        return `${attrs}${appendToLastLine(`${prefix} ${fitted}`, ";")}`;
+      }
+      return `${attrs}${prefix}\n${appendToLastLine(
+        `${targetIndent}${printRustTypeFitted(item.target, 1, targetIndent.length)}`,
+        ";",
+      )}`;
+    }
     case "const":
       return `${attrs}${printRustVisibility(item.visibility)}const ${item.name}: ${printRustType(item.type)} = ${printRustExpr(item.value)};`;
     case "static":
@@ -79,16 +99,30 @@ export function printRustItem(item: RustItem): string {
     case "trait": {
       const safety = item.safety === "unsafe" ? "unsafe " : "";
       const auto = item.auto ? "auto " : "";
-      const superTraits = item.superTraits.length === 0
+      const renderedSuperTraits = item.superTraits.map(printRustTypeBound);
+      const superTraits = renderedSuperTraits.length === 0
         ? ""
-        : `: ${item.superTraits.map(printRustTypeBound).join(" + ")}`;
+        : `: ${renderedSuperTraits.join(" + ")}`;
       const members = [
         ...item.associatedTypes.map((associated) => printAssociatedType(associated, 1, false)),
         ...item.associatedConstants.map((constant) => printAssociatedConstant(constant, 1, false)),
         ...item.functions.map((fn) => printRustTraitFunction(fn, 1)),
       ].join("\n");
-      const header = `${attrs}${printRustVisibility(item.visibility)}${safety}${auto}trait ${item.name}${printRustGenerics(item.generics)}${superTraits}${printRustWhereClause(item.generics, 1)}`;
-      return members.length === 0 ? `${header} {}` : `${header} {\n${members}\n}`;
+      const declaration = `${printRustVisibility(item.visibility)}${safety}${auto}trait ${item.name}${printRustGenerics(item.generics)}`;
+      const flatHeader = `${declaration}${superTraits}`;
+      const whereClause = printRustWhereClause(item.generics, 1);
+      const expandedHeader = renderedSuperTraits.length > 0 && whereClause.length === 0 &&
+          (`${flatHeader} {`.length >= rustFormatWidth ||
+            (renderedSuperTraits.length > 1 && flatHeader.length > 80) ||
+            (members.length > 0 && `${flatHeader} {`.length >= 86))
+        ? `${declaration}:\n    ${renderedSuperTraits.join(" + ")}\n{`
+        : `${flatHeader}${whereClause} {`;
+      if (members.length === 0) {
+        return expandedHeader.includes("\n")
+          ? `${attrs}${expandedHeader}\n}`
+          : `${attrs}${flatHeader} {}`;
+      }
+      return `${attrs}${expandedHeader}\n${members}\n}`;
     }
     case "impl": {
       const safety = item.safety === "unsafe" ? "unsafe " : "";
@@ -107,15 +141,25 @@ export function printRustItem(item: RustItem): string {
     }
     case "extern-block": {
       const safety = item.safety === "unsafe" ? "unsafe " : "";
-      const functions = item.functions.map((fn) =>
-        `${printOuterAttributes(fn.attrs, 1)}${indentText(1)}${printRustVisibility(fn.visibility)}${printRustExternSafety(fn.safety)}${printRustFunctionSignature({ ...fn, abi: item.abi }, false, false, false, 1)};`).join("\n");
+      const functions = item.functions.map((fn) => {
+        const prefix = `${printRustVisibility(fn.visibility)}${printRustExternSafety(fn.safety)}`;
+        return `${printOuterAttributes(fn.attrs, 1)}${indentText(1)}${prefix}${printRustFunctionSignature({ ...fn, abi: item.abi }, false, false, false, 1, prefix.length)};`;
+      }).join("\n");
       const statics = item.statics.map((entry) =>
         `${indentText(1)}${printRustVisibility(entry.visibility)}${printRustExternSafety(entry.safety)}static ${entry.mutable ? "mut " : ""}${entry.name}: ${printRustType(entry.type)};`).join("\n");
       return `${attrs}${safety}extern ${JSON.stringify(item.abi)} {\n${[functions, statics].filter(Boolean).join("\n")}\n}`;
     }
     case "function": {
-      const signature = printRustFunctionSignature(item, item.isAsync === true, true, true, 0);
-      return `${attrs}${printRustVisibility(item.visibility)}${signature}${printRustFunctionBody(item.body, 0)}`;
+      const visibility = printRustVisibility(item.visibility);
+      const signature = printRustFunctionSignature(
+        item,
+        item.isAsync === true,
+        true,
+        true,
+        0,
+        visibility.length,
+      );
+      return `${attrs}${visibility}${signature}${printRustFunctionBody(item.body, 0)}`;
     }
   }
 }
@@ -127,7 +171,14 @@ function printRustExternSafety(safety: "inherited" | "safe" | "unsafe"): string 
 function printRustImplFunction(fn: RustImplFunction, depth: number, traitImplementation: boolean): string {
   const attrs = printOuterAttributes(fn.attrs, depth);
   const visibility = traitImplementation ? "" : printRustVisibility(fn.visibility);
-  const signature = printRustFunctionSignature(fn, fn.isAsync === true, true, true, depth);
+  const signature = printRustFunctionSignature(
+    fn,
+    fn.isAsync === true,
+    true,
+    true,
+    depth,
+    visibility.length,
+  );
   return `${attrs}${indentText(depth)}${visibility}${signature}${printRustFunctionBody(fn.body, depth)}`;
 }
 
@@ -161,32 +212,57 @@ function printRustFunctionSignature(
   includeBodySpacing: boolean,
   includeAbi: boolean,
   depth: number,
+  leadingWidth = 0,
 ): string {
-  const parameters = [
-    ...(fn.receiver === undefined ? [] : [printRustReceiver(fn.receiver)]),
-    ...fn.params.map(printRustFunctionParameter),
+  const parameters: RustFunctionParameterPrint[] = [
+    ...(fn.receiver === undefined ? [] : [rustReceiverParameter(fn.receiver)]),
+    ...fn.params.map(rustFunctionParameter),
   ];
   const returnType = rustFunctionReturnType(fn.returnType, fn.errorType);
   const whereClause = printRustWhereClause(fn.generics, depth + 1);
   if (fn.variadic === true && (fn.abi === undefined || fn.abi === "Rust" || asynchronous)) {
     throw new Error("A Rust variadic function requires a non-Rust ABI and cannot be async.");
   }
-  if (fn.variadic === true) parameters.push("...");
+  if (fn.variadic === true) parameters.push({ prefix: "..." });
   const abi = includeAbi && fn.abi !== undefined
     ? `extern ${JSON.stringify(fn.abi)} `
     : "";
   const opening = `${asynchronous ? "async " : ""}${fn.isUnsafe === true ? "unsafe " : ""}${abi}fn ${fn.name}${printRustGenerics(fn.generics)}(`;
-  const trailing = `${returnType === undefined ? "" : ` -> ${printRustType(returnType)}`}${whereClause}${includeBodySpacing ? " " : ""}`;
-  const flat = `${opening}${parameters.join(", ")})${trailing}`;
+  const flatParameters = parameters.map(printRustFunctionParameterFlat);
+  const returnSuffix = printRustReturnSuffix(returnType);
+  const trailing = `${returnSuffix}${whereClause}${includeBodySpacing ? " " : ""}`;
+  const flat = `${opening}${flatParameters.join(", ")})${trailing}`;
   const terminalWidth = 1;
-  if (parameters.length === 0 ||
-    indentText(depth).length + flat.split("\n", 1)[0]!.length + terminalWidth < rustFormatWidth) {
+  const flatLineWidth = indentText(depth).length + leadingWidth +
+    flat.split("\n", 1)[0]!.length + terminalWidth;
+  if (includeBodySpacing
+    ? flatLineWidth <= rustFormatWidth
+    : flatLineWidth < rustFormatWidth) {
     return flat;
   }
+  const flatInvocation = `${opening}${flatParameters.join(", ")})`;
+  if (!includeBodySpacing && returnType !== undefined && whereClause.length === 0 &&
+    flatLineWidth === rustFormatWidth &&
+    indentText(depth).length + leadingWidth + flatInvocation.length <= rustFormatWidth) {
+    return `${flatInvocation}\n${indentText(depth + 1)}${printRustReturnSuffix(returnType).trimStart()}`;
+  }
+  const closingIndent = indentText(depth);
+  const closingPrefix = parameters.length === 0
+    ? `${opening})`
+    : `${closingIndent})`;
+  const fittedReturnSuffix = printRustFittedReturnSuffix(
+    returnType,
+    depth,
+    closingPrefix.length,
+  );
   return [
-    opening,
-    ...parameters.map((parameter) => `${indentText(depth + 1)}${parameter},`),
-    `${indentText(depth)})${trailing}`,
+    ...(parameters.length === 0
+      ? []
+      : [
+          opening,
+          ...parameters.map((parameter) => printRustFunctionParameterFitted(parameter, depth + 1)),
+        ]),
+    `${closingPrefix}${fittedReturnSuffix}${whereClause}${includeBodySpacing ? " " : ""}`,
   ].join("\n");
 }
 
@@ -197,20 +273,62 @@ function printRustFunctionBody(body: RustBlock, depth: number): string {
     : `{\n${statements}\n${indentText(depth)}}`;
 }
 
-function printRustReceiver(receiver: RustReceiver): string {
+function rustReceiverParameter(receiver: RustReceiver): RustFunctionParameterPrint {
   switch (receiver.kind) {
-    case "value": return `${receiver.mutable === true ? "mut " : ""}self`;
+    case "value": return { prefix: `${receiver.mutable === true ? "mut " : ""}self` };
     case "reference": {
       const lifetime = receiver.lifetime === undefined ? "" : `${printRustLifetime(receiver.lifetime)} `;
-      return `&${lifetime}${receiver.mutable ? "mut " : ""}self`;
+      return { prefix: `&${lifetime}${receiver.mutable ? "mut " : ""}self` };
     }
     case "typed":
-      return `${receiver.mutable === true ? "mut " : ""}self: ${printRustType(receiver.type)}`;
+      return {
+        prefix: `${receiver.mutable === true ? "mut " : ""}self: `,
+        type: receiver.type,
+      };
   }
 }
 
-function printRustFunctionParameter(parameter: RustFunctionParam): string {
-  return `${parameter.mutable === true ? "mut " : ""}${parameter.name}: ${printRustType(parameter.type)}`;
+function rustFunctionParameter(parameter: RustFunctionParam): RustFunctionParameterPrint {
+  return {
+    prefix: `${parameter.mutable === true ? "mut " : ""}${parameter.name}: `,
+    type: parameter.type,
+  };
+}
+
+function printRustFunctionParameterFlat(parameter: RustFunctionParameterPrint): string {
+  return parameter.type === undefined
+    ? parameter.prefix
+    : `${parameter.prefix}${printRustType(parameter.type)}`;
+}
+
+function printRustFunctionParameterFitted(
+  parameter: RustFunctionParameterPrint,
+  depth: number,
+): string {
+  const indent = indentText(depth);
+  if (parameter.type === undefined) return `${indent}${parameter.prefix},`;
+  return appendToLastLine(
+    `${indent}${parameter.prefix}${printRustTypeFitted(
+      parameter.type,
+      depth,
+      indent.length + parameter.prefix.length,
+    )}`,
+    ",",
+  );
+}
+
+function printRustReturnSuffix(returnType: RustType | undefined): string {
+  return returnType === undefined ? "" : ` -> ${printRustType(returnType)}`;
+}
+
+function printRustFittedReturnSuffix(
+  returnType: RustType | undefined,
+  depth: number,
+  column: number,
+): string {
+  return returnType === undefined
+    ? ""
+    : ` -> ${printRustTypeFitted(returnType, depth, column + " -> ".length)}`;
 }
 
 function printAssociatedType(item: RustAssociatedTypeItem, depth: number, implementation: boolean): string {
@@ -247,7 +365,16 @@ function printRustStructFields(fields: RustStructFields, depth: number, declarat
 
 function printRustStructField(field: RustStructField, depth: number): string {
   const attrs = printOuterAttributes(field.attrs, depth);
-  return `${attrs}${indentText(depth)}${printRustVisibility(field.visibility)}${field.name}: ${printRustType(field.type)},`;
+  const prefix = `${indentText(depth)}${printRustVisibility(field.visibility)}${field.name}:`;
+  const flatType = printRustType(field.type);
+  if (!flatType.includes("\n") && renderedFits(`${prefix} ${flatType},`, 0)) {
+    return `${attrs}${prefix} ${flatType},`;
+  }
+  const typeIndent = indentText(depth + 1);
+  return `${attrs}${prefix}\n${appendToLastLine(
+    `${typeIndent}${printRustTypeFitted(field.type, depth + 1, typeIndent.length)}`,
+    ",",
+  )}`;
 }
 
 function printOuterAttributes(attrs: readonly RustAttribute[] | undefined, depth = 0): string {

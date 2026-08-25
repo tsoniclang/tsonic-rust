@@ -10,6 +10,7 @@ function projectFunction(expression) {
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -26,11 +27,16 @@ function field(receiver, name) {
   return { kind: "field", receiver, name };
 }
 
+function tupleField(receiver, index) {
+  return { kind: "tuple-field", receiver, index };
+}
+
 function nestedTryScopeSource(returnType, flowName, bodyName) {
   return printRustSourceFile({
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       fallible: true,
@@ -69,7 +75,10 @@ function nestedTryScopeSource(returnType, flowName, bodyName) {
 }
 
 test("nested tuple fields use one edition-neutral rustfmt-stable form", () => {
-  const text = projectFunction(field(field(field({ kind: "path", path: "state" }, "0"), "1"), "0"));
+  const text = projectFunction(tupleField(tupleField(tupleField(
+    { kind: "path", path: "state" },
+    0,
+  ), 1), 0));
 
   assert.match(text, /\(\(state\.0\)\.1\)\.0/u);
   assert.doesNotMatch(text, /state\.0 \.1|state\.0\.1/u);
@@ -108,22 +117,32 @@ test("long typed bindings expand the type before attaching the initializer", () 
   const callableType = {
     kind: "named",
     path: "rt::OwnedLocalCallable",
-    typeArguments: [{
-      kind: "tuple",
-      elements: [
-        { kind: "named", path: "tsonic_rust_node::http::IncomingMessage" },
-        { kind: "named", path: "tsonic_rust_node::http::ServerResponseHandle" },
-      ],
-    }, {
-      kind: "named",
-      path: "rt::TsonicResult",
-      typeArguments: [{ kind: "unit" }],
-    }],
+    genericArguments: [
+      {
+        kind: "type",
+        type: {
+          kind: "tuple",
+          elements: [
+            { kind: "named", path: "tsonic_rust_node::http::IncomingMessage" },
+            { kind: "named", path: "tsonic_rust_node::http::ServerResponseHandle" },
+          ],
+        },
+      },
+      {
+        kind: "type",
+        type: {
+          kind: "named",
+          path: "rt::TsonicResult",
+          genericArguments: [{ kind: "type", type: { kind: "unit" } }],
+        },
+      },
+    ],
   };
   const text = printRustSourceFile({
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -177,6 +196,7 @@ test("fallible nested calls remain compact when their selected line fits", () =>
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -261,6 +281,7 @@ test("logical block operands keep the following operator on the closing brace", 
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -325,7 +346,7 @@ test("associated values preserve their exact generic owner", () => {
     owner: {
       kind: "named",
       path: "Option",
-      typeArguments: [{ kind: "string" }],
+      genericArguments: [{ kind: "type", type: { kind: "string" } }],
     },
     name: "None",
   });
@@ -354,6 +375,7 @@ test("detached logical block operands use the continuation indentation", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -436,14 +458,27 @@ test("format macro arguments keep borrowed nested calls attached to their call",
     headerComment,
     items: [{
       kind: "impl",
+      generics: { parameters: [], wherePredicates: [] },
       target: { kind: "named", path: "Proof" },
+      polarity: "positive",
+      safety: "safe",
       functions: [{
         name: "proof",
         visibility: "private",
-        selfParam: "rc",
+        generics: { parameters: [], wherePredicates: [] },
+        receiver: {
+          kind: "typed",
+          type: {
+            kind: "named",
+            path: "std::rc::Rc",
+            genericArguments: [{ kind: "type", type: { kind: "named", path: "Self" } }],
+          },
+        },
         params: [],
         body: { statements: [{ kind: "tail", expr: expression }] },
       }],
+      associatedTypes: [],
+      associatedConstants: [],
     }],
   });
 
@@ -531,6 +566,7 @@ test("multiline awaited match-arm expressions use a canonical arm block", () => 
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       isAsync: true,
@@ -577,6 +613,7 @@ test("multiline synchronous match-arm expressions remain direct", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       fallible: true,
@@ -627,7 +664,11 @@ test("try-scope match bindings follow all rustfmt width boundaries", () => {
   );
 
   const overWidth = nestedTryScopeSource(
-    { kind: "named", path: "Option", typeArguments: [{ kind: "string" }] },
+    {
+      kind: "named",
+      path: "Option",
+      genericArguments: [{ kind: "type", type: { kind: "string" } }],
+    },
     "__tsonic_try_flow_2",
     "__tsonic_try_body_1",
   );
@@ -678,6 +719,7 @@ test("method chains in logical continuations use the continuation body indent", 
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],

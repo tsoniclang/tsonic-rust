@@ -1,4 +1,5 @@
 export type { TargetTypeRef } from "./model.js";
+export { rustArrayLikeElementCarrier } from "./carriers/sequences.js";
 export {
   rustBuiltinPathTargetType,
   rustBuiltinGenericPathTargetType,

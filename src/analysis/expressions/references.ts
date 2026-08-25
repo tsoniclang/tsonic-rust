@@ -19,6 +19,7 @@ import {
 } from "../facts/keys.js";
 import {
   rustOptionElementCarrier,
+  rustArrayLikeElementCarrier,
   rustCallableSignature,
   rustCallableTargetType,
   rustSourcePrimitiveTargetType,
@@ -707,7 +708,7 @@ function applySelectedRuntimeCallableCall(
       consumedBindings.add(binding);
       const inputCarrier = form === "rest" &&
           binding.sourceParameterForm === "rest-element"
-        ? valueCarrier.kind === "array" ? valueCarrier.element : undefined
+        ? rustArrayLikeElementCarrier(valueCarrier)
         : form === "optional" ? parameterCarrier : valueCarrier;
       return inputCarrier === undefined
         ? undefined

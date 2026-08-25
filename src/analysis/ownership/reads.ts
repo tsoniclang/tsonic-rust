@@ -3,6 +3,7 @@ import {
   BinaryExpression_Left,
   Node_Expression,
   sourceNodeIdentity,
+  sourceNodesEqual,
 } from "@tsonic/target-api/source";
 import type {
   RustOwnershipOperation,
@@ -81,6 +82,9 @@ function implicitReadDisposition(
       mutable: sourceContract.kind === "mutable-reference",
     });
   }
+  if (canImplicitlyMoveOrdinarySourceReference(node, input)) {
+    return Object.freeze({ kind: "move" });
+  }
   if (environment.supportsTrait(carrier, rustCloneTrait)) {
     return Object.freeze({
       kind: "clone",
@@ -88,6 +92,136 @@ function implicitReadDisposition(
     });
   }
   return Object.freeze({ kind: "borrowed", mutable: false });
+}
+
+function canImplicitlyMoveOrdinarySourceReference(
+  reference: Node,
+  input: RustOwnershipAnalysisInput,
+): boolean {
+  const selected = input.navigation.sourceReferenceFor(reference);
+  const declaration = selected?.declaration;
+  if (selected?.symbol === undefined || declaration === undefined ||
+    enclosingCallable(declaration, input) === undefined) {
+    return false;
+  }
+  const declarationKind = input.ast.variableDeclarationKind(declaration);
+  if (declarationKind === "using" || declarationKind === "await using") {
+    return false;
+  }
+  const summary = input.navigation.declarationUseSummary(declaration);
+  if (summary.captured || summary.exported) {
+    return false;
+  }
+  if (isExactCallableExitValue(reference, declaration, selected.symbol, input)) {
+    return true;
+  }
+  const runtimeUses = summary.uses.filter((use) =>
+    use.kind !== "source-linkage" && use.kind !== "type-only");
+  return !summary.bindingWritten && runtimeUses.length === 1 &&
+    sourceNodesEqual(input.ast, runtimeUses[0]?.reference, reference) &&
+    !isInsideRepeatedRegion(reference, declaration, input);
+}
+
+function isExactCallableExitValue(
+  reference: Node,
+  declaration: Node,
+  symbol: NonNullable<NonNullable<ReturnType<RustOwnershipAnalysisInput["navigation"]["sourceReferenceFor"]>>["symbol"]>,
+  input: RustOwnershipAnalysisInput,
+): boolean {
+  const declarationCallable = enclosingCallable(declaration, input);
+  if (declarationCallable === undefined) {
+    return false;
+  }
+  let current = reference;
+  for (;;) {
+    const parent = input.ast.parent(current);
+    if (parent === undefined || parent === declarationCallable) {
+      const body = input.ast.body(declarationCallable);
+      return body !== undefined && sourceNodesEqual(input.ast, body, current);
+    }
+    if (isTransparentValueWrapper(parent, current, input)) {
+      current = parent;
+      continue;
+    }
+    if (input.ast.is.IsReturnStatement(parent) &&
+      sourceNodesEqual(input.ast, Node_Expression(input.ast, parent), current) &&
+      !returnCrossesRetainedControlRegion(parent, declarationCallable, input)) {
+      const references = input.navigation.referencesWithin(symbol, current);
+      return references.length === 1 &&
+        sourceNodesEqual(input.ast, references[0], reference);
+    }
+    return false;
+  }
+}
+
+function returnCrossesRetainedControlRegion(
+  statement: Node,
+  callable: Node,
+  input: RustOwnershipAnalysisInput,
+): boolean {
+  let current = input.ast.parent(statement);
+  while (current !== undefined && current !== callable) {
+    const kind = input.ast.kindName(current);
+    if (input.ast.is.IsTryStatement(current) || kind === "KindSwitchStatement" ||
+      kind === "KindForStatement" || kind === "KindForInStatement" ||
+      kind === "KindForOfStatement" || kind === "KindWhileStatement" ||
+      kind === "KindDoStatement" || isCallableKind(kind)) {
+      return true;
+    }
+    current = input.ast.parent(current);
+  }
+  return current !== callable;
+}
+
+function isTransparentValueWrapper(
+  wrapper: Node,
+  expression: Node,
+  input: RustOwnershipAnalysisInput,
+): boolean {
+  if (!isTransparent(input.ast.kindName(wrapper))) {
+    return false;
+  }
+  return sourceNodesEqual(input.ast, Node_Expression(input.ast, wrapper), expression);
+}
+
+function isInsideRepeatedRegion(
+  reference: Node,
+  declaration: Node,
+  input: RustOwnershipAnalysisInput,
+): boolean {
+  const declarationCallable = enclosingCallable(declaration, input);
+  let current = input.ast.parent(reference);
+  while (current !== undefined && current !== declarationCallable) {
+    const kind = input.ast.kindName(current);
+    if (isCallableKind(kind) || kind === "KindForStatement" ||
+      kind === "KindForInStatement" || kind === "KindForOfStatement" ||
+      kind === "KindWhileStatement" || kind === "KindDoStatement") {
+      return true;
+    }
+    current = input.ast.parent(current);
+  }
+  return current !== declarationCallable;
+}
+
+function enclosingCallable(
+  node: Node,
+  input: RustOwnershipAnalysisInput,
+): Node | undefined {
+  let current: Node | undefined = node;
+  while (current !== undefined) {
+    if (isCallableKind(input.ast.kindName(current))) {
+      return current;
+    }
+    current = input.ast.parent(current);
+  }
+  return undefined;
+}
+
+function isCallableKind(kind: string): boolean {
+  return kind === "KindFunctionDeclaration" || kind === "KindFunctionExpression" ||
+    kind === "KindArrowFunction" || kind === "KindMethodDeclaration" ||
+    kind === "KindConstructor" || kind === "KindGetAccessor" ||
+    kind === "KindSetAccessor";
 }
 
 function explicitReadDisposition(

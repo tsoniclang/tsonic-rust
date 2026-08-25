@@ -22,54 +22,68 @@ test("source style attributes are item-local and derived from exact Rust signatu
       kind: "struct",
       name: "Hidden",
       visibility: "crate",
-      derives: [],
-      fields: [],
+      generics: { parameters: [], wherePredicates: [] },
+      fields: { kind: "named", fields: [] },
     }, {
       kind: "struct",
       name: "Owner",
       visibility: "public",
-      derives: [],
-      fields: [],
+      generics: { parameters: [], wherePredicates: [] },
+      fields: { kind: "named", fields: [] },
     }, {
       kind: "struct",
       name: "InternalCursor",
       visibility: "crate",
-      derives: [],
-      fields: [],
+      generics: { parameters: [], wherePredicates: [] },
+      fields: { kind: "named", fields: [] },
     }, {
       kind: "impl",
+      generics: { parameters: [], wherePredicates: [] },
       target: { kind: "named", path: "Owner" },
+      polarity: "positive",
+      safety: "safe",
       functions: [{
         name: "to_string",
         visibility: "public",
-        selfParam: "ref",
+        generics: { parameters: [], wherePredicates: [] },
+        receiver: { kind: "reference", mutable: false },
         params: [],
         returnType: { kind: "string" },
         body: { statements: [{ kind: "tail", expr: { kind: "string-literal", value: "owner" } }] },
       }, {
         name: "next",
         visibility: "public",
-        selfParam: "mut-ref",
+        generics: { parameters: [], wherePredicates: [] },
+        receiver: { kind: "reference", mutable: true },
         params: [],
         returnType: { kind: "string" },
         body: { statements: [{ kind: "tail", expr: { kind: "string-literal", value: "value" } }] },
       }, {
         name: "configure",
         visibility: "public",
+        generics: { parameters: [], wherePredicates: [] },
         params: parameters,
         body: { statements: [] },
       }],
+      associatedTypes: [],
+      associatedConstants: [],
     }, {
       kind: "impl",
+      generics: { parameters: [], wherePredicates: [] },
       target: { kind: "named", path: "InternalCursor" },
+      polarity: "positive",
+      safety: "safe",
       functions: [{
         name: "next",
         visibility: "public",
-        selfParam: "mut-ref",
+        generics: { parameters: [], wherePredicates: [] },
+        receiver: { kind: "reference", mutable: true },
         params: [],
         returnType: { kind: "string" },
         body: { statements: [{ kind: "tail", expr: { kind: "string-literal", value: "internal" } }] },
       }],
+      associatedTypes: [],
+      associatedConstants: [],
     }],
   });
 
@@ -90,6 +104,7 @@ test("source style keeps intentional control-flow policy statement-local", () =>
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -145,6 +160,7 @@ test("source liveness policy is attached only to proven dead local values", () =
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [{ name: "condition", type: { kind: "primitive", name: "bool" } }],
@@ -277,6 +293,7 @@ test("multiline method-chain arguments use rustfmt-compatible outer-call layout"
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -297,6 +314,7 @@ test("nested collection initializers reserve the trailing semicolon at continuat
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -348,6 +366,7 @@ test("fitted multi-argument calls stay horizontal inside assignments", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -380,6 +399,7 @@ test("assignment continuations keep newly fitting nested calls horizontal", () =
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -416,6 +436,7 @@ test("a fitted outer call stays attached to its multiline nested call", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -455,6 +476,7 @@ test("a nested call owns the fitting break inside a wider expression", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -502,6 +524,7 @@ test("fallible statement calls reserve the trailing semicolon before fitting nes
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -545,6 +568,7 @@ test("an outer call stays attached to an expanded fallible inner call", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -582,6 +606,7 @@ test("a multiline fallible method chain expands inside its outer call", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -632,6 +657,7 @@ test("a long outer call expands before a jointly fitting method argument", () =>
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       visibility: "public",
       name: "proof",
       params: [],

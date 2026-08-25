@@ -10,6 +10,7 @@ test("fitting method-call arguments remain on one rustfmt line", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -46,15 +47,16 @@ test("single binary call arguments retain rustfmt's attached continuation", () =
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "selected",
       visibility: "public",
       params: [],
       returnType: {
         kind: "named",
         path: "Result",
-        typeArguments: [
-          { kind: "primitive", name: "i32" },
-          { kind: "named", path: "Error" },
+        genericArguments: [
+          { kind: "type", type: { kind: "primitive", name: "i32" } },
+          { kind: "type", type: { kind: "named", path: "Error" } },
         ],
       },
       body: {
@@ -116,6 +118,7 @@ test("multi-argument calls follow rustfmt argument width independently of callab
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -160,6 +163,7 @@ test("single projection calls keep a short receiver attached when closure argume
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -226,6 +230,7 @@ test("fallible calls on the left of comparisons expand their arguments before th
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -279,6 +284,7 @@ test("fitting fallible call operands stay compact before a comparison break", ()
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -336,6 +342,7 @@ test("long calls on the left of comparisons expand before the operator", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -399,6 +406,7 @@ test("trailing closures expand to preserve comparison attachment", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -452,6 +460,7 @@ test("logical-chain operands keep fitted closures before nested comparison conti
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -506,6 +515,7 @@ test("unary expressions expand long nested calls before outer attachment", () =>
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -549,6 +559,7 @@ test("unary fallible calls retain rustfmt's attached outer-call layout", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -605,6 +616,7 @@ test("unary block arguments remain attached to their outer calls", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -644,6 +656,7 @@ test("long atomic vectors use rustfmt-compatible element lines", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -676,6 +689,7 @@ test("fallible conversion wrappers own multiline callback method chains", () => 
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -731,6 +745,7 @@ test("fallible conversion wrappers stay attached to one callback method", () => 
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -795,6 +810,7 @@ test("conversion wrappers retain rustfmt layout for one block-valued array argum
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -844,6 +860,7 @@ test("method chains inside expanded call comparisons use argument indentation", 
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -899,6 +916,7 @@ test("expanded call comparisons break short receiver chains before the first sel
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -959,6 +977,7 @@ test("expanded call arguments keep fitting optional closure chains attached", ()
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -1024,7 +1043,7 @@ test("every fitted call layout preserves exact call-site type arguments", () => 
       value: {
         kind: "call",
         path: "load_selected_value",
-        typeArguments: [{ kind: "string" }],
+        genericArguments: [{ kind: "type", type: { kind: "string" } }],
         args: [{ kind: "path", path: "input" }],
       },
     }],
@@ -1034,6 +1053,7 @@ test("every fitted call layout preserves exact call-site type arguments", () => 
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -1045,7 +1065,10 @@ test("every fitted call layout preserves exact call-site type arguments", () => 
           init: {
             kind: "call",
             path: "Ok",
-            typeArguments: [{ kind: "infer" }, errorType],
+            genericArguments: [
+              { kind: "type", type: { kind: "infer" } },
+              { kind: "type", type: errorType },
+            ],
             args: [expandedValue],
           },
         }, {
@@ -1056,7 +1079,7 @@ test("every fitted call layout preserves exact call-site type arguments", () => 
             kind: "associated-call",
             owner: { kind: "named", path: "Factory" },
             method: "make",
-            typeArguments: [{ kind: "string" }],
+            genericArguments: [{ kind: "type", type: { kind: "string" } }],
             args: [expandedValue],
           },
         }, {
@@ -1067,7 +1090,7 @@ test("every fitted call layout preserves exact call-site type arguments", () => 
             kind: "method-call",
             receiver: { kind: "path", path: "values" },
             method: "convert",
-            typeArguments: [{ kind: "string" }],
+            genericArguments: [{ kind: "type", type: { kind: "string" } }],
             args: [expandedValue],
           },
         }, {
@@ -1080,7 +1103,10 @@ test("every fitted call layout preserves exact call-site type arguments", () => 
             args: [{
               kind: "call",
               path: "Ok",
-              typeArguments: [{ kind: "infer" }, errorType],
+              genericArguments: [
+                { kind: "type", type: { kind: "infer" } },
+                { kind: "type", type: errorType },
+              ],
               args: [expandedValue],
             }],
           },
@@ -1102,7 +1128,10 @@ test("every fitted call layout preserves exact call-site type arguments", () => 
                   body: {
                     kind: "call",
                     path: "Ok",
-                    typeArguments: [{ kind: "infer" }, errorType],
+                    genericArguments: [
+                      { kind: "type", type: { kind: "infer" } },
+                      { kind: "type", type: errorType },
+                    ],
                     args: [{
                       kind: "try",
                       resultErrorType: errorType,

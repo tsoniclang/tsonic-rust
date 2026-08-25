@@ -180,7 +180,9 @@ export function planRustNonConsumingValue(
   context: RustPlanContext,
 ): RustExpr {
   const disposition = context.input.program.ownership.readDispositionFor(node);
-  return disposition?.kind === "clone" &&
+  const generatedClone = context.expressionOverrides?.get(node)?.valueForm ===
+    "clone-on-owned-read";
+  return (disposition?.kind === "clone" || generatedClone) &&
       expression.kind === "method-call" && expression.method === "clone" &&
       expression.args.length === 0
     ? expression.receiver

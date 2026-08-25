@@ -25,7 +25,7 @@ import {
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
 import { planExpression } from "../entry.js";
 import { planPromotedSourceMethodCall, shapeRustSourceCallParameters, sourceCallSelectedMemberMatches } from "./arguments.js";
-import { planRustNonConsumingValue, planRustPromotedStorageLocation } from "../typed-locations.js";
+import { planRustNonConsumingValue, planRustPromotedStorageLocation, planRustSharedReceiver } from "../typed-locations.js";
 import { rustBottomAfterEffect, rustBottomExpression } from "../../types/fallible-shape.js";
 import {
   planRustExactProjectMethodCall,
@@ -216,7 +216,7 @@ export function planSelectedSourceCall(
                   ? undefined
                   : planRustVirtualProjectMethodCall(
                       node,
-                      receiver,
+                      planRustSharedReceiver(receiverNode, receiver, context),
                       fact.target.dispatch.ownerCarrier,
                       dispatchVariant.virtualSlot,
                       shaped,

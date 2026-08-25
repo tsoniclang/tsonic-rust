@@ -7,6 +7,7 @@ import {
 import {
   rustBigIntTargetType,
   rustAsyncCallableTargetType,
+  rustArrayLikeElementCarrier,
   rustCallableTargetType,
   rustFutureOutputCarrier,
   rustJsArrayTargetType,
@@ -24,8 +25,6 @@ import {
   rustVecTargetType,
   rustFixedArrayTargetType,
   rustFunctionPointerTargetType,
-  isRustJsArrayCarrier,
-  rustJsArrayLikeElementTargetType,
 } from "../../../target-model/types/index.js";
 import { asNode } from "../../evidence/selected-source.js";
 import { denseDefined, resolveProjectSourceCarrier } from "./project.js";
@@ -597,11 +596,7 @@ function resolveRustSignatureParameterListTarget(
   }
   const restIndex = restIndexes[0]!;
   const restCarrier = elements[restIndex];
-  const restElement = restCarrier?.kind === "array"
-    ? restCarrier.element
-    : isRustJsArrayCarrier(restCarrier)
-      ? rustJsArrayLikeElementTargetType(restCarrier)
-      : undefined;
+  const restElement = rustArrayLikeElementCarrier(restCarrier);
   if (restElement === undefined) {
     return undefined;
   }

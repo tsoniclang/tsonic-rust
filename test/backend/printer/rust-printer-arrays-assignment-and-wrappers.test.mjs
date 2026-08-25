@@ -9,6 +9,7 @@ test("single long owned array arguments stay attached to their call", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -74,6 +75,7 @@ test("logical assignment keeps a fitting first operand beside the operator", () 
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -96,6 +98,7 @@ test("fitting fallible statement calls remain horizontal", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -135,6 +138,7 @@ test("expanded method arguments stay attached to one outer conversion wrapper", 
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],

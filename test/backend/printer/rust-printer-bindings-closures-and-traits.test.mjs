@@ -10,6 +10,7 @@ test("borrowed method-chain let initializers reflow as one continuation", () => 
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -53,6 +54,7 @@ test("typed let bindings keep fitting call openings before expanded arrays", () 
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -64,7 +66,7 @@ test("typed let bindings keep fitting call openings before expanded arrays", () 
           type: {
             kind: "named",
             path: "js_abi::JsArray",
-            typeArguments: [{ kind: "primitive", name: "i32" }],
+            genericArguments: [{ kind: "type", type: { kind: "primitive", name: "i32" } }],
           },
           init: {
             kind: "method-call",
@@ -102,6 +104,7 @@ test("typed let bindings keep expanded ordinary calls attached", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -146,6 +149,7 @@ test("typed let bindings keep a fitting call base before a fallible selector", (
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -184,6 +188,7 @@ test("typed let bindings move an expanded call base to one continuation", () => 
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -236,6 +241,7 @@ test("fitting string concatenations remain on typed binding lines", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -273,6 +279,7 @@ test("fallible method calls keep short receivers attached to block arguments", (
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -321,6 +328,7 @@ test("fallible method calls keep short receivers attached to closure blocks", ()
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -371,6 +379,7 @@ test("long expression closures use a vertical receiver before expanding the clos
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -420,6 +429,7 @@ test("short optional chains stay attached when their fitted closure body expands
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "proof",
       visibility: "public",
       params: [],
@@ -469,11 +479,22 @@ test("long multi-supertrait headers use rustfmt-compatible vertical layout", () 
       kind: "trait",
       name: "__TsonicDispatch_CompleteProjectObject",
       visibility: "private",
+      generics: { parameters: [], wherePredicates: [] },
+      safety: "safe",
+      auto: false,
       superTraits: [
-        { kind: "named", path: "__TsonicDispatch_TaggedProjectObject" },
-        { kind: "named", path: "__TsonicDispatch_CountedProjectObject" },
+        {
+          kind: "trait",
+          trait: { kind: "named", path: "__TsonicDispatch_TaggedProjectObject" },
+        },
+        {
+          kind: "trait",
+          trait: { kind: "named", path: "__TsonicDispatch_CountedProjectObject" },
+        },
       ],
       functions: [],
+      associatedTypes: [],
+      associatedConstants: [],
     }],
   });
 
@@ -490,11 +511,19 @@ test("one long supertrait header uses rustfmt-compatible vertical layout", () =>
       kind: "trait",
       name: "__TsonicDispatch_ProjectObjectWithAnIntentionallyLongContractName",
       visibility: "private",
+      generics: { parameters: [], wherePredicates: [] },
+      safety: "safe",
+      auto: false,
       superTraits: [{
-        kind: "named",
-        path: "__TsonicDispatch_ProjectObjectWithAnIntentionallyLongBaseContractName",
+        kind: "trait",
+        trait: {
+          kind: "named",
+          path: "__TsonicDispatch_ProjectObjectWithAnIntentionallyLongBaseContractName",
+        },
       }],
       functions: [],
+      associatedTypes: [],
+      associatedConstants: [],
     }],
   });
 
@@ -511,11 +540,20 @@ test("one supertrait header below rustfmt width remains on one line", () => {
       kind: "trait",
       name: "__TsonicDispatch_StringValue",
       visibility: "crate",
+      generics: { parameters: [], wherePredicates: [] },
+      safety: "safe",
+      auto: false,
       superTraits: [{
-        kind: "named",
-        path: "__TsonicDispatch_GenericBase<String>",
+        kind: "trait",
+        trait: {
+          kind: "named",
+          path: "__TsonicDispatch_GenericBase",
+          genericArguments: [{ kind: "type", type: { kind: "string" } }],
+        },
       }],
       functions: [],
+      associatedTypes: [],
+      associatedConstants: [],
     }],
   });
 
@@ -532,16 +570,29 @@ test("nonempty traits use rustfmt-compatible long supertrait headers", () => {
       kind: "trait",
       name: "__TsonicDispatch_UnsafeImplementation",
       visibility: "crate",
+      generics: { parameters: [], wherePredicates: [] },
+      safety: "safe",
+      auto: false,
       superTraits: [{
-        kind: "named",
-        path: "__TsonicDispatch_UnsafeContract",
+        kind: "trait",
+        trait: { kind: "named", path: "__TsonicDispatch_UnsafeContract" },
       }],
       functions: [{
         name: "read",
-        selfParam: "rc",
+        generics: { parameters: [], wherePredicates: [] },
+        receiver: {
+          kind: "typed",
+          type: {
+            kind: "named",
+            path: "std::rc::Rc",
+            genericArguments: [{ kind: "type", type: { kind: "named", path: "Self" } }],
+          },
+        },
         params: [{ name: "value", type: { kind: "primitive", name: "i32" } }],
         returnType: { kind: "primitive", name: "i32" },
       }],
+      associatedTypes: [],
+      associatedConstants: [],
     }],
   });
 
@@ -558,16 +609,33 @@ test("nonempty traits retain rustfmt-compatible fitted supertrait headers", () =
       kind: "trait",
       name: "__TsonicDispatch_StringValue",
       visibility: "crate",
+      generics: { parameters: [], wherePredicates: [] },
+      safety: "safe",
+      auto: false,
       superTraits: [{
-        kind: "named",
-        path: "__TsonicDispatch_GenericBase<String>",
+        kind: "trait",
+        trait: {
+          kind: "named",
+          path: "__TsonicDispatch_GenericBase",
+          genericArguments: [{ kind: "type", type: { kind: "string" } }],
+        },
       }],
       functions: [{
         name: "read",
-        selfParam: "rc",
+        generics: { parameters: [], wherePredicates: [] },
+        receiver: {
+          kind: "typed",
+          type: {
+            kind: "named",
+            path: "std::rc::Rc",
+            genericArguments: [{ kind: "type", type: { kind: "named", path: "Self" } }],
+          },
+        },
         params: [],
         returnType: { kind: "named", path: "String" },
       }],
+      associatedTypes: [],
+      associatedConstants: [],
     }],
   });
 
@@ -582,6 +650,7 @@ test("string concatenation preserves vertical chains inside trailing blocks", ()
     headerComment,
     items: [{
       kind: "function",
+      generics: { parameters: [], wherePredicates: [] },
       name: "append",
       visibility: "private",
       params: [],
@@ -635,22 +704,31 @@ test("long struct field types use rustfmt-compatible continuation indentation", 
       kind: "struct",
       name: "DispatchRoot",
       visibility: "private",
-      derives: [],
-      fields: [{
-        name: "dispatch_identity_identity_specialization_1_implementation",
-        visibility: "private",
-        type: {
-          kind: "named",
-          path: "rt::OwnedLocalCallable",
-          typeArguments: [{
-            kind: "tuple",
-            elements: [
-              { kind: "named", path: "Identity" },
-              { kind: "named", path: "String" },
+      generics: { parameters: [], wherePredicates: [] },
+      fields: {
+        kind: "named",
+        fields: [{
+          name: "dispatch_identity_identity_specialization_1_implementation",
+          visibility: "private",
+          type: {
+            kind: "named",
+            path: "rt::OwnedLocalCallable",
+            genericArguments: [
+              {
+                kind: "type",
+                type: {
+                  kind: "tuple",
+                  elements: [
+                    { kind: "named", path: "Identity" },
+                    { kind: "named", path: "String" },
+                  ],
+                },
+              },
+              { kind: "type", type: { kind: "named", path: "String" } },
             ],
-          }, { kind: "named", path: "String" }],
-        },
-      }],
+          },
+        }],
+      },
     }],
   });
 
