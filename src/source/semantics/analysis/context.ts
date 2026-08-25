@@ -1,7 +1,6 @@
 import type {
   Node,
   ProviderVirtualDeclarationFact,
-  Symbol,
   SourceAnalysisContext,
   SourceFileQueries,
 } from "@tsonic/tsts";
@@ -54,46 +53,7 @@ export function selectedRustProviderTypeDeclaration(
   const candidates: ProviderVirtualDeclarationFact[] = [];
   appendProviderFact(candidates, typeReference, context);
   appendProviderFact(candidates, typeName, context);
-
-  const symbols = new Set<Symbol>();
-  const selectedSymbol = context.checker.getResolvedSymbolOrNil(typeName) ??
-    context.checker.getSymbolAtLocation(typeName);
-  if (selectedSymbol !== undefined) {
-    symbols.add(selectedSymbol);
-    const aliased = hasAliasDeclaration(selectedSymbol, context)
-      ? context.checker.getAliasedSymbol(selectedSymbol)
-      : undefined;
-    if (aliased !== undefined) symbols.add(aliased);
-    for (const root of context.checker.getRootSymbols(selectedSymbol)) {
-      if (root !== undefined) symbols.add(root);
-    }
-  }
-  for (const symbol of symbols) {
-    appendProviderFact(candidates, symbol, context);
-    for (const declaration of context.checker.getSymbolDeclarations(symbol)) {
-      appendProviderFact(candidates, declaration, context);
-    }
-  }
   return oneProviderTypeIdentity(candidates);
-}
-
-function hasAliasDeclaration(
-  symbol: Symbol,
-  context: RustSourceFileAnalysisContext,
-): boolean {
-  return context.checker.getSymbolDeclarations(symbol).some((declaration) => {
-    let current = declaration;
-    for (let depth = 0; current !== undefined && depth < 3; depth += 1) {
-      if (context.ast.is.IsImportClause(current) ||
-        context.ast.is.IsImportSpecifier(current) ||
-        context.ast.is.IsNamespaceImport(current) ||
-        context.ast.is.IsExportSpecifier(current)) {
-        return true;
-      }
-      current = context.ast.parent(current);
-    }
-    return false;
-  });
 }
 
 export function selectedRustProviderCall(
