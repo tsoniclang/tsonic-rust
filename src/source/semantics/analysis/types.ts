@@ -159,11 +159,10 @@ function analyzeTypeParameter(
   if (declaration === undefined || owner === undefined) return;
   const constraint = declaration.Constraint ?? undefined;
   const defaultType = declaration.DefaultType ?? undefined;
-  const rawBounds = constraint !== undefined &&
-      context.ast.is.IsIntersectionTypeNode(constraint)
-    ? context.ast.as.AsIntersectionTypeNode(constraint)?.Types?.Nodes
-    : undefined;
-  if (rawBounds?.some((bound) => bound === undefined)) {
+  const bounds = constraint === undefined
+    ? Object.freeze([])
+    : flattenConstraintBounds(constraint, context);
+  if (bounds === undefined) {
     appendRustSourceDiagnostic(
       context,
       parameter,
@@ -173,11 +172,6 @@ function analyzeTypeParameter(
     );
     return;
   }
-  const bounds = constraint === undefined
-    ? []
-    : rawBounds === undefined
-      ? [constraint]
-      : rawBounds as readonly Node[];
   const boundFacts = bounds.map((bound) => ({
     bound,
     fact: readRustSourceFact(context, bound, rustSourceTypeContractFactKey),
@@ -212,6 +206,26 @@ function analyzeTypeParameter(
       `Rust lifetime parameter fact could not be recorded (${result}).`,
     );
   }
+}
+
+function flattenConstraintBounds(
+  node: Node,
+  context: RustSourceFileAnalysisContext,
+): readonly Node[] | undefined {
+  if (context.ast.is.IsParenthesizedTypeNode(node)) {
+    const inner = context.ast.as.AsParenthesizedTypeNode(node)?.Type;
+    return inner === undefined ? undefined : flattenConstraintBounds(inner, context);
+  }
+  if (!context.ast.is.IsIntersectionTypeNode(node)) return Object.freeze([node]);
+  const raw = context.ast.as.AsIntersectionTypeNode(node)?.Types?.Nodes;
+  if (raw === undefined || raw.some((bound) => bound === undefined)) return undefined;
+  const flattened: Node[] = [];
+  for (const bound of raw as readonly Node[]) {
+    const selected = flattenConstraintBounds(bound, context);
+    if (selected === undefined) return undefined;
+    flattened.push(...selected);
+  }
+  return Object.freeze(flattened);
 }
 
 const rustSourceTypeContractExportIds = new Set<string>(

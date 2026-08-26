@@ -43,7 +43,7 @@ export type RustCallGenericArgument = Extract<
 
 export type RustTypeBound =
   | { readonly kind: "trait"; readonly path: string }
-  | { readonly kind: "trait-type"; readonly trait: RustType }
+  | { readonly kind: "trait-type"; readonly reference: RustTraitReference }
   | { readonly kind: "lifetime"; readonly lifetime: RustLifetime }
   | {
       readonly kind: "callable";
@@ -58,6 +58,11 @@ export interface RustLifetimeParameter {
   readonly kind: "lifetime";
   readonly name: string;
   readonly outlives: readonly RustLifetime[];
+}
+
+export interface RustTraitReference {
+  readonly trait: RustType;
+  readonly binder?: readonly RustLifetimeParameter[];
 }
 
 export interface RustOrdinaryTypeParameter {
@@ -124,13 +129,13 @@ export type RustType =
     }
   | {
       readonly kind: "trait-object";
-      readonly principal: RustType;
-      readonly autoTraits: readonly RustType[];
+      readonly principal: RustTraitReference;
+      readonly autoTraits: readonly RustTraitReference[];
       readonly lifetime?: RustLifetime;
     }
   | {
       readonly kind: "impl-trait";
-      readonly bounds: readonly RustTypeBound[];
+      readonly bounds: readonly RustTraitReference[];
       readonly outlives: readonly RustLifetime[];
       readonly captures: readonly RustLifetime[];
     }

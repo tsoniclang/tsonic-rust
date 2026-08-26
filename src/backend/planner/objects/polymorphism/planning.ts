@@ -224,7 +224,7 @@ export function planPolymorphicClassDeclaration(
           name: rustProjectObjectDispatchField,
           type: rustRcType({
             kind: "trait-object",
-            principal: dispatchType,
+            principal: { trait: dispatchType },
             autoTraits: [],
           }),
           visibility: implementationVisibility,
@@ -397,7 +397,7 @@ export function planPolymorphicInterfaceDeclaration(
           name: rustProjectObjectDispatchField,
           type: rustRcType({
             kind: "trait-object",
-            principal: dispatchType,
+            principal: { trait: dispatchType },
             autoTraits: [],
           }),
           visibility: implementationVisibility,

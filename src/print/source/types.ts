@@ -3,6 +3,7 @@ import type {
   RustGenericArgument,
   RustLifetime,
   RustLifetimeParameter,
+  RustTraitReference,
   RustType,
   RustTypeBound,
 } from "../../backend/target-ast/nodes.js";
@@ -43,15 +44,15 @@ export function printRustType(type: RustType): string {
     }
     case "trait-object": {
       const bounds = [
-        printRustType(type.principal),
-        ...type.autoTraits.map(printRustType),
+        printRustTraitReference(type.principal),
+        ...type.autoTraits.map(printRustTraitReference),
         ...(type.lifetime === undefined ? [] : [printRustLifetime(type.lifetime)]),
       ];
       return `dyn ${bounds.join(" + ")}`;
     }
     case "impl-trait": {
       const bounds = [
-        ...type.bounds.map(printRustTypeBound),
+        ...type.bounds.map(printRustTraitReference),
         ...type.outlives.map(printRustLifetime),
         ...(type.captures.length === 0
           ? []
@@ -97,6 +98,15 @@ export function printRustLifetime(lifetime: RustLifetime): string {
       : `'${lifetime.name}`;
 }
 
+export function printRustLifetimeParameter(
+  parameter: RustLifetimeParameter,
+): string {
+  const name = `'${parameter.name}`;
+  return parameter.outlives.length === 0
+    ? name
+    : `${name}: ${parameter.outlives.map(printRustLifetime).join(" + ")}`;
+}
+
 export function printRustGenericArgument(argument: RustGenericArgument): string {
   switch (argument.kind) {
     case "lifetime":
@@ -140,7 +150,7 @@ export function printRustTypeBound(bound: RustTypeBound): string {
     case "trait":
       return bound.path;
     case "trait-type":
-      return printRustType(bound.trait);
+      return printRustTraitReference(bound.reference);
     case "lifetime":
       return printRustLifetime(bound.lifetime);
     case "maybe-sized":
@@ -152,12 +162,16 @@ export function printRustTypeBound(bound: RustTypeBound): string {
   }
 }
 
+export function printRustTraitReference(reference: RustTraitReference): string {
+  return `${printRustBinder(reference.binder)}${printRustType(reference.trait)}`;
+}
+
 function printRustBinder(
   parameters: readonly RustLifetimeParameter[] | undefined,
 ): string {
   return parameters === undefined || parameters.length === 0
     ? ""
-    : `for<${parameters.map((parameter) => `'${parameter.name}`).join(", ")}> `;
+    : `for<${parameters.map(printRustLifetimeParameter).join(", ")}> `;
 }
 
 export function indentText(depth: number): string {

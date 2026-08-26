@@ -115,7 +115,7 @@ function rustTypeBoundReferencesModuleAlias(
     case "trait":
       return rustPathReferencesModuleAlias(bound.path, alias);
     case "trait-type":
-      return rustTypeReferencesModuleAlias(bound.trait, alias);
+      return rustTypeReferencesModuleAlias(bound.reference.trait, alias);
     case "callable":
       return bound.parameters.some((parameter) =>
         rustTypeReferencesModuleAlias(parameter, alias)) ||
@@ -150,11 +150,11 @@ function rustTypeReferencesModuleAlias(type: RustType, alias: string): boolean {
         rustOptionalTypeReferencesModuleAlias(type.trait, alias) ||
         rustGenericArgumentsReferenceModuleAlias(type.genericArguments, alias);
     case "trait-object":
-      return rustTypeReferencesModuleAlias(type.principal, alias) ||
-        type.autoTraits.some((trait) => rustTypeReferencesModuleAlias(trait, alias));
+      return rustTypeReferencesModuleAlias(type.principal.trait, alias) ||
+        type.autoTraits.some((trait) => rustTypeReferencesModuleAlias(trait.trait, alias));
     case "impl-trait":
       return type.bounds.some((bound) =>
-        rustTypeBoundReferencesModuleAlias(bound, alias));
+        rustTypeReferencesModuleAlias(bound.trait, alias));
     case "reference":
       return rustTypeReferencesModuleAlias(type.referent, alias);
     case "raw-pointer":

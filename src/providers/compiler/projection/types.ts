@@ -735,6 +735,7 @@ export function targetTraitFor(
   return {
     kind: "trait-ref",
     id,
+    path,
     genericArguments: trait.genericArguments.map((argument) =>
       targetGenericArgumentFor(argument, binderContext, position)),
     associatedConstraints: trait.associatedConstraints.map((constraint) =>

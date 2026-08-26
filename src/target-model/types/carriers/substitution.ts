@@ -840,7 +840,8 @@ export function inferRustTargetGenericBindings(
           match(left.result, right.result, nested);
       }
       case "trait-ref": {
-        if (right.kind !== "trait-ref" || left.id !== right.id) return false;
+        if (right.kind !== "trait-ref" || left.id !== right.id ||
+          left.path !== right.path) return false;
         const nested = matchBinder(left.lifetimeBinder, right.lifetimeBinder, lifetimeContext);
         return nested !== undefined &&
           matchGenericArguments(

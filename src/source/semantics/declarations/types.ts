@@ -58,7 +58,7 @@ export function rustLifetimeTypeDeclarations(): readonly ProviderExportDeclarati
         {
           name: "L",
           constraints: [life],
-          defaultType: rustType(rustSourceTypeExportIds.staticLifetime),
+          defaultType: life,
         },
       ],
       value,

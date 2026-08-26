@@ -246,7 +246,9 @@ function rustTargetTypeRefEqualsValidated(
         rustTargetTypeRefEqualsValidated(left.result, right.result, nested);
     }
     case "trait-ref": {
-      if (right.kind !== left.kind || left.id !== right.id) return false;
+      if (right.kind !== left.kind || left.id !== right.id || left.path !== right.path) {
+        return false;
+      }
       const nested = matchLifetimeBinders(
         left.lifetimeBinder,
         right.lifetimeBinder,
@@ -355,9 +357,9 @@ function validateRustTargetTypeRef(
       case "trait-ref":
         return hasExactKeys(
           value,
-          ["kind", "id", "genericArguments", "associatedConstraints", "lifetimeBinder"],
-          ["kind", "id", "genericArguments", "associatedConstraints"],
-        ) && nonEmptyString(value.id) &&
+          ["kind", "id", "path", "genericArguments", "associatedConstraints", "lifetimeBinder"],
+          ["kind", "id", "path", "genericArguments", "associatedConstraints"],
+        ) && nonEmptyString(value.id) && nonEmptyString(value.path) &&
           validateGenericArguments(value.genericArguments, validateChild) &&
           validateAssociatedConstraints(value.associatedConstraints, validateChild) &&
           (value.lifetimeBinder === undefined || validateLifetimeBinder(value.lifetimeBinder));

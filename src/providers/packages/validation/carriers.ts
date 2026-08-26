@@ -129,6 +129,55 @@ export function validateCarrier(
         position: "return",
       });
       return;
+    case "trait-ref":
+      requireExactKeys(
+        record,
+        ["kind", "id", "path", "genericArguments", "associatedConstraints", "lifetimeBinder"],
+        where,
+        fail,
+      );
+      requireNonEmpty(carrier.id, `${where}.id`, fail);
+      requireRustPath(carrier.path, `${where}.path`, fail);
+      if (definition.carrierPaths?.[carrier.id] !== undefined &&
+        definition.carrierPaths[carrier.id] !== carrier.path) {
+        fail(`${where}.path conflicts with carrierPaths['${carrier.id}']`);
+      }
+      for (const [index, argument] of carrier.genericArguments.entries()) {
+        validateCarrierGenericArgument(argument, definition, `${where}.genericArguments[${index}]`, fail);
+      }
+      for (const [index, constraint] of carrier.associatedConstraints.entries()) {
+        for (const [argumentIndex, argument] of constraint.genericArguments.entries()) {
+          validateCarrierGenericArgument(
+            argument,
+            definition,
+            `${where}.associatedConstraints[${index}].genericArguments[${argumentIndex}]`,
+            fail,
+          );
+        }
+        if (constraint.kind === "equality") {
+          validateCarrier(
+            constraint.type,
+            definition,
+            `${where}.associatedConstraints[${index}].type`,
+            fail,
+            { allowUnsized: true },
+          );
+        } else {
+          for (const [traitIndex, trait] of constraint.traits.entries()) {
+            validateCarrier(
+              trait,
+              definition,
+              `${where}.associatedConstraints[${index}].traits[${traitIndex}]`,
+              fail,
+              { allowUnsized: true },
+            );
+          }
+          if (constraint.outlives.some((lifetime) => !isRustLifetimeRef(lifetime))) {
+            fail(`${where}.associatedConstraints[${index}].outlives contains an invalid lifetime`);
+          }
+        }
+      }
+      return;
     case "trait-object":
       requireExactKeys(record, ["kind", "principal", "autoTraits", "lifetime"], where, fail);
       validateCarrier(carrier.principal, definition, `${where}.principal`, fail, {
@@ -141,11 +190,15 @@ export function validateCarrier(
       }
       return;
     case "impl-trait":
-      requireExactKeys(record, ["kind", "id", "bounds", "captures"], where, fail);
+      requireExactKeys(record, ["kind", "id", "bounds", "outlives", "captures"], where, fail);
       for (const [index, bound] of carrier.bounds.entries()) {
         validateCarrier(bound, definition, `${where}.bounds[${index}]`, fail, {
           allowUnsized: true,
         });
+      }
+      if ([...carrier.outlives, ...carrier.captures].some((lifetime) =>
+        !isRustLifetimeRef(lifetime))) {
+        fail(`${where} contains an invalid opaque lifetime`);
       }
       return;
     case "associated-type":
@@ -192,6 +245,19 @@ export function validateCarrier(
     }
     default:
       fail(`${where} uses unsupported Rust carrier kind '${carrier.kind}'`);
+  }
+}
+
+function validateCarrierGenericArgument(
+  argument: import("../../../target-model/types/model.js").RustTargetGenericArgument,
+  definition: RustProviderPackageDefinition,
+  where: string,
+  fail: Fail,
+): void {
+  if (argument.kind === "type") {
+    validateCarrier(argument.type, definition, `${where}.type`, fail, {
+      allowUnsized: true,
+    });
   }
 }
 

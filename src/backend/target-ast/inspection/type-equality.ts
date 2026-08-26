@@ -2,6 +2,7 @@ import type {
   RustGenericArgument,
   RustLifetime,
   RustLifetimeParameter,
+  RustTraitReference,
   RustType,
   RustTypeBound,
 } from "../nodes.js";
@@ -30,11 +31,12 @@ export function rustTypeEquals(
         genericArgumentsEqual(left.genericArguments, right.genericArguments);
     case "trait-object":
       return right.kind === "trait-object" &&
-        rustTypeEquals(left.principal, right.principal) &&
-        sameTypes(left.autoTraits, right.autoTraits) &&
+        traitReferencesEqual(left.principal, right.principal) &&
+        sameTraitReferences(left.autoTraits, right.autoTraits) &&
         lifetimeEqual(left.lifetime, right.lifetime);
     case "impl-trait":
-      return right.kind === "impl-trait" && boundsEqual(left.bounds, right.bounds) &&
+      return right.kind === "impl-trait" &&
+        sameTraitReferences(left.bounds, right.bounds) &&
         lifetimeListsEqual(left.outlives, right.outlives) &&
         lifetimeListsEqual(left.captures, right.captures);
     case "reference":
@@ -166,7 +168,8 @@ function boundsEqual(
       case "trait":
         return other.kind === "trait" && bound.path === other.path;
       case "trait-type":
-        return other.kind === "trait-type" && rustTypeEquals(bound.trait, other.trait);
+        return other.kind === "trait-type" &&
+          traitReferencesEqual(bound.reference, other.reference);
       case "lifetime":
         return other.kind === "lifetime" && lifetimeEqual(bound.lifetime, other.lifetime);
       case "callable":
@@ -178,6 +181,22 @@ function boundsEqual(
         return true;
     }
   });
+}
+
+function traitReferencesEqual(
+  left: RustTraitReference,
+  right: RustTraitReference,
+): boolean {
+  return bindersEqual(left.binder, right.binder) &&
+    rustTypeEquals(left.trait, right.trait);
+}
+
+function sameTraitReferences(
+  left: readonly RustTraitReference[],
+  right: readonly RustTraitReference[],
+): boolean {
+  return left.length === right.length && left.every((value, index) =>
+    traitReferencesEqual(value, right[index]!));
 }
 
 function sameTypes(

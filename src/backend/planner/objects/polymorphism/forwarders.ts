@@ -78,7 +78,7 @@ export function projectDowncastReturnType(
               kind: "type",
               type: {
                 kind: "trait-object",
-                principal: dispatch,
+                principal: { trait: dispatch },
                 autoTraits: [],
               },
             }],

@@ -329,6 +329,7 @@ export function materializeProviderCarrier(
   if (carrier.kind === "trait-ref") {
     return {
       ...carrier,
+      path: carrierPaths[carrier.id] ?? carrier.path,
       genericArguments: materializeProviderGenericArguments(
         carrier.genericArguments,
         carrierPaths,

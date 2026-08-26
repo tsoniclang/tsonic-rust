@@ -72,6 +72,7 @@ export type RustTargetTypeRef =
   | {
       readonly kind: "trait-ref";
       readonly id: string;
+      readonly path: string;
       readonly genericArguments: readonly RustTargetGenericArgument[];
       readonly associatedConstraints: readonly RustTargetAssociatedConstraint[];
       readonly lifetimeBinder?: RustLifetimeBinder;

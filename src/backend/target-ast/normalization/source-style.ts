@@ -599,11 +599,11 @@ function rustTypeNames(type: RustType): readonly string[] {
       ];
     case "trait-object":
       return [
-        ...rustTypeNames(type.principal),
-        ...type.autoTraits.flatMap(rustTypeNames),
+        ...rustTypeNames(type.principal.trait),
+        ...type.autoTraits.flatMap((trait) => rustTypeNames(trait.trait)),
       ];
     case "impl-trait":
-      return type.bounds.flatMap(rustTypeBoundNames);
+      return type.bounds.flatMap((bound) => rustTypeNames(bound.trait));
     case "reference":
       return rustTypeNames(type.referent);
     case "raw-pointer":
@@ -629,7 +629,7 @@ function rustTypeBoundNames(bound: RustTypeBound): readonly string[] {
     case "trait":
       return [bound.path];
     case "trait-type":
-      return rustTypeNames(bound.trait);
+      return rustTypeNames(bound.reference.trait);
     case "callable":
       return [
         ...bound.parameters.flatMap(rustTypeNames),
@@ -658,7 +658,7 @@ function rustGenericArgumentTypeNames(
           ...rustGenericArgumentTypeNames(argument.genericArguments),
           ...argument.bounds.flatMap((bound) =>
             bound.kind === "trait-type"
-              ? rustTypeNames(bound.trait)
+              ? rustTypeNames(bound.reference.trait)
               : bound.kind === "callable"
                 ? [
                     ...bound.parameters.flatMap(rustTypeNames),

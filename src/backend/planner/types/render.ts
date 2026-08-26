@@ -9,6 +9,7 @@ import type {
   RustConstArgument,
   RustLifetime,
   RustLifetimeParameter,
+  RustTraitReference,
   RustType,
   RustTypeBound,
 } from "../../target-ast/nodes.js";
@@ -310,12 +311,12 @@ export function rustTypeFromCarrier(
     }
   }
   if (carrier.kind === "trait-object") {
-    const principal = rustTypeFromCarrier(
+    const principal = rustTraitReferenceFromCarrier(
       carrier.principal,
       resolveSourceTypePath,
       resolveStructuralShape,
     );
-    const autoTraits = carrier.autoTraits.map((trait) => rustTypeFromCarrier(
+    const autoTraits = carrier.autoTraits.map((trait) => rustTraitReferenceFromCarrier(
       trait,
       resolveSourceTypePath,
       resolveStructuralShape,
@@ -325,14 +326,14 @@ export function rustTypeFromCarrier(
       : {
           kind: "trait-object",
           principal,
-          autoTraits: autoTraits as RustType[],
+          autoTraits: autoTraits as RustTraitReference[],
           ...(carrier.lifetime === undefined
             ? {}
             : { lifetime: rustLifetimeToAst(carrier.lifetime) }),
         };
   }
   if (carrier.kind === "impl-trait") {
-    const bounds = carrier.bounds.map((bound) => rustTypeFromCarrier(
+    const bounds = carrier.bounds.map((bound) => rustTraitReferenceFromCarrier(
       bound,
       resolveSourceTypePath,
       resolveStructuralShape,
@@ -341,10 +342,7 @@ export function rustTypeFromCarrier(
       ? undefined
       : {
           kind: "impl-trait",
-          bounds: (bounds as RustType[]).map((trait): RustTypeBound => ({
-            kind: "trait-type",
-            trait,
-          })),
+          bounds: bounds as RustTraitReference[],
           outlives: carrier.outlives.map(rustLifetimeToAst),
           captures: carrier.captures.map(rustLifetimeToAst),
         };
@@ -355,27 +353,112 @@ export function rustTypeFromCarrier(
       resolveSourceTypePath,
       resolveStructuralShape,
     );
-    const trait = carrier.trait === undefined
+    const traitReference = carrier.trait === undefined
       ? undefined
-      : rustTypeFromCarrier(carrier.trait, resolveSourceTypePath, resolveStructuralShape);
+      : rustTraitReferenceFromCarrier(
+          carrier.trait,
+          resolveSourceTypePath,
+          resolveStructuralShape,
+        );
     const genericArguments = rustGenericArgumentsFromCarrier(
       carrier.genericArguments,
       resolveSourceTypePath,
       resolveStructuralShape,
     );
-    if (owner === undefined || carrier.trait !== undefined && trait === undefined ||
+    if (owner === undefined || carrier.trait !== undefined && traitReference === undefined ||
+      (traitReference?.binder?.length ?? 0) !== 0 ||
       genericArguments === undefined) {
       return undefined;
     }
     return {
       kind: "qualified",
       owner,
-      ...(trait === undefined ? {} : { trait }),
+      ...(traitReference === undefined ? {} : { trait: traitReference.trait }),
       member: carrier.name,
       ...(genericArguments.length === 0 ? {} : { genericArguments }),
     };
   }
   return undefined;
+}
+
+function rustTraitReferenceFromCarrier(
+  carrier: TargetTypeRef,
+  resolveSourceTypePath?: (value: { readonly fileName: string; readonly typeName: string }) => string | undefined,
+  resolveStructuralShape?: (carrier: TargetTypeRef) => RustType | undefined,
+): RustTraitReference | undefined {
+  if (carrier.kind !== "trait-ref") return undefined;
+  const genericArguments = rustGenericArgumentsFromCarrier(
+    carrier.genericArguments,
+    resolveSourceTypePath,
+    resolveStructuralShape,
+  );
+  if (genericArguments === undefined) return undefined;
+  const associatedConstraints = carrier.associatedConstraints.map((constraint) => {
+    const arguments_ = rustGenericArgumentsFromCarrier(
+      constraint.genericArguments,
+      resolveSourceTypePath,
+      resolveStructuralShape,
+    );
+    if (arguments_ === undefined) return undefined;
+    if (constraint.kind === "equality") {
+      const type = rustTypeFromCarrier(
+        constraint.type,
+        resolveSourceTypePath,
+        resolveStructuralShape,
+      );
+      return type === undefined
+        ? undefined
+        : {
+            kind: "associated-equality" as const,
+            name: constraint.name,
+            genericArguments: arguments_,
+            type,
+          };
+    }
+    const traits = constraint.traits.map((trait) => rustTraitReferenceFromCarrier(
+      trait,
+      resolveSourceTypePath,
+      resolveStructuralShape,
+    ));
+    return traits.some((trait) => trait === undefined)
+      ? undefined
+      : {
+          kind: "associated-bounds" as const,
+          name: constraint.name,
+          genericArguments: arguments_,
+          bounds: Object.freeze([
+            ...(traits as RustTraitReference[]).map((reference): RustTypeBound => ({
+              kind: "trait-type",
+              reference,
+            })),
+            ...constraint.outlives.map((lifetime): RustTypeBound => ({
+              kind: "lifetime",
+              lifetime: rustLifetimeToAst(lifetime),
+            })),
+          ]),
+        };
+  });
+  return associatedConstraints.some((constraint) => constraint === undefined)
+    ? undefined
+    : {
+        trait: {
+          kind: "named",
+          path: carrier.path,
+          ...(
+            genericArguments.length === 0 && associatedConstraints.length === 0
+              ? {}
+              : {
+                  genericArguments: Object.freeze([
+                    ...genericArguments,
+                    ...(associatedConstraints as RustGenericArgument[]),
+                  ]),
+                }
+          ),
+        },
+        ...(carrier.lifetimeBinder === undefined
+          ? {}
+          : { binder: rustLifetimeBinderToAst(carrier.lifetimeBinder) }),
+      };
 }
 
 export function rustReturnTypeFromCarrier(
@@ -549,8 +632,8 @@ function rustTypeContainsImplTrait(type: RustType): boolean {
         (type.trait !== undefined && rustTypeContainsImplTrait(type.trait)) ||
         rustGenericArgumentsContainImplTrait(type.genericArguments);
     case "trait-object":
-      return rustTypeContainsImplTrait(type.principal) ||
-        type.autoTraits.some(rustTypeContainsImplTrait);
+      return rustTypeContainsImplTrait(type.principal.trait) ||
+        type.autoTraits.some((trait) => rustTypeContainsImplTrait(trait.trait));
     case "reference":
       return rustTypeContainsImplTrait(type.referent);
     case "raw-pointer":
@@ -596,7 +679,7 @@ function rustGenericArgumentsContainImplTrait(
 function rustTypeBoundContainsImplTrait(bound: RustTypeBound): boolean {
   switch (bound.kind) {
     case "trait-type":
-      return rustTypeContainsImplTrait(bound.trait);
+      return rustTypeContainsImplTrait(bound.reference.trait);
     case "callable":
       return bound.parameters.some(rustTypeContainsImplTrait) ||
         rustTypeContainsImplTrait(bound.result);
@@ -616,26 +699,22 @@ export function collectAliasesFromRustType(
   }
   if (type.kind === "named") {
     register(type.path);
-    for (const argument of type.genericArguments ?? []) {
-      if (argument.kind === "type") collectAliasesFromRustType(argument.type, register);
-    }
+    collectAliasesFromRustGenericArguments(type.genericArguments, register);
     return;
   }
   if (type.kind === "qualified") {
     collectAliasesFromRustType(type.owner, register);
     collectAliasesFromRustType(type.trait, register);
-    for (const argument of type.genericArguments ?? []) {
-      if (argument.kind === "type") collectAliasesFromRustType(argument.type, register);
-    }
+    collectAliasesFromRustGenericArguments(type.genericArguments, register);
     return;
   }
   if (type.kind === "trait-object") {
-    collectAliasesFromRustType(type.principal, register);
-    for (const trait of type.autoTraits) collectAliasesFromRustType(trait, register);
+    collectAliasesFromRustType(type.principal.trait, register);
+    for (const trait of type.autoTraits) collectAliasesFromRustType(trait.trait, register);
     return;
   }
   if (type.kind === "impl-trait") {
-    for (const bound of type.bounds) collectAliasesFromRustTypeBound(bound, register);
+    for (const bound of type.bounds) collectAliasesFromRustType(bound.trait, register);
     return;
   }
   if (type.kind === "slice") {
@@ -664,6 +743,32 @@ export function collectAliasesFromRustType(
   }
 }
 
+function collectAliasesFromRustGenericArguments(
+  arguments_: readonly RustGenericArgument[] | undefined,
+  register: (path: string) => void,
+): void {
+  for (const argument of arguments_ ?? []) {
+    switch (argument.kind) {
+      case "type":
+        collectAliasesFromRustType(argument.type, register);
+        break;
+      case "associated-equality":
+        collectAliasesFromRustGenericArguments(argument.genericArguments, register);
+        collectAliasesFromRustType(argument.type, register);
+        break;
+      case "associated-bounds":
+        collectAliasesFromRustGenericArguments(argument.genericArguments, register);
+        for (const bound of argument.bounds) {
+          collectAliasesFromRustTypeBound(bound, register);
+        }
+        break;
+      case "lifetime":
+      case "const":
+        break;
+    }
+  }
+}
+
 function collectAliasesFromRustTypeBound(
   bound: RustTypeBound,
   register: (path: string) => void,
@@ -673,7 +778,7 @@ function collectAliasesFromRustTypeBound(
       register(bound.path);
       return;
     case "trait-type":
-      collectAliasesFromRustType(bound.trait, register);
+      collectAliasesFromRustType(bound.reference.trait, register);
       return;
     case "callable":
       for (const parameter of bound.parameters) {

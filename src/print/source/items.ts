@@ -3,6 +3,7 @@ import {
   indentText,
   printRustConstArgument,
   printRustLifetime,
+  printRustLifetimeParameter,
   printRustType,
   printRustTypeBound,
 } from "./types.js";
@@ -270,7 +271,7 @@ function printRustGenerics(
           }
           const binder = predicate.binder === undefined || predicate.binder.length === 0
             ? ""
-            : `for<${predicate.binder.map((parameter) => `'${parameter.name}`).join(", ")}> `;
+            : `for<${predicate.binder.map(printRustLifetimeParameter).join(", ")}> `;
           return `${binder}${printRustType(predicate.type)}: ${predicate.bounds.map(printRustTypeBound).join(" + ")}`;
         }).join(", ")}`,
   };
@@ -380,10 +381,7 @@ function printRustGenericParameter(
   parameter: import("../../backend/target-ast/nodes.js").RustGenericParameter,
 ): string {
   if (parameter.kind === "lifetime") {
-    const name = `'${parameter.name}`;
-    return parameter.outlives.length === 0
-      ? name
-      : `${name}: ${parameter.outlives.map(printRustLifetime).join(" + ")}`;
+    return printRustLifetimeParameter(parameter);
   }
   if (parameter.kind === "const") {
     const value = parameter.defaultValue === undefined
