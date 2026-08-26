@@ -328,28 +328,3 @@ export function rustFlowQueryComplexityDiagnostic(
       )
     : undefined;
 }
-
-export function rustFlowGraphCountComplexityDiagnostic(
-  pointCount: number,
-  edgeCount: number,
-  constructionDepth: number,
-): TargetDiagnostic | undefined {
-  if (exceedsFiniteBudget(pointCount, maximumFlowPoints)) {
-    return rustOwnershipDiagnostic(
-      "RUST_OWNERSHIP_FLOW_POINT_BUDGET_EXCEEDED",
-      `Rust ownership analysis produced ${pointCount} control-flow points; the finite limit is ${maximumFlowPoints}.`,
-    );
-  }
-  if (exceedsFiniteBudget(edgeCount, maximumFlowEdges)) {
-    return rustOwnershipDiagnostic(
-      "RUST_OWNERSHIP_FLOW_EDGE_BUDGET_EXCEEDED",
-      `Rust ownership analysis produced ${edgeCount} control-flow edges; the finite limit is ${maximumFlowEdges}.`,
-    );
-  }
-  return exceedsFiniteBudget(constructionDepth, maximumFlowConstructionDepth)
-    ? rustOwnershipDiagnostic(
-        "RUST_OWNERSHIP_FLOW_DEPTH_BUDGET_EXCEEDED",
-        `Rust ownership analysis reached control-flow nesting depth ${constructionDepth}; the finite limit is ${maximumFlowConstructionDepth}.`,
-      )
-    : undefined;
-}

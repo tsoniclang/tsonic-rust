@@ -7,6 +7,7 @@ import {
   rustValueConversionContract,
   rustValueConversionIdentity,
 } from "../../../dist/target-model/conversions/contracts.js";
+import { rustBuiltinIdentity } from "../../../dist/target-model/semantics/index.js";
 import {
   rustAsyncCallableTargetType,
   rustBorrowedAsyncCallableTargetType,
@@ -365,6 +366,25 @@ test("callable alpha normalization rejects cyclic, over-deep, oversized, and mal
     result: bool,
   };
   assert.equal(rustCallableSignaturesAlphaEquivalent(oversized, oversized), false);
+
+  const manyPathSegments = Object.freeze(Array.from(
+    { length: 33_000 },
+    () => "segment",
+  ));
+  const aggregateOversizedPath = Object.freeze({
+    kind: "path",
+    identity: rustBuiltinIdentity("test::AggregateOversized"),
+    displayPath: manyPathSegments,
+    arguments: Object.freeze([]),
+  });
+  const aggregateOversized = Object.freeze({
+    parameters: Object.freeze([aggregateOversizedPath, aggregateOversizedPath]),
+    result: bool,
+  });
+  assert.equal(
+    rustCallableSignaturesAlphaEquivalent(aggregateOversized, aggregateOversized),
+    false,
+  );
 
   const bound = {
     kind: "bound",

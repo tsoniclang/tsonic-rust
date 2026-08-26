@@ -160,16 +160,21 @@ function normalizeRustBoundSemanticValue(
   state: RustBoundNormalizationState,
   depth: number,
 ): unknown {
+  state.budget.valueCount += 1;
+  if (
+    !Number.isSafeInteger(state.budget.valueCount) ||
+    state.budget.valueCount > maximumRustBoundNormalizationValues ||
+    depth > maximumRustBoundNormalizationDepth
+  ) {
+    state.validity.valid = false;
+    return undefined;
+  }
   if (typeof value === "string") {
     chargeRustBoundNormalizationScalars(state, value.length);
     return state.validity.valid ? value : undefined;
   }
   if (value === null || typeof value !== "object") return value;
-  state.budget.valueCount += 1;
-  if (!Number.isSafeInteger(state.budget.valueCount) ||
-    state.budget.valueCount > maximumRustBoundNormalizationValues ||
-    depth > maximumRustBoundNormalizationDepth ||
-    state.budget.active.has(value)) {
+  if (state.budget.active.has(value)) {
     state.validity.valid = false;
     return undefined;
   }
