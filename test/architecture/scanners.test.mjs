@@ -326,6 +326,7 @@ test("selected source operation identity is never reconstructed through checker 
   }
   assert.deepEqual(broadCatchOwners, [
     "target-model/metadata/closed-data.ts|isClosedMetadata",
+    "target-model/types/equality.ts|isRustTargetGenericArgument",
     "target-model/types/equality.ts|isRustTargetTypeRef",
   ]);
 
@@ -776,8 +777,8 @@ test("project-source backend calls require the exact finalized selected member A
   assert.match(selectedGate, /member\.targetName === expectedTargetName/u);
   assert.match(selectedGate, /member\.parameters\.length === fact\.parameters\.length/u);
   assert.match(selectedGate, /sourceSelectedMethodTypeArguments/u);
-  assert.match(selectedGate, /substituteRustTargetTypeParameters\(parameter\.type, substitutions\)/u);
-  assert.match(selectedGate, /fact\.targetTypeArguments/u);
+  assert.match(selectedGate, /substituteRustTargetGenerics/u);
+  assert.match(selectedGate, /fact\.targetGenericArguments/u);
   assert.match(selectedGate, /fact\.parameters\[index\]\?\.parameterCarrier/u);
   assert.match(selectedGate, /mode === fact\.parameters\[index\]\?\.mode/u);
   assert.doesNotMatch(selectedGate, /sourceName ===|memberName|includes\(|toLowerCase/u);

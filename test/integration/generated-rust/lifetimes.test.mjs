@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { test } from "node:test";
 
-import { rustSourceReferenceOperationFactKey } from "../../../dist/source/semantics/facts.js";
+import { rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
 import {
   acmeTestingPackage,
   analyzeRust,
@@ -148,20 +148,19 @@ export function namespaced<A extends RustTypes.Life>(
   for (const sourceFile of source.sourceFiles) {
     if (ast.isDeclarationFile(sourceFile)) continue;
     const visit = (node) => {
-      const fact = program.facts.resolve(node, rustSourceReferenceOperationFactKey);
-      if (fact !== undefined) selected.push(fact);
+      const fact = program.facts.getFact(node, rustTargetOperationFactKey);
+      if (fact?.kind === "reference-operation") selected.push(fact);
       ast.forEachChild(node, (child) => child && visit(child));
     };
     visit(sourceFile);
   }
 
-  assert.deepEqual(selected.map((fact) => fact.kind).sort(), [
+  assert.deepEqual(selected.map((fact) => fact.operation).sort(), [
     "shared-reference",
     "shared-reference",
   ]);
   assert.ok(selected.every((fact) =>
-    fact.selectedDeclaration.moduleSpecifier === "@tsonic/rust/lang.js" &&
-    fact.selectedDeclaration.exportName === "ref"));
+    fact.operationId === "tsonic.rust.reference.shared-reference"));
 });
 
 test("elided native references execute as zero-wrapper Rust borrows", { timeout: 300_000 }, () => {

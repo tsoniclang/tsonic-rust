@@ -122,6 +122,7 @@ export function createRustAnalysisContext(
     sourceFiles,
   });
   const lifetimes = analyzeRustLifetimes({
+    source: input.source,
     ast,
     sourceFiles,
     facts,
@@ -129,6 +130,7 @@ export function createRustAnalysisContext(
     referencedDeclaration(node) {
       return input.source.navigation.sourceReferenceFor(node)?.declaration;
     },
+    semanticsFor: input.source.semantics.forNode,
   });
   return Object.freeze({
     source: input.source,

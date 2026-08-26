@@ -122,6 +122,7 @@ test("Rust tests mirror explicit architecture domains", () => {
     "policy",
     "providers",
     "source",
+    "target-model",
     "toolchain",
   ];
   const files = collectFiles(resolve(repositoryRoot, "test"), {

@@ -319,6 +319,9 @@ function appendRustWhereTerminator(
   const declarationIndent = indentText(depth);
   if (generics.wherePredicates.length === 0) {
     if (terminator === ";") return `${declaration};`;
+    if (terminator === "{}" && breakWithoutWhere) {
+      return `${declaration}\n${declarationIndent}{\n${declarationIndent}}`;
+    }
     const separator = breakWithoutWhere ? `\n${declarationIndent}` : " ";
     return `${declaration}${separator}${terminator}`;
   }
@@ -374,7 +377,8 @@ function printRustFunctionHeader(
   const returnSuffix = printRustReturnSuffix(returnType);
   const flatParameters = parameters.map(printRustFunctionParameterFlat);
   const flat = `${prefix}${name}${generics.parameters}(${flatParameters.join(", ")})${returnSuffix}`;
-  if (flat.length <= rustFormatWidth) {
+  const flatTerminatorWidth = generics.wherePredicates.length === 0 ? " {".length : 0;
+  if (flat.length + flatTerminatorWidth <= rustFormatWidth) {
     return appendRustWhereTerminator(flat, generics, depth, "{");
   }
   const closingIndent = indentText(depth);
@@ -410,11 +414,12 @@ function printRustFunctionSignature(
   const flatParameters = parameters.map(printRustFunctionParameterFlat);
   const invocation = `${prefix}${name}${generics.parameters}(${flatParameters.join(", ")})`;
   const flat = `${invocation}${returnSuffix}`;
-  if (flat.length < rustFormatWidth ||
-    flat.length === rustFormatWidth && returnSuffix.length === 0) {
+  const terminatedLength = flat.length + ";".length;
+  if (terminatedLength < rustFormatWidth ||
+    terminatedLength === rustFormatWidth && returnSuffix.length === 0) {
     return appendRustWhereTerminator(flat, generics, depth, ";");
   }
-  if (flat.length === rustFormatWidth && returnSuffix.length > 0) {
+  if (terminatedLength === rustFormatWidth && returnSuffix.length > 0) {
     return appendRustWhereTerminator(
       `${invocation}\n${indentText(depth + 1)}${returnSuffix.trimStart()}`,
       generics,

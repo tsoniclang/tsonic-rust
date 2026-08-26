@@ -11,13 +11,14 @@ import {
   nativePointerProviderDeclaration,
   providerExportDeclarationsForSemanticsModule,
 } from "@tsonic/source-core/extension";
-import { analyzeRustSourceSemantics } from "../semantics/analysis/index.js";
 import {
   rustLifetimeTypeDeclarations,
   rustReferenceOperationDeclarations,
 } from "../semantics/declarations/index.js";
 import {
   rustLangModule,
+  rustConstPointerExport,
+  rustMutPointerExport,
   rustSourceProviderVersion,
   rustSourceSemanticsExtensionId,
   rustSourceTypeExportIds,
@@ -27,12 +28,12 @@ import {
 import { rustSourceSemanticsModules } from "../profiles/source-modules.js";
 
 export {
+  rustConstPointerExport,
+  rustMutPointerExport,
   rustSourceProviderVersion,
   rustSourceSemanticsExtensionId,
   rustSourceVirtualModulesProviderId,
 };
-export const rustConstPointerExport = "constPtr";
-export const rustMutPointerExport = "mutPtr";
 
 export function createRustSourceSemanticsExtension(
   additionalProviders: readonly SourceDeclarationProvider[] = [],
@@ -83,9 +84,6 @@ export function createRustSourceSemanticsExtension(
       for (const provider of additionalProviders) {
         context.registerSourceDeclarationProvider(provider);
       }
-    },
-    analyzeSource(context): void {
-      analyzeRustSourceSemantics(context);
     },
   };
 }

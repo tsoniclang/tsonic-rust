@@ -213,8 +213,17 @@ test("generic value-array forms require closed paths and element carriers", () =
 });
 
 test("tagged-array forms require unique exact alternatives and closed constructors", () => {
-  const arrayCarrier = { kind: "target-named", id: "rust.js.JsArray", typeArguments: [int32Carrier] };
-  const taggedCarrier = { kind: "target-named", id: "rust.js.JsArrayConcatItem", typeArguments: [int32Carrier] };
+  const typeArgument = { kind: "type", type: int32Carrier };
+  const arrayCarrier = {
+    kind: "target-named",
+    id: "rust.js.JsArray",
+    genericArguments: [typeArgument],
+  };
+  const taggedCarrier = {
+    kind: "target-named",
+    id: "rust.js.JsArrayConcatItem",
+    genericArguments: [typeArgument],
+  };
   const operation = (target) => ({
     exportId: "@acme/validation::run",
     operationKind: "method",
@@ -428,7 +437,7 @@ test("provider type relations remain target-owned and require closed Rust paths"
         id: "acme.validation.Value",
         path: "acme_validation::Value",
         traits: { implementations: [] },
-        typeArguments: [],
+        genericArguments: [],
       },
     },
     providerPackageId: "acme-validation",
@@ -436,7 +445,6 @@ test("provider type relations remain target-owned and require closed Rust paths"
     providerVersion: "1.0.0",
     providerModuleId: "acme.validation",
     moduleSpecifier: "@acme/validation",
-    sourceTypeParameters: [],
   }]);
 
   assert.throws(

@@ -46,14 +46,89 @@ import {
   recordBindingWrite,
   tryFlowMarkerCall,
 } from "../declarations/types-and-bindings.js";
-import { rustSourceReferenceOperationFactKey } from "../../source/semantics/facts.js";
 import { rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
 import { selectRustEquivalentAssignment } from "../../policy/operations/operator-rules.js";
-import type { RustSourceReferenceOperationFact } from "../../source/semantics/model.js";
-import type { Node, SourceFile } from "@tsonic/tsts";
+import {
+  rustLangModule,
+  rustSourceOperationExportIds,
+  rustSourceOperationSignatureIds,
+  rustSourceProviderVersion,
+  rustSourceVirtualModulesProviderId,
+} from "../../source/semantics/identity.js";
+import { resolveProviderTypeIdentity } from "../../policy/types/resolution/providers.js";
+import type {
+  Node,
+  ProviderDeclarationIdentity,
+  SourceFile,
+  Type,
+} from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustSelectedTargetSignature, TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustSourceBindingFact, RustTargetOperationFact } from "../facts/keys.js";
+
+type RustSourceReferenceOperationKind =
+  | "shared-reference"
+  | "mutable-reference"
+  | "load"
+  | "store";
+
+interface RustSourceReferenceOperationBase {
+  readonly call: Node;
+  readonly resultType: Type;
+  readonly selectedDeclaration: ProviderDeclarationIdentity;
+}
+
+type RustSourceReferenceOperation =
+  | RustSourceReferenceOperationBase & {
+      readonly kind: "shared-reference";
+      readonly valueExpression: Node;
+      readonly valueType: Type;
+      readonly lifetimeTypeNode?: Node;
+    }
+  | RustSourceReferenceOperationBase & {
+      readonly kind: "mutable-reference";
+      readonly valueExpression: Node;
+      readonly valueType: Type;
+      readonly lifetimeTypeNode?: Node;
+    }
+  | RustSourceReferenceOperationBase & {
+      readonly kind: "load";
+      readonly referenceExpression: Node;
+      readonly referenceType: Type;
+    }
+  | RustSourceReferenceOperationBase & {
+      readonly kind: "store";
+      readonly referenceExpression: Node;
+      readonly referenceType: Type;
+      readonly valueExpression: Node;
+      readonly valueType: Type;
+    };
+
+const referenceOperationBySignature = new Map<string, {
+  readonly exportId: string;
+  readonly kind: RustSourceReferenceOperationKind;
+}>([
+  [rustSourceOperationSignatureIds.sharedReference, {
+    exportId: rustSourceOperationExportIds.sharedReference,
+    kind: "shared-reference",
+  }],
+  [rustSourceOperationSignatureIds.mutableReference, {
+    exportId: rustSourceOperationExportIds.mutableReference,
+    kind: "mutable-reference",
+  }],
+  [rustSourceOperationSignatureIds.loadShared, {
+    exportId: rustSourceOperationExportIds.load,
+    kind: "load",
+  }],
+  [rustSourceOperationSignatureIds.loadMutable, {
+    exportId: rustSourceOperationExportIds.load,
+    kind: "load",
+  }],
+  [rustSourceOperationSignatureIds.store, {
+    exportId: rustSourceOperationExportIds.store,
+    kind: "store",
+  }],
+]);
 
 export function resolveIdentifierCarrier(walk: RustFactWalk, identifier: Node, sourceFile: SourceFile): TargetTypeRef | undefined {
   const { ast } = walk.context;
@@ -351,16 +426,73 @@ function resolveSharedSourceMarkerCarrier(
 function readRustReferenceOperation(
   walk: RustFactWalk,
   expression: Node,
-): RustSourceReferenceOperationFact | undefined {
-  return walk.context.facts.get(expression, rustSourceReferenceOperationFactKey) ??
-    walk.context.facts.resolve(expression, rustSourceReferenceOperationFactKey);
+): RustSourceReferenceOperation | undefined {
+  const semantics = walk.context.semanticsFor(expression);
+  const selection = semantics.operations.call(expression);
+  if (selection?.outcome !== "applicable" || selection.call !== expression ||
+    selection.sourceSelectedSignatureKind !== "resolved") {
+    return undefined;
+  }
+  const signatureDeclaration = semantics.declarations.signatureDeclaration(
+    selection.selectedSignature,
+  );
+  const declaration = resolveProviderTypeIdentity([
+    selection.selectedSignature,
+    ...(signatureDeclaration === undefined ? [] : [signatureDeclaration]),
+  ], walk.context);
+  const operation = declaration?.providerId === rustSourceVirtualModulesProviderId &&
+      declaration.providerVersion === rustSourceProviderVersion &&
+      declaration.providerModuleId === rustLangModule &&
+      declaration.moduleSpecifier === rustLangModule &&
+      declaration.signatureId !== undefined
+    ? referenceOperationBySignature.get(declaration.signatureId)
+    : undefined;
+  const reference = selection.sourceArguments[0];
+  const value = selection.sourceArguments[1];
+  if (declaration === undefined || operation === undefined ||
+    declaration.exportId !== operation.exportId || reference === undefined ||
+    (operation.kind === "store" && value === undefined)) {
+    return undefined;
+  }
+  const base = {
+    call: expression,
+    resultType: selection.sourceResultType,
+    selectedDeclaration: declaration,
+  };
+  if (operation.kind === "shared-reference" || operation.kind === "mutable-reference") {
+    const typeArguments = walk.context.ast.typeArguments(expression);
+    const lifetimeTypeNode = typeArguments.length === 2 ? typeArguments[1] : undefined;
+    return {
+      ...base,
+      kind: operation.kind,
+      valueExpression: reference.expression,
+      valueType: reference.type,
+      ...(lifetimeTypeNode === undefined ? {} : { lifetimeTypeNode }),
+    };
+  }
+  if (operation.kind === "load") {
+    return {
+      ...base,
+      kind: operation.kind,
+      referenceExpression: reference.expression,
+      referenceType: reference.type,
+    };
+  }
+  return {
+    ...base,
+    kind: operation.kind,
+    referenceExpression: reference.expression,
+    referenceType: reference.type,
+    valueExpression: value!.expression,
+    valueType: value!.type,
+  };
 }
 
 function resolvedRustReferenceOperationCarrier(
   walk: RustFactWalk,
   expression: Node,
   sourceFile: SourceFile,
-  source: RustSourceReferenceOperationFact,
+  source: RustSourceReferenceOperation,
   expected: TargetTypeRef | undefined,
 ): { readonly carrier?: TargetTypeRef } {
   if (source.call !== expression || source.selectedDeclaration.signatureId === undefined) {
@@ -534,7 +666,7 @@ function resolvedRustReferenceConstruction(
   expression: Node,
   sourceFile: SourceFile,
   source: Extract<
-    RustSourceReferenceOperationFact,
+    RustSourceReferenceOperation,
     { readonly kind: "shared-reference" | "mutable-reference" }
   >,
   expected: TargetTypeRef | undefined,

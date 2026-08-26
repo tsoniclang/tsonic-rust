@@ -21,8 +21,22 @@ function createModel() {
 test("closed Rust carrier and conversion facts are allocation-independent", () => {
   const model = createModel();
   const subject = {};
-  const firstCarrier = { kind: "target-named", id: "rust.std.Vec", typeArguments: [{ kind: "source-primitive", name: "int32" }] };
-  const equivalentCarrier = { kind: "target-named", id: "rust.std.Vec", typeArguments: [{ kind: "source-primitive", name: "int32" }] };
+  const firstCarrier = {
+    kind: "target-named",
+    id: "rust.std.Vec",
+    genericArguments: [{
+      kind: "type",
+      type: { kind: "source-primitive", name: "int32" },
+    }],
+  };
+  const equivalentCarrier = {
+    kind: "target-named",
+    id: "rust.std.Vec",
+    genericArguments: [{
+      kind: "type",
+      type: { kind: "source-primitive", name: "int32" },
+    }],
+  };
 
   model.set(subject, rustRuntimeCarrierKey, { carrier: firstCarrier });
   assert.doesNotThrow(() => model.set(subject, rustRuntimeCarrierKey, { carrier: equivalentCarrier }));

@@ -1,10 +1,7 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import { sourceNodeIdentity } from "@tsonic/target-api/source";
+import type { SourceFileSemantics, TargetSourceProgram } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import {
-  rustSourceGenericParameterFactKey,
-  rustSourceTypeContractFactKey,
-} from "../../source/semantics/facts.js";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import { rustSnakeCaseIdentifier } from "../../target-model/names/identifiers.js";
@@ -21,13 +18,28 @@ import type {
   RustSourceGenericParameterContract,
 } from "../../target-model/lifetimes/index.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
+import { rustSourceLifetimeTypeContract } from "../../policy/types/resolution/lifetimes.js";
+
+interface RustSourceGenericParameterEvidence {
+  readonly parameter: Node;
+  readonly owner: Node;
+  readonly kind: "lifetime" | "type";
+  readonly constraint?: Node;
+  readonly defaultType?: Node;
+  readonly bounds: readonly Node[];
+  readonly outlives: readonly Node[];
+  readonly typeOutlives: readonly Node[];
+  readonly maybeSized: boolean;
+}
 
 export interface AnalyzeRustLifetimesInput {
+  readonly source: TargetSourceProgram;
   readonly ast: AstReader;
   readonly sourceFiles: readonly SourceFile[];
   readonly facts: RustPlanQueries;
   readonly names: RustNamePlan;
   referencedDeclaration(node: Node): Node | undefined;
+  semanticsFor(node: Node): SourceFileSemantics;
 }
 
 export interface AnalyzeRustLifetimesResult {
@@ -49,6 +61,7 @@ export function analyzeRustLifetimes(
     };
   }
   const parameterByDeclaration = new WeakMap<Node, RustSourceGenericParameterContract>();
+  const parameterEvidence = new WeakMap<Node, RustSourceGenericParameterEvidence>();
   const contracts: RustSourceGenericContract[] = [];
   const unresolved = new Map<Node, {
     readonly owner: Node;
@@ -59,11 +72,11 @@ export function analyzeRustLifetimes(
 
   for (const owner of declarations) {
     for (const parameter of input.ast.typeParameters(owner) as readonly Node[]) {
-      const fact = readFact(input.facts, parameter, rustSourceGenericParameterFactKey);
+      const evidence = sourceGenericParameterEvidence(parameter, owner, input);
       const nameNode = input.ast.name(parameter);
       const sourceName = nameNode === undefined ? "" : input.ast.text(nameNode);
       const targetName = input.names.nameForDeclaration(parameter) ?? "";
-      if (fact === undefined || fact.owner !== owner || fact.parameter !== parameter ||
+      if (evidence === undefined || evidence.owner !== owner || evidence.parameter !== parameter ||
         sourceName.length === 0 || targetName.length === 0) {
         diagnostics.push(diagnostic(
           "RUST_LIFETIME_GENERIC_IDENTITY_MISSING",
@@ -76,8 +89,9 @@ export function analyzeRustLifetimes(
         owner,
         sourceName,
         targetName,
-        kind: fact.kind,
+        kind: evidence.kind,
       });
+      parameterEvidence.set(parameter, evidence);
     }
   }
 
@@ -132,10 +146,10 @@ export function analyzeRustLifetimes(
     if (input.ast.is.IsParenthesizedTypeNode(node)) {
       return resolve(input.ast.as.AsParenthesizedTypeNode(node)?.Type);
     }
-    const typeFact = readFact(input.facts, node, rustSourceTypeContractFactKey);
+    const typeFact = rustSourceLifetimeTypeContract(node, input);
     if (typeFact?.kind === "static-lifetime") return rustStaticLifetime;
     if (typeFact?.kind === "placeholder-lifetime") return rustPlaceholderLifetime;
-    const declaration = referencedTypeParameter(node, input);
+    const declaration = referencedTypeParameter(node, input, parameterEvidence);
     if (declaration === undefined) return undefined;
     return lifetimeByDeclaration.get(declaration);
   };
@@ -144,18 +158,20 @@ export function analyzeRustLifetimes(
     const parameters: RustSourceGenericParameterContract[] = [];
     for (const parameter of input.ast.typeParameters(owner) as readonly Node[]) {
       const registered = unresolved.get(parameter);
-      const fact = readFact(input.facts, parameter, rustSourceGenericParameterFactKey);
-      if (registered === undefined || fact === undefined) continue;
-      const factShapeError = genericFactShapeError(fact);
-      if (factShapeError !== undefined) {
+      const evidence = parameterEvidence.get(parameter);
+      if (registered === undefined || evidence === undefined) continue;
+      const shapeError = genericEvidenceShapeError(evidence);
+      if (shapeError !== undefined) {
         diagnostics.push(diagnostic(
           "RUST_LIFETIME_GENERIC_CONTRACT_INVALID",
-          factShapeError,
+          shapeError,
           parameter,
         ));
         continue;
       }
-      const outlivesNodes = fact.kind === "lifetime" ? fact.outlives : fact.typeOutlives;
+      const outlivesNodes = evidence.kind === "lifetime"
+        ? evidence.outlives
+        : evidence.typeOutlives;
       const outlives = outlivesNodes.map(resolve);
       if (outlives.some((lifetime) => lifetime === undefined ||
         lifetime.kind === "placeholder")) {
@@ -166,7 +182,7 @@ export function analyzeRustLifetimes(
         ));
         continue;
       }
-      const contract: RustSourceGenericParameterContract = fact.kind === "lifetime"
+      const contract: RustSourceGenericParameterContract = evidence.kind === "lifetime"
         ? (() => {
             const lifetime = resolve(parameter);
             if (lifetime?.kind !== "parameter" && lifetime?.kind !== "bound") {
@@ -186,7 +202,7 @@ export function analyzeRustLifetimes(
             sourceName: registered.sourceName,
             targetName: registered.targetName,
             outlives: Object.freeze(outlives as RustLifetimeRef[]),
-            maybeSized: fact.maybeSized,
+            maybeSized: evidence.maybeSized,
           });
       parameterByDeclaration.set(parameter, contract);
       parameters.push(contract);
@@ -274,22 +290,73 @@ function allocateLifetimeNames(
   return names;
 }
 
-function genericFactShapeError(
-  fact: import("../../source/semantics/model.js").RustSourceGenericParameterFact,
+function genericEvidenceShapeError(
+  evidence: RustSourceGenericParameterEvidence,
 ): string | undefined {
-  if (fact.kind === "lifetime") {
-    if (fact.defaultType !== undefined) {
+  if (evidence.kind === "lifetime") {
+    if (evidence.defaultType !== undefined) {
       return "Rust lifetime parameters cannot declare defaults.";
     }
-    if (fact.typeOutlives.length !== 0 || fact.maybeSized ||
-      fact.bounds.length !== 1 + fact.outlives.length) {
+    if (evidence.typeOutlives.length !== 0 || evidence.maybeSized ||
+      evidence.bounds.length !== 1 + evidence.outlives.length) {
       return "A Rust lifetime parameter may contain only one Life marker and exact Outlives bounds.";
     }
     return undefined;
   }
-  return fact.outlives.length === 0
+  return evidence.outlives.length === 0
     ? undefined
     : "A Rust type parameter cannot use a lifetime-parameter Outlives bound; use ValidFor instead.";
+}
+
+function sourceGenericParameterEvidence(
+  parameter: Node,
+  owner: Node,
+  input: AnalyzeRustLifetimesInput,
+): RustSourceGenericParameterEvidence | undefined {
+  if (!input.ast.is.IsTypeParameterDeclaration(parameter)) return undefined;
+  const declaration = input.ast.as.AsTypeParameterDeclaration(parameter);
+  if (declaration === undefined) return undefined;
+  const constraint = declaration.Constraint ?? undefined;
+  const defaultType = declaration.DefaultType ?? undefined;
+  const bounds = constraint === undefined
+    ? Object.freeze([])
+    : flattenConstraintBounds(constraint, input.ast);
+  if (bounds === undefined) return undefined;
+  const contracts = bounds.map((bound) => rustSourceLifetimeTypeContract(bound, input));
+  const lifetime = contracts.some((contract) => contract?.kind === "lifetime-kind");
+  return Object.freeze({
+    parameter,
+    owner,
+    kind: lifetime ? "lifetime" : "type",
+    ...(constraint === undefined ? {} : { constraint }),
+    ...(defaultType === undefined ? {} : { defaultType }),
+    bounds,
+    outlives: Object.freeze(contracts.flatMap((contract) =>
+      contract?.kind === "outlives" ? [contract.lifetimeTypeNode] : [])),
+    typeOutlives: Object.freeze(contracts.flatMap((contract) =>
+      contract?.kind === "valid-for" ? [contract.lifetimeTypeNode] : [])),
+    maybeSized: contracts.some((contract) => contract?.kind === "maybe-sized"),
+  });
+}
+
+function flattenConstraintBounds(
+  node: Node,
+  ast: AstReader,
+): readonly Node[] | undefined {
+  if (ast.is.IsParenthesizedTypeNode(node)) {
+    const inner = ast.as.AsParenthesizedTypeNode(node)?.Type;
+    return inner === undefined ? undefined : flattenConstraintBounds(inner, ast);
+  }
+  if (!ast.is.IsIntersectionTypeNode(node)) return Object.freeze([node]);
+  const raw = ast.as.AsIntersectionTypeNode(node)?.Types?.Nodes;
+  if (raw === undefined || raw.some((bound) => bound === undefined)) return undefined;
+  const flattened: Node[] = [];
+  for (const bound of raw as readonly Node[]) {
+    const selected = flattenConstraintBounds(bound, ast);
+    if (selected === undefined) return undefined;
+    flattened.push(...selected);
+  }
+  return Object.freeze(flattened);
 }
 
 function collectGenericDeclarations(
@@ -335,13 +402,16 @@ function isLifetimeBinderOwner(kind: string | undefined): boolean {
 function referencedTypeParameter(
   node: Node,
   input: AnalyzeRustLifetimesInput,
+  parameterEvidence: WeakMap<Node, RustSourceGenericParameterEvidence>,
 ): Node | undefined {
   if (input.ast.is.IsParenthesizedTypeNode(node)) {
     const inner = input.ast.as.AsParenthesizedTypeNode(node)?.Type;
-    return inner === undefined ? undefined : referencedTypeParameter(inner, input);
+    return inner === undefined
+      ? undefined
+      : referencedTypeParameter(inner, input, parameterEvidence);
   }
   if (input.ast.is.IsTypeParameterDeclaration(node) &&
-    readFact(input.facts, node, rustSourceGenericParameterFactKey)?.kind === "lifetime") {
+    parameterEvidence.get(node)?.kind === "lifetime") {
     return node;
   }
   if (!input.ast.is.IsTypeReferenceNode(node)) return undefined;
@@ -350,7 +420,7 @@ function referencedTypeParameter(
     ? undefined
     : input.referencedDeclaration(typeName);
   return declaration !== undefined &&
-      readFact(input.facts, declaration, rustSourceGenericParameterFactKey)?.kind === "lifetime"
+      parameterEvidence.get(declaration)?.kind === "lifetime"
     ? declaration
     : undefined;
 }
@@ -362,14 +432,6 @@ function parameterIdentity(
 ): string | undefined {
   const occurrence = sourceNodeIdentity(ast, declaration);
   return occurrence === undefined ? undefined : `${role}\0${occurrence}`;
-}
-
-function readFact<T>(
-  facts: RustPlanQueries,
-  subject: Node,
-  key: import("@tsonic/tsts").ExtensionFactKey<T>,
-): T | undefined {
-  return facts.resolve(subject, key) ?? facts.get(subject, key);
 }
 
 function diagnostic(

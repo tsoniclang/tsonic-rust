@@ -48,6 +48,7 @@ import type {
 import { jsRegExpSourceProfileIdentity } from "@tsonic/js-source-profile";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
+import type { RustSourcePolicyContext } from "../../model/context.js";
 
 const regExpIdentity = jsRegExpSourceProfileIdentity;
 const regExpResultCarrierByOwner = new Map<string, () => TargetTypeRef>([
@@ -74,7 +75,7 @@ export type RustProviderObjectLiteralConstructionSelection =
 
 export function resolveProviderTypeIdentity(
   subjects: readonly ExtensionFactSubject[],
-  context: RustTargetTypeResolutionContext,
+  context: Pick<RustSourcePolicyContext, "facts">,
 ): ProviderDeclarationIdentity | undefined {
   let selected: ProviderDeclarationIdentity | undefined;
   for (const subject of subjects) {

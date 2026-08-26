@@ -4,6 +4,8 @@ export const rustSourceProviderVersion = "0.0.1";
 
 export const rustTypesModule = "@tsonic/rust/types.js";
 export const rustLangModule = "@tsonic/rust/lang.js";
+export const rustConstPointerExport = "constPtr";
+export const rustMutPointerExport = "mutPtr";
 
 export const rustSourceTypeExportIds = Object.freeze({
   life: "Life",

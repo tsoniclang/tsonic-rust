@@ -155,12 +155,18 @@ test("optional value conversions lift one exact element conversion", () => {
   const source = {
     kind: "target-named",
     id: "rust.std.Option",
-    typeArguments: [{ kind: "source-primitive", name: "int32" }],
+    genericArguments: [{
+      kind: "type",
+      type: { kind: "source-primitive", name: "int32" },
+    }],
   };
   const target = {
     kind: "target-named",
     id: "rust.std.Option",
-    typeArguments: [{ kind: "source-primitive", name: "float64" }],
+    genericArguments: [{
+      kind: "type",
+      type: { kind: "source-primitive", name: "float64" },
+    }],
   };
   const conversion = selectRustSourceValueConversion(source, target);
   assert.deepEqual(conversion, {

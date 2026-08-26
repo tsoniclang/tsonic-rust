@@ -36,10 +36,11 @@ export function resolveProjectSourceCarrier(
     const sourceType = rustSourceTypeCarrierValue(carrier);
     if (sourceType !== undefined) {
       const contract = context.sourceLifetimes.contractFor(declaration);
-      if (contract === undefined ||
-        genericArguments.values.length !== contract.parameters.length ||
-        contract.parameters.some((parameter, index) =>
-          genericArguments.values[index]?.kind !== parameter.kind)) {
+      if (contract === undefined
+        ? genericArguments.values.length !== 0
+        : genericArguments.values.length !== contract.parameters.length ||
+          contract.parameters.some((parameter, index) =>
+            genericArguments.values[index]?.kind !== parameter.kind)) {
         continue;
       }
       return rustSourceTypeCarrier(

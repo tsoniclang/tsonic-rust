@@ -458,8 +458,16 @@ export function sourceCallSelectedMemberMatches(
     selectedArguments.length !== targetArguments.length ||
     parameters.some((parameter, index) =>
       parameter.sourceName !== sourceArguments[index]?.typeParameterName) ||
-    selectedArguments.some((argument, index) =>
-      !rustTargetGenericArgumentEquals(argument, targetArguments[index]))) {
+    selectedArguments.some((argument, index) => {
+      const parameter = parameters[index];
+      const sourceArgument = sourceArguments[index];
+      const targetArgument = targetArguments[index];
+      const targetFinalizesInferredType = parameter?.kind === "type" &&
+        sourceArgument?.explicitTypeNode === undefined &&
+        argument.kind === "type" && targetArgument?.kind === "type";
+      return !targetFinalizesInferredType &&
+        !rustTargetGenericArgumentEquals(argument, targetArgument);
+    })) {
     return false;
   }
   const substitutions = rustTargetGenericBindingsForArguments(parameters, targetArguments);

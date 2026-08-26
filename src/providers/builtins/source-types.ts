@@ -9,8 +9,8 @@ import {
   rustMutPointerExport,
   rustSourceProviderVersion,
   rustSourceVirtualModulesProviderId,
-} from "../../source/extension/source-extension.js";
-import { rustTypesModule } from "../../source/profiles/source-modules.js";
+  rustTypesModule,
+} from "../../source/semantics/identity.js";
 import type {
   RustProviderSemantics,
   RustProviderTypeRow,
