@@ -2,7 +2,6 @@ import type { Node } from "@tsonic/tsts";
 import {
   BinaryExpression_Left,
   Node_Expression,
-  sourceNodeIdentity,
   sourceNodesEqual,
 } from "@tsonic/target-api/source";
 import type {
@@ -13,12 +12,14 @@ import type {
   RustValueReadDisposition,
 } from "../../target-model/semantics/index.js";
 import { rustCloneTrait, rustCopyTrait } from "../../target-model/types/index.js";
+import { rustFlowReadProjectionFactKey } from "../facts/keys.js";
 import type {
   RustOwnershipAnalysisInput,
   RustOwnershipEnvironment,
 } from "./context.js";
 import type { RustOwnershipOperationInventory } from "./operations.js";
 import { rustOwnershipTraitProof } from "./operations.js";
+import { requireRustOwnershipSourceIdentity } from "./identity.js";
 
 export function classifyRustOwnershipReads(
   nodes: readonly Node[],
@@ -31,7 +32,7 @@ export function classifyRustOwnershipReads(
   const reads = new WeakMap<Node, RustValueReadDisposition>();
   for (const node of nodes) {
     if (places.get(node) === undefined || isWriteOnlyReference(node, input) ||
-      isProjectionBase(node, input)) continue;
+      isProjectionBase(node, input) && input.facts.getFact(node, rustFlowReadProjectionFactKey) === undefined) continue;
     const carrier = input.facts.getRuntimeCarrierFact(node)?.carrier ??
       runtimeCarrierForDeclaration(node, input);
     if (carrier === undefined) continue;
@@ -69,7 +70,7 @@ function implicitReadDisposition(
   input: RustOwnershipAnalysisInput,
   environment: RustOwnershipEnvironment,
 ): RustValueReadDisposition {
-  const evidenceId = sourceNodeIdentity(input.ast, node) ?? "sealed-read";
+  const evidenceId = requireRustOwnershipSourceIdentity(input.ast, node);
   if (environment.supportsTrait(carrier, rustCopyTrait)) {
     return Object.freeze({
       kind: "copy",

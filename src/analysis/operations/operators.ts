@@ -55,6 +55,7 @@ import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { rustSelectedOperationKey } from "../../target-model/facts/selections.js";
 import { rustTargetOperationSupportsAssignment, rustTargetOperationText } from "../facts/target-operation.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustTypeSemanticKey } from "../../target-model/semantics/index.js";
 import { selectedSourceLiteralIsRepresentable } from "../../policy/types/selected-numeric-literal.js";
 import { setCarrierFact, setRustOperationFact } from "./project-calls.js";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
@@ -542,8 +543,8 @@ export function resolvePostCheckBinaryCarrier(
         [
           `target.capability=rust.operation.${assignment ? "assignment" : "binary"}`,
           `source.operatorKind=${operatorKind}`,
-          `left=${JSON.stringify(left)}`,
-          `right=${JSON.stringify(right)}`,
+          `left=${rustTypeSemanticKey(left)}`,
+          `right=${rustTypeSemanticKey(right)}`,
         ],
       );
     }

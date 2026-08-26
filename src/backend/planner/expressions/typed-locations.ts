@@ -6,6 +6,7 @@ import type {
 import {
   ElementAccessExpression_ArgumentExpression,
   Node_Expression,
+  sourceNodesEqual,
 } from "@tsonic/target-api/source";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
@@ -137,6 +138,13 @@ export function planRustIdentifierValue(
   if (captured?.storage === "location") {
     return { kind: "method-call", receiver: value, method: "load", args: [] };
   }
+  if (captured !== undefined) {
+    return planRustValueRead(
+      node,
+      rustCapturedSemanticValue(value, captured),
+      context,
+    );
+  }
   if (storage !== undefined) {
     return storage.storage === "module-cell"
       ? rustModuleCellAccess(value, "load", [])
@@ -159,19 +167,76 @@ export function planRustValueRead(
 export function planRustCaptureValue(
   node: Node,
   path: string,
+  capture: import("../../../target-model/semantics/index.js").RustCapture,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  const capturedPath = rustCapturedBinding(node, context)?.path ?? path;
-  const capture = context.input.program.ownership.captureFor(node);
-  if (capture === undefined) return undefined;
+  const captured = rustCapturedBinding(node, context);
+  const capturedPath = captured?.path ?? path;
   const value: RustExpr = { kind: "path", path: capturedPath };
+  const availableCarrier = captured?.representationCarrier ?? capture.storageCarrier;
   return capture.mode === "clone"
-    ? { kind: "method-call", receiver: value, method: "clone", args: [] }
+    ? rustCapturedClone(value, availableCarrier, capture.storageCarrier)
     : capture.mode === "mutable"
-      ? { kind: "reference", expr: value, mutable: true }
+      ? rustCapturedBorrow(value, availableCarrier, capture.representationCarrier)
       : capture.mode === "shared"
-        ? { kind: "reference", expr: value }
-        : value;
+        ? rustCapturedBorrow(value, availableCarrier, capture.representationCarrier)
+        : rustCapturedOwnedValue(value, availableCarrier, capture.storageCarrier);
+}
+
+function rustCapturedSemanticValue(
+  value: RustExpr,
+  captured: import("../program/plan-context.js").RustCapturedBinding,
+): RustExpr {
+  return rustTargetTypeRefEquals(captured.valueCarrier, captured.representationCarrier)
+    ? value
+    : { kind: "dereference", pointer: value };
+}
+
+function rustCapturedOwnedValue(
+  value: RustExpr,
+  available: import("../../../target-model/types/model.js").TargetTypeRef,
+  required: import("../../../target-model/types/model.js").TargetTypeRef,
+): RustExpr | undefined {
+  if (rustTargetTypeRefEquals(available, required)) return value;
+  return available.kind === "reference" &&
+      rustTargetTypeRefEquals(available.target, required)
+    ? { kind: "dereference", pointer: value }
+    : undefined;
+}
+
+function rustCapturedClone(
+  value: RustExpr,
+  available: import("../../../target-model/types/model.js").TargetTypeRef,
+  required: import("../../../target-model/types/model.js").TargetTypeRef,
+): RustExpr | undefined {
+  const owned = rustCapturedOwnedValue(value, available, required);
+  return owned === undefined
+    ? undefined
+    : { kind: "method-call", receiver: owned, method: "clone", args: [] };
+}
+
+function rustCapturedBorrow(
+  value: RustExpr,
+  available: import("../../../target-model/types/model.js").TargetTypeRef,
+  required: import("../../../target-model/types/model.js").TargetTypeRef,
+): RustExpr | undefined {
+  if (rustTargetTypeRefEquals(available, required)) return value;
+  if (required.kind !== "reference") return undefined;
+  if (rustTargetTypeRefEquals(available, required.target)) {
+    return {
+      kind: "reference",
+      expr: value,
+      ...(required.mutable ? { mutable: true } : {}),
+    };
+  }
+  if (available.kind !== "reference" ||
+    !rustTargetTypeRefEquals(available.target, required.target) ||
+    required.mutable && !available.mutable) return undefined;
+  return {
+    kind: "reference",
+    expr: { kind: "dereference", pointer: value },
+    ...(required.mutable ? { mutable: true } : {}),
+  };
 }
 
 export function planRustNonConsumingValue(
@@ -322,10 +387,11 @@ function rustCapturedBindingForDeclaration(
 ): import("../program/plan-context.js").RustCapturedBinding | undefined {
   return context.capturedBindings?.find((binding) =>
     binding.declaration === declaration ||
-    (context.input.program.source.ast.getSourceFile(binding.declaration) === context.input.program.source.ast.getSourceFile(declaration) &&
-      context.input.program.source.ast.kind(binding.declaration) === context.input.program.source.ast.kind(declaration) &&
-      context.input.program.source.ast.pos(binding.declaration) === context.input.program.source.ast.pos(declaration) &&
-      context.input.program.source.ast.end(binding.declaration) === context.input.program.source.ast.end(declaration)));
+    sourceNodesEqual(
+      context.input.program.source.ast,
+      binding.declaration,
+      declaration,
+    ));
 }
 
 export type RustPromotedStorageWritePlan =

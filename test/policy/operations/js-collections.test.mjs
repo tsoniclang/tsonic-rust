@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { selectJsSurfaceOperation } from "../../../dist/policy/operations/js-surface.js";
+import { selectJsSurfaceOperation as selectJsSurfaceOperationBase } from "../../../dist/policy/operations/js-surface.js";
 import {
+  createRustNamedTypeTraitContractIndex,
+  createRustTraitSupportQueries,
   rustJsMapTargetType,
   rustJsSetTargetType,
   rustSourcePrimitiveTargetType,
@@ -14,6 +16,14 @@ import {
   compileRust,
 } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
+
+const jsTraitSupport = createRustTraitSupportQueries(
+  createRustNamedTypeTraitContractIndex([]),
+);
+const selectJsSurfaceOperation = (request) => selectJsSurfaceOperationBase({
+  ...request,
+  carrierSupportsClone: (carrier) => jsTraitSupport.supportsClone(carrier),
+});
 
 test("collection rows require exact carrier capabilities", () => {
   const int32 = rustSourcePrimitiveTargetType("int32");
@@ -28,7 +38,7 @@ test("collection rows require exact carrier capabilities", () => {
     receiverCarrier: map,
     argumentCarriers: [],
   })?.fact.resultCarrier, {
-    kind: "array",
+    kind: "sequence",
     element: { kind: "tuple", elements: [string, int32] },
   });
   assert.equal(selectJsSurfaceOperation({

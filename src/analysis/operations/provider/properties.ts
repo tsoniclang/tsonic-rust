@@ -62,6 +62,7 @@ export function selectRustCheckedDelete(
     operationKind: "delete",
     ...(receiverCarrier === undefined ? {} : { receiverCarrier }),
     argumentCarriers: [indexCarrier],
+    carrierSupportsClone: (carrier) => context.traits.supportsClone(carrier),
   });
   if (selection?.fact.kind !== "provider-operation") {
     return rejectSelectedOperation(
@@ -128,7 +129,7 @@ function selectExternalProjectFieldAccess(
     externalField.field.declaration,
     "write",
   );
-  if (readSlot === undefined || writeSlot === undefined) {
+  if (operationId === undefined || readSlot === undefined || writeSlot === undefined) {
     return rejectSelectedOperation(
       request.expression,
       context,
@@ -298,6 +299,7 @@ export function selectRustCheckedPropertyAccess(
       ...(jsIdentity.memberName === "index" && authoredPropertyKey !== undefined
         ? { authoredPropertyKey }
         : {}),
+      carrierSupportsClone: (carrier) => context.traits.supportsClone(carrier),
     });
     if (selection === undefined || selection.fact.kind !== "provider-operation" || selection.resultCarrier === undefined) {
       return rejectSelectedOperation(
@@ -349,6 +351,14 @@ export function selectRustCheckedPropertyAccess(
         );
       }
       const operationId = sourceOperationId(context, declaration, "static-field");
+      if (operationId === undefined) {
+        return rejectSelectedOperation(
+          request.expression,
+          context,
+          "RUST_SOURCE_OPERATION_IDENTITY_NOT_PROVEN",
+          "Selected project static field has no exact compiler-owned declaration identity.",
+        );
+      }
       return acceptRustMemberOperation(request, "property", {
         kind: "source-static-field",
         operationId,
@@ -391,6 +401,14 @@ export function selectRustCheckedPropertyAccess(
         : rustSourceTypeCarrier(enumFileName, enumName, "enum");
       if (memberName.length > 0 && resultCarrier !== undefined) {
         const operationId = sourceOperationId(context, declaration, "enum-member");
+        if (operationId === undefined) {
+          return rejectSelectedOperation(
+            request.expression,
+            context,
+            "RUST_SOURCE_OPERATION_IDENTITY_NOT_PROVEN",
+            "Selected project enum member has no exact compiler-owned declaration identity.",
+          );
+        }
         return acceptRustMemberOperation(request, "property", {
           kind: "source-enum-member",
           operationId,
@@ -426,6 +444,14 @@ export function selectRustCheckedPropertyAccess(
         );
       }
       const operationId = sourceOperationId(context, declaration, "field");
+      if (operationId === undefined) {
+        return rejectSelectedOperation(
+          request.expression,
+          context,
+          "RUST_SOURCE_OPERATION_IDENTITY_NOT_PROVEN",
+          "Selected project field has no exact compiler-owned declaration identity.",
+        );
+      }
       const owner = options.projectTypes.definitionContainingDeclaration(declaration);
       const storageIndex = field.storageIndex +
         (owner === undefined
@@ -594,9 +620,18 @@ function selectProjectSourceMethodProperty(
       registration.reason,
     );
   }
+  const operationId = sourceOperationId(context, declaration, "method-property");
+  if (operationId === undefined) {
+    return rejectSelectedOperation(
+      request.expression,
+      context,
+      "RUST_SOURCE_OPERATION_IDENTITY_NOT_PROVEN",
+      "Selected project method property has no exact compiler-owned declaration identity.",
+    );
+  }
   return acceptRustMemberOperation(request, "property", {
     kind: "source-method-property",
-    operationId: sourceOperationId(context, declaration, "method-property"),
+    operationId,
     declaration,
     receiverCarrier: selectedReceiverCarrier,
     callableCarrier,
@@ -772,14 +807,21 @@ function selectProjectSourceAccessor(
       "Selected project accessor has no exact Rust operation result carrier.",
     );
   }
-  const operationId = `tsonic.rust.source.accessor:${request.accessMode}:${[
-    readDeclaration === undefined
-      ? "-"
-      : sourceOperationId(context, readDeclaration, "accessor-read"),
-    writeDeclaration === undefined
-      ? "-"
-      : sourceOperationId(context, writeDeclaration, "accessor-write"),
-  ].join(":")}`;
+  const readOperationId = readDeclaration === undefined
+    ? "-"
+    : sourceOperationId(context, readDeclaration, "accessor-read");
+  const writeOperationId = writeDeclaration === undefined
+    ? "-"
+    : sourceOperationId(context, writeDeclaration, "accessor-write");
+  if (readOperationId === undefined || writeOperationId === undefined) {
+    return rejectSelectedOperation(
+      request.expression,
+      context,
+      "RUST_SOURCE_OPERATION_IDENTITY_NOT_PROVEN",
+      "Selected project accessor has no exact compiler-owned declaration identity.",
+    );
+  }
+  const operationId = `tsonic.rust.source.accessor:${request.accessMode}:${readOperationId}:${writeOperationId}`;
   return acceptRustMemberOperation(request, "property", {
     kind: "source-accessor",
     operationId,

@@ -31,6 +31,7 @@ import { planRustProjectDowncast } from "../objects/project-downcasts.js";
 import { rustProjectObjectDispatchField, rustProjectObjectIdentityField } from "../objects/project-objects.js";
 import { rustSelectedAccessorRequiresUnsafe, rustSelectedCallRequiresUnsafe, tryPlanRustExplicitSafetyExpression } from "../safety/explicit-safety.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustTypeSemanticKey } from "../../../target-model/semantics/index.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustValueCarrierBeforeContextualConversion } from "../../../analysis/facts/value-carrier-queries.js";
 import { tryPlanRustNativePointerOperation } from "./native-pointers.js";
@@ -280,17 +281,27 @@ function applyRustContextualValueConversion(
       ...diagnostic,
       evidence: [
         ...(diagnostic.evidence ?? []),
-        `carrier.current=${JSON.stringify(sourceCarrier)}`,
-        `carrier.source=${JSON.stringify(fact.sourceCarrier)}`,
-        `carrier.target=${JSON.stringify(fact.targetCarrier)}`,
-        `carrier.left=${JSON.stringify(context.input.program.facts.getRuntimeCarrierFact(left)?.carrier)}`,
-        `carrier.right=${JSON.stringify(context.input.program.facts.getRuntimeCarrierFact(right)?.carrier)}`,
-        `operation=${JSON.stringify(context.input.program.facts.getFact(node, rustTargetOperationFactKey))}`,
+        `carrier.current=${optionalRustTypeSemanticKey(sourceCarrier)}`,
+        `carrier.source=${rustTypeSemanticKey(fact.sourceCarrier)}`,
+        `carrier.target=${rustTypeSemanticKey(fact.targetCarrier)}`,
+        `carrier.left=${optionalRustTypeSemanticKey(context.input.program.facts.getRuntimeCarrierFact(left)?.carrier)}`,
+        `carrier.right=${optionalRustTypeSemanticKey(context.input.program.facts.getRuntimeCarrierFact(right)?.carrier)}`,
+        `operation=${rustOperationDiagnosticKey(context.input.program.facts.getFact(node, rustTargetOperationFactKey))}`,
       ],
     });
     return undefined;
   }
   return applyRustValueConversion(context, expression, fact.conversion, node, false);
+}
+
+function optionalRustTypeSemanticKey(carrier: TargetTypeRef | undefined): string {
+  return carrier === undefined ? "missing" : rustTypeSemanticKey(carrier);
+}
+
+function rustOperationDiagnosticKey(
+  operation: import("../../../analysis/facts/keys.js").RustTargetOperationFact | undefined,
+): string {
+  return operation === undefined ? "missing" : `${operation.kind}/${operation.operationId}`;
 }
 
 function rustExpressionUnsafeRequirement(

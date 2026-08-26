@@ -11,14 +11,41 @@ import {
   rustGenericSubstitutionsForArguments,
   substituteRustTargetGenerics,
 } from "../../dist/target-model/types/generic-substitution.js";
-import { rustTargetTypeRefEquals } from "../../dist/target-model/types/equality.js";
 import {
-  rustCarrierSupportsTrait,
-  rustCarrierSupportsTraitBound,
+  isRustBinderValue,
+  isRustBoundValue,
+  isRustTargetTypeRef,
+  isRustTraitReference,
+  rustTargetTypeRefEquals,
+} from "../../dist/target-model/types/equality.js";
+import {
+  createRustNamedTypeTraitContractIndex,
+  createRustTraitSupportQueries,
+  isRustStringCarrier,
+  rustCallableProtocol,
+  rustCallableTargetType,
+  rustCloneTrait,
+  rustCopyTrait,
+  rustDefaultTrait,
+  rustEqTrait,
   rustFnMutTrait,
   rustFnOnceTrait,
   rustFnTrait,
+  rustHashTrait,
+  rustSendTrait,
+  rustOpaqueTargetType,
+  rustSyncTrait,
+  rustTupleTargetType,
+  rustUnpinTrait,
 } from "../../dist/target-model/types/index.js";
+import {
+  isRustNamedTypeTraitContract,
+  rustPathTargetType,
+} from "../../dist/target-model/types/index.js";
+import {
+  closedMetadataEquals,
+  closedMetadataKey,
+} from "../../dist/target-model/metadata/closed-data.js";
 
 const projectIdentity = (declarationId) => Object.freeze({
   kind: "project",
@@ -43,6 +70,136 @@ const constParameter = (declarationId, displayName = "N") => Object.freeze({
   kind: "parameter",
   identity: projectIdentity(declarationId),
   displayName,
+});
+
+const emptyTraitSupport = createRustTraitSupportQueries(
+  createRustNamedTypeTraitContractIndex([]),
+);
+const rustCarrierSupportsTrait = (carrier, trait) =>
+  emptyTraitSupport.supportsTrait(carrier, trait);
+const rustCarrierSupportsTraitBound = (carrier, bound) =>
+  emptyTraitSupport.supportsTraitBound(carrier, bound);
+
+test("unit is the one canonical zero-element Rust tuple representation", () => {
+  const result = Object.freeze({ kind: "primitive", name: "i32" });
+  const unit = rustTupleTargetType([]);
+  const invalidEmptyTuple = Object.freeze({ kind: "tuple", elements: Object.freeze([]) });
+  const single = rustTupleTargetType([result]);
+
+  assert.deepEqual(unit, Object.freeze({ kind: "unit" }));
+  assert.equal(isRustTargetTypeRef(unit), true);
+  assert.equal(isRustTargetTypeRef(invalidEmptyTuple), false);
+  assert.equal(single.kind, "tuple");
+  assert.equal(rustCallableProtocol(rustCallableTargetType([], result))?.parameters.length, 0);
+});
+
+test("Rust semantic carriers reject non-canonical binders and malformed target forms", () => {
+  const boundLifetime = Object.freeze({
+    kind: "bound",
+    binderId: "binder",
+    parameterId: "life",
+    displayName: "a",
+  });
+  const lifetimeParameter = Object.freeze({
+    kind: "lifetime",
+    identity: boundLifetime,
+    bounds: Object.freeze([]),
+  });
+  const validBinder = Object.freeze({
+    id: "binder",
+    lifetimes: Object.freeze([lifetimeParameter]),
+  });
+  assert.equal(isRustBinderValue(validBinder), true);
+  assert.equal(isRustBinderValue(Object.freeze({ id: "binder", lifetimes: Object.freeze([]) })), false);
+  assert.equal(isRustBinderValue(Object.freeze({
+    id: "other",
+    lifetimes: Object.freeze([lifetimeParameter]),
+  })), false);
+  assert.equal(isRustBinderValue(Object.freeze({
+    id: "binder",
+    lifetimes: Object.freeze([lifetimeParameter, lifetimeParameter]),
+  })), false);
+
+  const unit = Object.freeze({ kind: "unit" });
+  assert.equal(isRustTargetTypeRef(Object.freeze({
+    kind: "function-pointer",
+    safety: "safe",
+    abi: "Rust",
+    parameters: Object.freeze([]),
+    variadic: true,
+    result: unit,
+  })), false);
+  assert.equal(isRustBoundValue(Object.freeze({
+    kind: "precise-capture",
+    captures: Object.freeze([]),
+  })), false);
+  assert.equal(isRustTargetTypeRef(Object.freeze({
+    kind: "opaque",
+    identity: projectIdentity("opaque:empty"),
+    bounds: Object.freeze([]),
+    captures: Object.freeze([]),
+  })), false);
+  assert.equal(isRustTargetTypeRef(Object.freeze({
+    kind: "trait-object",
+    principal: rustSendTrait,
+    autoTraits: Object.freeze([rustSendTrait]),
+    lifetime: Object.freeze({ kind: "static" }),
+  })), false);
+  const capture = Object.freeze({
+    kind: "type",
+    identity: projectIdentity("capture:type"),
+    displayName: "T",
+  });
+  assert.equal(isRustTargetTypeRef(Object.freeze({
+    kind: "closure",
+    callTrait: "fn",
+    parameters: Object.freeze([]),
+    result: unit,
+    captures: Object.freeze([capture, capture]),
+  })), false);
+  assert.equal(isRustTargetTypeRef(Object.freeze({
+    kind: "array",
+    element: unit,
+    length: Object.freeze({
+      kind: "literal",
+      literalKind: "character",
+      value: "\ud800",
+    }),
+  })), false);
+});
+
+test("opaque captures have one canonical semantic owner and deterministic order", () => {
+  const typeCapture = Object.freeze({
+    kind: "type",
+    identity: projectIdentity("capture:type"),
+    displayName: "T",
+  });
+  const lifetimeCapture = Object.freeze({
+    kind: "lifetime",
+    value: lifetimeParameter("capture:lifetime", "a"),
+  });
+  const traitBound = Object.freeze({
+    kind: "trait",
+    trait: rustSendTrait,
+    polarity: "required",
+  });
+  const opaque = rustOpaqueTargetType({
+    identity: projectIdentity("opaque:ordered"),
+    bounds: [traitBound],
+    captures: [typeCapture, lifetimeCapture],
+  });
+
+  assert.deepEqual(opaque.captures, [lifetimeCapture, typeCapture]);
+  assert.equal(isRustTargetTypeRef(opaque), true);
+  assert.equal(isRustTargetTypeRef(Object.freeze({
+    ...opaque,
+    captures: Object.freeze([typeCapture, lifetimeCapture]),
+  })), false);
+});
+
+test("closed metadata equality and identity distinguish negative zero", () => {
+  assert.equal(closedMetadataEquals(0, -0), false);
+  assert.notEqual(closedMetadataKey(0), closedMetadataKey(-0));
 });
 
 test("semantic keys use declaration identity rather than display spelling", () => {
@@ -155,7 +312,6 @@ test("associated, trait-object, and opaque identities remain structurally distin
     identity: projectIdentity("type:owner"),
     displayPath: Object.freeze(["Owner"]),
     arguments: Object.freeze([]),
-    traitImplementations: Object.freeze([]),
   });
   const trait = Object.freeze({
     identity: projectIdentity("trait:iter"),
@@ -196,6 +352,46 @@ test("associated, trait-object, and opaque identities remain structurally distin
     rustTypeSemanticKey(opaque),
     rustTypeSemanticKey({ ...opaque, identity: projectIdentity("opaque:second") }),
   );
+});
+
+test("trait references reject duplicate or textually ambiguous associated projections", () => {
+  const traitIdentity = projectIdentity("trait:generic");
+  const firstItemIdentity = projectIdentity("trait:generic:item:first");
+  const secondItemIdentity = projectIdentity("trait:generic:item:second");
+  const argument = Object.freeze({
+    kind: "type",
+    value: Object.freeze({ kind: "primitive", name: "i32" }),
+  });
+  const equality = (item, displayName, selectedArgument = argument) => Object.freeze({
+    kind: "equality",
+    item,
+    displayName,
+    arguments: Object.freeze([selectedArgument]),
+    type: Object.freeze({ kind: "primitive", name: "u32" }),
+  });
+  const trait = (associatedConstraints) => Object.freeze({
+    identity: traitIdentity,
+    displayPath: Object.freeze(["Generic"]),
+    arguments: Object.freeze([]),
+    associatedConstraints: Object.freeze(associatedConstraints),
+  });
+
+  assert.equal(isRustTraitReference(trait([equality(firstItemIdentity, "Item")])), true);
+  assert.equal(isRustTraitReference(trait([
+    equality(firstItemIdentity, "Item"),
+    equality(firstItemIdentity, "Item"),
+  ])), false);
+  assert.equal(isRustTraitReference(trait([
+    equality(firstItemIdentity, "Item"),
+    equality(secondItemIdentity, "Item"),
+  ])), false);
+  assert.equal(isRustTraitReference(trait([
+    equality(firstItemIdentity, "Item"),
+    equality(firstItemIdentity, "Item", Object.freeze({
+      kind: "type",
+      value: Object.freeze({ kind: "primitive", name: "u64" }),
+    })),
+  ])), true);
 });
 
 test("where-clause keys distinguish lifetime and type-outlives relations", () => {
@@ -408,4 +604,181 @@ test("higher-ranked callable requirements compare bound lifetimes by binder posi
     trait: alphaEquivalent.trait,
     polarity: "required",
   })), false);
+});
+
+test("native trait evidence binds mixed generic arguments without kind collapse", () => {
+  const lifetime = lifetimeParameter("implementation:lifetime", "a");
+  const type = typeParameter("implementation:type", "T");
+  const constant = constParameter("implementation:const", "N");
+  const parameters = Object.freeze([
+    Object.freeze({ kind: "lifetime", value: lifetime }),
+    Object.freeze({ kind: "type", value: type }),
+    Object.freeze({ kind: "const", value: constant }),
+  ]);
+  const trait = Object.freeze({
+    identity: projectIdentity("trait:mixed"),
+    displayPath: Object.freeze(["Mixed"]),
+    arguments: parameters,
+    associatedConstraints: Object.freeze([]),
+  });
+  const implementation = Object.freeze({
+    trait,
+    genericBindings: Object.freeze(parameters.map((parameter, genericArgumentIndex) =>
+      Object.freeze({ parameter, genericArgumentIndex }))),
+    requirements: Object.freeze([Object.freeze({
+      genericArgumentIndex: 1,
+      bound: Object.freeze({
+        kind: "trait",
+        trait: rustCloneTrait,
+        polarity: "required",
+      }),
+    })]),
+  });
+  const contract = Object.freeze({ implementations: Object.freeze([implementation]) });
+  assert.equal(isRustNamedTypeTraitContract(contract), true);
+
+  const concreteArguments = Object.freeze([
+    Object.freeze({ kind: "lifetime", value: Object.freeze({ kind: "static" }) }),
+    Object.freeze({ kind: "type", value: Object.freeze({ kind: "primitive", name: "i32" }) }),
+    Object.freeze({
+      kind: "const",
+      value: Object.freeze({ kind: "literal", literalKind: "integer", value: 4n }),
+    }),
+  ]);
+  const carrierIdentity = projectIdentity("type:mixed");
+  const traitSupport = createRustTraitSupportQueries(
+    createRustNamedTypeTraitContractIndex([Object.freeze({
+      typeIdentity: carrierIdentity,
+      contract,
+    })]),
+  );
+  const carrier = rustPathTargetType({
+    identity: carrierIdentity,
+    displayPath: Object.freeze(["MixedType"]),
+    arguments: concreteArguments,
+  });
+  const selectedTrait = Object.freeze({
+    ...trait,
+    arguments: concreteArguments,
+  });
+  assert.equal(traitSupport.supportsTrait(carrier, selectedTrait), true);
+  const nonCloneArguments = Object.freeze([
+    concreteArguments[0],
+    Object.freeze({ kind: "type", value: Object.freeze({ kind: "str" }) }),
+    concreteArguments[2],
+  ]);
+  assert.equal(traitSupport.supportsTrait(Object.freeze({
+    ...carrier,
+    arguments: nonCloneArguments,
+  }), Object.freeze({ ...trait, arguments: nonCloneArguments })), false);
+
+  assert.equal(isRustNamedTypeTraitContract({
+    implementations: [{
+      ...implementation,
+      genericBindings: [
+        implementation.genericBindings[0],
+        { ...implementation.genericBindings[1], genericArgumentIndex: 0 },
+        implementation.genericBindings[2],
+      ],
+    }],
+  }), false);
+  assert.equal(isRustNamedTypeTraitContract({
+    implementations: [{
+      ...implementation,
+      requirements: [{
+        ...implementation.requirements[0],
+        bound: { ...implementation.requirements[0].bound, polarity: "maybe" },
+      }],
+    }],
+  }), false);
+});
+
+test("builtin carrier policy requires exact builtin semantic identity", () => {
+  const collidingProviderType = rustPathTargetType({
+    identity: Object.freeze({
+      kind: "provider",
+      providerId: "fixture.provider",
+      compilationSnapshotId: "fixture@1",
+      itemId: "rust.std.String",
+    }),
+    displayPath: Object.freeze(["fixture", "String"]),
+  });
+
+  assert.equal(isRustStringCarrier(collidingProviderType), false);
+  assert.equal(emptyTraitSupport.supportsTrait(collidingProviderType, rustCloneTrait), false);
+  assert.equal(emptyTraitSupport.supportsTrait(collidingProviderType, rustEqTrait), false);
+});
+
+test("built-in Rust trait rules preserve references, DSTs, tuples, arrays, and auto traits", () => {
+  const i32 = Object.freeze({ kind: "primitive", name: "i32" });
+  const shared = Object.freeze({
+    kind: "reference",
+    lifetime: Object.freeze({ kind: "static" }),
+    mutable: false,
+    target: i32,
+  });
+  const mutable = Object.freeze({ ...shared, mutable: true });
+  const raw = Object.freeze({ kind: "raw-pointer", mutable: true, target: i32 });
+  const pointer = Object.freeze({
+    kind: "function-pointer",
+    safety: "safe",
+    abi: "Rust",
+    parameters: Object.freeze([i32]),
+    variadic: false,
+    result: i32,
+  });
+  assert.equal(rustCarrierSupportsTrait(shared, rustCloneTrait), true);
+  assert.equal(rustCarrierSupportsTrait(mutable, rustCloneTrait), false);
+  assert.equal(rustCarrierSupportsTrait(Object.freeze({ kind: "str" }), rustCopyTrait), false);
+  assert.equal(rustCarrierSupportsTrait(Object.freeze({ kind: "str" }), rustCloneTrait), false);
+  assert.equal(rustCarrierSupportsTrait(Object.freeze({ kind: "str" }), rustEqTrait), true);
+  assert.equal(rustCarrierSupportsTrait(Object.freeze({ kind: "str" }), rustHashTrait), true);
+  assert.equal(rustCarrierSupportsTrait(raw, rustSendTrait), false);
+  assert.equal(rustCarrierSupportsTrait(raw, rustSyncTrait), false);
+  assert.equal(rustCarrierSupportsTrait(raw, rustUnpinTrait), true);
+  for (const trait of [rustCopyTrait, rustCloneTrait, rustEqTrait, rustHashTrait, rustSendTrait, rustSyncTrait, rustUnpinTrait]) {
+    assert.equal(rustCarrierSupportsTrait(pointer, trait), true);
+  }
+  assert.equal(rustCarrierSupportsTrait(Object.freeze({
+    kind: "tuple",
+    elements: Object.freeze(Array.from({ length: 13 }, () => i32)),
+  }), rustCopyTrait), false);
+  assert.equal(rustCarrierSupportsTrait(Object.freeze({
+    kind: "array",
+    element: i32,
+    length: Object.freeze({ kind: "literal", literalKind: "integer", value: 32n }),
+  }), rustDefaultTrait), true);
+  assert.equal(rustCarrierSupportsTrait(Object.freeze({
+    kind: "array",
+    element: i32,
+    length: Object.freeze({ kind: "literal", literalKind: "integer", value: 33n }),
+  }), rustDefaultTrait), false);
+
+  const principal = Object.freeze({
+    identity: projectIdentity("trait:handler"),
+    displayPath: Object.freeze(["Handler"]),
+    arguments: Object.freeze([]),
+    associatedConstraints: Object.freeze([]),
+  });
+  const object = Object.freeze({
+    kind: "trait-object",
+    principal,
+    autoTraits: Object.freeze([rustSendTrait]),
+    lifetime: Object.freeze({ kind: "static" }),
+  });
+  assert.equal(rustCarrierSupportsTrait(object, principal), true);
+  assert.equal(rustCarrierSupportsTrait(object, rustSendTrait), true);
+  assert.equal(rustCarrierSupportsTrait(object, rustSyncTrait), false);
+  const opaque = Object.freeze({
+    kind: "opaque",
+    identity: projectIdentity("opaque:send"),
+    bounds: Object.freeze([Object.freeze({
+      kind: "trait",
+      trait: rustSendTrait,
+      polarity: "required",
+    })]),
+    captures: Object.freeze([]),
+  });
+  assert.equal(rustCarrierSupportsTrait(opaque, rustSendTrait), true);
+  assert.equal(rustCarrierSupportsTrait(opaque, rustSyncTrait), false);
 });

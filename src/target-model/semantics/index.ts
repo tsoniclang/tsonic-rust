@@ -31,7 +31,11 @@ export {
   rustSemanticIdentityKey,
 } from "./identity.js";
 export {
+  compareRustCapturedGenerics,
+  compareRustSemanticKeys,
+  rustBinderSemanticKey,
   rustBoundSemanticKey,
+  rustCapturedGenericSemanticKey,
   rustConstSemanticKey,
   rustGenericArgumentSemanticKey,
   rustGenericParameterSemanticKey,
@@ -67,6 +71,7 @@ export type {
   RustAbi,
   RustAssociatedConstraint,
   RustConditionalTraitRequirement,
+  RustTraitImplementationGenericBinding,
   RustPrimitive,
   RustReceiver,
   RustTraitRef,

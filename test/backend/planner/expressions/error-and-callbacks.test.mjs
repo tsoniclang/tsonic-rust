@@ -105,6 +105,43 @@ export function stats(xs: int32[]): int32 {
   assert.match(text, /xs\.reduce\(0, \|acc, x\| acc \+ x\)/u);
 });
 
+test("stored callable values adapt once at exact JavaScript callback boundaries", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "stored_callback_adapters" } },
+    files: {
+      "index.ts": `
+import { check } from "@acme/testing";
+import type { int32 } from "@tsonic/core/types.js";
+
+function makeMapper(offset: int32): (value: int32) => int32 {
+  return (value: int32): int32 => value + offset;
+}
+
+function makeReducer(): (total: int32, value: int32) => int32 {
+  return (total: int32, value: int32): int32 => total + value;
+}
+
+export function main(): void {
+  const values: int32[] = [1, 2, 3];
+  const mapped = values.map(makeMapper(4));
+  const total = values.reduce(makeReducer(), 0);
+  check(mapped[0] === 5);
+  check(mapped[2] === 7);
+  check(total === 6);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /\.try_map\(move \|[^|]+\| [a-zA-Z0-9_]+\.call\(\([^)]*,\)\)\)/u);
+  assert.match(text, /\.try_reduce\(0, move \|[^|]+\| [a-zA-Z0-9_]+\.call\(\([^)]*\)\)\)/u);
+  assert.equal(validateGeneratedProject("stored-callback-adapters", result.artifacts, { run: true }).status, 0);
+});
+
 test("fallible JavaScript callbacks use explicit fallible ABIs across collection families", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     surfaces: ["js"],
@@ -595,6 +632,7 @@ test("fallible provider rows are restricted to method, constructor, and property
       id: "bad",
       displayName: "Bad",
       version: "1.0.0",
+      compilationSnapshotId: "bad@1.0.0",
       modules: [{
         moduleSpecifier: "@bad",
         providerModuleId: "bad",
@@ -666,7 +704,7 @@ export function main(): void {
   const source = artifactText(result, "src/index.rs");
   assert.match(
     source,
-    /js_string::replace_all\(value, "a", "b"\)\.map_err\(rt::TsonicError::from\)/u,
+    /js_string::replace_all\(&value, "a", "b"\)\.map_err\(rt::TsonicError::from\)/u,
   );
   assert.equal(validateGeneratedProject("concise-program-error", result.artifacts, { run: true }).status, 0);
 });

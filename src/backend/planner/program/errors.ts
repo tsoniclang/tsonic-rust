@@ -5,6 +5,11 @@ import { rustTypeFromCarrier } from "../types/render.js";
 import { rustJsErrorTargetType, rustProgramErrorTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import {
+  compareRustSemanticKeys,
+  rustTypeSemanticKey,
+} from "../../../target-model/semantics/index.js";
+import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
+import {
   createRustSourceFile,
   emptyRustAstGenerics,
   type RustExpr,
@@ -110,6 +115,10 @@ export function planRustProgramErrorModule(
     type: namedType(external.typePath),
   }));
   const providerErrorTypes: RustType[] = [];
+  const providerErrorTypeKeys = new Set([
+    closedMetadataKey(runtimeErrorType),
+    closedMetadataKey(runtimeJsErrorType),
+  ]);
   for (const carrier of input.program.providerErrorCarriers) {
     if (rustTargetTypeRefEquals(carrier, rustJsErrorTargetType()) ||
       rustTargetTypeRefEquals(carrier, rustProgramErrorTargetType())) {
@@ -124,18 +133,21 @@ export function planRustProgramErrorModule(
         message: "A selected provider-native error carrier has no exact renderable Rust type.",
         evidence: [
           "target.capability=rust.error.provider-conversion",
-          `carrier=${JSON.stringify(carrier)}`,
+          `carrier=${rustTypeSemanticKey(carrier)}`,
         ],
       });
       continue;
     }
-    if (![runtimeErrorType, runtimeJsErrorType, ...providerErrorTypes].some((existing) =>
-      JSON.stringify(existing) === JSON.stringify(type))) {
+    const key = closedMetadataKey(type);
+    if (!providerErrorTypeKeys.has(key)) {
+      providerErrorTypeKeys.add(key);
       providerErrorTypes.push(type);
     }
   }
-  providerErrorTypes.sort((left, right) =>
-    JSON.stringify(left).localeCompare(JSON.stringify(right), "en"));
+  providerErrorTypes.sort((left, right) => compareRustSemanticKeys(
+    closedMetadataKey(left),
+    closedMetadataKey(right),
+  ));
   if (diagnostics.length > 0) {
     return undefined;
   }

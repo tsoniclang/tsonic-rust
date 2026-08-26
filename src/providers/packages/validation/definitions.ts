@@ -1,14 +1,17 @@
 import { asRecord, requireExactKeys, requireNonEmpty, requireRustIdentifier, requireRustPath, rustSourcePrimitiveHasCarrier, validateCarrier, validateRustGenerics } from "./carriers.js";
-import { builtInTargetCarrierIds } from "./model.js";
 import { isClosedMetadata } from "../../../target-model/metadata/closed-data.js";
 import { isRustFallibleErrorBoundary } from "../../../target-model/operations/error-boundary.js";
 import {
   isRustNamedTypeTraitContract,
+  isRustSemanticIdentity,
   rustGenericParameterIdentity,
   rustTargetTypeAssociatedProjectionKeys,
   rustTargetTypeOpenGenericIdentityKeys,
 } from "../../../target-model/types/index.js";
-import { rustTypeSemanticKey } from "../../../target-model/semantics/index.js";
+import {
+  rustSemanticIdentityKey,
+  rustTypeSemanticKey,
+} from "../../../target-model/semantics/index.js";
 import { isRustTargetTypeRef } from "../../../target-model/types/equality.js";
 import {
   validateOperationRows,
@@ -27,7 +30,7 @@ import type {
 } from "@tsonic/tsts";
 import type { ExportRecord, Fail, MemberRecord, SignatureRecord } from "./model.js";
 import type { RustProviderPackageDefinition } from "../index.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { rustProviderBindingProviderId } from "../identity.js";
 
 export function validateProviderPackageDefinition(definition: RustProviderPackageDefinition): void {
   const fail: Fail = (message) => {
@@ -39,9 +42,10 @@ export function validateProviderPackageDefinition(definition: RustProviderPackag
   requireNonEmpty(definition.id, "package id", fail);
   requireNonEmpty(definition.displayName, "display name", fail);
   requireNonEmpty(definition.version, "version", fail);
+  requireNonEmpty(definition.compilationSnapshotId, "compilation snapshot id", fail);
   requireExactKeys(asRecord(definition), [
-    "id", "displayName", "version", "requiredSurfaces", "sourceDependencies", "moduleAliases", "modules", "types", "operations", "crates",
-    "aliasImports", "carrierPaths", "carrierTraits", "binaryEpilogues",
+    "id", "displayName", "version", "compilationSnapshotId", "requiredSurfaces", "sourceDependencies", "moduleAliases", "modules", "types", "operations", "crates",
+    "aliasImports", "traitContracts", "binaryEpilogues",
   ], "package", fail);
 
   const modulesBySpecifier = new Map<string, RustProviderPackageDefinition["modules"][number]>();
@@ -123,8 +127,7 @@ export function validateProviderPackageDefinition(definition: RustProviderPackag
 
   validateCrates(definition, fail);
   validateAliases(definition, fail);
-  validateCarrierPaths(definition, fail);
-  validateCarrierTraits(definition, fail);
+  validateTraitContracts(definition, fail);
   validateBinaryEpilogues(definition, fail);
   validateTypeRelations(definition, exportsById, fail);
   validateOperationRows(definition, exportsById, membersById, signaturesById, fail);
@@ -483,21 +486,26 @@ function validateAliases(definition: RustProviderPackageDefinition, fail: Fail):
   }
 }
 
-function validateCarrierPaths(definition: RustProviderPackageDefinition, fail: Fail): void {
-  for (const [carrierId, path] of Object.entries(definition.carrierPaths ?? {})) {
-    requireNonEmpty(carrierId, "carrier id", fail);
-    requireRustPath(path, `path for carrier '${carrierId}'`, fail);
-  }
-}
-
-function validateCarrierTraits(definition: RustProviderPackageDefinition, fail: Fail): void {
-  for (const [carrierId, traits] of Object.entries(definition.carrierTraits ?? {})) {
-    requireNonEmpty(carrierId, "carrier trait id", fail);
-    if (definition.carrierPaths?.[carrierId] === undefined) {
-      fail(`carrier trait contract '${carrierId}' has no rendered carrier path`);
+function validateTraitContracts(definition: RustProviderPackageDefinition, fail: Fail): void {
+  const identities = new Set<string>();
+  const expectedProviderId = rustProviderBindingProviderId(definition.id);
+  const expectedSnapshotId = definition.compilationSnapshotId;
+  for (const entry of definition.traitContracts ?? []) {
+    requireExactKeys(asRecord(entry), ["typeIdentity", "contract"], "trait contract", fail);
+    if (!isRustSemanticIdentity(entry.typeIdentity) ||
+      entry.typeIdentity.kind !== "provider" ||
+      entry.typeIdentity.providerId !== expectedProviderId ||
+      entry.typeIdentity.providerVersion !== definition.version ||
+      entry.typeIdentity.compilationSnapshotId !== expectedSnapshotId) {
+      fail("trait contract type identity is not owned by the exact provider package snapshot");
     }
-    if (!isRustNamedTypeTraitContract(traits)) {
-      fail(`carrier '${carrierId}' has an invalid native trait contract`);
+    const identityKey = rustSemanticIdentityKey(entry.typeIdentity);
+    if (identities.has(identityKey)) {
+      fail(`duplicate trait contract for '${identityKey}'`);
+    }
+    identities.add(identityKey);
+    if (!isRustNamedTypeTraitContract(entry.contract)) {
+      fail(`type '${identityKey}' has an invalid native trait contract`);
     }
   }
 }
@@ -668,11 +676,6 @@ function validateTypeRelations(
         fail(`export '${relation.exportId}' source parameter '${binding.sourceName}' has no target associated-type use '${projectionKey}'`);
       }
     }
-    for (const targetTypeId of targetCarrierNamedIds(relation.targetCarrier)) {
-      if (!builtInTargetCarrierIds.has(targetTypeId) && definition.carrierPaths?.[targetTypeId] === undefined) {
-        fail(`export '${relation.exportId}' target type '${targetTypeId}' has no closed Rust carrier path`);
-      }
-    }
   }
 }
 
@@ -736,86 +739,5 @@ function validateTypeSemanticRoles(
       resultBinding.target.role !== "callable-result") {
       fail(`export '${relation.exportId}' callable-trait role must select one exact callable-result semantic parameter`);
     }
-  }
-}
-
-function targetCarrierNamedIds(carrier: TargetTypeRef): readonly string[] {
-  const ids = new Set<string>();
-  walkTargetCarrier(carrier, (candidate) => {
-    if (candidate.kind === "path" && candidate.identity.kind === "builtin") {
-      ids.add(candidate.identity.itemId);
-    }
-  });
-  return [...ids].sort();
-}
-
-function walkTargetCarrier(
-  carrier: TargetTypeRef,
-  visit: (carrier: TargetTypeRef) => void,
-): void {
-  visit(carrier);
-  switch (carrier.kind) {
-    case "path":
-      for (const argument of carrier.arguments) {
-        if (argument.kind === "type") walkTargetCarrier(argument.value, visit);
-      }
-      for (const implementation of carrier.traitImplementations) {
-        for (const argument of implementation.trait.arguments) {
-          if (argument.kind === "type") walkTargetCarrier(argument.value, visit);
-        }
-        for (const requirement of implementation.requirements) {
-          for (const argument of requirement.trait.arguments) {
-            if (argument.kind === "type") walkTargetCarrier(argument.value, visit);
-          }
-        }
-      }
-      return;
-    case "array":
-    case "sequence":
-    case "slice":
-      walkTargetCarrier(carrier.element, visit);
-      return;
-    case "tuple":
-      for (const element of carrier.elements) walkTargetCarrier(element, visit);
-      return;
-    case "reference":
-    case "raw-pointer":
-      walkTargetCarrier(carrier.target, visit);
-      return;
-    case "function-pointer":
-    case "closure":
-      for (const argument of carrier.parameters) walkTargetCarrier(argument, visit);
-      walkTargetCarrier(carrier.result, visit);
-      return;
-    case "associated-type":
-      walkTargetCarrier(carrier.owner, visit);
-      for (const argument of carrier.arguments) {
-        if (argument.kind === "type") walkTargetCarrier(argument.value, visit);
-      }
-      return;
-    case "trait-object":
-      for (const argument of carrier.principal.arguments) {
-        if (argument.kind === "type") walkTargetCarrier(argument.value, visit);
-      }
-      return;
-    case "opaque":
-      for (const bound of carrier.bounds) {
-        if (bound.kind === "type-outlives") walkTargetCarrier(bound.type, visit);
-        if (bound.kind === "associated-equality") {
-          walkTargetCarrier(bound.projection, visit);
-          walkTargetCarrier(bound.value, visit);
-        }
-      }
-      return;
-    case "source-primitive":
-    case "primitive":
-    case "never":
-    case "unit":
-    case "str":
-    case "self":
-    case "type-parameter":
-    case "inference-variable":
-    case "source-carrier":
-      return;
   }
 }

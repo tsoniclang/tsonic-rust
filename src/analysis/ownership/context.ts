@@ -20,8 +20,6 @@ import {
 } from "../../target-model/semantics/index.js";
 import {
   isRustNullishSourceCarrier,
-  rustCarrierSupportsTrait,
-  rustCarrierSupportsTraitBound,
   rustDropTrait,
   rustSendTrait,
   rustSourceTypeCarrierValue,
@@ -29,11 +27,16 @@ import {
   rustStructuralObjectCarrierValue,
   rustSyncTrait,
   type RustTypeParameterTraitResolver,
+  type RustTraitSupportQueries,
 } from "../../target-model/types/index.js";
 import { rustTraitReferenceEquals } from "../../target-model/types/equality.js";
 import type { RustOwnershipNodeInventory } from "./inventory.js";
 import type { RustSourceValueInventory } from "./source-values.js";
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
+import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";
+import type { RustProjectFieldDispatchQueries } from "../project-types/field-dispatch.js";
+import { requireDenseRustOwnershipNodes } from "./source-shape.js";
+import { requireRustOwnershipSourceIdentity } from "./identity.js";
 
 export interface RustOwnershipAnalysisInput {
   readonly ast: AstReader;
@@ -44,7 +47,10 @@ export interface RustOwnershipAnalysisInput {
   readonly providerTypes: readonly RustProviderTypeRow[];
   readonly projectTypes: RustProjectTypePolicy;
   readonly objectRepresentations: RustObjectRepresentationPlan;
+  readonly structuralShapes: RustStructuralShapePlan;
+  readonly projectFieldDispatch: RustProjectFieldDispatchQueries;
   readonly declarationContracts: RustDeclarationContractIndex;
+  readonly traits: RustTraitSupportQueries;
 }
 
 export interface RustOwnershipEnvironment {
@@ -85,13 +91,15 @@ export function createRustOwnershipEnvironment(
           rustSemanticIdentitiesEqual(trait.identity, rustSyncTrait.identity))) {
         return projectDefinitionSupportsAutoTrait(project, type, trait);
       }
-      return rustCarrierSupportsTrait(type, trait, typeParameterSupports);
+      return input.traits.supportsTrait(type, trait, typeParameterSupports);
     },
     supportsTraitBound(type, bound) {
+      if (bound.polarity === "maybe") return true;
+      if (bound.polarity !== "required") return false;
       if (bound.binder === undefined) {
         return environment.supportsTrait(type, bound.trait);
       }
-      return rustCarrierSupportsTraitBound(type, bound, typeParameterSupports);
+      return input.traits.supportsTraitBound(type, bound, typeParameterSupports);
     },
     lifetimeOutlives(longer, shorter) {
       if (lifetimesEqual(longer, shorter) || longer.kind === "static") return true;
@@ -224,10 +232,16 @@ export function createRustOwnershipEnvironment(
         });
       }
       const definition = input.projectTypes.definitionForCarrier(type);
+      const definitionMembers = definition === undefined
+        ? Object.freeze([])
+        : requireDenseRustOwnershipNodes(
+            input.ast.members(definition.declaration),
+            "Project declaration contains an undefined member slot during Drop analysis.",
+            definition.declaration,
+          );
       const declaration = definition === undefined
         ? undefined
-        : input.ast.members(definition.declaration).find((member) =>
-            member !== undefined &&
+        : definitionMembers.find((member) =>
             input.declarationContracts.forDeclaration(member)?.nativeDrop === true);
       if (declaration === undefined) return undefined;
       const sourceFile = input.ast.getSourceFile(declaration);
@@ -237,7 +251,7 @@ export function createRustOwnershipEnvironment(
           kind: "project" as const,
           packageId: "source-program",
           sourceFileId: input.ast.getPath(sourceFile),
-          declarationId: `drop:${input.ast.pos(declaration)}:${input.ast.end(declaration)}`,
+          declarationId: `drop:${requireRustOwnershipSourceIdentity(input.ast, declaration)}`,
         }),
       });
     },
@@ -253,6 +267,11 @@ export function createRustOwnershipEnvironment(
     const key = `${definition.fileName}\0${definition.sourceName}\0${traitKey}\0${rustTypeSemanticKey(carrier)}`;
     const cached = projectAutoTraitMemo.get(key);
     if (cached !== undefined) return cached;
+    const explicit = explicitProjectAutoTraitDecision(definition, trait);
+    if (explicit !== undefined) {
+      projectAutoTraitMemo.set(key, explicit);
+      return explicit;
+    }
     if (projectAutoTraitVisiting.has(key)) return true;
     projectAutoTraitVisiting.add(key);
     const representation = input.objectRepresentations.representationFor(definition);
@@ -264,8 +283,12 @@ export function createRustOwnershipEnvironment(
     const requiredTrait = rustSemanticIdentitiesEqual(trait.identity, rustSyncTrait.identity)
       ? rustSyncTrait
       : rustSendTrait;
-    const fields = input.ast.members(definition.declaration).filter((member): member is Node =>
-      member !== undefined && !input.ast.hasModifierKind(member, "static") &&
+    const fields = requireDenseRustOwnershipNodes(
+      input.ast.members(definition.declaration),
+      "Project declaration contains an undefined member slot during auto-trait analysis.",
+      definition.declaration,
+    ).filter((member) =>
+      !input.ast.hasModifierKind(member, "static") &&
       (input.ast.kindName(member) === "KindPropertyDeclaration" ||
         input.ast.kindName(member) === "KindPropertySignature"));
     const fieldTypes = fields.map((field) => {
@@ -283,6 +306,23 @@ export function createRustOwnershipEnvironment(
     projectAutoTraitVisiting.delete(key);
     projectAutoTraitMemo.set(key, supported);
     return supported;
+  }
+
+  function explicitProjectAutoTraitDecision(
+    definition: import("../../policy/types/project-types.js").RustProjectTypeDefinition,
+    trait: RustTraitRef,
+  ): boolean | undefined {
+    const implementation = input.declarationContracts.forDeclaration(definition.declaration)
+      ?.traitImpls.find((candidate) => candidate.trait.kind === "path" &&
+        rustTraitReferenceEquals(Object.freeze({
+          identity: candidate.trait.identity,
+          displayPath: candidate.trait.displayPath,
+          arguments: candidate.trait.arguments,
+          associatedConstraints: Object.freeze([]),
+        }), trait));
+    return implementation === undefined
+      ? undefined
+      : implementation.polarity === "positive";
   }
 }
 

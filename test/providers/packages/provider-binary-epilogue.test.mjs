@@ -14,6 +14,7 @@ function definition(overrides = {}) {
     id: "acme-lifecycle",
     displayName: "Acme lifecycle",
     version: "1.0.0",
+    compilationSnapshotId: "acme-lifecycle@1.0.0",
     modules: [{
       moduleSpecifier: "@acme/lifecycle",
       providerModuleId: "acme.lifecycle",

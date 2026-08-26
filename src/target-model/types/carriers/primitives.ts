@@ -6,7 +6,7 @@ import {
   rustBuiltinPathTargetType,
   rustInferredLifetime,
   rustPathTypeArguments,
-  rustPathTypeMatches,
+  rustBuiltinPathTypeMatches,
   rustReferenceTargetType,
   rustSourceCarrierTargetType,
 } from "../constructors.js";
@@ -154,7 +154,7 @@ export function rustFutureTargetType(output: TargetTypeRef): TargetTypeRef {
 }
 
 export function rustFutureOutputCarrier(carrier: TargetTypeRef | undefined): TargetTypeRef | undefined {
-  return rustPathTypeMatches(carrier, rustFutureTargetId)
+  return rustBuiltinPathTypeMatches(carrier, rustFutureTargetId, "rust")
     ? rustPathTypeArguments(carrier)?.[0]
     : undefined;
 }

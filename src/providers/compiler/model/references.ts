@@ -20,6 +20,7 @@ export interface RustCompilerReferenceVisitor {
   readonly type: (identity: RustCompilerItemIdentity) => void;
   readonly trait: (identity: RustCompilerItemIdentity) => void;
   readonly genericParameter?: (identity: string) => void;
+  readonly lifetime?: (lifetime: import("./model.js").RustCompilerLifetime) => void;
 }
 
 export function rustCompilerGenericParameterDependencies(
@@ -121,7 +122,8 @@ function visitTypeTraits(
 ): void {
   for (const implementation of traits.implementations) {
     visitRustCompilerTraitReferences(implementation.trait, visitor);
-    implementation.requirements.forEach((requirement) => visitRustCompilerTraitReferences(requirement.trait, visitor));
+    implementation.genericBindings.forEach((binding) => visitArgument(binding.parameter, visitor));
+    implementation.requirements.forEach((requirement) => visitBound(requirement.bound, visitor));
   }
 }
 
@@ -183,8 +185,16 @@ function visitLifetime(
   lifetime: import("./model.js").RustCompilerLifetime,
   visitor: RustCompilerReferenceVisitor,
 ): void {
+  visitor.lifetime?.(lifetime);
   if (lifetime.kind === "parameter") visitor.genericParameter?.(lifetime.identity.itemId);
   else if (lifetime.kind === "bound") visitor.genericParameter?.(lifetime.parameterId);
+}
+
+export function visitRustCompilerBoundReferences(
+  bound: RustCompilerBound,
+  visitor: RustCompilerReferenceVisitor,
+): void {
+  visitBound(bound, visitor);
 }
 
 function visitConst(

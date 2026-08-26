@@ -29,6 +29,7 @@ import { selectedSourceLiteralIsRepresentable, selectedSourceNumericLiteralOpera
 import { selectJsSurfaceOperation } from "../../../policy/operations/js-surface.js";
 import { selectRustOptionalChain } from "../../../policy/operations/optional-chains.js";
 import { selectRustValueCarrierReconciliation } from "../../../policy/types/value-carrier-reconciliation.js";
+import { sourceNodeIdentity } from "@tsonic/target-api/source";
 import type {
   RustCheckedElementSelectionInput,
   RustCheckedOperationSelectionResult,
@@ -195,6 +196,7 @@ export function acceptRustMemberOperation(
       operationReceiverCarrier,
       selectedReceiverCarrier,
       options.projectTypes,
+      context.traits,
     );
     if (projection.kind === "incompatible") {
       return rejectSelectedOperation(
@@ -356,10 +358,11 @@ export function sourceOperationId(
   context: RustOperationPolicyContext,
   declaration: Node,
   kind: string,
-): string {
-  const ast = context.ast;
-  const fileName = ast.getFileName(ast.getSourceFile(declaration));
-  return `tsonic.rust.source.${kind}:${fileName}:${ast.pos(declaration)}:${ast.end(declaration)}`;
+): string | undefined {
+  const identity = sourceNodeIdentity(context.ast, declaration);
+  return identity === undefined
+    ? undefined
+    : `tsonic.rust.source.${kind}:${identity}`;
 }
 
 export function isDeclarationFileSubject(subject: ExtensionFactSubject, context: RustOperationPolicyContext): boolean {

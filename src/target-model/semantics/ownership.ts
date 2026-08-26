@@ -113,8 +113,10 @@ export type RustDropImplementationProof =
 export interface RustCapture {
   readonly place: RustPlaceRef;
   readonly carrier: RustTypeRef;
+  readonly storageCarrier: RustTypeRef;
   readonly representationCarrier: RustTypeRef;
   readonly mode: "shared" | "mutable" | "copy" | "move" | "clone";
+  readonly bodyEffect: "read" | "mutate" | "move";
   readonly crossesSuspension: boolean;
   readonly executionDomain: RustExecutionDomain;
   readonly requiresStatic: boolean;
@@ -133,6 +135,7 @@ export interface RustPinState {
 
 export interface RustSuspensionPoint {
   readonly occurrenceId: string;
+  readonly flowPointId: string;
   readonly kind: "await" | "yield";
   readonly region: RustRegionRef;
 }
@@ -145,6 +148,7 @@ export interface RustSuspendedValue {
 export interface RustExecutionContract {
   readonly kind: RustExecutionDomain;
   readonly storage: RustExecutionStorage;
+  readonly captureStyle: "lexical" | "move";
   readonly lifetime: RustLifetimeRef;
   readonly requiresSend: boolean;
   readonly requiresSync: boolean;

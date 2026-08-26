@@ -1,6 +1,16 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
-import { sourceNodeIdentity } from "@tsonic/target-api/source";
 import type { RustRegionRef } from "../../target-model/semantics/index.js";
+import { maximumLexicalRegions } from "./complexity.js";
+import { requireRustOwnershipSourceIdentity } from "./identity.js";
+
+export class RustLexicalRegionLimitError extends Error {
+  constructor(readonly regionCount: number) {
+    super(
+      `Rust ownership analysis received ${regionCount} lexical regions; ` +
+      `the finite limit is ${maximumLexicalRegions}.`,
+    );
+  }
+}
 
 export interface RustLexicalRegionIndex {
   readonly regions: readonly RustRegionRef[];
@@ -21,12 +31,10 @@ export function collectRustLexicalRegions(
   const ownedRegionByNode = new WeakMap<Node, RustRegionRef>();
 
   const createRegion = (owner: Node, parent: RustRegionRef | undefined): RustRegionRef => {
-    const identity = sourceNodeIdentity(ast, owner) ?? [
-      ast.getPath(ast.getSourceFile(owner)),
-      ast.kind(owner),
-      ast.pos(owner),
-      ast.end(owner),
-    ].join(":");
+    if (regions.length >= maximumLexicalRegions) {
+      throw new RustLexicalRegionLimitError(regions.length + 1);
+    }
+    const identity = requireRustOwnershipSourceIdentity(ast, owner);
     const region = Object.freeze({
       id: `rust-lexical\0${identity}`,
       kind: "lexical" as const,
@@ -38,27 +46,19 @@ export function collectRustLexicalRegions(
     return region;
   };
 
-  const visitChildren = (owner: Node, region: RustRegionRef): void => {
-    ast.forEachChild(owner, (child) => {
-      if (child !== undefined) visit(child, region);
-    });
-  };
-
-  const visit = (node: Node, inherited: RustRegionRef): void => {
-    if (isRustLexicalOwner(ast.kindName(node))) {
-      regionByNode.set(node, inherited);
-      const owned = createRegion(node, inherited);
-      visitChildren(node, owned);
-      return;
-    }
-    regionByNode.set(node, inherited);
-    visitChildren(node, inherited);
-  };
-
   for (const sourceFile of sourceFiles) {
     const sourceRegion = createRegion(sourceFile, undefined);
     regionByNode.set(sourceFile, sourceRegion);
-    visitChildren(sourceFile, sourceRegion);
+    const pending: { readonly node: Node; readonly inherited: RustRegionRef }[] = [];
+    appendChildren(sourceFile, sourceRegion, pending, ast);
+    while (pending.length > 0) {
+      const { node, inherited } = pending.pop()!;
+      regionByNode.set(node, inherited);
+      const childRegion = isRustLexicalOwner(ast.kindName(node))
+        ? createRegion(node, inherited)
+        : inherited;
+      appendChildren(node, childRegion, pending, ast);
+    }
   }
 
   const lineage = (id: string | undefined): readonly RustRegionRef[] => {
@@ -94,6 +94,21 @@ export function collectRustLexicalRegions(
       return Object.freeze(lineage(fromId).filter((region) => !targetLineage.has(region.id)));
     },
   });
+}
+
+function appendChildren(
+  owner: Node,
+  inherited: RustRegionRef,
+  pending: { readonly node: Node; readonly inherited: RustRegionRef }[],
+  ast: AstReader,
+): void {
+  const children: Node[] = [];
+  ast.forEachChild(owner, (child) => {
+    if (child !== undefined) children.push(child);
+  });
+  for (let index = children.length - 1; index >= 0; index -= 1) {
+    pending.push({ node: children[index]!, inherited });
+  }
 }
 
 function isRustLexicalOwner(kind: string | undefined): boolean {

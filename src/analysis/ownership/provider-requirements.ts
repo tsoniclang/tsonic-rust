@@ -115,7 +115,5 @@ function providerRequirementFailure(
         code: "RUST_PROVIDER_GENERIC_ASSOCIATED_REQUIREMENT_NOT_RESOLVED",
         message: `Provider generic '${requirement.sourceName}' retains an associated-type equality that operation instantiation did not resolve.`,
       };
-    case "precise-capture":
-      return undefined;
   }
 }

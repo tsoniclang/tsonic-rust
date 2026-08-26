@@ -16,7 +16,6 @@ import {
   normalizeGenerics,
   normalizeTraitReference,
   normalizeType,
-  sourceVisibleTypeParameters,
   type RustCompilerNormalizationContext,
 } from "./normalization.js";
 import {
@@ -25,10 +24,15 @@ import {
   rustCompilerTraitSemanticKey,
   rustCompilerTypeSemanticKey,
   rustCompilerTypesEqual,
+  substituteRustCompilerBound,
+  substituteRustCompilerTrait,
+  substituteRustCompilerType,
   type RustCompilerSubstitutions,
 } from "./substitution.js";
 import type {
   RustCompilerBound,
+  RustCompilerGenericArgument,
+  RustCompilerGenericParameter,
   RustCompilerGenerics,
   RustCompilerTraitImplementation,
   RustCompilerTraitReference,
@@ -46,75 +50,61 @@ export function normalizeTypeTraits(
   context: RustCompilerNormalizationContext,
 ): RustCompilerTypeTraits {
   const implementations = new Map<string, RustCompilerTraitImplementation>();
-  const sourceParameters = sourceVisibleTypeParameters(declaredGenerics.parameters);
   for (const implId of requireArray(owner.impls, "Rust type implementations")) {
     const implItem = itemById(document, implId);
     if (rustdocItemEffectiveStability(document, implItem) === "unstable") continue;
     const impl = requireInnerRecord(implItem, "impl", "Rust type implementation");
     if (!isRecord(impl.trait) || impl.is_negative === true || impl.blanket_impl !== null) continue;
-    try {
-      const traitDeclaration = resolveRustdocItem(
-        document,
-        context.dependency,
-        impl.trait.id,
-        context.resolveItem,
-      );
-      if (rustdocItemEffectiveStability(traitDeclaration.document, traitDeclaration.item) === "unstable") continue;
-      const implOwner = {
-        itemId: `${context.owner.itemId}::impl:${String(implId)}`,
-        canonicalPath: Object.freeze([...context.owner.canonicalPath, `<impl:${String(implId)}>`]),
-      };
-      const implGenerics = normalizeGenerics(
-        document,
-        requireRecord(impl.generics, "Rust implementation generics"),
-        {
-          dependency: context.dependency,
-          owner: implOwner,
-          ...(context.resolveItem === undefined ? {} : { resolveItem: context.resolveItem }),
-        },
-      );
-      const implContext: RustCompilerNormalizationContext = {
+    const traitDeclaration = resolveRustdocItem(
+      document,
+      context.dependency,
+      impl.trait.id,
+      context.resolveItem,
+    );
+    if (rustdocItemEffectiveStability(traitDeclaration.document, traitDeclaration.item) === "unstable") continue;
+    const implOwner = {
+      itemId: `${context.owner.itemId}::impl:${String(implId)}`,
+      canonicalPath: Object.freeze([...context.owner.canonicalPath, `<impl:${String(implId)}>`]),
+    };
+    const implGenerics = normalizeGenerics(
+      document,
+      requireRecord(impl.generics, "Rust implementation generics"),
+      {
         dependency: context.dependency,
         owner: implOwner,
-        parameters: genericParameterMap(implGenerics),
         ...(context.resolveItem === undefined ? {} : { resolveItem: context.resolveItem }),
-      };
-      const trait = normalizeTraitReference(document, impl.trait, implContext);
-      if (!rustCompilerTraitIsSourceAvailable(
-        document,
-        context.dependency,
-        trait,
-        context.resolveItem,
-      )) continue;
-      const positions = directImplementationTypeParameterPositions(
-        document,
-        impl,
-        implGenerics,
-        declaredGenerics,
-        ownerCanonicalPath,
-        implContext,
-      );
-      if (positions === undefined) continue;
-      const requirements = implGenerics.parameters.flatMap((parameter) => {
-        if (parameter.kind !== "type") return [];
-        const typeArgumentIndex = positions.get(parameter.identity.itemId);
-        if (typeArgumentIndex === undefined) return parameter.bounds.length === 0 ? [] : [undefined];
-        const declared = sourceParameters[typeArgumentIndex];
-        if (declared === undefined) return [undefined];
-        return parameter.bounds.flatMap((bound) => {
-          if (bound.kind !== "trait" || typeParameterGuaranteesTrait(declared, bound.trait)) return [];
-          return [{ typeArgumentIndex, trait: bound.trait }];
-        });
-      });
-      if (requirements.some((requirement) => requirement === undefined)) continue;
-      const implementation = Object.freeze({
-        trait,
-        requirements: Object.freeze(requirements as RustCompilerTraitImplementation["requirements"]),
-      });
-      implementations.set(traitImplementationKey(implementation), implementation);
-    } catch {
-      continue;
-    }
+      },
+    );
+    const implContext: RustCompilerNormalizationContext = {
+      dependency: context.dependency,
+      owner: implOwner,
+      parameters: genericParameterMap(implGenerics),
+      ...(context.resolveItem === undefined ? {} : { resolveItem: context.resolveItem }),
+    };
+    const trait = normalizeTraitReference(document, impl.trait, implContext);
+    if (!rustCompilerTraitIsSourceAvailable(
+      document,
+      context.dependency,
+      trait,
+      context.resolveItem,
+    )) continue;
+    const genericBindings = directImplementationGenericBindings(
+      document,
+      impl,
+      implGenerics,
+      declaredGenerics,
+      ownerCanonicalPath,
+      implContext,
+    );
+    if (genericBindings === undefined) continue;
+    const requirements = conditionalTraitRequirements(implGenerics, genericBindings);
+    if (requirements === undefined) continue;
+    const implementation = Object.freeze({
+      trait,
+      genericBindings: Object.freeze(genericBindings),
+      requirements,
+    });
+    implementations.set(traitImplementationKey(implementation), implementation);
   }
   return Object.freeze({
     implementations: Object.freeze([...implementations.entries()]
@@ -123,35 +113,156 @@ export function normalizeTypeTraits(
   });
 }
 
-export function directImplementationTypeParameterPositions(
+export function directImplementationGenericBindings(
   document: RustdocDocument,
   impl: Readonly<Record<string, unknown>>,
   implementationGenerics: RustCompilerGenerics,
   declaredGenerics: RustCompilerGenerics,
   ownerCanonicalPath: readonly string[],
   context: RustCompilerNormalizationContext,
-): ReadonlyMap<string, number> | undefined {
+): RustCompilerTraitImplementation["genericBindings"] | undefined {
   const target = normalizeType(document, impl.for, context);
   if (target.kind !== "path" || canonicalCompilerTypePathKey(target) !== canonicalPathKey(ownerCanonicalPath)) {
     return undefined;
   }
   const declared = declaredGenerics.parameters;
-  if (target.arguments.length > declared.length) return undefined;
-  const positions = new Map<string, number>();
+  if (target.arguments.length !== declared.length) return undefined;
+  const implementationParameters = new Map(implementationGenerics.parameters.flatMap((parameter) => {
+    const identity = compilerGenericParameterIdentity(parameter);
+    return identity === undefined ? [] : [[identity, parameter] as const];
+  }));
+  if (implementationParameters.size !== implementationGenerics.parameters.length) return undefined;
+  const selected = new Set<string>();
+  const bindings: RustCompilerTraitImplementation["genericBindings"][number][] = [];
   for (let index = 0; index < target.arguments.length; index += 1) {
     const argument = target.arguments[index]!;
     const parameter = declared[index];
     if (parameter === undefined || argument.kind !== parameter.kind) return undefined;
-    if (argument.kind !== "type") continue;
-    if (argument.value.kind !== "type-parameter") continue;
-    const typeParameter = argument.value;
-    if (!implementationGenerics.parameters.some(
-      (candidate) => candidate.kind === "type" && candidate.identity.itemId === typeParameter.identity.itemId,
-    )) continue;
-    if (positions.has(typeParameter.identity.itemId)) return undefined;
-    positions.set(typeParameter.identity.itemId, index);
+    const identity = compilerGenericArgumentParameterIdentity(argument);
+    const implementationParameter = identity === undefined
+      ? undefined
+      : implementationParameters.get(identity);
+    if (implementationParameter === undefined || implementationParameter.kind !== argument.kind ||
+      selected.has(identity!)) return undefined;
+    const openParameter = compilerGenericParameterArgument(implementationParameter);
+    if (openParameter === undefined ||
+      rustCompilerArgumentSemanticKey(openParameter) !== rustCompilerArgumentSemanticKey(argument)) return undefined;
+    selected.add(identity!);
+    bindings.push(Object.freeze({
+      parameter: openParameter,
+      genericArgumentIndex: index,
+    }));
   }
-  return positions;
+  return selected.size === implementationParameters.size
+    ? Object.freeze(bindings)
+    : undefined;
+}
+
+function conditionalTraitRequirements(
+  generics: RustCompilerGenerics,
+  bindings: RustCompilerTraitImplementation["genericBindings"],
+): readonly RustCompilerTraitImplementation["requirements"][number][] | undefined {
+  const positions = new Map(bindings.flatMap((binding) => {
+    const identity = compilerGenericArgumentParameterIdentity(binding.parameter);
+    return identity === undefined ? [] : [[identity, binding.genericArgumentIndex] as const];
+  }));
+  if (positions.size !== bindings.length) return undefined;
+  const requirements = new Map<string, RustCompilerTraitImplementation["requirements"][number]>();
+
+  const recordBound = (
+    parameterIdentity: string,
+    bound: RustCompilerBound,
+    predicateBinder?: import("../model.js").RustCompilerBinder,
+  ): boolean => {
+    if (bound.kind !== "trait") return false;
+    if (bound.polarity === "maybe") return true;
+    if (bound.polarity !== "required" ||
+      predicateBinder !== undefined && bound.binder !== undefined) return false;
+    const genericArgumentIndex = positions.get(parameterIdentity);
+    if (genericArgumentIndex === undefined) return false;
+    const effectiveBound = predicateBinder === undefined
+      ? bound
+      : Object.freeze({ ...bound, binder: predicateBinder });
+    const requirement = Object.freeze({ genericArgumentIndex, bound: effectiveBound });
+    requirements.set(
+      `${String(genericArgumentIndex).padStart(12, "0")}\0${rustCompilerBoundSemanticKey(effectiveBound)}`,
+      requirement,
+    );
+    return true;
+  };
+
+  for (const parameter of generics.parameters) {
+    const identity = compilerGenericParameterIdentity(parameter);
+    if (identity === undefined) return undefined;
+    if (parameter.kind === "lifetime") {
+      if (parameter.bounds.length !== 0) return undefined;
+      continue;
+    }
+    if (parameter.kind === "const") continue;
+    if (!parameter.bounds.every((bound) => recordBound(identity, bound))) return undefined;
+  }
+
+  for (const predicate of generics.wherePredicates) {
+    if (predicate.kind !== "type" || predicate.type.kind !== "type-parameter") return undefined;
+    const identity = predicate.type.identity.itemId;
+    if (!predicate.bounds.every((bound) => recordBound(identity, bound, predicate.binder))) {
+      return undefined;
+    }
+  }
+
+  return Object.freeze([...requirements.entries()]
+    .sort(([left], [right]) => compareText(left, right))
+    .map(([, requirement]) => requirement));
+}
+
+function compilerGenericParameterIdentity(
+  parameter: RustCompilerGenericParameter,
+): string | undefined {
+  return parameter.kind === "lifetime"
+    ? parameter.identity.kind === "parameter"
+      ? parameter.identity.identity.itemId
+      : undefined
+    : parameter.identity.itemId;
+}
+
+function compilerGenericArgumentParameterIdentity(
+  argument: RustCompilerGenericArgument,
+): string | undefined {
+  if (argument.kind === "lifetime") {
+    return argument.value.kind === "parameter" ? argument.value.identity.itemId : undefined;
+  }
+  if (argument.kind === "type") {
+    return argument.value.kind === "type-parameter" ? argument.value.identity.itemId : undefined;
+  }
+  return argument.value.kind === "parameter" ? argument.value.identity.itemId : undefined;
+}
+
+function compilerGenericParameterArgument(
+  parameter: RustCompilerGenericParameter,
+): RustCompilerGenericArgument | undefined {
+  if (parameter.kind === "lifetime") {
+    return parameter.identity.kind === "parameter"
+      ? Object.freeze({ kind: "lifetime", value: parameter.identity })
+      : undefined;
+  }
+  if (parameter.kind === "type") {
+    return Object.freeze({
+      kind: "type",
+      value: Object.freeze({
+        kind: "type-parameter",
+        identity: parameter.identity,
+        displayName: parameter.displayName,
+      }),
+    });
+  }
+  return Object.freeze({
+    kind: "const",
+    value: Object.freeze({
+      kind: "parameter",
+      identity: parameter.identity,
+      displayName: parameter.displayName,
+    }),
+  });
 }
 
 export function typeParameterGuaranteesTrait(
@@ -179,20 +290,35 @@ export function compilerTypeSupportsTrait(
   switch (type.kind) {
     case "primitive":
       return primitiveSupportsTrait(type.name, traitPath);
-    case "unit":
-    case "never":
-      return structuralBuiltinSupportsTrait(traitPath);
+    case "unit": return unitSupportsTrait(traitPath);
+    case "never": return neverSupportsTrait(traitPath);
     case "tuple":
-      return structuralBuiltinSupportsTrait(traitPath) &&
+      return tupleSupportsTrait(type.elements.length, traitPath) &&
         type.elements.every((element) => compilerTypeSupportsTrait(document, element, trait, context, active));
     case "array":
-      return structuralBuiltinSupportsTrait(traitPath) &&
+      return arraySupportsTrait(type.length, traitPath) &&
         compilerTypeSupportsTrait(document, type.element, trait, context, active);
-    case "reference":
-      return !type.mutable && (traitPath === "core::marker::Copy" || traitPath === "core::clone::Clone");
-    case "function-pointer":
-    case "raw-pointer":
-      return traitPath === "core::marker::Copy" || traitPath === "core::clone::Clone";
+    case "reference": return compilerReferenceSupportsTrait(
+      document,
+      type,
+      trait,
+      traitPath,
+      context,
+      active,
+    );
+    case "function-pointer": return functionPointerSupportsTrait(traitPath);
+    case "raw-pointer": return rawPointerSupportsTrait(traitPath);
+    case "slice":
+      return sliceSupportsTrait(traitPath) &&
+        compilerTypeSupportsTrait(document, type.element, trait, context, active);
+    case "trait-object":
+      return rustCompilerTraitSemanticKey(type.principal) === rustCompilerTraitSemanticKey(trait) ||
+        type.autoTraits.some((candidate) =>
+          rustCompilerTraitSemanticKey(candidate) === rustCompilerTraitSemanticKey(trait));
+    case "opaque":
+      return type.bounds.some((bound) => bound.kind === "trait" &&
+        bound.polarity === "required" && bound.binder === undefined &&
+        rustCompilerTraitSemanticKey(bound.trait) === rustCompilerTraitSemanticKey(trait));
     case "path":
       return compilerPathTypeSupportsTrait(document, type, trait, context, active);
     case "type-parameter": {
@@ -201,9 +327,6 @@ export function compilerTypeSupportsTrait(
     }
     case "self":
     case "associated-type":
-    case "trait-object":
-    case "opaque":
-    case "slice":
       return false;
   }
 }
@@ -298,26 +421,59 @@ function compilerPathTypeSupportsTrait(
         selectedTrait,
         context.resolveItem,
       )) continue;
-      if (rustCompilerTraitSemanticKey(selectedTrait) !== rustCompilerTraitSemanticKey(trait)) continue;
       const substitutions = directImplementationSubstitutions(document, impl, type, implContext);
       if (substitutions === undefined) continue;
-      if (generics.parameters.every((parameter) => parameter.kind !== "type" || parameter.bounds.every((bound) =>
-        bound.kind !== "trait" || compilerTypeSupportsTrait(
-          document,
-          substitutions.types.get(parameter.identity.itemId) ?? Object.freeze({
-            kind: "type-parameter" as const,
-            identity: parameter.identity,
-            displayName: parameter.displayName,
-          }),
-          bound.trait,
-          implContext,
-          active,
-        )))) return true;
+      if (rustCompilerTraitSemanticKey(substituteRustCompilerTrait(selectedTrait, substitutions)) !==
+        rustCompilerTraitSemanticKey(trait)) continue;
+      if (compilerImplementationRequirementsSatisfied(
+        document,
+        generics,
+        substitutions,
+        implContext,
+        active,
+      )) return true;
     }
     return false;
   } finally {
     active.delete(activeKey);
   }
+}
+
+function compilerImplementationRequirementsSatisfied(
+  document: RustdocDocument,
+  generics: RustCompilerGenerics,
+  substitutions: RustCompilerSubstitutions,
+  context: RustCompilerNormalizationContext,
+  active: Set<string>,
+): boolean {
+  const boundSatisfied = (subject: RustCompilerType, bound: RustCompilerBound): boolean => {
+    const selected = substituteRustCompilerBound(bound, substitutions);
+    if (selected.kind !== "trait") return false;
+    if (selected.polarity === "maybe") return true;
+    return selected.polarity === "required" && selected.binder === undefined &&
+      compilerTypeSupportsTrait(
+        document,
+        substituteRustCompilerType(subject, substitutions),
+        selected.trait,
+        context,
+        active,
+      );
+  };
+
+  for (const parameter of generics.parameters) {
+    if (parameter.kind === "lifetime") {
+      if (parameter.bounds.length !== 0) return false;
+      continue;
+    }
+    if (parameter.kind === "const") continue;
+    const subject = substitutions.types.get(parameter.identity.itemId);
+    if (subject === undefined || !parameter.bounds.every((bound) => boundSatisfied(subject, bound))) {
+      return false;
+    }
+  }
+  return generics.wherePredicates.every((predicate) =>
+    predicate.kind === "type" && predicate.binder === undefined &&
+    predicate.bounds.every((bound) => boundSatisfied(predicate.type, bound)));
 }
 
 function directImplementationSubstitutions(
@@ -423,25 +579,118 @@ function canonicalTraitPath(trait: RustCompilerTraitReference): string {
 }
 
 function primitiveSupportsTrait(name: string, traitPath: string): boolean {
-  if (structuralBuiltinSupportsTrait(traitPath)) return true;
-  const integral = name === "bool" || name === "char" || /^(?:[iu](?:8|16|32|64|128)|isize|usize)$/u.test(name);
-  return integral && (traitPath === "core::cmp::Eq" || traitPath === "core::hash::Hash" ||
-    traitPath === "core::cmp::Ord" || traitPath === "core::cmp::PartialOrd");
+  if (name === "str") {
+    return isAutoTraitPath(traitPath) || isEqualityOrderingHashTraitPath(traitPath) ||
+      traitPath === "core::fmt::Debug";
+  }
+  if (isScalarValueTraitPath(traitPath)) return true;
+  const ordered = name === "bool" || name === "char" ||
+    /^(?:[iu](?:8|16|32|64|128)|isize|usize)$/u.test(name);
+  return ordered && (traitPath === "core::cmp::Eq" || traitPath === "core::hash::Hash" ||
+    traitPath === "core::cmp::Ord");
 }
 
-function structuralBuiltinSupportsTrait(traitPath: string): boolean {
-  return traitPath === "core::marker::Copy" || traitPath === "core::clone::Clone" ||
-    traitPath === "core::fmt::Debug" || traitPath === "core::default::Default" ||
-    traitPath === "core::cmp::PartialEq" || traitPath === "core::cmp::Eq" ||
+function unitSupportsTrait(traitPath: string): boolean {
+  return isScalarValueTraitPath(traitPath) || isEqualityOrderingHashTraitPath(traitPath);
+}
+
+function neverSupportsTrait(traitPath: string): boolean {
+  return traitPath !== "core::default::Default" &&
+    (isScalarValueTraitPath(traitPath) || isEqualityOrderingHashTraitPath(traitPath));
+}
+
+function tupleSupportsTrait(length: number, traitPath: string): boolean {
+  return isAutoTraitPath(traitPath) || length <= 12 && (
+    isScalarValueTraitPath(traitPath) || isEqualityOrderingHashTraitPath(traitPath)
+  );
+}
+
+function arraySupportsTrait(
+  length: import("../model.js").RustCompilerConstExpression,
+  traitPath: string,
+): boolean {
+  if (traitPath === "core::default::Default") {
+    return length.kind === "literal" && length.literalKind === "integer" &&
+      length.value >= 0n && length.value <= 32n;
+  }
+  return isAutoTraitPath(traitPath) || isCopyCloneDebugTraitPath(traitPath) ||
+    isEqualityOrderingHashTraitPath(traitPath);
+}
+
+function sliceSupportsTrait(traitPath: string): boolean {
+  return isAutoTraitPath(traitPath) || traitPath === "core::fmt::Debug" ||
+    isEqualityOrderingHashTraitPath(traitPath);
+}
+
+function compilerReferenceSupportsTrait(
+  document: RustdocDocument,
+  type: Extract<RustCompilerType, { readonly kind: "reference" }>,
+  trait: RustCompilerTraitReference,
+  traitPath: string,
+  context: RustCompilerNormalizationContext,
+  active: Set<string>,
+): boolean {
+  if (traitPath === "core::marker::Unpin") return true;
+  if (traitPath === "core::marker::Copy" || traitPath === "core::clone::Clone") {
+    return !type.mutable;
+  }
+  if (traitPath === "core::marker::Send") {
+    const required = type.mutable
+      ? rustCompilerTraitByCanonicalPath(document, context, ["core", "marker", "Send"])
+      : rustCompilerTraitByCanonicalPath(document, context, ["core", "marker", "Sync"]);
+    return required !== undefined && compilerTypeSupportsTrait(document, type.target, required, context, active);
+  }
+  if (traitPath === "core::marker::Sync") {
+    const required = rustCompilerTraitByCanonicalPath(document, context, ["core", "marker", "Sync"]);
+    return required !== undefined && compilerTypeSupportsTrait(document, type.target, required, context, active);
+  }
+  return (traitPath === "core::fmt::Debug" || isEqualityOrderingHashTraitPath(traitPath)) &&
+    compilerTypeSupportsTrait(document, type.target, trait, context, active);
+}
+
+function functionPointerSupportsTrait(traitPath: string): boolean {
+  return isCopyCloneTraitPath(traitPath) || isAutoTraitPath(traitPath) ||
+    traitPath === "core::fmt::Debug" || isEqualityOrderingHashTraitPath(traitPath);
+}
+
+function rawPointerSupportsTrait(traitPath: string): boolean {
+  return isCopyCloneTraitPath(traitPath) || traitPath === "core::marker::Unpin" ||
+    traitPath === "core::fmt::Debug" || isEqualityOrderingHashTraitPath(traitPath);
+}
+
+function isScalarValueTraitPath(traitPath: string): boolean {
+  return isCopyCloneDebugTraitPath(traitPath) || traitPath === "core::default::Default" ||
+    traitPath === "core::cmp::PartialEq" || traitPath === "core::cmp::PartialOrd" ||
+    isAutoTraitPath(traitPath);
+}
+
+function isCopyCloneDebugTraitPath(traitPath: string): boolean {
+  return isCopyCloneTraitPath(traitPath) || traitPath === "core::fmt::Debug";
+}
+
+function isCopyCloneTraitPath(traitPath: string): boolean {
+  return traitPath === "core::marker::Copy" || traitPath === "core::clone::Clone";
+}
+
+function isEqualityOrderingHashTraitPath(traitPath: string): boolean {
+  return traitPath === "core::cmp::PartialEq" || traitPath === "core::cmp::Eq" ||
     traitPath === "core::hash::Hash" || traitPath === "core::cmp::PartialOrd" ||
-    traitPath === "core::cmp::Ord" || traitPath === "core::marker::Send" ||
-    traitPath === "core::marker::Sync" || traitPath === "core::marker::Unpin";
+    traitPath === "core::cmp::Ord";
+}
+
+function isAutoTraitPath(traitPath: string): boolean {
+  return traitPath === "core::marker::Send" || traitPath === "core::marker::Sync" ||
+    traitPath === "core::marker::Unpin";
 }
 
 function traitImplementationKey(implementation: RustCompilerTraitImplementation): string {
-  return `${rustCompilerTraitSemanticKey(implementation.trait)}\0${implementation.requirements
-    .map((requirement) => `${requirement.typeArgumentIndex}:${rustCompilerTraitSemanticKey(requirement.trait)}`)
-    .join("\0")}`;
+  return [
+    rustCompilerTraitSemanticKey(implementation.trait),
+    ...implementation.genericBindings.map((binding) =>
+      `${binding.genericArgumentIndex}:${rustCompilerArgumentSemanticKey(binding.parameter)}`),
+    ...implementation.requirements.map((requirement) =>
+      `${requirement.genericArgumentIndex}:${rustCompilerBoundSemanticKey(requirement.bound)}`),
+  ].join("\0");
 }
 
 function rustCompilerArgumentKey(argument: import("../model.js").RustCompilerGenericArgument): string {

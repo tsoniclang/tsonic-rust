@@ -9,7 +9,6 @@ import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import {
   getRustGeneratorProtocol,
-  rustCarrierSupportsTrait,
   rustCloneTrait,
   rustDefaultTrait,
   rustSendTrait,
@@ -17,6 +16,7 @@ import {
   rustSyncTrait,
   rustUnpinTrait,
 } from "../../target-model/types/index.js";
+import type { RustTraitSupportQueries } from "../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustSemanticIdentity } from "../../target-model/semantics/index.js";
 import {
@@ -99,6 +99,7 @@ export function analyzeRustCallableGenericRequirements(
   facts: RustPlanQueries,
   sourceGenerics: RustSourceGenericIndex,
   ownership: RustOwnershipAnalysis,
+  traits: RustTraitSupportQueries,
 ): AnalyzeRustCallableGenericRequirementsResult {
   const ast = source.ast;
   const diagnostics: TargetDiagnostic[] = [];
@@ -158,6 +159,7 @@ export function analyzeRustCallableGenericRequirements(
         facts,
         sourceGenerics,
         ownership,
+        traits,
         idByDeclaration,
         implementationDeclaration,
         contractFor(candidate) {
@@ -229,6 +231,7 @@ interface ClassifyCallableInput {
   readonly facts: RustPlanQueries;
   readonly sourceGenerics: RustSourceGenericIndex;
   readonly ownership: RustOwnershipAnalysis;
+  readonly traits: RustTraitSupportQueries;
   readonly idByDeclaration: WeakMap<Node, string>;
   readonly implementationDeclaration: (declaration: Node) => Node;
   readonly contractFor: (declaration: Node) => RequirementContractState | undefined;
@@ -276,6 +279,7 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       normalized,
       declared,
       byParameter,
+      input.traits,
     );
     if (!classified) {
       return `A generated Rust operation requires ${rustRequirementDescription(normalized)} that its exact target carrier does not provide.`;
@@ -346,25 +350,37 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
         return "A Rust closure has no exact capture classification.";
       }
       for (const capture of captures.captures) {
-        const selectedCapture = input.ownership.captureFor(capture.reference);
+        const selectedCapture = input.ownership.captureFor(node, capture.reference);
         if (selectedCapture === undefined) {
           return "A Rust closure capture has no sealed ownership classification.";
         }
-        const required: RustGenericRequirement[] = [];
-        if (selectedCapture.mode === "clone") required.push("clone");
-        if (execution.storage === "owned") required.push("static");
-        if (execution.requiresSend) {
-          required.push(selectedCapture.sendProof !== undefined &&
-              rustSemanticIdentitiesEqual(
-                selectedCapture.sendProof.trait,
-                rustSyncTrait.identity,
-              )
-            ? "sync"
-            : "send");
+        if (selectedCapture.mode === "clone") {
+          const error = addUse(
+            capture.reference,
+            selectedCapture.storageCarrier,
+            ["clone"],
+          );
+          if (error !== undefined) return error;
         }
-        if (execution.requiresSync) required.push("sync");
-        const error = addUse(capture.reference, selectedCapture.carrier, required);
-        if (error !== undefined) return error;
+        if (execution.storage === "owned") {
+          const error = addUse(
+            capture.reference,
+            selectedCapture.representationCarrier,
+            ["static"],
+          );
+          if (error !== undefined) return error;
+        }
+        const representationRequirements: RustGenericRequirement[] = [];
+        if (execution.requiresSend) representationRequirements.push("send");
+        if (execution.requiresSync) representationRequirements.push("sync");
+        if (representationRequirements.length > 0) {
+          const error = addUse(
+            capture.reference,
+            selectedCapture.representationCarrier,
+            representationRequirements,
+          );
+          if (error !== undefined) return error;
+        }
       }
     }
     const yieldFact = facts.getFact(node, rustYieldFactKey);
@@ -480,6 +496,7 @@ function classifyCarrierRequirements(
   required: readonly RustGenericRequirement[],
   declared: ReadonlyMap<string, { readonly identity: RustSemanticIdentity; readonly name: string }>,
   byParameter: Map<string, Set<RustGenericRequirement>>,
+  traits: RustTraitSupportQueries,
 ): boolean {
   for (const requirement of required) {
     if (requirement === "static") {
@@ -495,7 +512,7 @@ function classifyCarrierRequirements(
           : requirement === "sync"
             ? rustSyncTrait
             : rustUnpinTrait;
-    if (!rustCarrierSupportsTrait(carrier, trait, (identity, selectedTrait) => {
+    if (!traits.supportsTrait(carrier, trait, (identity, selectedTrait) => {
       const key = rustSemanticIdentityKey(identity);
       if (!declared.has(key) || !rustSemanticIdentitiesEqual(
         selectedTrait.identity,

@@ -51,8 +51,7 @@ export function rustBuiltInSourceTypeSemantics(): RustProviderSemantics {
   return Object.freeze({
     exports: Object.freeze([]),
     operations: Object.freeze([]),
-    carrierPaths: Object.freeze({}),
-    carrierTraits: Object.freeze({}),
+    traitContracts: Object.freeze([]),
     binaryEpilogues: Object.freeze([]),
     types: Object.freeze([
       nativePointerType,

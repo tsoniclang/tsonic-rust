@@ -377,9 +377,13 @@ function isFinalizedConversion(value: unknown): value is RustFinalizedValueConve
       hasExactKeys(value.conversion, ["kind", "source", "target"]) &&
       isRustTargetTypeRef(value.conversion.source) &&
       isRustTargetTypeRef(value.conversion.target)) ||
+    (value.conversion.kind === "runtime-callable-callback" &&
+      hasExactKeys(value.conversion, ["kind", "source", "target"]) &&
+      isRustTargetTypeRef(value.conversion.source) &&
+      isRustTargetTypeRef(value.conversion.target)) ||
     (value.conversion.kind === "js-argument-vector-callback" &&
       hasExactKeys(value.conversion, [
-        "kind", "lane", "source", "target", "projections", "sourceFallible",
+        "kind", "lane", "source", "target", "projections", "sourceInvocationReturnsResult",
       ]) &&
       (value.conversion.lane === "native" || value.conversion.lane === "exact") &&
       isRustTargetTypeRef(value.conversion.source) &&
@@ -388,7 +392,7 @@ function isFinalizedConversion(value: unknown): value is RustFinalizedValueConve
       value.conversion.projections.every((projection) =>
         projection === "native-string" || projection === "exact-string" ||
         projection === "value" || projection === "rest-values") &&
-      typeof value.conversion.sourceFallible === "boolean") ||
+      typeof value.conversion.sourceInvocationReturnsResult === "boolean") ||
     (value.conversion.kind === "option-some" &&
       hasExactKeys(value.conversion, ["kind", "element"]) &&
       isRustTargetTypeRef(value.conversion.element)) ||
@@ -419,9 +423,12 @@ function isNonOptionValueConversion(value: unknown): boolean {
     (value.kind === "bottom-coercion" &&
       hasExactKeys(value, ["kind", "source", "target"]) &&
       isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target)) ||
+    (value.kind === "runtime-callable-callback" &&
+      hasExactKeys(value, ["kind", "source", "target"]) &&
+      isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target)) ||
     (value.kind === "js-argument-vector-callback" &&
       hasExactKeys(value, [
-        "kind", "lane", "source", "target", "projections", "sourceFallible",
+        "kind", "lane", "source", "target", "projections", "sourceInvocationReturnsResult",
       ]) &&
       (value.lane === "native" || value.lane === "exact") &&
       isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) &&
@@ -429,7 +436,7 @@ function isNonOptionValueConversion(value: unknown): boolean {
       value.projections.every((projection) =>
         projection === "native-string" || projection === "exact-string" ||
         projection === "value" || projection === "rest-values") &&
-      typeof value.sourceFallible === "boolean");
+      typeof value.sourceInvocationReturnsResult === "boolean");
 }
 
 function isProviderConstant(value: unknown): value is RustProviderConstantArgument {

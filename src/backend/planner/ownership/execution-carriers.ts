@@ -2,12 +2,13 @@ import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustLifetimeSemanticKey } from "../../../target-model/semantics/index.js";
 import {
+  getRustGeneratorProtocol,
   rustCallableProtocol,
   rustCallableSignature,
+  rustCallableSignaturesAlphaEquivalent,
 } from "../../../target-model/types/index.js";
-import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import type { RustGenericArgument, RustType } from "../../target-ast/nodes.js";
-import { rustAstLifetimeFromSemantic } from "../types/render.js";
+import type { RustType } from "../../target-ast/nodes.js";
+import { rustReturnTypeFromCarrierInContext } from "../types/render.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
@@ -65,29 +66,12 @@ function callableSignaturesEqual(
 ): boolean {
   const left = rustCallableSignature(leftCarrier);
   const right = rustCallableSignature(rightCarrier);
-  if (left === undefined || right === undefined) return false;
-  return rustTargetTypeRefEquals({
-    kind: "function-pointer",
-    ...(left.binder === undefined ? {} : { binder: left.binder }),
-    safety: "safe",
-    abi: "Rust",
-    parameters: left.parameters,
-    variadic: false,
-    result: left.result,
-  }, {
-    kind: "function-pointer",
-    ...(right.binder === undefined ? {} : { binder: right.binder }),
-    safety: "safe",
-    abi: "Rust",
-    parameters: right.parameters,
-    variadic: false,
-    result: right.result,
-  });
+  return left !== undefined && right !== undefined &&
+    rustCallableSignaturesAlphaEquivalent(left, right);
 }
 
 export function rustGeneratorExecutionCarrier(
   callable: Node,
-  returnType: RustType | undefined,
   kind: "sync" | "async",
   context: RustPlanContext,
 ): RustGeneratorExecutionCarrier | undefined {
@@ -100,66 +84,41 @@ export function rustGeneratorExecutionCarrier(
     ));
     return undefined;
   }
-  if (execution.kind !== "local") {
+  const selected = context.input.program.ownership.executionCarrierFor(callable);
+  const protocol = getRustGeneratorProtocol(selected);
+  if (protocol === undefined || protocol.kind !== kind) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, callable),
+      "rust.backend.generator-execution-carrier",
+      "Generator lowering requires one exact ownership-finalized generator carrier.",
+    ));
+    return undefined;
+  }
+  const expectedLifetime = protocol.lifetime ?? { kind: "static" as const };
+  if (execution.kind !== "local" || execution.storage !== protocol.storage ||
+    rustLifetimeSemanticKey(execution.lifetime) !== rustLifetimeSemanticKey(expectedLifetime) ||
+    execution.requiresSend || execution.requiresSync) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, callable),
       "rust.backend.threaded-generator-carrier",
-      "The selected generator execution contract requires a threaded carrier that is not represented by the finalized generator ABI.",
+      "The finalized generator carrier conflicts with its sealed ownership execution contract.",
     ));
     return undefined;
   }
   const ownedPath = kind === "sync" ? "rt::OwnedGenerator" : "rt::OwnedAsyncGenerator";
   const borrowedPath = kind === "sync" ? "rt::BorrowedGenerator" : "rt::BorrowedAsyncGenerator";
-  if (returnType?.kind !== "named" ||
-    (returnType.path !== ownedPath && returnType.path !== borrowedPath)) {
+  const expectedPath = protocol.storage === "owned" ? ownedPath : borrowedPath;
+  const returnType = rustReturnTypeFromCarrierInContext(selected, context);
+  if (returnType?.kind !== "named" || returnType.path !== expectedPath) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, callable),
       "rust.backend.generator-carrier",
-      "Generator return type does not match its finalized Rust runtime carrier family.",
+      "The exact finalized generator carrier cannot be rendered as its selected Rust runtime family.",
     ));
     return undefined;
   }
-  if (execution.storage === "owned") {
-    if (execution.lifetime.kind !== "static") {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, callable),
-        "rust.backend.owned-generator-lifetime",
-        "An owned generator execution contract must carry the exact static lifetime.",
-      ));
-      return undefined;
-    }
-    return Object.freeze({
-      returnType: {
-        ...returnType,
-        path: ownedPath,
-        genericArguments: stripBorrowedLifetime(returnType, borrowedPath),
-      },
-      constructorPath: `${ownedPath}::new`,
-    });
-  }
-  const lifetimeArgument: RustGenericArgument = {
-    kind: "lifetime",
-    lifetime: rustAstLifetimeFromSemantic(execution.lifetime),
-  };
   return Object.freeze({
-    returnType: {
-      ...returnType,
-      path: borrowedPath,
-      genericArguments: [
-        lifetimeArgument,
-        ...stripBorrowedLifetime(returnType, borrowedPath),
-      ],
-    },
-    constructorPath: `${borrowedPath}::new`,
+    returnType,
+    constructorPath: `${expectedPath}::new`,
   });
-}
-
-function stripBorrowedLifetime(
-  type: Extract<RustType, { readonly kind: "named" }>,
-  borrowedPath: string,
-): readonly import("../../target-ast/nodes.js").RustGenericArgument[] {
-  const argumentsList = type.genericArguments ?? [];
-  return type.path === borrowedPath && argumentsList[0]?.kind === "lifetime"
-    ? argumentsList.slice(1)
-    : argumentsList;
 }

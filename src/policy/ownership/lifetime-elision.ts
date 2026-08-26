@@ -179,10 +179,6 @@ function visitFreeLifetimes(
         visitFreeLifetimes(bound.projection, visit);
         visitFreeLifetimes(bound.value, visit);
         return;
-      case "precise-capture":
-        for (const capture of bound.captures) {
-          if (capture.kind === "lifetime") visit(capture.value);
-        }
     }
   };
   switch (type.kind) {
@@ -301,10 +297,6 @@ function replaceInferredLifetimes(
           { readonly kind: "associated-type" }
         >,
         value: replaceInferredLifetimes(value.value, replacements),
-      });
-      case "precise-capture": return Object.freeze({
-        ...value,
-        captures: Object.freeze(value.captures.map(capture)),
       });
     }
   };

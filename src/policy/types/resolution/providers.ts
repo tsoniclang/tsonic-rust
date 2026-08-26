@@ -22,6 +22,7 @@ import {
   rustRegExpNamedIndicesTargetType,
   rustRegExpStringIteratorTargetType,
   rustStringTargetType,
+  rustTupleElementCarriers,
   rustVecTargetType,
   rustGenericParameterIdentity,
   rustClosureTargetType,
@@ -254,7 +255,11 @@ export function instantiateProviderTargetType(
     substitutions,
   );
   if (requirements === undefined ||
-    !rustResolvedProviderTypeRequirementsAreSatisfied(requirements, sourceGenerics)) {
+    !rustResolvedProviderTypeRequirementsAreSatisfied(
+      requirements,
+      sourceGenerics,
+      context.traits,
+    )) {
     return undefined;
   }
   const targetCarrier = substituteRustTargetGenerics(relation.targetCarrier, substitutions);
@@ -264,11 +269,13 @@ export function instantiateProviderTargetType(
     [binding.sourceName, arguments_[index]] as const));
   const parameterTuple = argumentBySourceName.get(callableRole.parameterTupleSourceName);
   const result = argumentBySourceName.get(callableRole.resultSourceName);
-  return parameterTuple?.kind === "type" && parameterTuple.value.kind === "tuple" &&
-      result?.kind === "type"
+  const parameters = parameterTuple?.kind === "type"
+    ? rustTupleElementCarriers(parameterTuple.value)
+    : undefined;
+  return parameters !== undefined && result?.kind === "type"
     ? rustClosureTargetType({
         callTrait: callableRole.callTrait,
-        parameters: parameterTuple.value.elements,
+        parameters,
         result: result.value,
       })
     : undefined;

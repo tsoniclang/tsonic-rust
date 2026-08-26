@@ -3,12 +3,10 @@ import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import {
   Node_Expression,
   Node_Initializer,
-  sourceNodeIdentity,
 } from "@tsonic/target-api/source";
 import {
   rustGeneratorFactKey,
   rustClosureCaptureFactKey,
-  rustSourceCallableReturnFactKey,
   rustTargetOperationFactKey,
 } from "../facts/keys.js";
 import { rustSourceOwnershipOperationFactKey } from "../../source/semantics/facts.js";
@@ -21,10 +19,12 @@ import {
 import type {
   RustCapture,
   RustBound,
+  RustDropObligation,
   RustExecutionContract,
   RustExecutionDomain,
   RustExecutionStorage,
   RustLifetimeRef,
+  RustPlaceRef,
   RustSuspensionPoint,
   RustTraitRef,
   RustTypeRef,
@@ -40,6 +40,7 @@ import {
   rustFnOnceTrait,
   rustFnTrait,
   rustFutureOutputCarrier,
+  rustLocationTargetType,
   rustReferenceTargetType,
   rustSendTrait,
   rustSyncTrait,
@@ -53,7 +54,7 @@ import {
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustResolvedProviderRequirementKey } from "../../policy/types/provider-generic-requirements.js";
 import type { RustClosureCaptureFact } from "../facts/keys.js";
-import type { RustSourceFlowGraph } from "./control-flow.js";
+import type { RustSourceFlowGraph, RustSourceFlowPoint } from "./control-flow.js";
 import type {
   RustOwnershipAnalysisInput,
   RustOwnershipEnvironment,
@@ -61,8 +62,13 @@ import type {
 import { rustOwnershipDiagnostic } from "./diagnostics.js";
 import type { RustOwnershipNodeInventory } from "./inventory.js";
 import type { RustOwnershipOperationInventory } from "./operations.js";
+import type { RustMoveAndDropAnalysis } from "./moves.js";
 import { rustOwnershipTraitProof } from "./operations.js";
-import { rustPlaceKey, rustPlacesOverlap } from "./places.js";
+import {
+  rustPlaceKey,
+  rustPlacesOverlap,
+  rustTemporaryPlaceForExpression,
+} from "./places.js";
 import {
   isRustSourceValueDeclarationKind,
   type RustSourceValueInventory,
@@ -75,10 +81,21 @@ import {
   enclosingCallInput,
   executionRequirementsForBound,
   executionRequirementsForCarrier,
+  exactCallableExpression,
   isCallable,
   nodeContains,
 } from "./capture-execution.js";
 import type { RustExecutionRequirement } from "./capture-execution.js";
+import {
+  RustOwnershipComplexityError,
+  rustCallableBoundComplexityDiagnostic,
+  rustCaptureCountComplexityDiagnostic,
+  rustCaptureEvidenceComplexityDiagnostic,
+  rustCaptureReferenceComplexityDiagnostic,
+  rustSuspendedDropComparisonComplexityDiagnostic,
+  rustSuspendedValueComplexityDiagnostic,
+} from "./complexity.js";
+import { requireRustOwnershipSourceIdentity } from "./identity.js";
 
 interface RustExecutionRequirements extends RustExecutionRequirement {
   readonly lifetime: RustLifetimeRef;
@@ -90,13 +107,29 @@ interface RustExpectedCallableBound {
   readonly bound: RustBound;
 }
 
+interface RustCaptureWorkBudget {
+  chargeCapture(node: Node): void;
+  chargeEvidence(count: number, node: Node): void;
+  chargeReferences(count: number, node: Node): void;
+  chargeSuspendedValue(node: Node): void;
+  chargeSuspendedDropComparisons(count: number, node: Node): void;
+  chargeCallableBound(node: Node): void;
+}
+
+interface RustCallableEvidenceIndex {
+  candidatesFor(callable: Node): readonly Node[];
+  valueCandidatesFor(callable: Node): readonly Node[];
+  referencesWithin(callable: Node, declaration: Node): readonly Node[];
+}
+
 export interface RustCaptureAnalysis {
   readonly capturesByCallable: WeakMap<Node, readonly RustCapture[]>;
-  readonly captureByNode: WeakMap<Node, RustCapture>;
+  captureFor(callable: Node, node: Node): RustCapture | undefined;
   readonly executionCarrierByNode: WeakMap<Node, RustTypeRef>;
   readonly executionDomainByCallable: WeakMap<Node, RustExecutionDomain>;
   readonly executionStorageByCallable: WeakMap<Node, RustExecutionStorage>;
   readonly executionContractByCallable: WeakMap<Node, RustExecutionContract>;
+  callableForSourceIdentity(identity: string): Node | undefined;
   providerRequirementIsProven(operation: Node, requirementKey: string): boolean;
 }
 
@@ -105,49 +138,77 @@ export function analyzeRustCaptures(
   inventory: RustOwnershipNodeInventory,
   sourceValues: RustSourceValueInventory,
   operations: RustOwnershipOperationInventory,
+  moves: RustMoveAndDropAnalysis,
   input: RustOwnershipAnalysisInput,
   environment: RustOwnershipEnvironment,
   diagnostics: TargetDiagnostic[],
 ): RustCaptureAnalysis {
   const capturesByCallable = new WeakMap<Node, readonly RustCapture[]>();
-  const captureByNode = new WeakMap<Node, RustCapture>();
+  const capturesByCallableAndNode = new WeakMap<Node, WeakMap<Node, RustCapture>>();
   const executionCarrierByNode = new WeakMap<Node, RustTypeRef>();
   const executionDomainByCallable = new WeakMap<Node, RustExecutionDomain>();
   const executionStorageByCallable = new WeakMap<Node, RustExecutionStorage>();
   const executionContractByCallable = new WeakMap<Node, RustExecutionContract>();
+  const callableBySourceIdentity = new Map<string, Node>();
   const providerRequirementProofs = new WeakMap<Node, Set<string>>();
   const captureMoveValues = new WeakSet<Node>();
+  const budget = createRustCaptureWorkBudget();
+  const evidence = createRustCallableEvidenceIndex(input, budget);
+  const flowPointById = indexFlowPointsById(flow);
+  const movedPlacesByCallable = indexMovedPlacesByCallable(operations, inventory);
+  const mutablyUsedPlacesByCallable = indexMutablyUsedPlacesByCallable(operations, inventory);
   for (const node of inventory.nodes) {
     const operation = input.facts.get(node, rustSourceOwnershipOperationFactKey);
-    if (operation?.kind === "capture-move") captureMoveValues.add(operation.valueExpression);
+    if (operation?.kind !== "capture-move") continue;
+    const callable = exactCallableExpression(operation.valueExpression, input.ast);
+    if (callable !== undefined) captureMoveValues.add(callable);
   }
-  for (const callable of inventory.nodes) {
-    if (!isCallable(callable, input.ast)) continue;
+  const callables = inventory.nodes.filter((node) => isCallable(node, input.ast)).reverse();
+  for (const callable of callables) {
+    const callableIdentity = requireRustOwnershipSourceIdentity(input.ast, callable);
+    const existingCallable = callableBySourceIdentity.get(callableIdentity);
+    if (existingCallable !== undefined && existingCallable !== callable) {
+      diagnostics.push(rustOwnershipDiagnostic(
+        "RUST_CALLABLE_SOURCE_IDENTITY_CONFLICT",
+        "Distinct Rust callables share one compiler-owned source identity.",
+        callable,
+      ));
+      continue;
+    }
+    callableBySourceIdentity.set(callableIdentity, callable);
     const fact = input.facts.getFact(callable, rustClosureCaptureFactKey) ??
       Object.freeze({ captures: Object.freeze([]) });
-    const expectedBounds = expectedCallableBounds(callable, input);
+    const expectedBounds = expectedCallableBounds(callable, input, evidence, budget);
     const diagnosticCount = diagnostics.length;
     const execution = executionRequirementsForCallable(
       callable,
       inventory,
+      moves,
       input,
       diagnostics,
       expectedBounds,
+      evidence,
     );
     if (execution === undefined) continue;
-    const suspensionPoints = collectSuspensionPoints(callable, flow, input.ast);
+    const suspensionPoints = collectSuspensionPoints(callable, flow);
     const suspendedValues = collectSuspendedValues(
       callable,
       suspensionPoints,
       flow,
+      flowPointById,
       inventory,
+      moves,
       input,
+      evidence,
+      budget,
     );
     const forceMove = captureMoveValues.has(callable);
     const captures: RustCapture[] = [];
+    const capturesByNode = new WeakMap<Node, RustCapture>();
     let movesFromCapture = false;
     let mutatesCapture = false;
     for (const capture of fact.captures) {
+      budget.chargeCapture(capture.reference);
       const place = inventory.places.get(capture.reference) ??
         inventory.places.get(capture.declaration);
       if (place === undefined) {
@@ -159,36 +220,65 @@ export function analyzeRustCaptures(
         continue;
       }
       const sourceContract = sourceValues.contracts.get(capture.declaration);
-      const movedByBody = operations.records.some((record) =>
-        record.operation.kind === "move" &&
-        rustPlacesOverlap(record.operation.place, place) &&
-        enclosingCallable(record.node, input.ast) === callable);
+      const references = evidence.referencesWithin(callable, capture.declaration);
+      const nestedCaptures: RustCapture[] = [];
+      let nestedCaptureMissing = false;
+      for (const reference of references) {
+        const owner = inventory.callableOwnerByNode.get(reference);
+        if (owner === undefined || owner === callable) continue;
+        const selected = capturesByCallableAndNode.get(owner)?.get(reference);
+        if (selected === undefined) {
+          diagnostics.push(rustOwnershipDiagnostic(
+            "RUST_NESTED_CAPTURE_NOT_PROVEN",
+            "A nested callable capture has no exact sealed ownership classification.",
+            reference,
+          ));
+          nestedCaptureMissing = true;
+          continue;
+        }
+        if (!nestedCaptures.includes(selected)) nestedCaptures.push(selected);
+      }
+      if (nestedCaptureMissing) continue;
+      const movedByBody = movedPlacesByCallable.get(callable)?.get(place.rootId)?.some(
+        (movedPlace) => rustPlacesOverlap(movedPlace, place),
+      ) === true || nestedCaptures.some((nested) => nested.bodyEffect === "move");
+      const mutatedByBody = moves.placeIsWrittenWithin(callable, place) ||
+        mutablyUsedPlacesByCallable.get(callable)?.get(place.rootId)?.some(
+          (mutatedPlace) => rustPlacesOverlap(mutatedPlace, place),
+        ) === true || nestedCaptures.some((nested) => nested.bodyEffect === "mutate");
+      const bodyEffect = captureBodyEffect(movedByBody, mutatedByBody, capture.storage);
+      const storageCarrier = capture.storage === "location"
+        ? rustLocationTargetType(capture.carrier)
+        : capture.carrier;
       const mode = captureMode(
         forceMove,
         movedByBody,
+        mutatedByBody,
         capture.storage,
-        capture.carrier,
+        storageCarrier,
         sourceContract,
         execution,
         environment,
       );
       if (mode === undefined) {
+        const requiresExplicitMove = sourceContract?.kind === "owned" ||
+          sourceContract?.kind === "mutable-reference";
         diagnostics.push(rustOwnershipDiagnostic(
-          sourceContract?.kind === "owned"
+          requiresExplicitMove
             ? "RUST_NATIVE_CAPTURE_REQUIRES_EXPLICIT_MOVE"
             : "RUST_CAPTURE_CLONE_NOT_PROVEN",
-          sourceContract?.kind === "owned"
-            ? "A native owned capture crossing its lexical execution region requires captureMove(...)."
+          requiresExplicitMove
+            ? "A native capture requiring ownership transfer must use captureMove(...)."
             : "A source-preserving closure capture requires exact Copy or Clone evidence.",
           capture.reference,
         ));
         continue;
       }
-      movesFromCapture ||= movedByBody;
-      mutatesCapture ||= mode === "mutable";
+      movesFromCapture ||= bodyEffect === "move";
+      mutatesCapture ||= bodyEffect === "mutate";
       if (!captureLifetimeIsValid(
         sourceContract,
-        capture.carrier,
+        storageCarrier,
         mode,
         execution,
         environment,
@@ -200,17 +290,16 @@ export function analyzeRustCaptures(
         ));
         continue;
       }
-      const evidenceId = sourceNodeIdentity(input.ast, capture.reference) ??
-        `capture\0${rustTypeSemanticKey(capture.carrier)}`;
+      const evidenceId = requireRustOwnershipSourceIdentity(input.ast, capture.reference);
       const representationCarrier = captureRepresentationCarrier(
-        capture.carrier,
+        storageCarrier,
         mode,
         execution.lifetime,
       );
       const proof = mode === "copy"
-        ? rustOwnershipTraitProof(rustCopyTrait, capture.carrier, evidenceId)
+        ? rustOwnershipTraitProof(rustCopyTrait, storageCarrier, evidenceId)
         : mode === "clone"
-          ? rustOwnershipTraitProof(rustCloneTrait, capture.carrier, evidenceId)
+          ? rustOwnershipTraitProof(rustCloneTrait, storageCarrier, evidenceId)
           : undefined;
       if (execution.requiresSend && !environment.supportsTrait(representationCarrier, rustSendTrait)) {
         diagnostics.push(rustOwnershipDiagnostic(
@@ -231,27 +320,40 @@ export function analyzeRustCaptures(
       const selected = Object.freeze({
         place,
         carrier: capture.carrier,
+        storageCarrier,
         representationCarrier,
         mode,
+        bodyEffect,
         crossesSuspension: captureCrossesSuspension(
-          capture.declaration,
-          callable,
+          evidence.referencesWithin(callable, capture.declaration),
           suspensionPoints,
+          flowPointById,
           flow,
-          input,
         ),
         executionDomain: execution.kind,
         requiresStatic: execution.storage === "owned",
         ...(proof === undefined ? {} : { proof }),
         ...(execution.requiresSend
-          ? { sendProof: rustOwnershipTraitProof(rustSendTrait, representationCarrier, evidenceId) }
+          ? {
+              sendProof: rustOwnershipTraitProof(
+                rustSendTrait,
+                representationCarrier,
+                evidenceId,
+              ),
+            }
           : {}),
         ...(execution.requiresSync
-          ? { syncProof: rustOwnershipTraitProof(rustSyncTrait, representationCarrier, evidenceId) }
+          ? {
+              syncProof: rustOwnershipTraitProof(
+                rustSyncTrait,
+                representationCarrier,
+                evidenceId,
+              ),
+            }
           : {}),
       });
       captures.push(selected);
-      captureByNode.set(capture.reference, selected);
+      for (const reference of references) capturesByNode.set(reference, selected);
     }
     const actualCallTrait = movesFromCapture
       ? "fn-once" as const
@@ -263,6 +365,7 @@ export function analyzeRustCaptures(
       actualCallTrait,
       expectedBounds,
       input,
+      evidence,
     )) {
       diagnostics.push(rustOwnershipDiagnostic(
         "RUST_CLOSURE_CALL_TRAIT_NOT_SATISFIED",
@@ -274,9 +377,10 @@ export function analyzeRustCaptures(
       callable,
       input,
       diagnostics,
+      evidence,
     );
     if (executionCarrier !== undefined) {
-      for (const candidate of callableValueEvidenceCandidates(callable, input)) {
+      for (const candidate of evidence.valueCandidatesFor(callable)) {
         const existing = executionCarrierByNode.get(candidate);
         if (existing !== undefined && !rustTargetTypeRefEquals(existing, executionCarrier)) {
           diagnostics.push(rustOwnershipDiagnostic(
@@ -291,11 +395,13 @@ export function analyzeRustCaptures(
     }
     const frozenCaptures = Object.freeze(captures);
     capturesByCallable.set(callable, frozenCaptures);
+    capturesByCallableAndNode.set(callable, capturesByNode);
     executionDomainByCallable.set(callable, execution.kind);
     executionStorageByCallable.set(callable, execution.storage);
     executionContractByCallable.set(callable, Object.freeze({
       kind: execution.kind,
       storage: execution.storage,
+      captureStyle: forceMove ? "move" : "lexical",
       lifetime: execution.lifetime,
       requiresSend: execution.requiresSend,
       requiresSync: execution.requiresSync,
@@ -325,11 +431,16 @@ export function analyzeRustCaptures(
   }
   return Object.freeze<RustCaptureAnalysis>({
     capturesByCallable,
-    captureByNode,
+    captureFor(callable, node) {
+      return capturesByCallableAndNode.get(callable)?.get(node);
+    },
     executionCarrierByNode,
     executionDomainByCallable,
     executionStorageByCallable,
     executionContractByCallable,
+    callableForSourceIdentity(identity) {
+      return callableBySourceIdentity.get(identity);
+    },
     providerRequirementIsProven(operation, requirementKey) {
       return providerRequirementProofs.get(operation)?.has(requirementKey) === true;
     },
@@ -340,8 +451,9 @@ function finalizedCallableExecutionCarrier(
   callable: Node,
   input: RustOwnershipAnalysisInput,
   diagnostics: TargetDiagnostic[],
+  evidence: RustCallableEvidenceIndex,
 ): RustTypeRef | undefined {
-  const carriers = expectedCallableCarriers(callable, input).filter((carrier) =>
+  const carriers = expectedCallableCarriers(callable, input, evidence).filter((carrier) =>
     isRustCallableCarrier(carrier) || getRustGeneratorProtocol(carrier) !== undefined);
   const selected = carriers[0];
   if (selected === undefined) return undefined;
@@ -361,9 +473,10 @@ function callableCallTraitRequirementsAreSatisfied(
   actual: "fn" | "fn-mut" | "fn-once",
   expectedBounds: readonly RustExpectedCallableBound[],
   input: RustOwnershipAnalysisInput,
+  evidence: RustCallableEvidenceIndex,
 ): boolean {
   const required: ("fn" | "fn-mut" | "fn-once")[] = [];
-  for (const carrier of expectedCallableCarriers(callable, input)) {
+  for (const carrier of expectedCallableCarriers(callable, input, evidence)) {
     if (carrier.kind === "closure") required.push(carrier.callTrait);
     else if (carrier.kind === "function-pointer" || rustCallableProtocol(carrier) !== undefined) {
       required.push("fn");
@@ -384,36 +497,59 @@ function callableCallTraitRequirementsAreSatisfied(
 function captureMode(
   forceMove: boolean,
   movedByBody: boolean,
+  mutatedByBody: boolean,
   storage: "value" | "location",
-  carrier: RustTypeRef,
+  storageCarrier: RustTypeRef,
   sourceContract: import("../../target-model/semantics/index.js").RustSourceValueContract | undefined,
   execution: RustExecutionRequirements,
   environment: RustOwnershipEnvironment,
 ): RustCapture["mode"] | undefined {
-  if (forceMove) return "move";
-  if (movedByBody) return undefined;
-  if (sourceContract?.kind === "owned") {
-    return execution.storage === "owned"
-      ? undefined
+  if (storage === "location") {
+    return forceMove || execution.storage === "owned"
+      ? environment.supportsTrait(storageCarrier, rustCloneTrait) ? "clone" : undefined
       : "shared";
   }
-  if (sourceContract?.kind === "shared-reference") return "copy";
-  if (sourceContract?.kind === "mutable-reference") return "mutable";
-  if (storage === "location") {
-    return environment.supportsTrait(carrier, rustCloneTrait) ? "clone" : undefined;
+  if (sourceContract?.kind === "owned") {
+    if (forceMove) return "move";
+    if (movedByBody || execution.storage === "owned") return undefined;
+    return mutatedByBody ? "mutable" : "shared";
   }
-  if (environment.supportsTrait(carrier, rustCopyTrait)) return "copy";
-  return environment.supportsTrait(carrier, rustCloneTrait) ? "clone" : undefined;
+  if (sourceContract?.kind === "shared-reference") return "copy";
+  if (sourceContract?.kind === "mutable-reference") {
+    if (forceMove) return "move";
+    if (movedByBody || execution.storage === "owned") return undefined;
+    return mutatedByBody ? "mutable" : "shared";
+  }
+  if (!forceMove && execution.storage === "borrowed" && !movedByBody) {
+    return mutatedByBody ? "mutable" : "shared";
+  }
+  if (environment.supportsTrait(storageCarrier, rustCopyTrait)) return "copy";
+  return environment.supportsTrait(storageCarrier, rustCloneTrait) ? "clone" : undefined;
+}
+
+function captureBodyEffect(
+  movedByBody: boolean,
+  mutatedByBody: boolean,
+  storage: "value" | "location",
+): RustCapture["bodyEffect"] {
+  if (movedByBody) return "move";
+  return mutatedByBody && storage === "value" ? "mutate" : "read";
 }
 
 function captureRepresentationCarrier(
-  carrier: RustTypeRef,
+  storageCarrier: RustTypeRef,
   mode: RustCapture["mode"],
   lifetime: RustLifetimeRef,
 ): RustTypeRef {
-  if (mode !== "shared" && mode !== "mutable") return carrier;
-  if (carrier.kind === "reference") return carrier;
-  return rustReferenceTargetType(carrier, mode === "mutable", lifetime);
+  if (mode !== "shared" && mode !== "mutable") return storageCarrier;
+  if (storageCarrier.kind === "reference") {
+    return rustReferenceTargetType(
+      storageCarrier.target,
+      mode === "mutable",
+      lifetime,
+    );
+  }
+  return rustReferenceTargetType(storageCarrier, mode === "mutable", lifetime);
 }
 
 function captureLifetimeIsValid(
@@ -445,15 +581,16 @@ function executionRequirementsForCallable(
   input: RustOwnershipAnalysisInput,
   diagnostics: TargetDiagnostic[],
   expectedBounds: readonly RustExpectedCallableBound[],
+  evidence: RustCallableEvidenceIndex,
 ): RustExecutionRequirements | undefined {
   const requirements = [
-    ...expectedCallableCarriers(callable, input).map(executionRequirementsForCarrier),
+    ...expectedCallableCarriers(callable, input, evidence).map(executionRequirementsForCarrier),
     ...expectedBounds.flatMap((entry) => executionRequirementsForBound(entry.bound)),
   ];
   const requiresSend = requirements.some((entry) => entry.requiresSend);
   const requiresSync = requirements.some((entry) => entry.requiresSync);
   const requiresStatic = requirements.some((entry) => entry.requiresStatic);
-  const occurrence = sourceNodeIdentity(input.ast, callable) ?? "anonymous-callable";
+  const occurrence = requireRustOwnershipSourceIdentity(input.ast, callable);
   const lexicalRegionId = inventory.regionByNode.get(callable)?.id ??
     inventory.lexicalRegions.ownedRegionFor(callable)?.id ??
     `${occurrence}\0execution`;
@@ -485,6 +622,14 @@ function executionRequirementsForCallable(
     ));
     return undefined;
   }
+  if (instanceGenerator && requiresStatic) {
+    diagnostics.push(rustOwnershipDiagnostic(
+      "RUST_GENERATOR_OWNED_EXECUTION_NOT_REPRESENTABLE",
+      "An instance generator borrows its exact receiver and cannot satisfy an owned or 'static' execution boundary.",
+      callable,
+    ));
+    return undefined;
+  }
   return Object.freeze({
     kind: requiresSend || requiresSync ? "threaded" : "local",
     storage,
@@ -498,9 +643,12 @@ function executionRequirementsForCallable(
 function expectedCallableBounds(
   callable: Node,
   input: RustOwnershipAnalysisInput,
+  evidence: RustCallableEvidenceIndex,
+  budget: RustCaptureWorkBudget,
 ): readonly RustExpectedCallableBound[] {
   const bounds: RustExpectedCallableBound[] = [];
-  for (const candidate of callableEvidenceCandidates(callable, input)) {
+  const seen = new Set<string>();
+  for (const candidate of evidence.candidatesFor(callable)) {
     const selected = enclosingCallInput(candidate, input);
     if (selected === undefined) continue;
     const operation = input.facts.getFact(selected.call, rustTargetOperationFactKey);
@@ -526,14 +674,16 @@ function expectedCallableBounds(
         if (bound.kind !== "type-outlives" ||
           rustTargetTypeRefEquals(bound.type, requirement.carrier)) {
           const key = rustResolvedProviderRequirementKey(requirement, bound);
-          if (!bounds.some((entry) => entry.operation === selected.call &&
-            rustResolvedProviderRequirementKey(entry.requirement, entry.bound) === key)) {
-            bounds.push(Object.freeze({
-              operation: selected.call,
-              requirement,
-              bound,
-            }));
-          }
+          const operationIdentity = requireRustOwnershipSourceIdentity(input.ast, selected.call);
+          const boundIdentity = `${operationIdentity}\0${key}`;
+          if (seen.has(boundIdentity)) continue;
+          budget.chargeCallableBound(selected.call);
+          seen.add(boundIdentity);
+          bounds.push(Object.freeze({
+            operation: selected.call,
+            requirement,
+            bound,
+          }));
         }
       }
     }
@@ -590,35 +740,139 @@ function collectSuspendedValues(
   callable: Node,
   suspensionPoints: readonly RustSuspensionPoint[],
   flow: RustSourceFlowGraph,
+  flowPointById: ReadonlyMap<string, RustSourceFlowPoint>,
   inventory: RustOwnershipNodeInventory,
+  moves: RustMoveAndDropAnalysis,
   input: RustOwnershipAnalysisInput,
+  evidence: RustCallableEvidenceIndex,
+  budget: RustCaptureWorkBudget,
 ): readonly import("../../target-model/semantics/index.js").RustSuspendedValue[] {
   if (suspensionPoints.length === 0) return Object.freeze([]);
   const retained: import("../../target-model/semantics/index.js").RustSuspendedValue[] = [];
   const seen = new Set<string>();
-  for (const declaration of inventory.nodes) {
-    if (!isRustSourceValueDeclarationKind(input.ast.kindName(declaration)) ||
-      enclosingCallable(declaration, input.ast) !== callable) {
+  const dropObligationsByRoot = new Map<string, RustDropObligation[]>();
+  for (const obligation of moves.dropObligations) {
+    const selected = dropObligationsByRoot.get(obligation.place.rootId);
+    if (selected === undefined) {
+      dropObligationsByRoot.set(obligation.place.rootId, [obligation]);
+    } else {
+      selected.push(obligation);
+    }
+  }
+  for (const declaration of inventory.nodesByCallable.get(callable) ?? Object.freeze([])) {
+    if (!isRustSourceValueDeclarationKind(input.ast.kindName(declaration))) {
       continue;
     }
     const place = inventory.places.get(declaration);
     const carrier = input.facts.getRuntimeCarrierFact(declaration)?.carrier;
-    const declarationPoint = flow.pointFor(declaration);
-    if (place === undefined || carrier === undefined || declarationPoint === undefined) continue;
-    const references = input.navigation.referencesToDeclaration(declaration).filter((reference) =>
-      nodeContains(callable, reference, input));
+    const declarationPoints = flow.pointsFor(declaration);
+    if (place === undefined || carrier === undefined || declarationPoints.length === 0) continue;
+    const references = evidence.referencesWithin(callable, declaration);
+    const dropObligations = dropObligationsByRoot.get(place.rootId) ?? [];
     const crosses = suspensionPoints.some((suspension) => {
-      const suspensionPoint = flow.points.find((point) => point.node !== undefined &&
-        sourceNodeIdentity(input.ast, point.node) === suspension.occurrenceId);
-      return suspensionPoint !== undefined && flow.reaches(declarationPoint, suspensionPoint) &&
-        references.some((reference) => flow.reaches(suspensionPoint, reference));
+      const suspensionPoint = flowPointById.get(suspension.flowPointId);
+      if (suspensionPoint === undefined ||
+        !declarationPoints.some((declarationPoint) => flow.reaches(declarationPoint, suspensionPoint))) {
+        return false;
+      }
+      if (suspensionPoint.resourceCleanup?.declaration === declaration ||
+        references.some((reference) => flow.reaches(suspensionPoint, reference))) {
+        return true;
+      }
+      if (!moves.placeMayBeAvailableAfter(suspension.flowPointId, place)) return false;
+      budget.chargeSuspendedDropComparisons(dropObligations.length, declaration);
+      return dropObligations.some((obligation) => {
+        const dropPoint = flowPointById.get(obligation.flowPointId);
+        return dropPoint !== undefined && flow.reaches(suspensionPoint, dropPoint);
+      });
     });
     const key = `${rustTypeSemanticKey(carrier)}\0${rustPlaceKey(place)}`;
     if (!crosses || seen.has(key)) continue;
+    budget.chargeSuspendedValue(declaration);
+    seen.add(key);
+    retained.push(Object.freeze({ place, carrier }));
+  }
+  for (const suspension of suspensionPoints) {
+    const point = flowPointById.get(suspension.flowPointId);
+    const operation = point?.node === undefined
+      ? undefined
+      : input.facts.getFact(point.node, rustTargetOperationFactKey);
+    if (point?.node === undefined || operation?.kind !== "iteration" ||
+      operation.iterationKind !== "for-await-of" ||
+      operation.lowering.kind !== "async-generator") {
+      continue;
+    }
+    const iterable = Node_Expression(input.ast, point.node);
+    const carrier = input.facts.getRuntimeCarrierFact(iterable)?.carrier;
+    if (iterable === undefined || carrier === undefined) {
+      continue;
+    }
+    const place = inventory.places.get(iterable) ??
+      rustTemporaryPlaceForExpression(iterable, input.ast);
+    const key = `${rustTypeSemanticKey(carrier)}\0${rustPlaceKey(place)}`;
+    if (seen.has(key)) continue;
+    budget.chargeSuspendedValue(iterable);
     seen.add(key);
     retained.push(Object.freeze({ place, carrier }));
   }
   return Object.freeze(retained);
+}
+
+function indexFlowPointsById(
+  flow: RustSourceFlowGraph,
+): ReadonlyMap<string, RustSourceFlowPoint> {
+  const indexed = new Map<string, RustSourceFlowPoint>();
+  for (const point of flow.points) {
+    indexed.set(point.id, point);
+  }
+  return indexed;
+}
+
+function indexMovedPlacesByCallable(
+  operations: RustOwnershipOperationInventory,
+  inventory: RustOwnershipNodeInventory,
+): WeakMap<Node, ReadonlyMap<string, readonly RustPlaceRef[]>> {
+  const indexed = new WeakMap<Node, Map<string, RustPlaceRef[]>>();
+  for (const record of operations.records) {
+    if (record.operation.kind !== "move") continue;
+    const callable = inventory.callableOwnerByNode.get(record.node);
+    if (callable === undefined) continue;
+    let byRoot = indexed.get(callable);
+    if (byRoot === undefined) {
+      byRoot = new Map();
+      indexed.set(callable, byRoot);
+    }
+    const places = byRoot.get(record.operation.place.rootId) ?? [];
+    places.push(record.operation.place);
+    byRoot.set(record.operation.place.rootId, places);
+  }
+  return indexed;
+}
+
+function indexMutablyUsedPlacesByCallable(
+  operations: RustOwnershipOperationInventory,
+  inventory: RustOwnershipNodeInventory,
+): WeakMap<Node, ReadonlyMap<string, readonly RustPlaceRef[]>> {
+  const indexed = new WeakMap<Node, Map<string, RustPlaceRef[]>>();
+  for (const record of operations.records) {
+    const operation = record.operation;
+    if (operation.kind !== "mutable-borrow" &&
+      (operation.kind !== "reborrow" || !operation.mutable) &&
+      operation.kind !== "store" && operation.kind !== "replace" && operation.kind !== "take") {
+      continue;
+    }
+    const callable = inventory.callableOwnerByNode.get(record.node);
+    if (callable === undefined) continue;
+    let byRoot = indexed.get(callable);
+    if (byRoot === undefined) {
+      byRoot = new Map();
+      indexed.set(callable, byRoot);
+    }
+    const places = byRoot.get(operation.place.rootId) ?? [];
+    places.push(operation.place);
+    byRoot.set(operation.place.rootId, places);
+  }
+  return indexed;
 }
 
 function captureDependentTrait(trait: RustTraitRef): boolean {
@@ -652,8 +906,9 @@ function captureRepresentationSupportsTrait(
 function expectedCallableCarriers(
   callable: Node,
   input: RustOwnershipAnalysisInput,
+  evidence: RustCallableEvidenceIndex,
 ): readonly RustTypeRef[] {
-  const contextual = contextualCallableBoundaryCarriers(callable, input);
+  const contextual = contextualCallableBoundaryCarriers(callable, input, evidence);
   if (contextual.length !== 0) return contextual;
   const carriers: RustTypeRef[] = [];
   const directCarrier = input.facts.getRuntimeCarrierFact(callable)?.carrier;
@@ -662,17 +917,16 @@ function expectedCallableCarriers(
   if (operationCarrier?.kind === "closure") carriers.push(operationCarrier.resultCarrier);
   const generatorCarrier = input.facts.getFact(callable, rustGeneratorFactKey)?.carrier;
   if (generatorCarrier !== undefined) carriers.push(generatorCarrier);
-  const returnCarrier = input.facts.getFact(callable, rustSourceCallableReturnFactKey)?.returnCarrier;
-  if (returnCarrier !== undefined) carriers.push(returnCarrier);
   return Object.freeze(carriers);
 }
 
 function contextualCallableBoundaryCarriers(
   callable: Node,
   input: RustOwnershipAnalysisInput,
+  evidence: RustCallableEvidenceIndex,
 ): readonly RustTypeRef[] {
   const carriers: RustTypeRef[] = [];
-  for (const candidate of callableEvidenceCandidates(callable, input)) {
+  for (const candidate of evidence.candidatesFor(callable)) {
     const selected = enclosingCallInput(candidate, input);
     if (selected === undefined) continue;
     const operation = input.facts.getFact(selected.call, rustTargetOperationFactKey);
@@ -700,57 +954,172 @@ function contextualCallableBoundaryCarriers(
   return Object.freeze(carriers);
 }
 
-function callableEvidenceCandidates(
+function collectCallableEvidenceCandidates(
   callable: Node,
   input: RustOwnershipAnalysisInput,
+  budget: RustCaptureWorkBudget,
 ): readonly Node[] {
   const candidates: Node[] = [];
   const pending: Node[] = [callable];
+  budget.chargeEvidence(1, callable);
   const seen = new Set<Node>();
-  while (pending.length > 0) {
-    const candidate = pending.shift()!;
+  let cursor = 0;
+  while (cursor < pending.length) {
+    const candidate = pending[cursor++]!;
     if (seen.has(candidate)) continue;
     seen.add(candidate);
     candidates.push(candidate);
     const invocation = directInvocationOf(candidate, input);
-    if (invocation !== undefined) pending.push(invocation);
+    if (invocation !== undefined) {
+      budget.chargeEvidence(1, invocation);
+      pending.push(invocation);
+    }
     const ownershipResult = exactCallableOwnershipResultOf(candidate, input);
-    if (ownershipResult !== undefined) pending.push(ownershipResult);
+    if (ownershipResult !== undefined) {
+      budget.chargeEvidence(1, ownershipResult);
+      pending.push(ownershipResult);
+    }
     const initializedDeclaration = declarationInitializedExactlyBy(candidate, input);
     if (initializedDeclaration !== undefined) {
-      for (const use of input.navigation.declarationUses(initializedDeclaration)) {
-        if (use.kind !== "source-linkage" && use.kind !== "type-only") pending.push(use.reference);
+      const uses = input.navigation.declarationUses(initializedDeclaration);
+      budget.chargeEvidence(uses.length, initializedDeclaration);
+      for (const use of uses) {
+        if (use.kind !== "source-linkage" && use.kind !== "type-only") {
+          pending.push(use.reference);
+        }
       }
     }
   }
   return Object.freeze(candidates);
 }
 
-function callableValueEvidenceCandidates(
+function collectCallableValueEvidenceCandidates(
   callable: Node,
   input: RustOwnershipAnalysisInput,
+  budget: RustCaptureWorkBudget,
 ): readonly Node[] {
   const candidates: Node[] = [];
   const pending: Node[] = [callable];
+  budget.chargeEvidence(1, callable);
   const seen = new Set<Node>();
-  while (pending.length > 0) {
-    const candidate = pending.shift()!;
+  let cursor = 0;
+  while (cursor < pending.length) {
+    const candidate = pending[cursor++]!;
     if (seen.has(candidate)) continue;
     seen.add(candidate);
     candidates.push(candidate);
     const transparentWrapper = transparentCallableValueWrapperOf(candidate, input);
-    if (transparentWrapper !== undefined) pending.push(transparentWrapper);
+    if (transparentWrapper !== undefined) {
+      budget.chargeEvidence(1, transparentWrapper);
+      pending.push(transparentWrapper);
+    }
     const ownershipResult = exactCallableOwnershipResultOf(candidate, input);
-    if (ownershipResult !== undefined) pending.push(ownershipResult);
+    if (ownershipResult !== undefined) {
+      budget.chargeEvidence(1, ownershipResult);
+      pending.push(ownershipResult);
+    }
     const initializedDeclaration = declarationInitializedExactlyBy(candidate, input);
     if (initializedDeclaration !== undefined) {
+      budget.chargeEvidence(1, initializedDeclaration);
       pending.push(initializedDeclaration);
-      for (const use of input.navigation.declarationUses(initializedDeclaration)) {
-        if (use.kind !== "source-linkage" && use.kind !== "type-only") pending.push(use.reference);
+      const uses = input.navigation.declarationUses(initializedDeclaration);
+      budget.chargeEvidence(uses.length, initializedDeclaration);
+      for (const use of uses) {
+        if (use.kind !== "source-linkage" && use.kind !== "type-only") {
+          pending.push(use.reference);
+        }
       }
     }
   }
   return Object.freeze(candidates);
+}
+
+function createRustCallableEvidenceIndex(
+  input: RustOwnershipAnalysisInput,
+  budget: RustCaptureWorkBudget,
+): RustCallableEvidenceIndex {
+  const candidatesByCallable = new WeakMap<Node, readonly Node[]>();
+  const valueCandidatesByCallable = new WeakMap<Node, readonly Node[]>();
+  const referencesByDeclaration = new WeakMap<Node, readonly Node[]>();
+  const referencesByCallable = new WeakMap<Node, WeakMap<Node, readonly Node[]>>();
+  return Object.freeze({
+    candidatesFor(callable) {
+      const existing = candidatesByCallable.get(callable);
+      if (existing !== undefined) return existing;
+      const candidates = collectCallableEvidenceCandidates(callable, input, budget);
+      candidatesByCallable.set(callable, candidates);
+      return candidates;
+    },
+    valueCandidatesFor(callable) {
+      const existing = valueCandidatesByCallable.get(callable);
+      if (existing !== undefined) return existing;
+      const candidates = collectCallableValueEvidenceCandidates(callable, input, budget);
+      valueCandidatesByCallable.set(callable, candidates);
+      return candidates;
+    },
+    referencesWithin(callable, declaration) {
+      let byDeclaration = referencesByCallable.get(callable);
+      if (byDeclaration === undefined) {
+        byDeclaration = new WeakMap<Node, readonly Node[]>();
+        referencesByCallable.set(callable, byDeclaration);
+      }
+      const existing = byDeclaration.get(declaration);
+      if (existing !== undefined) return existing;
+      let allReferences = referencesByDeclaration.get(declaration);
+      if (allReferences === undefined) {
+        const selected = input.navigation.referencesToDeclaration(declaration);
+        budget.chargeReferences(selected.length, declaration);
+        allReferences = Object.freeze([...selected]);
+        referencesByDeclaration.set(declaration, allReferences);
+      }
+      budget.chargeReferences(allReferences.length, declaration);
+      const references = Object.freeze(allReferences.filter((reference) =>
+        nodeContains(callable, reference, input)));
+      byDeclaration.set(declaration, references);
+      return references;
+    },
+  });
+}
+
+function createRustCaptureWorkBudget(): RustCaptureWorkBudget {
+  let captureCount = 0;
+  let evidenceVisits = 0;
+  let referenceVisits = 0;
+  let suspendedValueCount = 0;
+  let suspendedDropComparisons = 0;
+  let callableBoundCount = 0;
+  const requireWithinBudget = (diagnostic: TargetDiagnostic | undefined): void => {
+    if (diagnostic !== undefined) throw new RustOwnershipComplexityError(diagnostic);
+  };
+  return Object.freeze({
+    chargeCapture(node) {
+      captureCount += 1;
+      requireWithinBudget(rustCaptureCountComplexityDiagnostic(captureCount, node));
+    },
+    chargeEvidence(count, node) {
+      evidenceVisits += count;
+      requireWithinBudget(rustCaptureEvidenceComplexityDiagnostic(evidenceVisits, node));
+    },
+    chargeReferences(count, node) {
+      referenceVisits += count;
+      requireWithinBudget(rustCaptureReferenceComplexityDiagnostic(referenceVisits, node));
+    },
+    chargeSuspendedValue(node) {
+      suspendedValueCount += 1;
+      requireWithinBudget(rustSuspendedValueComplexityDiagnostic(suspendedValueCount, node));
+    },
+    chargeSuspendedDropComparisons(count, node) {
+      suspendedDropComparisons += count;
+      requireWithinBudget(rustSuspendedDropComparisonComplexityDiagnostic(
+        suspendedDropComparisons,
+        node,
+      ));
+    },
+    chargeCallableBound(node) {
+      callableBoundCount += 1;
+      requireWithinBudget(rustCallableBoundComplexityDiagnostic(callableBoundCount, node));
+    },
+  });
 }
 
 function transparentCallableValueWrapperOf(

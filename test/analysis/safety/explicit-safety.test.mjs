@@ -14,6 +14,7 @@ test("native pointer operations lower inside one explicit unsafe block", { timeo
 import {
   loadNativePointer,
   offsetNativePointer,
+  offsetNativePointerBytes,
   storeNativePointer,
   unsafeContext,
 } from "@tsonic/core/lang.js";
@@ -28,6 +29,13 @@ export function copy(
   storeNativePointer(destination, loadNativePointer(source));
   return offsetNativePointer(source, elementOffset);
 }
+
+export function byteOffset(
+  source: NativePointer<int32>,
+  offset: nativeInt,
+): NativePointer<int32> {
+  return unsafeContext(offsetNativePointerBytes(source, offset));
+}
 `,
     },
   });
@@ -36,7 +44,8 @@ export function copy(
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /pub fn copy\(source: \*mut i32, destination: \*mut i32, element_offset: isize\) -> \*mut i32/u);
   assert.match(source, /unsafe \{\s*\*destination = \*source;\s*source\.offset\(element_offset\)\s*\}/u);
-  assert.doesNotMatch(source, /loadNativePointer|offsetNativePointer|storeNativePointer|unsafeContext/u);
+  assert.match(source, /pub fn byte_offset\(source: \*mut i32, offset: isize\) -> \*mut i32 \{\s*unsafe \{ source\.byte_offset\(offset\) \}\s*\}/u);
+  assert.doesNotMatch(source, /loadNativePointer|offsetNativePointer(?:Bytes)?|storeNativePointer|unsafeContext/u);
   validateGeneratedProject("explicit-safety-native-pointer-block", result.artifacts);
 });
 

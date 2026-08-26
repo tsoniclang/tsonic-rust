@@ -26,6 +26,7 @@ import { planRustProjectTypeTest } from "../objects/project-downcasts.js";
 import { rustOptionProjectionFactKey } from "../../../analysis/facts/keys.js";
 import { rustTargetOperationText } from "../../../analysis/facts/target-operation.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustTypeSemanticKey } from "../../../target-model/semantics/index.js";
 import { rustValueCarrierBeforeOptionProjection } from "../../../analysis/facts/value-carrier-queries.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/nodes.js";
@@ -279,9 +280,9 @@ export function planBinaryExpression(node: Node, context: RustPlanContext): Rust
         ...diagnostic,
         evidence: [
           ...(diagnostic.evidence ?? []),
-          `carrier.expected=${JSON.stringify(fact.optionCarrier)}`,
-          `carrier.left=${JSON.stringify(leftCarrier)}`,
-          `carrier.right=${JSON.stringify(rightCarrier)}`,
+          `carrier.expected=${rustTypeSemanticKey(fact.optionCarrier)}`,
+          `carrier.left=${optionalRustTypeSemanticKey(leftCarrier)}`,
+          `carrier.right=${optionalRustTypeSemanticKey(rightCarrier)}`,
           `operation.selected.id=${selectedOperation?.operationId ?? "missing"}`,
           `operation.selected.kind=${selectedOperation?.operationKind ?? "missing"}`,
           `operation.selected.target=${selectedOperation?.targetOperation ?? "missing"}`,
@@ -498,6 +499,10 @@ export function planBinaryExpression(node: Node, context: RustPlanContext): Rust
     "Binary expression selected a non-operator Rust operation.",
   ));
   return undefined;
+}
+
+function optionalRustTypeSemanticKey(carrier: import("../../../target-model/types/model.js").TargetTypeRef | undefined): string {
+  return carrier === undefined ? "missing" : rustTypeSemanticKey(carrier);
 }
 
 function isExplicitRustNullishValue(expression: RustExpr): boolean {

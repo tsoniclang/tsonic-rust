@@ -1,4 +1,5 @@
 export type { TargetTypeRef } from "./model.js";
+export { isRustSemanticIdentity } from "./equality.js";
 export { rustArrayLikeElementCarrier } from "./carriers/sequences.js";
 export {
   rustBuiltinPathTargetType,
@@ -14,14 +15,14 @@ export {
   rustPathTargetType,
   rustPathGenericArguments,
   rustPathTypeArguments,
-  rustPathTypeMatches,
+  rustBuiltinPathTypeMatches,
+  rustBuiltinTypeIdentityItemId,
   rustRawPointerTargetType,
   rustReferenceTargetType,
   rustSequenceTargetType,
   rustSourceCarrierTargetType,
   rustStaticLifetime,
   rustTypeArgument,
-  rustTypeIdentityItemId,
   rustTypeParameterTargetType,
 } from "./constructors.js";
 export type { RustPrimitiveTypeName } from "../syntax/tokens.js";
@@ -37,6 +38,12 @@ export {
   rustBorrowedCallableTargetType,
   rustBorrowedGeneratorTargetType,
   rustBorrowedLocationTargetType,
+  rustCallableBoundaryProtocol,
+  rustCallableBoundaryCanAdapt,
+  rustCallableBindersAlphaEquivalent,
+  rustCallableSignaturesAlphaEquivalent,
+  rustBoundSemanticValuesAlphaEquivalent,
+  rustCallTraitSatisfies,
   rustCallableProtocol,
   rustCallableSignature,
   instantiateRustCallableSignature,
@@ -58,6 +65,7 @@ export {
   rustThreadedAsyncCallableTargetType,
 } from "./carriers/callables.js";
 export type {
+  RustCallableBoundaryProtocol,
   RustCallableProtocol,
   RustCallableSignature,
   RustGeneratorProtocol,
@@ -111,14 +119,10 @@ export {
   rustOptionTargetType,
 } from "./carriers/optional.js";
 export {
-  isRustNamedTypeTraitContract,
-  rustNamedTypeTraitImplementationSemanticKey,
-  rustNamedTypeTraitRequirementSemanticKey,
   rustBigIntTargetType,
   rustBorrowedStrTargetType,
   rustFixedArrayCarrierValue,
   rustFixedArrayTargetType,
-  rustMoveOnlyNamedTypeTraits,
   rustNamedTargetType,
   rustTraitReference,
   rustNamedTypeCarrierValue,
@@ -126,21 +130,31 @@ export {
   rustNullTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
+  rustTupleElementCarriers,
   rustTupleTargetType,
   rustUndefinedTargetType,
   rustUnitTargetType,
   rustVecTargetType,
 } from "./carriers/native.js";
+export {
+  createRustNamedTypeTraitContractIndex,
+  isRustNamedTypeTraitContract,
+  rustNamedTypeTraitGenericBindingSemanticKey,
+  rustNamedTypeTraitImplementationSemanticKey,
+  rustNamedTypeTraitRequirementSemanticKey,
+} from "./trait-contracts.js";
+export { rustBoundsAlphaEquivalent } from "./alpha-equivalence.js";
 export type {
   RustFixedArrayCarrierValue,
   RustNamedTypeCarrierValue,
 } from "./carriers/native.js";
 export type {
   RustNamedTypeTraitContract,
+  RustNamedTypeTraitContractEntry,
+  RustNamedTypeTraitContractIndex,
   RustNamedTypeTraitImplementation,
   RustNamedTypeTraitRequirement,
 } from "./model.js";
-export type { RustTypeParameterTraitResolver } from "./carriers/traits.js";
 export {
   isRustDefinitelyNullishCarrier,
   isRustIntegerCarrier,
@@ -255,15 +269,12 @@ export {
   rustTraitOpenGenericIdentityKeys,
 } from "./generic-reference-collection.js";
 export {
-  isRustCopyCarrier,
+  createRustTraitSupportQueries,
   isRustJsStrictEqualityCarrier,
   isRustSourceStringConvertibleCarrier,
   rustCloneTrait,
-  rustCarrierSupportsClone,
   rustCarrierReferentMutationRequiresMutableBinding,
   rustCarrierSupportsJsEquality,
-  rustCarrierSupportsTrait,
-  rustCarrierSupportsTraitBound,
   rustCopyTrait,
   rustDefaultTrait,
   rustDropTrait,
@@ -279,4 +290,8 @@ export {
   rustUnpinTrait,
   rustSizedTrait,
   rustBuiltinTraitForCanonicalPath,
+} from "./carriers/traits.js";
+export type {
+  RustTraitSupportQueries,
+  RustTypeParameterTraitResolver,
 } from "./carriers/traits.js";

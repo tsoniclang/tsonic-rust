@@ -40,6 +40,7 @@ export function createRustProviderPackageSourceProvider(definition: RustProvider
       id: rustProviderBindingProviderId(definition.id),
       version: definition.version,
       extensionContractVersion: TstsSourceProviderContractVersion,
+      configHash: definition.compilationSnapshotId,
     },
     declarationMaterialization: "complete",
     ownsModule(specifier: string) {

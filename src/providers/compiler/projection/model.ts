@@ -8,7 +8,7 @@ import type {
   RustCompilerStandardItemLocation,
 } from "../model/model.js";
 import type { RustCompilerSubstitutions } from "../model/rustdoc-types.js";
-import type { RustNamedTypeTraitContract } from "../../../target-model/types/model.js";
+import type { RustNamedTypeTraitContractEntry } from "../../../target-model/types/model.js";
 import type { RustProviderModuleDefinition, RustProviderOperationDefinition, RustProviderTypeDefinition } from "../../packages/model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustGenericArgument } from "../../../target-model/semantics/index.js";
@@ -18,8 +18,7 @@ export interface RustCompilerProviderProjection {
   readonly module: RustProviderModuleDefinition;
   readonly operations: readonly RustProviderOperationDefinition[];
   readonly types: readonly RustProviderTypeDefinition[];
-  readonly carrierPaths: ReadonlyMap<string, string>;
-  readonly carrierTraits: ReadonlyMap<string, RustNamedTypeTraitContract>;
+  readonly traitContracts: ReadonlyMap<string, RustNamedTypeTraitContractEntry>;
 }
 
 export interface ProjectionOwner {
@@ -36,8 +35,7 @@ export interface ProjectionContext {
   readonly modulePath: readonly string[];
   readonly owner: ProjectionOwner;
   readonly imports: Map<string, Set<string>>;
-  readonly carrierPaths: Map<string, string>;
-  readonly carrierTraits: Map<string, RustNamedTypeTraitContract>;
+  readonly traitContracts: Map<string, RustNamedTypeTraitContractEntry>;
   readonly standardItems: ReadonlyMap<string, RustCompilerStandardItemLocation>;
   readonly localStandardTypeNames: ReadonlyMap<string, string>;
   readonly defaultTypeBindings?: RustCompilerSubstitutions;

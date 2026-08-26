@@ -8,6 +8,7 @@ import {
 } from "./carriers/source-types.js";
 import { rustPathTargetType } from "./constructors.js";
 import {
+  compareRustSemanticKeys,
   rustConstSemanticKey,
   rustLifetimeSemanticKey,
   rustSemanticIdentitiesEqual,
@@ -62,7 +63,7 @@ export function rustGenericSubstitutionEntries(
 ): RustGenericSubstitutionEntries {
   const ordered = <T>(values: ReadonlyMap<string, T>): readonly (readonly [string, T])[] =>
     Object.freeze([...values]
-      .sort(([left], [right]) => left.localeCompare(right, "en"))
+      .sort(([left], [right]) => compareRustSemanticKeys(left, right))
       .map(([identity, value]) => Object.freeze([identity, value] as const)));
   return Object.freeze({
     lifetimes: ordered(substitutions.lifetimes),
@@ -453,14 +454,6 @@ export function substituteRustTargetGenerics(
         ...type,
         arguments: type.arguments.map((argument) =>
           substituteRustGenericArgument(argument, substitutions)),
-        traitImplementations: type.traitImplementations.map((implementation) => ({
-          ...implementation,
-          trait: substituteRustTraitRef(implementation.trait, substitutions),
-          requirements: implementation.requirements.map((requirement) => ({
-            ...requirement,
-            trait: substituteRustTraitRef(requirement.trait, substitutions),
-          })),
-        })),
       });
     case "array":
       return {
@@ -651,12 +644,6 @@ export function substituteRustBound(
         ...bound,
         projection: substituteAssociatedProjectionShape(bound.projection, substitutions),
         value: substituteRustTargetGenerics(bound.value, substitutions),
-      };
-    case "precise-capture":
-      return {
-        ...bound,
-        captures: bound.captures.map((capture) =>
-          substituteRustCapturedGeneric(capture, substitutions)),
       };
   }
 }

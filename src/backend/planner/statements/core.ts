@@ -137,6 +137,7 @@ export function planStatementSequence(
   context: RustPlanContext,
 ): RustBlock | undefined {
   const fixedMutableLoanStatements = planRustFixedMutableLoanStatements(children, context);
+  if (fixedMutableLoanStatements === undefined) return undefined;
   if (fixedMutableLoanStatements.size > 0) {
     context = { ...context, fixedMutableLoanStatements };
   }

@@ -11,6 +11,7 @@ import type {
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
+import type { RustTraitSupportQueries } from "../../target-model/types/index.js";
 
 export interface RustSourcePolicyContext {
   readonly source: TargetSourceProgram;
@@ -18,6 +19,7 @@ export interface RustSourcePolicyContext {
   readonly sourceFiles: readonly SourceFile[];
   readonly facts: RustPlanQueries;
   readonly names: RustNamePlan;
+  readonly traits: RustTraitSupportQueries;
   readonly diagnostics: TargetDiagnostic[];
   semantics(sourceFile: SourceFile): SourceFileSemantics;
   semanticsFor(node: Node): SourceFileSemantics;

@@ -1,4 +1,5 @@
 import {
+  rustCallableBoundaryCanAdapt,
   rustClosureTargetType,
   rustJsArrayTargetType,
   rustJsStringTargetType,
@@ -6,6 +7,7 @@ import {
   rustStringTargetType,
 } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { applyRustProviderArgumentConversion } from "../../../policy/operations/forms.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
 import type {
   RustCheckedCallSelectionInput,
@@ -14,7 +16,6 @@ import type {
 import type { RustOperationsProviderOptions } from "./model.js";
 import type {
   RustProviderOperationForm,
-  RustValueConversion,
 } from "../../../target-model/operations/model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { Type } from "@tsonic/tsts";
@@ -55,7 +56,7 @@ export function finalizeRustRegExpReplacementCallbackContract(
   evidence: RustRegExpReplacementCallbackEvidence,
   sourceCarrier: TargetTypeRef,
 ): RustRegExpReplacementCallbackContract | undefined {
-  if (!rustTargetTypeRefEquals(evidence.sourceCarrier, sourceCarrier)) {
+  if (!rustCallableBoundaryCanAdapt(sourceCarrier, evidence.sourceCarrier)) {
     return undefined;
   }
   return Object.freeze({
@@ -74,36 +75,16 @@ export function applyRustRegExpReplacementCallbackConversion(
   sourceArgumentIndex: number,
   sourceArgumentCount: number,
   contract: RustRegExpReplacementCallbackContract,
-  sourceFallible: boolean,
+  sourceInvocationReturnsResult: boolean,
 ): RustProviderOperationForm | undefined {
-  if (form.form !== "call" && form.form !== "free-call" &&
-    form.form !== "receiver-method" && form.form !== "arg-receiver-method" &&
-    form.form !== "arg-structural-method") {
-    return undefined;
-  }
-  const existing = form.argConversions;
-  if (sourceArgumentIndex < 0 || sourceArgumentIndex >= sourceArgumentCount ||
-    (existing !== undefined && existing.length !== sourceArgumentCount) ||
-    existing?.[sourceArgumentIndex] !== undefined ||
-    ((form.form === "arg-receiver-method" || form.form === "arg-structural-method") &&
-      sourceArgumentIndex === 0)) {
-    return undefined;
-  }
-  const conversions = existing === undefined
-    ? Array.from(
-        { length: sourceArgumentCount },
-        (): RustValueConversion | undefined => undefined,
-      )
-    : [...existing];
-  conversions[sourceArgumentIndex] = Object.freeze({
+  return applyRustProviderArgumentConversion(form, sourceArgumentIndex, sourceArgumentCount, Object.freeze({
     kind: "js-argument-vector-callback",
     lane: contract.lane,
     source: contract.sourceCarrier,
     target: contract.targetCarrier,
     projections: contract.projections,
-    sourceFallible,
-  });
-  return Object.freeze({ ...form, argConversions: Object.freeze(conversions) });
+    sourceInvocationReturnsResult,
+  }));
 }
 
 function replacementCallbackEvidence(

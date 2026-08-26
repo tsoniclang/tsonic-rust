@@ -143,12 +143,18 @@ export function recordCallableTypeSignatureFacts(
 export function rustImplicitCallableReceiverLifetime(
   walk: RustFactWalk,
   declaration: Node,
-): RustLifetimeRef {
-  const occurrence = sourceNodeIdentity(walk.context.ast, declaration) ?? [
-    walk.context.ast.getPath(walk.context.ast.getSourceFile(declaration)),
-    walk.context.ast.pos(declaration),
-    walk.context.ast.end(declaration),
-  ].join(":");
+): RustLifetimeRef | undefined {
+  const occurrence = sourceNodeIdentity(walk.context.ast, declaration);
+  if (occurrence === undefined) {
+    appendRustDiagnostic(
+      walk,
+      "RUST_CALLABLE_RECEIVER_IDENTITY_NOT_PROVEN",
+      "An implicit Rust callable receiver lifetime requires one exact compiler-owned source declaration identity.",
+      declaration,
+      ["target.capability=rust.callable.receiver-lifetime"],
+    );
+    return undefined;
+  }
   return rustInferredLifetime(`source-method-receiver\0${occurrence}`);
 }
 

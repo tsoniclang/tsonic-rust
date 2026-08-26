@@ -3,7 +3,7 @@ import type { TargetTypeRef } from "../model.js";
 import {
   rustBuiltinPathTargetType,
   rustPathTypeArguments,
-  rustPathTypeMatches,
+  rustBuiltinPathTypeMatches,
 } from "../constructors.js";
 
 export function rustOptionTargetType(value: TargetTypeRef): TargetTypeRef {
@@ -11,7 +11,7 @@ export function rustOptionTargetType(value: TargetTypeRef): TargetTypeRef {
 }
 
 export function isRustOptionCarrier(carrier: TargetTypeRef | undefined): boolean {
-  return rustPathTypeMatches(carrier, rustOptionTargetId) &&
+  return rustBuiltinPathTypeMatches(carrier, rustOptionTargetId, "rust") &&
     rustPathTypeArguments(carrier)?.length === 1;
 }
 

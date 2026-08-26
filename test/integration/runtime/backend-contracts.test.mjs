@@ -15,6 +15,8 @@ import {
 } from "../../../dist/backend/planner/expressions/index.js";
 import {
   isRustNamedTypeTraitContract,
+  createRustNamedTypeTraitContractIndex,
+  createRustTraitSupportQueries,
   rustCloneTrait,
   rustCopyTrait,
   rustJsValueTargetType,
@@ -26,31 +28,66 @@ import {
 import { emptyRustGenerics } from "../../../dist/target-model/semantics/index.js";
 
 test("native trait contracts preserve exact conditional Copy and Clone semantics", () => {
+  const parameter = Object.freeze({
+    kind: "type",
+    value: Object.freeze({
+      kind: "type-parameter",
+      identity: Object.freeze({
+        kind: "project",
+        packageId: "fixture",
+        sourceFileId: "/src/native-traits.ts",
+        declarationId: "Cell.T",
+      }),
+      displayName: "T",
+    }),
+  });
+  const genericBindings = Object.freeze([{ genericArgumentIndex: 0, parameter }]);
   const traits = {
     implementations: [
       {
         trait: rustCloneTrait,
-        requirements: [{ typeArgumentIndex: 0, trait: rustCloneTrait }],
+        genericBindings,
+        requirements: [{
+          genericArgumentIndex: 0,
+          bound: { kind: "trait", trait: rustCloneTrait, polarity: "required" },
+        }],
       },
       {
         trait: rustCopyTrait,
-        requirements: [{ typeArgumentIndex: 0, trait: rustCopyTrait }],
+        genericBindings,
+        requirements: [{
+          genericArgumentIndex: 0,
+          bound: { kind: "trait", trait: rustCopyTrait, polarity: "required" },
+        }],
       },
     ],
   };
   assert.equal(isRustNamedTypeTraitContract(traits), true);
-  assert.ok(rustNamedTypeCarrierValue(rustNamedTargetType(
+  const identity = Object.freeze({
+    kind: "generated",
+    artifactId: "fixture.native-traits",
+    itemId: "acme.Cell",
+  });
+  const support = createRustTraitSupportQueries(
+    createRustNamedTypeTraitContractIndex([{ typeIdentity: identity, contract: traits }]),
+  );
+  const carrier = rustNamedTargetType(
     "acme.Cell",
     "acme::Cell",
     [{ kind: "source-primitive", name: "int32" }],
-    traits,
-  )));
-  assert.throws(() => rustNamedTargetType(
+    identity,
+  );
+  assert.ok(rustNamedTypeCarrierValue(carrier));
+  assert.equal(support.supportsClone(carrier), true);
+  assert.equal(support.isCopy(carrier), true);
+  const nonCloneCarrier = rustNamedTargetType(
     "acme.Cell",
     "acme::Cell",
-    [],
-    traits,
-  ), /invalid native trait contract/u);
+    [{ kind: "str" }],
+    identity,
+  );
+  assert.equal(support.supportsClone(nonCloneCarrier), false);
+  assert.equal(support.isCopy(nonCloneCarrier), false);
 });
 
 test("value-returning fallible bodies never synthesize an invalid Ok unit", () => {

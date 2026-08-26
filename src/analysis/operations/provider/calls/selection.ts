@@ -271,6 +271,7 @@ export function selectRustCheckedCall(
       },
       carrierSupportsProjectIdentity: (carrier) =>
         options.projectTypes.definitionForCarrier(carrier) !== undefined,
+      carrierSupportsClone: (carrier) => context.traits.supportsClone(carrier),
       resultUse: context.source.navigation.expressionResultUse(request.source.call),
     });
     if (selection === undefined || selection.fact.kind !== "provider-operation" || selection.resultCarrier === undefined) {

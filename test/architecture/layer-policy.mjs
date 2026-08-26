@@ -92,8 +92,8 @@ export const rustSourceRules = Object.freeze([
   Object.freeze({
     ruleId: "ARCH-RUST-PROVIDER-001",
     matches: (file, source) => file === "src/providers/packages/model.ts" &&
-      /interface RustProviderSemantics[\s\S]*?\bReadonlyMap\s*</u.test(source),
-    reason: "Sealed Rust provider semantics expose immutable metadata values rather than mutable Map objects.",
+      /\bcarrierPaths\b|\bcarrierTraits\b/u.test(source),
+    reason: "Sealed Rust provider semantics retain exact materialized identities, never package-local carrier lookup inputs.",
   }),
   Object.freeze({
     ruleId: "ARCH-RUST-PROVIDER-002",

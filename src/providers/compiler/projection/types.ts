@@ -8,6 +8,7 @@ import {
   rustSequenceTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
+  rustTupleTargetType,
   rustBuiltinTraitForCanonicalPath,
   rustFnOnceOutputIdentity,
   rustTypeParameterTargetType,
@@ -27,7 +28,6 @@ import {
 import {
   compilerModuleSpecifier,
   compilerTargetTypeId,
-  recordCarrierPath,
   rustPath,
 } from "./operations.js";
 import { compilerAssociatedSourceExportName } from "../model/rustdoc-items.js";
@@ -104,17 +104,32 @@ export function sourceTypeFor(
         { kind: "literal", value: type.safety === "unsafe" },
         { kind: "literal", value: type.variadic },
       ]);
-    case "trait-object":
+    case "trait-object": {
+      const traits = [type.principal, ...type.autoTraits].map((trait) =>
+        sourceTraitFor(trait, context, position));
+      const sourceTraits: ProviderTypeExpression = traits.length === 1
+        ? traits[0]!
+        : { kind: "intersection", types: traits };
       return importedSourceType(context, rustTypesModule, rustSourceTypeExportIds.dynamicTrait, [
-        sourceTraitFor(type.principal, context, position),
+        sourceTraits,
         sourceLifetimeFor(type.lifetime, context),
       ]);
+    }
     case "opaque": {
-      const principal = type.bounds.find((bound) => bound.kind === "trait" && bound.polarity === "required");
-      if (principal?.kind !== "trait") throw new Error("Rust opaque type has no exact principal source bound.");
+      const traitBounds = type.bounds.filter((bound): bound is Extract<RustCompilerBound, {
+        readonly kind: "trait";
+      }> => bound.kind === "trait" && bound.polarity === "required");
+      if (traitBounds.length === 0) {
+        throw new Error("Rust opaque type has no exact principal source bound.");
+      }
+      const sourceBounds = traitBounds.map((bound) => sourceTraitFor(bound.trait, context, position));
       return importedSourceType(context, rustTypesModule, rustSourceTypeExportIds.opaqueType, [
-        sourceTraitFor(principal.trait, context, position),
-        { kind: "tuple", elementTypes: type.captures.map((capture) => sourceGenericArgumentFor(capture, context, position)) },
+        sourceBounds.length === 1
+          ? sourceBounds[0]!
+          : { kind: "intersection", types: sourceBounds },
+        importedSourceType(context, rustTypesModule, rustSourceTypeExportIds.captureSet, [
+          { kind: "tuple", elementTypes: type.captures.map((capture) => sourceGenericArgumentFor(capture, context, position)) },
+        ]),
       ]);
     }
     case "associated-type":
@@ -122,10 +137,14 @@ export function sourceTypeFor(
     case "path": {
       if (isRustStringPath(type)) return { kind: "string" };
       if (isRustOptionPath(type)) {
-        const arguments_ = type.arguments.filter((argument) => argument.kind === "type")
-          .map((argument) => sourceTypeFor(argument.value, context, position, true));
-        if (arguments_.length !== 1) throw new Error("Rust Option must carry exactly one type argument.");
-        return { kind: "union", types: [arguments_[0]!, { kind: "undefined" }] };
+        const [argument] = type.arguments;
+        if (type.arguments.length !== 1 || argument?.kind !== "type") {
+          throw new Error("Rust Option must carry exactly one type argument.");
+        }
+        return {
+          kind: "union",
+          types: [sourceTypeFor(argument.value, context, position, true), { kind: "undefined" }],
+        };
       }
       const standard = context.standardItems.get(canonicalPathKey(type.identity.canonicalPath));
       if (standard?.kind === "trait") {
@@ -172,7 +191,7 @@ function sourceTypeParameterFor(
   if (parameter?.kind !== "type" || parameter.declarationKind === "explicit") {
     return {
       kind: "type-parameter",
-      name: sourceGenericName(type.identity.itemId, type.displayName, context),
+      name: requireSourceGenericName(type.identity.itemId, context),
     };
   }
   const requiredTraits = parameter.bounds.flatMap((bound) =>
@@ -258,10 +277,11 @@ export function targetTypeFor(
     case "type-parameter":
       return rustTypeParameterTargetType(
         compilerProjectionIdentity(context, type.identity.itemId),
-        sourceGenericName(type.identity.itemId, type.displayName, context),
+        requireSourceGenericName(type.identity.itemId, context),
       );
     case "self": return requireCurrentType(context).carrier;
-    case "tuple": return Object.freeze({ kind: "tuple", elements: type.elements.map((element) => targetTypeFor(element, context, position, true)) });
+    case "tuple": return rustTupleTargetType(type.elements.map((element) =>
+      targetTypeFor(element, context, position, true)));
     case "array": return rustFixedArrayType(targetTypeFor(type.element, context, position, true), targetConstFor(type.length, context));
     case "slice": return nested
       ? Object.freeze({ kind: "slice", element: targetTypeFor(type.element, context, position, true) })
@@ -304,10 +324,11 @@ export function targetTypeFor(
     case "path": {
       if (isRustStringPath(type)) return rustStringTargetType();
       if (isRustOptionPath(type)) {
-        const arguments_ = type.arguments.filter((argument) => argument.kind === "type")
-          .map((argument) => targetTypeFor(argument.value, context, position, true));
-        if (arguments_.length !== 1) throw new Error("Rust Option must carry exactly one target type argument.");
-        return rustOptionTargetType(arguments_[0]!);
+        const [argument] = type.arguments;
+        if (type.arguments.length !== 1 || argument?.kind !== "type") {
+          throw new Error("Rust Option must carry exactly one target type argument.");
+        }
+        return rustOptionTargetType(targetTypeFor(argument.value, context, position, true));
       }
       const standard = context.standardItems.get(canonicalPathKey(type.identity.canonicalPath));
       if (standard?.kind === "trait") {
@@ -319,7 +340,6 @@ export function targetTypeFor(
         }
         const arguments_ = standardTargetTypeArguments(type, standard, context, position);
         const path = standard.targetPath.join("::");
-        recordCarrierPath(context.carrierPaths, standard.targetId, path);
         return rustPathTargetType({
           identity: compilerProjectionIdentity(context, standard.targetId),
           displayPath: standard.targetPath,
@@ -329,7 +349,6 @@ export function targetTypeFor(
       if (type.crateName !== context.dependency.crateName) throw new Error(`External Rust type '${rustCompilerTypeText(type)}' has no target carrier contract.`);
       const id = compilerTargetTypeId(context.dependency, type.identity.canonicalPath);
       const path = rustPath(context.dependency.targetCrateName, type.modulePath, type.name);
-      recordCarrierPath(context.carrierPaths, id, path);
       return rustPathTargetType({
         identity: compilerProjectionIdentity(context, id),
         displayPath: path.split("::"),
@@ -375,8 +394,8 @@ export function parameterPassing(type: RustCompilerType): {
 function sourceLifetimeFor(lifetime: RustCompilerLifetime, context: ProjectionContext): ProviderTypeExpression {
   switch (lifetime.kind) {
     case "static": return importedSourceType(context, rustTypesModule, rustSourceTypeExportIds.staticLifetime, []);
-    case "parameter": return { kind: "type-parameter", name: sourceGenericName(lifetime.identity.itemId, lifetime.displayName, context) };
-    case "bound": return { kind: "type-parameter", name: sourceGenericName(lifetime.parameterId, lifetime.displayName, context) };
+    case "parameter": return { kind: "type-parameter", name: requireSourceGenericName(lifetime.identity.itemId, context) };
+    case "bound": return { kind: "type-parameter", name: requireSourceGenericName(lifetime.parameterId, context) };
     case "elided": return importedSourceType(context, rustTypesModule, rustSourceTypeExportIds.life, []);
   }
 }
@@ -393,7 +412,7 @@ function sourceConstFor(expression: RustCompilerConstExpression, context: Projec
     }
     case "parameter": return {
       kind: "type-parameter",
-      name: sourceGenericName(expression.identity.itemId, expression.displayName, context),
+      name: requireSourceGenericName(expression.identity.itemId, context),
     };
     case "item": throw new Error(`Rust associated const '${expression.identity.itemId}' has no source type argument contract.`);
     case "inferred": throw new Error("Inferred Rust const argument cannot be projected to source.");
@@ -428,7 +447,7 @@ export function sourceTraitFor(trait: RustCompilerTraitReference, context: Proje
         standard.sourceModuleSpecifier,
         standard.sourceExportName,
         [
-          sourceGenericArgumentFor(callable.arguments, context, position),
+          sourceCallableArgumentTupleFor(callable.arguments, context, position),
           sourceTypeFor(callable.output, context, position, true),
         ],
       );
@@ -558,7 +577,8 @@ function compilerCallableTraitProjection(
   const output = parenthesizedArguments?.[1];
   if (parenthesizedArguments !== undefined &&
     standard.sourceGenericArgumentCount === 1 &&
-    argumentTuple?.kind === "type" && argumentTuple.value.kind === "tuple" &&
+    argumentTuple?.kind === "type" &&
+    (argumentTuple.value.kind === "unit" || argumentTuple.value.kind === "tuple") &&
     output?.kind === "type") {
     return Object.freeze({ arguments: argumentTuple, output: output.value });
   }
@@ -580,6 +600,23 @@ function compilerCallableTraitProjection(
   throw new Error(
     `Rust callable trait '${path.join("::")}' has no exact argument-tuple and output contract.`,
   );
+}
+
+function sourceCallableArgumentTupleFor(
+  argument: RustCompilerGenericArgument,
+  context: ProjectionContext,
+  position: "parameter" | "result",
+): ProviderTypeExpression {
+  if (argument.kind !== "type" ||
+    (argument.value.kind !== "unit" && argument.value.kind !== "tuple")) {
+    throw new Error("Rust callable trait argument contract is not one canonical tuple type.");
+  }
+  return {
+    kind: "tuple",
+    elementTypes: argument.value.kind === "unit"
+      ? []
+      : argument.value.elements.map((element) => sourceTypeFor(element, context, position, true)),
+  };
 }
 
 function targetAssociatedConstraintFor(
@@ -622,16 +659,8 @@ export function targetBoundFor(bound: RustCompilerBound, context: ProjectionCont
       if (projection.kind !== "associated-type") throw new Error("Rust associated equality projection lost its kind.");
       return Object.freeze({ kind: "associated-equality", projection, value: targetTypeFor(bound.value, context, position, true) });
     }
-    case "precise-capture": return Object.freeze({
-      kind: "precise-capture",
-      captures: Object.freeze(bound.captures.map((capture) => {
-        const selected = targetGenericArgumentFor(capture, context, position);
-        if (selected.kind === "lifetime") return { kind: "lifetime" as const, value: selected.value };
-        if (selected.kind === "type" && selected.value.kind === "type-parameter") return { kind: "type" as const, identity: selected.value.identity, displayName: selected.value.displayName };
-        if (selected.kind === "const" && selected.value.kind === "parameter") return { kind: "const" as const, identity: selected.value.identity, displayName: selected.value.displayName };
-        throw new Error("Rust precise capture is not a generic identity.");
-      })),
-    });
+    case "precise-capture":
+      throw new Error("Rust compiler precise captures must be canonicalized onto their owning opaque type before target projection.");
   }
 }
 
@@ -702,8 +731,12 @@ export function targetGenericsFor(
   });
 }
 
-function sourceGenericName(identity: string, fallback: string, context: ProjectionContext): string {
-  return context.genericNames?.get(identity) ?? fallback;
+function requireSourceGenericName(identity: string, context: ProjectionContext): string {
+  const name = context.genericNames?.get(identity);
+  if (name === undefined) {
+    throw new Error(`Rust generic identity '${identity}' has no exact source-visible name.`);
+  }
+  return name;
 }
 
 function targetBinderFor(

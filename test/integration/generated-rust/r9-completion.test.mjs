@@ -123,7 +123,13 @@ test("stream scheduler target limits fail at the provider boundary", async () =>
 
 test("provider package creation rejects inconsistent identity models", async () => {
   const { createRustProviderPackage } = await import("../../../dist/public/provider.js");
-  const base = { id: "bad", displayName: "Bad", version: "1.0.0", crates: [] };
+  const base = {
+    id: "bad",
+    displayName: "Bad",
+    version: "1.0.0",
+    compilationSnapshotId: "bad@1.0.0",
+    crates: [],
+  };
   const fn = (m, name) => ({ id: `${m}::${name}`, name, kind: "function", signatures: [{ id: `${m}::${name}()`, name, parameters: [], returnType: { kind: "void" } }] });
   const cases = [
     {

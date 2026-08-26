@@ -33,7 +33,12 @@ import {
 } from "../../../facts/keys.js";
 import type { RustTargetMember, TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustRegExpReplacementCallbackContract } from "../regexp-replacement-callback.js";
-import { rustJsStringTargetType, rustStringTargetType, rustTypeArgument } from "../../../../target-model/types/index.js";
+import {
+  rustCallableBoundaryProtocol,
+  rustJsStringTargetType,
+  rustStringTargetType,
+  rustTypeArgument,
+} from "../../../../target-model/types/index.js";
 
 export interface RustPreparedDeferredCheckedCall {
   readonly sourceName: string;
@@ -212,7 +217,10 @@ export function finalizeRustPreparedCheckedCall(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedCallSelectionResult> {
-  let template = callbackFallible
+  const callbackCarrier = prepared.parameterCarriers[prepared.callback.sourceArgumentIndex];
+  const callbackInvocationIsImmediatelyFallible = callbackFallible ||
+    rustCallableBoundaryProtocol(callbackCarrier)?.failureChannel === "result";
+  let template = callbackInvocationIsImmediatelyFallible
     ? callbackFallibleTemplate(prepared)
     : prepared.template;
   if (prepared.replacementCallback !== undefined) {
@@ -221,7 +229,7 @@ export function finalizeRustPreparedCheckedCall(
       prepared.callback.sourceArgumentIndex,
       prepared.parameterCarriers.length,
       prepared.replacementCallback,
-      callbackFallible,
+      callbackInvocationIsImmediatelyFallible,
     );
     if (target === undefined) {
       return rejectSelectedOperation(

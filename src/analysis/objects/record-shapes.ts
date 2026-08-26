@@ -5,7 +5,6 @@ import {
   rustClosureTargetType,
   rustSourceTypeCarrierValue,
   rustStructuralObjectCarrierValue,
-  rustCarrierSupportsClone,
 } from "../../target-model/types/index.js";
 import {
   KindSpreadAssignment,
@@ -118,7 +117,7 @@ export function resolveProjectIndexRecordLiteral(
   );
   if (keyCarrier === undefined || valueCarrier === undefined || storageName === undefined ||
     (!isRustStringCarrier(keyCarrier) && !isRustIntegerCarrier(keyCarrier)) ||
-    !rustCarrierSupportsClone(valueCarrier)) {
+    !walk.context.traits.supportsClone(valueCarrier)) {
     return undefined;
   }
   const contributions: Extract<

@@ -38,6 +38,7 @@ import { rustArgumentPassingKey, rustRuntimeCarrierKey, rustSelectedOperationKey
 import { rustArgumentPassingMode } from "../facts/parameter-passing.js";
 import { rustProjectCallableTargetName } from "../facts/source-member-name.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustTypeSemanticKey } from "../../target-model/semantics/index.js";
 import { sourceTypeCarrierForDeclaration } from "./inputs.js";
 import { rustSourceOwnershipOperationFactKey } from "../../source/semantics/facts.js";
 import { rustExplicitReferenceArgumentCanCoerce } from "../../policy/types/value-carrier-reconciliation.js";
@@ -336,6 +337,7 @@ export function applySelectedProjectSourceCall(
         rawReceiverCarrier,
         selectedReceiverCarrier,
         walk.context.projectTypes,
+        walk.context.traits,
       );
       if (receiverProjection.kind === "incompatible") {
         appendRustDiagnostic(
@@ -799,8 +801,8 @@ export function setCarrierFact(walk: RustFactWalk, subject: Node, carrier: Targe
         subject,
         [
           "target.capability=rust.runtime-carrier.single-owner",
-          `existing=${JSON.stringify(existing.carrier)}`,
-          `incoming=${JSON.stringify(carrier)}`,
+          `existing=${rustTypeSemanticKey(existing.carrier)}`,
+          `incoming=${rustTypeSemanticKey(carrier)}`,
         ],
       );
       return undefined;

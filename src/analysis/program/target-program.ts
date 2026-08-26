@@ -82,6 +82,8 @@ export function analyzeRustTargetProgram(
   const projectTypes = context.projectTypes.seal();
   const sourceGenerics = context.sourceGenerics.seal();
   const sourceObjectRepresentations = context.objectRepresentations.seal();
+  const structuralShapes = context.structuralShapes.seal();
+  const projectFieldDispatch = context.projectFieldDispatch.seal();
   const ownership = analyzeRustOwnership({
     ast: context.ast,
     sourceFiles: context.sourceFiles,
@@ -91,7 +93,10 @@ export function analyzeRustTargetProgram(
     providerTypes: providerSemantics.types,
     projectTypes,
     objectRepresentations: sourceObjectRepresentations,
+    structuralShapes,
+    projectFieldDispatch,
     declarationContracts,
+    traits: context.traits,
   });
   if (ownership.kind === "rejected") {
     return rejectedTargetStage(ownership.diagnostics);
@@ -102,6 +107,7 @@ export function analyzeRustTargetProgram(
     facts,
     context.sourceGenerics,
     ownership.analysis,
+    context.traits,
   );
   if (callableGenericRequirements.kind === "rejected") {
     return rejectedTargetStage(callableGenericRequirements.diagnostics);
@@ -121,13 +127,13 @@ export function analyzeRustTargetProgram(
     objectRepresentations: sourceObjectRepresentations,
     projectMethodDispatch: context.projectMethodDispatch.seal(),
     projectMethodProperties: context.projectMethodProperties.seal(),
-    projectFieldDispatch: context.projectFieldDispatch.seal(),
+    projectFieldDispatch,
     sourceCallableSpecializations: context.sourceCallableSpecializations.seal(),
     sourceGenerics,
     declarationContracts,
     callableGenericRequirements: callableGenericRequirements.index,
     ownership: ownership.analysis,
-    structuralShapes: context.structuralShapes.seal(),
+    structuralShapes,
     runtimeReferences: runtimeReferences.plan,
     binaryEpilogues,
     providerErrorCarriers: analyzeRustProviderErrorCarriers(

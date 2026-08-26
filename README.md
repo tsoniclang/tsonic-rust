@@ -47,9 +47,9 @@ lowers to a Result closure boundary, and fallible calls propagate with `?`
 (closures are fallibility boundaries). The string ABI: parameters whose
 every use is a ref-mode provider argument or member-access receiver take
 `&str` (literal call sites pass bare `&str` literals); ownership-requiring
-uses keep owned `String`. Homogeneous primitive tuple annotations carry
-compile-time-proven length and lower to `[T; N]` with literal construction
-and constant in-range indexing; dynamic indexing fails closed.
+uses keep owned `String`. Ordinary tuple annotations lower to Rust tuples and
+retain positional access. Exact `FixedArray<T, N>` source facts lower to
+`[T; N]`; their proven length supports checked constant and dynamic indexing.
 
 The Rust-only operations are owned by `@tsonic/rust/lang.js`: `ref` creates a
 shared loan, `mut` creates an exclusive loan, `move` transfers native

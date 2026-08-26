@@ -16,6 +16,10 @@ import {
   rustProviderPathTargetType,
 } from "../../../dist/public/provider.js";
 import {
+  createRustNamedTypeTraitContractIndex,
+  createRustTraitSupportQueries,
+} from "../../../dist/target-model/types/index.js";
+import {
   collectRustProviderSemantics,
   collectRustProviderSemanticsFromDefinitions,
   mergeRustProviderSemantics,
@@ -43,10 +47,37 @@ export function load(path: string): string {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /acme_files::read_text\(path\.clone\(\)\)/u);
+  assert.match(source, /acme_files::read_text\(path\)/u);
+  assert.doesNotMatch(source, /acme_files::read_text\(path\.clone\(\)\)/u);
   const manifest = artifactText(result, "Cargo.toml");
   assert.match(manifest, /acme_files = \{ path = ".*acme_files" \}/u);
   assert.match(manifest, /tsonic_rust_runtime = \{ path = /u);
+});
+
+test("ordinary source calls clone only when a later source-visible use requires it", () => {
+  const packages = [acmeFilesPackage()];
+  const { result } = compileRust({
+    packages,
+    files: {
+      "index.ts": `
+import { readText } from "@acme/files";
+
+function forward(path: string): string {
+  return readText(path);
+}
+
+export function loadAndRetain(path: string): string {
+  const contents = forward(path);
+  return path + contents;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /fn forward\(path: String\) -> String \{\s*acme_files::read_text\(path\)\s*\}/u);
+  assert.match(source, /forward\(path\.clone\(\)\)/u);
 });
 
 test("provider call records selected signature and operation facts by identity", () => {
@@ -249,15 +280,19 @@ test("provider packages contribute cargo path dependencies through runtime contr
 
 test("provider paths and named carriers materialize before facts reach the backend", () => {
   const resultCarrier = rustProviderPathTargetType({
-    owner: { packageId: "acme-materialized", packageVersion: "1.0.0" },
+    owner: {
+      packageId: "acme-materialized",
+      packageVersion: "1.0.0",
+      compilationSnapshotId: "acme-materialized@1.0.0",
+    },
     itemId: "acme.materialized.Value",
     displayPath: "acme_runtime::Value",
-    traitImplementations: [{ trait: rustCloneTrait, requirements: [] }],
   });
   const providerPackage = createRustProviderPackage({
     id: "acme-materialized",
     displayName: "Acme materialized",
     version: "1.0.0",
+    compilationSnapshotId: "acme-materialized@1.0.0",
     modules: [{
       moduleSpecifier: "@acme/materialized",
       providerModuleId: "acme.materialized",
@@ -273,6 +308,12 @@ test("provider paths and named carriers materialize before facts reach the backe
       operationKind: "method",
       target: { form: "call", path: "api::create" },
       resultCarrier,
+    }],
+    traitContracts: [{
+      typeIdentity: resultCarrier.identity,
+      contract: {
+        implementations: [{ trait: rustCloneTrait, genericBindings: [], requirements: [] }],
+      },
     }],
     aliasImports: [{ alias: "api", path: "acme_runtime::api" }],
     crates: [],
@@ -297,6 +338,7 @@ test("provider path identity distinguishes owners and rejects contradictory exac
     id,
     displayName: id,
     version: "1.0.0",
+    compilationSnapshotId: `${id}@1.0.0`,
     modules: [{
       moduleSpecifier,
       providerModuleId: id,
@@ -312,7 +354,11 @@ test("provider path identity distinguishes owners and rejects contradictory exac
       operationKind: "method",
       target: { form: "call", path: `${id.replaceAll("-", "_")}::create` },
       resultCarrier: rustProviderPathTargetType({
-        owner: { packageId: id, packageVersion: "1.0.0" },
+        owner: {
+          packageId: id,
+          packageVersion: "1.0.0",
+          compilationSnapshotId: `${id}@1.0.0`,
+        },
         itemId: "acme.Shared",
         displayPath: path,
       }),
@@ -334,17 +380,69 @@ test("provider path identity distinguishes owners and rejects contradictory exac
   ), /conflicting definitions/u);
 });
 
-test("provider carrier trait guarantees are part of the exact carrier contract", () => {
+test("provider carrier trait guarantees are separate from exact type identity", () => {
   const moveOnly = rustProviderPathTargetType({
-    owner: { packageId: "acme-shared", packageVersion: "1.0.0" },
+    owner: {
+      packageId: "acme-shared",
+      packageVersion: "1.0.0",
+      compilationSnapshotId: "acme-shared@1.0.0",
+    },
     itemId: "acme.Shared",
     displayPath: "acme_shared::Shared",
   });
   const cloneable = rustProviderPathTargetType({
-    owner: { packageId: "acme-shared", packageVersion: "1.0.0" },
+    owner: {
+      packageId: "acme-shared",
+      packageVersion: "1.0.0",
+      compilationSnapshotId: "acme-shared@1.0.0",
+    },
     itemId: "acme.Shared",
     displayPath: "acme_shared::Shared",
-    traitImplementations: [{ trait: rustCloneTrait, requirements: [] }],
   });
-  assert.notDeepEqual(moveOnly, cloneable);
+  assert.deepEqual(moveOnly, cloneable);
+
+  const packageDefinition = {
+    id: "acme-shared",
+    displayName: "Acme shared",
+    version: "1.0.0",
+    compilationSnapshotId: "acme-shared@1.0.0",
+    modules: [],
+    operations: [],
+    crates: [],
+    traitContracts: [{
+      typeIdentity: moveOnly.identity,
+      contract: {
+        implementations: [{ trait: rustCloneTrait, genericBindings: [], requirements: [] }],
+      },
+    }],
+  };
+  const semantics = collectRustProviderSemanticsFromDefinitions([packageDefinition]);
+  const support = createRustTraitSupportQueries(
+    createRustNamedTypeTraitContractIndex(semantics.traitContracts),
+  );
+  assert.equal(support.supportsClone(moveOnly), true);
+  assert.equal(createRustTraitSupportQueries(
+    createRustNamedTypeTraitContractIndex([]),
+  ).supportsClone(moveOnly), false);
+
+  assert.throws(
+    () => createRustProviderPackage({
+      ...packageDefinition,
+      compilationSnapshotId: "acme-shared@different-snapshot",
+    }),
+    /trait contract type identity is not owned by the exact provider package snapshot/u,
+  );
+  assert.throws(
+    () => createRustProviderPackage({
+      ...packageDefinition,
+      traitContracts: [{
+        ...packageDefinition.traitContracts[0],
+        typeIdentity: {
+          ...packageDefinition.traitContracts[0].typeIdentity,
+          providerId: "tsonic.rust.provider-package.other.binding",
+        },
+      }],
+    }),
+    /trait contract type identity is not owned by the exact provider package snapshot/u,
+  );
 });

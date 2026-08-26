@@ -77,9 +77,13 @@ function resolveHigherRankedCallableBinder(
 } | undefined {
   const contract = context.sourceGenerics.contractFor(declaration);
   if (contract === undefined || contract.parameters.length === 0) return undefined;
-  const binderId = rustSemanticIdentityKey(
-    rustSourceNodeIdentity(declaration, context, "higher-ranked-callable"),
+  const binderIdentity = rustSourceNodeIdentity(
+    declaration,
+    context,
+    "higher-ranked-callable",
   );
+  if (binderIdentity === undefined) return undefined;
+  const binderId = rustSemanticIdentityKey(binderIdentity);
   const lifetimeBindings: {
     readonly parameter: Extract<
       (typeof contract.parameters)[number]["parameter"],
@@ -148,12 +152,10 @@ export function resolveSourceTypeParameter(
     return undefined;
   }
   const name = context.ast.text(context.ast.name(declaration));
-  return name.length === 0
+  const identity = rustSourceNodeIdentity(declaration, context, "type-parameter");
+  return name.length === 0 || identity === undefined
     ? undefined
-    : rustTypeParameterTargetType(
-        rustSourceNodeIdentity(declaration, context, "type-parameter"),
-        name,
-      );
+    : rustTypeParameterTargetType(identity, name);
 }
 
 export function resolveSourcePrimitive(

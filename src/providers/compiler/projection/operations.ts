@@ -6,13 +6,22 @@ import type {
   RustCompilerTypeTraits,
 } from "../model/model.js";
 import type { ProjectionContext } from "./model.js";
-import type { RustNamedTypeTraitContract } from "../../../target-model/types/model.js";
+import type {
+  RustNamedTypeTraitContract,
+  RustNamedTypeTraitContractEntry,
+} from "../../../target-model/types/model.js";
 import type { RustProviderModuleDefinition, RustProviderOperationDefinition } from "../../packages/model.js";
 import type { RustProviderTypeParameterRequirement } from "../../../target-model/operations/model.js";
 import {
   rustBoundSemanticKey,
+  rustSemanticIdentityKey,
 } from "../../../target-model/semantics/index.js";
-import { targetBoundFor, targetTraitFor } from "./types.js";
+import type { RustSemanticIdentity } from "../../../target-model/semantics/index.js";
+import {
+  targetBoundFor,
+  targetGenericArgumentFor,
+  targetTraitFor,
+} from "./types.js";
 import {
   rustNamedTypeTraitImplementationSemanticKey,
   rustNamedTypeTraitRequirementSemanticKey,
@@ -35,24 +44,17 @@ export function materializeImports(
     })));
 }
 
-export function recordCarrierPath(paths: Map<string, string>, id: string, path: string): void {
-  const existing = paths.get(id);
-  if (existing !== undefined && existing !== path) {
-    throw new Error(`Rust compiler target carrier '${id}' maps to both '${existing}' and '${path}'.`);
-  }
-  paths.set(id, path);
-}
-
 export function recordCarrierTraits(
-  traits: Map<string, RustNamedTypeTraitContract>,
-  id: string,
+  traits: Map<string, RustNamedTypeTraitContractEntry>,
+  typeIdentity: RustSemanticIdentity,
   contract: RustNamedTypeTraitContract,
 ): void {
-  const existing = traits.get(id);
-  if (existing !== undefined && traitContractKey(existing) !== traitContractKey(contract)) {
-    throw new Error(`Rust compiler target carrier '${id}' has conflicting native trait contracts.`);
+  const identityKey = rustSemanticIdentityKey(typeIdentity);
+  const existing = traits.get(identityKey);
+  if (existing !== undefined && traitContractKey(existing.contract) !== traitContractKey(contract)) {
+    throw new Error(`Rust compiler target carrier '${identityKey}' has conflicting native trait contracts.`);
   }
-  traits.set(id, contract);
+  traits.set(identityKey, Object.freeze({ typeIdentity, contract }));
 }
 
 export function projectCompilerTraitContract(
@@ -61,10 +63,20 @@ export function projectCompilerTraitContract(
 ): RustNamedTypeTraitContract {
   const implementations = contract.implementations.map((implementation) => Object.freeze({
     trait: targetTraitFor(implementation.trait, context, "result"),
-    requirements: Object.freeze(implementation.requirements.map((requirement) => Object.freeze({
-      typeArgumentIndex: requirement.typeArgumentIndex,
-      trait: targetTraitFor(requirement.trait, context, "result"),
-    })).sort((left, right) => compareText(
+    genericBindings: Object.freeze(implementation.genericBindings.map((binding) => Object.freeze({
+      parameter: targetGenericArgumentFor(binding.parameter, context, "result"),
+      genericArgumentIndex: binding.genericArgumentIndex,
+    }))),
+    requirements: Object.freeze(implementation.requirements.map((requirement) => {
+      const bound = targetBoundFor(requirement.bound, context, "result");
+      if (bound.kind !== "trait") {
+        throw new Error("Rust compiler trait requirement lost its trait-bound identity during projection.");
+      }
+      return Object.freeze({
+        genericArgumentIndex: requirement.genericArgumentIndex,
+        bound,
+      });
+    }).sort((left, right) => compareText(
       rustNamedTypeTraitRequirementSemanticKey(left),
       rustNamedTypeTraitRequirementSemanticKey(right),
     ))),
@@ -83,7 +95,10 @@ export function typeRequirements(
   const allowed = new Set(allowedTypeParameters);
   const requirements = generics.parameters.flatMap((parameter) => {
     if (parameter.kind !== "type") return [];
-    const name = context.genericNames?.get(parameter.identity.itemId) ?? parameter.displayName;
+    const name = context.genericNames?.get(parameter.identity.itemId);
+    if (name === undefined) {
+      throw new Error(`Rust generic identity '${parameter.identity.itemId}' has no exact source-visible requirement name.`);
+    }
     if (!allowed.has(name)) return [];
     const bounds = [
       ...parameter.bounds,

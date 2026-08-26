@@ -15,19 +15,28 @@ import {
 } from "./source-types.js";
 import {
   rustBuiltinGenericPathTargetType,
+  rustBuiltinTypeIdentityItemId,
   rustPathGenericArguments,
-  rustTypeIdentityItemId,
 } from "../constructors.js";
 import { rustOptionElementCarrier, rustOptionTargetType } from "./optional.js";
-import { rustTupleTargetType, rustUnitTargetType } from "./native.js";
+import {
+  rustTupleElementCarriers,
+  rustTupleTargetType,
+  rustUnitTargetType,
+} from "./native.js";
 import type {
   RustBinder,
   RustGenericArgument,
   RustLifetimeRef,
 } from "../../semantics/index.js";
-import { rustLifetimeSemanticKey } from "../../semantics/index.js";
+import {
+  rustLifetimeSemanticKey,
+} from "../../semantics/index.js";
 import type { TargetTypeRef } from "../model.js";
 import { rustFutureOutputCarrier, rustFutureTargetType } from "./primitives.js";
+import {
+  rustCallableSignaturesAlphaEquivalent,
+} from "../alpha-equivalence.js";
 import {
   emptyRustGenericSubstitutions,
   inferRustTargetGenericSubstitutions,
@@ -81,6 +90,75 @@ export interface RustCallableSignature {
   readonly binder?: RustBinder;
   readonly parameters: readonly TargetTypeRef[];
   readonly result: TargetTypeRef;
+}
+
+export interface RustCallableBoundaryProtocol extends RustCallableSignature {
+  readonly callTrait: "fn" | "fn-mut" | "fn-once";
+  readonly invocation: "direct" | "runtime-call";
+  readonly failureChannel: "none" | "result" | "future-output";
+}
+
+export {
+  rustBoundSemanticValuesAlphaEquivalent,
+  rustCallableBindersAlphaEquivalent,
+  rustCallableSignaturesAlphaEquivalent,
+} from "../alpha-equivalence.js";
+
+export function rustCallTraitSatisfies(
+  actual: RustCallableBoundaryProtocol["callTrait"],
+  required: RustCallableBoundaryProtocol["callTrait"],
+): boolean {
+  return required === "fn-once" ||
+    required === "fn-mut" && actual !== "fn-once" ||
+    required === "fn" && actual === "fn";
+}
+
+export function rustCallableBoundaryCanAdapt(
+  actual: TargetTypeRef | undefined,
+  required: TargetTypeRef | undefined,
+): boolean {
+  const actualProtocol = rustCallableBoundaryProtocol(actual);
+  const requiredProtocol = rustCallableBoundaryProtocol(required);
+  return actualProtocol !== undefined && requiredProtocol !== undefined &&
+    rustCallTraitSatisfies(actualProtocol.callTrait, requiredProtocol.callTrait) &&
+    rustCallableSignaturesAlphaEquivalent(actualProtocol, requiredProtocol);
+}
+
+export function rustCallableBoundaryProtocol(
+  carrier: TargetTypeRef | undefined,
+): RustCallableBoundaryProtocol | undefined {
+  if (carrier?.kind === "closure") {
+    return Object.freeze({
+      ...(carrier.binder === undefined ? {} : { binder: carrier.binder }),
+      callTrait: carrier.callTrait,
+      invocation: "direct",
+      failureChannel: "none",
+      parameters: carrier.parameters,
+      result: carrier.result,
+    });
+  }
+  if (carrier?.kind === "function-pointer") {
+    return carrier.safety !== "safe" || carrier.abi !== "Rust" || carrier.variadic
+      ? undefined
+      : Object.freeze({
+          ...(carrier.binder === undefined ? {} : { binder: carrier.binder }),
+          callTrait: "fn" as const,
+          invocation: "direct" as const,
+          failureChannel: "none" as const,
+          parameters: carrier.parameters,
+          result: carrier.result,
+        });
+  }
+  const callable = rustCallableProtocol(carrier);
+  return callable === undefined
+    ? undefined
+    : Object.freeze({
+        callTrait: "fn" as const,
+        invocation: "runtime-call" as const,
+        failureChannel: callable.asynchronous ? "future-output" as const : "result" as const,
+        parameters: callable.parameters,
+        result: callable.result,
+      });
 }
 
 export function rustCallableSignature(
@@ -246,36 +324,42 @@ export function isRustCallableCarrier(carrier: TargetTypeRef | undefined): boole
 export function rustCallableProtocol(
   carrier: TargetTypeRef | undefined,
 ): RustCallableProtocol | undefined {
-  const id = rustTypeIdentityItemId(carrier);
+  const id = rustBuiltinTypeIdentityItemId(carrier, "tsonic-runtime");
   const argumentsList = rustPathGenericArguments(carrier);
   if (id === rustOwnedLocalCallableTargetId || id === rustThreadedCallableTargetId ||
     id === rustOwnedLocalAsyncCallableTargetId || id === rustThreadedAsyncCallableTargetId) {
     const [argumentsCarrier, result] = argumentsList ?? [];
+    const parameters = argumentsCarrier?.kind === "type"
+      ? rustTupleElementCarriers(argumentsCarrier.value)
+      : undefined;
     const asynchronous = id === rustOwnedLocalAsyncCallableTargetId ||
       id === rustThreadedAsyncCallableTargetId;
     return argumentsList?.length === 2 && argumentsCarrier?.kind === "type" &&
-        argumentsCarrier.value.kind === "tuple" && result?.kind === "type"
+        parameters !== undefined && result?.kind === "type"
       ? {
           storage: id === rustThreadedCallableTargetId || id === rustThreadedAsyncCallableTargetId
             ? "threaded"
             : "owned-local",
           asynchronous,
-          parameters: argumentsCarrier.value.elements,
+          parameters,
           result: asynchronous ? rustFutureTargetType(result.value) : result.value,
         }
       : undefined;
   }
   if (id === rustBorrowedLocalCallableTargetId || id === rustBorrowedLocalAsyncCallableTargetId) {
     const [lifetime, argumentsCarrier, result] = argumentsList ?? [];
+    const parameters = argumentsCarrier?.kind === "type"
+      ? rustTupleElementCarriers(argumentsCarrier.value)
+      : undefined;
     const asynchronous = id === rustBorrowedLocalAsyncCallableTargetId;
     return argumentsList?.length === 3 && lifetime?.kind === "lifetime" &&
-        argumentsCarrier?.kind === "type" && argumentsCarrier.value.kind === "tuple" &&
+        argumentsCarrier?.kind === "type" && parameters !== undefined &&
         result?.kind === "type"
       ? {
           storage: "borrowed-local",
           asynchronous,
           lifetime: lifetime.value,
-          parameters: argumentsCarrier.value.elements,
+          parameters,
           result: asynchronous ? rustFutureTargetType(result.value) : result.value,
         }
       : undefined;
@@ -465,7 +549,7 @@ export function rustIteratorResultTargetType(
 export function getRustGeneratorProtocol(
   carrier: TargetTypeRef | undefined,
 ): RustGeneratorProtocol | undefined {
-  const id = rustTypeIdentityItemId(carrier);
+  const id = rustBuiltinTypeIdentityItemId(carrier, "tsonic-runtime");
   const kind = id === rustOwnedGeneratorTargetId || id === rustBorrowedGeneratorTargetId
     ? "sync" as const
     : id === rustOwnedAsyncGeneratorTargetId || id === rustBorrowedAsyncGeneratorTargetId
@@ -496,7 +580,7 @@ export function getRustGeneratorProtocol(
 export function getRustIteratorResultProtocol(
   carrier: TargetTypeRef | undefined,
 ): RustIteratorResultProtocol | undefined {
-  const argumentsList = rustTypeIdentityItemId(carrier) === rustIteratorResultTargetId && carrier !== undefined
+  const argumentsList = rustBuiltinTypeIdentityItemId(carrier, "tsonic-runtime") === rustIteratorResultTargetId && carrier !== undefined
     ? rustPathGenericArguments(carrier)
     : undefined;
   const [yieldType, returnType] = argumentsList ?? [];
@@ -508,7 +592,7 @@ export function getRustIteratorResultProtocol(
 export function rustLocationProtocol(
   carrier: TargetTypeRef | undefined,
 ): RustLocationProtocol | undefined {
-  const id = rustTypeIdentityItemId(carrier);
+  const id = rustBuiltinTypeIdentityItemId(carrier, "tsonic-runtime");
   const argumentsList = rustPathGenericArguments(carrier);
   if (id === rustOwnedLocationTargetId) {
     const [pointee] = argumentsList ?? [];

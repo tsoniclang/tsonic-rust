@@ -1,6 +1,5 @@
-export { materializeProviderCarrier } from "./materialization.js";
 export { rustProviderBindingProviderId } from "./identity.js";
-export { rustProviderPathTargetType } from "./type-references.js";
+export { rustProviderPathTargetType, rustProviderTypeIdentity } from "./type-references.js";
 export type { RustProviderTypeOwner } from "./type-references.js";
 export { rustProviderPolicyContributionKind } from "./model.js";
 export type {

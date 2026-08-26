@@ -333,6 +333,7 @@ function mapSelectedAssignment(
     argumentCarriers: assignmentSubjects.map((subject) =>
       resolveRustTargetTypeRef(subject, context, options)),
     argumentMatchScore: selectedArgumentMatchScore(assignmentSubjects, context, options),
+    carrierSupportsClone: (carrier) => context.traits.supportsClone(carrier),
     ...(jsIdentity.memberName === "index" && authoredPropertyKey !== undefined
       ? { authoredPropertyKey }
       : {}),

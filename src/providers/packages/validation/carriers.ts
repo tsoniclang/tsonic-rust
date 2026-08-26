@@ -178,15 +178,6 @@ export function validateRustBound(
     validateCarrier(bound.value, definition, `${where}.value`, fail, { allowUnsized: true });
     return;
   }
-  requireExactKeys(asRecord(bound), ["kind", "captures"], where, fail);
-  for (const [index, capture] of bound.captures.entries()) {
-    const argument = capture.kind === "lifetime"
-      ? { kind: "lifetime" as const, value: capture.value }
-      : capture.kind === "type"
-        ? { kind: "type" as const, value: { kind: "type-parameter" as const, identity: capture.identity, displayName: capture.displayName } }
-        : { kind: "const" as const, value: { kind: "parameter" as const, identity: capture.identity, displayName: capture.displayName } };
-    validateGenericArgumentValue(argument, `${where}.captures[${index}]`, fail);
-  }
 }
 
 function validateGenericArgumentValue(
@@ -252,10 +243,8 @@ function validateCanonicalCarrier(
         const targetId = carrier.identity.kind === "builtin"
           ? carrier.identity.itemId
           : undefined;
-        if (targetId !== undefined &&
-          !builtInTargetCarrierIds.has(targetId) &&
-          definition.carrierPaths?.[targetId] === undefined) {
-          fail(`${where} names target carrier '${targetId}' without a Rust carrier path`);
+        if (targetId !== undefined && !builtInTargetCarrierIds.has(targetId)) {
+          fail(`${where} names unknown built-in target carrier '${targetId}'`);
         }
         for (const [index, argument] of carrier.arguments.entries()) {
           validateGenericArgument(argument, definition, `${where}.arguments[${index}]`, fail, active);
@@ -383,6 +372,8 @@ export function validateValueConversion(
     if (!isRustNeverCarrier(conversion.source)) {
       fail(`${where}.source is not the exact Rust never carrier`);
     }
+  } else if (conversion.kind === "runtime-callable-callback") {
+    requireExactKeys(asRecord(conversion), ["kind", "source", "target"], where, fail);
   } else if (conversion.kind === "option-map") {
     requireExactKeys(asRecord(conversion), ["kind", "elementConversion"], where, fail);
     validateValueConversion(
@@ -398,7 +389,7 @@ export function validateValueConversion(
   } else if (conversion.kind === "js-argument-vector-callback") {
     requireExactKeys(
       asRecord(conversion),
-      ["kind", "lane", "source", "target", "projections", "sourceFallible"],
+      ["kind", "lane", "source", "target", "projections", "sourceInvocationReturnsResult"],
       where,
       fail,
     );

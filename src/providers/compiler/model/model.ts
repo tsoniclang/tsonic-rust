@@ -349,9 +349,13 @@ export interface RustCompilerUnsupportedMember {
 
 export interface RustCompilerTraitImplementation {
   readonly trait: RustCompilerTraitReference;
+  readonly genericBindings: readonly {
+    readonly parameter: RustCompilerGenericArgument;
+    readonly genericArgumentIndex: number;
+  }[];
   readonly requirements: readonly {
-    readonly typeArgumentIndex: number;
-    readonly trait: RustCompilerTraitReference;
+    readonly genericArgumentIndex: number;
+    readonly bound: Extract<RustCompilerBound, { readonly kind: "trait" }>;
   }[];
 }
 

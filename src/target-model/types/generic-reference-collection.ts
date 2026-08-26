@@ -134,11 +134,6 @@ function collectTypeIdentities(type: TargetTypeRef, identities: Set<string>): vo
       return;
     case "path":
       type.arguments.forEach((argument) => collectArgumentIdentities(argument, identities));
-      type.traitImplementations.forEach((implementation) => {
-        collectTraitIdentities(implementation.trait, identities);
-        implementation.requirements.forEach((requirement) =>
-          collectTraitIdentities(requirement.trait, identities));
-      });
       return;
     case "array":
       collectTypeIdentities(type.element, identities);
@@ -210,11 +205,6 @@ function collectTypeAssociatedProjections(
     case "path":
       type.arguments.forEach((argument) =>
         collectArgumentAssociatedProjections(argument, projections));
-      type.traitImplementations.forEach((implementation) => {
-        collectTraitAssociatedProjections(implementation.trait, projections);
-        implementation.requirements.forEach((requirement) =>
-          collectTraitAssociatedProjections(requirement.trait, projections));
-      });
       return;
     case "array":
     case "sequence":
@@ -313,7 +303,6 @@ function collectBoundAssociatedProjections(
       collectTypeAssociatedProjections(bound.value, projections);
       return;
     case "lifetime-outlives":
-    case "precise-capture":
       return;
   }
 }
@@ -330,6 +319,21 @@ function collectArgumentIdentities(argument: RustGenericArgument, identities: Se
       collectConstIdentities(argument.value, identities);
       return;
   }
+}
+
+function genericArgumentParameterIdentityKey(
+  argument: RustGenericArgument,
+): string | undefined {
+  if (argument.kind === "lifetime" && argument.value.kind === "parameter") {
+    return rustSemanticIdentityKey(argument.value.identity);
+  }
+  if (argument.kind === "type" && argument.value.kind === "type-parameter") {
+    return rustSemanticIdentityKey(argument.value.identity);
+  }
+  if (argument.kind === "const" && argument.value.kind === "parameter") {
+    return rustSemanticIdentityKey(argument.value.identity);
+  }
+  return undefined;
 }
 
 function collectLifetimeIdentities(lifetime: RustLifetimeRef, identities: Set<string>): void {
@@ -380,9 +384,6 @@ function collectBoundIdentities(bound: RustBound, identities: Set<string>): void
     case "associated-equality":
       collectTypeIdentities(bound.projection, identities);
       collectTypeIdentities(bound.value, identities);
-      return;
-    case "precise-capture":
-      bound.captures.forEach((capture) => collectCaptureIdentities(capture, identities));
       return;
   }
 }

@@ -338,6 +338,7 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
         "CRecord",
         "FirstSameName",
         "FixedBuffer",
+        "GenericEvidence",
         "Handler",
         "LendingFamily",
         "PackedRecord",
@@ -401,6 +402,50 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
       bound.kind === "trait" && bound.polarity === "maybe"));
     assert.ok(borrowedValue.generics.parameters[1].bounds.some((bound) =>
       bound.kind === "type-outlives"));
+
+    const genericEvidence = semanticExport("GenericEvidence");
+    assert.equal(genericEvidence.kind, "struct");
+    assert.deepEqual(genericEvidence.generics.parameters.map(({ kind }) => kind), [
+      "lifetime",
+      "type",
+      "const",
+    ]);
+    const traitImplementation = (path) => genericEvidence.traits.implementations.find(({ trait }) =>
+      trait.identity.canonicalPath.join("::") === path);
+    const mixedEvidence = traitImplementation("acme_widget::MixedEvidence");
+    assert.ok(mixedEvidence);
+    assert.deepEqual(
+      mixedEvidence.genericBindings.map(({ genericArgumentIndex, parameter }) => ({
+        genericArgumentIndex,
+        kind: parameter.kind,
+      })),
+      [
+        { genericArgumentIndex: 0, kind: "lifetime" },
+        { genericArgumentIndex: 1, kind: "type" },
+        { genericArgumentIndex: 2, kind: "const" },
+      ],
+    );
+    assert.deepEqual(mixedEvidence.trait.arguments.map(({ kind }) => kind), [
+      "lifetime",
+      "type",
+      "const",
+    ]);
+    const cloneEvidence = traitImplementation("acme_widget::CloneEvidence");
+    assert.ok(cloneEvidence?.requirements.some(({ genericArgumentIndex, bound }) =>
+      genericArgumentIndex === 1 && bound.kind === "trait" &&
+      bound.polarity === "required" &&
+      bound.trait.identity.canonicalPath.join("::") === "core::clone::Clone"));
+    const higherRankedEvidence = traitImplementation("acme_widget::HigherRankedEvidence");
+    assert.equal(higherRankedEvidence?.requirements[0]?.bound.kind, "trait");
+    assert.equal(higherRankedEvidence?.requirements[0]?.bound.binder?.lifetimes.length, 1);
+    const iteratorEvidence = traitImplementation("acme_widget::IteratorEvidence");
+    const iteratorBound = iteratorEvidence?.requirements[0]?.bound;
+    assert.equal(iteratorBound?.kind, "trait");
+    assert.equal(iteratorBound?.kind === "trait"
+      ? iteratorBound.trait.associatedConstraints.some(({ kind }) => kind === "equality")
+      : false, true);
+    assert.equal(traitImplementation("acme_widget::StaticOnlyEvidence"), undefined);
+    assert.equal(traitImplementation("acme_widget::SpecializedEvidence"), undefined);
 
     assert.deepEqual(semanticExport("CRecord").layout, {
       representation: "c",
@@ -533,7 +578,9 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
       providerModuleId: compilerProviderModuleId(dependency, []),
       moduleSpecifier: "@tsonic/rust/crates/widget_alias/index.js",
     });
-    assert.match(projection.carrierPaths.values().next().value, /^widget_alias::Widget$/u);
+    assert.equal(projection.types.some(({ targetCarrier }) =>
+      targetCarrier.kind === "path" &&
+      targetCarrier.displayPath.join("::") === "widget_alias::Widget"), true);
     assert.equal(
       projection.declarationModel.exports.find(({ name }) => name === "Widget")?.members
         ?.some(({ name }) => name === "SLOT"),
@@ -565,17 +612,20 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
       /borrowed or unsized value with no closed target carrier/u,
     );
 
-    const unsupportedOpenAssociatedType = worker.module({
+    const associatedTypeModule = worker.module({
       snapshot,
       dependency,
       modulePath: [],
       requestedExports: ["pass_family_item"],
     });
-    assert.match(
-      unsupportedOpenAssociatedType.unsupportedExports.find(({ name }) =>
-        name === "pass_family_item")?.reason ?? "",
-      /Generic associated Rust types have no closed provider type contract/u,
-    );
+    assert.deepEqual(associatedTypeModule.unsupportedExports, []);
+    const passFamilyItem = associatedTypeModule.exports.find(({ name }) =>
+      name === "pass_family_item");
+    assert.equal(passFamilyItem?.kind, "function");
+    const associatedParameter = passFamilyItem.function.parameters[0].type;
+    assert.equal(associatedParameter.kind, "associated-type");
+    assert.equal(associatedParameter.arguments.length, 1);
+    assert.deepEqual(passFamilyItem.function.result, associatedParameter);
 
     const standardSnapshot = worker.standardSnapshot();
     const standardDependency = standardSnapshot.dependencies.find(({ alias }) => alias === "std");
@@ -609,9 +659,10 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
       }],
     );
     assert.ok(hashMap.traits.implementations.some(({ trait, requirements }) =>
-      trait.kind === "trait" && trait.path === "core::cmp::Eq" &&
-      requirements.some(({ typeArgumentIndex, requirement }) =>
-        typeArgumentIndex === 0 && requirement.kind === "trait" && requirement.path === "core::hash::Hash")));
+      trait.identity.canonicalPath.join("::") === "core::cmp::Eq" &&
+      requirements.some(({ genericArgumentIndex, bound }) =>
+        genericArgumentIndex === 0 && bound.kind === "trait" &&
+        bound.trait.identity.canonicalPath.join("::") === "core::hash::Hash")));
     const collectionsProjection = projectRustCompilerModule(collectionsModule, {
       providerModuleId: compilerProviderModuleId(standardDependency, ["collections"]),
       moduleSpecifier: "@tsonic/rust/std/collections.js",

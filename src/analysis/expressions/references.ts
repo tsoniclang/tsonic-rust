@@ -349,9 +349,25 @@ function resolvedRustPointerCarrier(
   sourceFile: SourceFile,
   source: RustSourcePointerOperationFact,
 ): { readonly carrier?: TargetTypeRef } {
-  if (source.kind === "restore-exposed-address") {
-    return resolvedRestoredPointerCarrier(walk, expression, sourceFile, source);
+  switch (source.kind) {
+    case "restore-exposed-address":
+      return resolvedRestoredPointerCarrier(walk, expression, sourceFile, source);
+    case "expose-address":
+    case "read-volatile":
+    case "write-volatile":
+      return resolvedPointerOperandCarrier(walk, expression, sourceFile, source);
   }
+}
+
+function resolvedPointerOperandCarrier(
+  walk: RustFactWalk,
+  expression: Node,
+  sourceFile: SourceFile,
+  source: Extract<
+    RustSourcePointerOperationFact,
+    { readonly kind: "expose-address" | "read-volatile" | "write-volatile" }
+  >,
+): { readonly carrier?: TargetTypeRef } {
   const pointerCarrier = resolveExpressionCarrier(
     walk,
     source.pointerExpression,
@@ -584,7 +600,8 @@ function resolvedNativePointerCarrier(
       };
       break;
     }
-    case "offset": {
+    case "offset":
+    case "offset-bytes": {
       const nativeIntCarrier = rustSourcePrimitiveTargetType("native-int");
       const offsetCarrier = resolveExactNativePointerOperandCarrier(
         walk,
@@ -606,7 +623,7 @@ function resolvedNativePointerCarrier(
       resultCarrier = pointerCarrier;
       fact = {
         kind: "native-pointer",
-        operationId: "tsonic.rust.native-pointer.offset",
+        operationId: `tsonic.rust.native-pointer.${source.operation}`,
         operation: source.operation,
         safety: "requires-unsafe",
         pointerExpression: source.pointerExpression,

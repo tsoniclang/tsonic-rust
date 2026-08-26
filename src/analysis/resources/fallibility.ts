@@ -36,7 +36,11 @@ import { finalizeRustPreparedCheckedCall } from "../operations/provider/index.js
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { recordSelectedOperationInputs } from "../operations/inputs.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
-import { rustFutureOutputCarrier, rustCallableProtocol } from "../../target-model/types/index.js";
+import {
+  rustCallableBoundaryProtocol,
+  rustCallableProtocol,
+  rustFutureOutputCarrier,
+} from "../../target-model/types/index.js";
 import { rustInheritedProjectConstructor } from "../project-types/type-policy.js";
 import { rustOperationAbiAwaitIsFallible, rustTargetOperationIsFallible } from "../facts/target-operation.js";
 import { rustPolicyTargetDiagnostic } from "../../policy/operations/contracts.js";
@@ -385,6 +389,11 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
   const callbackExpressionIsFallible = (
     pending: { readonly request: import("../../policy/operations/contracts.js").RustCheckedCallSelectionInput; readonly prepared: RustPreparedDeferredCheckedCall },
   ): boolean => callbackValueAnalysis(callbackExpression(pending), new Set())?.fallible === true;
+  const callbackInvocationIsImmediatelyFallible = (
+    prepared: RustPreparedDeferredCheckedCall,
+  ): boolean => rustCallableBoundaryProtocol(
+    prepared.parameterCarriers[prepared.callback.sourceArgumentIndex],
+  )?.failureChannel === "result";
   const callbackValueAnalysis = (
     expression: Node | undefined,
     resolving: Set<Node>,
@@ -430,7 +439,8 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
   const preparedCallbackOperationIsFallible = (node: Node): boolean => {
     const pending = walk.preparedCallbackCalls.get(node);
     return pending !== undefined && (
-      pending.prepared.template.isFallible || callbackExpressionIsFallible(pending)
+      pending.prepared.template.isFallible || callbackExpressionIsFallible(pending) ||
+      callbackInvocationIsImmediatelyFallible(pending.prepared)
     );
   };
   function expressionRegionIsFallible(root: Node): boolean {
@@ -558,7 +568,9 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
   const ownedCallbackClosures = new Set<Node>();
   for (const [call, pending] of walk.preparedCallbackCalls) {
     const callbackArgument = callbackValueExpression(callbackExpression(pending));
-    const callbackAnalysis = callbackValueAnalysis(callbackArgument, new Set());
+    const invocationFallible = callbackInvocationIsImmediatelyFallible(pending.prepared);
+    const callbackAnalysis = callbackValueAnalysis(callbackArgument, new Set()) ??
+      (invocationFallible ? { fallible: false, subjects: [] } : undefined);
     if (callbackAnalysis === undefined) {
       appendRustDiagnostic(
         walk,

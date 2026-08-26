@@ -4,7 +4,6 @@ import {
   BinaryExpression_Right,
   Node_Expression,
   Node_Initializer,
-  sourceNodeIdentity,
 } from "@tsonic/target-api/source";
 import {
   isRustFinalizedArrayInput,
@@ -26,17 +25,29 @@ import {
   rustDefaultTrait,
   rustToOwnedTrait,
 } from "../../target-model/types/index.js";
-import { rustTargetOperationFactKey } from "../facts/keys.js";
+import {
+  rustClosureCaptureFactKey,
+  rustTargetOperationFactKey,
+} from "../facts/keys.js";
 import type {
   RustOwnershipAnalysisInput,
   RustOwnershipEnvironment,
 } from "./context.js";
 import { rustOwnershipDiagnostic } from "./diagnostics.js";
 import {
+  RustOwnershipComplexityError,
+  rustOwnershipOperationCountComplexityDiagnostic,
+} from "./complexity.js";
+import { requireRustOwnershipSourceIdentity } from "./identity.js";
+import { requireDenseRustOwnershipNodes } from "./source-shape.js";
+import {
   rustDereferencedPlace,
   rustPlaceKey,
   rustTemporaryPlaceForExpression,
 } from "./places.js";
+import type { RustSourceFlowGraph, RustSourceFlowPoint } from "./control-flow.js";
+import type { RustSourceValueInventory } from "./source-values.js";
+import { exactCallableExpression } from "./capture-execution.js";
 
 export interface RustOwnershipOperationRecord {
   readonly node: Node;
@@ -44,7 +55,8 @@ export interface RustOwnershipOperationRecord {
   readonly sourceValue: Node;
   readonly carrier: RustTypeRef;
   readonly operation: RustOwnershipOperation;
-  readonly origin: "source-marker" | "selected-operation";
+  readonly origin: "source-marker" | "capture-transfer" | "selected-operation" | "resource-cleanup";
+  readonly flowPointIndex?: number;
 }
 
 export interface RustOwnershipOperationInventory {
@@ -56,8 +68,10 @@ export interface RustOwnershipOperationInventory {
 }
 
 export function collectRustOwnershipOperations(
+  flow: RustSourceFlowGraph,
   nodes: readonly Node[],
   places: WeakMap<Node, RustPlaceRef>,
+  sourceValues: RustSourceValueInventory,
   input: RustOwnershipAnalysisInput,
   environment: RustOwnershipEnvironment,
   diagnostics: TargetDiagnostic[],
@@ -67,6 +81,7 @@ export function collectRustOwnershipOperations(
   const recordByNode = new WeakMap<Node, RustOwnershipOperationRecord>();
   const bySourceValue = new WeakMap<Node, RustOwnershipOperation>();
   const seen = new Set<string>();
+  let loanCount = 0;
   const append = (
     node: Node,
     completionNode: Node,
@@ -74,21 +89,54 @@ export function collectRustOwnershipOperations(
     carrier: RustTypeRef,
     operation: RustOwnershipOperation,
     origin: RustOwnershipOperationRecord["origin"],
+    flowPointIndex?: number,
   ): void => {
-    const occurrence = sourceNodeIdentity(input.ast, node);
-    if (occurrence === undefined) return;
-    const key = `${occurrence}\0${ownershipOperationIdentity(operation)}`;
+    const occurrence = requireRustOwnershipSourceIdentity(input.ast, node);
+    const key = `${occurrence}\0${ownershipOperationIdentity(operation)}\0${flowPointIndex ?? "source"}`;
     if (seen.has(key)) return;
+    const nextLoanCount = loanCount + (operation.kind === "shared-borrow" ||
+        operation.kind === "mutable-borrow" || operation.kind === "reborrow"
+      ? 1
+      : 0);
+    const complexity = rustOwnershipOperationCountComplexityDiagnostic(
+      records.length + 1,
+      nextLoanCount,
+    );
+    if (complexity !== undefined) throw new RustOwnershipComplexityError(complexity);
     seen.add(key);
-    const record = Object.freeze({ node, completionNode, sourceValue, carrier, operation, origin });
+    loanCount = nextLoanCount;
+    const record = Object.freeze({
+      node,
+      completionNode,
+      sourceValue,
+      carrier,
+      operation,
+      origin,
+      ...(flowPointIndex === undefined ? {} : { flowPointIndex }),
+    });
     records.push(record);
-    if (byNode.get(node) === undefined) byNode.set(node, operation);
-    if (recordByNode.get(node) === undefined) recordByNode.set(node, record);
+    if (origin !== "resource-cleanup") {
+      if (byNode.get(node) === undefined) byNode.set(node, operation);
+      if (recordByNode.get(node) === undefined) recordByNode.set(node, record);
+    }
     if (origin === "source-marker") bySourceValue.set(sourceValue, operation);
   };
   for (const node of nodes) {
     const source = input.facts.get(node, rustSourceOwnershipOperationFactKey);
-    if (source === undefined || source.kind === "capture-move") continue;
+    if (source === undefined) continue;
+    if (source.kind === "capture-move") {
+      collectCaptureTransferOperations(
+        node,
+        source.valueExpression,
+        places,
+        sourceValues,
+        input,
+        environment,
+        diagnostics,
+        append,
+      );
+      continue;
+    }
     const carrier = input.facts.getRuntimeCarrierFact(source.valueExpression)?.carrier;
     const selectedReferenceTarget = referenceTargetPlace(
       source.valueExpression,
@@ -110,15 +158,7 @@ export function collectRustOwnershipOperations(
       ));
       continue;
     }
-    const evidenceId = sourceNodeIdentity(input.ast, node);
-    if (evidenceId === undefined) {
-      diagnostics.push(rustOwnershipDiagnostic(
-        "RUST_OWNERSHIP_OPERATION_IDENTITY_MISSING",
-        `Rust '${source.kind}' has no exact authored occurrence identity.`,
-        node,
-      ));
-      continue;
-    }
+    const evidenceId = requireRustOwnershipSourceIdentity(input.ast, node);
     const operation = rustOwnershipOperation(
       source.kind,
       place,
@@ -140,6 +180,33 @@ export function collectRustOwnershipOperations(
   for (const node of nodes) {
     collectSelectedOwnershipOperations(node, places, input, diagnostics, append);
   }
+  for (const point of flow.points) {
+    const cleanup = point.resourceCleanup;
+    if (cleanup === undefined) continue;
+    const declaration = cleanup.declaration;
+    const place = places.get(declaration);
+    const carrier = input.facts.getRuntimeCarrierFact(declaration)?.carrier;
+    if (place === undefined || carrier === undefined) {
+      diagnostics.push(rustOwnershipDiagnostic(
+        "RUST_RESOURCE_CLEANUP_PLACE_NOT_PROVEN",
+        "An exact resource cleanup requires one finalized resource place and carrier.",
+        declaration,
+      ));
+      continue;
+    }
+    const loanId = `${point.id}\0resource-cleanup`;
+    append(
+      declaration,
+      declaration,
+      declaration,
+      carrier,
+      Object.freeze(cleanup.access === "mutable"
+        ? { kind: "mutable-borrow" as const, place, loanId }
+        : { kind: "shared-borrow" as const, place, loanId }),
+      "resource-cleanup",
+      point.index,
+    );
+  }
   const frozenRecords = Object.freeze(records);
   return Object.freeze<RustOwnershipOperationInventory>({
     records: frozenRecords,
@@ -152,6 +219,74 @@ export function collectRustOwnershipOperations(
       return bySourceValue.get(node);
     },
   });
+}
+
+function collectCaptureTransferOperations(
+  operationNode: Node,
+  callableValue: Node,
+  places: WeakMap<Node, RustPlaceRef>,
+  sourceValues: RustSourceValueInventory,
+  input: RustOwnershipAnalysisInput,
+  environment: RustOwnershipEnvironment,
+  diagnostics: TargetDiagnostic[],
+  append: AppendRustOwnershipOperation,
+): void {
+  const callable = exactCallableExpression(callableValue, input.ast);
+  if (callable === undefined) {
+    diagnostics.push(rustOwnershipDiagnostic(
+      "RUST_CAPTURE_TRANSFER_CALLABLE_NOT_PROVEN",
+      "An explicit captureMove operation requires one exact inline callable expression.",
+      operationNode,
+    ));
+    return;
+  }
+  const captureFact = input.facts.getFact(callable, rustClosureCaptureFactKey);
+  if (captureFact === undefined) {
+    diagnostics.push(rustOwnershipDiagnostic(
+      "RUST_CAPTURE_TRANSFER_FACT_NOT_PROVEN",
+      "An explicit captureMove operation requires exact finalized closure-capture evidence.",
+      operationNode,
+    ));
+    return;
+  }
+  for (const capture of captureFact.captures) {
+    if (capture.storage === "location") continue;
+    const sourceContract = sourceValues.contracts.get(capture.declaration);
+    if (sourceContract === undefined || sourceContract.kind === "ordinary-typescript") continue;
+    const place = places.get(capture.reference) ?? places.get(capture.declaration);
+    if (place === undefined) {
+      diagnostics.push(rustOwnershipDiagnostic(
+        "RUST_CAPTURE_TRANSFER_PLACE_NOT_PROVEN",
+        "An explicit native capture transfer requires one exact source place.",
+        capture.reference,
+      ));
+      continue;
+    }
+    const evidenceId = requireRustOwnershipSourceIdentity(input.ast, capture.reference);
+    const operation = rustOwnershipOperation(
+      "move",
+      place,
+      capture.carrier,
+      evidenceId,
+      environment,
+    );
+    if (operation === undefined) {
+      diagnostics.push(rustOwnershipDiagnostic(
+        "RUST_CAPTURE_TRANSFER_NOT_PROVEN",
+        "An explicit native capture transfer has no exact move or Copy proof.",
+        capture.reference,
+      ));
+      continue;
+    }
+    append(
+      operationNode,
+      operationNode,
+      capture.reference,
+      capture.carrier,
+      operation,
+      "capture-transfer",
+    );
+  }
 }
 
 function ownershipOperationIdentity(operation: RustOwnershipOperation): string {
@@ -174,7 +309,26 @@ type AppendRustOwnershipOperation = (
   carrier: RustTypeRef,
   operation: RustOwnershipOperation,
   origin: RustOwnershipOperationRecord["origin"],
+  flowPointIndex?: number,
 ) => void;
+
+export function rustOwnershipOperationFlowPoints(
+  record: RustOwnershipOperationRecord,
+  flow: RustSourceFlowGraph,
+): readonly RustSourceFlowPoint[] {
+  if (record.flowPointIndex === undefined) return flow.pointsFor(record.node);
+  const point = flow.points[record.flowPointIndex];
+  return point === undefined ? Object.freeze([]) : Object.freeze([point]);
+}
+
+export function rustOwnershipOperationCompletionFlowPoints(
+  record: RustOwnershipOperationRecord,
+  flow: RustSourceFlowGraph,
+): readonly RustSourceFlowPoint[] {
+  if (record.flowPointIndex === undefined) return flow.pointsFor(record.completionNode);
+  const point = flow.points[record.flowPointIndex];
+  return point === undefined ? Object.freeze([]) : Object.freeze([point]);
+}
 
 function collectSelectedOwnershipOperations(
   node: Node,
@@ -185,12 +339,14 @@ function collectSelectedOwnershipOperations(
 ): void {
   const fact = input.facts.getFact(node, rustTargetOperationFactKey);
   if (fact === undefined) return;
-  const occurrence = sourceNodeIdentity(input.ast, node);
-  if (occurrence === undefined) return;
+  const occurrence = requireRustOwnershipSourceIdentity(input.ast, node);
   const nodeKind = input.ast.kindName(node);
   const args = nodeKind === "KindCallExpression" || nodeKind === "KindNewExpression"
-    ? input.ast.arguments(node).filter((argument): argument is Node =>
-        argument !== undefined)
+    ? requireDenseRustOwnershipNodes(
+        input.ast.arguments(node),
+        "Selected operation contains an undefined source argument slot.",
+        node,
+      )
     : [];
   const expression = Node_Expression(input.ast, node);
   const expressionKind = expression === undefined ? undefined : input.ast.kindName(expression);
@@ -354,7 +510,13 @@ function rustOwnershipOperation(
       }
       return Object.freeze({ kind, place, loanId: `${evidenceId}\0mutable` });
     case "move":
-      return Object.freeze({ kind, place });
+      return environment.supportsTrait(carrier, rustCopyTrait)
+        ? Object.freeze({
+            kind: "copy" as const,
+            place,
+            proof: rustOwnershipTraitProof(rustCopyTrait, carrier, evidenceId),
+          })
+        : Object.freeze({ kind, place });
     case "clone":
       return environment.supportsTrait(carrier, rustCloneTrait)
         ? Object.freeze({

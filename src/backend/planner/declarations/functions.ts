@@ -365,7 +365,6 @@ function planRustFunctionItem(
     }
     const executionCarrier = rustGeneratorExecutionCarrier(
       node,
-      returnType,
       generatorFact.kind,
       context,
     );

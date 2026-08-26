@@ -25,9 +25,6 @@ import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { rustSourceUnionTargetType } from "../../target-model/types/index.js";
 import {
-  isRustCopyCarrier,
-  rustCarrierSupportsClone,
-  rustCarrierSupportsTrait,
   rustDefaultTrait,
   rustInferredLifetime,
   rustReferenceTargetType,
@@ -425,13 +422,18 @@ export function tryRustOwnershipMarkerCall(
   const borrowedTarget = argumentCarrier.kind === "reference"
     ? argumentCarrier.target
     : argumentCarrier;
-  const inferredBorrowLifetime = rustInferredLifetime(
-    `source-borrow\0${sourceNodeIdentity(walk.context.ast, expression) ?? [
-      walk.context.ast.getPath(sourceFile),
-      walk.context.ast.pos(expression),
-      walk.context.ast.end(expression),
-    ].join(":")}`,
-  );
+  const occurrence = sourceNodeIdentity(walk.context.ast, expression);
+  if (occurrence === undefined) {
+    appendRustDiagnostic(
+      walk,
+      "RUST_OWNERSHIP_OPERATION_IDENTITY_NOT_PROVEN",
+      "A Rust ownership operation requires one exact compiler-owned source occurrence identity.",
+      expression,
+      ["target.capability=rust.ownership.source-identity"],
+    );
+    return { carrier: undefined };
+  }
+  const inferredBorrowLifetime = rustInferredLifetime(`source-borrow\0${occurrence}`);
   const sharedBorrowLifetime = expected?.kind === "reference" && !expected.mutable &&
       rustTargetTypeRefEquals(expected.target, borrowedTarget)
     ? expected.lifetime
@@ -473,14 +475,14 @@ export function tryRustOwnershipMarkerCall(
       : source.kind === "move"
         ? "identity" as const
         : source.kind === "clone"
-          ? rustCarrierSupportsClone(argumentCarrier) ? "clone" as const : undefined
+          ? walk.context.traits.supportsClone(argumentCarrier) ? "clone" as const : undefined
           : source.kind === "own"
             ? argumentCarrier.kind === "reference" &&
-                rustCarrierSupportsTrait(argumentCarrier.target, rustToOwnedTrait)
+                walk.context.traits.supportsTrait(argumentCarrier.target, rustToOwnedTrait)
               ? "to-owned" as const
               : undefined
             : source.kind === "load"
-              ? isRustCopyCarrier(resultCarrier)
+              ? walk.context.traits.isCopy(resultCarrier)
                 ? "dereference-copy" as const
                 : undefined
               : source.kind === "store"
@@ -489,7 +491,7 @@ export function tryRustOwnershipMarkerCall(
                   ? "replace" as const
                   : source.kind === "take"
                     ? argumentCarrier.kind === "reference" && argumentCarrier.mutable &&
-                        rustCarrierSupportsTrait(resultCarrier, rustDefaultTrait)
+                        walk.context.traits.supportsTrait(resultCarrier, rustDefaultTrait)
                       ? "take" as const
                       : undefined
                     : "capture-move" as const;

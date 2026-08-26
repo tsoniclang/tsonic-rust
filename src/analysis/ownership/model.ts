@@ -19,6 +19,17 @@ import type {
 } from "../../target-model/semantics/index.js";
 import type { RustSourceFlowGraph } from "./control-flow.js";
 
+export interface RustFixedMutableLoanBinding {
+  readonly statement: Node;
+  readonly declaration: Node;
+  readonly rootDeclaration: Node;
+  readonly index: number;
+}
+
+export interface RustFixedMutableLoanGroup {
+  readonly bindings: readonly RustFixedMutableLoanBinding[];
+}
+
 export interface RustOwnershipAnalysis {
   readonly flow: RustSourceFlowGraph;
   readonly regions: readonly RustRegionRef[];
@@ -31,17 +42,18 @@ export interface RustOwnershipAnalysis {
   placeFor(node: Node): RustPlaceRef | undefined;
   operationFor(node: Node): RustOwnershipOperation | undefined;
   readDispositionFor(node: Node): RustValueReadDisposition | undefined;
-  captureFor(node: Node): RustCapture | undefined;
+  captureFor(callable: Node, node: Node): RustCapture | undefined;
   capturesFor(callable: Node): readonly RustCapture[];
   executionContractFor(callable: Node): RustExecutionContract | undefined;
   executionCarrierFor(node: Node): RustTypeRef | undefined;
   executionDomainFor(callable: Node): RustExecutionDomain;
   executionStorageFor(callable: Node): RustExecutionStorage;
   loansAt(node: Node): readonly RustLoan[];
-  dropStateFor(node: Node): RustDropState | undefined;
+  dropStatesFor(node: Node): readonly RustDropState[];
   dropObligationsForRegion(region: RustRegionRef | string): readonly RustDropObligation[];
-  pinStateFor(node: Node): RustPinState | undefined;
+  pinStatesFor(node: Node): readonly RustPinState[];
   traitProofFor(type: RustTypeRef, trait: RustTraitRef): RustTraitProof | undefined;
   ownedReadForCarrier(type: RustTypeRef): Extract<RustValueReadDisposition, { readonly kind: "copy" | "clone" }> | undefined;
   bindingRequiresMutable(node: Node): boolean;
+  fixedMutableLoanGroupFor(statement: Node): RustFixedMutableLoanGroup | undefined;
 }

@@ -15,12 +15,15 @@ import type {
   RustConstExpr,
   RustGenericArgument,
   RustLifetimeRef,
-  RustTraitImplementationEvidence,
 } from "../semantics/index.js";
 import {
+  compareRustCapturedGenerics,
+  rustCapturedGenericSemanticKey,
   rustGenericArgumentSemanticKey,
+  rustSemanticIdentityKey,
   rustSemanticIdentitiesEqual,
 } from "../semantics/index.js";
+import { singleRustUnicodeScalar } from "../syntax/literals.js";
 
 export function rustTargetTypeRefEquals(
   left: RustTargetTypeRef | undefined,
@@ -53,6 +56,14 @@ export function isRustTraitReference(value: unknown): value is RustTraitRef {
   } catch {
     return false;
   }
+}
+
+export function isRustBinderValue(value: unknown): value is import("../semantics/index.js").RustBinder {
+  return isRustBinder(value, new WeakSet<object>(), 0);
+}
+
+export function isRustLifetimeValue(value: unknown): value is RustLifetimeRef {
+  return isRustLifetime(value);
 }
 
 export function isRustGenericArgumentValue(
@@ -255,11 +266,7 @@ function rustTargetTypeRefEqualsValidated(
     case "path":
       return right.kind === left.kind &&
         rustSemanticIdentitiesEqual(left.identity, right.identity) &&
-        rustGenericArgumentsEqual(left.arguments, right.arguments) &&
-        traitImplementationListsEqual(
-          left.traitImplementations,
-          right.traitImplementations,
-        );
+        rustGenericArgumentsEqual(left.arguments, right.arguments);
     case "reference":
       return right.kind === left.kind && left.mutable === right.mutable &&
         rustLifetimesEqual(left.lifetime, right.lifetime) &&
@@ -394,24 +401,6 @@ function traitRefListsEqual(
   });
 }
 
-function traitImplementationListsEqual(
-  left: readonly RustTraitImplementationEvidence[],
-  right: readonly RustTraitImplementationEvidence[],
-): boolean {
-  return left.length === right.length && left.every((implementation, index) => {
-    const other = right[index];
-    return other !== undefined &&
-      rustTraitRefsEqualValidated(implementation.trait, other.trait) &&
-      implementation.requirements.length === other.requirements.length &&
-      implementation.requirements.every((requirement, requirementIndex) => {
-        const otherRequirement = other.requirements[requirementIndex];
-        return otherRequirement !== undefined &&
-          requirement.typeArgumentIndex === otherRequirement.typeArgumentIndex &&
-          rustTraitRefsEqualValidated(requirement.trait, otherRequirement.trait);
-      });
-  });
-}
-
 function rustBindersEqual(
   left: import("../semantics/index.js").RustBinder | undefined,
   right: import("../semantics/index.js").RustBinder | undefined,
@@ -457,9 +446,6 @@ function rustBoundsEqual(left: RustBound, right: RustBound): boolean {
       return right.kind === left.kind &&
         rustTargetTypeRefEqualsValidated(left.projection, right.projection) &&
         rustTargetTypeRefEqualsValidated(left.value, right.value);
-    case "precise-capture":
-      return right.kind === left.kind &&
-        capturedGenericListsEqual(left.captures, right.captures);
   }
 }
 
@@ -524,7 +510,8 @@ function validateRustTargetTypeRef(
           validateChild(value.element);
       case "tuple":
         return hasExactKeys(value, ["kind", "elements"], ["kind", "elements"]) &&
-          validateChildren(value.elements);
+          isDenseDataArray(value.elements) && value.elements.length > 0 &&
+          value.elements.every(validateChild);
       case "reference":
         return hasExactKeys(
           value,
@@ -538,11 +525,10 @@ function validateRustTargetTypeRef(
       case "path":
         return hasExactKeys(
           value,
-          ["kind", "identity", "displayPath", "arguments", "traitImplementations"],
-          ["kind", "identity", "displayPath", "arguments", "traitImplementations"],
+          ["kind", "identity", "displayPath", "arguments"],
+          ["kind", "identity", "displayPath", "arguments"],
         ) && isRustSemanticIdentity(value.identity) && isStringList(value.displayPath) &&
-          isRustGenericArguments(value.arguments, active, depth + 1) &&
-          isRustTraitImplementations(value.traitImplementations, active, depth + 1);
+          isRustGenericArguments(value.arguments, active, depth + 1);
       case "function-pointer":
         return hasExactKeys(
           value,
@@ -551,7 +537,8 @@ function validateRustTargetTypeRef(
         ) && (value.binder === undefined || isRustBinder(value.binder, active, depth + 1)) &&
           (value.safety === "safe" || value.safety === "unsafe") &&
           rustAbiNames.has(value.abi) && validateChildren(value.parameters) &&
-          typeof value.variadic === "boolean" && validateChild(value.result);
+          typeof value.variadic === "boolean" && (!value.variadic || value.abi !== "Rust") &&
+          validateChild(value.result);
       case "closure":
         return hasExactKeys(
           value,
@@ -562,20 +549,22 @@ function validateRustTargetTypeRef(
           value.callTrait === "fn-once") && validateChildren(value.parameters) &&
           validateChild(value.result) && isRustCapturedGenerics(value.captures);
       case "trait-object":
-        return hasExactKeys(
+        if (!hasExactKeys(
           value,
           ["kind", "principal", "autoTraits", "lifetime"],
           ["kind", "principal", "autoTraits", "lifetime"],
-        ) && isRustTraitRef(value.principal, active, depth + 1) &&
-          isDenseDataArray(value.autoTraits) && value.autoTraits.every((trait) =>
-            isRustTraitRef(trait, active, depth + 1)) && isRustLifetime(value.lifetime);
+        ) || !isRustTraitRef(value.principal, active, depth + 1) ||
+          !isDenseDataArray(value.autoTraits) || !isRustLifetime(value.lifetime)) {
+          return false;
+        }
+        return hasUniqueAutoTraitIdentities(value.principal, value.autoTraits, active, depth + 1);
       case "opaque":
         return hasExactKeys(
           value,
           ["kind", "identity", "bounds", "captures"],
           ["kind", "identity", "bounds", "captures"],
         ) && isRustSemanticIdentity(value.identity) &&
-          isDenseDataArray(value.bounds) && value.bounds.every((bound) =>
+          isDenseDataArray(value.bounds) && value.bounds.length > 0 && value.bounds.every((bound) =>
             isRustBound(bound, active, depth + 1)) &&
           isRustCapturedGenerics(value.captures);
       case "associated-type":
@@ -646,7 +635,7 @@ function targetTypeRefListsEqual(
   return left.every((entry, index) => rustTargetTypeRefEqualsValidated(entry, right[index]!));
 }
 
-function isRustSemanticIdentity(value: unknown): boolean {
+export function isRustSemanticIdentity(value: unknown): boolean {
   if (!isPlainRecord(value)) return false;
   switch (value.kind) {
     case "builtin":
@@ -715,7 +704,8 @@ function isRustConstExpr(value: unknown, active: WeakSet<object>, depth: number)
         ) && (
           value.literalKind === "boolean" && typeof value.value === "boolean" ||
           value.literalKind === "integer" && typeof value.value === "bigint" ||
-          value.literalKind === "character" && typeof value.value === "string"
+          value.literalKind === "character" && typeof value.value === "string" &&
+            singleRustUnicodeScalar(value.value) !== undefined
         );
       case "parameter":
         return hasExactKeys(
@@ -763,6 +753,7 @@ function isRustGenericArguments(
 ): boolean {
   return isDenseDataArray(value) && value.every((argument) => {
     if (!isPlainRecord(argument)) return false;
+    if (!hasExactKeys(argument, ["kind", "value"], ["kind", "value"])) return false;
     if (argument.kind === "lifetime") return isRustLifetime(argument.value);
     if (argument.kind === "type") {
       return validateRustTargetTypeRef(argument.value, active, depth + 1);
@@ -776,7 +767,7 @@ function isRustGenericArgument(
   active: WeakSet<object>,
   depth: number,
 ): value is import("../semantics/index.js").RustGenericArgument {
-  return isPlainRecord(value) && (
+  return isPlainRecord(value) && hasExactKeys(value, ["kind", "value"], ["kind", "value"]) && (
     value.kind === "type" && validateRustTargetTypeRef(value.value, active, depth + 1) ||
     value.kind === "lifetime" && isRustLifetime(value.value) ||
     value.kind === "const" && isRustConstExpr(value.value, active, depth + 1)
@@ -784,69 +775,136 @@ function isRustGenericArgument(
 }
 
 function isRustCapturedGenerics(value: unknown): boolean {
-  return isDenseDataArray(value) && value.every((capture) =>
-    isPlainRecord(capture) && (
-      capture.kind === "lifetime"
-        ? isRustLifetime(capture.value)
-        : (capture.kind === "type" || capture.kind === "const") &&
-          isRustSemanticIdentity(capture.identity) && isNonEmptyString(capture.displayName)
-    ));
+  if (!isDenseDataArray(value)) return false;
+  const identities = new Set<string>();
+  let previous: RustCapturedGeneric | undefined;
+  for (const capture of value) {
+    if (!isPlainRecord(capture)) return false;
+    if (capture.kind === "lifetime") {
+      if (!hasExactKeys(capture, ["kind", "value"], ["kind", "value"]) ||
+        !isRustLifetime(capture.value)) return false;
+    } else if (capture.kind === "type" || capture.kind === "const") {
+      if (!hasExactKeys(
+        capture,
+        ["kind", "identity", "displayName"],
+        ["kind", "identity", "displayName"],
+      ) || !isRustSemanticIdentity(capture.identity) || !isNonEmptyString(capture.displayName)) {
+        return false;
+      }
+    } else {
+      return false;
+    }
+    const selected = capture as RustCapturedGeneric;
+    if (previous !== undefined && compareRustCapturedGenerics(previous, selected) >= 0) return false;
+    const identity = rustCapturedGenericSemanticKey(selected);
+    if (identities.has(identity)) return false;
+    identities.add(identity);
+    previous = selected;
+  }
+  return true;
 }
 
-function isRustTraitRef(value: unknown, active: WeakSet<object>, depth: number): boolean {
-  return isPlainRecord(value) && hasExactKeys(
-    value,
-    ["identity", "displayPath", "arguments", "associatedConstraints"],
-    ["identity", "displayPath", "arguments", "associatedConstraints"],
-  ) && isRustSemanticIdentity(value.identity) && isStringList(value.displayPath) &&
-    isRustGenericArguments(value.arguments, active, depth + 1) &&
-    isDenseDataArray(value.associatedConstraints) && value.associatedConstraints.every((constraint) =>
-      isPlainRecord(constraint) && isRustSemanticIdentity(constraint.item) &&
-      isNonEmptyString(constraint.displayName) &&
-      isRustGenericArguments(constraint.arguments, active, depth + 1) && (
-        constraint.kind === "equality" && hasExactKeys(
-          constraint,
-          ["kind", "item", "displayName", "arguments", "type"],
-          ["kind", "item", "displayName", "arguments", "type"],
-        )
-          ? validateRustTargetTypeRef(constraint.type, active, depth + 1)
-          : constraint.kind === "bounds" && hasExactKeys(
-            constraint,
-            ["kind", "item", "displayName", "arguments", "bounds"],
-            ["kind", "item", "displayName", "arguments", "bounds"],
-          ) && isDenseDataArray(constraint.bounds) &&
-            constraint.bounds.every((bound) => isRustBound(bound, active, depth + 1))
-      ));
-}
-
-function isRustTraitImplementations(
-  value: unknown,
+function hasUniqueAutoTraitIdentities(
+  principal: RustTraitRef,
+  autoTraits: readonly unknown[],
   active: WeakSet<object>,
   depth: number,
 ): boolean {
-  return isDenseDataArray(value) && value.every((implementation) =>
-    isPlainRecord(implementation) &&
-    hasExactKeys(implementation, ["trait", "requirements"], ["trait", "requirements"]) &&
-    isRustTraitRef(implementation.trait, active, depth + 1) &&
-    isDenseDataArray(implementation.requirements) &&
-    implementation.requirements.every((requirement) =>
-      isPlainRecord(requirement) &&
-      hasExactKeys(
-        requirement,
-        ["typeArgumentIndex", "trait"],
-        ["typeArgumentIndex", "trait"],
-      ) && Number.isSafeInteger(requirement.typeArgumentIndex) &&
-      (requirement.typeArgumentIndex as number) >= 0 &&
-      isRustTraitRef(requirement.trait, active, depth + 1)));
+  const identities = new Set<string>([rustSemanticIdentityKey(principal.identity)]);
+  for (const value of autoTraits) {
+    if (!isRustTraitRef(value, active, depth) || value.arguments.length !== 0 ||
+      value.associatedConstraints.length !== 0) return false;
+    const identity = rustSemanticIdentityKey(value.identity);
+    if (identities.has(identity)) return false;
+    identities.add(identity);
+  }
+  return true;
+}
+
+function isRustTraitRef(
+  value: unknown,
+  active: WeakSet<object>,
+  depth: number,
+): value is RustTraitRef {
+  if (!isPlainRecord(value) || depth > 128 || active.has(value)) return false;
+  active.add(value);
+  try {
+    if (!hasExactKeys(
+      value,
+      ["identity", "displayPath", "arguments", "associatedConstraints"],
+      ["identity", "displayPath", "arguments", "associatedConstraints"],
+    ) || !isRustSemanticIdentity(value.identity) || !isStringList(value.displayPath) ||
+      !isRustGenericArguments(value.arguments, active, depth + 1) ||
+      !isDenseDataArray(value.associatedConstraints)) {
+      return false;
+    }
+
+    const semanticProjections = new Set<string>();
+    const renderedProjections = new Set<string>();
+    for (const constraint of value.associatedConstraints) {
+      if (!isPlainRecord(constraint) || !isRustSemanticIdentity(constraint.item) ||
+        !isNonEmptyString(constraint.displayName) ||
+        !isRustGenericArguments(constraint.arguments, active, depth + 1)) {
+        return false;
+      }
+      if (constraint.kind === "equality") {
+        if (!hasExactKeys(
+          constraint,
+          ["kind", "item", "displayName", "arguments", "type"],
+          ["kind", "item", "displayName", "arguments", "type"],
+        ) || !validateRustTargetTypeRef(constraint.type, active, depth + 1)) {
+          return false;
+        }
+      } else if (constraint.kind === "bounds") {
+        if (!hasExactKeys(
+          constraint,
+          ["kind", "item", "displayName", "arguments", "bounds"],
+          ["kind", "item", "displayName", "arguments", "bounds"],
+        ) || !isDenseDataArray(constraint.bounds) || constraint.bounds.length === 0 ||
+          !constraint.bounds.every((bound) => isRustBound(bound, active, depth + 1))) {
+          return false;
+        }
+      } else {
+        return false;
+      }
+
+      const argumentKeys = (constraint.arguments as readonly RustGenericArgument[])
+        .map(rustGenericArgumentSemanticKey);
+      const semanticProjection = JSON.stringify([
+        rustSemanticIdentityKey(constraint.item),
+        ...argumentKeys,
+      ]);
+      const renderedProjection = JSON.stringify([constraint.displayName, ...argumentKeys]);
+      if (semanticProjections.has(semanticProjection) || renderedProjections.has(renderedProjection)) {
+        return false;
+      }
+      semanticProjections.add(semanticProjection);
+      renderedProjections.add(renderedProjection);
+    }
+    return true;
+  } finally {
+    active.delete(value);
+  }
 }
 
 function isRustBinder(value: unknown, _active: WeakSet<object>, _depth: number): boolean {
-  return isPlainRecord(value) && hasExactKeys(value, ["id", "lifetimes"], ["id", "lifetimes"]) &&
-    isNonEmptyString(value.id) && isDenseDataArray(value.lifetimes) &&
-    value.lifetimes.every((parameter) =>
-      isPlainRecord(parameter) && parameter.kind === "lifetime" &&
-      isRustLifetime(parameter.identity) && isDenseDataArray(parameter.bounds) &&
-      parameter.bounds.every(isRustLifetime));
+  if (!isPlainRecord(value) ||
+    !hasExactKeys(value, ["id", "lifetimes"], ["id", "lifetimes"]) ||
+    !isNonEmptyString(value.id) || !isDenseDataArray(value.lifetimes) ||
+    value.lifetimes.length === 0) return false;
+  const parameterIds = new Set<string>();
+  for (const parameter of value.lifetimes) {
+    if (!isPlainRecord(parameter) ||
+      !hasExactKeys(parameter, ["kind", "identity", "bounds"], ["kind", "identity", "bounds"]) ||
+      parameter.kind !== "lifetime" || !isPlainRecord(parameter.identity) ||
+      parameter.identity.kind !== "bound" || parameter.identity.binderId !== value.id ||
+      !isRustLifetime(parameter.identity) || !isDenseDataArray(parameter.bounds) ||
+      !parameter.bounds.every(isRustLifetime) || parameterIds.has(parameter.identity.parameterId)) {
+      return false;
+    }
+    parameterIds.add(parameter.identity.parameterId);
+  }
+  return true;
 }
 
 function isRustBound(value: unknown, active: WeakSet<object>, depth: number): boolean {
@@ -869,9 +927,6 @@ function isRustBound(value: unknown, active: WeakSet<object>, depth: number): bo
         validateRustTargetTypeRef(value.projection, active, depth + 1) &&
         isPlainRecord(value.projection) && value.projection.kind === "associated-type" &&
         validateRustTargetTypeRef(value.value, active, depth + 1);
-    case "precise-capture":
-      return hasExactKeys(value, ["kind", "captures"], ["kind", "captures"]) &&
-        isRustCapturedGenerics(value.captures);
     default:
       return false;
   }

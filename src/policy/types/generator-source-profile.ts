@@ -6,7 +6,7 @@ import {
   rustIteratorResultTargetType,
   rustJsErrorTargetId,
   rustSourcePrimitiveTargetType,
-  rustTypeIdentityItemId,
+  rustBuiltinTypeIdentityItemId,
 } from "../../target-model/types/index.js";
 
 export interface RustGeneratorSourceCallRequest {
@@ -92,7 +92,7 @@ export function selectRustGeneratorSourceCall(
     const errorCarrier = request.argumentCarriers[0];
     if (request.selectedParameterCount !== 1 || request.argumentCarriers.length !== 1 ||
       errorCarrier === undefined ||
-      rustTypeIdentityItemId(errorCarrier) !== rustJsErrorTargetId) {
+      rustBuiltinTypeIdentityItemId(errorCarrier, "tsonic-runtime") !== rustJsErrorTargetId) {
       return rejected("Generator.throw requires one exact closed Rust JsError carrier.");
     }
     return resolved({

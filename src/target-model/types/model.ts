@@ -12,6 +12,7 @@ import type {
   RustGenericArgument,
   RustGenerics,
   RustConditionalTraitRequirement,
+  RustSemanticIdentity,
   RustTraitImplementationEvidence,
   RustTypeRef,
 } from "../semantics/index.js";
@@ -26,6 +27,16 @@ export type RustNamedTypeTraitImplementation = RustTraitImplementationEvidence;
 
 export interface RustNamedTypeTraitContract {
   readonly implementations: readonly RustNamedTypeTraitImplementation[];
+}
+
+export interface RustNamedTypeTraitContractEntry {
+  readonly typeIdentity: RustSemanticIdentity;
+  readonly contract: RustNamedTypeTraitContract;
+}
+
+export interface RustNamedTypeTraitContractIndex {
+  contractFor(typeIdentity: RustSemanticIdentity): RustNamedTypeTraitContract | undefined;
+  entries(): readonly RustNamedTypeTraitContractEntry[];
 }
 
 export interface RustTargetParameter {

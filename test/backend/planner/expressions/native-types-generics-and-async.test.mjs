@@ -392,28 +392,29 @@ export function first(entry: [int32, string]): int32 {
   assert.doesNotMatch(text, /entry\.clone\(\)\.0/u);
 });
 
-test("homogeneous tuple carriers support checked dynamic indexing", { timeout: 300_000 }, () => {
+test("explicit fixed-array carriers support checked dynamic indexing", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     packages: [acmeTestingPackage()],
-    target: { id: "rust", options: { outputType: "bin", crateName: "dynamic_tuple_index_proof" } },
+    target: { id: "rust", options: { outputType: "bin", crateName: "dynamic_fixed_array_index_proof" } },
     files: {
       "index.ts": `
-import type { int32 } from "@tsonic/core/types.js";
+import type { FixedArray, int32 } from "@tsonic/core/types.js";
 import { check } from "@acme/testing";
 
-export function pick(entry: [int32, int32], i: int32): int32 {
+export function pick(entry: FixedArray<int32, 2>, i: int32): int32 {
   return entry[i];
 }
 
 export function main(): void {
-  check(pick([10, 20], 1) === 20);
+  const values: FixedArray<int32, 2> = [10, 20];
+  check(pick(values, 1) === 20);
 }
 `,
     },
   });
   assert.deepEqual(result.diagnostics, []);
   assert.match(artifactText(result, "src/index.rs"), /entry\[tsonic_rust_runtime::conversions::i32_to_usize\(i\)\?\]/u);
-  assert.equal(validateGeneratedProject("dynamic-tuple-index", result.artifacts, { run: true }).status, 0);
+  assert.equal(validateGeneratedProject("dynamic-fixed-array-index", result.artifacts, { run: true }).status, 0);
 });
 
 test("closed string-literal unions lower to unit-variant enums", () => {

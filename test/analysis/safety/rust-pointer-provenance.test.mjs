@@ -41,6 +41,7 @@ export function read(pointer: constPtr<int32>): int32 {
 export function write(pointer: mutPtr<int32>, value: int32): void {
   unsafeContext(writeVolatile(pointer, value));
 }
+
 `,
     },
   });

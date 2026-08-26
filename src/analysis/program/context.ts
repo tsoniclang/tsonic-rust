@@ -64,6 +64,10 @@ import {
   createRustDeclarationApplicationIndex,
   type RustDeclarationApplicationIndex,
 } from "../declarations/declaration-applications.js";
+import {
+  createRustNamedTypeTraitContractIndex,
+  createRustTraitSupportQueries,
+} from "../../target-model/types/index.js";
 
 export interface RustAnalysisContext extends RustSourcePolicyContext {
   readonly target: TargetSelection;
@@ -123,6 +127,9 @@ export function createRustAnalysisContext(
     safetyApplications,
     declarationApplications,
   });
+  const traits = createRustTraitSupportQueries(
+    createRustNamedTypeTraitContractIndex(providerSemantics.traitContracts),
+  );
   return Object.freeze({
     source: input.source,
     target: input.target,
@@ -141,6 +148,7 @@ export function createRustAnalysisContext(
     sourceGenerics: createRustSourceGenericRegistry(),
     structuralShapes: createRustStructuralShapePlanRegistry(),
     providerSemantics,
+    traits,
     safetyApplications,
     declarationApplications,
     runtimeValueUses,

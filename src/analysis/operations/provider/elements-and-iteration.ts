@@ -6,7 +6,6 @@ import {
   resolveSelectedSourceProfileMember,
 } from "../../../policy/evidence/selected-source.js";
 import {
-  isRustCopyCarrier,
   getRustGeneratorProtocol,
   isRustJsArrayLikeCarrier,
   isRustStringCarrier,
@@ -15,7 +14,7 @@ import {
   rustJsRegExpStringIteratorTargetId,
   rustRegExpExecArrayTargetType,
   rustRegExpStringIteratorTargetId,
-  rustPathTypeMatches,
+  rustBuiltinPathTypeMatches,
 } from "../../../target-model/types/index.js";
 import {
   KindArrayLiteralExpression,
@@ -33,8 +32,8 @@ import {
   getRustJsMapTargetTypes,
   getRustJsSetElementTargetType,
   rustSourcePrimitiveTargetType,
-  rustCarrierSupportsClone,
 } from "../../../target-model/types/index.js";
+import type { RustTraitSupportQueries } from "../../../target-model/types/index.js";
 import { acceptDeclarationOperation, acceptRustMemberOperation, acceptRustOperation, elementProvenance, isDeclarationFileSubject, normalizeSelectedLiteralCarrier, rejectSelectedOperation, selectedArgumentMatchScore, selectedMemberReceiverCarrier, sourceOperationId } from "./result.js";
 import { finalizeProviderOperationFromSubjects, mapProviderCheckedOperation } from "./conversions.js";
 import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
@@ -43,6 +42,7 @@ import { rustInt32ToUsizeValueConversion } from "../../../target-model/conversio
 import { rustProjectObjectIndexSignature } from "../../project-types/object-layout.js";
 import { rustRuntimeCarrierKey } from "../../../target-model/facts/selections.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustTypeSemanticKey } from "../../../target-model/semantics/index.js";
 import { selectedValueCarrier } from "./operators.js";
 import { selectJsSurfaceOperation } from "../../../policy/operations/js-surface.js";
 import { selectRustFixedArrayElementAccess } from "./structural-properties.js";
@@ -58,6 +58,10 @@ import type { ExtensionFactSubject, Node } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { RustProviderOperationTemplate, RustTargetOperationFact } from "../../facts/keys.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+
+function optionalRustTypeSemanticKey(carrier: TargetTypeRef | undefined): string {
+  return carrier === undefined ? "missing" : rustTypeSemanticKey(carrier);
+}
 
 export function selectRustCheckedElementAccess(
   request: RustCheckedElementSelectionInput,
@@ -143,10 +147,12 @@ export function selectRustCheckedElementAccess(
       ? undefined
       : options.projectTypes.fieldStorageName(owner, index.declaration);
     if (index !== undefined) {
+      const operationId = sourceOperationId(context, index.declaration, "index-signature");
       if (owner?.kind !== "interface" || relationship?.kind !== "related" ||
         options.projectTypeRequiresDynamicDispatch(owner) || keyCarrier === undefined ||
         resultCarrier === undefined || selectedKeyCarrier === undefined ||
-        storageName === undefined || !rustTargetTypeRefEquals(keyCarrier, selectedKeyCarrier)) {
+        storageName === undefined || operationId === undefined ||
+        !rustTargetTypeRefEquals(keyCarrier, selectedKeyCarrier)) {
         return rejectSelectedOperation(
           request.expression,
           context,
@@ -156,7 +162,7 @@ export function selectRustCheckedElementAccess(
       }
       return acceptRustMemberOperation(request, "indexer", {
         kind: "source-index-signature",
-        operationId: sourceOperationId(context, index.declaration, "index-signature"),
+        operationId,
         receiverCarrier: selectedReceiverCarrier!,
         keyCarrier,
         storageName,
@@ -198,7 +204,7 @@ export function selectRustCheckedElementAccess(
   if (sourceProfileIdentity?.profile === "native" &&
     (sourceProfileIdentity.ownerName === "Array" || sourceProfileIdentity.ownerName === "ReadonlyArray") &&
     sourceProfileIdentity.memberName === "index" &&
-    nativeArrayReceiver !== undefined && isRustCopyCarrier(nativeArrayReceiver.element)) {
+    nativeArrayReceiver !== undefined && context.traits.isCopy(nativeArrayReceiver.element)) {
     const template: RustProviderOperationTemplate = {
       kind: "provider-operation",
       operationId: `tsonic.rust.native.${sourceProfileIdentity.ownerName}.index`,
@@ -236,6 +242,7 @@ export function selectRustCheckedElementAccess(
       ...(receiverCarrier === undefined ? {} : { receiverCarrier }),
       argumentCarriers: [selectedArgumentCarrier],
       argumentMatchScore: selectedArgumentMatchScore([request.argument], context, options),
+      carrierSupportsClone: (carrier) => context.traits.supportsClone(carrier),
     });
     if (selection === undefined || selection.fact.kind !== "provider-operation" || selection.resultCarrier === undefined) {
       return rejectSelectedOperation(
@@ -244,7 +251,7 @@ export function selectRustCheckedElementAccess(
         "RUST_SELECTED_OPERATION_UNSUPPORTED",
         `The selected JavaScript index signature '${jsIdentity.ownerName}' has no closed Rust operation row for this receiver carrier.`,
         [{
-          message: `receiver=${JSON.stringify(receiverCarrier)}; argument=${JSON.stringify(selectedArgumentCarrier)}`,
+          message: `receiver=${optionalRustTypeSemanticKey(receiverCarrier)}; argument=${optionalRustTypeSemanticKey(selectedArgumentCarrier)}`,
         }],
       );
     }
@@ -309,7 +316,7 @@ export function selectRustCheckedIteration(
     }, elementCarrier);
   }
   const iterable = resolveRustTargetTypeRef(request.expression, context, options);
-  const targetIteration = rustIterableTargetPolicy(iterable);
+  const targetIteration = rustIterableTargetPolicy(iterable, context.traits);
   if (targetIteration === undefined) {
     return rejectSelectedOperation(
       request.statement,
@@ -322,6 +329,7 @@ export function selectRustCheckedIteration(
     source,
     targetIteration,
     isFreshRustIterationValue(request.expression, context.ast),
+    context.traits,
   );
   if (lowering === undefined) {
     return rejectSelectedOperation(
@@ -385,7 +393,10 @@ type RustIterableTargetPolicy =
       readonly method: string;
     };
 
-function rustIterableTargetPolicy(iterable: TargetTypeRef | undefined): RustIterableTargetPolicy | undefined {
+function rustIterableTargetPolicy(
+  iterable: TargetTypeRef | undefined,
+  traits: RustTraitSupportQueries,
+): RustIterableTargetPolicy | undefined {
   if (iterable?.kind === "sequence") {
     return { kind: "borrowed", elementCarrier: iterable.element, input: "reference" };
   }
@@ -401,8 +412,8 @@ function rustIterableTargetPolicy(iterable: TargetTypeRef | undefined): RustIter
     return { kind: "js-array", elementCarrier: jsElement };
   }
   const mapTypes = getRustJsMapTargetTypes(iterable);
-  if (mapTypes !== undefined && rustCarrierSupportsClone(mapTypes.key) &&
-    rustCarrierSupportsClone(mapTypes.value)) {
+  if (mapTypes !== undefined && traits.supportsClone(mapTypes.key) &&
+    traits.supportsClone(mapTypes.value)) {
     return {
       kind: "receiver-method",
       elementCarrier: { kind: "tuple", elements: [mapTypes.key, mapTypes.value] },
@@ -410,17 +421,17 @@ function rustIterableTargetPolicy(iterable: TargetTypeRef | undefined): RustIter
     };
   }
   const setElement = getRustJsSetElementTargetType(iterable);
-  if (setElement !== undefined && rustCarrierSupportsClone(setElement)) {
+  if (setElement !== undefined && traits.supportsClone(setElement)) {
     return { kind: "receiver-method", elementCarrier: setElement, method: "values" };
   }
   if (iterable?.kind === "path") {
-    if (rustPathTypeMatches(iterable, rustRegExpStringIteratorTargetId)) {
+    if (rustBuiltinPathTypeMatches(iterable, rustRegExpStringIteratorTargetId, "tsonic-runtime")) {
       return {
         kind: "fallible-owned",
         elementCarrier: rustRegExpExecArrayTargetType(),
       };
     }
-    if (rustPathTypeMatches(iterable, rustJsRegExpStringIteratorTargetId)) {
+    if (rustBuiltinPathTypeMatches(iterable, rustJsRegExpStringIteratorTargetId, "tsonic-runtime")) {
       return {
         kind: "fallible-owned",
         elementCarrier: rustJsRegExpExecArrayTargetType(),
@@ -440,6 +451,7 @@ function selectRustIterationLowering(
   source: Exclude<import("@tsonic/tsts").ResolvedSourceIterationInfo, { readonly iterationKind: "for-in" }>,
   target: RustIterableTargetPolicy,
   consumeResult: boolean,
+  traits: RustTraitSupportQueries,
 ): Extract<
   RustTargetOperationFact,
   { readonly kind: "iteration"; readonly iterationKind: "for-of" | "for-await-of" }
@@ -457,7 +469,7 @@ function selectRustIterationLowering(
       }
       return {
         kind: "borrowed",
-        style: isRustCopyCarrier(target.elementCarrier) ? "copied" : "cloned",
+        style: traits.isCopy(target.elementCarrier) ? "copied" : "cloned",
         input: target.input,
       };
     }
@@ -482,7 +494,7 @@ function selectRustIterationLowering(
     }
     return {
       kind: "borrowed",
-      style: isRustCopyCarrier(target.elementCarrier) ? "copied" : "cloned",
+      style: traits.isCopy(target.elementCarrier) ? "copied" : "cloned",
       input: target.input,
     };
   }

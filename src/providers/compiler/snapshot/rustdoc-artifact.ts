@@ -24,6 +24,7 @@ import {
   parseRustdocDocument,
   type RustdocDocument,
 } from "../model/rustdoc-schema.js";
+import { closedMetadataEquals } from "../../../target-model/metadata/closed-data.js";
 
 const commandBufferLimit = 64 * 1024 * 1024;
 const rustdocJsonByteLimit = 128 * 1024 * 1024;
@@ -247,7 +248,7 @@ export function validateDependencyBelongsToSnapshot(
     throw new Error(`Rust compiler-provider snapshot uses an unsupported contract.`);
   }
   const exact = snapshot.dependencies.find((candidate) => candidate.alias === dependency.alias);
-  if (exact === undefined || JSON.stringify(exact) !== JSON.stringify(dependency)) {
+  if (exact === undefined || !closedMetadataEquals(exact, dependency)) {
     throw new Error(`Rust compiler-provider dependency '${dependency.alias}' does not belong to snapshot '${snapshot.digest}'.`);
   }
 }

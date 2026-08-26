@@ -178,6 +178,114 @@ rust(Handle.prototype.release).drop();
   validateGeneratedProject("explicit-layout-and-drop-contracts", result.artifacts);
 });
 
+test("packed layout, mutable statics, and thread-local storage remain independent", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32, uint8, uint32 } from "@tsonic/core/types.js";
+import { rust } from "@tsonic/rust/lang.js";
+
+export class PackedHeader {
+  tag!: uint8;
+  value!: uint32;
+}
+rust<PackedHeader>().reprC().reprPacked(2);
+
+export let nativeState: int32 = 1;
+rust(nativeState).mutableStatic();
+
+export let localState: int32 = 2;
+rust(localState).threadLocal();
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /#\[repr\(C, packed\(2\)\)\]\s*pub struct PackedHeader/u);
+  assert.match(source, /pub static mut native_state: i32 = 1;/u);
+  assert.match(source, /std::thread_local! \{[\s\S]*pub static local_state: rt::ModuleCell<i32>/u);
+  validateGeneratedProject("explicit-layout-and-storage-controls", result.artifacts);
+});
+
+test("foreign declaration safety is independent from ABI and follows the selected Rust edition", { timeout: 300_000 }, () => {
+  const edition2024 = compileRust({
+    target: { id: "rust", options: { edition: "2024" } },
+    files: {
+      "index.ts": `
+import { safety } from "@tsonic/core/lang.js";
+import type { int32 } from "@tsonic/core/types.js";
+import { rust } from "@tsonic/rust/lang.js";
+
+export declare function safeForeign(value: int32): int32;
+export declare function unsafeForeign(value: int32): int32;
+rust(safeForeign).extern("C");
+rust(unsafeForeign).extern("C");
+safety(unsafeForeign).requiresUnsafe();
+`,
+    },
+  }).result;
+  assert.deepEqual(edition2024.diagnostics, []);
+  const source2024 = artifactText(edition2024, "src/index.rs");
+  assert.match(source2024, /unsafe extern "C" \{[\s\S]*pub safe fn safe_foreign\(value: i32\) -> i32;/u);
+  assert.match(source2024, /unsafe extern "C" \{[\s\S]*pub unsafe fn unsafe_foreign\(value: i32\) -> i32;/u);
+  validateGeneratedProject("explicit-foreign-safety-rust-2024", edition2024.artifacts);
+
+  const edition2021Unsafe = compileRust({
+    target: { id: "rust", options: { edition: "2021" } },
+    files: {
+      "index.ts": `
+import { safety } from "@tsonic/core/lang.js";
+import type { int32 } from "@tsonic/core/types.js";
+import { rust } from "@tsonic/rust/lang.js";
+
+export declare function foreign(value: int32): int32;
+rust(foreign).extern("C");
+safety(foreign).requiresUnsafe();
+`,
+    },
+  }).result;
+  assert.deepEqual(edition2021Unsafe.diagnostics, []);
+  const source2021 = artifactText(edition2021Unsafe, "src/index.rs");
+  assert.match(source2021, /extern "C" \{[\s\S]*pub fn foreign\(value: i32\) -> i32;/u);
+  assert.doesNotMatch(source2021, /pub safe fn|pub unsafe fn/u);
+  validateGeneratedProject("explicit-foreign-safety-rust-2021", edition2021Unsafe.artifacts);
+
+  const edition2021Safe = compileRust({
+    target: { id: "rust", options: { edition: "2021" } },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { rust } from "@tsonic/rust/lang.js";
+
+export declare function foreign(value: int32): int32;
+rust(foreign).extern("C");
+`,
+    },
+  }).result;
+  assert.equal(edition2021Safe.artifacts.length, 0);
+  assert.ok(edition2021Safe.diagnostics.some(({ code, message }) =>
+    code === "RUST_UNSUPPORTED_AST" &&
+    message.includes("Rust 2021 cannot express an independently safe foreign item")));
+});
+
+test("negative implementations fail closed unless the selected dialect proves the feature", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import { rust } from "@tsonic/rust/lang.js";
+
+interface ThreadSafe {}
+class LocalValue {}
+rust<LocalValue>().negativeImpl<ThreadSafe>();
+`,
+    },
+  });
+
+  assert.equal(result.artifacts.length, 0);
+  assert.ok(diagnosticCodes(result).includes("RUST_DECLARATION_NEGATIVE_IMPL_UNSTABLE"));
+});
+
 test("declaration controls never imply unrelated ABI, safety, or storage knobs", () => {
   const invalid = [
     {

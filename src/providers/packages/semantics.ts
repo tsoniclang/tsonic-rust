@@ -1,26 +1,20 @@
 import {
-  canonicalizeProviderOperationRow,
   materializeProviderBinaryEpilogueRow,
-  materializeProviderCarrier,
-  materializeProviderGenericArgument,
-  materializeProviderGenerics,
   materializeProviderOperationRow,
-  materializeProviderSourceGenericBinding,
-  materializeProviderTypeRequirements,
 } from "./materialization.js";
 import { rustProviderBindingProviderId } from "./identity.js";
 import { validateProviderPackageDefinition } from "./validation.js";
 import {
   closedMetadataEquals,
-  closedMetadataKey,
   snapshotClosedMetadata,
 } from "../../target-model/metadata/closed-data.js";
 import {
-  rustGenericsSemanticKey,
-  rustTypeSemanticKey,
+  rustSemanticIdentityKey,
 } from "../../target-model/semantics/index.js";
 import { rustBuiltInSourceTypeSemantics } from "../builtins/source-types.js";
-import type { RustNamedTypeTraitContract } from "../../target-model/types/model.js";
+import type {
+  RustNamedTypeTraitContractEntry,
+} from "../../target-model/types/model.js";
 import { rustProviderPolicyContributionKind } from "./model.js";
 import type { RustProviderBinaryEpilogueRow, RustProviderExportRow, RustProviderOperationRow, RustProviderPackageDefinition, RustProviderPolicyContribution, RustProviderSemantics, RustProviderTypeRow } from "./model.js";
 import type { SelectedTargetCapabilityContributions } from "@tsonic/target-api/provider";
@@ -78,20 +72,7 @@ export function providerOperationRowIdentity(row: RustProviderOperationRow): str
 }
 
 export function providerTypeRowIdentity(row: RustProviderTypeRow): string {
-  return [
-    providerExportRowIdentity(row),
-    row.targetDeclarationKind,
-    row.targetTraitKind ?? "",
-    row.targetTraitSafety ?? "",
-    String(row.targetTraitRequiresImplementationItems ?? ""),
-    closedMetadataKey(row.sourceGenericBindings),
-    closedMetadataKey(row.targetImplicitParameters),
-    closedMetadataKey(row.semanticRoles),
-    rustGenericsSemanticKey(row.targetGenerics),
-    rustTypeSemanticKey(row.targetCarrier),
-    closedMetadataKey(row.typeRequirements),
-    closedMetadataKey(row.objectLiteralConstruction),
-  ].join("\0");
+  return providerExportRowIdentity(row);
 }
 
 export function providerBinaryEpilogueIdentity(row: RustProviderBinaryEpilogueRow): string {
@@ -122,8 +103,7 @@ export function collectRustProviderSemanticsFromDefinitions(
 ): RustProviderSemantics {
   const exports: RustProviderExportRow[] = [];
   const operations: RustProviderOperationRow[] = [];
-  const carrierPaths = new Map<string, string>();
-  const carrierTraits = new Map<string, RustNamedTypeTraitContract>();
+  const traitContracts: RustNamedTypeTraitContractEntry[] = [];
   const types: RustProviderTypeRow[] = [];
   const binaryEpilogues: RustProviderBinaryEpilogueRow[] = [];
   for (const definition of definitions) {
@@ -144,22 +124,8 @@ export function collectRustProviderSemanticsFromDefinitions(
         }));
       }
     }
-    const carrierPathRows = definition.carrierPaths ?? {};
-    const carrierTraitRows = definition.carrierTraits ?? {};
-    for (const [carrierId, path] of Object.entries(carrierPathRows)) {
-      const existing = carrierPaths.get(carrierId);
-      if (existing !== undefined && existing !== path) {
-        throw new Error(`Rust provider carrier '${carrierId}' has conflicting target paths '${existing}' and '${path}'.`);
-      }
-      carrierPaths.set(carrierId, path);
-    }
-    for (const [carrierId, traits] of Object.entries(carrierTraitRows)) {
-      const existing = carrierTraits.get(carrierId);
-      if (existing !== undefined && !closedMetadataEquals(existing, traits)) {
-        throw new Error(`Rust provider carrier '${carrierId}' has conflicting native trait contracts.`);
-      }
-      carrierTraits.set(carrierId, snapshotClosedMetadata(traits));
-    }
+    traitContracts.push(...(definition.traitContracts ?? []).map((entry) =>
+      snapshotClosedMetadata(entry)));
     for (const type of definition.types ?? []) {
       const owner = moduleByExportId.get(type.exportId);
       if (owner === undefined) {
@@ -167,66 +133,6 @@ export function collectRustProviderSemanticsFromDefinitions(
       }
       types.push(Object.freeze({
         ...type,
-        sourceGenericBindings: Object.freeze(type.sourceGenericBindings.map((binding) =>
-          materializeProviderSourceGenericBinding(
-            binding,
-            carrierPathRows,
-            carrierTraitRows,
-            {
-              providerPackageId: definition.id,
-              providerId,
-              providerVersion: definition.version,
-            },
-          ))),
-        ...(type.targetImplicitParameters === undefined
-          ? {}
-          : {
-              targetImplicitParameters: Object.freeze(type.targetImplicitParameters.map((argument) =>
-                materializeProviderGenericArgument(
-                  argument,
-                  carrierPathRows,
-                  carrierTraitRows,
-                  {
-                    providerPackageId: definition.id,
-                    providerId,
-                    providerVersion: definition.version,
-                  },
-                ))),
-            }),
-        targetGenerics: materializeProviderGenerics(
-          type.targetGenerics,
-          carrierPathRows,
-          carrierTraitRows,
-          {
-            providerPackageId: definition.id,
-            providerId,
-            providerVersion: definition.version,
-          },
-        ),
-        targetCarrier: materializeProviderCarrier(
-          type.targetCarrier,
-          carrierPathRows,
-          carrierTraitRows,
-          {
-            providerPackageId: definition.id,
-            providerId,
-            providerVersion: definition.version,
-          },
-        ),
-        ...(type.typeRequirements === undefined
-          ? {}
-          : {
-              typeRequirements: materializeProviderTypeRequirements(
-                type.typeRequirements,
-                carrierPathRows,
-                carrierTraitRows,
-                {
-                  providerPackageId: definition.id,
-                  providerId,
-                  providerVersion: definition.version,
-                },
-              ),
-            }),
         providerPackageId: definition.id,
         providerId,
         providerVersion: definition.version,
@@ -239,8 +145,6 @@ export function collectRustProviderSemanticsFromDefinitions(
       snapshotClosedMetadata(materializeProviderBinaryEpilogueRow(
         epilogue,
         aliases,
-        carrierPathRows,
-        carrierTraitRows,
         {
           providerPackageId: definition.id,
           providerVersion: definition.version,
@@ -251,7 +155,7 @@ export function collectRustProviderSemanticsFromDefinitions(
       if (owner === undefined) {
         throw new Error(`Rust provider package '${definition.id}' operation '${row.memberId ?? row.exportId}' has no declaration owner.`);
       }
-      return materializeProviderOperationRow(row, aliases, carrierPathRows, carrierTraitRows, {
+      return materializeProviderOperationRow(row, aliases, {
         providerPackageId: definition.id,
         providerId,
         providerVersion: definition.version,
@@ -260,44 +164,15 @@ export function collectRustProviderSemanticsFromDefinitions(
       });
     }));
   }
-  const canonicalCarrierPaths = freezeSortedRecord(carrierPaths);
-  const canonicalCarrierTraits = freezeSortedRecord(carrierTraits);
   return Object.freeze({
     exports: Object.freeze(exports),
-    operations: Object.freeze(operations.map((row) =>
-      snapshotClosedMetadata(canonicalizeProviderOperationRow(row, canonicalCarrierPaths, canonicalCarrierTraits)))),
-    carrierPaths: canonicalCarrierPaths,
-    carrierTraits: canonicalCarrierTraits,
-    types: Object.freeze(types.map((row) => snapshotClosedMetadata({
-      ...row,
-      ...(row.targetImplicitParameters === undefined
-        ? {}
-        : {
-            targetImplicitParameters: Object.freeze(row.targetImplicitParameters.map((argument) =>
-              materializeProviderGenericArgument(
-                argument,
-                canonicalCarrierPaths,
-                canonicalCarrierTraits,
-                row,
-              ))),
-          }),
-      targetCarrier: materializeProviderCarrier(
-        row.targetCarrier,
-        canonicalCarrierPaths,
-        canonicalCarrierTraits,
-        row,
-      ),
-      ...(row.typeRequirements === undefined
-        ? {}
-        : {
-            typeRequirements: materializeProviderTypeRequirements(
-              row.typeRequirements,
-              canonicalCarrierPaths,
-              canonicalCarrierTraits,
-              row,
-            ),
-          }),
-    }))),
+    operations: Object.freeze(operations.map((row) => snapshotClosedMetadata(row))),
+    traitContracts: mergeExactRows(
+      traitContracts,
+      (entry) => rustSemanticIdentityKey(entry.typeIdentity),
+      "named-type trait contract",
+    ),
+    types: Object.freeze(types.map((row) => snapshotClosedMetadata(row))),
     binaryEpilogues: Object.freeze(binaryEpilogues),
   });
 }
@@ -305,60 +180,14 @@ export function collectRustProviderSemanticsFromDefinitions(
 export function mergeRustProviderSemantics(
   ...inputs: readonly RustProviderSemantics[]
 ): RustProviderSemantics {
-  const carrierPaths = new Map<string, string>();
-  const carrierTraits = new Map<string, RustNamedTypeTraitContract>();
-  for (const input of inputs) {
-    for (const [id, path] of Object.entries(input.carrierPaths)) {
-      const existing = carrierPaths.get(id);
-      if (existing !== undefined && existing !== path) {
-        throw new Error(`Rust provider carrier '${id}' has conflicting target paths '${existing}' and '${path}'.`);
-      }
-      carrierPaths.set(id, path);
-    }
-    for (const [id, traits] of Object.entries(input.carrierTraits)) {
-      const existing = carrierTraits.get(id);
-      if (existing !== undefined && !closedMetadataEquals(existing, traits)) {
-        throw new Error(`Rust provider carrier '${id}' has conflicting native trait contracts.`);
-      }
-      carrierTraits.set(id, snapshotClosedMetadata(traits));
-    }
-  }
-  const canonicalCarrierPaths = freezeSortedRecord(carrierPaths);
-  const canonicalCarrierTraits = freezeSortedRecord(carrierTraits);
   const exports = mergeExactRows(inputs.flatMap((input) => input.exports), providerExportRowIdentity, "export");
   const operations = mergeExactRows(
-    inputs.flatMap((input) => input.operations).map((row) =>
-      canonicalizeProviderOperationRow(row, canonicalCarrierPaths, canonicalCarrierTraits)),
+    inputs.flatMap((input) => input.operations),
     providerOperationRowIdentity,
     "operation",
   );
   const types = mergeExactRows(
-    inputs.flatMap((input) => input.types).map((row) => snapshotClosedMetadata({
-      ...row,
-      ...(row.targetImplicitParameters === undefined
-        ? {}
-        : {
-            targetImplicitParameters: Object.freeze(row.targetImplicitParameters.map((argument) =>
-              materializeProviderGenericArgument(
-                argument,
-                canonicalCarrierPaths,
-                canonicalCarrierTraits,
-                row,
-              ))),
-          }),
-      targetGenerics: materializeProviderGenerics(
-        row.targetGenerics,
-        canonicalCarrierPaths,
-        canonicalCarrierTraits,
-        row,
-      ),
-      targetCarrier: materializeProviderCarrier(
-        row.targetCarrier,
-        canonicalCarrierPaths,
-        canonicalCarrierTraits,
-        row,
-      ),
-    })),
+    inputs.flatMap((input) => input.types),
     providerTypeRowIdentity,
     "type",
   );
@@ -367,18 +196,16 @@ export function mergeRustProviderSemantics(
     providerBinaryEpilogueIdentity,
     "binary epilogue",
   );
+  const traitContracts = mergeExactRows(
+    inputs.flatMap((input) => input.traitContracts),
+    (entry) => rustSemanticIdentityKey(entry.typeIdentity),
+    "named-type trait contract",
+  );
   return Object.freeze({
     exports,
     operations,
     types,
+    traitContracts,
     binaryEpilogues,
-    carrierPaths: canonicalCarrierPaths,
-    carrierTraits: canonicalCarrierTraits,
   });
-}
-
-function freezeSortedRecord<T>(entries: ReadonlyMap<string, T>): Readonly<Record<string, T>> {
-  return Object.freeze(Object.fromEntries(
-    [...entries.entries()].sort(([left], [right]) => left.localeCompare(right, "en")),
-  ));
 }

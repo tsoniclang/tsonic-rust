@@ -10,9 +10,9 @@ import type {
 import {
   isRustProgramErrorCarrier,
   isRustStringCarrier,
-  rustCarrierSupportsClone,
   rustOptionElementCarrier,
 } from "../../target-model/types/index.js";
+import type { RustTraitSupportQueries } from "../../target-model/types/index.js";
 import type { RustProjectTypePolicy } from "./project-types.js";
 import { selectRustSourceValueConversion } from "../conversions/selection.js";
 
@@ -40,6 +40,7 @@ export function selectRustFlowReadProjection(
   sourceCarrier: TargetTypeRef,
   selectedCarrier: TargetTypeRef,
   projectTypes: RustProjectTypePolicy,
+  traits: RustTraitSupportQueries,
 ): RustFlowReadProjectionSelection {
   if (rustTargetTypeRefEquals(sourceCarrier, selectedCarrier)) {
     return { kind: "identity" };
@@ -49,7 +50,7 @@ export function selectRustFlowReadProjection(
     const variant = selectedDefinition === undefined
       ? undefined
       : projectTypes.programErrorVariant(selectedDefinition);
-    return variant !== undefined && rustCarrierSupportsClone(selectedCarrier)
+    return variant !== undefined && traits.supportsClone(selectedCarrier)
       ? {
           kind: "projection",
           fact: {
@@ -64,7 +65,7 @@ export function selectRustFlowReadProjection(
   const optionalElement = rustOptionElementCarrier(sourceCarrier);
   if (optionalElement !== undefined &&
     rustTargetTypeRefEquals(optionalElement, selectedCarrier)) {
-    return rustCarrierSupportsClone(selectedCarrier)
+    return traits.supportsClone(selectedCarrier)
       ? {
           kind: "projection",
           fact: { kind: "option-value", sourceCarrier, selectedCarrier },
@@ -83,7 +84,7 @@ export function selectRustFlowReadProjection(
   if (relationship.kind !== "related" ||
     !rustTargetTypeRefEquals(relationship.targetType, dispatchCarrier) ||
     route === undefined ||
-    (optionalElement !== undefined && !rustCarrierSupportsClone(dispatchCarrier))) {
+    (optionalElement !== undefined && !traits.supportsClone(dispatchCarrier))) {
     return { kind: "incompatible" };
   }
   return {

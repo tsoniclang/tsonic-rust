@@ -7,11 +7,7 @@ import {
   Node_Initializer,
   Node_Name,
 } from "@tsonic/target-api/source";
-import {
-  rustMutatedBindingFactKey,
-  rustMutatedReferentFactKey,
-  rustSourceParameterAbiFactKey,
-} from "../../../analysis/facts/keys.js";
+import { rustSourceParameterAbiFactKey } from "../../../analysis/facts/keys.js";
 import type { RustFunctionParam, RustStmt } from "../../target-ast/nodes.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import {
@@ -31,7 +27,6 @@ import type { RustSyntheticNameState } from "../names/synthetic.js";
 import { rustLocationStorageForDeclaration } from "../expressions/typed-locations.js";
 import type { RustBindingExpressionPlanner } from "../bindings/patterns.js";
 import { rustOptionDefaultValue } from "../option-default.js";
-import { rustCarrierReferentMutationRequiresMutableBinding } from "../../../target-model/types/index.js";
 
 type RustParameterPrelude =
   | { readonly kind: "statement"; readonly statement: RustStmt }
@@ -112,29 +107,9 @@ export function planRustCallableParameters(
       ));
       return undefined;
     }
-    const ownedBinding = parameterCarrier !== undefined &&
-      parameterCarrier.kind !== "raw-pointer" &&
-      parameterCarrier.kind !== "reference";
-    const objectRepresentation = context.input.program.objectRepresentations.representationFor(
-      context.input.program.projectTypes.definitionForCarrier(parameterCarrier),
-    );
-    const referentMutationRequiresMutableBinding =
-      rustCarrierReferentMutationRequiresMutableBinding(parameterCarrier) &&
-      (objectRepresentation === undefined || objectRepresentation.kind === "value");
     const mutable = pattern === undefined &&
       locationStorage === undefined &&
-      (
-        context.input.program.facts.getFact(
-          parameter,
-          rustMutatedBindingFactKey,
-        ) !== undefined ||
-        context.input.program.ownership.bindingRequiresMutable(parameter) ||
-        ownedBinding && referentMutationRequiresMutableBinding &&
-          context.input.program.facts.getFact(
-            parameter,
-            rustMutatedReferentFactKey,
-          ) !== undefined
-      );
+      context.input.program.ownership.bindingRequiresMutable(parameter);
     params.push({
       name: parameterName,
       type: parameterType,

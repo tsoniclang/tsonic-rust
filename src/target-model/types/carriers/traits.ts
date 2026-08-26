@@ -4,21 +4,24 @@ import type {
   RustSemanticIdentity,
   RustTraitRef,
 } from "../../semantics/index.js";
-import { closedMetadataEquals } from "../../metadata/closed-data.js";
 import {
   rustBuiltinIdentity,
   rustSemanticIdentitiesEqual,
-  rustSemanticIdentityItemId,
+  rustSemanticIdentityKey,
 } from "../../semantics/index.js";
 import {
+  rustBuiltinPathTypeMatches,
   rustPathTypeArguments,
-  rustPathTypeMatches,
 } from "../constructors.js";
 import {
   rustTargetTypeRefEquals,
   rustTraitReferenceEquals,
 } from "../equality.js";
-import type { TargetTypeRef } from "../model.js";
+import type {
+  RustNamedTypeTraitContract,
+  RustNamedTypeTraitContractIndex,
+  TargetTypeRef,
+} from "../model.js";
 import {
   isRustBigIntCarrier,
   isRustJsStringCarrier,
@@ -67,8 +70,20 @@ import {
   rustThreadedAsyncCallableTargetId,
   rustUndefinedTargetId,
 } from "./source-types.js";
-import { rustNamedTypeCarrierValue } from "./native.js";
+import {
+  rustNamedTypeCarrierValue,
+  rustTupleElementCarriers,
+} from "./native.js";
 import type { RustNamedTypeCarrierValue } from "./native.js";
+import {
+  rustBoundSemanticValuesAlphaEquivalent,
+  rustCallableBindersAlphaEquivalent,
+} from "./callables.js";
+import {
+  rustGenericSubstitutionsForOpenArguments,
+  substituteRustBound,
+  substituteRustTraitRef,
+} from "../generic-substitution.js";
 
 function builtinTrait(itemId: string): RustTraitRef {
   return Object.freeze({
@@ -125,45 +140,100 @@ export type RustTypeParameterTraitResolver = (
 
 const noTypeParameterTraits: RustTypeParameterTraitResolver = () => false;
 
-export function isRustCopyCarrier(carrier: TargetTypeRef | undefined): boolean {
-  return rustCarrierSupportsTrait(carrier, rustCopyTrait);
+interface RustTraitSupportResolution {
+  readonly namedTypeContract: (
+    identity: RustSemanticIdentity,
+  ) => RustNamedTypeTraitContract | undefined;
+  readonly typeParameterSupports: RustTypeParameterTraitResolver;
 }
 
-export function rustCarrierSupportsClone(carrier: TargetTypeRef | undefined): boolean {
-  return rustCarrierSupportsTrait(carrier, rustCloneTrait);
+export interface RustTraitSupportQueries {
+  isCopy(carrier: TargetTypeRef | undefined): boolean;
+  supportsClone(carrier: TargetTypeRef | undefined): boolean;
+  supportsTrait(
+    carrier: TargetTypeRef | undefined,
+    trait: RustTraitRef,
+    typeParameterSupports?: RustTypeParameterTraitResolver,
+  ): boolean;
+  supportsTraitBound(
+    carrier: TargetTypeRef | undefined,
+    bound: Extract<RustBound, { readonly kind: "trait" }>,
+    typeParameterSupports?: RustTypeParameterTraitResolver,
+  ): boolean;
 }
 
-export function rustCarrierSupportsTrait(
+export function createRustTraitSupportQueries(
+  namedTypeContracts: RustNamedTypeTraitContractIndex,
+): RustTraitSupportQueries {
+  const base: RustTraitSupportResolution = Object.freeze({
+    namedTypeContract: (identity) => namedTypeContracts.contractFor(identity),
+    typeParameterSupports: noTypeParameterTraits,
+  });
+  const resolutionFor = (
+    typeParameterSupports: RustTypeParameterTraitResolver | undefined,
+  ): RustTraitSupportResolution => typeParameterSupports === undefined
+    ? base
+    : { ...base, typeParameterSupports };
+  return Object.freeze({
+    isCopy(carrier) {
+      return rustCarrierSupportsTrait(carrier, rustCopyTrait, base);
+    },
+    supportsClone(carrier) {
+      return rustCarrierSupportsTrait(carrier, rustCloneTrait, base);
+    },
+    supportsTrait(carrier, trait, typeParameterSupports) {
+      return rustCarrierSupportsTrait(
+        carrier,
+        trait,
+        resolutionFor(typeParameterSupports),
+      );
+    },
+    supportsTraitBound(carrier, bound, typeParameterSupports) {
+      return rustCarrierSupportsTraitBound(
+        carrier,
+        bound,
+        resolutionFor(typeParameterSupports),
+      );
+    },
+  });
+}
+
+function rustCarrierSupportsTrait(
   carrier: TargetTypeRef | undefined,
   trait: RustTraitRef,
-  typeParameterSupports: RustTypeParameterTraitResolver = noTypeParameterTraits,
+  resolution: RustTraitSupportResolution,
 ): boolean {
   if (carrier === undefined) return false;
   if (carrier.kind === "type-parameter") {
-    return typeParameterSupports(carrier.identity, trait);
+    return resolution.typeParameterSupports(carrier.identity, trait);
   }
+  if (carrier.kind === "trait-object" &&
+    rustTraitReferenceEquals(carrier.principal, trait)) return true;
+  if (carrier.kind === "opaque" && carrier.bounds.some((bound) =>
+    bound.kind === "trait" && bound.polarity === "required" &&
+    bound.binder === undefined && rustTraitReferenceEquals(bound.trait, trait))) return true;
   if (isBuiltinTrait(trait, rustCopyTrait)) {
-    return supportsCopy(carrier, typeParameterSupports);
+    return supportsCopy(carrier, resolution);
   }
   if (isBuiltinTrait(trait, rustCloneTrait)) {
-    return supportsClone(carrier, typeParameterSupports);
+    return supportsClone(carrier, resolution);
   }
   if (isBuiltinTrait(trait, rustDefaultTrait)) {
-    return supportsDefault(carrier, typeParameterSupports);
+    return supportsDefault(carrier, resolution);
   }
   if (isBuiltinTrait(trait, rustEqTrait) || isBuiltinTrait(trait, rustHashTrait)) {
-    return supportsEqHash(carrier, trait, typeParameterSupports);
+    return supportsEqHash(carrier, trait, resolution);
   }
   if (isBuiltinTrait(trait, rustDropTrait)) {
     const named = rustNamedTypeCarrierValue(carrier);
     return named !== undefined && rustNamedTypeSupportsTrait(
       named,
       trait,
-      typeParameterSupports,
+      resolution,
     );
   }
   if (isBuiltinTrait(trait, rustToOwnedTrait)) {
-    return supportsToOwned(carrier, typeParameterSupports);
+    return supportsToOwned(carrier, resolution);
   }
   if (isBuiltinTraitIdentity(trait, rustFnTrait) ||
     isBuiltinTraitIdentity(trait, rustFnMutTrait) ||
@@ -172,27 +242,29 @@ export function rustCarrierSupportsTrait(
   }
   if (isBuiltinTrait(trait, rustSendTrait) || isBuiltinTrait(trait, rustSyncTrait) ||
     isBuiltinTrait(trait, rustUnpinTrait)) {
-    return supportsAutoTrait(carrier, trait, typeParameterSupports);
+    return supportsAutoTrait(carrier, trait, resolution);
   }
   const named = rustNamedTypeCarrierValue(carrier);
   return named !== undefined && rustNamedTypeSupportsTrait(
     named,
     trait,
-    typeParameterSupports,
+    resolution,
   );
 }
 
-export function rustCarrierSupportsTraitBound(
+function rustCarrierSupportsTraitBound(
   carrier: TargetTypeRef | undefined,
   bound: Extract<RustBound, { readonly kind: "trait" }>,
-  typeParameterSupports: RustTypeParameterTraitResolver = noTypeParameterTraits,
+  resolution: RustTraitSupportResolution,
 ): boolean {
+  if (bound.polarity === "maybe") return true;
+  if (bound.polarity !== "required") return false;
   if (carrier === undefined || bound.binder === undefined) {
-    return rustCarrierSupportsTrait(carrier, bound.trait, typeParameterSupports);
+    return rustCarrierSupportsTrait(carrier, bound.trait, resolution);
   }
   return (carrier.kind === "closure" || carrier.kind === "function-pointer") &&
     carrier.binder !== undefined &&
-    callableBindersMatch(carrier.binder, bound.binder) &&
+    rustCallableBindersAlphaEquivalent(carrier.binder, bound.binder) &&
     supportsCallableTraitWithBinders(carrier, carrier.binder, bound.trait, bound.binder);
 }
 
@@ -205,10 +277,12 @@ function supportsCallableTrait(
     return false;
   }
   const [arguments_] = trait.arguments;
+  const parameters = arguments_?.kind === "type"
+    ? rustTupleElementCarriers(arguments_.value)
+    : undefined;
   if (trait.arguments.length !== 1 || arguments_?.kind !== "type" ||
-    arguments_.value.kind !== "tuple" ||
-    arguments_.value.elements.length !== protocol.parameters.length ||
-    !arguments_.value.elements.every((parameter, index) =>
+    parameters === undefined || parameters.length !== protocol.parameters.length ||
+    !parameters.every((parameter, index) =>
       rustTargetTypeRefEquals(parameter, protocol.parameters[index]))) {
     return false;
   }
@@ -228,12 +302,14 @@ function supportsCallableTraitWithBinders(
   const callTrait = carrier.kind === "closure" ? carrier.callTrait : "fn";
   if (!callTraitSatisfies(callTrait, trait)) return false;
   const [arguments_] = trait.arguments;
+  const parameters = arguments_?.kind === "type"
+    ? rustTupleElementCarriers(arguments_.value)
+    : undefined;
   const [output] = trait.associatedConstraints;
   return trait.arguments.length === 1 && arguments_?.kind === "type" &&
-    arguments_.value.kind === "tuple" &&
-    arguments_.value.elements.length === carrier.parameters.length &&
-    arguments_.value.elements.every((parameter, index) =>
-      boundSemanticValuesEqual(
+    parameters !== undefined && parameters.length === carrier.parameters.length &&
+    parameters.every((parameter, index) =>
+      rustBoundSemanticValuesAlphaEquivalent(
         parameter,
         traitBinder,
         carrier.parameters[index],
@@ -241,53 +317,12 @@ function supportsCallableTraitWithBinders(
       )) &&
     trait.associatedConstraints.length === 1 && output?.kind === "equality" &&
     output.arguments.length === 0 &&
-    boundSemanticValuesEqual(output.type, traitBinder, carrier.result, carrierBinder);
-}
-
-function callableBindersMatch(left: RustBinder, right: RustBinder): boolean {
-  return left.lifetimes.length === right.lifetimes.length &&
-    left.lifetimes.every((parameter, index) => {
-      const other = right.lifetimes[index];
-      return other !== undefined && parameter.bounds.length === other.bounds.length &&
-        parameter.bounds.every((lifetime, boundIndex) =>
-          boundSemanticValuesEqual(
-            lifetime,
-            left,
-            other.bounds[boundIndex],
-            right,
-          ));
-    });
-}
-
-function boundSemanticValuesEqual(
-  left: unknown,
-  leftBinder: RustBinder,
-  right: unknown,
-  rightBinder: RustBinder,
-): boolean {
-  return closedMetadataEquals(
-    normalizeBoundSemanticValue(left, leftBinder),
-    normalizeBoundSemanticValue(right, rightBinder),
-  );
-}
-
-function normalizeBoundSemanticValue(value: unknown, binder: RustBinder): unknown {
-  if (Array.isArray(value)) {
-    return value.map((entry) => normalizeBoundSemanticValue(entry, binder));
-  }
-  if (value === null || typeof value !== "object") return value;
-  const record = value as Readonly<Record<string, unknown>>;
-  if (record.kind === "bound" && record.binderId === binder.id &&
-    typeof record.parameterId === "string") {
-    const index = binder.lifetimes.findIndex((parameter) =>
-      parameter.identity.kind === "bound" &&
-      parameter.identity.parameterId === record.parameterId);
-    return index < 0
-      ? value
-      : Object.freeze({ kind: "bound", binderId: "canonical", parameterId: `${index}`, displayName: "_" });
-  }
-  return Object.freeze(Object.fromEntries(Object.entries(record).map(([key, entry]) =>
-    [key, normalizeBoundSemanticValue(entry, binder)])));
+    rustBoundSemanticValuesAlphaEquivalent(
+      output.type,
+      traitBinder,
+      carrier.result,
+      carrierBinder,
+    );
 }
 
 function callableTraitProtocol(
@@ -322,19 +357,19 @@ function callTraitSatisfies(
 
 function supportsToOwned(
   carrier: TargetTypeRef,
-  typeParameterSupports: RustTypeParameterTraitResolver,
+  resolution: RustTraitSupportResolution,
 ): boolean {
   if (carrier.kind === "str" || carrier.kind === "slice") return true;
   if (carrier.kind === "type-parameter") {
-    return typeParameterSupports(carrier.identity, rustToOwnedTrait);
+    return resolution.typeParameterSupports(carrier.identity, rustToOwnedTrait);
   }
-  return supportsClone(carrier, typeParameterSupports);
+  return supportsClone(carrier, resolution);
 }
 
 function supportsAutoTrait(
   carrier: TargetTypeRef,
   trait: RustTraitRef,
-  typeParameterSupports: RustTypeParameterTraitResolver,
+  resolution: RustTraitSupportResolution,
 ): boolean {
   switch (carrier.kind) {
     case "source-primitive":
@@ -350,50 +385,54 @@ function supportsAutoTrait(
         return rustCarrierSupportsTrait(
           carrier.target,
           carrier.mutable ? rustSendTrait : rustSyncTrait,
-          typeParameterSupports,
+          resolution,
         );
       }
-      return rustCarrierSupportsTrait(carrier.target, rustSyncTrait, typeParameterSupports);
+      return rustCarrierSupportsTrait(carrier.target, rustSyncTrait, resolution);
     case "raw-pointer":
       return isBuiltinTrait(trait, rustUnpinTrait);
     case "tuple":
       return carrier.elements.every((element) =>
-        rustCarrierSupportsTrait(element, trait, typeParameterSupports));
+        rustCarrierSupportsTrait(element, trait, resolution));
     case "array":
     case "sequence":
     case "slice":
-      return rustCarrierSupportsTrait(carrier.element, trait, typeParameterSupports);
+      return rustCarrierSupportsTrait(carrier.element, trait, resolution);
     case "type-parameter":
-      return typeParameterSupports(carrier.identity, trait);
+      return resolution.typeParameterSupports(carrier.identity, trait);
     case "path": {
-      const itemId = rustSemanticIdentityItemId(carrier.identity);
-      if (itemId !== undefined && isBuiltinTrait(trait, rustUnpinTrait) &&
-        rustRuntimeCallableTargetIds.has(itemId)) return true;
-      if (itemId !== undefined &&
+      const identityKey = rustBuiltinCarrierIdentityKey(carrier);
+      if (identityKey !== undefined && isBuiltinTrait(trait, rustUnpinTrait) &&
+        rustRuntimeCallableTypeKeys.has(identityKey)) return true;
+      if (identityKey !== undefined &&
         (isBuiltinTrait(trait, rustSendTrait) || isBuiltinTrait(trait, rustSyncTrait)) &&
-        rustThreadedRuntimeCallableTargetIds.has(itemId)) return true;
+        rustThreadedRuntimeCallableTypeKeys.has(identityKey)) return true;
       const named = rustNamedTypeCarrierValue(carrier);
       return named !== undefined && rustNamedTypeSupportsTrait(
         named,
         trait,
-        typeParameterSupports,
+        resolution,
       );
     }
+    case "trait-object":
+      return carrier.autoTraits.some((candidate) => rustTraitReferenceEquals(candidate, trait));
+    case "opaque":
+      return carrier.bounds.some((bound) => bound.kind === "trait" &&
+        bound.polarity === "required" && bound.binder === undefined &&
+        rustTraitReferenceEquals(bound.trait, trait));
     case "source-carrier": {
       const structural = rustStructuralObjectCarrierValue(carrier);
       if (structural !== undefined) {
         return structural.fields.every((field) =>
-          rustCarrierSupportsTrait(field.type, trait, typeParameterSupports));
+          rustCarrierSupportsTrait(field.type, trait, resolution));
       }
       const union = rustSourceUnionCarrierValue(carrier);
       return union !== undefined && union.variants.every((variant) =>
-        rustCarrierSupportsTrait(variant.carrier, trait, typeParameterSupports));
+        rustCarrierSupportsTrait(variant.carrier, trait, resolution));
     }
     case "self":
     case "inference-variable":
     case "closure":
-    case "trait-object":
-    case "opaque":
     case "associated-type":
       return false;
   }
@@ -401,7 +440,7 @@ function supportsAutoTrait(
 
 function supportsCopy(
   carrier: TargetTypeRef,
-  typeParameterSupports: RustTypeParameterTraitResolver,
+  resolution: RustTraitSupportResolution,
 ): boolean {
   switch (carrier.kind) {
     case "source-primitive":
@@ -414,27 +453,28 @@ function supportsCopy(
     case "reference":
       return !carrier.mutable;
     case "tuple":
-      return carrier.elements.every((element) => supportsCopy(element, typeParameterSupports));
+      return carrier.elements.length <= 12 &&
+        carrier.elements.every((element) => supportsCopy(element, resolution));
     case "array":
-      return supportsCopy(carrier.element, typeParameterSupports);
+      return supportsCopy(carrier.element, resolution);
     case "type-parameter":
-      return typeParameterSupports(carrier.identity, rustCopyTrait);
+      return resolution.typeParameterSupports(carrier.identity, rustCopyTrait);
     case "inference-variable":
       return false;
     case "path": {
-      const option = rustPathTypeMatches(carrier, rustOptionTargetId)
+      const option = rustBuiltinPathTypeMatches(carrier, rustOptionTargetId, "rust")
         ? rustPathTypeArguments(carrier)
         : undefined;
       if (option?.length === 1 && option[0] !== undefined) {
-        return supportsCopy(option[0], typeParameterSupports);
+        return supportsCopy(option[0], resolution);
       }
-      const itemId = rustSemanticIdentityItemId(carrier.identity);
-      if (itemId !== undefined && rustUnconditionallyCopyTargetIds.has(itemId)) return true;
+      const identityKey = rustBuiltinCarrierIdentityKey(carrier);
+      if (identityKey !== undefined && rustUnconditionallyCopyTypeKeys.has(identityKey)) return true;
       const named = rustNamedTypeCarrierValue(carrier);
       return named !== undefined && rustNamedTypeSupportsTrait(
         named,
         rustCopyTrait,
-        typeParameterSupports,
+        resolution,
       );
     }
     case "source-carrier":
@@ -453,7 +493,7 @@ function supportsCopy(
 
 function supportsClone(
   carrier: TargetTypeRef,
-  typeParameterSupports: RustTypeParameterTraitResolver,
+  resolution: RustTraitSupportResolution,
 ): boolean {
   switch (carrier.kind) {
     case "source-primitive":
@@ -462,41 +502,43 @@ function supportsClone(
     case "unit":
     case "function-pointer":
     case "raw-pointer":
-    case "reference":
       return true;
+    case "reference":
+      return !carrier.mutable;
     case "tuple":
-      return carrier.elements.every((element) => supportsClone(element, typeParameterSupports));
+      return carrier.elements.length <= 12 &&
+        carrier.elements.every((element) => supportsClone(element, resolution));
     case "array":
     case "sequence":
-      return supportsClone(carrier.element, typeParameterSupports);
+      return supportsClone(carrier.element, resolution);
     case "type-parameter":
-      return typeParameterSupports(carrier.identity, rustCloneTrait);
+      return resolution.typeParameterSupports(carrier.identity, rustCloneTrait);
     case "inference-variable":
       return false;
     case "path": {
-      const option = rustPathTypeMatches(carrier, rustOptionTargetId)
+      const option = rustBuiltinPathTypeMatches(carrier, rustOptionTargetId, "rust")
         ? rustPathTypeArguments(carrier)
         : undefined;
       if (option?.length === 1 && option[0] !== undefined) {
-        return supportsClone(option[0], typeParameterSupports);
+        return supportsClone(option[0], resolution);
       }
-      const itemId = rustSemanticIdentityItemId(carrier.identity);
-      if (itemId !== undefined && rustUnconditionallyCloneTargetIds.has(itemId)) return true;
+      const identityKey = rustBuiltinCarrierIdentityKey(carrier);
+      if (identityKey !== undefined && rustUnconditionallyCloneTypeKeys.has(identityKey)) return true;
       const named = rustNamedTypeCarrierValue(carrier);
       return named !== undefined && rustNamedTypeSupportsTrait(
         named,
         rustCloneTrait,
-        typeParameterSupports,
+        resolution,
       );
     }
     case "source-carrier": {
       const structural = rustStructuralObjectCarrierValue(carrier);
       if (structural !== undefined) {
-        return structural.fields.every((field) => supportsClone(field.type, typeParameterSupports));
+        return structural.fields.every((field) => supportsClone(field.type, resolution));
       }
       const union = rustSourceUnionCarrierValue(carrier);
       if (union !== undefined) {
-        return union.variants.every((variant) => supportsClone(variant.carrier, typeParameterSupports));
+        return union.variants.every((variant) => supportsClone(variant.carrier, resolution));
       }
       return rustSourceTypeCarrierValue(carrier) !== undefined;
     }
@@ -513,7 +555,7 @@ function supportsClone(
 
 function supportsDefault(
   carrier: TargetTypeRef,
-  typeParameterSupports: RustTypeParameterTraitResolver,
+  resolution: RustTraitSupportResolution,
 ): boolean {
   switch (carrier.kind) {
     case "source-primitive":
@@ -522,25 +564,27 @@ function supportsDefault(
     case "unit":
       return true;
     case "array":
-      return supportsDefault(carrier.element, typeParameterSupports);
+      return carrier.length.kind === "literal" && carrier.length.literalKind === "integer" &&
+        carrier.length.value >= 0n && carrier.length.value <= 32n &&
+        supportsDefault(carrier.element, resolution);
     case "tuple":
       return carrier.elements.length <= 12 && carrier.elements.every((element) =>
-        supportsDefault(element, typeParameterSupports));
+        supportsDefault(element, resolution));
     case "type-parameter":
-      return typeParameterSupports(carrier.identity, rustDefaultTrait);
+      return resolution.typeParameterSupports(carrier.identity, rustDefaultTrait);
     case "inference-variable":
       return false;
     case "path": {
-      const itemId = rustSemanticIdentityItemId(carrier.identity);
-      if (rustPathTypeMatches(carrier, rustOptionTargetId) ||
-        itemId !== undefined && rustUnconditionallyDefaultTargetIds.has(itemId)) {
+      const identityKey = rustBuiltinCarrierIdentityKey(carrier);
+      if (rustBuiltinPathTypeMatches(carrier, rustOptionTargetId, "rust") ||
+        identityKey !== undefined && rustUnconditionallyDefaultTypeKeys.has(identityKey)) {
         return true;
       }
       const named = rustNamedTypeCarrierValue(carrier);
       return named !== undefined && rustNamedTypeSupportsTrait(
         named,
         rustDefaultTrait,
-        typeParameterSupports,
+        resolution,
       );
     }
     default:
@@ -551,7 +595,7 @@ function supportsDefault(
 function supportsEqHash(
   carrier: TargetTypeRef,
   trait: RustTraitRef,
-  typeParameterSupports: RustTypeParameterTraitResolver,
+  resolution: RustTraitSupportResolution,
 ): boolean {
   switch (carrier.kind) {
     case "source-primitive":
@@ -561,31 +605,36 @@ function supportsEqHash(
       return carrier.name !== "f16" && carrier.name !== "f32" && carrier.name !== "f64";
     case "unit":
     case "never":
+    case "str":
+    case "function-pointer":
       return true;
     case "tuple":
-      return carrier.elements.every((element) =>
-        rustCarrierSupportsTrait(element, trait, typeParameterSupports));
+      return carrier.elements.length <= 12 && carrier.elements.every((element) =>
+        rustCarrierSupportsTrait(element, trait, resolution));
     case "array":
+    case "sequence":
     case "slice":
-      return rustCarrierSupportsTrait(carrier.element, trait, typeParameterSupports);
+      return rustCarrierSupportsTrait(carrier.element, trait, resolution);
+    case "reference":
+      return rustCarrierSupportsTrait(carrier.target, trait, resolution);
     case "type-parameter":
-      return typeParameterSupports(carrier.identity, trait);
+      return resolution.typeParameterSupports(carrier.identity, trait);
     case "inference-variable":
       return false;
     case "path": {
-      const itemId = rustSemanticIdentityItemId(carrier.identity);
-      if (itemId !== undefined && rustUnconditionallyEqHashTargetIds.has(itemId)) return true;
-      const option = rustPathTypeMatches(carrier, rustOptionTargetId)
+      const identityKey = rustBuiltinCarrierIdentityKey(carrier);
+      if (identityKey !== undefined && rustUnconditionallyEqHashTypeKeys.has(identityKey)) return true;
+      const option = rustBuiltinPathTypeMatches(carrier, rustOptionTargetId, "rust")
         ? rustPathTypeArguments(carrier)
         : undefined;
       if (option?.length === 1 && option[0] !== undefined) {
-        return rustCarrierSupportsTrait(option[0], trait, typeParameterSupports);
+        return rustCarrierSupportsTrait(option[0], trait, resolution);
       }
       const named = rustNamedTypeCarrierValue(carrier);
       return named !== undefined && rustNamedTypeSupportsTrait(
         named,
         trait,
-        typeParameterSupports,
+        resolution,
       );
     }
     default:
@@ -593,21 +642,33 @@ function supportsEqHash(
   }
 }
 
-export function rustNamedTypeSupportsTrait(
+function rustNamedTypeSupportsTrait(
   namedType: RustNamedTypeCarrierValue,
   trait: RustTraitRef,
-  typeParameterSupports: RustTypeParameterTraitResolver = noTypeParameterTraits,
+  resolution: RustTraitSupportResolution,
 ): boolean {
-  return namedType.traits.implementations.some((implementation) =>
-    rustTraitReferenceEquals(implementation.trait, trait) &&
-    implementation.requirements.every((requirement) => {
-      const argument = namedType.typeArguments[requirement.typeArgumentIndex];
-      return argument !== undefined && rustCarrierSupportsTrait(
-        argument,
-        requirement.trait,
-        typeParameterSupports,
-      );
-    }));
+  const contract = resolution.namedTypeContract(namedType.identity);
+  return contract !== undefined && contract.implementations.some((implementation) => {
+    const parameters = implementation.genericBindings.map(({ parameter }) => parameter);
+    const arguments_: import("../../semantics/index.js").RustGenericArgument[] = [];
+    for (const { genericArgumentIndex } of implementation.genericBindings) {
+      const argument = namedType.arguments[genericArgumentIndex];
+      if (argument === undefined) return false;
+      arguments_.push(argument);
+    }
+    const substitutions = rustGenericSubstitutionsForOpenArguments(
+      parameters,
+      arguments_,
+    );
+    return substitutions !== undefined &&
+      rustTraitReferenceEquals(substituteRustTraitRef(implementation.trait, substitutions), trait) &&
+      implementation.requirements.every((requirement) => {
+        const argument = namedType.arguments[requirement.genericArgumentIndex];
+        const bound = substituteRustBound(requirement.bound, substitutions);
+        return argument?.kind === "type" && bound.kind === "trait" &&
+          rustCarrierSupportsTraitBound(argument.value, bound, resolution);
+      });
+  });
 }
 
 export function rustCarrierReferentMutationRequiresMutableBinding(
@@ -618,10 +679,8 @@ export function rustCarrierReferentMutationRequiresMutableBinding(
 }
 
 export function isRustJsStrictEqualityCarrier(carrier: TargetTypeRef | undefined): boolean {
-  const itemId = carrier?.kind === "path"
-    ? rustSemanticIdentityItemId(carrier.identity)
-    : undefined;
-  return itemId !== undefined && rustJsStrictEqualityTargetIds.has(itemId);
+  const identityKey = rustBuiltinCarrierIdentityKey(carrier);
+  return identityKey !== undefined && rustJsStrictEqualityTypeKeys.has(identityKey);
 }
 
 export function rustCarrierSupportsJsEquality(carrier: TargetTypeRef | undefined): boolean {
@@ -635,7 +694,7 @@ export function isRustSourceStringConvertibleCarrier(carrier: TargetTypeRef | un
   return isRustStringCarrier(carrier) || isRustUnitCarrier(carrier) ||
     isRustNullCarrier(carrier) || isRustUndefinedCarrier(carrier) ||
     isRustBigIntCarrier(carrier) ||
-    rustPathTypeMatches(carrier, rustProgramErrorTargetId) ||
+    rustBuiltinPathTypeMatches(carrier, rustProgramErrorTargetId, "tsonic-runtime") ||
     (carrier?.kind === "source-primitive" && carrier.name !== "char");
 }
 
@@ -648,85 +707,105 @@ function isBuiltinTraitIdentity(actual: RustTraitRef, expected: RustTraitRef): b
   return rustSemanticIdentitiesEqual(actual.identity, expected.identity);
 }
 
-const rustUnconditionallyCopyTargetIds = new Set([
-  rustNullTargetId,
-  rustUndefinedTargetId,
+function rustBuiltinCarrierIdentityKey(
+  carrier: TargetTypeRef | undefined,
+): string | undefined {
+  return carrier?.kind === "path" && carrier.identity.kind === "builtin"
+    ? rustSemanticIdentityKey(carrier.identity)
+    : undefined;
+}
+
+function rustNativeTypeKey(itemId: string): string {
+  return rustSemanticIdentityKey(rustBuiltinIdentity(itemId, "rust"));
+}
+
+function rustRuntimeTypeKey(itemId: string): string {
+  return rustSemanticIdentityKey(rustBuiltinIdentity(itemId, "tsonic-runtime"));
+}
+
+const rustUnconditionallyCopyTypeKeys = new Set([
+  rustRuntimeTypeKey(rustNullTargetId),
+  rustRuntimeTypeKey(rustUndefinedTargetId),
 ]);
 
-const rustUnconditionallyEqHashTargetIds = new Set([
-  rustStringTargetId,
-  rustBigIntTargetId,
-  rustNullTargetId,
-  rustUndefinedTargetId,
+const rustUnconditionallyEqHashTypeKeys = new Set([
+  rustNativeTypeKey(rustStringTargetId),
+  rustRuntimeTypeKey(rustBigIntTargetId),
+  rustRuntimeTypeKey(rustNullTargetId),
+  rustRuntimeTypeKey(rustUndefinedTargetId),
 ]);
 
-const rustJsStrictEqualityTargetIds = new Set([
-  rustNullTargetId,
-  rustUndefinedTargetId,
-  rustJsValueTargetId,
-  rustJsArrayTargetId,
-  rustJsMapTargetId,
-  rustJsSetTargetId,
-  rustJsDateTargetId,
-  rustJsRegExpTargetId,
+const rustJsStrictEqualityTypeKeys = new Set([
+  rustRuntimeTypeKey(rustNullTargetId),
+  rustRuntimeTypeKey(rustUndefinedTargetId),
+  rustRuntimeTypeKey(rustJsValueTargetId),
+  rustRuntimeTypeKey(rustJsArrayTargetId),
+  rustRuntimeTypeKey(rustJsMapTargetId),
+  rustRuntimeTypeKey(rustJsSetTargetId),
+  rustRuntimeTypeKey(rustJsDateTargetId),
+  rustRuntimeTypeKey(rustJsRegExpTargetId),
 ]);
 
-const rustUnconditionallyCloneTargetIds = new Set([
-  rustStringTargetId,
-  rustJsStringTargetId,
-  rustBigIntTargetId,
+const rustUnconditionallyCloneTypeKeys = new Set([
+  rustNativeTypeKey(rustStringTargetId),
+  ...[
+    rustJsStringTargetId,
+    rustBigIntTargetId,
+    rustOwnedLocalCallableTargetId,
+    rustOwnedLocalAsyncCallableTargetId,
+    rustBorrowedLocalCallableTargetId,
+    rustBorrowedLocalAsyncCallableTargetId,
+    rustThreadedCallableTargetId,
+    rustThreadedAsyncCallableTargetId,
+    rustOwnedLocationTargetId,
+    rustBorrowedLocationTargetId,
+    rustNullTargetId,
+    rustUndefinedTargetId,
+    rustJsValueTargetId,
+    rustJsArrayTargetId,
+    rustJsMapTargetId,
+    rustJsSetTargetId,
+    rustJsDateTargetId,
+    rustJsRegExpTargetId,
+    rustRegExpExecArrayTargetId,
+    rustRegExpMatchArrayTargetId,
+    rustRegExpIndicesTargetId,
+    rustRegExpNamedGroupsTargetId,
+    rustRegExpNamedIndicesTargetId,
+    rustRegExpStringIteratorTargetId,
+    rustJsRegExpExecArrayTargetId,
+    rustJsRegExpMatchArrayTargetId,
+    rustJsRegExpIndicesTargetId,
+    rustJsRegExpNamedGroupsTargetId,
+    rustJsRegExpNamedIndicesTargetId,
+    rustJsRegExpStringIteratorTargetId,
+    rustJsErrorTargetId,
+    rustProgramErrorTargetId,
+  ].map(rustRuntimeTypeKey),
+]);
+
+const rustRuntimeCallableTypeKeys = new Set([
   rustOwnedLocalCallableTargetId,
   rustOwnedLocalAsyncCallableTargetId,
   rustBorrowedLocalCallableTargetId,
   rustBorrowedLocalAsyncCallableTargetId,
   rustThreadedCallableTargetId,
   rustThreadedAsyncCallableTargetId,
-  rustOwnedLocationTargetId,
-  rustBorrowedLocationTargetId,
-  rustNullTargetId,
-  rustUndefinedTargetId,
-  rustJsValueTargetId,
-  rustJsArrayTargetId,
-  rustJsMapTargetId,
-  rustJsSetTargetId,
-  rustJsDateTargetId,
-  rustJsRegExpTargetId,
-  rustRegExpExecArrayTargetId,
-  rustRegExpMatchArrayTargetId,
-  rustRegExpIndicesTargetId,
-  rustRegExpNamedGroupsTargetId,
-  rustRegExpNamedIndicesTargetId,
-  rustRegExpStringIteratorTargetId,
-  rustJsRegExpExecArrayTargetId,
-  rustJsRegExpMatchArrayTargetId,
-  rustJsRegExpIndicesTargetId,
-  rustJsRegExpNamedGroupsTargetId,
-  rustJsRegExpNamedIndicesTargetId,
-  rustJsRegExpStringIteratorTargetId,
-  rustJsErrorTargetId,
-  rustProgramErrorTargetId,
-]);
+].map(rustRuntimeTypeKey));
 
-const rustRuntimeCallableTargetIds = new Set([
-  rustOwnedLocalCallableTargetId,
-  rustOwnedLocalAsyncCallableTargetId,
-  rustBorrowedLocalCallableTargetId,
-  rustBorrowedLocalAsyncCallableTargetId,
+const rustThreadedRuntimeCallableTypeKeys = new Set([
   rustThreadedCallableTargetId,
   rustThreadedAsyncCallableTargetId,
-]);
+].map(rustRuntimeTypeKey));
 
-const rustThreadedRuntimeCallableTargetIds = new Set([
-  rustThreadedCallableTargetId,
-  rustThreadedAsyncCallableTargetId,
-]);
-
-const rustUnconditionallyDefaultTargetIds = new Set([
-  rustStringTargetId,
-  rustJsStringTargetId,
-  rustNullTargetId,
-  rustUndefinedTargetId,
-  rustJsArrayTargetId,
-  rustJsMapTargetId,
-  rustJsSetTargetId,
+const rustUnconditionallyDefaultTypeKeys = new Set([
+  rustNativeTypeKey(rustStringTargetId),
+  ...[
+    rustJsStringTargetId,
+    rustNullTargetId,
+    rustUndefinedTargetId,
+    rustJsArrayTargetId,
+    rustJsMapTargetId,
+    rustJsSetTargetId,
+  ].map(rustRuntimeTypeKey),
 ]);

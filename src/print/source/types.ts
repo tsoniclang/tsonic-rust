@@ -8,6 +8,7 @@ import type {
   RustTypeBound,
   RustWherePredicate,
 } from "../../backend/target-ast/nodes.js";
+import { singleRustUnicodeScalar } from "../../target-model/syntax/literals.js";
 
 export function printRustType(type: RustType): string {
   switch (type.kind) {
@@ -73,7 +74,7 @@ export function printRustConstExpression(expression: RustConstExpression): strin
     case "integer": return expression.value.toString();
     case "boolean": return expression.value ? "true" : "false";
     case "character": return rustCharacterLiteral(expression.value);
-    case "path": return expression.path;
+    case "path": return `${expression.path}${printRustGenericArguments(expression.genericArguments, true)}`;
     case "inferred": return "_";
     case "unary":
       return `${expression.operator}(${printRustConstExpression(expression.operand)})`;
@@ -118,7 +119,7 @@ export function printRustTypeBound(bound: RustTypeBound): string {
 }
 
 function isRustUnitType(type: RustType): boolean {
-  return type.kind === "unit" || type.kind === "tuple" && type.elements.length === 0;
+  return type.kind === "unit";
 }
 
 export function printRustGenericParameter(parameter: RustGenericParameter): string {
@@ -147,10 +148,16 @@ export function printRustGenerics(generics: RustGenerics): string {
     : `<${generics.parameters.map(printRustGenericParameter).join(", ")}>`;
 }
 
-export function printRustWhereClause(generics: RustGenerics, depth = 0): string {
+export function printRustWhereClause(
+  generics: RustGenerics,
+  depth = 0,
+  trailingComma = true,
+): string {
   if (generics.wherePredicates.length === 0) return "";
-  return `\n${indentText(depth)}where\n${generics.wherePredicates.map((predicate) =>
-    `${indentText(depth + 1)}${printRustWherePredicate(predicate)},`).join("\n")}`;
+  return `\n${indentText(depth)}where\n${generics.wherePredicates.map((predicate, index) =>
+    `${indentText(depth + 1)}${printRustWherePredicate(predicate)}${
+      trailingComma || index + 1 < generics.wherePredicates.length ? "," : ""
+    }`).join("\n")}`;
 }
 
 export function printRustWherePredicate(predicate: RustWherePredicate): string {
@@ -161,8 +168,6 @@ export function printRustWherePredicate(predicate: RustWherePredicate): string {
       const binder = printRustBinder(predicate.binder);
       return `${binder}${printRustType(predicate.type)}: ${predicate.bounds.map(printRustTypeBound).join(" + ")}`;
     }
-    case "equality":
-      return `${printRustType(predicate.projection)} = ${printRustType(predicate.value)}`;
   }
 }
 
@@ -175,10 +180,11 @@ function printRustBinder(
 }
 
 function rustCharacterLiteral(value: string): string {
-  if ([...value].length !== 1) {
+  const scalar = singleRustUnicodeScalar(value);
+  if (scalar === undefined) {
     throw new Error("A Rust character literal must contain exactly one Unicode scalar value.");
   }
-  const escaped = value
+  const escaped = scalar
     .split("\\").join("\\\\")
     .split("'").join("\\'")
     .split("\n").join("\\n")

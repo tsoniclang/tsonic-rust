@@ -51,6 +51,19 @@ export function exchange(value: Owned<int32>, replacement: int32): int32 {
 export function reset(value: Owned<string>): Owned<string> {
   return take(mut(value));
 }
+
+export function resetAndReuse(value: Owned<string>): Owned<string> {
+  const previous = take(mut(value));
+  consume(move(previous));
+  return move(value);
+}
+
+function consume(_value: Owned<string>): void {}
+
+export function copyRemainsAvailable(value: Owned<int32>): int32 {
+  const first = move(value);
+  return first + move(value);
+}
 `,
     },
   });
@@ -63,6 +76,8 @@ export function reset(value: Owned<string>): Owned<string> {
   assert.match(source, /core::mem::replace\(destination, replacement\)/u);
   assert.match(source, /\*destination = 0/u);
   assert.match(source, /core::mem::take\(&mut value\)/u);
+  assert.match(source, /pub fn reset_and_reuse\(mut value: String\) -> String/u);
+  assert.match(source, /pub fn copy_remains_available\(value: i32\) -> i32/u);
   assert.doesNotMatch(source, /Rc<|Arc<|Mutex<|RefCell</u);
   validateGeneratedProject("explicit-native-ownership-operations", result.artifacts);
 });

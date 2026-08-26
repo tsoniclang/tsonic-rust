@@ -1,7 +1,6 @@
 import {
   getRustJsMapTargetTypes,
   getRustJsSetElementTargetType,
-  rustCarrierSupportsClone,
   rustCarrierSupportsJsEquality,
   isRustBoolCarrier,
   isRustIntegerCarrier,
@@ -37,6 +36,9 @@ import {
   rustRegExpStringIteratorTargetId,
   rustRegExpStringIteratorTargetType,
   rustJsArrayTargetType,
+  rustCallableBoundaryProtocol,
+  rustCallTraitSatisfies,
+  rustCallableSignature,
   isRustCallableCarrier,
   rustClosureTargetType,
   rustNullTargetType,
@@ -45,8 +47,8 @@ import {
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
   rustUnitTargetType,
-  rustPathTypeMatches,
-  rustTypeIdentityItemId,
+  rustBuiltinPathTypeMatches,
+  rustBuiltinTypeIdentityItemId,
 } from "../../../target-model/types/index.js";
 import { jsOperationRows, rustInferCarrier } from "./rows.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -66,7 +68,8 @@ interface JsLaneBindings {
 }
 
 function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readonly lane: JsLane; readonly bindings: JsLaneBindings } | undefined {
-  if (carrier?.kind === "reference" && rustPathTypeMatches(carrier.target, rustStringTargetId)) {
+  if (carrier?.kind === "reference" &&
+    rustBuiltinPathTypeMatches(carrier.target, rustStringTargetId, "rust")) {
     // Borrowed string parameters (&str) share the string lane.
     return { lane: "string", bindings: { receiver: carrier.target } };
   }
@@ -83,29 +86,29 @@ function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readon
     if (setValue !== undefined) {
       return { lane: "set", bindings: { setValue, receiver: carrier } };
     }
-    if (rustPathTypeMatches(carrier, rustJsDateTargetId)) {
+    if (rustBuiltinPathTypeMatches(carrier, rustJsDateTargetId, "tsonic-runtime")) {
       return { lane: "date", bindings: { receiver: carrier } };
     }
-    if (rustPathTypeMatches(carrier, rustJsRegExpTargetId)) {
+    if (rustBuiltinPathTypeMatches(carrier, rustJsRegExpTargetId, "tsonic-runtime")) {
       return { lane: "regexp", bindings: { receiver: carrier } };
     }
-    if (rustPathTypeMatches(carrier, rustRegExpNamedGroupsTargetId) ||
-      rustPathTypeMatches(carrier, rustJsRegExpNamedGroupsTargetId)) {
+    if (rustBuiltinPathTypeMatches(carrier, rustRegExpNamedGroupsTargetId, "tsonic-runtime") ||
+      rustBuiltinPathTypeMatches(carrier, rustJsRegExpNamedGroupsTargetId, "tsonic-runtime")) {
       return { lane: "regexp-named-groups", bindings: { receiver: carrier } };
     }
-    if (rustPathTypeMatches(carrier, rustRegExpNamedIndicesTargetId) ||
-      rustPathTypeMatches(carrier, rustJsRegExpNamedIndicesTargetId)) {
+    if (rustBuiltinPathTypeMatches(carrier, rustRegExpNamedIndicesTargetId, "tsonic-runtime") ||
+      rustBuiltinPathTypeMatches(carrier, rustJsRegExpNamedIndicesTargetId, "tsonic-runtime")) {
       return { lane: "regexp-named-indices", bindings: { receiver: carrier } };
     }
-    if (rustPathTypeMatches(carrier, rustRegExpStringIteratorTargetId) ||
-      rustPathTypeMatches(carrier, rustJsRegExpStringIteratorTargetId)) {
+    if (rustBuiltinPathTypeMatches(carrier, rustRegExpStringIteratorTargetId, "tsonic-runtime") ||
+      rustBuiltinPathTypeMatches(carrier, rustJsRegExpStringIteratorTargetId, "tsonic-runtime")) {
       return { lane: "regexp-string-iterator", bindings: { receiver: carrier } };
     }
   }
   if (isRustStringCarrier(carrier)) {
     return { lane: "string", bindings: { receiver: carrier } };
   }
-  if (rustPathTypeMatches(carrier, rustJsStringTargetId)) {
+  if (rustBuiltinPathTypeMatches(carrier, rustJsStringTargetId, "tsonic-runtime")) {
     return { lane: "js-string", bindings: { receiver: carrier } };
   }
   if (isRustNumericCarrier(carrier)) {
@@ -468,7 +471,7 @@ function materializeInferredCarrier(carrier: TargetTypeRef, inferred: TargetType
 
 function firstArgumentId(request: JsOperationRequest): string | undefined {
   const carrier = request.argumentCarriers?.[0];
-  return rustTypeIdentityItemId(carrier);
+  return rustBuiltinTypeIdentityItemId(carrier, "tsonic-runtime");
 }
 
 export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperationSelection | undefined {
@@ -659,7 +662,7 @@ function carrierRequirementsMatch(
       case "integer":
         return isRustIntegerCarrier(carrier);
       case "clone":
-        return rustCarrierSupportsClone(carrier);
+        return request.carrierSupportsClone(carrier);
       case "stringifiable":
         return isRustSourceStringConvertibleCarrier(carrier);
       case "js-equality":
@@ -684,14 +687,17 @@ function jsArgumentCarrierMatchScore(
   if (expected === undefined || expected.kind === "inference-variable") {
     return 0;
   }
-  if (expected.kind === "closure" && actual.kind === "closure") {
-    if (expected.parameters.length !== actual.parameters.length) {
+  if (expected.kind === "closure") {
+    const actualSignature = rustCallableSignature(actual);
+    if (actualSignature === undefined || !callableSatisfiesJsBoundary(actual, expected.callTrait) ||
+      expected.binder !== undefined || actualSignature.binder !== undefined ||
+      expected.parameters.length !== actualSignature.parameters.length) {
       return relationScore?.(expected, actual, index);
     }
     const scores = [
       ...expected.parameters.map((argument, argumentIndex) =>
-        jsArgumentCarrierMatchScore(argument, actual.parameters[argumentIndex], index, relationScore)),
-      jsArgumentCarrierMatchScore(expected.result, actual.result, index, relationScore),
+        jsArgumentCarrierMatchScore(argument, actualSignature.parameters[argumentIndex], index, relationScore)),
+      jsArgumentCarrierMatchScore(expected.result, actualSignature.result, index, relationScore),
     ];
     return scores.some((score) => score === undefined)
       ? relationScore?.(expected, actual, index)
@@ -701,6 +707,14 @@ function jsArgumentCarrierMatchScore(
     return 0;
   }
   return relationScore?.(expected, actual, index);
+}
+
+function callableSatisfiesJsBoundary(
+  actual: TargetTypeRef,
+  required: "fn" | "fn-mut" | "fn-once",
+): boolean {
+  const protocol = rustCallableBoundaryProtocol(actual);
+  return protocol !== undefined && rustCallTraitSatisfies(protocol.callTrait, required);
 }
 
 // Constructor rows: matched by lib class declaration identity plus argument

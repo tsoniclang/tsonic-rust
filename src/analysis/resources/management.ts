@@ -6,7 +6,7 @@ import type { RustOperationPolicyContext } from "../../policy/operations/contrac
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
-import { Node_Type } from "@tsonic/target-api/source";
+import { Node_Type, sourceNodeIdentity } from "@tsonic/target-api/source";
 import type {
   RustResourceDisposalTarget,
   RustResourceManagementFact,
@@ -38,6 +38,24 @@ export type RustResourceManagementSelection =
       readonly fact: RustResourceManagementFact;
     }
   | { readonly kind: "rejected"; readonly reason: string };
+
+export function rustResourceDisposalReceiverMode(
+  fact: RustResourceManagementFact,
+): "ref" | "mut-ref" | undefined {
+  const target = fact.disposal.target;
+  if (target.form === "source-method") {
+    return target.receiverMode;
+  }
+  if (target.target.form === "free-call") {
+    return target.target.receiverMode === "value"
+      ? undefined
+      : target.target.receiverMode;
+  }
+  if (target.target.form === "receiver-method") {
+    return target.target.mutatesReceiver === true ? "mut-ref" : "ref";
+  }
+  return target.target.form === "method" ? "ref" : undefined;
+}
 
 export function selectRustResourceManagement(
   declaration: Node,
@@ -132,9 +150,10 @@ function selectDisposalAlternative(
     const expectedKind = alternative.kind === "sync" ? "dispose" : "async-dispose";
     const effects = projectDisposerEffects(declaration);
     const targetName = rustProjectCallableTargetName(declaration, context);
+    const sourceDeclarationIdentity = sourceNodeIdentity(context.ast, declaration);
     const owner = options.projectTypes.definitionContainingDeclaration(declaration);
     if (wellKnown?.kind !== expectedKind || effects === undefined ||
-      targetName === undefined || owner === undefined ||
+      targetName === undefined || sourceDeclarationIdentity === undefined || owner === undefined ||
       effects.async !== (alternative.kind === "async")) {
       return rejected("The selected project-source disposer has no exact Rust well-known method contract.");
     }
@@ -174,6 +193,7 @@ function selectDisposalAlternative(
         errorBoundary: "source-program",
         target: {
           form: "source-method",
+          sourceDeclarationIdentity,
           name: targetName,
           receiverMode: effects.selfMode.mode,
           ...(dispatch === undefined ? {} : { dispatch }),
@@ -184,6 +204,7 @@ function selectDisposalAlternative(
         errorBoundary: "none",
         target: {
           form: "source-method",
+          sourceDeclarationIdentity,
           name: targetName,
           receiverMode: effects.selfMode.mode,
           ...(dispatch === undefined ? {} : { dispatch }),
@@ -271,14 +292,7 @@ function resourceDisposalTargetsEqual(
   left: RustResourceDisposalTarget,
   right: RustResourceDisposalTarget,
 ): boolean {
-  if (left.form !== right.form) {
-    return false;
-  }
-  if (left.form === "source-method" && right.form === "source-method") {
-    return left.name === right.name && left.receiverMode === right.receiverMode;
-  }
-  return left.form === "provider" && right.form === "provider" &&
-    closedMetadataEquals(left.target, right.target);
+  return closedMetadataEquals(left, right);
 }
 
 function rejected(reason: string): Extract<RustResourceManagementSelection, { readonly kind: "rejected" }> {

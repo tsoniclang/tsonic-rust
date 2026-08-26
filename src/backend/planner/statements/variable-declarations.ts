@@ -6,19 +6,10 @@ import {
   Node_Type,
 } from "@tsonic/target-api/source";
 import { rustLocationStorageForDeclaration } from "../expressions/typed-locations.js";
-import {
-  rustMutatedBindingFactKey,
-  rustMutatedReferentFactKey,
-  rustResourceManagementFactKey,
-} from "../../../analysis/facts/keys.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { collectVariableDeclarations, resourceDisposalReceiverMode } from "./resources.js";
+import { collectVariableDeclarations } from "./resources.js";
 import { diagnosticInput, isValidRustIdentifier } from "../program/plan-context.js";
-import {
-  rustCarrierReferentMutationRequiresMutableBinding,
-  rustLocationTargetType,
-  rustOptionElementCarrier,
-} from "../../../target-model/types/index.js";
+import { rustLocationTargetType, rustOptionElementCarrier } from "../../../target-model/types/index.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planExpression } from "../expressions/index.js";
 import { planRustBindingPattern } from "../bindings/patterns.js";
@@ -141,23 +132,8 @@ function planVariableDeclaration(
     ));
     return undefined;
   }
-  const ownedBinding = declarationCarrier.kind !== "raw-pointer" && declarationCarrier.kind !== "reference";
-  const resourceFact = context.input.program.facts.getFact(declaration, rustResourceManagementFactKey);
-  const sourceUseSummary = context.input.program.sourceNavigation.declarationUseSummary(declaration);
-  const objectRepresentation = context.input.program.objectRepresentations.representationFor(
-    context.input.program.projectTypes.definitionForCarrier(declarationCarrier),
-  );
-  const referentMutationRequiresMutableBinding =
-    rustCarrierReferentMutationRequiresMutableBinding(declarationCarrier) &&
-    (objectRepresentation === undefined || objectRepresentation.kind === "value");
   const mutable = locationStorage === undefined &&
-    (sourceUseSummary.bindingWritten ||
-      context.input.program.facts.getFact(declaration, rustMutatedBindingFactKey) !== undefined ||
-      context.input.program.ownership.bindingRequiresMutable(declaration) ||
-      (objectRepresentation?.kind === "value" && sourceUseSummary.memberWritten) ||
-      (ownedBinding && referentMutationRequiresMutableBinding &&
-        context.input.program.facts.getFact(declaration, rustMutatedReferentFactKey) !== undefined) ||
-      resourceFact !== undefined && resourceDisposalReceiverMode(resourceFact) === "mut-ref");
+    context.input.program.ownership.bindingRequiresMutable(declaration);
   let init: RustExpr | undefined;
   if (initializer !== undefined) {
     if (planned === undefined) {

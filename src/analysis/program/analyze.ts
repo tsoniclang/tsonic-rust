@@ -410,6 +410,7 @@ export function analyzeRustProgram(
     projectTypes: walk.context.projectTypes,
     projectMethodDispatch: walk.context.projectMethodDispatch,
     sourceGenerics: walk.context.sourceGenerics,
+    traits: walk.context.traits,
     expressions: walk.objectLiteralMethodExpressions,
   })) {
     appendRustDiagnostic(

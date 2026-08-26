@@ -284,7 +284,7 @@ export function substituteRustCompilerConstExpression(
   }
 }
 
-function substituteRustCompilerTrait(
+export function substituteRustCompilerTrait(
   trait: RustCompilerTraitReference,
   substitutions: RustCompilerSubstitutions,
 ): RustCompilerTraitReference {

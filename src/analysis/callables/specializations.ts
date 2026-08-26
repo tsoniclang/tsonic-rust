@@ -8,7 +8,10 @@ import {
   rustGenericSubstitutionsForArguments,
   substituteRustGenericArgument,
 } from "../../target-model/types/index.js";
-import { rustGenericArgumentSemanticKey } from "../../target-model/semantics/index.js";
+import {
+  compareRustSemanticKeys,
+  rustGenericArgumentSemanticKey,
+} from "../../target-model/semantics/index.js";
 import type { RustGenericArgument, RustGenerics } from "../../target-model/semantics/index.js";
 import type { RustGenericSubstitutions } from "../../target-model/types/index.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
@@ -198,12 +201,13 @@ function createRustSourceCallableSpecializationPlan(
   const variants = new Map<Node, MutableSpecializationVariant[]>();
   const methodRequests: RustProjectMethodSpecializationRequest[] = [];
   const issues: RustSourceCallableSpecializationIssue[] = [];
-  const issueKeys = new Set<string>();
+  const issueKeys = new WeakMap<Node, Set<string>>();
 
   const addIssue = (subject: Node, message: string): void => {
-    const key = `${input.ast.getFileName(input.ast.getSourceFile(subject))}:${input.ast.pos(subject)}:${input.ast.end(subject)}:${message}`;
-    if (!issueKeys.has(key)) {
-      issueKeys.add(key);
+    const messages = issueKeys.get(subject) ?? new Set<string>();
+    if (!messages.has(message)) {
+      messages.add(message);
+      issueKeys.set(subject, messages);
       issues.push(Object.freeze({ subject, message }));
     }
   };
@@ -343,7 +347,10 @@ function createRustSourceCallableSpecializationPlan(
 
   assignCallableVariantNames(variants, input.ast, input.names);
   for (const declarationVariants of variants.values()) {
-    declarationVariants.sort((left, right) => variantKey(left).localeCompare(variantKey(right), "en"));
+    declarationVariants.sort((left, right) => compareRustSemanticKeys(
+      variantKey(left),
+      variantKey(right),
+    ));
     declarationVariants.forEach((variant) => {
       if (variant.targetName === undefined) {
         addIssue(
@@ -355,14 +362,14 @@ function createRustSourceCallableSpecializationPlan(
     });
   }
   methodRequests.sort((left, right) => {
-    const fileOrder = input.ast.getFileName(input.ast.getSourceFile(left.declaration)).localeCompare(
+    const fileOrder = compareRustSemanticKeys(
+      input.ast.getFileName(input.ast.getSourceFile(left.declaration)),
       input.ast.getFileName(input.ast.getSourceFile(right.declaration)),
-      "en",
     );
     return fileOrder || input.ast.pos(left.declaration) - input.ast.pos(right.declaration) ||
-      closedMetadataKey(specializationArguments(left.targetGenericArguments)).localeCompare(
+      compareRustSemanticKeys(
+        closedMetadataKey(specializationArguments(left.targetGenericArguments)),
         closedMetadataKey(specializationArguments(right.targetGenericArguments)),
-        "en",
       );
   });
   const plan: RustSourceCallableSpecializationPlan = {
@@ -470,7 +477,7 @@ function assignCallableVariantNames(
     }
     const used = usedNames(scope);
     entries
-      .sort((left, right) => variantKey(left).localeCompare(variantKey(right), "en"))
+      .sort((left, right) => compareRustSemanticKeys(variantKey(left), variantKey(right)))
       .forEach((entry, index) => {
         const targetName = allocateRustGeneratedName(
           used,

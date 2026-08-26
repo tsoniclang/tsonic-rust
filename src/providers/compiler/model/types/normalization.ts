@@ -37,6 +37,7 @@ import {
   resolveExactSuperTraitReference,
   traitReferenceSubstitutions,
 } from "./trait-resolution.js";
+import { visitRustCompilerBoundReferences } from "../references.js";
 
 export { exactAssociatedTypeIdentity } from "./trait-resolution.js";
 
@@ -51,7 +52,10 @@ export interface RustCompilerNormalizationContext {
   readonly resolveItem?: RustdocItemResolver;
   readonly selfType?: RustCompilerType;
   readonly traitDispatch?: RustCompilerTraitReference;
+  readonly depth?: number;
 }
+
+const maximumRustCompilerTypeDepth = 128;
 
 export function standardTypePathKind(value: unknown): boolean {
   return value === "struct" || value === "enum" || value === "union" ||
@@ -93,14 +97,14 @@ export function normalizeType(
     });
   }
   if (Array.isArray(type.tuple)) {
-    return Object.freeze({
-      kind: "tuple",
-      elements: Object.freeze(type.tuple.map((entry, index) => normalizeType(
-        document,
-        entry,
-        childContext(context, `tuple-${index}`),
-      ))),
-    });
+    const elements = type.tuple.map((entry, index) => normalizeType(
+      document,
+      entry,
+      childContext(context, `tuple-${index}`),
+    ));
+    return elements.length === 0
+      ? Object.freeze({ kind: "unit" })
+      : Object.freeze({ kind: "tuple", elements: Object.freeze(elements) });
   }
   if (type.slice !== undefined) {
     return Object.freeze({
@@ -203,35 +207,74 @@ export function normalizeType(
     if (traits.length === 0) {
       throw new Error("Rust trait object has no principal trait.");
     }
-    const references = traits.map((entry) => normalizeTraitReference(
+    const references = traits.map((entry) => normalizeDynamicTraitReference(
       document,
       entry.trait,
       withBinderParameters(document, entry.generic_params, context, "trait-object"),
     ));
+    const principals = references.filter((entry) => !entry.auto);
+    if (principals.length !== 1) {
+      throw new Error(principals.length === 0
+        ? "Rust auto-trait-only objects have no approved source projection."
+        : "Rust trait objects may contain exactly one non-auto principal trait.");
+    }
+    const autoTraits = references.filter((entry) => entry.auto)
+      .map((entry) => entry.reference)
+      .sort((left, right) => compareText(left.identity.itemId, right.identity.itemId));
+    if (autoTraits.some((entry, index) => index > 0 &&
+      entry.identity.itemId === autoTraits[index - 1]!.identity.itemId)) {
+      throw new Error("Rust trait object repeats one exact auto-trait identity.");
+    }
     return Object.freeze({
       kind: "trait-object",
-      principal: references[0]!,
-      autoTraits: Object.freeze(references.slice(1)),
+      principal: principals[0]!.reference,
+      autoTraits: Object.freeze(autoTraits),
       lifetime: normalizeLifetime(type.dyn_trait.lifetime, context, "trait-object"),
     });
   }
   if (Array.isArray(type.impl_trait)) {
+    const rawBounds = type.impl_trait.map((bound, index) => normalizeBound(
+      document,
+      bound,
+      childContext(context, `opaque-bound-${index}`),
+    ));
+    const captureBounds = rawBounds.filter((bound): bound is Extract<RustCompilerBound, {
+      readonly kind: "precise-capture";
+    }> => bound.kind === "precise-capture");
+    if (captureBounds.length > 1) {
+      throw new Error("Rust opaque type declares more than one precise capture contract.");
+    }
+    const bounds = Object.freeze(rawBounds.filter((bound) => bound.kind !== "precise-capture"));
+    if (!bounds.some((bound) => bound.kind === "trait")) {
+      throw new Error("Rust opaque type requires at least one exact trait bound.");
+    }
+    const captures = Object.freeze([...(captureBounds[0]?.captures ?? [])]
+      .sort(compareRustCompilerCaptures));
+    const captureKeys = captures.map(rustCompilerCaptureIdentityKey);
+    if (new Set(captureKeys).size !== captureKeys.length) {
+      throw new Error("Rust opaque type repeats one exact generic capture identity.");
+    }
+    const requiredCaptureKeys = requiredRustOpaqueCaptureKeys(bounds, context);
+    if (captureBounds.length === 0 && requiredCaptureKeys.size !== 0) {
+      throw new Error("Rust generic opaque type has no exact compiler-visible capture contract.");
+    }
+    const captured = new Set(captureKeys);
+    const missing = [...requiredCaptureKeys].filter((key) => !captured.has(key));
+    if (missing.length !== 0) {
+      throw new Error("Rust opaque precise capture omits an in-scope type, const, or bound-referenced lifetime parameter.");
+    }
     return Object.freeze({
       kind: "opaque",
       identity: derivedCompilerItemIdentity(context.owner, `opaque:${context.position ?? "type"}`),
-      bounds: Object.freeze(type.impl_trait.map((bound, index) => normalizeBound(
-        document,
-        bound,
-        childContext(context, `opaque-bound-${index}`),
-      ))),
-      captures: Object.freeze([]),
+      bounds,
+      captures,
     });
   }
   if (type.infer !== undefined) {
     throw new Error("Rust inferred provider types do not have a stable public contract.");
   }
   if (isRecord(type.pat)) {
-    return normalizeType(document, type.pat.type, childContext(context, "pattern-base"));
+    throw new Error("Rust pattern types require an explicit target-dialect and source-projection contract.");
   }
   throw new Error("Rust type has no supported structural representation.");
 }
@@ -345,6 +388,31 @@ export function normalizeTraitReference(
     : completeDefaultedTraitArguments(normalized, context, resolved);
 }
 
+function normalizeDynamicTraitReference(
+  document: RustdocDocument,
+  raw: unknown,
+  context: RustCompilerNormalizationContext,
+): {
+  readonly reference: RustCompilerTraitReference;
+  readonly auto: boolean;
+} {
+  const trait = requireRecord(raw, "Rust dynamic trait reference");
+  const local = document.index[String(trait.id)];
+  if (context.resolveItem === undefined && !isRecord(local)) {
+    throw new Error("Rust trait-object classification requires the exact referenced trait declaration.");
+  }
+  const resolved = resolveRustdocItem(document, context.dependency, trait.id, context.resolveItem);
+  const declaration = requireInnerRecord(
+    resolved.item,
+    "trait",
+    "Rust dynamic trait declaration",
+  );
+  return Object.freeze({
+    reference: normalizeTraitReference(document, raw, context),
+    auto: requireBoolean(declaration.is_auto, "Rust dynamic trait auto-trait classification"),
+  });
+}
+
 function completeDefaultedTraitArguments(
   trait: RustCompilerTraitReference,
   context: RustCompilerNormalizationContext,
@@ -434,10 +502,9 @@ export function normalizePathArguments(
     );
     const argumentsTuple: RustCompilerGenericArgument = Object.freeze({
       kind: "type",
-      value: Object.freeze({
-        kind: "tuple",
-        elements: Object.freeze(inputs),
-      }),
+      value: inputs.length === 0
+        ? Object.freeze({ kind: "unit" })
+        : Object.freeze({ kind: "tuple", elements: Object.freeze(inputs) }),
     });
     const output: RustCompilerGenericArgument = Object.freeze({
       kind: "type",
@@ -473,27 +540,6 @@ export function normalizePathArguments(
       },
     )),
   });
-}
-
-export function sourceVisibleTypeParameterCount(
-  parameters: readonly RustCompilerGenericParameter[],
-): number {
-  return sourceVisibleTypeParameters(parameters).length;
-}
-
-export function sourceVisibleTypeParameters(
-  parameters: readonly RustCompilerGenericParameter[],
-): readonly RustCompilerTypeParameter[] {
-  const selected = parameters.filter(
-    (parameter): parameter is RustCompilerTypeParameter =>
-      parameter.kind === "type" && parameter.declarationKind === "explicit",
-  );
-  const firstDefault = selected.findIndex((parameter) => parameter.defaultType !== undefined);
-  if (firstDefault < 0) return Object.freeze(selected);
-  if (selected.slice(firstDefault).some((parameter) => parameter.defaultType === undefined)) {
-    throw new Error("Rust default type parameters must form one trailing source-omittable suffix.");
-  }
-  return Object.freeze(selected.slice(0, firstDefault));
 }
 
 export function genericParameterMap(
@@ -683,7 +729,10 @@ function normalizeBound(
       ? context
       : { ...context, boundLifetimes: boundLifetimeMap(binder) };
     const modifier = traitBound.modifier;
-    if (modifier !== "none" && modifier !== "maybe" && modifier !== "maybe_const") {
+    if (modifier === "maybe_const") {
+      throw new Error("Rust ~const trait bounds require an explicitly selected const-trait dialect contract.");
+    }
+    if (modifier !== "none" && modifier !== "maybe") {
       throw new Error(`Rust trait bound modifier '${String(modifier)}' is unsupported by the selected dialect.`);
     }
     return Object.freeze({
@@ -791,7 +840,13 @@ function normalizeLifetime(raw: unknown, context: RustCompilerNormalizationConte
 
 function normalizeCapture(raw: unknown, context: RustCompilerNormalizationContext, position: string): RustCompilerGenericArgument {
   if (typeof raw !== "string") throw new Error(`Rust precise capture ${position} has no stable representation.`);
-  if (raw.startsWith("'")) return Object.freeze({ kind: "lifetime", value: normalizeLifetime(raw, context, position) });
+  if (raw.startsWith("'")) {
+    const value = normalizeLifetime(raw, context, position);
+    if (value.kind !== "parameter" && value.kind !== "elided") {
+      throw new Error(`Rust precise capture '${raw}' is not an in-scope lifetime parameter.`);
+    }
+    return Object.freeze({ kind: "lifetime", value });
+  }
   const parameter = context.parameters?.get(raw);
   if (parameter?.kind === "type") {
     return Object.freeze({ kind: "type", value: Object.freeze({ kind: "type-parameter", identity: parameter.identity, displayName: parameter.displayName }) });
@@ -807,6 +862,68 @@ function normalizeCapture(raw: unknown, context: RustCompilerNormalizationContex
     });
   }
   throw new Error(`Rust precise capture '${raw}' has no declaration-backed identity.`);
+}
+
+function rustCompilerCaptureIdentityKey(capture: RustCompilerGenericArgument): string {
+  switch (capture.kind) {
+    case "lifetime": {
+      const lifetime = capture.value;
+      switch (lifetime.kind) {
+        case "static": return "lifetime:static";
+        case "parameter": return `lifetime:parameter:${lifetime.identity.itemId}`;
+        case "bound": return `lifetime:bound:${lifetime.binderId}:${lifetime.parameterId}`;
+        case "elided": return `lifetime:elided:${lifetime.ownerId}:${lifetime.position}`;
+      }
+    }
+    case "type":
+      if (capture.value.kind !== "type-parameter") {
+        throw new Error("Rust precise type capture is not a declaration-backed type parameter.");
+      }
+      return `type:${capture.value.identity.itemId}`;
+    case "const":
+      if (capture.value.kind !== "parameter") {
+        throw new Error("Rust precise const capture is not a declaration-backed const parameter.");
+      }
+      return `const:${capture.value.identity.itemId}`;
+  }
+}
+
+function compareRustCompilerCaptures(
+  left: RustCompilerGenericArgument,
+  right: RustCompilerGenericArgument,
+): number {
+  const leftRank = left.kind === "lifetime" ? 0 : left.kind === "type" ? 1 : 2;
+  const rightRank = right.kind === "lifetime" ? 0 : right.kind === "type" ? 1 : 2;
+  if (leftRank !== rightRank) return leftRank - rightRank;
+  return compareText(
+    rustCompilerCaptureIdentityKey(left),
+    rustCompilerCaptureIdentityKey(right),
+  );
+}
+
+function requiredRustOpaqueCaptureKeys(
+  bounds: readonly RustCompilerBound[],
+  context: RustCompilerNormalizationContext,
+): ReadonlySet<string> {
+  const required = new Set<string>();
+  for (const parameter of context.parameters?.values() ?? []) {
+    if (parameter.kind === "type") required.add(`type:${parameter.identity.itemId}`);
+    else if (parameter.kind === "const") required.add(`const:${parameter.identity.itemId}`);
+  }
+  for (const bound of bounds) {
+    visitRustCompilerBoundReferences(bound, {
+      type: () => {},
+      trait: () => {},
+      lifetime: (lifetime) => {
+        if (lifetime.kind === "parameter") {
+          required.add(`lifetime:parameter:${lifetime.identity.itemId}`);
+        } else if (lifetime.kind === "elided") {
+          required.add(`lifetime:elided:${lifetime.ownerId}:${lifetime.position}`);
+        }
+      },
+    });
+  }
+  return required;
 }
 
 function normalizeBinder(
@@ -865,7 +982,17 @@ function stripLifetime(name: string): string {
 }
 
 function childContext(context: RustCompilerNormalizationContext, position: string): RustCompilerNormalizationContext {
-  return { ...context, position: context.position === undefined ? position : `${context.position}/${position}` };
+  const depth = (context.depth ?? 0) + 1;
+  if (depth > maximumRustCompilerTypeDepth) {
+    throw new Error(
+      `Rust compiler type normalization exceeded its finite depth limit of ${maximumRustCompilerTypeDepth} at '${context.position ?? "root"}'.`,
+    );
+  }
+  return {
+    ...context,
+    depth,
+    position: context.position === undefined ? position : `${context.position}/${position}`,
+  };
 }
 
 export function compareCompilerGenericParameters(left: RustCompilerGenericParameter, right: RustCompilerGenericParameter): number {

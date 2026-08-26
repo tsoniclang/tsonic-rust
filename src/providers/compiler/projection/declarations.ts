@@ -11,7 +11,6 @@ import {
   materializeImports,
   operationRow,
   projectCompilerTraitContract,
-  recordCarrierPath,
   recordCarrierTraits,
   typeRequirements,
 } from "./operations.js";
@@ -85,8 +84,7 @@ export function projectRustCompilerModule(
   const declarations: ProviderExportDeclaration[] = [];
   const operations: RustProviderOperationDefinition[] = [];
   const types: RustProviderTypeDefinition[] = [];
-  const carrierPaths = new Map<string, string>();
-  const carrierTraits = new Map<string, import("../../../target-model/types/model.js").RustNamedTypeTraitContract>();
+  const traitContracts = new Map<string, import("../../../target-model/types/model.js").RustNamedTypeTraitContractEntry>();
   const standardItems = new Map(module.standardItemLocations.map((location) => [
     canonicalPathKey(location.canonicalPath),
     location,
@@ -100,8 +98,7 @@ export function projectRustCompilerModule(
       modulePath: module.modulePath,
       owner,
       imports,
-      carrierPaths,
-      carrierTraits,
+      traitContracts,
       standardItems,
       localStandardTypeNames,
     });
@@ -123,8 +120,7 @@ export function projectRustCompilerModule(
     module: providerModule,
     operations: Object.freeze(operations),
     types: Object.freeze(types),
-    carrierPaths,
-    carrierTraits,
+    traitContracts,
   });
 }
 
@@ -345,7 +341,6 @@ function projectNominalExport(
   ];
   const targetArguments = genericParameters.map((parameter) =>
     targetGenericParameterArgument(parameter, genericContext));
-  recordCarrierPath(context.carrierPaths, targetTypeId, selectedTargetPath.join("::"));
   const typeCarrier = rustPathTargetType({
     identity: compilerProjectionIdentity(context, targetTypeId),
     displayPath: selectedTargetPath,
@@ -395,8 +390,8 @@ function projectNominalExport(
     },
   };
   recordCarrierTraits(
-    context.carrierTraits,
-    targetTypeId,
+    context.traitContracts,
+    typeCarrier.identity,
     projectCompilerTraitContract(exported.traits, typeContext),
   );
   const members: ProviderMemberDeclaration[] = [];

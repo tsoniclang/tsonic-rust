@@ -90,14 +90,18 @@ export function recordClassSignatureFacts(walk: RustFactWalk, declaration: Node)
       }
       const instanceMember = memberKind !== "KindConstructor" &&
         !ast.hasModifierKind(member, "static");
+      const receiverLifetime = instanceMember
+        ? rustImplicitCallableReceiverLifetime(walk, member)
+        : undefined;
+      if (instanceMember && receiverLifetime === undefined) {
+        continue;
+      }
       recordCallableTypeSignatureFacts(walk, member, {
         recordReturn: memberKind !== "KindConstructor",
         ...(memberKind === "KindSetAccessor"
           ? { returnCarrier: rustUnitTargetType() }
           : {}),
-        ...(instanceMember
-          ? { receiverLifetime: rustImplicitCallableReceiverLifetime(walk, member) }
-          : {}),
+        ...(receiverLifetime === undefined ? {} : { receiverLifetime }),
       });
     }
   }
@@ -255,8 +259,12 @@ export function recordInterfaceFacts(walk: RustFactWalk, declaration: Node): voi
       walk.context.facts.set(member, rustSelfModeFactKey, { mode: "ref" }, [
         { message: "rust reference-backed project interface method self mode" },
       ]);
+      const receiverLifetime = rustImplicitCallableReceiverLifetime(walk, member);
+      if (receiverLifetime === undefined) {
+        continue;
+      }
       recordCallableTypeSignatureFacts(walk, member, {
-        receiverLifetime: rustImplicitCallableReceiverLifetime(walk, member),
+        receiverLifetime,
       });
     }
   }

@@ -96,11 +96,6 @@ export type RustWherePredicate =
       readonly type: RustType;
       readonly bounds: readonly RustTypeBound[];
       readonly binder?: readonly Extract<RustGenericParameter, { readonly kind: "lifetime" }>[];
-    }
-  | {
-      readonly kind: "equality";
-      readonly projection: RustType;
-      readonly value: RustType;
     };
 
 export interface RustGenerics {
@@ -139,7 +134,7 @@ export type RustType =
       readonly binder?: readonly Extract<RustGenericParameter, { readonly kind: "lifetime" }>[];
       readonly parameters: readonly RustType[];
       readonly result: RustType;
-      readonly abi?: string;
+      readonly abi?: RustAbi;
       readonly isUnsafe?: boolean;
       readonly variadic?: boolean;
     }

@@ -28,3 +28,14 @@ export function parseSourceBigIntLiteral(text: string): bigint | undefined {
 export function sourceCharCodeUnit(value: string): number | undefined {
   return value.length === 1 ? value.charCodeAt(0) : undefined;
 }
+
+export function singleRustUnicodeScalar(value: string): string | undefined {
+  const characters = Array.from(value);
+  if (characters.length !== 1) return undefined;
+  const selected = characters[0];
+  const codePoint = selected?.codePointAt(0);
+  return selected === undefined || codePoint === undefined ||
+      codePoint >= 0xd800 && codePoint <= 0xdfff
+    ? undefined
+    : selected;
+}

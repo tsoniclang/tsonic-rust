@@ -759,8 +759,10 @@ test("malformed compiler collection slots fail closed instead of disappearing", 
   assert.match(semantics, /isDenseDataArray\(rawSourceFiles\)/u);
   assert.doesNotMatch(semantics, /getSourceFiles\(\)\s*\.filter\([^;]+sourceFile !== undefined/su);
   assert.doesNotMatch(semantics, /if \((?:statement|member|parameter) === undefined\) \{\s*continue;\s*\}/u);
-  assert.doesNotMatch(expressions, /ast\.arguments\(node\)\.filter\([^;]+!== undefined/su);
-  assert.doesNotMatch(semantics, /ast\.elements\(expression\)\.filter\(\(element\): element is Node => element !== undefined\)/u);
+  assert.doesNotMatch(
+    `${expressions}\n${semantics}`,
+    /ast\.(?:arguments|elements|members|parameters|statements)\([^)]*\)\.filter\([^;]+!== undefined/su,
+  );
 });
 
 test("project-source backend calls require the exact finalized selected member ABI", () => {
@@ -890,6 +892,16 @@ test("Rust ownership and lifetime policy is sealed before backend planning", () 
     .join("\n");
   assert.match(ownershipReaders, /program\.ownership\./u);
   assert.doesNotMatch(ownershipReaders, /sourceNavigation\.|sourceFacts|facts\.get/u);
+
+  const fixedIndexProjection = readFileSync(
+    join(sourceRoot, "backend/planner/statements/fixed-index-loans.ts"),
+    "utf8",
+  );
+  assert.match(fixedIndexProjection, /program\.ownership\.fixedMutableLoanGroupFor/u);
+  assert.doesNotMatch(
+    fixedIndexProjection,
+    /\b(?:operationFor|placeFor|sourceReferenceFor|rustFixedArrayCarrierValue|Node_[A-Za-z0-9_]+|ast\.is)\b/u,
+  );
 });
 
 test("Rust public ownership surface has one canonical spelling", () => {
@@ -984,6 +996,151 @@ test("Rust ownership algorithms consume semantic identities rather than concrete
       `${path} branches on a concrete Rust carrier name`,
     );
   }
+});
+
+test("Rust execution contracts come only from exact callable boundaries", () => {
+  const captures = readFileSync(
+    join(sourceRoot, "analysis/ownership/captures.ts"),
+    "utf8",
+  );
+  const execution = readFileSync(
+    join(sourceRoot, "analysis/ownership/capture-execution.ts"),
+    "utf8",
+  );
+  assert.doesNotMatch(captures, /rustSourceCallableReturnFactKey/u);
+  assert.doesNotMatch(execution, /generatorExecutionLifetime|executionTraits|executionLifetime/u);
+  assert.match(execution, /generator\.storage/u);
+  assert.match(execution, /callable\.storage === "threaded"/u);
+});
+
+test("Rust ownership identities and work remain exact and finitely bounded", () => {
+  const ownership = collectFiles(join(sourceRoot, "analysis/ownership"), ".ts")
+    .map((path) => readFileSync(path, "utf8"))
+    .join("\n");
+  const identity = readFileSync(
+    join(sourceRoot, "analysis/ownership/identity.ts"),
+    "utf8",
+  );
+  const complexity = readFileSync(
+    join(sourceRoot, "analysis/ownership/complexity.ts"),
+    "utf8",
+  );
+  assert.match(identity, /requireRustOwnershipSourceIdentity/u);
+  assert.doesNotMatch(ownership, /sealed-read|anonymous-callable/u);
+  assert.doesNotMatch(ownership, /sourceNodeIdentity\([^\n]+\)\s*\?\?/u);
+  for (const required of [
+    "maximumCaptures",
+    "maximumCaptureEvidenceVisits",
+    "maximumCaptureReferenceVisits",
+    "maximumSuspensionPoints",
+    "maximumSuspendedValues",
+    "maximumSuspendedDropComparisons",
+    "maximumCallableBoundRequirements",
+  ]) {
+    assert.match(complexity, new RegExp(`\\b${required}\\b`, "u"));
+  }
+});
+
+test("Rust semantic source identities never fall back to reconstructed coordinates", () => {
+  const semanticPolicy = [
+    ...collectFiles(join(sourceRoot, "analysis"), ".ts"),
+    ...collectFiles(join(sourceRoot, "policy"), ".ts"),
+    ...collectFiles(join(sourceRoot, "target-model"), ".ts"),
+  ].map((path) => readFileSync(path, "utf8")).join("\n");
+
+  assert.doesNotMatch(semanticPolicy, /sourceNodeIdentity\([^\n]+\)\s*\?\?/u);
+
+  const planning = collectFiles(join(sourceRoot, "backend/planner"), ".ts")
+    .map((path) => readFileSync(path, "utf8")).join("\n");
+  assert.doesNotMatch(
+    planning,
+    /getSourceFile\([^\n]+\)[\s\S]{0,240}\.pos\([^\n]+\)[\s\S]{0,240}\.end\(/u,
+  );
+  assert.doesNotMatch(
+    readFileSync(
+      join(sourceRoot, "backend/planner/statements/variable-declarations.ts"),
+      "utf8",
+    ),
+    /declarationUseSummary|rustMutatedBindingFactKey|rustMutatedReferentFactKey/u,
+  );
+});
+
+test("Rust semantic syntax classification uses exact TSTS predicates", () => {
+  const semanticFiles = [
+    ...collectFiles(join(sourceRoot, "analysis"), ".ts"),
+    ...collectFiles(join(sourceRoot, "policy"), ".ts"),
+    ...collectFiles(join(sourceRoot, "target-model"), ".ts"),
+  ];
+  for (const path of semanticFiles) {
+    const text = readFileSync(path, "utf8");
+    assert.doesNotMatch(
+      text,
+      /kindName\([^\n]*\)\.(?:startsWith|endsWith|includes)\(/u,
+      `${path} classifies compiler syntax by kind-name spelling`,
+    );
+  }
+});
+
+test("Rust callable planning projects sealed capture semantics", () => {
+  const source = readFileSync(
+    join(sourceRoot, "backend/planner/expressions/callable.ts"),
+    "utf8",
+  );
+  assert.doesNotMatch(
+    source,
+    /closureMove\s*=.*(?:nativeClosureProtocol|callableProtocol)/su,
+  );
+  assert.match(source, /executionContract\.captureStyle\s*===\s*"move"/u);
+  assert.match(source, /executionContract\.storage\s*===\s*"owned"/u);
+});
+
+test("Rust provider generic identity never falls back to diagnostic display names", () => {
+  const projection = collectFiles(join(sourceRoot, "providers/compiler/projection"), ".ts")
+    .map((path) => readFileSync(path, "utf8"))
+    .join("\n");
+  assert.doesNotMatch(projection, /genericNames[^\n]*\?\?[^\n]*displayName/u);
+  assert.doesNotMatch(projection, /sourceGenericName\([^,]+,[^)]+\)/u);
+});
+
+test("Rust bound alpha-normalization rejects cyclic or unbounded metadata", () => {
+  const alphaEquivalence = readFileSync(
+    join(sourceRoot, "target-model/types/alpha-equivalence.ts"),
+    "utf8",
+  );
+  assert.match(alphaEquivalence, /maximumRustBoundNormalizationDepth/u);
+  assert.match(alphaEquivalence, /maximumRustBoundNormalizationValues/u);
+  assert.match(alphaEquivalence, /active:\s*new WeakSet<object>\(\)/u);
+  assert.match(alphaEquivalence, /state\.validity\.valid = false/u);
+});
+
+test("Rust type identity is independent from trait-proof inventory", () => {
+  const typeModel = readFileSync(
+    join(sourceRoot, "target-model/semantics/types.ts"),
+    "utf8",
+  );
+  const typeKeys = readFileSync(
+    join(sourceRoot, "target-model/semantics/keys.ts"),
+    "utf8",
+  );
+  const typeEquality = readFileSync(
+    join(sourceRoot, "target-model/types/equality.ts"),
+    "utf8",
+  );
+  const providerModel = readFileSync(
+    join(sourceRoot, "providers/packages/model.ts"),
+    "utf8",
+  );
+  const constructors = readFileSync(
+    join(sourceRoot, "target-model/types/constructors.ts"),
+    "utf8",
+  );
+
+  assert.doesNotMatch(typeModel, /traitImplementations/u);
+  assert.doesNotMatch(typeKeys, /traitImplementations|traitContracts/u);
+  assert.doesNotMatch(typeEquality, /traitImplementations|traitContracts/u);
+  assert.doesNotMatch(providerModel, /\bcarrierPaths\b|\bcarrierTraits\b/u);
+  assert.doesNotMatch(constructors, /case "provider"[\s\S]*?return type\.identity\.itemId/u);
+  assert.match(constructors, /type\.identity\.kind === "builtin"/u);
 });
 
 test("Rust semantic contracts have no compatibility or dual-format reader", () => {

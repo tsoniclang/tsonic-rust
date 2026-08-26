@@ -23,7 +23,11 @@ import { rustNamedTypeCarrierValue } from "../../../dist/target-model/types/inde
 import { captureRustProviderContributions } from "../../helpers/provider-contributions.mjs";
 
 const int32Carrier = { kind: "source-primitive", name: "int32" };
-const validationOwner = Object.freeze({ packageId: "acme-validation", packageVersion: "1.0.0" });
+const validationOwner = Object.freeze({
+  packageId: "acme-validation",
+  packageVersion: "1.0.0",
+  compilationSnapshotId: "acme-validation@1.0.0",
+});
 
 function validationPath(itemId, displayPath, options = {}) {
   return rustProviderPathTargetType({
@@ -62,6 +66,7 @@ function definition(overrides = {}) {
     id: "acme-validation",
     displayName: "Acme validation",
     version: "1.0.0",
+    compilationSnapshotId: "acme-validation@1.0.0",
     modules: [{
       moduleSpecifier: "@acme/validation",
       providerModuleId: "acme.validation",
@@ -365,19 +370,30 @@ test("provider carriers distinguish owned vectors from nested unsized slices", (
 
 test("provider carrier metadata canonicalizes after cross-provider composition", () => {
   const boxCarrier = rustProviderPathTargetType({
-    owner: { packageId: "acme-carrier-owner", packageVersion: "1.0.0" },
+    owner: {
+      packageId: "acme-carrier-owner",
+      packageVersion: "1.0.0",
+      compilationSnapshotId: "acme-carrier-owner@1.0.0",
+    },
     itemId: "acme.Box",
     displayPath: "alloc::boxed::Box",
-    traitImplementations: [{ trait: rustCloneTrait, requirements: [] }],
   });
   const owner = definition({
     id: "acme-carrier-owner",
     displayName: "Acme carrier owner",
+    compilationSnapshotId: "acme-carrier-owner@1.0.0",
     operations: [],
+    traitContracts: [{
+      typeIdentity: boxCarrier.identity,
+      contract: {
+        implementations: [{ trait: rustCloneTrait, genericBindings: [], requirements: [] }],
+      },
+    }],
   });
   const consumer = definition({
     id: "acme-carrier-consumer",
     displayName: "Acme carrier consumer",
+    compilationSnapshotId: "acme-carrier-consumer@1.0.0",
     operations: [{
       exportId: "@acme/validation::run",
       operationKind: "method",
@@ -394,10 +410,11 @@ test("provider carrier metadata canonicalizes after cross-provider composition",
   const togetherCarrier = rustNamedTypeCarrierValue(together.operations[0].resultCarrier);
   const separateCarrier = rustNamedTypeCarrierValue(separately.operations[0].resultCarrier);
 
-  assert.deepEqual(togetherCarrier?.traits, {
-    implementations: [{ trait: rustCloneTrait, requirements: [] }],
+  assert.deepEqual(togetherCarrier, separateCarrier);
+  assert.deepEqual(together.traitContracts, separately.traitContracts);
+  assert.deepEqual(together.traitContracts[0]?.contract, {
+    implementations: [{ trait: rustCloneTrait, genericBindings: [], requirements: [] }],
   });
-  assert.deepEqual(separateCarrier, togetherCarrier);
 });
 
 test("the owned local callable is a built-in generic carrier and needs no provider-owned path", () => {

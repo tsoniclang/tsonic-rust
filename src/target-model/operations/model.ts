@@ -136,6 +136,11 @@ export type RustNonOptionValueConversion =
       readonly target: TargetTypeRef;
     }
   | {
+      readonly kind: "runtime-callable-callback";
+      readonly source: TargetTypeRef;
+      readonly target: TargetTypeRef;
+    }
+  | {
       readonly kind: "js-argument-vector-callback";
       readonly lane: "native" | "exact";
       readonly source: TargetTypeRef;
@@ -146,7 +151,7 @@ export type RustNonOptionValueConversion =
         | "value"
         | "rest-values"
       )[];
-      readonly sourceFallible: boolean;
+      readonly sourceInvocationReturnsResult: boolean;
     };
 
 export type RustValueConversion =

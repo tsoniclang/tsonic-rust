@@ -11,6 +11,7 @@ import { isRustCVariadicArgumentCarrier } from "../../../facts/c-variadic.js";
 import {
   KindCallExpression,
   KindNewExpression,
+  sourceNodeIdentity,
 } from "@tsonic/target-api/source";
 import { normalizeSelectedArgumentCarrier, rejectSelectedOperation } from "../result.js";
 import { selectRustValueCarrierReconciliation } from "../../../../policy/types/value-carrier-reconciliation.js";
@@ -128,8 +129,8 @@ export function mapSelectedProjectGenericArguments(
   }
   const callNode = asNode(request.source.call, context);
   if (callNode === undefined) return undefined;
-  const sourceFile = context.ast.getSourceFile(callNode);
-  const callIdentity = `${context.ast.getPath(sourceFile)}:${context.ast.pos(callNode)}:${context.ast.end(callNode)}`;
+  const callIdentity = sourceNodeIdentity(context.ast, callNode);
+  if (callIdentity === undefined) return undefined;
   const mapped = contract.parameters.map((parameter): RustGenericArgument | undefined => {
     const parameterSemantics = context.semanticsFor(parameter.declaration);
     const selected = sourceArguments.filter((argument) => {
@@ -386,7 +387,7 @@ export function acceptInstantiatedSelectedCall(
       "RUST_CALL_ARGUMENT_CONVERSION_UNSUPPORTED",
       "The TSTS-selected call argument cannot be represented by the selected Rust target parameter carrier.",
       [{
-        message: `sourceArgumentIndex=${sourceArguments.sourceIndex}; actual=${JSON.stringify(sourceArguments.actual)}; expected=${JSON.stringify(sourceArguments.expected)}`,
+        message: `sourceArgumentIndex=${sourceArguments.sourceIndex}; actual=${optionalRustTypeSemanticKey(sourceArguments.actual)}; expected=${optionalRustTypeSemanticKey(sourceArguments.expected)}`,
       }],
     );
   }
@@ -438,7 +439,7 @@ export function acceptInstantiatedSelectedCall(
       "RUST_PREPARED_OPERATION_RESULT_CONFLICT",
       `Finalized call '${callIdentity.sourceName}' conflicts with its exact prepared Rust operation result.`,
       [{
-        message: `prepared=${JSON.stringify(preparedResult)}; finalized=${JSON.stringify({ operationId: fact.operationId, operationKind: fact.abi.operationKind, resultCarrier })}`,
+        message: `prepared=${preparedResult.operationId}/${preparedResult.operationKind}/${rustTypeSemanticKey(preparedResult.resultCarrier)}; finalized=${fact.operationId}/${fact.abi.operationKind}/${rustTypeSemanticKey(resultCarrier)}`,
       }],
     );
   }
@@ -534,6 +535,10 @@ export function acceptInstantiatedSelectedCall(
     };
   context.facts.set(request.source.call, rustSelectedCallKey, selectedSignature, evidence);
   return acceptRustPolicy({ selectedSignature }, evidence);
+}
+
+function optionalRustTypeSemanticKey(carrier: TargetTypeRef | undefined): string {
+  return carrier === undefined ? "missing" : rustTypeSemanticKey(carrier);
 }
 
 type SelectedCallSourceCarriers =

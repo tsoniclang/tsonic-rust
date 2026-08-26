@@ -20,10 +20,8 @@ import { rustValueConversionIsFallible } from "../../target-model/conversions/co
 import {
   emptyRustGenericSubstitutions,
   inferRustTargetGenericSubstitutions,
-  isRustCopyCarrier,
   isRustVecCarrier,
   rustCallableProtocol,
-  rustCarrierSupportsClone,
   rustClosureProtocol,
   mergeRustGenericSubstitutions,
   rustGenericSubstitutionEntries,
@@ -34,6 +32,7 @@ import {
   substituteRustTargetGenerics,
 } from "../../target-model/types/index.js";
 import type { RustGenericSubstitutions } from "../../target-model/types/index.js";
+import type { RustTraitSupportQueries } from "../../target-model/types/index.js";
 import { rustGenericParameterIdentityKey } from "../../target-model/types/index.js";
 import type { RustSourceGenericIndex } from "../../policy/types/source-generics.js";
 import type { RustGenericArgument, RustGenerics } from "../../target-model/semantics/index.js";
@@ -56,6 +55,7 @@ export function recordRustObjectLiteralMethodAdapterFacts(input: {
   readonly projectTypes: RustProjectTypePolicy;
   readonly projectMethodDispatch: RustProjectMethodDispatchPlan;
   readonly sourceGenerics: RustSourceGenericIndex;
+  readonly traits: RustTraitSupportQueries;
   readonly expressions: readonly Node[];
 }): readonly RustObjectLiteralMethodAdapterIssue[] {
   const issues: RustObjectLiteralMethodAdapterIssue[] = [];
@@ -88,6 +88,7 @@ function createObjectLiteralMethodAdapterFact(
     readonly projectTypes: RustProjectTypePolicy;
     readonly projectMethodDispatch: RustProjectMethodDispatchPlan;
     readonly sourceGenerics: RustSourceGenericIndex;
+    readonly traits: RustTraitSupportQueries;
   },
   expression: Node,
   operation: Extract<RustTargetOperationFact, { readonly kind: "record-literal" }>,
@@ -201,12 +202,14 @@ function createObjectLiteralMethodAdapterFact(
           implementationParameters,
           input.projectTypes,
           input.sourceGenerics,
+          input.traits,
         );
         const resultAdapter = selectObjectLiteralValueAdapter(
           implementationReturnCarrier,
           contractReturnCarrier,
           input.projectTypes,
           input.sourceGenerics,
+          input.traits,
         );
         if (parameterAdapters === undefined || resultAdapter === undefined) {
           return reject(
@@ -402,6 +405,7 @@ function selectObjectLiteralParameterAdapters(
   implementationParameters: readonly RustObjectLiteralMethodParameterAbi[],
   projectTypes: RustProjectTypePolicy,
   sourceGenerics: RustSourceGenericIndex,
+  traits: RustTraitSupportQueries,
 ): RustObjectLiteralMethodParameterAdapter[] | undefined {
   const adapters: RustObjectLiteralMethodParameterAdapter[] = [];
   for (const [implementationIndex, target] of implementationParameters.entries()) {
@@ -420,6 +424,7 @@ function selectObjectLiteralParameterAdapters(
           targetElementCarrier,
           projectTypes,
           sourceGenerics,
+          traits,
         );
         if (elementAdapter === undefined) {
           return undefined;
@@ -442,6 +447,7 @@ function selectObjectLiteralParameterAdapters(
           targetElementCarrier,
           projectTypes,
           sourceGenerics,
+          traits,
         ));
       if (elementAdapters.some((adapter) => adapter === undefined)) {
         return undefined;
@@ -468,6 +474,7 @@ function selectObjectLiteralParameterAdapters(
       target.parameterCarrier,
       projectTypes,
       sourceGenerics,
+      traits,
     );
     if (runtimeAdapter !== undefined &&
       (source.mode === target.mode || source.mode === "mut-ref" && target.mode === "ref")) {
@@ -481,8 +488,8 @@ function selectObjectLiteralParameterAdapters(
       continue;
     }
     if (source.form !== "required" ||
-      source.mode !== "value" && !isRustCopyCarrier(source.valueCarrier) &&
-        !rustCarrierSupportsClone(source.valueCarrier)) {
+      source.mode !== "value" && !input.traits.isCopy(source.valueCarrier) &&
+        !input.traits.supportsClone(source.valueCarrier)) {
       return undefined;
     }
     const targetLogicalCarrier = target.form === "optional"
@@ -495,6 +502,7 @@ function selectObjectLiteralParameterAdapters(
           targetLogicalCarrier,
           projectTypes,
           sourceGenerics,
+          traits,
         );
     if (logicalAdapter === undefined) {
       return undefined;
@@ -515,6 +523,7 @@ function selectObjectLiteralValueAdapter(
   targetCarrier: TargetTypeRef,
   projectTypes: RustProjectTypePolicy,
   sourceGenerics: RustSourceGenericIndex,
+  traits: RustTraitSupportQueries,
 ): RustObjectLiteralValueAdapter | undefined {
   if (rustTargetTypeRefEquals(sourceCarrier, targetCarrier)) {
     return Object.freeze({ kind: "identity", sourceCarrier, targetCarrier });
@@ -527,6 +536,7 @@ function selectObjectLiteralValueAdapter(
       targetOption,
       projectTypes,
       sourceGenerics,
+      traits,
     );
     return element === undefined
       ? undefined
@@ -538,6 +548,7 @@ function selectObjectLiteralValueAdapter(
       targetOption,
       projectTypes,
       sourceGenerics,
+      traits,
     );
     return element === undefined
       ? undefined

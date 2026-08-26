@@ -3,6 +3,7 @@ import type {
   RustFinalizedOperationKind,
   RustProviderConstantArgument,
   RustProviderOperationForm,
+  RustValueConversion,
 } from "../../target-model/operations/model.js";
 import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
 import { isRustBinaryOperator, rustBinaryOperatorTraitPath } from "../../target-model/syntax/tokens.js";
@@ -16,6 +17,54 @@ import {
 const rustIdentifierPattern = /^(?:r#)?[A-Za-z_][A-Za-z0-9_]*$/u;
 const rustPathPattern = /^(?:r#)?[A-Za-z_][A-Za-z0-9_]*(?:::(?:r#)?[A-Za-z_][A-Za-z0-9_]*)*$/u;
 const modes = new Set<RustArgumentMode>(["value", "ref", "mut-ref"]);
+
+export function applyRustProviderArgumentConversion(
+  form: RustProviderOperationForm,
+  sourceArgumentIndex: number,
+  sourceArgumentCount: number,
+  conversion: RustValueConversion,
+): RustProviderOperationForm | undefined {
+  if (!Number.isSafeInteger(sourceArgumentIndex) || sourceArgumentIndex < 0 ||
+    !Number.isSafeInteger(sourceArgumentCount) || sourceArgumentCount < 0 ||
+    sourceArgumentIndex >= sourceArgumentCount ||
+    rustValueConversionContract(conversion) === undefined) {
+    return undefined;
+  }
+  let targetArgumentIndex: number;
+  switch (form.form) {
+    case "call":
+    case "free-call":
+    case "receiver-method":
+      targetArgumentIndex = form.argOrder === undefined
+        ? sourceArgumentIndex
+        : form.argOrder.indexOf(sourceArgumentIndex);
+      break;
+    case "arg-receiver-method":
+    case "arg-structural-method":
+      if (sourceArgumentIndex === 0) return undefined;
+      targetArgumentIndex = sourceArgumentIndex;
+      break;
+    default:
+      return undefined;
+  }
+  const existing = form.argConversions;
+  if (targetArgumentIndex < 0 || targetArgumentIndex >= sourceArgumentCount ||
+    existing !== undefined && existing.length !== sourceArgumentCount ||
+    existing?.[targetArgumentIndex] !== undefined) {
+    return undefined;
+  }
+  const conversions = existing === undefined
+    ? Array.from(
+        { length: sourceArgumentCount },
+        (): RustValueConversion | undefined => undefined,
+      )
+    : [...existing];
+  conversions[targetArgumentIndex] = conversion;
+  return Object.freeze({
+    ...form,
+    argConversions: Object.freeze(conversions),
+  });
+}
 
 export function rustProviderOperationFormAcceptsTargetTypeArguments(
   form: RustProviderOperationForm,

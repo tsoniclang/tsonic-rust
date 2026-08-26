@@ -12,7 +12,6 @@ import type {
   RustCompilerGenerics,
   RustCompilerStandardItemLocation,
   RustCompilerType,
-  RustCompilerTypeParameter,
 } from "../model/model.js";
 import type { RustGenericArgument } from "../../../target-model/semantics/index.js";
 
@@ -78,19 +77,6 @@ export function standardTargetTypeArguments(
   const count = requireStandardSourceArgumentCount(type, location);
   return Object.freeze(type.arguments.slice(0, count).map((argument) =>
     targetGenericArgumentFor(argument, context, position)));
-}
-
-export function sourceVisibleTypeParameters(
-  parameters: readonly RustCompilerGenericParameter[],
-): readonly RustCompilerTypeParameter[] {
-  const selected = parameters.filter((parameter): parameter is RustCompilerTypeParameter =>
-    parameter.kind === "type" && parameter.declarationKind === "explicit");
-  const firstDefault = selected.findIndex(sourceGenericParameterHasDefault);
-  if (firstDefault < 0) return Object.freeze(selected);
-  if (selected.slice(firstDefault).some((parameter) => !sourceGenericParameterHasDefault(parameter))) {
-    throw new Error("Rust default type parameters must form one trailing source-omittable suffix.");
-  }
-  return Object.freeze(selected.slice(0, firstDefault));
 }
 
 export function sourceVisibleGenericParameters(

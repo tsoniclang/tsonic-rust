@@ -30,7 +30,7 @@ test("Rust architecture rules reject target-specific boundary mutations", () => 
     ["ARCH-RUST-PRINTER-001", "src/print/source/index.ts", "finalizeRustSourceStyle(model);"],
     ["ARCH-RUST-PLAN-001", "src/backend/artifact-model/output.ts", "readonly diagnostics: readonly string[];"],
     ["ARCH-RUST-PROGRAM-001", "src/analysis/program/model.ts", "readonly values: Set<string>;"],
-    ["ARCH-RUST-PROVIDER-001", "src/providers/packages/model.ts", "interface RustProviderSemantics { readonly carrierPaths: ReadonlyMap<string, string>; }"],
+    ["ARCH-RUST-PROVIDER-001", "src/providers/packages/model.ts", "interface RustProviderSemantics { readonly carrierPaths: Readonly<Record<string, string>>; }"],
     ["ARCH-RUST-PROVIDER-002", "src/providers/packages/materialization.ts", "type Carriers = Readonly<Record<string, string>> | ReadonlyMap<string, string>;"],
     ["ARCH-RUST-SELECTION-001", "src/analysis/operations/call.ts", "semantics.types.callSignatures(type);"],
     ["ARCH-TARGET-PLANNER-002", "src/backend/planner/call.ts", "selectRustTargetCall(node);"],

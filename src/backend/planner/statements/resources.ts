@@ -21,6 +21,7 @@ import type { RustCompletionBoundary, RustControlTarget, RustPlanContext } from 
 import type { RustResourceManagementFact } from "../../../analysis/facts/keys.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planRustVirtualProjectMethodCall } from "../objects/project-method-dispatch.js";
+import { rustResourceDisposalReceiverMode } from "../../../analysis/resources/management.js";
 
 export function directResourceDeclaration(
   statement: Node,
@@ -228,7 +229,7 @@ function planResourceCleanup(
   fact: RustResourceManagementFact,
   context: RustPlanContext,
 ): RustBlock | undefined {
-  const receiverMode = resourceDisposalReceiverMode(fact);
+  const receiverMode = rustResourceDisposalReceiverMode(fact);
   if (receiverMode === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, context.sourceFile),
@@ -293,24 +294,6 @@ function planResourceCleanup(
       body,
     }],
   };
-}
-
-export function resourceDisposalReceiverMode(
-  fact: RustResourceManagementFact,
-): "ref" | "mut-ref" | undefined {
-  const target = fact.disposal.target;
-  if (target.form === "source-method") {
-    return target.receiverMode;
-  }
-  if (target.target.form === "free-call") {
-    return target.target.receiverMode === "value"
-      ? undefined
-      : target.target.receiverMode;
-  }
-  if (target.target.form === "receiver-method") {
-    return target.target.mutatesReceiver === true ? "mut-ref" : "ref";
-  }
-  return target.target.form === "method" ? "ref" : undefined;
 }
 
 function planResourceDisposalExpression(

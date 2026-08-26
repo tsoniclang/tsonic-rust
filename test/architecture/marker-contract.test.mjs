@@ -75,6 +75,15 @@ test("Rust source modules expose the canonical primitive and explicit semantic c
   ]) {
     assert.match(identity, new RegExp(`${property}:\\s*"${exportName}"`, "u"));
   }
+  for (const [property, exportName] of [
+    ["exposePointerAddress", "exposePointerAddress"],
+    ["constPointerFromExposedAddress", "constPointerFromExposedAddress"],
+    ["mutablePointerFromExposedAddress", "mutPointerFromExposedAddress"],
+    ["readVolatile", "readVolatile"],
+    ["writeVolatile", "writeVolatile"],
+  ]) {
+    assert.match(identity, new RegExp(`${property}:\\s*"${exportName}"`, "u"));
+  }
   assert.match(types, /rustSemanticTypeDeclarations/u);
   assert.match(operations, /rustSemanticOperationDeclarations/u);
   assert.doesNotMatch(`${identity}\n${types}\n${operations}`, /["']borrowMut["']|["']borrow["']/u);

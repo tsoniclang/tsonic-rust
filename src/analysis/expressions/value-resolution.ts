@@ -61,6 +61,7 @@ import {
 import { appendRustDiagnostic, boolCarrier, checkedPropertySelectionInput, recordPolicySelection, rustOperationContext, rustResolutionContext } from "../program/walk.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { parseSourceBigIntLiteral, sourceCharCodeUnit } from "../../target-model/syntax/literals.js";
+import { rustTypeSemanticKey } from "../../target-model/semantics/index.js";
 import { recordFinalizedOperatorSelection, resolvePostCheckBinaryCarrier, resolvePostCheckUnaryCarrier } from "../operations/operators.js";
 import { recordTargetOperation, setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
 import { resolveArrayLiteralCarrier } from "../operations/inputs.js";
@@ -568,7 +569,7 @@ function resolveTemplateExpressionCarrier(
         span,
         [
           "target.capability=rust.syntax.template",
-          `substitution.carrier=${JSON.stringify(carrier)}`,
+          `substitution.carrier=${carrier === undefined ? "missing" : rustTypeSemanticKey(carrier)}`,
         ],
       );
       return undefined;

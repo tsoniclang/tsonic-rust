@@ -17,7 +17,8 @@ import {
   Node_Name,
 } from "@tsonic/target-api/source";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { collectVariableDeclarations, planResourceManagedBody, resourceDisposalReceiverMode, resourceFactForPlanning } from "./resources.js";
+import { collectVariableDeclarations, planResourceManagedBody, resourceFactForPlanning } from "./resources.js";
+import { rustResourceDisposalReceiverMode } from "../../../analysis/resources/management.js";
 import { createRustLoopTarget, withRustControlTarget } from "./control-flow.js";
 import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustActiveErrorType } from "../program/plan-context.js";
 import { isRustUnitCarrier } from "../../../target-model/types/index.js";
@@ -401,7 +402,7 @@ export function planForOfStatement(
     body = { statements: [...bindings, ...body.statements] };
   }
   const bindingMutable = resourceFact !== undefined &&
-    resourceDisposalReceiverMode(resourceFact) === "mut-ref";
+    rustResourceDisposalReceiverMode(resourceFact) === "mut-ref";
   if (fact.lowering.kind === "async-generator") {
     if (context.asyncContext !== true || context.syntheticNames === undefined) {
       context.diagnostics.push(missingFactDiagnostic(

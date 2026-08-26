@@ -56,7 +56,7 @@ function closedMetadataKeyValidated(value: unknown): string {
     case "boolean":
       return value ? "true" : "false";
     case "number":
-      return `n:${String(value)}`;
+      return Object.is(value, -0) ? "n:-0" : `n:${String(value)}`;
     case "bigint":
       return `i:${String(value)}`;
     case "string":

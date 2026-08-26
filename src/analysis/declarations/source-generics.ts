@@ -236,6 +236,14 @@ function registerParameterIdentity(
     input.ast,
     `${fact.kind}-parameter`,
   );
+  if (identity === undefined) {
+    input.report(diagnostic(
+      "RUST_SOURCE_GENERIC_IDENTITY_MISSING",
+      "A source generic parameter has no exact compiler-owned source occurrence identity.",
+      declaration,
+    ));
+    return undefined;
+  }
   const argument: RustGenericArgument | undefined = fact.kind === "lifetime"
     ? Object.freeze({
         kind: "lifetime",

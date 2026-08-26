@@ -2,10 +2,10 @@ import type { Node } from "@tsonic/tsts";
 import {
   Node_Expression,
   Node_Initializer,
-  sourceNodeIdentity,
 } from "@tsonic/target-api/source";
 import {
   rustAsyncFunctionFactKey,
+  rustResourceManagementFactKey,
   rustSelfModeFactKey,
   rustTargetOperationFactKey,
   type RustTargetOperationFact,
@@ -36,6 +36,7 @@ import type {
   RustOwnershipAnalysisInput,
   RustOwnershipEnvironment,
 } from "./context.js";
+import { requireRustOwnershipSourceIdentity } from "./identity.js";
 
 type RustFutureStateRequirement =
   | { readonly kind: "trait"; readonly trait: RustTraitRef }
@@ -119,16 +120,7 @@ function futureExpressionRequirementIsProven(
   try {
     const origin = sourceFutureOrigin(selected, input, new Set());
     if (origin === undefined ||
-      !rustTargetTypeRefEquals(origin.operation.resultCarrier, expectedCarrier) ||
-      input.facts.getFact(origin.callable, rustAsyncFunctionFactKey) === undefined) {
-      return false;
-    }
-    const execution = captures.executionContractByCallable.get(origin.callable);
-    if (execution === undefined ||
-      !execution.captures.every((capture) =>
-        captureRequirementIsProven(capture, requirement, environment)) ||
-      !execution.suspendedValues.every((state) =>
-        carrierRequirementIsProven(state.carrier, requirement, environment))) {
+      !rustTargetTypeRefEquals(origin.operation.resultCarrier, expectedCarrier)) {
       return false;
     }
     const callArguments = input.ast.arguments(origin.call);
@@ -155,7 +147,7 @@ function futureExpressionRequirementIsProven(
       ))) {
       return false;
     }
-    return awaitedFutureRequirementsAreProven(
+    return sourceCallableFutureRequirementIsProven(
       origin.callable,
       requirement,
       captures,
@@ -165,6 +157,39 @@ function futureExpressionRequirementIsProven(
     );
   } finally {
     resolving.delete(selected);
+  }
+}
+
+function sourceCallableFutureRequirementIsProven(
+  callable: Node,
+  requirement: RustFutureStateRequirement,
+  captures: RustCaptureAnalysis,
+  input: RustOwnershipAnalysisInput,
+  environment: RustOwnershipEnvironment,
+  resolving: Set<Node>,
+): boolean {
+  if (resolving.has(callable) ||
+    input.facts.getFact(callable, rustAsyncFunctionFactKey) === undefined) {
+    return false;
+  }
+  resolving.add(callable);
+  try {
+    const execution = captures.executionContractByCallable.get(callable);
+    return execution !== undefined &&
+      execution.captures.every((capture) =>
+        captureRequirementIsProven(capture, requirement, environment)) &&
+      execution.suspendedValues.every((state) =>
+        carrierRequirementIsProven(state.carrier, requirement, environment)) &&
+      awaitedFutureRequirementsAreProven(
+        callable,
+        requirement,
+        captures,
+        input,
+        environment,
+        resolving,
+      );
+  } finally {
+    resolving.delete(callable);
   }
 }
 
@@ -203,13 +228,21 @@ function awaitedFutureRequirementsAreProven(
   environment: RustOwnershipEnvironment,
   resolving: Set<Node>,
 ): boolean {
+  if (requirement.kind === "outlives") return true;
   let proven = true;
-  const visit = (node: Node): void => {
-    if (!proven || node !== callable && isCallable(node, input)) return;
-    if (input.ast.kindName(node) === "KindAwaitExpression") {
+  const pending = [callable];
+  while (pending.length > 0 && proven) {
+    const node = pending.pop()!;
+    if (node !== callable && isCallable(node, input)) continue;
+    const kind = input.ast.kindName(node);
+    if (kind === "KindAwaitExpression") {
       const operand = Node_Expression(input.ast, node);
+      if (operand === undefined) {
+        proven = false;
+        break;
+      }
       const carrier = input.facts.getRuntimeCarrierFact(operand)?.carrier;
-      if (operand === undefined || carrier === undefined ||
+      if (carrier === undefined ||
         rustFutureOutputCarrier(carrier) === undefined ||
         !futureExpressionRequirementIsProven(
           operand,
@@ -221,15 +254,89 @@ function awaitedFutureRequirementsAreProven(
           resolving,
         )) {
         proven = false;
-        return;
+        break;
+      }
+    } else if (kind === "KindVariableDeclaration" &&
+      input.ast.variableDeclarationKind(node) === "await using" &&
+      !asyncResourceCleanupRequirementIsProven(
+        node,
+        requirement,
+        captures,
+        input,
+        environment,
+        resolving,
+      )) {
+      proven = false;
+      break;
+    } else {
+      const operation = input.facts.getFact(node, rustTargetOperationFactKey);
+      if (operation?.kind === "iteration" && operation.iterationKind === "for-await-of" &&
+        operation.lowering.kind === "async-generator" &&
+        !asyncIterationRequirementIsProven(node, requirement, input, environment)) {
+        proven = false;
+        break;
       }
     }
     input.ast.forEachChild(node, (child) => {
-      if (child !== undefined) visit(child);
+      if (child !== undefined) pending.push(child);
     });
-  };
-  visit(callable);
+  }
   return proven;
+}
+
+function asyncResourceCleanupRequirementIsProven(
+  declaration: Node,
+  requirement: Extract<RustFutureStateRequirement, { readonly kind: "trait" }>,
+  captures: RustCaptureAnalysis,
+  input: RustOwnershipAnalysisInput,
+  environment: RustOwnershipEnvironment,
+  resolving: Set<Node>,
+): boolean {
+  const fact = input.facts.getFact(declaration, rustResourceManagementFactKey);
+  if (fact?.disposal.kind !== "async" || fact.disposal.target.form !== "source-method") {
+    return false;
+  }
+  const callable = captures.callableForSourceIdentity(
+    fact.disposal.target.sourceDeclarationIdentity,
+  );
+  if (callable === undefined) return false;
+  const occurrence = requireRustOwnershipSourceIdentity(input.ast, declaration);
+  const receiver = rustReferenceTargetType(
+    fact.resourceCarrier,
+    fact.disposal.target.receiverMode === "mut-ref",
+    rustInferredLifetime(`resource-cleanup-receiver\0${occurrence}`),
+  );
+  return carrierRequirementIsProven(receiver, requirement, environment) &&
+    sourceCallableFutureRequirementIsProven(
+      callable,
+      requirement,
+      captures,
+      input,
+      environment,
+      resolving,
+    );
+}
+
+function asyncIterationRequirementIsProven(
+  statement: Node,
+  requirement: Extract<RustFutureStateRequirement, { readonly kind: "trait" }>,
+  input: RustOwnershipAnalysisInput,
+  environment: RustOwnershipEnvironment,
+): boolean {
+  const iterable = Node_Expression(input.ast, statement);
+  if (iterable === undefined) return false;
+  const carrier = input.facts.getRuntimeCarrierFact(iterable)?.carrier;
+  if (carrier === undefined) return false;
+  const occurrence = requireRustOwnershipSourceIdentity(input.ast, statement);
+  return carrierRequirementIsProven(
+    rustReferenceTargetType(
+      carrier,
+      true,
+      rustInferredLifetime(`async-iteration-receiver\0${occurrence}`),
+    ),
+    requirement,
+    environment,
+  );
 }
 
 function captureRequirementIsProven(
@@ -248,8 +355,8 @@ function futureMethodReceiverCarrier(
 ): RustTypeRef | undefined {
   const receiver = input.facts.getSelectedTargetCall(origin.call)?.sourceSelectedReceiverCarrier;
   const selfMode = input.facts.getFact(origin.callable, rustSelfModeFactKey);
-  const occurrence = sourceNodeIdentity(input.ast, origin.call);
-  if (receiver === undefined || selfMode === undefined || occurrence === undefined) return undefined;
+  if (receiver === undefined || selfMode === undefined) return undefined;
+  const occurrence = requireRustOwnershipSourceIdentity(input.ast, origin.call);
   return rustReferenceTargetType(
     receiver,
     selfMode.mode === "mut-ref",

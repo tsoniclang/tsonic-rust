@@ -334,6 +334,18 @@ export function main(): void {
   require_fn((): void => {});
   let count = 0;
   require_fn_mut((): void => { count += 1; });
+  let movedLocation = 0;
+  require_fn(captureMove((): void => { movedLocation += 1; }));
+  if (movedLocation !== 1) {
+    throw new Error("move-captured location did not retain outer identity");
+  }
+  let nestedLocation = 0;
+  require_fn(captureMove((): void => {
+    require_fn(captureMove((): void => { nestedLocation += 1; }));
+  }));
+  if (nestedLocation !== 1) {
+    throw new Error("nested move-captured location did not retain outer identity");
+  }
   let message = "once";
   require_fn_once(captureMove((): void => consume(move(message))));
   require_local_future(localWork());
@@ -388,6 +400,49 @@ export function rejected(): void {
   assert.ok(borrowedFuture.result.diagnostics.some(({ code }) =>
     code === "RUST_PROVIDER_GENERIC_LIFETIME_REQUIREMENT_NOT_PROVEN"),
   JSON.stringify(borrowedFuture.result.diagnostics));
+
+  const dropLiveFuture = compileRustThroughTargetPack({
+    target: { id: "rust", options: { projectFile: project.manifestPath } },
+    files: {
+      "index.ts": `
+import { LocalDrop, require_send_static_future } from "@tsonic/rust/crates/widget_alias/index.js";
+async function work(): Promise<void> {
+  const _local = LocalDrop.new();
+  await Promise.resolve();
+}
+export function rejected(): void {
+  require_send_static_future(work());
+}
+`,
+    },
+  });
+  assert.equal(dropLiveFuture.result.artifacts.length, 0);
+  assert.ok(dropLiveFuture.result.diagnostics.some(({ code }) =>
+    code === "RUST_PROVIDER_GENERIC_TRAIT_REQUIREMENT_NOT_PROVEN"),
+  JSON.stringify(dropLiveFuture.result.diagnostics));
+
+  const borrowedInstanceGenerator = compileRustThroughTargetPack({
+    target: { id: "rust", options: { projectFile: project.manifestPath } },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import { require_static_value } from "@tsonic/rust/crates/widget_alias/index.js";
+class Values {
+  value: int32;
+  constructor(value: int32) { this.value = value; }
+  *items(): Generator<int32, void, void> { yield this.value; }
+}
+export function rejected(): void {
+  const values = new Values(1);
+  require_static_value(values.items());
+}
+`,
+    },
+  });
+  assert.equal(borrowedInstanceGenerator.result.artifacts.length, 0);
+  assert.ok(borrowedInstanceGenerator.result.diagnostics.some(({ code }) =>
+    code === "RUST_GENERATOR_OWNED_EXECUTION_NOT_REPRESENTABLE"),
+  JSON.stringify(borrowedInstanceGenerator.result.diagnostics));
 });
 
 test("dependency-closure mutation after snapshot is rejected before rustdoc reuse", { timeout: 300_000 }, () => {

@@ -40,6 +40,7 @@ import type {
 import type { ProjectionContext } from "./model.js";
 import type { RustProviderOperationDefinition } from "../../packages/model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 
 export function genericParameterProjectionMap(
   parameters: readonly RustCompilerGenericParameter[],
@@ -433,7 +434,7 @@ export function projectAssociatedConstants(
 }
 
 function sourceSignatureSelectionKey(signature: ProviderSignatureDeclaration): string {
-  return JSON.stringify({
+  return closedMetadataKey({
     parameters: signature.parameters,
     returnType: signature.returnType,
     typeParameters: signature.typeParameters,

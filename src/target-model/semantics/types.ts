@@ -52,12 +52,18 @@ export interface RustTraitRef {
 }
 
 export interface RustConditionalTraitRequirement {
-  readonly typeArgumentIndex: number;
-  readonly trait: RustTraitRef;
+  readonly genericArgumentIndex: number;
+  readonly bound: Extract<RustBound, { readonly kind: "trait" }>;
+}
+
+export interface RustTraitImplementationGenericBinding {
+  readonly parameter: RustGenericArgument;
+  readonly genericArgumentIndex: number;
 }
 
 export interface RustTraitImplementationEvidence {
   readonly trait: RustTraitRef;
+  readonly genericBindings: readonly RustTraitImplementationGenericBinding[];
   readonly requirements: readonly RustConditionalTraitRequirement[];
 }
 
@@ -106,7 +112,6 @@ export type RustTypeRef =
       readonly identity: RustSemanticIdentity;
       readonly displayPath: readonly string[];
       readonly arguments: readonly RustGenericArgument[];
-      readonly traitImplementations: readonly RustTraitImplementationEvidence[];
     }
   | {
       readonly kind: "reference";

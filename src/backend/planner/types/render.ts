@@ -10,12 +10,20 @@ import type {
   RustTypeBound,
 } from "../../target-ast/nodes.js";
 import type {
+  RustAssociatedConstraint,
   RustBound,
+  RustCapturedGeneric,
   RustConstExpr,
   RustGenericArgument,
   RustGenerics as RustSemanticGenerics,
   RustLifetimeRef,
   RustTraitRef,
+  RustTypeRef,
+} from "../../../target-model/semantics/index.js";
+import {
+  rustGenericArgumentSemanticKey,
+  rustSemanticIdentityKey,
+  rustTypeSemanticKey,
 } from "../../../target-model/semantics/index.js";
 import {
   rustSourceTypeCarrierValue,
@@ -27,11 +35,12 @@ import {
   rustCallableProtocol,
   rustFutureOutputCarrier,
   inferRustTargetGenericSubstitutions,
-  rustPathTypeMatches,
+  rustBuiltinPathTypeMatches,
   rustPrimitiveTypeName,
   substituteRustTargetGenerics,
   substituteRustGenericArgument,
   rustStringTargetId,
+  rustTupleTargetType,
   isRustNeverCarrier,
 } from "../../../target-model/types/index.js";
 
@@ -174,15 +183,6 @@ export function rustAstTypeBoundFromSemantic(
       return { kind: "lifetime", lifetime: rustAstLifetimeFromSemantic(bound.shorter) };
     case "type-outlives":
       return { kind: "lifetime", lifetime: rustAstLifetimeFromSemantic(bound.lifetime) };
-    case "precise-capture": {
-      const captures = bound.captures.map((capture): RustAstGenericArgument =>
-        capture.kind === "lifetime"
-          ? { kind: "lifetime", lifetime: rustAstLifetimeFromSemantic(capture.value) }
-          : capture.kind === "type"
-            ? { kind: "type", type: { kind: "named", path: capture.displayName } }
-            : { kind: "const", expression: { kind: "path", path: capture.displayName } });
-      return { kind: "precise-capture", captures };
-    }
     case "associated-equality":
       return undefined;
   }
@@ -205,13 +205,13 @@ export function rustTypeFromCarrier(
       : rustPrimitiveTypeName(carrier.name);
     return name === undefined ? undefined : { kind: "primitive", name };
   }
-  if (rustPathTypeMatches(carrier, rustStringTargetId)) {
+  if (rustBuiltinPathTypeMatches(carrier, rustStringTargetId, "rust")) {
     return { kind: "string" };
   }
   const callableProtocol = rustCallableProtocol(carrier);
   if (callableProtocol !== undefined) {
     const argumentsType = rustTypeFromCarrier(
-      { kind: "tuple", elements: callableProtocol.parameters },
+      rustTupleTargetType(callableProtocol.parameters),
       resolveSourceTypePath,
       resolveStructuralShape,
     );
@@ -258,7 +258,7 @@ export function rustTypeFromCarrier(
     return { kind: "named", path: carrier.displayName };
   }
   if (carrier.kind === "reference") {
-    const target = rustPathTypeMatches(carrier.target, rustStringTargetId)
+    const target = rustBuiltinPathTypeMatches(carrier.target, rustStringTargetId, "rust")
       ? { kind: "str" as const }
       : carrier.target;
     const referent = rustTypeFromCarrier(target, resolveSourceTypePath, resolveStructuralShape);
@@ -322,7 +322,7 @@ export function rustTypeFromCarrier(
     return {
       kind: "named",
       path: carrier.displayPath.join("::"),
-      identity: JSON.stringify(carrier.identity),
+      identity: rustSemanticIdentityKey(carrier.identity),
       ...(genericArguments.length === 0 ? {} : { genericArguments: genericArguments as RustAstGenericArgument[] }),
     };
   }
@@ -339,9 +339,7 @@ export function rustTypeFromCarrier(
     };
   }
   if (carrier.kind === "tuple") {
-    if (carrier.elements.length === 0) {
-      return { kind: "unit" };
-    }
+    if (carrier.elements.length === 0) return undefined;
     const elements = carrier.elements.map((element) =>
       rustTypeFromCarrier(element, resolveSourceTypePath, resolveStructuralShape));
     if (elements.some((element) => element === undefined)) {
@@ -398,7 +396,13 @@ export function rustTypeFromCarrier(
     ));
     return bounds.some((bound) => bound === undefined)
       ? undefined
-      : { kind: "opaque", bounds: bounds as RustTypeBound[] };
+      : {
+          kind: "opaque",
+          bounds: [
+            ...(bounds as RustTypeBound[]),
+            rustAstPreciseCaptureBound(carrier.captures),
+          ],
+        };
   }
   if (carrier.kind === "associated-type") {
     const owner = rustTypeFromCarrier(carrier.owner, resolveSourceTypePath, resolveStructuralShape);
@@ -425,24 +429,27 @@ export function rustTypeFromCarrier(
     return result === undefined || parameters.some((parameter) => parameter === undefined)
       ? undefined
       : {
-          kind: "opaque",
-          bounds: [{
-            kind: "callable-trait",
-            trait: carrier.callTrait === "fn" ? "Fn" : carrier.callTrait === "fn-mut" ? "FnMut" : "FnOnce",
-            ...(carrier.binder === undefined || carrier.binder.lifetimes.length === 0
-              ? {}
-              : {
-                  binder: carrier.binder.lifetimes.map((parameter) => ({
-                    kind: "lifetime" as const,
-                    name: parameter.identity.kind === "parameter" || parameter.identity.kind === "bound"
-                      ? parameter.identity.displayName
-                      : "_",
-                    bounds: parameter.bounds.map(rustAstLifetimeFromSemantic),
-                  })),
-                }),
-            parameters: parameters as RustType[],
-            result,
-          }],
+        kind: "opaque",
+          bounds: [
+            {
+              kind: "callable-trait",
+              trait: carrier.callTrait === "fn" ? "Fn" : carrier.callTrait === "fn-mut" ? "FnMut" : "FnOnce",
+              ...(carrier.binder === undefined || carrier.binder.lifetimes.length === 0
+                ? {}
+                : {
+                    binder: carrier.binder.lifetimes.map((parameter) => ({
+                      kind: "lifetime" as const,
+                      name: parameter.identity.kind === "parameter" || parameter.identity.kind === "bound"
+                        ? parameter.identity.displayName
+                        : "_",
+                      bounds: parameter.bounds.map(rustAstLifetimeFromSemantic),
+                    })),
+                  }),
+              parameters: parameters as RustType[],
+              result,
+            },
+            rustAstPreciseCaptureBound(carrier.captures),
+          ],
         };
   }
   return undefined;
@@ -634,19 +641,23 @@ export function rustAstTypeBoundFromSemanticInContext(
       return { kind: "lifetime", lifetime: rustAstLifetimeFromSemantic(bound.shorter) };
     case "type-outlives":
       return { kind: "lifetime", lifetime: rustAstLifetimeFromSemantic(bound.lifetime) };
-    case "precise-capture":
-      return {
-        kind: "precise-capture",
-        captures: bound.captures.map((capture): RustAstGenericArgument =>
-          capture.kind === "lifetime"
-            ? { kind: "lifetime", lifetime: rustAstLifetimeFromSemantic(capture.value) }
-            : capture.kind === "type"
-              ? { kind: "type", type: { kind: "named", path: capture.displayName } }
-              : { kind: "const", expression: { kind: "path", path: capture.displayName } }),
-      };
     case "associated-equality":
       return undefined;
   }
+}
+
+function rustAstPreciseCaptureBound(
+  captures: readonly RustCapturedGeneric[],
+): Extract<RustTypeBound, { readonly kind: "precise-capture" }> {
+  return {
+    kind: "precise-capture",
+    captures: captures.map((capture): RustAstGenericArgument =>
+      capture.kind === "lifetime"
+        ? { kind: "lifetime", lifetime: rustAstLifetimeFromSemantic(capture.value) }
+        : capture.kind === "type"
+          ? { kind: "type", type: { kind: "named", path: capture.displayName } }
+          : { kind: "const", expression: { kind: "path", path: capture.displayName } }),
+  };
 }
 
 export function rustAstGenericsFromSemanticInContext(
@@ -722,11 +733,18 @@ export function rustAstGenericsFromSemanticInContext(
             };
       }
       case "equality": {
-        const projection = rustTypeFromCarrierInContext(predicate.projection, context);
-        const value = rustTypeFromCarrierInContext(predicate.value, context);
-        return projection === undefined || value === undefined
+        const trait = rustTraitWithProjectionEquality(predicate.projection, predicate.value);
+        const owner = rustTypeFromCarrierInContext(predicate.projection.owner, context);
+        const renderedTrait = trait === undefined
           ? undefined
-          : { kind: "equality", projection, value };
+          : rustAstTraitFromSemanticInContext(trait, context);
+        return owner === undefined || renderedTrait === undefined
+          ? undefined
+          : {
+              kind: "type",
+              type: owner,
+              bounds: [{ kind: "trait", trait: renderedTrait }],
+            };
       }
     }
   });
@@ -736,6 +754,52 @@ export function rustAstGenericsFromSemanticInContext(
         parameters: Object.freeze(parameters as RustAstGenericParameter[]),
         wherePredicates: Object.freeze(wherePredicates as RustAstGenerics["wherePredicates"]),
       });
+}
+
+function rustTraitWithProjectionEquality(
+  projection: Extract<RustTypeRef, { readonly kind: "associated-type" }>,
+  value: RustTypeRef,
+): RustTraitRef | undefined {
+  const itemKey = rustSemanticIdentityKey(projection.item);
+  const argumentKeys = projection.arguments.map(rustGenericArgumentSemanticKey);
+  const valueKey = rustTypeSemanticKey(value);
+  let matchingConstraintCount = 0;
+  for (const constraint of projection.trait.associatedConstraints) {
+    if (rustSemanticIdentityKey(constraint.item) !== itemKey ||
+      !rustSemanticKeyListsEqual(
+        constraint.arguments.map(rustGenericArgumentSemanticKey),
+        argumentKeys,
+      )) {
+      continue;
+    }
+    if (constraint.kind !== "equality" || rustTypeSemanticKey(constraint.type) !== valueKey) {
+      return undefined;
+    }
+    matchingConstraintCount += 1;
+    if (matchingConstraintCount > 1) return undefined;
+  }
+  if (matchingConstraintCount === 1) return projection.trait;
+  const equality: RustAssociatedConstraint = Object.freeze({
+    kind: "equality",
+    item: projection.item,
+    displayName: projection.displayName,
+    arguments: projection.arguments,
+    type: value,
+  });
+  return Object.freeze({
+    ...projection.trait,
+    associatedConstraints: Object.freeze([
+      ...projection.trait.associatedConstraints,
+      equality,
+    ]),
+  });
+}
+
+function rustSemanticKeyListsEqual(
+  left: readonly string[],
+  right: readonly string[],
+): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 function rustAstLifetimeParameter(

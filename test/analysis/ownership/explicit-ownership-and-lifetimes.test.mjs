@@ -217,6 +217,22 @@ export function invalid<Value extends Const<string>>(value: string): string {
   }).result;
   assert.equal(rejected.artifacts.length, 0);
   assert.ok(diagnosticCodes(rejected).includes("RUST_SOURCE_CONST_PARAMETER_VALUE_INVALID"));
+
+  const invalidCharacter = compileRust({
+    files: {
+      "index.ts": `
+import type { char as rustChar, Const } from "@tsonic/rust/types.js";
+
+export function invalidCharacter<Value extends Const<rustChar> = "ab">(
+  value: rustChar,
+): rustChar {
+  return value;
+}
+`,
+    },
+  }).result;
+  assert.equal(invalidCharacter.artifacts.length, 0);
+  assert.ok(diagnosticCodes(invalidCharacter).includes("RUST_SOURCE_CONST_PARAMETER_VALUE_INVALID"));
 });
 
 test("partial moves preserve disjoint tuple fields and reject a later whole-value read", { timeout: 300_000 }, () => {
@@ -251,6 +267,50 @@ function consume(_value: Owned<string>): void {}
 
 export function reject(pair: Owned<[string, string]>): Owned<[string, string]> {
   consume(move(pair[0]));
+  return move(pair);
+}
+`,
+    },
+  }).result;
+  assert.equal(rejected.artifacts.length, 0);
+  assert.ok(diagnosticCodes(rejected).includes("RUST_USE_AFTER_MOVE"));
+});
+
+test("nested aggregate reinitialization restores only completely initialized ancestors", { timeout: 300_000 }, () => {
+  const accepted = compileRust({
+    files: {
+      "index.ts": `
+import { move } from "@tsonic/rust/lang.js";
+import type { Owned } from "@tsonic/rust/types.js";
+
+function consume(_value: Owned<string>): void {}
+
+export function restore(pair: Owned<[[string, string], string]>): Owned<[[string, string], string]> {
+  consume(move(pair[0][0]));
+  pair[0][0] = "restored";
+  return move(pair);
+}
+`,
+    },
+  }).result;
+  assert.deepEqual(accepted.diagnostics, []);
+  const source = artifactText(accepted, "src/index.rs");
+  assert.match(source, /consume\(pair\.0\.0\)/u);
+  assert.match(source, /pair\.0\.0 = String::from\("restored"\)/u);
+  validateGeneratedProject("explicit-rust-nested-partial-reinitialization", accepted.artifacts);
+
+  const rejected = compileRust({
+    files: {
+      "index.ts": `
+import { move } from "@tsonic/rust/lang.js";
+import type { Owned } from "@tsonic/rust/types.js";
+
+function consume(_value: Owned<string>): void {}
+
+export function incomplete(pair: Owned<[[string, string], string]>): Owned<[[string, string], string]> {
+  consume(move(pair[0][0]));
+  consume(move(pair[0][1]));
+  pair[0][0] = "restored";
   return move(pair);
 }
 `,
@@ -341,6 +401,63 @@ export function reject(value: Owned<string>): () => string {
   assert.ok(diagnosticCodes(rejected).includes("RUST_NATIVE_CAPTURE_REQUIRES_EXPLICIT_MOVE"));
 });
 
+test("captureMove transfers explicit native captures when the closure is constructed", { timeout: 300_000 }, () => {
+  const accepted = compileRust({
+    files: {
+      "index.ts": `
+import { captureMove } from "@tsonic/rust/lang.js";
+import type { Owned } from "@tsonic/rust/types.js";
+
+export function read(value: Owned<string>): number {
+  const callback = captureMove((): number => value.length);
+  return callback();
+}
+
+export function readParenthesized(value: Owned<string>): number {
+  const callback = captureMove(((): number => value.length));
+  return callback();
+}
+`,
+    },
+  }).result;
+  assert.deepEqual(accepted.diagnostics, []);
+  const source = artifactText(accepted, "src/index.rs");
+  assert.equal(source.match(/move \|\|/gu)?.length, 2);
+  assert.doesNotMatch(source, /&value/u);
+  validateGeneratedProject("explicit-rust-read-only-capture-transfer", accepted.artifacts);
+
+  const useAfterCapture = compileRust({
+    files: {
+      "index.ts": `
+import { captureMove } from "@tsonic/rust/lang.js";
+import type { Owned } from "@tsonic/rust/types.js";
+
+export function reject(value: Owned<string>): number {
+  const callback = captureMove((): number => value.length);
+  return callback() + value.length;
+}
+`,
+    },
+  }).result;
+  assert.equal(useAfterCapture.artifacts.length, 0);
+  assert.ok(diagnosticCodes(useAfterCapture).includes("RUST_USE_AFTER_MOVE"));
+
+  const missingOuterCapture = compileRust({
+    files: {
+      "index.ts": `
+import { captureMove } from "@tsonic/rust/lang.js";
+import type { Owned } from "@tsonic/rust/types.js";
+
+export function reject(value: Owned<string>): () => () => number {
+  return (): (() => number) => captureMove((): number => value.length);
+}
+`,
+    },
+  }).result;
+  assert.equal(missingOuterCapture.artifacts.length, 0);
+  assert.ok(diagnosticCodes(missingOuterCapture).includes("RUST_NATIVE_CAPTURE_REQUIRES_EXPLICIT_MOVE"));
+});
+
 test("ordinary TypeScript aliasing remains automatic and separate from explicit native transfer", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     files: {
@@ -368,4 +485,211 @@ export function aliasing(): number {
   assert.match(source, /LocalObjectHandle/u);
   assert.match(source, /\.clone\(\)/u);
   validateGeneratedProject("ordinary-typescript-aliasing-preserved", result.artifacts);
+});
+
+test("ownership follows exact exceptional edges from finalized call effects", { timeout: 300_000 }, () => {
+  const accepted = compileRust({
+    files: {
+      "index.ts": `
+import { move } from "@tsonic/rust/lang.js";
+import type { Owned } from "@tsonic/rust/types.js";
+
+function consume(_value: Owned<string>): void {}
+function mayFail(fail: boolean): void {
+  if (fail) throw new Error("failure");
+}
+
+export function consumeOnce(value: Owned<string>, fail: boolean): void {
+  try {
+    mayFail(fail);
+    consume(move(value));
+  } catch {
+    consume(move(value));
+  }
+}
+`,
+    },
+  }).result;
+  assert.deepEqual(accepted.diagnostics, []);
+  validateGeneratedProject("explicit-rust-exception-before-move", accepted.artifacts);
+
+  const rejected = compileRust({
+    files: {
+      "index.ts": `
+import { move } from "@tsonic/rust/lang.js";
+import type { Owned } from "@tsonic/rust/types.js";
+
+function consume(_value: Owned<string>): void {}
+function mayFail(fail: boolean): void {
+  if (fail) throw new Error("failure");
+}
+
+export function reject(value: Owned<string>, fail: boolean): void {
+  try {
+    consume(move(value));
+    mayFail(fail);
+  } catch {
+    consume(move(value));
+  }
+}
+`,
+    },
+  }).result;
+  assert.equal(rejected.artifacts.length, 0);
+  assert.ok(diagnosticCodes(rejected).includes("RUST_USE_AFTER_MOVE"));
+});
+
+test("ownership follows labeled block and loop continuations through finally", () => {
+  const block = compileRust({
+    files: {
+      "index.ts": `
+import { move } from "@tsonic/rust/lang.js";
+import type { Owned } from "@tsonic/rust/types.js";
+
+function consume(_value: Owned<string>): void {}
+
+export function reject(value: Owned<string>): void {
+  outer: {
+    try {
+      consume(move(value));
+      break outer;
+    } finally {
+    }
+  }
+  consume(move(value));
+}
+`,
+    },
+  }).result;
+  assert.equal(block.artifacts.length, 0);
+  assert.ok(diagnosticCodes(block).includes("RUST_USE_AFTER_MOVE"));
+
+  const loop = compileRust({
+    files: {
+      "index.ts": `
+import { move } from "@tsonic/rust/lang.js";
+import type { int32 } from "@tsonic/core/types.js";
+import type { Owned } from "@tsonic/rust/types.js";
+
+function consume(_value: Owned<string>): void {}
+
+export function reject(value: Owned<string>): void {
+  outer: for (let index: int32 = 0; index < 2; index++) {
+    consume(move(value));
+    continue outer;
+  }
+}
+`,
+    },
+  }).result;
+  assert.equal(loop.artifacts.length, 0);
+  assert.ok(diagnosticCodes(loop).includes("RUST_USE_AFTER_MOVE"));
+});
+
+test("resource cleanup retains the exact resource place on every exit", () => {
+  const movedResource = compileRust({
+    files: {
+      "index.ts": `
+import { move } from "@tsonic/rust/lang.js";
+import type { Owned } from "@tsonic/rust/types.js";
+
+class Resource {
+  [Symbol.dispose](): void {}
+}
+
+function consume(_value: Owned<Resource>): void {}
+
+export function reject(): void {
+  using resource: Owned<Resource> = new Resource();
+  consume(move(resource));
+}
+`,
+    },
+  }).result;
+  assert.equal(movedResource.artifacts.length, 0);
+  assert.ok(diagnosticCodes(movedResource).includes("RUST_USE_AFTER_MOVE"));
+
+  const cleanupFailure = compileRust({
+    files: {
+      "index.ts": `
+import { move } from "@tsonic/rust/lang.js";
+import type { Owned } from "@tsonic/rust/types.js";
+
+class FailingResource {
+  [Symbol.dispose](): void {
+    throw new Error("cleanup");
+  }
+}
+
+function consume(_value: Owned<string>): void {}
+
+export function reject(value: Owned<string>): void {
+  try {
+    using resource = new FailingResource();
+    consume(move(value));
+  } catch {
+    consume(move(value));
+  }
+}
+`,
+    },
+  }).result;
+  assert.equal(cleanupFailure.artifacts.length, 0);
+  assert.ok(diagnosticCodes(cleanupFailure).includes("RUST_USE_AFTER_MOVE"));
+});
+
+test("implicit async cleanup and iteration are exact ownership suspension points", () => {
+  const asyncCleanup = compileRust({
+    files: {
+      "index.ts": `
+import { ref } from "@tsonic/rust/lang.js";
+import type { Owned, Ref } from "@tsonic/rust/types.js";
+
+class AsyncResource {
+  async [Symbol.asyncDispose](): Promise<void> {}
+}
+
+function inspect(_value: Ref<string>): void {}
+
+export async function reject(value: Owned<string>): Promise<void> {
+  const held = ref(value);
+  {
+    await using resource = new AsyncResource();
+  }
+  inspect(held);
+}
+`,
+    },
+  }).result;
+  assert.equal(asyncCleanup.artifacts.length, 0);
+  assert.ok(diagnosticCodes(asyncCleanup).includes(
+    "RUST_SELF_REFERENTIAL_LOAN_ACROSS_SUSPENSION",
+  ));
+
+  const asyncIteration = compileRust({
+    files: {
+      "index.ts": `
+import { ref } from "@tsonic/rust/lang.js";
+import type { Owned, Ref } from "@tsonic/rust/types.js";
+
+async function* values(): AsyncGenerator<number, void, void> {
+  yield 1;
+}
+
+function inspect(_value: Ref<string>): void {}
+
+export async function reject(value: Owned<string>): Promise<void> {
+  const held = ref(value);
+  for await (const item of values()) {
+    void item;
+  }
+  inspect(held);
+}
+`,
+    },
+  }).result;
+  assert.equal(asyncIteration.artifacts.length, 0);
+  assert.ok(diagnosticCodes(asyncIteration).includes(
+    "RUST_SELF_REFERENTIAL_LOAN_ACROSS_SUSPENSION",
+  ));
 });

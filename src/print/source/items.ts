@@ -80,6 +80,9 @@ export function printRustItem(item: RustItem): string {
     }
     case "struct": {
       const header = `${attrs}${printRustVisibility(item.visibility)}struct ${item.name}${printRustGenerics(item.generics)}`;
+      if (item.fields.kind === "tuple") {
+        return `${header}${printRustStructFields(item.fields, 0, false)}${printRustWhereClause(item.generics, 0, false)};`;
+      }
       return `${header}${printRustWhereClause(item.generics)}${printRustStructFields(item.fields, 0, true)}`;
     }
     case "union": {

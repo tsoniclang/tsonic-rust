@@ -137,9 +137,7 @@ function planCallExpressionInner(node: Node, context: RustPlanContext): RustExpr
       case "take":
         return { kind: "call", path: "core::mem::take", args: [value] };
       case "capture-move":
-        return argument.kind === "closure" || argument.kind === "closure-block"
-          ? { ...argument, move: true }
-          : argument;
+        return argument;
     }
   }
   if (fact !== undefined && fact.kind === "object-shape-projection") {

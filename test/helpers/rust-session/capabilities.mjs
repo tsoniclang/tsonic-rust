@@ -134,6 +134,7 @@ export function acmeSuperbunapiCapability() {
     id: "@acme/rust-superbunapi",
     displayName: "SuperBunAPI for Rust",
     version: "1.0.0",
+    compilationSnapshotId: "@acme/rust-superbunapi@1.0.0",
     modules: [{
       moduleSpecifier: "superbunapi",
       providerModuleId: "acme.superbunapi",
@@ -164,7 +165,11 @@ export function acmeSuperbunapiCapability() {
 // a runtime crate contribution — proving composition scale is name-blind.
 export function acmeTelemetryCapability() {
   const meterCarrier = rustProviderPathTargetType({
-    owner: { packageId: "@acme/rust-telemetry", packageVersion: "1.0.0" },
+    owner: {
+      packageId: "@acme/rust-telemetry",
+      packageVersion: "1.0.0",
+      compilationSnapshotId: "@acme/rust-telemetry@1.0.0",
+    },
     itemId: "acme.telemetry.Meter",
     displayPath: "acme_telemetry::Meter",
   });
@@ -172,6 +177,7 @@ export function acmeTelemetryCapability() {
     id: "@acme/rust-telemetry",
     displayName: "Telemetry for Rust",
     version: "1.0.0",
+    compilationSnapshotId: "@acme/rust-telemetry@1.0.0",
     modules: [{
       moduleSpecifier: "telemetry",
       providerModuleId: "acme.telemetry",
@@ -231,7 +237,11 @@ export function acmeTelemetryCapability() {
 // Capability with a fallible property row and a formatter-like carrier.
 export function acmeLogsinkCapability() {
   const sinkCarrier = rustProviderPathTargetType({
-    owner: { packageId: "@acme/rust-logsink", packageVersion: "1.0.0" },
+    owner: {
+      packageId: "@acme/rust-logsink",
+      packageVersion: "1.0.0",
+      compilationSnapshotId: "@acme/rust-logsink@1.0.0",
+    },
     itemId: "acme.logsink.Sink",
     displayPath: "acme_logsink::Sink",
   });
@@ -239,6 +249,7 @@ export function acmeLogsinkCapability() {
     id: "@acme/rust-logsink",
     displayName: "Log sink for Rust",
     version: "1.0.0",
+    compilationSnapshotId: "@acme/rust-logsink@1.0.0",
     modules: [{
       moduleSpecifier: "logsink",
       providerModuleId: "acme.logsink",

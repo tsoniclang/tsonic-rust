@@ -410,7 +410,7 @@ function closedStringUnionVariants(
       members.push(child);
     }
   }
-  const semanticMembers = members.filter((child) => !ast.kindName(child).endsWith("Token"));
+  const semanticMembers = members.filter((child) => !ast.is.IsToken(child));
   const variants: RustSourceEnumVariant[] = [];
   for (const member of semanticMembers) {
     const literalNode = ast.kindName(member) === "KindLiteralType"

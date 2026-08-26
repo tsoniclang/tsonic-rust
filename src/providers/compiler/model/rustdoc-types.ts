@@ -8,15 +8,13 @@ export {
   normalizePathArguments,
   normalizeTraitReference,
   normalizeType,
-  sourceVisibleTypeParameterCount,
-  sourceVisibleTypeParameters,
   standardTypePathKind,
   type RustCompilerNormalizationContext,
 } from "./types/normalization.js";
 export {
   compilerTypeSupportsTrait,
   compilerTypeTraitConditions,
-  directImplementationTypeParameterPositions,
+  directImplementationGenericBindings,
   normalizeTypeTraits,
   rustCompilerTraitByCanonicalPath,
   typeParameterGuaranteesTrait,

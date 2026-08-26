@@ -38,6 +38,7 @@ import {
   rustdocItemStability,
   type RustdocDocument,
 } from "../model/rustdoc-schema.js";
+import { closedMetadataEquals } from "../../../target-model/metadata/closed-data.js";
 import {
   canonicalPathKey,
   normalizeGenerics,
@@ -68,7 +69,7 @@ export function loadStandardLibraryContext(
   const existing = standardLibraryContexts.get(snapshot.digest);
   if (existing !== undefined) {
     if (existing.targetDirectory !== targetDirectory ||
-      JSON.stringify(existing.snapshot) !== JSON.stringify(snapshot)) {
+      !closedMetadataEquals(existing.snapshot, snapshot)) {
       throw new Error("Rust standard-library compiler context conflicts with its immutable snapshot or artifact directory.");
     }
     return existing;

@@ -11,7 +11,8 @@ import type {
 import {
   isRustNeverCarrier,
   isRustNumericCarrier,
-  rustCallableProtocol,
+  rustCallableBoundaryProtocol,
+  rustCallTraitSatisfies,
   rustClosureProtocol,
   rustJsArrayTargetType,
   rustJsStringTargetType,
@@ -29,6 +30,7 @@ import {
   substituteRustTargetGenerics,
 } from "../types/index.js";
 import type { RustPrimitiveTypeName } from "../syntax/tokens.js";
+import { rustTypeSemanticKey } from "../semantics/index.js";
 import { rustNumericPromotionKind } from "./numeric-promotion.js";
 
 const boolCarrier = rustSourcePrimitiveTargetType("bool");
@@ -83,7 +85,7 @@ export type RustValueConversionContract = RustValueConversionContractBase & (
         | "value"
         | "rest-values"
       )[];
-      readonly sourceFallible: boolean;
+      readonly sourceInvocationReturnsResult: boolean;
     }
   | {
       readonly lowering: "owned-string-from-borrowed-str";
@@ -91,13 +93,39 @@ export type RustValueConversionContract = RustValueConversionContractBase & (
   | {
       readonly lowering: "copy-from-reference";
     }
+  | {
+      readonly lowering: "runtime-callable-callback";
+      readonly parameters: readonly TargetTypeRef[];
+    }
 );
 
 export function rustValueConversionContract(
   value: RustValueConversion,
 ): RustValueConversionContract | undefined {
+  if (value.kind === "runtime-callable-callback") {
+    const source = rustCallableBoundaryProtocol(value.source);
+    const target = rustClosureProtocol(value.target);
+    return source === undefined || source.invocation !== "runtime-call" ||
+        source.failureChannel !== "result" ||
+        target === undefined || target.binder !== undefined ||
+        target.captures.length !== 0 || source.parameters.length !== target.parameters.length ||
+        !rustCallTraitSatisfies(source.callTrait, target.callTrait) ||
+        !source.parameters.every((parameter, index) =>
+          rustTargetTypeRefEquals(parameter, target.parameters[index])) ||
+        !rustTargetTypeRefEquals(source.result, target.result)
+      ? undefined
+      : {
+          category: "exact",
+          lowering: "runtime-callable-callback",
+          sourceMode: "value",
+          source: value.source,
+          target: value.target,
+          parameters: target.parameters,
+          fallible: false,
+        };
+  }
   if (value.kind === "js-argument-vector-callback") {
-    const source = callbackProtocol(value.source);
+    const source = rustCallableBoundaryProtocol(value.source);
     const target = rustClosureProtocol(value.target);
     const vectorCarrier = rustJsArrayTargetType(jsValueCarrier);
     const expectedString = value.lane === "native" ? stringCarrier : exactStringCarrier;
@@ -116,6 +144,9 @@ export function rustValueConversionContract(
           rustTargetTypeRefEquals(parameter, expected);
       });
     return source === undefined || target === undefined ||
+        !rustCallTraitSatisfies(source.callTrait, target.callTrait) ||
+        source.failureChannel === "future-output" ||
+        source.failureChannel === "result" && !value.sourceInvocationReturnsResult ||
         !rustTargetTypeRefEquals(source.result, expectedString) ||
         target.parameters.length !== 1 ||
         !rustTargetTypeRefEquals(target.parameters[0], vectorCarrier) ||
@@ -133,7 +164,7 @@ export function rustValueConversionContract(
           target: value.target,
           lane: value.lane,
           projections: value.projections,
-          sourceFallible: value.sourceFallible,
+          sourceInvocationReturnsResult: value.sourceInvocationReturnsResult,
           fallible: false,
         };
   }
@@ -308,17 +339,19 @@ export function rustValueConversionIdentity(value: RustValueConversion): string 
     : value.kind === "numeric-promotion"
       ? `numeric-promotion.${value.source}.${value.target}`
       : value.kind === "raw-pointer-mut-to-const"
-        ? `raw-pointer-mut-to-const.${JSON.stringify(value.pointee)}`
+        ? `raw-pointer-mut-to-const.${rustTypeSemanticKey(value.pointee)}`
         : value.kind === "copy-from-reference"
-          ? `copy-from-reference.${JSON.stringify(value.target)}`
+          ? `copy-from-reference.${rustTypeSemanticKey(value.target)}`
         : value.kind === "source-union-variant"
-          ? `source-union-variant.${value.variantName}.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}`
+          ? `source-union-variant.${value.variantName}.${rustTypeSemanticKey(value.source)}.${rustTypeSemanticKey(value.target)}`
           : value.kind === "bottom-coercion"
-            ? `bottom-coercion.${JSON.stringify(value.target)}`
+            ? `bottom-coercion.${rustTypeSemanticKey(value.target)}`
+            : value.kind === "runtime-callable-callback"
+              ? `runtime-callable-callback.${rustTypeSemanticKey(value.source)}.${rustTypeSemanticKey(value.target)}`
             : value.kind === "js-argument-vector-callback"
-              ? `js-argument-vector-callback.${value.lane}.${value.sourceFallible}.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}.${value.projections.join(".")}`
+              ? `js-argument-vector-callback.${value.lane}.${value.sourceInvocationReturnsResult}.${rustTypeSemanticKey(value.source)}.${rustTypeSemanticKey(value.target)}.${value.projections.join(".")}`
             : value.kind === "option-some"
-              ? `option-some.${JSON.stringify(value.element)}`
+              ? `option-some.${rustTypeSemanticKey(value.element)}`
             : `option-map.${rustValueConversionIdentity(value.elementConversion)}`;
 }
 
@@ -349,6 +382,7 @@ function substituteRustValueConversionTypes(
       });
     case "source-union-variant":
     case "bottom-coercion":
+    case "runtime-callable-callback":
     case "js-argument-vector-callback":
       return Object.freeze({
         ...value,
@@ -372,13 +406,4 @@ function substituteRustValueConversionTypes(
     case "numeric-promotion":
       return value;
   }
-}
-
-function callbackProtocol(
-  carrier: TargetTypeRef,
-): { readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef } | undefined {
-  if (carrier.kind === "closure" || carrier.kind === "function-pointer") {
-    return { parameters: carrier.parameters, result: carrier.result };
-  }
-  return rustCallableProtocol(carrier);
 }

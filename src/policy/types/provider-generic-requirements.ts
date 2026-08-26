@@ -13,9 +13,9 @@ import {
   rustTypeSemanticKey,
 } from "../../target-model/semantics/index.js";
 import {
-  rustCarrierSupportsTraitBound,
   substituteRustBound,
   type RustGenericSubstitutions,
+  type RustTraitSupportQueries,
   type RustTypeParameterTraitResolver,
 } from "../../target-model/types/index.js";
 import {
@@ -113,13 +113,14 @@ export function rustResolvedProviderRequirementKey(
 export function rustResolvedProviderTypeRequirementsAreSatisfied(
   requirements: readonly RustResolvedProviderTypeParameterRequirement[],
   sourceGenerics: RustSourceGenericIndex,
+  traits: RustTraitSupportQueries,
 ): boolean {
   const typeParameterSupports = sourceTypeParameterTraitResolver(sourceGenerics);
   return requirements.every((requirement) => requirement.requirements.every((bound) => {
     switch (bound.kind) {
       case "trait":
         return bound.polarity === "maybe" || bound.polarity === "required" &&
-          rustCarrierSupportsTraitBound(requirement.carrier, bound, typeParameterSupports);
+          traits.supportsTraitBound(requirement.carrier, bound, typeParameterSupports);
       case "lifetime-outlives":
         return sourceLifetimeOutlives(sourceGenerics, bound.longer, bound.shorter);
       case "type-outlives":
@@ -128,8 +129,6 @@ export function rustResolvedProviderTypeRequirementsAreSatisfied(
           bound.lifetime,
           sourceGenerics,
         );
-      case "precise-capture":
-        return true;
       case "associated-equality":
         return false;
     }

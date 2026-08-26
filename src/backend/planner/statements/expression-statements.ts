@@ -33,6 +33,7 @@ import {
   rustStringPushMethod,
   rustStringPushStrMethod,
 } from "../../../target-model/syntax/tokens.js";
+import { singleRustUnicodeScalar } from "../../../target-model/syntax/literals.js";
 import { isRustStringCarrier } from "../../../target-model/types/index.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planExpression, sourceFieldSelectedOperationMatches, sourceUnionFieldSelectedOperationMatches } from "../expressions/index.js";
@@ -704,7 +705,7 @@ function planInPlaceStringAppend(
   return parts.map((part) => {
     const character = (part.kind === "string-literal" ||
         part.kind === "str-literal")
-      ? singleUnicodeScalar(part.value)
+      ? singleRustUnicodeScalar(part.value)
       : undefined;
     return {
       kind: "expr" as const,
@@ -721,11 +722,6 @@ function planInPlaceStringAppend(
       },
     };
   });
-}
-
-function singleUnicodeScalar(value: string): string | undefined {
-  const characters = Array.from(value);
-  return characters.length === 1 ? characters[0] : undefined;
 }
 
 function planStringAppendArgument(value: RustExpr): RustExpr {

@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { selectJsSurfaceOperation } from "../../../dist/policy/operations/js-surface.js";
+import { selectJsSurfaceOperation as selectJsSurfaceOperationBase } from "../../../dist/policy/operations/js-surface.js";
 import {
+  createRustNamedTypeTraitContractIndex,
+  createRustTraitSupportQueries,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
 } from "../../../dist/target-model/types/index.js";
@@ -15,6 +17,13 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 const float64 = rustSourcePrimitiveTargetType("float64");
 const int32 = rustSourcePrimitiveTargetType("int32");
+const jsTraitSupport = createRustTraitSupportQueries(
+  createRustNamedTypeTraitContractIndex([]),
+);
+const selectJsSurfaceOperation = (request) => selectJsSurfaceOperationBase({
+  ...request,
+  carrierSupportsClone: (carrier) => jsTraitSupport.supportsClone(carrier),
+});
 
 test("Number rows select only exact source and carrier contracts", () => {
   assert.equal(selectJsSurfaceOperation({

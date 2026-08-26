@@ -10,13 +10,13 @@ import { int32Carrier, stringCarrier, unitCarrier } from "./provider-core.mjs";
 import { relative, resolve } from "node:path";
 
 export const vectorCarrier = rustProviderPathTargetType({
-  owner: { packageId: "acme-vectors", packageVersion: "1.0.0" },
+  owner: {
+    packageId: "acme-vectors",
+    packageVersion: "1.0.0",
+    compilationSnapshotId: "acme-vectors@1.0.0",
+  },
   itemId: "acme.vectors.Vector",
   displayPath: "acme_vectors::Vector",
-  traitImplementations: [
-    { trait: rustCloneTrait, requirements: [] },
-    { trait: rustCopyTrait, requirements: [] },
-  ],
 });
 
 export function acmeVectorsPackage() {
@@ -24,6 +24,7 @@ export function acmeVectorsPackage() {
     id: "acme-vectors",
     displayName: "Acme vectors",
     version: "1.0.0",
+    compilationSnapshotId: "acme-vectors@1.0.0",
     modules: [{
       moduleSpecifier: "@acme/vectors",
       providerModuleId: "acme.vectors",
@@ -115,6 +116,15 @@ export function acmeVectorsPackage() {
         },
       ],
     }],
+    traitContracts: [{
+      typeIdentity: vectorCarrier.identity,
+      contract: {
+        implementations: [
+          { trait: rustCloneTrait, genericBindings: [], requirements: [] },
+          { trait: rustCopyTrait, genericBindings: [], requirements: [] },
+        ],
+      },
+    }],
     types: [{
       exportId: "@acme/vectors::Vector",
       targetDeclarationKind: "struct",
@@ -189,7 +199,11 @@ export function acmeVectorsPackage() {
 }
 
 export const dbCarrier = rustProviderPathTargetType({
-  owner: { packageId: "acme-db", packageVersion: "1.0.0" },
+  owner: {
+    packageId: "acme-db",
+    packageVersion: "1.0.0",
+    compilationSnapshotId: "acme-db@1.0.0",
+  },
   itemId: "acme.db.Db",
   displayPath: "acme_db::Db",
 });
@@ -199,6 +213,7 @@ export function acmeDbPackage() {
     id: "acme-db",
     displayName: "Acme db",
     version: "1.0.0",
+    compilationSnapshotId: "acme-db@1.0.0",
     modules: [{
       moduleSpecifier: "@acme/db",
       providerModuleId: "acme.db",

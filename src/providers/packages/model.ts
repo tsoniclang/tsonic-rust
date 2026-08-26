@@ -1,6 +1,6 @@
 import type { ProviderDeclarationKind, ProviderExportDeclaration } from "@tsonic/tsts";
 import type { RustFallibleErrorBoundary } from "../../target-model/operations/error-boundary.js";
-import type { RustNamedTypeTraitContract } from "../../target-model/types/model.js";
+import type { RustNamedTypeTraitContractEntry } from "../../target-model/types/model.js";
 import type {
   RustProviderOperationForm,
   RustProviderReceiverContract,
@@ -144,8 +144,7 @@ export interface RustProviderExportRow {
 export interface RustProviderSemantics {
   readonly exports: readonly RustProviderExportRow[];
   readonly operations: readonly RustProviderOperationRow[];
-  readonly carrierPaths: Readonly<Record<string, string>>;
-  readonly carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>>;
+  readonly traitContracts: readonly RustNamedTypeTraitContractEntry[];
   readonly types: readonly RustProviderTypeRow[];
   readonly binaryEpilogues: readonly RustProviderBinaryEpilogueRow[];
 }
@@ -201,6 +200,7 @@ export interface RustProviderPackageDefinition {
   readonly id: string;
   readonly displayName: string;
   readonly version: string;
+  readonly compilationSnapshotId: string;
   readonly requiredSurfaces?: readonly string[];
   readonly sourceDependencies?: readonly RustProviderSourceDependency[];
   readonly moduleAliases?: readonly RustProviderModuleAliasDefinition[];
@@ -211,12 +211,7 @@ export interface RustProviderPackageDefinition {
   // Rust module aliases used by this capability's operation row paths
   // (e.g. acme_db_ext -> acme_db::ext). Emitted as use items.
   readonly aliasImports?: readonly { readonly alias: string; readonly path: string }[];
-  // Rendered Rust paths for this capability's native path carriers
-  // (e.g. acme.db.Row -> acme_db::Row).
-  readonly carrierPaths?: Readonly<Record<string, string>>;
-  // Exact native trait guarantees for rendered named carriers. Missing rows
-  // materialize as move-only; consumers never infer traits from Rust names.
-  readonly carrierTraits?: Readonly<Record<string, RustNamedTypeTraitContract>>;
+  readonly traitContracts?: readonly RustNamedTypeTraitContractEntry[];
   readonly binaryEpilogues?: readonly RustProviderBinaryEpilogueDefinition[];
 }
 

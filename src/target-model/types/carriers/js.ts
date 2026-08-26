@@ -28,9 +28,9 @@ import {
 } from "./source-types.js";
 import {
   rustBuiltinPathTargetType,
+  rustBuiltinPathTypeMatches,
+  rustBuiltinTypeIdentityItemId,
   rustPathTypeArguments,
-  rustPathTypeMatches,
-  rustTypeIdentityItemId,
 } from "../constructors.js";
 import { rustOptionTargetType } from "./optional.js";
 import type { TargetTypeRef } from "../model.js";
@@ -88,7 +88,7 @@ export function rustProgramErrorTargetType(): TargetTypeRef {
 }
 
 export function isRustProgramErrorCarrier(carrier: TargetTypeRef | undefined): boolean {
-  return rustPathTypeMatches(carrier, rustProgramErrorTargetId);
+  return rustBuiltinPathTypeMatches(carrier, rustProgramErrorTargetId, "tsonic-runtime");
 }
 
 export function rustJsArrayTargetType(element: TargetTypeRef): TargetTypeRef {
@@ -110,7 +110,7 @@ export function rustJsSetTargetType(value: TargetTypeRef): TargetTypeRef {
 export function getRustJsMapTargetTypes(
   carrier: TargetTypeRef | undefined,
 ): { readonly key: TargetTypeRef; readonly value: TargetTypeRef } | undefined {
-  const argumentsList = rustPathTypeMatches(carrier, rustJsMapTargetId)
+  const argumentsList = rustBuiltinPathTypeMatches(carrier, rustJsMapTargetId, "tsonic-runtime")
     ? rustPathTypeArguments(carrier)
     : undefined;
   const [key, value] = argumentsList ?? [];
@@ -122,7 +122,7 @@ export function getRustJsMapTargetTypes(
 export function getRustJsSetElementTargetType(
   carrier: TargetTypeRef | undefined,
 ): TargetTypeRef | undefined {
-  const argumentsList = rustPathTypeMatches(carrier, rustJsSetTargetId)
+  const argumentsList = rustBuiltinPathTypeMatches(carrier, rustJsSetTargetId, "tsonic-runtime")
     ? rustPathTypeArguments(carrier)
     : undefined;
   return argumentsList?.length === 1 ? argumentsList[0] : undefined;
@@ -193,13 +193,13 @@ export function isRustVecCarrier(
 export function isRustJsArrayCarrier(
   carrier: TargetTypeRef | undefined,
 ): carrier is Extract<TargetTypeRef, { readonly kind: "path" }> {
-  return rustPathTypeMatches(carrier, rustJsArrayTargetId);
+  return rustBuiltinPathTypeMatches(carrier, rustJsArrayTargetId, "tsonic-runtime");
 }
 
 export function rustJsArrayLikeElementTargetType(
   carrier: TargetTypeRef | undefined,
 ): TargetTypeRef | undefined {
-  const id = rustTypeIdentityItemId(carrier);
+  const id = rustBuiltinTypeIdentityItemId(carrier, "tsonic-runtime");
   if (id === rustJsArrayTargetId) {
     const argumentsList = rustPathTypeArguments(carrier);
     return argumentsList?.length === 1 ? argumentsList[0] : undefined;
@@ -225,7 +225,7 @@ export function rustJsArrayLikeIterationElementTargetType(
   carrier: TargetTypeRef | undefined,
 ): TargetTypeRef | undefined {
   const element = rustJsArrayLikeElementTargetType(carrier);
-  const id = rustTypeIdentityItemId(carrier);
+  const id = rustBuiltinTypeIdentityItemId(carrier, "tsonic-runtime");
   if (element === undefined || id === undefined) return undefined;
   return rustRegExpResultArrayTargetIds.has(id) ? rustOptionTargetType(element) : element;
 }
@@ -244,19 +244,19 @@ export function isRustJsArrayLikeCarrier(carrier: TargetTypeRef | undefined): bo
 }
 
 export function isRustJsValueCarrier(carrier: TargetTypeRef | undefined): boolean {
-  return rustPathTypeMatches(carrier, rustJsValueTargetId);
+  return rustBuiltinPathTypeMatches(carrier, rustJsValueTargetId, "tsonic-runtime");
 }
 
 export function isRustStringCarrier(carrier: TargetTypeRef | undefined): boolean {
-  return rustPathTypeMatches(carrier, rustStringTargetId);
+  return rustBuiltinPathTypeMatches(carrier, rustStringTargetId, "rust");
 }
 
 export function isRustJsStringCarrier(carrier: TargetTypeRef | undefined): boolean {
-  return rustPathTypeMatches(carrier, rustJsStringTargetId);
+  return rustBuiltinPathTypeMatches(carrier, rustJsStringTargetId, "tsonic-runtime");
 }
 
 export function isRustBigIntCarrier(carrier: TargetTypeRef | undefined): boolean {
-  return rustPathTypeMatches(carrier, rustBigIntTargetId);
+  return rustBuiltinPathTypeMatches(carrier, rustBigIntTargetId, "tsonic-runtime");
 }
 
 export function isRustUnitCarrier(carrier: TargetTypeRef | undefined): boolean {
@@ -268,11 +268,11 @@ export function isRustNeverCarrier(carrier: TargetTypeRef | undefined): boolean 
 }
 
 export function isRustUndefinedCarrier(carrier: TargetTypeRef | undefined): boolean {
-  return rustPathTypeMatches(carrier, rustUndefinedTargetId);
+  return rustBuiltinPathTypeMatches(carrier, rustUndefinedTargetId, "tsonic-runtime");
 }
 
 export function isRustNullCarrier(carrier: TargetTypeRef | undefined): boolean {
-  return rustPathTypeMatches(carrier, rustNullTargetId);
+  return rustBuiltinPathTypeMatches(carrier, rustNullTargetId, "tsonic-runtime");
 }
 
 export function isRustBoolCarrier(carrier: TargetTypeRef | undefined): boolean {

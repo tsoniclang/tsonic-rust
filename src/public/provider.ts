@@ -1,5 +1,8 @@
 export { createRustProviderPackage } from "../providers/packages/package.js";
-export { rustProviderPathTargetType } from "../providers/packages/type-references.js";
+export {
+  rustProviderPathTargetType,
+  rustProviderTypeIdentity,
+} from "../providers/packages/type-references.js";
 export type { RustProviderTypeOwner } from "../providers/packages/type-references.js";
 export type {
   RustProviderBinaryEpilogueDefinition,
@@ -24,6 +27,10 @@ export type {
   RustProviderTypeRequirement,
 } from "../target-model/operations/model.js";
 export type { RustTargetTypeRef } from "../target-model/types/model.js";
+export type {
+  RustNamedTypeTraitContract,
+  RustNamedTypeTraitContractEntry,
+} from "../target-model/types/model.js";
 export type {
   RustProviderConstantArgument,
   RustProviderOperationForm,

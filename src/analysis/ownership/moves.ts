@@ -2,11 +2,11 @@ import type { Node } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import {
   BinaryExpression_Left,
+  CatchClause_VariableDeclaration,
   ForInOrOfStatement_Initializer,
   Node_Expression,
   Node_Initializer,
   Node_Operand,
-  sourceNodeIdentity,
 } from "@tsonic/target-api/source";
 import type {
   RustDropObligation,
@@ -16,9 +16,13 @@ import type {
   RustTypeRef,
   RustValueReadDisposition,
 } from "../../target-model/semantics/index.js";
-import { rustLifetimeSemanticKey } from "../../target-model/semantics/index.js";
+import {
+  compareRustSemanticKeys,
+  rustLifetimeSemanticKey,
+} from "../../target-model/semantics/index.js";
 import {
   isRustNullishSourceCarrier,
+  rustFixedArrayCarrierValue,
   rustSourceTypeCarrierValue,
   rustSourceUnionCarrierValue,
   rustStructuralObjectCarrierValue,
@@ -31,6 +35,22 @@ import type {
 import { rustOwnershipDiagnostic } from "./diagnostics.js";
 import type { RustOwnershipNodeInventory } from "./inventory.js";
 import type { RustOwnershipOperationInventory } from "./operations.js";
+import { rustOwnershipOperationFlowPoints } from "./operations.js";
+import {
+  maximumDropObligations,
+  maximumDropProjectionComparisons,
+  maximumDropStates,
+  maximumMoveDataflowEvaluations,
+  maximumMovePlaceEvaluations,
+  maximumTrackedOwnershipPlaces,
+  rustDropObligationComplexityDiagnostic,
+  rustDropProjectionComplexityDiagnostic,
+  rustDropStateComplexityDiagnostic,
+  rustMoveDataflowComplexityDiagnostic,
+  rustMovePlaceEvaluationComplexityDiagnostic,
+  rustMoveStateMembershipComplexityDiagnostic,
+  rustOwnershipPlaceComplexityDiagnostic,
+} from "./complexity.js";
 import {
   rustPlaceKey,
   rustPlaceContains,
@@ -38,6 +58,8 @@ import {
   rustProjectedPlace,
   rustProjectFieldProjection,
 } from "./places.js";
+import { requireRustOwnershipSourceIdentity } from "./identity.js";
+import { requireDenseRustOwnershipNodes } from "./source-shape.js";
 
 interface RustPlaceUniverse {
   readonly places: readonly RustPlaceRef[];
@@ -63,8 +85,20 @@ export interface RustMoveAndDropAnalysis {
   readonly drops: readonly RustDropState[];
   readonly dropObligations: readonly RustDropObligation[];
   readonly dropObligationsByRegion: ReadonlyMap<string, readonly RustDropObligation[]>;
-  readonly dropByNode: WeakMap<Node, RustDropState>;
+  readonly dropsByNode: WeakMap<Node, readonly RustDropState[]>;
   readonly unavailableAtNode: WeakMap<Node, ReadonlySet<string>>;
+  placeMayBeAvailableAfter(flowPointId: string, place: RustPlaceRef): boolean;
+  placeIsWrittenWithin(callable: Node, place: RustPlaceRef): boolean;
+}
+
+export type AnalyzeRustMovesAndDropsResult =
+  | { readonly kind: "resolved"; readonly analysis: RustMoveAndDropAnalysis }
+  | { readonly kind: "rejected"; readonly diagnostic: TargetDiagnostic };
+
+class RustMoveComplexityError extends Error {
+  constructor(readonly diagnostic: TargetDiagnostic) {
+    super(diagnostic.message);
+  }
 }
 
 export function analyzeRustMovesAndDrops(
@@ -75,72 +109,105 @@ export function analyzeRustMovesAndDrops(
   input: RustOwnershipAnalysisInput,
   environment: RustOwnershipEnvironment,
   diagnostics: TargetDiagnostic[],
-): RustMoveAndDropAnalysis {
-  const universe = createPlaceUniverse(inventory, operations, input);
-  const events = collectMoveEvents(flow, inventory, operations, input);
-  const states = solveMoveStates(flow, events, universe);
-  const unavailableAtNode = new WeakMap<Node, ReadonlySet<string>>();
-  const reported = new Set<string>();
-  for (const node of inventory.nodes) {
-    const point = flow.pointFor(node);
-    if (point === undefined) continue;
-    const state = states.inStates[point.index];
-    if (state === undefined) continue;
-    unavailableAtNode.set(node, state.unavailable);
-    const place = inventory.places.get(node);
-    if (place === undefined || reads.get(node) === undefined) continue;
-    validateAvailable(
-      place,
-      node,
-      sourceNodeIdentity(input.ast, node) ?? `${input.ast.pos(node)}:${input.ast.end(node)}`,
-      state,
-      universe,
-      diagnostics,
-      reported,
-    );
-  }
-  for (const record of operations.records) {
-    const point = flow.pointFor(record.node);
-    const state = point === undefined ? undefined : states.inStates[point.index];
-    if (state === undefined || record.operation.kind === "store") continue;
-    validateAvailable(
-      record.operation.place,
-      record.node,
-      sourceNodeIdentity(input.ast, record.node) ??
-        `${input.ast.pos(record.node)}:${input.ast.end(record.node)}`,
-      state,
-      universe,
-      diagnostics,
-      reported,
-    );
-    if (record.operation.kind === "move" &&
-      record.operation.place.projections.length > 0) {
-      const rootCarrier = universe.carrierByRoot.get(record.operation.place.rootId);
-      if (rootCarrier !== undefined && environment.customDropProof(rootCarrier) !== undefined) {
-        diagnostics.push(rustOwnershipDiagnostic(
-          "RUST_PARTIAL_MOVE_OF_DROP_TYPE",
-          "A value with an exact native Drop implementation cannot be partially moved.",
-          record.node,
-        ));
+): AnalyzeRustMovesAndDropsResult {
+  try {
+    const universe = createPlaceUniverse(inventory, operations, input);
+    const events = collectMoveEvents(flow, inventory, operations, input);
+    const work = { placeEvaluations: 0 };
+    const states = solveMoveStates(flow, events.byFlowPoint, universe, work);
+    const unavailableAtNode = new WeakMap<Node, ReadonlySet<string>>();
+    const reported = new Set<string>();
+    for (const node of inventory.nodes) {
+      const place = inventory.places.get(node);
+      const unavailable = new Set<string>();
+      let reached = false;
+      for (const point of flow.pointsFor(node)) {
+        const state = states.inStates[point.index];
+        if (state === undefined) continue;
+        reached = true;
+        state.unavailable.forEach((key) => unavailable.add(key));
+        if (place !== undefined && reads.get(node) !== undefined) {
+          validateAvailable(
+            place,
+            node,
+            requireRustOwnershipSourceIdentity(input.ast, node),
+            state,
+            universe,
+            diagnostics,
+            reported,
+            work,
+          );
+        }
+      }
+      if (reached) unavailableAtNode.set(node, unavailable);
+    }
+    for (const record of operations.records) {
+      let reached = false;
+      for (const point of rustOwnershipOperationFlowPoints(record, flow)) {
+        const state = states.inStates[point.index];
+        if (state === undefined) continue;
+        reached = true;
+        if (record.operation.kind !== "store") {
+          validateAvailable(
+            record.operation.place,
+            record.node,
+            requireRustOwnershipSourceIdentity(input.ast, record.node),
+            state,
+            universe,
+            diagnostics,
+            reported,
+            work,
+          );
+        }
+      }
+      if (!reached) continue;
+      if (record.operation.kind === "move" &&
+        record.operation.place.projections.length > 0) {
+        const rootCarrier = universe.carrierByRoot.get(record.operation.place.rootId);
+        if (rootCarrier !== undefined && environment.customDropProof(rootCarrier) !== undefined) {
+          diagnostics.push(rustOwnershipDiagnostic(
+            "RUST_PARTIAL_MOVE_OF_DROP_TYPE",
+            "A value with an exact native Drop implementation cannot be partially moved.",
+            record.node,
+          ));
+        }
       }
     }
+    const dropResult = collectDropStates(
+      flow,
+      inventory,
+      events.byFlowPoint,
+      states.outStates,
+      universe,
+      environment,
+      work,
+      diagnostics,
+    );
+    const flowPointIndexById = new Map(flow.points.map((point) => [point.id, point.index]));
+    return {
+      kind: "resolved",
+      analysis: Object.freeze({
+        drops: dropResult.drops,
+        dropObligations: dropResult.obligations,
+        dropObligationsByRegion: dropResult.obligationsByRegion,
+        dropsByNode: dropResult.dropsByNode,
+        unavailableAtNode,
+        placeMayBeAvailableAfter(flowPointId, place) {
+          const pointIndex = flowPointIndexById.get(flowPointId);
+          const state = pointIndex === undefined ? undefined : states.outStates[pointIndex];
+          return state?.possiblyAvailable.has(rustPlaceKey(place)) === true;
+        },
+        placeIsWrittenWithin(callable, place) {
+          return events.writtenPlacesByCallable.get(callable)?.get(place.rootId)?.some(
+            (writtenPlace) => rustPlacesOverlap(writtenPlace, place),
+          ) === true;
+        },
+      }),
+    };
+  } catch (error) {
+    if (!(error instanceof RustMoveComplexityError)) throw error;
+    return { kind: "rejected", diagnostic: error.diagnostic };
   }
-  const dropResult = collectDropStates(
-    flow,
-    inventory,
-    events,
-    states.outStates,
-    universe,
-    environment,
-    diagnostics,
-  );
-  return Object.freeze({
-    drops: dropResult.drops,
-    dropObligations: dropResult.obligations,
-    dropObligationsByRegion: dropResult.obligationsByRegion,
-    dropByNode: dropResult.dropByNode,
-    unavailableAtNode,
-  });
 }
 
 function createPlaceUniverse(
@@ -149,11 +216,20 @@ function createPlaceUniverse(
   input: RustOwnershipAnalysisInput,
 ): RustPlaceUniverse {
   const byKey = new Map<string, RustPlaceRef>();
-  const carrierByRoot = new Map<string, import("../../target-model/semantics/index.js").RustTypeRef>();
+  const carrierByRoot = new Map<string, RustTypeRef>();
   const regionByRoot = new Map<string, string>();
-  const add = (place: RustPlaceRef, carrier?: import("../../target-model/semantics/index.js").RustTypeRef): void => {
-    byKey.set(rustPlaceKey(place), place);
-    if (carrier !== undefined && !carrierByRoot.has(place.rootId)) carrierByRoot.set(place.rootId, carrier);
+  let placeBudgetExceeded = false;
+  const add = (place: RustPlaceRef, carrier?: RustTypeRef): void => {
+    const key = rustPlaceKey(place);
+    if (!byKey.has(key)) {
+      if (byKey.size >= maximumTrackedOwnershipPlaces) {
+        placeBudgetExceeded = true;
+        return;
+      }
+      byKey.set(key, place);
+    }
+    if (carrier !== undefined && place.projections.length === 0 &&
+      !carrierByRoot.has(place.rootId)) carrierByRoot.set(place.rootId, carrier);
   };
   for (const node of inventory.nodes) {
     const place = inventory.places.get(node);
@@ -165,32 +241,53 @@ function createPlaceUniverse(
     }
   }
   for (const record of operations.records) add(record.operation.place, record.carrier);
+  const observedPlaces = Object.freeze([...byKey.values()]);
+  const expandableParents = new Set<string>();
+  for (const place of observedPlaces) {
+    for (let length = 0; length < place.projections.length; length += 1) {
+      expandableParents.add(rustPlaceKey(Object.freeze({
+        rootId: place.rootId,
+        projections: Object.freeze(place.projections.slice(0, length)),
+      })));
+    }
+  }
   const completeChildrenByParent = new Map<string, readonly string[]>();
+  const pending: { readonly place: RustPlaceRef; readonly carrier: RustTypeRef }[] = [];
   for (const [rootId, carrier] of carrierByRoot) {
     const root = byKey.get(rootId);
-    if (root === undefined) continue;
-    const definition = input.projectTypes.definitionForCarrier(carrier);
-    if (definition !== undefined) {
-      const children = input.ast.members(definition.declaration).filter((member): member is Node =>
-        member !== undefined && input.ast.kindName(member) === "KindPropertyDeclaration").map((member) => {
-          const child = rustProjectedPlace(
-            root,
-            rustProjectFieldProjection(member, input.ast, `field:${input.ast.pos(member)}`),
-          );
-          add(child);
-          return rustPlaceKey(child);
-        });
-      if (children.length > 0) completeChildrenByParent.set(rootId, Object.freeze(children));
-      continue;
+    if (root !== undefined) pending.push({ place: root, carrier });
+  }
+  const expanded = new Set<string>();
+  while (pending.length > 0 && !placeBudgetExceeded) {
+    const { place, carrier } = pending.pop()!;
+    const parentKey = rustPlaceKey(place);
+    if (expanded.has(parentKey) || !expandableParents.has(parentKey)) continue;
+    expanded.add(parentKey);
+    const childrenResult = completeAggregateChildren(
+      place,
+      carrier,
+      input,
+      maximumTrackedOwnershipPlaces - byKey.size,
+    );
+    if (childrenResult.kind === "budget-exceeded") {
+      placeBudgetExceeded = true;
+      break;
     }
-    if (carrier.kind === "tuple") {
-      const children = carrier.elements.map((_element, index) => {
-        const child = rustProjectedPlace(root, Object.freeze({ kind: "tuple-field" as const, index }));
-        add(child);
-        return rustPlaceKey(child);
-      });
-      if (children.length > 0) completeChildrenByParent.set(rootId, Object.freeze(children));
-    }
+    if (childrenResult.kind === "not-aggregate" || childrenResult.children.length === 0) continue;
+    const children = childrenResult.children;
+    const childKeys = children.map(({ place: child, carrier: childCarrier }) => {
+      add(child, childCarrier);
+      const childKey = rustPlaceKey(child);
+      if (expandableParents.has(childKey)) {
+        pending.push({ place: child, carrier: childCarrier });
+      }
+      return childKey;
+    });
+    completeChildrenByParent.set(parentKey, Object.freeze(childKeys));
+  }
+  if (placeBudgetExceeded) {
+    const diagnostic = rustOwnershipPlaceComplexityDiagnostic(byKey.size + 1);
+    if (diagnostic !== undefined) throw new RustMoveComplexityError(diagnostic);
   }
   const byRoot = new Map<string, RustPlaceRef[]>();
   for (const place of byKey.values()) {
@@ -208,23 +305,131 @@ function createPlaceUniverse(
   });
 }
 
+function completeAggregateChildren(
+  parent: RustPlaceRef,
+  carrier: RustTypeRef,
+  input: RustOwnershipAnalysisInput,
+  maximumChildren: number,
+):
+  | {
+      readonly kind: "complete";
+      readonly children: readonly {
+        readonly place: RustPlaceRef;
+        readonly carrier: RustTypeRef;
+      }[];
+    }
+  | { readonly kind: "not-aggregate" }
+  | { readonly kind: "budget-exceeded" } {
+  const definition = input.projectTypes.definitionForCarrier(carrier);
+  if (definition !== undefined) {
+    const fields = requireDenseRustOwnershipNodes(
+      input.ast.members(definition.declaration),
+      "Project declaration contains an undefined member slot during move analysis.",
+      definition.declaration,
+    ).filter((member) =>
+      !input.ast.hasModifierKind(member, "static") &&
+      input.ast.kindName(member) === "KindPropertyDeclaration");
+    if (fields.length > maximumChildren) return { kind: "budget-exceeded" };
+    const children = fields.map((member) => {
+      const declared = input.facts.getRuntimeCarrierFact(member)?.carrier;
+      const fieldCarrier = declared === undefined
+        ? undefined
+        : input.projectTypes.instantiateMemberCarrier(member, carrier, declared);
+      return fieldCarrier === undefined
+        ? undefined
+        : Object.freeze({
+            place: rustProjectedPlace(
+              parent,
+              rustProjectFieldProjection(
+                member,
+                input.ast,
+                `field:${requireRustOwnershipSourceIdentity(input.ast, member)}`,
+              ),
+            ),
+            carrier: fieldCarrier,
+          });
+    });
+    return children.some((child) => child === undefined)
+      ? { kind: "not-aggregate" }
+      : {
+          kind: "complete",
+          children: Object.freeze(children as readonly {
+            readonly place: RustPlaceRef;
+            readonly carrier: RustTypeRef;
+          }[]),
+        };
+  }
+  if (carrier.kind === "tuple") {
+    return carrier.elements.length > maximumChildren
+      ? { kind: "budget-exceeded" }
+      : {
+          kind: "complete",
+          children: Object.freeze(carrier.elements.map((element, index) => Object.freeze({
+            place: rustProjectedPlace(
+              parent,
+              Object.freeze({ kind: "tuple-field" as const, index }),
+            ),
+            carrier: element,
+          }))),
+        };
+  }
+  const fixed = rustFixedArrayCarrierValue(carrier);
+  return fixed === undefined
+    ? { kind: "not-aggregate" }
+    : fixed.length > maximumChildren
+      ? { kind: "budget-exceeded" }
+      : {
+          kind: "complete",
+          children: Object.freeze(Array.from(
+            { length: fixed.length },
+            (_unused, index) => Object.freeze({
+              place: rustProjectedPlace(
+                parent,
+                Object.freeze({ kind: "fixed-index" as const, index }),
+              ),
+              carrier: fixed.element,
+            }),
+          )),
+        };
+}
+
 function collectMoveEvents(
   flow: RustSourceFlowGraph,
   inventory: RustOwnershipNodeInventory,
   operations: RustOwnershipOperationInventory,
   input: RustOwnershipAnalysisInput,
-): ReadonlyMap<number, readonly RustMoveEvent[]> {
+): {
+  readonly byFlowPoint: ReadonlyMap<number, readonly RustMoveEvent[]>;
+  readonly writtenPlacesByCallable: WeakMap<Node, ReadonlyMap<string, readonly RustPlaceRef[]>>;
+} {
   const events = new Map<number, RustMoveEvent[]>();
+  const mutableWrittenPlacesByCallable = new WeakMap<Node, Map<string, RustPlaceRef[]>>();
   const seen = new Set<string>();
-  const append = (pointNode: Node, event: RustMoveEvent): void => {
-    const point = flow.pointFor(pointNode);
-    if (point === undefined) return;
+  const appendAtPoint = (point: RustSourceFlowPoint, event: RustMoveEvent): void => {
     const key = `${point.id}\0${event.kind}\0${rustPlaceKey(event.place)}`;
     if (seen.has(key)) return;
     seen.add(key);
     const selected = events.get(point.index) ?? [];
     selected.push(event);
     events.set(point.index, selected);
+  };
+  const append = (pointNode: Node, event: RustMoveEvent): void => {
+    for (const point of flow.pointsFor(pointNode)) {
+      appendAtPoint(point, event);
+    }
+    if (event.kind === "write") {
+      const callable = inventory.callableOwnerByNode.get(event.node);
+      if (callable !== undefined) {
+        let byRoot = mutableWrittenPlacesByCallable.get(callable);
+        if (byRoot === undefined) {
+          byRoot = new Map();
+          mutableWrittenPlacesByCallable.set(callable, byRoot);
+        }
+        const selected = byRoot.get(event.place.rootId) ?? [];
+        selected.push(event.place);
+        byRoot.set(event.place.rootId, selected);
+      }
+    }
   };
   for (const node of inventory.nodes) {
     const place = inventory.places.get(node);
@@ -236,7 +441,8 @@ function collectMoveEvents(
         place,
         initialized: kind === "KindParameter" || kind === "KindBindingElement" ||
           Node_Initializer(input.ast, node) !== undefined ||
-          isIterationBindingDeclaration(node, input),
+          isIterationBindingDeclaration(node, input) ||
+          isCatchBindingDeclaration(node, input),
         node,
       });
     }
@@ -245,12 +451,34 @@ function collectMoveEvents(
   }
   for (const record of operations.records) {
     if (record.operation.kind === "move") {
-      append(record.node, { kind: "move", place: record.operation.place, node: record.node });
-    } else if (record.operation.kind === "store" || record.operation.kind === "replace") {
+      for (const point of rustOwnershipOperationFlowPoints(record, flow)) {
+        appendAtPoint(point, { kind: "move", place: record.operation.place, node: record.node });
+      }
+    } else if (record.operation.kind === "store" || record.operation.kind === "replace" ||
+      record.operation.kind === "take") {
       append(record.node, { kind: "write", place: record.operation.place, node: record.node });
     }
   }
-  return new Map([...events].map(([index, selected]) => [index, Object.freeze(selected)]));
+  const writtenPlacesByCallable = new WeakMap<Node, ReadonlyMap<string, readonly RustPlaceRef[]>>();
+  for (const callable of inventory.nodes) {
+    const byRoot = mutableWrittenPlacesByCallable.get(callable);
+    if (byRoot === undefined) continue;
+    writtenPlacesByCallable.set(callable, new Map([...byRoot].map(([rootId, places]) =>
+      [rootId, Object.freeze(places)])));
+  }
+  return Object.freeze({
+    byFlowPoint: new Map([...events].map(([index, selected]) => [index, Object.freeze(selected)])),
+    writtenPlacesByCallable,
+  });
+}
+
+function isCatchBindingDeclaration(
+  node: Node,
+  input: RustOwnershipAnalysisInput,
+): boolean {
+  const catchClause = input.ast.parent(node);
+  return catchClause !== undefined && input.ast.kindName(catchClause) === "KindCatchClause" &&
+    CatchClause_VariableDeclaration(input.ast, catchClause) === node;
 }
 
 function isIterationBindingDeclaration(
@@ -275,6 +503,7 @@ function solveMoveStates(
   flow: RustSourceFlowGraph,
   events: ReadonlyMap<number, readonly RustMoveEvent[]>,
   universe: RustPlaceUniverse,
+  work: { placeEvaluations: number },
 ): {
   readonly inStates: readonly (RustMoveState | undefined)[];
   readonly outStates: readonly (RustMoveState | undefined)[];
@@ -283,8 +512,25 @@ function solveMoveStates(
   const outStates = new Array<RustMoveState | undefined>(flow.points.length);
   const pending = flow.points.filter((point) => point.kind === "entry").map((point) => point.index);
   const queued = new Set(pending);
-  while (pending.length > 0) {
-    const index = pending.shift()!;
+  const chargedStates = new WeakSet<RustMoveState>();
+  let cursor = 0;
+  let evaluations = 0;
+  let retainedStateMemberships = 0;
+  const chargeState = (state: RustMoveState): void => {
+    if (chargedStates.has(state)) return;
+    chargedStates.add(state);
+    retainedStateMemberships += state.unavailable.size + state.moved.size +
+      state.possiblyAvailable.size;
+    const diagnostic = rustMoveStateMembershipComplexityDiagnostic(retainedStateMemberships);
+    if (diagnostic !== undefined) throw new RustMoveComplexityError(diagnostic);
+  };
+  while (cursor < pending.length) {
+    evaluations += 1;
+    if (evaluations > maximumMoveDataflowEvaluations) {
+      const diagnostic = rustMoveDataflowComplexityDiagnostic(evaluations);
+      if (diagnostic !== undefined) throw new RustMoveComplexityError(diagnostic);
+    }
+    const index = pending[cursor++]!;
     queued.delete(index);
     const point = flow.points[index]!;
     const predecessors = flow.predecessors(point).map((entry) => outStates[entry.index]).filter(
@@ -296,8 +542,10 @@ function solveMoveStates(
         ? undefined
         : mergeMoveStates(predecessors);
     if (incoming === undefined) continue;
+    chargeState(incoming);
     inStates[index] = incoming;
-    const outgoing = applyMoveEvents(incoming, events.get(index) ?? [], universe);
+    const outgoing = applyMoveEvents(incoming, events.get(index) ?? [], universe, work);
+    chargeState(outgoing);
     if (moveStatesEqual(outStates[index], outgoing)) continue;
     outStates[index] = outgoing;
     for (const successor of flow.successors(point)) {
@@ -314,12 +562,15 @@ function applyMoveEvents(
   state: RustMoveState,
   events: readonly RustMoveEvent[],
   universe: RustPlaceUniverse,
+  work: { placeEvaluations: number },
 ): RustMoveState {
+  if (events.length === 0) return state;
   const unavailable = new Set(state.unavailable);
   const moved = new Set(state.moved);
   const possiblyAvailable = new Set(state.possiblyAvailable);
   for (const event of events) {
     const rootPlaces = universe.byRoot.get(event.place.rootId) ?? [];
+    chargeMovePlaceEvaluations(work, rootPlaces.length, event.node);
     if (event.kind === "declare") {
       for (const place of rootPlaces) {
         const key = rustPlaceKey(place);
@@ -388,13 +639,21 @@ function validateAvailable(
   universe: RustPlaceUniverse,
   diagnostics: TargetDiagnostic[],
   reported: Set<string>,
+  work: { placeEvaluations: number },
 ): void {
   const key = rustPlaceKey(place);
   if (!state.unavailable.has(key)) return;
-  const moved = state.moved.has(key) || [...state.moved].some((movedKey) => {
-    const movedPlace = universe.byKey.get(movedKey);
-    return movedPlace !== undefined && rustPlacesOverlap(movedPlace, place);
-  });
+  let moved = state.moved.has(key);
+  if (!moved) {
+    chargeMovePlaceEvaluations(work, state.moved.size, node);
+    for (const movedKey of state.moved) {
+      const movedPlace = universe.byKey.get(movedKey);
+      if (movedPlace !== undefined && rustPlacesOverlap(movedPlace, place)) {
+        moved = true;
+        break;
+      }
+    }
+  }
   const diagnosticKey = `${moved ? "move" : "init"}\0${key}\0${nodeIdentity}`;
   if (reported.has(diagnosticKey)) return;
   reported.add(diagnosticKey);
@@ -414,17 +673,48 @@ function collectDropStates(
   outStates: readonly (RustMoveState | undefined)[],
   universe: RustPlaceUniverse,
   environment: RustOwnershipEnvironment,
+  work: { placeEvaluations: number },
   diagnostics: TargetDiagnostic[],
 ): {
   readonly drops: readonly RustDropState[];
   readonly obligations: readonly RustDropObligation[];
   readonly obligationsByRegion: ReadonlyMap<string, readonly RustDropObligation[]>;
-  readonly dropByNode: WeakMap<Node, RustDropState>;
+  readonly dropsByNode: WeakMap<Node, readonly RustDropState[]>;
 } {
   const drops: RustDropState[] = [];
   const obligations: RustDropObligation[] = [];
   const obligationsByRegion = new Map<string, RustDropObligation[]>();
-  const dropByNode = new WeakMap<Node, RustDropState>();
+  const dropsByNode = new WeakMap<Node, readonly RustDropState[]>();
+  const rootsByRegion = new Map<string, readonly (readonly [string, readonly RustPlaceRef[]])[]>();
+  const mutableRootsByRegion = new Map<string, (readonly [string, readonly RustPlaceRef[]])[]>();
+  for (const [rootId, places] of universe.byRoot) {
+    const regionId = universe.regionByRoot.get(rootId);
+    if (regionId === undefined) continue;
+    const selected = mutableRootsByRegion.get(regionId) ?? [];
+    selected.push(Object.freeze([rootId, places] as const));
+    mutableRootsByRegion.set(regionId, selected);
+  }
+  for (const [regionId, roots] of mutableRootsByRegion) {
+    rootsByRegion.set(regionId, Object.freeze(roots));
+  }
+  const declarationPointByRoot = new Map<string, number>();
+  for (const [pointIndex, selected] of events) {
+    for (const event of selected) {
+      if (event.kind === "declare" && event.place.projections.length === 0 &&
+        !declarationPointByRoot.has(event.place.rootId)) {
+        declarationPointByRoot.set(event.place.rootId, pointIndex);
+      }
+    }
+  }
+  const orderedRootsByRegion = new Map<string, readonly (readonly [string, readonly RustPlaceRef[]])[]>();
+  for (const [regionId, roots] of rootsByRegion) {
+    orderedRootsByRegion.set(regionId, Object.freeze([...roots].sort((left, right) => {
+      const leftPoint = declarationPointByRoot.get(left[0]) ?? -1;
+      const rightPoint = declarationPointByRoot.get(right[0]) ?? -1;
+      return rightPoint - leftPoint || compareRustSemanticKeys(right[0], left[0]);
+    })));
+  }
+  let dropProjectionComparisons = 0;
   const append = (
     point: RustSourceFlowPoint,
     place: RustPlaceRef,
@@ -432,8 +722,20 @@ function collectDropStates(
     node?: Node,
     exactRegion?: import("../../target-model/semantics/index.js").RustRegionRef,
   ): void => {
+    if (drops.length >= maximumDropStates) {
+      const diagnostic = rustDropStateComplexityDiagnostic(drops.length + 1);
+      if (diagnostic !== undefined) throw new RustMoveComplexityError(diagnostic);
+      return;
+    }
     const flowState = outStates[point.index] ?? emptyMoveState();
     const rootPlaces = universe.byRoot.get(place.rootId) ?? [];
+    dropProjectionComparisons += rootPlaces.length * 2;
+    if (!Number.isSafeInteger(dropProjectionComparisons) ||
+      dropProjectionComparisons > maximumDropProjectionComparisons) {
+      const diagnostic = rustDropProjectionComplexityDiagnostic(dropProjectionComparisons);
+      if (diagnostic !== undefined) throw new RustMoveComplexityError(diagnostic);
+      return;
+    }
     const selectedNode = node ?? point.node;
     const region = exactRegion ??
       (selectedNode === undefined ? undefined : inventory.regionByNode.get(selectedNode)) ??
@@ -452,7 +754,9 @@ function collectDropStates(
         candidate.projections.length > 0 && !flowState.unavailable.has(rustPlaceKey(candidate)))),
     });
     drops.push(selected);
-    if (node !== undefined) dropByNode.set(node, selected);
+    if (node !== undefined) {
+      dropsByNode.set(node, Object.freeze([...(dropsByNode.get(node) ?? []), selected]));
+    }
   };
   for (const point of flow.points) {
     const selectedEvents = events.get(point.index) ?? [];
@@ -472,14 +776,10 @@ function collectDropStates(
         point.lexicalRegionId,
         successor.lexicalRegionId,
       )) {
-        const roots = [...universe.byRoot].filter(([rootId]) =>
-          universe.regionByRoot.get(rootId) === region.id).sort((left, right) => {
-          const leftPoint = declarationPointIndex(left[0], events);
-          const rightPoint = declarationPointIndex(right[0], events);
-          return rightPoint - leftPoint || right[0].localeCompare(left[0]);
-        });
+        const roots = orderedRootsByRegion.get(region.id) ?? [];
         let order = 0;
         for (const [rootId, places] of roots) {
+          chargeMovePlaceEvaluations(work, places.length, point.node);
           const root = places.find((place) => place.projections.length === 0);
           if (root === undefined) continue;
           const unavailable = flowState.unavailable.has(rootId);
@@ -532,6 +832,11 @@ function collectDropStates(
             ...(customDropProof === undefined ? {} : { customDropProof }),
           });
           order += 1;
+          if (obligations.length >= maximumDropObligations) {
+            const diagnostic = rustDropObligationComplexityDiagnostic(obligations.length + 1);
+            if (diagnostic !== undefined) throw new RustMoveComplexityError(diagnostic);
+            break;
+          }
           obligations.push(obligation);
           const selected = obligationsByRegion.get(region.id) ?? [];
           selected.push(obligation);
@@ -545,11 +850,27 @@ function collectDropStates(
     obligations: Object.freeze(obligations),
     obligationsByRegion: new Map([...obligationsByRegion].map(([region, selected]) =>
       [region, Object.freeze(selected)])),
-    dropByNode,
+    dropsByNode,
   };
 }
 
+function chargeMovePlaceEvaluations(
+  work: { placeEvaluations: number },
+  count: number,
+  node?: Node,
+): void {
+  work.placeEvaluations += count;
+  if (Number.isSafeInteger(work.placeEvaluations) &&
+    work.placeEvaluations <= maximumMovePlaceEvaluations) return;
+  const diagnostic = rustMovePlaceEvaluationComplexityDiagnostic(
+    work.placeEvaluations,
+    node,
+  );
+  if (diagnostic !== undefined) throw new RustMoveComplexityError(diagnostic);
+}
+
 function mergeMoveStates(states: readonly RustMoveState[]): RustMoveState {
+  if (states.length === 1) return states[0]!;
   const unavailable = new Set<string>();
   const moved = new Set<string>();
   const possiblyAvailable = new Set<string>();
@@ -573,19 +894,6 @@ function moveStatesEqual(left: RustMoveState | undefined, right: RustMoveState):
   return left !== undefined && setsEqual(left.unavailable, right.unavailable) &&
     setsEqual(left.moved, right.moved) &&
     setsEqual(left.possiblyAvailable, right.possiblyAvailable);
-}
-
-function declarationPointIndex(
-  rootId: string,
-  events: ReadonlyMap<number, readonly RustMoveEvent[]>,
-): number {
-  for (const [pointIndex, selected] of events) {
-    if (selected.some((event) => event.kind === "declare" &&
-      event.place.rootId === rootId && event.place.projections.length === 0)) {
-      return pointIndex;
-    }
-  }
-  return -1;
 }
 
 function collectTypeLifetimes(type: RustTypeRef): readonly RustLifetimeRef[] {
@@ -669,7 +977,11 @@ function collectTypeLifetimes(type: RustTypeRef): readonly RustLifetimeRef[] {
 }
 
 function setsEqual(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
-  return left.size === right.size && [...left].every((entry) => right.has(entry));
+  if (left.size !== right.size) return false;
+  for (const entry of left) {
+    if (!right.has(entry)) return false;
+  }
+  return true;
 }
 
 function isInitializedDeclarationKind(kind: string): boolean {

@@ -7,8 +7,10 @@ import {
   createRustSession,
   rustSourceDiagnostics,
 } from "../../helpers/rust-session.mjs";
-import { selectJsSurfaceOperation } from "../../../dist/policy/operations/js-surface.js";
+import { selectJsSurfaceOperation as selectJsSurfaceOperationBase } from "../../../dist/policy/operations/js-surface.js";
 import {
+  createRustNamedTypeTraitContractIndex,
+  createRustTraitSupportQueries,
   rustJsArrayConcatItemTargetType,
   rustJsArrayTargetType,
   rustJsValueTargetType,
@@ -20,6 +22,14 @@ import {
   rustVecTargetType,
 } from "../../../dist/target-model/types/index.js";
 import { rustInt32ToFloat64ValueConversion } from "../../../dist/target-model/conversions/model.js";
+
+const jsTraitSupport = createRustTraitSupportQueries(
+  createRustNamedTypeTraitContractIndex([]),
+);
+const selectJsSurfaceOperation = (request) => selectJsSurfaceOperationBase({
+  ...request,
+  carrierSupportsClone: (carrier) => jsTraitSupport.supportsClone(carrier),
+});
 
 const denseSource = `
 import type { int32 } from "@tsonic/core/types.js";

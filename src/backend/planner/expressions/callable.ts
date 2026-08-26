@@ -104,6 +104,15 @@ export function planCallableExpression(
     ));
     return undefined;
   }
+  const executionContract = context.input.program.ownership.executionContractFor(node);
+  if (executionContract === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.closure-execution-contract",
+      "Callable expressions require one sealed Rust execution contract.",
+    ));
+    return undefined;
+  }
   if (executionCarrier.kind === "function-pointer" &&
     (captureFact.captures.length !== 0 || captureFact.recursiveDeclaration !== undefined)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -317,9 +326,9 @@ export function planCallableExpression(
     expressionOverrides,
   };
   const captureBindings: { readonly name: string; readonly value: RustExpr }[] = [];
-  const capturedBindings = [...(context.capturedBindings ?? [])];
+  const localCapturedBindings: NonNullable<RustPlanContext["capturedBindings"]>[number][] = [];
   for (const capture of captureFact.captures) {
-    const ownershipCapture = context.input.program.ownership.captureFor(capture.reference);
+    const ownershipCapture = context.input.program.ownership.captureFor(node, capture.reference);
     if (context.syntheticNames === undefined || ownershipCapture === undefined) {
       return undefined;
     }
@@ -339,6 +348,7 @@ export function planCallableExpression(
     const captureValue = planRustCaptureValue(
       capture.reference,
       sourcePath,
+      ownershipCapture,
       context,
     );
     if (captureValue === undefined) return undefined;
@@ -346,11 +356,13 @@ export function planCallableExpression(
       name,
       value: captureValue,
     });
-    capturedBindings.push({
+    localCapturedBindings.push({
       declaration: capture.declaration,
       path: name,
       storage: capture.storage,
       valueCarrier: capture.carrier,
+      storageCarrier: ownershipCapture.storageCarrier,
+      representationCarrier: ownershipCapture.representationCarrier,
     });
   }
   let recursiveName: string | undefined;
@@ -359,20 +371,27 @@ export function planCallableExpression(
       return undefined;
     }
     recursiveName = allocateRustSyntheticName(context.syntheticNames, "recursive_callable");
-    capturedBindings.push({
+    localCapturedBindings.push({
       declaration: captureFact.recursiveDeclaration,
       path: recursiveName,
       storage: "value",
       valueCarrier: closureFact.resultCarrier,
+      storageCarrier: closureFact.resultCarrier,
+      representationCarrier: closureFact.resultCarrier,
     });
   }
+  const capturedBindings = [
+    ...localCapturedBindings,
+    ...(context.capturedBindings ?? []),
+  ];
   const callableClosureContext: RustPlanContext = {
     ...closureContext,
     capturedBindings,
   };
   const bindingStatements: RustStmt[] = [];
   let closureParams: { name: string; mutable: boolean; byRefCopy?: boolean }[];
-  let closureMove = nativeClosureProtocol !== undefined && captureBindings.length > 0;
+  const closureMove = executionContract.captureStyle === "move" ||
+    executionContract.storage === "owned" && executionContract.captures.length > 0;
   if (callableProtocol === undefined) {
     closureParams = [
       ...leadingParameterPlans.map((parameter) => ({
@@ -397,7 +416,6 @@ export function planCallableExpression(
       ...(recursiveName === undefined ? [] : [{ name: recursiveName, mutable: false }]),
       { name: tupleName, mutable: false },
     ];
-    closureMove = true;
     for (const [index, parameter] of leadingParameterPlans.entries()) {
       bindingStatements.push({
         kind: "let",

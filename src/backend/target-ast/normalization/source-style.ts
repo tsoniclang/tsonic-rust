@@ -737,7 +737,6 @@ function rustGenericsTypes(
       switch (predicate.kind) {
         case "lifetime": return [];
         case "type": return [predicate.type, ...predicate.bounds.flatMap(rustBoundTypes)];
-        case "equality": return [predicate.projection, predicate.value];
       }
     }),
   ];

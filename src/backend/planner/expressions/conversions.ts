@@ -1,7 +1,7 @@
 import {
   isRustNeverCarrier,
   rustCallableProtocol,
-  rustPathTypeMatches,
+  rustBuiltinPathTypeMatches,
   rustPrimitiveTypeName,
   rustStringTargetId,
   rustSourceUnionCarrierValue,
@@ -138,6 +138,34 @@ export function lowerRustValueConversion(
       return { kind: "owned-string-from-borrowed-str", expression: source };
     case "copy-from-reference":
       return { kind: "dereference", pointer: source };
+    case "runtime-callable-callback": {
+      const names = context.syntheticNames ?? createRustSyntheticNameState(
+        context.input.program.source.ast,
+        node ?? context.sourceFile,
+        [],
+      );
+      const callableName = allocateRustSyntheticName(names, "callable");
+      const parameterNames = contract.parameters.map((_parameter, index) =>
+        allocateRustSyntheticName(names, `callable_argument_${index}`));
+      return {
+        kind: "block",
+        bindings: [{ name: callableName, value: source }],
+        value: {
+          kind: "closure",
+          move: true,
+          params: parameterNames.map((name) => ({ name, byRefCopy: false })),
+          body: {
+            kind: "method-call",
+            receiver: { kind: "path", path: callableName },
+            method: "call",
+            args: [{
+              kind: "tuple-literal",
+              elements: parameterNames.map((path) => ({ kind: "path", path })),
+            }],
+          },
+        },
+      };
+    }
     case "js-argument-vector-callback": {
       const activeErrorType = contract.lane === "native"
         ? rustActiveErrorType(context)
@@ -196,7 +224,7 @@ export function lowerRustValueConversion(
             method: "call",
             args: [{ kind: "tuple-literal", elements: callbackArguments }],
           };
-      const body = contract.sourceFallible || contract.lane === "exact"
+      const body = contract.sourceInvocationReturnsResult || contract.lane === "exact"
         ? invocation
         : {
             kind: "call" as const,
@@ -747,7 +775,7 @@ export function planFinalizedTargetInput(
         return undefined;
       }
       const asTargetElement = element.parameterCarrier.kind === "reference" &&
-        rustPathTypeMatches(element.parameterCarrier.target, rustStringTargetId)
+        rustBuiltinPathTypeMatches(element.parameterCarrier.target, rustStringTargetId, "rust")
         ? planned.kind === "string-literal"
           ? { kind: "str-literal", value: planned.value } as RustExpr
           : planned.kind === "reference"

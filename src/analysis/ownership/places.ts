@@ -2,7 +2,6 @@ import type { AstReader, Node, ProviderDeclarationIdentity } from "@tsonic/tsts"
 import {
   ElementAccessExpression_ArgumentExpression,
   Node_Expression,
-  sourceNodeIdentity,
   type SourceProgramNavigation,
 } from "@tsonic/target-api/source";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
@@ -18,6 +17,7 @@ import {
 import {
   rustTargetOperationFactKey,
 } from "../facts/keys.js";
+import { requireRustOwnershipSourceIdentity } from "./identity.js";
 
 export interface RustPlaceAnalysisContext {
   readonly ast: AstReader;
@@ -38,7 +38,9 @@ export function rustPlaceForExpression(
   }
   if (kind === "KindThisExpression" || kind === "KindThisKeyword") {
     const owner = enclosingCallable(expression, context.ast);
-    const ownerId = owner === undefined ? undefined : sourceNodeIdentity(context.ast, owner);
+    const ownerId = owner === undefined
+      ? undefined
+      : requireRustOwnershipSourceIdentity(context.ast, owner);
     return ownerId === undefined
       ? undefined
       : Object.freeze({ rootId: `${ownerId}\0this`, projections: Object.freeze([]) });
@@ -67,7 +69,9 @@ export function rustPlaceForExpression(
       }));
     }
     const index = ElementAccessExpression_ArgumentExpression(context.ast, expression);
-    const indexId = index === undefined ? undefined : sourceNodeIdentity(context.ast, index);
+    const indexId = index === undefined
+      ? undefined
+      : requireRustOwnershipSourceIdentity(context.ast, index);
     return indexId === undefined
       ? undefined
       : appendProjection(root, Object.freeze({
@@ -89,13 +93,11 @@ export function rustTemporaryPlaceForExpression(
   expression: Node,
   ast: AstReader,
 ): RustPlaceRef | undefined {
-  const occurrence = sourceNodeIdentity(ast, expression);
-  return occurrence === undefined
-    ? undefined
-    : Object.freeze({
-        rootId: `temporary\0${occurrence}`,
-        projections: Object.freeze([]),
-      });
+  const occurrence = requireRustOwnershipSourceIdentity(ast, expression);
+  return Object.freeze({
+    rootId: `temporary\0${occurrence}`,
+    projections: Object.freeze([]),
+  });
 }
 
 export function rustPlacesOverlap(left: RustPlaceRef, right: RustPlaceRef): boolean {
@@ -149,10 +151,8 @@ export function rustProjectFieldProjection(
 }
 
 function rustRootPlace(declaration: Node, ast: AstReader): RustPlaceRef | undefined {
-  const rootId = sourceNodeIdentity(ast, declaration);
-  return rootId === undefined
-    ? undefined
-    : Object.freeze({ rootId, projections: Object.freeze([]) });
+  const rootId = requireRustOwnershipSourceIdentity(ast, declaration);
+  return Object.freeze({ rootId, projections: Object.freeze([]) });
 }
 
 function appendProjection(
@@ -198,7 +198,7 @@ function sourceSemanticIdentity(declaration: Node, ast: AstReader): RustSemantic
     kind: "project",
     packageId: "source-program",
     sourceFileId: ast.getPath(sourceFile),
-    declarationId: `node:${ast.kind(declaration)}:${ast.pos(declaration)}:${ast.end(declaration)}`,
+    declarationId: `node:${requireRustOwnershipSourceIdentity(ast, declaration)}`,
   });
 }
 
@@ -233,8 +233,7 @@ function generatedOperationIdentity(
   expression: Node,
   ast: AstReader,
 ): RustSemanticIdentity | undefined {
-  const occurrence = sourceNodeIdentity(ast, expression);
-  if (occurrence === undefined) return undefined;
+  const occurrence = requireRustOwnershipSourceIdentity(ast, expression);
   return Object.freeze({
     kind: "generated",
     artifactId: "rust-ownership-analysis",

@@ -1,6 +1,10 @@
 import type { RustCompilerDependency } from "./model.js";
 import { supportedRustdocFormatVersion } from "./model.js";
 
+const maximumRustdocDocumentTextUnits = 134_217_728;
+const maximumRustdocCollectionEntries = 1_048_576;
+const maximumRustdocScalarTextUnits = 16_777_216;
+
 export interface RustdocDocument {
   readonly root: number | string;
   readonly crate_version: string | null;
@@ -13,6 +17,11 @@ export function parseRustdocDocument(
   text: string,
   dependency: RustCompilerDependency,
 ): RustdocDocument {
+  if (text.length > maximumRustdocDocumentTextUnits) {
+    throw new Error(
+      `rustdoc output for '${dependency.alias}' exceeds the finite ${maximumRustdocDocumentTextUnits}-code-unit parser limit.`,
+    );
+  }
   const parsed = JSON.parse(text) as unknown;
   if (!isRecord(parsed) || (typeof parsed.root !== "number" && typeof parsed.root !== "string") ||
     !isRecord(parsed.index) || !isRecord(parsed.paths) || parsed.format_version !== supportedRustdocFormatVersion) {
@@ -20,6 +29,14 @@ export function parseRustdocDocument(
   }
   if (parsed.crate_version !== dependency.packageVersion) {
     throw new Error(`rustdoc crate version '${String(parsed.crate_version)}' does not match Cargo package version '${dependency.packageVersion}'.`);
+  }
+  const indexEntries = Object.keys(parsed.index).length;
+  const pathEntries = Object.keys(parsed.paths).length;
+  if (indexEntries > maximumRustdocCollectionEntries ||
+    pathEntries > maximumRustdocCollectionEntries) {
+    throw new Error(
+      `rustdoc output for '${dependency.alias}' exceeds the finite ${maximumRustdocCollectionEntries}-entry index/path limit (${indexEntries} index, ${pathEntries} path).`,
+    );
   }
   return parsed as unknown as RustdocDocument;
 }
@@ -53,6 +70,11 @@ export function requireRecord(value: unknown, where: string): Readonly<Record<st
 export function requireArray(value: unknown, where: string): readonly unknown[] {
   if (!Array.isArray(value)) {
     throw new Error(`${where} is not an array.`);
+  }
+  if (value.length > maximumRustdocCollectionEntries) {
+    throw new Error(
+      `${where} exceeds the finite ${maximumRustdocCollectionEntries}-entry rustdoc collection limit.`,
+    );
   }
   return value;
 }
@@ -182,6 +204,11 @@ export function normalizeAbi(value: unknown, where: string): string {
 export function requireString(value: unknown, where: string): string {
   if (typeof value !== "string" || value.length === 0) {
     throw new Error(`${where} is not a non-empty string.`);
+  }
+  if (value.length > maximumRustdocScalarTextUnits) {
+    throw new Error(
+      `${where} exceeds the finite ${maximumRustdocScalarTextUnits}-code-unit rustdoc scalar-text limit.`,
+    );
   }
   return value;
 }

@@ -13,6 +13,7 @@ function storeDefinition(operations, { readonlyProperty = false } = {}) {
     id: "acme-store-setters",
     displayName: "Acme store setters",
     version: "1.0.0",
+    compilationSnapshotId: "acme-store-setters@1.0.0",
     modules: [{
       moduleSpecifier: "@acme/store-setters",
       providerModuleId: "acme.store.setters",
@@ -82,6 +83,7 @@ test("a checked writable projection may retain its exact provider value identity
     id: "acme-module-setter",
     displayName: "Acme module setter",
     version: "1.0.0",
+    compilationSnapshotId: "acme-module-setter@1.0.0",
     modules: [{
       moduleSpecifier: "@acme/module-setter",
       providerModuleId: "acme.module.setter",

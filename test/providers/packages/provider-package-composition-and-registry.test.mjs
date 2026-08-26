@@ -41,6 +41,7 @@ function definition(overrides = {}) {
     id: "acme-validation",
     displayName: "Acme validation",
     version: "1.0.0",
+    compilationSnapshotId: "acme-validation@1.0.0",
     modules: [{
       moduleSpecifier: "@acme/validation",
       providerModuleId: "acme.validation",
@@ -369,6 +370,15 @@ test("provider packages retain an immutable validated metadata snapshot", () => 
   assert.equal(Object.isFrozen(contribution.definition.operations), true);
 });
 
+test("provider package compilation snapshot identity is explicit and reaches TSTS", () => {
+  assert.throws(
+    () => createRustProviderPackage(definition({ compilationSnapshotId: "" })),
+    /compilation snapshot id must be a non-empty string/u,
+  );
+  const provider = createRustProviderPackageSourceProvider(definition());
+  assert.equal(provider.identity.configHash, "acme-validation@1.0.0");
+});
+
 test("provider operation contributions are revalidated with exact owner identity", () => {
   const providerPackage = createRustProviderPackage(definition());
   const [contribution] = providerPackage.createTargetContributions({});
@@ -405,7 +415,11 @@ test("provider type relations remain target-owned and require closed Rust paths"
     members: [],
   };
   const valueCarrier = rustProviderPathTargetType({
-    owner: { packageId: "acme-validation", packageVersion: "1.0.0" },
+    owner: {
+      packageId: "acme-validation",
+      packageVersion: "1.0.0",
+      compilationSnapshotId: "acme-validation@1.0.0",
+    },
     itemId: "acme.validation.Value",
     displayPath: "acme_validation::Value",
   });
@@ -456,6 +470,55 @@ test("provider type relations remain target-owned and require closed Rust paths"
   assert.throws(
     () => createRustProviderPackage({ ...definition(), targetIdentities: { "@acme/validation::Value": "acme.validation.Value" } }),
     /unsupported field 'targetIdentities'/u,
+  );
+});
+
+test("provider type composition rejects contradictory relations for one exact export", () => {
+  const valueExport = {
+    id: "@acme/validation::Value",
+    name: "Value",
+    kind: "class",
+    members: [],
+  };
+  const targetCarrier = rustProviderPathTargetType({
+    owner: {
+      packageId: "acme-validation",
+      packageVersion: "1.0.0",
+      compilationSnapshotId: "acme-validation@1.0.0",
+    },
+    itemId: "acme.validation.Value",
+    displayPath: "acme_validation::Value",
+  });
+  const semantics = collectRustProviderSemanticsFromDefinitions([definition({
+    modules: [{
+      moduleSpecifier: "@acme/validation",
+      providerModuleId: "acme.validation",
+      exports: [valueExport],
+    }],
+    types: [{
+      exportId: valueExport.id,
+      targetDeclarationKind: "struct",
+      sourceGenericBindings: [],
+      targetGenerics: emptyRustGenerics,
+      targetCarrier,
+    }],
+    operations: [],
+  })]);
+  const contradictory = {
+    ...semantics,
+    types: [{
+      ...semantics.types[0],
+      targetCarrier: rustProviderPathTargetType({
+        owner: targetCarrier.identity.owner,
+        itemId: "acme.validation.OtherValue",
+        displayPath: "acme_validation::OtherValue",
+      }),
+    }],
+  };
+
+  assert.throws(
+    () => mergeRustProviderSemantics(semantics, contradictory),
+    /Rust provider type .* has conflicting definitions/u,
   );
 });
 

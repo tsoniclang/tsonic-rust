@@ -16,7 +16,11 @@ export const int32Carrier = rustSourcePrimitiveTargetType("int32");
 export const boolCarrier = rustSourcePrimitiveTargetType("bool");
 export const neverCarrier = rustNeverTargetType();
 export const storeCarrier = rustProviderPathTargetType({
-  owner: { packageId: "acme-platform", packageVersion: "1.0.0" },
+  owner: {
+    packageId: "acme-platform",
+    packageVersion: "1.0.0",
+    compilationSnapshotId: "acme-platform@1.0.0",
+  },
   itemId: "acme.platform.Store",
   displayPath: "acme_platform::Store",
 });
@@ -26,6 +30,7 @@ export function acmeFilesPackage({ binaryEpilogues } = {}) {
     id: "acme-files",
     displayName: "Acme files",
     version: "1.0.0",
+    compilationSnapshotId: "acme-files@1.0.0",
     modules: [{
       moduleSpecifier: "@acme/files",
       providerModuleId: "acme.files",
@@ -57,6 +62,7 @@ export function acmeTestingPackage() {
     id: "acme-testing",
     displayName: "Acme testing",
     version: "1.0.0",
+    compilationSnapshotId: "acme-testing@1.0.0",
     modules: [{
       moduleSpecifier: "@acme/testing",
       providerModuleId: "acme.testing",
@@ -110,6 +116,7 @@ export function acmePlatformPackage({ includeHomeDir = true, includeSetters = fa
     id: "acme-platform",
     displayName: "Acme platform",
     version: "1.0.0",
+    compilationSnapshotId: "acme-platform@1.0.0",
     modules: [{
       moduleSpecifier: "@acme/platform",
       providerModuleId: "acme.platform",

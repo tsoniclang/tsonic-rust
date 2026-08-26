@@ -44,7 +44,7 @@ import {
 } from "./projection/projection.js";
 import { standardModuleRequestFromSpecifier } from "./projection/module-specifier.js";
 import type { RustCompilerProviderProjection } from "./projection/projection.js";
-import type { RustNamedTypeTraitContract } from "../../target-model/types/model.js";
+import type { RustNamedTypeTraitContractEntry } from "../../target-model/types/model.js";
 import { createRustCompilerWorkerClient } from "./protocol/worker-client.js";
 import type { RustCompilerWorkerClient } from "./protocol/worker-client.js";
 
@@ -83,6 +83,7 @@ export function createRustCompilerProviderSession(
     packageId: rustStandardProviderPackageId,
     displayName: "Rust standard-library compiler provider",
     providerVersion: standardVersion,
+    compilationSnapshotId: standardSnapshot.digest,
   });
   const standardProvider = createCompilerProvider({
     packageId: rustStandardProviderPackageId,
@@ -121,6 +122,7 @@ export function createRustCompilerProviderSession(
     packageId: rustCompilerProviderPackageId,
     displayName: "Rust Cargo compiler provider",
     providerVersion,
+    compilationSnapshotId: snapshot.digest,
   });
   const sourceProviders = [
     standardProvider,
@@ -323,6 +325,7 @@ function createProjectionRegistry(options: {
   readonly packageId: string;
   readonly displayName: string;
   readonly providerVersion: string;
+  readonly compilationSnapshotId: string;
 }): ProjectionRegistry {
   const modules = new Map<string, {
     readonly providerModuleId: string;
@@ -331,8 +334,7 @@ function createProjectionRegistry(options: {
   }>();
   const operationsByIdentity = new Map<string, RustProviderOperationDefinition>();
   const typesByIdentity = new Map<string, RustProviderTypeDefinition>();
-  const carrierPaths = new Map<string, string>();
-  const carrierTraits = new Map<string, RustNamedTypeTraitContract>();
+  const traitContracts = new Map<string, RustNamedTypeTraitContractEntry>();
   let state: "open" | "sealed" | "closed" = "open";
   let sealedSemantics: RustProviderSemantics | undefined;
   return Object.freeze({
@@ -367,19 +369,12 @@ function createProjectionRegistry(options: {
       for (const row of projection.types) {
         addExact(typesByIdentity, providerTypeIdentity(row), row, "type");
       }
-      for (const [id, path] of projection.carrierPaths) {
-        const existing = carrierPaths.get(id);
-        if (existing !== undefined && existing !== path) {
-          throw new Error(`Rust compiler-provider carrier '${id}' maps to both '${existing}' and '${path}'.`);
+      for (const [identityKey, entry] of projection.traitContracts) {
+        const existing = traitContracts.get(identityKey);
+        if (existing !== undefined && !closedMetadataEquals(existing, entry)) {
+          throw new Error(`Rust compiler-provider carrier '${identityKey}' has conflicting native trait contracts.`);
         }
-        carrierPaths.set(id, path);
-      }
-      for (const [id, traits] of projection.carrierTraits) {
-        const existing = carrierTraits.get(id);
-        if (existing !== undefined && !closedMetadataEquals(existing, traits)) {
-          throw new Error(`Rust compiler-provider carrier '${id}' has conflicting native trait contracts.`);
-        }
-        carrierTraits.set(id, traits);
+        traitContracts.set(identityKey, entry);
       }
     },
     semantics(): RustProviderSemantics {
@@ -410,11 +405,10 @@ function createProjectionRegistry(options: {
             .sort(([left], [right]) => compareText(left, right))
             .map(([, exported]) => exported)),
         }));
-      const carrierPathRecord = Object.fromEntries(
-        [...carrierPaths.entries()].sort(([left], [right]) => compareText(left, right)),
-      );
-      const carrierTraitRecord = Object.fromEntries(
-        [...carrierTraits.entries()].sort(([left], [right]) => compareText(left, right)),
+      const selectedTraitContracts = Object.freeze(
+        [...traitContracts.entries()]
+          .sort(([left], [right]) => compareText(left, right))
+          .map(([, entry]) => entry),
       );
       const ownedModuleSpecifiers = new Set(moduleDefinitions.map((module) => module.moduleSpecifier));
       const sourceDependencyNames = new Map<string, Set<string>>();
@@ -440,6 +434,7 @@ function createProjectionRegistry(options: {
         id: options.packageId,
         displayName: options.displayName,
         version: options.providerVersion,
+        compilationSnapshotId: options.compilationSnapshotId,
         ...(sourceDependencies.length === 0 ? {} : { sourceDependencies: Object.freeze(sourceDependencies) }),
         modules: Object.freeze(moduleDefinitions),
         types: Object.freeze([...typesByIdentity.entries()]
@@ -449,12 +444,9 @@ function createProjectionRegistry(options: {
           .sort(([left], [right]) => compareText(left, right))
           .map(([, operation]) => operation)),
         crates: Object.freeze([]),
-        ...(Object.keys(carrierPathRecord).length === 0
+        ...(selectedTraitContracts.length === 0
           ? {}
-          : { carrierPaths: Object.freeze(carrierPathRecord) }),
-        ...(Object.keys(carrierTraitRecord).length === 0
-          ? {}
-          : { carrierTraits: Object.freeze(carrierTraitRecord) }),
+          : { traitContracts: selectedTraitContracts }),
       });
       sealedSemantics = collectRustProviderSemanticsFromDefinitions([definition]);
       return sealedSemantics;
@@ -473,8 +465,7 @@ function createProjectionRegistry(options: {
       modules.clear();
       operationsByIdentity.clear();
       typesByIdentity.clear();
-      carrierPaths.clear();
-      carrierTraits.clear();
+      traitContracts.clear();
       sealedSemantics = undefined;
       state = "closed";
     },

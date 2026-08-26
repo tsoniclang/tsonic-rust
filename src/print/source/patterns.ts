@@ -5,6 +5,7 @@ import { rustExpressionChildren } from "../../backend/target-ast/inspection/sour
 import { rustExpressionContainsStatementBlock } from "../../backend/target-ast/expressions.js";
 import { rustFormatWidth, rustMatchArmWidth } from "./formatting.js";
 import type { RustExpr, RustPattern } from "../../backend/target-ast/nodes.js";
+import { singleRustUnicodeScalar } from "../../target-model/syntax/literals.js";
 
 export function printRustPattern(pattern: RustPattern): string {
   switch (pattern.kind) {
@@ -180,5 +181,9 @@ export function escapeRustString(value: string): string {
 }
 
 export function escapeRustChar(value: string): string {
-  return value === "'" ? "\\'" : escapeRustString(value);
+  const scalar = singleRustUnicodeScalar(value);
+  if (scalar === undefined) {
+    throw new Error("A Rust character literal must contain exactly one Unicode scalar value.");
+  }
+  return scalar === "'" ? "\\'" : escapeRustString(scalar);
 }

@@ -10,6 +10,11 @@ import type {
 import { rustSemanticIdentityKey } from "./identity.js";
 import type { RustLifetimeRef } from "./lifetimes.js";
 import type { RustTraitRef, RustTypeRef } from "./types.js";
+import { closedMetadataKey } from "../metadata/closed-data.js";
+
+export function compareRustSemanticKeys(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
 
 export function rustLifetimeSemanticKey(lifetime: RustLifetimeRef): string {
   switch (lifetime.kind) {
@@ -116,12 +121,7 @@ export function rustTypeSemanticKey(type: RustTypeRef): string {
       return `type:${type.kind}:${field(rustTypeSemanticKey(type.element))}`;
     case "path":
       return `type:path:${field(rustSemanticIdentityKey(type.identity))}:${list(
-        type.arguments.map(rustGenericArgumentSemanticKey),
-      )}:${list(type.traitImplementations.map((implementation) =>
-        `${field(rustTraitSemanticKey(implementation.trait))}:${list(
-          implementation.requirements.map((requirement) =>
-            `${requirement.typeArgumentIndex}:${field(rustTraitSemanticKey(requirement.trait))}`),
-        )}`,
+      type.arguments.map(rustGenericArgumentSemanticKey),
       ))}`;
     case "reference":
       return `type:reference:${type.mutable ? "mut" : "shared"}:${field(
@@ -153,7 +153,7 @@ export function rustTypeSemanticKey(type: RustTypeRef): string {
       )}`;
     case "source-carrier":
       return `type:source-carrier:${field(rustSemanticIdentityKey(type.identity))}:${field(
-        canonicalClosedValue(type.payload),
+        closedMetadataKey(type.payload),
       )}`;
   }
 }
@@ -168,8 +168,6 @@ export function rustBoundSemanticKey(bound: RustBound): string {
       return `bound:type:${field(rustTypeSemanticKey(bound.type))}:${field(rustLifetimeSemanticKey(bound.lifetime))}`;
     case "associated-equality":
       return `bound:associated:${field(rustTypeSemanticKey(bound.projection))}:${field(rustTypeSemanticKey(bound.value))}`;
-    case "precise-capture":
-      return `bound:capture:${list(bound.captures.map(rustCapturedGenericSemanticKey))}`;
   }
 }
 
@@ -190,7 +188,7 @@ export function rustWherePredicateSemanticKey(predicate: RustWherePredicate): st
   }
 }
 
-function rustBinderSemanticKey(binder: RustBinder | undefined): string {
+export function rustBinderSemanticKey(binder: RustBinder | undefined): string {
   return binder === undefined
     ? "none"
     : `binder:${field(binder.id)}:${list(binder.lifetimes.map((parameter) =>
@@ -200,22 +198,26 @@ function rustBinderSemanticKey(binder: RustBinder | undefined): string {
       ))}`;
 }
 
-function rustCapturedGenericSemanticKey(capture: RustCapturedGeneric): string {
+export function rustCapturedGenericSemanticKey(capture: RustCapturedGeneric): string {
   return capture.kind === "lifetime"
     ? rustLifetimeSemanticKey(capture.value)
     : `${capture.kind}:${rustSemanticIdentityKey(capture.identity)}`;
 }
 
-function canonicalClosedValue(value: unknown): string {
-  if (value === undefined) return "undefined";
-  if (value === null || typeof value !== "object") {
-    return typeof value === "bigint" ? `${value}n` : JSON.stringify(value) as string;
-  }
-  if (Array.isArray(value)) return `[${value.map(canonicalClosedValue).join(",")}]`;
-  return `{${Object.entries(value as Readonly<Record<string, unknown>>)
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([key, entry]) => `${field(key)}:${field(canonicalClosedValue(entry))}`)
-    .join(",")}}`;
+export function compareRustCapturedGenerics(
+  left: RustCapturedGeneric,
+  right: RustCapturedGeneric,
+): number {
+  const leftRank = rustCapturedGenericRank(left);
+  const rightRank = rustCapturedGenericRank(right);
+  if (leftRank !== rightRank) return leftRank - rightRank;
+  const leftKey = rustCapturedGenericSemanticKey(left);
+  const rightKey = rustCapturedGenericSemanticKey(right);
+  return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
+}
+
+function rustCapturedGenericRank(capture: RustCapturedGeneric): number {
+  return capture.kind === "lifetime" ? 0 : capture.kind === "type" ? 1 : 2;
 }
 
 function list(entries: readonly string[]): string {

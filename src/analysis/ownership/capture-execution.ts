@@ -1,27 +1,26 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import { Node_Expression, sourceNodeIdentity } from "@tsonic/target-api/source";
+import { Node_Expression } from "@tsonic/target-api/source";
 import {
   getRustGeneratorProtocol,
   rustCallableProtocol,
   rustSendTrait,
   rustSyncTrait,
 } from "../../target-model/types/index.js";
-import {
-  rustSemanticIdentitiesEqual,
-  rustTypeSemanticKey,
-} from "../../target-model/semantics/index.js";
+import { rustSemanticIdentitiesEqual } from "../../target-model/semantics/index.js";
 import type {
   RustBound,
   RustExecutionDomain,
   RustExecutionStorage,
-  RustGenericArgument,
   RustLifetimeRef,
   RustSuspensionPoint,
-  RustTraitRef,
   RustTypeRef,
 } from "../../target-model/semantics/index.js";
-import type { RustSourceFlowGraph } from "./control-flow.js";
+import type { RustSourceFlowGraph, RustSourceFlowPoint } from "./control-flow.js";
 import type { RustOwnershipAnalysisInput } from "./context.js";
+import {
+  RustOwnershipComplexityError,
+  rustSuspensionPointComplexityDiagnostic,
+} from "./complexity.js";
 
 export interface RustExecutionRequirement {
   readonly kind: RustExecutionDomain;
@@ -47,34 +46,23 @@ export function executionRequirementsForCarrier(carrier: RustTypeRef): RustExecu
   }
   const generator = getRustGeneratorProtocol(carrier);
   if (generator !== undefined) {
-    const retainedLifetime = generator.lifetime ?? generatorExecutionLifetime(generator);
     return Object.freeze({
       kind: "local",
-      storage: generator.storage === "borrowed" || retainedLifetime !== undefined
-        ? "borrowed"
-        : "owned",
-      lifetime: retainedLifetime ?? Object.freeze({ kind: "static" as const }),
+      storage: generator.storage,
+      lifetime: generator.lifetime ?? Object.freeze({ kind: "static" as const }),
       requiresSend: false,
       requiresSync: false,
-      requiresStatic: generator.storage === "owned" && retainedLifetime === undefined,
+      requiresStatic: generator.storage === "owned",
     });
   }
-  const traits = executionTraits(carrier);
-  const requiresSend = traits.some((trait) =>
-    rustSemanticIdentitiesEqual(trait.identity, rustSendTrait.identity));
-  const requiresSync = traits.some((trait) =>
-    rustSemanticIdentitiesEqual(trait.identity, rustSyncTrait.identity));
   return Object.freeze({
-    kind: requiresSend || requiresSync ? "threaded" : "local",
+    kind: "local",
     storage: carrier.kind === "function-pointer" ? "owned" : "borrowed",
-    lifetime: carrier.kind === "function-pointer"
-      ? Object.freeze({ kind: "static" as const })
-      : executionLifetime(carrier) ?? Object.freeze({
-          kind: "inferred-region" as const,
-          regionId: `carrier\0${rustTypeSemanticKey(carrier)}`,
-        }),
-    requiresSend,
-    requiresSync,
+    ...(carrier.kind === "function-pointer"
+      ? { lifetime: Object.freeze({ kind: "static" as const }) }
+      : {}),
+    requiresSend: false,
+    requiresSync: false,
     requiresStatic: carrier.kind === "function-pointer",
   });
 }
@@ -108,107 +96,43 @@ export function executionRequirementsForBound(
   return [];
 }
 
-function generatorExecutionLifetime(
-  protocol: import("../../target-model/types/index.js").RustGeneratorProtocol,
-): RustLifetimeRef | undefined {
-  return executionLifetime(protocol.yieldType) ??
-    executionLifetime(protocol.returnType) ??
-    executionLifetime(protocol.nextType);
-}
-
-function executionTraits(carrier: RustTypeRef): readonly RustTraitRef[] {
-  switch (carrier.kind) {
-    case "trait-object":
-      return Object.freeze([carrier.principal, ...carrier.autoTraits]);
-    case "path":
-      return Object.freeze([
-        ...carrier.traitImplementations.map((entry) => entry.trait),
-        ...carrier.arguments.flatMap(genericArgumentExecutionTraits),
-      ]);
-    case "tuple":
-      return Object.freeze(carrier.elements.flatMap(executionTraits));
-    case "array":
-    case "sequence":
-    case "slice":
-      return executionTraits(carrier.element);
-    case "reference":
-    case "raw-pointer":
-      return executionTraits(carrier.target);
-    default:
-      return Object.freeze([]);
-  }
-}
-
-function genericArgumentExecutionTraits(argument: RustGenericArgument): readonly RustTraitRef[] {
-  return argument.kind === "type" ? executionTraits(argument.value) : Object.freeze([]);
-}
-
-function executionLifetime(carrier: RustTypeRef): RustLifetimeRef | undefined {
-  switch (carrier.kind) {
-    case "trait-object":
-    case "reference":
-      return carrier.lifetime;
-    case "path":
-      return carrier.arguments.flatMap((argument) => argument.kind === "lifetime"
-        ? [argument.value]
-        : argument.kind === "type"
-          ? [executionLifetime(argument.value)].filter((value): value is RustLifetimeRef =>
-            value !== undefined)
-          : [])[0];
-    case "closure":
-      return carrier.captures.find((capture) => capture.kind === "lifetime")?.value;
-    case "opaque":
-      return carrier.captures.find((capture) => capture.kind === "lifetime")?.value;
-    default:
-      return undefined;
-  }
-}
-
 export function collectSuspensionPoints(
   callable: Node,
   flow: RustSourceFlowGraph,
-  ast: AstReader,
 ): readonly RustSuspensionPoint[] {
   const points: RustSuspensionPoint[] = [];
-  const visit = (node: Node): void => {
-    if (node !== callable && isCallable(node, ast)) return;
-    const kind = ast.kindName(node);
-    if (kind === "KindAwaitExpression" || kind === "KindYieldExpression") {
-      const occurrenceId = sourceNodeIdentity(ast, node);
-      const point = flow.pointFor(node);
-      if (occurrenceId !== undefined && point !== undefined) {
-        points.push(Object.freeze({
-          occurrenceId,
-          kind: kind === "KindAwaitExpression" ? "await" : "yield",
-          region: Object.freeze({
-            id: `${occurrenceId}\0suspension`,
-            kind: "suspension",
-            parentId: point.regionId,
-          }),
-        }));
-      }
-    }
-    ast.forEachChild(node, (child) => {
-      if (child !== undefined) visit(child);
-    });
-  };
-  visit(callable);
+  const callableRegionId = flow.exitsFor(callable)[0]?.regionId;
+  if (callableRegionId === undefined) return Object.freeze([]);
+  for (const point of flow.points) {
+    if (point.regionId !== callableRegionId || point.suspension === undefined) continue;
+    const complexity = rustSuspensionPointComplexityDiagnostic(
+      points.length + 1,
+      point.node ?? point.resourceCleanup?.declaration,
+    );
+    if (complexity !== undefined) throw new RustOwnershipComplexityError(complexity);
+    points.push(Object.freeze({
+      occurrenceId: point.suspension.occurrenceId,
+      flowPointId: point.id,
+      kind: point.suspension.kind,
+      region: Object.freeze({
+        id: `${point.id}\0suspension`,
+        kind: "suspension",
+        parentId: point.regionId,
+      }),
+    }));
+  }
   return Object.freeze(points);
 }
 
 export function captureCrossesSuspension(
-  declaration: Node,
-  callable: Node,
+  references: readonly Node[],
   suspensionPoints: readonly RustSuspensionPoint[],
+  flowPointById: ReadonlyMap<string, RustSourceFlowPoint>,
   flow: RustSourceFlowGraph,
-  input: RustOwnershipAnalysisInput,
 ): boolean {
   if (suspensionPoints.length === 0) return false;
-  const references = input.navigation.referencesToDeclaration(declaration).filter((reference) =>
-    nodeContains(callable, reference, input));
   return suspensionPoints.some((suspension) => {
-    const suspensionPoint = flow.points.find((point) => point.node !== undefined &&
-      sourceNodeIdentity(input.ast, point.node) === suspension.occurrenceId);
+    const suspensionPoint = flowPointById.get(suspension.flowPointId);
     return suspensionPoint !== undefined && references.some((reference) =>
       flow.reaches(suspensionPoint, reference));
   });
@@ -251,12 +175,12 @@ export function nodeContains(
   selected: Node,
   input: RustOwnershipAnalysisInput,
 ): boolean {
-  if (root === selected) return true;
-  let found = false;
-  input.ast.forEachChild(root, (child) => {
-    if (!found && child !== undefined && nodeContains(child, selected, input)) found = true;
-  });
-  return found;
+  let current: Node | undefined = selected;
+  while (current !== undefined) {
+    if (current === root) return true;
+    current = input.ast.parent(current);
+  }
+  return false;
 }
 
 export function isCallable(node: Node, ast: AstReader): boolean {
@@ -264,6 +188,25 @@ export function isCallable(node: Node, ast: AstReader): boolean {
   return kind === "KindFunctionDeclaration" || kind === "KindFunctionExpression" ||
     kind === "KindArrowFunction" || kind === "KindMethodDeclaration" ||
     kind === "KindConstructor" || kind === "KindGetAccessor" || kind === "KindSetAccessor";
+}
+
+export function exactCallableExpression(
+  node: Node,
+  ast: AstReader,
+): Node | undefined {
+  let current = node;
+  while (isTransparentExpression(current, ast)) {
+    const expression = Node_Expression(ast, current);
+    if (expression === undefined) return undefined;
+    current = expression;
+  }
+  return isCallable(current, ast) ? current : undefined;
+}
+
+function isTransparentExpression(node: Node, ast: AstReader): boolean {
+  return ast.is.IsParenthesizedExpression(node) || ast.is.IsAsExpression(node) ||
+    ast.is.IsSatisfiesExpression(node) || ast.is.IsNonNullExpression(node) ||
+    ast.is.IsTypeAssertionExpression(node);
 }
 
 export function enclosingCallable(node: Node, ast: AstReader): Node | undefined {

@@ -1,4 +1,4 @@
-import type { RustCapturedGeneric, RustBinder } from "./generics.js";
+import type { RustBinder } from "./generics.js";
 import type { RustLifetimeRef } from "./lifetimes.js";
 import type { RustTraitRef, RustTypeRef } from "./types.js";
 
@@ -23,10 +23,6 @@ export type RustBound =
       readonly kind: "associated-equality";
       readonly projection: Extract<RustTypeRef, { readonly kind: "associated-type" }>;
       readonly value: RustTypeRef;
-    }
-  | {
-      readonly kind: "precise-capture";
-      readonly captures: readonly RustCapturedGeneric[];
     };
 
 export type RustWherePredicate =

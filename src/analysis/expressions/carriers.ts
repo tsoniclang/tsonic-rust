@@ -33,6 +33,7 @@ import {
   rustNullishSourceTargetType,
   rustSourcePrimitiveTargetType,
 } from "../../target-model/types/index.js";
+import { rustTypeSemanticKey } from "../../target-model/semantics/index.js";
 import {
   selectRustFlowReadProjection,
   selectRustValueCarrierReconciliation,
@@ -280,6 +281,7 @@ function applyFlowReadLane(
     sourceCarrier,
     selectedCarrier,
     walk.context.projectTypes,
+    walk.context.traits,
   );
   if (selection.kind === "identity") {
     return sourceCarrier;
@@ -292,8 +294,8 @@ function applyFlowReadLane(
       expression,
       [
         "target.capability=rust.flow-read.closed-projection",
-        `source=${JSON.stringify(sourceCarrier)}`,
-        `selected=${JSON.stringify(selectedCarrier)}`,
+        `source=${rustTypeSemanticKey(sourceCarrier)}`,
+        `selected=${rustTypeSemanticKey(selectedCarrier)}`,
       ],
     );
     return undefined;

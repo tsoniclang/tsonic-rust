@@ -235,7 +235,6 @@ export function planProjectMethod(
     context.usedAliases?.add("rt");
     const executionCarrier = rustGeneratorExecutionCarrier(
       member,
-      returnType,
       generatorFact.kind,
       context,
     );

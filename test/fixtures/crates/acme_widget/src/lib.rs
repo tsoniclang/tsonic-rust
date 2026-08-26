@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::boxed::Box;
 use std::future::Future;
+use std::rc::Rc;
 use std::pin::Pin;
 use tsonic_rust_runtime::{TsonicError, TsonicResult};
 
@@ -17,6 +18,49 @@ pub struct FixedBuffer<T, const N: usize = 4> {
 pub struct BorrowedValue<'a, T: ?Sized + 'a> {
     pub value: &'a T,
 }
+
+pub struct GenericEvidence<'a, T, const N: usize> {
+    pub value: &'a T,
+    pub bytes: [u8; N],
+}
+
+pub trait MixedEvidence<'a, T, const N: usize> {}
+
+impl<'a, T, const N: usize> MixedEvidence<'a, T, N> for GenericEvidence<'a, T, N> {}
+
+pub trait CloneEvidence {}
+
+impl<'a, T, const N: usize> CloneEvidence for GenericEvidence<'a, T, N>
+where
+    T: Clone,
+{}
+
+pub trait BorrowView<'a> {}
+
+pub trait HigherRankedEvidence {}
+
+impl<'a, T, const N: usize> HigherRankedEvidence for GenericEvidence<'a, T, N>
+where
+    T: for<'value> BorrowView<'value>,
+{}
+
+pub trait IteratorEvidence {}
+
+impl<'a, T, const N: usize> IteratorEvidence for GenericEvidence<'a, T, N>
+where
+    T: Iterator<Item = i32>,
+{}
+
+pub trait StaticOnlyEvidence {}
+
+impl<'a, T, const N: usize> StaticOnlyEvidence for GenericEvidence<'a, T, N>
+where
+    'a: 'static,
+{}
+
+pub trait SpecializedEvidence {}
+
+impl SpecializedEvidence for GenericEvidence<'static, i32, 4> {}
 
 #[repr(C)]
 pub struct CRecord {
@@ -167,6 +211,24 @@ where
 {
     drop(future);
 }
+
+pub struct LocalDrop {
+    _marker: Rc<()>,
+}
+
+impl LocalDrop {
+    pub fn new() -> Self {
+        Self {
+            _marker: Rc::new(()),
+        }
+    }
+}
+
+impl Drop for LocalDrop {
+    fn drop(&mut self) {}
+}
+
+pub fn require_static_value<T: 'static>(_value: T) {}
 
 pub trait Metric<T> {
     type Output;

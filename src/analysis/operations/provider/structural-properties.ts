@@ -2,7 +2,6 @@ import { acceptRustMemberOperation, elementProvenance, normalizeSelectedOperatio
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { finalizeProviderOperationFromSubjects } from "./conversions.js";
 import { isProjectSourceDeclaration } from "../../../policy/evidence/selected-source.js";
-import { isRustCopyCarrier } from "../../../target-model/types/index.js";
 import { rustFixedArrayCarrierValue, rustSourcePrimitiveTargetType } from "../../../target-model/types/index.js";
 import { rustInt32ToUsizeValueConversion, rustUsizeToInt32ValueConversion } from "../../../target-model/conversions/model.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -340,7 +339,7 @@ function sourceDeclarationsOperationId(
     return undefined;
   }
   const unique = [...new Set(identities as readonly string[])].sort();
-  return `tsonic.rust.source.${kind}:${JSON.stringify(unique)}`;
+  return `tsonic.rust.source.${kind}:${closedMetadataKey(unique)}`;
 }
 
 export function selectRustFixedArrayLengthProperty(
@@ -450,7 +449,7 @@ export function selectRustFixedArrayElementAccess(
       "An authored fixed-array integer index is outside the finalized array bounds.",
     );
   }
-  if (!isRustCopyCarrier(fixedArray.element) &&
+  if (!context.traits.isCopy(fixedArray.element) &&
     !fixedArrayElementIsBorrowedPlace(request.expression, context)) {
     return rejectSelectedOperation(
       request.expression,

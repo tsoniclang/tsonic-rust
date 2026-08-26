@@ -77,6 +77,7 @@ export const rustYieldFactKey: RustPlanKey<RustYieldFact> =
 export type RustResourceDisposalTarget =
   | {
       readonly form: "source-method";
+      readonly sourceDeclarationIdentity: string;
       readonly name: string;
       readonly receiverMode: "ref" | "mut-ref";
       readonly dispatch?: {

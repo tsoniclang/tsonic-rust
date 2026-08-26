@@ -92,3 +92,27 @@ export function lanes(value: string): string {
   assert.match(source, /regexp_escape_exact_native/u);
   assert.match(source, /js_exact_string::to_well_formed/u);
 });
+
+test("stored RegExp replacement callbacks retain their finalized callable carrier", () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    files: {
+      "index.ts": `
+function replacement(): (substring: string, ...args: any[]) => string {
+  const suffix = "!";
+  return (substring: string, ..._args: any[]): string => substring + suffix;
+}
+
+export function replace(value: string): string {
+  const callback = replacement();
+  return value.replaceAll(/a/g, callback);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /OwnedLocalCallable/u);
+  assert.match(source, /replacement_callback\.call\(/u);
+});

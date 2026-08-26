@@ -17,6 +17,7 @@ import {
   KindPropertyAssignment,
   KindShorthandPropertyAssignment,
   Node_Type,
+  sourceNodeIdentity,
 } from "@tsonic/target-api/source";
 import { orderEnumerableOwnStringProperties } from "@tsonic/target-api/source";
 import { rejectSelectedOperation } from "./result.js";
@@ -783,10 +784,18 @@ export function acceptProjectSourceCall(
       ? "call"
       : rustProjectCallableTargetName(callableDeclaration, context) ?? "<anonymous>";
   const memberDeclaration = construction ? selectedOwner ?? callableDeclaration : callableDeclaration;
-  const fileName = ast.getFileName(ast.getSourceFile(memberDeclaration));
   const targetName = selectedConstructor?.targetName ?? sourceName;
+  const sourceIdentity = sourceNodeIdentity(ast, memberDeclaration);
+  if (sourceIdentity === undefined) {
+    return rejectSelectedOperation(
+      request.source.call,
+      context,
+      "RUST_SOURCE_CALL_IDENTITY_NOT_PROVEN",
+      "The selected project source call has no exact compiler-owned declaration identity.",
+    );
+  }
   const member: RustTargetMember = {
-    id: `tsonic.rust.source.call:${fileName}:${ast.pos(memberDeclaration)}:${ast.end(memberDeclaration)}:${targetName}`,
+    id: `tsonic.rust.source.call:${sourceIdentity}:${targetName}`,
     sourceName,
     targetName,
     kind: construction ? "constructor" : "method",

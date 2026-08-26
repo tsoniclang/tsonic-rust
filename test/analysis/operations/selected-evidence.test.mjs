@@ -17,6 +17,7 @@ const providerValuePackage = createRustProviderPackage({
   id: "acme-environment",
   displayName: "Acme environment",
   version: "1.0.0",
+  compilationSnapshotId: "acme-environment@1.0.0",
   modules: [{
     moduleSpecifier: "@acme/environment",
     providerModuleId: "acme.environment",
@@ -40,6 +41,7 @@ const unsupportedProviderValuePackage = createRustProviderPackage({
   id: "acme-unsupported-environment",
   displayName: "Acme unsupported environment",
   version: "1.0.0",
+  compilationSnapshotId: "acme-unsupported-environment@1.0.0",
   modules: [{
     moduleSpecifier: "@acme/unsupported-environment",
     providerModuleId: "acme.unsupported-environment",

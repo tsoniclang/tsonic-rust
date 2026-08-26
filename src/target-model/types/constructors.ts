@@ -6,9 +6,9 @@ import type {
   RustGenericArgument,
   RustLifetimeRef,
   RustSemanticIdentity,
-  RustTraitImplementationEvidence,
 } from "../semantics/index.js";
 import {
+  compareRustCapturedGenerics,
   rustBuiltinIdentity,
   rustStaticLifetime,
 } from "../semantics/index.js";
@@ -37,14 +37,13 @@ export function rustPathTargetType(options: {
   readonly identity: RustSemanticIdentity;
   readonly displayPath: readonly string[];
   readonly arguments?: readonly RustGenericArgument[];
-  readonly traitImplementations?: readonly RustTraitImplementationEvidence[];
 }): TargetTypeRef {
+  const arguments_ = options.arguments ?? [];
   return Object.freeze({
     kind: "path",
     identity: options.identity,
     displayPath: Object.freeze([...options.displayPath]),
-    arguments: Object.freeze([...(options.arguments ?? [])]),
-    traitImplementations: Object.freeze([...(options.traitImplementations ?? [])]),
+    arguments: Object.freeze([...arguments_]),
   });
 }
 
@@ -53,13 +52,11 @@ export function rustBuiltinPathTargetType(
   displayPath: string,
   typeArguments: readonly TargetTypeRef[] = [],
   namespace: "rust" | "tsonic-runtime" = "rust",
-  traitImplementations: readonly RustTraitImplementationEvidence[] = [],
 ): TargetTypeRef {
   return rustPathTargetType({
     identity: rustBuiltinIdentity(itemId, namespace),
     displayPath: Object.freeze(displayPath.split("::")),
     arguments: Object.freeze(typeArguments.map(rustTypeArgument)),
-    traitImplementations,
   });
 }
 
@@ -68,26 +65,22 @@ export function rustBuiltinGenericPathTargetType(
   displayPath: string,
   argumentsList: readonly RustGenericArgument[] = [],
   namespace: "rust" | "tsonic-runtime" = "rust",
-  traitImplementations: readonly RustTraitImplementationEvidence[] = [],
 ): TargetTypeRef {
   return rustPathTargetType({
     identity: rustBuiltinIdentity(itemId, namespace),
     displayPath: Object.freeze(displayPath.split("::")),
     arguments: Object.freeze([...argumentsList]),
-    traitImplementations,
   });
 }
 
-export function rustTypeIdentityItemId(type: TargetTypeRef | undefined): string | undefined {
-  if (type?.kind !== "path") return undefined;
-  switch (type.identity.kind) {
-    case "builtin":
-    case "provider":
-    case "generated":
-      return type.identity.itemId;
-    case "project":
-      return undefined;
-  }
+export function rustBuiltinTypeIdentityItemId(
+  type: TargetTypeRef | undefined,
+  namespace: "rust" | "tsonic-runtime",
+): string | undefined {
+  return type?.kind === "path" && type.identity.kind === "builtin" &&
+      type.identity.namespace === namespace
+    ? type.identity.itemId
+    : undefined;
 }
 
 export function rustPathTypeArguments(
@@ -108,11 +101,12 @@ export function rustPathGenericArguments(
   return type?.kind === "path" ? type.arguments : undefined;
 }
 
-export function rustPathTypeMatches(
+export function rustBuiltinPathTypeMatches(
   type: TargetTypeRef | undefined,
   itemId: string,
+  namespace: "rust" | "tsonic-runtime",
 ): boolean {
-  return rustTypeIdentityItemId(type) === itemId;
+  return rustBuiltinTypeIdentityItemId(type, namespace) === itemId;
 }
 
 export function rustReferenceTargetType(
@@ -170,11 +164,15 @@ export function rustFunctionPointerTargetType(options: {
   readonly safety?: "safe" | "unsafe";
   readonly variadic?: boolean;
 }): TargetTypeRef {
+  const abi = options.abi ?? "Rust";
+  if (options.variadic === true && abi === "Rust") {
+    throw new Error("Rust variadic function pointers require an explicit non-Rust ABI.");
+  }
   return Object.freeze({
     kind: "function-pointer",
     ...(options.binder === undefined ? {} : { binder: options.binder }),
     safety: options.safety ?? "safe",
-    abi: options.abi ?? "Rust",
+    abi,
     parameters: Object.freeze([...options.parameters]),
     variadic: options.variadic ?? false,
     result: options.result,
@@ -203,11 +201,14 @@ export function rustOpaqueTargetType(options: {
   readonly bounds: readonly RustBound[];
   readonly captures?: readonly RustCapturedGeneric[];
 }): TargetTypeRef {
+  if (options.bounds.length === 0) {
+    throw new Error("Rust opaque types require at least one exact bound.");
+  }
   return Object.freeze({
     kind: "opaque",
     identity: options.identity,
     bounds: Object.freeze([...options.bounds]),
-    captures: Object.freeze([...(options.captures ?? [])]),
+    captures: Object.freeze([...(options.captures ?? [])].sort(compareRustCapturedGenerics)),
   });
 }
 
