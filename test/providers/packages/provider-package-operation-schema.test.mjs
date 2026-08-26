@@ -111,6 +111,79 @@ test("provider operation metadata accepts only structured Rust forms", () => {
   }
 });
 
+test("provider carrier validation preserves exact lifetime, HRTB, mixed-generic, and associated-type contracts", () => {
+  const lifetime = { kind: "parameter", identity: "lifetime-a", name: "a" };
+  const bound = {
+    kind: "bound",
+    binderIdentity: "family-binder",
+    identity: "bound-a",
+    name: "a",
+  };
+  const carrier = {
+    kind: "trait-ref",
+    id: "acme.Family",
+    path: "acme_validation::Family",
+    lifetimeBinder: {
+      identity: "family-binder",
+      parameters: [{ lifetime: bound, outlives: [lifetime] }],
+    },
+    genericArguments: [
+      { kind: "lifetime", lifetime: bound },
+      { kind: "type", type: int32Carrier },
+      { kind: "const", value: { kind: "integer", value: "4" } },
+    ],
+    associatedConstraints: [{
+      kind: "equality",
+      identity: "acme.Family.Item",
+      name: "Item",
+      genericArguments: [{ kind: "lifetime", lifetime: bound }],
+      type: {
+        kind: "reference",
+        referent: int32Carrier,
+        mutable: false,
+        lifetime: bound,
+      },
+    }],
+  };
+  const operation = (resultCarrier) => ({
+    exportId: "@acme/validation::run",
+    operationKind: "method",
+    target: { form: "call", path: "acme_validation::run" },
+    resultCarrier,
+  });
+  const withCarrier = (resultCarrier, carrierPath = "acme_validation::Family") =>
+    definition({
+      carrierPaths: { "acme.Family": carrierPath },
+      operations: [operation(resultCarrier)],
+    });
+
+  assert.doesNotThrow(() => createRustProviderPackage(withCarrier(carrier)));
+  assert.throws(
+    () => createRustProviderPackage(withCarrier(carrier, "other::Family")),
+    /path conflicts with carrierPaths/u,
+  );
+  assert.throws(
+    () => createRustProviderPackage(withCarrier({
+      ...carrier,
+      lifetimeBinder: {
+        identity: "different-binder",
+        parameters: [{ lifetime: bound, outlives: [] }],
+      },
+    })),
+    /not a closed Rust target type/u,
+  );
+  assert.throws(
+    () => createRustProviderPackage(withCarrier({
+      ...carrier,
+      associatedConstraints: [
+        carrier.associatedConstraints[0],
+        { ...carrier.associatedConstraints[0] },
+      ],
+    })),
+    /not a closed Rust target type/u,
+  );
+});
+
 test("provider operation metadata rejects unknown and missing operation kinds", () => {
   for (const operationKind of [undefined, "call", "guess"]) {
     assert.throws(
