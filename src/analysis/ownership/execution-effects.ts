@@ -97,25 +97,28 @@ export function rustOwnershipNodeMayThrow(
     return true;
   }
 
-  const projection = input.facts.getFact(node, rustBindingProjectionFactKey);
-  if (projection?.projection.kind === "object-field") {
-    if (projection.projection.accessor !== undefined ||
-      projection.projection.storage === "object-handle" &&
-        input.structuralStorage.field(
-          projection.sourceCarrier,
-          projection.projection.storageIndex,
-        )?.storage === "property") {
+  const projectionFact = input.facts.getFact(node, rustBindingProjectionFactKey);
+  if (projectionFact !== undefined) {
+    const projection = projectionFact.projection;
+    if (projection.kind === "object-field") {
+      if (projection.accessor !== undefined ||
+        projection.storage === "object-handle" &&
+          input.structuralStorage.field(
+            projectionFact.sourceCarrier,
+            projection.storageIndex,
+          )?.storage === "property") {
+        return true;
+      }
+    } else if (projection.kind === "object-rest" &&
+      projection.fields.some((field) =>
+        field.accessor !== undefined ||
+        projection.storage === "object-handle" &&
+          input.structuralStorage.field(
+            projectionFact.sourceCarrier,
+            field.sourceStorageIndex,
+          )?.storage === "property")) {
       return true;
     }
-  } else if (projection?.projection.kind === "object-rest" &&
-    projection.projection.fields.some((field) =>
-      field.accessor !== undefined ||
-      projection.projection.storage === "object-handle" &&
-        input.structuralStorage.field(
-          projection.sourceCarrier,
-          field.sourceStorageIndex,
-        )?.storage === "property")) {
-    return true;
   }
 
   return rustValueConversionIsFallible(

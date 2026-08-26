@@ -52,7 +52,7 @@ export function createRustNamedTypeTraitContractIndex(
   const selected = Object.freeze([...byIdentity.entries()]
     .sort(([left], [right]) => left.localeCompare(right, "en"))
     .map(([, entry]) => entry));
-  return Object.freeze({
+  return Object.freeze<RustNamedTypeTraitContractIndex>({
     contractFor(typeIdentity) {
       return byIdentity.get(rustSemanticIdentityKey(typeIdentity))?.contract;
     },

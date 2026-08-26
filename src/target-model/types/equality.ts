@@ -15,6 +15,7 @@ import type {
   RustConstExpr,
   RustGenericArgument,
   RustLifetimeRef,
+  RustSemanticIdentity,
 } from "../semantics/index.js";
 import {
   compareRustCapturedGenerics,
@@ -635,7 +636,7 @@ function targetTypeRefListsEqual(
   return left.every((entry, index) => rustTargetTypeRefEqualsValidated(entry, right[index]!));
 }
 
-export function isRustSemanticIdentity(value: unknown): boolean {
+export function isRustSemanticIdentity(value: unknown): value is RustSemanticIdentity {
   if (!isPlainRecord(value)) return false;
   switch (value.kind) {
     case "builtin":
@@ -665,7 +666,7 @@ export function isRustSemanticIdentity(value: unknown): boolean {
   }
 }
 
-function isRustLifetime(value: unknown): boolean {
+function isRustLifetime(value: unknown): value is RustLifetimeRef {
   if (!isPlainRecord(value)) return false;
   switch (value.kind) {
     case "static":
@@ -896,10 +897,10 @@ function isRustBinder(value: unknown, _active: WeakSet<object>, _depth: number):
   for (const parameter of value.lifetimes) {
     if (!isPlainRecord(parameter) ||
       !hasExactKeys(parameter, ["kind", "identity", "bounds"], ["kind", "identity", "bounds"]) ||
-      parameter.kind !== "lifetime" || !isPlainRecord(parameter.identity) ||
+      parameter.kind !== "lifetime" || !isRustLifetime(parameter.identity) ||
       parameter.identity.kind !== "bound" || parameter.identity.binderId !== value.id ||
-      !isRustLifetime(parameter.identity) || !isDenseDataArray(parameter.bounds) ||
-      !parameter.bounds.every(isRustLifetime) || parameterIds.has(parameter.identity.parameterId)) {
+      !isDenseDataArray(parameter.bounds) || !parameter.bounds.every(isRustLifetime) ||
+      parameterIds.has(parameter.identity.parameterId)) {
       return false;
     }
     parameterIds.add(parameter.identity.parameterId);

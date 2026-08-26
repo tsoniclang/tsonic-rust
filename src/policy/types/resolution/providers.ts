@@ -27,6 +27,7 @@ import {
   rustGenericParameterIdentity,
   rustClosureTargetType,
   substituteRustTargetGenerics,
+  type RustTraitSupportQueries,
 } from "../../../target-model/types/index.js";
 import { rustTypeSemanticKey } from "../../../target-model/semantics/index.js";
 import { denseDefined } from "./project.js";
@@ -184,6 +185,7 @@ export function instantiateTargetType(
       value,
     })),
     context.sourceGenerics,
+    context.traits,
   );
 }
 
@@ -191,6 +193,7 @@ export function instantiateProviderTargetType(
   relation: RustProviderTypeRow,
   arguments_: readonly RustGenericArgument[],
   sourceGenerics: import("../source-generics.js").RustSourceGenericIndex,
+  traits: RustTraitSupportQueries,
 ): TargetTypeRef | undefined {
   if (relation.sourceGenericBindings.length !== arguments_.length) {
     return undefined;
@@ -258,7 +261,7 @@ export function instantiateProviderTargetType(
     !rustResolvedProviderTypeRequirementsAreSatisfied(
       requirements,
       sourceGenerics,
-      context.traits,
+      traits,
     )) {
     return undefined;
   }

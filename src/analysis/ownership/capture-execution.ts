@@ -206,7 +206,7 @@ export function exactCallableExpression(
 function isTransparentExpression(node: Node, ast: AstReader): boolean {
   return ast.is.IsParenthesizedExpression(node) || ast.is.IsAsExpression(node) ||
     ast.is.IsSatisfiesExpression(node) || ast.is.IsNonNullExpression(node) ||
-    ast.is.IsTypeAssertionExpression(node);
+    ast.is.IsTypeAssertion(node);
 }
 
 export function enclosingCallable(node: Node, ast: AstReader): Node | undefined {

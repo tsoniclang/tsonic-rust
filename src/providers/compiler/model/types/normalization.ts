@@ -28,7 +28,6 @@ import type {
   RustCompilerLifetimeParameter,
   RustCompilerTraitReference,
   RustCompilerType,
-  RustCompilerTypeParameter,
 } from "../model.js";
 import type { RustdocDocument } from "../rustdoc-schema.js";
 import { normalizeRustConstExpression } from "./const-expressions.js";

@@ -121,8 +121,8 @@ export function rustTypeSemanticKey(type: RustTypeRef): string {
       return `type:${type.kind}:${field(rustTypeSemanticKey(type.element))}`;
     case "path":
       return `type:path:${field(rustSemanticIdentityKey(type.identity))}:${list(
-      type.arguments.map(rustGenericArgumentSemanticKey),
-      ))}`;
+        type.arguments.map(rustGenericArgumentSemanticKey),
+      )}`;
     case "reference":
       return `type:reference:${type.mutable ? "mut" : "shared"}:${field(
         rustLifetimeSemanticKey(type.lifetime),

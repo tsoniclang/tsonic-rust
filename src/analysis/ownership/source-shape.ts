@@ -11,7 +11,7 @@ export class RustOwnershipSourceShapeError extends Error {
 }
 
 export function requireDenseRustOwnershipNodes(
-  values: readonly (Node | undefined)[],
+  values: readonly (Node | undefined)[] | undefined,
   message: string,
   owner?: Node,
 ): readonly Node[] {

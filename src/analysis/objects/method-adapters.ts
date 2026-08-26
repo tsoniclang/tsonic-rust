@@ -488,8 +488,8 @@ function selectObjectLiteralParameterAdapters(
       continue;
     }
     if (source.form !== "required" ||
-      source.mode !== "value" && !input.traits.isCopy(source.valueCarrier) &&
-        !input.traits.supportsClone(source.valueCarrier)) {
+      source.mode !== "value" && !traits.isCopy(source.valueCarrier) &&
+        !traits.supportsClone(source.valueCarrier)) {
       return undefined;
     }
     const targetLogicalCarrier = target.form === "optional"

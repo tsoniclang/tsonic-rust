@@ -77,7 +77,6 @@ import {
 import {
   captureCrossesSuspension,
   collectSuspensionPoints,
-  enclosingCallable,
   enclosingCallInput,
   executionRequirementsForBound,
   executionRequirementsForCarrier,
@@ -183,7 +182,6 @@ export function analyzeRustCaptures(
     const execution = executionRequirementsForCallable(
       callable,
       inventory,
-      moves,
       input,
       diagnostics,
       expectedBounds,
@@ -1042,7 +1040,7 @@ function createRustCallableEvidenceIndex(
   const valueCandidatesByCallable = new WeakMap<Node, readonly Node[]>();
   const referencesByDeclaration = new WeakMap<Node, readonly Node[]>();
   const referencesByCallable = new WeakMap<Node, WeakMap<Node, readonly Node[]>>();
-  return Object.freeze({
+  return Object.freeze<RustCallableEvidenceIndex>({
     candidatesFor(callable) {
       const existing = candidatesByCallable.get(callable);
       if (existing !== undefined) return existing;
@@ -1091,7 +1089,7 @@ function createRustCaptureWorkBudget(): RustCaptureWorkBudget {
   const requireWithinBudget = (diagnostic: TargetDiagnostic | undefined): void => {
     if (diagnostic !== undefined) throw new RustOwnershipComplexityError(diagnostic);
   };
-  return Object.freeze({
+  return Object.freeze<RustCaptureWorkBudget>({
     chargeCapture(node) {
       captureCount += 1;
       requireWithinBudget(rustCaptureCountComplexityDiagnostic(captureCount, node));

@@ -395,6 +395,7 @@ export function resolveRustTargetTypeSyntax(
           relation,
           genericArguments as import("../../../target-model/semantics/index.js").RustGenericArgument[],
           context.sourceGenerics,
+          context.traits,
         );
   }
   const typeArguments = typeArgumentNodes.map((argument) =>

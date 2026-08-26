@@ -372,7 +372,8 @@ function rustTraitClassification(
   const relation = options.providerTypes.find((candidate) =>
     candidate.targetCarrier.kind === "path" &&
     rustSemanticIdentitiesEqual(candidate.targetCarrier.identity, type.identity));
-  if (relation?.targetDeclarationKind === "trait") {
+  if (relation?.targetDeclarationKind === "trait" &&
+    relation.targetTraitKind !== undefined) {
     return Object.freeze({ trait, traitKind: relation.targetTraitKind });
   }
   const declaration = options.sourceTypes.declarationForCarrier(type);

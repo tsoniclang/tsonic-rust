@@ -86,7 +86,7 @@ import {
 } from "../generic-substitution.js";
 
 function builtinTrait(itemId: string): RustTraitRef {
-  return Object.freeze({
+  return Object.freeze<RustTraitRef>({
     identity: rustBuiltinIdentity(itemId),
     displayPath: Object.freeze(itemId.split("::")),
     arguments: Object.freeze([]),
@@ -165,7 +165,7 @@ export interface RustTraitSupportQueries {
 export function createRustTraitSupportQueries(
   namedTypeContracts: RustNamedTypeTraitContractIndex,
 ): RustTraitSupportQueries {
-  const base: RustTraitSupportResolution = Object.freeze({
+  const base = Object.freeze<RustTraitSupportResolution>({
     namedTypeContract: (identity) => namedTypeContracts.contractFor(identity),
     typeParameterSupports: noTypeParameterTraits,
   });
@@ -174,7 +174,7 @@ export function createRustTraitSupportQueries(
   ): RustTraitSupportResolution => typeParameterSupports === undefined
     ? base
     : { ...base, typeParameterSupports };
-  return Object.freeze({
+  return Object.freeze<RustTraitSupportQueries>({
     isCopy(carrier) {
       return rustCarrierSupportsTrait(carrier, rustCopyTrait, base);
     },
@@ -312,7 +312,7 @@ function supportsCallableTraitWithBinders(
       rustBoundSemanticValuesAlphaEquivalent(
         parameter,
         traitBinder,
-        carrier.parameters[index],
+        carrier.parameters[index]!,
         carrierBinder,
       )) &&
     trait.associatedConstraints.length === 1 && output?.kind === "equality" &&

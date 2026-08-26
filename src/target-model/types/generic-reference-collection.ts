@@ -321,21 +321,6 @@ function collectArgumentIdentities(argument: RustGenericArgument, identities: Se
   }
 }
 
-function genericArgumentParameterIdentityKey(
-  argument: RustGenericArgument,
-): string | undefined {
-  if (argument.kind === "lifetime" && argument.value.kind === "parameter") {
-    return rustSemanticIdentityKey(argument.value.identity);
-  }
-  if (argument.kind === "type" && argument.value.kind === "type-parameter") {
-    return rustSemanticIdentityKey(argument.value.identity);
-  }
-  if (argument.kind === "const" && argument.value.kind === "parameter") {
-    return rustSemanticIdentityKey(argument.value.identity);
-  }
-  return undefined;
-}
-
 function collectLifetimeIdentities(lifetime: RustLifetimeRef, identities: Set<string>): void {
   if (lifetime.kind === "parameter") identities.add(rustSemanticIdentityKey(lifetime.identity));
 }

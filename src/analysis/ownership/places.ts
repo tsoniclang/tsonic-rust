@@ -92,7 +92,7 @@ export function rustPlaceForDeclaration(
 export function rustTemporaryPlaceForExpression(
   expression: Node,
   ast: AstReader,
-): RustPlaceRef | undefined {
+): RustPlaceRef {
   const occurrence = requireRustOwnershipSourceIdentity(ast, expression);
   return Object.freeze({
     rootId: `temporary\0${occurrence}`,

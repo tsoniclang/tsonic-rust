@@ -346,7 +346,6 @@ export function targetTypeFor(
           throw new Error(`Rust standard type '${type.identity.canonicalPath.join("::")}' has no public target path.`);
         }
         const arguments_ = standardTargetTypeArguments(type, standard, context, position);
-        const path = standard.targetPath.join("::");
         return rustPathTargetType({
           identity: compilerProjectionIdentity(context, standard.targetId),
           displayPath: standard.targetPath,

@@ -186,7 +186,7 @@ export function analyzeRustMovesAndDrops(
     const flowPointIndexById = new Map(flow.points.map((point) => [point.id, point.index]));
     return {
       kind: "resolved",
-      analysis: Object.freeze({
+      analysis: Object.freeze<RustMoveAndDropAnalysis>({
         drops: dropResult.drops,
         dropObligations: dropResult.obligations,
         dropObligationsByRegion: dropResult.obligationsByRegion,

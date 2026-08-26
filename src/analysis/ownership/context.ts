@@ -1,4 +1,4 @@
-import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
+import type { AstReader, SourceFile } from "@tsonic/tsts";
 import type { SourceProgramNavigation } from "@tsonic/target-api/source";
 import type { RustSourceGenericIndex } from "../../policy/types/source-generics.js";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";

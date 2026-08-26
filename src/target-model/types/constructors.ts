@@ -37,7 +37,7 @@ export function rustPathTargetType(options: {
   readonly identity: RustSemanticIdentity;
   readonly displayPath: readonly string[];
   readonly arguments?: readonly RustGenericArgument[];
-}): TargetTypeRef {
+}): Extract<TargetTypeRef, { readonly kind: "path" }> {
   const arguments_ = options.arguments ?? [];
   return Object.freeze({
     kind: "path",

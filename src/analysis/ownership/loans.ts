@@ -10,7 +10,7 @@ import type {
   RustRegionRef,
   RustValueReadDisposition,
 } from "../../target-model/semantics/index.js";
-import type { RustSourceFlowGraph, RustSourceFlowPoint } from "./control-flow.js";
+import type { RustSourceFlowGraph } from "./control-flow.js";
 import type { RustOwnershipAnalysisInput } from "./context.js";
 import {
   maximumLoanOperationComparisons,
@@ -174,7 +174,7 @@ export function analyzeRustLoans(
   const loansByNode = new WeakMap<Node, readonly RustLoan[]>();
   for (const [pointIndex, selectedRecords] of recordsByPoint) {
     const point = flow.points[pointIndex];
-    if (point.node === undefined) continue;
+    if (point?.node === undefined) continue;
     const selected = new Map((loansByNode.get(point.node) ?? [])
       .map((loan) => [loan.id, loan] as const));
     selectedRecords.forEach((record) => selected.set(record.loan.id, record.loan));

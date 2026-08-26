@@ -588,7 +588,6 @@ class SourceFlowGraphBuilder {
     }
     if (stepMayThrow) this.#connect(step, context.throwTarget);
     const loopContext = this.#withoutPendingLoopLabels(context);
-    const loopRegionId = this.#lexicalRegions.ownedRegionFor(node)?.id ?? context.lexicalRegionId;
     const expressionNode = this.#requiredNode(
       Node_Expression(this.#ast, node),
       "Iteration statement has no exact iterable expression.",
