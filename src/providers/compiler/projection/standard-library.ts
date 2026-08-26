@@ -41,6 +41,7 @@ import {
 } from "../model/rustdoc-schema.js";
 import {
   canonicalPathKey,
+  compilerTypeRequirementCanonicalPath,
   normalizeGenericParameters,
   rootNormalizationContext,
   standardTypePathKind,
@@ -526,7 +527,11 @@ export function collectModuleStandardTypeLocations(
     for (const parameter of parameters) {
       if (parameter.kind === "type") {
         parameter.requirements.forEach((requirement) => {
-          if (typeof requirement !== "string") visitTrait(requirement.trait);
+          if (typeof requirement === "string") {
+            selectCanonicalPath(compilerTypeRequirementCanonicalPath(requirement));
+          } else {
+            visitTrait(requirement.trait);
+          }
         });
         if (parameter.defaultType !== undefined) visitType(parameter.defaultType);
       } else if (parameter.kind === "const") {
@@ -590,7 +595,18 @@ export function collectModuleStandardTypeLocations(
         exported.associatedTypes.forEach((associated) => {
           visitParameters(associated.genericParameters);
           associated.requirements.forEach((requirement) => {
-            if (typeof requirement !== "string") visitTrait(requirement.trait);
+            if (typeof requirement === "string") {
+              selectCanonicalPath(compilerTypeRequirementCanonicalPath(requirement));
+            } else {
+              visitTrait(requirement.trait);
+            }
+          });
+          associated.ownerRequirements.forEach((requirement) => {
+            if (typeof requirement === "string") {
+              selectCanonicalPath(compilerTypeRequirementCanonicalPath(requirement));
+            } else {
+              visitTrait(requirement.trait);
+            }
           });
           if (associated.defaultType !== undefined) visitType(associated.defaultType);
         });

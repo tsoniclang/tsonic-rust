@@ -161,6 +161,9 @@ function planRustFunctionItem(
     return undefined;
   }
   context = genericPlan.context;
+  if (genericPlan.preservesExplicitLifetimes) {
+    declarationAttributes.push(rustLintAttributes.needlessLifetimes);
+  }
   const syntheticNames = createRustSyntheticNameState(ast, node, []);
   const parameterPlan = planRustCallableParameters(node, context, syntheticNames, {
     requireStatic: generatorFact !== undefined,

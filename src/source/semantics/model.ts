@@ -9,7 +9,12 @@ export type RustSourceTypeContractFact =
   | { readonly kind: "static-lifetime" }
   | { readonly kind: "placeholder-lifetime" }
   | {
-      readonly kind: "shared-reference" | "mutable-reference";
+      readonly kind: "shared-reference";
+      readonly targetTypeNode: Node;
+      readonly lifetimeTypeNode?: Node;
+    }
+  | {
+      readonly kind: "mutable-reference";
       readonly targetTypeNode: Node;
       readonly lifetimeTypeNode?: Node;
     }
@@ -53,7 +58,13 @@ interface RustSourceReferenceOperationFactBase {
 
 export type RustSourceReferenceOperationFact =
   | RustSourceReferenceOperationFactBase & {
-      readonly kind: "shared-reference" | "mutable-reference";
+      readonly kind: "shared-reference";
+      readonly valueExpression: Node;
+      readonly valueType: Type;
+      readonly lifetimeTypeNode?: Node;
+    }
+  | RustSourceReferenceOperationFactBase & {
+      readonly kind: "mutable-reference";
       readonly valueExpression: Node;
       readonly valueType: Type;
       readonly lifetimeTypeNode?: Node;

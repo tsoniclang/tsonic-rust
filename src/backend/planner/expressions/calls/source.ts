@@ -32,9 +32,12 @@ import {
   planRustVirtualProjectMethodCall,
 } from "../../objects/project-method-dispatch.js";
 import { rustSourceCallEffectsFactKey } from "../../../../analysis/facts/keys.js";
-import { rustTargetGenericArgumentToAstInContext } from "../../types/render.js";
+import {
+  rustTargetCallGenericArgumentToAstInContext,
+  rustTypeFromCarrierInContext,
+} from "../../types/render.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr, RustGenericArgument } from "../../../target-ast/nodes.js";
+import type { RustCallGenericArgument, RustExpr } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
 
@@ -119,9 +122,12 @@ export function planSelectedSourceCall(
     ));
     return undefined;
   }
-  const targetAstGenericArguments = targetGenericArguments
-    .filter((argument) => argument.kind !== "lifetime")
-    .map((argument) => rustTargetGenericArgumentToAstInContext(argument, context));
+  const targetAstGenericArguments = targetGenericArguments.flatMap(
+    (argument): readonly (RustCallGenericArgument | undefined)[] =>
+      argument.kind === "lifetime"
+        ? []
+        : [rustTargetCallGenericArgumentToAstInContext(argument, context)],
+  );
   if (targetAstGenericArguments.some((argument) => argument === undefined)) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -153,7 +159,7 @@ export function planSelectedSourceCall(
   const callGenericArguments = targetAstGenericArguments.length === 0 ||
       callableSpecialization !== undefined
     ? undefined
-    : targetAstGenericArguments as readonly RustGenericArgument[];
+    : targetAstGenericArguments as readonly RustCallGenericArgument[];
 
   let planned: RustExpr | undefined;
   switch (fact.target.form) {

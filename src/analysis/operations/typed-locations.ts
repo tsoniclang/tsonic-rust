@@ -21,6 +21,7 @@ import {
   rustSelectedOperationKey,
 } from "../../target-model/facts/selections.js";
 import type {
+  RustSelectedTargetSignature,
   RustTargetMember,
   TargetTypeRef,
 } from "../../target-model/types/model.js";
@@ -243,7 +244,7 @@ function acceptRustTypedLocationCall(
     }],
     providerDeclaration: provider,
   };
-  const selectedSignature = {
+  const selectedSignature: RustSelectedTargetSignature = {
     member,
     providerDeclaration: provider,
     ...(request.source.selectedSignature === undefined

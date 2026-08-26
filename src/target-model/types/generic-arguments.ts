@@ -52,6 +52,17 @@ export function rustTargetConstArguments(
     argument.kind === "const" ? [argument.value] : []));
 }
 
+export function rustTargetConstSafeInteger(
+  value: RustTargetConstArgument,
+): number | undefined {
+  if (value.kind !== "integer") return undefined;
+  const integer = BigInt(value.value);
+  return integer < BigInt(Number.MIN_SAFE_INTEGER) ||
+      integer > BigInt(Number.MAX_SAFE_INTEGER)
+    ? undefined
+    : Number(integer);
+}
+
 export function rustTargetGenericTypeArguments(
   arguments_: readonly RustTargetGenericArgument[] | undefined,
 ): readonly TargetTypeRef[] {

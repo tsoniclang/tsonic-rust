@@ -34,7 +34,7 @@ export function rustReferenceOperationDeclarations(): readonly ProviderExportDec
   const mutable = rustType(rustSourceTypeExportIds.mutableReference, [value, lifetime]);
   const referenceTypeParameters = [
     Object.freeze({ name: "T" }),
-    Object.freeze({ name: "L", constraints: Object.freeze([life]), defaultType: life }),
+    Object.freeze({ name: "L", constraints: [life], defaultType: life }),
   ];
   return [
     unary(
@@ -120,6 +120,6 @@ function functionDeclaration(
     id: name,
     name,
     kind: "function",
-    signatures: Object.freeze([...signatures]),
+    signatures: [...signatures],
   });
 }

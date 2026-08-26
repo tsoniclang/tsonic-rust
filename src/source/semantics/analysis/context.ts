@@ -3,6 +3,7 @@ import type {
   ProviderVirtualDeclarationFact,
   SourceAnalysisContext,
   SourceFileQueries,
+  Symbol,
 } from "@tsonic/tsts";
 import { providerVirtualDeclarationFactKey } from "@tsonic/tsts";
 import { rustSourceSemanticsExtensionId } from "../identity.js";
@@ -54,8 +55,7 @@ export function selectedRustProviderTypeDeclaration(
   const candidates: ProviderVirtualDeclarationFact[] = [];
   appendProviderFact(candidates, typeReference, context);
   appendProviderFact(candidates, typeName, context);
-  const selectedReference = context.source.navigation.sourceReferenceFor(typeName);
-  appendProviderFact(candidates, selectedReference?.declaration, context);
+  appendSelectedProviderTypeFacts(candidates, typeName, context);
   return oneProviderTypeIdentity(candidates);
 }
 
@@ -129,6 +129,45 @@ function appendProviderFact(
 ): void {
   const fact = readRustSourceFact(context, subject, providerVirtualDeclarationFactKey);
   if (fact !== undefined) candidates.push(fact);
+}
+
+function appendSelectedProviderTypeFacts(
+  candidates: ProviderVirtualDeclarationFact[],
+  typeName: Node,
+  context: RustSourceFileAnalysisContext,
+): void {
+  const symbols: Symbol[] = [];
+  const seen = new Set<Symbol>();
+  const appendSymbol = (symbol: Symbol | undefined): void => {
+    if (symbol === undefined || seen.has(symbol)) return;
+    seen.add(symbol);
+    symbols.push(symbol);
+  };
+  appendSymbol(context.checker.getSymbolAtLocation(typeName));
+  appendSymbol(context.checker.getResolvedSymbolOrNil(typeName));
+
+  for (const symbol of symbols) {
+    appendProviderFact(candidates, symbol, context);
+    const declarations = context.checker.getSymbolDeclarations(symbol);
+    for (const declaration of declarations) {
+      appendProviderFact(candidates, declaration, context);
+    }
+    if (declarations.some((declaration) => isAliasDeclaration(declaration, context))) {
+      appendSymbol(context.checker.getAliasedSymbol(symbol));
+    }
+  }
+}
+
+function isAliasDeclaration(
+  declaration: Node | undefined,
+  context: Pick<RustSourceFileAnalysisContext, "ast">,
+): boolean {
+  return declaration !== undefined && (
+    context.ast.is.IsImportClause(declaration) ||
+    context.ast.is.IsImportSpecifier(declaration) ||
+    context.ast.is.IsNamespaceImport(declaration) ||
+    context.ast.is.IsExportSpecifier(declaration)
+  );
 }
 
 function oneProviderTypeIdentity(

@@ -11,6 +11,7 @@ export {
   rustLifetimeGenericArgument,
   rustOnlyTypeGenericArguments,
   rustTargetConstArguments,
+  rustTargetConstSafeInteger,
   rustTargetGenericBindingsForArguments,
   rustTargetGenericTypeArguments,
   rustTargetLifetimeArguments,

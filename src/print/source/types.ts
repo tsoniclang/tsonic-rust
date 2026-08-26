@@ -52,7 +52,7 @@ export function printRustType(type: RustType): string {
     }
     case "impl-trait": {
       const bounds = [
-        ...type.bounds.map(printRustTraitReference),
+        ...type.bounds.map(printRustTypeBound),
         ...type.outlives.map(printRustLifetime),
         ...(type.captures.length === 0
           ? []

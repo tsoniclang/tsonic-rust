@@ -114,6 +114,33 @@ export function resolveFunctionExpressionCarrier(
     return undefined;
   }
   const targetParameterCarriers = selectedParameters.slice(leadingParameters.length);
+  const authoredBoundCallable = sourceSelected ?? (
+    (selectedExpected.kind === "function-pointer" || selectedExpected.kind === "closure") &&
+      selectedExpected.lifetimeBinder !== undefined
+      ? resolveRustTargetTypeRef(
+          expression,
+          rustResolutionContext(walk, expression),
+          walk.operationOptions,
+        )
+      : undefined
+  );
+  const sourceCallableIsAlphaEquivalent = authoredBoundCallable !== undefined &&
+    rustTargetTypeRefEquals(authoredBoundCallable, selectedExpected);
+  const authoredBoundProtocol = sourceCallableIsAlphaEquivalent
+    ? authoredBoundCallable?.kind === "function-pointer"
+      ? { parameters: authoredBoundCallable.args, result: authoredBoundCallable.result }
+      : rustClosureProtocol(authoredBoundCallable)
+    : undefined;
+  const lifetimeBinders = sourceCallableIsAlphaEquivalent &&
+      (authoredBoundCallable?.kind === "function-pointer" || authoredBoundCallable?.kind === "closure") &&
+      (selectedExpected.kind === "function-pointer" || selectedExpected.kind === "closure") &&
+      authoredBoundCallable.lifetimeBinder !== undefined &&
+      selectedExpected.lifetimeBinder !== undefined
+    ? {
+        authored: authoredBoundCallable.lifetimeBinder,
+        selected: selectedExpected.lifetimeBinder,
+      }
+    : undefined;
   if (parameters.length !== targetParameterCarriers.length) {
     return undefined;
   }
@@ -127,8 +154,10 @@ export function resolveFunctionExpressionCarrier(
     if (parameter === undefined) {
       return undefined;
     }
-    const sourceParameterCarrier = resolvedSourceCallable?.parameters[index];
     const targetParameterCarrier = targetParameterCarriers[index];
+    const sourceParameterCarrier = sourceCallableIsAlphaEquivalent
+      ? authoredBoundProtocol?.parameters[index]
+      : resolvedSourceCallable?.parameters[index];
     if (targetParameterCarrier === undefined ||
       (targetParameterCarrier.kind === "opaque" && targetParameterCarrier.id === "tsonic.rust.infer")) {
       return undefined;
@@ -140,6 +169,7 @@ export function resolveFunctionExpressionCarrier(
       targetParameterCarrier,
       rustResolutionContext(walk, parameter),
       walk.operationOptions,
+      lifetimeBinders,
     );
     if (parameterAbi === undefined ||
       (sourceParameterCarrier !== undefined &&

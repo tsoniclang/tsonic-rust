@@ -91,7 +91,7 @@ test("Rust type printer preserves higher-ranked, trait-object, opaque, and assoc
   assert.equal(
     printRustType({
       kind: "impl-trait",
-      bounds: [traitReference("crate::View")],
+      bounds: [{ kind: "trait-type", reference: traitReference("crate::View") }],
       outlives: [namedLifetime("a")],
       captures: [namedLifetime("a"), namedLifetime("b")],
     }),

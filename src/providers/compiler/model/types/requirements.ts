@@ -17,15 +17,12 @@ import {
   standardTypePathKind,
 } from "./normalization.js";
 import {
-  emptyRustCompilerSubstitutions,
   normalizeType,
   rustCompilerTypeSemanticKey,
   typeRequirementKey,
 } from "./substitution.js";
 import {
-  contextWithParameters,
   derivedNormalizationContext,
-  rustCompilerDerivedIdentity,
 } from "./normalization-context.js";
 import type {
   RustCompilerDependency,
@@ -46,6 +43,14 @@ import type {
   RustCompilerSubstitutions,
 } from "../rustdoc-types.js";
 
+export function compilerTypeRequirementCanonicalPath(
+  requirement: RustCompilerTypeRequirement,
+): readonly string[] {
+  if (requirement === "clone") return Object.freeze(["core", "clone", "Clone"]);
+  if (requirement === "copy") return Object.freeze(["core", "marker", "Copy"]);
+  return requirement.trait.identity.canonicalPath;
+}
+
 export function normalizeTypeTraits(
   document: RustdocDocument,
   dependency: RustCompilerDependency,
@@ -62,40 +67,41 @@ export function normalizeTypeTraits(
   for (const implId of requireArray(owner.impls, "Rust type impls")) {
     const implItem = itemById(document, implId);
     const impl = requireInnerRecord(implItem, "impl", "Rust type impl");
-    if (!isRecord(impl.trait) || impl.is_negative === true || impl.blanket_impl !== null) continue;
-    const context = implementationContext(
-      document,
-      dependency,
-      implItem,
-      impl,
-      ownerIdentity,
-      resolveItem,
-    );
-    let requirement: RustCompilerTypeRequirement;
-    let implementationParameters: readonly RustCompilerTypeParameter[];
+    if (!isRecord(impl.trait) || impl.is_negative === true || impl.is_synthetic === true ||
+      impl.blanket_impl !== null) continue;
     try {
-      requirement = rustCompilerTraitRequirement(normalizeTraitDispatch(document, impl.trait, context.context));
-      implementationParameters = context.generics.parameters.filter(
+      const context = implementationContext(
+        document,
+        dependency,
+        implItem,
+        impl,
+        ownerIdentity,
+        resolveItem,
+      );
+      const requirement = rustCompilerTraitRequirement(
+        normalizeTraitDispatch(document, impl.trait, context.context),
+      );
+      const implementationParameters = context.generics.parameters.filter(
         (parameter): parameter is RustCompilerTypeParameter => parameter.kind === "type",
       );
+      const implementation = sourceTraitImplementation(
+        document,
+        dependency,
+        impl,
+        requirement,
+        implementationParameters,
+        context.context,
+        declaredGenericParameters,
+        declaredTypeParameters,
+        sourceTypeArgumentCount,
+        ownerIdentity,
+        resolveItem,
+      );
+      if (implementation !== undefined) {
+        implementations.set(traitImplementationKey(implementation), implementation);
+      }
     } catch {
       continue;
-    }
-    const implementation = sourceTraitImplementation(
-      document,
-      dependency,
-      impl,
-      requirement,
-      implementationParameters,
-      context.context,
-      declaredGenericParameters,
-      declaredTypeParameters,
-      sourceTypeArgumentCount,
-      ownerIdentity,
-      resolveItem,
-    );
-    if (implementation !== undefined) {
-      implementations.set(traitImplementationKey(implementation), implementation);
     }
   }
   return Object.freeze({

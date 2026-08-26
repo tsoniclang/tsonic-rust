@@ -78,7 +78,7 @@ export function selectedMemberReceiverCarrier(
   options: RustOperationsProviderOptions,
 ): TargetTypeRef | undefined {
   const receiver = asNode(request.receiver, context);
-  const sourceCarrier = resolveRustTargetTypeRef(
+  const resolvedSourceCarrier = resolveRustTargetTypeRef(
     request.receiver,
     context,
     options,
@@ -86,6 +86,14 @@ export function selectedMemberReceiverCarrier(
   if (receiver === undefined) {
     return undefined;
   }
+  const receiverKind = context.ast.kindName(receiver);
+  const containingThisDefinition = receiverKind === "KindThisExpression" ||
+      receiverKind === "KindThisKeyword"
+    ? options.projectTypes.definitionContainingDeclaration(receiver)
+    : undefined;
+  const sourceCarrier = containingThisDefinition === undefined
+    ? resolvedSourceCarrier
+    : options.projectTypes.openCarrier(containingThisDefinition);
   if (request.sourceReceiverType === undefined) {
     return undefined;
   }
@@ -94,7 +102,22 @@ export function selectedMemberReceiverCarrier(
     context,
     options,
   );
+  const selectedOwner = options.projectTypes.definitionContainingDeclaration(
+    request.sourceSelectedDeclaration,
+  );
+  if (
+    containingThisDefinition !== undefined &&
+    sourceCarrier !== undefined &&
+    selectedOwner === containingThisDefinition &&
+    !context.ast.hasModifierKind(request.sourceSelectedDeclaration, "static")
+  ) {
+    return sourceCarrier;
+  }
   if (selectedCarrier === undefined) {
+    if (sourceCarrier !== undefined && selectedOwner !== undefined &&
+      options.projectTypes.relationship(sourceCarrier, selectedOwner).kind === "related") {
+      return sourceCarrier;
+    }
     const selectedSourceProfileMember = resolveSelectedSourceProfilePropertyMembers(
       context,
       request.expression,
@@ -110,7 +133,6 @@ export function selectedMemberReceiverCarrier(
       : sourceCarrier;
   }
   if (sourceCarrier === undefined) {
-    const receiverKind = context.ast.kindName(receiver);
     return (receiverKind === "KindThisExpression" || receiverKind === "KindThisKeyword") &&
         rustStructuralObjectCarrierValue(selectedCarrier) !== undefined
       ? selectedCarrier

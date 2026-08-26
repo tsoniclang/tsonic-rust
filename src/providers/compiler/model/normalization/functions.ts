@@ -5,6 +5,7 @@ import {
   mergeTypeParameterRequirements,
   normalizeGenericParameters,
   rootNormalizationContext,
+  rootNormalizationContextForIdentity,
   rustCompilerItemIdentity,
   rustCompilerLifetimeSemanticKey,
 } from "../rustdoc-types.js";
@@ -39,6 +40,7 @@ export interface NormalizeRustCompilerFunctionOptions {
   readonly associatedTypeBindings?: ReadonlyMap<string, RustCompilerType>;
   readonly traitDispatch?: RustCompilerTraitDispatch;
   readonly selfOwner?: RustCompilerItemIdentity;
+  readonly declarationIdentity?: RustCompilerItemIdentity;
   readonly resolveItem?: RustdocItemResolver;
 }
 
@@ -53,8 +55,10 @@ export function normalizeFunction(
   const fn = requireInnerRecord(item, "function", `Rust function '${name}'`);
   const signature = requireRecord(fn.sig, `${name}.sig`);
   const header = requireRecord(fn.header, `${name}.header`);
-  const identity = rustCompilerItemIdentity(document, dependency, item);
-  const root = rootNormalizationContext(document, dependency, item, options.resolveItem);
+  const identity = options.declarationIdentity ?? rustCompilerItemIdentity(document, dependency, item);
+  const root = options.declarationIdentity === undefined
+    ? rootNormalizationContext(document, dependency, item, options.resolveItem)
+    : rootNormalizationContextForIdentity(dependency, identity, options.resolveItem);
   const inherited = options.inheritedGenericParameters ?? Object.freeze([]);
   const declarationContext = Object.freeze({
     ...contextWithParameters(root, inherited),
@@ -151,7 +155,8 @@ function rustResultTypeHasClosedCarrier(type: RustCompilerType): boolean {
     case "path":
       return type.genericArguments.every(genericArgumentHasClosedCarrier);
     case "associated-type":
-      return false;
+      return !type.maybeSized &&
+        type.genericArguments.every((argument) => argument.kind === "lifetime");
     case "unit":
     case "primitive":
     case "generic":

@@ -11,6 +11,7 @@ export {
   standardTypePathKind,
 } from "./types/normalization.js";
 export {
+  compilerTypeRequirementCanonicalPath,
   compilerTypeRequirementConditions,
   compilerTypeSupportsRequirement,
   directImplementationGenericParameterPositions,
@@ -37,7 +38,9 @@ export {
   contextWithParameters,
   derivedNormalizationContext,
   rootNormalizationContext,
+  rootNormalizationContextForIdentity,
   rustCompilerDerivedIdentity,
   rustCompilerItemIdentity,
+  rustCompilerNestedItemIdentity,
   type RustCompilerNormalizationContext,
 } from "./types/normalization-context.js";

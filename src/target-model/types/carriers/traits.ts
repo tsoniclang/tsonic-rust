@@ -7,7 +7,6 @@ import type { TargetTypeRef } from "../model.js";
 import {
   rustOnlyTypeGenericArguments,
   rustTargetGenericTypeArguments,
-  rustTargetLifetimeArguments,
 } from "../generic-arguments.js";
 
 export function isRustCopyCarrier(carrier: TargetTypeRef | undefined): boolean {
@@ -52,7 +51,7 @@ export function isRustJsStrictEqualityCarrier(carrier: TargetTypeRef | undefined
 
 export function rustCarrierSupportsClone(carrier: TargetTypeRef | undefined): boolean {
   if (carrier === undefined || carrier.kind === "type-parameter" ||
-    carrier.kind === "associated-type" || carrier.kind === "lifetime" ||
+    carrier.kind === "associated-type" ||
     carrier.kind === "opaque" || carrier.kind === "closure" ||
     carrier.kind === "slice" ||
     carrier.kind === "reference" && carrier.mutable) {
@@ -91,7 +90,8 @@ export function rustCarrierSupportsClone(carrier: TargetTypeRef | undefined): bo
   if (sourceUnion !== undefined) {
     return sourceUnion.variants.every((variant) => rustCarrierSupportsClone(variant.carrier));
   }
-  return carrier.target === "rust" && carrier.name === "source-type";
+  return carrier.kind === "target-specific" &&
+    carrier.target === "rust" && carrier.name === "source-type";
 }
 
 export function rustCarrierReferentMutationRequiresMutableBinding(

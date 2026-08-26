@@ -18,6 +18,7 @@ import {
   normalizeType,
   normalizeTypeBounds,
   rustCompilerDerivedIdentity,
+  rustCompilerNestedItemIdentity,
   substituteRustCompilerTrait,
 } from "../rustdoc-types.js";
 import {
@@ -225,6 +226,11 @@ export function normalizeTypeMembers(
               associatedTypeBindings: selected.associatedTypeBindings,
               ...(selected.traitDispatch === undefined ? {} : { traitDispatch: selected.traitDispatch }),
               selfOwner: ownerIdentity,
+              declarationIdentity: rustCompilerNestedItemIdentity(
+                dependency,
+                item,
+                selected.context.owner,
+              ),
               ...(resolveItem === undefined ? {} : { resolveItem }),
             }));
           } else if (selected.traitDispatch !== undefined && hasInnerKind(item, "assoc_const")) {
@@ -304,6 +310,11 @@ export function normalizeTraitMembers(
           inheritedGenericParameters: declaredGenericParameters,
           traitDispatch,
           selfOwner: ownerIdentity,
+          declarationIdentity: rustCompilerNestedItemIdentity(
+            dependency,
+            item,
+            context.owner,
+          ),
           ...(resolveItem === undefined ? {} : { resolveItem }),
         }));
         continue;
@@ -333,14 +344,20 @@ export function normalizeTraitMembers(
           "assoc_type",
           `Rust trait associated type '${name}'`,
         );
-        const identity = rustCompilerDerivedIdentity(
+        const associatedContext = derivedNormalizationContext(
+          context.dependency,
           traitDispatch.identity,
           `associated:${name}`,
+          {
+            ...(context.selfOwner === undefined ? {} : { selfOwner: context.selfOwner }),
+            ...(context.resolveItem === undefined ? {} : { resolveItem: context.resolveItem }),
+          },
         );
+        const identity = associatedContext.owner;
         const generics = normalizeGenericParameters(
           document,
           requireRecord(associated.generics, `${name}.generics`),
-          derivedNormalizationContext(context, identity, `associated-type:${name}`),
+          associatedContext,
         );
         const bounds = normalizeTypeBounds(
           document,
@@ -354,6 +371,9 @@ export function normalizeTraitMembers(
           requirements: bounds.requirements,
           outlives: bounds.outlives,
           maybeSized: bounds.maybeSized,
+          ownerRequirements: generics.selfRequirements,
+          ownerOutlives: generics.selfOutlives,
+          ownerMaybeSized: generics.selfMaybeSized,
           ...(associated.type === null || associated.type === undefined
             ? {}
             : {

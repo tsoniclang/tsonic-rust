@@ -198,7 +198,8 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /fn increment\(value: &mut i32\)/u);
-  assert.match(source, /\*value = \*value \+ 1;/u);
+  assert.match(source, /let current: i32 = \*value;/u);
+  assert.match(source, /\*value = current \+ 1;/u);
   assert.match(source, /fn read\(value: &i32\) -> i32/u);
   assert.match(source, /increment\(&mut value\)/u);
   assert.match(source, /read\(&value\)/u);
@@ -234,6 +235,10 @@ export function staticReader(value: Ref<int32, Static>): () => int32 {
   return () => load(value);
 }
 
+export function invokeCaptured(value: Ref<int32, Static>): void {
+  acceptReader(<L extends Life>(_ignored: Ref<int32, L>): int32 => load(value));
+}
+
 export function* staticValues(
   value: Ref<int32, Static>,
 ): Generator<int32, void, void> {
@@ -245,8 +250,14 @@ export function* staticValues(
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
+  assert.match(
+    source,
+    /#\[allow\(clippy::needless_lifetimes, reason = "explicit lifetime contract"\)\]\npub async fn retain<'l>/u,
+  );
   assert.match(source, /pub async fn retain<'l>\(value: &'l i32\) -> &'l i32/u);
   assert.match(source, /reader: impl for<'l> Fn\(&'l i32\) -> i32/u);
+  assert.match(source, /pub fn static_reader\(value: &'static i32\)/u);
+  assert.match(source, /pub fn invoke_captured\(value: &'static i32\)/u);
   assert.match(source, /value: &'static i32/u);
   assert.match(source, /\*value/u);
   validateGeneratedProject("native-lifetime-retention-proof", result.artifacts);
@@ -270,7 +281,7 @@ export function invalid<L extends Life>(value: Ref<int32, L>): Ref<int32, L> {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /pub fn invalid<'l>\(value: &'l i32\) -> &'l i32/u);
+  assert.match(source, /pub fn invalid<'l>\(_value: &'l i32\) -> &'l i32/u);
   assert.match(source, /&local/u);
 
   const projectRoot = writeGeneratedProject("invalid-native-lifetime-proof", result.artifacts);

@@ -37,7 +37,10 @@ import { rustPolicyTargetDiagnostic } from "../../policy/operations/contracts.js
 import { rustRuntimeCarrierKey, rustSelectedCallKey } from "../../target-model/facts/selections.js";
 import { rustSourceParameterContractCarrier } from "../../policy/ownership/source-callable-abi.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { tryFlowMarkerCall } from "../declarations/types-and-bindings.js";
+import {
+  recordBindingWrite,
+  tryFlowMarkerCall,
+} from "../declarations/types-and-bindings.js";
 import { rustSourceReferenceOperationFactKey } from "../../source/semantics/facts.js";
 import { rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
 import type { RustSourceReferenceOperationFact } from "../../source/semantics/model.js";
@@ -362,60 +365,25 @@ function resolvedRustReferenceOperationCarrier(
       "Rust reference operation has no exact selected call and signature identity.",
     );
   }
-  if (source.kind === "shared-reference" || source.kind === "mutable-reference") {
-    const operandCarrier = resolveExpressionCarrier(
+  if (source.kind === "shared-reference") {
+    return resolvedRustReferenceConstruction(
       walk,
-      source.valueExpression,
+      expression,
       sourceFile,
-      undefined,
+      source,
+      expected,
+      false,
     );
-    const mutable = source.kind === "mutable-reference";
-    const explicitLifetime = source.lifetimeTypeNode === undefined
-      ? undefined
-      : walk.context.sourceLifetimes.resolve(source.lifetimeTypeNode);
-    if (operandCarrier === undefined ||
-      (source.lifetimeTypeNode !== undefined && explicitLifetime === undefined)) {
-      return rejectRustReferenceOperation(
-        walk,
-        expression,
-        "RUST_REFERENCE_OPERATION_CARRIER_MISSING",
-        "Rust reference construction has no exact operand carrier or authored lifetime identity.",
-      );
-    }
-    const expectedReference = expected?.kind === "reference" ? expected : undefined;
-    if (expectedReference !== undefined &&
-      (expectedReference.mutable !== mutable ||
-        !rustTargetTypeRefEquals(expectedReference.referent, operandCarrier) ||
-        explicitLifetime !== undefined &&
-          !rustLifetimesEqual(expectedReference.lifetime, explicitLifetime))) {
-      return rejectRustReferenceOperation(
-        walk,
-        expression,
-        "RUST_REFERENCE_OPERATION_EXPECTATION_CONFLICT",
-        "Rust reference construction conflicts with its exact contextual reference contract.",
-      );
-    }
-    const lifetime = explicitLifetime ?? expectedReference?.lifetime;
-    const referenceCarrier: Extract<TargetTypeRef, { readonly kind: "reference" }> = {
-      kind: "reference",
-      referent: operandCarrier,
-      mutable,
-      ...(lifetime === undefined ? {} : { lifetime }),
-    };
-    const fact: Extract<
-      RustTargetOperationFact,
-      { readonly kind: "reference-operation"; readonly operation: "shared-reference" | "mutable-reference" }
-    > = {
-      kind: "reference-operation",
-      operationId: `tsonic.rust.reference.${source.kind}`,
-      operation: source.kind,
-      operandExpression: source.valueExpression,
-      operandCarrier,
-      referenceCarrier,
-      resultCarrier: referenceCarrier,
-    };
-    setRustOperationFact(walk, expression, fact);
-    return { carrier: setCarrierFact(walk, expression, referenceCarrier) };
+  }
+  if (source.kind === "mutable-reference") {
+    return resolvedRustReferenceConstruction(
+      walk,
+      expression,
+      sourceFile,
+      source,
+      expected,
+      true,
+    );
   }
 
   const operandCarrier = resolveExpressionCarrier(
@@ -488,6 +456,74 @@ function resolvedRustReferenceOperationCarrier(
   };
   setRustOperationFact(walk, expression, fact);
   return { carrier: setCarrierFact(walk, expression, resultCarrier) };
+}
+
+function resolvedRustReferenceConstruction(
+  walk: RustFactWalk,
+  expression: Node,
+  sourceFile: SourceFile,
+  source: Extract<
+    RustSourceReferenceOperationFact,
+    { readonly kind: "shared-reference" | "mutable-reference" }
+  >,
+  expected: TargetTypeRef | undefined,
+  mutable: boolean,
+): { readonly carrier?: TargetTypeRef } {
+  const operandCarrier = resolveExpressionCarrier(
+    walk,
+    source.valueExpression,
+    sourceFile,
+    undefined,
+  );
+  const explicitLifetime = source.lifetimeTypeNode === undefined
+    ? undefined
+    : walk.context.sourceLifetimes.resolve(source.lifetimeTypeNode);
+  if (operandCarrier === undefined ||
+    (source.lifetimeTypeNode !== undefined && explicitLifetime === undefined)) {
+    return rejectRustReferenceOperation(
+      walk,
+      expression,
+      "RUST_REFERENCE_OPERATION_CARRIER_MISSING",
+      "Rust reference construction has no exact operand carrier or authored lifetime identity.",
+    );
+  }
+  const expectedReference = expected?.kind === "reference" ? expected : undefined;
+  if (expectedReference !== undefined &&
+    (expectedReference.mutable !== mutable ||
+      !rustTargetTypeRefEquals(expectedReference.referent, operandCarrier) ||
+      explicitLifetime !== undefined &&
+        !rustLifetimesEqual(expectedReference.lifetime, explicitLifetime))) {
+    return rejectRustReferenceOperation(
+      walk,
+      expression,
+      "RUST_REFERENCE_OPERATION_EXPECTATION_CONFLICT",
+      "Rust reference construction conflicts with its exact contextual reference contract.",
+    );
+  }
+  const lifetime = explicitLifetime ?? expectedReference?.lifetime;
+  const referenceCarrier: Extract<TargetTypeRef, { readonly kind: "reference" }> = {
+    kind: "reference",
+    referent: operandCarrier,
+    mutable,
+    ...(lifetime === undefined ? {} : { lifetime }),
+  };
+  if (mutable) {
+    recordBindingWrite(walk, source.valueExpression);
+  }
+  const fact: Extract<
+    RustTargetOperationFact,
+    { readonly kind: "reference-operation"; readonly operation: "shared-reference" | "mutable-reference" }
+  > = {
+    kind: "reference-operation",
+    operationId: `tsonic.rust.reference.${source.kind}`,
+    operation: source.kind,
+    operandExpression: source.valueExpression,
+    operandCarrier,
+    referenceCarrier,
+    resultCarrier: referenceCarrier,
+  };
+  setRustOperationFact(walk, expression, fact);
+  return { carrier: setCarrierFact(walk, expression, referenceCarrier) };
 }
 
 function rejectRustReferenceOperation(

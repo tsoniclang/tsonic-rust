@@ -3,6 +3,7 @@ import {
   isRustVecCarrier,
   rustCallableProtocol,
   rustFixedArrayCarrierValue,
+  rustTargetConstSafeInteger,
   rustSliceElementCarrier,
   rustTargetGenericBindingsForArguments,
   substituteRustTargetGenerics,
@@ -389,7 +390,10 @@ function rustSpreadElementCarrier(
     return sourceCarrier.elements[index];
   }
   const fixedArray = rustFixedArrayCarrierValue(sourceCarrier);
-  return fixedArray !== undefined && index < fixedArray.length
+  const fixedLength = fixedArray === undefined
+    ? undefined
+    : rustTargetConstSafeInteger(fixedArray.length);
+  return fixedArray !== undefined && fixedLength !== undefined && index < fixedLength
     ? fixedArray.element
     : undefined;
 }

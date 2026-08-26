@@ -9,6 +9,8 @@ export const rustLintAttributes = Object.freeze({
     '#[expect(clippy::inherent_to_string, reason = "authored toString contract")]',
   missingSafetyDoc:
     '#[allow(clippy::missing_safety_doc, reason = "explicit source safety contract")]',
+  needlessLifetimes:
+    '#[allow(clippy::needless_lifetimes, reason = "explicit lifetime contract")]',
   neverLoop:
     '#[expect(clippy::never_loop, reason = "authored iterator protocol")]',
   newReturningOtherType:

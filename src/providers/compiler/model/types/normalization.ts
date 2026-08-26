@@ -8,8 +8,8 @@ import {
 import {
   childNormalizationContext,
   contextWithParameters,
+  resolveRustCompilerItem,
   rustCompilerDerivedIdentity,
-  rustCompilerItemIdentity,
 } from "./normalization-context.js";
 import {
   normalizeConstArgument,
@@ -61,19 +61,7 @@ export function normalizeTraitDispatch(
     path.some((segment) => typeof segment !== "string")) {
     throw new Error(`Rust trait reference '${String(trait.id)}' has no canonical crate-qualified identity.`);
   }
-  const local = document.index[String(trait.id)];
-  const resolved = context.resolveItem === undefined
-    ? undefined
-    : context.resolveItem(document, context.dependency, trait.id);
-  const item = resolved?.item ?? (isRecord(local) ? local : undefined);
-  if (item === undefined) {
-    throw new Error(`Rust trait reference '${String(trait.id)}' has no exact declaration identity.`);
-  }
-  const identity = rustCompilerItemIdentity(
-    resolved?.document ?? document,
-    resolved?.dependency ?? context.dependency,
-    item,
-  );
+  const identity = resolveRustCompilerItem(document, trait.id, context).identity;
   const selected = normalizePathArguments(
     document,
     trait.args,
@@ -91,9 +79,12 @@ export function normalizeTraitDispatch(
 export interface NormalizedRustCompilerGenerics {
   readonly parameters: readonly RustCompilerGenericParameter[];
   readonly context: RustCompilerNormalizationContext;
+  readonly selfRequirements: readonly RustCompilerTypeRequirement[];
+  readonly selfOutlives: readonly RustCompilerLifetime[];
+  readonly selfMaybeSized: boolean;
 }
 
-export function normalizeGenericParameters(
+export function normalizeDeclaredGenericParameters(
   document: RustdocDocument,
   generics: Readonly<Record<string, unknown>>,
   context: RustCompilerNormalizationContext,
@@ -205,20 +196,37 @@ export function normalizeGenericParameters(
     });
   });
   const completeContext = contextWithParameters(context, parameters);
+  return Object.freeze({
+    parameters: Object.freeze(parameters),
+    context: completeContext,
+    selfRequirements: Object.freeze([]),
+    selfOutlives: Object.freeze([]),
+    selfMaybeSized: false,
+  });
+}
+
+export function normalizeGenericParameters(
+  document: RustdocDocument,
+  generics: Readonly<Record<string, unknown>>,
+  context: RustCompilerNormalizationContext,
+): NormalizedRustCompilerGenerics {
+  const declared = normalizeDeclaredGenericParameters(document, generics, context);
   const augmented = applyWherePredicates(
     document,
-    parameters,
+    declared.parameters,
     requireArray(generics.where_predicates, "Rust generic where predicates"),
-    completeContext,
+    declared.context,
   );
   return Object.freeze({
-    parameters: augmented,
-    context: contextWithParameters(context, augmented),
+    parameters: augmented.parameters,
+    context: contextWithParameters(context, augmented.parameters),
+    selfRequirements: augmented.selfRequirements,
+    selfOutlives: augmented.selfOutlives,
+    selfMaybeSized: augmented.selfMaybeSized,
   });
 }
 
 export function normalizeLifetimeBinder(
-  document: RustdocDocument,
   rawParameters: unknown,
   context: RustCompilerNormalizationContext,
   role: string,
@@ -333,8 +341,16 @@ function applyWherePredicates(
   parameters: readonly RustCompilerGenericParameter[],
   predicates: readonly unknown[],
   context: RustCompilerNormalizationContext,
-): readonly RustCompilerGenericParameter[] {
+): {
+  readonly parameters: readonly RustCompilerGenericParameter[];
+  readonly selfRequirements: readonly RustCompilerTypeRequirement[];
+  readonly selfOutlives: readonly RustCompilerLifetime[];
+  readonly selfMaybeSized: boolean;
+} {
   const selected = new Map(parameters.map((parameter) => [parameterIdentity(parameter), parameter] as const));
+  let selfRequirements: readonly RustCompilerTypeRequirement[] = Object.freeze([]);
+  let selfOutlives: readonly RustCompilerLifetime[] = Object.freeze([]);
+  let selfMaybeSized = true;
   for (const [index, raw] of predicates.entries()) {
     const predicate = requireRecord(raw, `Rust generic where predicate ${index}`);
     if (isRecord(predicate.lifetime_predicate)) {
@@ -376,6 +392,22 @@ function applyWherePredicates(
       bounded.type,
       childNormalizationContext(context, `where:${index}:type`),
     );
+    const bounds = normalizeTypeBounds(
+      document,
+      requireArray(bounded.bounds, "Rust type where-predicate bounds"),
+      context,
+    );
+    if (type.kind === "self") {
+      selfRequirements = mergeRequirements(selfRequirements, bounds.requirements);
+      selfOutlives = mergeLifetimes(selfOutlives, bounds.outlives);
+      if (bounds.requirements.some((requirement) =>
+        typeof requirement === "object" && requirement.kind === "trait" &&
+        isSizedTrait(requirement.trait))) {
+        selfMaybeSized = false;
+      }
+      if (bounds.maybeSized) selfMaybeSized = true;
+      continue;
+    }
     if (type.kind !== "generic") {
       throw new Error("Rust where predicates must constrain one declared type parameter directly.");
     }
@@ -383,11 +415,6 @@ function applyWherePredicates(
     if (parameter?.kind !== "type") {
       throw new Error("Rust type where predicate has no matching declaration.");
     }
-    const bounds = normalizeTypeBounds(
-      document,
-      requireArray(bounded.bounds, "Rust type where-predicate bounds"),
-      context,
-    );
     selected.set(type.identity.itemId, Object.freeze({
       ...parameter,
       requirements: mergeRequirements(parameter.requirements, bounds.requirements),
@@ -395,7 +422,12 @@ function applyWherePredicates(
       maybeSized: parameter.maybeSized || bounds.maybeSized,
     }));
   }
-  return Object.freeze(parameters.map((parameter) => selected.get(parameterIdentity(parameter))!));
+  return Object.freeze({
+    parameters: Object.freeze(parameters.map((parameter) => selected.get(parameterIdentity(parameter))!)),
+    selfRequirements,
+    selfOutlives,
+    selfMaybeSized,
+  });
 }
 
 export function normalizeTypeBounds(
@@ -441,7 +473,6 @@ export function normalizeTraitBounds(
       throw new Error("Rust generic bound is neither one lifetime nor one exact trait.");
     }
     const binder = normalizeLifetimeBinder(
-      document,
       traitBound.generic_params,
       childNormalizationContext(context, `bound:${index}`),
       `trait-bound:${index}`,

@@ -4,8 +4,6 @@ import {
   targetGenericArgumentFor,
 } from "./types.js";
 import {
-  rustCompilerLifetimeSemanticKey,
-  rustCompilerTypeSemanticKey,
   substituteRustCompilerType,
 } from "../model/rustdoc-types.js";
 import type { ProjectionContext } from "./model.js";
@@ -16,7 +14,6 @@ import type {
   RustCompilerGenericParameter,
   RustCompilerStandardTypeLocation,
   RustCompilerType,
-  RustCompilerTypeParameter,
   RustCompilerTypeRequirement,
 } from "../model/model.js";
 import type { RustTargetGenericArgument } from "../../../target-model/types/model.js";

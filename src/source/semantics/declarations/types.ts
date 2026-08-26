@@ -101,7 +101,7 @@ function genericAlias(
       ...parameter,
       ...(parameter.constraints === undefined
         ? {}
-        : { constraints: Object.freeze([...parameter.constraints]) }),
+        : { constraints: [...parameter.constraints] }),
     })),
     type,
   });

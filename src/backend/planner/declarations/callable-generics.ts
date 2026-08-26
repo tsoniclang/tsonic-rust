@@ -18,6 +18,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 
 export interface RustCallableGenericPlan {
   readonly context: RustPlanContext;
+  readonly preservesExplicitLifetimes: boolean;
   readonly sourceTypeParameterNames: readonly string[];
   finalizeGenerics(): RustGenerics;
 }
@@ -81,6 +82,7 @@ export function planRustCallableGenerics(
     }
     return {
       context: { ...context, callableDeclaration: declaration },
+      preservesExplicitLifetimes: false,
       sourceTypeParameterNames: Object.freeze([]),
       finalizeGenerics: () => emptyRustGenerics,
     };
@@ -185,6 +187,9 @@ export function planRustCallableGenerics(
       callableDeclaration: declaration,
       ...(substitutions.size === 0 ? {} : { typeParameterSubstitutions: substitutions }),
     },
+    preservesExplicitLifetimes: sourceContract.parameters.some(
+      (parameter) => parameter.kind === "lifetime",
+    ),
     sourceTypeParameterNames,
     finalizeGenerics: () => generics,
   };

@@ -288,11 +288,6 @@ function projectNominalExport(
   context: ProjectionContext,
   exportId: string,
 ): ProjectedExport {
-  if (exported.unsupportedMembers.length > 0) {
-    throw new Error(exported.unsupportedMembers
-      .map((member) => `${exported.name}.${member.name}: ${member.reason}`)
-      .join("; "));
-  }
   const declaredContext = withProjectionGenericParameters(
     context,
     exported.genericParameters,
@@ -412,7 +407,7 @@ function projectNominalExport(
       })))
     : Object.freeze([]);
   const associated = exported.kind === "trait"
-    ? projectAssociatedTypes(exported, typeContext)
+    ? projectAssociatedTypes(exported, genericContext)
     : { declarations: Object.freeze([]), types: Object.freeze([]) };
   const typeNames = providerTypeParameterNames(exported.genericParameters, genericContext);
   return {
@@ -762,21 +757,33 @@ function projectAssociatedTypes(
   const types: RustProviderTypeDefinition[] = [];
   for (const associated of exported.associatedTypes) {
     const self = syntheticAssociatedSelf(exported, associated, context);
-    const parameters = Object.freeze([
-      ...exported.genericParameters,
-      self,
-      ...associated.genericParameters,
-    ]);
-    const associatedContext = withDefaultGenericBindings(
-      withProjectionGenericParameters(context, parameters),
-      parameters,
-    );
-    const sourceParameters = providerGenericParametersFor(parameters, associatedContext);
     const exportName = compilerAssociatedSourceExportName(
       associated.identity.itemId,
       associated.name,
     );
     const exportId = `${exported.id}::associated-type:${associated.identity.itemId}`;
+    const parameters = Object.freeze([
+      ...exported.genericParameters,
+      self,
+      ...associated.genericParameters,
+    ]);
+    const genericContext = withDefaultGenericBindings(
+      withProjectionGenericParameters(context, parameters),
+      parameters,
+    );
+    const associatedContext: ProjectionContext = Object.freeze({
+      ...genericContext,
+      currentType: Object.freeze({
+        exportId,
+        name: associated.name,
+        carrier: Object.freeze({ kind: "type-parameter", name: self.name }),
+        sourceType: Object.freeze({ kind: "type-parameter", name: self.name }),
+        genericParameters: parameters,
+        canonicalPath: Object.freeze([...exported.canonicalPath, associated.name, "Self"]),
+        targetPath: exported.targetPath,
+      }),
+    });
+    const sourceParameters = providerGenericParametersFor(parameters, associatedContext);
     const trait = targetTraitFor(
       traitDispatchFor(exported),
       associatedContext,
@@ -908,9 +915,9 @@ function syntheticAssociatedSelf(
       canonicalPath: Object.freeze([...exported.canonicalPath, associated.name, "Self"]),
     }),
     name,
-    requirements: Object.freeze([]),
-    outlives: Object.freeze([]),
-    maybeSized: true,
+    requirements: associated.ownerRequirements,
+    outlives: associated.ownerOutlives,
+    maybeSized: associated.ownerMaybeSized,
   });
 }
 

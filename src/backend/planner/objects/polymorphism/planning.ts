@@ -185,7 +185,7 @@ export function planPolymorphicClassDeclaration(
           type: {
             kind: "named" as const,
             path: "Option",
-            genericArguments: [{ kind: "type", type: property.callableType }],
+            genericArguments: [{ kind: "type" as const, type: property.callableType }],
           },
           visibility: implementationVisibility,
           ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
@@ -251,7 +251,7 @@ export function planPolymorphicClassDeclaration(
           type: {
             kind: "named",
             path: "rt::ObjectHandle",
-            genericArguments: [{ kind: "type", type: stateType }],
+            genericArguments: [{ kind: "type" as const, type: stateType }],
           },
           visibility: "private",
         },

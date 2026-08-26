@@ -34,7 +34,6 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../.
 const fixtureCrate = resolve(repositoryRoot, "test/fixtures/crates/acme_widget");
 const runtimeCrate = resolve(repositoryRoot, "../rust-runtime/crates/tsonic_rust_runtime");
 const testRoot = resolve(repositoryRoot, ".temp/compiler-provider-tests");
-
 test("compiler worker reflects exact Cargo and standard-library snapshots once per session", { timeout: 300_000 }, () => {
   const project = createUserCargoProject();
   const workerRoot = uniquePath("worker-cache");
@@ -59,20 +58,34 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
     });
     const widget = widgetModule.exports.find(({ name }) => name === "Widget");
     assert.equal(widget?.kind, "struct");
+    const widgetTypeParameter = widget.genericParameters.find((parameter) =>
+      parameter.kind === "type" && parameter.name === "T");
+    assert.ok(widgetTypeParameter);
     const valueMethod = widget.methods.find(({ name }) => name === "value");
     assert.deepEqual(valueMethod?.borrowedResult, {
-      sourceType: { kind: "generic", name: "T" },
+      sourceType: {
+        kind: "generic",
+        identity: widgetTypeParameter.identity,
+        name: "T",
+      },
       origin: { kind: "receiver" },
       conversion: "copy",
     });
-    assert.deepEqual(valueMethod?.typeRequirements, [{ name: "T", requirements: ["copy"] }]);
+    assert.deepEqual(valueMethod?.typeRequirements, [{
+      kind: "type",
+      identity: widgetTypeParameter.identity,
+      name: "T",
+      requirements: ["copy"],
+      outlives: [],
+      maybeSized: false,
+    }]);
     assert.equal(
       widget.methods.find(({ name }) => name === "into_box_value")?.receiver?.kind,
       "custom",
     );
     assert.match(
       widget.unsupportedMembers.find(({ name }) => name === "pinned_count")?.reason ?? "",
-      /borrowed custom receiver with no lifetime-bearing source receiver contract/u,
+      /borrowed custom receiver with no exact source receiver contract/u,
     );
     assert.ok(widget.methods.some(({ name, traitDispatch }) =>
       name === "measure" && traitDispatch?.path === "acme_widget::Metric"));
@@ -191,6 +204,8 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
       modulePath: [],
       requestedExports: [
         "apply_borrowed",
+        "borrowed_owned_string",
+        "borrowed_slice",
         "choose_borrowed",
         "inspect_view",
         "opaque_borrow",
@@ -247,6 +262,17 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
     assert.equal(lending?.result.kind, "associated-type");
     assert.equal(lending?.result.name, "Item");
     assert.equal(lending?.result.genericArguments[0].kind, "lifetime");
+    const lendingFamily = lifetimeModule.exports.find(
+      ({ name }) => name === "LendingFamily",
+    );
+    assert.equal(lendingFamily?.kind, "trait");
+    const lendingItem = lendingFamily.associatedTypes.find(({ name }) => name === "Item");
+    assert.equal(lendingItem?.genericParameters[0].kind, "lifetime");
+    assert.deepEqual(
+      lendingItem?.ownerOutlives,
+      [lendingItem.genericParameters[0].lifetime],
+    );
+    assert.equal(lendingItem?.ownerMaybeSized, true);
 
     const inspectView = lifetimeModule.exports.find(
       ({ name }) => name === "inspect_view",
@@ -259,6 +285,22 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
     )?.function;
     assert.equal(opaqueBorrow?.result.kind, "opaque");
     assert.equal(opaqueBorrow?.result.captures[0].kind, "lifetime");
+
+    const borrowedOwnedString = lifetimeModule.exports.find(
+      ({ name }) => name === "borrowed_owned_string",
+    )?.function;
+    assert.equal(borrowedOwnedString?.parameters[0].type.kind, "reference");
+    assert.equal(borrowedOwnedString?.result.kind, "reference");
+    assert.equal(borrowedOwnedString?.result.target.kind, "path");
+    assert.equal(borrowedOwnedString?.borrowedResult, undefined);
+
+    const borrowedSlice = lifetimeModule.exports.find(
+      ({ name }) => name === "borrowed_slice",
+    )?.function;
+    assert.equal(borrowedSlice?.parameters[0].type.kind, "reference");
+    assert.equal(borrowedSlice?.result.kind, "reference");
+    assert.equal(borrowedSlice?.result.target.kind, "slice");
+    assert.equal(borrowedSlice?.borrowedResult, undefined);
 
     const lifetimeProjection = projectRustCompilerModule(lifetimeModule, {
       providerModuleId: compilerProviderModuleId(dependency, []),
@@ -276,6 +318,16 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
     );
     assert.equal(lendingOperation?.resultCarrier.kind, "associated-type");
     assert.equal(lendingOperation?.resultCarrier.genericArguments?.[0].kind, "lifetime");
+    assert.equal(
+      lifetimeProjection.operations.find(({ exportId }) =>
+        exportId.endsWith("::borrowed_owned_string"))?.resultCarrier.kind,
+      "reference",
+    );
+    assert.equal(
+      lifetimeProjection.operations.find(({ exportId }) =>
+        exportId.endsWith("::borrowed_slice"))?.resultCarrier.kind,
+      "reference",
+    );
     const closedFunctionModule = worker.module({
       snapshot,
       dependency,
@@ -365,14 +417,30 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
       conversion: "owned-string",
     });
     const cloned = functionModule.exports.find(({ name }) => name === "cloned");
-    assert.deepEqual(cloned?.kind === "function" ? cloned.function.typeRequirements : undefined, [{
+    assert.equal(cloned?.kind, "function");
+    const clonedParameter = cloned.function.genericParameters.find((parameter) =>
+      parameter.kind === "type" && parameter.name === "T");
+    assert.ok(clonedParameter);
+    assert.deepEqual(cloned.function.typeRequirements, [{
+      kind: "type",
+      identity: clonedParameter.identity,
       name: "T",
       requirements: ["clone"],
+      outlives: [],
+      maybeSized: false,
     }]);
     const copied = functionModule.exports.find(({ name }) => name === "copied");
-    assert.deepEqual(copied?.kind === "function" ? copied.function.typeRequirements : undefined, [{
+    assert.equal(copied?.kind, "function");
+    const copiedParameter = copied.function.genericParameters.find((parameter) =>
+      parameter.kind === "type" && parameter.name === "T");
+    assert.ok(copiedParameter);
+    assert.deepEqual(copied.function.typeRequirements, [{
+      kind: "type",
+      identity: copiedParameter.identity,
       name: "T",
       requirements: ["copy"],
+      outlives: [],
+      maybeSized: false,
     }]);
     const checkedDoubleOperation = functionProjection.operations.find(
       ({ exportId }) => exportId.endsWith("::checked_double"),
@@ -409,6 +477,14 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
           namedImports: [{ exportedName: "FunctionPointer" }],
         },
         {
+          moduleSpecifier: "@tsonic/rust/std/clone.js",
+          namedImports: [{ exportedName: "Clone" }],
+        },
+        {
+          moduleSpecifier: "@tsonic/rust/std/marker.js",
+          namedImports: [{ exportedName: "Copy" }],
+        },
+        {
           moduleSpecifier: "@tsonic/rust/types.js",
           namedImports: [{ exportedName: "constPtr" }],
         },
@@ -426,36 +502,26 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
       providerModuleId: compilerProviderModuleId(dependency, []),
       moduleSpecifier: "@tsonic/rust/crates/widget_alias/index.js",
     });
-    assert.match(projection.carrierPaths.values().next().value, /^widget_alias::Widget$/u);
     assert.equal(
-      projection.declarationModel.exports.find(({ name }) => name === "Widget")?.members
-        ?.some(({ name }) => name === "SLOT"),
+      [...projection.carrierPaths.values()].includes("widget_alias::Widget"),
+      true,
+    );
+    const projectedWidgetMembers = projection.declarationModel.exports
+      .find(({ name }) => name === "Widget")?.members ?? [];
+    assert.equal(
+      projectedWidgetMembers.some(({ name }) => name === "pinned_count"),
+      false,
+      "an unsupported custom receiver is omitted without hiding supported members",
+    );
+    assert.equal(
+      projectedWidgetMembers.some(({ name }) => name === "measure"),
+      true,
+      "a supported associated-result method remains available",
+    );
+    assert.equal(
+      projectedWidgetMembers.some(({ name }) => name === "SLOT"),
       false,
       "a trait constant and trait method occupying one source static slot are both omitted",
-    );
-
-    const unsupportedBorrowedResult = worker.module({
-      snapshot,
-      dependency,
-      modulePath: [],
-      requestedExports: ["borrowed_owned_string"],
-    });
-    assert.match(
-      unsupportedBorrowedResult.unsupportedExports.find(({ name }) =>
-        name === "borrowed_owned_string")?.reason ?? "",
-      /borrowed or unsized value with no closed target carrier/u,
-    );
-
-    const unsupportedBorrowedSlice = worker.module({
-      snapshot,
-      dependency,
-      modulePath: [],
-      requestedExports: ["borrowed_slice"],
-    });
-    assert.match(
-      unsupportedBorrowedSlice.unsupportedExports.find(({ name }) =>
-        name === "borrowed_slice")?.reason ?? "",
-      /borrowed or unsized value with no closed target carrier/u,
     );
 
     const unsupportedOpenAssociatedType = worker.module({
@@ -481,7 +547,10 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
     });
     const hashMap = collectionsModule.exports.find(({ name }) => name === "HashMap");
     assert.equal(hashMap?.kind, "struct");
-    assert.deepEqual(hashMap.typeParameters.map(({ name, defaultType }) => ({
+    const hashMapTypeParameters = hashMap.genericParameters.filter(
+      ({ kind }) => kind === "type",
+    );
+    assert.deepEqual(hashMapTypeParameters.map(({ name, defaultType }) => ({
       name,
       hasDefault: defaultType !== undefined,
     })), [
@@ -491,20 +560,40 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
       { name: "A", hasDefault: true },
     ]);
     assert.ok(hashMap.methods.some(({ name }) => name === "new"));
+    const hashMapKeyParameter = hashMapTypeParameters.find(({ name }) => name === "K");
+    const insertKeyRequirement = hashMap.methods
+      .find(({ name }) => name === "insert")?.typeRequirements
+      .find(({ name }) => name === "K");
+    assert.deepEqual(insertKeyRequirement?.identity, hashMapKeyParameter?.identity);
     assert.deepEqual(
-      hashMap.methods.find(({ name }) => name === "insert")?.typeRequirements,
-      [{
-        name: "K",
-        requirements: [
-          { kind: "trait", path: "core::cmp::Eq" },
-          { kind: "trait", path: "core::hash::Hash" },
-        ],
-      }],
+      insertKeyRequirement?.requirements.map(({ kind, trait }) => ({
+        kind,
+        path: trait.path,
+        canonicalPath: trait.identity.canonicalPath,
+        hasItemIdentity: trait.identity.itemId.length > 0,
+      })),
+      [
+        {
+          kind: "trait",
+          path: "core::cmp::Eq",
+          canonicalPath: ["core", "cmp", "Eq"],
+          hasItemIdentity: true,
+        },
+        {
+          kind: "trait",
+          path: "core::hash::Hash",
+          canonicalPath: ["core", "hash", "Hash"],
+          hasItemIdentity: true,
+        },
+      ],
     );
+    assert.deepEqual(insertKeyRequirement?.outlives, []);
+    assert.equal(insertKeyRequirement?.maybeSized, false);
     assert.ok(hashMap.traits.implementations.some(({ trait, requirements }) =>
-      trait.kind === "trait" && trait.path === "core::cmp::Eq" &&
+      trait.kind === "trait" && trait.trait.path === "core::cmp::Eq" &&
       requirements.some(({ typeArgumentIndex, requirement }) =>
-        typeArgumentIndex === 0 && requirement.kind === "trait" && requirement.path === "core::hash::Hash")));
+        typeArgumentIndex === 0 && requirement.kind === "trait" &&
+        requirement.trait.path === "core::hash::Hash")));
     const collectionsProjection = projectRustCompilerModule(collectionsModule, {
       providerModuleId: compilerProviderModuleId(standardDependency, ["collections"]),
       moduleSpecifier: "@tsonic/rust/std/collections.js",
@@ -527,11 +616,14 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
       moduleSpecifier: "@tsonic/rust/std/ops.js",
     });
     const controlFlow = opsProjection.declarationModel.exports.find(({ name }) => name === "ControlFlow");
-    assert.deepEqual(controlFlow?.typeParameters, [{ name: "B" }]);
+    assert.deepEqual(controlFlow?.typeParameters, [
+      { name: "B" },
+      { name: "C", defaultType: { kind: "tuple", elementTypes: [] } },
+    ]);
     assert.deepEqual(
       controlFlow?.members?.find(({ name }) => name === "Continue")?.signatures?.[0]?.parameters[0]?.type,
-      { kind: "tuple", elementTypes: [] },
-      "a hidden trailing Rust default parameter is substituted with its exact default source type",
+      { kind: "type-parameter", name: "C" },
+      "a trailing Rust default remains an authored generic with its exact source default",
     );
 
     const vecModule = worker.module({
@@ -545,12 +637,18 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
       moduleSpecifier: "@tsonic/rust/std/vec.js",
     });
     const boxedSliceConversion = vecProjection.operations.find(({ target }) =>
-      target.form === "trait-call" && target.traitTypeArguments.some((argument) =>
-        argument.kind === "target-named" && argument.typeArguments?.some(({ kind }) => kind === "slice")));
+      target.form === "trait-call" && target.traitGenericArguments.some((argument) =>
+        argument.kind === "type" && argument.type.kind === "target-named" &&
+        argument.type.genericArguments?.some((genericArgument) =>
+          genericArgument.kind === "type" && genericArgument.type.kind === "slice")));
     assert.ok(boxedSliceConversion);
     assert.equal(
       boxedSliceConversion.target.form === "trait-call"
-        ? boxedSliceConversion.target.traitTypeArguments[0]?.typeArguments?.[0]?.kind
+        ? boxedSliceConversion.target.traitGenericArguments[0]?.kind === "type" &&
+            boxedSliceConversion.target.traitGenericArguments[0].type.kind === "target-named" &&
+            boxedSliceConversion.target.traitGenericArguments[0].type.genericArguments?.[0]?.kind === "type"
+          ? boxedSliceConversion.target.traitGenericArguments[0].type.genericArguments[0].type.kind
+          : undefined
         : undefined,
       "slice",
       "nested Rust slices remain unsized target types instead of becoming owned Vec carriers",

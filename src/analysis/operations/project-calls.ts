@@ -4,20 +4,10 @@ import {
   substituteRustTargetGenerics,
 } from "../../target-model/types/index.js";
 import {
-  KindBinaryExpression,
-  KindCallExpression,
-  KindElementAccessExpression,
   KindFunctionDeclaration,
   KindFunctionExpression,
-  KindIdentifier,
   KindNewExpression,
-  KindNonNullExpression,
-  KindNumericLiteral,
-  KindParenthesizedExpression,
-  KindPostfixUnaryExpression,
-  KindPrefixUnaryExpression,
   KindPropertyAccessExpression,
-  KindSatisfiesExpression,
   KindSpreadElement,
   Node_Expression,
   asSourceNode,
@@ -29,23 +19,21 @@ import {
   rustTargetOperationFactKey,
 } from "../facts/keys.js";
 import { appendMalformedSourceAst } from "../declarations/project-types.js";
-import { appendRustDiagnostic, rustOperationContext } from "../program/walk.js";
+import { appendRustDiagnostic } from "../program/walk.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { recordBindingWrite, resolveParameterAbi, validateFlowMarkerAgainstMode } from "../declarations/types-and-bindings.js";
 import { selectRustFlowReadProjection } from "../../policy/types/value-carrier-reconciliation.js";
 import { recordRustFlowReadProjection } from "../facts/value-carrier-queries.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
-import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { rustArgumentPassingKey, rustRuntimeCarrierKey, rustSelectedOperationKey } from "../../target-model/facts/selections.js";
 import { rustArgumentPassingMode } from "../facts/parameter-passing.js";
 import { rustProjectCallableTargetName } from "../facts/source-member-name.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { selectedSourceLiteralIsRepresentable } from "../../policy/types/selected-numeric-literal.js";
 import { finalizeProjectSourceGenericArguments } from "./project-call-generics.js";
 import { sourceTypeCarrierForDeclaration } from "./inputs.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
-import type { RustSelectedTargetSignature, RustTargetMember, TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustSelectedTargetSignature, TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTargetOperationFact } from "../facts/keys.js";
 
 export function applySelectedProjectSourceCall(

@@ -9,7 +9,6 @@ import {
   isGlobUse,
 } from "../rustdoc-items.js";
 import {
-  canonicalCompilerTypePathKey,
   canonicalPathKey,
   normalizeGenericParameters,
   normalizeTraitBounds,
@@ -354,10 +353,13 @@ function sameModuleExportDependencies(
     if (constraint.kind === "equality") visitType(constraint.type);
     else constraint.traits.forEach(visitTrait);
   };
-  const visitTrait = (trait: RustCompilerTraitDispatch): void => {
-    selectIdentity(trait.identity.canonicalPath);
+  const visitTraitArguments = (trait: RustCompilerTraitDispatch): void => {
     trait.genericArguments.forEach(visitArgument);
     trait.associatedConstraints.forEach(visitConstraint);
+  };
+  const visitTrait = (trait: RustCompilerTraitDispatch): void => {
+    selectIdentity(trait.identity.canonicalPath);
+    visitTraitArguments(trait);
   };
   const visitType = (type: RustCompilerType): void => {
     switch (type.kind) {
@@ -417,7 +419,7 @@ function sameModuleExportDependencies(
     if (fn.receiver?.kind === "custom") visitType(fn.receiver.type);
     fn.parameters.forEach((parameter) => visitType(parameter.type));
     visitType(fn.result);
-    if (fn.traitDispatch !== undefined) visitTrait(fn.traitDispatch);
+    if (fn.traitDispatch !== undefined) visitTraitArguments(fn.traitDispatch);
   };
   switch (exported.kind) {
     case "constant":
@@ -438,7 +440,7 @@ function sameModuleExportDependencies(
       exported.methods.forEach(visitFunction);
       exported.associatedConstants.forEach((constant) => {
         visitType(constant.type);
-        visitTrait(constant.traitDispatch);
+        visitTraitArguments(constant.traitDispatch);
       });
       break;
     case "enum":
@@ -447,7 +449,7 @@ function sameModuleExportDependencies(
       exported.methods.forEach(visitFunction);
       exported.associatedConstants.forEach((constant) => {
         visitType(constant.type);
-        visitTrait(constant.traitDispatch);
+        visitTraitArguments(constant.traitDispatch);
       });
       break;
     case "trait":
@@ -456,7 +458,7 @@ function sameModuleExportDependencies(
       exported.methods.forEach(visitFunction);
       exported.associatedConstants.forEach((constant) => {
         visitType(constant.type);
-        visitTrait(constant.traitDispatch);
+        visitTraitArguments(constant.traitDispatch);
       });
       exported.associatedTypes.forEach((associated) => {
         visitGenericParameters(associated.genericParameters);

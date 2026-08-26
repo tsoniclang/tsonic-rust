@@ -1,4 +1,9 @@
 import { canonicalItemId, canonicalItemPath } from "../rustdoc-items.js";
+import {
+  isRecord,
+  requireArray,
+  requireRecord,
+} from "../rustdoc-schema.js";
 import type {
   RustCompilerDependency,
   RustCompilerGenericParameter,
@@ -28,6 +33,58 @@ export function rustCompilerItemIdentity(
   });
 }
 
+export function rustCompilerNestedItemIdentity(
+  dependency: RustCompilerDependency,
+  item: Readonly<Record<string, unknown>>,
+  owner: RustCompilerItemIdentity,
+): RustCompilerItemIdentity {
+  const itemId = canonicalItemId(dependency, item);
+  return Object.freeze({
+    itemId,
+    canonicalPath: Object.freeze([...owner.canonicalPath, `<item:${itemId}>`]),
+  });
+}
+
+export function resolveRustCompilerItem(
+  document: RustdocDocument,
+  id: unknown,
+  context: RustCompilerNormalizationContext,
+): {
+  readonly document: RustdocDocument;
+  readonly dependency: RustCompilerDependency;
+  readonly item?: Readonly<Record<string, unknown>>;
+  readonly identity: RustCompilerItemIdentity;
+} {
+  const local = document.index[String(id)];
+  const resolved = context.resolveItem === undefined
+    ? undefined
+    : context.resolveItem(document, context.dependency, id);
+  const selectedDocument = resolved?.document ?? document;
+  const selectedDependency = resolved?.dependency ?? context.dependency;
+  const item = resolved?.item ?? (isRecord(local) ? local : undefined);
+  if (item !== undefined) {
+    return Object.freeze({
+      document: selectedDocument,
+      dependency: selectedDependency,
+      item,
+      identity: rustCompilerItemIdentity(selectedDocument, selectedDependency, item),
+    });
+  }
+  const pathRecord = requireRecord(document.paths[String(id)], `Rust item '${String(id)}' path`);
+  const path = requireArray(pathRecord.path, `Rust item '${String(id)}' path segments`);
+  if (path.length < 2 || path.some((segment) => typeof segment !== "string")) {
+    throw new Error(`Rust item '${String(id)}' has no canonical crate-qualified identity.`);
+  }
+  return Object.freeze({
+    document,
+    dependency: context.dependency,
+    identity: Object.freeze({
+      itemId: `${context.dependency.packageId}#${String(id)}`,
+      canonicalPath: Object.freeze(path as string[]),
+    }),
+  });
+}
+
 export function rustCompilerDerivedIdentity(
   owner: RustCompilerItemIdentity,
   role: string,
@@ -45,13 +102,21 @@ export function rootNormalizationContext(
   resolveItem?: RustdocItemResolver,
 ): RustCompilerNormalizationContext {
   const owner = rustCompilerItemIdentity(document, dependency, item);
+  return rootNormalizationContextForIdentity(dependency, owner, resolveItem);
+}
+
+export function rootNormalizationContextForIdentity(
+  dependency: RustCompilerDependency,
+  owner: RustCompilerItemIdentity,
+  resolveItem?: RustdocItemResolver,
+): RustCompilerNormalizationContext {
   return Object.freeze({
     dependency,
     owner,
-    parameters: new Map(),
+    parameters: new Map<string, RustCompilerGenericParameter>(),
     selfOwner: owner,
     position: "root",
-    resolvingAliases: new Set(),
+    resolvingAliases: new Set<string>(),
     ...(resolveItem === undefined ? {} : { resolveItem }),
   });
 }
@@ -79,10 +144,10 @@ export function derivedNormalizationContext(
   return Object.freeze({
     dependency,
     owner: identity,
-    parameters: new Map(),
+    parameters: new Map<string, RustCompilerGenericParameter>(),
     selfOwner: options.selfOwner ?? owner,
     position: role,
-    resolvingAliases: new Set(),
+    resolvingAliases: new Set<string>(),
     ...(options.resolveItem === undefined ? {} : { resolveItem: options.resolveItem }),
   });
 }

@@ -1,4 +1,5 @@
 import { compareText, digestText, typeRequirementKey } from "./utilities.js";
+import { compilerTypeRequirementCanonicalPath } from "../model/rustdoc-types.js";
 import type {
   RustCompilerDependency,
   RustCompilerFunction,
@@ -69,11 +70,7 @@ export function projectCompilerTraitContract(
 function compilerRequirementTraitPath(
   requirement: RustCompilerTypeParameter["requirements"][number],
 ): string {
-  return requirement === "clone"
-    ? "core::clone::Clone"
-    : requirement === "copy"
-      ? "core::marker::Copy"
-      : requirement.path;
+  return compilerTypeRequirementCanonicalPath(requirement).join("::");
 }
 
 export function typeRequirements(
@@ -86,7 +83,10 @@ export function typeRequirements(
     .map((parameter) => Object.freeze({
       name: parameter.name,
       requirements: Object.freeze([...parameter.requirements]
-        .sort((left, right) => compareText(typeRequirementKey(left), typeRequirementKey(right)))),
+        .sort((left, right) => compareText(typeRequirementKey(left), typeRequirementKey(right)))
+        .map((requirement) => requirement === "clone" || requirement === "copy"
+          ? requirement
+          : Object.freeze({ kind: "trait" as const, path: requirement.trait.path }))),
     }))
     .sort((left, right) => compareText(left.name, right.name));
   return requirements.length === 0

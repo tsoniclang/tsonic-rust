@@ -149,6 +149,11 @@ test("provider carrier validation preserves exact lifetime, HRTB, mixed-generic,
     exportId: "@acme/validation::run",
     operationKind: "method",
     target: { form: "call", path: "acme_validation::run" },
+    genericParameters: [{
+      kind: "lifetime",
+      sourceName: "L",
+      targetIdentity: "parameter\0lifetime-a",
+    }],
     resultCarrier,
   });
   const withCarrier = (resultCarrier, carrierPath = "acme_validation::Family") =>
@@ -423,7 +428,10 @@ test("provider carriers distinguish owned vectors from nested unsized slices", (
       resultCarrier: {
         kind: "target-named",
         id: "acme.Box",
-        typeArguments: [{ kind: "slice", element: int32Carrier }],
+        genericArguments: [{
+          kind: "type",
+          type: { kind: "slice", element: int32Carrier },
+        }],
       },
     }],
   })));
@@ -776,7 +784,7 @@ test("operation type parameters are declared exactly when their carriers use the
         resultCarrier: { kind: "type-parameter", name: "T" },
       }],
     })),
-    /references undeclared operation type parameter 'T'/u,
+    /references undeclared type parameter 'T'/u,
   );
   assert.throws(
     () => createRustProviderPackage(definition({
@@ -785,10 +793,10 @@ test("operation type parameters are declared exactly when their carriers use the
         operationKind: "method",
         target: { form: "call", path: "acme_validation::run" },
         resultCarrier: int32Carrier,
-        typeParameters: ["T"],
+        genericParameters: [{ kind: "type", sourceName: "T" }],
       }],
     })),
-    /declares unused operation type parameter 'T'/u,
+    /declares unused type parameter 'T'/u,
   );
   assert.doesNotThrow(() => createRustProviderPackage(definition({
     operations: [{
@@ -796,7 +804,7 @@ test("operation type parameters are declared exactly when their carriers use the
       operationKind: "method",
       target: { form: "call", path: "acme_validation::run" },
       resultCarrier: { kind: "type-parameter", name: "T" },
-      typeParameters: ["T"],
+      genericParameters: [{ kind: "type", sourceName: "T" }],
     }],
   })));
   assert.doesNotThrow(() => createRustProviderPackage(definition({
@@ -805,8 +813,11 @@ test("operation type parameters are declared exactly when their carriers use the
       operationKind: "method",
       target: { form: "call", path: "acme_validation::run" },
       resultCarrier: int32Carrier,
-      typeParameters: ["T"],
-      targetTypeArguments: [{ kind: "type-parameter", name: "T" }],
+      genericParameters: [{ kind: "type", sourceName: "T" }],
+      targetGenericArguments: [{
+        kind: "type",
+        type: { kind: "type-parameter", name: "T" },
+      }],
     }],
   })));
   assert.throws(
@@ -816,10 +827,13 @@ test("operation type parameters are declared exactly when their carriers use the
         operationKind: "method",
         target: { form: "path", path: "acme_validation::VALUE" },
         resultCarrier: int32Carrier,
-        typeParameters: ["T"],
-        targetTypeArguments: [{ kind: "type-parameter", name: "T" }],
+        genericParameters: [{ kind: "type", sourceName: "T" }],
+        targetGenericArguments: [{
+          kind: "type",
+          type: { kind: "type-parameter", name: "T" },
+        }],
       }],
     })),
-    /targetTypeArguments requires a non-empty native call or method/u,
+    /targetGenericArguments requires a non-empty native call or method/u,
   );
 });

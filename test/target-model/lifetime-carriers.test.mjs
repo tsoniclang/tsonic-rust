@@ -8,6 +8,7 @@ import {
 import {
   isRustTargetTypeRef,
   rustTargetTypeRefEquals,
+  rustTargetTypeRefEqualsWithinLifetimeBinders,
 } from "../../dist/target-model/types/equality.js";
 
 const int32 = Object.freeze({ kind: "source-primitive", name: "int32" });
@@ -48,6 +49,24 @@ test("higher-ranked lifetime carriers compare by alpha-equivalent binder identit
   assert.equal(isRustTargetTypeRef(left), true);
   assert.equal(isRustTargetTypeRef(right), true);
   assert.equal(rustTargetTypeRefEquals(left, right), true);
+  assert.equal(
+    rustTargetTypeRefEqualsWithinLifetimeBinders(
+      left.args[0],
+      right.args[0],
+      left.lifetimeBinder,
+      right.lifetimeBinder,
+    ),
+    true,
+  );
+  assert.equal(
+    rustTargetTypeRefEqualsWithinLifetimeBinders(
+      left.args[0],
+      reference({ kind: "static" }),
+      left.lifetimeBinder,
+      right.lifetimeBinder,
+    ),
+    false,
+  );
   assert.equal(
     rustTargetTypeRefEquals(left, {
       ...right,

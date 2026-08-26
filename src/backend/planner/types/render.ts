@@ -5,6 +5,7 @@ import type {
 } from "../../../target-model/types/model.js";
 import { registerAliasFromPath } from "../program/plan-context.js";
 import type {
+  RustCallGenericArgument,
   RustGenericArgument,
   RustConstArgument,
   RustLifetime,
@@ -342,7 +343,10 @@ export function rustTypeFromCarrier(
       ? undefined
       : {
           kind: "impl-trait",
-          bounds: bounds as RustTraitReference[],
+          bounds: (bounds as RustTraitReference[]).map((reference): RustTypeBound => ({
+            kind: "trait-type",
+            reference,
+          })),
           outlives: carrier.outlives.map(rustLifetimeToAst),
           captures: carrier.captures.map(rustLifetimeToAst),
         };
@@ -714,7 +718,7 @@ export function collectAliasesFromRustType(
     return;
   }
   if (type.kind === "impl-trait") {
-    for (const bound of type.bounds) collectAliasesFromRustType(bound.trait, register);
+    for (const bound of type.bounds) collectAliasesFromRustTypeBound(bound, register);
     return;
   }
   if (type.kind === "slice") {
@@ -820,6 +824,16 @@ export function rustTargetGenericArgumentToAstInContext(
       return type === undefined ? undefined : { kind: "type", type };
     }
   }
+}
+
+export function rustTargetCallGenericArgumentToAstInContext(
+  argument: Extract<RustTargetGenericArgument, { readonly kind: "type" | "const" }>,
+  context: RustTypeRenderingContext,
+): RustCallGenericArgument | undefined {
+  const rendered = rustTargetGenericArgumentToAstInContext(argument, context);
+  return rendered?.kind === "type" || rendered?.kind === "const"
+    ? rendered
+    : undefined;
 }
 
 function rustLifetimeBinderToAst(

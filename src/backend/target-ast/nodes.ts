@@ -135,7 +135,7 @@ export type RustType =
     }
   | {
       readonly kind: "impl-trait";
-      readonly bounds: readonly RustTraitReference[];
+      readonly bounds: readonly RustTypeBound[];
       readonly outlives: readonly RustLifetime[];
       readonly captures: readonly RustLifetime[];
     }

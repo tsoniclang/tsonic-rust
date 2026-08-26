@@ -228,10 +228,10 @@ export function analyzeRustLifetimes(
   for (const contract of contracts) contractByDeclaration.set(contract.declaration, contract);
   return {
     index: Object.freeze({
-      contractFor(declaration) {
+      contractFor(declaration: Node | undefined) {
         return declaration === undefined ? undefined : contractByDeclaration.get(declaration);
       },
-      parameterFor(declaration) {
+      parameterFor(declaration: Node | undefined) {
         return declaration === undefined ? undefined : parameterByDeclaration.get(declaration);
       },
       resolve,

@@ -1,6 +1,7 @@
 import {
   hasInnerKind,
   isRecord,
+  itemById,
   normalizeAbi,
   requireArray,
   requireBoolean,
@@ -11,13 +12,16 @@ import {
 import {
   childNormalizationContext,
   contextResolvingAlias,
+  derivedNormalizationContext,
+  resolveRustCompilerItem,
   rootNormalizationContext,
   rustCompilerDerivedIdentity,
-  rustCompilerItemIdentity,
 } from "./normalization-context.js";
 import {
+  normalizeDeclaredGenericParameters,
   normalizeGenericParameters,
   normalizeLifetimeBinder,
+  normalizeTypeBounds,
   normalizeTraitDispatch,
 } from "./normalization.js";
 import type {
@@ -144,6 +148,18 @@ export function normalizeType(
       throw new Error("Rust associated-type path arguments cannot contain nested associated constraints.");
     }
     const name = requireString(qualified.name, "Rust associated type name");
+    const declaration = normalizeAssociatedTypeReference(
+      document,
+      qualified.trait,
+      trait,
+      name,
+      context,
+    );
+    if (declaration.genericParameters.length !== selected.genericArguments.length ||
+      declaration.genericParameters.some((parameter, index) =>
+        parameter.kind !== "lifetime" || selected.genericArguments[index]?.kind !== "lifetime")) {
+      throw new Error("Generic associated Rust types have no closed provider type contract.");
+    }
     return Object.freeze({
       kind: "associated-type",
       identity: rustCompilerDerivedIdentity(trait.identity, `associated:${name}`),
@@ -155,6 +171,7 @@ export function normalizeType(
       trait,
       name,
       genericArguments: selected.genericArguments,
+      maybeSized: declaration.maybeSized,
     });
   }
   if (isRecord(type.resolved_path)) {
@@ -173,6 +190,69 @@ export function normalizeType(
     throw new Error("Rust pattern types have no approved provider lifetime contract.");
   }
   throw new Error("Rust type has no supported exact representation.");
+}
+
+function normalizeAssociatedTypeReference(
+  document: RustdocDocument,
+  rawTrait: unknown,
+  trait: RustCompilerTraitDispatch,
+  name: string,
+  context: RustCompilerNormalizationContext,
+): {
+  readonly genericParameters: readonly RustCompilerGenericParameter[];
+  readonly maybeSized: boolean;
+} {
+  const traitReference = requireRecord(rawTrait, "Rust associated-type trait reference");
+  const resolvedTrait = resolveRustCompilerItem(document, traitReference.id, context);
+  if (resolvedTrait.item === undefined || !hasInnerKind(resolvedTrait.item, "trait") ||
+    resolvedTrait.identity.itemId !== trait.identity.itemId) {
+    throw new Error(`Rust associated type '${name}' has no exact trait declaration.`);
+  }
+  const traitBody = requireInnerRecord(
+    resolvedTrait.item,
+    "trait",
+    `Rust associated type '${name}' trait declaration`,
+  );
+  const candidates = requireArray(
+    traitBody.items,
+    `Rust associated type '${name}' trait members`,
+  ).flatMap((itemId): readonly Readonly<Record<string, unknown>>[] => {
+    const selected = itemById(resolvedTrait.document, itemId);
+    return hasInnerKind(selected, "assoc_type") && selected.name === name
+      ? Object.freeze([selected])
+      : Object.freeze([]);
+  });
+  if (candidates.length !== 1) {
+    throw new Error(`Rust associated type '${name}' does not select one exact declaration.`);
+  }
+  const associated = requireInnerRecord(
+    candidates[0]!,
+    "assoc_type",
+    `Rust associated type '${name}' declaration`,
+  );
+  const associatedContext = derivedNormalizationContext(
+    resolvedTrait.dependency,
+    trait.identity,
+    `associated:${name}`,
+    {
+      selfOwner: trait.identity,
+      ...(context.resolveItem === undefined ? {} : { resolveItem: context.resolveItem }),
+    },
+  );
+  const generics = normalizeDeclaredGenericParameters(
+    resolvedTrait.document,
+    requireRecord(associated.generics, `Rust associated type '${name}' generics`),
+    associatedContext,
+  );
+  const bounds = normalizeTypeBounds(
+    resolvedTrait.document,
+    requireArray(associated.bounds, `Rust associated type '${name}' bounds`),
+    generics.context,
+  );
+  return Object.freeze({
+    genericParameters: generics.parameters,
+    maybeSized: bounds.maybeSized,
+  });
 }
 
 export function normalizeLifetime(
@@ -541,7 +621,6 @@ function normalizeFunctionPointer(
   context: RustCompilerNormalizationContext,
 ): RustCompilerType {
   const selectedBinder = normalizeLifetimeBinder(
-    document,
     pointer.generic_params,
     context,
     "function-pointer",
@@ -582,7 +661,7 @@ function normalizeResolvedPath(
   resolvedPath: Readonly<Record<string, unknown>>,
   context: RustCompilerNormalizationContext,
 ): RustCompilerType {
-  const resolved = resolveCompilerItem(document, resolvedPath.id, context);
+  const resolved = resolveRustCompilerItem(document, resolvedPath.id, context);
   const identity = resolved.identity;
   const path = identity.canonicalPath;
   const selected = normalizePathArguments(
@@ -641,14 +720,13 @@ function normalizeDynamicTrait(
   const selected = requireArray(dynamic.traits, "Rust dynamic trait bounds").map((entry, index) => {
     const bound = requireRecord(entry, `Rust dynamic trait bound ${index}`);
     const binder = normalizeLifetimeBinder(
-      document,
       bound.generic_params,
       childNormalizationContext(context, `trait-object:${index}`),
       `trait-object:${index}`,
     );
     const trait = normalizeTraitDispatch(document, bound.trait, binder.context);
     const traitRecord = requireRecord(bound.trait, `Rust dynamic trait bound ${index} trait`);
-    const resolved = resolveCompilerItem(document, traitRecord.id, binder.context);
+    const resolved = resolveRustCompilerItem(document, traitRecord.id, binder.context);
     if (resolved.item === undefined || !hasInnerKind(resolved.item, "trait")) {
       throw new Error(`Rust dynamic trait '${trait.path}' has no exact declaration for auto-trait classification.`);
     }
@@ -714,7 +792,6 @@ function normalizeOpaqueType(
       throw new Error(`Rust opaque trait-bound modifier '${String(traitBound.modifier)}' is unsupported.`);
     }
     const binder = normalizeLifetimeBinder(
-      document,
       traitBound.generic_params,
       childNormalizationContext(context, `opaque:bound:${index}`),
       `opaque-bound:${index}`,
@@ -729,7 +806,7 @@ function normalizeOpaqueType(
   if (captures === undefined) {
     throw new Error("Rust opaque type has no exact compiler-visible capture set.");
   }
-  const captureKeys = captures.map(genericArgumentSemanticKey);
+  const captureKeys = captures.map((capture) => genericArgumentSemanticKey(capture));
   if (new Set(captureKeys).size !== captureKeys.length) {
     throw new Error("Rust opaque type repeats one exact capture identity.");
   }
@@ -833,7 +910,6 @@ function normalizeAssociatedConstraint(
       throw new Error(`Rust associated constraint '${name}' has unsupported trait modifier '${String(traitBound.modifier)}'.`);
     }
     const binder = normalizeLifetimeBinder(
-      document,
       traitBound.generic_params,
       childNormalizationContext(context, `bound:${index}`),
       `associated-bound:${index}`,
@@ -851,46 +927,6 @@ function normalizeAssociatedConstraint(
     genericArguments: selected.genericArguments,
     traits: Object.freeze(traits),
     outlives: Object.freeze(outlives),
-  });
-}
-
-function resolveCompilerItem(
-  document: RustdocDocument,
-  id: unknown,
-  context: RustCompilerNormalizationContext,
-): {
-  readonly document: RustdocDocument;
-  readonly dependency: import("../model.js").RustCompilerDependency;
-  readonly item?: Readonly<Record<string, unknown>>;
-  readonly identity: RustCompilerItemIdentity;
-} {
-  const local = document.index[String(id)];
-  const resolved = context.resolveItem === undefined
-    ? undefined
-    : context.resolveItem(document, context.dependency, id);
-  const selectedDocument = resolved?.document ?? document;
-  const selectedDependency = resolved?.dependency ?? context.dependency;
-  const item = resolved?.item ?? (isRecord(local) ? local : undefined);
-  if (item !== undefined) {
-    return Object.freeze({
-      document: selectedDocument,
-      dependency: selectedDependency,
-      item,
-      identity: rustCompilerItemIdentity(selectedDocument, selectedDependency, item),
-    });
-  }
-  const pathRecord = requireRecord(document.paths[String(id)], `Rust item '${String(id)}' path`);
-  const path = requireArray(pathRecord.path, `Rust item '${String(id)}' path segments`);
-  if (path.length < 2 || path.some((segment) => typeof segment !== "string")) {
-    throw new Error(`Rust item '${String(id)}' has no canonical crate-qualified identity.`);
-  }
-  return Object.freeze({
-    document,
-    dependency: context.dependency,
-    identity: Object.freeze({
-      itemId: `${context.dependency.packageId}#${String(id)}`,
-      canonicalPath: Object.freeze(path as string[]),
-    }),
   });
 }
 
@@ -1016,7 +1052,7 @@ function typeSemanticKey(type: RustCompilerType, boundNames: ReadonlyMap<string,
     }
     case "trait-object": return `dynamic:${field(traitSemanticKey(type.principal, boundNames))}:${list(type.autoTraits.map((trait) => traitSemanticKey(trait, boundNames)))}:${field(lifetimeSemanticKey(type.lifetime, boundNames))}`;
     case "opaque": return `opaque:${field(type.identity.itemId)}:${list(type.bounds.map((bound) => traitSemanticKey(bound, boundNames)))}:${list(type.outlives.map((lifetime) => lifetimeSemanticKey(lifetime, boundNames)))}:${list(type.captures.map((capture) => genericArgumentSemanticKey(capture, boundNames)))}`;
-    case "associated-type": return `associated:${field(type.identity.itemId)}:${field(typeSemanticKey(type.owner, boundNames))}:${field(traitSemanticKey(type.trait, boundNames))}:${list(type.genericArguments.map((argument) => genericArgumentSemanticKey(argument, boundNames)))}`;
+    case "associated-type": return `associated:${field(type.identity.itemId)}:${field(typeSemanticKey(type.owner, boundNames))}:${field(traitSemanticKey(type.trait, boundNames))}:${list(type.genericArguments.map((argument) => genericArgumentSemanticKey(argument, boundNames)))}:${type.maybeSized ? "maybe-sized" : "sized"}`;
     case "path": return `path:${field(type.identity.itemId)}:${list(type.genericArguments.map((argument) => genericArgumentSemanticKey(argument, boundNames)))}`;
   }
 }

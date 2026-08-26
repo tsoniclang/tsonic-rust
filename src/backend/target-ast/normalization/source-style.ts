@@ -603,7 +603,7 @@ function rustTypeNames(type: RustType): readonly string[] {
         ...type.autoTraits.flatMap((trait) => rustTypeNames(trait.trait)),
       ];
     case "impl-trait":
-      return type.bounds.flatMap((bound) => rustTypeNames(bound.trait));
+      return type.bounds.flatMap(rustTypeBoundNames);
     case "reference":
       return rustTypeNames(type.referent);
     case "raw-pointer":

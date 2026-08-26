@@ -11,6 +11,7 @@ import {
 } from "../../target-model/names/identifiers.js";
 import {
   rustModuleBindingFactKey,
+  rustTypeAliasDeclarationFactKey,
 } from "../facts/keys.js";
 import type {
   RustAnalysisContext,
@@ -221,6 +222,13 @@ function rustDeclarationItemNames(
   context: RustAnalysisContext,
   declaration: Node,
 ): readonly string[] {
+  if (
+    context.ast.kindName(declaration) === "KindTypeAliasDeclaration" &&
+    context.facts.getFact(declaration, rustTypeAliasDeclarationFactKey)?.kind ===
+      "erased"
+  ) {
+    return emptyNames;
+  }
   const binding = context.facts.getFact(declaration, rustModuleBindingFactKey);
   const candidates = binding?.storage === "native-callable"
     ? [binding.value?.name ?? binding.name]

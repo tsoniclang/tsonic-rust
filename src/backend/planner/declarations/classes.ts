@@ -339,7 +339,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
       type: {
         kind: "named" as const,
         path: "Option",
-        genericArguments: [{ kind: "type", type: property.callableType }],
+        genericArguments: [{ kind: "type" as const, type: property.callableType }],
       },
       visibility: storageVisibility,
       ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),

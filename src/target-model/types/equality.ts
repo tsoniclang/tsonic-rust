@@ -31,6 +31,24 @@ export function rustTargetTypeRefEquals(
   return rustTargetTypeRefEqualsValidated(left, right);
 }
 
+export function rustTargetTypeRefEqualsWithinLifetimeBinders(
+  left: RustTargetTypeRef | undefined,
+  right: RustTargetTypeRef | undefined,
+  leftBinder: RustLifetimeBinder,
+  rightBinder: RustLifetimeBinder,
+): boolean {
+  if (left === undefined || right === undefined ||
+    !isRustTargetTypeRef(left) || !isRustTargetTypeRef(right)) {
+    return false;
+  }
+  const context = matchLifetimeBinders(
+    leftBinder,
+    rightBinder,
+    emptyLifetimeEqualityContext,
+  );
+  return context !== undefined && rustTargetTypeRefEqualsValidated(left, right, context);
+}
+
 export function isRustTargetTypeRef(value: unknown): value is RustTargetTypeRef {
   try {
     return validateRustTargetTypeRef(value, new WeakSet<object>(), 0);

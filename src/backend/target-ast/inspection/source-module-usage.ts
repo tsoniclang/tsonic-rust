@@ -154,7 +154,7 @@ function rustTypeReferencesModuleAlias(type: RustType, alias: string): boolean {
         type.autoTraits.some((trait) => rustTypeReferencesModuleAlias(trait.trait, alias));
     case "impl-trait":
       return type.bounds.some((bound) =>
-        rustTypeReferencesModuleAlias(bound.trait, alias));
+        rustTypeBoundReferencesModuleAlias(bound, alias));
     case "reference":
       return rustTypeReferencesModuleAlias(type.referent, alias);
     case "raw-pointer":

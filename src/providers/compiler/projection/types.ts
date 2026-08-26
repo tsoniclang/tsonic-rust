@@ -21,6 +21,7 @@ import {
 import {
   compilerAssociatedSourceExportName,
 } from "../model/rustdoc-items.js";
+import { compilerTypeRequirementCanonicalPath } from "../model/rustdoc-types.js";
 import {
   compilerModuleSpecifier,
   compilerTargetTypeId,
@@ -71,7 +72,6 @@ export function sourceTypeFor(
   type: RustCompilerType,
   context: ProjectionContext,
   position: "parameter" | "result",
-  nested = false,
 ): ProviderTypeExpression {
   switch (type.kind) {
     case "unit":
@@ -96,13 +96,13 @@ export function sourceTypeFor(
       return {
         kind: "tuple",
         elementTypes: type.elements.map((element) =>
-          sourceTypeFor(element, context, position, true)),
+          sourceTypeFor(element, context, position)),
       };
     case "array":
     case "slice":
       return {
         kind: "array",
-        elementType: sourceTypeFor(type.element, context, position, true),
+        elementType: sourceTypeFor(type.element, context, position),
       };
     case "reference": {
       const lifetime = sourceLifetimeFor(type.lifetime, context);
@@ -113,7 +113,7 @@ export function sourceTypeFor(
           ? rustSourceTypeExportIds.mutableReference
           : rustSourceTypeExportIds.sharedReference,
         [
-          sourceTypeFor(type.target, context, position, true),
+          sourceTypeFor(type.target, context, position),
           ...(lifetime === undefined ? [] : [lifetime]),
         ],
       );
@@ -123,7 +123,7 @@ export function sourceTypeFor(
         context,
         rustTypesModule,
         type.mutable ? rustMutPointerExport : rustConstPointerExport,
-        [sourceTypeFor(type.target, context, position, true)],
+        [sourceTypeFor(type.target, context, position)],
       );
     case "function-pointer": {
       const binderContext = withCompilerLifetimeBinder(context, type.lifetimeBinder);
@@ -135,9 +135,9 @@ export function sourceTypeFor(
           {
             kind: "tuple",
             elementTypes: type.parameters.map((parameter) =>
-              sourceTypeFor(parameter, binderContext, position, true)),
+              sourceTypeFor(parameter, binderContext, position)),
           },
-          sourceTypeFor(type.result, binderContext, position, true),
+          sourceTypeFor(type.result, binderContext, position),
         ],
       );
     }
@@ -204,7 +204,7 @@ export function sourceTypeFor(
         return {
           kind: "union",
           types: [
-            sourceTypeFor(argument.type, context, position, true),
+            sourceTypeFor(argument.type, context, position),
             { kind: "undefined" },
           ],
         };
@@ -441,7 +441,7 @@ export function sourceGenericArgumentFor(
 ): ProviderTypeExpression {
   switch (argument.kind) {
     case "type":
-      return sourceTypeFor(argument.type, context, position, true);
+      return sourceTypeFor(argument.type, context, position);
     case "lifetime": {
       const selected = sourceLifetimeFor(argument.lifetime, context);
       return selected ?? importedSourceType(
@@ -512,7 +512,7 @@ export function providerGenericParametersFor(
       return Object.freeze({
         name,
         constraints: Object.freeze([
-          sourceTypeFor(parameter.type, selectedContext, "parameter", true),
+          sourceTypeFor(parameter.type, selectedContext, "parameter"),
         ]),
         ...(parameter.defaultValue === undefined
           ? {}
@@ -548,7 +548,6 @@ export function providerGenericParametersFor(
               parameter.defaultType,
               selectedContext,
               "parameter",
-              true,
             ),
           }),
     });
@@ -687,7 +686,7 @@ function sourceAssociatedTypeFor(
     [
       ...type.trait.genericArguments.map((argument) =>
         sourceGenericArgumentFor(argument, context, position)),
-      sourceTypeFor(type.owner, context, position, true),
+      sourceTypeFor(type.owner, context, position),
       ...type.genericArguments.map((argument) =>
         sourceGenericArgumentFor(argument, context, position)),
     ],
@@ -789,9 +788,7 @@ function sourceRequirementFor(
   if (typeof requirement !== "string") {
     return sourceTraitFor(requirement.trait, context, "parameter");
   }
-  const canonicalPath = requirement === "copy"
-    ? ["core", "marker", "Copy"]
-    : ["core", "clone", "Clone"];
+  const canonicalPath = compilerTypeRequirementCanonicalPath(requirement);
   const standard = context.standardTypes.get(canonicalPath.join("\0"));
   if (standard === undefined) {
     throw new Error(

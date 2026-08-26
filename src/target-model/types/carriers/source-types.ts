@@ -10,7 +10,6 @@ import type {
 } from "../model.js";
 import {
   isRustLifetimeRef,
-  type RustLifetimeRef,
 } from "../../lifetimes/index.js";
 
 export const rustStringTargetId = "rust.std.String";

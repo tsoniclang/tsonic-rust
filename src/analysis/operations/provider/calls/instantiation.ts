@@ -42,12 +42,12 @@ import type {
 } from "../../../../policy/operations/contracts.js";
 import type {
   RustProviderFactOperationKind,
-  RustProviderGenericParameter,
   RustProviderOperationForm,
   RustProviderOperationTemplate,
   RustRuntimeSetOperationKind,
   RustTargetOperationFact,
 } from "../../../facts/keys.js";
+import type { RustProviderGenericParameter } from "../../../../target-model/operations/model.js";
 import type { ProviderDeclarationIdentity } from "@tsonic/tsts";
 import type { RustAppliedValueCarrierReconciliation } from "../../../../policy/types/value-carrier-reconciliation.js";
 import type { RustOperationsProviderOptions } from "../model.js";

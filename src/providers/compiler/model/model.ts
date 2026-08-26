@@ -210,6 +210,7 @@ export type RustCompilerType =
       readonly trait: RustCompilerTraitDispatch;
       readonly name: string;
       readonly genericArguments: readonly RustCompilerGenericArgument[];
+      readonly maybeSized: boolean;
     }
   | {
       readonly kind: "path";
@@ -313,6 +314,9 @@ export interface RustCompilerAssociatedType {
   readonly requirements: readonly RustCompilerTypeRequirement[];
   readonly outlives: readonly RustCompilerLifetime[];
   readonly maybeSized: boolean;
+  readonly ownerRequirements: readonly RustCompilerTypeRequirement[];
+  readonly ownerOutlives: readonly RustCompilerLifetime[];
+  readonly ownerMaybeSized: boolean;
   readonly defaultType?: RustCompilerType;
 }
 

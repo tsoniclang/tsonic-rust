@@ -148,6 +148,7 @@ export function planProjectMethod(
   const methodAttributes = [
     ...(isStatic && methodName === "new" ? [rustLintAttributes.newReturningOtherType] : []),
     ...(ast.hasModifierKind(ast.parent(member) ?? member, "export") ? [] : [rustLintAttributes.deadCode]),
+    ...(genericPlan.preservesExplicitLifetimes ? [rustLintAttributes.needlessLifetimes] : []),
     ...safetyAttributes,
   ];
   if (generatorFact !== undefined && fallible) {
