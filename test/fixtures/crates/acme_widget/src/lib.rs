@@ -69,6 +69,46 @@ pub fn pass_family_item<F: Family, T>(value: F::Item<T>) -> F::Item<T> {
     value
 }
 
+pub trait LendingFamily {
+    type Item<'a>
+    where
+        Self: 'a;
+}
+
+pub trait View {
+    fn value(&self) -> i32;
+}
+
+pub fn pass_lending_item<'a, F>(value: F::Item<'a>) -> F::Item<'a>
+where
+    F: LendingFamily + 'a,
+{
+    value
+}
+
+pub fn choose_borrowed<'short, 'long: 'short, T: 'short + ?Sized, const N: usize>(
+    short: &'short T,
+    _long: &'long T,
+    _witness: &[u8; N],
+) -> &'short T {
+    short
+}
+
+pub fn apply_borrowed(
+    callback: for<'a> fn(&'a i32) -> &'a i32,
+    value: &i32,
+) -> &i32 {
+    callback(value)
+}
+
+pub fn inspect_view(value: &(dyn View + '_)) -> i32 {
+    value.value()
+}
+
+pub fn opaque_borrow<'a>(value: &'a i32) -> impl Copy + use<'a> {
+    value
+}
+
 pub trait Metric<T> {
     type Output;
 

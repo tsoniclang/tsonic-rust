@@ -185,6 +185,97 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
         unsafe: false,
       },
     );
+    const lifetimeModule = worker.module({
+      snapshot,
+      dependency,
+      modulePath: [],
+      requestedExports: [
+        "apply_borrowed",
+        "choose_borrowed",
+        "inspect_view",
+        "opaque_borrow",
+        "pass_lending_item",
+      ],
+    });
+    assert.deepEqual(lifetimeModule.unsupportedExports, []);
+
+    const chooseBorrowed = lifetimeModule.exports.find(
+      ({ name }) => name === "choose_borrowed",
+    )?.function;
+    assert.ok(chooseBorrowed);
+    assert.deepEqual(
+      chooseBorrowed.genericParameters.map(({ kind }) => kind),
+      ["lifetime", "lifetime", "type", "const"],
+    );
+    const [shortLifetime, longLifetime, valueType, length] =
+      chooseBorrowed.genericParameters;
+    assert.equal(shortLifetime.kind, "lifetime");
+    assert.equal(longLifetime.kind, "lifetime");
+    assert.equal(valueType.kind, "type");
+    assert.equal(length.kind, "const");
+    assert.deepEqual(longLifetime.outlives, [shortLifetime.lifetime]);
+    assert.deepEqual(valueType.outlives, [shortLifetime.lifetime]);
+    assert.equal(valueType.maybeSized, true);
+    assert.equal(chooseBorrowed.parameters[0].type.kind, "reference");
+    assert.deepEqual(
+      chooseBorrowed.parameters[0].type.lifetime,
+      shortLifetime.lifetime,
+    );
+    assert.equal(chooseBorrowed.parameters[1].type.kind, "reference");
+    assert.deepEqual(
+      chooseBorrowed.parameters[1].type.lifetime,
+      longLifetime.lifetime,
+    );
+    assert.equal(chooseBorrowed.result.kind, "reference");
+    assert.deepEqual(chooseBorrowed.result.lifetime, shortLifetime.lifetime);
+
+    const applyBorrowed = lifetimeModule.exports.find(
+      ({ name }) => name === "apply_borrowed",
+    )?.function;
+    assert.equal(applyBorrowed?.parameters[0].type.kind, "function-pointer");
+    const callback = applyBorrowed.parameters[0].type;
+    assert.equal(callback.lifetimeBinder?.parameters.length, 1);
+    const callbackLifetime = callback.lifetimeBinder.parameters[0].lifetime;
+    assert.equal(callbackLifetime.kind, "bound");
+    assert.deepEqual(callback.parameters[0].lifetime, callbackLifetime);
+    assert.deepEqual(callback.result.lifetime, callbackLifetime);
+
+    const lending = lifetimeModule.exports.find(
+      ({ name }) => name === "pass_lending_item",
+    )?.function;
+    assert.equal(lending?.parameters[0].type.kind, "associated-type");
+    assert.equal(lending?.result.kind, "associated-type");
+    assert.equal(lending?.result.name, "Item");
+    assert.equal(lending?.result.genericArguments[0].kind, "lifetime");
+
+    const inspectView = lifetimeModule.exports.find(
+      ({ name }) => name === "inspect_view",
+    )?.function;
+    assert.equal(inspectView?.parameters[0].type.kind, "reference");
+    assert.equal(inspectView?.parameters[0].type.target.kind, "trait-object");
+
+    const opaqueBorrow = lifetimeModule.exports.find(
+      ({ name }) => name === "opaque_borrow",
+    )?.function;
+    assert.equal(opaqueBorrow?.result.kind, "opaque");
+    assert.equal(opaqueBorrow?.result.captures[0].kind, "lifetime");
+
+    const lifetimeProjection = projectRustCompilerModule(lifetimeModule, {
+      providerModuleId: compilerProviderModuleId(dependency, []),
+      moduleSpecifier: "@tsonic/rust/crates/widget_alias/index.js",
+    });
+    const chooseOperation = lifetimeProjection.operations.find(
+      ({ exportId }) => exportId.endsWith("::choose_borrowed"),
+    );
+    assert.deepEqual(
+      chooseOperation?.genericParameters?.map(({ kind }) => kind),
+      ["lifetime", "lifetime", "type", "const"],
+    );
+    const lendingOperation = lifetimeProjection.operations.find(
+      ({ exportId }) => exportId.endsWith("::pass_lending_item"),
+    );
+    assert.equal(lendingOperation?.resultCarrier.kind, "associated-type");
+    assert.equal(lendingOperation?.resultCarrier.genericArguments?.[0].kind, "lifetime");
     const closedFunctionModule = worker.module({
       snapshot,
       dependency,
