@@ -8,6 +8,7 @@ import {
 import type {
   RustNamedTypeTraitContract,
   RustTargetGenericArgument,
+  RustTargetTraitRef,
 } from "../../target-model/types/model.js";
 import type {
   RustProviderBinaryEpilogueDefinition,
@@ -358,23 +359,23 @@ export function materializeProviderCarrier(
                 carrierTraits,
               ),
               traits: constraint.traits.map((trait) =>
-                materializeProviderCarrier(trait, carrierPaths, carrierTraits)),
+                materializeProviderTraitRef(trait, carrierPaths, carrierTraits)),
             }),
     };
   }
   if (carrier.kind === "trait-object") {
     return {
       ...carrier,
-      principal: materializeProviderCarrier(carrier.principal, carrierPaths, carrierTraits),
+      principal: materializeProviderTraitRef(carrier.principal, carrierPaths, carrierTraits),
       autoTraits: carrier.autoTraits.map((trait) =>
-        materializeProviderCarrier(trait, carrierPaths, carrierTraits)),
+        materializeProviderTraitRef(trait, carrierPaths, carrierTraits)),
     };
   }
   if (carrier.kind === "impl-trait") {
     return {
       ...carrier,
       bounds: carrier.bounds.map((bound) =>
-        materializeProviderCarrier(bound, carrierPaths, carrierTraits)),
+        materializeProviderTraitRef(bound, carrierPaths, carrierTraits)),
     };
   }
   if (carrier.kind === "associated-type") {
@@ -383,7 +384,7 @@ export function materializeProviderCarrier(
       owner: materializeProviderCarrier(carrier.owner, carrierPaths, carrierTraits),
       ...(carrier.trait === undefined
         ? {}
-        : { trait: materializeProviderCarrier(carrier.trait, carrierPaths, carrierTraits) }),
+        : { trait: materializeProviderTraitRef(carrier.trait, carrierPaths, carrierTraits) }),
       ...(carrier.genericArguments === undefined
         ? {}
         : {
@@ -399,6 +400,18 @@ export function materializeProviderCarrier(
   return fixedArray === undefined
     ? carrier
     : rustFixedArrayTargetType(materializeProviderCarrier(fixedArray.element, carrierPaths, carrierTraits), fixedArray.length);
+}
+
+function materializeProviderTraitRef(
+  trait: RustTargetTraitRef,
+  carrierPaths: Readonly<Record<string, string>>,
+  carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>>,
+): RustTargetTraitRef {
+  const materialized = materializeProviderCarrier(trait, carrierPaths, carrierTraits);
+  if (materialized.kind !== "trait-ref") {
+    throw new Error("Rust provider trait materialization changed the exact target trait carrier kind.");
+  }
+  return materialized;
 }
 
 function materializeProviderGenericArguments(

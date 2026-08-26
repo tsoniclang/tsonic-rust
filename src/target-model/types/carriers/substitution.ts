@@ -5,6 +5,7 @@ import { rustTargetTypeRefEquals } from "../equality.js";
 import type {
   RustTargetConstArgument,
   RustTargetGenericArgument,
+  RustTargetTraitRef,
   TargetTypeRef,
 } from "../model.js";
 import { rustLifetimeKey, rustLifetimesEqual } from "../../lifetimes/index.js";
@@ -180,7 +181,7 @@ export function substituteRustTargetGenerics(
                     constSubstitutions,
                   ),
                   traits: constraint.traits.map((trait) =>
-                    substituteRustTargetGenerics(
+                    substituteRustTargetTraitRef(
                       trait,
                       substitutions,
                       nestedLifetimes,
@@ -229,14 +230,14 @@ export function substituteRustTargetGenerics(
     case "trait-object":
       return {
         ...type,
-        principal: substituteRustTargetGenerics(
+        principal: substituteRustTargetTraitRef(
           type.principal,
           substitutions,
           lifetimeSubstitutions,
           constSubstitutions,
         ),
         autoTraits: type.autoTraits.map((trait) =>
-          substituteRustTargetGenerics(
+          substituteRustTargetTraitRef(
             trait,
             substitutions,
             lifetimeSubstitutions,
@@ -248,7 +249,7 @@ export function substituteRustTargetGenerics(
       return {
         ...type,
         bounds: type.bounds.map((bound) =>
-          substituteRustTargetGenerics(
+          substituteRustTargetTraitRef(
             bound,
             substitutions,
             lifetimeSubstitutions,
@@ -269,7 +270,7 @@ export function substituteRustTargetGenerics(
         ...(type.trait === undefined
           ? {}
           : {
-              trait: substituteRustTargetGenerics(
+              trait: substituteRustTargetTraitRef(
                 type.trait,
                 substitutions,
                 lifetimeSubstitutions,
@@ -362,6 +363,24 @@ export function substituteRustTargetGenerics(
     default:
       return type;
   }
+}
+
+function substituteRustTargetTraitRef(
+  trait: RustTargetTraitRef,
+  substitutions: ReadonlyMap<string, TargetTypeRef>,
+  lifetimeSubstitutions: ReadonlyMap<string, RustLifetimeRef>,
+  constSubstitutions: ReadonlyMap<string, RustTargetConstArgument>,
+): RustTargetTraitRef {
+  const substituted = substituteRustTargetGenerics(
+    trait,
+    substitutions,
+    lifetimeSubstitutions,
+    constSubstitutions,
+  );
+  if (substituted.kind !== "trait-ref") {
+    throw new Error("Rust trait substitution changed the exact target trait carrier kind.");
+  }
+  return substituted;
 }
 
 function substituteGenericArguments(

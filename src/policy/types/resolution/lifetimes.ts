@@ -62,7 +62,7 @@ export function resolveRustLifetimeSourceType(
       const lifetime = contract.lifetimeTypeNode === undefined
         ? undefined
         : context.sourceLifetimes.resolve(contract.lifetimeTypeNode);
-      return principal === undefined ||
+      return principal?.kind !== "trait-ref" ||
           (contract.lifetimeTypeNode !== undefined && lifetime === undefined)
         ? undefined
         : Object.freeze({
@@ -83,7 +83,7 @@ export function resolveRustLifetimeSourceType(
         ? Object.freeze([])
         : resolveLifetimeCaptures(contract.captureTypeNode, context);
       const identity = sourceNodeIdentity(context.ast, node);
-      return bound === undefined || captures === undefined || identity === undefined
+      return bound?.kind !== "trait-ref" || captures === undefined || identity === undefined
         ? undefined
         : Object.freeze({
             kind: "impl-trait" as const,

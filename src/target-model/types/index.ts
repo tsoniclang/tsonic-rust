@@ -3,6 +3,7 @@ export type {
   RustTargetConstArgument,
   RustTargetGenericArgument,
   RustTargetGenericParameter,
+  RustTargetTraitRef,
   TargetTypeRef,
 } from "./model.js";
 export {

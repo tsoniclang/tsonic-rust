@@ -164,6 +164,24 @@ test("malformed, duplicate, and wrong-kind lifetime carrier shapes fail closed",
       id: "acme.Value",
       genericArguments: [{ kind: "lifetime", lifetime: int32 }],
     },
+    {
+      kind: "trait-object",
+      principal: int32,
+      autoTraits: [],
+    },
+    {
+      kind: "impl-trait",
+      id: "acme.impl",
+      bounds: [int32],
+      outlives: [],
+      captures: [],
+    },
+    {
+      kind: "associated-type",
+      owner: int32,
+      trait: int32,
+      name: "Item",
+    },
   ];
 
   for (const carrier of invalid) {

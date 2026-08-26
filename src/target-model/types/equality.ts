@@ -378,7 +378,10 @@ function validateRustTargetTypeRef(
           value,
           ["kind", "principal", "autoTraits", "lifetime"],
           ["kind", "principal", "autoTraits"],
-        ) && validateChild(value.principal) && validateChildren(value.autoTraits) &&
+        ) && isPlainRecord(value.principal) && value.principal.kind === "trait-ref" &&
+          validateChild(value.principal) && isDenseDataArray(value.autoTraits) &&
+          value.autoTraits.every((trait) =>
+            isPlainRecord(trait) && trait.kind === "trait-ref" && validateChild(trait)) &&
           (value.lifetime === undefined || validateLifetime(value.lifetime));
       case "impl-trait":
         return hasExactKeys(
@@ -386,7 +389,9 @@ function validateRustTargetTypeRef(
           ["kind", "id", "bounds", "outlives", "captures"],
           ["kind", "id", "bounds", "outlives", "captures"],
         ) && typeof value.id === "string" && value.id.length > 0 &&
-          validateChildren(value.bounds) && validateLifetimeList(value.outlives) &&
+          isDenseDataArray(value.bounds) && value.bounds.every((bound) =>
+            isPlainRecord(bound) && bound.kind === "trait-ref" && validateChild(bound)) &&
+          validateLifetimeList(value.outlives) &&
           validateLifetimeList(value.captures);
       case "associated-type":
         return hasExactKeys(
@@ -394,7 +399,9 @@ function validateRustTargetTypeRef(
           ["kind", "owner", "trait", "name", "genericArguments"],
           ["kind", "owner", "name"],
         ) && validateChild(value.owner) &&
-          (value.trait === undefined || validateChild(value.trait)) &&
+          (value.trait === undefined ||
+            isPlainRecord(value.trait) && value.trait.kind === "trait-ref" &&
+              validateChild(value.trait)) &&
           typeof value.name === "string" && value.name.length > 0 &&
           (value.genericArguments === undefined ||
             validateGenericArguments(value.genericArguments, validateChild));
@@ -455,7 +462,9 @@ function validateAssociatedConstraints(
       constraint,
       ["kind", "identity", "name", "genericArguments", "traits", "outlives"],
       ["kind", "identity", "name", "genericArguments", "traits", "outlives"],
-    ) || !isDenseDataArray(constraint.traits) || !constraint.traits.every(validateType) ||
+    ) || !isDenseDataArray(constraint.traits) ||
+      !constraint.traits.every((trait) =>
+        isPlainRecord(trait) && trait.kind === "trait-ref" && validateType(trait)) ||
       !validateLifetimeList(constraint.outlives)) {
       return false;
     }

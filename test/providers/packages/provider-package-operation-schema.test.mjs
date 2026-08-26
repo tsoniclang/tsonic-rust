@@ -182,6 +182,14 @@ test("provider carrier validation preserves exact lifetime, HRTB, mixed-generic,
     })),
     /not a closed Rust target type/u,
   );
+  assert.throws(
+    () => createRustProviderPackage(withCarrier({
+      kind: "trait-object",
+      principal: int32Carrier,
+      autoTraits: [],
+    })),
+    /not a closed Rust target type/u,
+  );
 });
 
 test("provider operation metadata rejects unknown and missing operation kinds", () => {

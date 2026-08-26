@@ -55,6 +55,7 @@ import type {
   RustTargetAssociatedConstraint,
   RustTargetConstArgument,
   RustTargetGenericArgument,
+  RustTargetTraitRef,
   TargetTypeRef,
 } from "../../../target-model/types/model.js";
 import type {
@@ -722,7 +723,7 @@ export function targetTraitFor(
   trait: RustCompilerTraitDispatch,
   context: ProjectionContext,
   position: "parameter" | "result",
-): TargetTypeRef {
+): RustTargetTraitRef {
   const binderContext = withCompilerLifetimeBinder(context, trait.lifetimeBinder);
   const standard = binderContext.standardTypes.get(
     trait.identity.canonicalPath.join("\0"),

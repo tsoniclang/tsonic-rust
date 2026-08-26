@@ -26,6 +26,15 @@ export type RustTargetGenericArgument =
   | { readonly kind: "type"; readonly type: RustTargetTypeRef }
   | { readonly kind: "const"; readonly value: RustTargetConstArgument };
 
+export interface RustTargetTraitRef {
+  readonly kind: "trait-ref";
+  readonly id: string;
+  readonly path: string;
+  readonly genericArguments: readonly RustTargetGenericArgument[];
+  readonly associatedConstraints: readonly RustTargetAssociatedConstraint[];
+  readonly lifetimeBinder?: RustLifetimeBinder;
+}
+
 export type RustTargetAssociatedConstraint =
   | {
       readonly kind: "equality";
@@ -39,7 +48,7 @@ export type RustTargetAssociatedConstraint =
       readonly identity: string;
       readonly name: string;
       readonly genericArguments: readonly RustTargetGenericArgument[];
-      readonly traits: readonly RustTargetTypeRef[];
+      readonly traits: readonly RustTargetTraitRef[];
       readonly outlives: readonly RustLifetimeRef[];
     };
 
@@ -69,14 +78,7 @@ export type RustTargetTypeRef =
       readonly abi?: readonly string[];
       readonly isUnsafe?: boolean;
     }
-  | {
-      readonly kind: "trait-ref";
-      readonly id: string;
-      readonly path: string;
-      readonly genericArguments: readonly RustTargetGenericArgument[];
-      readonly associatedConstraints: readonly RustTargetAssociatedConstraint[];
-      readonly lifetimeBinder?: RustLifetimeBinder;
-    }
+  | RustTargetTraitRef
   | {
       readonly kind: "closure";
       readonly args: readonly RustTargetTypeRef[];
@@ -86,21 +88,21 @@ export type RustTargetTypeRef =
   | { readonly kind: "opaque"; readonly id: string }
   | {
       readonly kind: "trait-object";
-      readonly principal: RustTargetTypeRef;
-      readonly autoTraits: readonly RustTargetTypeRef[];
+      readonly principal: RustTargetTraitRef;
+      readonly autoTraits: readonly RustTargetTraitRef[];
       readonly lifetime?: RustLifetimeRef;
     }
   | {
       readonly kind: "impl-trait";
       readonly id: string;
-      readonly bounds: readonly RustTargetTypeRef[];
+      readonly bounds: readonly RustTargetTraitRef[];
       readonly outlives: readonly RustLifetimeRef[];
       readonly captures: readonly RustLifetimeRef[];
     }
   | {
       readonly kind: "associated-type";
       readonly owner: RustTargetTypeRef;
-      readonly trait?: RustTargetTypeRef;
+      readonly trait?: RustTargetTraitRef;
       readonly name: string;
       readonly genericArguments?: readonly RustTargetGenericArgument[];
     }
