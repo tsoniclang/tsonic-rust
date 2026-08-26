@@ -7,6 +7,7 @@ import type {
   RustTargetTypeResolutionContext,
   RustTargetTypeResolutionOptions,
 } from "./model.js";
+import { rustStaticLifetime } from "../../../target-model/lifetimes/index.js";
 
 export function rustSourceLifetimeTypeContract(
   node: Node,
@@ -60,7 +61,7 @@ export function resolveRustLifetimeSourceType(
         resolving,
       );
       const lifetime = contract.lifetimeTypeNode === undefined
-        ? undefined
+        ? rustStaticLifetime
         : context.sourceLifetimes.resolve(contract.lifetimeTypeNode);
       return principal === undefined ||
           (contract.lifetimeTypeNode !== undefined && lifetime === undefined)
@@ -69,7 +70,7 @@ export function resolveRustLifetimeSourceType(
             kind: "trait-object" as const,
             principal,
             autoTraits: Object.freeze([]),
-            ...(lifetime === undefined ? {} : { lifetime }),
+            lifetime,
           });
     }
     case "opaque-type": {
@@ -89,11 +90,13 @@ export function resolveRustLifetimeSourceType(
             kind: "impl-trait" as const,
             id: `source-opaque\0${identity}`,
             bounds: Object.freeze([bound]),
+            outlives: Object.freeze([]),
             captures,
           });
     }
     case "lifetime-kind":
     case "static-lifetime":
+    case "placeholder-lifetime":
     case "outlives":
     case "valid-for":
     case "capture-set":

@@ -1,5 +1,5 @@
 import { appendToLastLine, firstLine, renderedFits } from "../patterns.js";
-import { indentText, printRustType } from "../types.js";
+import { indentText, printRustGenericArgument, printRustType } from "../types.js";
 import { printRustAssociatedOwner, printRustSingleCollectionCallContinuation, rustMethodChain, rustMethodChainPrefersVerticalLayout } from "./chains.js";
 import { printRustClosureParams } from "./closure-params.js";
 import { printRustExpr } from "./core.js";
@@ -149,7 +149,8 @@ export function printRustAssociatedOwnerFitted(
   depth: number,
   column: number,
 ): string {
-  if (owner.kind !== "named" || owner.typeArguments === undefined || owner.typeArguments.length === 0) {
+  if (owner.kind !== "named" || owner.genericArguments === undefined ||
+    owner.genericArguments.length === 0) {
     return printRustType(owner);
   }
   const flat = printRustAssociatedOwner(owner);
@@ -157,8 +158,10 @@ export function printRustAssociatedOwnerFitted(
     return flat;
   }
   const argumentIndent = indentText(depth + 1);
-  const arguments_ = owner.typeArguments.map((argument) => {
-    const rendered = printRustTypeFitted(argument, depth + 1, argumentIndent.length);
+  const arguments_ = owner.genericArguments.map((argument) => {
+    const rendered = argument.kind === "type"
+      ? printRustTypeFitted(argument.type, depth + 1, argumentIndent.length)
+      : printRustGenericArgument(argument);
     return appendToLastLine(`${argumentIndent}${rendered}`, ",");
   });
   return [
@@ -190,12 +193,15 @@ export function printRustTypeFitted(
       `${indentText(depth)})`,
     ].join("\n");
   }
-  if (type.kind === "named" && type.typeArguments !== undefined && type.typeArguments.length > 0) {
+  if (type.kind === "named" && type.genericArguments !== undefined &&
+    type.genericArguments.length > 0) {
     const argumentIndent = indentText(depth + 1);
     return [
       `${type.path}<`,
-      ...type.typeArguments.map((argument) => {
-        const rendered = printRustTypeFitted(argument, depth + 1, argumentIndent.length);
+      ...type.genericArguments.map((argument) => {
+        const rendered = argument.kind === "type"
+          ? printRustTypeFitted(argument.type, depth + 1, argumentIndent.length)
+          : printRustGenericArgument(argument);
         return appendToLastLine(`${argumentIndent}${rendered}`, ",");
       }),
       `${indentText(depth)}>`,

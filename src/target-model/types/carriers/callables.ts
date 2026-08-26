@@ -2,9 +2,14 @@ import { rustAsyncGeneratorTargetId, rustCallableTargetId, rustGeneratorTargetId
 import { rustOptionElementCarrier, rustOptionTargetType } from "./optional.js";
 import { rustTupleTargetType, rustUnitTargetType } from "./native.js";
 import type { TargetTypeRef } from "../model.js";
+import { rustOnlyTypeGenericArguments, rustTypeGenericArguments } from "../generic-arguments.js";
 
 export function rustLocationTargetType(pointee: TargetTypeRef): TargetTypeRef {
-  return { kind: "target-named", id: rustLocationTargetId, typeArguments: [pointee] };
+  return {
+    kind: "target-named",
+    id: rustLocationTargetId,
+    genericArguments: rustTypeGenericArguments([pointee]),
+  };
 }
 
 export function rustCallableTargetType(
@@ -14,7 +19,7 @@ export function rustCallableTargetType(
   return {
     kind: "target-named",
     id: rustCallableTargetId,
-    typeArguments: [rustTupleTargetType(parameters), result],
+    genericArguments: rustTypeGenericArguments([rustTupleTargetType(parameters), result]),
   };
 }
 
@@ -28,11 +33,12 @@ export function isRustCallableCarrier(
 export function rustCallableProtocol(
   carrier: TargetTypeRef | undefined,
 ): { readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef } | undefined {
-  if (carrier?.kind !== "target-named" || carrier.id !== rustCallableTargetId ||
-    carrier.typeArguments?.length !== 2) {
+  if (carrier?.kind !== "target-named" || carrier.id !== rustCallableTargetId) {
     return undefined;
   }
-  const [argumentsCarrier, result] = carrier.typeArguments;
+  const arguments_ = rustOnlyTypeGenericArguments(carrier.genericArguments);
+  if (arguments_?.length !== 2) return undefined;
+  const [argumentsCarrier, result] = arguments_;
   return argumentsCarrier?.kind === "tuple" && result !== undefined
     ? { parameters: argumentsCarrier.elements, result }
     : undefined;
@@ -130,7 +136,11 @@ export function rustGeneratorTargetType(
   return {
     kind: "target-named",
     id: rustGeneratorTargetId,
-    typeArguments: [protocol.yieldType, protocol.returnType, protocol.nextType],
+    genericArguments: rustTypeGenericArguments([
+      protocol.yieldType,
+      protocol.returnType,
+      protocol.nextType,
+    ]),
   };
 }
 
@@ -140,7 +150,11 @@ export function rustAsyncGeneratorTargetType(
   return {
     kind: "target-named",
     id: rustAsyncGeneratorTargetId,
-    typeArguments: [protocol.yieldType, protocol.returnType, protocol.nextType],
+    genericArguments: rustTypeGenericArguments([
+      protocol.yieldType,
+      protocol.returnType,
+      protocol.nextType,
+    ]),
   };
 }
 
@@ -150,7 +164,7 @@ export function rustIteratorResultTargetType(
   return {
     kind: "target-named",
     id: rustIteratorResultTargetId,
-    typeArguments: [protocol.yieldType, protocol.returnType],
+    genericArguments: rustTypeGenericArguments([protocol.yieldType, protocol.returnType]),
   };
 }
 
@@ -158,11 +172,12 @@ export function getRustGeneratorProtocol(
   carrier: TargetTypeRef | undefined,
 ): RustGeneratorProtocol | undefined {
   if (carrier?.kind !== "target-named" ||
-    (carrier.id !== rustGeneratorTargetId && carrier.id !== rustAsyncGeneratorTargetId) ||
-    carrier.typeArguments?.length !== 3) {
+    (carrier.id !== rustGeneratorTargetId && carrier.id !== rustAsyncGeneratorTargetId)) {
     return undefined;
   }
-  const [yieldType, returnType, nextType] = carrier.typeArguments;
+  const arguments_ = rustOnlyTypeGenericArguments(carrier.genericArguments);
+  if (arguments_?.length !== 3) return undefined;
+  const [yieldType, returnType, nextType] = arguments_;
   return yieldType === undefined || returnType === undefined || nextType === undefined
     ? undefined
     : {
@@ -176,11 +191,12 @@ export function getRustGeneratorProtocol(
 export function getRustIteratorResultProtocol(
   carrier: TargetTypeRef | undefined,
 ): RustIteratorResultProtocol | undefined {
-  if (carrier?.kind !== "target-named" || carrier.id !== rustIteratorResultTargetId ||
-    carrier.typeArguments?.length !== 2) {
+  if (carrier?.kind !== "target-named" || carrier.id !== rustIteratorResultTargetId) {
     return undefined;
   }
-  const [yieldType, returnType] = carrier.typeArguments;
+  const arguments_ = rustOnlyTypeGenericArguments(carrier.genericArguments);
+  if (arguments_?.length !== 2) return undefined;
+  const [yieldType, returnType] = arguments_;
   return yieldType === undefined || returnType === undefined
     ? undefined
     : { yieldType, returnType };
@@ -189,11 +205,9 @@ export function getRustIteratorResultProtocol(
 export function rustLocationPointeeCarrier(
   carrier: TargetTypeRef | undefined,
 ): TargetTypeRef | undefined {
-  return carrier?.kind === "target-named" &&
-      carrier.id === rustLocationTargetId &&
-      carrier.typeArguments?.length === 1
-    ? carrier.typeArguments[0]
-    : undefined;
+  if (carrier?.kind !== "target-named" || carrier.id !== rustLocationTargetId) return undefined;
+  const arguments_ = rustOnlyTypeGenericArguments(carrier.genericArguments);
+  return arguments_?.length === 1 ? arguments_[0] : undefined;
 }
 
 export function rustOptionalLocationPointeeCarrier(

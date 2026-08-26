@@ -673,7 +673,7 @@ function applySelectedRuntimeCallableCall(
     !isDenseDataArray(callArguments) ||
     callArguments.some((argument) => argument === undefined) ||
     (selectedSignature.sourceSelectedMethodTypeArguments?.length ?? 0) !== 0 ||
-    (selectedSignature.targetTypeArguments?.length ?? 0) !== 0 ||
+    (selectedSignature.targetGenericArguments?.length ?? 0) !== 0 ||
     callable.parameters.length !== memberParameters.length ||
     sourceParameterIndexes.length !== memberParameters.length ||
     sourceParameterIndexes.some((index) => !Number.isSafeInteger(index) || index < 0 ||

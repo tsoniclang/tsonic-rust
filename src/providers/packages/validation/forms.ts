@@ -4,6 +4,7 @@ import type { Fail } from "./model.js";
 import type { RustProviderConstantArgument, RustProviderOperationForm } from "../../../target-model/operations/model.js";
 import type { RustProviderPackageDefinition } from "../index.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { validateTargetGenericArguments } from "./generics.js";
 
 export function validateOperationForm(
   operationKind: RustProviderPackageDefinition["operations"][number]["operationKind"],
@@ -148,16 +149,19 @@ export function validateOperationForm(
     case "trait-call":
       requireExactKeys(
         record,
-        ["form", "owner", "traitPath", "traitTypeArguments", "method", "receiverMode", "argModes"],
+        ["form", "owner", "traitPath", "traitGenericArguments", "method", "receiverMode", "argModes"],
         `${label}.target`,
         fail,
       );
       validateCarrier(form.owner, definition, `${label}.target.owner`, fail);
       requireRustPath(form.traitPath, `${label}.target.traitPath`, fail);
       requireRustIdentifier(form.method, `${label}.target.method`, fail);
-      for (const [index, argument] of form.traitTypeArguments.entries()) {
-        validateCarrier(argument, definition, `${label}.target.traitTypeArguments[${index}]`, fail);
-      }
+      validateTargetGenericArguments(
+        form.traitGenericArguments,
+        definition,
+        `${label}.target.traitGenericArguments`,
+        fail,
+      );
       if (form.receiverMode !== undefined && form.receiverMode !== "value" &&
         form.receiverMode !== "ref" && form.receiverMode !== "mut-ref") {
         fail(`${label}.target.receiverMode contains unsupported mode '${String(form.receiverMode)}'`);
@@ -167,16 +171,29 @@ export function validateOperationForm(
     case "trait-associated-value":
       requireExactKeys(
         record,
-        ["form", "owner", "traitPath", "traitTypeArguments", "name"],
+        ["form", "owner", "traitPath", "traitGenericArguments", "name"],
         `${label}.target`,
         fail,
       );
       validateCarrier(form.owner, definition, `${label}.target.owner`, fail);
       requireRustPath(form.traitPath, `${label}.target.traitPath`, fail);
       requireRustIdentifier(form.name, `${label}.target.name`, fail);
-      for (const [index, argument] of form.traitTypeArguments.entries()) {
-        validateCarrier(argument, definition, `${label}.target.traitTypeArguments[${index}]`, fail);
-      }
+      validateTargetGenericArguments(
+        form.traitGenericArguments,
+        definition,
+        `${label}.target.traitGenericArguments`,
+        fail,
+      );
+      return;
+    case "associated-value":
+      requireExactKeys(
+        record,
+        ["form", "owner", "name"],
+        `${label}.target`,
+        fail,
+      );
+      validateCarrier(form.owner, definition, `${label}.target.owner`, fail);
+      requireRustIdentifier(form.name, `${label}.target.name`, fail);
       return;
     case "receiver-method":
       requireExactKeys(record, ["form", "name", "argModes", "argConversions", "argOrder", "chain", "mutatesReceiver"], `${label}.target`, fail);

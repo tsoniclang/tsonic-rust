@@ -17,6 +17,7 @@ import type { Node } from "@tsonic/tsts";
 import type { PlannedProjectObjectField } from "./classes.js";
 import type { RustItem, RustStructField } from "../../target-ast/nodes.js";
 import { emptyRustGenerics } from "../../target-ast/nodes.js";
+import { rustSourceDeclarationGenerics } from "./callable-generics.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustProjectImplementationVisibility } from "../objects/project-storage-abi.js";
 
@@ -316,6 +317,28 @@ export function planTypeAliasDeclaration(node: Node, context: RustPlanContext): 
   }
   if (fact.kind === "erased") {
     return [];
+  }
+  if (fact.kind === "native-alias") {
+    const contract = context.input.program.sourceLifetimes.contractFor(node);
+    const generics = contract === undefined
+      ? undefined
+      : rustSourceDeclarationGenerics(contract);
+    const target = rustTypeFromCarrierInContext(fact.target, context);
+    if (generics === undefined || target === undefined) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, node),
+        "rust.backend.native-type-alias",
+        "A lifetime-bearing type alias has no exact generic contract or renderable target type.",
+      ));
+      return undefined;
+    }
+    return [{
+      kind: "type-alias",
+      name: aliasName,
+      visibility: ast.hasModifierKind(node, "export") ? "public" : "crate",
+      generics,
+      target,
+    }];
   }
   const runtimeVariantTypes = fact.kind === "runtime"
     ? fact.variants.map((variant) =>

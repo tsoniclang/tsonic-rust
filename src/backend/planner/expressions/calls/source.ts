@@ -3,7 +3,8 @@ import {
   rustCallableProtocol,
   rustFutureOutputCarrier,
   rustSourceTypeCarrierValue,
-  substituteRustTargetTypeParameters,
+  rustTargetGenericTypeArguments,
+  substituteRustTargetGenericArgument,
 } from "../../../../target-model/types/index.js";
 import {
   diagnosticInput,
@@ -31,9 +32,9 @@ import {
   planRustVirtualProjectMethodCall,
 } from "../../objects/project-method-dispatch.js";
 import { rustSourceCallEffectsFactKey } from "../../../../analysis/facts/keys.js";
-import { rustTypeFromCarrierInContext } from "../../types/render.js";
+import { rustTargetGenericArgumentToAstInContext } from "../../types/render.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr, RustType } from "../../../target-ast/nodes.js";
+import type { RustExpr, RustGenericArgument } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
 
@@ -103,32 +104,33 @@ export function planSelectedSourceCall(
   if (shaped === undefined) {
     return undefined;
   }
-  const sourceTypeArguments = selected.sourceSelectedMethodTypeArguments ?? [];
-  const targetTypeArgumentCarriers = (fact.targetTypeArguments ?? []).map((argument) =>
-    context.typeParameterSubstitutions === undefined
-      ? argument
-      : substituteRustTargetTypeParameters(
-          argument,
-          context.typeParameterSubstitutions,
-        ));
-  if (sourceTypeArguments.length !== targetTypeArgumentCarriers.length) {
+  const sourceGenericArguments = selected.sourceSelectedMethodTypeArguments ?? [];
+  const targetGenericArguments = (fact.targetGenericArguments ?? []).map((argument) =>
+    substituteRustTargetGenericArgument(
+      argument,
+      context.typeParameterSubstitutions ?? new Map(),
+      context.lifetimeSubstitutions ?? new Map(),
+    ));
+  if (sourceGenericArguments.length !== targetGenericArguments.length) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
-      "rust.backend.source-call-type-arguments",
-      "Selected project-source call has inconsistent source and target type-argument evidence.",
+      "rust.backend.source-call-generic-arguments",
+      "Selected project-source call has inconsistent source and target generic-argument evidence.",
     ));
     return undefined;
   }
-  const targetTypeArguments = targetTypeArgumentCarriers.map((carrier) =>
-    rustTypeFromCarrierInContext(carrier, context));
-  if (targetTypeArguments.some((argument) => argument === undefined)) {
+  const targetAstGenericArguments = targetGenericArguments
+    .filter((argument) => argument.kind !== "lifetime")
+    .map((argument) => rustTargetGenericArgumentToAstInContext(argument, context));
+  if (targetAstGenericArguments.some((argument) => argument === undefined)) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
-      "rust.backend.source-call-type-arguments",
-      "Selected project-source call type arguments do not have exact Rust target types.",
+      "rust.backend.source-call-generic-arguments",
+      "Selected project-source call generic arguments do not have exact Rust target representations.",
     ));
     return undefined;
   }
+  const targetTypeArguments = rustTargetGenericTypeArguments(targetGenericArguments);
   const selectedDeclaration = selected.sourceDeclaration;
   const requiresCallableSpecialization = selectedDeclaration !== undefined &&
     context.input.program.sourceCallableSpecializations.requiresSpecialization(
@@ -137,7 +139,7 @@ export function planSelectedSourceCall(
   const callableSpecialization = requiresCallableSpecialization && selectedDeclaration !== undefined
     ? context.input.program.sourceCallableSpecializations.variantForCall(
         selectedDeclaration,
-        targetTypeArgumentCarriers,
+        targetTypeArguments,
       )
     : undefined;
   if (requiresCallableSpecialization && callableSpecialization === undefined) {
@@ -148,10 +150,10 @@ export function planSelectedSourceCall(
     ));
     return undefined;
   }
-  const callTypeArguments = targetTypeArguments.length === 0 ||
+  const callGenericArguments = targetAstGenericArguments.length === 0 ||
       callableSpecialization !== undefined
     ? undefined
-    : targetTypeArguments as readonly RustType[];
+    : targetAstGenericArguments as readonly RustGenericArgument[];
 
   let planned: RustExpr | undefined;
   switch (fact.target.form) {
@@ -165,7 +167,7 @@ export function planSelectedSourceCall(
         kind: "call",
         path,
         args: shaped,
-        ...(callTypeArguments === undefined ? {} : { typeArguments: callTypeArguments }),
+        ...(callGenericArguments === undefined ? {} : { genericArguments: callGenericArguments }),
       };
       break;
     }
@@ -185,7 +187,7 @@ export function planSelectedSourceCall(
           ? undefined
           : context.input.program.projectMethodDispatch.variantForMember(
               dispatchDeclaration,
-              targetTypeArgumentCarriers,
+              targetTypeArguments,
             );
         if (dispatchVariant === undefined) {
           context.diagnostics.push(missingFactDiagnostic(
@@ -257,7 +259,7 @@ export function planSelectedSourceCall(
             ? receiver
             : planRustNonConsumingValue(receiverNode, receiver, context),
           method: targetName,
-          ...(callTypeArguments === undefined ? {} : { typeArguments: callTypeArguments }),
+          ...(callGenericArguments === undefined ? {} : { genericArguments: callGenericArguments }),
           args: shaped,
           receiverMode: fact.target.mutatesSelf ? "mut-ref" : "ref",
         };
@@ -273,7 +275,7 @@ export function planSelectedSourceCall(
           kind: "call",
           path: `${typePath}::${targetName}`,
           args: shaped,
-          ...(callTypeArguments === undefined ? {} : { typeArguments: callTypeArguments }),
+          ...(callGenericArguments === undefined ? {} : { genericArguments: callGenericArguments }),
         };
       }
       break;

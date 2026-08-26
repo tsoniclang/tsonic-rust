@@ -1,8 +1,7 @@
 import {
-  isRustNumericCarrier,
   rustCallableProtocol,
-  inferRustTargetTypeParameterBindings,
-  substituteRustTargetTypeParameters,
+  rustTargetGenericTypeArguments,
+  substituteRustTargetGenerics,
 } from "../../target-model/types/index.js";
 import {
   KindBinaryExpression,
@@ -42,6 +41,7 @@ import { rustArgumentPassingMode } from "../facts/parameter-passing.js";
 import { rustProjectCallableTargetName } from "../facts/source-member-name.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { selectedSourceLiteralIsRepresentable } from "../../policy/types/selected-numeric-literal.js";
+import { finalizeProjectSourceGenericArguments } from "./project-call-generics.js";
 import { sourceTypeCarrierForDeclaration } from "./inputs.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
@@ -65,24 +65,17 @@ export function applySelectedProjectSourceCall(
     appendMalformedSourceAst(walk, "Checked project-source call contains an undefined or non-data argument slot.");
     return undefined;
   }
-  const targetTypeArguments = finalizeProjectSourceTargetTypeArguments(
+  const genericInstantiation = finalizeProjectSourceGenericArguments(
     walk,
     selectedSignature,
     callArguments as readonly Node[],
     expected,
   );
-  if (targetTypeArguments === undefined) {
+  if (genericInstantiation === undefined) {
     return undefined;
   }
-  const substitutions = new Map<string, TargetTypeRef>();
-  for (let index = 0; index < (selectedSignature.sourceSelectedMethodTypeArguments?.length ?? 0); index += 1) {
-    const name = selectedSignature.sourceSelectedMethodTypeArguments?.[index]?.typeParameterName;
-    const target = targetTypeArguments[index];
-    if (name === undefined || target === undefined) {
-      return undefined;
-    }
-    substitutions.set(name, target);
-  }
+  const { substitutions, targetGenericArguments } = genericInstantiation;
+  const targetTypeArguments = rustTargetGenericTypeArguments(targetGenericArguments);
   const bindings = selectedSignature.sourceArgumentBindings;
   const selectedParameters = selectedSignature.sourceSelectedSignatureParameters;
   if (bindings === undefined || selectedParameters === undefined) {
@@ -134,8 +127,18 @@ export function applySelectedProjectSourceCall(
       );
       return undefined;
     }
-    const parameterCarrier = substituteRustTargetTypeParameters(targetParameter.type, substitutions);
-    const valueCarrier = substituteRustTargetTypeParameters(parameterAbi.valueCarrier, substitutions);
+    const parameterCarrier = substituteRustTargetGenerics(
+      targetParameter.type,
+      substitutions.types,
+      substitutions.lifetimes,
+      substitutions.consts,
+    );
+    const valueCarrier = substituteRustTargetGenerics(
+      parameterAbi.valueCarrier,
+      substitutions.types,
+      substitutions.lifetimes,
+      substitutions.consts,
+    );
     const mode = targetParameter.passingMode === "borrow-mut"
       ? "mut-ref" as const
       : targetParameter.passingMode === "borrow-shared"
@@ -182,7 +185,12 @@ export function applySelectedProjectSourceCall(
   }
   const resultCarrier = selectedMember.returnType === undefined
     ? undefined
-    : substituteRustTargetTypeParameters(selectedMember.returnType, substitutions);
+    : substituteRustTargetGenerics(
+        selectedMember.returnType,
+        substitutions.types,
+        substitutions.lifetimes,
+        substitutions.consts,
+      );
   if (resultCarrier === undefined) {
     return undefined;
   }
@@ -326,6 +334,7 @@ export function applySelectedProjectSourceCall(
           targetTypeArguments,
           ast,
           projectTypes: walk.context.projectTypes,
+          sourceLifetimes: walk.context.sourceLifetimes,
         });
         if (registration.kind === "rejected") {
           appendRustDiagnostic(
@@ -392,6 +401,7 @@ export function applySelectedProjectSourceCall(
       callee: selectedDeclaration,
       targetTypeArguments,
       ast,
+      sourceLifetimes: walk.context.sourceLifetimes,
     });
     if (registration.kind === "rejected") {
       appendRustDiagnostic(
@@ -474,7 +484,7 @@ export function applySelectedProjectSourceCall(
     operationId,
     target,
     parameters,
-    ...(targetTypeArguments.length === 0 ? {} : { targetTypeArguments }),
+    ...(targetGenericArguments.length === 0 ? {} : { targetGenericArguments }),
     resultCarrier,
   });
   return setCarrierFact(walk, expression, finalResultCarrier);
@@ -540,170 +550,6 @@ export function applySelectedSourceCallArguments(
     }
   }
   return true;
-}
-
-function finalizeProjectSourceTargetTypeArguments(
-  walk: RustFactWalk,
-  selected: RustSelectedTargetSignature,
-  callArguments: readonly Node[],
-  expected: TargetTypeRef | undefined,
-): readonly TargetTypeRef[] | undefined {
-  const sourceArguments = selected.sourceSelectedMethodTypeArguments ?? [];
-  const selectedTargets = selected.targetTypeArguments ?? [];
-  if (sourceArguments.length !== selectedTargets.length) {
-    return undefined;
-  }
-  if (sourceArguments.length === 0) {
-    return selectedTargets;
-  }
-  const parameterNames = new Set(sourceArguments.map((argument) => argument.typeParameterName));
-  const finalized = [...selectedTargets];
-  const inferred = reconcileProjectSourceArgumentTypeParameters(
-    walk,
-    selected,
-    callArguments,
-    parameterNames,
-  );
-  if (inferred === undefined) {
-    return undefined;
-  }
-  for (let index = 0; index < sourceArguments.length; index += 1) {
-    const source = sourceArguments[index]!;
-    const target = inferred.get(source.typeParameterName);
-    if (target !== undefined && source.explicitTypeNode === undefined) {
-      finalized[index] = target;
-    }
-  }
-  if (expected === undefined || selected.member.returnType === undefined) {
-    return finalized;
-  }
-  const contextual = inferRustTargetTypeParameterBindings(
-    selected.member.returnType,
-    expected,
-    parameterNames,
-  );
-  if (contextual === undefined || contextual.size === 0) {
-    return finalized;
-  }
-  for (let index = 0; index < sourceArguments.length; index += 1) {
-    const source = sourceArguments[index]!;
-    const selectedTarget = finalized[index]!;
-    const contextualTarget = contextual.get(source.typeParameterName);
-    if (contextualTarget === undefined || rustTargetTypeRefEquals(selectedTarget, contextualTarget)) {
-      continue;
-    }
-    const argumentTarget = inferred.get(source.typeParameterName);
-    if (argumentTarget !== undefined && !rustTargetTypeRefEquals(argumentTarget, contextualTarget)) {
-      continue;
-    }
-    if (source.explicitTypeNode !== undefined || !isRustNumericCarrier(selectedTarget) ||
-      contextualTarget.kind !== "source-primitive" || !isRustNumericCarrier(contextualTarget) ||
-      !projectSourceTypeArgumentHasLiteralProof(
-        walk,
-        selected.member,
-        source.typeParameterName,
-        callArguments,
-        contextualTarget,
-      )) {
-      continue;
-    }
-    finalized[index] = contextualTarget;
-  }
-  return finalized;
-}
-
-function reconcileProjectSourceArgumentTypeParameters(
-  walk: RustFactWalk,
-  selected: RustSelectedTargetSignature,
-  callArguments: readonly Node[],
-  parameterNames: ReadonlySet<string>,
-): ReadonlyMap<string, TargetTypeRef> | undefined {
-  const reconciled = new Map<string, TargetTypeRef>();
-  const bindings = selected.sourceArgumentBindings;
-  if (bindings === undefined) {
-    return reconciled;
-  }
-  for (const [argumentIndex, argument] of callArguments.entries()) {
-    if (walk.context.ast.kindName(argument) === KindNumericLiteral) {
-      continue;
-    }
-    const matches = bindings.filter((binding) =>
-      binding.sourceArgumentIndex === argumentIndex);
-    const first = matches[0];
-    if (first === undefined || matches.some((binding) =>
-      binding.sourceParameterIndex !== first.sourceParameterIndex ||
-      binding.sourceForm !== first.sourceForm)) {
-      return undefined;
-    }
-    const parameter = selected.member.parameters[first.sourceParameterIndex];
-    const actual = walk.context.facts.getRuntimeCarrierFact(argument)?.carrier ??
-      resolveProjectSourceInferenceCarrier(walk, argument);
-    if (parameter === undefined || actual === undefined) {
-      continue;
-    }
-    const candidate = inferRustTargetTypeParameterBindings(
-      parameter.type,
-      actual,
-      parameterNames,
-    );
-    if (candidate === undefined) {
-      continue;
-    }
-    for (const [name, carrier] of candidate) {
-      const existing = reconciled.get(name);
-      if (existing !== undefined && !rustTargetTypeRefEquals(existing, carrier)) {
-        return undefined;
-      }
-      reconciled.set(name, carrier);
-    }
-  }
-  return reconciled;
-}
-
-function resolveProjectSourceInferenceCarrier(
-  walk: RustFactWalk,
-  argument: Node,
-): TargetTypeRef | undefined {
-  const kind = walk.context.ast.kindName(argument);
-  if (kind !== KindIdentifier && kind !== KindCallExpression &&
-    kind !== KindNewExpression && kind !== KindPropertyAccessExpression &&
-    kind !== KindElementAccessExpression && kind !== KindBinaryExpression &&
-    kind !== KindPrefixUnaryExpression && kind !== KindPostfixUnaryExpression &&
-    kind !== KindParenthesizedExpression && kind !== KindNonNullExpression &&
-    kind !== KindSatisfiesExpression && kind !== "KindAsExpression" &&
-    kind !== "KindTypeAssertionExpression") {
-    return undefined;
-  }
-  return resolveRustTargetTypeRef(
-    argument,
-    rustOperationContext(walk, argument),
-    walk.operationOptions,
-  );
-}
-
-function projectSourceTypeArgumentHasLiteralProof(
-  walk: RustFactWalk,
-  member: RustTargetMember,
-  typeParameterName: string,
-  callArguments: readonly Node[],
-  target: Extract<TargetTypeRef, { readonly kind: "source-primitive" }>,
-): boolean {
-  let proven = false;
-  for (let index = 0; index < member.parameters.length; index += 1) {
-    const parameter = member.parameters[index];
-    if (parameter?.type.kind !== "type-parameter" || parameter.type.name !== typeParameterName) {
-      continue;
-    }
-    const argument = callArguments[index];
-    if (argument === undefined) {
-      return false;
-    }
-    if (!selectedSourceLiteralIsRepresentable(argument, target.name, walk.context.ast)) {
-      return false;
-    }
-    proven = true;
-  }
-  return proven;
 }
 
 export function recordTargetOperation(

@@ -418,7 +418,10 @@ function normalizeBindingValue(
   const result = (value: RustExpr): RustExpr => ({
     kind: "call",
     path: "Ok",
-    typeArguments: [{ kind: "infer" }, activeErrorType],
+    genericArguments: [
+      { kind: "type", type: { kind: "infer" } },
+      { kind: "type", type: activeErrorType },
+    ],
     args: [value],
   });
   return {

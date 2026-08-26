@@ -146,7 +146,10 @@ export function planRustCrateInitializer(
       expr: {
         kind: "call",
         path: "Ok",
-        typeArguments: [{ kind: "unit" }, errorType],
+        genericArguments: [
+          { kind: "type", type: { kind: "unit" } },
+          { kind: "type", type: errorType },
+        ],
         args: [{ kind: "path", path: "()" }],
       },
     });

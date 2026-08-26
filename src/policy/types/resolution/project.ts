@@ -1,13 +1,15 @@
 import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
-import { rustSourceTypeCarrier, rustSourceTypeCarrierValue } from "../../../target-model/types/index.js";
+import {
+  rustSourceTypeCarrier,
+  rustSourceTypeCarrierValue,
+} from "../../../target-model/types/index.js";
 import type { Node, Symbol } from "@tsonic/tsts";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustLifetimeRef } from "../../../target-model/lifetimes/index.js";
+import type { RustTargetGenericArgument } from "../../../target-model/types/model.js";
 
 export interface RustResolvedProjectGenericArguments {
-  readonly lifetimes: readonly RustLifetimeRef[];
-  readonly types: readonly TargetTypeRef[];
+  readonly values: readonly RustTargetGenericArgument[];
 }
 
 export function resolveProjectSourceCarrier(
@@ -34,23 +36,20 @@ export function resolveProjectSourceCarrier(
     const sourceType = rustSourceTypeCarrierValue(carrier);
     if (sourceType !== undefined) {
       const contract = context.sourceLifetimes.contractFor(declaration);
-      const lifetimeCount = contract?.parameters.filter((parameter) =>
-        parameter.kind === "lifetime").length ?? 0;
-      const typeCount = contract?.parameters.filter((parameter) =>
-        parameter.kind === "type").length ?? 0;
-      if (genericArguments.lifetimes.length !== lifetimeCount ||
-        genericArguments.types.length !== typeCount) {
+      if (contract === undefined ||
+        genericArguments.values.length !== contract.parameters.length ||
+        contract.parameters.some((parameter, index) =>
+          genericArguments.values[index]?.kind !== parameter.kind)) {
         continue;
       }
       return rustSourceTypeCarrier(
         sourceType.fileName,
         sourceType.typeName,
         sourceType.shape,
-        genericArguments,
+        genericArguments.values,
       );
     }
-    if (carrier !== undefined && genericArguments.lifetimes.length === 0 &&
-      genericArguments.types.length === 0) {
+    if (carrier !== undefined && genericArguments.values.length === 0) {
       return carrier;
     }
   }

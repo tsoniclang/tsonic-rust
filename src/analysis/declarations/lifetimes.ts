@@ -13,6 +13,8 @@ import {
   rustStaticLifetime,
 } from "../../target-model/lifetimes/index.js";
 import type {
+  RustBoundLifetimeParameterContract,
+  RustLifetimeBinder,
   RustLifetimeIndex,
   RustLifetimeRef,
   RustSourceGenericContract,
@@ -79,23 +81,47 @@ export function analyzeRustLifetimes(
     }
   }
 
+  const lifetimeByDeclaration = new WeakMap<Node, Extract<
+    RustLifetimeRef,
+    { readonly kind: "parameter" | "bound" }
+  >>();
+  for (const [declaration, registered] of unresolved) {
+    if (registered.kind !== "lifetime") continue;
+    const identity = parameterIdentity(declaration, input.ast, "lifetime");
+    const ownerIdentity = sourceNodeIdentity(input.ast, registered.owner);
+    if (identity === undefined || ownerIdentity === undefined) {
+      diagnostics.push(diagnostic(
+        "RUST_LIFETIME_GENERIC_IDENTITY_MISSING",
+        "A Rust lifetime parameter has no exact declaration or owner identity.",
+        declaration,
+      ));
+      continue;
+    }
+    const name = rustSnakeCaseIdentifier(registered.sourceName);
+    lifetimeByDeclaration.set(declaration, isLifetimeBinderOwner(
+      input.ast.kindName(registered.owner),
+    )
+      ? Object.freeze({
+          kind: "bound" as const,
+          binderIdentity: `lifetime-binder\0${ownerIdentity}`,
+          identity,
+          name,
+        })
+      : Object.freeze({
+          kind: "parameter" as const,
+          identity,
+          name,
+        }));
+  }
+
   const resolve = (node: Node | undefined): RustLifetimeRef | undefined => {
     if (node === undefined) return undefined;
     const typeFact = readFact(input.facts, node, rustSourceTypeContractFactKey);
     if (typeFact?.kind === "static-lifetime") return rustStaticLifetime;
-    if (typeFact?.kind === "lifetime-kind") return rustPlaceholderLifetime;
+    if (typeFact?.kind === "placeholder-lifetime") return rustPlaceholderLifetime;
     const declaration = referencedTypeParameter(node, input);
     if (declaration === undefined) return undefined;
-    const registered = unresolved.get(declaration);
-    if (registered?.kind !== "lifetime") return undefined;
-    const identity = parameterIdentity(declaration, input.ast, "lifetime");
-    return identity === undefined
-      ? undefined
-      : Object.freeze({
-          kind: "parameter" as const,
-          identity,
-          name: rustSnakeCaseIdentifier(registered.sourceName),
-        });
+    return lifetimeByDeclaration.get(declaration);
   };
 
   for (const owner of declarations) {
@@ -118,7 +144,7 @@ export function analyzeRustLifetimes(
       const contract: RustSourceGenericParameterContract = fact.kind === "lifetime"
         ? (() => {
             const lifetime = resolve(parameter);
-            if (lifetime?.kind !== "parameter") {
+            if (lifetime?.kind !== "parameter" && lifetime?.kind !== "bound") {
               throw new Error("Registered Rust lifetime parameter lost its exact identity.");
             }
             return Object.freeze({
@@ -141,9 +167,33 @@ export function analyzeRustLifetimes(
       parameters.push(contract);
     }
     if (parameters.length === input.ast.typeParameters(owner).length) {
+      const boundParameters = parameters.filter((parameter): parameter is Extract<
+        RustSourceGenericParameterContract,
+        { readonly kind: "lifetime" }
+      > & { readonly lifetime: Extract<RustLifetimeRef, { readonly kind: "bound" }> } =>
+        parameter.kind === "lifetime" && parameter.lifetime.kind === "bound");
+      const lifetimeBinder: RustLifetimeBinder | undefined = boundParameters.length === 0
+        ? undefined
+        : (() => {
+            const identity = boundParameters[0]!.lifetime.binderIdentity;
+            if (boundParameters.some((parameter) =>
+              parameter.lifetime.binderIdentity !== identity)) {
+              throw new Error("A Rust source generic contract spans multiple lifetime binders.");
+            }
+            const binderParameters: RustBoundLifetimeParameterContract[] =
+              boundParameters.map((parameter) => Object.freeze({
+                lifetime: parameter.lifetime,
+                outlives: parameter.outlives,
+              }));
+            return Object.freeze({
+              identity,
+              parameters: Object.freeze(binderParameters),
+            });
+          })();
       contracts.push(Object.freeze({
         declaration: owner,
         parameters: Object.freeze(parameters),
+        ...(lifetimeBinder === undefined ? {} : { lifetimeBinder }),
       }));
     }
   }
@@ -200,6 +250,12 @@ function isGenericOwner(kind: string | undefined): boolean {
     kind === "KindGetAccessor" || kind === "KindSetAccessor" ||
     kind === "KindClassDeclaration" || kind === "KindClassExpression" ||
     kind === "KindInterfaceDeclaration" || kind === "KindTypeAliasDeclaration";
+}
+
+function isLifetimeBinderOwner(kind: string | undefined): boolean {
+  return kind === "KindFunctionType" || kind === "KindConstructorType" ||
+    kind === "KindCallSignature" || kind === "KindConstructSignature" ||
+    kind === "KindFunctionExpression" || kind === "KindArrowFunction";
 }
 
 function referencedTypeParameter(

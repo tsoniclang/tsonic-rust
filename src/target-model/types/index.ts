@@ -1,4 +1,21 @@
-export type { TargetTypeRef } from "./model.js";
+export type {
+  RustTargetAssociatedConstraint,
+  RustTargetConstArgument,
+  RustTargetGenericArgument,
+  RustTargetGenericParameter,
+  TargetTypeRef,
+} from "./model.js";
+export {
+  rustConstGenericArgument,
+  rustLifetimeGenericArgument,
+  rustOnlyTypeGenericArguments,
+  rustTargetConstArguments,
+  rustTargetGenericBindingsForArguments,
+  rustTargetGenericTypeArguments,
+  rustTargetLifetimeArguments,
+  rustTypeGenericArgument,
+  rustTypeGenericArguments,
+} from "./generic-arguments.js";
 export type { RustPrimitiveTypeName } from "../syntax/tokens.js";
 export {
   getRustGeneratorProtocol,
@@ -165,11 +182,19 @@ export type {
   RustStructuralObjectFieldCarrierValue,
 } from "./carriers/source-types.js";
 export {
+  inferRustTargetGenericBindings,
   inferRustTargetTypeParameterBindings,
+  rustTargetGenericReferences,
   rustTargetTypeContainsTypeParameter,
   rustTargetTypeParameterNames,
+  substituteRustTargetGenericArgument,
   substituteRustTargetGenerics,
   substituteRustTargetTypeParameters,
+} from "./carriers/substitution.js";
+export type { RustTargetGenericReferences } from "./carriers/substitution.js";
+export type {
+  RustTargetGenericBindings,
+  RustTargetGenericParameterSet,
 } from "./carriers/substitution.js";
 export {
   isRustCopyCarrier,

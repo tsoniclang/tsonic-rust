@@ -414,9 +414,18 @@ function materializeInferredCarrier(carrier: TargetTypeRef, inferred: TargetType
   }
   switch (carrier.kind) {
     case "target-named":
-      return carrier.typeArguments === undefined
+      return carrier.genericArguments === undefined
         ? carrier
-        : { ...carrier, typeArguments: carrier.typeArguments.map((argument) => materializeInferredCarrier(argument, inferred)) };
+        : {
+            ...carrier,
+            genericArguments: carrier.genericArguments.map((argument) =>
+              argument.kind === "type"
+                ? {
+                    kind: "type" as const,
+                    type: materializeInferredCarrier(argument.type, inferred),
+                  }
+                : argument),
+          };
     case "array":
       return { ...carrier, element: materializeInferredCarrier(carrier.element, inferred) };
     case "tuple":
@@ -433,7 +442,24 @@ function materializeInferredCarrier(carrier: TargetTypeRef, inferred: TargetType
         result: materializeInferredCarrier(carrier.result, inferred),
       };
     case "associated-type":
-      return { ...carrier, owner: materializeInferredCarrier(carrier.owner, inferred) };
+      return {
+        ...carrier,
+        owner: materializeInferredCarrier(carrier.owner, inferred),
+        ...(carrier.trait === undefined
+          ? {}
+          : { trait: materializeInferredCarrier(carrier.trait, inferred) }),
+        ...(carrier.genericArguments === undefined
+          ? {}
+          : {
+              genericArguments: carrier.genericArguments.map((argument) =>
+                argument.kind === "type"
+                  ? {
+                      kind: "type" as const,
+                      type: materializeInferredCarrier(argument.type, inferred),
+                    }
+                  : argument),
+            }),
+      };
     default:
       return carrier;
   }

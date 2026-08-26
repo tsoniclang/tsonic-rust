@@ -5,6 +5,7 @@ export {
   isRustLifetimeRef,
 } from "./identity.js";
 export type {
+  RustBoundLifetimeParameterContract,
   RustLifetimeIndex,
   RustLifetimeBinder,
   RustLifetimeParameterContract,

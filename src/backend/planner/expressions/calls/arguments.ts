@@ -4,7 +4,8 @@ import {
   rustCallableProtocol,
   rustFixedArrayCarrierValue,
   rustSliceElementCarrier,
-  substituteRustTargetTypeParameters,
+  rustTargetGenericBindingsForArguments,
+  substituteRustTargetGenerics,
 } from "../../../../target-model/types/index.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
 import { diagnosticInput } from "../../program/plan-context.js";
@@ -23,7 +24,10 @@ import { planRustNonConsumingValue } from "../typed-locations.js";
 import { rustArgumentPassingMode } from "../../../../analysis/facts/parameter-passing.js";
 import { rustFinalizedCarrierTransitionMatches } from "../../../../analysis/facts/target-operation.js";
 import { rustSourceParameterAbiFactKey, rustTargetOperationFactKey } from "../../../../analysis/facts/keys.js";
-import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
+import {
+  rustTargetGenericArgumentEquals,
+  rustTargetTypeRefEquals,
+} from "../../../../target-model/types/equality.js";
 import { rustValueCarrierTransitionTarget } from "../../../../analysis/facts/value-carrier-queries.js";
 import { rustVecRestAssembly } from "../../../../target-model/operations/rest-assembly.js";
 import { validateRustFinalizedOperationAbi } from "../../../../analysis/facts/finalized-operation-abi.js";
@@ -441,15 +445,21 @@ export function sourceCallSelectedMemberMatches(
   selected: SelectedTargetSignatureFact,
 ): boolean {
   const member = selected.member;
-  const sourceTypeArguments = selected.sourceSelectedMethodTypeArguments ?? [];
-  const targetTypeArguments = fact.targetTypeArguments ?? [];
-  if (sourceTypeArguments.length !== targetTypeArguments.length) {
+  const sourceArguments = selected.sourceSelectedMethodTypeArguments ?? [];
+  const parameters = member.genericParameters ?? [];
+  const targetArguments = fact.targetGenericArguments ?? [];
+  const selectedArguments = selected.targetGenericArguments ?? [];
+  if (sourceArguments.length !== parameters.length ||
+    parameters.length !== targetArguments.length ||
+    selectedArguments.length !== targetArguments.length ||
+    parameters.some((parameter, index) =>
+      parameter.sourceName !== sourceArguments[index]?.typeParameterName) ||
+    selectedArguments.some((argument, index) =>
+      !rustTargetGenericArgumentEquals(argument, targetArguments[index]))) {
     return false;
   }
-  const substitutions = new Map<string, TargetTypeRef>();
-  for (let index = 0; index < sourceTypeArguments.length; index += 1) {
-    substitutions.set(sourceTypeArguments[index]!.typeParameterName, targetTypeArguments[index]!);
-  }
+  const substitutions = rustTargetGenericBindingsForArguments(parameters, targetArguments);
+  if (substitutions === undefined) return false;
   const expectedKind = fact.target.form === "constructor" ? "constructor" : "method";
   const expectedTargetName = fact.target.form === "constructor"
     ? fact.target.name
@@ -460,7 +470,12 @@ export function sourceCallSelectedMemberMatches(
         : fact.target.name;
   const selectedReturn = member.returnType === undefined
     ? undefined
-    : substituteRustTargetTypeParameters(member.returnType, substitutions);
+    : substituteRustTargetGenerics(
+        member.returnType,
+        substitutions.types,
+        substitutions.lifetimes,
+        substitutions.consts,
+      );
   const identityMatches = member.id === fact.operationId &&
     member.kind === expectedKind &&
     member.targetName === expectedTargetName &&
@@ -487,7 +502,12 @@ export function sourceCallSelectedMemberMatches(
           ? "ref"
           : "value";
       return rustTargetTypeRefEquals(
-        substituteRustTargetTypeParameters(parameter.type, substitutions),
+        substituteRustTargetGenerics(
+          parameter.type,
+          substitutions.types,
+          substitutions.lifetimes,
+          substitutions.consts,
+        ),
         fact.parameters[index]?.parameterCarrier,
       ) && mode === fact.parameters[index]?.mode;
     });

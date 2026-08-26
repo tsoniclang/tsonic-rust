@@ -472,7 +472,10 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
           expr: {
             kind: "call" as const,
             path: "Ok",
-            typeArguments: [{ kind: "unit" as const }, mainErrorType],
+            genericArguments: [
+              { kind: "type" as const, type: { kind: "unit" as const } },
+              { kind: "type" as const, type: mainErrorType },
+            ],
             args: [{ kind: "path" as const, path: "()" }],
           },
         }]

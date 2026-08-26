@@ -198,7 +198,7 @@ function selectProjectDowncast(
   const sourceDefinition = options.projectTypes.definitionForCarrier(dispatchCarrier);
   const targetDefinition = options.projectTypes.definitionForCarrier(targetCarrier);
   const relationship = sourceDefinition === undefined || targetDefinition === undefined ||
-      targetDefinition.kind !== "class" || targetDefinition.typeParameterNames.length !== 0
+      targetDefinition.kind !== "class" || targetDefinition.genericParameters.length !== 0
     ? { kind: "unrelated" as const }
     : options.projectTypes.relationship(targetCarrier, sourceDefinition);
   if (sourceDefinition === undefined || relationship.kind !== "related" ||

@@ -8,6 +8,7 @@ export const rustLangModule = "@tsonic/rust/lang.js";
 export const rustSourceTypeExportIds = Object.freeze({
   life: "Life",
   staticLifetime: "Static",
+  placeholderLifetime: "Placeholder",
   sharedReference: "Ref",
   mutableReference: "Mut",
   outlives: "Outlives",

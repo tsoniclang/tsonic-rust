@@ -24,7 +24,7 @@ import {
   isValidRustIdentifier,
 } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { rustTypeFromCarrierInContext } from "../types/render.js";
+import { rustParameterTypeFromCarrierInContext } from "../types/render.js";
 import {
   allocateRustSyntheticName,
 } from "../names/synthetic.js";
@@ -80,7 +80,7 @@ export function planRustCallableParameters(
       : undefined;
     const abi = context.input.program.facts.getFact(parameter, rustSourceParameterAbiFactKey);
     const parameterCarrier = abi?.parameterCarrier;
-    const parameterType = rustTypeFromCarrierInContext(parameterCarrier, context);
+    const parameterType = rustParameterTypeFromCarrierInContext(parameterCarrier, context);
     const parameterName = pattern === undefined
       ? context.input.program.names.nameForDeclaration(parameter) ?? ""
       : allocateRustSyntheticName(syntheticNames, "binding_parameter");

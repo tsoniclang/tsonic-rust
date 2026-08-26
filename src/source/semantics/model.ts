@@ -7,6 +7,7 @@ import type {
 export type RustSourceTypeContractFact =
   | { readonly kind: "lifetime-kind" }
   | { readonly kind: "static-lifetime" }
+  | { readonly kind: "placeholder-lifetime" }
   | {
       readonly kind: "shared-reference" | "mutable-reference";
       readonly targetTypeNode: Node;

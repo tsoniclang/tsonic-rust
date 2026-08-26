@@ -30,6 +30,7 @@ export function rustLifetimeTypeDeclarations(): readonly ProviderExportDeclarati
   return [
     alias(rustSourceTypeExportIds.life, { kind: "unknown" }),
     alias(rustSourceTypeExportIds.staticLifetime, life),
+    alias(rustSourceTypeExportIds.placeholderLifetime, life),
     genericAlias(
       rustSourceTypeExportIds.sharedReference,
       [{ name: "T" }, { name: "L", constraints: [life], defaultType: life }],

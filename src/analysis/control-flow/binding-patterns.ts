@@ -22,6 +22,7 @@ import {
 } from "../facts/keys.js";
 import {
   isRustJsArrayCarrier,
+  rustJsArrayLikeElementTargetType,
   isRustVecCarrier,
   rustFixedArrayCarrierValue,
   rustFixedArrayTargetType,
@@ -171,7 +172,7 @@ function selectArrayProjection(
         : sourceCarrier.element;
       projection = { kind: "vec-element", index, checked: hasDefault };
     } else if (isRustJsArrayCarrier(sourceCarrier)) {
-      const elementCarrier = sourceCarrier.typeArguments?.[0];
+      const elementCarrier = rustJsArrayLikeElementTargetType(sourceCarrier);
       projectedCarrier = elementCarrier === undefined
         ? undefined
         : rustOptionTargetType(elementCarrier);

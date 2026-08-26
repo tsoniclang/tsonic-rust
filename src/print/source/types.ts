@@ -6,6 +6,7 @@ import type {
   RustType,
   RustTypeBound,
 } from "../../backend/target-ast/nodes.js";
+import { escapeRustChar } from "./patterns.js";
 
 export function printRustType(type: RustType): string {
   switch (type.kind) {
@@ -50,7 +51,8 @@ export function printRustType(type: RustType): string {
     }
     case "impl-trait": {
       const bounds = [
-        ...type.bounds.map(printRustType),
+        ...type.bounds.map(printRustTypeBound),
+        ...type.outlives.map(printRustLifetime),
         ...(type.captures.length === 0
           ? []
           : [`use<${type.captures.map(printRustLifetime).join(", ")}>`]),
@@ -67,7 +69,7 @@ export function printRustType(type: RustType): string {
       return `${type.mutable ? "*mut " : "*const "}${printRustType(type.pointee)}`;
     }
     case "fixed-array": {
-      return `[${printRustType(type.element)}; ${type.length}]`;
+      return `[${printRustType(type.element)}; ${printRustConstArgument(type.length)}]`;
     }
     case "slice": {
       return `[${printRustType(type.element)}]`;
@@ -103,6 +105,18 @@ export function printRustGenericArgument(argument: RustGenericArgument): string 
       return printRustType(argument.type);
     case "const":
       return printRustConstArgument(argument.value);
+    case "associated-equality": {
+      const generics = argument.genericArguments.length === 0
+        ? ""
+        : `<${argument.genericArguments.map(printRustGenericArgument).join(", ")}>`;
+      return `${argument.name}${generics} = ${printRustType(argument.type)}`;
+    }
+    case "associated-bounds": {
+      const generics = argument.genericArguments.length === 0
+        ? ""
+        : `<${argument.genericArguments.map(printRustGenericArgument).join(", ")}>`;
+      return `${argument.name}${generics}: ${argument.bounds.map(printRustTypeBound).join(" + ")}`;
+    }
   }
 }
 
@@ -112,6 +126,8 @@ export function printRustConstArgument(value: RustConstArgument): string {
       return value.value.toString();
     case "boolean":
       return value.value ? "true" : "false";
+    case "char":
+      return `'${escapeRustChar(value.value)}'`;
     case "path":
       return value.path;
     case "infer":

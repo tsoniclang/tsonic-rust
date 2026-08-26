@@ -22,6 +22,40 @@ export interface RustCallableGenericPlan {
   finalizeGenerics(): RustGenerics;
 }
 
+export function rustSourceDeclarationGenerics(
+  contract: import("../../../target-model/lifetimes/index.js").RustSourceGenericContract,
+): RustGenerics | undefined {
+  if (contract.lifetimeBinder !== undefined) return undefined;
+  const parameters: RustGenericParameter[] = [];
+  for (const parameter of contract.parameters) {
+    if (parameter.kind === "lifetime") {
+      if (parameter.lifetime.kind !== "parameter") return undefined;
+      parameters.push({
+        kind: "lifetime",
+        name: parameter.lifetime.name,
+        outlives: Object.freeze(parameter.outlives.map(rustLifetimeToAst)),
+      });
+      continue;
+    }
+    if (!isValidRustIdentifier(parameter.targetName)) return undefined;
+    parameters.push({
+      kind: "type",
+      name: parameter.targetName,
+      bounds: Object.freeze([
+        ...parameter.outlives.map((lifetime): RustTypeBound => ({
+          kind: "lifetime",
+          lifetime: rustLifetimeToAst(lifetime),
+        })),
+        ...(parameter.maybeSized ? [{ kind: "maybe-sized" as const }] : []),
+      ]),
+    });
+  }
+  return Object.freeze({
+    parameters: Object.freeze(parameters),
+    wherePredicates: Object.freeze([]),
+  });
+}
+
 export function planRustCallableGenerics(
   declaration: Node,
   context: RustPlanContext,
@@ -110,26 +144,39 @@ export function planRustCallableGenerics(
     for (const [name, carrier] of specialization) substitutions.set(name, carrier);
   }
 
-  const lifetimeParameters = sourceContract.parameters.flatMap((parameter): RustGenericParameter[] =>
-    parameter.kind !== "lifetime"
-      ? []
-      : [{
-          kind: "lifetime",
-          name: parameter.lifetime.name,
-          outlives: Object.freeze(parameter.outlives.map(rustLifetimeToAst)),
-        }]);
-  const typeParameters = specialization === undefined
-    ? ordinaryParameters.map((parameter, index): RustGenericParameter => ({
-        kind: "type",
-        name: parameter.targetName,
-        bounds: mergeTypeBounds(
-          parameter,
-          requirementContract.typeParameters[index]!.requirements,
-        ),
-      }))
-    : [];
+  const declarationGenerics = rustSourceDeclarationGenerics(sourceContract);
+  if (declarationGenerics === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, declaration),
+      "rust.backend.callable-generic-contract",
+      "Callable declaration has a bound lifetime contract that cannot be emitted as item generics.",
+    ));
+    return undefined;
+  }
+  const requirementsByName = new Map(requirementContract.typeParameters.map((parameter) =>
+    [parameter.name, parameter.requirements] as const));
+  const parameters = sourceContract.parameters.flatMap((parameter): readonly RustGenericParameter[] => {
+    if (parameter.kind === "lifetime") {
+      if (parameter.lifetime.kind !== "parameter") return Object.freeze([]);
+      return Object.freeze([{
+        kind: "lifetime" as const,
+        name: parameter.lifetime.name,
+        outlives: Object.freeze(parameter.outlives.map(rustLifetimeToAst)),
+      }]);
+    }
+    if (specialization !== undefined) return Object.freeze([]);
+    const requirements = requirementsByName.get(parameter.targetName);
+    if (requirements === undefined) {
+      throw new Error("Sealed callable generic requirements lost one exact source type parameter.");
+    }
+    return Object.freeze([{
+      kind: "type" as const,
+      name: parameter.targetName,
+      bounds: mergeTypeBounds(parameter, requirements),
+    }]);
+  });
   const generics: RustGenerics = Object.freeze({
-    parameters: Object.freeze([...lifetimeParameters, ...typeParameters]),
+    parameters: Object.freeze(parameters),
     wherePredicates: Object.freeze([]),
   });
   return {

@@ -447,13 +447,16 @@ function mapRustDefaultValueCall(
     static: true,
     parameters: [],
     returnType: resultCarrier,
-    typeParameters: [{ name: sourceTypeArguments[0]!.typeParameterName }],
+    genericParameters: [{
+      kind: "type",
+      sourceName: sourceTypeArguments[0]!.typeParameterName,
+    }],
     providerDeclaration: provider,
   };
   const selectedSignature = {
     member,
     providerDeclaration: provider,
-    targetTypeArguments,
+    targetGenericArguments: [{ kind: "type", type: targetTypeArguments[0]! }],
     ...(request.source.selectedSignature === undefined
       ? {}
       : { sourceSignature: request.source.selectedSignature }),

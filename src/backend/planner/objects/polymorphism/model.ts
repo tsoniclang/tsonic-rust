@@ -17,6 +17,7 @@ import {
   isRustNeverCarrier,
   rustSourceTypeCarrierValue,
 } from "../../../../target-model/types/index.js";
+import { rustLifetimeKey } from "../../../../target-model/lifetimes/index.js";
 import type {
   RustExpr,
   RustFunctionParam,
@@ -243,6 +244,7 @@ export function projectOwnMethodProperties(
       : projectCallableShape(declaration, {
           ...context,
           typeParameterSubstitutions: projectTypeSubstitutions(owner, relation.targetType),
+          lifetimeSubstitutions: projectLifetimeSubstitutions(owner, relation.targetType),
         }, { methodTypeArgumentSubstitutions: new Map() });
     const targetName = owner === undefined
       ? undefined
@@ -455,8 +457,47 @@ export function projectTypeSubstitutions(
   carrier: TargetTypeRef,
 ): ReadonlyMap<string, TargetTypeRef> {
   const value = rustSourceTypeCarrierValue(carrier);
-  return new Map(definition.typeParameterNames.map((name, index) =>
-    [name, value?.typeArguments[index] ?? { kind: "type-parameter", name }] as const));
+  const arguments_ = value?.genericArguments ?? [];
+  if (arguments_.length !== definition.genericParameters.length) {
+    throw new Error("Project carrier does not match its sealed generic declaration arity.");
+  }
+  const result = new Map<string, TargetTypeRef>();
+  for (const [index, parameter] of definition.genericParameters.entries()) {
+    const argument = arguments_[index];
+    if (parameter.kind === "type") {
+      if (argument?.kind !== "type") {
+        throw new Error("Project carrier generic argument kind conflicts with its sealed declaration.");
+      }
+      result.set(parameter.sourceName, argument.type);
+    } else if (argument?.kind !== "lifetime") {
+      throw new Error("Project carrier generic argument kind conflicts with its sealed declaration.");
+    }
+  }
+  return result;
+}
+
+export function projectLifetimeSubstitutions(
+  definition: RustProjectTypeDefinition,
+  carrier: TargetTypeRef,
+): ReadonlyMap<string, import("../../../../target-model/lifetimes/index.js").RustLifetimeRef> {
+  const value = rustSourceTypeCarrierValue(carrier);
+  const arguments_ = value?.genericArguments ?? [];
+  if (arguments_.length !== definition.genericParameters.length) {
+    throw new Error("Project carrier does not match its sealed generic declaration arity.");
+  }
+  const result = new Map<string, import("../../../../target-model/lifetimes/index.js").RustLifetimeRef>();
+  for (const [index, parameter] of definition.genericParameters.entries()) {
+    const argument = arguments_[index];
+    if (parameter.kind === "lifetime") {
+      if (argument?.kind !== "lifetime") {
+        throw new Error("Project carrier generic argument kind conflicts with its sealed declaration.");
+      }
+      result.set(rustLifetimeKey(parameter.lifetime), argument.lifetime);
+    } else if (argument?.kind !== "type") {
+      throw new Error("Project carrier generic argument kind conflicts with its sealed declaration.");
+    }
+  }
+  return result;
 }
 
 export function rustFunctionTypesMatch(

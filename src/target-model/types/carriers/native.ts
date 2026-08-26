@@ -9,8 +9,12 @@ import type {
   RustNamedTypeTraitContract,
   RustNamedTypeTraitImplementation,
   RustNamedTypeTraitRequirement,
+  RustTargetConstArgument,
+  RustTargetGenericArgument,
   TargetTypeRef,
 } from "../model.js";
+import { rustTargetGenericTypeArguments } from "../generic-arguments.js";
+import { isRustLifetimeRef } from "../../lifetimes/index.js";
 
 export function rustSourcePrimitiveTargetType(kind: SourcePrimitiveKind): TargetTypeRef {
   return { kind: "source-primitive", name: kind };
@@ -63,14 +67,14 @@ export function rustTupleTargetType(elements: readonly TargetTypeRef[]): TargetT
 
 export interface RustFixedArrayCarrierValue {
   readonly element: TargetTypeRef;
-  readonly length: number;
+  readonly length: RustTargetConstArgument;
 }
 
 export interface RustNamedTypeCarrierValue {
   readonly id: string;
   readonly path: string;
   readonly traits: RustNamedTypeTraitContract;
-  readonly typeArguments: readonly TargetTypeRef[];
+  readonly genericArguments: readonly RustTargetGenericArgument[];
 }
 
 export const rustMoveOnlyNamedTypeTraits: RustNamedTypeTraitContract = Object.freeze({
@@ -80,14 +84,14 @@ export const rustMoveOnlyNamedTypeTraits: RustNamedTypeTraitContract = Object.fr
 export function rustNamedTargetType(
   id: string,
   path: string,
-  typeArguments: readonly TargetTypeRef[] = [],
+  genericArguments: readonly RustTargetGenericArgument[] = [],
   traits: RustNamedTypeTraitContract = rustMoveOnlyNamedTypeTraits,
 ): TargetTypeRef {
   return {
     kind: "target-specific",
     target: "rust",
     name: rustNamedTypeCarrierName,
-    value: { id, path, traits, typeArguments },
+    value: { id, path, traits, genericArguments },
   };
 }
 
@@ -100,24 +104,25 @@ export function rustNamedTypeCarrierValue(carrier: TargetTypeRef | undefined): R
     return undefined;
   }
   const keys = Object.keys(value).sort();
-  if (keys.length !== 4 || keys[0] !== "id" || keys[1] !== "path" || keys[2] !== "traits" ||
-    keys[3] !== "typeArguments") {
+  if (keys.length !== 4 || keys[0] !== "genericArguments" || keys[1] !== "id" ||
+    keys[2] !== "path" || keys[3] !== "traits") {
     return undefined;
   }
   const candidate = value as {
     readonly id?: unknown;
     readonly path?: unknown;
     readonly traits?: unknown;
-    readonly typeArguments?: unknown;
+    readonly genericArguments?: unknown;
   };
   if (typeof candidate.id !== "string" || candidate.id.length === 0 ||
     typeof candidate.path !== "string" || candidate.path.length === 0 ||
     !isRustNamedTypeTraitContract(candidate.traits) ||
-    !isDenseDataArray(candidate.typeArguments) ||
-    candidate.typeArguments.some((argument) => !isRustTargetTypeRef(argument))) {
+    !isDenseDataArray(candidate.genericArguments) ||
+    candidate.genericArguments.some((argument) => !isRustNamedGenericArgument(argument))) {
     return undefined;
   }
-  const typeArguments = candidate.typeArguments as readonly TargetTypeRef[];
+  const genericArguments = candidate.genericArguments as readonly RustTargetGenericArgument[];
+  const typeArguments = rustTargetGenericTypeArguments(genericArguments);
   if (candidate.traits.implementations.some((implementation) =>
     implementation.requirements.some((requirement) => requirement.typeArgumentIndex >= typeArguments.length))) {
     return undefined;
@@ -126,8 +131,44 @@ export function rustNamedTypeCarrierValue(carrier: TargetTypeRef | undefined): R
     id: candidate.id,
     path: candidate.path,
     traits: candidate.traits,
-    typeArguments,
+    genericArguments,
   };
+}
+
+function isRustNamedGenericArgument(value: unknown): value is RustTargetGenericArgument {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const candidate = value as Partial<RustTargetGenericArgument>;
+  const keys = Object.keys(value).sort();
+  if (candidate.kind === "lifetime") {
+    return keys.length === 2 && keys[0] === "kind" && keys[1] === "lifetime" &&
+      isRustLifetimeRef(candidate.lifetime);
+  }
+  if (candidate.kind === "type") {
+    return keys.length === 2 && keys[0] === "kind" && keys[1] === "type" &&
+      isRustTargetTypeRef(candidate.type);
+  }
+  if (candidate.kind !== "const" || keys.length !== 2 || keys[0] !== "kind" ||
+    keys[1] !== "value" || typeof candidate.value !== "object" ||
+    candidate.value === null || Array.isArray(candidate.value)) {
+    return false;
+  }
+  const constant = candidate.value as Record<string, unknown>;
+  const constantKeys = Object.keys(constant).sort();
+  if (constant.kind === "infer") return constantKeys.length === 1;
+  if (constant.kind === "boolean") {
+    return constantKeys.length === 2 && typeof constant.value === "boolean";
+  }
+  if (constant.kind === "integer") {
+    return constantKeys.length === 2 && typeof constant.value === "string" &&
+      /^-?(?:0|[1-9][0-9]*)$/u.test(constant.value);
+  }
+  if (constant.kind === "char") {
+    return constantKeys.length === 2 && typeof constant.value === "string" &&
+      [...constant.value].length === 1;
+  }
+  return constant.kind === "parameter" && constantKeys.length === 3 &&
+    typeof constant.identity === "string" && constant.identity.length > 0 &&
+    typeof constant.name === "string" && constant.name.length > 0;
 }
 
 export function isRustNamedTypeTraitContract(value: unknown): value is RustNamedTypeTraitContract {
@@ -195,12 +236,20 @@ function isRustTraitPath(value: unknown): value is string {
     /^[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)+$/u.test(value);
 }
 
-export function rustFixedArrayTargetType(element: TargetTypeRef, length: number): TargetTypeRef {
+export function rustFixedArrayTargetType(
+  element: TargetTypeRef,
+  length: number | RustTargetConstArgument,
+): TargetTypeRef {
   return {
     kind: "target-specific",
     target: "rust",
     name: "fixed-array",
-    value: { element, length },
+    value: {
+      element,
+      length: typeof length === "number"
+        ? { kind: "integer", value: String(length) }
+        : length,
+    },
   };
 }
 
@@ -218,7 +267,32 @@ export function rustFixedArrayCarrierValue(carrier: TargetTypeRef | undefined): 
   }
   const length = (value as { readonly length?: unknown }).length;
   const element = (value as { readonly element?: unknown }).element;
-  return Number.isSafeInteger(length) && (length as number) >= 0 && isRustTargetTypeRef(element)
-    ? { element: element as TargetTypeRef, length: length as number }
+  return isRustTargetConstArgument(length) &&
+      !(length.kind === "integer" && BigInt(length.value) < 0n) &&
+      isRustTargetTypeRef(element)
+    ? { element: element as TargetTypeRef, length }
     : undefined;
+}
+
+function isRustTargetConstArgument(value: unknown): value is RustTargetConstArgument {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const candidate = value as Partial<RustTargetConstArgument>;
+  const keys = Object.keys(value).sort();
+  if (candidate.kind === "infer") return keys.length === 1 && keys[0] === "kind";
+  if (candidate.kind === "boolean") {
+    return keys.length === 2 && keys[0] === "kind" && keys[1] === "value" &&
+      typeof candidate.value === "boolean";
+  }
+  if (candidate.kind === "integer") {
+    return keys.length === 2 && keys[0] === "kind" && keys[1] === "value" &&
+      typeof candidate.value === "string" && /^-?(?:0|[1-9][0-9]*)$/u.test(candidate.value);
+  }
+  if (candidate.kind === "char") {
+    return keys.length === 2 && keys[0] === "kind" && keys[1] === "value" &&
+      typeof candidate.value === "string" && [...candidate.value].length === 1;
+  }
+  return candidate.kind === "parameter" && keys.length === 3 &&
+    keys[0] === "identity" && keys[1] === "kind" && keys[2] === "name" &&
+    typeof candidate.identity === "string" && candidate.identity.length > 0 &&
+    typeof candidate.name === "string" && candidate.name.length > 0;
 }

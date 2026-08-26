@@ -22,10 +22,17 @@ export type RustTypeAliasDeclarationFact =
         readonly carrier: TargetTypeRef;
       }[];
     }
+  | {
+      readonly kind: "native-alias";
+      readonly target: TargetTypeRef;
+    }
   | { readonly kind: "erased" };
 
 export const rustTypeAliasDeclarationFactKey: RustPlanKey<RustTypeAliasDeclarationFact> =
-  defineRustPlanKey("typeAliasDeclaration", closedMetadataEquals);
+  defineRustPlanKey("typeAliasDeclaration", (left, right) =>
+    left.kind === right.kind && (left.kind !== "native-alias" ||
+      right.kind === "native-alias" && rustTargetTypeRefEquals(left.target, right.target)) &&
+    (left.kind === "native-alias" || closedMetadataEquals(left, right)));
 
 export interface RustAsyncFunctionFact {
   readonly isAsync: true;

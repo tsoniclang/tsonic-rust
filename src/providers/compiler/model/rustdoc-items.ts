@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { RustCompilerDependency } from "./model.js";
 import {
   hasInnerKind,
@@ -135,6 +136,7 @@ export function authoredPublicKind(
     "module",
     "static",
     "struct",
+    "trait",
     "type_alias",
     "union",
   ]) {
@@ -151,6 +153,17 @@ export function canonicalItemId(dependency: RustCompilerDependency, item: Readon
     throw new Error(`Rust item has no stable rustdoc identifier.`);
   }
   return `${dependency.packageId}#${String(id)}`;
+}
+
+export function compilerAssociatedSourceExportName(
+  itemId: string,
+  displayName: string,
+): string {
+  const readableName = /^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(displayName)
+    ? displayName
+    : "AssociatedType";
+  const digest = createHash("sha256").update(itemId).digest("hex").slice(0, 12);
+  return `RustAssociated${readableName}_${digest}`;
 }
 
 export function canonicalItemPath(

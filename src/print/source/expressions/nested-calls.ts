@@ -132,7 +132,7 @@ export function printFittedNestedCallWrapper(
     if (owner.includes("\n")) {
       const opening = appendToLastLine(
         `${outerCallable}(${owner}`,
-        `::${printRustCallMember(nested.method, nested.typeArguments)}(`,
+        `::${printRustCallMember(nested.method, nested.genericArguments)}(`,
       );
       const attachedArgument = printRustExprFitted(
         nested.args[0],

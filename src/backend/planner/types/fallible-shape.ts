@@ -150,7 +150,12 @@ function applyRustResultExpression(
     path: "Ok",
     ...(inferErrorTypeFromReturnType
       ? {}
-      : { typeArguments: [{ kind: "infer" as const }, boundary.errorType] }),
+      : {
+          genericArguments: [
+            { kind: "type" as const, type: { kind: "infer" as const } },
+            { kind: "type" as const, type: boundary.errorType },
+          ],
+        }),
     args: [expression],
   };
 }

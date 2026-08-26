@@ -1,6 +1,10 @@
 import { rustSourcePrimitiveTargetType } from "../../../target-model/types/index.js";
 import type { ProviderDeclarationModel, ProviderTypeExpression } from "@tsonic/tsts";
-import type { RustCompilerDependency, RustCompilerType, RustCompilerStandardTypeLocation } from "../model/model.js";
+import type {
+  RustCompilerDependency,
+  RustCompilerGenericParameter,
+  RustCompilerStandardTypeLocation,
+} from "../model/model.js";
 import type { RustNamedTypeTraitContract } from "../../../target-model/types/model.js";
 import type { RustProviderModuleDefinition, RustProviderOperationDefinition, RustProviderTypeDefinition } from "../../packages/model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
@@ -28,13 +32,14 @@ export interface ProjectionContext {
   readonly carrierTraits: Map<string, RustNamedTypeTraitContract>;
   readonly standardTypes: ReadonlyMap<string, RustCompilerStandardTypeLocation>;
   readonly localStandardTypeNames: ReadonlyMap<string, string>;
-  readonly defaultTypeBindings?: ReadonlyMap<string, RustCompilerType>;
+  readonly defaultGenericBindings?: import("../model/rustdoc-types.js").RustCompilerSubstitutions;
+  readonly genericNames?: ReadonlyMap<string, string>;
   readonly currentType?: {
     readonly exportId: string;
     readonly name: string;
     readonly carrier: TargetTypeRef;
     readonly sourceType: ProviderTypeExpression;
-    readonly typeParameters: readonly string[];
+    readonly genericParameters: readonly RustCompilerGenericParameter[];
     readonly canonicalPath: readonly string[];
     readonly targetPath: readonly string[];
   };

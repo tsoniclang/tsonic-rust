@@ -33,6 +33,9 @@ export function rustTargetOperationText(fact: RustTargetOperationFact): string {
     if (target.form === "trait-associated-value") {
       return `${target.traitPath}::${target.name}`;
     }
+    if (target.form === "associated-value") {
+      return `${JSON.stringify(target.owner)}::${target.name}`;
+    }
     if (target.form === "arg-structural-method") {
       return `structural-method[${target.storageIndex}]`;
     }

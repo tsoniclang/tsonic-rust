@@ -2,6 +2,7 @@ import type {
   RustBlock,
   RustExpr,
   RustFunctionParam,
+  RustGenericArgument,
   RustImplFunction,
   RustItem,
   RustPattern,
@@ -143,20 +144,17 @@ function rustTypeReferencesModuleAlias(type: RustType, alias: string): boolean {
       return false;
     case "named":
       return rustPathReferencesModuleAlias(type.path, alias) ||
-        type.genericArguments?.some((argument) =>
-          argument.kind === "type" &&
-            rustTypeReferencesModuleAlias(argument.type, alias)) === true;
+        rustGenericArgumentsReferenceModuleAlias(type.genericArguments, alias);
     case "qualified":
       return rustTypeReferencesModuleAlias(type.owner, alias) ||
         rustOptionalTypeReferencesModuleAlias(type.trait, alias) ||
-        type.genericArguments?.some((argument) =>
-          argument.kind === "type" &&
-            rustTypeReferencesModuleAlias(argument.type, alias)) === true;
+        rustGenericArgumentsReferenceModuleAlias(type.genericArguments, alias);
     case "trait-object":
       return rustTypeReferencesModuleAlias(type.principal, alias) ||
         type.autoTraits.some((trait) => rustTypeReferencesModuleAlias(trait, alias));
     case "impl-trait":
-      return type.bounds.some((bound) => rustTypeReferencesModuleAlias(bound, alias));
+      return type.bounds.some((bound) =>
+        rustTypeBoundReferencesModuleAlias(bound, alias));
     case "reference":
       return rustTypeReferencesModuleAlias(type.referent, alias);
     case "raw-pointer":
@@ -172,6 +170,32 @@ function rustTypeReferencesModuleAlias(type: RustType, alias: string): boolean {
       return type.elements.some((element) =>
         rustTypeReferencesModuleAlias(element, alias));
   }
+}
+
+function rustGenericArgumentsReferenceModuleAlias(
+  arguments_: readonly RustGenericArgument[] | undefined,
+  alias: string,
+): boolean {
+  return arguments_?.some((argument) => {
+    switch (argument.kind) {
+      case "type":
+        return rustTypeReferencesModuleAlias(argument.type, alias);
+      case "associated-equality":
+        return rustGenericArgumentsReferenceModuleAlias(
+          argument.genericArguments,
+          alias,
+        ) || rustTypeReferencesModuleAlias(argument.type, alias);
+      case "associated-bounds":
+        return rustGenericArgumentsReferenceModuleAlias(
+          argument.genericArguments,
+          alias,
+        ) || argument.bounds.some((bound) =>
+          rustTypeBoundReferencesModuleAlias(bound, alias));
+      case "lifetime":
+      case "const":
+        return false;
+    }
+  }) === true;
 }
 
 function rustBlockReferencesModuleAlias(block: RustBlock, alias: string): boolean {
@@ -294,8 +318,7 @@ function rustExpressionReferencesModuleAlias(expression: RustExpr, alias: string
         rustExpressionReferencesModuleAlias(expression.value, alias);
     case "call":
       return rustPathReferencesModuleAlias(expression.path, alias) ||
-        expression.typeArguments?.some((argument) =>
-          rustTypeReferencesModuleAlias(argument, alias)) === true ||
+        rustGenericArgumentsReferenceModuleAlias(expression.genericArguments, alias) ||
         expression.args.some((argument) =>
           rustExpressionReferencesModuleAlias(argument, alias));
     case "invoke":
@@ -308,14 +331,12 @@ function rustExpressionReferencesModuleAlias(expression: RustExpr, alias: string
     case "associated-call":
       return rustTypeReferencesModuleAlias(expression.owner, alias) ||
         rustOptionalTypeReferencesModuleAlias(expression.trait, alias) ||
-        expression.typeArguments?.some((argument) =>
-          rustTypeReferencesModuleAlias(argument, alias)) === true ||
+        rustGenericArgumentsReferenceModuleAlias(expression.genericArguments, alias) ||
         expression.args.some((argument) =>
           rustExpressionReferencesModuleAlias(argument, alias));
     case "method-call":
       return rustExpressionReferencesModuleAlias(expression.receiver, alias) ||
-        expression.typeArguments?.some((argument) =>
-          rustTypeReferencesModuleAlias(argument, alias)) === true ||
+        rustGenericArgumentsReferenceModuleAlias(expression.genericArguments, alias) ||
         expression.args.some((argument) =>
           rustExpressionReferencesModuleAlias(argument, alias));
     case "field":

@@ -139,7 +139,7 @@ export function planRustObjectLiteralMethodArguments(
         kind: "method-call",
         receiver: mapped,
         method: "collect",
-        typeArguments: [collectionType],
+        genericArguments: [{ kind: "type", type: collectionType }],
         args: [],
       };
       const activeErrorType = rustActiveErrorType(context);

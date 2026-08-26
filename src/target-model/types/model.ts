@@ -14,13 +14,41 @@ import type {
   RustLifetimeRef,
 } from "../lifetimes/index.js";
 
+export type RustTargetConstArgument =
+  | { readonly kind: "integer"; readonly value: string }
+  | { readonly kind: "boolean"; readonly value: boolean }
+  | { readonly kind: "char"; readonly value: string }
+  | { readonly kind: "parameter"; readonly identity: string; readonly name: string }
+  | { readonly kind: "infer" };
+
+export type RustTargetGenericArgument =
+  | { readonly kind: "lifetime"; readonly lifetime: RustLifetimeRef }
+  | { readonly kind: "type"; readonly type: RustTargetTypeRef }
+  | { readonly kind: "const"; readonly value: RustTargetConstArgument };
+
+export type RustTargetAssociatedConstraint =
+  | {
+      readonly kind: "equality";
+      readonly identity: string;
+      readonly name: string;
+      readonly genericArguments: readonly RustTargetGenericArgument[];
+      readonly type: RustTargetTypeRef;
+    }
+  | {
+      readonly kind: "bounds";
+      readonly identity: string;
+      readonly name: string;
+      readonly genericArguments: readonly RustTargetGenericArgument[];
+      readonly traits: readonly RustTargetTypeRef[];
+      readonly outlives: readonly RustLifetimeRef[];
+    };
+
 export type RustTargetTypeRef =
   | { readonly kind: "source-primitive"; readonly name: SourcePrimitiveKind }
   | {
       readonly kind: "target-named";
       readonly id: string;
-      readonly lifetimeArguments?: readonly RustLifetimeRef[];
-      readonly typeArguments?: readonly RustTargetTypeRef[];
+      readonly genericArguments?: readonly RustTargetGenericArgument[];
     }
   | { readonly kind: "type-parameter"; readonly name: string }
   | { readonly kind: "array"; readonly element: RustTargetTypeRef; readonly rank?: number }
@@ -42,6 +70,13 @@ export type RustTargetTypeRef =
       readonly isUnsafe?: boolean;
     }
   | {
+      readonly kind: "trait-ref";
+      readonly id: string;
+      readonly genericArguments: readonly RustTargetGenericArgument[];
+      readonly associatedConstraints: readonly RustTargetAssociatedConstraint[];
+      readonly lifetimeBinder?: RustLifetimeBinder;
+    }
+  | {
       readonly kind: "closure";
       readonly args: readonly RustTargetTypeRef[];
       readonly result: RustTargetTypeRef;
@@ -58,14 +93,15 @@ export type RustTargetTypeRef =
       readonly kind: "impl-trait";
       readonly id: string;
       readonly bounds: readonly RustTargetTypeRef[];
+      readonly outlives: readonly RustLifetimeRef[];
       readonly captures: readonly RustLifetimeRef[];
     }
   | {
       readonly kind: "associated-type";
       readonly owner: RustTargetTypeRef;
+      readonly trait?: RustTargetTypeRef;
       readonly name: string;
-      readonly lifetimeArguments?: readonly RustLifetimeRef[];
-      readonly typeArguments?: readonly RustTargetTypeRef[];
+      readonly genericArguments?: readonly RustTargetGenericArgument[];
     }
   | { readonly kind: "target-specific"; readonly target: "rust"; readonly name: string; readonly value?: unknown };
 
@@ -93,9 +129,21 @@ export interface RustTargetParameter {
   readonly paramsArray?: boolean;
 }
 
-export interface RustTargetTypeParameter {
-  readonly name: string;
-}
+export type RustTargetGenericParameter =
+  | {
+      readonly kind: "type";
+      readonly sourceName: string;
+    }
+  | {
+      readonly kind: "lifetime";
+      readonly sourceName: string;
+      readonly targetIdentity: string;
+    }
+  | {
+      readonly kind: "const";
+      readonly sourceName: string;
+      readonly targetIdentity: string;
+    };
 
 export interface RustTargetMember {
   readonly id: string;
@@ -105,7 +153,7 @@ export interface RustTargetMember {
   readonly static?: boolean;
   readonly parameters: readonly RustTargetParameter[];
   readonly returnType?: RustTargetTypeRef;
-  readonly typeParameters?: readonly RustTargetTypeParameter[];
+  readonly genericParameters?: readonly RustTargetGenericParameter[];
   readonly providerDeclaration?: ProviderDeclarationIdentity;
 }
 
@@ -126,7 +174,7 @@ export interface RustSelectedTargetSignature {
     readonly receiverCarrier: RustTargetTypeRef;
     readonly storageIndex: number;
   };
-  readonly targetTypeArguments?: readonly RustTargetTypeRef[];
+  readonly targetGenericArguments?: readonly RustTargetGenericArgument[];
   readonly providerDeclaration?: ProviderDeclarationIdentity;
   readonly argumentConversions?: readonly RustTargetCallArgumentSlot[];
   readonly sourceSignature?: Signature;

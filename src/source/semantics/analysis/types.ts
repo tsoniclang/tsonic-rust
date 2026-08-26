@@ -81,6 +81,8 @@ function typeContractFor(
       return args.length === 0 ? { kind: "lifetime-kind" } : undefined;
     case rustSourceTypeExportIds.staticLifetime:
       return args.length === 0 ? { kind: "static-lifetime" } : undefined;
+    case rustSourceTypeExportIds.placeholderLifetime:
+      return args.length === 0 ? { kind: "placeholder-lifetime" } : undefined;
     case rustSourceTypeExportIds.sharedReference:
     case rustSourceTypeExportIds.mutableReference:
       return args.length >= 1 && args.length <= 2 && args[0] !== undefined

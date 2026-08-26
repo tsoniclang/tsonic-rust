@@ -1,6 +1,8 @@
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
-import { rustSourceTypeCarrierValue } from "../../../../target-model/types/index.js";
+import {
+  rustSourceTypeCarrierValue,
+} from "../../../../target-model/types/index.js";
 import type {
   RustExpr,
   RustGenericArgument,
@@ -58,7 +60,6 @@ function projectTypeBounds(
 ): readonly RustTypeBound[] {
   return Object.freeze([
     { kind: "trait", path: "Clone" },
-    { kind: "lifetime", lifetime: { kind: "static" } },
     ...parameter.outlives.map((lifetime): RustTypeBound => ({
       kind: "lifetime",
       lifetime: rustLifetimeToAst(lifetime),
@@ -134,28 +135,27 @@ function rustProjectGeneratedType(
   const path = value === undefined || definition === undefined
     ? undefined
     : sourceModuleItemPath(context, value.fileName, generatedName(definition));
-  const lifetimeCount = definition?.genericParameters.filter((parameter) =>
-    parameter.kind === "lifetime").length ?? 0;
+  const sourceArguments = value?.genericArguments ?? [];
   if (value === undefined || definition === undefined || path === undefined ||
-    value.lifetimeArguments.length !== lifetimeCount ||
-    value.typeArguments.length !== definition.typeParameterNames.length) {
+    sourceArguments.length !== definition.genericParameters.length ||
+    definition.genericParameters.some((parameter, index) =>
+      sourceArguments[index]?.kind !== parameter.kind)) {
     return undefined;
   }
-  const typeArguments = value.typeArguments.map((argument) =>
-    rustTypeFromCarrierInContext(argument, context));
-  if (typeArguments.some((argument) => argument === undefined)) {
-    return undefined;
+  const genericArguments: RustGenericArgument[] = [];
+  for (const argument of sourceArguments) {
+    if (argument.kind === "lifetime") {
+      genericArguments.push({
+        kind: "lifetime",
+        lifetime: rustLifetimeToAst(argument.lifetime),
+      });
+      continue;
+    }
+    if (argument.kind !== "type") return undefined;
+    const type = rustTypeFromCarrierInContext(argument.type, context);
+    if (type === undefined) return undefined;
+    genericArguments.push({ kind: "type", type });
   }
-  const genericArguments: RustGenericArgument[] = [
-    ...value.lifetimeArguments.map((lifetime): RustGenericArgument => ({
-      kind: "lifetime",
-      lifetime: rustLifetimeToAst(lifetime),
-    })),
-    ...(typeArguments as RustType[]).map((type): RustGenericArgument => ({
-      kind: "type",
-      type,
-    })),
-  ];
   return {
     kind: "named",
     path,

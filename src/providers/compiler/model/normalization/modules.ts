@@ -11,9 +11,12 @@ import {
 import {
   canonicalCompilerTypePathKey,
   canonicalPathKey,
+  normalizeGenericParameters,
+  normalizeTraitBounds,
   normalizeType,
-  normalizeTypeParameters,
   normalizeTypeTraits,
+  rootNormalizationContext,
+  rustCompilerItemIdentity,
   rustStaticValueCanBeCopied,
 } from "../rustdoc-types.js";
 import {
@@ -26,24 +29,31 @@ import {
   requireRecord,
   requireString,
 } from "../rustdoc-schema.js";
-import { normalizeEnumVariants, normalizeFields, normalizePublicFields, normalizeTypeMembers } from "./members.js";
+import {
+  normalizeEnumVariants,
+  normalizeFields,
+  normalizePublicFields,
+  normalizeTraitMembers,
+  normalizeTypeMembers,
+} from "./members.js";
 import { normalizeFunction } from "./functions.js";
 import { rustCompilerProviderProtocolVersion } from "../model.js";
 import type {
+  RustCompilerAssociatedConstraint,
   RustCompilerDependency,
   RustCompilerExport,
   RustCompilerFunction,
+  RustCompilerGenericArgument,
+  RustCompilerGenericParameter,
   RustCompilerModuleModel,
   RustCompilerProjectSnapshot,
   RustCompilerStandardTypeLocation,
+  RustCompilerTraitDispatch,
   RustCompilerType,
-  RustCompilerTypeParameter,
   RustCompilerUnsupportedExport,
+  RustCompilerUnsupportedMember,
 } from "../model.js";
-import type {
-  ResolvedRustdocItem,
-  RustdocItemResolver,
-} from "../rustdoc-items.js";
+import type { ResolvedRustdocItem, RustdocItemResolver } from "../rustdoc-items.js";
 import type { RustdocDocument } from "../rustdoc-schema.js";
 
 export function normalizeModule(
@@ -57,38 +67,28 @@ export function normalizeModule(
   resolveItem?: RustdocItemResolver,
 ): RustCompilerModuleModel {
   const module = findModule(document, options.dependency, options.modulePath, resolveItem);
-  const items = expandedPublicModuleItems(
-    module,
-    "requested Rust module",
-    resolveItem,
-  );
+  const items = expandedPublicModuleItems(module, "requested Rust module", resolveItem);
   const publicItemsByName = new Map<string, ResolvedRustdocItem>();
   const publicItemIdentitiesByName = new Map<string, string>();
   const publicNameByCanonicalPath = new Map<string, string>();
   const ambiguousNames = new Set<string>();
-  for (const item of items) {
-    const authored = item.item;
-    if (authored.visibility !== "public" || isGlobUse(authored) ||
-      !providerExportKind(authoredPublicKind(item.document, authored))) {
-      continue;
-    }
-    const name = authoredPublicName(authored);
-    if (name === undefined) {
-      continue;
-    }
-    const identity = authoredPublicIdentity(item.document, item.dependency, authored);
-    const existingIdentity = publicItemIdentitiesByName.get(name);
-    if (existingIdentity === identity) {
-      continue;
-    }
-    if (existingIdentity !== undefined) {
+  for (const selected of items) {
+    const item = selected.item;
+    if (item.visibility !== "public" || isGlobUse(item) ||
+      !providerExportKind(authoredPublicKind(selected.document, item))) continue;
+    const name = authoredPublicName(item);
+    if (name === undefined) continue;
+    const identity = authoredPublicIdentity(selected.document, selected.dependency, item);
+    const previous = publicItemIdentitiesByName.get(name);
+    if (previous === identity) continue;
+    if (previous !== undefined) {
       publicItemsByName.delete(name);
       publicItemIdentitiesByName.delete(name);
       ambiguousNames.add(name);
     } else if (!ambiguousNames.has(name)) {
-      publicItemsByName.set(name, item);
+      publicItemsByName.set(name, selected);
       publicItemIdentitiesByName.set(name, identity);
-      const canonicalPath = authoredPublicCanonicalPath(item.document, authored);
+      const canonicalPath = authoredPublicCanonicalPath(selected.document, item);
       if (canonicalPath !== undefined) {
         publicNameByCanonicalPath.set(canonicalPathKey(canonicalPath), name);
       }
@@ -101,49 +101,41 @@ export function normalizeModule(
   const visited = new Set<string>();
   while (pending.length > 0) {
     const name = pending.shift()!;
-    if (visited.has(name)) {
-      continue;
-    }
+    if (visited.has(name)) continue;
     visited.add(name);
     if (ambiguousNames.has(name)) {
       unsupported.push({ name, reason: `Rust module exports more than one public item named '${name}'.` });
       continue;
     }
-    const item = publicItemsByName.get(name);
-    if (item === undefined) {
+    const authored = publicItemsByName.get(name);
+    if (authored === undefined) {
       unsupported.push({ name, reason: `Rust module does not export public item '${name}'.` });
       continue;
     }
     try {
-      const authored = item.item;
-      const resolved = resolveItem?.(item.document, item.dependency, authored.id) ?? {
-        document: item.document,
-        item: authored,
-        dependency: item.dependency,
-        publicName: name,
-      };
+      const resolved = resolveItem?.(
+        authored.document,
+        authored.dependency,
+        authored.item.id,
+      ) ?? { ...authored, publicName: name };
       const normalized = normalizeExport(
         resolved.document,
         resolved.item,
         resolved.dependency,
         name,
         [options.dependency.targetCrateName, ...options.modulePath, name],
+        resolveItem,
       );
       exports.push(normalized);
       for (const dependencyName of sameModuleExportDependencies(
         normalized,
         publicNameByCanonicalPath,
       )) {
-        if (!visited.has(dependencyName)) {
-          pending.push(dependencyName);
-        }
+        if (!visited.has(dependencyName)) pending.push(dependencyName);
       }
       pending.sort(compareText);
     } catch (error) {
-      unsupported.push({
-        name,
-        reason: error instanceof Error ? error.message : String(error),
-      });
+      unsupported.push({ name, reason: error instanceof Error ? error.message : String(error) });
     }
   }
   exports.sort((left, right) => compareText(left.name, right.name));
@@ -159,11 +151,214 @@ export function normalizeModule(
   });
 }
 
+function normalizeExport(
+  document: RustdocDocument,
+  item: Readonly<Record<string, unknown>>,
+  dependency: RustCompilerDependency,
+  publicName: string,
+  targetPath: readonly string[],
+  resolveItem?: RustdocItemResolver,
+): RustCompilerExport {
+  const name = requireString(publicName, "Rust export name");
+  const itemIdentity = rustCompilerItemIdentity(document, dependency, item);
+  const identity = {
+    id: canonicalItemId(dependency, item),
+    name,
+    canonicalPath: canonicalItemPath(document, item),
+    targetPath: Object.freeze([...targetPath]),
+  };
+  const root = rootNormalizationContext(document, dependency, item, resolveItem);
+  if (hasInnerKind(item, "constant")) {
+    const constant = requireInnerRecord(item, "constant", `Rust constant '${name}'`);
+    return Object.freeze({
+      kind: "constant",
+      ...identity,
+      type: normalizeType(document, constant.type, root),
+    });
+  }
+  if (hasInnerKind(item, "static")) {
+    const static_ = requireInnerRecord(item, "static", `Rust static '${name}'`);
+    const mutable = requireBoolean(static_.is_mutable, `${name}.static.is_mutable`);
+    const type = normalizeType(document, static_.type, root);
+    if (!rustStaticValueCanBeCopied(type)) {
+      throw new Error(`Rust static '${name}' has a value type that is not structurally proven Copy.`);
+    }
+    return Object.freeze({
+      kind: "static",
+      ...identity,
+      type,
+      unsafe: requireBoolean(static_.is_unsafe, `${name}.static.is_unsafe`),
+      mutable,
+    });
+  }
+  if (hasInnerKind(item, "function")) {
+    return Object.freeze({
+      kind: "function",
+      ...identity,
+      function: normalizeFunction(document, item, dependency, undefined, {
+        ...(resolveItem === undefined ? {} : { resolveItem }),
+      }),
+    });
+  }
+  if (hasInnerKind(item, "type_alias")) {
+    const alias = requireInnerRecord(item, "type_alias", `Rust type alias '${name}'`);
+    const generics = normalizeGenericParameters(
+      document,
+      requireRecord(alias.generics, `${name}.generics`),
+      root,
+    );
+    return Object.freeze({
+      kind: "type-alias",
+      ...identity,
+      genericParameters: generics.parameters,
+      type: normalizeType(document, alias.type, generics.context),
+    });
+  }
+  if (hasInnerKind(item, "trait")) {
+    const trait = requireInnerRecord(item, "trait", `Rust trait '${name}'`);
+    const generics = normalizeGenericParameters(
+      document,
+      requireRecord(trait.generics, `${name}.generics`),
+      root,
+    );
+    const traitDispatch: RustCompilerTraitDispatch = Object.freeze({
+      identity: itemIdentity,
+      path: itemIdentity.canonicalPath.join("::"),
+      genericArguments: Object.freeze(generics.parameters.map(
+        compilerGenericParameterArgument,
+      )),
+      associatedConstraints: Object.freeze([]),
+    });
+    const members = normalizeTraitMembers(
+      document,
+      trait,
+      dependency,
+      generics.parameters,
+      itemIdentity,
+      traitDispatch,
+      generics.context,
+      resolveItem,
+    );
+    const bounds = normalizeTraitBounds(
+      document,
+      requireArray(trait.bounds, `${name}.bounds`),
+      generics.context,
+    );
+    if (bounds.maybeSized) {
+      throw new Error(`Rust trait '${name}' has an invalid optional Sized supertrait.`);
+    }
+    return Object.freeze({
+      kind: "trait",
+      ...identity,
+      genericParameters: generics.parameters,
+      methods: members.methods,
+      associatedConstants: members.associatedConstants,
+      associatedTypes: members.associatedTypes,
+      unsupportedMembers: members.unsupported,
+      superTraits: bounds.traits,
+      outlives: bounds.outlives,
+      auto: trait.is_auto === true,
+      unsafe: trait.is_unsafe === true,
+    });
+  }
+  const declarationKind = hasInnerKind(item, "struct")
+    ? "struct" as const
+    : hasInnerKind(item, "enum")
+      ? "enum" as const
+      : hasInnerKind(item, "union")
+        ? "union" as const
+        : undefined;
+  if (declarationKind === undefined) {
+    throw new Error(`Rust export '${name}' has no supported provider representation.`);
+  }
+  const declaration = requireInnerRecord(item, declarationKind, `Rust ${declarationKind} '${name}'`);
+  const generics = normalizeGenericParameters(
+    document,
+    requireRecord(declaration.generics, `${name}.generics`),
+    root,
+  );
+  const members = normalizeTypeMembers(
+    document,
+    declaration,
+    dependency,
+    generics.parameters,
+    itemIdentity,
+    resolveItem,
+  );
+  const common = {
+    ...identity,
+    genericParameters: generics.parameters,
+    methods: members.methods,
+    associatedConstants: members.associatedConstants,
+    unsupportedMembers: members.unsupported,
+    traits: normalizeTypeTraits(
+      document,
+      dependency,
+      declaration,
+      generics.parameters,
+      itemIdentity,
+      resolveItem,
+    ),
+  };
+  if (declarationKind === "struct") {
+    const fields = normalizeFields(document, declaration, dependency, generics.context);
+    return Object.freeze({
+      kind: declarationKind,
+      ...common,
+      fields: fields.values,
+      unsupportedMembers: mergeUnsupported(common.unsupportedMembers, fields.unsupported),
+    });
+  }
+  if (declarationKind === "enum") {
+    const variantsComplete = declaration.has_stripped_variants === false;
+    const variants = variantsComplete
+      ? normalizeEnumVariants(document, declaration, dependency, generics.context)
+      : { values: Object.freeze([]), unsupported: Object.freeze([]) };
+    return Object.freeze({
+      kind: declarationKind,
+      ...common,
+      variantsComplete,
+      variants: variants.values,
+      unsupportedMembers: mergeUnsupported(common.unsupportedMembers, variants.unsupported),
+    });
+  }
+  const fields = normalizePublicFields(
+    document,
+    requireArray(declaration.fields, `${name}.fields`),
+    dependency,
+    "union",
+    generics.context,
+  );
+  return Object.freeze({
+    kind: declarationKind,
+    ...common,
+    fields: fields.values,
+    unsupportedMembers: mergeUnsupported(common.unsupportedMembers, fields.unsupported),
+  });
+}
+
 function sameModuleExportDependencies(
   exported: RustCompilerExport,
   publicNameByCanonicalPath: ReadonlyMap<string, string>,
 ): readonly string[] {
   const names = new Set<string>();
+  const selectIdentity = (canonicalPath: readonly string[]): void => {
+    const selected = publicNameByCanonicalPath.get(canonicalPathKey(canonicalPath));
+    if (selected !== undefined) names.add(selected);
+  };
+  const visitArgument = (argument: RustCompilerGenericArgument): void => {
+    if (argument.kind === "type") visitType(argument.type);
+  };
+  const visitConstraint = (constraint: RustCompilerAssociatedConstraint): void => {
+    constraint.genericArguments.forEach(visitArgument);
+    if (constraint.kind === "equality") visitType(constraint.type);
+    else constraint.traits.forEach(visitTrait);
+  };
+  const visitTrait = (trait: RustCompilerTraitDispatch): void => {
+    selectIdentity(trait.identity.canonicalPath);
+    trait.genericArguments.forEach(visitArgument);
+    trait.associatedConstraints.forEach(visitConstraint);
+  };
   const visitType = (type: RustCompilerType): void => {
     switch (type.kind) {
       case "unit":
@@ -182,41 +377,47 @@ function sameModuleExportDependencies(
       case "raw-pointer":
         visitType(type.target);
         return;
-      case "associated-type":
-        visitType(type.owner);
-        type.trait.typeArguments.forEach(visitType);
-        return;
       case "function-pointer":
         type.parameters.forEach(visitType);
         visitType(type.result);
         return;
-      case "path":
-        type.typeArguments.forEach(visitType);
-        {
-          const publicName = publicNameByCanonicalPath.get(canonicalCompilerTypePathKey(type));
-          if (publicName !== undefined) {
-            names.add(publicName);
-          }
-        }
+      case "trait-object":
+        visitTrait(type.principal);
+        type.autoTraits.forEach(visitTrait);
         return;
+      case "opaque":
+        type.bounds.forEach(visitTrait);
+        type.captures.forEach(visitArgument);
+        return;
+      case "associated-type":
+        visitType(type.owner);
+        visitTrait(type.trait);
+        type.genericArguments.forEach(visitArgument);
+        return;
+      case "path":
+        selectIdentity(type.identity.canonicalPath);
+        type.genericArguments.forEach(visitArgument);
     }
   };
-  const visitParameters = (parameters: readonly RustCompilerTypeParameter[]): void => {
+  const visitGenericParameters = (parameters: readonly RustCompilerGenericParameter[]): void => {
     for (const parameter of parameters) {
-      if (parameter.defaultType !== undefined) {
-        visitType(parameter.defaultType);
+      if (parameter.kind === "type") {
+        parameter.requirements.forEach((requirement) => {
+          if (typeof requirement !== "string") visitTrait(requirement.trait);
+        });
+        if (parameter.defaultType !== undefined) visitType(parameter.defaultType);
+      } else if (parameter.kind === "const") {
+        visitType(parameter.type);
       }
     }
   };
   const visitFunction = (fn: RustCompilerFunction): void => {
-    visitParameters(fn.typeParameters);
-    visitParameters(fn.typeRequirements);
-    if (fn.receiver?.kind === "custom") {
-      visitType(fn.receiver.type);
-    }
+    visitGenericParameters(fn.genericParameters);
+    visitGenericParameters(fn.typeRequirements);
+    if (fn.receiver?.kind === "custom") visitType(fn.receiver.type);
     fn.parameters.forEach((parameter) => visitType(parameter.type));
     visitType(fn.result);
-    fn.traitDispatch?.typeArguments.forEach(visitType);
+    if (fn.traitDispatch !== undefined) visitTrait(fn.traitDispatch);
   };
   switch (exported.kind) {
     case "constant":
@@ -226,35 +427,43 @@ function sameModuleExportDependencies(
     case "function":
       visitFunction(exported.function);
       break;
+    case "type-alias":
+      visitGenericParameters(exported.genericParameters);
+      visitType(exported.type);
+      break;
     case "struct":
-      visitParameters(exported.typeParameters);
+    case "union":
+      visitGenericParameters(exported.genericParameters);
       exported.fields.forEach((field) => visitType(field.type));
       exported.methods.forEach(visitFunction);
       exported.associatedConstants.forEach((constant) => {
         visitType(constant.type);
-        constant.traitDispatch.typeArguments.forEach(visitType);
+        visitTrait(constant.traitDispatch);
       });
       break;
-    case "type-alias":
-      visitParameters(exported.typeParameters);
-      visitType(exported.type);
-      break;
     case "enum":
-      visitParameters(exported.typeParameters);
+      visitGenericParameters(exported.genericParameters);
       exported.variants.forEach((variant) => variant.fields.forEach(visitType));
       exported.methods.forEach(visitFunction);
       exported.associatedConstants.forEach((constant) => {
         visitType(constant.type);
-        constant.traitDispatch.typeArguments.forEach(visitType);
+        visitTrait(constant.traitDispatch);
       });
       break;
-    case "union":
-      visitParameters(exported.typeParameters);
-      exported.fields.forEach((field) => visitType(field.type));
+    case "trait":
+      visitGenericParameters(exported.genericParameters);
+      exported.superTraits.forEach(visitTrait);
       exported.methods.forEach(visitFunction);
       exported.associatedConstants.forEach((constant) => {
         visitType(constant.type);
-        constant.traitDispatch.typeArguments.forEach(visitType);
+        visitTrait(constant.traitDispatch);
+      });
+      exported.associatedTypes.forEach((associated) => {
+        visitGenericParameters(associated.genericParameters);
+        associated.requirements.forEach((requirement) => {
+          if (typeof requirement !== "string") visitTrait(requirement.trait);
+        });
+        if (associated.defaultType !== undefined) visitType(associated.defaultType);
       });
       break;
   }
@@ -279,12 +488,9 @@ function findModule(
       `Rust module '${segment}' parent`,
       resolveItem,
     )
-      .filter((child) => {
-        const authored = child.item;
-        return authored.visibility === "public" && !isGlobUse(authored) &&
-          authoredPublicName(authored) === segment &&
-          authoredPublicKind(child.document, authored) === "module";
-      })
+      .filter((child) => child.item.visibility === "public" && !isGlobUse(child.item) &&
+        authoredPublicName(child.item) === segment &&
+        authoredPublicKind(child.document, child.item) === "module")
       .map((child) => [
         authoredPublicIdentity(child.document, child.dependency, child.item),
         child,
@@ -293,145 +499,51 @@ function findModule(
     if (children.length !== 1) {
       throw new Error(`Rust module path '${modulePath.join("::")}' does not resolve uniquely at '${segment}'.`);
     }
-    const authoredChild = children[0]!;
-    const authored = authoredChild.item;
-    const child = resolveItem?.(
-      authoredChild.document,
-      authoredChild.dependency,
-      authored.id,
-    ) ?? {
-      document: authoredChild.document,
-      item: authored,
-      dependency: authoredChild.dependency,
-      publicName: segment,
-    };
-    if (!hasInnerKind(child.item, "module")) {
+    const authored = children[0]!;
+    module = resolveItem?.(authored.document, authored.dependency, authored.item.id) ?? authored;
+    if (!hasInnerKind(module.item, "module")) {
       throw new Error(`Rust item '${segment}' in module path '${modulePath.join("::")}' is not a module.`);
     }
-    module = child;
   }
   return module;
 }
 
 function providerExportKind(kind: string | undefined): boolean {
   return kind === "constant" || kind === "enum" || kind === "function" ||
-    kind === "static" || kind === "struct" || kind === "type_alias" || kind === "union";
+    kind === "static" || kind === "struct" || kind === "trait" ||
+    kind === "type_alias" || kind === "union";
 }
 
-function normalizeExport(
-  document: RustdocDocument,
-  item: Readonly<Record<string, unknown>>,
-  dependency: RustCompilerDependency,
-  publicName: string,
-  targetPath: readonly string[],
-): RustCompilerExport {
-  const name = requireString(publicName, "Rust export name");
-  const id = canonicalItemId(dependency, item);
-  const canonicalPath = canonicalItemPath(document, item);
-  const identity = { id, name, canonicalPath, targetPath: Object.freeze([...targetPath]) };
-  if (hasInnerKind(item, "constant")) {
-    const constant = requireInnerRecord(item, "constant", `Rust constant '${name}'`);
+function compilerGenericParameterArgument(
+  parameter: RustCompilerGenericParameter,
+): RustCompilerGenericArgument {
+  if (parameter.kind === "lifetime") {
+    return Object.freeze({ kind: "lifetime", lifetime: parameter.lifetime });
+  }
+  if (parameter.kind === "type") {
     return Object.freeze({
-      kind: "constant",
-      ...identity,
-      type: normalizeType(document, constant.type),
+      kind: "type",
+      type: Object.freeze({
+        kind: "generic",
+        identity: parameter.identity,
+        name: parameter.name,
+      }),
     });
   }
-  if (hasInnerKind(item, "static")) {
-    const static_ = requireInnerRecord(item, "static", `Rust static '${name}'`);
-    const mutable = requireBoolean(static_.is_mutable, `${name}.static.is_mutable`);
-    const type = normalizeType(document, static_.type);
-    if (!rustStaticValueCanBeCopied(type)) {
-      throw new Error(`Rust static '${name}' has a value type that is not structurally proven Copy.`);
-    }
-    return Object.freeze({
-      kind: "static",
-      ...identity,
-      type,
-      unsafe: requireBoolean(static_.is_unsafe, `${name}.static.is_unsafe`),
-      mutable,
-    });
-  }
-  if (hasInnerKind(item, "function")) {
-    return Object.freeze({
-      kind: "function",
-      ...identity,
-      function: normalizeFunction(document, item, dependency, undefined),
-    });
-  }
-  if (hasInnerKind(item, "struct")) {
-    const struct = requireInnerRecord(item, "struct", `Rust struct '${name}'`);
-    const typeParameters = normalizeTypeParameters(document, requireRecord(struct.generics, `${name}.generics`));
-    const fields = normalizeFields(document, struct, dependency);
-    const members = normalizeTypeMembers(document, struct, dependency, typeParameters, canonicalPath);
-    return Object.freeze({
-      kind: "struct",
-      ...identity,
-      typeParameters,
-      fields: fields.values,
-      methods: members.methods,
-      associatedConstants: members.associatedConstants,
-      unsupportedMembers: Object.freeze([...fields.unsupported, ...members.unsupported]
-        .sort((left, right) => compareText(`${left.kind}\0${left.name}`, `${right.kind}\0${right.name}`))),
-      traits: normalizeTypeTraits(document, struct, typeParameters, canonicalPath),
-    });
-  }
-  if (hasInnerKind(item, "type_alias")) {
-    const alias = requireInnerRecord(item, "type_alias", `Rust type alias '${name}'`);
-    const generics = requireRecord(alias.generics, `${name}.generics`);
-    return Object.freeze({
-      kind: "type-alias",
-      ...identity,
-      typeParameters: normalizeTypeParameters(document, generics),
-      type: normalizeType(document, alias.type),
-    });
-  }
-  if (hasInnerKind(item, "enum")) {
-    const enum_ = requireInnerRecord(item, "enum", `Rust enum '${name}'`);
-    const generics = requireRecord(enum_.generics, `${name}.generics`);
-    const typeParameters = normalizeTypeParameters(document, generics);
-    const members = normalizeTypeMembers(document, enum_, dependency, typeParameters, canonicalPath);
-    const variantsComplete = enum_.has_stripped_variants === false;
-    const variants = variantsComplete
-      ? normalizeEnumVariants(document, enum_, dependency)
-      : { values: Object.freeze([]), unsupported: Object.freeze([]) };
-    return Object.freeze({
-      kind: "enum",
-      ...identity,
-      typeParameters,
-      variantsComplete,
-      variants: variants.values,
-      methods: members.methods,
-      associatedConstants: members.associatedConstants,
-      unsupportedMembers: Object.freeze([...variants.unsupported, ...members.unsupported]
-        .sort((left, right) => compareText(`${left.kind}\0${left.name}`, `${right.kind}\0${right.name}`))),
-      traits: normalizeTypeTraits(document, enum_, typeParameters, canonicalPath),
-    });
-  }
-  if (hasInnerKind(item, "union")) {
-    const union = requireInnerRecord(item, "union", `Rust union '${name}'`);
-    const typeParameters = normalizeTypeParameters(
-      document,
-      requireRecord(union.generics, `${name}.generics`),
-    );
-    const fields = normalizePublicFields(
-      document,
-      requireArray(union.fields, `${name}.fields`),
-      dependency,
-      "union",
-    );
-    const members = normalizeTypeMembers(document, union, dependency, typeParameters, canonicalPath);
-    return Object.freeze({
-      kind: "union",
-      ...identity,
-      typeParameters,
-      fields: fields.values,
-      methods: members.methods,
-      associatedConstants: members.associatedConstants,
-      unsupportedMembers: Object.freeze([...fields.unsupported, ...members.unsupported]
-        .sort((left, right) => compareText(`${left.kind}\0${left.name}`, `${right.kind}\0${right.name}`))),
-      traits: normalizeTypeTraits(document, union, typeParameters, canonicalPath),
-    });
-  }
-  throw new Error(`Rust export '${name}' has no supported provider representation.`);
+  return Object.freeze({
+    kind: "const",
+    value: Object.freeze({
+      kind: "parameter",
+      identity: parameter.identity,
+      name: parameter.name,
+    }),
+  });
+}
+
+function mergeUnsupported(
+  left: readonly RustCompilerUnsupportedMember[],
+  right: readonly RustCompilerUnsupportedMember[],
+): readonly RustCompilerUnsupportedMember[] {
+  return Object.freeze([...left, ...right].sort((a, b) =>
+    compareText(`${a.kind}\0${a.name}`, `${b.kind}\0${b.name}`)));
 }

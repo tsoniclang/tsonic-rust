@@ -1,5 +1,6 @@
 import {
   projectCallableShape,
+  projectLifetimeSubstitutions,
   projectOwnMethods,
   projectTypeSubstitutions,
   rustFunctionTypesMatch,
@@ -306,7 +307,14 @@ export function createImplementationPlan(
     });
     const shape = projectCallableShape(
       dispatch.contractMethod,
-      { ...context, typeParameterSubstitutions: substitutions },
+      {
+        ...context,
+        typeParameterSubstitutions: substitutions,
+        lifetimeSubstitutions: projectLifetimeSubstitutions(
+          owner,
+          ownerRelation.targetType,
+        ),
+      },
       {
         methodTypeArgumentSubstitutions: new Map(
           variant.sourceTypeParameterNames.map((name, index) =>
@@ -384,6 +392,10 @@ export function createImplementationPlan(
           {
             ...context,
             typeParameterSubstitutions: projectTypeSubstitutions(
+              owner,
+              ownerRelation.targetType,
+            ),
+            lifetimeSubstitutions: projectLifetimeSubstitutions(
               owner,
               ownerRelation.targetType,
             ),

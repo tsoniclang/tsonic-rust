@@ -17,17 +17,22 @@ export type RustLifetimeRef =
 
 export interface RustLifetimeBinder {
   readonly identity: string;
-  readonly parameters: readonly Extract<
-    RustLifetimeRef,
-    { readonly kind: "bound" }
-  >[];
+  readonly parameters: readonly RustBoundLifetimeParameterContract[];
+}
+
+export interface RustBoundLifetimeParameterContract {
+  readonly lifetime: Extract<RustLifetimeRef, { readonly kind: "bound" }>;
+  readonly outlives: readonly RustLifetimeRef[];
 }
 
 export interface RustLifetimeParameterContract {
   readonly kind: "lifetime";
   readonly declaration: Node;
   readonly sourceName: string;
-  readonly lifetime: Extract<RustLifetimeRef, { readonly kind: "parameter" }>;
+  readonly lifetime: Extract<
+    RustLifetimeRef,
+    { readonly kind: "parameter" | "bound" }
+  >;
   readonly outlives: readonly RustLifetimeRef[];
 }
 
@@ -47,6 +52,7 @@ export type RustSourceGenericParameterContract =
 export interface RustSourceGenericContract {
   readonly declaration: Node;
   readonly parameters: readonly RustSourceGenericParameterContract[];
+  readonly lifetimeBinder?: RustLifetimeBinder;
 }
 
 export interface RustLifetimeIndex {

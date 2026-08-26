@@ -26,6 +26,7 @@ import {
   rustClosureProtocol,
   rustOptionElementCarrier,
   rustSourceTypeCarrierValue,
+  rustTargetGenericTypeArguments,
   rustTargetTypeContainsTypeParameter,
   substituteRustTargetTypeParameters,
 } from "../../target-model/types/index.js";
@@ -303,8 +304,9 @@ function projectOwnerTypeSubstitutions(
   carrier: TargetTypeRef,
 ): Map<string, TargetTypeRef> {
   const value = rustSourceTypeCarrierValue(carrier);
+  const typeArguments = rustTargetGenericTypeArguments(value?.genericArguments);
   return new Map(owner.typeParameterNames.map((name, index) =>
-    [name, value?.typeArguments[index] ?? { kind: "type-parameter", name }] as const));
+    [name, typeArguments[index] ?? { kind: "type-parameter", name }] as const));
 }
 
 function inferObjectLiteralImplementationSubstitutions(

@@ -242,6 +242,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     ast,
     names: context.names,
     projectTypes,
+    sourceLifetimes: context.sourceLifetimes,
   });
   for (const issue of callableSpecializations.issues) {
     appendRustDiagnostic(
@@ -258,6 +259,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
       request.targetTypeArguments,
       ast,
       projectTypes,
+      context.sourceLifetimes,
     );
     if (registration.kind === "rejected") {
       appendRustDiagnostic(
@@ -273,6 +275,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     ast,
     names: context.names,
     projectTypes,
+    sourceLifetimes: context.sourceLifetimes,
   });
   context.projectMethodProperties.initialize({
     ast,

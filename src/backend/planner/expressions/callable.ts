@@ -54,7 +54,7 @@ function collapseExactForwardingClosure(
 ): RustExpr {
   if (captureCount !== 0 || closure.kind !== "closure" || closure.move === true ||
     closure.params.some((parameter) => parameter.byRefCopy) ||
-    closure.body.kind !== "call" || (closure.body.typeArguments?.length ?? 0) !== 0 ||
+    closure.body.kind !== "call" || (closure.body.genericArguments?.length ?? 0) !== 0 ||
     closure.body.args.length !== closure.params.length ||
     !closure.body.args.every((argument, index) =>
       argument.kind === "path" && argument.path === closure.params[index]?.name)) {

@@ -1,9 +1,12 @@
 import {
   rustCallableProtocol,
+  rustLifetimeGenericArgument,
   rustStringTargetType,
-  inferRustTargetTypeParameterBindings,
-  rustTargetTypeContainsTypeParameter,
-  substituteRustTargetTypeParameters,
+  inferRustTargetGenericBindings,
+  rustTargetGenericBindingsForArguments,
+  rustTargetGenericReferences,
+  substituteRustTargetGenerics,
+  rustTypeGenericArgument,
 } from "../../../../target-model/types/index.js";
 import { acceptRustPolicy } from "../../../../policy/operations/contracts.js";
 import { asNode } from "../../../../policy/evidence/selected-source.js";
@@ -24,10 +27,12 @@ import { rustProviderGenericRequirementsAreSatisfied } from "../../../../policy/
 import { rustTargetOperationFactKey, rustPreparedOperationResultFactKey, rustOptionalChainFactKey } from "../../../facts/keys.js";
 import { rustTargetOperationText } from "../../../facts/target-operation.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
+import { rustTargetGenericArgumentEquals } from "../../../../target-model/types/equality.js";
 import { selectedCallArgumentNodes, selectedCallCalleeDeclaration, selectedCallCalleeSymbol, selectedSourceValueCarrier } from "../operators.js";
 import { selectRustOptionalChain } from "../../../../policy/operations/optional-chains.js";
 import { substituteRustValueConversion } from "../../../../target-model/conversions/contracts.js";
 import { selectRustSourceValueConversion } from "../../../../policy/conversions/selection.js";
+import { resolveRustProviderGenericArgument } from "../../../../policy/types/resolution/source.js";
 import type {
   RustCheckedCallSelectionInput,
   RustCheckedCallSelectionResult,
@@ -37,6 +42,7 @@ import type {
 } from "../../../../policy/operations/contracts.js";
 import type {
   RustProviderFactOperationKind,
+  RustProviderGenericParameter,
   RustProviderOperationForm,
   RustProviderOperationTemplate,
   RustRuntimeSetOperationKind,
@@ -46,27 +52,83 @@ import type { ProviderDeclarationIdentity } from "@tsonic/tsts";
 import type { RustAppliedValueCarrierReconciliation } from "../../../../policy/types/value-carrier-reconciliation.js";
 import type { RustOperationsProviderOptions } from "../model.js";
 import type { RustOptionalCallGuard } from "./selection.js";
-import type { RustTargetMember, TargetTypeRef } from "../../../../target-model/types/model.js";
+import type {
+  RustTargetConstArgument,
+  RustTargetGenericArgument,
+  RustTargetGenericParameter,
+  RustTargetMember,
+  TargetTypeRef,
+} from "../../../../target-model/types/model.js";
+import type { RustLifetimeRef } from "../../../../target-model/lifetimes/index.js";
+import { rustLifetimeKey } from "../../../../target-model/lifetimes/index.js";
+import type {
+  RustTargetGenericBindings,
+  RustTargetGenericParameterSet,
+} from "../../../../target-model/types/index.js";
 
 export function instantiateExactSelectedConstructionCarrier(
   definition: import("../../../project-types/type-policy.js").RustProjectTypeDefinition,
-  sourceTypeArguments: NonNullable<
-    RustCheckedCallSelectionInput["source"]["sourceSelectedMethodTypeArguments"]
-  >,
-  targetTypeArguments: readonly TargetTypeRef[],
+  targetGenericArguments: readonly RustTargetGenericArgument[],
   options: RustOperationsProviderOptions,
 ): TargetTypeRef | undefined {
-  if (sourceTypeArguments.length !== definition.typeParameterNames.length ||
-    targetTypeArguments.length !== definition.typeParameterNames.length ||
-    sourceTypeArguments.some((argument, index) =>
-      argument.typeParameterName !== definition.typeParameterNames[index])) {
+  const parameters = definition.genericParameters.map((parameter): RustTargetGenericParameter =>
+    parameter.kind === "type"
+      ? { kind: "type", sourceName: parameter.sourceName }
+      : {
+          kind: "lifetime",
+          sourceName: parameter.sourceName,
+          targetIdentity: rustLifetimeKey(parameter.lifetime),
+        });
+  const substitutions = rustTargetGenericBindingsForArguments(
+    parameters,
+    targetGenericArguments,
+  );
+  if (substitutions === undefined) return undefined;
+  return substituteRustTargetGenerics(
+    options.projectTypes.openCarrier(definition),
+    substitutions.types,
+    substitutions.lifetimes,
+    substitutions.consts,
+  );
+}
+
+export function mapSelectedProjectGenericArguments(
+  request: RustCheckedCallSelectionInput,
+  genericOwner: import("@tsonic/tsts").Node,
+  context: RustOperationPolicyContext,
+  options: RustOperationsProviderOptions,
+): readonly RustTargetGenericArgument[] | undefined {
+  const selected = request.source.sourceSelectedMethodTypeArguments ?? [];
+  const sourceParameters = context.ast.typeParameters(genericOwner);
+  if (sourceParameters.some((parameter) => parameter === undefined)) return undefined;
+  if (sourceParameters.length === 0) {
+    return selected.length === 0 ? Object.freeze([]) : undefined;
+  }
+  const contract = context.sourceLifetimes.contractFor(genericOwner);
+  if (contract === undefined || selected.length !== contract.parameters.length) {
     return undefined;
   }
-  return substituteRustTargetTypeParameters(
-    options.projectTypes.openCarrier(definition),
-    new Map(definition.typeParameterNames.map((name, index) =>
-      [name, targetTypeArguments[index]!] as const)),
-  );
+  const arguments_ = contract.parameters.map((parameter, index) => {
+    const evidence = selected[index];
+    if (evidence === undefined || evidence.typeParameterName !== parameter.sourceName ||
+      !context.currentSemantics.facts.typeSubjects(evidence.typeParameter).some((subject) =>
+        asNode(subject, context) === parameter.declaration)) {
+      return undefined;
+    }
+    if (parameter.kind === "type") {
+      const type = resolveRustTargetTypeRef(
+        evidence.explicitTypeNode ?? evidence.selectedType,
+        context,
+        options,
+      );
+      return type === undefined ? undefined : rustTypeGenericArgument(type);
+    }
+    const lifetime = resolveSelectedLifetimeArgument(evidence, context);
+    return lifetime === undefined ? undefined : rustLifetimeGenericArgument(lifetime);
+  });
+  return arguments_.some((argument) => argument === undefined)
+    ? undefined
+    : Object.freeze(arguments_ as RustTargetGenericArgument[]);
 }
 
 export function selectedProjectConstructor(
@@ -109,6 +171,30 @@ export function mapSelectedTargetTypeArguments(
     : undefined;
 }
 
+function resolveSelectedLifetimeArgument(
+  evidence: NonNullable<
+    RustCheckedCallSelectionInput["source"]["sourceSelectedMethodTypeArguments"]
+  >[number],
+  context: RustOperationPolicyContext,
+): RustLifetimeRef | undefined {
+  const authored = evidence.explicitTypeNode === undefined
+    ? undefined
+    : context.sourceLifetimes.resolve(evidence.explicitTypeNode);
+  const semantic = new Map<string, RustLifetimeRef>();
+  for (const subject of context.currentSemantics.facts.typeSubjects(evidence.selectedType)) {
+    const node = asNode(subject, context);
+    const lifetime = node === undefined ? undefined : context.sourceLifetimes.resolve(node);
+    if (lifetime !== undefined) semantic.set(rustLifetimeKey(lifetime), lifetime);
+  }
+  if (semantic.size > 1) return undefined;
+  const selected = semantic.values().next().value as RustLifetimeRef | undefined;
+  if (authored !== undefined && selected !== undefined &&
+    rustLifetimeKey(authored) !== rustLifetimeKey(selected)) {
+    return undefined;
+  }
+  return authored ?? selected;
+}
+
 export function instantiateSelectedCallTemplate(
   request: RustCheckedCallSelectionInput,
   template: RustProviderOperationTemplate,
@@ -120,27 +206,85 @@ export function instantiateSelectedCallTemplate(
     context,
     resolutionOptions,
   );
-  const selectedParameterCarriers = request.source.sourceSelectedSignatureParameters.map((parameter) =>
-    resolveRustTargetTypeRef(parameter.selectedType, context, resolutionOptions));
+  const selectedParameterCarriers = selectedCallParameterInferenceCarriers(
+    request,
+    context,
+    resolutionOptions,
+  );
   const selectedResultCarrier = request.source.sourceResultType === undefined
     ? undefined
     : resolveRustTargetTypeRef(request.source.sourceResultType, context, resolutionOptions);
-  const directTypeArguments = new Map<string, TargetTypeRef>();
-  for (const argument of request.source.sourceSelectedMethodTypeArguments ?? []) {
-    const carrier = resolveRustTargetTypeRef(
-      argument.explicitTypeNode ?? argument.selectedType,
-      context,
-      resolutionOptions,
-    );
-    if (carrier !== undefined) {
-      directTypeArguments.set(argument.typeParameterName, carrier);
+  const directGenericArguments = new Map<string, RustTargetGenericArgument>();
+  for (const parameter of template.genericParameters ?? []) {
+    const selected = (request.source.sourceSelectedMethodTypeArguments ?? []).filter((argument) =>
+      argument.typeParameterName === parameter.sourceName);
+    if (selected.length > 1) return undefined;
+    const argument = selected[0];
+    if (argument === undefined) continue;
+    const resolved = parameter.kind === "type"
+      ? (() => {
+          const type = resolveRustTargetTypeRef(
+            argument.explicitTypeNode ?? argument.selectedType,
+            context,
+            resolutionOptions,
+          );
+          return type === undefined
+            ? undefined
+            : Object.freeze({ kind: "type" as const, type });
+        })()
+      : parameter.kind === "lifetime"
+        ? (() => {
+            const lifetime = resolveSelectedLifetimeArgument(argument, context);
+            return lifetime === undefined
+              ? undefined
+              : rustLifetimeGenericArgument(lifetime);
+          })()
+        : argument.explicitTypeNode === undefined
+          ? undefined
+          : resolveRustProviderGenericArgument(
+              argument.explicitTypeNode,
+              parameter,
+              context,
+              resolutionOptions,
+            );
+    if (resolved !== undefined) {
+      directGenericArguments.set(parameter.sourceName, resolved);
     }
   }
   return instantiateProviderOperationTemplate(template, {
     sourceReceiverCarrier: rawReceiverCarrier,
     sourceParameterCarriers: selectedParameterCarriers,
     sourceResultCarrier: selectedResultCarrier,
-    directTypeArguments,
+    directGenericArguments,
+  });
+}
+
+function selectedCallParameterInferenceCarriers(
+  request: RustCheckedCallSelectionInput,
+  context: RustOperationPolicyContext,
+  options: RustOperationsProviderOptions,
+): readonly (TargetTypeRef | undefined)[] {
+  return request.source.sourceSelectedSignatureParameters.map((_parameter, parameterIndex) => {
+    const bindings = request.source.sourceArgumentBindings.filter((binding) =>
+      binding.sourceParameterIndex === parameterIndex);
+    if (bindings.length === 0 || bindings.some((binding) => binding.sourceForm !== "value")) {
+      return undefined;
+    }
+    const sourceIndexes = [...new Set(bindings.map((binding) => binding.sourceArgumentIndex))];
+    const carriers = sourceIndexes.map((sourceIndex) => {
+      const sourceBindings = request.source.sourceArgumentBindings.filter((binding) =>
+        binding.sourceArgumentIndex === sourceIndex);
+      const argument = request.source.sourceArguments[sourceIndex];
+      return argument === undefined || sourceBindings.some((binding) =>
+        binding.sourceParameterIndex !== parameterIndex || binding.sourceForm !== "value")
+        ? undefined
+        : selectedSourceValueCarrier(argument, context, options);
+    });
+    const first = carriers[0];
+    return first === undefined || carriers.some((carrier) =>
+      carrier === undefined || !rustTargetTypeRefEquals(carrier, first))
+      ? undefined
+      : first;
   });
 }
 
@@ -198,11 +342,6 @@ export function acceptSelectedCall(
   const fact = finalizeProviderOperationFact(instantiatedTemplate, sourceArguments.carriers, selectedReceiverCarrier);
   if (fact === undefined) {
     return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_OPERATION_ABI_INCOMPLETE", `Selected call '${callIdentity.sourceName}' cannot finalize one total Rust operation ABI.`);
-  }
-  const targetTypeArguments = request.source.sourceSelectedMethodTypeArguments?.map((argument) =>
-    resolveRustTargetTypeRef(argument.explicitTypeNode ?? argument.selectedType, context, resolutionOptions));
-  if (targetTypeArguments?.some((argument) => argument === undefined) === true) {
-    return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_TYPE_ARGUMENT_CARRIER_MISSING", `Selected generic call '${callIdentity.sourceName}' has a source-selected type argument that cannot map to a closed Rust target type.`);
   }
   const optionalResult = selectRustOptionalCallResult(
     request,
@@ -322,7 +461,6 @@ export function acceptSelectedCall(
       sourceArgumentBindings: request.source.sourceArgumentBindings,
       sourceSelectedSignatureParameters: request.source.sourceSelectedSignatureParameters,
       ...(request.source.sourceSelectedMethodTypeArguments === undefined ? {} : { sourceSelectedMethodTypeArguments: request.source.sourceSelectedMethodTypeArguments }),
-      ...(targetTypeArguments === undefined ? {} : { targetTypeArguments: targetTypeArguments as TargetTypeRef[] }),
       ...(callIdentity.providerDeclaration === undefined ? {} : { providerDeclaration: callIdentity.providerDeclaration }),
     };
   context.facts.set(request.source.call, rustSelectedCallKey, selectedSignature, evidence);
@@ -600,7 +738,7 @@ interface InstantiatedProviderOperationTemplate<
   OperationKind extends RustProviderFactOperationKind | RustRuntimeSetOperationKind = RustProviderFactOperationKind,
 > {
   readonly template: RustProviderOperationTemplate<OperationKind>;
-  readonly substitutions: ReadonlyMap<string, TargetTypeRef>;
+  readonly substitutions: RustTargetGenericBindings;
 }
 
 export function instantiateProviderOperationTemplate<
@@ -611,124 +749,293 @@ export function instantiateProviderOperationTemplate<
     readonly sourceReceiverCarrier?: TargetTypeRef;
     readonly sourceParameterCarriers?: readonly (TargetTypeRef | undefined)[];
     readonly sourceResultCarrier?: TargetTypeRef;
-    readonly directTypeArguments?: ReadonlyMap<string, TargetTypeRef>;
+    readonly directGenericArguments?: ReadonlyMap<string, RustTargetGenericArgument>;
   },
 ): InstantiatedProviderOperationTemplate<OperationKind> | undefined {
-  const parameterNames = new Set(template.typeParameters ?? []);
-  if (parameterNames.size === 0) {
-    return { template, substitutions: new Map() };
-  }
-  const bindings = new Map<string, TargetTypeRef>();
-  for (const [name, carrier] of evidence.directTypeArguments ?? []) {
-    if (parameterNames.has(name) && !mergeTypeBinding(bindings, name, carrier)) {
+  const parameters = template.genericParameters ?? [];
+  const parameterSet = providerGenericParameterSet(parameters);
+  const bindings: MutableRustTargetGenericBindings = {
+    types: new Map(),
+    lifetimes: new Map(),
+    consts: new Map(),
+  };
+  for (const [sourceName, argument] of evidence.directGenericArguments ?? []) {
+    const parameter = parameters.find((candidate) => candidate.sourceName === sourceName);
+    if (parameter === undefined || !mergeDirectGenericArgument(bindings, parameter, argument)) {
       return undefined;
     }
   }
-  if (!inferTemplateBindings(template.receiverCarrier, evidence.sourceReceiverCarrier, true) ||
-    !inferTemplateBindings(template.resultCarrier, evidence.sourceResultCarrier, false)) {
+  if (!inferTemplateBindings(template.receiverCarrier, evidence.sourceReceiverCarrier) ||
+    !inferTemplateBindings(template.resultCarrier, evidence.sourceResultCarrier)) {
     return undefined;
   }
   for (let index = 0; index < (template.parameterCarriers?.length ?? 0); index += 1) {
     if (!inferTemplateBindings(
       template.parameterCarriers?.[index],
       evidence.sourceParameterCarriers?.[index],
-      false,
     )) {
       return undefined;
     }
   }
-  if ([...parameterNames].some((name) => !bindings.has(name))) {
+  for (const parameter of parameters) {
+    if (providerGenericParameterIsBound(bindings, parameter)) continue;
+    if (parameter.kind === "lifetime" || parameter.defaultArgument === undefined) {
+      return undefined;
+    }
+    const defaultArgument = substituteTargetGenericArgument(
+      parameter.defaultArgument,
+      bindings,
+    );
+    if (!mergeDirectGenericArgument(bindings, parameter, defaultArgument)) {
+      return undefined;
+    }
+  }
+  if (!rustProviderGenericRequirementsAreSatisfied(template.typeRequirements, bindings.types)) {
     return undefined;
   }
-  if (!rustProviderGenericRequirementsAreSatisfied(template.typeRequirements, bindings)) {
-    return undefined;
-  }
+  const substitutions: RustTargetGenericBindings = Object.freeze({
+    types: bindings.types,
+    lifetimes: bindings.lifetimes,
+    consts: bindings.consts,
+  });
+  const {
+    genericParameters: _genericParameters,
+    typeRequirements: _typeRequirements,
+    ...closedTemplate
+  } = template;
   return {
     template: {
-      ...template,
-      target: substituteProviderOperationForm(template.target, bindings),
-      resultCarrier: substituteRustTargetTypeParameters(template.resultCarrier, bindings),
+      ...closedTemplate,
+      target: substituteProviderOperationForm(template.target, substitutions),
+      resultCarrier: substituteProviderCarrier(template.resultCarrier, substitutions),
       ...(template.sourceResultCarrier === undefined
         ? {}
         : {
-            sourceResultCarrier: substituteRustTargetTypeParameters(
-              template.sourceResultCarrier,
-              bindings,
-            ),
+            sourceResultCarrier: substituteProviderCarrier(template.sourceResultCarrier, substitutions),
+          }),
+      ...(template.sourceAbsenceCarrier === undefined
+        ? {}
+        : {
+            sourceAbsenceCarrier: substituteProviderCarrier(template.sourceAbsenceCarrier, substitutions),
           }),
       ...(template.parameterCarriers === undefined
         ? {}
         : { parameterCarriers: template.parameterCarriers.map((carrier) =>
-            carrier === undefined ? undefined : substituteRustTargetTypeParameters(carrier, bindings)) }),
+            carrier === undefined ? undefined : substituteProviderCarrier(carrier, substitutions)) }),
       ...(template.receiverCarrier === undefined
         ? {}
-        : { receiverCarrier: substituteRustTargetTypeParameters(template.receiverCarrier, bindings) }),
-      ...(template.targetTypeArguments === undefined
+        : { receiverCarrier: substituteProviderCarrier(template.receiverCarrier, substitutions) }),
+      ...(template.targetGenericArguments === undefined
         ? {}
         : {
-            targetTypeArguments: template.targetTypeArguments.map((carrier) =>
-              substituteRustTargetTypeParameters(carrier, bindings)),
+            targetGenericArguments: template.targetGenericArguments.map((argument) =>
+              substituteTargetGenericArgument(argument, substitutions)),
           }),
       ...(template.resultConversion === undefined
         ? {}
         : {
             resultConversion: substituteRustValueConversion(
               template.resultConversion,
-              bindings,
+              substitutions.types,
+              substitutions.lifetimes,
+              substitutions.consts,
             ),
           }),
-      typeParameters: [],
-      typeRequirements: [],
+      ...(template.errorCarrier === undefined
+        ? {}
+        : { errorCarrier: substituteProviderCarrier(template.errorCarrier, substitutions) }),
     },
-    substitutions: bindings,
+    substitutions,
   };
 
   function inferTemplateBindings(
     pattern: TargetTypeRef | undefined,
     actual: TargetTypeRef | undefined,
-    reconcileKnownBindings: boolean,
   ): boolean {
-    if (pattern === undefined || !rustTargetTypeContainsTypeParameter(pattern, parameterNames)) {
-      return true;
-    }
-    const selectedNames = reconcileKnownBindings
-      ? parameterNames
-      : new Set([...parameterNames].filter((name) => !bindings.has(name)));
-    if (!rustTargetTypeContainsTypeParameter(pattern, selectedNames)) {
+    if (pattern === undefined || !carrierReferencesProviderParameters(pattern, parameterSet)) {
       return true;
     }
     if (actual === undefined) {
       return false;
     }
-    const inferred = inferRustTargetTypeParameterBindings(pattern, actual, selectedNames);
+    const inferred = inferRustTargetGenericBindings(pattern, actual, parameterSet);
     if (inferred === undefined) {
       return false;
     }
-    for (const [name, carrier] of inferred) {
-      if (!mergeTypeBinding(bindings, name, carrier)) {
-        return false;
-      }
-    }
-    return true;
+    return mergeGenericBindings(bindings, inferred);
   }
+}
+
+interface MutableRustTargetGenericBindings {
+  readonly types: Map<string, TargetTypeRef>;
+  readonly lifetimes: Map<string, RustLifetimeRef>;
+  readonly consts: Map<string, RustTargetConstArgument>;
+}
+
+function providerGenericParameterSet(
+  parameters: readonly RustProviderGenericParameter[],
+): RustTargetGenericParameterSet {
+  return Object.freeze({
+    typeNames: new Set(parameters.flatMap((parameter) =>
+      parameter.kind === "type" ? [parameter.sourceName] : [])),
+    lifetimeIdentities: new Set(parameters.flatMap((parameter) =>
+      parameter.kind === "lifetime" ? [parameter.targetIdentity] : [])),
+    constIdentities: new Set(parameters.flatMap((parameter) =>
+      parameter.kind === "const" ? [parameter.targetIdentity] : [])),
+  });
+}
+
+function carrierReferencesProviderParameters(
+  carrier: TargetTypeRef,
+  parameters: RustTargetGenericParameterSet,
+): boolean {
+  const references = rustTargetGenericReferences(carrier);
+  return references.typeNames.some((name) => parameters.typeNames.has(name)) ||
+    references.lifetimeIdentities.some((identity) =>
+      parameters.lifetimeIdentities.has(identity)) ||
+    references.constIdentities.some((identity) =>
+      parameters.constIdentities.has(identity));
+}
+
+function providerGenericParameterIsBound(
+  bindings: RustTargetGenericBindings,
+  parameter: RustProviderGenericParameter,
+): boolean {
+  switch (parameter.kind) {
+    case "type":
+      return bindings.types.has(parameter.sourceName);
+    case "lifetime":
+      return bindings.lifetimes.has(parameter.targetIdentity);
+    case "const":
+      return bindings.consts.has(parameter.targetIdentity);
+  }
+}
+
+function mergeDirectGenericArgument(
+  bindings: MutableRustTargetGenericBindings,
+  parameter: RustProviderGenericParameter,
+  argument: RustTargetGenericArgument,
+): boolean {
+  if (parameter.kind !== argument.kind) return false;
+  switch (parameter.kind) {
+    case "type":
+      return argument.kind === "type" &&
+        mergeTypeBinding(bindings.types, parameter.sourceName, argument.type);
+    case "lifetime":
+      return argument.kind === "lifetime" && mergeLifetimeBinding(
+        bindings.lifetimes,
+        parameter.targetIdentity,
+        argument.lifetime,
+      );
+    case "const":
+      return argument.kind === "const" && mergeConstBinding(
+        bindings.consts,
+        parameter.targetIdentity,
+        argument.value,
+      );
+  }
+}
+
+function mergeGenericBindings(
+  target: MutableRustTargetGenericBindings,
+  source: RustTargetGenericBindings,
+): boolean {
+  for (const [identity, type] of source.types) {
+    if (!mergeTypeBinding(target.types, identity, type)) return false;
+  }
+  for (const [identity, lifetime] of source.lifetimes) {
+    if (!mergeLifetimeBinding(target.lifetimes, identity, lifetime)) return false;
+  }
+  for (const [identity, value] of source.consts) {
+    if (!mergeConstBinding(target.consts, identity, value)) return false;
+  }
+  return true;
 }
 
 function mergeTypeBinding(
   bindings: Map<string, TargetTypeRef>,
-  name: string,
+  identity: string,
   carrier: TargetTypeRef,
 ): boolean {
-  const existing = bindings.get(name);
-  if (existing !== undefined) {
-    return rustTargetTypeRefEquals(existing, carrier);
-  }
-  bindings.set(name, carrier);
+  const existing = bindings.get(identity);
+  if (existing !== undefined) return rustTargetTypeRefEquals(existing, carrier);
+  bindings.set(identity, carrier);
   return true;
+}
+
+function mergeLifetimeBinding(
+  bindings: Map<string, RustLifetimeRef>,
+  identity: string,
+  lifetime: RustLifetimeRef,
+): boolean {
+  const existing = bindings.get(identity);
+  if (existing !== undefined) {
+    return rustTargetGenericArgumentEquals(
+      { kind: "lifetime", lifetime: existing },
+      { kind: "lifetime", lifetime },
+    );
+  }
+  bindings.set(identity, lifetime);
+  return true;
+}
+
+function mergeConstBinding(
+  bindings: Map<string, RustTargetConstArgument>,
+  identity: string,
+  value: RustTargetConstArgument,
+): boolean {
+  const existing = bindings.get(identity);
+  if (existing !== undefined) {
+    return rustTargetGenericArgumentEquals(
+      { kind: "const", value: existing },
+      { kind: "const", value },
+    );
+  }
+  bindings.set(identity, value);
+  return true;
+}
+
+function substituteProviderCarrier(
+  carrier: TargetTypeRef,
+  substitutions: RustTargetGenericBindings,
+): TargetTypeRef {
+  return substituteRustTargetGenerics(
+    carrier,
+    substitutions.types,
+    substitutions.lifetimes,
+    substitutions.consts,
+  );
+}
+
+function substituteTargetGenericArgument(
+  argument: RustTargetGenericArgument,
+  substitutions: RustTargetGenericBindings,
+): RustTargetGenericArgument {
+  switch (argument.kind) {
+    case "type":
+      return Object.freeze({
+        kind: "type",
+        type: substituteProviderCarrier(argument.type, substitutions),
+      });
+    case "lifetime":
+      return Object.freeze({
+        kind: "lifetime",
+        lifetime: substitutions.lifetimes.get(rustLifetimeKey(argument.lifetime)) ??
+          argument.lifetime,
+      });
+    case "const":
+      return argument.value.kind === "parameter"
+        ? Object.freeze({
+            kind: "const",
+            value: substitutions.consts.get(argument.value.identity) ?? argument.value,
+          })
+        : argument;
+  }
 }
 
 export function substituteProviderOperationForm(
   form: RustProviderOperationForm,
-  substitutions: ReadonlyMap<string, TargetTypeRef>,
+  substitutions: RustTargetGenericBindings,
 ): RustProviderOperationForm {
   switch (form.form) {
     case "call-value-slice":
@@ -738,21 +1045,21 @@ export function substituteProviderOperationForm(
         ...form,
         leadingArguments: form.leadingArguments.map((argument) => ({
           ...argument,
-          carrier: substituteRustTargetTypeParameters(argument.carrier, substitutions),
+          carrier: substituteProviderCarrier(argument.carrier, substitutions),
         })),
-        elementCarrier: substituteRustTargetTypeParameters(form.elementCarrier, substitutions),
+        elementCarrier: substituteProviderCarrier(form.elementCarrier, substitutions),
       };
     case "receiver-tagged-array":
       return {
         ...form,
         leadingArguments: form.leadingArguments.map((argument) => ({
           ...argument,
-          carrier: substituteRustTargetTypeParameters(argument.carrier, substitutions),
+          carrier: substituteProviderCarrier(argument.carrier, substitutions),
         })),
-        elementCarrier: substituteRustTargetTypeParameters(form.elementCarrier, substitutions),
+        elementCarrier: substituteProviderCarrier(form.elementCarrier, substitutions),
         alternatives: form.alternatives.map((alternative) => ({
           ...alternative,
-          inputCarrier: substituteRustTargetTypeParameters(alternative.inputCarrier, substitutions),
+          inputCarrier: substituteProviderCarrier(alternative.inputCarrier, substitutions),
         })),
       };
     case "arg-structural-method":
@@ -764,17 +1071,65 @@ export function substituteProviderOperationForm(
             argConversions: form.argConversions.map((conversion) =>
               conversion === undefined
                 ? undefined
-                : substituteRustValueConversion(conversion, substitutions)),
+                : substituteRustValueConversion(
+                    conversion,
+                    substitutions.types,
+                    substitutions.lifetimes,
+                    substitutions.consts,
+                  )),
           };
     case "trait-call":
     case "trait-associated-value":
       return {
         ...form,
-        owner: substituteRustTargetTypeParameters(form.owner, substitutions),
-        traitTypeArguments: form.traitTypeArguments.map((argument) =>
-          substituteRustTargetTypeParameters(argument, substitutions)),
+        owner: substituteProviderCarrier(form.owner, substitutions),
+        traitGenericArguments: form.traitGenericArguments.map((argument) =>
+          substituteTargetGenericArgument(argument, substitutions)),
       };
-    default:
+    case "associated-value":
+      return {
+        ...form,
+        owner: substituteProviderCarrier(form.owner, substitutions),
+      };
+    case "call":
+    case "free-call":
+    case "receiver-method":
+      return form.argConversions === undefined
+        ? form
+        : {
+            ...form,
+            argConversions: form.argConversions.map((conversion) =>
+              conversion === undefined
+                ? undefined
+                : substituteRustValueConversion(
+                    conversion,
+                    substitutions.types,
+                    substitutions.lifetimes,
+                    substitutions.consts,
+                  )),
+          };
+    case "index":
+      return form.indexConversion === undefined
+        ? form
+        : {
+            ...form,
+            indexConversion: substituteRustValueConversion(
+              form.indexConversion,
+              substitutions.types,
+              substitutions.lifetimes,
+              substitutions.consts,
+            ),
+          };
+    case "marker":
+    case "call-c-variadic":
+    case "call-str-slice":
+    case "free-call-str-slice":
+    case "path":
+    case "static":
+    case "method":
+    case "arg-method":
+    case "field":
+    case "binary-operator":
       return form;
   }
 }
@@ -794,9 +1149,9 @@ export function finalizeProviderOperationFact(
       ? {}
       : { compileTimeSourceArgumentIndexes: template.compileTimeSourceArgumentIndexes }),
     resultCarrier: template.resultCarrier,
-    ...(template.targetTypeArguments === undefined
+    ...(template.targetGenericArguments === undefined
       ? {}
-      : { targetTypeArguments: template.targetTypeArguments }),
+      : { targetGenericArguments: template.targetGenericArguments }),
     ...(template.resultConversion === undefined ? {} : { resultConversion: template.resultConversion }),
     isAsync: template.isAsync,
     isFallible: template.isFallible,

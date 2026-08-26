@@ -2,6 +2,7 @@ import type { ProviderDeclarationKind, ProviderExportDeclaration } from "@tsonic
 import type { RustFallibleErrorBoundary } from "../../target-model/operations/error-boundary.js";
 import type { RustNamedTypeTraitContract } from "../../target-model/types/model.js";
 import type {
+  RustProviderGenericParameter,
   RustProviderOperationForm,
   RustProviderTypeParameterRequirement,
   RustValueConversion,
@@ -10,7 +11,10 @@ import type {
   TargetCapabilityContribution,
   TargetCapabilityImplementation,
 } from "@tsonic/target-api/provider";
-import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type {
+  RustTargetGenericArgument,
+  TargetTypeRef,
+} from "../../target-model/types/model.js";
 
 export interface RustProviderModuleDefinition {
   readonly moduleSpecifier: string;
@@ -44,9 +48,9 @@ interface RustProviderOperationDefinitionBase<
   readonly resultCarrier: TargetTypeRef;
   readonly parameterCarriers?: readonly TargetTypeRef[];
   readonly receiverCarrier?: TargetTypeRef;
-  readonly typeParameters?: readonly string[];
+  readonly genericParameters?: readonly RustProviderGenericParameter[];
   readonly typeRequirements?: readonly RustProviderTypeParameterRequirement[];
-  readonly targetTypeArguments?: readonly TargetTypeRef[];
+  readonly targetGenericArguments?: readonly RustTargetGenericArgument[];
   readonly resultConversion?: RustValueConversion;
   readonly evaluation?: "pure";
   // Async provider operations produce future carriers that must be awaited.
@@ -79,6 +83,7 @@ export type RustProviderOperationDefinition<
 
 export interface RustProviderTypeDefinition {
   readonly exportId: string;
+  readonly genericParameters?: readonly RustProviderGenericParameter[];
   readonly targetCarrier: TargetTypeRef;
   readonly typeRequirements?: readonly RustProviderTypeParameterRequirement[];
   readonly objectLiteralConstruction?: {
@@ -92,7 +97,6 @@ export interface RustProviderTypeRow extends RustProviderTypeDefinition {
   readonly providerVersion: string;
   readonly providerModuleId: string;
   readonly moduleSpecifier: string;
-  readonly sourceTypeParameters: readonly string[];
 }
 
 export type RustProviderOperationRow<

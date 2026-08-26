@@ -205,9 +205,11 @@ function planRustDefaultValueCall(
     selected.member.kind !== "method" || selected.member.static !== true ||
     selected.member.parameters.length !== 0 || selected.member.returnType === undefined ||
     !rustTargetTypeRefEquals(selected.member.returnType, fact.resultCarrier) ||
-    selected.member.typeParameters?.length !== 1 ||
-    selected.targetTypeArguments?.length !== 1 ||
-    !rustTargetTypeRefEquals(selected.targetTypeArguments[0], fact.resultCarrier) ||
+    selected.member.genericParameters?.length !== 1 ||
+    selected.member.genericParameters[0]?.kind !== "type" ||
+    selected.targetGenericArguments?.length !== 1 ||
+    selected.targetGenericArguments[0]?.kind !== "type" ||
+    !rustTargetTypeRefEquals(selected.targetGenericArguments[0].type, fact.resultCarrier) ||
     operation === undefined || operation.operationId !== fact.operationId ||
     operation.operationKind !== "method" || operation.targetOperation !== "Default::default" ||
     operation.resultType === undefined ||

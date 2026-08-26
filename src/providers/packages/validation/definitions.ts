@@ -2,9 +2,17 @@ import { asRecord, requireExactKeys, requireNonEmpty, requireRustIdentifier, req
 import { builtInTargetCarrierIds } from "./model.js";
 import { isClosedMetadata } from "../../../target-model/metadata/closed-data.js";
 import { isRustFallibleErrorBoundary } from "../../../target-model/operations/error-boundary.js";
-import { isRustNamedTypeTraitContract } from "../../../target-model/types/index.js";
+import {
+  isRustNamedTypeTraitContract,
+  rustTargetGenericReferences,
+} from "../../../target-model/types/index.js";
 import { isRustTargetTypeRef } from "../../../target-model/types/equality.js";
 import { validateOperationRows, validateTypeParameterRequirements } from "./operations.js";
+import {
+  genericArgumentCarriers,
+  validateGenericReferences,
+  validateProviderGenericParameters,
+} from "./generics.js";
 import type {
   ProviderExportDeclaration,
   ProviderMemberDeclaration,
@@ -546,7 +554,10 @@ function validateTypeRelations(
 ): void {
   const relatedExports = new Set<string>();
   for (const relation of definition.types ?? []) {
-    requireExactKeys(asRecord(relation), ["exportId", "targetCarrier", "typeRequirements", "objectLiteralConstruction"], "type relation", fail);
+    requireExactKeys(asRecord(relation), [
+      "exportId", "genericParameters", "targetCarrier", "typeRequirements",
+      "objectLiteralConstruction",
+    ], "type relation", fail);
     requireNonEmpty(relation.exportId, "type relation export id", fail);
     const exported = exportsById.get(relation.exportId)?.declaration;
     if (exported === undefined) {
@@ -567,18 +578,49 @@ function validateTypeRelations(
     )) {
       fail(`export '${relation.exportId}' has an invalid Rust object-literal construction contract`);
     }
-    const sourceTypeParameters = new Set(
-      (exported.typeParameters ?? []).map((parameter) => parameter.name),
+    const declared = validateProviderGenericParameters(
+      relation.genericParameters,
+      exported.typeParameters,
+      definition,
+      `export '${relation.exportId}'.genericParameters`,
+      fail,
     );
     validateTypeParameterRequirements(
       relation.typeRequirements,
-      sourceTypeParameters,
+      declared.typeNames,
       `export '${relation.exportId}' type requirements`,
       fail,
     );
-    for (const parameter of targetCarrierTypeParameters(relation.targetCarrier)) {
-      if (!sourceTypeParameters.has(parameter)) {
-        fail(`export '${relation.exportId}' target carrier references undeclared source type parameter '${parameter}'`);
+    validateGenericReferences(
+      [
+        relation.targetCarrier,
+        ...(relation.genericParameters ?? []).flatMap((parameter) =>
+          parameter.kind === "lifetime"
+            ? []
+            : genericArgumentCarriers(
+                parameter.defaultArgument === undefined
+                  ? undefined
+                  : [parameter.defaultArgument],
+              )),
+      ],
+      declared,
+      `export '${relation.exportId}' target carrier`,
+      fail,
+    );
+    const referenced = rustTargetGenericReferences(relation.targetCarrier);
+    for (const name of declared.typeNames) {
+      if (!referenced.typeNames.includes(name)) {
+        fail(`export '${relation.exportId}' does not use declared type parameter '${name}'`);
+      }
+    }
+    for (const identity of declared.lifetimeIdentities) {
+      if (!referenced.lifetimeIdentities.includes(identity)) {
+        fail(`export '${relation.exportId}' does not use declared lifetime parameter '${identity}'`);
+      }
+    }
+    for (const identity of declared.constIdentities) {
+      if (!referenced.constIdentities.includes(identity)) {
+        fail(`export '${relation.exportId}' does not use declared const parameter '${identity}'`);
       }
     }
     for (const targetTypeId of targetCarrierNamedIds(relation.targetCarrier)) {
@@ -587,16 +629,6 @@ function validateTypeRelations(
       }
     }
   }
-}
-
-function targetCarrierTypeParameters(carrier: TargetTypeRef): readonly string[] {
-  const names = new Set<string>();
-  walkTargetCarrier(carrier, (candidate) => {
-    if (candidate.kind === "type-parameter") {
-      names.add(candidate.name);
-    }
-  });
-  return [...names].sort();
 }
 
 function targetCarrierNamedIds(carrier: TargetTypeRef): readonly string[] {
@@ -616,7 +648,9 @@ function walkTargetCarrier(
   visit(carrier);
   switch (carrier.kind) {
     case "target-named":
-      for (const argument of carrier.typeArguments ?? []) walkTargetCarrier(argument, visit);
+      for (const argument of carrier.genericArguments ?? []) {
+        if (argument.kind === "type") walkTargetCarrier(argument.type, visit);
+      }
       return;
     case "array":
     case "slice":
@@ -638,11 +672,21 @@ function walkTargetCarrier(
       return;
     case "associated-type":
       walkTargetCarrier(carrier.owner, visit);
+      if (carrier.trait !== undefined) walkTargetCarrier(carrier.trait, visit);
+      for (const argument of carrier.genericArguments ?? []) {
+        if (argument.kind === "type") walkTargetCarrier(argument.type, visit);
+      }
+      return;
+    case "trait-object":
+      walkTargetCarrier(carrier.principal, visit);
+      for (const trait of carrier.autoTraits) walkTargetCarrier(trait, visit);
+      return;
+    case "impl-trait":
+      for (const bound of carrier.bounds) walkTargetCarrier(bound, visit);
       return;
     case "source-primitive":
     case "type-parameter":
     case "opaque":
-    case "lifetime":
     case "target-specific":
       return;
   }

@@ -25,6 +25,7 @@ import {
 } from "@tsonic/target-api/source";
 import {
   isRustJsArrayCarrier,
+  rustJsArrayLikeElementTargetType,
   rustOptionElementCarrier,
   rustOptionTargetType,
   isRustVecCarrier,
@@ -274,7 +275,7 @@ export function resolveArrayLiteralCarrier(
   if (expected !== undefined && isRustVecCarrier(expected)) {
     expectedElement = expected.element;
   } else if (expected?.kind === "target-named" && isRustJsArrayCarrier(expected)) {
-    expectedElement = expected.typeArguments?.[0];
+    expectedElement = rustJsArrayLikeElementTargetType(expected);
   }
   if (expected?.kind === "target-specific" && expected.name === "fixed-array") {
     const value = expected.value as { element: TargetTypeRef; length: number };

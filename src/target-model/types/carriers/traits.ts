@@ -4,6 +4,11 @@ import { rustBigIntTargetId, rustCallableTargetId, rustJsArrayTargetId, rustJsDa
 import { rustFixedArrayCarrierValue, rustNamedTypeCarrierValue } from "./native.js";
 import type { RustNamedTypeCarrierValue } from "./native.js";
 import type { TargetTypeRef } from "../model.js";
+import {
+  rustOnlyTypeGenericArguments,
+  rustTargetGenericTypeArguments,
+  rustTargetLifetimeArguments,
+} from "../generic-arguments.js";
 
 export function isRustCopyCarrier(carrier: TargetTypeRef | undefined): boolean {
   if (carrier === undefined) {
@@ -18,7 +23,7 @@ export function isRustCopyCarrier(carrier: TargetTypeRef | undefined): boolean {
   }
   if (carrier.kind === "target-named") {
     if (carrier.id === rustOptionTargetId) {
-      const [value] = carrier.typeArguments ?? [];
+      const [value] = rustOnlyTypeGenericArguments(carrier.genericArguments) ?? [];
       return value !== undefined && isRustCopyCarrier(value);
     }
     if (rustUnconditionallyCopyTargetIds.has(carrier.id)) {
@@ -65,7 +70,7 @@ export function rustCarrierSupportsClone(carrier: TargetTypeRef | undefined): bo
   }
   if (carrier.kind === "target-named") {
     if (carrier.id === rustOptionTargetId) {
-      const [value] = carrier.typeArguments ?? [];
+      const [value] = rustOnlyTypeGenericArguments(carrier.genericArguments) ?? [];
       return value !== undefined && rustCarrierSupportsClone(value);
     }
     return rustUnconditionallyCloneTargetIds.has(carrier.id);
@@ -156,7 +161,7 @@ export function rustCarrierSupportsTrait(
     return rustEqHashTraitPaths.has(traitPath) && rustCarrierSupportsTrait(fixedArray.element, traitPath);
   }
   if (carrier.kind === "target-named" && carrier.id === rustOptionTargetId) {
-    const [element] = carrier.typeArguments ?? [];
+    const [element] = rustOnlyTypeGenericArguments(carrier.genericArguments) ?? [];
     return rustEqHashTraitPaths.has(traitPath) && element !== undefined &&
       rustCarrierSupportsTrait(element, traitPath);
   }
@@ -213,9 +218,10 @@ export function rustNamedTypeSupportsTrait(
   traitPath: string,
   typeParameterSupports: (name: string, traitPath: string) => boolean = () => false,
 ): boolean {
+  const typeArguments = rustTargetGenericTypeArguments(namedType.genericArguments);
   return namedType.traits.implementations.some((implementation) =>
     implementation.traitPath === traitPath && implementation.requirements.every((requirement) => {
-      const argument = namedType.typeArguments[requirement.typeArgumentIndex];
+      const argument = typeArguments[requirement.typeArgumentIndex];
       return argument !== undefined && rustCarrierSupportsTrait(
         argument,
         requirement.traitPath,

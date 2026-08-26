@@ -2,6 +2,7 @@ import {
   cloneExpression,
   cloneField,
   projectCallableShape,
+  projectLifetimeSubstitutions,
   projectTypeSubstitutions,
   rustFunctionTypesMatch,
 } from "./model.js";
@@ -230,6 +231,7 @@ function planRootCallableImplementation(
     ...context,
     syntheticNames,
     typeParameterSubstitutions: projectTypeSubstitutions(owner, ownerRelation.targetType),
+    lifetimeSubstitutions: projectLifetimeSubstitutions(owner, ownerRelation.targetType),
     expressionOverrides: thisPlan.overrides,
     projectDispatchRoot: { kind: "path", path: "self" },
   }, {
@@ -290,6 +292,10 @@ export function planRootMethodForwarder(
     ? projectCallableShape(contractMember, {
         ...context,
         typeParameterSubstitutions: projectTypeSubstitutions(
+          contractOwner,
+          contractRelation.targetType,
+        ),
+        lifetimeSubstitutions: projectLifetimeSubstitutions(
           contractOwner,
           contractRelation.targetType,
         ),
@@ -485,6 +491,7 @@ export function projectAccessorCallableShape(
     {
       ...context,
       typeParameterSubstitutions: projectTypeSubstitutions(definition, carrier),
+      lifetimeSubstitutions: projectLifetimeSubstitutions(definition, carrier),
     },
     { safetyPlacement: role === "read" ? "getter" : "setter" },
   );

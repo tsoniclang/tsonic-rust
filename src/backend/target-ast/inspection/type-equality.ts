@@ -3,6 +3,7 @@ import type {
   RustLifetime,
   RustLifetimeParameter,
   RustType,
+  RustTypeBound,
 } from "../nodes.js";
 
 export function rustTypeEquals(
@@ -33,7 +34,8 @@ export function rustTypeEquals(
         sameTypes(left.autoTraits, right.autoTraits) &&
         lifetimeEqual(left.lifetime, right.lifetime);
     case "impl-trait":
-      return right.kind === "impl-trait" && sameTypes(left.bounds, right.bounds) &&
+      return right.kind === "impl-trait" && boundsEqual(left.bounds, right.bounds) &&
+        lifetimeListsEqual(left.outlives, right.outlives) &&
         lifetimeListsEqual(left.captures, right.captures);
     case "reference":
       return right.kind === "reference" && left.mutable === right.mutable &&
@@ -43,7 +45,8 @@ export function rustTypeEquals(
       return right.kind === "raw-pointer" && left.mutable === right.mutable &&
         rustTypeEquals(left.pointee, right.pointee);
     case "fixed-array":
-      return right.kind === "fixed-array" && left.length === right.length &&
+      return right.kind === "fixed-array" &&
+        constArgumentsEqual(left.length, right.length) &&
         rustTypeEquals(left.element, right.element);
     case "slice":
       return right.kind === "slice" && rustTypeEquals(left.element, right.element);
@@ -83,6 +86,14 @@ function genericArgumentsEqual(
           return other.kind === "type" && rustTypeEquals(argument.type, other.type);
         case "const":
           return other.kind === "const" && constArgumentsEqual(argument.value, other.value);
+        case "associated-equality":
+          return other.kind === "associated-equality" && argument.name === other.name &&
+            genericArgumentsEqual(argument.genericArguments, other.genericArguments) &&
+            rustTypeEquals(argument.type, other.type);
+        case "associated-bounds":
+          return other.kind === "associated-bounds" && argument.name === other.name &&
+            genericArgumentsEqual(argument.genericArguments, other.genericArguments) &&
+            boundsEqual(argument.bounds, other.bounds);
       }
     });
 }
@@ -95,6 +106,7 @@ function constArgumentsEqual(
   switch (left.kind) {
     case "integer":
     case "boolean":
+    case "char":
       return right.kind === left.kind && left.value === right.value;
     case "path":
       return right.kind === "path" && left.path === right.path;
@@ -141,6 +153,31 @@ function sameStrings(
 ): boolean {
   return (left ?? []).length === (right ?? []).length &&
     (left ?? []).every((value, index) => value === (right ?? [])[index]);
+}
+
+function boundsEqual(
+  left: readonly RustTypeBound[],
+  right: readonly RustTypeBound[],
+): boolean {
+  return left.length === right.length && left.every((bound, index) => {
+    const other = right[index];
+    if (other === undefined || bound.kind !== other.kind) return false;
+    switch (bound.kind) {
+      case "trait":
+        return other.kind === "trait" && bound.path === other.path;
+      case "trait-type":
+        return other.kind === "trait-type" && rustTypeEquals(bound.trait, other.trait);
+      case "lifetime":
+        return other.kind === "lifetime" && lifetimeEqual(bound.lifetime, other.lifetime);
+      case "callable":
+        return other.kind === "callable" && bound.trait === other.trait &&
+          bindersEqual(bound.binder, other.binder) &&
+          sameTypes(bound.parameters, other.parameters) &&
+          rustTypeEquals(bound.result, other.result);
+      case "maybe-sized":
+        return true;
+    }
+  });
 }
 
 function sameTypes(

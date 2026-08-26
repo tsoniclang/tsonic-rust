@@ -11,6 +11,7 @@ import type { Fail } from "./model.js";
 import type { RustProviderPackageDefinition } from "../index.js";
 import type { RustValueConversion } from "../../../target-model/operations/model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { isRustLifetimeRef } from "../../../target-model/lifetimes/index.js";
 
 export function validateCarrier(
   carrier: TargetTypeRef,
@@ -23,6 +24,9 @@ export function validateCarrier(
     readonly position?: "value" | "return";
   } = {},
 ): void {
+  if (!isRustTargetTypeRef(carrier)) {
+    fail(`${where} is not a closed Rust target type`);
+  }
   const record = carrier as unknown as Readonly<Record<string, unknown>>;
   switch (carrier.kind) {
     case "source-primitive":
@@ -32,15 +36,21 @@ export function validateCarrier(
       }
       return;
     case "target-named":
-      requireExactKeys(record, ["kind", "id", "typeArguments"], where, fail);
+      requireExactKeys(record, ["kind", "id", "genericArguments"], where, fail);
       requireNonEmpty(carrier.id, `${where}.id`, fail);
       if (!builtInTargetCarrierIds.has(carrier.id) && definition.carrierPaths?.[carrier.id] === undefined) {
         fail(`${where} names target carrier '${carrier.id}' without a Rust carrier path`);
       }
-      for (const [index, argument] of (carrier.typeArguments ?? []).entries()) {
-        validateCarrier(argument, definition, `${where}.typeArguments[${index}]`, fail, {
-          allowUnsized: true,
-        });
+      for (const [index, argument] of (carrier.genericArguments ?? []).entries()) {
+        if (argument.kind === "type") {
+          validateCarrier(
+            argument.type,
+            definition,
+            `${where}.genericArguments[${index}].type`,
+            fail,
+            { allowUnsized: true },
+          );
+        }
       }
       return;
     case "type-parameter":
@@ -70,7 +80,7 @@ export function validateCarrier(
     case "reference":
       requireExactKeys(record, ["kind", "referent", "mutable", "lifetime"], where, fail);
       if (typeof carrier.mutable !== "boolean" ||
-        (carrier.lifetime !== undefined && (typeof carrier.lifetime !== "string" || carrier.lifetime.length === 0))) {
+        (carrier.lifetime !== undefined && !isRustLifetimeRef(carrier.lifetime))) {
         fail(`${where} has an invalid Rust reference contract`);
       }
       validateCarrier(carrier.referent, definition, `${where}.referent`, fail, {
@@ -87,7 +97,12 @@ export function validateCarrier(
       }
       fail(`${where} is not a renderable Rust pointer carrier`);
     case "function-pointer":
-      requireExactKeys(record, ["kind", "args", "result", "abi", "isUnsafe"], where, fail);
+      requireExactKeys(
+        record,
+        ["kind", "args", "result", "lifetimeBinder", "abi", "isUnsafe"],
+        where,
+        fail,
+      );
       if (carrier.isUnsafe !== undefined && typeof carrier.isUnsafe !== "boolean") {
         fail(`${where}.isUnsafe must be boolean when present`);
       }
@@ -103,7 +118,7 @@ export function validateCarrier(
       });
       return;
     case "closure":
-      requireExactKeys(record, ["kind", "args", "result"], where, fail);
+      requireExactKeys(record, ["kind", "args", "result", "lifetimeBinder"], where, fail);
       if (options.allowImmediateClosure !== true) {
         fail(`${where} uses a native Rust closure outside an exact immediate-callback parameter`);
       }
@@ -113,6 +128,55 @@ export function validateCarrier(
       validateCarrier(carrier.result, definition, `${where}.result`, fail, {
         position: "return",
       });
+      return;
+    case "trait-object":
+      requireExactKeys(record, ["kind", "principal", "autoTraits", "lifetime"], where, fail);
+      validateCarrier(carrier.principal, definition, `${where}.principal`, fail, {
+        allowUnsized: true,
+      });
+      for (const [index, trait] of carrier.autoTraits.entries()) {
+        validateCarrier(trait, definition, `${where}.autoTraits[${index}]`, fail, {
+          allowUnsized: true,
+        });
+      }
+      return;
+    case "impl-trait":
+      requireExactKeys(record, ["kind", "id", "bounds", "captures"], where, fail);
+      for (const [index, bound] of carrier.bounds.entries()) {
+        validateCarrier(bound, definition, `${where}.bounds[${index}]`, fail, {
+          allowUnsized: true,
+        });
+      }
+      return;
+    case "associated-type":
+      requireExactKeys(
+        record,
+        ["kind", "owner", "trait", "name", "genericArguments"],
+        where,
+        fail,
+      );
+      validateCarrier(carrier.owner, definition, `${where}.owner`, fail, {
+        allowUnsized: true,
+      });
+      if (carrier.trait !== undefined) {
+        validateCarrier(carrier.trait, definition, `${where}.trait`, fail, {
+          allowUnsized: true,
+        });
+      }
+      for (const [index, argument] of (carrier.genericArguments ?? []).entries()) {
+        if (argument.kind === "type") {
+          validateCarrier(
+            argument.type,
+            definition,
+            `${where}.genericArguments[${index}].type`,
+            fail,
+            { allowUnsized: true },
+          );
+        }
+      }
+      return;
+    case "opaque":
+      requireExactKeys(record, ["kind", "id"], where, fail);
       return;
     case "target-specific": {
       requireExactKeys(record, ["kind", "target", "name", "value"], where, fail);

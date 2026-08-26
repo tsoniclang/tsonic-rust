@@ -7,13 +7,17 @@ import type {
 import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
 import { isRustBinaryOperator, rustBinaryOperatorTraitPath } from "../../target-model/syntax/tokens.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
-import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import {
+  isRustTargetGenericArgument,
+  isRustTargetTypeRef,
+  rustTargetTypeRefEquals,
+} from "../../target-model/types/equality.js";
 
 const rustIdentifierPattern = /^(?:r#)?[A-Za-z_][A-Za-z0-9_]*$/u;
 const rustPathPattern = /^(?:r#)?[A-Za-z_][A-Za-z0-9_]*(?:::(?:r#)?[A-Za-z_][A-Za-z0-9_]*)*$/u;
 const modes = new Set<RustArgumentMode>(["value", "ref", "mut-ref"]);
 
-export function rustProviderOperationFormAcceptsTargetTypeArguments(
+export function rustProviderOperationFormAcceptsTargetGenericArguments(
   form: RustProviderOperationForm,
 ): boolean {
   return form.form === "call" || form.form === "free-call" || form.form === "method" ||
@@ -61,6 +65,7 @@ export function rustProviderOperationFormDeclaresWritableInput(
     case "field":
     case "index":
     case "binary-operator":
+    case "associated-value":
     case "trait-associated-value":
       return false;
   }
@@ -271,11 +276,11 @@ export function rustProviderOperationFormContractViolation(
     case "trait-call":
       return hasExactKeys(
         form,
-        ["form", "owner", "traitPath", "traitTypeArguments", "method", "receiverMode", "argModes"],
-        ["form", "owner", "traitPath", "traitTypeArguments", "method"],
+        ["form", "owner", "traitPath", "traitGenericArguments", "method", "receiverMode", "argModes"],
+        ["form", "owner", "traitPath", "traitGenericArguments", "method"],
       ) && isRustTargetTypeRef(form.owner) && typeof form.traitPath === "string" &&
-        rustPathPattern.test(form.traitPath) && Array.isArray(form.traitTypeArguments) &&
-        form.traitTypeArguments.every(isRustTargetTypeRef) && typeof form.method === "string" &&
+        rustPathPattern.test(form.traitPath) && Array.isArray(form.traitGenericArguments) &&
+        form.traitGenericArguments.every(isRustTargetGenericArgument) && typeof form.method === "string" &&
         rustIdentifierPattern.test(form.method) &&
         (form.receiverMode === undefined || modes.has(form.receiverMode)) &&
         validateModes(form.argModes) === undefined
@@ -284,16 +289,26 @@ export function rustProviderOperationFormContractViolation(
     case "trait-associated-value":
       return hasExactKeys(
         form,
-        ["form", "owner", "traitPath", "traitTypeArguments", "name"],
-        ["form", "owner", "traitPath", "traitTypeArguments", "name"],
+        ["form", "owner", "traitPath", "traitGenericArguments", "name"],
+        ["form", "owner", "traitPath", "traitGenericArguments", "name"],
       ) && isRustTargetTypeRef(form.owner) && typeof form.traitPath === "string" &&
-        rustPathPattern.test(form.traitPath) && Array.isArray(form.traitTypeArguments) &&
-        form.traitTypeArguments.every(isRustTargetTypeRef) && typeof form.name === "string" &&
+        rustPathPattern.test(form.traitPath) && Array.isArray(form.traitGenericArguments) &&
+        form.traitGenericArguments.every(isRustTargetGenericArgument) && typeof form.name === "string" &&
         rustIdentifierPattern.test(form.name) &&
         runtimeSourceIndexes.length === 0 &&
         (operationKind === "property" || operationKind === "method")
         ? undefined
         : "trait associated value must carry one exact owner, trait identity, and zero runtime arguments";
+    case "associated-value":
+      return hasExactKeys(
+        form,
+        ["form", "owner", "name"],
+        ["form", "owner", "name"],
+      ) && isRustTargetTypeRef(form.owner) && typeof form.name === "string" &&
+        rustIdentifierPattern.test(form.name) && runtimeSourceIndexes.length === 0 &&
+        (operationKind === "property" || operationKind === "method")
+        ? undefined
+        : "associated value must carry one exact owner, Rust identifier, and zero runtime arguments";
     case "call":
       if (!hasExactKeys(form, ["form", "path", "argModes", "argConversions", "argOrder", "trailingArguments", "chain"], ["form", "path"]) ||
         typeof form.path !== "string" || !rustPathPattern.test(form.path)) {

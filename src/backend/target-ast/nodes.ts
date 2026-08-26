@@ -15,13 +15,31 @@ export type RustLifetime =
 export type RustConstArgument =
   | { readonly kind: "integer"; readonly value: bigint }
   | { readonly kind: "boolean"; readonly value: boolean }
+  | { readonly kind: "char"; readonly value: string }
   | { readonly kind: "path"; readonly path: string }
   | { readonly kind: "infer" };
 
 export type RustGenericArgument =
   | { readonly kind: "lifetime"; readonly lifetime: RustLifetime }
   | { readonly kind: "type"; readonly type: RustType }
-  | { readonly kind: "const"; readonly value: RustConstArgument };
+  | { readonly kind: "const"; readonly value: RustConstArgument }
+  | {
+      readonly kind: "associated-equality";
+      readonly name: string;
+      readonly genericArguments: readonly RustGenericArgument[];
+      readonly type: RustType;
+    }
+  | {
+      readonly kind: "associated-bounds";
+      readonly name: string;
+      readonly genericArguments: readonly RustGenericArgument[];
+      readonly bounds: readonly RustTypeBound[];
+    };
+
+export type RustCallGenericArgument = Extract<
+  RustGenericArgument,
+  { readonly kind: "type" | "const" }
+>;
 
 export type RustTypeBound =
   | { readonly kind: "trait"; readonly path: string }
@@ -112,7 +130,8 @@ export type RustType =
     }
   | {
       readonly kind: "impl-trait";
-      readonly bounds: readonly RustType[];
+      readonly bounds: readonly RustTypeBound[];
+      readonly outlives: readonly RustLifetime[];
       readonly captures: readonly RustLifetime[];
     }
   | {
@@ -122,7 +141,7 @@ export type RustType =
       readonly lifetime?: RustLifetime;
     }
   | { readonly kind: "raw-pointer"; readonly pointee: RustType; readonly mutable: boolean }
-  | { readonly kind: "fixed-array"; readonly element: RustType; readonly length: number }
+  | { readonly kind: "fixed-array"; readonly element: RustType; readonly length: RustConstArgument }
   | { readonly kind: "slice"; readonly element: RustType }
   | {
       readonly kind: "function-pointer";
@@ -172,15 +191,15 @@ export type RustExpr =
     }
   | { readonly kind: "matches"; readonly expression: RustExpr; readonly pattern: RustPattern }
   | { readonly kind: "assignment"; readonly operator: RustAssignmentOperator; readonly target: RustExpr; readonly value: RustExpr }
-  | { readonly kind: "call"; readonly path: string; readonly typeArguments?: readonly RustType[]; readonly args: readonly RustExpr[] }
+  | { readonly kind: "call"; readonly path: string; readonly genericArguments?: readonly RustCallGenericArgument[]; readonly args: readonly RustExpr[] }
   | { readonly kind: "invoke"; readonly callee: RustExpr; readonly args: readonly RustExpr[] }
   | { readonly kind: "associated-value"; readonly owner: RustType; readonly trait?: RustType; readonly name: string }
-  | { readonly kind: "associated-call"; readonly owner: RustType; readonly trait?: RustType; readonly method: string; readonly typeArguments?: readonly RustType[]; readonly args: readonly RustExpr[] }
+  | { readonly kind: "associated-call"; readonly owner: RustType; readonly trait?: RustType; readonly method: string; readonly genericArguments?: readonly RustCallGenericArgument[]; readonly args: readonly RustExpr[] }
   | {
       readonly kind: "method-call";
       readonly receiver: RustExpr;
       readonly method: string;
-      readonly typeArguments?: readonly RustType[];
+      readonly genericArguments?: readonly RustCallGenericArgument[];
       readonly args: readonly RustExpr[];
       readonly receiverMode?: "value" | "ref" | "mut-ref";
     }

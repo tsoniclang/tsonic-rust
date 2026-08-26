@@ -2,7 +2,10 @@ import type { Node } from "@tsonic/tsts";
 import type { RustArgumentMode, RustProviderFactOperationKind, RustRuntimeSetOperationKind, RustSourceCallParameterPlan, RustValueConversion } from "../../../target-model/operations/model.js";
 import type { RustFinalizedOperationAbiFor } from "../finalized-operation-abi.js";
 import type { RustOperationSymbol, RustOperatorToken } from "../../../target-model/syntax/tokens.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type {
+  RustTargetGenericArgument,
+  TargetTypeRef,
+} from "../../../target-model/types/model.js";
 
 export type RustTargetOperationFact =
   | {
@@ -327,7 +330,7 @@ export type RustTargetOperationFact =
             readonly typeCarrier: TargetTypeRef;
           };
       readonly parameters: readonly RustSourceCallParameterPlan[];
-      readonly targetTypeArguments?: readonly TargetTypeRef[];
+      readonly targetGenericArguments?: readonly RustTargetGenericArgument[];
       readonly resultCarrier: TargetTypeRef;
     }
   | {

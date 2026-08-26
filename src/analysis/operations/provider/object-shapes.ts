@@ -6,9 +6,21 @@ import {
   rustStringTargetType,
 } from "../../../target-model/types/index.js";
 import { acceptRustPolicy } from "../../../policy/operations/contracts.js";
-import { acceptSelectedCall, checkedCallIsConstruction, instantiateExactSelectedConstructionCarrier, mapSelectedTargetTypeArguments, selectedCallReceiverValueCarrier, selectedProjectConstructor, selectRustOptionalCallResult } from "./calls/instantiation.js";
+import {
+  acceptSelectedCall,
+  checkedCallIsConstruction,
+  instantiateExactSelectedConstructionCarrier,
+  mapSelectedProjectGenericArguments,
+  selectedCallReceiverValueCarrier,
+  selectedProjectConstructor,
+  selectRustOptionalCallResult,
+} from "./calls/instantiation.js";
 import { asNode } from "../../../policy/evidence/selected-source.js";
-import { isRustJsArrayCarrier, rustOptionElementCarrier } from "../../../target-model/types/index.js";
+import {
+  isRustJsArrayCarrier,
+  rustJsArrayLikeElementTargetType,
+  rustOptionElementCarrier,
+} from "../../../target-model/types/index.js";
 import {
   KindPropertyAssignment,
   KindShorthandPropertyAssignment,
@@ -21,6 +33,7 @@ import { rustArgumentPassingKey, rustSelectedCallKey, rustSelectedOperationKey }
 import { rustProjectCallableTargetName } from "../../facts/source-member-name.js";
 import { rustTargetOperationFactKey, rustOptionalChainFactKey } from "../../facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
 import { selectedCallArgumentNodes, selectedCallCalleeDeclaration, selectedCallCalleeSymbol, selectedSourceValueCarrier, selectedValueCarrier } from "./operators.js";
 import { rustValueConversionIsFallible } from "../../../target-model/conversions/contracts.js";
 import { selectRustSourceValueConversion } from "../../../policy/conversions/selection.js";
@@ -478,13 +491,15 @@ function selectObjectShapeProjectionFields(
       ? { kind: "resolved", fields: fields.map(projectIdentityField) }
       : { kind: "rejected", reason: "Object.hasOwn requires an exact boolean result carrier." };
   }
-  if (!isRustJsArrayCarrier(resultCarrier) || resultCarrier.typeArguments?.length !== 1) {
+  const elementCarrier = isRustJsArrayCarrier(resultCarrier)
+    ? rustJsArrayLikeElementTargetType(resultCarrier)
+    : undefined;
+  if (elementCarrier === undefined) {
     return {
       kind: "rejected",
       reason: `Object.${projection} requires an exact JavaScript-array result carrier.`,
     };
   }
-  const elementCarrier = resultCarrier.typeArguments[0]!;
   if (projection === "keys") {
     return rustTargetTypeRefEquals(elementCarrier, rustStringTargetType())
       ? { kind: "resolved", fields: fields.map(projectIdentityField) }
@@ -634,9 +649,23 @@ export function acceptProjectSourceCall(
   const callableDeclaration = callableImplementation?.kind === "resolved"
     ? callableImplementation.implementation.declaration
     : selectedCallableDeclaration;
-  const targetTypeArguments = mapSelectedTargetTypeArguments(request, context, options);
-  if (targetTypeArguments === undefined && (request.source.sourceSelectedMethodTypeArguments?.length ?? 0) > 0) {
-    return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_TYPE_ARGUMENT_CARRIER_MISSING", "A TSTS-selected project-source method type argument could not map to a closed Rust target type.");
+  const genericOwner = construction ? selectedOwner : selectedCallableDeclaration;
+  const targetGenericArguments = genericOwner === undefined
+    ? undefined
+    : mapSelectedProjectGenericArguments(request, genericOwner, context, options);
+  const sourceGenericParameters = genericOwner === undefined
+    ? undefined
+    : context.ast.typeParameters(genericOwner);
+  const genericContract = sourceGenericParameters?.length === 0
+    ? Object.freeze([])
+    : genericOwner === undefined
+      ? undefined
+      : context.sourceLifetimes.contractFor(genericOwner)?.parameters;
+  if (targetGenericArguments === undefined || genericContract === undefined ||
+    sourceGenericParameters === undefined ||
+    sourceGenericParameters.some((parameter) => parameter === undefined) ||
+    genericContract.length !== sourceGenericParameters.length) {
+    return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_GENERIC_ARGUMENT_NOT_PROVEN", "A TSTS-selected project-source call does not have one exact lifetime/type generic instantiation.");
   }
   const superConstruction = construction &&
     ast.kindName(request.source.sourceCallee.expression) === "KindSuperKeyword";
@@ -653,8 +682,7 @@ export function acceptProjectSourceCall(
   const selectedAuthoredOwnerCarrier = construction && selectedOwnerDefinition !== undefined
     ? instantiateExactSelectedConstructionCarrier(
         selectedOwnerDefinition,
-        request.source.sourceSelectedMethodTypeArguments ?? [],
-        targetTypeArguments ?? [],
+        targetGenericArguments,
         options,
       )
     : undefined;
@@ -780,12 +808,19 @@ export function acceptProjectSourceCall(
     kind: construction ? "constructor" : "method",
     parameters: parameters as NonNullable<RustTargetMember["parameters"]>,
     returnType,
-    ...((request.source.sourceSelectedMethodTypeArguments?.length ?? 0) === 0
+    ...(genericContract.length === 0
       ? {}
       : {
-          typeParameters: request.source.sourceSelectedMethodTypeArguments!.map((argument) => ({
-            name: argument.typeParameterName,
-          })),
+          genericParameters: genericContract.map((parameter) => parameter.kind === "type"
+            ? {
+                kind: "type" as const,
+                sourceName: parameter.sourceName,
+              }
+            : {
+                kind: "lifetime" as const,
+                sourceName: parameter.sourceName,
+                targetIdentity: rustLifetimeKey(parameter.lifetime),
+              }),
         }),
   };
   const selectedSignature = {
@@ -801,7 +836,7 @@ export function acceptProjectSourceCall(
     sourceArgumentBindings: request.source.sourceArgumentBindings,
     sourceSelectedSignatureParameters: request.source.sourceSelectedSignatureParameters,
     ...(request.source.sourceSelectedMethodTypeArguments === undefined ? {} : { sourceSelectedMethodTypeArguments: request.source.sourceSelectedMethodTypeArguments }),
-    ...(targetTypeArguments === undefined ? {} : { targetTypeArguments }),
+    ...(targetGenericArguments.length === 0 ? {} : { targetGenericArguments }),
   };
   if (optionalResult.fact !== undefined) {
     context.facts.set(
@@ -826,7 +861,7 @@ export function acceptProjectSourceCall(
       sourceArgumentBindings: request.source.sourceArgumentBindings,
       sourceSelectedSignatureParameters: request.source.sourceSelectedSignatureParameters,
       ...(request.source.sourceSelectedMethodTypeArguments === undefined ? {} : { sourceSelectedMethodTypeArguments: request.source.sourceSelectedMethodTypeArguments }),
-      ...(targetTypeArguments === undefined ? {} : { targetTypeArguments }),
+      ...(targetGenericArguments.length === 0 ? {} : { targetGenericArguments }),
     },
   }, [{ message: `rust selected project-source call ${member.id}` }]);
 }

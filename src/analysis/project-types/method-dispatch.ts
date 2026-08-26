@@ -9,6 +9,7 @@ import type {
   RustProjectTypePolicy,
 } from "./type-policy.js";
 import { rustTargetTypeParameterNames } from "../../target-model/types/index.js";
+import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 
 export interface RustProjectMethodDispatchVariant {
   readonly declaration: Node;
@@ -36,11 +37,13 @@ export interface RustProjectMethodDispatchPlanRegistry extends RustProjectMethod
     targetTypeArguments: readonly TargetTypeRef[],
     ast: AstReader,
     projectTypes: RustProjectTypePolicy,
+    sourceLifetimes: RustLifetimeIndex,
   ): RustProjectMethodDispatchRegistration;
   initialize(input: {
     readonly ast: AstReader;
     readonly names: RustNamePlan;
     readonly projectTypes: RustProjectTypePolicy;
+    readonly sourceLifetimes: RustLifetimeIndex;
   }): RustProjectMethodDispatchPlan;
   seal(): RustProjectMethodDispatchPlan;
 }
@@ -61,7 +64,7 @@ export function createRustProjectMethodDispatchPlanRegistry(): RustProjectMethod
     return current;
   };
   const registry: RustProjectMethodDispatchPlanRegistry = {
-    record(declaration, targetTypeArguments, ast, projectTypes) {
+    record(declaration, targetTypeArguments, ast, projectTypes, sourceLifetimes) {
       if (current !== undefined) {
         throw new Error("Rust project method dispatch requests cannot be recorded after initialization.");
       }
@@ -70,10 +73,13 @@ export function createRustProjectMethodDispatchPlanRegistry(): RustProjectMethod
       if (owner === undefined || parameters === undefined) {
         return { kind: "rejected", reason: "Selected project method has no exact owner or dense type-parameter list." };
       }
-      const sourceTypeParameterNames = parameters.map((parameter) => {
-        const name = ast.name(parameter);
-        return name === undefined ? "" : ast.text(name);
-      });
+      const sourceTypeParameterNames = parameters
+        .filter((parameter) =>
+          sourceLifetimes.parameterFor(parameter)?.kind !== "lifetime")
+        .map((parameter) => {
+          const name = ast.name(parameter);
+          return name === undefined ? "" : ast.text(name);
+        });
       if (sourceTypeParameterNames.some((name) => name.length === 0) ||
         sourceTypeParameterNames.length !== targetTypeArguments.length) {
         return { kind: "rejected", reason: "Selected project method type arguments do not match its exact declaration arity." };
@@ -119,6 +125,7 @@ function createRustProjectMethodDispatchPlan(
     readonly ast: AstReader;
     readonly names: RustNamePlan;
     readonly projectTypes: RustProjectTypePolicy;
+    readonly sourceLifetimes: RustLifetimeIndex;
   },
 ): RustProjectMethodDispatchPlan {
   const pending: PendingVariant[] = recorded.map((variant) => ({ ...variant }));
@@ -134,10 +141,13 @@ function createRustProjectMethodDispatchPlan(
       }
       const implementation = selected.implementation.declaration;
       const parameters = denseNodes(input.ast.typeParameters(implementation));
-      const names = parameters?.map((parameter) => {
-        const name = input.ast.name(parameter);
-        return name === undefined ? "" : input.ast.text(name);
-      });
+      const names = parameters
+        ?.filter((parameter) =>
+          input.sourceLifetimes.parameterFor(parameter)?.kind !== "lifetime")
+        .map((parameter) => {
+          const name = input.ast.name(parameter);
+          return name === undefined ? "" : input.ast.text(name);
+        });
       if (names === undefined || names.some((name) => name.length === 0) ||
         names.length !== variant.targetTypeArguments.length) {
         continue;
@@ -163,7 +173,8 @@ function createRustProjectMethodDispatchPlan(
         input.ast.hasModifierKind(member, "static")) {
         continue;
       }
-      const sourceParameters = denseNodes(input.ast.typeParameters(member));
+      const sourceParameters = denseNodes(input.ast.typeParameters(member))?.filter((parameter) =>
+        input.sourceLifetimes.parameterFor(parameter)?.kind !== "lifetime");
       if (sourceParameters === undefined) {
         continue;
       }

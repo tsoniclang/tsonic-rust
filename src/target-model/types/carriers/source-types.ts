@@ -3,7 +3,11 @@ import {
   isDenseDataArray,
 } from "../../metadata/closed-data.js";
 import { isRustTargetTypeRef } from "../equality.js";
-import type { TargetTypeRef } from "../model.js";
+import type {
+  RustTargetConstArgument,
+  RustTargetGenericArgument,
+  TargetTypeRef,
+} from "../model.js";
 import {
   isRustLifetimeRef,
   type RustLifetimeRef,
@@ -50,19 +54,10 @@ export interface RustSourceTypeCarrierValue {
   readonly fileName: string;
   readonly typeName: string;
   readonly shape: "object" | "enum";
-  readonly lifetimeArguments: readonly RustLifetimeRef[];
-  readonly typeArguments: readonly TargetTypeRef[];
+  readonly genericArguments: readonly RustTargetGenericArgument[];
 }
 
-export interface RustSourceTypeGenericArguments {
-  readonly lifetimes: readonly RustLifetimeRef[];
-  readonly types: readonly TargetTypeRef[];
-}
-
-const noRustSourceTypeGenericArguments: RustSourceTypeGenericArguments = Object.freeze({
-  lifetimes: Object.freeze([]),
-  types: Object.freeze([]),
-});
+const noRustSourceTypeGenericArguments: readonly RustTargetGenericArgument[] = Object.freeze([]);
 
 export interface RustStructuralObjectFieldCarrierValue {
   readonly sourceName: string;
@@ -96,7 +91,7 @@ export function rustSourceTypeCarrier(
   fileName: string,
   typeName: string,
   shape: "object" | "enum",
-  genericArguments: RustSourceTypeGenericArguments = noRustSourceTypeGenericArguments,
+  genericArguments: readonly RustTargetGenericArgument[] = noRustSourceTypeGenericArguments,
 ): TargetTypeRef {
   return {
     kind: "target-specific",
@@ -106,8 +101,7 @@ export function rustSourceTypeCarrier(
       fileName,
       typeName,
       shape,
-      lifetimeArguments: genericArguments.lifetimes,
-      typeArguments: genericArguments.types,
+      genericArguments,
     },
   };
 }
@@ -122,33 +116,68 @@ export function rustSourceTypeCarrierValue(
     return undefined;
   }
   const keys = Object.keys(value).sort();
-  if (keys.length !== 5 || keys[0] !== "fileName" ||
-    keys[1] !== "lifetimeArguments" || keys[2] !== "shape" ||
-    keys[3] !== "typeArguments" || keys[4] !== "typeName") {
+  if (keys.length !== 4 || keys[0] !== "fileName" ||
+    keys[1] !== "genericArguments" || keys[2] !== "shape" ||
+    keys[3] !== "typeName") {
     return undefined;
   }
   const candidate = value as {
     readonly fileName?: unknown;
     readonly typeName?: unknown;
     readonly shape?: unknown;
-    readonly lifetimeArguments?: unknown;
-    readonly typeArguments?: unknown;
+    readonly genericArguments?: unknown;
   };
   return typeof candidate.fileName === "string" && candidate.fileName.length > 0 &&
     typeof candidate.typeName === "string" && candidate.typeName.length > 0 &&
     (candidate.shape === "object" || candidate.shape === "enum") &&
-    isDenseDataArray(candidate.lifetimeArguments) &&
-    candidate.lifetimeArguments.every((argument) => isRustLifetimeRef(argument)) &&
-    isDenseDataArray(candidate.typeArguments) &&
-    candidate.typeArguments.every((argument) => isRustTargetTypeRef(argument))
+    isDenseDataArray(candidate.genericArguments) &&
+    candidate.genericArguments.every(isRustSourceTypeGenericArgument)
     ? {
         fileName: candidate.fileName,
         typeName: candidate.typeName,
         shape: candidate.shape,
-        lifetimeArguments: candidate.lifetimeArguments as readonly RustLifetimeRef[],
-        typeArguments: candidate.typeArguments as readonly TargetTypeRef[],
+        genericArguments: candidate.genericArguments as readonly RustTargetGenericArgument[],
       }
     : undefined;
+}
+
+function isRustSourceTypeGenericArgument(value: unknown): value is RustTargetGenericArgument {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const candidate = value as Partial<RustTargetGenericArgument>;
+  const keys = Object.keys(value).sort();
+  if (candidate.kind === "lifetime") {
+    return keys.length === 2 && keys[0] === "kind" && keys[1] === "lifetime" &&
+      isRustLifetimeRef(candidate.lifetime);
+  }
+  if (candidate.kind === "type") {
+    return keys.length === 2 && keys[0] === "kind" && keys[1] === "type" &&
+      isRustTargetTypeRef(candidate.type);
+  }
+  return candidate.kind === "const" && keys.length === 2 && keys[0] === "kind" &&
+    keys[1] === "value" && isRustSourceTypeConstArgument(candidate.value);
+}
+
+function isRustSourceTypeConstArgument(value: unknown): value is RustTargetConstArgument {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const candidate = value as Partial<RustTargetConstArgument>;
+  const keys = Object.keys(value).sort();
+  if (candidate.kind === "infer") return keys.length === 1 && keys[0] === "kind";
+  if (candidate.kind === "boolean") {
+    return keys.length === 2 && keys[0] === "kind" && keys[1] === "value" &&
+      typeof candidate.value === "boolean";
+  }
+  if (candidate.kind === "integer") {
+    return keys.length === 2 && keys[0] === "kind" && keys[1] === "value" &&
+      typeof candidate.value === "string" && /^-?(?:0|[1-9][0-9]*)$/u.test(candidate.value);
+  }
+  if (candidate.kind === "char") {
+    return keys.length === 2 && keys[0] === "kind" && keys[1] === "value" &&
+      typeof candidate.value === "string" && [...candidate.value].length === 1;
+  }
+  return candidate.kind === "parameter" && keys.length === 3 &&
+    keys[0] === "identity" && keys[1] === "kind" && keys[2] === "name" &&
+    typeof candidate.identity === "string" && candidate.identity.length > 0 &&
+    typeof candidate.name === "string" && candidate.name.length > 0;
 }
 
 export function rustStructuralObjectTargetType(

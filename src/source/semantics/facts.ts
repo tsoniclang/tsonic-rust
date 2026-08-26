@@ -52,6 +52,7 @@ function sourceTypeContractsEqual(
   switch (left.kind) {
     case "lifetime-kind":
     case "static-lifetime":
+    case "placeholder-lifetime":
     case "maybe-sized":
       return true;
     case "shared-reference":

@@ -1,6 +1,7 @@
 import {
   ArrayTypeNode_ElementType,
   Node_Type,
+  Node_Operand,
   TypeReferenceNode_TypeName,
   TypeOperatorNode_Type,
 } from "@tsonic/target-api/source";
@@ -22,6 +23,7 @@ import {
   rustVecTargetType,
   rustFixedArrayTargetType,
   isRustJsArrayCarrier,
+  rustJsArrayLikeElementTargetType,
 } from "../../../target-model/types/index.js";
 import { asNode } from "../../evidence/selected-source.js";
 import { denseDefined, resolveProjectSourceCarrier } from "./project.js";
@@ -40,11 +42,16 @@ import type {
   SourceTypeComponentEvidence,
 } from "@tsonic/target-api/source";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type {
+  RustTargetConstArgument,
+  RustTargetGenericArgument,
+  TargetTypeRef,
+} from "../../../target-model/types/model.js";
 import {
   resolveRustLifetimeSourceType,
   rustSourceLifetimeTypeContract,
 } from "./lifetimes.js";
+import { parseSourceIntegerLiteral } from "../../../target-model/syntax/literals.js";
 
 export function resolveRustTargetTypeRef(
   subject: ExtensionFactSubject | undefined,
@@ -354,9 +361,7 @@ export function resolveRustTargetTypeSyntax(
     : context.currentSemantics.declarations.typeAliasSymbol(selectedType) ??
       context.currentSemantics.declarations.typeSymbol(selectedType);
   const sourceGenericContract = context.sourceLifetimes.contractFor(referencedDeclaration);
-  const hasSourceLifetimeParameters = sourceGenericContract?.parameters.some((parameter) =>
-    parameter.kind === "lifetime") === true;
-  const sourceGenericArguments = !hasSourceLifetimeParameters || sourceGenericContract === undefined
+  const sourceGenericArguments = sourceGenericContract === undefined
     ? undefined
     : resolveProjectGenericArguments(
         typeArgumentNodes,
@@ -365,10 +370,11 @@ export function resolveRustTargetTypeSyntax(
         options,
         resolving,
       );
-  const typeArguments = !hasSourceLifetimeParameters
+  const typeArguments = sourceGenericArguments === undefined
     ? typeArgumentNodes.map((argument) =>
         resolveRustAuthoredTargetType(argument, context, options, resolving))
-    : sourceGenericArguments?.types;
+    : sourceGenericArguments.values.flatMap((argument) =>
+        argument.kind === "type" ? [argument.type] : []);
   if (typeArguments === undefined || typeArguments.some((argument) => argument === undefined)) {
     return undefined;
   }
@@ -378,9 +384,17 @@ export function resolveRustTargetTypeSyntax(
   );
   if (provider !== undefined) {
     const relation = providerCarrierFromRelations(provider, options);
-    return relation === undefined
+    if (relation === undefined) return undefined;
+    const providerArguments = resolveRustProviderGenericArguments(
+      typeArgumentNodes,
+      relation.genericParameters ?? [],
+      context,
+      options,
+      resolving,
+    );
+    return providerArguments === undefined
       ? undefined
-      : instantiateProviderTargetType(relation, typeArguments as TargetTypeRef[]);
+      : instantiateProviderTargetType(relation, providerArguments);
   }
   const sourceProfileName = resolveOwnedSourceProfileTypeName(
     selectedTypeSymbol,
@@ -392,7 +406,10 @@ export function resolveRustTargetTypeSyntax(
   }
   const sourceType = resolveProjectSourceCarrier(
     selectedTypeSymbol,
-    sourceGenericArguments ?? { lifetimes: Object.freeze([]), types: typeArguments as readonly TargetTypeRef[] },
+    sourceGenericArguments ?? {
+      values: Object.freeze((typeArguments as readonly TargetTypeRef[]).map((type) =>
+        Object.freeze({ kind: "type" as const, type }))),
+    },
     context,
     options,
     referencedDeclaration,
@@ -421,6 +438,104 @@ export function resolveRustTargetTypeSyntax(
       );
 }
 
+export function resolveRustProviderGenericArguments(
+  nodes: readonly Node[],
+  parameters: readonly import("../../../target-model/operations/model.js").RustProviderGenericParameter[],
+  context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions,
+  resolving: Set<object>,
+): readonly RustTargetGenericArgument[] | undefined {
+  if (nodes.length > parameters.length) return undefined;
+  const values: RustTargetGenericArgument[] = [];
+  for (const [index, node] of nodes.entries()) {
+    const parameter = parameters[index];
+    if (parameter === undefined) return undefined;
+    const value = resolveRustProviderGenericArgument(
+      node,
+      parameter,
+      context,
+      options,
+      resolving,
+    );
+    if (value === undefined) return undefined;
+    values.push(value);
+  }
+  return Object.freeze(values);
+}
+
+export function resolveRustProviderGenericArgument(
+  node: Node,
+  parameter: import("../../../target-model/operations/model.js").RustProviderGenericParameter,
+  context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions,
+  resolving: Set<object> = new Set<object>(),
+): RustTargetGenericArgument | undefined {
+  if (parameter.kind === "type") {
+    const type = resolveRustAuthoredTargetType(node, context, options, resolving);
+    return type === undefined
+      ? undefined
+      : Object.freeze({ kind: "type", type });
+  }
+  if (parameter.kind === "lifetime") {
+    const lifetime = context.sourceLifetimes.resolve(node);
+    return lifetime === undefined
+      ? undefined
+      : Object.freeze({ kind: "lifetime", lifetime });
+  }
+  const value = resolveRustConstGenericArgument(node, context);
+  return value === undefined
+    ? undefined
+    : Object.freeze({ kind: "const", value });
+}
+
+export function resolveRustConstGenericArgument(
+  node: Node,
+  context: RustTargetTypeResolutionContext,
+): RustTargetConstArgument | undefined {
+  const literal = context.ast.kindName(node) === "KindLiteralType"
+    ? context.ast.as.AsLiteralTypeNode(node)?.Literal
+    : node;
+  if (literal === undefined) return undefined;
+  const kind = context.ast.kindName(literal);
+  if (kind === "KindTrueKeyword" || kind === "KindFalseKeyword") {
+    return Object.freeze({ kind: "boolean", value: kind === "KindTrueKeyword" });
+  }
+  if (kind === "KindStringLiteral") {
+    const value = context.ast.text(literal);
+    return [...value].length === 1
+      ? Object.freeze({ kind: "char", value })
+      : undefined;
+  }
+  const integer = constIntegerText(literal, context);
+  return integer === undefined
+    ? undefined
+    : Object.freeze({ kind: "integer", value: integer });
+}
+
+function constIntegerText(
+  node: Node,
+  context: RustTargetTypeResolutionContext,
+): string | undefined {
+  if (context.ast.kindName(node) === "KindNumericLiteral") {
+    return parseSourceIntegerLiteral(context.ast.text(node))?.toString(10);
+  }
+  if (context.ast.kindName(node) !== "KindPrefixUnaryExpression") {
+    return undefined;
+  }
+  const operand = Node_Operand(context.ast, node);
+  if (operand === undefined || context.ast.kindName(operand) !== "KindNumericLiteral") {
+    return undefined;
+  }
+  const value = parseSourceIntegerLiteral(context.ast.text(operand));
+  if (value === undefined) return undefined;
+  const operator = context.ast.operatorKindName(node);
+  return operator === "KindMinusToken"
+    ? (-value).toString(10)
+    : operator === "KindPlusToken"
+      ? value.toString(10)
+      : undefined;
+}
+
 function resolveProjectGenericArguments(
   argumentNodes: readonly Node[],
   contract: import("../../../target-model/lifetimes/index.js").RustSourceGenericContract,
@@ -429,24 +544,22 @@ function resolveProjectGenericArguments(
   resolving: Set<object>,
 ): import("./project.js").RustResolvedProjectGenericArguments | undefined {
   if (argumentNodes.length !== contract.parameters.length) return undefined;
-  const lifetimes: import("../../../target-model/lifetimes/index.js").RustLifetimeRef[] = [];
-  const types: TargetTypeRef[] = [];
+  const values: import("../../../target-model/types/model.js").RustTargetGenericArgument[] = [];
   for (const [index, parameter] of contract.parameters.entries()) {
     const argument = argumentNodes[index];
     if (argument === undefined) return undefined;
     if (parameter.kind === "lifetime") {
       const lifetime = context.sourceLifetimes.resolve(argument);
       if (lifetime === undefined) return undefined;
-      lifetimes.push(lifetime);
+      values.push(Object.freeze({ kind: "lifetime", lifetime }));
     } else {
       const type = resolveRustAuthoredTargetType(argument, context, options, resolving);
       if (type === undefined) return undefined;
-      types.push(type);
+      values.push(Object.freeze({ kind: "type", type }));
     }
   }
   return Object.freeze({
-    lifetimes: Object.freeze(lifetimes),
-    types: Object.freeze(types),
+    values: Object.freeze(values),
   });
 }
 
@@ -591,7 +704,7 @@ function resolveRustSignatureParameterListTarget(
   const restElement = restCarrier?.kind === "array"
     ? restCarrier.element
     : isRustJsArrayCarrier(restCarrier)
-      ? restCarrier.typeArguments?.[0]
+      ? rustJsArrayLikeElementTargetType(restCarrier)
       : undefined;
   if (restElement === undefined) {
     return undefined;
@@ -634,9 +747,20 @@ export function resolveRustCallableEvidence(
     options,
     resolving,
   );
-  return result === undefined
-    ? undefined
-    : rustCallableTargetType(parameters as readonly TargetTypeRef[], result);
+  if (result === undefined) return undefined;
+  const declaration = callable.result.declaration;
+  const genericContract = context.sourceLifetimes.contractFor(declaration);
+  if (genericContract?.lifetimeBinder !== undefined) {
+    return genericContract.parameters.some((parameter) => parameter.kind !== "lifetime")
+      ? undefined
+      : Object.freeze({
+          kind: "closure" as const,
+          args: Object.freeze(parameters as readonly TargetTypeRef[]),
+          result,
+          lifetimeBinder: genericContract.lifetimeBinder,
+        });
+  }
+  return rustCallableTargetType(parameters as readonly TargetTypeRef[], result);
 }
 
 function resolveRustSignatureParameterEvidence(

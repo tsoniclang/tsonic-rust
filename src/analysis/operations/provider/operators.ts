@@ -85,7 +85,7 @@ function selectRustProjectTypeTest(
   const sourceDefinition = options.projectTypes.definitionForCarrier(dispatchCarrier);
   const targetDefinition = options.projectTypes.definitionForDeclaration(request.sourceRightDeclaration);
   const targetCarrier = targetDefinition === undefined || targetDefinition.kind !== "class" ||
-      targetDefinition.typeParameterNames.length !== 0
+      targetDefinition.genericParameters.length !== 0
     ? undefined
     : options.projectTypes.openCarrier(targetDefinition);
   const programErrorVariant = targetDefinition === undefined

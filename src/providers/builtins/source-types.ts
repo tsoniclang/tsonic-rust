@@ -78,6 +78,9 @@ function pointerType(
     providerVersion,
     providerModuleId: moduleSpecifier,
     moduleSpecifier,
-    sourceTypeParameters: Object.freeze(["T"]),
+    genericParameters: Object.freeze([Object.freeze({
+      kind: "type" as const,
+      sourceName: "T",
+    })]),
   });
 }
