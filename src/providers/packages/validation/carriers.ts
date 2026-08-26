@@ -1,5 +1,6 @@
 import {
   rustFixedArrayCarrierValue,
+  rustNamedTypeCarrierValue,
   rustPrimitiveTypeName,
   isRustNeverCarrier,
   rustOptionElementCarrier,
@@ -244,6 +245,30 @@ export function validateCarrier(
       return;
     case "target-specific": {
       if (isRustNeverCarrier(carrier)) {
+        return;
+      }
+      const namedType = rustNamedTypeCarrierValue(carrier);
+      if (namedType !== undefined) {
+        const canonicalPath = definition.carrierPaths?.[namedType.id];
+        if (canonicalPath !== undefined && canonicalPath !== namedType.path) {
+          fail(`${where}.value.path conflicts with carrierPaths['${namedType.id}']`);
+        }
+        for (const [index, argument] of namedType.genericArguments.entries()) {
+          validateCarrierGenericArgument(
+            argument,
+            definition,
+            `${where}.value.genericArguments[${index}]`,
+            fail,
+          );
+        }
+        for (const [index, argument] of namedType.genericDefaults.entries()) {
+          validateCarrierGenericArgument(
+            argument,
+            definition,
+            `${where}.value.genericDefaults[${index}]`,
+            fail,
+          );
+        }
         return;
       }
       const fixedArray = rustFixedArrayCarrierValue(carrier);

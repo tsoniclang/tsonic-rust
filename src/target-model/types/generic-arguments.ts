@@ -5,7 +5,7 @@ import type {
   RustTargetGenericParameter,
   TargetTypeRef,
 } from "./model.js";
-import type { RustTargetGenericBindings } from "./carriers/substitution.js";
+import type { RustTargetGenericBindings } from "./carriers/generic-inference.js";
 
 export function rustTypeGenericArgument(type: TargetTypeRef): RustTargetGenericArgument {
   return Object.freeze({ kind: "type", type });

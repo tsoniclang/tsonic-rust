@@ -21,7 +21,7 @@ import {
   rustTargetOperationFactKey,
 } from "../../../analysis/facts/keys.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
-import { applyRustValueConversion } from "./conversions.js";
+import { applyRustValueConversion } from "./value-conversions.js";
 import { diagnosticInput, sourceTypePath } from "../program/plan-context.js";
 import { findRustUpdateSourceAccessor } from "./updates/source.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";

@@ -59,7 +59,8 @@ import {
   rustYieldFactKey,
 } from "../../../analysis/facts/keys.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
-import { applyFinalizedValueConversion, finishProviderOperationExpression, planProviderOperationExpression } from "./conversions.js";
+import { finishProviderOperationExpression, planProviderOperationExpression } from "./conversions.js";
+import { applyFinalizedValueConversion } from "./value-conversions.js";
 import { applyRustErrorBoundary } from "../types/error-boundary.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { expressionCarrier, planBigIntLiteral, planDeleteExpression, planGeneratorResumeExpression, planNumericLiteral, planSourceConversion, planTemplateExpression, requireExpressionCarrier, rustOperationFact, selectedOperationMatches } from "./fundamentals.js";

@@ -326,8 +326,8 @@ test("selected source operation identity is never reconstructed through checker 
   }
   assert.deepEqual(broadCatchOwners, [
     "target-model/metadata/closed-data.ts|isClosedMetadata",
-    "target-model/types/equality.ts|isRustTargetGenericArgument",
     "target-model/types/equality.ts|isRustTargetTypeRef",
+    "target-model/types/equality.ts|isRustTargetGenericArgument",
   ]);
 
   for (const { path, text } of semanticFiles) {

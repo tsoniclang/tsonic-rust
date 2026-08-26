@@ -1,6 +1,6 @@
 import { asNode } from "../../evidence/selected-source.js";
 import { denseDefined } from "./project.js";
-import { resolveRustCallableEvidence } from "./source.js";
+import { resolveRustCallableEvidence } from "./source-evidence.js";
 import { resolveRustTargetType } from "./target.js";
 import { rustOptionTargetType, rustSourcePrimitiveTargetType, rustStringTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";

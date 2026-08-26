@@ -30,7 +30,9 @@ import {
   rustOptionTargetType,
   isRustVecCarrier,
   rustJsArrayTargetType,
+  rustFixedArrayCarrierValue,
   rustSourcePrimitiveTargetType,
+  rustTargetConstSafeInteger,
   rustVecTargetType,
 } from "../../target-model/types/index.js";
 import { appendMalformedSourceAst } from "../declarations/project-types.js";
@@ -277,13 +279,14 @@ export function resolveArrayLiteralCarrier(
   } else if (expected?.kind === "target-named" && isRustJsArrayCarrier(expected)) {
     expectedElement = rustJsArrayLikeElementTargetType(expected);
   }
-  if (expected?.kind === "target-specific" && expected.name === "fixed-array") {
-    const value = expected.value as { element: TargetTypeRef; length: number };
-    if (presentElements.length !== value.length) {
+  const fixedArray = rustFixedArrayCarrierValue(expected);
+  if (expected !== undefined && fixedArray !== undefined) {
+    const length = rustTargetConstSafeInteger(fixedArray.length);
+    if (length === undefined || presentElements.length !== length) {
       return undefined;
     }
     for (const element of presentElements) {
-      resolveExpressionCarrier(walk, element, sourceFile, value.element);
+      resolveExpressionCarrier(walk, element, sourceFile, fixedArray.element);
     }
     setRustOperationFact(walk, expression, { kind: "fixed-array-literal", operationId: "tsonic.rust.fixed-array.literal" });
     return setCarrierFact(walk, expression, expected);

@@ -145,7 +145,7 @@ export function validateTargetGenericArgument(
   const record = asRecord(value);
   if (value.kind === "type") {
     requireExactKeys(record, ["kind", "type"], where, fail);
-    validateCarrier(value.type, definition, `${where}.type`, fail);
+    validateCarrier(value.type, definition, `${where}.type`, fail, { allowUnsized: true });
     return;
   }
   if (value.kind === "lifetime") {

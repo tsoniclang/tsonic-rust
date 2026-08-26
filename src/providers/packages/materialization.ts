@@ -277,6 +277,11 @@ export function materializeProviderCarrier(
       named.id,
       path ?? named.path,
       genericArguments,
+      materializeProviderGenericArguments(
+        named.genericDefaults,
+        carrierPaths,
+        carrierTraits,
+      ),
       traits ?? named.traits,
     );
   }
@@ -294,6 +299,7 @@ export function materializeProviderCarrier(
           carrier.id,
           path,
           genericArguments,
+          [],
           traits ?? rustMoveOnlyNamedTypeTraits,
         );
   }

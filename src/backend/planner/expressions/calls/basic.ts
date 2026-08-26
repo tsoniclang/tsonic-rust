@@ -1,5 +1,6 @@
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
-import { applyRustValueConversion, finishProviderOperationExpression, planProviderOperationExpression } from "../conversions.js";
+import { finishProviderOperationExpression, planProviderOperationExpression } from "../conversions.js";
+import { applyRustValueConversion } from "../value-conversions.js";
 import { planRustCallArguments } from "../input-shaping.js";
 import { diagnosticInput } from "../../program/plan-context.js";
 import { effectiveMemberResultCarrier, planOptionalChainExpression } from "../special.js";

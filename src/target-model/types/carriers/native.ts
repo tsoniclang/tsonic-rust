@@ -75,6 +75,7 @@ export interface RustNamedTypeCarrierValue {
   readonly path: string;
   readonly traits: RustNamedTypeTraitContract;
   readonly genericArguments: readonly RustTargetGenericArgument[];
+  readonly genericDefaults: readonly RustTargetGenericArgument[];
 }
 
 export const rustMoveOnlyNamedTypeTraits: RustNamedTypeTraitContract = Object.freeze({
@@ -85,13 +86,14 @@ export function rustNamedTargetType(
   id: string,
   path: string,
   genericArguments: readonly RustTargetGenericArgument[] = [],
+  genericDefaults: readonly RustTargetGenericArgument[] = [],
   traits: RustNamedTypeTraitContract = rustMoveOnlyNamedTypeTraits,
 ): TargetTypeRef {
   return {
     kind: "target-specific",
     target: "rust",
     name: rustNamedTypeCarrierName,
-    value: { id, path, traits, genericArguments },
+    value: { id, path, traits, genericArguments, genericDefaults },
   };
 }
 
@@ -104,8 +106,8 @@ export function rustNamedTypeCarrierValue(carrier: TargetTypeRef | undefined): R
     return undefined;
   }
   const keys = Object.keys(value).sort();
-  if (keys.length !== 4 || keys[0] !== "genericArguments" || keys[1] !== "id" ||
-    keys[2] !== "path" || keys[3] !== "traits") {
+  if (keys.length !== 5 || keys[0] !== "genericArguments" || keys[1] !== "genericDefaults" ||
+    keys[2] !== "id" || keys[3] !== "path" || keys[4] !== "traits") {
     return undefined;
   }
   const candidate = value as {
@@ -113,15 +115,24 @@ export function rustNamedTypeCarrierValue(carrier: TargetTypeRef | undefined): R
     readonly path?: unknown;
     readonly traits?: unknown;
     readonly genericArguments?: unknown;
+    readonly genericDefaults?: unknown;
   };
   if (typeof candidate.id !== "string" || candidate.id.length === 0 ||
     typeof candidate.path !== "string" || candidate.path.length === 0 ||
     !isRustNamedTypeTraitContract(candidate.traits) ||
     !isDenseDataArray(candidate.genericArguments) ||
-    candidate.genericArguments.some((argument) => !isRustNamedGenericArgument(argument))) {
+    candidate.genericArguments.some((argument) => !isRustNamedGenericArgument(argument)) ||
+    !isDenseDataArray(candidate.genericDefaults) ||
+    candidate.genericDefaults.some((argument) => !isRustNamedGenericArgument(argument))) {
     return undefined;
   }
   const genericArguments = candidate.genericArguments as readonly RustTargetGenericArgument[];
+  const genericDefaults = candidate.genericDefaults as readonly RustTargetGenericArgument[];
+  const defaultOffset = genericArguments.length - genericDefaults.length;
+  if (defaultOffset < 0 || genericDefaults.some((argument, index) =>
+    argument.kind !== genericArguments[defaultOffset + index]?.kind)) {
+    return undefined;
+  }
   const typeArguments = rustTargetGenericTypeArguments(genericArguments);
   if (candidate.traits.implementations.some((implementation) =>
     implementation.requirements.some((requirement) => requirement.typeArgumentIndex >= typeArguments.length))) {
@@ -132,6 +143,7 @@ export function rustNamedTypeCarrierValue(carrier: TargetTypeRef | undefined): R
     path: candidate.path,
     traits: candidate.traits,
     genericArguments,
+    genericDefaults,
   };
 }
 

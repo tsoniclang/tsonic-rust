@@ -15,6 +15,8 @@ export {
   applyFinalizedValueConversion,
   applyRustValueConversion,
   lowerRustValueConversion,
+} from "./value-conversions.js";
+export {
   planFinalizedSourceInput,
   planFinalizedTargetInput,
 } from "./conversions.js";

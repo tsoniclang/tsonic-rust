@@ -22,6 +22,9 @@ import {
   rustCompilerProviderProtocolVersion,
 } from "../../../../dist/providers/compiler/model/model.js";
 import {
+  rustNamedTypeCarrierValue,
+} from "../../../../dist/target-model/types/index.js";
+import {
   verifyRustCompilerStandardLibraryMetadata,
 } from "../../../../dist/providers/compiler/snapshot/cargo-snapshot.js";
 import {
@@ -442,6 +445,16 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
       outlives: [],
       maybeSized: false,
     }]);
+    const projectedCopied = functionProjection.declarationModel.exports.find(
+      ({ name }) => name === "copied",
+    );
+    assert.deepEqual(projectedCopied?.signatures?.[0]?.typeParameters, [{ name: "T" }]);
+    assert.deepEqual(
+      functionProjection.operations.find(({ exportId }) => exportId.endsWith("::copied"))
+        ?.typeRequirements,
+      [{ name: "T", requirements: ["copy"] }],
+      "native Rust requirements remain target policy rather than TypeScript structural constraints",
+    );
     const checkedDoubleOperation = functionProjection.operations.find(
       ({ exportId }) => exportId.endsWith("::checked_double"),
     );
@@ -475,14 +488,6 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
         {
           moduleSpecifier: "@tsonic/core/types.js",
           namedImports: [{ exportedName: "FunctionPointer" }],
-        },
-        {
-          moduleSpecifier: "@tsonic/rust/std/clone.js",
-          namedImports: [{ exportedName: "Clone" }],
-        },
-        {
-          moduleSpecifier: "@tsonic/rust/std/marker.js",
-          namedImports: [{ exportedName: "Copy" }],
         },
         {
           moduleSpecifier: "@tsonic/rust/types.js",
@@ -560,6 +565,27 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
       { name: "A", hasDefault: true },
     ]);
     assert.ok(hashMap.methods.some(({ name }) => name === "new"));
+    const hashMapProjection = projectRustCompilerModule(collectionsModule, {
+      providerModuleId: compilerProviderModuleId(standardDependency, ["collections"]),
+      moduleSpecifier: "@tsonic/rust/std/collections.js",
+    });
+    const projectedFromIterator = hashMapProjection.declarationModel.exports
+      .find(({ name }) => name === "HashMap")?.members
+      ?.find(({ name }) => name === "from_iter")?.signatures?.[0];
+    assert.deepEqual(
+      projectedFromIterator?.typeParameters?.map(({ name, defaultType }) => ({
+        name,
+        hasDefault: defaultType !== undefined,
+      })),
+      [
+        { name: "K", hasDefault: false },
+        { name: "V", hasDefault: false },
+        { name: "S", hasDefault: false },
+        { name: "A", hasDefault: false },
+        { name: "T", hasDefault: false },
+      ],
+      "flattened static-call generics cannot retain owner defaults before callable parameters",
+    );
     const hashMapKeyParameter = hashMapTypeParameters.find(({ name }) => name === "K");
     const insertKeyRequirement = hashMap.methods
       .find(({ name }) => name === "insert")?.typeRequirements
@@ -638,20 +664,55 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
     });
     const boxedSliceConversion = vecProjection.operations.find(({ target }) =>
       target.form === "trait-call" && target.traitGenericArguments.some((argument) =>
-        argument.kind === "type" && argument.type.kind === "target-named" &&
-        argument.type.genericArguments?.some((genericArgument) =>
+        argument.kind === "type" && rustNamedTypeCarrierValue(argument.type)?.genericArguments.some((genericArgument) =>
           genericArgument.kind === "type" && genericArgument.type.kind === "slice")));
     assert.ok(boxedSliceConversion);
     assert.equal(
       boxedSliceConversion.target.form === "trait-call"
         ? boxedSliceConversion.target.traitGenericArguments[0]?.kind === "type" &&
-            boxedSliceConversion.target.traitGenericArguments[0].type.kind === "target-named" &&
-            boxedSliceConversion.target.traitGenericArguments[0].type.genericArguments?.[0]?.kind === "type"
-          ? boxedSliceConversion.target.traitGenericArguments[0].type.genericArguments[0].type.kind
+            rustNamedTypeCarrierValue(
+              boxedSliceConversion.target.traitGenericArguments[0].type,
+            )?.genericArguments[0]?.kind === "type"
+          ? rustNamedTypeCarrierValue(
+              boxedSliceConversion.target.traitGenericArguments[0].type,
+            )?.genericArguments[0].type.kind
           : undefined
         : undefined,
       "slice",
       "nested Rust slices remain unsized target types instead of becoming owned Vec carriers",
+    );
+    const projectedIntoIterator = vecProjection.declarationModel.exports
+      .find(({ name }) => name === "IntoIter");
+    assert.deepEqual(
+      projectedIntoIterator?.members?.find(({ name }) => name === "try_fold")
+        ?.signatures?.[0]?.typeParameters?.map(({ name }) => name),
+      ["B", "R", "F"],
+      "callable generic constraints are declared after every source-visible dependency",
+    );
+    const projectedVec = vecProjection.declarationModel.exports.find(({ name }) => name === "Vec");
+    assert.deepEqual(
+      projectedVec?.members?.find(({ name }) => name === "dedup_by_key")
+        ?.signatures?.[0]?.typeParameters?.map(({ name }) => name),
+      ["K", "F"],
+      "later Rust callable dependencies move before the constrained source parameter",
+    );
+
+    const fmtModule = worker.module({
+      snapshot: standardSnapshot,
+      dependency: standardDependency,
+      modulePath: ["fmt"],
+      requestedExports: ["Formatter", "Debug"],
+    });
+    const fmtProjection = projectRustCompilerModule(fmtModule, {
+      providerModuleId: compilerProviderModuleId(standardDependency, ["fmt"]),
+      moduleSpecifier: "@tsonic/rust/std/fmt.js",
+    });
+    assert.ok(fmtProjection.declarationModel.exports.some(({ name }) => name === "Formatter"));
+    assert.equal(
+      fmtProjection.declarationModel.exports.find(({ name }) => name === "Formatter")
+        ?.members?.some(({ name }) => name === "fill"),
+      false,
+      "optional methods with no declared primitive carrier do not poison a representable type",
     );
 
     const ioModule = worker.module({

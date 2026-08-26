@@ -9,6 +9,7 @@ import {
   applyRustFallibleResultExpression,
 } from "../../../dist/backend/planner/types/fallible-shape.js";
 import { rustBlockTerminates } from "../../../dist/backend/planner/declarations/functions.js";
+import { rustTypeFromCarrier } from "../../../dist/backend/planner/types/render.js";
 import {
   requireProviderArgumentPassingFacts,
   sourceCallSelectedMemberMatches,
@@ -37,14 +38,63 @@ test("native trait contracts preserve exact conditional Copy and Clone semantics
     "acme.Cell",
     "acme::Cell",
     [{ kind: "type", type: { kind: "source-primitive", name: "int32" } }],
+    [],
     traits,
   )));
   assert.equal(rustNamedTypeCarrierValue(rustNamedTargetType(
     "acme.Cell",
     "acme::Cell",
     [],
+    [],
     traits,
   )), undefined, "trait requirements cannot address a missing type argument");
+});
+
+test("named carriers elide only an exact trailing Rust generic-default suffix", () => {
+  const int32 = { kind: "type", type: { kind: "source-primitive", name: "int32" } };
+  const boolean = { kind: "type", type: { kind: "source-primitive", name: "bool" } };
+  const float64 = { kind: "type", type: { kind: "source-primitive", name: "float64" } };
+  const uint8 = { kind: "type", type: { kind: "source-primitive", name: "uint8" } };
+
+  assert.deepEqual(
+    rustTypeFromCarrier(rustNamedTargetType(
+      "acme.Family",
+      "acme::Family",
+      [int32, boolean, float64],
+      [boolean, float64],
+    )),
+    {
+      kind: "named",
+      path: "acme::Family",
+      genericArguments: [{ kind: "type", type: { kind: "primitive", name: "i32" } }],
+    },
+  );
+  assert.deepEqual(
+    rustTypeFromCarrier(rustNamedTargetType(
+      "acme.Family",
+      "acme::Family",
+      [int32, uint8, float64],
+      [boolean, float64],
+    )),
+    {
+      kind: "named",
+      path: "acme::Family",
+      genericArguments: [
+        { kind: "type", type: { kind: "primitive", name: "i32" } },
+        { kind: "type", type: { kind: "primitive", name: "u8" } },
+      ],
+    },
+  );
+  assert.equal(rustNamedTypeCarrierValue({
+    ...rustNamedTargetType("acme.Invalid", "acme::Invalid", [int32]),
+    value: {
+      id: "acme.Invalid",
+      path: "acme::Invalid",
+      traits: { implementations: [] },
+      genericArguments: [int32],
+      genericDefaults: [boolean, float64],
+    },
+  }), undefined);
 });
 
 test("value-returning fallible bodies never synthesize an invalid Ok unit", () => {
@@ -131,6 +181,7 @@ test("operation fact equality is structural and independent of metadata key orde
       path: "acme::Value",
       traits: { implementations: [] },
       genericArguments: [],
+      genericDefaults: [],
     },
   };
   const abi = finalizeRustProviderOperationAbi({

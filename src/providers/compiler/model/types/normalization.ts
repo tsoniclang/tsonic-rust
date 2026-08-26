@@ -16,6 +16,8 @@ import {
   normalizeLifetime,
   normalizePathArguments,
   normalizeType,
+} from "./rustdoc-type-normalization.js";
+import {
   typeRequirementKey,
 } from "./substitution.js";
 import type {

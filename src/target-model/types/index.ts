@@ -186,17 +186,21 @@ export type {
 export {
   inferRustTargetGenericBindings,
   inferRustTargetTypeParameterBindings,
-  rustTargetGenericReferences,
-  rustTargetTypeContainsTypeParameter,
-  rustTargetTypeParameterNames,
-  substituteRustTargetGenericArgument,
-  substituteRustTargetGenerics,
-  substituteRustTargetTypeParameters,
-} from "./carriers/substitution.js";
-export type { RustTargetGenericReferences } from "./carriers/substitution.js";
+} from "./carriers/generic-inference.js";
 export type {
   RustTargetGenericBindings,
   RustTargetGenericParameterSet,
+} from "./carriers/generic-inference.js";
+export {
+  rustTargetGenericReferences,
+  rustTargetTypeContainsTypeParameter,
+  rustTargetTypeParameterNames,
+} from "./carriers/generic-references.js";
+export type { RustTargetGenericReferences } from "./carriers/generic-references.js";
+export {
+  substituteRustTargetGenericArgument,
+  substituteRustTargetGenerics,
+  substituteRustTargetTypeParameters,
 } from "./carriers/substitution.js";
 export {
   isRustCopyCarrier,

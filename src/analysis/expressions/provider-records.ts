@@ -18,7 +18,7 @@ import {
 } from "../operations/provider/result.js";
 import {
   instantiateProviderOperationTemplate,
-} from "../operations/provider/calls/instantiation.js";
+} from "../operations/provider/calls/template-instantiation.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";

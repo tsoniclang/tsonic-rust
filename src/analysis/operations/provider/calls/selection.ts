@@ -14,7 +14,8 @@ import {
 } from "../../../../target-model/types/index.js";
 import { acceptProjectSourceCall, mapSelectedJsSpecialCall } from "../object-shapes.js";
 import { acceptRustPolicy } from "../../../../policy/operations/contracts.js";
-import { acceptSelectedCall, checkedCallIsConstruction, instantiateSelectedCallTemplate, selectedCallReceiverValueCarrier, selectRustOptionalCallResult, substituteProviderOperationForm } from "./instantiation.js";
+import { acceptSelectedCall, checkedCallIsConstruction, instantiateSelectedCallTemplate, selectedCallReceiverValueCarrier, selectRustOptionalCallResult } from "./instantiation.js";
+import { substituteProviderOperationForm } from "./template-instantiation.js";
 import { closedMetadataKey } from "../../../../target-model/metadata/closed-data.js";
 import { mapRustSourceMarkerCall } from "./deferred.js";
 import { providerIdentityText, providerOperationFact, rejectSelectedOperation, selectedArgumentMatchScore } from "../result.js";

@@ -55,8 +55,11 @@ export function main(): void {
   });
 
   assert.deepEqual(result.diagnostics, []);
-  assert.doesNotMatch(artifactText(result, "src/index.rs"), /42\.0/u);
-  assert.doesNotMatch(artifactText(result, "src/index.rs"), /alloc::vec::Vec/u);
+  const source = artifactText(result, "src/index.rs");
+  assert.doesNotMatch(source, /42\.0/u);
+  assert.doesNotMatch(source, /alloc::vec::Vec/u);
+  assert.doesNotMatch(source, /std::alloc::Global/u);
+  assert.doesNotMatch(source, /RandomState/u);
   const run = validateGeneratedProject("rust-stdlib-provider", result.artifacts, { run: true });
   assert.equal(run.status, 0);
 });

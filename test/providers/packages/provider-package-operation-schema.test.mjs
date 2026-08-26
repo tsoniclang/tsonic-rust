@@ -435,6 +435,24 @@ test("provider carriers distinguish owned vectors from nested unsized slices", (
       },
     }],
   })));
+
+  assert.doesNotThrow(() => createRustProviderPackage(definition({
+    operations: [{
+      exportId: "@acme/validation::run",
+      operationKind: "method",
+      target: {
+        form: "trait-call",
+        owner: int32Carrier,
+        traitPath: "core::convert::AsRef",
+        traitGenericArguments: [{
+          kind: "type",
+          type: { kind: "slice", element: int32Carrier },
+        }],
+        method: "as_ref",
+      },
+      resultCarrier: int32Carrier,
+    }],
+  })));
 });
 
 test("provider carrier metadata canonicalizes after cross-provider composition", () => {

@@ -53,14 +53,18 @@ export function recordCarrierTraits(
 export function projectCompilerTraitContract(
   contract: RustCompilerTypeTraits,
 ): RustNamedTypeTraitContract {
-  const implementations = contract.implementations.map((implementation) => Object.freeze({
+  const projected = contract.implementations.map((implementation) => Object.freeze({
     traitPath: compilerRequirementTraitPath(implementation.trait),
     requirements: Object.freeze(implementation.requirements.map((requirement) => Object.freeze({
       typeArgumentIndex: requirement.typeArgumentIndex,
       traitPath: compilerRequirementTraitPath(requirement.requirement),
     })).sort((left, right) =>
       left.typeArgumentIndex - right.typeArgumentIndex || compareText(left.traitPath, right.traitPath))),
-  })).sort((left, right) => compareText(
+  }));
+  const implementations = [...new Map(projected.map((implementation) => [
+    `${implementation.traitPath}\0${JSON.stringify(implementation.requirements)}`,
+    implementation,
+  ])).values()].sort((left, right) => compareText(
     `${left.traitPath}\0${JSON.stringify(left.requirements)}`,
     `${right.traitPath}\0${JSON.stringify(right.requirements)}`,
   ));

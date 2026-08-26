@@ -26,6 +26,7 @@ import {
   rustStructuralObjectCarrierValue,
 } from "../../../target-model/types/index.js";
 import { rustSourceItemIdentity } from "../program/source-package-facades.js";
+import { rustExplicitNamedTypeArguments } from "./generic-defaults.js";
 import {
   rustBigIntTargetId,
   rustJsArrayTargetId,
@@ -249,7 +250,7 @@ export function rustTypeFromCarrier(
   const namedType = rustNamedTypeCarrierValue(carrier);
   if (namedType !== undefined) {
     const genericArguments = rustGenericArgumentsFromCarrier(
-      namedType.genericArguments,
+      rustExplicitNamedTypeArguments(namedType),
       resolveSourceTypePath,
       resolveStructuralShape,
     );

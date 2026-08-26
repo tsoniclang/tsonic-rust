@@ -166,6 +166,10 @@ export function compilerAssociatedSourceExportName(
   return `RustAssociated${readableName}_${digest}`;
 }
 
+export function isCompilerAssociatedSourceExportName(name: string): boolean {
+  return /^RustAssociated[A-Za-z_$][A-Za-z0-9_$]*_[0-9a-f]{12}$/u.test(name);
+}
+
 export function canonicalItemPath(
   document: RustdocDocument,
   item: Readonly<Record<string, unknown>>,

@@ -4,6 +4,9 @@ import {
   targetGenericArgumentFor,
 } from "./types.js";
 import {
+  createRustCompilerSubstitutions,
+  compilerTypeRequirementCanonicalPath,
+  substituteRustCompilerArgument,
   substituteRustCompilerType,
 } from "../model/rustdoc-types.js";
 import type { ProjectionContext } from "./model.js";
@@ -86,19 +89,46 @@ export function standardTargetGenericArguments(
   position: "parameter" | "result",
 ): readonly RustTargetGenericArgument[] {
   requireGenericApplication(type, location);
-  return Object.freeze(type.genericArguments.map((argument) =>
-    targetGenericArgumentFor(argument, context, position)));
+  const substitutions = createRustCompilerSubstitutions(
+    location.genericParameters,
+    type.genericArguments,
+  );
+  return Object.freeze(location.genericParameters.map((parameter) =>
+    targetGenericArgumentFor(
+      compilerArgumentForParameter(parameter, substitutions),
+      context,
+      position,
+      "target-default",
+    )));
 }
 
-export function sourceVisibleGenericParameters(
-  parameters: readonly RustCompilerGenericParameter[],
-): readonly RustCompilerGenericParameter[] {
-  const firstDefault = parameters.findIndex(genericParameterHasDefault);
-  if (firstDefault < 0) return parameters;
-  if (parameters.slice(firstDefault).some((parameter) => !genericParameterHasDefault(parameter))) {
-    throw new Error("Rust generic defaults must form one trailing source-omittable suffix.");
+export function standardTargetGenericDefaults(
+  type: Extract<RustCompilerType, { readonly kind: "path" }>,
+  location: RustCompilerStandardTypeLocation,
+  context: ProjectionContext,
+  position: "parameter" | "result",
+): readonly RustTargetGenericArgument[] {
+  requireGenericApplication(type, location);
+  const firstDefault = location.genericParameters.findIndex(genericParameterHasDefault);
+  if (firstDefault < 0) return Object.freeze([]);
+  const defaultParameters = location.genericParameters.slice(firstDefault);
+  if (defaultParameters.some((parameter) => !genericParameterHasDefault(parameter))) {
+    throw new Error("Rust generic defaults must form one trailing target-omittable suffix.");
   }
-  return parameters;
+  const substitutions = createRustCompilerSubstitutions(
+    location.genericParameters,
+    type.genericArguments,
+  );
+  return Object.freeze(defaultParameters.map((parameter) =>
+    targetGenericArgumentFor(
+      substituteRustCompilerArgument(
+        compilerDefaultArgumentForParameter(parameter),
+        substitutions,
+      ),
+      context,
+      position,
+      "target-default",
+    )));
 }
 
 export function withProjectionGenericParameters(
@@ -162,7 +192,7 @@ export function requireSourceGenericName(
   return selected;
 }
 
-export function rustCompilerTypeNamesCurrentType(
+export function rustCompilerTypeConstructsCurrentType(
   type: RustCompilerType,
   context: ProjectionContext,
 ): boolean {
@@ -173,12 +203,8 @@ export function rustCompilerTypeNamesCurrentType(
     type.genericArguments.length > current.genericParameters.length) {
     return false;
   }
-  for (let index = 0; index < type.genericArguments.length; index += 1) {
-    if (!genericArgumentNamesParameter(
-      type.genericArguments[index]!,
-      current.genericParameters[index]!,
-    )) return false;
-  }
+  if (type.genericArguments.some((argument, index) =>
+    argument.kind !== current.genericParameters[index]?.kind)) return false;
   return current.genericParameters.slice(type.genericArguments.length)
     .every(genericParameterHasDefault);
 }
@@ -196,7 +222,7 @@ export function canonicalPathKey(path: readonly string[]): string {
 export function typeRequirementKey(requirement: RustCompilerTypeRequirement): string {
   return requirement === "clone" || requirement === "copy"
     ? requirement
-    : `trait:${JSON.stringify(requirement.trait)}`;
+    : `trait:${compilerTypeRequirementCanonicalPath(requirement).join("::")}`;
 }
 
 export function rustCompilerTypeText(
@@ -246,23 +272,44 @@ function genericParameterName(parameter: RustCompilerGenericParameter): string {
   return parameter.kind === "lifetime" ? parameter.lifetime.name : parameter.name;
 }
 
-function genericArgumentNamesParameter(
-  argument: RustCompilerGenericArgument,
+function compilerArgumentForParameter(
   parameter: RustCompilerGenericParameter,
-): boolean {
-  if (argument.kind !== parameter.kind) return false;
-  if (argument.kind === "lifetime" && parameter.kind === "lifetime") {
-    return argument.lifetime.kind === "parameter" &&
-      parameter.lifetime.kind === "parameter" &&
-      argument.lifetime.identity.itemId === parameter.lifetime.identity.itemId;
+  substitutions: import("../model/rustdoc-types.js").RustCompilerSubstitutions,
+): RustCompilerGenericArgument {
+  if (parameter.kind === "lifetime") {
+    if (parameter.lifetime.kind !== "parameter") {
+      throw new Error("Rust standard type lifetime parameter has no stable identity.");
+    }
+    const lifetime = substitutions.lifetimes.get(parameter.lifetime.identity.itemId);
+    if (lifetime === undefined) {
+      throw new Error("Rust standard type lifetime parameter has no exact argument.");
+    }
+    return Object.freeze({ kind: "lifetime", lifetime });
   }
-  if (argument.kind === "type" && parameter.kind === "type") {
-    return argument.type.kind === "generic" &&
-      argument.type.identity.itemId === parameter.identity.itemId;
+  if (parameter.kind === "type") {
+    const type = substitutions.types.get(parameter.identity.itemId);
+    if (type === undefined) {
+      throw new Error(`Rust standard type parameter '${parameter.name}' has no exact argument.`);
+    }
+    return Object.freeze({ kind: "type", type });
   }
-  return argument.kind === "const" && parameter.kind === "const" &&
-    argument.value.kind === "parameter" &&
-    argument.value.identity.itemId === parameter.identity.itemId;
+  const value = substitutions.consts.get(parameter.identity.itemId);
+  if (value === undefined) {
+    throw new Error(`Rust standard const parameter '${parameter.name}' has no exact argument.`);
+  }
+  return Object.freeze({ kind: "const", value });
+}
+
+function compilerDefaultArgumentForParameter(
+  parameter: RustCompilerGenericParameter,
+): RustCompilerGenericArgument {
+  if (parameter.kind === "type" && parameter.defaultType !== undefined) {
+    return Object.freeze({ kind: "type", type: parameter.defaultType });
+  }
+  if (parameter.kind === "const" && parameter.defaultValue !== undefined) {
+    return Object.freeze({ kind: "const", value: parameter.defaultValue });
+  }
+  throw new Error("Rust generic default metadata contains a non-defaulted parameter.");
 }
 
 function substituteConstArgument(

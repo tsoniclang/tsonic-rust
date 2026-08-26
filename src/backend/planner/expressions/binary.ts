@@ -6,7 +6,7 @@ import {
   rustSourcePrimitiveTargetType,
 } from "../../../target-model/types/index.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
-import { applyRustValueConversion } from "./conversions.js";
+import { applyRustValueConversion } from "./value-conversions.js";
 import { applyRustArgumentMode } from "./input-shaping.js";
 import { applyRustFallibleResultExpression, rustExpressionUsesTryInCurrentRegion } from "../types/fallible-shape.js";
 import {

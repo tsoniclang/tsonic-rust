@@ -18,6 +18,11 @@ import {
   withProjectionGenericParameters,
 } from "./utilities.js";
 import {
+  referencedCallableOwnerGenericParameters,
+  sourceCallableGenericParameters,
+} from "./source-generics.js";
+import { compilerFunctionResult } from "./representability.js";
+import {
   rustBorrowedStrToStringValueConversion,
 } from "../../../target-model/conversions/model.js";
 import type { ProjectionContext } from "./model.js";
@@ -97,9 +102,7 @@ export function projectFunction(
 
   const result = compilerFunctionResult(fn.result);
   const exposedResultType = fn.borrowedResult?.sourceType ?? result.type;
-  const resultCarrier = constructor
-    ? requireCurrentType(context).carrier
-    : targetTypeFor(exposedResultType, functionContext, "result");
+  const resultCarrier = targetTypeFor(exposedResultType, functionContext, "result");
   const returnType = constructor
     ? undefined
     : sourceTypeFor(exposedResultType, functionContext, "result");
@@ -109,12 +112,18 @@ export function projectFunction(
       ? rustBorrowedStrToStringValueConversion
       : Object.freeze({ kind: "copy-from-reference" as const, target: resultCarrier });
 
-  const signatureGenerics = context.currentType !== undefined &&
-      !instanceMethod && !constructor
-    ? combineGenericParameters(ownerGenerics, fn.genericParameters)
-    : fn.genericParameters;
+  const selectedOwnerGenerics = context.currentType !== undefined &&
+      !instanceMethod
+    ? referencedCallableOwnerGenericParameters(ownerGenerics, fn)
+    : ownerGenerics;
+  const signatureGenerics = sourceCallableGenericParameters(
+    context.currentType !== undefined && !instanceMethod && !constructor
+      ? selectedOwnerGenerics
+      : [],
+    fn.genericParameters,
+  );
   const operationGenerics = combineGenericParameters(
-    ownerGenerics,
+    selectedOwnerGenerics,
     fn.genericParameters,
   );
   const operationGenericBindings = providerGenericBindingsFor(
@@ -304,31 +313,6 @@ function uniqueVariadicParameterName(
   let name = "variadicArguments";
   while (occupied.has(name)) name = `_${name}`;
   return name;
-}
-
-export function compilerFunctionResult(type: RustCompilerType): {
-  readonly type: RustCompilerType;
-  readonly fallible: boolean;
-} {
-  if (type.kind === "path" && isTsonicResultPath(type)) {
-    const argument = type.genericArguments[0];
-    if (argument?.kind !== "type") {
-      throw new Error("Rust TsonicResult must carry one exact type argument.");
-    }
-    return { type: argument.type, fallible: true };
-  }
-  return { type, fallible: false };
-}
-
-function isTsonicResultPath(
-  type: Extract<RustCompilerType, { readonly kind: "path" }>,
-): boolean {
-  return type.crateName === "tsonic_rust_runtime" &&
-    type.modulePath.length === 1 &&
-    type.modulePath[0] === "error" &&
-    type.name === "TsonicResult" &&
-    type.genericArguments.length === 1 &&
-    type.genericArguments[0]?.kind === "type";
 }
 
 export function sourceMethodIsInstance(method: RustCompilerFunction): boolean {

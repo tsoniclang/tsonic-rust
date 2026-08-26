@@ -20,9 +20,11 @@ export {
   typeParameterGuaranteesRequirement,
 } from "./types/requirements.js";
 export {
+  normalizeType,
+} from "./types/rustdoc-type-normalization.js";
+export {
   createRustCompilerSubstitutions,
   emptyRustCompilerSubstitutions,
-  normalizeType,
   rustCompilerLifetimeSemanticKey,
   rustCompilerTraitSemanticKey,
   rustCompilerTypeSemanticKey,

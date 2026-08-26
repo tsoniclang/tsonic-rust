@@ -6,6 +6,8 @@ import {
   canonicalItemId,
   canonicalItemPath,
   expandedPublicModuleItems,
+  compilerAssociatedSourceExportName,
+  isCompilerAssociatedSourceExportName,
   isGlobUse,
 } from "../rustdoc-items.js";
 import {
@@ -15,6 +17,7 @@ import {
   normalizeType,
   normalizeTypeTraits,
   rootNormalizationContext,
+  rustCompilerDerivedIdentity,
   rustCompilerItemIdentity,
   rustStaticValueCanBeCopied,
 } from "../rustdoc-types.js";
@@ -108,6 +111,18 @@ export function normalizeModule(
     }
     const authored = publicItemsByName.get(name);
     if (authored === undefined) {
+      const associatedOwner = isCompilerAssociatedSourceExportName(name)
+        ? associatedTypeOwnerName(
+            name,
+            publicItemsByName,
+            resolveItem,
+          )
+        : undefined;
+      if (associatedOwner !== undefined) {
+        if (!visited.has(associatedOwner)) pending.push(associatedOwner);
+        pending.sort(compareText);
+        continue;
+      }
       unsupported.push({ name, reason: `Rust module does not export public item '${name}'.` });
       continue;
     }
@@ -148,6 +163,47 @@ export function normalizeModule(
     unsupportedExports: Object.freeze(unsupported),
     standardTypeLocations: Object.freeze([]) as readonly RustCompilerStandardTypeLocation[],
   });
+}
+
+function associatedTypeOwnerName(
+  requestedName: string,
+  publicItemsByName: ReadonlyMap<string, ResolvedRustdocItem>,
+  resolveItem?: RustdocItemResolver,
+): string | undefined {
+  let selectedOwner: string | undefined;
+  for (const [publicName, authored] of publicItemsByName) {
+    const resolved = resolveItem?.(
+      authored.document,
+      authored.dependency,
+      authored.item.id,
+    ) ?? authored;
+    if (!hasInnerKind(resolved.item, "trait")) continue;
+    const trait = requireInnerRecord(
+      resolved.item,
+      "trait",
+      `Rust trait '${publicName}'`,
+    );
+    const ownerIdentity = rustCompilerItemIdentity(
+      resolved.document,
+      resolved.dependency,
+      resolved.item,
+    );
+    for (const itemId of requireArray(trait.items, `Rust trait '${publicName}' items`)) {
+      const member = itemById(resolved.document, itemId);
+      if (!hasInnerKind(member, "assoc_type") || typeof member.name !== "string") continue;
+      const identity = rustCompilerDerivedIdentity(ownerIdentity, `associated:${member.name}`);
+      if (compilerAssociatedSourceExportName(identity.itemId, member.name) !== requestedName) {
+        continue;
+      }
+      if (selectedOwner !== undefined && selectedOwner !== publicName) {
+        throw new Error(
+          `Generated Rust associated source export '${requestedName}' belongs to more than one public trait.`,
+        );
+      }
+      selectedOwner = publicName;
+    }
+  }
+  return selectedOwner;
 }
 
 function normalizeExport(

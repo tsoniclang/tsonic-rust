@@ -211,7 +211,7 @@ function lookupStandardLibraryCanonicalItem(
 function standardTypeLocation(
   context: RustStandardLibraryContext,
   canonicalPath: readonly string[],
-): RustCompilerStandardTypeLocation {
+): RustCompilerStandardTypeLocation | undefined {
   const canonicalKey = canonicalPathKey(canonicalPath);
   const cached = context.typeLocationsByCanonicalPath.get(canonicalKey);
   if (cached !== undefined) {
@@ -225,7 +225,7 @@ function standardTypeLocation(
   const dependency = context.snapshot.dependencies.find((candidate) =>
     candidate.crateName === crateName);
   if (dependency === undefined) {
-    throw new Error(`Rust standard-library type '${canonicalPath.join("::")}' belongs to untracked sysroot crate '${crateName}'.`);
+    return undefined;
   }
   const document = loadStandardLibraryCrateDocument(context, dependency);
   const candidateIds = Object.entries(document.paths)
@@ -234,14 +234,12 @@ function standardTypeLocation(
       standardTypePathKind(candidate.kind))
     .map(([id]) => id);
   if (candidateIds.length !== 1) {
-    throw new Error(
-      `Rust standard-library type '${canonicalPath.join("::")}' has ${candidateIds.length} exact compiler type identities; expected one.`,
-    );
+    return undefined;
   }
   const item = itemById(document, candidateIds[0]!);
   const publicPath = preferredStandardLibraryPublicTypeAlias(context, canonicalPath);
   if (publicPath === undefined) {
-    throw new Error(`Rust standard-library type '${canonicalPath.join("::")}' has no exact public module export.`);
+    return undefined;
   }
   const publicCrateName = publicPath[0]!;
   const publicExportName = publicPath[publicPath.length - 1]!;
@@ -258,7 +256,7 @@ function standardTypeLocation(
             ? inner.trait
           : undefined;
   if (declaration === undefined) {
-    throw new Error(`Rust standard-library item '${canonicalPath.join("::")}' is not a supported type declaration.`);
+    return undefined;
   }
   const parameters = normalizeGenericParameters(
     document,
@@ -462,7 +460,9 @@ export function collectModuleStandardTypeLocations(
       return;
     }
     const location = standardTypeLocation(context, canonicalPath);
-    selected.set(canonicalPathKey(location.canonicalPath), location);
+    if (location !== undefined) {
+      selected.set(canonicalPathKey(location.canonicalPath), location);
+    }
   };
   const visitType = (type: RustCompilerType): void => {
     switch (type.kind) {

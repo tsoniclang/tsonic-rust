@@ -1,7 +1,11 @@
 import { acceptRustMemberOperation, acceptRustOperation, normalizeSelectedOperationInputCarrier, providerIdentityText, providerOperationFact, rejectSelectedOperation, sourceLiteralIsRepresentableAsPrimitive } from "./result.js";
 import { acceptRustPolicy } from "../../../policy/operations/contracts.js";
 import { asNode } from "../../../policy/evidence/selected-source.js";
-import { finalizeProviderOperationFact, instantiateProviderOperationTemplate, providerFormRequiresSourceReceiver } from "./calls/instantiation.js";
+import { providerFormRequiresSourceReceiver } from "./calls/instantiation.js";
+import {
+  finalizeProviderOperationFact,
+  instantiateProviderOperationTemplate,
+} from "./calls/template-instantiation.js";
 import { isRustNullishSourceCarrier, rustOptionElementCarrier } from "../../../target-model/types/index.js";
 import { selectRustValueCarrierReconciliation } from "../../../policy/types/value-carrier-reconciliation.js";
 import { recordRustValueCarrierReconciliation, rustEffectiveValueCarrier } from "../../facts/value-carrier-queries.js";

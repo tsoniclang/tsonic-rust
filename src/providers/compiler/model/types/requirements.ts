@@ -18,6 +18,8 @@ import {
 } from "./normalization.js";
 import {
   normalizeType,
+} from "./rustdoc-type-normalization.js";
+import {
   rustCompilerTypeSemanticKey,
   typeRequirementKey,
 } from "./substitution.js";

@@ -350,6 +350,7 @@ test("provider receivers distinguish runtime values from compile-time owner iden
       id: "rust.test.Environment",
       path: "acme::Environment",
       genericArguments: [],
+      genericDefaults: [],
       traits: { implementations: [] },
     },
   };

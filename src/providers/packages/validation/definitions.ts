@@ -4,6 +4,7 @@ import { isClosedMetadata } from "../../../target-model/metadata/closed-data.js"
 import { isRustFallibleErrorBoundary } from "../../../target-model/operations/error-boundary.js";
 import {
   isRustNamedTypeTraitContract,
+  rustNamedTypeCarrierValue,
   rustTargetGenericReferences,
 } from "../../../target-model/types/index.js";
 import { isRustTargetTypeRef } from "../../../target-model/types/equality.js";
@@ -636,7 +637,10 @@ function targetCarrierNamedIds(carrier: TargetTypeRef): readonly string[] {
   walkTargetCarrier(carrier, (candidate) => {
     if (candidate.kind === "target-named") {
       ids.add(candidate.id);
+      return;
     }
+    const namedType = rustNamedTypeCarrierValue(candidate);
+    if (namedType !== undefined) ids.add(namedType.id);
   });
   return [...ids].sort();
 }
@@ -687,7 +691,17 @@ function walkTargetCarrier(
     case "source-primitive":
     case "type-parameter":
     case "opaque":
-    case "target-specific":
+    case "target-specific": {
+      const namedType = rustNamedTypeCarrierValue(carrier);
+      if (namedType !== undefined) {
+        for (const argument of [
+          ...namedType.genericArguments,
+          ...namedType.genericDefaults,
+        ]) {
+          if (argument.kind === "type") walkTargetCarrier(argument.type, visit);
+        }
+      }
       return;
+    }
   }
 }

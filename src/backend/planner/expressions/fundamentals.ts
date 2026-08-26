@@ -20,7 +20,8 @@ import {
   rustTargetOperationFactKey,
 } from "../../../analysis/facts/keys.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { applyRustValueConversion, finishProviderOperationExpression, planProviderOperationExpression } from "./conversions.js";
+import { finishProviderOperationExpression, planProviderOperationExpression } from "./conversions.js";
+import { applyRustValueConversion } from "./value-conversions.js";
 import { diagnosticInput, rustActiveErrorType } from "../program/plan-context.js";
 import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
 import { isFloatCarrier, rustTypeFromCarrierInContext } from "../types/render.js";
