@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustArgumentMode, RustProviderFactOperationKind, RustRuntimeSetOperationKind, RustSourceCallParameterPlan, RustValueConversion } from "../../../target-model/operations/model.js";
 import type { RustFinalizedOperationAbiFor } from "../finalized-operation-abi.js";
-import type { RustOperationSymbol, RustOperatorToken } from "../../../target-model/syntax/tokens.js";
+import type { RustAssignmentOperator, RustOperationSymbol, RustOperatorToken } from "../../../target-model/syntax/tokens.js";
 import type {
   RustTargetGenericArgument,
   TargetTypeRef,
@@ -542,6 +542,12 @@ export type RustTargetOperationFact =
       readonly referenceCarrier: Extract<TargetTypeRef, { readonly kind: "reference" }>;
       readonly valueExpression: Node;
       readonly valueCarrier: TargetTypeRef;
+      readonly writeStrategy?: {
+        readonly kind: "compound-assignment";
+        readonly operator: Exclude<RustAssignmentOperator, "=">;
+        readonly readExpression: Node;
+        readonly rightExpression: Node;
+      };
       readonly resultCarrier: TargetTypeRef;
     }
   | {

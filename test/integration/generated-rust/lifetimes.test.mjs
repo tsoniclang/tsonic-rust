@@ -186,10 +186,17 @@ function read(value: Ref<int32>): int32 {
   return load(value);
 }
 
+function copyPlusOne(target: Mut<int32>, source: Ref<int32>): void {
+  store(target, load(source) + 1);
+}
+
 export function main(): void {
   let value: int32 = 41;
+  let copied: int32 = 0;
   increment(mut(value));
   check(read(ref(value)) === 42);
+  copyPlusOne(mut(copied), ref(value));
+  check(copied === 43);
 }
 `,
     },
@@ -198,8 +205,8 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /fn increment\(value: &mut i32\)/u);
-  assert.match(source, /let current: i32 = \*value;/u);
-  assert.match(source, /\*value = current \+ 1;/u);
+  assert.match(source, /\*value \+= 1;/u);
+  assert.match(source, /\*target = \*source \+ 1;/u);
   assert.match(source, /fn read\(value: &i32\) -> i32/u);
   assert.match(source, /increment\(&mut value\)/u);
   assert.match(source, /read\(&value\)/u);

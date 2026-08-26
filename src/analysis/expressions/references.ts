@@ -1,7 +1,11 @@
 import {
+  BinaryExpression_Left,
+  BinaryExpression_Right,
   KindExportAssignment,
+  KindBinaryExpression,
   KindFunctionDeclaration,
   KindBindingElement,
+  KindIdentifier,
   KindParameter,
   KindVariableDeclaration,
   Node_Expression,
@@ -16,6 +20,7 @@ import {
   rustSourceCallableReturnFactKey,
   rustSourceCallableValueFactKey,
   rustSourceParameterAbiFactKey,
+  rustTargetOperationFactKey,
 } from "../facts/keys.js";
 import {
   rustOptionElementCarrier,
@@ -43,6 +48,7 @@ import {
 } from "../declarations/types-and-bindings.js";
 import { rustSourceReferenceOperationFactKey } from "../../source/semantics/facts.js";
 import { rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
+import { selectRustEquivalentAssignment } from "../../policy/operations/operator-rules.js";
 import type { RustSourceReferenceOperationFact } from "../../source/semantics/model.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
@@ -452,10 +458,75 @@ function resolvedRustReferenceOperationCarrier(
     referenceCarrier: operandCarrier,
     valueExpression: source.valueExpression,
     valueCarrier,
+    ...referenceStoreWriteStrategy(
+      walk,
+      source.referenceExpression,
+      source.valueExpression,
+      operandCarrier,
+    ),
     resultCarrier,
   };
   setRustOperationFact(walk, expression, fact);
   return { carrier: setCarrierFact(walk, expression, resultCarrier) };
+}
+
+function referenceStoreWriteStrategy(
+  walk: RustFactWalk,
+  targetReferenceExpression: Node,
+  valueExpression: Node,
+  targetCarrier: Extract<TargetTypeRef, { readonly kind: "reference" }>,
+): Pick<
+  Extract<RustTargetOperationFact, { readonly kind: "reference-operation"; readonly operation: "store" }>,
+  "writeStrategy"
+> {
+  const { ast } = walk.context;
+  if (ast.kindName(targetReferenceExpression) !== KindIdentifier ||
+    ast.kindName(valueExpression) !== KindBinaryExpression) {
+    return {};
+  }
+  const readExpression = BinaryExpression_Left(ast, valueExpression);
+  const rightExpression = BinaryExpression_Right(ast, valueExpression);
+  if (readExpression === undefined || rightExpression === undefined) {
+    return {};
+  }
+  const readFact = walk.context.facts.get(readExpression, rustTargetOperationFactKey) ??
+    walk.context.facts.resolve(readExpression, rustTargetOperationFactKey);
+  const valueFact = walk.context.facts.get(valueExpression, rustTargetOperationFactKey) ??
+    walk.context.facts.resolve(valueExpression, rustTargetOperationFactKey);
+  if (readFact?.kind !== "reference-operation" || readFact.operation !== "load" ||
+    ast.kindName(readFact.operandExpression) !== KindIdentifier ||
+    valueFact?.kind !== "operator-token" || valueFact.leftConversion !== undefined ||
+    valueFact.rightConversion !== undefined ||
+    !rustTargetTypeRefEquals(readFact.operandCarrier, targetCarrier) ||
+    !rustTargetTypeRefEquals(readFact.resultCarrier, targetCarrier.referent)) {
+    return {};
+  }
+  const targetReference = walk.context.source.navigation.sourceReferenceFor(
+    targetReferenceExpression,
+  );
+  const readReference = walk.context.source.navigation.sourceReferenceFor(
+    readFact.operandExpression,
+  );
+  if (targetReference?.symbol === undefined || readReference?.symbol === undefined ||
+    targetReference.symbol !== readReference.symbol ||
+    targetReference.declaration !== readReference.declaration) {
+    return {};
+  }
+  const operator = selectRustEquivalentAssignment(
+    valueFact.operator,
+    targetCarrier.referent,
+    valueFact.resultCarrier,
+  );
+  return operator === undefined || operator === "="
+    ? {}
+    : {
+        writeStrategy: {
+          kind: "compound-assignment",
+          operator,
+          readExpression,
+          rightExpression,
+        },
+      };
 }
 
 function resolvedRustReferenceConstruction(

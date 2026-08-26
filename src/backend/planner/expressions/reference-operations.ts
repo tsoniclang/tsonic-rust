@@ -1,5 +1,6 @@
 import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
@@ -59,6 +60,37 @@ export function planRustReferenceOperationCall(
           "RUST_REFERENCE_STORE_VALUE_CONFLICT",
           "Rust reference store value conflicts with its finalized target carrier.",
         );
+      }
+      if (fact.writeStrategy !== undefined) {
+        const readFact = context.input.program.facts.getFact(
+          fact.writeStrategy.readExpression,
+          rustTargetOperationFactKey,
+        );
+        const valueFact = context.input.program.facts.getFact(
+          fact.valueExpression,
+          rustTargetOperationFactKey,
+        );
+        if (readFact?.kind !== "reference-operation" || readFact.operation !== "load" ||
+          valueFact?.kind !== "operator-token" ||
+          !rustTargetTypeRefEquals(readFact.operandCarrier, fact.operandCarrier) ||
+          !rustTargetTypeRefEquals(readFact.resultCarrier, fact.operandCarrier.referent) ||
+          !rustTargetTypeRefEquals(valueFact.resultCarrier, fact.valueCarrier)) {
+          return rejectReferenceOperation(
+            call,
+            context,
+            "RUST_REFERENCE_STORE_STRATEGY_CONFLICT",
+            "Rust reference store strategy conflicts with its finalized read and operator facts.",
+          );
+        }
+        const right = planExpression(fact.writeStrategy.rightExpression, context);
+        return right === undefined
+          ? undefined
+          : {
+              kind: "assignment",
+              operator: fact.writeStrategy.operator,
+              target: { kind: "dereference", pointer: operand },
+              value: right,
+            };
       }
       const value = planExpression(fact.valueExpression, context);
       return value === undefined
