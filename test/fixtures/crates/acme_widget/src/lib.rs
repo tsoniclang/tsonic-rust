@@ -150,6 +150,12 @@ pub trait Handler {
     fn handle(&self, value: i32) -> i32;
 }
 
+pub trait SelfCapturing {
+    fn captured(&self) -> impl Sized + use<Self> {
+        ()
+    }
+}
+
 pub unsafe trait Trusted {}
 
 pub struct TrustedToken;

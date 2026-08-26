@@ -1113,6 +1113,31 @@ test("Rust bound alpha-normalization rejects cyclic or unbounded metadata", () =
   assert.match(alphaEquivalence, /state\.validity\.valid = false/u);
 });
 
+test("Rust opaque precise captures have one semantic owner and exact Self identity", () => {
+  const semanticBounds = readFileSync(
+    join(sourceRoot, "target-model/semantics/bounds.ts"),
+    "utf8",
+  );
+  const compilerModel = readFileSync(
+    join(sourceRoot, "providers/compiler/model/model.ts"),
+    "utf8",
+  );
+  const compilerNormalization = readFileSync(
+    join(sourceRoot, "providers/compiler/model/types/normalization.ts"),
+    "utf8",
+  );
+  const sourceOpaqueResolution = readFileSync(
+    join(sourceRoot, "policy/types/resolution/rust-semantics.ts"),
+    "utf8",
+  );
+
+  assert.doesNotMatch(semanticBounds, /kind:\s*["']precise-capture["']/u);
+  assert.match(compilerModel, /kind:\s*["']precise-capture["']/u);
+  assert.match(compilerNormalization, /raw === ["']Self["']/u);
+  assert.match(compilerNormalization, /type:self:/u);
+  assert.doesNotMatch(sourceOpaqueResolution, /displayName\s*===\s*["']Self["']/u);
+});
+
 test("Rust type identity is independent from trait-proof inventory", () => {
   const typeModel = readFileSync(
     join(sourceRoot, "target-model/semantics/types.ts"),

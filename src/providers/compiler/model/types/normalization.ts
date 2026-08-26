@@ -847,6 +847,12 @@ function normalizeCapture(raw: unknown, context: RustCompilerNormalizationContex
     }
     return Object.freeze({ kind: "lifetime", value });
   }
+  if (raw === "Self") {
+    if (context.selfType?.kind !== "self") {
+      throw new Error("Rust precise Self capture is not owned by an exact trait declaration.");
+    }
+    return Object.freeze({ kind: "type", value: context.selfType });
+  }
   const parameter = context.parameters?.get(raw);
   if (parameter?.kind === "type") {
     return Object.freeze({ kind: "type", value: Object.freeze({ kind: "type-parameter", identity: parameter.identity, displayName: parameter.displayName }) });
@@ -876,10 +882,11 @@ function rustCompilerCaptureIdentityKey(capture: RustCompilerGenericArgument): s
       }
     }
     case "type":
-      if (capture.value.kind !== "type-parameter") {
-        throw new Error("Rust precise type capture is not a declaration-backed type parameter.");
+      if (capture.value.kind === "type-parameter") {
+        return `type:${capture.value.identity.itemId}`;
       }
-      return `type:${capture.value.identity.itemId}`;
+      if (capture.value.kind === "self") return `type:self:${capture.value.owner.itemId}`;
+      throw new Error("Rust precise type capture is not a declaration-backed type parameter or trait Self.");
     case "const":
       if (capture.value.kind !== "parameter") {
         throw new Error("Rust precise const capture is not a declaration-backed const parameter.");
@@ -909,6 +916,9 @@ function requiredRustOpaqueCaptureKeys(
   for (const parameter of context.parameters?.values() ?? []) {
     if (parameter.kind === "type") required.add(`type:${parameter.identity.itemId}`);
     else if (parameter.kind === "const") required.add(`const:${parameter.identity.itemId}`);
+  }
+  if (context.selfType?.kind === "self") {
+    required.add(`type:self:${context.selfType.owner.itemId}`);
   }
   for (const bound of bounds) {
     visitRustCompilerBoundReferences(bound, {

@@ -343,6 +343,7 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
         "LendingFamily",
         "PackedRecord",
         "SecondSameName",
+        "SelfCapturing",
         "TransparentValue",
         "Trusted",
         "TrustedToken",
@@ -513,6 +514,17 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
     assert.equal(opaqueResult.kind, "function");
     assert.equal(opaqueResult.function.result.kind, "opaque");
     assert.ok(opaqueResult.function.result.captures.some((argument) => argument.kind === "lifetime"));
+
+    const selfCapturing = semanticExport("SelfCapturing");
+    assert.equal(selfCapturing.kind, "trait");
+    const capturedMethod = selfCapturing.methods.find(({ name }) => name === "captured");
+    assert.equal(capturedMethod?.result.kind, "opaque");
+    assert.deepEqual(capturedMethod?.result.kind === "opaque"
+      ? capturedMethod.result.captures.map(({ kind }) => kind)
+      : undefined, ["type"]);
+    assert.equal(capturedMethod?.result.kind === "opaque"
+      ? capturedMethod.result.captures[0]?.identity.itemId
+      : undefined, selfCapturing.identity.itemId);
 
     const functionPointer = semanticExport("apply_generic_pointer");
     assert.equal(functionPointer.kind, "function");

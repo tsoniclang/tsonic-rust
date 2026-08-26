@@ -504,6 +504,7 @@ function finalizeSourceOpaqueType(options: {
       }
     }
   }
+  let implicitSelfCapture: RustCapturedGeneric | undefined;
   if (options.opaqueContext.implicitSelfOwner !== undefined) {
     const identity = rustSourceNodeIdentity(
       options.opaqueContext.implicitSelfOwner,
@@ -511,30 +512,30 @@ function finalizeSourceOpaqueType(options: {
       "implicit-self-parameter",
     );
     if (identity === undefined) return undefined;
-    const selfCapture = Object.freeze({
+    implicitSelfCapture = Object.freeze({
       kind: "type" as const,
       identity,
       displayName: "Self",
     });
-    allowedCaptures.push(selfCapture);
-    requiredCaptureKeys.add(rustCapturedGenericSemanticKey(selfCapture));
+    allowedCaptures.push(implicitSelfCapture);
+    requiredCaptureKeys.add(rustCapturedGenericSemanticKey(implicitSelfCapture));
   }
   const allowedCaptureKeys = new Set(allowedCaptures.map(rustCapturedGenericSemanticKey));
   const authoredCaptureKeys = new Set(options.authoredCaptures.map(rustCapturedGenericSemanticKey));
+  const implicitSelfCaptureKey = implicitSelfCapture === undefined
+    ? undefined
+    : rustCapturedGenericSemanticKey(implicitSelfCapture);
   if (options.authoredCaptures.some((capture) => !allowedCaptureKeys.has(
     rustCapturedGenericSemanticKey(capture),
-  )) || [...requiredCaptureKeys].some((key) => !authoredCaptureKeys.has(key) &&
-    !allowedCaptures.some((capture) => capture.kind === "type" &&
-      capture.displayName === "Self" && rustCapturedGenericSemanticKey(capture) === key))) {
+  )) || [...requiredCaptureKeys].some((key) =>
+    key !== implicitSelfCaptureKey && !authoredCaptureKeys.has(key))) {
     return undefined;
   }
   const captures = [...options.authoredCaptures];
-  for (const capture of allowedCaptures) {
-    if (capture.kind === "type" && capture.displayName === "Self" &&
-      !captures.some((candidate) => rustCapturedGenericSemanticKey(candidate) ===
-        rustCapturedGenericSemanticKey(capture))) {
-      captures.push(capture);
-    }
+  if (implicitSelfCapture !== undefined &&
+    !captures.some((candidate) => rustCapturedGenericSemanticKey(candidate) ===
+      implicitSelfCaptureKey)) {
+    captures.push(implicitSelfCapture);
   }
   captures.sort(compareRustCapturedGenerics);
   return Object.freeze({

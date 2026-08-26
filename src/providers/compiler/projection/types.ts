@@ -306,6 +306,13 @@ export function targetTypeFor(
       identity: compilerProjectionIdentity(context, type.identity.itemId),
       bounds: type.bounds.map((bound) => targetBoundFor(bound, context, position)),
       captures: Object.freeze(type.captures.map((capture) => {
+        if (capture.kind === "type" && capture.value.kind === "self") {
+          return {
+            kind: "type" as const,
+            identity: compilerProjectionIdentity(context, capture.value.owner.itemId),
+            displayName: "Self",
+          };
+        }
         const selected = targetGenericArgumentFor(capture, context, position);
         if (selected.kind === "lifetime") return { kind: "lifetime" as const, value: selected.value };
         if (selected.kind === "type" && selected.value.kind === "type-parameter") return { kind: "type" as const, identity: selected.value.identity, displayName: selected.value.displayName };
