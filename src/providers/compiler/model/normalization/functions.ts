@@ -8,6 +8,7 @@ import {
   type RustCompilerSubstitutions,
 } from "../rustdoc-types.js";
 import {
+  isRecord,
   normalizeAbi,
   requireArray,
   requireBoolean,
@@ -97,18 +98,20 @@ export function normalizeFunction(
     );
   };
   const normalizeParameterType = (raw: unknown, position: string): RustCompilerType => {
-    const normalized = normalizeSelectedType(raw, position);
-    if (normalized.kind !== "opaque") return normalized;
-    const parameter = syntheticParameters[syntheticParameterIndex];
-    if (parameter === undefined) {
-      throw new Error(`Rust function '${name}' has argument-position impl Trait without its rustdoc synthetic generic parameter.`);
+    if (isRecord(raw) && Array.isArray(raw.impl_trait)) {
+      const parameter = syntheticParameters[syntheticParameterIndex];
+      if (parameter === undefined) {
+        throw new Error(`Rust function '${name}' has argument-position impl Trait without its rustdoc synthetic generic parameter.`);
+      }
+      syntheticParameterIndex += 1;
+      return Object.freeze({
+        kind: "type-parameter",
+        identity: parameter.identity,
+        displayName: parameter.displayName,
+      });
     }
-    syntheticParameterIndex += 1;
-    return Object.freeze({
-      kind: "type-parameter",
-      identity: parameter.identity,
-      displayName: parameter.displayName,
-    });
+    const normalized = normalizeSelectedType(raw, position);
+    return normalized;
   };
   const signature = requireRecord(fn.sig, `${name}.sig`);
   const rawInputs = requireArray(signature.inputs, `${name}.inputs`);

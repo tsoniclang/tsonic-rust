@@ -59,6 +59,10 @@ export function expressionPrecedence(expression: RustExpr): RustPrecedence {
     case "closure":
     case "closure-block":
       return RustPrecedence.Assignment;
+    case "try":
+      return expression.errorCapture === undefined
+        ? RustPrecedence.Postfix
+        : RustPrecedence.Assignment;
     case "range":
       return RustPrecedence.Or;
     case "binary":
@@ -107,6 +111,7 @@ export function expressionIsRightHandBlock(expression: RustExpr): boolean {
   }
   return expression.kind === "conditional" ||
     expression.kind === "match" ||
+    expression.kind === "try" && expression.errorCapture !== undefined ||
     expression.kind === "block" ||
     expression.kind === "unsafe" ||
     expression.kind === "evaluate-then";

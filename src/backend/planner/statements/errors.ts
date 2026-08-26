@@ -22,6 +22,7 @@ import { rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustCompletionBoundary, RustPlanContext } from "../program/plan-context.js";
 import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
+import { captureRustLocalControl } from "../../target-ast/local-control.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { resolveRustProgramErrorRoute } from "../program/source-package-errors.js";
 
@@ -168,7 +169,7 @@ export function planTryStatement(node: Node, context: RustPlanContext): readonly
     ));
     return undefined;
   }
-  const bodyBoundary = createRustCompletionBoundary(context, bodyFallible);
+  const bodyBoundary = createRustCompletionBoundary(context, outwardFallible);
   const body = planBlockLike(tryBlock, {
     ...context,
     completionBoundary: bodyBoundary,
@@ -178,7 +179,10 @@ export function planTryStatement(node: Node, context: RustPlanContext): readonly
     return undefined;
   }
 
-  let plannedCatch: Extract<RustStmt, { readonly kind: "try-scope" }>["catchClause"];
+  let plannedCatch: Omit<
+    NonNullable<Extract<RustStmt, { readonly kind: "try-scope" }>["catchClause"]>,
+    "captureLabel"
+  > | undefined;
   let catchBoundary: RustCompletionBoundary | undefined;
   if (catchBlock !== undefined) {
     catchBoundary = createRustCompletionBoundary(context, outwardFallible);
@@ -228,7 +232,10 @@ export function planTryStatement(node: Node, context: RustPlanContext): readonly
     };
   }
 
-  let plannedFinally: Extract<RustStmt, { readonly kind: "try-scope" }>["finallyClause"];
+  let plannedFinally: Omit<
+    NonNullable<Extract<RustStmt, { readonly kind: "try-scope" }>["finallyClause"]>,
+    "captureLabel"
+  > | undefined;
   let finallyBoundary: RustCompletionBoundary | undefined;
   if (finallyBlock !== undefined) {
     finallyBoundary = createRustCompletionBoundary(context, outwardFallible);
@@ -258,22 +265,68 @@ export function planTryStatement(node: Node, context: RustPlanContext): readonly
   const boundaries = [bodyBoundary, catchBoundary, finallyBoundary]
     .filter((boundary): boundary is RustCompletionBoundary => boundary !== undefined);
   const dispatch = collectRustCompletionDispatch(boundaries);
+  const bodyLabel = allocateRustSyntheticName(context.syntheticNames, "try_body_scope");
+  const catchLabel = plannedCatch === undefined
+    ? undefined
+    : allocateRustSyntheticName(context.syntheticNames, "catch_scope");
+  const finallyName = plannedFinally === undefined
+    ? undefined
+    : allocateRustSyntheticName(context.syntheticNames, "finally_flow");
+  const finallyLabel = plannedFinally === undefined
+    ? undefined
+    : allocateRustSyntheticName(context.syntheticNames, "finally_scope");
+  const catchCapture = { value: plannedCatch?.fallible === true };
+  const capturedCatchBody = plannedCatch === undefined || catchLabel === undefined
+    ? undefined
+    : captureRustLocalControl(plannedCatch.body, {
+        completionLabel: catchLabel,
+        completionCaptured: catchCapture,
+        ...(plannedCatch.fallible
+          ? { errorCapture: { kind: "propagate" as const, label: catchLabel } }
+          : {}),
+      });
+  const finalizedCatch = plannedCatch === undefined || catchLabel === undefined || capturedCatchBody === undefined
+    ? undefined
+    : {
+        ...plannedCatch,
+        body: capturedCatchBody,
+        ...(catchCapture.value ? { captureLabel: catchLabel } : {}),
+      };
+  const bodyErrorCapture = finalizedCatch !== undefined
+    ? { kind: "catch" as const, flowLabel: bodyLabel, clause: finalizedCatch }
+    : bodyFallible
+      ? { kind: "propagate" as const, label: bodyLabel }
+      : undefined;
+  const finalizedFinally = plannedFinally === undefined || finallyLabel === undefined
+    ? undefined
+    : {
+        ...plannedFinally,
+        captureLabel: finallyLabel,
+        body: captureRustLocalControl(plannedFinally.body, {
+          completionLabel: finallyLabel,
+          ...(plannedFinally.fallible
+            ? { errorCapture: { kind: "propagate" as const, label: finallyLabel } }
+            : {}),
+        }),
+      };
   context.usedAliases?.add("rt");
   return [{
     kind: "try-scope",
-    bodyName: allocateRustSyntheticName(context.syntheticNames, "try_body"),
+    bodyLabel,
     flowName: allocateRustSyntheticName(context.syntheticNames, "try_flow"),
-    ...(plannedFinally === undefined
-      ? {}
-      : { finallyName: allocateRustSyntheticName(context.syntheticNames, "finally_flow") }),
+    ...(finallyName === undefined ? {} : { finallyName }),
     returnType: bodyBoundary.returnType,
     fallible: outwardFallible,
-    asynchronous: bodyBoundary.asynchronous,
-    body: bodyTerminates ? tailCompletionExits(body) : body,
-    bodyFallible,
+    body: captureRustLocalControl(
+      bodyTerminates ? tailCompletionExits(body) : body,
+      {
+        completionLabel: bodyLabel,
+        ...(bodyErrorCapture === undefined ? {} : { errorCapture: bodyErrorCapture }),
+      },
+    ),
     bodyTerminates,
-    ...(plannedCatch === undefined ? {} : { catchClause: plannedCatch }),
-    ...(plannedFinally === undefined ? {} : { finallyClause: plannedFinally }),
+    ...(finalizedCatch === undefined ? {} : { catchClause: finalizedCatch }),
+    ...(finalizedFinally === undefined ? {} : { finallyClause: finalizedFinally }),
     propagate: context.completionBoundary !== undefined,
     dispatchReturn: dispatch.dispatchReturn,
     dispatchTargets: dispatch.dispatchTargets.map((target) => ({

@@ -525,7 +525,7 @@ export function planRustDirectStorage(
     return undefined;
   }
   const target: RustExpr = fact.kind === "tuple-index"
-    ? { kind: "field", receiver, name: String(fact.index) }
+    ? { kind: "tuple-field", receiver, index: fact.index }
     : {
         kind: "index",
         receiver,

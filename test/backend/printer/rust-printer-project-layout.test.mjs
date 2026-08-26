@@ -31,7 +31,7 @@ function tupleField(receiver, index) {
   return { kind: "tuple-field", receiver, index };
 }
 
-function nestedTryScopeSource(returnType, flowName, bodyName) {
+function nestedTryScopeSource(returnType, flowName, bodyLabel) {
   return printRustSourceFile({
     headerComment,
     items: [{
@@ -48,20 +48,12 @@ function nestedTryScopeSource(returnType, flowName, bodyName) {
           then: {
             statements: [{
               kind: "try-scope",
-              bodyName,
+              bodyLabel,
               flowName,
               returnType,
               fallible: true,
-              asynchronous: false,
               body: { statements: [] },
-              bodyFallible: true,
               bodyTerminates: false,
-              catchClause: {
-                binding: "_",
-                body: { statements: [] },
-                fallible: true,
-                terminates: false,
-              },
               propagate: false,
               dispatchReturn: false,
               dispatchTargets: [],
@@ -561,7 +553,15 @@ test("expanded format macros pack fitting source values", () => {
   );
 });
 
-test("multiline awaited match-arm expressions use a canonical arm block", () => {
+test("async try scopes keep local catch branches closure-free", () => {
+  const catchClause = {
+    binding: "_",
+    body: {
+      statements: [{ kind: "expr", expr: { kind: "call", path: "record_failure", args: [] } }],
+    },
+    fallible: true,
+    terminates: false,
+  };
   const text = printRustSourceFile({
     headerComment,
     items: [{
@@ -575,24 +575,24 @@ test("multiline awaited match-arm expressions use a canonical arm block", () => 
       body: {
         statements: [{
           kind: "try-scope",
-          bodyName: "try_body",
+          bodyLabel: "try_body_scope",
           flowName: "try_flow",
           returnType: { kind: "unit" },
           fallible: true,
-          asynchronous: true,
           body: {
-            statements: [{ kind: "expr", expr: { kind: "call", path: "may_fail", args: [] } }],
+            statements: [{
+              kind: "expr",
+              expr: {
+                kind: "try",
+                expr: { kind: "call", path: "may_fail", args: [] },
+                resultErrorType: { kind: "named", path: "rt::TsonicError" },
+                operandErrorType: { kind: "named", path: "rt::TsonicError" },
+                errorCapture: { kind: "catch", flowLabel: "try_body_scope", clause: catchClause },
+              },
+            }],
           },
-          bodyFallible: true,
           bodyTerminates: false,
-          catchClause: {
-            binding: "_",
-            body: {
-              statements: [{ kind: "expr", expr: { kind: "call", path: "record_failure", args: [] } }],
-            },
-            fallible: true,
-            terminates: false,
-          },
+          catchClause,
           propagate: false,
           dispatchReturn: false,
           dispatchTargets: [],
@@ -602,13 +602,20 @@ test("multiline awaited match-arm expressions use a canonical arm block", () => 
     }],
   });
 
-  assert.match(text, /Err\(_\) => \{\n\s+\(async \{/u);
-  assert.match(text, /\n\s+\.await\n\s+\}\n/u);
-  assert.doesNotMatch(text, /\n\s+\.await\n\s+\},/u);
-  assert.doesNotMatch(text, /Err\(_\) => \(async \{/u);
+  assert.match(text, /match may_fail\(\) \{/u);
+  assert.match(text, /Err\(_\) => \{\n\s+break 'try_body_scope/u);
+  assert.doesNotMatch(text, /completion_region|\(async \{/u);
 });
 
-test("multiline synchronous match-arm expressions remain direct", () => {
+test("synchronous try scopes keep local catch branches closure-free", () => {
+  const catchClause = {
+    binding: "_",
+    body: {
+      statements: [{ kind: "expr", expr: { kind: "call", path: "record_failure", args: [] } }],
+    },
+    fallible: true,
+    terminates: false,
+  };
   const text = printRustSourceFile({
     headerComment,
     items: [{
@@ -621,24 +628,24 @@ test("multiline synchronous match-arm expressions remain direct", () => {
       body: {
         statements: [{
           kind: "try-scope",
-          bodyName: "try_body",
+          bodyLabel: "try_body_scope",
           flowName: "try_flow",
           returnType: { kind: "unit" },
           fallible: true,
-          asynchronous: false,
           body: {
-            statements: [{ kind: "expr", expr: { kind: "call", path: "may_fail", args: [] } }],
+            statements: [{
+              kind: "expr",
+              expr: {
+                kind: "try",
+                expr: { kind: "call", path: "may_fail", args: [] },
+                resultErrorType: { kind: "named", path: "rt::TsonicError" },
+                operandErrorType: { kind: "named", path: "rt::TsonicError" },
+                errorCapture: { kind: "catch", flowLabel: "try_body_scope", clause: catchClause },
+              },
+            }],
           },
-          bodyFallible: true,
           bodyTerminates: false,
-          catchClause: {
-            binding: "_",
-            body: {
-              statements: [{ kind: "expr", expr: { kind: "call", path: "record_failure", args: [] } }],
-            },
-            fallible: true,
-            terminates: false,
-          },
+          catchClause,
           propagate: false,
           dispatchReturn: false,
           dispatchTargets: [],
@@ -648,19 +655,20 @@ test("multiline synchronous match-arm expressions remain direct", () => {
     }],
   });
 
-  assert.match(text, /Err\(_\) => rt::completion_region\(\|\| \{/u);
-  assert.doesNotMatch(text, /Err\(_\) => \{\n\s+rt::completion_region/u);
+  assert.match(text, /match may_fail\(\) \{/u);
+  assert.match(text, /Err\(_\) => \{\n\s+break 'try_body_scope/u);
+  assert.doesNotMatch(text, /completion_region|\(\|\|/u);
 });
 
-test("try-scope match bindings follow all rustfmt width boundaries", () => {
+test("try-scope captures follow rustfmt width boundaries", () => {
   const exactWidth = nestedTryScopeSource(
     { kind: "primitive", name: "i32" },
-    "__tsonic_try_flow_11",
-    "__tsonic_try_body_10",
+    "try_flow",
+    "try_body",
   );
   assert.match(
     exactWidth,
-    /let __tsonic_try_flow_11: rt::TsonicResult<rt::Completion<i32>> = match __tsonic_try_body_10\n        \{/u,
+    /let try_flow: rt::TsonicResult<rt::Completion<i32>> = 'try_body: \{/u,
   );
 
   const overWidth = nestedTryScopeSource(
@@ -674,7 +682,7 @@ test("try-scope match bindings follow all rustfmt width boundaries", () => {
   );
   assert.match(
     overWidth,
-    /let __tsonic_try_flow_2: rt::TsonicResult<rt::Completion<Option<String>>> =\n            match __tsonic_try_body_1 \{/u,
+    /let __tsonic_try_flow_2: rt::TsonicResult<rt::Completion<Option<String>>> =\n            '__tsonic_try_body_1: \{/u,
   );
 });
 

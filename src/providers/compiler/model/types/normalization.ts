@@ -232,7 +232,7 @@ export function normalizeType(
     });
   }
   if (Array.isArray(type.impl_trait)) {
-    const rawBounds = type.impl_trait.map((bound, index) => normalizeBound(
+    const rawBounds = type.impl_trait.map((bound, index) => normalizeRustCompilerBound(
       document,
       bound,
       childContext(context, `opaque-bound-${index}`),
@@ -578,7 +578,7 @@ function normalizeGenericParameter(
       bounds: includeBounds
         ? Object.freeze(requireArray(type.bounds, `Rust type parameter '${shell.displayName}' bounds`)
             .map((bound, index) => {
-              const normalized = normalizeBound(document, bound, {
+              const normalized = normalizeRustCompilerBound(document, bound, {
                 ...childContext(context, `bound-${index}`),
                 selfType: parameterType,
               });
@@ -668,7 +668,7 @@ function normalizeWherePredicate(
       : { ...context, boundLifetimes: boundLifetimeMap(binder) };
     const type = normalizeType(document, bounded.type, childContext(boundContext, "where-type"));
     const bounds = Object.freeze(requireArray(bounded.bounds, "Rust where type bounds").map((rawBound, index) => {
-      const bound = normalizeBound(document, rawBound, {
+      const bound = normalizeRustCompilerBound(document, rawBound, {
         ...childContext(boundContext, `where-bound-${index}`),
         selfType: type,
       });
@@ -710,7 +710,7 @@ function normalizeWherePredicate(
   throw new Error("Rust where predicate has no supported structural representation.");
 }
 
-function normalizeBound(
+export function normalizeRustCompilerBound(
   document: RustdocDocument,
   raw: unknown,
   context: RustCompilerNormalizationContext,
@@ -728,10 +728,7 @@ function normalizeBound(
       ? context
       : { ...context, boundLifetimes: boundLifetimeMap(binder) };
     const modifier = traitBound.modifier;
-    if (modifier === "maybe_const") {
-      throw new Error("Rust ~const trait bounds require an explicitly selected const-trait dialect contract.");
-    }
-    if (modifier !== "none" && modifier !== "maybe") {
+    if (modifier !== "none" && modifier !== "maybe" && modifier !== "maybe_const") {
       throw new Error(`Rust trait bound modifier '${String(modifier)}' is unsupported by the selected dialect.`);
     }
     return Object.freeze({
@@ -811,7 +808,7 @@ function normalizeAssociatedConstraint(
       item,
       displayName: name,
       arguments: arguments_,
-      bounds: Object.freeze(binding.constraint.map((bound, index) => normalizeBound(
+      bounds: Object.freeze(binding.constraint.map((bound, index) => normalizeRustCompilerBound(
         document,
         bound,
         childContext(context, `associated-bound-${index}`),

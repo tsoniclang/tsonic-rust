@@ -13,6 +13,7 @@ import {
   canonicalPathKey,
   genericParameterMap,
   normalizeGenerics,
+  normalizeRustCompilerBound,
   normalizeType,
   normalizeTypeTraits,
   type RustCompilerNormalizationContext,
@@ -270,11 +271,12 @@ function normalizeExport(
         associatedConstraints: Object.freeze([]),
       });
       const members = normalizeTraitItems(document, declaration, dependency, generics, context, traitReference);
-      const superTraits = requireArray(declaration.bounds, `${name}.bounds`).map((bound, index) => {
-        const opaque = normalizeType(document, { impl_trait: [bound] }, { ...context, position: `super-trait-${index}` });
-        if (opaque.kind !== "opaque" || opaque.bounds.length !== 1) throw new Error("Rust supertrait did not normalize exactly.");
-        return opaque.bounds[0]!;
-      });
+      const superTraits = requireArray(declaration.bounds, `${name}.bounds`).map((bound, index) =>
+        normalizeRustCompilerBound(
+          document,
+          bound,
+          { ...context, position: `super-trait-${index}` },
+        ));
       return {
         exported: Object.freeze({
           kind,

@@ -176,8 +176,12 @@ function validateCallableTypes(
 ): void {
   validateDistinctNames(fn.params, `${label} parameter`);
   if (fn.receiver?.kind === "typed") validateType(fn.receiver.type, `${label} receiver`);
-  fn.params.forEach((parameter) => validateType(parameter.type, `${label} parameter '${parameter.name}'`));
-  if (fn.returnType !== undefined) validateType(fn.returnType, `${label} result`);
+  fn.params.forEach((parameter) => validateType(
+    parameter.type,
+    `${label} parameter '${parameter.name}'`,
+    "argument",
+  ));
+  if (fn.returnType !== undefined) validateType(fn.returnType, `${label} result`, "return");
   if (fn.errorType !== undefined) validateType(fn.errorType, `${label} error`);
 }
 
@@ -239,7 +243,13 @@ function validateStructFields(fields: RustStructFields, label: string, visibilit
   });
 }
 
-function validateType(type: RustType, label: string): void {
+type RustOpaqueTypePosition = "argument" | "return" | "unavailable";
+
+function validateType(
+  type: RustType,
+  label: string,
+  opaquePosition: RustOpaqueTypePosition = "unavailable",
+): void {
   switch (type.kind) {
     case "infer":
     case "primitive":
@@ -266,13 +276,23 @@ function validateType(type: RustType, label: string): void {
     case "opaque": {
       const captureBounds = type.bounds.filter((bound) => bound.kind === "precise-capture");
       const ordinaryBounds = type.bounds.filter((bound) => bound.kind !== "precise-capture");
-      if (captureBounds.length !== 1) {
+      if (opaquePosition === "unavailable") {
+        throw new Error(`Rust ${label} places an opaque type outside a callable argument or result.`);
+      }
+      if (opaquePosition === "argument" && captureBounds.length !== 0) {
+        throw new Error(`Rust ${label} places a precise-capture bound on an argument-position opaque type.`);
+      }
+      if (opaquePosition === "return" && captureBounds.length !== 1) {
         throw new Error(`Rust ${label} must have exactly one precise-capture bound.`);
       }
       if (!ordinaryBounds.some((bound) => bound.kind === "trait" || bound.kind === "callable-trait")) {
         throw new Error(`Rust ${label} opaque type has no trait bound.`);
       }
-      type.bounds.forEach((bound) => validateTypeBound(bound, label, true));
+      type.bounds.forEach((bound) => validateTypeBound(
+        bound,
+        label,
+        opaquePosition === "return",
+      ));
       return;
     }
     case "reference":

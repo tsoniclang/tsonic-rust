@@ -356,6 +356,7 @@ export interface RustCompilerTraitImplementation {
   readonly requirements: readonly {
     readonly genericArgumentIndex: number;
     readonly bound: Extract<RustCompilerBound, { readonly kind: "trait" }>;
+    readonly defaultArgumentSatisfiesBound?: true;
   }[];
 }
 

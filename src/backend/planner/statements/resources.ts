@@ -22,6 +22,7 @@ import type { RustResourceManagementFact } from "../../../analysis/facts/keys.js
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planRustVirtualProjectMethodCall } from "../objects/project-method-dispatch.js";
 import { rustResourceDisposalReceiverMode } from "../../../analysis/resources/management.js";
+import { captureRustLocalControl } from "../../target-ast/local-control.js";
 
 export function directResourceDeclaration(
   statement: Node,
@@ -162,16 +163,27 @@ export function planResourceManagedBody(
   }
   const terminates = rustBlockDefinitelyExits(body);
   const finalizedBody = terminates ? tailCompletionExits(body) : body;
+  const flowName = allocateRustSyntheticName(context.syntheticNames, "resource_flow");
+  const cleanupName = allocateRustSyntheticName(context.syntheticNames, "resource_cleanup");
   context.usedAliases?.add("rt");
   return {
     kind: "resource-scope",
-    flowName: allocateRustSyntheticName(context.syntheticNames, "resource_flow"),
-    cleanupName: allocateRustSyntheticName(context.syntheticNames, "resource_cleanup"),
+    flowName,
+    cleanupName,
     returnType: boundary.returnType,
     fallible: boundary.fallible,
-    asynchronous: boundary.asynchronous,
-    body: finalizedBody,
-    cleanup,
+    body: captureRustLocalControl(finalizedBody, {
+      completionLabel: flowName,
+      ...(boundary.fallible
+        ? { errorCapture: { kind: "propagate" as const, label: flowName } }
+        : {}),
+    }),
+    cleanup: captureRustLocalControl(cleanup, {
+      completionLabel: cleanupName,
+      ...(boundary.fallible
+        ? { errorCapture: { kind: "propagate" as const, label: cleanupName } }
+        : {}),
+    }),
     propagate: boundary.parent !== undefined,
     dispatchReturn: boundary.dispatchReturn.value,
     dispatchTargets: [...boundary.dispatchTargets.values()]
@@ -196,7 +208,6 @@ export function createRustCompletionBoundary(
       : { parent: context.completionBoundary }),
     returnType: context.functionReturnType ?? { kind: "unit" },
     fallible,
-    asynchronous: context.asyncContext === true || context.generator !== undefined,
     dispatchReturn: { value: false },
     dispatchTargets: new Map(),
   };

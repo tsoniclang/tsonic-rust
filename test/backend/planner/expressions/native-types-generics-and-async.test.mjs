@@ -667,9 +667,10 @@ export function caller(flag: boolean): int32 {
   assert.match(text, /return Err\(rt::TsonicError::from\(rt::JsError::error\(/u);
   assert.match(text, /Ok\(7\)/u);
   assert.doesNotMatch(text, /Ok::<_, rt::TsonicError>\(7\)/u);
-  assert.match(text, /let try_body: rt::TsonicResult<rt::Completion<i32>> = rt::completion_region\(\|\| \{/u);
-  assert.match(text, /outcome = risky\(flag\)\?;/u);
-  assert.match(text, /let try_flow: rt::Completion<i32> = match try_body \{/u);
-  assert.match(text, /Err\(_error\) => rt::completion_region\(\|\| \{/u);
+  assert.match(text, /let try_flow: rt::Completion<i32> = 'try_body_scope: \{/u);
+  assert.match(text, /outcome = match risky\(flag\) \{/u);
+  assert.match(text, /Err\(error\) => \{\n\s+break 'try_body_scope/u);
+  assert.match(text, /let _error = error;/u);
+  assert.doesNotMatch(text, /completion_region|\(\|\|/u);
   assert.match(text, /use tsonic_rust_runtime as rt;/u);
 });

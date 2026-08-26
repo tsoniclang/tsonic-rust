@@ -161,7 +161,7 @@ function planElementAccessInner(node: Node, context: RustPlanContext): RustExpr 
     if (planned === undefined) {
       return undefined;
     }
-    const value: RustExpr = { kind: "field", receiver: planned, name: String(fact.index) };
+    const value: RustExpr = { kind: "tuple-field", receiver: planned, index: fact.index };
     if (context.input.program.source.ast.kindName(indexNode) === KindNumericLiteral) {
       return value;
     }

@@ -23,6 +23,7 @@ import {
   targetTraitFor,
 } from "./types.js";
 import {
+  rustGenericParameterIdentity,
   rustNamedTypeTraitImplementationSemanticKey,
   rustNamedTypeTraitRequirementSemanticKey,
 } from "../../../target-model/types/index.js";
@@ -61,13 +62,36 @@ export function projectCompilerTraitContract(
   contract: RustCompilerTypeTraits,
   context: ProjectionContext,
 ): RustNamedTypeTraitContract {
-  const implementations = contract.implementations.map((implementation) => Object.freeze({
-    trait: targetTraitFor(implementation.trait, context, "result"),
-    genericBindings: Object.freeze(implementation.genericBindings.map((binding) => Object.freeze({
-      parameter: targetGenericArgumentFor(binding.parameter, context, "result"),
-      genericArgumentIndex: binding.genericArgumentIndex,
-    }))),
-    requirements: Object.freeze(implementation.requirements.map((requirement) => {
+  const implementations = contract.implementations.flatMap((implementation) => {
+    const projectedBindings = implementation.genericBindings.map((binding) => {
+      const parameter = targetGenericArgumentFor(binding.parameter, context, "result");
+      return Object.freeze({
+        parameter,
+        genericArgumentIndex: binding.genericArgumentIndex,
+        retained: rustGenericParameterIdentity(parameter) !== undefined,
+        defaulted: compilerBindingUsesDefault(binding.parameter, context),
+      });
+    });
+    if (projectedBindings.some((binding) => !binding.retained && !binding.defaulted)) {
+      throw new Error("Rust compiler trait binding projected to a concrete argument without exact default-argument evidence.");
+    }
+    const defaultedIndexes = new Set(projectedBindings
+      .filter((binding) => binding.defaulted)
+      .map((binding) => binding.genericArgumentIndex));
+    if (implementation.requirements.some((requirement) =>
+      defaultedIndexes.has(requirement.genericArgumentIndex) &&
+      requirement.defaultArgumentSatisfiesBound !== true)) {
+      return [];
+    }
+    const genericBindings = projectedBindings
+      .filter((binding) => binding.retained)
+      .map(({ parameter, genericArgumentIndex }) => Object.freeze({
+        parameter,
+        genericArgumentIndex,
+      }));
+    const requirements = implementation.requirements
+      .filter((requirement) => !defaultedIndexes.has(requirement.genericArgumentIndex))
+      .map((requirement) => {
       const bound = targetBoundFor(requirement.bound, context, "result");
       if (bound.kind !== "trait") {
         throw new Error("Rust compiler trait requirement lost its trait-bound identity during projection.");
@@ -79,12 +103,30 @@ export function projectCompilerTraitContract(
     }).sort((left, right) => compareText(
       rustNamedTypeTraitRequirementSemanticKey(left),
       rustNamedTypeTraitRequirementSemanticKey(right),
-    ))),
-  })).sort((left, right) => compareText(
+    ));
+    return [Object.freeze({
+      trait: targetTraitFor(implementation.trait, context, "result"),
+      genericBindings: Object.freeze(genericBindings),
+      requirements: Object.freeze(requirements),
+    })];
+  }).sort((left, right) => compareText(
     rustNamedTypeTraitImplementationSemanticKey(left),
     rustNamedTypeTraitImplementationSemanticKey(right),
   ));
   return Object.freeze({ implementations: Object.freeze(implementations) });
+}
+
+function compilerBindingUsesDefault(
+  parameter: import("../model/model.js").RustCompilerGenericArgument,
+  context: ProjectionContext,
+): boolean {
+  if (parameter.kind === "type" && parameter.value.kind === "type-parameter") {
+    return context.defaultTypeBindings?.types.has(parameter.value.identity.itemId) === true;
+  }
+  if (parameter.kind === "const" && parameter.value.kind === "parameter") {
+    return context.defaultTypeBindings?.consts.has(parameter.value.identity.itemId) === true;
+  }
+  return false;
 }
 
 export function typeRequirements(
@@ -94,7 +136,7 @@ export function typeRequirements(
 ): { readonly typeRequirements?: readonly RustProviderTypeParameterRequirement[] } {
   const allowed = new Set(allowedTypeParameters);
   const requirements = generics.parameters.flatMap((parameter) => {
-    if (parameter.kind !== "type") return [];
+    if (parameter.kind !== "type" || parameter.declarationKind !== "explicit") return [];
     const name = context.genericNames?.get(parameter.identity.itemId);
     if (name === undefined) {
       throw new Error(`Rust generic identity '${parameter.identity.itemId}' has no exact source-visible requirement name.`);

@@ -57,7 +57,6 @@ export interface RustCompletionBoundary {
   readonly parent?: RustCompletionBoundary;
   readonly returnType: RustType;
   readonly fallible: boolean;
-  readonly asynchronous: boolean;
   readonly dispatchReturn: { value: boolean };
   readonly dispatchTargets: Map<number, RustControlTarget>;
 }

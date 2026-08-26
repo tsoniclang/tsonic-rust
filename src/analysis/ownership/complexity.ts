@@ -318,6 +318,39 @@ export function rustDropProjectionComplexityDiagnostic(
     : undefined;
 }
 
+export function rustFlowPointComplexityDiagnostic(
+  pointCount: number,
+): TargetDiagnostic | undefined {
+  return exceedsFiniteBudget(pointCount, maximumFlowPoints)
+    ? rustOwnershipDiagnostic(
+        "RUST_OWNERSHIP_FLOW_POINT_BUDGET_EXCEEDED",
+        `Rust ownership analysis produced ${pointCount} control-flow points; the finite limit is ${maximumFlowPoints}.`,
+      )
+    : undefined;
+}
+
+export function rustFlowEdgeComplexityDiagnostic(
+  edgeCount: number,
+): TargetDiagnostic | undefined {
+  return exceedsFiniteBudget(edgeCount, maximumFlowEdges)
+    ? rustOwnershipDiagnostic(
+        "RUST_OWNERSHIP_FLOW_EDGE_BUDGET_EXCEEDED",
+        `Rust ownership analysis produced ${edgeCount} control-flow edges; the finite limit is ${maximumFlowEdges}.`,
+      )
+    : undefined;
+}
+
+export function rustFlowConstructionDepthComplexityDiagnostic(
+  depth: number,
+): TargetDiagnostic | undefined {
+  return exceedsFiniteBudget(depth, maximumFlowConstructionDepth)
+    ? rustOwnershipDiagnostic(
+        "RUST_OWNERSHIP_FLOW_DEPTH_BUDGET_EXCEEDED",
+        `Rust ownership analysis reached control-flow construction depth ${depth}; the finite limit is ${maximumFlowConstructionDepth}.`,
+      )
+    : undefined;
+}
+
 export function rustFlowQueryComplexityDiagnostic(
   stepCount: number,
 ): TargetDiagnostic | undefined {

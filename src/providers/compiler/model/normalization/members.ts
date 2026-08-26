@@ -3,6 +3,7 @@ import {
   canonicalPathKey,
   genericParameterMap,
   normalizeGenerics,
+  normalizeRustCompilerBound,
   normalizeTraitReference,
   normalizeType,
   exactAssociatedTypeIdentity,
@@ -692,11 +693,12 @@ function normalizeAssociatedType(
       ...genericParameterMap(generics),
     ]),
   };
-  const bounds = requireArray(associated.bounds, `Rust associated type '${name}' bounds`).map((raw, index) => {
-    const carrier = normalizeType(document, { impl_trait: [raw] }, { ...normalizedContext, position: `bound-${index}` });
-    if (carrier.kind !== "opaque" || carrier.bounds.length !== 1) throw new Error("Rust associated bound did not normalize exactly.");
-    return carrier.bounds[0]!;
-  });
+  const bounds = requireArray(associated.bounds, `Rust associated type '${name}' bounds`).map((raw, index) =>
+    normalizeRustCompilerBound(
+      document,
+      raw,
+      { ...normalizedContext, position: `bound-${index}` },
+    ));
   return Object.freeze({
     identity,
     name,

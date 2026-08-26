@@ -10,7 +10,7 @@ import { printRustFormatArgument } from "./format-arguments.js";
 import { printNestedCallArgument } from "./nested-calls.js";
 import { printRustAssociatedCallOwner, printRustAssociatedCallOwnerFitted, printRustAssociatedOwnerFitted, printRustBlockExpressionLines, printRustClosureFitted, printRustConditionalArmLines } from "./blocks.js";
 import { printRustBlockStatements } from "../blocks.js";
-import { printRustExpr, rustExpressionContainsClosure } from "./core.js";
+import { printRustCapturedTryExpression, printRustExpr, rustExpressionContainsClosure } from "./core.js";
 import { rustExpressionContainsExpandedCollectionLiteral, rustExpressionContainsExpandedStructLiteral, rustFormatArgumentCanShareLine, rustFormatArgumentIsAtomic } from "./inspection.js";
 import { rustExpressionContainsStatementBlock } from "../../../backend/target-ast/expressions.js";
 import { rustFormatWidth, rustInlineFormatArgumentWidth, rustMethodChainWidth, rustNestedCallWidth, rustSingleLineConditionalWidth, rustStructLiteralWidth } from "../formatting.js";
@@ -56,6 +56,15 @@ export function printRustExprFitted(
         `${argumentIndent}${printRustPattern(expression.pattern)},`,
         `${indentText(depth)})`,
       ].join("\n");
+    }
+    case "assignment": {
+      const target = printRustExprFitted(expression.target, depth, column);
+      const prefix = `${target} ${expression.operator} `;
+      return `${prefix}${printRustExprFitted(
+        expression.value,
+        depth,
+        column + lastLineLength(prefix),
+      )}`;
     }
     case "unreachable": {
       if (renderedFits(flat, column)) {
@@ -436,6 +445,14 @@ export function printRustExprFitted(
         : `${rendered}\n${indentText(depth)}.await`;
     }
     case "try": {
+      if (expression.errorCapture !== undefined) {
+        const operand = printRustExprFitted(
+          expression.expr,
+          depth,
+          column + "match ".length,
+        );
+        return printRustCapturedTryExpression(expression, depth, operand);
+      }
       const chain = rustMethodChain(expression);
       if (chain !== undefined && expression.expr.kind === "method-call" &&
         expression.expr.args.length === 0 && rustMethodChainRequiresVerticalLayout(expression)) {
@@ -468,10 +485,13 @@ export function printRustExprFitted(
         : appendToLastLine(printRustExprFitted(expression.expr, depth, column + 1), "?");
     }
     case "return-expression": {
+      const keyword = expression.captureLabel === undefined
+        ? "return"
+        : `break '${expression.captureLabel}`;
       if (expression.expr === undefined) {
-        return "return";
+        return keyword;
       }
-      const prefix = "return ";
+      const prefix = `${keyword} `;
       return `${prefix}${printRustExprFitted(expression.expr, depth, column + prefix.length)}`;
     }
     case "reference": {

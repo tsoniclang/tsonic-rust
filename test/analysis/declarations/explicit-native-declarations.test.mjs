@@ -203,8 +203,8 @@ rust(localState).threadLocal();
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /#\[repr\(C, packed\(2\)\)\]\s*pub struct PackedHeader/u);
-  assert.match(source, /pub static mut native_state: i32 = 1;/u);
-  assert.match(source, /std::thread_local! \{[\s\S]*pub static local_state: rt::ModuleCell<i32>/u);
+  assert.match(source, /pub static mut NATIVE_STATE: i32 = 1;/u);
+  assert.match(source, /std::thread_local! \{[\s\S]*pub static LOCAL_STATE: rt::ModuleCell<i32>/u);
   validateGeneratedProject("explicit-layout-and-storage-controls", result.artifacts);
 });
 

@@ -247,8 +247,9 @@ export type RustExpr =
       readonly expr: RustExpr;
       readonly resultErrorType: RustType;
       readonly operandErrorType: RustType;
+      readonly errorCapture?: RustLocalErrorCapture;
     }
-  | { readonly kind: "return-expression"; readonly expr?: RustExpr }
+  | { readonly kind: "return-expression"; readonly expr?: RustExpr; readonly captureLabel?: string }
   | { readonly kind: "unreachable"; readonly message: string }
   | {
       readonly kind: "struct-literal";
@@ -285,6 +286,7 @@ export type RustStmt =
       readonly tail?: true;
       readonly expr?: RustExpr;
       readonly loopId?: number;
+      readonly captureLabel?: string;
     }
   | {
       readonly kind: "resource-scope";
@@ -292,11 +294,12 @@ export type RustStmt =
       readonly cleanupName: string;
       readonly returnType: RustType;
       readonly fallible: boolean;
-      readonly asynchronous: boolean;
       readonly body: RustBlock;
       readonly cleanup: RustBlock;
       readonly tail?: true;
       readonly propagate: boolean;
+      readonly propagateLabel?: string;
+      readonly errorCapture?: RustLocalErrorCapture;
       readonly dispatchReturn: boolean;
       readonly dispatchTargets: readonly {
         readonly kind: "loop" | "switch" | "label";
@@ -309,31 +312,27 @@ export type RustStmt =
   | { readonly kind: "index-assign"; readonly receiver: RustExpr; readonly index: RustExpr; readonly value: RustExpr }
   | { readonly kind: "scope"; readonly label?: string; readonly body: RustBlock }
   | { readonly kind: "unsafe-scope"; readonly body: RustBlock }
-  | { readonly kind: "throw"; readonly error: RustExpr; readonly tail?: true }
+  | { readonly kind: "throw"; readonly error: RustExpr; readonly tail?: true; readonly errorCapture?: RustLocalErrorCapture }
   | {
       readonly kind: "try-scope";
-      readonly bodyName: string;
+      readonly bodyLabel: string;
       readonly flowName: string;
       readonly finallyName?: string;
       readonly returnType: RustType;
       readonly fallible: boolean;
-      readonly asynchronous: boolean;
       readonly body: RustBlock;
-      readonly bodyFallible: boolean;
       readonly bodyTerminates: boolean;
       readonly tail?: true;
-      readonly catchClause?: {
-        readonly binding: string;
-        readonly body: RustBlock;
-        readonly fallible: boolean;
-        readonly terminates: boolean;
-      };
+      readonly catchClause?: RustLocalCatchClause;
       readonly finallyClause?: {
+        readonly captureLabel: string;
         readonly body: RustBlock;
         readonly fallible: boolean;
         readonly terminates: boolean;
       };
       readonly propagate: boolean;
+      readonly propagateLabel?: string;
+      readonly errorCapture?: RustLocalErrorCapture;
       readonly dispatchReturn: boolean;
       readonly dispatchTargets: readonly {
         readonly kind: "loop" | "switch" | "label";
@@ -342,6 +341,22 @@ export type RustStmt =
         readonly continuePrelude?: readonly RustStmt[];
       }[];
       readonly terminates: boolean;
+    };
+
+export interface RustLocalCatchClause {
+  readonly binding: string;
+  readonly captureLabel?: string;
+  readonly body: RustBlock;
+  readonly fallible: boolean;
+  readonly terminates: boolean;
+}
+
+export type RustLocalErrorCapture =
+  | { readonly kind: "propagate"; readonly label: string }
+  | {
+      readonly kind: "catch";
+      readonly flowLabel: string;
+      readonly clause: RustLocalCatchClause;
     };
 
 export interface RustBlock {

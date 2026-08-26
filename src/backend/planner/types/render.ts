@@ -193,6 +193,20 @@ export function rustTypeFromCarrier(
   resolveSourceTypePath?: (value: { readonly fileName: string; readonly typeName: string }) => string | undefined,
   resolveStructuralShape?: (carrier: TargetTypeRef) => RustType | undefined,
 ): RustType | undefined {
+  return rustTypeFromCarrierAtPosition(
+    carrier,
+    resolveSourceTypePath,
+    resolveStructuralShape,
+    false,
+  );
+}
+
+function rustTypeFromCarrierAtPosition(
+  carrier: TargetTypeRef | undefined,
+  resolveSourceTypePath: ((value: { readonly fileName: string; readonly typeName: string }) => string | undefined) | undefined,
+  resolveStructuralShape: ((carrier: TargetTypeRef) => RustType | undefined) | undefined,
+  includePreciseCapture: boolean,
+): RustType | undefined {
   if (carrier === undefined) {
     return undefined;
   }
@@ -400,7 +414,7 @@ export function rustTypeFromCarrier(
           kind: "opaque",
           bounds: [
             ...(bounds as RustTypeBound[]),
-            rustAstPreciseCaptureBound(carrier.captures),
+            ...(includePreciseCapture ? [rustAstPreciseCaptureBound(carrier.captures)] : []),
           ],
         };
   }
@@ -448,7 +462,7 @@ export function rustTypeFromCarrier(
               parameters: parameters as RustType[],
               result,
             },
-            rustAstPreciseCaptureBound(carrier.captures),
+            ...(includePreciseCapture ? [rustAstPreciseCaptureBound(carrier.captures)] : []),
           ],
         };
   }
@@ -462,7 +476,12 @@ export function rustReturnTypeFromCarrier(
 ): RustType | undefined {
   return isRustNeverCarrier(carrier)
     ? { kind: "never" }
-    : rustTypeFromCarrier(carrier, resolveSourceTypePath, resolveStructuralShape);
+    : rustTypeFromCarrierAtPosition(
+        carrier,
+        resolveSourceTypePath,
+        resolveStructuralShape,
+        true,
+      );
 }
 
 export function isFloatCarrier(carrier: TargetTypeRef | undefined): boolean {
@@ -472,6 +491,14 @@ export function isFloatCarrier(carrier: TargetTypeRef | undefined): boolean {
 export function rustTypeFromCarrierInContext(
   carrier: TargetTypeRef | undefined,
   context: RustTypeRenderingContext,
+): RustType | undefined {
+  return rustTypeFromCarrierInContextAtPosition(carrier, context, false);
+}
+
+function rustTypeFromCarrierInContextAtPosition(
+  carrier: TargetTypeRef | undefined,
+  context: RustTypeRenderingContext,
+  includePreciseCapture: boolean,
 ): RustType | undefined {
   const selectedCarrier = carrier === undefined || context.genericSubstitutions === undefined
     ? carrier
@@ -537,10 +564,11 @@ export function rustTypeFromCarrierInContext(
       genericArguments: [{ kind: "type", type: stateType }],
     };
   };
-  const rendered = rustTypeFromCarrier(
+  const rendered = rustTypeFromCarrierAtPosition(
     selectedCarrier,
     resolveSourceTypePath,
     resolveStructuralShape,
+    includePreciseCapture,
   );
   collectAliasesFromRustType(rendered, (path) => {
     registerAliasFromPath(context, path);
@@ -554,7 +582,7 @@ export function rustReturnTypeFromCarrierInContext(
 ): RustType | undefined {
   return isRustNeverCarrier(carrier)
     ? { kind: "never" }
-    : rustTypeFromCarrierInContext(carrier, context);
+    : rustTypeFromCarrierInContextAtPosition(carrier, context, true);
 }
 
 export function rustAstGenericArgumentFromSemanticInContext(

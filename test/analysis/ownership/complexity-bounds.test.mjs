@@ -37,8 +37,10 @@ import {
   rustCaptureCountComplexityDiagnostic,
   rustCaptureEvidenceComplexityDiagnostic,
   rustCaptureReferenceComplexityDiagnostic,
+  rustFlowConstructionDepthComplexityDiagnostic,
+  rustFlowEdgeComplexityDiagnostic,
+  rustFlowPointComplexityDiagnostic,
   rustFlowQueryComplexityDiagnostic,
-  rustFlowGraphCountComplexityDiagnostic,
   rustLoanLivenessComplexityDiagnostic,
   rustLoanOperationComplexityDiagnostic,
   rustLoanPairComplexityDiagnostic,
@@ -163,17 +165,17 @@ test("drop and flow-query budgets reject before retained work becomes unbounded"
   );
   provesExactBoundary(
     maximumFlowPoints,
-    (value) => rustFlowGraphCountComplexityDiagnostic(value, 0, 0),
+    rustFlowPointComplexityDiagnostic,
     "RUST_OWNERSHIP_FLOW_POINT_BUDGET_EXCEEDED",
   );
   provesExactBoundary(
     maximumFlowEdges,
-    (value) => rustFlowGraphCountComplexityDiagnostic(0, value, 0),
+    rustFlowEdgeComplexityDiagnostic,
     "RUST_OWNERSHIP_FLOW_EDGE_BUDGET_EXCEEDED",
   );
   provesExactBoundary(
     maximumFlowConstructionDepth,
-    (value) => rustFlowGraphCountComplexityDiagnostic(0, 0, value),
+    rustFlowConstructionDepthComplexityDiagnostic,
     "RUST_OWNERSHIP_FLOW_DEPTH_BUDGET_EXCEEDED",
   );
 });

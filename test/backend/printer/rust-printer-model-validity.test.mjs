@@ -185,3 +185,40 @@ test("opaque types print one explicit precise-capture contract including the emp
 
   assert.match(source, /-> impl Iterator \+ use<>/u);
 });
+
+test("argument-position opaque types reject return-only precise captures", () => {
+  const functionItem = {
+    kind: "function",
+    name: "consume",
+    visibility: "public",
+    generics: emptyGenerics,
+    params: [{
+      name: "value",
+      type: {
+        kind: "opaque",
+        bounds: [{ kind: "trait", trait: { kind: "named", path: "Iterator" } }],
+      },
+    }],
+    body: { statements: [] },
+  };
+
+  const source = printRustSourceFile({ headerComment: "proof", items: [functionItem] });
+  assert.match(source, /value: impl Iterator/u);
+
+  assert.throws(() => printRustSourceFile({
+    headerComment: "proof",
+    items: [{
+      ...functionItem,
+      params: [{
+        name: "value",
+        type: {
+          kind: "opaque",
+          bounds: [
+            { kind: "trait", trait: { kind: "named", path: "Iterator" } },
+            { kind: "precise-capture", captures: [] },
+          ],
+        },
+      }],
+    }],
+  }), /precise-capture bound on an argument-position opaque type/u);
+});

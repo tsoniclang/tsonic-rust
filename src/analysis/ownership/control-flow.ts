@@ -34,11 +34,11 @@ import {
 import type { RustLexicalRegionIndex } from "./lexical-regions.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import {
-  maximumFlowConstructionDepth,
-  maximumFlowEdges,
-  maximumFlowPoints,
   maximumFlowQuerySteps,
   maximumFlowReachabilityCacheEntries,
+  rustFlowConstructionDepthComplexityDiagnostic,
+  rustFlowEdgeComplexityDiagnostic,
+  rustFlowPointComplexityDiagnostic,
 } from "./complexity.js";
 import { requireRustOwnershipSourceIdentity } from "./identity.js";
 
@@ -130,8 +130,8 @@ class FlowConstructionError extends Error {
 }
 
 class FlowLimitError extends FlowConstructionError {
-  constructor(message: string) {
-    super("RUST_OWNERSHIP_FLOW_GRAPH_LIMIT_EXCEEDED", message);
+  constructor(code: string, message: string) {
+    super(code, message);
   }
 }
 
@@ -290,12 +290,10 @@ class SourceFlowGraphBuilder {
 
   #buildNode(node: Node, context: FlowContext): FlowFragment {
     this.#constructionDepth += 1;
-    if (this.#constructionDepth > maximumFlowConstructionDepth) {
-      const depth = this.#constructionDepth;
+    const depthDiagnostic = rustFlowConstructionDepthComplexityDiagnostic(this.#constructionDepth);
+    if (depthDiagnostic !== undefined) {
       this.#constructionDepth -= 1;
-      throw new FlowLimitError(
-        `Rust ownership analysis exceeded its ${maximumFlowConstructionDepth}-level control-flow nesting budget at depth ${depth}.`,
-      );
+      throw new FlowLimitError(depthDiagnostic.code, depthDiagnostic.message);
     }
     try {
       return this.#buildNodeAtDepth(node, context);
@@ -1096,10 +1094,9 @@ class SourceFlowGraphBuilder {
   }
 
   #appendPoint(point: Omit<RustSourceFlowPoint, "index">): number {
-    if (this.#points.length >= maximumFlowPoints) {
-      throw new FlowLimitError(
-        `Rust ownership analysis exceeded its ${maximumFlowPoints}-point control-flow budget.`,
-      );
+    const pointDiagnostic = rustFlowPointComplexityDiagnostic(this.#points.length + 1);
+    if (pointDiagnostic !== undefined) {
+      throw new FlowLimitError(pointDiagnostic.code, pointDiagnostic.message);
     }
     const index = this.#points.length;
     this.#points.push(Object.freeze({ ...point, index }));
@@ -1111,10 +1108,9 @@ class SourceFlowGraphBuilder {
   #connect(from: number, to: number): void {
     const successors = this.#successors[from]!;
     if (successors.includes(to)) return;
-    if (this.#edgeCount >= maximumFlowEdges) {
-      throw new FlowLimitError(
-        `Rust ownership analysis exceeded its ${maximumFlowEdges}-edge control-flow budget.`,
-      );
+    const edgeDiagnostic = rustFlowEdgeComplexityDiagnostic(this.#edgeCount + 1);
+    if (edgeDiagnostic !== undefined) {
+      throw new FlowLimitError(edgeDiagnostic.code, edgeDiagnostic.message);
     }
     successors.push(to);
     this.#predecessors[to]!.push(from);

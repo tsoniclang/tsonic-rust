@@ -131,14 +131,14 @@ function collectCallableInputLifetimes(
   type: RustTypeRef,
   selected: Map<string, RustLifetimeRef>,
 ): void {
-  visitFreeLifetimes(type, (lifetime) => {
+  visitRustFreeLifetimes(type, (lifetime) => {
     selected.set(rustLifetimeSemanticKey(lifetime), lifetime);
   });
 }
 
 function collectInferredLifetimes(type: RustTypeRef): ReadonlySet<string> {
   const selected = new Set<string>();
-  visitFreeLifetimes(type, (lifetime) => {
+  visitRustFreeLifetimes(type, (lifetime) => {
     if (lifetime.kind === "inferred-region") {
       selected.add(rustLifetimeSemanticKey(lifetime));
     }
@@ -146,19 +146,19 @@ function collectInferredLifetimes(type: RustTypeRef): ReadonlySet<string> {
   return selected;
 }
 
-function visitFreeLifetimes(
+export function visitRustFreeLifetimes(
   type: RustTypeRef,
   visit: (lifetime: RustLifetimeRef) => void,
 ): void {
   const visitArgument = (argument: RustGenericArgument): void => {
     if (argument.kind === "lifetime") visit(argument.value);
-    if (argument.kind === "type") visitFreeLifetimes(argument.value, visit);
+    if (argument.kind === "type") visitRustFreeLifetimes(argument.value, visit);
   };
   const visitTrait = (trait: RustTraitRef): void => {
     trait.arguments.forEach(visitArgument);
     for (const constraint of trait.associatedConstraints) {
       constraint.arguments.forEach(visitArgument);
-      if (constraint.kind === "equality") visitFreeLifetimes(constraint.type, visit);
+      if (constraint.kind === "equality") visitRustFreeLifetimes(constraint.type, visit);
       else constraint.bounds.forEach(visitBound);
     }
   };
@@ -172,43 +172,43 @@ function visitFreeLifetimes(
         visit(bound.shorter);
         return;
       case "type-outlives":
-        visitFreeLifetimes(bound.type, visit);
+        visitRustFreeLifetimes(bound.type, visit);
         visit(bound.lifetime);
         return;
       case "associated-equality":
-        visitFreeLifetimes(bound.projection, visit);
-        visitFreeLifetimes(bound.value, visit);
+        visitRustFreeLifetimes(bound.projection, visit);
+        visitRustFreeLifetimes(bound.value, visit);
         return;
     }
   };
   switch (type.kind) {
     case "tuple":
-      type.elements.forEach((element) => visitFreeLifetimes(element, visit));
+      type.elements.forEach((element) => visitRustFreeLifetimes(element, visit));
       return;
     case "array":
     case "sequence":
     case "slice":
-      visitFreeLifetimes(type.element, visit);
+      visitRustFreeLifetimes(type.element, visit);
       return;
     case "path":
       type.arguments.forEach(visitArgument);
       return;
     case "reference":
       visit(type.lifetime);
-      visitFreeLifetimes(type.target, visit);
+      visitRustFreeLifetimes(type.target, visit);
       return;
     case "raw-pointer":
-      visitFreeLifetimes(type.target, visit);
+      visitRustFreeLifetimes(type.target, visit);
       return;
     case "function-pointer":
       if (type.binder === undefined) {
-        type.parameters.forEach((parameter) => visitFreeLifetimes(parameter, visit));
-        visitFreeLifetimes(type.result, visit);
+        type.parameters.forEach((parameter) => visitRustFreeLifetimes(parameter, visit));
+        visitRustFreeLifetimes(type.result, visit);
       }
       return;
     case "closure":
-      type.parameters.forEach((parameter) => visitFreeLifetimes(parameter, visit));
-      visitFreeLifetimes(type.result, visit);
+      type.parameters.forEach((parameter) => visitRustFreeLifetimes(parameter, visit));
+      visitRustFreeLifetimes(type.result, visit);
       for (const capture of type.captures) {
         if (capture.kind === "lifetime") visit(capture.value);
       }
@@ -225,7 +225,7 @@ function visitFreeLifetimes(
       }
       return;
     case "associated-type":
-      visitFreeLifetimes(type.owner, visit);
+      visitRustFreeLifetimes(type.owner, visit);
       visitTrait(type.trait);
       type.arguments.forEach(visitArgument);
       return;

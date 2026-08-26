@@ -6,6 +6,7 @@ export {
   genericParameterMap,
   normalizeGenerics,
   normalizePathArguments,
+  normalizeRustCompilerBound,
   normalizeTraitReference,
   normalizeType,
   standardTypePathKind,

@@ -154,7 +154,7 @@ export function second(pair: [int32, int32]): int32 {
   });
 
   assert.deepEqual(result.diagnostics, []);
-  assert.match(artifactText(result, "src/index.rs"), /\{\n        let _ = one;\n        pair\[1\]\n    \}/u);
+  assert.match(artifactText(result, "src/index.rs"), /\{\n        let _ = one;\n        pair\.1\n    \}/u);
   validateGeneratedProject("selected-tuple-ordinal", result.artifacts);
 });
 
@@ -174,8 +174,8 @@ export function pick(pair: [int32, int32], flag: boolean): int32 {
 
   assert.deepEqual(result.artifacts, []);
   assert.deepEqual(result.diagnostics.map(({ code, message }) => ({ code, message })), [{
-    code: "RUST_FIXED_ARRAY_DYNAMIC_INDEX_CARRIER_UNSUPPORTED",
-    message: "Dynamic fixed-array element access requires an exact int32 or native-uint index carrier; literal unions and other source carriers are not reconstructed from their spelling.",
+    code: "RUST_TUPLE_INDEX_NOT_PROVEN",
+    message: "Tuple element access requires a TSTS-selected fixed ordinal within the tuple bounds.",
   }]);
 });
 

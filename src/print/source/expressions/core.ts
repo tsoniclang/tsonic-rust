@@ -5,8 +5,9 @@ import { printRustAssociatedOwner, rustMethodChainPrefersVerticalLayout } from "
 import { printRustAssociatedCallTarget, printRustDirectCallTarget, printRustMethodCallTarget } from "./callable.js";
 import { printRustBlockStatements } from "../blocks.js";
 import { printRustClosureParams } from "./closure-params.js";
-import { printRustGenericArguments, printRustType } from "../types.js";
-import type { RustExpr } from "../../../backend/target-ast/nodes.js";
+import { indentText, printRustGenericArguments, printRustType } from "../types.js";
+import { rustTypeEquals } from "../../../backend/target-ast/inspection/type-equality.js";
+import type { RustExpr, RustLocalErrorCapture } from "../../../backend/target-ast/nodes.js";
 
 export function printRustExpr(expression: RustExpr): string {
   switch (expression.kind) {
@@ -144,10 +145,15 @@ export function printRustExpr(expression: RustExpr): string {
       return `${printOperand(expression.expr, RustPrecedence.Postfix, false)}.await`;
     }
     case "try": {
-      return `${printOperand(expression.expr, RustPrecedence.Postfix, false)}?`;
+      return expression.errorCapture === undefined
+        ? `${printOperand(expression.expr, RustPrecedence.Postfix, false)}?`
+        : printRustCapturedTryExpression(expression, 0, printRustExpr(expression.expr));
     }
     case "return-expression": {
-      return expression.expr === undefined ? "return" : `return ${printRustExpr(expression.expr)}`;
+      const keyword = expression.captureLabel === undefined
+        ? "return"
+        : `break '${expression.captureLabel}`;
+      return expression.expr === undefined ? keyword : `${keyword} ${printRustExpr(expression.expr)}`;
     }
     case "unreachable": {
       return `unreachable!("${escapeRustString(expression.message)}")`;
@@ -172,6 +178,66 @@ export function printRustExpr(expression: RustExpr): string {
     }
 
   }
+}
+
+export function printRustCapturedTryExpression(
+  expression: Extract<RustExpr, { readonly kind: "try" }>,
+  depth: number,
+  operand: string,
+): string {
+  if (expression.errorCapture === undefined) {
+    return `${operand}?`;
+  }
+  const nested = indentText(depth + 1);
+  const indent = indentText(depth);
+  const converted = rustTypeEquals(expression.resultErrorType, expression.operandErrorType)
+    ? "error"
+    : `<${printRustType(expression.resultErrorType)} as From<${printRustType(expression.operandErrorType)}>>::from(error)`;
+  const captured = printRustCapturedErrorExpression(converted, expression.errorCapture, depth + 2);
+  const capturedLines = captured.split("\n");
+  const errorPattern = expression.errorCapture.kind === "catch" &&
+    expression.errorCapture.clause.binding === "_"
+    ? "_"
+    : "error";
+  return [
+    `match ${operand} {`,
+    `${nested}Ok(value) => value,`,
+    `${nested}Err(${errorPattern}) => {`,
+    `${indentText(depth + 2)}${capturedLines[0]}`,
+    ...capturedLines.slice(1),
+    `${nested}}`,
+    `${indent}}`,
+  ].join("\n");
+}
+
+export function printRustCapturedErrorExpression(
+  error: string,
+  capture: RustLocalErrorCapture,
+  depth: number,
+): string {
+  if (capture.kind === "propagate") {
+    return `break '${capture.label} Err(${error})`;
+  }
+  const nested = indentText(depth + 1);
+  const catchBodyDepth = depth + 2;
+  const catchBody = printRustBlockStatements(capture.clause.body, catchBodyDepth);
+  const normal = capture.clause.fallible
+    ? `${indentText(catchBodyDepth)}Ok(rt::Completion::Normal)`
+    : `${indentText(catchBodyDepth)}rt::Completion::Normal`;
+  const catchHeader = capture.clause.captureLabel === undefined
+    ? `${nested}{`
+    : `${nested}'${capture.clause.captureLabel}: {`;
+  return [
+    `break '${capture.flowLabel} ({`,
+    ...(capture.clause.binding === "_"
+      ? []
+      : [`${nested}let ${capture.clause.binding} = ${error};`]),
+    catchHeader,
+    ...(catchBody.length === 0 ? [] : [catchBody]),
+    ...(capture.clause.terminates ? [] : [normal]),
+    `${nested}}`,
+    `${indentText(depth)}})`,
+  ].join("\n");
 }
 export function rustExpressionContainsClosure(expression: RustExpr): boolean {
   switch (expression.kind) {

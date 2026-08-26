@@ -24,6 +24,7 @@ import {
   rustCompilerTraitSemanticKey,
   rustCompilerTypeSemanticKey,
   rustCompilerTypesEqual,
+  substituteRustCompilerArgument,
   substituteRustCompilerBound,
   substituteRustCompilerTrait,
   substituteRustCompilerType,
@@ -97,12 +98,42 @@ export function normalizeTypeTraits(
       implContext,
     );
     if (genericBindings === undefined) continue;
-    const requirements = conditionalTraitRequirements(implGenerics, genericBindings);
+    const substitutions = implementationOwnerGenericSubstitutions(
+      genericBindings,
+      declaredGenerics,
+    );
+    if (substitutions === undefined) continue;
+    const rawRequirements = conditionalTraitRequirements(implGenerics, genericBindings);
+    const requirements = rawRequirements?.map((requirement) => {
+      const bound = substituteRustCompilerBound(requirement.bound, substitutions);
+      if (bound.kind !== "trait") {
+        throw new Error("Rust trait implementation substitution changed a trait requirement's kind.");
+      }
+      const declared = declaredGenerics.parameters[requirement.genericArgumentIndex];
+      const defaultArgumentSatisfiesBound = declared?.kind === "type" &&
+        declared.defaultType !== undefined &&
+        compilerTypeSupportsTrait(
+          document,
+          declared.defaultType,
+          bound.trait,
+          context,
+        );
+      return Object.freeze({
+        ...requirement,
+        bound,
+        ...(defaultArgumentSatisfiesBound
+          ? { defaultArgumentSatisfiesBound: true as const }
+          : {}),
+      });
+    });
     if (requirements === undefined) continue;
     const implementation = Object.freeze({
-      trait,
-      genericBindings: Object.freeze(genericBindings),
-      requirements,
+      trait: substituteRustCompilerTrait(trait, substitutions),
+      genericBindings: Object.freeze(genericBindings.map((binding) => Object.freeze({
+        ...binding,
+        parameter: substituteRustCompilerArgument(binding.parameter, substitutions),
+      }))),
+      requirements: Object.freeze(requirements),
     });
     implementations.set(traitImplementationKey(implementation), implementation);
   }
@@ -111,6 +142,29 @@ export function normalizeTypeTraits(
       .sort(([left], [right]) => compareText(left, right))
       .map(([, implementation]) => implementation)),
   });
+}
+
+function implementationOwnerGenericSubstitutions(
+  bindings: RustCompilerTraitImplementation["genericBindings"],
+  declaredGenerics: RustCompilerGenerics,
+): RustCompilerSubstitutions | undefined {
+  const types = new Map<string, RustCompilerType>();
+  const lifetimes = new Map<string, import("../model.js").RustCompilerLifetime>();
+  const consts = new Map<string, import("../model.js").RustCompilerConstExpression>();
+  for (const binding of bindings) {
+    const sourceIdentity = compilerGenericArgumentParameterIdentity(binding.parameter);
+    const declared = declaredGenerics.parameters[binding.genericArgumentIndex];
+    const target = declared === undefined
+      ? undefined
+      : compilerGenericParameterArgument(declared);
+    if (sourceIdentity === undefined || target === undefined || target.kind !== binding.parameter.kind) {
+      return undefined;
+    }
+    if (target.kind === "type") types.set(sourceIdentity, target.value);
+    else if (target.kind === "lifetime") lifetimes.set(sourceIdentity, target.value);
+    else consts.set(sourceIdentity, target.value);
+  }
+  return Object.freeze({ types, lifetimes, consts });
 }
 
 export function directImplementationGenericBindings(
@@ -689,7 +743,7 @@ function traitImplementationKey(implementation: RustCompilerTraitImplementation)
     ...implementation.genericBindings.map((binding) =>
       `${binding.genericArgumentIndex}:${rustCompilerArgumentSemanticKey(binding.parameter)}`),
     ...implementation.requirements.map((requirement) =>
-      `${requirement.genericArgumentIndex}:${rustCompilerBoundSemanticKey(requirement.bound)}`),
+      `${requirement.genericArgumentIndex}:${rustCompilerBoundSemanticKey(requirement.bound)}:${requirement.defaultArgumentSatisfiesBound === true ? "default-proven" : "default-unproven"}`),
   ].join("\0");
 }
 

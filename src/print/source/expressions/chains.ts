@@ -489,6 +489,9 @@ function collectRustMethodChain(expression: RustExpr, steps: RustMethodChainStep
     return base;
   }
   if (expression.kind === "try") {
+    if (expression.errorCapture !== undefined) {
+      return expression;
+    }
     const base = collectRustMethodChain(expression.expr, steps);
     steps.push({ kind: "try" });
     return base;

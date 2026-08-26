@@ -295,8 +295,8 @@ export function restore(pair: Owned<[[string, string], string]>): Owned<[[string
   }).result;
   assert.deepEqual(accepted.diagnostics, []);
   const source = artifactText(accepted, "src/index.rs");
-  assert.match(source, /consume\(pair\.0\.0\)/u);
-  assert.match(source, /pair\.0\.0 = String::from\("restored"\)/u);
+  assert.match(source, /consume\(\(pair\.0\)\.0\)/u);
+  assert.match(source, /\(pair\.0\)\.0 = String::from\("restored"\)/u);
   validateGeneratedProject("explicit-rust-nested-partial-reinitialization", accepted.artifacts);
 
   const rejected = compileRust({
@@ -408,13 +408,13 @@ test("captureMove transfers explicit native captures when the closure is constru
 import { captureMove } from "@tsonic/rust/lang.js";
 import type { Owned } from "@tsonic/rust/types.js";
 
-export function read(value: Owned<string>): number {
-  const callback = captureMove((): number => value.length);
+export function read(value: Owned<string>): boolean {
+  const callback = captureMove((): boolean => value === "selected");
   return callback();
 }
 
-export function readParenthesized(value: Owned<string>): number {
-  const callback = captureMove(((): number => value.length));
+export function readParenthesized(value: Owned<string>): boolean {
+  const callback = captureMove(((): boolean => value === "selected"));
   return callback();
 }
 `,
@@ -422,7 +422,7 @@ export function readParenthesized(value: Owned<string>): number {
   }).result;
   assert.deepEqual(accepted.diagnostics, []);
   const source = artifactText(accepted, "src/index.rs");
-  assert.equal(source.match(/move \|\|/gu)?.length, 2);
+  assert.equal(source.match(/::new\(move \|_callable_arguments\|/gu)?.length, 2);
   assert.doesNotMatch(source, /&value/u);
   validateGeneratedProject("explicit-rust-read-only-capture-transfer", accepted.artifacts);
 
@@ -432,9 +432,9 @@ export function readParenthesized(value: Owned<string>): number {
 import { captureMove } from "@tsonic/rust/lang.js";
 import type { Owned } from "@tsonic/rust/types.js";
 
-export function reject(value: Owned<string>): number {
-  const callback = captureMove((): number => value.length);
-  return callback() + value.length;
+export function reject(value: Owned<string>): boolean {
+  const callback = captureMove((): boolean => value === "selected");
+  return callback() && value === "selected";
 }
 `,
     },
@@ -448,8 +448,8 @@ export function reject(value: Owned<string>): number {
 import { captureMove } from "@tsonic/rust/lang.js";
 import type { Owned } from "@tsonic/rust/types.js";
 
-export function reject(value: Owned<string>): () => () => number {
-  return (): (() => number) => captureMove((): number => value.length);
+export function reject(value: Owned<string>): () => () => boolean {
+  return (): (() => boolean) => captureMove((): boolean => value === "selected");
 }
 `,
     },

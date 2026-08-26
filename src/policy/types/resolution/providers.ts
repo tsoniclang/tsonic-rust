@@ -1,5 +1,7 @@
 import {
   rustFutureTargetType,
+  rustBorrowedGeneratorTargetType,
+  rustBorrowedAsyncGeneratorTargetType,
   rustGeneratorTargetType,
   rustAsyncGeneratorTargetType,
   rustIteratorResultTargetType,
@@ -29,7 +31,12 @@ import {
   substituteRustTargetGenerics,
   type RustTraitSupportQueries,
 } from "../../../target-model/types/index.js";
-import { rustTypeSemanticKey } from "../../../target-model/semantics/index.js";
+import {
+  rustLifetimeSemanticKey,
+  rustTypeSemanticKey,
+  type RustLifetimeRef,
+} from "../../../target-model/semantics/index.js";
+import { visitRustFreeLifetimes } from "../../ownership/lifetime-elision.js";
 import { denseDefined } from "./project.js";
 import { mergeProviderDeclarationIdentities } from "../../evidence/selected-source.js";
 import { providerVirtualDeclarationFactKey } from "@tsonic/tsts";
@@ -390,10 +397,7 @@ export function resolveSourceProfileCarrier(
     if (yieldType === undefined || returnType === undefined || nextType === undefined) {
       return undefined;
     }
-    const protocol = { yieldType, returnType, nextType };
-    return name === "Generator"
-      ? rustGeneratorTargetType(protocol)
-      : rustAsyncGeneratorTargetType(protocol);
+    return resolveGeneratorCarrier(name, { yieldType, returnType, nextType });
   }
   if (name === "IteratorResult" || name === "IteratorYieldResult" || name === "IteratorReturnResult") {
     const yieldType = targetArguments[0];
@@ -443,10 +447,7 @@ export function resolveSourceProfileCarrierFromArguments(
     if (yieldType === undefined || returnType === undefined || nextType === undefined) {
       return undefined;
     }
-    const protocol = { yieldType, returnType, nextType };
-    return name === "Generator"
-      ? rustGeneratorTargetType(protocol)
-      : rustAsyncGeneratorTargetType(protocol);
+    return resolveGeneratorCarrier(name, { yieldType, returnType, nextType });
   }
   if (name === "IteratorResult" || name === "IteratorYieldResult" || name === "IteratorReturnResult") {
     const yieldType = arguments_[0];
@@ -497,4 +498,34 @@ export function resolveSourceProfileCarrierFromArguments(
       : undefined;
   }
   return undefined;
+}
+
+function resolveGeneratorCarrier(
+  name: "Generator" | "AsyncGenerator",
+  protocol: {
+    readonly yieldType: TargetTypeRef;
+    readonly returnType: TargetTypeRef;
+    readonly nextType: TargetTypeRef;
+  },
+): TargetTypeRef | undefined {
+  const nonStaticLifetimes = new Map<string, RustLifetimeRef>();
+  for (const carrier of [protocol.yieldType, protocol.returnType, protocol.nextType]) {
+    visitRustFreeLifetimes(carrier, (lifetime) => {
+      if (lifetime.kind !== "static") {
+        nonStaticLifetimes.set(rustLifetimeSemanticKey(lifetime), lifetime);
+      }
+    });
+  }
+  if (nonStaticLifetimes.size > 1) {
+    return undefined;
+  }
+  const lifetime = nonStaticLifetimes.values().next().value as RustLifetimeRef | undefined;
+  if (name === "Generator") {
+    return lifetime === undefined
+      ? rustGeneratorTargetType(protocol)
+      : rustBorrowedGeneratorTargetType(protocol, lifetime);
+  }
+  return lifetime === undefined
+    ? rustAsyncGeneratorTargetType(protocol)
+    : rustBorrowedAsyncGeneratorTargetType(protocol, lifetime);
 }

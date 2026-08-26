@@ -222,7 +222,7 @@ function printRustFunctionSignature(
     ...fn.params.map(rustFunctionParameter),
   ];
   const returnType = rustFunctionReturnType(fn.returnType, fn.errorType);
-  const whereClause = printRustWhereClause(fn.generics, depth + 1);
+  const whereClause = printRustWhereClause(fn.generics, depth);
   if (fn.variadic === true && (fn.abi === undefined || fn.abi === "Rust" || asynchronous)) {
     throw new Error("A Rust variadic function requires a non-Rust ABI and cannot be async.");
   }
