@@ -16,11 +16,14 @@ import {
   KindPrefixUnaryExpression,
   KindPropertyAccessExpression,
   KindSatisfiesExpression,
+  KindSpreadElement,
+  Node_Expression,
 } from "@tsonic/target-api/source";
 import { rustOperationContext } from "../program/walk.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { selectedSourceLiteralIsRepresentable } from "../../policy/types/selected-numeric-literal.js";
+import { rustSpreadElementCarrier } from "../../target-model/operations/rest-assembly.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type {
@@ -128,34 +131,44 @@ function reconcileProjectSourceArgumentTypeParameters(
   parameterNames: ReadonlySet<string>,
 ): ReadonlyMap<string, TargetTypeRef> | undefined {
   const reconciled = new Map<string, TargetTypeRef>();
+  if (parameterNames.size === 0) return reconciled;
   const bindings = selected.sourceArgumentBindings;
   if (bindings === undefined) return reconciled;
   for (const [argumentIndex, argument] of callArguments.entries()) {
     if (walk.context.ast.kindName(argument) === KindNumericLiteral) continue;
     const matches = bindings.filter((binding) =>
       binding.sourceArgumentIndex === argumentIndex);
-    const first = matches[0];
-    if (first === undefined || matches.some((binding) =>
-      binding.sourceParameterIndex !== first.sourceParameterIndex ||
-      binding.sourceForm !== first.sourceForm)) {
-      return undefined;
-    }
-    const parameter = selected.member.parameters[first.sourceParameterIndex];
     const actual = walk.context.facts.getRuntimeCarrierFact(argument)?.carrier ??
       resolveProjectSourceInferenceCarrier(walk, argument);
-    if (parameter === undefined || actual === undefined) continue;
-    const candidate = inferRustTargetTypeParameterBindings(
-      parameter.type,
-      actual,
-      parameterNames,
-    );
-    if (candidate === undefined) continue;
-    for (const [name, carrier] of candidate) {
-      const existing = reconciled.get(name);
-      if (existing !== undefined && !rustTargetTypeRefEquals(existing, carrier)) {
-        return undefined;
+    if (matches.length === 0 || actual === undefined) continue;
+    for (const binding of matches) {
+      const parameter = selected.member.parameters[binding.sourceParameterIndex];
+      const parameterCarrier = parameter === undefined
+        ? undefined
+        : binding.sourceParameterForm === "rest-element" && parameter.type.kind === "array"
+          ? parameter.type.element
+          : parameter.type;
+      const actualCarrier = binding.sourceForm === "spread-element"
+        ? binding.spreadElementIndex === undefined
+          ? undefined
+          : rustSpreadElementCarrier(actual, binding.spreadElementIndex)
+        : actual;
+      if (parameterCarrier === undefined || actualCarrier === undefined) {
+        continue;
       }
-      reconciled.set(name, carrier);
+      const candidate = inferRustTargetTypeParameterBindings(
+        parameterCarrier,
+        actualCarrier,
+        parameterNames,
+      );
+      if (candidate === undefined) continue;
+      for (const [name, carrier] of candidate) {
+        const existing = reconciled.get(name);
+        if (existing !== undefined && !rustTargetTypeRefEquals(existing, carrier)) {
+          return undefined;
+        }
+        reconciled.set(name, carrier);
+      }
     }
   }
   return reconciled;
@@ -166,6 +179,17 @@ function resolveProjectSourceInferenceCarrier(
   argument: Node,
 ): TargetTypeRef | undefined {
   const kind = walk.context.ast.kindName(argument);
+  if (kind === KindSpreadElement) {
+    const inner = Node_Expression(walk.context.ast, argument);
+    return inner === undefined
+      ? undefined
+      : walk.context.facts.getRuntimeCarrierFact(inner)?.carrier ??
+          resolveRustTargetTypeRef(
+            inner,
+            rustOperationContext(walk, inner),
+            walk.operationOptions,
+          );
+  }
   if (kind !== KindIdentifier && kind !== KindCallExpression &&
     kind !== KindNewExpression && kind !== KindPropertyAccessExpression &&
     kind !== KindElementAccessExpression && kind !== KindBinaryExpression &&

@@ -6,7 +6,7 @@ import { diagnosticInput } from "../../program/plan-context.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustProjectImplementationVisibility } from "../project-storage-abi.js";
 import type { ProjectClassStateLayer } from "./model.js";
-import { rustProjectGenerics } from "./names.js";
+import { rustProjectRepresentationGenerics } from "./names.js";
 import { emptyRustGenerics } from "../../../target-ast/nodes.js";
 import { rustSelfParameter } from "../../declarations/self-parameter.js";
 
@@ -16,6 +16,12 @@ export function planProjectPrivateStateAccessors(
   publiclyReachable: boolean,
   context: RustPlanContext,
 ): readonly RustItem[] | undefined {
+  const representation = context.input.program.objectRepresentations.representationFor(
+    layer.definition,
+  );
+  if (representation === undefined) {
+    return undefined;
+  }
   const fields = layer.fields.filter((field) =>
     rustProjectMemberIsPrivate(context.input.program.source.ast, field.declaration));
   if (fields.length === 0) {
@@ -82,7 +88,7 @@ export function planProjectPrivateStateAccessors(
   }
   return [{
     kind: "impl",
-    generics: rustProjectGenerics(layer.definition),
+    generics: rustProjectRepresentationGenerics(representation),
     target: stateType,
     functions,
   }];

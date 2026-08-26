@@ -18,7 +18,7 @@ import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js"
 import { planProjectMethod } from "../../declarations/nominal.js";
 import { readRustProjectMethodOverride, rustProjectObjectDispatchField, rustProjectObjectIdentityField } from "../project-objects.js";
 import { rustCallableSpecialization } from "../../declarations/callable-generics.js";
-import { rustProjectDispatchTraitType } from "./names.js";
+import { rustProjectDispatchObjectType, rustProjectDispatchTraitType } from "./names.js";
 import { rustSourceTypeCarrierValue } from "../../../../target-model/types/index.js";
 import { emptyRustGenerics } from "../../../target-ast/nodes.js";
 import { rustSelfParameter } from "../../declarations/self-parameter.js";
@@ -63,8 +63,8 @@ export function projectDowncastReturnType(
   route: RustProjectDowncastRoute,
   context: RustPlanContext,
 ): RustType | undefined {
-  const dispatch = rustProjectDispatchTraitType(route.targetCarrier, context);
-  return dispatch === undefined
+  const dispatchObject = rustProjectDispatchObjectType(route.targetCarrier, context);
+  return dispatchObject === undefined
     ? undefined
     : {
         kind: "named",
@@ -76,11 +76,7 @@ export function projectDowncastReturnType(
             path: "std::rc::Rc",
             genericArguments: [{
               kind: "type",
-              type: {
-                kind: "trait-object",
-                principal: { trait: dispatch },
-                autoTraits: [],
-              },
+              type: dispatchObject,
             }],
           },
         }],

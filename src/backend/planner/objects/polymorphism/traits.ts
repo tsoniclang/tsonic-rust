@@ -8,7 +8,7 @@ import {
 import { projectAccessorCallableShape, projectDowncastReturnType } from "./forwarders.js";
 import { rustCallableSpecialization } from "../../declarations/callable-generics.js";
 import { rustLintAttributes } from "../../../target-ast/normalization/lint-policy.js";
-import { rustProjectDispatchTraitName, rustProjectDispatchTraitType, rustProjectGenerics } from "./names.js";
+import { rustProjectDispatchTraitName, rustProjectDispatchTraitType, rustProjectRepresentationGenerics } from "./names.js";
 import { rustProjectObjectIdentityField } from "../project-objects.js";
 import type { RustItem, RustTraitFunction, RustType } from "../../../target-ast/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/nodes.js";
@@ -20,14 +20,16 @@ import {
   rustProjectTypeHasPublicImplementationAbi,
 } from "../../program/plan-context.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
+import type { RustObjectRepresentation } from "../../../../analysis/project-types/object-representation.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { rustProjectImplementationVisibility } from "../project-storage-abi.js";
 
 export function projectIdentityImplementations(
   definition: RustProjectTypeDefinition,
   wrapperType: RustType,
+  representation: RustObjectRepresentation,
 ): readonly RustItem[] {
-  const generics = rustProjectGenerics(definition);
+  const generics = rustProjectRepresentationGenerics(representation);
   return [
     {
       kind: "impl",
@@ -120,6 +122,10 @@ export function planProjectDispatchTrait(
   carrier: TargetTypeRef,
   context: RustPlanContext,
 ): RustItem | undefined {
+  const representation = context.input.program.objectRepresentations.representationFor(definition);
+  if (representation === undefined) {
+    return undefined;
+  }
   const fields = projectOwnFields(definition, carrier, context);
   if (fields === undefined) {
     return undefined;
@@ -261,7 +267,7 @@ export function planProjectDispatchTrait(
   if (superTraits.some((type) => type === undefined)) {
     return undefined;
   }
-  const generics = rustProjectGenerics(definition);
+  const generics = rustProjectRepresentationGenerics(representation);
   const publiclyReachable = context.input.program.projectTypes.programErrorVariant(definition) !== undefined ||
     rustProjectTypeHasPublicImplementationAbi(context, definition.targetName);
   return {

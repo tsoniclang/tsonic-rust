@@ -1,5 +1,6 @@
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
+import type { RustObjectRepresentation } from "../../../../analysis/project-types/object-representation.js";
 import {
   rustSourceTypeCarrierValue,
 } from "../../../../target-model/types/index.js";
@@ -15,6 +16,8 @@ import { rustLifetimeToAst } from "../../types/render.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { sourceModuleItemPath } from "../../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
+import { rustLifetimesEqual } from "../../../../target-model/lifetimes/index.js";
+import type { RustLifetimeRef } from "../../../../target-model/lifetimes/index.js";
 
 export function rustProjectDispatchTraitName(
   definition: RustProjectTypeDefinition,
@@ -34,6 +37,24 @@ export function rustProjectRootName(
 export function rustProjectGenerics(
   definition: RustProjectTypeDefinition,
 ): RustGenerics {
+  return rustProjectGenericsWithTypeOutlives(definition, []);
+}
+
+export function rustProjectRepresentationGenerics(
+  representation: RustObjectRepresentation,
+): RustGenerics {
+  return rustProjectGenericsWithTypeOutlives(
+    representation.definition,
+    representation.dispatchObjectLifetime === undefined
+      ? []
+      : [representation.dispatchObjectLifetime],
+  );
+}
+
+function rustProjectGenericsWithTypeOutlives(
+  definition: RustProjectTypeDefinition,
+  requiredTypeOutlives: readonly RustLifetimeRef[],
+): RustGenerics {
   const parameters = definition.genericParameters.map((parameter): RustGenericParameter =>
     parameter.kind === "lifetime"
       ? {
@@ -44,7 +65,7 @@ export function rustProjectGenerics(
       : {
           kind: "type",
           name: parameter.targetName,
-          bounds: projectTypeBounds(parameter),
+          bounds: projectTypeBounds(parameter, requiredTypeOutlives),
         });
   return Object.freeze({
     parameters: Object.freeze(parameters),
@@ -57,15 +78,39 @@ function projectTypeBounds(
     RustProjectTypeDefinition["genericParameters"][number],
     { readonly kind: "type" }
   >,
+  requiredOutlives: readonly RustLifetimeRef[],
 ): readonly RustTypeBound[] {
+  const outlives = [
+    ...parameter.outlives,
+    ...requiredOutlives.filter((required) =>
+      !parameter.outlives.some((existing) => rustLifetimesEqual(existing, required))),
+  ];
   return Object.freeze([
     { kind: "trait", path: "Clone" },
-    ...parameter.outlives.map((lifetime): RustTypeBound => ({
+    ...outlives.map((lifetime): RustTypeBound => ({
       kind: "lifetime",
       lifetime: rustLifetimeToAst(lifetime),
     })),
     ...(parameter.maybeSized ? [{ kind: "maybe-sized" as const }] : []),
   ]);
+}
+
+export function rustProjectDispatchObjectType(
+  carrier: TargetTypeRef,
+  context: RustPlanContext,
+): RustType | undefined {
+  const definition = context.input.program.projectTypes.definitionForCarrier(carrier);
+  const representation = context.input.program.objectRepresentations.representationFor(definition);
+  const dispatch = rustProjectDispatchTraitType(carrier, context);
+  return representation?.kind !== "open-hierarchy" ||
+      representation.dispatchObjectLifetime === undefined || dispatch === undefined
+    ? undefined
+    : {
+        kind: "trait-object",
+        principal: { trait: dispatch },
+        autoTraits: [],
+        lifetime: rustLifetimeToAst(representation.dispatchObjectLifetime),
+      };
 }
 
 export function rustProjectDispatchTraitType(

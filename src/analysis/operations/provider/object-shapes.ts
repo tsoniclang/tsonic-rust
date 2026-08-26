@@ -9,7 +9,6 @@ import { acceptRustPolicy } from "../../../policy/operations/contracts.js";
 import {
   acceptSelectedCall,
   checkedCallIsConstruction,
-  instantiateExactSelectedConstructionCarrier,
   mapSelectedProjectGenericArguments,
   selectedCallReceiverValueCarrier,
   selectedProjectConstructor,
@@ -649,7 +648,9 @@ export function acceptProjectSourceCall(
   const callableDeclaration = callableImplementation?.kind === "resolved"
     ? callableImplementation.implementation.declaration
     : selectedCallableDeclaration;
-  const genericOwner = construction ? selectedOwner : selectedCallableDeclaration;
+  const genericOwner = construction
+    ? callableOwner?.declaration
+    : selectedCallableDeclaration;
   const targetGenericArguments = genericOwner === undefined
     ? undefined
     : mapSelectedProjectGenericArguments(request, genericOwner, context, options);
@@ -679,13 +680,6 @@ export function acceptProjectSourceCall(
         options.projectTypes.openCarrier(containingDefinition),
         selectedOwnerDefinition,
       );
-  const selectedAuthoredOwnerCarrier = construction && selectedOwnerDefinition !== undefined
-    ? instantiateExactSelectedConstructionCarrier(
-        selectedOwnerDefinition,
-        targetGenericArguments,
-        options,
-      )
-    : undefined;
   const selectedResultOwnerCarrier = construction && selectedOwnerDefinition !== undefined &&
       request.source.sourceResultType !== undefined
     ? resolveRustTargetTypeRef(
@@ -698,7 +692,7 @@ export function acceptProjectSourceCall(
     ? selectedOwnerRelationship?.kind === "related"
       ? selectedOwnerRelationship.targetType
       : undefined
-    : selectedAuthoredOwnerCarrier ?? selectedResultOwnerCarrier;
+    : selectedResultOwnerCarrier;
   if (construction && selectedOwnerCarrier === undefined) {
     return rejectSelectedOperation(
       request.source.call,

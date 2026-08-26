@@ -29,12 +29,12 @@ import {
 } from "./model.js";
 import { planProjectStaticMethods } from "../../declarations/nominal.js";
 import {
-  rustProjectDispatchTraitType,
+  rustProjectDispatchObjectType,
   rustProjectRootName,
   rustProjectRootType,
+  rustProjectRepresentationGenerics,
   rustProjectStateMarker,
   rustProjectStateType,
-  rustProjectGenerics,
 } from "./names.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import {
@@ -53,13 +53,14 @@ export function planPolymorphicClassDeclaration(
   }
   const diagnosticCountBeforeShape = context.diagnostics.length;
   const openCarrier = context.input.program.projectTypes.openCarrier(definition);
+  const representation = context.input.program.objectRepresentations.representationFor(definition);
   const wrapperType = rustTypeFromCarrierInContext(openCarrier, context);
-  const dispatchType = rustProjectDispatchTraitType(openCarrier, context);
+  const dispatchObjectType = rustProjectDispatchObjectType(openCarrier, context);
   const rootType = rustProjectRootType(openCarrier, context);
   const layers = projectClassStateLayers(definition, openCarrier, context);
   const stateType = layers === undefined ? undefined : projectStateType(layers, context);
-  if (wrapperType === undefined || dispatchType === undefined || rootType === undefined ||
-    layers === undefined || stateType === undefined) {
+  if (wrapperType === undefined || dispatchObjectType === undefined || rootType === undefined ||
+    layers === undefined || stateType === undefined || representation === undefined) {
     if (context.diagnostics.length === diagnosticCountBeforeShape) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, declaration),
@@ -112,7 +113,7 @@ export function planPolymorphicClassDeclaration(
     return undefined;
   }
   context.usedAliases?.add("rt");
-  const generics = rustProjectGenerics(definition);
+  const generics = rustProjectRepresentationGenerics(representation);
   const stateMarker = rustProjectStateMarker(definition, context);
   const programErrorVariant = context.input.program.projectTypes.programErrorVariant(definition);
   const publiclyReachable = programErrorVariant !== undefined ||
@@ -139,6 +140,7 @@ export function planPolymorphicClassDeclaration(
   const externalErrorImplementations = planProjectExternalErrorImplementations(
     definition,
     wrapperType,
+    representation,
     context,
   );
   if (staticMethods === undefined || externalErrorImplementations === undefined) {
@@ -222,17 +224,13 @@ export function planPolymorphicClassDeclaration(
         },
         {
           name: rustProjectObjectDispatchField,
-          type: rustRcType({
-            kind: "trait-object",
-            principal: { trait: dispatchType },
-            autoTraits: [],
-          }),
+          type: rustRcType(dispatchObjectType),
           visibility: implementationVisibility,
           ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
         },
       ],
     },
-    ...projectIdentityImplementations(definition, wrapperType),
+    ...projectIdentityImplementations(definition, wrapperType, representation),
     {
       kind: "struct",
       name: rustProjectRootName(definition),
@@ -272,6 +270,7 @@ export function planPolymorphicClassDeclaration(
 function planProjectExternalErrorImplementations(
   definition: RustProjectTypeDefinition,
   wrapperType: RustType,
+  representation: import("../../../../analysis/project-types/object-representation.js").RustObjectRepresentation,
   context: RustPlanContext,
 ): readonly RustItem[] | undefined {
   const external = context.input.program.projectTypes.externalBaseForDefinition(definition);
@@ -291,7 +290,7 @@ function planProjectExternalErrorImplementations(
   const self = { kind: "path" as const, path: "self" };
   return [{
     kind: "impl",
-    generics: rustProjectGenerics(definition),
+    generics: rustProjectRepresentationGenerics(representation),
     trait: { kind: "named", path: "std::fmt::Display" },
     target: wrapperType,
     functions: [{
@@ -329,7 +328,7 @@ function planProjectExternalErrorImplementations(
     }],
   }, {
     kind: "impl",
-    generics: rustProjectGenerics(definition),
+    generics: rustProjectRepresentationGenerics(representation),
     trait: { kind: "named", path: "rt::ToSourceString" },
     target: wrapperType,
     functions: [{
@@ -358,10 +357,12 @@ export function planPolymorphicInterfaceDeclaration(
     return undefined;
   }
   const carrier = context.input.program.projectTypes.openCarrier(definition);
+  const representation = context.input.program.objectRepresentations.representationFor(definition);
   const wrapperType = rustTypeFromCarrierInContext(carrier, context);
-  const dispatchType = rustProjectDispatchTraitType(carrier, context);
+  const dispatchObjectType = rustProjectDispatchObjectType(carrier, context);
   const trait = planProjectDispatchTrait(definition, carrier, context);
-  if (wrapperType === undefined || dispatchType === undefined || trait === undefined) {
+  if (wrapperType === undefined || dispatchObjectType === undefined || trait === undefined ||
+    representation === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, declaration),
       "rust.backend.project-interface-carrier",
@@ -370,7 +371,7 @@ export function planPolymorphicInterfaceDeclaration(
     return undefined;
   }
   context.usedAliases?.add("rt");
-  const generics = rustProjectGenerics(definition);
+  const generics = rustProjectRepresentationGenerics(representation);
   const exported = context.input.program.source.ast.hasModifierKind(declaration, "export");
   const publiclyReachable = rustProjectTypeHasPublicImplementationAbi(
     context,
@@ -395,16 +396,12 @@ export function planPolymorphicInterfaceDeclaration(
         },
         {
           name: rustProjectObjectDispatchField,
-          type: rustRcType({
-            kind: "trait-object",
-            principal: { trait: dispatchType },
-            autoTraits: [],
-          }),
+          type: rustRcType(dispatchObjectType),
           visibility: implementationVisibility,
           ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
         },
       ],
     },
-    ...projectIdentityImplementations(definition, wrapperType),
+    ...projectIdentityImplementations(definition, wrapperType, representation),
   ];
 }

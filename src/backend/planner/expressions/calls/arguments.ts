@@ -3,7 +3,6 @@ import {
   isRustVecCarrier,
   rustCallableProtocol,
   rustFixedArrayCarrierValue,
-  rustTargetConstSafeInteger,
   rustSliceElementCarrier,
   rustTargetGenericBindingsForArguments,
   substituteRustTargetGenerics,
@@ -30,7 +29,7 @@ import {
   rustTargetTypeRefEquals,
 } from "../../../../target-model/types/equality.js";
 import { rustValueCarrierTransitionTarget } from "../../../../analysis/facts/value-carrier-queries.js";
-import { rustVecRestAssembly } from "../../../../target-model/operations/rest-assembly.js";
+import { rustSpreadElementCarrier, rustVecRestAssembly } from "../../../../target-model/operations/rest-assembly.js";
 import { validateRustFinalizedOperationAbi } from "../../../../analysis/facts/finalized-operation-abi.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../../target-ast/nodes.js";
@@ -377,25 +376,6 @@ function resolveFinalizedRustSpreadInput(
   return fixedArray !== undefined && !isRustCopyCarrier(element)
     ? { kind: "method-call", receiver: selected, method: "clone", args: [] }
     : selected;
-}
-
-function rustSpreadElementCarrier(
-  sourceCarrier: TargetTypeRef,
-  index: number,
-): TargetTypeRef | undefined {
-  if (!Number.isSafeInteger(index) || index < 0) {
-    return undefined;
-  }
-  if (sourceCarrier.kind === "tuple") {
-    return sourceCarrier.elements[index];
-  }
-  const fixedArray = rustFixedArrayCarrierValue(sourceCarrier);
-  const fixedLength = fixedArray === undefined
-    ? undefined
-    : rustTargetConstSafeInteger(fixedArray.length);
-  return fixedArray !== undefined && fixedLength !== undefined && index < fixedLength
-    ? fixedArray.element
-    : undefined;
 }
 
 export function planPromotedSourceMethodCall(

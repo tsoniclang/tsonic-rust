@@ -460,8 +460,12 @@ export function collectModuleStandardTypeLocations(
       return;
     }
     const location = standardTypeLocation(context, canonicalPath);
-    if (location !== undefined) {
-      selected.set(canonicalPathKey(location.canonicalPath), location);
+    const key = location === undefined
+      ? undefined
+      : canonicalPathKey(location.canonicalPath);
+    if (location !== undefined && key !== undefined && !selected.has(key)) {
+      selected.set(key, location);
+      visitParameters(location.genericParameters);
     }
   };
   const visitType = (type: RustCompilerType): void => {

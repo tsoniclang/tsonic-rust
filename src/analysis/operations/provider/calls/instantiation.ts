@@ -2,8 +2,6 @@ import {
   rustCallableProtocol,
   rustLifetimeGenericArgument,
   rustStringTargetType,
-  rustTargetGenericBindingsForArguments,
-  substituteRustTargetGenerics,
   rustTypeGenericArgument,
 } from "../../../../target-model/types/index.js";
 import { acceptRustPolicy } from "../../../../policy/operations/contracts.js";
@@ -46,38 +44,11 @@ import type { RustOperationsProviderOptions } from "../model.js";
 import type { RustOptionalCallGuard } from "./selection.js";
 import type {
   RustTargetGenericArgument,
-  RustTargetGenericParameter,
   RustTargetMember,
   TargetTypeRef,
 } from "../../../../target-model/types/model.js";
 import { rustLifetimeKey } from "../../../../target-model/lifetimes/index.js";
 import type { RustLifetimeRef } from "../../../../target-model/lifetimes/index.js";
-
-export function instantiateExactSelectedConstructionCarrier(
-  definition: import("../../../project-types/type-policy.js").RustProjectTypeDefinition,
-  targetGenericArguments: readonly RustTargetGenericArgument[],
-  options: RustOperationsProviderOptions,
-): TargetTypeRef | undefined {
-  const parameters = definition.genericParameters.map((parameter): RustTargetGenericParameter =>
-    parameter.kind === "type"
-      ? { kind: "type", sourceName: parameter.sourceName }
-      : {
-          kind: "lifetime",
-          sourceName: parameter.sourceName,
-          targetIdentity: rustLifetimeKey(parameter.lifetime),
-        });
-  const substitutions = rustTargetGenericBindingsForArguments(
-    parameters,
-    targetGenericArguments,
-  );
-  if (substitutions === undefined) return undefined;
-  return substituteRustTargetGenerics(
-    options.projectTypes.openCarrier(definition),
-    substitutions.types,
-    substitutions.lifetimes,
-    substitutions.consts,
-  );
-}
 
 export function mapSelectedProjectGenericArguments(
   request: RustCheckedCallSelectionInput,

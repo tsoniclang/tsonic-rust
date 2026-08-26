@@ -182,6 +182,7 @@ function projectValueExport(
           name: "value",
           kind: "property",
           type: sourceType,
+          static: true,
         })]),
       }),
       operations: Object.freeze([

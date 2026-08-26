@@ -31,6 +31,7 @@ import { rustProjectCallableTargetName } from "../facts/source-member-name.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { finalizeProjectSourceGenericArguments } from "./project-call-generics.js";
 import { sourceTypeCarrierForDeclaration } from "./inputs.js";
+import { rustSpreadElementCarrier } from "../../target-model/operations/rest-assembly.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustSelectedTargetSignature, TargetTypeRef } from "../../target-model/types/model.js";
@@ -509,7 +510,28 @@ export function applySelectedSourceCallArguments(
           rustTargetTypeRefEquals(carrier, bindingCarriers[0]))
         ? bindingCarriers[0]
         : undefined;
-    resolveExpressionCarrier(walk, argument, sourceFile, expected);
+    const resolvedArgumentCarrier = resolveExpressionCarrier(
+      walk,
+      argument,
+      sourceFile,
+      expected,
+    );
+    if (resolvedArgumentCarrier === undefined ||
+      ast.kindName(argument) === KindSpreadElement &&
+        !selectedSpreadArgumentMatches(
+          resolvedArgumentCarrier,
+          parameters.flatMap((parameter) => parameter.inputs.filter((input) =>
+            input.sourceArgumentIndex === index)),
+        )) {
+      appendRustDiagnostic(
+        walk,
+        "RUST_SOURCE_CALL_ARGUMENT_CARRIER_MISSING",
+        `Selected source argument ${index} has no exact carrier matching its effective parameter bindings.`,
+        argument,
+        ["target.capability=rust.source-call.argument-carrier"],
+      );
+      return false;
+    }
     const modes = parameters
       .filter((parameter) => parameter.inputs.some((input) =>
         input.sourceArgumentIndex === index))
@@ -538,6 +560,23 @@ export function applySelectedSourceCallArguments(
     }
   }
   return true;
+}
+
+function selectedSpreadArgumentMatches(
+  sourceCarrier: TargetTypeRef,
+  inputs: readonly import("../facts/keys.js").RustSourceCallParameterPlan["inputs"][number][],
+): boolean {
+  return inputs.length > 0 && inputs.every((input) => {
+    const selectedCarrier = input.sourceForm === "spread-element"
+      ? input.spreadElementIndex === undefined
+        ? undefined
+        : rustSpreadElementCarrier(sourceCarrier, input.spreadElementIndex)
+      : input.sourceForm === "spread-sequence"
+        ? sourceCarrier
+        : undefined;
+    return selectedCarrier !== undefined &&
+      rustTargetTypeRefEquals(selectedCarrier, input.carrier);
+  });
 }
 
 export function recordTargetOperation(

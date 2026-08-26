@@ -15,7 +15,7 @@ import {
   writeRustProjectObjectField,
   writeRustProjectPrivateField,
 } from "../project-objects.js";
-import { rustProjectDispatchTraitType, rustProjectGenerics } from "./names.js";
+import { rustProjectDispatchTraitType, rustProjectRepresentationGenerics } from "./names.js";
 import { emptyRustGenerics } from "../../../target-ast/nodes.js";
 import { rustSelfParameter } from "../../declarations/self-parameter.js";
 import type { Node } from "@tsonic/tsts";
@@ -48,7 +48,7 @@ export function planProjectRootImplementations(
     return undefined;
   }
   const items: RustItem[] = [];
-  const generics = rustProjectGenerics(concrete);
+  const generics = rustProjectRepresentationGenerics(representation);
   const methodImplementations = new Map<Node, RustImplFunction[]>();
   const accessorImplementations = new Map<Node, RustImplFunction>();
   const implementationFor = (

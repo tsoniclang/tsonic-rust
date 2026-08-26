@@ -9,6 +9,8 @@ import type {
   RustProjectTypeDefinition,
   RustProjectTypePolicy,
 } from "./type-policy.js";
+import { rustStaticLifetime } from "../../target-model/lifetimes/index.js";
+import type { RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 
 export type RustObjectRepresentationKind =
   | "value"
@@ -24,6 +26,7 @@ export interface RustObjectRepresentation {
   readonly identityObserved: boolean;
   readonly escapes: boolean;
   readonly constructionCount: number;
+  readonly dispatchObjectLifetime: RustLifetimeRef | undefined;
 }
 
 export interface RustObjectRepresentationPlan {
@@ -124,6 +127,9 @@ export function createRustObjectRepresentationPlan(
       identityObserved,
       escapes,
       constructionCount: creationFlows.length,
+      dispatchObjectLifetime: kind === "open-hierarchy"
+        ? rustStaticLifetime
+        : undefined,
     });
   });
   const byDefinition = new Map(representations.map((representation) =>
