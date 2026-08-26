@@ -1,7 +1,15 @@
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
 import { rustSourceTypeCarrierValue } from "../../../../target-model/types/index.js";
-import type { RustExpr, RustType, RustTypeParameter } from "../../../target-ast/nodes.js";
+import type {
+  RustExpr,
+  RustGenericArgument,
+  RustGenericParameter,
+  RustGenerics,
+  RustType,
+  RustTypeBound,
+} from "../../../target-ast/nodes.js";
+import { rustLifetimeToAst } from "../../types/render.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { sourceModuleItemPath } from "../../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
@@ -21,16 +29,42 @@ export function rustProjectRootName(
   return definition.rootName;
 }
 
-export function rustProjectTypeParameters(
+export function rustProjectGenerics(
   definition: RustProjectTypeDefinition,
-): readonly RustTypeParameter[] {
-  return definition.targetTypeParameterNames.map((name) => ({
-    name,
-    bounds: [
-      { kind: "trait", path: "Clone" },
-      { kind: "lifetime", name: "static" },
-    ],
-  }));
+): RustGenerics {
+  const parameters = definition.genericParameters.map((parameter): RustGenericParameter =>
+    parameter.kind === "lifetime"
+      ? {
+          kind: "lifetime",
+          name: parameter.lifetime.name,
+          outlives: Object.freeze(parameter.outlives.map(rustLifetimeToAst)),
+        }
+      : {
+          kind: "type",
+          name: parameter.targetName,
+          bounds: projectTypeBounds(parameter),
+        });
+  return Object.freeze({
+    parameters: Object.freeze(parameters),
+    wherePredicates: Object.freeze([]),
+  });
+}
+
+function projectTypeBounds(
+  parameter: Extract<
+    RustProjectTypeDefinition["genericParameters"][number],
+    { readonly kind: "type" }
+  >,
+): readonly RustTypeBound[] {
+  return Object.freeze([
+    { kind: "trait", path: "Clone" },
+    { kind: "lifetime", lifetime: { kind: "static" } },
+    ...parameter.outlives.map((lifetime): RustTypeBound => ({
+      kind: "lifetime",
+      lifetime: rustLifetimeToAst(lifetime),
+    })),
+    ...(parameter.maybeSized ? [{ kind: "maybe-sized" as const }] : []),
+  ]);
 }
 
 export function rustProjectDispatchTraitType(
@@ -62,7 +96,7 @@ export function rustProjectStateMarker(
   readonly type: RustType;
   readonly value: RustExpr;
 } | undefined {
-  if (definition.targetTypeParameterNames.length === 0) {
+  if (definition.genericParameters.length === 0) {
     return undefined;
   }
   return {
@@ -70,12 +104,20 @@ export function rustProjectStateMarker(
     type: {
       kind: "named",
       path: "std::marker::PhantomData",
-      typeArguments: [{
-        kind: "tuple",
-        elements: definition.targetTypeParameterNames.map((name) => ({
-          kind: "named",
-          path: name,
-        })),
+      genericArguments: [{
+        kind: "type",
+        type: {
+          kind: "tuple",
+          elements: definition.genericParameters.map((parameter): RustType =>
+            parameter.kind === "lifetime"
+              ? {
+                  kind: "reference",
+                  referent: { kind: "unit" },
+                  mutable: false,
+                  lifetime: rustLifetimeToAst(parameter.lifetime),
+                }
+              : { kind: "named", path: parameter.targetName }),
+        },
       }],
     },
     value: { kind: "path", path: "std::marker::PhantomData" },
@@ -92,7 +134,10 @@ function rustProjectGeneratedType(
   const path = value === undefined || definition === undefined
     ? undefined
     : sourceModuleItemPath(context, value.fileName, generatedName(definition));
+  const lifetimeCount = definition?.genericParameters.filter((parameter) =>
+    parameter.kind === "lifetime").length ?? 0;
   if (value === undefined || definition === undefined || path === undefined ||
+    value.lifetimeArguments.length !== lifetimeCount ||
     value.typeArguments.length !== definition.typeParameterNames.length) {
     return undefined;
   }
@@ -101,11 +146,21 @@ function rustProjectGeneratedType(
   if (typeArguments.some((argument) => argument === undefined)) {
     return undefined;
   }
+  const genericArguments: RustGenericArgument[] = [
+    ...value.lifetimeArguments.map((lifetime): RustGenericArgument => ({
+      kind: "lifetime",
+      lifetime: rustLifetimeToAst(lifetime),
+    })),
+    ...(typeArguments as RustType[]).map((type): RustGenericArgument => ({
+      kind: "type",
+      type,
+    })),
+  ];
   return {
     kind: "named",
     path,
-    ...(typeArguments.length === 0
+    ...(genericArguments.length === 0
       ? {}
-      : { typeArguments: typeArguments as readonly RustType[] }),
+      : { genericArguments: Object.freeze(genericArguments) }),
   };
 }

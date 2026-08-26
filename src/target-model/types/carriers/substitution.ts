@@ -3,42 +3,90 @@ import { rustFixedArrayCarrierValue, rustFixedArrayTargetType, rustNamedTargetTy
 import { rustSourceTypeCarrier, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustSourceUnionTargetType, rustStructuralObjectCarrierValue, rustStructuralObjectTargetType } from "./source-types.js";
 import { rustTargetTypeRefEquals } from "../equality.js";
 import type { TargetTypeRef } from "../model.js";
+import { rustLifetimeKey } from "../../lifetimes/index.js";
+import type { RustLifetimeRef } from "../../lifetimes/index.js";
 
 export function substituteRustTargetTypeParameters(
   type: TargetTypeRef,
   substitutions: ReadonlyMap<string, TargetTypeRef>,
 ): TargetTypeRef {
+  return substituteRustTargetGenerics(type, substitutions, new Map());
+}
+
+export function substituteRustTargetGenerics(
+  type: TargetTypeRef,
+  substitutions: ReadonlyMap<string, TargetTypeRef>,
+  lifetimeSubstitutions: ReadonlyMap<string, RustLifetimeRef>,
+): TargetTypeRef {
+  const substituteLifetime = (lifetime: RustLifetimeRef): RustLifetimeRef =>
+    lifetimeSubstitutions.get(rustLifetimeKey(lifetime)) ?? lifetime;
   switch (type.kind) {
     case "type-parameter":
       return substitutions.get(type.name) ?? type;
     case "target-named":
-      return type.typeArguments === undefined
-        ? type
-        : { ...type, typeArguments: type.typeArguments.map((argument) => substituteRustTargetTypeParameters(argument, substitutions)) };
+      return {
+        ...type,
+        ...(type.lifetimeArguments === undefined
+          ? {}
+          : { lifetimeArguments: type.lifetimeArguments.map(substituteLifetime) }),
+        ...(type.typeArguments === undefined
+          ? {}
+          : { typeArguments: type.typeArguments.map((argument) =>
+              substituteRustTargetGenerics(argument, substitutions, lifetimeSubstitutions)) }),
+      };
     case "array":
-      return { ...type, element: substituteRustTargetTypeParameters(type.element, substitutions) };
+      return { ...type, element: substituteRustTargetGenerics(type.element, substitutions, lifetimeSubstitutions) };
     case "slice":
-      return { ...type, element: substituteRustTargetTypeParameters(type.element, substitutions) };
+      return { ...type, element: substituteRustTargetGenerics(type.element, substitutions, lifetimeSubstitutions) };
     case "tuple":
-      return { ...type, elements: type.elements.map((element) => substituteRustTargetTypeParameters(element, substitutions)) };
+      return { ...type, elements: type.elements.map((element) => substituteRustTargetGenerics(element, substitutions, lifetimeSubstitutions)) };
     case "reference":
-      return { ...type, referent: substituteRustTargetTypeParameters(type.referent, substitutions) };
+      return {
+        ...type,
+        ...(type.lifetime === undefined ? {} : { lifetime: substituteLifetime(type.lifetime) }),
+        referent: substituteRustTargetGenerics(type.referent, substitutions, lifetimeSubstitutions),
+      };
     case "pointer":
-      return { ...type, pointee: substituteRustTargetTypeParameters(type.pointee, substitutions) };
+      return { ...type, pointee: substituteRustTargetGenerics(type.pointee, substitutions, lifetimeSubstitutions) };
     case "function-pointer":
       return {
         ...type,
-        args: type.args.map((argument) => substituteRustTargetTypeParameters(argument, substitutions)),
-        result: substituteRustTargetTypeParameters(type.result, substitutions),
+        args: type.args.map((argument) => substituteRustTargetGenerics(argument, substitutions, lifetimeSubstitutions)),
+        result: substituteRustTargetGenerics(type.result, substitutions, lifetimeSubstitutions),
       };
     case "closure":
       return {
         ...type,
-        args: type.args.map((argument) => substituteRustTargetTypeParameters(argument, substitutions)),
-        result: substituteRustTargetTypeParameters(type.result, substitutions),
+        args: type.args.map((argument) => substituteRustTargetGenerics(argument, substitutions, lifetimeSubstitutions)),
+        result: substituteRustTargetGenerics(type.result, substitutions, lifetimeSubstitutions),
+      };
+    case "trait-object":
+      return {
+        ...type,
+        principal: substituteRustTargetGenerics(type.principal, substitutions, lifetimeSubstitutions),
+        autoTraits: type.autoTraits.map((trait) =>
+          substituteRustTargetGenerics(trait, substitutions, lifetimeSubstitutions)),
+        ...(type.lifetime === undefined ? {} : { lifetime: substituteLifetime(type.lifetime) }),
+      };
+    case "impl-trait":
+      return {
+        ...type,
+        bounds: type.bounds.map((bound) =>
+          substituteRustTargetGenerics(bound, substitutions, lifetimeSubstitutions)),
+        captures: type.captures.map(substituteLifetime),
       };
     case "associated-type":
-      return { ...type, owner: substituteRustTargetTypeParameters(type.owner, substitutions) };
+      return {
+        ...type,
+        owner: substituteRustTargetGenerics(type.owner, substitutions, lifetimeSubstitutions),
+        ...(type.lifetimeArguments === undefined
+          ? {}
+          : { lifetimeArguments: type.lifetimeArguments.map(substituteLifetime) }),
+        ...(type.typeArguments === undefined
+          ? {}
+          : { typeArguments: type.typeArguments.map((argument) =>
+              substituteRustTargetGenerics(argument, substitutions, lifetimeSubstitutions)) }),
+      };
     case "target-specific": {
       const sourceType = rustSourceTypeCarrierValue(type);
       if (sourceType !== undefined) {
@@ -46,15 +94,18 @@ export function substituteRustTargetTypeParameters(
           sourceType.fileName,
           sourceType.typeName,
           sourceType.shape,
-          sourceType.typeArguments.map((argument) =>
-            substituteRustTargetTypeParameters(argument, substitutions)),
+          {
+            lifetimes: sourceType.lifetimeArguments.map(substituteLifetime),
+            types: sourceType.typeArguments.map((argument) =>
+              substituteRustTargetGenerics(argument, substitutions, lifetimeSubstitutions)),
+          },
         );
       }
       const structuralObject = rustStructuralObjectCarrierValue(type);
       if (structuralObject !== undefined) {
         return rustStructuralObjectTargetType(structuralObject.ownerFileName, structuralObject.fields.map((field) => ({
           ...field,
-          type: substituteRustTargetTypeParameters(field.type, substitutions),
+          type: substituteRustTargetGenerics(field.type, substitutions, lifetimeSubstitutions),
         })));
       }
       const sourceUnion = rustSourceUnionCarrierValue(type);
@@ -64,7 +115,7 @@ export function substituteRustTargetTypeParameters(
           sourceUnion.typeName,
           sourceUnion.variants.map((variant) => ({
             ...variant,
-            carrier: substituteRustTargetTypeParameters(variant.carrier, substitutions),
+            carrier: substituteRustTargetGenerics(variant.carrier, substitutions, lifetimeSubstitutions),
           })),
         );
       }
@@ -74,7 +125,7 @@ export function substituteRustTargetTypeParameters(
           namedType.id,
           namedType.path,
           namedType.typeArguments.map((argument) =>
-            substituteRustTargetTypeParameters(argument, substitutions)),
+            substituteRustTargetGenerics(argument, substitutions, lifetimeSubstitutions)),
           namedType.traits,
         );
       }
@@ -82,7 +133,7 @@ export function substituteRustTargetTypeParameters(
       return fixedArray === undefined
         ? type
         : rustFixedArrayTargetType(
-            substituteRustTargetTypeParameters(fixedArray.element, substitutions),
+            substituteRustTargetGenerics(fixedArray.element, substitutions, lifetimeSubstitutions),
             fixedArray.length,
           );
     }

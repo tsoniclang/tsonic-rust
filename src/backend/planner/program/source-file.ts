@@ -17,6 +17,7 @@ import {
 } from "../../../target-model/types/index.js";
 import {
   createRustSourceFile,
+  emptyRustGenerics,
 } from "../../target-ast/nodes.js";
 import { rustItemsReferenceModuleAlias } from "../../target-ast/inspection/source-module-usage.js";
 import type {
@@ -440,6 +441,7 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
     kind: "function",
     name: initializationFunctionName,
     visibility: "public",
+    generics: emptyRustGenerics,
     attrs: [
       "#[doc(hidden)]",
     ],

@@ -7,20 +7,131 @@ import type {
   RustPrimitiveTypeName,
 } from "../../target-model/syntax/tokens.js";
 
+export type RustLifetime =
+  | { readonly kind: "static" }
+  | { readonly kind: "placeholder" }
+  | { readonly kind: "named"; readonly name: string };
+
+export type RustConstArgument =
+  | { readonly kind: "integer"; readonly value: bigint }
+  | { readonly kind: "boolean"; readonly value: boolean }
+  | { readonly kind: "path"; readonly path: string }
+  | { readonly kind: "infer" };
+
+export type RustGenericArgument =
+  | { readonly kind: "lifetime"; readonly lifetime: RustLifetime }
+  | { readonly kind: "type"; readonly type: RustType }
+  | { readonly kind: "const"; readonly value: RustConstArgument };
+
+export type RustTypeBound =
+  | { readonly kind: "trait"; readonly path: string }
+  | { readonly kind: "trait-type"; readonly trait: RustType }
+  | { readonly kind: "lifetime"; readonly lifetime: RustLifetime }
+  | {
+      readonly kind: "callable";
+      readonly trait: "Fn" | "FnMut" | "FnOnce";
+      readonly binder: readonly RustLifetimeParameter[];
+      readonly parameters: readonly RustType[];
+      readonly result: RustType;
+    }
+  | { readonly kind: "maybe-sized" };
+
+export interface RustLifetimeParameter {
+  readonly kind: "lifetime";
+  readonly name: string;
+  readonly outlives: readonly RustLifetime[];
+}
+
+export interface RustOrdinaryTypeParameter {
+  readonly kind: "type";
+  readonly name: string;
+  readonly bounds: readonly RustTypeBound[];
+  readonly defaultType?: RustType;
+}
+
+export interface RustConstParameter {
+  readonly kind: "const";
+  readonly name: string;
+  readonly type: RustType;
+  readonly defaultValue?: RustConstArgument;
+}
+
+export type RustGenericParameter =
+  | RustLifetimeParameter
+  | RustOrdinaryTypeParameter
+  | RustConstParameter;
+
+export type RustWherePredicate =
+  | {
+      readonly kind: "lifetime";
+      readonly lifetime: RustLifetime;
+      readonly outlives: readonly RustLifetime[];
+    }
+  | {
+      readonly kind: "type";
+      readonly type: RustType;
+      readonly bounds: readonly RustTypeBound[];
+      readonly binder?: readonly RustLifetimeParameter[];
+    };
+
+export interface RustGenerics {
+  readonly parameters: readonly RustGenericParameter[];
+  readonly wherePredicates: readonly RustWherePredicate[];
+}
+
+export const emptyRustGenerics: RustGenerics = Object.freeze({
+  parameters: Object.freeze([]),
+  wherePredicates: Object.freeze([]),
+});
+
 export type RustType =
   | { readonly kind: "infer" }
   | { readonly kind: "primitive"; readonly name: RustPrimitiveTypeName }
   | { readonly kind: "string" }
-  | { readonly kind: "str-ref" }
+  | { readonly kind: "str" }
   | { readonly kind: "unit" }
   | { readonly kind: "never" }
-  | { readonly kind: "named"; readonly path: string; readonly identity?: string; readonly lifetimeArguments?: readonly string[]; readonly typeArguments?: readonly RustType[] }
-  | { readonly kind: "trait-object"; readonly trait: RustType }
-  | { readonly kind: "reference"; readonly referent: RustType; readonly mutable: boolean }
+  | {
+      readonly kind: "named";
+      readonly path: string;
+      readonly identity?: string;
+      readonly genericArguments?: readonly RustGenericArgument[];
+    }
+  | {
+      readonly kind: "qualified";
+      readonly owner: RustType;
+      readonly trait?: RustType;
+      readonly member: string;
+      readonly genericArguments?: readonly RustGenericArgument[];
+    }
+  | {
+      readonly kind: "trait-object";
+      readonly principal: RustType;
+      readonly autoTraits: readonly RustType[];
+      readonly lifetime?: RustLifetime;
+    }
+  | {
+      readonly kind: "impl-trait";
+      readonly bounds: readonly RustType[];
+      readonly captures: readonly RustLifetime[];
+    }
+  | {
+      readonly kind: "reference";
+      readonly referent: RustType;
+      readonly mutable: boolean;
+      readonly lifetime?: RustLifetime;
+    }
   | { readonly kind: "raw-pointer"; readonly pointee: RustType; readonly mutable: boolean }
   | { readonly kind: "fixed-array"; readonly element: RustType; readonly length: number }
   | { readonly kind: "slice"; readonly element: RustType }
-  | { readonly kind: "function-pointer"; readonly parameters: readonly RustType[]; readonly result: RustType; readonly abi?: readonly string[]; readonly isUnsafe?: boolean }
+  | {
+      readonly kind: "function-pointer";
+      readonly binder?: readonly RustLifetimeParameter[];
+      readonly parameters: readonly RustType[];
+      readonly result: RustType;
+      readonly abi?: readonly string[];
+      readonly isUnsafe?: boolean;
+    }
   | { readonly kind: "tuple"; readonly elements: readonly RustType[] };
 
 export type RustPattern =
@@ -219,16 +330,10 @@ export interface RustFunctionParam {
   readonly mutable?: boolean;
 }
 
-export type RustTypeBound =
-  | { readonly kind: "trait"; readonly path: string }
-  | { readonly kind: "lifetime"; readonly name: string };
-
-export interface RustTypeParameter {
-  readonly name: string;
-  readonly bounds: readonly RustTypeBound[];
-}
-
-export type RustSelfParam = "ref" | "mut-ref" | "rc";
+export type RustSelfParam =
+  | { readonly kind: "value" }
+  | { readonly kind: "reference"; readonly mutable: boolean; readonly lifetime?: RustLifetime }
+  | { readonly kind: "rc" };
 
 export type RustVisibility = "private" | "crate" | "public";
 
@@ -246,7 +351,7 @@ export interface RustImplFunction {
   readonly isAsync?: boolean;
   readonly isUnsafe?: boolean;
   readonly errorType?: RustType;
-  readonly typeParams?: readonly RustTypeParameter[];
+  readonly generics: RustGenerics;
   readonly selfParam?: RustSelfParam;
   readonly params: readonly RustFunctionParam[];
   readonly returnType?: RustType;
@@ -258,6 +363,7 @@ export interface RustTraitFunction {
   readonly attrs?: readonly string[];
   readonly isUnsafe?: boolean;
   readonly errorType?: RustType;
+  readonly generics: RustGenerics;
   readonly selfParam?: RustSelfParam;
   readonly params: readonly RustFunctionParam[];
   readonly returnType?: RustType;
@@ -272,7 +378,7 @@ export type RustItem =
       readonly isAsync?: boolean;
       readonly isUnsafe?: boolean;
       readonly errorType?: RustType;
-      readonly typeParams?: readonly RustTypeParameter[];
+      readonly generics: RustGenerics;
       readonly params: readonly RustFunctionParam[];
       readonly returnType?: RustType;
       readonly body: RustBlock;
@@ -295,11 +401,11 @@ export type RustItem =
       readonly constInitializer: boolean;
     }
   | { readonly kind: "mod-decl"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly string[] }
-  | { readonly kind: "struct"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly string[]; readonly derives: readonly string[]; readonly typeParams?: readonly RustTypeParameter[]; readonly fields: readonly RustStructField[] }
-  | { readonly kind: "trait"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly string[]; readonly typeParams?: readonly RustTypeParameter[]; readonly superTraits?: readonly RustType[]; readonly functions: readonly RustTraitFunction[] }
-  | { readonly kind: "impl"; readonly typeParams?: readonly RustTypeParameter[]; readonly trait?: RustType; readonly target: RustType; readonly functions: readonly RustImplFunction[] }
-  | { readonly kind: "enum"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly string[]; readonly derives: readonly string[]; readonly variants: readonly { readonly name: string; readonly discriminant?: string; readonly fields?: readonly RustType[] }[] }
-  | { readonly kind: "type-alias"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly string[]; readonly typeParams?: readonly RustTypeParameter[]; readonly target: RustType }
+  | { readonly kind: "struct"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly string[]; readonly derives: readonly string[]; readonly generics: RustGenerics; readonly fields: readonly RustStructField[] }
+  | { readonly kind: "trait"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly string[]; readonly generics: RustGenerics; readonly superTraits?: readonly RustType[]; readonly functions: readonly RustTraitFunction[] }
+  | { readonly kind: "impl"; readonly generics: RustGenerics; readonly trait?: RustType; readonly target: RustType; readonly functions: readonly RustImplFunction[] }
+  | { readonly kind: "enum"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly string[]; readonly derives: readonly string[]; readonly generics: RustGenerics; readonly variants: readonly { readonly name: string; readonly discriminant?: string; readonly fields?: readonly RustType[] }[] }
+  | { readonly kind: "type-alias"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly string[]; readonly generics: RustGenerics; readonly target: RustType }
   | { readonly kind: "use"; readonly path: string; readonly alias?: string; readonly visibility?: RustVisibility };
 
 export interface RustSourceFileModel {

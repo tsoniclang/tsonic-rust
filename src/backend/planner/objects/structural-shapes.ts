@@ -5,10 +5,12 @@ import {
 } from "../../target-ast/nodes.js";
 import type {
   RustItem,
+  RustGenericArgument,
+  RustGenerics,
+  RustOrdinaryTypeParameter,
   RustSourceFileModel,
   RustStructField,
   RustType,
-  RustTypeParameter,
   RustVisibility,
 } from "../../target-ast/nodes.js";
 import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
@@ -61,13 +63,18 @@ export function planRustStructuralShapeModule(
     const visibility: RustVisibility = publicShapeNames.has(definition.targetName)
       ? "public"
       : "crate";
-    const typeParams: readonly RustTypeParameter[] = definition.typeParameterNames.map((name) => ({
+    const typeParameters: readonly RustOrdinaryTypeParameter[] = definition.typeParameterNames.map((name) => ({
+      kind: "type",
       name,
       bounds: [],
     }));
-    const aliasTypeArguments: readonly RustType[] = definition.typeParameterNames.map((name) => ({
-      kind: "named",
-      path: name,
+    const generics: RustGenerics = {
+      parameters: typeParameters,
+      wherePredicates: [],
+    };
+    const aliasGenericArguments: readonly RustGenericArgument[] = definition.typeParameterNames.map((name) => ({
+      kind: "type",
+      type: { kind: "named", path: name },
     }));
     const callableAliases: RustItem[] = [];
     const fields: RustStructField[] = [];
@@ -106,8 +113,8 @@ export function planRustStructuralShapeModule(
           ? structuralCallableAlias(
               callableAliases,
               `${definition.targetName}${rustPascalCaseIdentifier(field.sourceName)}Method`,
-              typeParams,
-              aliasTypeArguments,
+              generics,
+              aliasGenericArguments,
               renderedStorageType,
               visibility,
             )
@@ -173,8 +180,8 @@ export function planRustStructuralShapeModule(
       const getterAlias = structuralCallableAlias(
         callableAliases,
         `${definition.targetName}${rustPascalCaseIdentifier(field.sourceName)}Getter`,
-        typeParams,
-        aliasTypeArguments,
+        generics,
+        aliasGenericArguments,
         getterType,
         visibility,
       );
@@ -197,8 +204,8 @@ export function planRustStructuralShapeModule(
         const setterAlias = structuralCallableAlias(
           callableAliases,
           `${definition.targetName}${rustPascalCaseIdentifier(field.sourceName)}Setter`,
-          typeParams,
-          aliasTypeArguments,
+          generics,
+          aliasGenericArguments,
           setterType,
           visibility,
         );
@@ -216,7 +223,7 @@ export function planRustStructuralShapeModule(
       visibility,
       attrs: [rustLintAttributes.deadCode],
       derives: [],
-      ...(typeParams.length === 0 ? {} : { typeParams }),
+      generics,
       fields,
     });
   }
@@ -234,8 +241,8 @@ export function planRustStructuralShapeModule(
 function structuralCallableAlias(
   aliases: RustItem[],
   name: string,
-  typeParams: readonly RustTypeParameter[],
-  typeArguments: readonly RustType[],
+  generics: RustGenerics,
+  genericArguments: readonly RustGenericArgument[],
   target: RustType,
   visibility: RustVisibility,
 ): RustType {
@@ -243,12 +250,12 @@ function structuralCallableAlias(
     kind: "type-alias",
     name,
     visibility,
-    ...(typeParams.length === 0 ? {} : { typeParams }),
+    generics,
     target,
   });
   return {
     kind: "named",
     path: name,
-    ...(typeArguments.length === 0 ? {} : { typeArguments }),
+    ...(genericArguments.length === 0 ? {} : { genericArguments }),
   };
 }

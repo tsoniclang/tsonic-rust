@@ -8,6 +8,13 @@ import type {
   RustSelectedTargetSignature,
   RustTargetTypeRef,
 } from "../../target-model/types/model.js";
+import {
+  rustLifetimesEqual,
+} from "../lifetimes/index.js";
+import type {
+  RustLifetimeBinder,
+  RustLifetimeRef,
+} from "../lifetimes/index.js";
 
 export function rustTargetTypeRefEquals(
   left: RustTargetTypeRef | undefined,
@@ -178,9 +185,9 @@ function rustTargetTypeRefEqualsValidated(
       return right.kind === left.kind && left.name === right.name;
     case "target-named":
       return right.kind === left.kind && left.id === right.id &&
+        lifetimeListsEqual(left.lifetimeArguments, right.lifetimeArguments) &&
         targetTypeRefListsEqual(left.typeArguments, right.typeArguments);
     case "type-parameter":
-    case "lifetime":
       return right.kind === left.kind && left.name === right.name;
     case "opaque":
       return right.kind === left.kind && left.id === right.id;
@@ -194,23 +201,36 @@ function rustTargetTypeRefEqualsValidated(
       return right.kind === left.kind && targetTypeRefListsEqual(left.elements, right.elements);
     case "reference":
       return right.kind === left.kind && left.mutable === right.mutable &&
-        left.lifetime === right.lifetime &&
+        rustLifetimesEqual(left.lifetime, right.lifetime) &&
         rustTargetTypeRefEqualsValidated(left.referent, right.referent);
     case "pointer":
       return right.kind === left.kind && left.mutability === right.mutability &&
         rustTargetTypeRefEqualsValidated(left.pointee, right.pointee);
     case "function-pointer":
       return right.kind === left.kind &&
+        lifetimeBindersEqual(left.lifetimeBinder, right.lifetimeBinder) &&
         stringListsEqual(left.abi, right.abi) &&
         left.isUnsafe === right.isUnsafe &&
         targetTypeRefListsEqual(left.args, right.args) &&
         rustTargetTypeRefEqualsValidated(left.result, right.result);
     case "closure":
       return right.kind === left.kind &&
+        lifetimeBindersEqual(left.lifetimeBinder, right.lifetimeBinder) &&
         targetTypeRefListsEqual(left.args, right.args) &&
         rustTargetTypeRefEqualsValidated(left.result, right.result);
+    case "trait-object":
+      return right.kind === left.kind &&
+        rustTargetTypeRefEqualsValidated(left.principal, right.principal) &&
+        targetTypeRefListsEqual(left.autoTraits, right.autoTraits) &&
+        rustLifetimesEqual(left.lifetime, right.lifetime);
+    case "impl-trait":
+      return right.kind === left.kind && left.id === right.id &&
+        targetTypeRefListsEqual(left.bounds, right.bounds) &&
+        lifetimeListsEqual(left.captures, right.captures);
     case "associated-type":
       return right.kind === left.kind && left.name === right.name &&
+        lifetimeListsEqual(left.lifetimeArguments, right.lifetimeArguments) &&
+        targetTypeRefListsEqual(left.typeArguments, right.typeArguments) &&
         rustTargetTypeRefEqualsValidated(left.owner, right.owner);
     case "target-specific":
       return right.kind === left.kind && left.target === right.target && left.name === right.name &&
@@ -237,11 +257,16 @@ function validateRustTargetTypeRef(
         return hasExactKeys(value, ["kind", "name"], ["kind", "name"]) &&
           sourcePrimitiveNames.has(value.name);
       case "target-named":
-        return hasExactKeys(value, ["kind", "id", "typeArguments"], ["kind", "id"]) &&
+        return hasExactKeys(
+          value,
+          ["kind", "id", "lifetimeArguments", "typeArguments"],
+          ["kind", "id"],
+        ) &&
           typeof value.id === "string" && value.id.length > 0 &&
+          (value.lifetimeArguments === undefined ||
+            validateLifetimeList(value.lifetimeArguments)) &&
           (value.typeArguments === undefined || validateChildren(value.typeArguments));
       case "type-parameter":
-      case "lifetime":
         return hasExactKeys(value, ["kind", "name"], ["kind", "name"]) &&
           typeof value.name === "string" && value.name.length > 0;
       case "array":
@@ -257,27 +282,57 @@ function validateRustTargetTypeRef(
       case "reference":
         return hasExactKeys(value, ["kind", "referent", "mutable", "lifetime"], ["kind", "referent", "mutable"]) &&
           validateChild(value.referent) && typeof value.mutable === "boolean" &&
-          (value.lifetime === undefined || (typeof value.lifetime === "string" && value.lifetime.length > 0));
+          (value.lifetime === undefined || validateLifetime(value.lifetime));
       case "pointer":
         return hasExactKeys(value, ["kind", "pointee", "mutability"], ["kind", "pointee"]) &&
           validateChild(value.pointee) &&
           (value.mutability === undefined || value.mutability === "const" || value.mutability === "mut" ||
             value.mutability === "target-defined");
       case "function-pointer":
-        return hasExactKeys(value, ["kind", "args", "result", "abi", "isUnsafe"], ["kind", "args", "result"]) &&
+        return hasExactKeys(
+          value,
+          ["kind", "args", "result", "lifetimeBinder", "abi", "isUnsafe"],
+          ["kind", "args", "result"],
+        ) &&
           validateChildren(value.args) && validateChild(value.result) &&
+          (value.lifetimeBinder === undefined || validateLifetimeBinder(value.lifetimeBinder)) &&
           (value.isUnsafe === undefined || typeof value.isUnsafe === "boolean") &&
           (value.abi === undefined ||
             (isDenseDataArray(value.abi) && value.abi.every((part) => typeof part === "string")));
       case "closure":
-        return hasExactKeys(value, ["kind", "args", "result"], ["kind", "args", "result"]) &&
-          validateChildren(value.args) && validateChild(value.result);
+        return hasExactKeys(
+          value,
+          ["kind", "args", "result", "lifetimeBinder"],
+          ["kind", "args", "result"],
+        ) && validateChildren(value.args) && validateChild(value.result) &&
+          (value.lifetimeBinder === undefined || validateLifetimeBinder(value.lifetimeBinder));
       case "opaque":
         return hasExactKeys(value, ["kind", "id"], ["kind", "id"]) &&
           typeof value.id === "string" && value.id.length > 0;
+      case "trait-object":
+        return hasExactKeys(
+          value,
+          ["kind", "principal", "autoTraits", "lifetime"],
+          ["kind", "principal", "autoTraits"],
+        ) && validateChild(value.principal) && validateChildren(value.autoTraits) &&
+          (value.lifetime === undefined || validateLifetime(value.lifetime));
+      case "impl-trait":
+        return hasExactKeys(
+          value,
+          ["kind", "id", "bounds", "captures"],
+          ["kind", "id", "bounds", "captures"],
+        ) && typeof value.id === "string" && value.id.length > 0 &&
+          validateChildren(value.bounds) && validateLifetimeList(value.captures);
       case "associated-type":
-        return hasExactKeys(value, ["kind", "owner", "name"], ["kind", "owner", "name"]) &&
-          validateChild(value.owner) && typeof value.name === "string" && value.name.length > 0;
+        return hasExactKeys(
+          value,
+          ["kind", "owner", "name", "lifetimeArguments", "typeArguments"],
+          ["kind", "owner", "name"],
+        ) && validateChild(value.owner) &&
+          typeof value.name === "string" && value.name.length > 0 &&
+          (value.lifetimeArguments === undefined ||
+            validateLifetimeList(value.lifetimeArguments)) &&
+          (value.typeArguments === undefined || validateChildren(value.typeArguments));
       case "target-specific":
         return hasExactKeys(value, ["kind", "target", "name", "value"], ["kind", "target", "name"]) &&
           value.target === "rust" && typeof value.name === "string" && value.name.length > 0 &&
@@ -288,6 +343,45 @@ function validateRustTargetTypeRef(
   } finally {
     active.delete(value);
   }
+}
+
+function validateLifetime(value: unknown): value is RustLifetimeRef {
+  if (!isPlainRecord(value)) return false;
+  switch (value.kind) {
+    case "static":
+    case "placeholder":
+      return hasExactKeys(value, ["kind"], ["kind"]);
+    case "parameter":
+      return hasExactKeys(
+        value,
+        ["kind", "identity", "name"],
+        ["kind", "identity", "name"],
+      ) && nonEmptyString(value.identity) && nonEmptyString(value.name);
+    case "bound":
+      return hasExactKeys(
+        value,
+        ["kind", "binderIdentity", "identity", "name"],
+        ["kind", "binderIdentity", "identity", "name"],
+      ) && nonEmptyString(value.binderIdentity) &&
+        nonEmptyString(value.identity) && nonEmptyString(value.name);
+    default:
+      return false;
+  }
+}
+
+function validateLifetimeList(value: unknown): value is readonly RustLifetimeRef[] {
+  return isDenseDataArray(value) && value.every(validateLifetime);
+}
+
+function validateLifetimeBinder(value: unknown): value is RustLifetimeBinder {
+  return isPlainRecord(value) &&
+    hasExactKeys(value, ["identity", "parameters"], ["identity", "parameters"]) &&
+    nonEmptyString(value.identity) && validateLifetimeList(value.parameters) &&
+    value.parameters.every((parameter) => parameter.kind === "bound");
+}
+
+function nonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0;
 }
 
 const sourcePrimitiveNames = new Set<unknown>([
@@ -335,4 +429,24 @@ function stringListsEqual(
   }
   return left !== undefined && right !== undefined && isDenseDataArray(left) && isDenseDataArray(right) &&
     left.length === right.length && left.every((entry, index) => entry === right[index]);
+}
+
+function lifetimeListsEqual(
+  left: readonly RustLifetimeRef[] | undefined,
+  right: readonly RustLifetimeRef[] | undefined,
+): boolean {
+  if (left === right) return true;
+  return left !== undefined && right !== undefined &&
+    left.length === right.length &&
+    left.every((entry, index) => rustLifetimesEqual(entry, right[index]));
+}
+
+function lifetimeBindersEqual(
+  left: RustLifetimeBinder | undefined,
+  right: RustLifetimeBinder | undefined,
+): boolean {
+  return left === undefined || right === undefined
+    ? left === right
+    : left.identity === right.identity &&
+      lifetimeListsEqual(left.parameters, right.parameters);
 }

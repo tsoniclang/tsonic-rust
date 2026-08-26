@@ -8,9 +8,11 @@ import {
 import { projectAccessorCallableShape, projectDowncastReturnType } from "./forwarders.js";
 import { rustCallableSpecialization } from "../../declarations/callable-generics.js";
 import { rustLintAttributes } from "../../../target-ast/normalization/lint-policy.js";
-import { rustProjectDispatchTraitName, rustProjectDispatchTraitType, rustProjectTypeParameters } from "./names.js";
+import { rustProjectDispatchTraitName, rustProjectDispatchTraitType, rustProjectGenerics } from "./names.js";
 import { rustProjectObjectIdentityField } from "../project-objects.js";
 import type { RustItem, RustTraitFunction, RustType } from "../../../target-ast/nodes.js";
+import { emptyRustGenerics } from "../../../target-ast/nodes.js";
+import { rustSelfParameter } from "../../declarations/self-parameter.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import {
   rustErrorBoundaryForProjectMember,
@@ -25,17 +27,18 @@ export function projectIdentityImplementations(
   definition: RustProjectTypeDefinition,
   wrapperType: RustType,
 ): readonly RustItem[] {
-  const typeParams = rustProjectTypeParameters(definition);
+  const generics = rustProjectGenerics(definition);
   return [
     {
       kind: "impl",
-      ...(typeParams.length === 0 ? {} : { typeParams }),
+      generics,
       trait: { kind: "named", path: "std::fmt::Debug" },
       target: wrapperType,
       functions: [{
         name: "fmt",
         visibility: "private",
-        selfParam: "ref",
+        generics: emptyRustGenerics,
+        selfParam: rustSelfParameter("ref"),
         params: [{
           name: "formatter",
           type: {
@@ -44,7 +47,7 @@ export function projectIdentityImplementations(
             referent: {
               kind: "named",
               path: "std::fmt::Formatter",
-              lifetimeArguments: ["_"],
+              genericArguments: [{ kind: "lifetime", lifetime: { kind: "placeholder" } }],
             },
           },
         }],
@@ -64,13 +67,14 @@ export function projectIdentityImplementations(
     },
     {
       kind: "impl",
-      ...(typeParams.length === 0 ? {} : { typeParams }),
+      generics,
       trait: { kind: "named", path: "PartialEq" },
       target: wrapperType,
       functions: [{
         name: "eq",
         visibility: "private",
-        selfParam: "ref",
+        generics: emptyRustGenerics,
+        selfParam: rustSelfParameter("ref"),
         params: [{
           name: "other",
           type: {
@@ -103,7 +107,7 @@ export function projectIdentityImplementations(
     },
     {
       kind: "impl",
-      ...(typeParams.length === 0 ? {} : { typeParams }),
+      generics,
       trait: { kind: "named", path: "Eq" },
       target: wrapperType,
       functions: [],
@@ -128,7 +132,8 @@ export function planProjectDispatchTrait(
     }
     functions.push({
       name: route.slot,
-      selfParam: "rc",
+      generics: emptyRustGenerics,
+      selfParam: rustSelfParameter("rc"),
       params: [],
       returnType,
     });
@@ -152,7 +157,8 @@ export function planProjectDispatchTrait(
     }
     functions.push({
       name: read,
-      selfParam: dispatch.read.selfMode,
+      generics: emptyRustGenerics,
+      selfParam: rustSelfParameter(dispatch.read.selfMode),
       params: [],
       returnType: field.type,
       ...(dispatch.read.fallible
@@ -162,7 +168,8 @@ export function planProjectDispatchTrait(
     if (dispatch.write !== undefined) {
       functions.push({
         name: write!,
-        selfParam: dispatch.write.selfMode,
+        generics: emptyRustGenerics,
+        selfParam: rustSelfParameter(dispatch.write.selfMode),
         params: [{ name: "value", type: field.type }],
         ...(dispatch.write.fallible
           ? { errorType: rustErrorType(fieldErrorBoundary!) }
@@ -187,7 +194,8 @@ export function planProjectDispatchTrait(
     }
     functions.push({
       name: slot,
-      selfParam: "rc",
+      generics: emptyRustGenerics,
+      selfParam: rustSelfParameter("rc"),
       params: shape.params.map((parameter) => ({ ...parameter, mutable: false })),
       ...(shape.returnType === undefined ? {} : { returnType: shape.returnType }),
       ...(shape.errorType === undefined ? {} : { errorType: shape.errorType }),
@@ -213,7 +221,8 @@ export function planProjectDispatchTrait(
       }
       const signature = (name: string): RustTraitFunction => ({
         name,
-        selfParam: "rc",
+        generics: emptyRustGenerics,
+        selfParam: rustSelfParameter("rc"),
         params: shape.params.map((parameter) => ({ ...parameter, mutable: false })),
         ...(shape.returnType === undefined ? {} : { returnType: shape.returnType }),
         ...(shape.errorType === undefined ? {} : { errorType: shape.errorType }),
@@ -242,7 +251,8 @@ export function planProjectDispatchTrait(
     }
     functions.push({
       name: write,
-      selfParam: "ref",
+      generics: emptyRustGenerics,
+      selfParam: rustSelfParameter("ref"),
       params: [{ name: "value", type: property.callableType }],
     });
   }
@@ -251,7 +261,7 @@ export function planProjectDispatchTrait(
   if (superTraits.some((type) => type === undefined)) {
     return undefined;
   }
-  const typeParams = rustProjectTypeParameters(definition);
+  const generics = rustProjectGenerics(definition);
   const publiclyReachable = context.input.program.projectTypes.programErrorVariant(definition) !== undefined ||
     rustProjectTypeHasPublicImplementationAbi(context, definition.targetName);
   return {
@@ -262,7 +272,7 @@ export function planProjectDispatchTrait(
       ...(publiclyReachable ? ["#[doc(hidden)]"] : []),
       rustLintAttributes.deadCode,
     ],
-    ...(typeParams.length === 0 ? {} : { typeParams }),
+    generics,
     ...(superTraits.length === 0 ? {} : { superTraits: superTraits as readonly RustType[] }),
     functions,
   };

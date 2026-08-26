@@ -293,7 +293,7 @@ function planRustFunctionItem(
       return undefined;
     }
     context.usedAliases?.add("rt");
-    const finalizedTypeParams = genericPlan.finalizeTypeParameters();
+    const generics = genericPlan.finalizeGenerics();
     const item: Extract<RustItem, { readonly kind: "function" }> = {
       kind: "function",
       name,
@@ -304,7 +304,7 @@ function planRustFunctionItem(
         ? {}
         : { attrs: declarationAttributes }),
       ...(isUnsafe ? { isUnsafe: true } : {}),
-      ...(finalizedTypeParams.length === 0 ? {} : { typeParams: finalizedTypeParams }),
+      generics,
       params,
       ...(returnType === undefined ? {} : { returnType }),
       body: {
@@ -342,7 +342,7 @@ function planRustFunctionItem(
     ));
     return undefined;
   }
-  const finalizedTypeParams = genericPlan.finalizeTypeParameters();
+  const generics = genericPlan.finalizeGenerics();
   const item: Extract<RustItem, { readonly kind: "function" }> = {
     kind: "function",
     name,
@@ -357,9 +357,7 @@ function planRustFunctionItem(
     ...(callableErrorBoundary === undefined
       ? {}
       : { errorType: rustErrorType(callableErrorBoundary) }),
-    ...(finalizedTypeParams.length === 0
-      ? {}
-      : { typeParams: finalizedTypeParams }),
+    generics,
     params,
     ...(returnType === undefined ? {} : { returnType }),
     body: {

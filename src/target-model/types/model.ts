@@ -9,21 +9,64 @@ import type {
   Symbol,
   Type,
 } from "@tsonic/tsts";
+import type {
+  RustLifetimeBinder,
+  RustLifetimeRef,
+} from "../lifetimes/index.js";
 
 export type RustTargetTypeRef =
   | { readonly kind: "source-primitive"; readonly name: SourcePrimitiveKind }
-  | { readonly kind: "target-named"; readonly id: string; readonly typeArguments?: readonly RustTargetTypeRef[] }
+  | {
+      readonly kind: "target-named";
+      readonly id: string;
+      readonly lifetimeArguments?: readonly RustLifetimeRef[];
+      readonly typeArguments?: readonly RustTargetTypeRef[];
+    }
   | { readonly kind: "type-parameter"; readonly name: string }
   | { readonly kind: "array"; readonly element: RustTargetTypeRef; readonly rank?: number }
   | { readonly kind: "slice"; readonly element: RustTargetTypeRef }
   | { readonly kind: "tuple"; readonly elements: readonly RustTargetTypeRef[] }
-  | { readonly kind: "reference"; readonly referent: RustTargetTypeRef; readonly mutable: boolean; readonly lifetime?: string }
+  | {
+      readonly kind: "reference";
+      readonly referent: RustTargetTypeRef;
+      readonly mutable: boolean;
+      readonly lifetime?: RustLifetimeRef;
+    }
   | { readonly kind: "pointer"; readonly pointee: RustTargetTypeRef; readonly mutability?: "const" | "mut" | "target-defined" }
-  | { readonly kind: "function-pointer"; readonly args: readonly RustTargetTypeRef[]; readonly result: RustTargetTypeRef; readonly abi?: readonly string[]; readonly isUnsafe?: boolean }
-  | { readonly kind: "closure"; readonly args: readonly RustTargetTypeRef[]; readonly result: RustTargetTypeRef }
+  | {
+      readonly kind: "function-pointer";
+      readonly args: readonly RustTargetTypeRef[];
+      readonly result: RustTargetTypeRef;
+      readonly lifetimeBinder?: RustLifetimeBinder;
+      readonly abi?: readonly string[];
+      readonly isUnsafe?: boolean;
+    }
+  | {
+      readonly kind: "closure";
+      readonly args: readonly RustTargetTypeRef[];
+      readonly result: RustTargetTypeRef;
+      readonly lifetimeBinder?: RustLifetimeBinder;
+    }
   | { readonly kind: "opaque"; readonly id: string }
-  | { readonly kind: "associated-type"; readonly owner: RustTargetTypeRef; readonly name: string }
-  | { readonly kind: "lifetime"; readonly name: string }
+  | {
+      readonly kind: "trait-object";
+      readonly principal: RustTargetTypeRef;
+      readonly autoTraits: readonly RustTargetTypeRef[];
+      readonly lifetime?: RustLifetimeRef;
+    }
+  | {
+      readonly kind: "impl-trait";
+      readonly id: string;
+      readonly bounds: readonly RustTargetTypeRef[];
+      readonly captures: readonly RustLifetimeRef[];
+    }
+  | {
+      readonly kind: "associated-type";
+      readonly owner: RustTargetTypeRef;
+      readonly name: string;
+      readonly lifetimeArguments?: readonly RustLifetimeRef[];
+      readonly typeArguments?: readonly RustTargetTypeRef[];
+    }
   | { readonly kind: "target-specific"; readonly target: "rust"; readonly name: string; readonly value?: unknown };
 
 export type TargetTypeRef = RustTargetTypeRef;

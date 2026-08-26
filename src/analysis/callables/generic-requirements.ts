@@ -19,6 +19,7 @@ import {
   rustSourceTypeCarrierValue,
 } from "../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import {
   rustClosureCaptureFactKey,
   rustGeneratorFactKey,
@@ -82,6 +83,7 @@ export function analyzeRustCallableGenericRequirements(
   sourceFiles: readonly SourceFile[],
   facts: RustPlanQueries,
   names: RustNamePlan,
+  sourceLifetimes: RustLifetimeIndex,
 ): AnalyzeRustCallableGenericRequirementsResult {
   const ast = source.ast;
   const diagnostics: TargetDiagnostic[] = [];
@@ -140,6 +142,7 @@ export function analyzeRustCallableGenericRequirements(
         declaration,
         facts,
         names,
+        sourceLifetimes,
         idByDeclaration,
         implementationDeclaration,
         contractFor(candidate) {
@@ -210,6 +213,7 @@ interface ClassifyCallableInput {
   readonly declaration: Node;
   readonly facts: RustPlanQueries;
   readonly names: RustNamePlan;
+  readonly sourceLifetimes: RustLifetimeIndex;
   readonly idByDeclaration: WeakMap<Node, string>;
   readonly implementationDeclaration: (declaration: Node) => Node;
   readonly contractFor: (declaration: Node) => RequirementContractState | undefined;
@@ -224,7 +228,8 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
   | { readonly kind: "rejected"; readonly reason: string } {
   const { ast, declaration, facts, names } = input;
   const typeParameterNodes = ast.typeParameters(declaration).filter(
-    (candidate): candidate is Node => candidate !== undefined,
+    (candidate): candidate is Node => candidate !== undefined &&
+      input.sourceLifetimes.parameterFor(candidate)?.kind !== "lifetime",
   );
   const typeParameterNames = typeParameterNodes.map((parameter) =>
     names.nameForDeclaration(parameter));
@@ -456,6 +461,10 @@ function classifyStaticCarrier(
       return carrier.elements.every((element) =>
         classifyStaticCarrier(element, declared, byParameter));
     case "target-named": {
+      if ((carrier.lifetimeArguments ?? []).some((lifetime) =>
+        lifetime.kind !== "static")) {
+        return false;
+      }
       const arguments_ = carrier.typeArguments ?? [];
       if (carrier.id === rustOptionTargetId || carrier.id === rustLocationTargetId) {
         return arguments_.every((argument) =>
@@ -479,7 +488,7 @@ function classifyStaticCarrier(
         containsDeclaredTypeParameter(argument, declared));
     }
     case "reference":
-      return carrier.lifetime === "static" &&
+      return carrier.lifetime?.kind === "static" &&
         classifyStaticCarrier(carrier.referent, declared, byParameter);
     case "pointer":
       return classifyStaticCarrier(carrier.pointee, declared, byParameter);
@@ -487,9 +496,21 @@ function classifyStaticCarrier(
       return carrier.args.every((argument) =>
         classifyStaticCarrier(argument, declared, byParameter)) &&
         classifyStaticCarrier(carrier.result, declared, byParameter);
+    case "trait-object":
+      return carrier.lifetime?.kind === "static" &&
+        classifyStaticCarrier(carrier.principal, declared, byParameter) &&
+        carrier.autoTraits.every((trait) =>
+          classifyStaticCarrier(trait, declared, byParameter));
+    case "impl-trait":
+      return carrier.captures.every((lifetime) => lifetime.kind === "static") &&
+        carrier.bounds.every((bound) =>
+          classifyStaticCarrier(bound, declared, byParameter));
     case "closure":
-    case "associated-type":
       return !containsDeclaredTypeParameter(carrier, declared);
+    case "associated-type":
+      return (carrier.lifetimeArguments ?? []).every((lifetime) =>
+        lifetime.kind === "static") &&
+        !containsDeclaredTypeParameter(carrier, declared);
     default:
       return true;
   }
@@ -521,7 +542,16 @@ function containsDeclaredTypeParameter(
         containsDeclaredTypeParameter(argument, declared)) ||
         containsDeclaredTypeParameter(carrier.result, declared);
     case "associated-type":
-      return containsDeclaredTypeParameter(carrier.owner, declared);
+      return containsDeclaredTypeParameter(carrier.owner, declared) ||
+        carrier.typeArguments?.some((argument) =>
+          containsDeclaredTypeParameter(argument, declared)) === true;
+    case "trait-object":
+      return containsDeclaredTypeParameter(carrier.principal, declared) ||
+        carrier.autoTraits.some((trait) =>
+          containsDeclaredTypeParameter(trait, declared));
+    case "impl-trait":
+      return carrier.bounds.some((bound) =>
+        containsDeclaredTypeParameter(bound, declared));
     case "target-specific": {
       const fixedArray = rustFixedArrayCarrierValue(carrier);
       if (fixedArray !== undefined) {

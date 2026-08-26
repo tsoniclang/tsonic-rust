@@ -561,7 +561,12 @@ export function planProviderOperationExpression(
           path: form.traitPath,
           ...(traitTypeArguments.length === 0
             ? {}
-            : { typeArguments: traitTypeArguments as readonly RustType[] }),
+            : {
+                genericArguments: (traitTypeArguments as readonly RustType[]).map((type) => ({
+                  kind: "type" as const,
+                  type,
+                })),
+              }),
         },
         method: form.method,
         args,
@@ -584,7 +589,12 @@ export function planProviderOperationExpression(
           path: form.traitPath,
           ...(traitTypeArguments.length === 0
             ? {}
-            : { typeArguments: traitTypeArguments as readonly RustType[] }),
+            : {
+                genericArguments: (traitTypeArguments as readonly RustType[]).map((type) => ({
+                  kind: "type" as const,
+                  type,
+                })),
+              }),
         },
         name: form.name,
       });

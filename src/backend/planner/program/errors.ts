@@ -12,6 +12,7 @@ import {
   type RustSourceFileModel,
   type RustType,
 } from "../../target-ast/nodes.js";
+import { emptyRustGenerics } from "../../target-ast/nodes.js";
 
 const programErrorName = "TsonicError";
 const programResultName = "TsonicResult";
@@ -32,9 +33,16 @@ function namedType(path: string, typeArguments?: readonly RustType[]): RustType 
   return {
     kind: "named",
     path,
-    ...(typeArguments === undefined ? {} : { typeArguments }),
+    ...(typeArguments === undefined
+      ? {}
+      : { genericArguments: typeArguments.map((type) => ({ kind: "type" as const, type })) }),
   };
 }
+
+const oneTypeParameterGenerics = Object.freeze({
+  parameters: Object.freeze([{ kind: "type" as const, name: "T", bounds: Object.freeze([]) }]),
+  wherePredicates: Object.freeze([]),
+});
 
 function resultType(value: RustType): RustType {
   return namedType(programResultName, [value]);
@@ -143,6 +151,7 @@ export function planRustProgramErrorModule(
     },
     {
       kind: "enum",
+      generics: emptyRustGenerics,
       name: programErrorName,
       visibility: "public",
       attrs: ["#[doc(hidden)]"],
@@ -161,7 +170,7 @@ export function planRustProgramErrorModule(
       kind: "type-alias",
       name: programResultName,
       visibility: "public",
-      typeParams: [{ name: "T", bounds: [] }],
+      generics: oneTypeParameterGenerics,
       target: namedType("Result", [typeParameterT, programErrorType]),
     },
     fromImplementation(runtimeErrorType, "Runtime", false),
@@ -178,6 +187,7 @@ export function planRustProgramErrorModule(
     debugImplementation(),
     {
       kind: "impl",
+      generics: emptyRustGenerics,
       trait: namedType("std::error::Error"),
       target: programErrorType,
       functions: [],
@@ -200,11 +210,13 @@ function fromImplementation(
     : value;
   return {
     kind: "impl",
+    generics: emptyRustGenerics,
     trait: namedType("std::convert::From", [source]),
     target: programErrorType,
     functions: [{
       name: "from",
       visibility: "private",
+      generics: emptyRustGenerics,
       params: [{ name: "value", type: source }],
       returnType: namedType("Self"),
       body: {
@@ -224,17 +236,19 @@ function displayImplementation(projectVariants: readonly string[]): RustItem {
     referent: {
       kind: "named",
       path: "std::fmt::Formatter",
-      lifetimeArguments: ["_"],
+      genericArguments: [{ kind: "lifetime", lifetime: { kind: "placeholder" } }],
     },
   };
   return {
     kind: "impl",
+    generics: emptyRustGenerics,
     trait: namedType("std::fmt::Display"),
     target: programErrorType,
     functions: [{
       name: "fmt",
       visibility: "private",
-      selfParam: "ref",
+      generics: emptyRustGenerics,
+      selfParam: { kind: "reference", mutable: false },
       params: [{ name: "formatter", type: formatterType }],
       returnType: namedType("std::fmt::Result"),
       body: {
@@ -281,12 +295,14 @@ function displayDelegateArm(variant: string): {
 function debugImplementation(): RustItem {
   return {
     kind: "impl",
+    generics: emptyRustGenerics,
     trait: namedType("std::fmt::Debug"),
     target: programErrorType,
     functions: [{
       name: "fmt",
       visibility: "private",
-      selfParam: "ref",
+      generics: emptyRustGenerics,
+      selfParam: { kind: "reference", mutable: false },
       params: [{
         name: "formatter",
         type: {
@@ -295,7 +311,7 @@ function debugImplementation(): RustItem {
           referent: {
             kind: "named",
             path: "std::fmt::Formatter",
-            lifetimeArguments: ["_"],
+            genericArguments: [{ kind: "lifetime", lifetime: { kind: "placeholder" } }],
           },
         },
       }],
@@ -313,12 +329,14 @@ function debugImplementation(): RustItem {
 function sourceStringImplementation(): RustItem {
   return {
     kind: "impl",
+    generics: emptyRustGenerics,
     trait: namedType("tsonic_rust_runtime::ToSourceString"),
     target: programErrorType,
     functions: [{
       name: "to_source_string",
       visibility: "private",
-      selfParam: "ref",
+      generics: emptyRustGenerics,
+      selfParam: { kind: "reference", mutable: false },
       params: [],
       returnType: { kind: "string" },
       body: {
@@ -343,7 +361,7 @@ function finishResourceFunction(): RustItem {
     name: "finish_resource",
     visibility: "public",
     attrs: ["#[doc(hidden)]"],
-    typeParams: [{ name: "T", bounds: [] }],
+    generics: oneTypeParameterGenerics,
     params: [
       { name: "body", type: resultType(completion) },
       { name: "cleanup", type: resultType(unitType) },
@@ -417,7 +435,7 @@ function finishFinallyFunction(): RustItem {
     name: "finish_finally",
     visibility: "public",
     attrs: ["#[doc(hidden)]"],
-    typeParams: [{ name: "T", bounds: [] }],
+    generics: oneTypeParameterGenerics,
     params: [
       { name: "body", type: resultType(completion) },
       { name: "finally", type: resultType(completion) },

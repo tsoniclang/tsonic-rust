@@ -10,12 +10,13 @@ import { Node_Type } from "@tsonic/target-api/source";
 import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
 import { rustProjectObjectLayout } from "../../../analysis/project-types/object-layout.js";
 import { rustProjectObjectStateField, rustProjectObjectType } from "../objects/project-objects.js";
-import { rustProjectStateType, rustProjectStateMarker, rustProjectTypeParameters } from "../objects/polymorphism/names.js";
+import { rustProjectGenerics, rustProjectStateType, rustProjectStateMarker } from "../objects/polymorphism/names.js";
 import { rustTypeAliasDeclarationFactKey } from "../../../analysis/facts/keys.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import type { Node } from "@tsonic/tsts";
 import type { PlannedProjectObjectField } from "./classes.js";
 import type { RustItem, RustStructField } from "../../target-ast/nodes.js";
+import { emptyRustGenerics } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustProjectImplementationVisibility } from "../objects/project-storage-abi.js";
 
@@ -74,6 +75,7 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
   }
   return [{
     kind: "enum",
+    generics: emptyRustGenerics,
     name: enumName,
     visibility: ast.hasModifierKind(node, "export") ||
         rustProjectTypeHasPublicImplementationAbi(context, enumName)
@@ -118,7 +120,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
     ));
     return undefined;
   }
-  const typeParams = rustProjectTypeParameters(definition);
+  const generics = rustProjectGenerics(definition);
   const stateType = rustProjectStateType(
     context.input.program.projectTypes.openCarrier(definition),
     context,
@@ -188,7 +190,10 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
         type: {
           kind: "named",
           path: "std::collections::HashMap",
-          typeArguments: [keyType, valueType],
+          genericArguments: [
+            { kind: "type", type: keyType },
+            { kind: "type", type: valueType },
+          ],
         },
         visibility: storageVisibility,
       };
@@ -263,7 +268,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
       rustLintAttributes.deadCode,
     ],
     derives: [],
-    ...(typeParams.length === 0 ? {} : { typeParams }),
+    generics,
     fields: [
       ...fields.map((field) => ({
         name: field.targetName,
@@ -286,7 +291,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
     ...(interfaceAttributes.length === 0 ? {} : { attrs: interfaceAttributes }),
     visibility: exported || publiclyReachable ? "public" : "crate",
     derives: ["Clone", "Debug", "PartialEq"],
-    ...(typeParams.length === 0 ? {} : { typeParams }),
+    generics,
     fields: [{
       name: rustProjectObjectStateField,
       type: stateCarrier,
@@ -326,6 +331,7 @@ export function planTypeAliasDeclaration(node: Node, context: RustPlanContext): 
   }
   return [{
     kind: "enum",
+    generics: emptyRustGenerics,
     name: aliasName,
     visibility: ast.hasModifierKind(node, "export") ||
         rustProjectTypeHasPublicImplementationAbi(context, aliasName)

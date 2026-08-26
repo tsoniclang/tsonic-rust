@@ -22,6 +22,7 @@ import { planBlockLike } from "../statements/index.js";
 import { planExpression } from "../expressions/index.js";
 import { planRustCallableGenerics, rustCallableSpecialization } from "./callable-generics.js";
 import { planRustCallableParameterPrelude, planRustCallableParameters } from "./callable-parameters.js";
+import { rustSelfParameter } from "./self-parameter.js";
 import { projectOwnMethods } from "../objects/polymorphism/model.js";
 import { readRustProjectMethodOverride } from "../objects/project-objects.js";
 import { resolveRustCallableBodyReturnType } from "./callable-body-return.js";
@@ -243,14 +244,14 @@ export function planProjectMethod(
       ));
       return undefined;
     }
-    const typeParams = genericPlan.finalizeTypeParameters();
+    const generics = genericPlan.finalizeGenerics();
     return {
       name: methodName,
       ...(isUnsafe ? { isUnsafe: true } : {}),
       visibility: !ast.hasModifierKind(member, "private") && !ast.hasModifierKind(member, "protected") ? "public" : "private",
       ...(methodAttributes.length === 0 ? {} : { attrs: methodAttributes }),
-      ...(isStatic ? {} : { selfParam: selfMode!.mode }),
-      ...(typeParams.length === 0 ? {} : { typeParams }),
+      ...(isStatic ? {} : { selfParam: rustSelfParameter(selfMode!.mode) }),
+      generics,
       params,
       returnType: generatorReturnType,
       body: {
@@ -281,7 +282,7 @@ export function planProjectMethod(
       },
     };
   }
-  const typeParams = genericPlan.finalizeTypeParameters();
+  const generics = genericPlan.finalizeGenerics();
   const finalizedBody = applyFallibleShape(
     applyRustTailShape({ statements: [...parameterStatements, ...body.statements] }, returnType !== undefined),
     fallible
@@ -308,8 +309,8 @@ export function planProjectMethod(
       ? {}
       : { errorType: rustErrorType(callableErrorBoundary) }),
     ...(sourceAsync ? { isAsync: true } : {}),
-    ...(isStatic ? {} : { selfParam: selfMode!.mode }),
-    ...(typeParams.length === 0 ? {} : { typeParams }),
+    ...(isStatic ? {} : { selfParam: rustSelfParameter(selfMode!.mode) }),
+    generics,
     params,
     ...(returnType === undefined ? {} : { returnType }),
     body: {
@@ -317,6 +318,7 @@ export function planProjectMethod(
     },
   };
 }
+
 function planDirectProjectMethodOverridePrelude(
   member: Node,
   params: readonly import("../../target-ast/nodes.js").RustFunctionParam[],
@@ -433,6 +435,9 @@ function borrowedGeneratorType(
   return {
     ...type,
     path: kind === "sync" ? "rt::BorrowedGenerator" : "rt::BorrowedAsyncGenerator",
-    lifetimeArguments: ["_"],
+    genericArguments: [
+      { kind: "lifetime", lifetime: { kind: "placeholder" } },
+      ...(type.genericArguments ?? []),
+    ],
   };
 }

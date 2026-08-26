@@ -1,5 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustItem, RustType } from "../../../target-ast/nodes.js";
+import { emptyRustGenerics } from "../../../target-ast/nodes.js";
 import { rustLintAttributes } from "../../../target-ast/normalization/lint-policy.js";
 import { rustDefaultImplementation } from "../../declarations/default-implementation.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
@@ -33,7 +34,7 @@ import {
   rustProjectRootType,
   rustProjectStateMarker,
   rustProjectStateType,
-  rustProjectTypeParameters,
+  rustProjectGenerics,
 } from "./names.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import {
@@ -111,7 +112,7 @@ export function planPolymorphicClassDeclaration(
     return undefined;
   }
   context.usedAliases?.add("rt");
-  const typeParams = rustProjectTypeParameters(definition);
+  const generics = rustProjectGenerics(definition);
   const stateMarker = rustProjectStateMarker(definition, context);
   const programErrorVariant = context.input.program.projectTypes.programErrorVariant(definition);
   const publiclyReachable = programErrorVariant !== undefined ||
@@ -146,7 +147,7 @@ export function planPolymorphicClassDeclaration(
   const implementationVisibility = rustProjectImplementationVisibility(publiclyReachable);
   const defaultImplementation = rustDefaultImplementation(
     wrapperType,
-    typeParams,
+    generics,
     constructor.construct,
   );
   return [
@@ -160,7 +161,7 @@ export function planPolymorphicClassDeclaration(
         rustLintAttributes.deadCode,
       ],
       derives: [],
-      ...(typeParams.length === 0 ? {} : { typeParams }),
+      generics,
       fields: [
         ...(baseStateType === undefined
           ? []
@@ -184,7 +185,7 @@ export function planPolymorphicClassDeclaration(
           type: {
             kind: "named" as const,
             path: "Option",
-            typeArguments: [property.callableType],
+            genericArguments: [{ kind: "type", type: property.callableType }],
           },
           visibility: implementationVisibility,
           ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
@@ -211,7 +212,7 @@ export function planPolymorphicClassDeclaration(
           : ["#[doc(hidden)]"]),
       ],
       derives: ["Clone"],
-      ...(typeParams.length === 0 ? {} : { typeParams }),
+      generics,
       fields: [
         {
           name: rustProjectObjectIdentityField,
@@ -221,7 +222,11 @@ export function planPolymorphicClassDeclaration(
         },
         {
           name: rustProjectObjectDispatchField,
-          type: rustRcType({ kind: "trait-object", trait: dispatchType }),
+          type: rustRcType({
+            kind: "trait-object",
+            principal: dispatchType,
+            autoTraits: [],
+          }),
           visibility: implementationVisibility,
           ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
         },
@@ -234,7 +239,7 @@ export function planPolymorphicClassDeclaration(
       visibility: "crate",
       attrs: [rustLintAttributes.deadCode],
       derives: [],
-      ...(typeParams.length === 0 ? {} : { typeParams }),
+      generics,
       fields: [
         {
           name: rustProjectObjectIdentityField,
@@ -246,7 +251,7 @@ export function planPolymorphicClassDeclaration(
           type: {
             kind: "named",
             path: "rt::ObjectHandle",
-            typeArguments: [stateType],
+            genericArguments: [{ kind: "type", type: stateType }],
           },
           visibility: "private",
         },
@@ -254,7 +259,7 @@ export function planPolymorphicClassDeclaration(
     },
     {
       kind: "impl",
-      ...(typeParams.length === 0 ? {} : { typeParams }),
+      generics,
       target: wrapperType,
       functions: [constructor.initialize, constructor.construct, ...staticMethods],
     },
@@ -286,12 +291,14 @@ function planProjectExternalErrorImplementations(
   const self = { kind: "path" as const, path: "self" };
   return [{
     kind: "impl",
+    generics: rustProjectGenerics(definition),
     trait: { kind: "named", path: "std::fmt::Display" },
     target: wrapperType,
     functions: [{
       name: "fmt",
       visibility: "private",
-      selfParam: "ref",
+      generics: emptyRustGenerics,
+      selfParam: { kind: "reference", mutable: false },
       params: [{
         name: "formatter",
         type: {
@@ -300,7 +307,7 @@ function planProjectExternalErrorImplementations(
           referent: {
             kind: "named",
             path: "std::fmt::Formatter",
-            lifetimeArguments: ["_"],
+            genericArguments: [{ kind: "lifetime", lifetime: { kind: "placeholder" } }],
           },
         },
       }],
@@ -322,12 +329,14 @@ function planProjectExternalErrorImplementations(
     }],
   }, {
     kind: "impl",
+    generics: rustProjectGenerics(definition),
     trait: { kind: "named", path: "rt::ToSourceString" },
     target: wrapperType,
     functions: [{
       name: "to_source_string",
       visibility: "private",
-      selfParam: "ref",
+      generics: emptyRustGenerics,
+      selfParam: { kind: "reference", mutable: false },
       params: [],
       returnType: { kind: "string" },
       body: {
@@ -361,7 +370,7 @@ export function planPolymorphicInterfaceDeclaration(
     return undefined;
   }
   context.usedAliases?.add("rt");
-  const typeParams = rustProjectTypeParameters(definition);
+  const generics = rustProjectGenerics(definition);
   const exported = context.input.program.source.ast.hasModifierKind(declaration, "export");
   const publiclyReachable = rustProjectTypeHasPublicImplementationAbi(
     context,
@@ -376,7 +385,7 @@ export function planPolymorphicInterfaceDeclaration(
       visibility: exported || publiclyReachable ? "public" : "crate",
       attrs: [rustLintAttributes.deadCode],
       derives: ["Clone"],
-      ...(typeParams.length === 0 ? {} : { typeParams }),
+      generics,
       fields: [
         {
           name: rustProjectObjectIdentityField,
@@ -386,7 +395,11 @@ export function planPolymorphicInterfaceDeclaration(
         },
         {
           name: rustProjectObjectDispatchField,
-          type: rustRcType({ kind: "trait-object", trait: dispatchType }),
+          type: rustRcType({
+            kind: "trait-object",
+            principal: dispatchType,
+            autoTraits: [],
+          }),
           visibility: implementationVisibility,
           ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
         },

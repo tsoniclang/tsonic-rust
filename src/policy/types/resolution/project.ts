@@ -3,10 +3,16 @@ import { rustSourceTypeCarrier, rustSourceTypeCarrierValue } from "../../../targ
 import type { Node, Symbol } from "@tsonic/tsts";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustLifetimeRef } from "../../../target-model/lifetimes/index.js";
+
+export interface RustResolvedProjectGenericArguments {
+  readonly lifetimes: readonly RustLifetimeRef[];
+  readonly types: readonly TargetTypeRef[];
+}
 
 export function resolveProjectSourceCarrier(
   symbol: Symbol | undefined,
-  typeArguments: readonly TargetTypeRef[],
+  genericArguments: RustResolvedProjectGenericArguments,
   context: RustTargetTypeResolutionContext,
   options: RustTargetTypeResolutionOptions,
   selectedDeclaration?: Node,
@@ -27,14 +33,24 @@ export function resolveProjectSourceCarrier(
     const carrier = options.sourceTypes.carrierForDeclaration(declaration, context.ast);
     const sourceType = rustSourceTypeCarrierValue(carrier);
     if (sourceType !== undefined) {
+      const contract = context.sourceLifetimes.contractFor(declaration);
+      const lifetimeCount = contract?.parameters.filter((parameter) =>
+        parameter.kind === "lifetime").length ?? 0;
+      const typeCount = contract?.parameters.filter((parameter) =>
+        parameter.kind === "type").length ?? 0;
+      if (genericArguments.lifetimes.length !== lifetimeCount ||
+        genericArguments.types.length !== typeCount) {
+        continue;
+      }
       return rustSourceTypeCarrier(
         sourceType.fileName,
         sourceType.typeName,
         sourceType.shape,
-        typeArguments,
+        genericArguments,
       );
     }
-    if (carrier !== undefined && typeArguments.length === 0) {
+    if (carrier !== undefined && genericArguments.lifetimes.length === 0 &&
+      genericArguments.types.length === 0) {
       return carrier;
     }
   }

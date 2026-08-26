@@ -15,6 +15,10 @@ import type {
 import type { RustExternalProjectBase, RustExternalProjectField } from "./external-project-types.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type {
+  RustLifetimeIndex,
+  RustSourceGenericParameterContract,
+} from "../../target-model/lifetimes/index.js";
 
 export interface RustProjectTypeIssue {
   readonly node: Node;
@@ -43,6 +47,7 @@ export interface RustProjectTypeDefinition {
   readonly sourceName: string;
   readonly targetName: string;
   readonly kind: "class" | "interface";
+  readonly genericParameters: readonly RustSourceGenericParameterContract[];
   readonly typeParameterNames: readonly string[];
   readonly targetTypeParameterNames: readonly string[];
   readonly stateName: string;
@@ -152,6 +157,7 @@ export interface RustProjectTypePolicyHost {
   readonly names: RustNamePlan;
   readonly navigation: SourceProgramNavigation;
   readonly sourceFiles: readonly SourceFile[];
+  readonly sourceLifetimes: RustLifetimeIndex;
   externallyExtensible(declaration: Node): boolean;
   targetNameForCallable(declaration: Node): string | undefined;
   sourcePackageComponentForFile(fileName: string): string | undefined;

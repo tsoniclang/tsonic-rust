@@ -513,6 +513,35 @@ export type RustTargetOperationFact =
       readonly state: "borrowed-shared" | "borrowed-mut" | "moved";
     }
   | {
+      readonly kind: "reference-operation";
+      readonly operationId: string;
+      readonly operation: "shared-reference" | "mutable-reference";
+      readonly operandExpression: Node;
+      readonly operandCarrier: TargetTypeRef;
+      readonly referenceCarrier: Extract<TargetTypeRef, { readonly kind: "reference" }>;
+      readonly resultCarrier: Extract<TargetTypeRef, { readonly kind: "reference" }>;
+    }
+  | {
+      readonly kind: "reference-operation";
+      readonly operationId: string;
+      readonly operation: "load";
+      readonly operandExpression: Node;
+      readonly operandCarrier: Extract<TargetTypeRef, { readonly kind: "reference" }>;
+      readonly referenceCarrier: Extract<TargetTypeRef, { readonly kind: "reference" }>;
+      readonly resultCarrier: TargetTypeRef;
+    }
+  | {
+      readonly kind: "reference-operation";
+      readonly operationId: string;
+      readonly operation: "store";
+      readonly operandExpression: Node;
+      readonly operandCarrier: Extract<TargetTypeRef, { readonly kind: "reference" }>;
+      readonly referenceCarrier: Extract<TargetTypeRef, { readonly kind: "reference" }>;
+      readonly valueExpression: Node;
+      readonly valueCarrier: TargetTypeRef;
+      readonly resultCarrier: TargetTypeRef;
+    }
+  | {
       readonly kind: "typed-location";
       readonly operationId: string;
       readonly operation: RustTypedLocationOperationKind;
@@ -606,6 +635,7 @@ export function rustTargetOperationResultCarrier(fact: RustTargetOperationFact):
     case "await-op":
     case "closure":
     case "source-conversion":
+    case "reference-operation":
     case "option-coalesce":
     case "nullish-identity":
     case "non-null-expression":

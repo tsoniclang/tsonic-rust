@@ -105,6 +105,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     names: context.names,
     navigation: context.source.navigation,
     sourceFiles: projectSourceFiles,
+    sourceLifetimes: context.sourceLifetimes,
     externallyExtensible(declaration) {
       return externallyExtensibleDeclarations.has(declaration);
     },

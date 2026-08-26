@@ -22,7 +22,7 @@ export function rustProjectObjectType(
   return {
     kind: "named",
     path,
-    typeArguments: [stateType],
+    genericArguments: [{ kind: "type", type: stateType }],
   };
 }
 

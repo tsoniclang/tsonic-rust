@@ -270,14 +270,26 @@ export function rustProjectMethodPropertyCallableType(
   return {
     kind: "named",
     path: "rt::Callable",
-    typeArguments: [{
-      kind: "tuple",
-      elements: shape.params.map((parameter) => parameter.type),
-    }, {
-      kind: "named",
-      path: "Result",
-      typeArguments: [resultType, shape.errorType!],
-    }],
+    genericArguments: [
+      {
+        kind: "type",
+        type: {
+          kind: "tuple",
+          elements: shape.params.map((parameter) => parameter.type),
+        },
+      },
+      {
+        kind: "type",
+        type: {
+          kind: "named",
+          path: "Result",
+          genericArguments: [
+            { kind: "type", type: resultType },
+            { kind: "type", type: shape.errorType! },
+          ],
+        },
+      },
+    ],
   };
 }
 
@@ -460,7 +472,11 @@ export function rustFunctionTypesMatch(
 }
 
 export function rustRcType(inner: RustType): RustType {
-  return { kind: "named", path: "std::rc::Rc", typeArguments: [inner] };
+  return {
+    kind: "named",
+    path: "std::rc::Rc",
+    genericArguments: [{ kind: "type", type: inner }],
+  };
 }
 
 export function cloneExpression(expression: RustExpr): RustExpr {

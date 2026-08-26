@@ -6,7 +6,9 @@ import { diagnosticInput } from "../../program/plan-context.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustProjectImplementationVisibility } from "../project-storage-abi.js";
 import type { ProjectClassStateLayer } from "./model.js";
-import { rustProjectTypeParameters } from "./names.js";
+import { rustProjectGenerics } from "./names.js";
+import { emptyRustGenerics } from "../../../target-ast/nodes.js";
+import { rustSelfParameter } from "../../declarations/self-parameter.js";
 
 export function planProjectPrivateStateAccessors(
   stateType: RustType,
@@ -43,7 +45,8 @@ export function planProjectPrivateStateAccessors(
       name: readName,
       visibility,
       ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
-      selfParam: "ref",
+      generics: emptyRustGenerics,
+      selfParam: rustSelfParameter("ref"),
       params: [],
       returnType: field.type,
       body: {
@@ -60,7 +63,8 @@ export function planProjectPrivateStateAccessors(
         name: writeName,
         visibility,
         ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
-        selfParam: "mut-ref",
+        generics: emptyRustGenerics,
+        selfParam: rustSelfParameter("mut-ref"),
         params: [{ name: "value", type: field.type }],
         body: {
           statements: [{
@@ -78,9 +82,7 @@ export function planProjectPrivateStateAccessors(
   }
   return [{
     kind: "impl",
-    ...(rustProjectTypeParameters(layer.definition).length === 0
-      ? {}
-      : { typeParams: rustProjectTypeParameters(layer.definition) }),
+    generics: rustProjectGenerics(layer.definition),
     target: stateType,
     functions,
   }];

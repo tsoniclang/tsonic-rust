@@ -11,16 +11,26 @@ import {
   nativePointerProviderDeclaration,
   providerExportDeclarationsForSemanticsModule,
 } from "@tsonic/source-core/extension";
+import { analyzeRustSourceSemantics } from "../semantics/analysis/index.js";
 import {
-  rustSourceSemanticsModules,
+  rustLifetimeTypeDeclarations,
+  rustReferenceOperationDeclarations,
+} from "../semantics/declarations/index.js";
+import {
+  rustLangModule,
+  rustSourceProviderVersion,
+  rustSourceSemanticsExtensionId,
+  rustSourceTypeExportIds,
+  rustSourceVirtualModulesProviderId,
   rustTypesModule,
-} from "../profiles/source-modules.js";
+} from "../semantics/identity.js";
+import { rustSourceSemanticsModules } from "../profiles/source-modules.js";
 
-export const rustSourceSemanticsExtensionId =
-  "tsonic.rust.source-semantics";
-export const rustSourceVirtualModulesProviderId =
-  "tsonic.rust.source-virtual-modules";
-export const rustSourceProviderVersion = "0.0.1";
+export {
+  rustSourceProviderVersion,
+  rustSourceSemanticsExtensionId,
+  rustSourceVirtualModulesProviderId,
+};
 export const rustConstPointerExport = "constPtr";
 export const rustMutPointerExport = "mutPtr";
 
@@ -44,6 +54,17 @@ export function createRustSourceSemanticsExtension(
           displayName: "Tsonic Rust source alias modules",
           virtualDirectory: "rust-source",
           modules: rustSourceSemanticsModules(),
+          importsForModule(module) {
+            return module.moduleSpecifier === rustLangModule
+              ? [{
+                  moduleSpecifier: rustTypesModule,
+                  namedImports: Object.values(rustSourceTypeExportIds).map(
+                    (exportedName) => ({ exportedName, kind: "type" as const }),
+                  ),
+                  typeOnly: true,
+                }]
+              : [];
+          },
           exportsForModule: rustProviderExportsForModule,
           evidenceMessage:
             "Rust target supplies source alias semantics as a complete virtual module.",
@@ -63,6 +84,9 @@ export function createRustSourceSemanticsExtension(
         context.registerSourceDeclarationProvider(provider);
       }
     },
+    analyzeSource(context): void {
+      analyzeRustSourceSemantics(context);
+    },
   };
 }
 
@@ -73,8 +97,11 @@ function rustProviderExportsForModule(
   return module.moduleSpecifier === rustTypesModule
     ? [
         ...semantics,
+        ...rustLifetimeTypeDeclarations(),
         nativePointerProviderDeclaration(rustConstPointerExport),
         nativePointerProviderDeclaration(rustMutPointerExport),
       ]
-    : semantics;
+    : module.moduleSpecifier === rustLangModule
+      ? [...semantics, ...rustReferenceOperationDeclarations()]
+      : semantics;
 }

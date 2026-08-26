@@ -24,6 +24,8 @@ import {
 } from "../../program/plan-context.js";
 import { applyRustFallibleResultExpression } from "../../types/fallible-shape.js";
 import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js";
+import { emptyRustGenerics } from "../../../target-ast/nodes.js";
+import { rustSelfParameter } from "../../declarations/self-parameter.js";
 
 export function planContractImplementation(
   contract: import("../../../../analysis/project-types/type-policy.js").RustProjectInterfaceContract,
@@ -108,7 +110,8 @@ export function planContractImplementation(
     functions.push({
       name: read,
       visibility: "private",
-      selfParam: dispatch.read.selfMode,
+      generics: emptyRustGenerics,
+      selfParam: rustSelfParameter(dispatch.read.selfMode),
       params: [],
       returnType: field.type,
       ...(dispatch.read.fallible ? { errorType: fieldErrorType! } : {}),
@@ -152,7 +155,8 @@ export function planContractImplementation(
       functions.push({
         name: write!,
         visibility: "private",
-        selfParam: dispatch.write.selfMode,
+        generics: emptyRustGenerics,
+        selfParam: rustSelfParameter(dispatch.write.selfMode),
         params: [{ name: "value", type: field.type }],
         ...(dispatch.write.fallible ? { errorType: fieldErrorType! } : {}),
         body: dispatch.write.fallible
@@ -301,7 +305,8 @@ export function planContractImplementation(
         functions.push({
           name: variant.virtualSlot,
           visibility: "private",
-          selfParam: "rc",
+          generics: emptyRustGenerics,
+          selfParam: rustSelfParameter("rc"),
           params: method.parameters,
           ...(method.returnType === undefined ? {} : { returnType: method.returnType }),
           ...(method.errorType === undefined ? {} : { errorType: method.errorType }),
@@ -364,7 +369,8 @@ export function planContractImplementation(
       functions.push({
         name: variant.virtualSlot,
         visibility: "private",
-        selfParam: "rc",
+        generics: emptyRustGenerics,
+        selfParam: rustSelfParameter("rc"),
         params: method.parameters,
         ...(method.returnType === undefined ? {} : { returnType: method.returnType }),
         ...(method.errorType === undefined ? {} : { errorType: method.errorType }),
@@ -416,7 +422,8 @@ export function planContractImplementation(
       functions.push({
         name: write,
         visibility: "private",
-        selfParam: "ref",
+        generics: emptyRustGenerics,
+        selfParam: rustSelfParameter("ref"),
         params: [{ name: "value", type: override.callableType }],
         body: {
           statements: [{
@@ -429,6 +436,7 @@ export function planContractImplementation(
   }
   return {
     kind: "impl",
+    generics: emptyRustGenerics,
     trait,
     target: rootType,
     functions,

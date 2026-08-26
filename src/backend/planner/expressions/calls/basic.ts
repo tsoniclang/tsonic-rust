@@ -25,6 +25,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
+import { planRustReferenceOperationCall } from "../reference-operations.js";
 
 export function planCallExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
   return planOptionalChainExpression(
@@ -43,7 +44,8 @@ function planCallExpressionInner(node: Node, context: RustPlanContext): RustExpr
       fact?.kind === "provider-operation" ||
       fact?.kind === "object-shape-projection" ||
       fact?.kind === "default-value" ||
-      fact?.kind === "typed-location"
+      fact?.kind === "typed-location" ||
+      fact?.kind === "reference-operation"
     ? fact.resultCarrier
     : undefined;
   const selectedResultCarrier = innerResultCarrier === undefined
@@ -73,6 +75,9 @@ function planCallExpressionInner(node: Node, context: RustPlanContext): RustExpr
     return undefined;
   }
   const callee = Node_Expression(context.input.program.source.ast, node);
+  if (fact?.kind === "reference-operation") {
+    return planRustReferenceOperationCall(node, fact, context, planExpression);
+  }
   if (fact?.kind === "typed-location") {
     return planRustTypedLocationCall(node, fact, context, planExpression);
   }

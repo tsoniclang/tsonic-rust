@@ -19,6 +19,8 @@ import { readRustProjectMethodOverride, rustProjectObjectDispatchField, rustProj
 import { rustCallableSpecialization } from "../../declarations/callable-generics.js";
 import { rustProjectDispatchTraitType } from "./names.js";
 import { rustSourceTypeCarrierValue } from "../../../../target-model/types/index.js";
+import { emptyRustGenerics } from "../../../target-ast/nodes.js";
+import { rustSelfParameter } from "../../declarations/self-parameter.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustEffectiveExpressionOverride, RustPlanContext } from "../../program/plan-context.js";
 import type { RustExpr, RustImplFunction, RustType } from "../../../target-ast/nodes.js";
@@ -36,7 +38,7 @@ export function planProjectFieldAccessorCall(
 ): { readonly expression: RustExpr; readonly errorType?: RustType } | undefined {
   const read = value === undefined;
   const expectedParameters = read ? [] : [{ name: "value", type: valueType }];
-  if (helper === undefined || helper.selfParam !== "rc" || helper.isAsync === true ||
+  if (helper === undefined || helper.selfParam?.kind !== "rc" || helper.isAsync === true ||
     helper.isUnsafe === true || !rustFunctionTypesMatch(
       helper.params,
       helper.returnType,
@@ -66,10 +68,20 @@ export function projectDowncastReturnType(
     : {
         kind: "named",
         path: "Option",
-        typeArguments: [{
-          kind: "named",
-          path: "std::rc::Rc",
-          typeArguments: [{ kind: "trait-object", trait: dispatch }],
+        genericArguments: [{
+          kind: "type",
+          type: {
+            kind: "named",
+            path: "std::rc::Rc",
+            genericArguments: [{
+              kind: "type",
+              type: {
+                kind: "trait-object",
+                principal: dispatch,
+                autoTraits: [],
+              },
+            }],
+          },
         }],
       };
 }
@@ -85,7 +97,8 @@ export function planProjectDowncastRouteImplementation(
     : {
         name: route.slot,
         visibility: "private",
-        selfParam: "rc",
+        generics: emptyRustGenerics,
+        selfParam: rustSelfParameter("rc"),
         params: [],
         returnType,
         body: {
@@ -238,7 +251,7 @@ function planRootCallableImplementation(
     ...planned,
     name: options.targetName,
     visibility: "private",
-    selfParam: "rc",
+    selfParam: rustSelfParameter("rc"),
     body: thisPlan.binding === undefined
       ? planned.body
       : {
@@ -361,7 +374,8 @@ export function planRootCallableForwarder(
     {
     name: slot,
     visibility: "private",
-    selfParam: "rc",
+    generics: helper.generics,
+    selfParam: rustSelfParameter("rc"),
     params: helper.params,
     ...(helper.returnType === undefined ? {} : { returnType: helper.returnType }),
     ...(helper.errorType === undefined ? {} : { errorType: helper.errorType }),

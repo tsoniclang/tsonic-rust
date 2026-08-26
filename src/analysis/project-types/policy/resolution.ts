@@ -1,7 +1,12 @@
 import { allocateRustGeneratedName as allocateGeneratedName, rustGeneratedNameComponent } from "../../../target-model/names/generated.js";
 import { compareProjectDefinitions, definitionKey, denseNodes, heritageKindIssue, projectDefinition, projectMemberNames, sourceFileIdentifierNames } from "./helpers.js";
 import { rustPascalCaseIdentifier, rustScreamingSnakeIdentifier, rustSnakeCaseIdentifier } from "../../../target-model/names/identifiers.js";
-import { rustSourceTypeCarrier, rustSourceTypeCarrierValue, substituteRustTargetTypeParameters } from "../../../target-model/types/index.js";
+import {
+  rustSourceTypeCarrier,
+  rustSourceTypeCarrierValue,
+  substituteRustTargetGenerics,
+} from "../../../target-model/types/index.js";
+import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { Node, Signature, SourceFile } from "@tsonic/tsts";
 import type {
@@ -24,7 +29,14 @@ export function createRustProjectTypePolicy(
     const usedNames = sourceFileIdentifierNames(sourceFile, host.ast, host.names);
     usedModuleNamesBySourceFile.set(sourceFile, usedNames);
     for (const statement of denseNodes(host.ast.statements(sourceFile)) ?? []) {
-      const definition = projectDefinition(statement, sourceFile, host.ast, host.names, usedNames);
+      const definition = projectDefinition(
+        statement,
+        sourceFile,
+        host.ast,
+        host.names,
+        host.sourceLifetimes,
+        usedNames,
+      );
       if (definition === undefined) {
         continue;
       }
@@ -84,7 +96,7 @@ export function createRustProjectTypePolicy(
         });
         continue;
       }
-      if (edge.selectedTypeArguments.length !== target.typeParameterNames.length ||
+      if (edge.selectedTypeArguments.length !== target.genericParameters.length ||
         edge.typeArguments.length > edge.selectedTypeArguments.length) {
         issues.push({
           node: edge.heritage,
@@ -93,9 +105,21 @@ export function createRustProjectTypePolicy(
         });
         continue;
       }
-      const arguments_ = edge.selectedTypeArguments.map((selectedType, index) =>
-        host.resolveSelectedType(edge.typeArguments[index], selectedType, edge.heritage));
-      if (arguments_.some((argument) => argument === undefined)) {
+      const lifetimeArguments = target.genericParameters.flatMap((parameter, index) => {
+        if (parameter.kind !== "lifetime") return [];
+        const authored = edge.typeArguments[index];
+        const lifetime = authored === undefined ? undefined : host.sourceLifetimes.resolve(authored);
+        return lifetime === undefined ? [undefined] : [lifetime];
+      });
+      const typeArguments = target.genericParameters.flatMap((parameter, index) => {
+        if (parameter.kind !== "type") return [];
+        const selectedType = edge.selectedTypeArguments[index];
+        return selectedType === undefined
+          ? [undefined]
+          : [host.resolveSelectedType(edge.typeArguments[index], selectedType, edge.heritage)];
+      });
+      if (lifetimeArguments.some((argument) => argument === undefined) ||
+        typeArguments.some((argument) => argument === undefined)) {
         issues.push({
           node: edge.heritage,
           code: "RUST_PROJECT_HERITAGE_CARRIER_UNRESOLVED",
@@ -112,7 +136,10 @@ export function createRustProjectTypePolicy(
           target.fileName,
           target.sourceName,
           "object",
-          arguments_ as readonly TargetTypeRef[],
+          {
+            lifetimes: lifetimeArguments as readonly import("../../../target-model/lifetimes/index.js").RustLifetimeRef[],
+            types: typeArguments as readonly TargetTypeRef[],
+          },
         ),
       }));
     }
@@ -124,14 +151,24 @@ export function createRustProjectTypePolicy(
     const definition = value === undefined
       ? undefined
       : byKey.get(definitionKey(value.fileName, value.typeName));
-    if (value === undefined || definition === undefined || value.typeArguments.length !== definition.typeParameterNames.length) {
+    const lifetimeParameters = definition?.genericParameters.filter((parameter) =>
+      parameter.kind === "lifetime") ?? [];
+    if (value === undefined || definition === undefined ||
+      value.lifetimeArguments.length !== lifetimeParameters.length ||
+      value.typeArguments.length !== definition.typeParameterNames.length) {
       return undefined;
     }
-    const substitutions = new Map(
+    const typeSubstitutions = new Map(
       definition.typeParameterNames.map((name, index) => [name, value.typeArguments[index]!] as const),
     );
+    const lifetimeSubstitutions = new Map(
+      lifetimeParameters.map((parameter, index) => [
+        rustLifetimeKey(parameter.lifetime),
+        value.lifetimeArguments[index]!,
+      ] as const),
+    );
     const project = (heritageByDeclaration.get(definition.declaration) ?? []).map((edge) =>
-      substituteRustTargetTypeParameters(edge.targetType, substitutions));
+      substituteRustTargetGenerics(edge.targetType, typeSubstitutions, lifetimeSubstitutions));
     const external = externalBaseByDeclaration.get(definition.declaration);
     return Object.freeze(external === undefined
       ? project
@@ -143,7 +180,14 @@ export function createRustProjectTypePolicy(
       definition.fileName,
       definition.sourceName,
       "object",
-      definition.typeParameterNames.map((name) => ({ kind: "type-parameter", name })),
+      {
+        lifetimes: definition.genericParameters.flatMap((parameter) =>
+          parameter.kind === "lifetime" ? [parameter.lifetime] : []),
+        types: definition.typeParameterNames.map((name) => ({
+          kind: "type-parameter",
+          name,
+        })),
+      },
     );
 
   const relationship = (
@@ -707,12 +751,19 @@ export function createRustProjectTypePolicy(
         return undefined;
       }
       const value = rustSourceTypeCarrierValue(selected.targetType);
-      if (value === undefined || value.typeArguments.length !== owner.typeParameterNames.length) {
+      const lifetimeParameters = owner.genericParameters.filter((parameter) =>
+        parameter.kind === "lifetime");
+      if (value === undefined || value.lifetimeArguments.length !== lifetimeParameters.length ||
+        value.typeArguments.length !== owner.typeParameterNames.length) {
         return undefined;
       }
-      return substituteRustTargetTypeParameters(
+      return substituteRustTargetGenerics(
         declaredCarrier,
         new Map(owner.typeParameterNames.map((name, index) => [name, value.typeArguments[index]!] as const)),
+        new Map(lifetimeParameters.map((parameter, index) => [
+          rustLifetimeKey(parameter.lifetime),
+          value.lifetimeArguments[index]!,
+        ] as const)),
       );
     },
     isPolymorphic(definition) {

@@ -168,6 +168,7 @@ export {
   inferRustTargetTypeParameterBindings,
   rustTargetTypeContainsTypeParameter,
   rustTargetTypeParameterNames,
+  substituteRustTargetGenerics,
   substituteRustTargetTypeParameters,
 } from "./carriers/substitution.js";
 export {

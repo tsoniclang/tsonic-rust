@@ -21,6 +21,7 @@ import type {
   RustStmt,
   RustType,
 } from "../../../target-ast/nodes.js";
+import { emptyRustGenerics } from "../../../target-ast/nodes.js";
 import { rustLintAttributes } from "../../../target-ast/normalization/lint-policy.js";
 import {
   missingFactDiagnostic,
@@ -511,6 +512,7 @@ export function planProjectClassConstructor(
   const initialize: RustImplFunction = {
     name: constructorSignature.initializeName,
     visibility: publishesImplementationAbi ? "public" : "crate",
+    generics: emptyRustGenerics,
     ...(!publishesImplementationAbi && initializationSafetyAttributes.length === 0
       ? {}
       : {
@@ -542,6 +544,7 @@ export function planProjectClassConstructor(
   }));
   const construct: RustImplFunction = {
     name: constructorSignature.targetName,
+    generics: emptyRustGenerics,
     ...(isUnsafe ? { isUnsafe: true } : {}),
     visibility: constructor === undefined ||
         (!context.input.program.source.ast.hasModifierKind(constructor, "private") &&

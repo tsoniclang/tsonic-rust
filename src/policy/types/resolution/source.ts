@@ -41,6 +41,10 @@ import type {
 } from "@tsonic/target-api/source";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import {
+  resolveRustLifetimeSourceType,
+  rustSourceLifetimeTypeContract,
+} from "./lifetimes.js";
 
 export function resolveRustTargetTypeRef(
   subject: ExtensionFactSubject | undefined,
@@ -150,6 +154,17 @@ export function resolveRustTargetTypeSyntax(
   options: RustTargetTypeResolutionOptions,
   resolving: Set<object>,
 ): TargetTypeRef | undefined {
+  const rustLifetimeContract = rustSourceLifetimeTypeContract(node, context);
+  if (rustLifetimeContract !== undefined) {
+    return resolveRustLifetimeSourceType(
+      node,
+      rustLifetimeContract,
+      context,
+      options,
+      resolving,
+      resolveRustAuthoredTargetType,
+    );
+  }
   const fixedArray = context.facts.resolve(node, tsonicFixedArrayFactKey) ??
     context.facts.get(node, tsonicFixedArrayFactKey);
   if (fixedArray !== undefined) {
@@ -330,11 +345,6 @@ export function resolveRustTargetTypeSyntax(
   if (typeArgumentNodes === undefined) {
     return undefined;
   }
-  const typeArguments = typeArgumentNodes.map((argument) =>
-    resolveRustAuthoredTargetType(argument, context, options, resolving));
-  if (typeArguments.some((argument) => argument === undefined)) {
-    return undefined;
-  }
   const typeName = TypeReferenceNode_TypeName(ast, node);
   const referencedDeclaration = typeName === undefined
     ? undefined
@@ -343,6 +353,25 @@ export function resolveRustTargetTypeSyntax(
     ? undefined
     : context.currentSemantics.declarations.typeAliasSymbol(selectedType) ??
       context.currentSemantics.declarations.typeSymbol(selectedType);
+  const sourceGenericContract = context.sourceLifetimes.contractFor(referencedDeclaration);
+  const hasSourceLifetimeParameters = sourceGenericContract?.parameters.some((parameter) =>
+    parameter.kind === "lifetime") === true;
+  const sourceGenericArguments = !hasSourceLifetimeParameters || sourceGenericContract === undefined
+    ? undefined
+    : resolveProjectGenericArguments(
+        typeArgumentNodes,
+        sourceGenericContract,
+        context,
+        options,
+        resolving,
+      );
+  const typeArguments = !hasSourceLifetimeParameters
+    ? typeArgumentNodes.map((argument) =>
+        resolveRustAuthoredTargetType(argument, context, options, resolving))
+    : sourceGenericArguments?.types;
+  if (typeArguments === undefined || typeArguments.some((argument) => argument === undefined)) {
+    return undefined;
+  }
   const provider = resolveProviderTypeIdentity(
     context.semanticsFor(node).facts.authoredTypeSubjects(node),
     context,
@@ -363,7 +392,7 @@ export function resolveRustTargetTypeSyntax(
   }
   const sourceType = resolveProjectSourceCarrier(
     selectedTypeSymbol,
-    typeArguments as readonly TargetTypeRef[],
+    sourceGenericArguments ?? { lifetimes: Object.freeze([]), types: typeArguments as readonly TargetTypeRef[] },
     context,
     options,
     referencedDeclaration,
@@ -390,6 +419,35 @@ export function resolveRustTargetTypeSyntax(
         options,
         resolving,
       );
+}
+
+function resolveProjectGenericArguments(
+  argumentNodes: readonly Node[],
+  contract: import("../../../target-model/lifetimes/index.js").RustSourceGenericContract,
+  context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions,
+  resolving: Set<object>,
+): import("./project.js").RustResolvedProjectGenericArguments | undefined {
+  if (argumentNodes.length !== contract.parameters.length) return undefined;
+  const lifetimes: import("../../../target-model/lifetimes/index.js").RustLifetimeRef[] = [];
+  const types: TargetTypeRef[] = [];
+  for (const [index, parameter] of contract.parameters.entries()) {
+    const argument = argumentNodes[index];
+    if (argument === undefined) return undefined;
+    if (parameter.kind === "lifetime") {
+      const lifetime = context.sourceLifetimes.resolve(argument);
+      if (lifetime === undefined) return undefined;
+      lifetimes.push(lifetime);
+    } else {
+      const type = resolveRustAuthoredTargetType(argument, context, options, resolving);
+      if (type === undefined) return undefined;
+      types.push(type);
+    }
+  }
+  return Object.freeze({
+    lifetimes: Object.freeze(lifetimes),
+    types: Object.freeze(types),
+  });
 }
 
 function resolveRustCheckerTransformedType(

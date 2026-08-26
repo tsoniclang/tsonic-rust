@@ -19,6 +19,7 @@ import type {
   RustStructField,
   RustType,
 } from "../../../target-ast/nodes.js";
+import { emptyRustGenerics } from "../../../target-ast/nodes.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustObjectLiteralAccessorImplementationPlan, RustObjectLiteralImplementationPlan, RustObjectLiteralMethodDispatchPlan, RustObjectLiteralMethodImplementationPlan, RustObjectLiteralMethodOverridePlan, RustRecordLiteralFact } from "./model.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
@@ -122,7 +123,10 @@ export function createImplementationPlan(
     const result = (type: RustType): RustType => ({
       kind: "named",
       path: "Result",
-      typeArguments: [type, errorType],
+      genericArguments: [
+        { kind: "type", type },
+        { kind: "type", type: errorType },
+      ],
     });
     accessors.push({
       storageIndex: field.storageIndex,
@@ -132,10 +136,13 @@ export function createImplementationPlan(
         callableType: {
           kind: "named",
           path: "rt::Callable",
-          typeArguments: [{
-            kind: "tuple",
-            elements: [wrapperType],
-          }, result(valueType)],
+          genericArguments: [
+            {
+              kind: "type",
+              type: { kind: "tuple", elements: [wrapperType] },
+            },
+            { kind: "type", type: result(valueType) },
+          ],
         },
       },
       ...(roles.has("set")
@@ -145,10 +152,16 @@ export function createImplementationPlan(
               callableType: {
                 kind: "named" as const,
                 path: "rt::Callable",
-                typeArguments: [{
-                  kind: "tuple" as const,
-                  elements: [wrapperType, valueType],
-                }, result({ kind: "unit" })],
+                genericArguments: [
+                  {
+                    kind: "type" as const,
+                    type: {
+                      kind: "tuple" as const,
+                      elements: [wrapperType, valueType],
+                    },
+                  },
+                  { kind: "type" as const, type: result({ kind: "unit" }) },
+                ],
               },
             },
           }
@@ -178,7 +191,10 @@ export function createImplementationPlan(
       ? {
           kind: "named",
           path: "Result",
-          typeArguments: [resultType, errorType!],
+          genericArguments: [
+            { kind: "type", type: resultType },
+            { kind: "type", type: errorType! },
+          ],
         }
       : resultType;
     implementations.push({
@@ -189,10 +205,16 @@ export function createImplementationPlan(
       callableType: {
         kind: "named",
         path: "rt::Callable",
-        typeArguments: [{
-          kind: "tuple",
-          elements: [wrapperType, ...(parameterTypes as RustType[])],
-        }, callableResultType],
+        genericArguments: [
+          {
+            kind: "type",
+            type: {
+              kind: "tuple",
+              elements: [wrapperType, ...(parameterTypes as RustType[])],
+            },
+          },
+          { kind: "type", type: callableResultType },
+        ],
       },
       parameterCount: implementation.parameters.length,
       typeParameterSubstitutions: implementation.typeParameterSubstitutions,
@@ -446,6 +468,7 @@ export function createImplementationPlan(
     visibility: "private",
     attrs: [rustLintAttributes.deadCode],
     derives: [],
+    generics: emptyRustGenerics,
     fields: [
       ...finalizedStateFields.map((field): RustStructField => ({
         name: field.targetName,
@@ -457,7 +480,7 @@ export function createImplementationPlan(
         type: {
           kind: "named",
           path: "Option",
-          typeArguments: [override.callableType],
+          genericArguments: [{ kind: "type", type: override.callableType }],
         },
         visibility: "private",
       })),
@@ -483,6 +506,7 @@ export function createImplementationPlan(
     visibility: "private",
     attrs: [rustLintAttributes.deadCode],
     derives: [],
+    generics: emptyRustGenerics,
     fields: [{
       name: rustProjectObjectIdentityField,
       type: { kind: "named", path: "rt::ObjectIdentity" },
@@ -492,7 +516,7 @@ export function createImplementationPlan(
       type: {
         kind: "named",
         path: "rt::ObjectHandle",
-        typeArguments: [stateType],
+        genericArguments: [{ kind: "type", type: stateType }],
       },
       visibility: "private",
     }, ...implementations.map((implementation): RustStructField => ({

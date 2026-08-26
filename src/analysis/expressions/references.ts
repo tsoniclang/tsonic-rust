@@ -38,6 +38,9 @@ import { rustRuntimeCarrierKey, rustSelectedCallKey } from "../../target-model/f
 import { rustSourceParameterContractCarrier } from "../../policy/ownership/source-callable-abi.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { tryFlowMarkerCall } from "../declarations/types-and-bindings.js";
+import { rustSourceReferenceOperationFactKey } from "../../source/semantics/facts.js";
+import { rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
+import type { RustSourceReferenceOperationFact } from "../../source/semantics/model.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustSelectedTargetSignature, TargetTypeRef } from "../../target-model/types/model.js";
@@ -261,7 +264,8 @@ export function isSharedSourceMarkerOperation(
   expression: Node,
 ): boolean {
   const sourceFacts = walk.context.source.sourceFacts;
-  return readRustSourceNativePointerOperation(sourceFacts, expression) !== undefined ||
+  return readRustReferenceOperation(walk, expression) !== undefined ||
+    readRustSourceNativePointerOperation(sourceFacts, expression) !== undefined ||
     readRustSourceUnsafeContext(sourceFacts, expression) !== undefined ||
     readRustSourceSafetyBuilder(sourceFacts, expression) !== undefined;
 }
@@ -277,6 +281,19 @@ function resolveSharedSourceMarkerCarrier(
   expected: TargetTypeRef | undefined,
 ): RustSharedSourceMarkerCarrierResolution {
   const sourceFacts = walk.context.source.sourceFacts;
+  const referenceOperation = readRustReferenceOperation(walk, expression);
+  if (referenceOperation !== undefined) {
+    return {
+      handled: true,
+      ...resolvedRustReferenceOperationCarrier(
+        walk,
+        expression,
+        sourceFile,
+        referenceOperation,
+        expected,
+      ),
+    };
+  }
   const nativePointer = readRustSourceNativePointerOperation(
     sourceFacts,
     expression,
@@ -320,6 +337,173 @@ function resolveSharedSourceMarkerCarrier(
     };
   }
   return { handled: false };
+}
+
+function readRustReferenceOperation(
+  walk: RustFactWalk,
+  expression: Node,
+): RustSourceReferenceOperationFact | undefined {
+  return walk.context.facts.get(expression, rustSourceReferenceOperationFactKey) ??
+    walk.context.facts.resolve(expression, rustSourceReferenceOperationFactKey);
+}
+
+function resolvedRustReferenceOperationCarrier(
+  walk: RustFactWalk,
+  expression: Node,
+  sourceFile: SourceFile,
+  source: RustSourceReferenceOperationFact,
+  expected: TargetTypeRef | undefined,
+): { readonly carrier?: TargetTypeRef } {
+  if (source.call !== expression || source.selectedDeclaration.signatureId === undefined) {
+    return rejectRustReferenceOperation(
+      walk,
+      expression,
+      "RUST_REFERENCE_OPERATION_IDENTITY_CONFLICT",
+      "Rust reference operation has no exact selected call and signature identity.",
+    );
+  }
+  if (source.kind === "shared-reference" || source.kind === "mutable-reference") {
+    const operandCarrier = resolveExpressionCarrier(
+      walk,
+      source.valueExpression,
+      sourceFile,
+      undefined,
+    );
+    const mutable = source.kind === "mutable-reference";
+    const explicitLifetime = source.lifetimeTypeNode === undefined
+      ? undefined
+      : walk.context.sourceLifetimes.resolve(source.lifetimeTypeNode);
+    if (operandCarrier === undefined ||
+      (source.lifetimeTypeNode !== undefined && explicitLifetime === undefined)) {
+      return rejectRustReferenceOperation(
+        walk,
+        expression,
+        "RUST_REFERENCE_OPERATION_CARRIER_MISSING",
+        "Rust reference construction has no exact operand carrier or authored lifetime identity.",
+      );
+    }
+    const expectedReference = expected?.kind === "reference" ? expected : undefined;
+    if (expectedReference !== undefined &&
+      (expectedReference.mutable !== mutable ||
+        !rustTargetTypeRefEquals(expectedReference.referent, operandCarrier) ||
+        explicitLifetime !== undefined &&
+          !rustLifetimesEqual(expectedReference.lifetime, explicitLifetime))) {
+      return rejectRustReferenceOperation(
+        walk,
+        expression,
+        "RUST_REFERENCE_OPERATION_EXPECTATION_CONFLICT",
+        "Rust reference construction conflicts with its exact contextual reference contract.",
+      );
+    }
+    const lifetime = explicitLifetime ?? expectedReference?.lifetime;
+    const referenceCarrier: Extract<TargetTypeRef, { readonly kind: "reference" }> = {
+      kind: "reference",
+      referent: operandCarrier,
+      mutable,
+      ...(lifetime === undefined ? {} : { lifetime }),
+    };
+    const fact: Extract<
+      RustTargetOperationFact,
+      { readonly kind: "reference-operation"; readonly operation: "shared-reference" | "mutable-reference" }
+    > = {
+      kind: "reference-operation",
+      operationId: `tsonic.rust.reference.${source.kind}`,
+      operation: source.kind,
+      operandExpression: source.valueExpression,
+      operandCarrier,
+      referenceCarrier,
+      resultCarrier: referenceCarrier,
+    };
+    setRustOperationFact(walk, expression, fact);
+    return { carrier: setCarrierFact(walk, expression, referenceCarrier) };
+  }
+
+  const operandCarrier = resolveExpressionCarrier(
+    walk,
+    source.referenceExpression,
+    sourceFile,
+    undefined,
+  );
+  if (operandCarrier?.kind !== "reference") {
+    return rejectRustReferenceOperation(
+      walk,
+      expression,
+      "RUST_REFERENCE_OPERATION_INPUT_CONFLICT",
+      `Rust '${source.kind}' requires one exact native reference operand.`,
+    );
+  }
+  if (source.kind === "load") {
+    const fact: Extract<
+      RustTargetOperationFact,
+      { readonly kind: "reference-operation"; readonly operation: "load" }
+    > = {
+      kind: "reference-operation",
+      operationId: "tsonic.rust.reference.load",
+      operation: source.kind,
+      operandExpression: source.referenceExpression,
+      operandCarrier,
+      referenceCarrier: operandCarrier,
+      resultCarrier: operandCarrier.referent,
+    };
+    setRustOperationFact(walk, expression, fact);
+    return { carrier: setCarrierFact(walk, expression, fact.resultCarrier) };
+  }
+  if (!operandCarrier.mutable) {
+    return rejectRustReferenceOperation(
+      walk,
+      expression,
+      "RUST_REFERENCE_STORE_REQUIRES_MUTABLE",
+      "Rust reference store requires an exact mutable reference operand.",
+    );
+  }
+  const valueCarrier = resolveExpressionCarrier(
+    walk,
+    source.valueExpression,
+    sourceFile,
+    operandCarrier.referent,
+  );
+  if (valueCarrier === undefined ||
+    !rustTargetTypeRefEquals(valueCarrier, operandCarrier.referent)) {
+    return rejectRustReferenceOperation(
+      walk,
+      expression,
+      "RUST_REFERENCE_STORE_VALUE_CONFLICT",
+      "Rust reference store value does not have the exact referenced target carrier.",
+    );
+  }
+  const resultCarrier = rustUnitTargetType();
+  const fact: Extract<
+    RustTargetOperationFact,
+    { readonly kind: "reference-operation"; readonly operation: "store" }
+  > = {
+    kind: "reference-operation",
+    operationId: "tsonic.rust.reference.store",
+    operation: source.kind,
+    operandExpression: source.referenceExpression,
+    operandCarrier,
+    referenceCarrier: operandCarrier,
+    valueExpression: source.valueExpression,
+    valueCarrier,
+    resultCarrier,
+  };
+  setRustOperationFact(walk, expression, fact);
+  return { carrier: setCarrierFact(walk, expression, resultCarrier) };
+}
+
+function rejectRustReferenceOperation(
+  walk: RustFactWalk,
+  expression: Node,
+  code: string,
+  message: string,
+): { readonly carrier?: TargetTypeRef } {
+  appendRustDiagnostic(
+    walk,
+    code,
+    message,
+    expression,
+    ["target.capability=rust.lifetimes.explicit-reference-operations"],
+  );
+  return {};
 }
 
 function resolvedNativePointerCarrier(

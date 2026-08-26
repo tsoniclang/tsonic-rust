@@ -4,6 +4,10 @@ import {
 } from "../../metadata/closed-data.js";
 import { isRustTargetTypeRef } from "../equality.js";
 import type { TargetTypeRef } from "../model.js";
+import {
+  isRustLifetimeRef,
+  type RustLifetimeRef,
+} from "../../lifetimes/index.js";
 
 export const rustStringTargetId = "rust.std.String";
 export const rustJsStringTargetId = "rust.js.JsString";
@@ -46,8 +50,19 @@ export interface RustSourceTypeCarrierValue {
   readonly fileName: string;
   readonly typeName: string;
   readonly shape: "object" | "enum";
+  readonly lifetimeArguments: readonly RustLifetimeRef[];
   readonly typeArguments: readonly TargetTypeRef[];
 }
+
+export interface RustSourceTypeGenericArguments {
+  readonly lifetimes: readonly RustLifetimeRef[];
+  readonly types: readonly TargetTypeRef[];
+}
+
+const noRustSourceTypeGenericArguments: RustSourceTypeGenericArguments = Object.freeze({
+  lifetimes: Object.freeze([]),
+  types: Object.freeze([]),
+});
 
 export interface RustStructuralObjectFieldCarrierValue {
   readonly sourceName: string;
@@ -81,13 +96,19 @@ export function rustSourceTypeCarrier(
   fileName: string,
   typeName: string,
   shape: "object" | "enum",
-  typeArguments: readonly TargetTypeRef[] = [],
+  genericArguments: RustSourceTypeGenericArguments = noRustSourceTypeGenericArguments,
 ): TargetTypeRef {
   return {
     kind: "target-specific",
     target: "rust",
     name: "source-type",
-    value: { fileName, typeName, shape, typeArguments },
+    value: {
+      fileName,
+      typeName,
+      shape,
+      lifetimeArguments: genericArguments.lifetimes,
+      typeArguments: genericArguments.types,
+    },
   };
 }
 export function rustSourceTypeCarrierValue(
@@ -101,25 +122,30 @@ export function rustSourceTypeCarrierValue(
     return undefined;
   }
   const keys = Object.keys(value).sort();
-  if (keys.length !== 4 || keys[0] !== "fileName" || keys[1] !== "shape" ||
-    keys[2] !== "typeArguments" || keys[3] !== "typeName") {
+  if (keys.length !== 5 || keys[0] !== "fileName" ||
+    keys[1] !== "lifetimeArguments" || keys[2] !== "shape" ||
+    keys[3] !== "typeArguments" || keys[4] !== "typeName") {
     return undefined;
   }
   const candidate = value as {
     readonly fileName?: unknown;
     readonly typeName?: unknown;
     readonly shape?: unknown;
+    readonly lifetimeArguments?: unknown;
     readonly typeArguments?: unknown;
   };
   return typeof candidate.fileName === "string" && candidate.fileName.length > 0 &&
     typeof candidate.typeName === "string" && candidate.typeName.length > 0 &&
     (candidate.shape === "object" || candidate.shape === "enum") &&
+    isDenseDataArray(candidate.lifetimeArguments) &&
+    candidate.lifetimeArguments.every((argument) => isRustLifetimeRef(argument)) &&
     isDenseDataArray(candidate.typeArguments) &&
     candidate.typeArguments.every((argument) => isRustTargetTypeRef(argument))
     ? {
         fileName: candidate.fileName,
         typeName: candidate.typeName,
         shape: candidate.shape,
+        lifetimeArguments: candidate.lifetimeArguments as readonly RustLifetimeRef[],
         typeArguments: candidate.typeArguments as readonly TargetTypeRef[],
       }
     : undefined;

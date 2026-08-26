@@ -123,10 +123,13 @@ export function planRustObjectLiteralMethodArguments(
         }],
       };
       const collectionType: RustType = raw.fallible
-        ? {
+          ? {
             kind: "named",
             path: "Result",
-            typeArguments: [targetType, rustTargetRuntimeErrorType],
+            genericArguments: [
+              { kind: "type", type: targetType },
+              { kind: "type", type: rustTargetRuntimeErrorType },
+            ],
           }
         : targetType;
       if (raw.fallible) {
