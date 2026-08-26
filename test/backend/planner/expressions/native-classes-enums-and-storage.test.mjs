@@ -605,12 +605,12 @@ test("flow markers erase into finalized argument modes", () => {
     files: {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
-import { borrow, move } from "@tsonic/rust/lang.js";
+import { move, sharedBorrow } from "@tsonic/core/lang.js";
 import { Vector, magnitude, consume } from "@acme/vectors";
 
 export function drive(): int32 {
   const v = new Vector(3, 4);
-  const m = magnitude(borrow(v));
+  const m = magnitude(sharedBorrow(v));
   return m + consume(move(v));
 }
 `,
@@ -629,12 +629,12 @@ test("flow markers mismatching argument modes fail closed", () => {
     files: {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
-import { borrow } from "@tsonic/rust/lang.js";
+import { sharedBorrow } from "@tsonic/core/lang.js";
 import { Vector, consume } from "@acme/vectors";
 
 export function bad(): int32 {
   const v = new Vector(1, 2);
-  return consume(borrow(v));
+  return consume(sharedBorrow(v));
 }
 `,
     },
@@ -737,7 +737,7 @@ test("native arrays moved into project objects retain owned Vec storage", { time
     files: {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
-import { move } from "@tsonic/rust/lang.js";
+import { move } from "@tsonic/core/lang.js";
 import { check } from "@acme/testing";
 
 class Holder {

@@ -33,8 +33,8 @@ contextual object literals, closed string-literal union aliases as
 unit-variant enums, discriminated object unions as payload enums with
 TSTS-selected narrowing, tuples with constant indexing, `readonly T[]` as `&[T]`
 and mutable array parameters as `&mut [T]`, null-only unions as `Option<T>`
-with `??` coalescing, passthrough generic functions, Rust-flavoured
-`borrow`/`borrowMut`/`move` flow aliases validated against finalized
+with `??` coalescing, passthrough generic functions, neutral
+`sharedBorrow`/`mutableBorrow`/`move` flow markers validated against finalized
 argument modes, async/await with await-only future discipline, a
 naming policy that preserves every user-authored identifier verbatim with
 scoped lint allowances (snake_case exists only for compiler-generated
@@ -50,10 +50,11 @@ uses keep owned `String`. Homogeneous primitive tuple annotations carry
 compile-time-proven length and lower to `[T; N]` with literal construction
 and constant in-range indexing; dynamic indexing fails closed.
 
-The aliases are owned by `@tsonic/rust/lang.js`: `borrow` selects the neutral
-shared-borrow meaning, `borrowMut` selects mutable-borrow, and `move` selects
-move. Neutral code uses `sharedBorrow` and `mutableBorrow` from
-`@tsonic/core/lang.js`. Safe typed-location facts are converted once at the
+The flow markers are owned by `@tsonic/core/lang.js`. Rust's
+`@tsonic/rust/lang.js` instead owns the exact native-reference operations
+`ref`, `mut`, `load`, and `store`; its `@tsonic/rust/types.js` module owns the
+corresponding explicit lifetime and reference types. Safe typed-location facts
+are converted once at the
 Rust-owned policy boundary and lower to the runtime-owned `Location<T>`
 carrier. Local, parameter, member, and index projections preserve stable
 alias identity; unsupported escape, root, and overlapping mutable-borrow

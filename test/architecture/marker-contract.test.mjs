@@ -42,11 +42,7 @@ test("Rust source modules expose only the approved native aliases", () => {
     ["f32", "float32"],
     ["f64", "float64"],
   ]);
-  assert.deepEqual(callAliases, [
-    ["borrow", "shared-borrow"],
-    ["borrowMut", "mutable-borrow"],
-    ["move", "move"],
-  ]);
+  assert.deepEqual(callAliases, []);
   assert.doesNotMatch(
     modules,
     /sourcePrimitive\("char"|marker:\s*"(?:pointer|function-pointer)"/u,
@@ -93,12 +89,19 @@ test("Rust backend consumes only target-owned marker facts", () => {
   assert.deepEqual(failures, []);
 });
 
-test("Rust-flavoured flow aliases are imported only from the Rust module", () => {
+test("provider argument-flow markers remain neutral while Rust references are explicit", () => {
   for (const file of ["test/backend/planner/expressions/native-classes-enums-and-storage.test.mjs", "test/policy/operations/operator-traits.test.mjs"]) {
     const text = source(file);
-    assert.doesNotMatch(
+    assert.match(
       text,
-      /import\s*\{[^}]*\b(?:borrow|borrowMut)\b[^}]*\}\s*from\s*"@tsonic\/core\/lang\.js"/u,
+      /import\s*\{[^}]*\b(?:sharedBorrow|mutableBorrow)\b[^}]*\}\s*from\s*"@tsonic\/core\/lang\.js"/u,
     );
   }
+
+  const identity = source("src/source/semantics/identity.ts");
+  assert.match(identity, /sharedReference:\s*"ref"/u);
+  assert.match(identity, /mutableReference:\s*"mut"/u);
+  assert.match(identity, /load:\s*"load"/u);
+  assert.match(identity, /store:\s*"store"/u);
+  assert.doesNotMatch(identity, /"borrow"|"borrowMut"/u);
 });
