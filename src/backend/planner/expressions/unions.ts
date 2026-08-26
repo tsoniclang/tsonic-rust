@@ -91,7 +91,7 @@ export function planRustSourceUnionFieldProjection(
   }
   return {
     kind: "match",
-    expression: { kind: "reference", expr: receiver },
+    expression: receiver,
     arms,
   };
 }

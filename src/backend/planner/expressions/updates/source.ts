@@ -494,7 +494,7 @@ function planRustSourceUnionFieldUpdate(
   }
   const receiverNode = Node_Expression(context.input.program.source.ast, fieldExpression);
   const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
-  if (receiver === undefined || context.syntheticNames === undefined) {
+  if (receiverNode === undefined || receiver === undefined || context.syntheticNames === undefined) {
     return undefined;
   }
   const receiverName = allocateRustSyntheticName(context.syntheticNames, "union_update_receiver");
@@ -550,7 +550,7 @@ function planRustSourceUnionFieldUpdate(
     : {
         kind: "block",
         bindings: [
-          { name: receiverName, value: receiver },
+          { name: receiverName, value: planRustSharedReceiver(receiverNode, receiver, context) },
           ...projection.bindings,
         ],
         value: projected,

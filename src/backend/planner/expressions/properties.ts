@@ -448,7 +448,7 @@ function planRustSourceUnionFieldRead(
   }
   return planRustSourceUnionFieldProjection(
     node,
-    planRustNonConsumingValue(receiverNode, receiver, context),
+    planRustSharedReceiver(receiverNode, receiver, context),
     fact,
     context,
     (payload, field, variantIndex) => {

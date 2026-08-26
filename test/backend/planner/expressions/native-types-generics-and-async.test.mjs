@@ -618,7 +618,10 @@ export function bad(): int32 {
     },
   });
   assert.deepEqual(result.diagnostics, []);
-  assert.match(artifactText(result, "src/index.rs"), /let stored = fetch_value\(\);/u);
+  assert.match(
+    artifactText(result, "src/index.rs"),
+    /let stored: core::future::Future<i32> = fetch_value\(\);/u,
+  );
 
   const asyncMain = compileRust({
     target: { id: "rust", options: { outputType: "bin", crateName: "async_main" } },

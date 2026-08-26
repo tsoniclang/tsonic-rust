@@ -312,8 +312,7 @@ function rustExpressionUnsafeRequirement(
     return "call";
   }
   const operation = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
-  if (((operation?.kind === "source-field" && operation.fieldLayout === "native-union") ||
-      operation?.kind === "source-union-field") &&
+  if (operation?.kind === "source-field" && operation.fieldLayout === "native-union" &&
     (operation.accessMode === "read" || operation.accessMode === "read-write")) {
     return "native-union-field";
   }

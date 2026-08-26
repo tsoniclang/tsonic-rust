@@ -22,6 +22,7 @@ import {
   planRustNonConsumingValue,
   planRustPromotedStorageLocation,
   planRustPromotedStorageWrite,
+  planRustSharedReceiver,
 } from "../expressions/typed-locations.js";
 import {
   rustTargetOperationFactKey,
@@ -196,7 +197,7 @@ export function planExpressionAsStatement(
         }
         const receiverNode = Node_Expression(ast, left);
         const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
-        if (receiver === undefined || context.syntheticNames === undefined) {
+        if (receiverNode === undefined || receiver === undefined || context.syntheticNames === undefined) {
           return undefined;
         }
         const syntheticNames = context.syntheticNames;
@@ -314,7 +315,7 @@ export function planExpressionAsStatement(
               expr: {
                 kind: "block",
                 bindings: [
-                  { name: receiverName, value: receiver },
+                  { name: receiverName, value: planRustSharedReceiver(receiverNode, receiver, context) },
                   ...(fact.kind === "operator-token" ? [{ name: valueName, value }] : []),
                 ],
                 value: projected,
