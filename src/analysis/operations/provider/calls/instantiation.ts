@@ -50,9 +50,11 @@ import type { RustTargetMember, TargetTypeRef } from "../../../../target-model/t
 import type { RustGenericArgument, RustGenerics } from "../../../../target-model/semantics/index.js";
 import {
   emptyRustGenerics,
+  rustBuiltinIdentity,
   rustSemanticIdentityKey,
   rustTypeSemanticKey,
 } from "../../../../target-model/semantics/index.js";
+import { rustPascalCaseIdentifier } from "../../../../target-model/names/identifiers.js";
 import type { RustGenericSubstitutions } from "../../../../target-model/types/index.js";
 import {
   finalizeProviderOperationFact,
@@ -66,16 +68,27 @@ export function selectedCallSingleTypeGenerics(
   context: RustOperationPolicyContext,
 ): RustGenerics | undefined {
   const selected = request.source.sourceSelectedMethodTypeArguments;
-  const declaration = selected?.length === 1
-    ? asNode(selected[0]?.typeParameter, context)
-    : undefined;
-  const parameter = context.sourceGenerics.parameterFor(declaration)?.parameter;
-  return parameter?.kind !== "type"
+  const argument = selected?.length === 1 ? selected[0] : undefined;
+  const declaration = asNode(argument?.typeParameter, context);
+  const occurrence = declaration === undefined
     ? undefined
-    : Object.freeze({
-        parameters: Object.freeze([parameter]),
-        wherePredicates: Object.freeze([]),
-      });
+    : sourceNodeIdentity(context.ast, declaration);
+  if (argument === undefined || declaration === undefined || occurrence === undefined ||
+    argument.typeParameterName.length === 0) {
+    return undefined;
+  }
+  return Object.freeze({
+    parameters: Object.freeze([Object.freeze({
+      kind: "type" as const,
+      identity: rustBuiltinIdentity(
+        `selected-source-generic:${occurrence}`,
+        "tsonic-runtime",
+      ),
+      displayName: rustPascalCaseIdentifier(argument.typeParameterName),
+      bounds: Object.freeze([]),
+    })]),
+    wherePredicates: Object.freeze([]),
+  });
 }
 
 export function instantiateExactSelectedConstructionCarrier(

@@ -38,9 +38,7 @@ import type {
   RustTypedLocationPlan,
 } from "../facts/keys.js";
 import {
-  rustLocationPointeeCarrier,
   rustLocationTargetType,
-  rustOptionalLocationPointeeCarrier,
   rustOptionTargetType,
   rustSourcePrimitiveTargetType,
   rustUnitTargetType,
@@ -289,63 +287,11 @@ function resolveRustTypedLocationPointee(
   context: RustOperationPolicyContext,
   options: RustTargetTypeResolutionOptions,
 ): TargetTypeRef | undefined {
-  if (operation.explicitPointeeTypeNode !== undefined) {
-    return resolveRustTargetTypeRef(
-      operation.explicitPointeeTypeNode,
-      context,
-      options,
-    );
-  }
-  switch (operation.operation) {
-    case "address-of":
-      return resolveRustTargetTypeRef(
-        operation.storageExpression,
-        context,
-        options,
-      ) ?? resolveRustTargetTypeRef(
-        operation.storageDeclaration === undefined
-          ? operation.storageType
-          : Node_Type(context.ast, operation.storageDeclaration) ??
-            operation.storageDeclaration,
-        context,
-        options,
-      );
-    case "allocate":
-      return resolveRustTargetTypeRef(
-        operation.initialExpression,
-        context,
-        options,
-      ) ?? resolveRustTargetTypeRef(operation.initialType, context, options);
-    case "load":
-    case "store":
-      return rustLocationPointeeCarrier(resolveRustTargetTypeRef(
-        operation.pointerExpression,
-        context,
-        options,
-      ) ?? resolveRustTargetTypeRef(
-        operation.pointerType,
-        context,
-        options,
-      ));
-    case "equal-pointer":
-      return rustOptionalLocationPointeeCarrier(resolveRustTargetTypeRef(
-        operation.leftExpression,
-        context,
-        options,
-      ) ?? resolveRustTargetTypeRef(
-        operation.leftType,
-        context,
-        options,
-      )) ?? rustOptionalLocationPointeeCarrier(resolveRustTargetTypeRef(
-        operation.rightExpression,
-        context,
-        options,
-      ) ?? resolveRustTargetTypeRef(
-        operation.rightType,
-        context,
-        options,
-      ));
-  }
+  return resolveRustTargetTypeRef(
+    operation.explicitPointeeTypeNode ?? operation.pointeeType,
+    context,
+    options,
+  );
 }
 
 function rustTypedLocationArgumentsMatch(
