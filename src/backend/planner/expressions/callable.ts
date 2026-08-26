@@ -390,7 +390,7 @@ export function planCallableExpression(
   };
   const bindingStatements: RustStmt[] = [];
   let closureParams: { name: string; mutable: boolean; byRefCopy?: boolean }[];
-  const closureMove = executionContract.captureStyle === "move" ||
+  const capturesByMove = executionContract.captureStyle === "move" ||
     executionContract.storage === "owned" && executionContract.captures.length > 0;
   if (callableProtocol === undefined) {
     closureParams = [
@@ -483,13 +483,13 @@ export function planCallableExpression(
             name: parameter.name,
             byRefCopy: parameter.byRefCopy === true,
           })),
-          ...(closureMove ? { move: true } : {}),
+          ...(capturesByMove ? { move: true } : {}),
           body: resultBody,
         }
       : {
           kind: "closure-block",
           params: closureParams,
-          move: closureMove,
+          move: capturesByMove,
           async: sourceAsync,
           body: { statements: [...bindingStatements, { kind: "tail", expr: resultBody }] },
         };
@@ -564,13 +564,13 @@ export function planCallableExpression(
         name: parameter.name,
         byRefCopy: parameter.byRefCopy === true,
       })),
-      ...(closureMove ? { move: true } : {}),
+      ...(capturesByMove ? { move: true } : {}),
       body: onlyStatement.expr,
     }
     : {
         kind: "closure-block",
         params: closureParams,
-        move: closureMove,
+        move: capturesByMove,
         async: sourceAsync,
         body: finalizedBlock,
       };

@@ -1122,8 +1122,8 @@ test("Rust opaque precise captures have one semantic owner and exact Self identi
     join(sourceRoot, "providers/compiler/model/model.ts"),
     "utf8",
   );
-  const compilerNormalization = readFileSync(
-    join(sourceRoot, "providers/compiler/model/types/normalization.ts"),
+  const compilerOpaqueCaptures = readFileSync(
+    join(sourceRoot, "providers/compiler/model/types/opaque-captures.ts"),
     "utf8",
   );
   const sourceOpaqueResolution = readFileSync(
@@ -1133,8 +1133,8 @@ test("Rust opaque precise captures have one semantic owner and exact Self identi
 
   assert.doesNotMatch(semanticBounds, /kind:\s*["']precise-capture["']/u);
   assert.match(compilerModel, /kind:\s*["']precise-capture["']/u);
-  assert.match(compilerNormalization, /raw === ["']Self["']/u);
-  assert.match(compilerNormalization, /type:self:/u);
+  assert.match(compilerOpaqueCaptures, /raw === ["']Self["']/u);
+  assert.match(compilerOpaqueCaptures, /type:self:/u);
   assert.doesNotMatch(sourceOpaqueResolution, /displayName\s*===\s*["']Self["']/u);
 });
 

@@ -172,15 +172,15 @@ function applicationDeclarations(
       ]);
     case "constructor": {
       const owner = application.resolvedRootDeclaration;
-      return owner === undefined || !ast.is.IsClassDeclaration(owner)
-        ? []
-        : uniqueNodes([
-            owner,
-            ...ast.members(owner).filter(
-              (member): member is Node =>
-                member !== undefined && ast.is.IsConstructorDeclaration(member),
-            ),
-          ]);
+      if (owner === undefined || !ast.is.IsClassDeclaration(owner)) return [];
+      const members = requireDenseSafetyNodes(
+        ast.members(owner),
+        "Class declaration contains an undefined member during safety application analysis.",
+      );
+      return uniqueNodes([
+        owner,
+        ...members.filter((member) => ast.is.IsConstructorDeclaration(member)),
+      ]);
     }
     case "getter":
     case "setter":
@@ -211,13 +211,24 @@ function walkSourceFile(
       continue;
     }
     visit(node);
-    const children = ast.children(node).filter(
-      (child): child is Node => child !== undefined,
+    const children = requireDenseSafetyNodes(
+      ast.children(node),
+      "Source tree contains an undefined child during safety application analysis.",
     );
     for (let index = children.length - 1; index >= 0; index -= 1) {
       pending.push(children[index]!);
     }
   }
+}
+
+function requireDenseSafetyNodes(
+  values: readonly (Node | undefined)[],
+  message: string,
+): readonly Node[] {
+  if (values.some((value) => value === undefined)) {
+    throw new Error(message);
+  }
+  return values as readonly Node[];
 }
 
 const emptyApplications = Object.freeze([]) as readonly RustSafetyApplication[];

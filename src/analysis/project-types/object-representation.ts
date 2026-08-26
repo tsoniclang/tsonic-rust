@@ -222,15 +222,16 @@ function collectMutatingProjectMethods(input: {
   readonly navigation: SourceProgramNavigation;
   readonly projectTypes: RustProjectTypePolicy;
 }): ReadonlySet<Node> {
-  const methods = input.projectTypes.definitions.flatMap((definition) =>
-    input.ast.members(definition.declaration).filter((member): member is Node =>
-      member !== undefined && isInstanceCallable(member, input.ast)));
+  const membersByDefinition = input.projectTypes.definitions.map((definition) =>
+    requireDenseProjectMembers(input.ast.members(definition.declaration)));
+  const methods = membersByDefinition.flatMap((members) =>
+    members.filter((member) => isInstanceCallable(member, input.ast)));
   const methodSet = new Set(methods);
   const mutating = new Set<Node>();
   const calls = new Map<Node, Set<Node>>();
-  for (const definition of input.projectTypes.definitions) {
-    for (const member of input.ast.members(definition.declaration)) {
-      if (member === undefined || input.ast.hasModifierKind(member, "static")) {
+  for (const members of membersByDefinition) {
+    for (const member of members) {
+      if (input.ast.hasModifierKind(member, "static")) {
         continue;
       }
       const summary = input.navigation.declarationUseSummary(member);
@@ -262,6 +263,15 @@ function collectMutatingProjectMethods(input: {
     }
   }
   return mutating;
+}
+
+function requireDenseProjectMembers(
+  values: readonly (Node | undefined)[],
+): readonly Node[] {
+  if (values.some((value) => value === undefined)) {
+    throw new Error("Project declaration contains an undefined member during object-representation analysis.");
+  }
+  return values as readonly Node[];
 }
 
 function projectDefinitionIsMutable(

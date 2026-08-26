@@ -322,9 +322,18 @@ export function resolveRecordLiteralCarrier(
     }
     resultCarrier = selectedExpected;
     storage = "project-object";
-    selectedMethodDeclarations = contracts.flatMap((contract) =>
-      ast.members(contract.definition.declaration).filter((member): member is Node =>
-        member !== undefined && ast.kindName(member) === "KindMethodSignature"));
+    const selectedContractMembers = contracts.map((contract) =>
+      requireDenseSourceNodes(
+        walk,
+        ast.members(contract.definition.declaration),
+        "Object contract contains an undefined member slot.",
+      ));
+    if (selectedContractMembers.some((members) => members === undefined)) {
+      return undefined;
+    }
+    selectedMethodDeclarations = selectedContractMembers.flatMap((members) =>
+      (members as readonly Node[]).filter((member) =>
+        ast.kindName(member) === "KindMethodSignature"));
     selectedFields = projectFields as readonly {
       readonly implementationDeclaration: Node;
       readonly contractDeclarations: readonly Node[];

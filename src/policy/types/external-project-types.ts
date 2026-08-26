@@ -51,12 +51,15 @@ export function resolveRustExternalProjectBase(
     !isNamedTypeReference(ast.typeNode(valueDeclaration), "ErrorConstructor", ast)) {
     return undefined;
   }
-  const errorDeclarations = ast.statements(sourceFile).filter((statement): statement is Node =>
-    statement !== undefined &&
+  const sourceStatements = ast.statements(sourceFile);
+  if (sourceStatements.some((statement) => statement === undefined)) {
+    return undefined;
+  }
+  const statements = sourceStatements as readonly Node[];
+  const errorDeclarations = statements.filter((statement) =>
     ast.kindName(statement) === "KindInterfaceDeclaration" &&
     ast.text(ast.name(statement)) === "Error");
-  const constructorDeclarations = ast.statements(sourceFile).filter((statement): statement is Node =>
-    statement !== undefined &&
+  const constructorDeclarations = statements.filter((statement) =>
     ast.kindName(statement) === "KindInterfaceDeclaration" &&
     ast.text(ast.name(statement)) === "ErrorConstructor");
   if (errorDeclarations.length !== 1 || constructorDeclarations.length !== 1) {
@@ -64,12 +67,13 @@ export function resolveRustExternalProjectBase(
   }
   const declaration = errorDeclarations[0]!;
   const constructorDeclaration = constructorDeclarations[0]!;
-  if (sourceProfiles.profileForNode(declaration, ast) !== profile ||
+  const constructorMembers = ast.members(constructorDeclaration);
+  if (constructorMembers.some((member) => member === undefined) ||
+    sourceProfiles.profileForNode(declaration, ast) !== profile ||
     sourceProfiles.profileForNode(constructorDeclaration, ast) !== profile ||
     ast.typeParameters(declaration).length !== 0 ||
     ast.typeParameters(constructorDeclaration).length !== 0 ||
-    !ast.members(constructorDeclaration).some((member) =>
-      member !== undefined &&
+    !(constructorMembers as readonly Node[]).some((member) =>
       ast.kindName(member) === "KindConstructSignature" &&
       isNamedTypeReference(ast.typeNode(member), "Error", ast))) {
     return undefined;

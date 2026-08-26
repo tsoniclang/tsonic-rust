@@ -8,7 +8,7 @@ import type {
   RustTypeBound,
   RustWherePredicate,
 } from "../../backend/target-ast/nodes.js";
-import { singleRustUnicodeScalar } from "../../target-model/syntax/literals.js";
+import { requireRustCharacterScalar } from "../../backend/target-ast/literals.js";
 
 export function printRustType(type: RustType): string {
   switch (type.kind) {
@@ -180,10 +180,7 @@ function printRustBinder(
 }
 
 function rustCharacterLiteral(value: string): string {
-  const scalar = singleRustUnicodeScalar(value);
-  if (scalar === undefined) {
-    throw new Error("A Rust character literal must contain exactly one Unicode scalar value.");
-  }
+  const scalar = requireRustCharacterScalar(value);
   const escaped = scalar
     .split("\\").join("\\\\")
     .split("'").join("\\'")

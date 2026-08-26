@@ -2,7 +2,6 @@ import {
   isRustNeverCarrier,
   rustCallableProtocol,
   rustBuiltinPathTypeMatches,
-  rustPrimitiveTypeName,
   rustStringTargetId,
   rustSourceUnionCarrierValue,
 } from "../../../target-model/types/index.js";
@@ -42,13 +41,13 @@ import type { RustExpr, RustGenericArgument } from "../../target-ast/nodes.js";
 import type { RustFinalizedInputPlanOverrides } from "../project/provider-evaluation-scope.js";
 import type { RustFinalizedSourceInput, RustFinalizedTargetInput, RustFinalizedValueConversion } from "../../../analysis/facts/finalized-operation-abi.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import {
   applyFinalizedRustArgumentMode,
   applyRustArgumentMode,
 } from "./input-shaping.js";
 import { invokeRustStructuralObjectMethod } from "../objects/project-storage.js";
 import { providerConstantExpression } from "./provider-constants.js";
+import { typeNumericMethodReceiverLiteral } from "./numeric-literals.js";
 
 export function applyRustValueConversion(
   context: RustPlanContext,
@@ -645,26 +644,6 @@ function mergeRustFinalizedInputOverrides(
     inputs.set(input, value);
   }
   return { sourceValues, inputs };
-}
-
-function typeNumericMethodReceiverLiteral(
-  expression: RustExpr,
-  carrier: TargetTypeRef,
-): RustExpr | undefined {
-  if (expression.kind === "unary" && expression.operator === "-") {
-    const operand = typeNumericMethodReceiverLiteral(expression.operand, carrier);
-    return operand === undefined ? undefined : { ...expression, operand };
-  }
-  if (expression.kind !== "float-literal" && expression.kind !== "int-literal") {
-    return expression;
-  }
-  if (carrier.kind !== "source-primitive") {
-    return undefined;
-  }
-  const suffix = rustPrimitiveTypeName(carrier.name);
-  return suffix === undefined
-    ? undefined
-    : { ...expression, text: `${expression.text}${suffix}` };
 }
 
 function applyProviderOperationChain(
