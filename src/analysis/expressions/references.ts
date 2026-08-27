@@ -21,6 +21,7 @@ import {
   rustOptionElementCarrier,
   rustCallableProtocol,
   rustCallableTargetType,
+  rustNativeCallableProtocol,
   rustSourcePrimitiveTargetType,
   rustUnitTargetType,
 } from "../../target-model/types/index.js";
@@ -491,9 +492,7 @@ function applySelectedRuntimeCallableCall(
   selectedSignature: RustSelectedTargetSignature,
 ): TargetTypeRef | undefined {
   const carrier = selectedSignature.sourceCallableCarrier;
-  const callable = carrier?.kind === "function-pointer"
-    ? { parameters: carrier.args, result: carrier.result }
-    : rustCallableProtocol(carrier);
+  const callable = rustNativeCallableProtocol(carrier) ?? rustCallableProtocol(carrier);
   const bindings = selectedSignature.sourceArgumentBindings;
   const memberParameters = selectedSignature.member.parameters;
   const sourceParameterIndexes = selectedSignature.sourceCallableParameterIndexes;

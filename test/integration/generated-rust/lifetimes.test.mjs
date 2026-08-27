@@ -173,7 +173,7 @@ test("elided native references execute as zero-wrapper Rust borrows", { timeout:
     files: {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
-import type { Life, Mut, Outlives, Ref } from "@tsonic/rust/types.js";
+import type { Life, Mut, Outlives, Ref, ValidFor } from "@tsonic/rust/types.js";
 import { load, mut, ref, store } from "@tsonic/rust/lang.js";
 import { check } from "@acme/testing";
 
@@ -192,6 +192,12 @@ function choose<A extends Life, B extends Life & Outlives<A>>(
   return left;
 }
 
+function hold<L extends Life, T extends ValidFor<L>>(
+  value: Ref<T, L>,
+): Ref<T, L> {
+  return value;
+}
+
 function copyPlusOne(target: Mut<int32>, source: Ref<int32>): void {
   store(target, load(source) + 1);
 }
@@ -202,6 +208,7 @@ export function main(): void {
   increment(mut(value));
   check(read(ref(value)) === 42);
   check(read(choose(ref(value), ref(copied))) === 42);
+  check(read(hold(ref(value))) === 42);
   copyPlusOne(mut(copied), ref(value));
   check(copied === 43);
 }
@@ -234,7 +241,7 @@ test("borrowed contracts survive async, HRTB callback, closure, and generator lo
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
 import type { Life, Outlives, Ref, Static } from "@tsonic/rust/types.js";
-import { load } from "@tsonic/rust/lang.js";
+import { load, ref } from "@tsonic/rust/lang.js";
 
 export type Reader = <L extends Life>(value: Ref<int32, L>) => int32;
 
@@ -244,7 +251,9 @@ export async function retain<L extends Life>(
   return value;
 }
 
-export function acceptReader(reader: Reader): void {
+export function acceptReader(reader: Reader): int32 {
+  const value: int32 = 9;
+  return reader(ref(value));
 }
 
 export function staticReader(value: Ref<int32, Static>): () => int32 {
@@ -296,6 +305,7 @@ export async function* borrowedAsyncValues<L extends Life>(
   );
   assert.match(source, /pub async fn retain<'l>\(value: &'l i32\) -> &'l i32/u);
   assert.match(source, /reader: impl for<'l> Fn\(&'l i32\) -> i32/u);
+  assert.match(source, /reader\(&value\)/u);
   assert.match(source, /pub fn static_reader\(value: &'static i32\)/u);
   assert.match(source, /pub fn invoke_captured\(value: &'static i32\)/u);
   assert.match(source, /value: &'static i32/u);

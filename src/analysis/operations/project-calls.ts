@@ -1,5 +1,6 @@
 import {
   rustCallableProtocol,
+  rustNativeCallableProtocol,
   rustTargetGenericTypeArguments,
   substituteRustTargetGenerics,
 } from "../../target-model/types/index.js";
@@ -208,8 +209,9 @@ export function applySelectedProjectSourceCall(
   const optionalCall = walk.context.facts.get(expression, rustOptionalChainFactKey) ??
     walk.context.facts.resolve(expression, rustOptionalChainFactKey);
   const selectedCallableCarrier = optionalCall?.selectedGuardCarrier ?? callableCalleeCarrier;
+  const selectedNativeCallable = rustNativeCallableProtocol(selectedCallableCarrier);
   const indirectCallable = selectedCallableCarrier !== undefined &&
-    (selectedCallableCarrier.kind === "function-pointer" ||
+    (selectedNativeCallable !== undefined ||
       rustCallableProtocol(selectedCallableCarrier) !== undefined) &&
     (!directCallableDeclaration ||
       ast.kindName(callee) === "KindArrowFunction" || ast.kindName(callee) === KindFunctionExpression);
@@ -372,7 +374,8 @@ export function applySelectedProjectSourceCall(
     declarationKind === KindFunctionExpression) {
     const calleeCarrier = selectedCallableCarrier;
     if (calleeCarrier === undefined ||
-      (calleeCarrier.kind !== "function-pointer" && rustCallableProtocol(calleeCarrier) === undefined)) {
+      (rustNativeCallableProtocol(calleeCarrier) === undefined &&
+        rustCallableProtocol(calleeCarrier) === undefined)) {
       return undefined;
     }
     target = { form: "callable", carrier: calleeCarrier };
@@ -404,7 +407,8 @@ export function applySelectedProjectSourceCall(
     }
   }
   if (target.form === "callable") {
-    const callable = rustCallableProtocol(target.carrier);
+    const callable = rustNativeCallableProtocol(target.carrier) ??
+      rustCallableProtocol(target.carrier);
     if (callable !== undefined) {
       if (callable.parameters.length !== parameters.length) {
         appendRustDiagnostic(
@@ -416,13 +420,38 @@ export function applySelectedProjectSourceCall(
         );
         return undefined;
       }
+      const callableResult = substituteRustTargetGenerics(
+        callable.result,
+        substitutions.types,
+        substitutions.lifetimes,
+        substitutions.consts,
+      );
+      if (!rustTargetTypeRefEquals(callableResult, resultCarrier)) {
+        appendRustDiagnostic(
+          walk,
+          "RUST_SOURCE_CALL_CALLABLE_RESULT_CONFLICT",
+          "The exact runtime-callable carrier conflicts with the selected source result ABI.",
+          expression,
+          ["target.capability=rust.source-call.callable-abi"],
+        );
+        return undefined;
+      }
       const callableParameters = parameters.map((parameter, index) => {
         const carrier = callable.parameters[index];
+        const instantiatedCarrier = carrier === undefined
+          ? undefined
+          : substituteRustTargetGenerics(
+              carrier,
+              substitutions.types,
+              substitutions.lifetimes,
+              substitutions.consts,
+            );
         const contractCarrier = parameter.mode === "value"
           ? parameter.parameterCarrier
           : parameter.valueCarrier;
-        return carrier !== undefined && rustTargetTypeRefEquals(carrier, contractCarrier)
-          ? { ...parameter, parameterCarrier: carrier, mode: "value" as const }
+        return instantiatedCarrier !== undefined &&
+            rustTargetTypeRefEquals(instantiatedCarrier, contractCarrier)
+          ? { ...parameter, parameterCarrier: instantiatedCarrier, mode: "value" as const }
           : undefined;
       });
       if (callableParameters.some((parameter) => parameter === undefined)) {

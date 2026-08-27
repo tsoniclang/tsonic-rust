@@ -1,7 +1,10 @@
 import {
+  inferRustTargetGenericBindings,
   inferRustTargetTypeParameterBindings,
   isRustNumericCarrier,
   rustTargetGenericBindingsForArguments,
+  rustTargetGenericReferences,
+  substituteRustTargetGenerics,
 } from "../../target-model/types/index.js";
 import {
   KindBinaryExpression,
@@ -24,6 +27,7 @@ import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { selectedSourceLiteralIsRepresentable } from "../../policy/types/selected-numeric-literal.js";
 import { rustSpreadElementCarrier } from "../../target-model/operations/rest-assembly.js";
+import { rustLifetimeKey, rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type {
@@ -58,6 +62,11 @@ export function finalizeProjectSourceGenericArguments(
     return undefined;
   }
   const finalized = [...selectedTargets];
+  const initialSubstitutions = rustTargetGenericBindingsForArguments(
+    parameters,
+    finalized,
+  );
+  if (initialSubstitutions === undefined) return undefined;
   const typeParameterNames = new Set(parameters.flatMap((parameter) =>
     parameter.kind === "type" ? [parameter.sourceName] : []));
   const inferred = reconcileProjectSourceArgumentTypeParameters(
@@ -65,6 +74,7 @@ export function finalizeProjectSourceGenericArguments(
     selected,
     callArguments,
     typeParameterNames,
+    initialSubstitutions,
   );
   if (inferred === undefined) return undefined;
   for (let index = 0; index < sourceArguments.length; index += 1) {
@@ -129,6 +139,7 @@ function reconcileProjectSourceArgumentTypeParameters(
   selected: RustSelectedTargetSignature,
   callArguments: readonly Node[],
   parameterNames: ReadonlySet<string>,
+  initialSubstitutions: RustTargetGenericBindings,
 ): ReadonlyMap<string, TargetTypeRef> | undefined {
   const reconciled = new Map<string, TargetTypeRef>();
   if (parameterNames.size === 0) return reconciled;
@@ -148,21 +159,43 @@ function reconcileProjectSourceArgumentTypeParameters(
         : binding.sourceParameterForm === "rest-element" && parameter.type.kind === "array"
           ? parameter.type.element
           : parameter.type;
+      const instantiatedParameterCarrier = parameterCarrier === undefined
+        ? undefined
+        : substituteRustTargetGenerics(
+            parameterCarrier,
+            new Map(),
+            initialSubstitutions.lifetimes,
+            initialSubstitutions.consts,
+          );
       const actualCarrier = binding.sourceForm === "spread-element"
         ? binding.spreadElementIndex === undefined
           ? undefined
           : rustSpreadElementCarrier(actual, binding.spreadElementIndex)
         : actual;
-      if (parameterCarrier === undefined || actualCarrier === undefined) {
+      if (instantiatedParameterCarrier === undefined || actualCarrier === undefined) {
         continue;
       }
-      const candidate = inferRustTargetTypeParameterBindings(
-        parameterCarrier,
+      const references = rustTargetGenericReferences(instantiatedParameterCarrier);
+      const callScopedElisions = new Map(references.callScopedElisions.map((lifetime) => [
+        rustLifetimeKey(lifetime),
+        lifetime,
+      ]));
+      const candidate = inferRustTargetGenericBindings(
+        instantiatedParameterCarrier,
         actualCarrier,
-        parameterNames,
+        {
+          typeNames: parameterNames,
+          lifetimeIdentities: new Set(callScopedElisions.keys()),
+          constIdentities: new Set(),
+        },
+        { callScopedElisionBindings: callScopedElisions },
       );
-      if (candidate === undefined) continue;
-      for (const [name, carrier] of candidate) {
+      if (candidate === undefined || candidate.lifetimes.size !== callScopedElisions.size ||
+        [...callScopedElisions].some(([identity, lifetime]) =>
+          !rustLifetimesEqual(candidate.lifetimes.get(identity), lifetime))) {
+        continue;
+      }
+      for (const [name, carrier] of candidate.types) {
         const existing = reconciled.get(name);
         if (existing !== undefined && !rustTargetTypeRefEquals(existing, carrier)) {
           return undefined;

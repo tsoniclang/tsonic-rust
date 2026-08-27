@@ -118,6 +118,14 @@ export function rustClosureProtocol(
     : undefined;
 }
 
+export function rustNativeCallableProtocol(
+  carrier: TargetTypeRef | undefined,
+): { readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef } | undefined {
+  return carrier?.kind === "function-pointer"
+    ? { parameters: carrier.args, result: carrier.result }
+    : rustClosureProtocol(carrier);
+}
+
 export interface RustGeneratorProtocol {
   readonly kind: "sync" | "async";
   readonly yieldType: TargetTypeRef;

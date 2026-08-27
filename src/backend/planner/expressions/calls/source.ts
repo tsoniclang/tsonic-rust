@@ -305,7 +305,8 @@ export function planSelectedSourceCall(
         break;
       }
       const callable = planRustNonConsumingValue(callee, plannedCallable, context);
-      if (fact.target.carrier.kind === "function-pointer") {
+      if (fact.target.carrier.kind === "function-pointer" ||
+        fact.target.carrier.kind === "closure") {
         planned = { kind: "invoke", callee: callable, args: shaped };
         break;
       }
