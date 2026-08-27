@@ -46,9 +46,20 @@ export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
     return;
   }
   const { ast } = walk.context;
-  if (ast.typeParameters(declaration).length !== 0) {
+  const sourceParameters = ast.typeParameters(declaration);
+  const genericContract = sourceParameters.length === 0
+    ? undefined
+    : walk.context.sourceLifetimes.contractFor(declaration);
+  if (sourceParameters.some((parameter) => parameter === undefined) ||
+    (sourceParameters.length > 0 && (genericContract === undefined ||
+      genericContract.parameters.length !== sourceParameters.length ||
+      genericContract.parameters.some((parameter, index) =>
+        parameter.declaration !== sourceParameters[index])))) {
     return;
   }
+  const lifetimeBearingAlias = genericContract?.parameters.some((parameter) =>
+    parameter.kind === "lifetime") === true;
+  if (sourceParameters.length > 0 && !lifetimeBearingAlias) return;
   const nameNode = ast.name(declaration);
   const typeName = nameNode === undefined ? "" : ast.text(nameNode);
   const fileName = ast.getFileName(ast.getSourceFile(declaration));
@@ -73,8 +84,12 @@ export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
       setCarrierFact(walk, typeNode, carrier);
     }
     walk.context.facts.set(declaration, rustTypeAliasDeclarationFactKey, {
-      kind: "erased",
-    }, [{ message: "rust representation-preserving type alias declaration" }]);
+      ...(lifetimeBearingAlias
+        ? { kind: "native-alias" as const, target: carrier }
+        : { kind: "erased" as const }),
+    }, [{ message: lifetimeBearingAlias
+      ? "rust explicit lifetime-bearing native type alias declaration"
+      : "rust representation-preserving type alias declaration" }]);
     return;
   }
   const compositeCarrier = resolveRustTargetTypeRef(
@@ -379,7 +394,7 @@ interface FlowMarkerResolution {
 }
 
 // The generic source-semantics extension records flowStateFactKey on neutral
-// sharedBorrow/mutableBorrow/move operations (including exact Rust aliases).
+// sharedBorrow/mutableBorrow/move operations.
 // This target converts those source facts into Rust-owned operation facts.
 // Flow operations erase at emission because the consuming position's finalized
 // Rust argument mode owns the passing shape. Non-flow source markers are

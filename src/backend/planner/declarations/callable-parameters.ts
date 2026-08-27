@@ -24,7 +24,7 @@ import {
   isValidRustIdentifier,
 } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { rustTypeFromCarrierInContext } from "../types/render.js";
+import { rustParameterTypeFromCarrierInContext } from "../types/render.js";
 import {
   allocateRustSyntheticName,
 } from "../names/synthetic.js";
@@ -58,7 +58,7 @@ export function planRustCallableParameters(
   callable: Node,
   context: RustPlanContext,
   syntheticNames: RustSyntheticNameState,
-  options: { readonly requireStatic: boolean },
+  options?: { readonly requiredStaticParameters?: readonly Node[] },
 ): RustCallableParameterPlan | undefined {
   const { ast } = context.input.program.source;
   const params: RustFunctionParam[] = [];
@@ -80,7 +80,7 @@ export function planRustCallableParameters(
       : undefined;
     const abi = context.input.program.facts.getFact(parameter, rustSourceParameterAbiFactKey);
     const parameterCarrier = abi?.parameterCarrier;
-    const parameterType = rustTypeFromCarrierInContext(parameterCarrier, context);
+    const parameterType = rustParameterTypeFromCarrierInContext(parameterCarrier, context);
     const parameterName = pattern === undefined
       ? context.input.program.names.nameForDeclaration(parameter) ?? ""
       : allocateRustSyntheticName(syntheticNames, "binding_parameter");
@@ -92,7 +92,8 @@ export function planRustCallableParameters(
       ));
       return undefined;
     }
-    if (options.requireStatic && parameterCarrier !== undefined &&
+    if (options?.requiredStaticParameters?.includes(parameter) === true &&
+      parameterCarrier !== undefined &&
       !requireRustCarrierRequirements(parameterCarrier, ["static"], parameter, context)) {
       return undefined;
     }

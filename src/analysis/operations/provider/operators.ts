@@ -20,7 +20,8 @@ import {
   KindBigIntLiteral,
 } from "@tsonic/target-api/source";
 import { finalizeRustProviderOperationAbi } from "../../facts/finalized-operation-abi.js";
-import { instantiateProviderOperationTemplate, providerFormRequiresSourceReceiver } from "./calls/instantiation.js";
+import { providerFormRequiresSourceReceiver } from "./calls/instantiation.js";
+import { instantiateProviderOperationTemplate } from "./calls/template-instantiation.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
 import { rustEffectiveValueCarrier } from "../../facts/value-carrier-queries.js";
 import { rustSourcePrimitiveTargetType, rustUnitTargetType } from "../../../target-model/types/index.js";
@@ -85,7 +86,7 @@ function selectRustProjectTypeTest(
   const sourceDefinition = options.projectTypes.definitionForCarrier(dispatchCarrier);
   const targetDefinition = options.projectTypes.definitionForDeclaration(request.sourceRightDeclaration);
   const targetCarrier = targetDefinition === undefined || targetDefinition.kind !== "class" ||
-      targetDefinition.typeParameterNames.length !== 0
+      targetDefinition.genericParameters.length !== 0
     ? undefined
     : options.projectTypes.openCarrier(targetDefinition);
   const programErrorVariant = targetDefinition === undefined

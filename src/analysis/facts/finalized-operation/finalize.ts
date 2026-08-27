@@ -9,10 +9,13 @@ import {
 } from "./conversions.js";
 import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
 import { isRustFallibleErrorBoundary } from "../../../target-model/operations/error-boundary.js";
-import { isRustTargetTypeRef } from "../../../target-model/types/equality.js";
+import {
+  isRustTargetGenericArgument,
+  isRustTargetTypeRef,
+} from "../../../target-model/types/equality.js";
 import { operationKinds, validateRustFinalizedOperationAbi } from "./validation.js";
-import { rustFutureTargetType, rustTargetTypeParameterNames } from "../../../target-model/types/index.js";
-import { rustProviderOperationFormAcceptsTargetTypeArguments, rustProviderOperationFormContractViolation } from "../../../policy/operations/forms.js";
+import { rustFutureTargetType } from "../../../target-model/types/index.js";
+import { rustProviderOperationFormAcceptsTargetGenericArguments, rustProviderOperationFormContractViolation } from "../../../policy/operations/forms.js";
 import type { FinalizeRustProviderOperationAbiOptions, RustFinalizedOperationAbiFor, RustFinalizedOperationResult, RustFinalizedTargetInput } from "./model.js";
 import type { RustFinalizedOperationKind } from "../../../target-model/operations/model.js";
 
@@ -31,11 +34,11 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
         new Set(options.compileTimeSourceArgumentIndexes).size !== options.compileTimeSourceArgumentIndexes.length ||
         options.compileTimeSourceArgumentIndexes.some((index) =>
           !Number.isSafeInteger(index) || index < 0 || index >= options.sourceArgumentCarriers.length))) ||
-    (options.targetTypeArguments !== undefined &&
-      (!isDenseDataArray(options.targetTypeArguments) || options.targetTypeArguments.length === 0 ||
-        options.targetTypeArguments.some((carrier) =>
-          !isRustTargetTypeRef(carrier) || rustTargetTypeParameterNames(carrier).length !== 0) ||
-        !rustProviderOperationFormAcceptsTargetTypeArguments(options.form))) ||
+    (options.targetGenericArguments !== undefined &&
+      (!isDenseDataArray(options.targetGenericArguments) || options.targetGenericArguments.length === 0 ||
+        options.targetGenericArguments.some((argument) =>
+          !isRustTargetGenericArgument(argument)) ||
+        !rustProviderOperationFormAcceptsTargetGenericArguments(options.form))) ||
     typeof options.isAsync !== "boolean" || typeof options.isFallible !== "boolean" ||
     (options.evaluation !== undefined && options.evaluation !== "pure") ||
     (options.isFallible && !isRustFallibleErrorBoundary(options.errorBoundary)) ||
@@ -128,7 +131,7 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
     sourceArguments,
     targetReceiver: mapping.targetReceiver,
     targetArguments: mapping.targetArguments,
-    targetTypeArguments: options.targetTypeArguments ?? [],
+    targetGenericArguments: options.targetGenericArguments ?? [],
     result,
     effects: {
       evaluation: options.evaluation === "pure" ? "pure" : "observable",

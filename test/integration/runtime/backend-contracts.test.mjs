@@ -9,6 +9,7 @@ import {
   applyRustFallibleResultExpression,
 } from "../../../dist/backend/planner/types/fallible-shape.js";
 import { rustBlockTerminates } from "../../../dist/backend/planner/declarations/functions.js";
+import { rustTypeFromCarrier } from "../../../dist/backend/planner/types/render.js";
 import {
   requireProviderArgumentPassingFacts,
   sourceCallSelectedMemberMatches,
@@ -36,15 +37,64 @@ test("native trait contracts preserve exact conditional Copy and Clone semantics
   assert.ok(rustNamedTypeCarrierValue(rustNamedTargetType(
     "acme.Cell",
     "acme::Cell",
-    [{ kind: "source-primitive", name: "int32" }],
+    [{ kind: "type", type: { kind: "source-primitive", name: "int32" } }],
+    [],
     traits,
   )));
   assert.equal(rustNamedTypeCarrierValue(rustNamedTargetType(
     "acme.Cell",
     "acme::Cell",
     [],
+    [],
     traits,
   )), undefined, "trait requirements cannot address a missing type argument");
+});
+
+test("named carriers elide only an exact trailing Rust generic-default suffix", () => {
+  const int32 = { kind: "type", type: { kind: "source-primitive", name: "int32" } };
+  const boolean = { kind: "type", type: { kind: "source-primitive", name: "bool" } };
+  const float64 = { kind: "type", type: { kind: "source-primitive", name: "float64" } };
+  const uint8 = { kind: "type", type: { kind: "source-primitive", name: "uint8" } };
+
+  assert.deepEqual(
+    rustTypeFromCarrier(rustNamedTargetType(
+      "acme.Family",
+      "acme::Family",
+      [int32, boolean, float64],
+      [boolean, float64],
+    )),
+    {
+      kind: "named",
+      path: "acme::Family",
+      genericArguments: [{ kind: "type", type: { kind: "primitive", name: "i32" } }],
+    },
+  );
+  assert.deepEqual(
+    rustTypeFromCarrier(rustNamedTargetType(
+      "acme.Family",
+      "acme::Family",
+      [int32, uint8, float64],
+      [boolean, float64],
+    )),
+    {
+      kind: "named",
+      path: "acme::Family",
+      genericArguments: [
+        { kind: "type", type: { kind: "primitive", name: "i32" } },
+        { kind: "type", type: { kind: "primitive", name: "u8" } },
+      ],
+    },
+  );
+  assert.equal(rustNamedTypeCarrierValue({
+    ...rustNamedTargetType("acme.Invalid", "acme::Invalid", [int32]),
+    value: {
+      id: "acme.Invalid",
+      path: "acme::Invalid",
+      traits: { implementations: [] },
+      genericArguments: [int32],
+      genericDefaults: [boolean, float64],
+    },
+  }), undefined);
 });
 
 test("value-returning fallible bodies never synthesize an invalid Ok unit", () => {
@@ -130,7 +180,8 @@ test("operation fact equality is structural and independent of metadata key orde
       id: "acme.Value",
       path: "acme::Value",
       traits: { implementations: [] },
-      typeArguments: [],
+      genericArguments: [],
+      genericDefaults: [],
     },
   };
   const abi = finalizeRustProviderOperationAbi({
@@ -196,10 +247,77 @@ test("project-source call consumption requires exact selected member kind, targe
     returnType: int32,
   };
   const selected = { member };
-  assert.equal(sourceCallSelectedMemberMatches(fact, selected), true);
-  assert.equal(sourceCallSelectedMemberMatches(fact, { member: { ...member, kind: "property" } }), false);
-  assert.equal(sourceCallSelectedMemberMatches(fact, { member: { ...member, targetName: "other" } }), false);
-  assert.equal(sourceCallSelectedMemberMatches(fact, { member: { ...member, parameters: [,] } }), false);
+  assert.equal(sourceCallSelectedMemberMatches(fact, selected, member.returnType), true);
+  assert.equal(sourceCallSelectedMemberMatches(fact, { member: { ...member, kind: "property" } }, member.returnType), false);
+  assert.equal(sourceCallSelectedMemberMatches(fact, { member: { ...member, targetName: "other" } }, member.returnType), false);
+  assert.equal(sourceCallSelectedMemberMatches(fact, { member: { ...member, parameters: [,] } }, member.returnType), false);
+});
+
+test("project-source call consumption accepts only proven target-finalized inferred type arguments", () => {
+  const int32 = { kind: "source-primitive", name: "int32" };
+  const float64 = { kind: "source-primitive", name: "float64" };
+  const typeParameter = { kind: "type-parameter", name: "T" };
+  const targetArgument = { kind: "type", type: int32 };
+  const selectedArgument = { kind: "type", type: float64 };
+  const fact = {
+    kind: "source-call",
+    operationId: "source:identity",
+    target: {
+      form: "function",
+      fileName: "/src/identity.ts",
+      name: "identity",
+      selectedTargetName: "identity",
+    },
+    parameters: [{
+      form: "required",
+      valueCarrier: int32,
+      parameterCarrier: int32,
+      mode: "value",
+      inputs: [{
+        sourceArgumentIndex: 0,
+        sourceForm: "value",
+        sourceParameterForm: "parameter",
+        carrier: int32,
+      }],
+    }],
+    targetGenericArguments: [targetArgument],
+    resultCarrier: int32,
+  };
+  const member = {
+    id: fact.operationId,
+    sourceName: "identity",
+    targetName: "identity",
+    kind: "method",
+    genericParameters: [{ kind: "type", sourceName: "T" }],
+    parameters: [{ name: "value", type: typeParameter, passingMode: "by-value" }],
+    returnType: typeParameter,
+  };
+  const inferredSourceArgument = {
+    typeParameterName: "T",
+    typeParameter: {},
+    selectedType: {},
+  };
+  const selected = {
+    member,
+    targetGenericArguments: [selectedArgument],
+    sourceSelectedMethodTypeArguments: [inferredSourceArgument],
+  };
+
+  assert.equal(sourceCallSelectedMemberMatches(fact, selected, member.returnType), true);
+  assert.equal(sourceCallSelectedMemberMatches(fact, {
+    ...selected,
+    sourceSelectedMethodTypeArguments: [{
+      ...inferredSourceArgument,
+      explicitTypeNode: {},
+    }],
+  }, member.returnType), false);
+  assert.equal(sourceCallSelectedMemberMatches(fact, {
+    ...selected,
+    member: {
+      ...member,
+      genericParameters: [{ kind: "lifetime", sourceName: "T", targetIdentity: "life:T" }],
+    },
+  }, member.returnType), false);
 });
 
 test("compile-time provider arguments never require runtime carrier or passing facts", () => {
@@ -318,7 +436,7 @@ export function make(): Empty {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub struct Empty \{\n    #\[doc\(hidden\)\]\n    pub identity: rt::ObjectIdentity,\n    #\[doc\(hidden\)\]\n    pub dispatch: std::rc::Rc<dyn EmptyDispatch>,\n\}/u);
+  assert.match(text, /pub struct Empty \{\n    #\[doc\(hidden\)\]\n    pub identity: rt::ObjectIdentity,\n    #\[doc\(hidden\)\]\n    pub dispatch: std::rc::Rc<dyn EmptyDispatch \+ 'static>,\n\}/u);
   assert.match(text, /let root = std::rc::Rc::new\(EmptyRoot \{/u);
   validateGeneratedProject("backend-empty-class", result.artifacts);
 });
@@ -368,7 +486,7 @@ export class Secret {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub struct Secret \{\n    #\[doc\(hidden\)\]\n    pub identity: rt::ObjectIdentity,\n    #\[doc\(hidden\)\]\n    pub dispatch: std::rc::Rc<dyn SecretDispatch>,\n\}/u);
+  assert.match(text, /pub struct Secret \{\n    #\[doc\(hidden\)\]\n    pub identity: rt::ObjectIdentity,\n    #\[doc\(hidden\)\]\n    pub dispatch: std::rc::Rc<dyn SecretDispatch \+ 'static>,\n\}/u);
   assert.match(text, /    value: i32,/u);
   assert.doesNotMatch(text, /    pub(?:\(crate\))? value: i32,/u);
   assert.match(text, /fn exact_secret_hidden\(self: std::rc::Rc<Self>\) -> i32/u);

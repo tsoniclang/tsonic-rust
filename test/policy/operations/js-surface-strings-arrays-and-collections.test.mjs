@@ -107,7 +107,7 @@ test("array index rows distinguish checked source and runtime result carriers", 
   assert.deepEqual(selected?.fact.resultCarrier, {
     kind: "target-named",
     id: "rust.std.Option",
-    typeArguments: [elementCarrier],
+    genericArguments: [{ kind: "type", type: elementCarrier }],
   });
 });
 
@@ -371,7 +371,7 @@ test("Array concat tags exact scalar and array arguments while preserving the re
     elementCarrier: {
       kind: "target-named",
       id: "rust.js.JsArrayConcatItem",
-      typeArguments: [int32Carrier],
+      genericArguments: [{ kind: "type", type: int32Carrier }],
     },
     alternatives: [
       { inputCarrier: int32Carrier, mode: "value", constructorPath: "js_abi::JsArrayConcatItem::Value" },

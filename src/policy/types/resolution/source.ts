@@ -1,18 +1,17 @@
 import {
   ArrayTypeNode_ElementType,
   Node_Type,
+  Node_Operand,
   TypeReferenceNode_TypeName,
   TypeOperatorNode_Type,
 } from "@tsonic/target-api/source";
 import {
   rustBigIntTargetType,
-  rustCallableTargetType,
   rustJsArrayTargetType,
   rustJsStringTargetType,
   rustLocationTargetType,
   rustNullTargetType,
   rustNeverTargetType,
-  rustOptionElementCarrier,
   rustOptionTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
@@ -21,7 +20,6 @@ import {
   rustUndefinedTargetType,
   rustVecTargetType,
   rustFixedArrayTargetType,
-  isRustJsArrayCarrier,
 } from "../../../target-model/types/index.js";
 import { asNode } from "../../evidence/selected-source.js";
 import { denseDefined, resolveProjectSourceCarrier } from "./project.js";
@@ -29,18 +27,29 @@ import { functionPointerFactKey, pointerFactKey, sourceMarkerFactKey } from "@ts
 import { instantiateProviderTargetType, providerCarrierFromRelations, resolveOwnedSourceProfileTypeName, resolveProviderTypeIdentity, resolveSourceProfileCarrierFromArguments } from "./providers.js";
 import { resolveCallableType, resolveSourcePrimitive, resolveSourceTypeParameter } from "./callables.js";
 import { resolveReferencedDeclarationType, resolveRustAuthoredTargetType, resolveRustTupleElementTargetTypeWithState, rustParameterLaneTargetType } from "./tuples.js";
-import { resolveRustExactNullishValueCarrier, resolveRustTargetType, resolveStructuralObjectType } from "./target.js";
-import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { resolveRustTargetType, resolveStructuralObjectType } from "./target.js";
 import { sourceTransformedTypeFactEvidenceNodes } from "@tsonic/target-api/source";
 import { tsonicFixedArrayFactKey } from "@tsonic/source-core/facts";
 import type { ExtensionFactSubject, Node, Type } from "@tsonic/tsts";
-import type {
-  SourceCallableTypeEvidence,
-  SourceStandardTypeTransformation,
-  SourceTypeComponentEvidence,
-} from "@tsonic/target-api/source";
+import type { SourceStandardTypeTransformation } from "@tsonic/target-api/source";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type {
+  RustTargetConstArgument,
+  RustTargetGenericArgument,
+  TargetTypeRef,
+} from "../../../target-model/types/model.js";
+import {
+  resolveRustLifetimeSourceType,
+  rustSourceLifetimeTypeContract,
+} from "./lifetimes.js";
+import { parseSourceIntegerLiteral } from "../../../target-model/syntax/literals.js";
+import {
+  resolveRustCallableEvidence,
+  resolveRustEvidenceNodesToCommonCarrier,
+  resolveRustSignatureParameterEvidence,
+  resolveRustSignatureParameterListTarget,
+  resolveRustTypeComponentEvidence,
+} from "./source-evidence.js";
 
 export function resolveRustTargetTypeRef(
   subject: ExtensionFactSubject | undefined,
@@ -150,6 +159,17 @@ export function resolveRustTargetTypeSyntax(
   options: RustTargetTypeResolutionOptions,
   resolving: Set<object>,
 ): TargetTypeRef | undefined {
+  const rustLifetimeContract = rustSourceLifetimeTypeContract(node, context);
+  if (rustLifetimeContract !== undefined) {
+    return resolveRustLifetimeSourceType(
+      node,
+      rustLifetimeContract,
+      context,
+      options,
+      resolving,
+      resolveRustAuthoredTargetType,
+    );
+  }
   const fixedArray = context.facts.resolve(node, tsonicFixedArrayFactKey) ??
     context.facts.get(node, tsonicFixedArrayFactKey);
   if (fixedArray !== undefined) {
@@ -330,11 +350,6 @@ export function resolveRustTargetTypeSyntax(
   if (typeArgumentNodes === undefined) {
     return undefined;
   }
-  const typeArguments = typeArgumentNodes.map((argument) =>
-    resolveRustAuthoredTargetType(argument, context, options, resolving));
-  if (typeArguments.some((argument) => argument === undefined)) {
-    return undefined;
-  }
   const typeName = TypeReferenceNode_TypeName(ast, node);
   const referencedDeclaration = typeName === undefined
     ? undefined
@@ -343,15 +358,41 @@ export function resolveRustTargetTypeSyntax(
     ? undefined
     : context.currentSemantics.declarations.typeAliasSymbol(selectedType) ??
       context.currentSemantics.declarations.typeSymbol(selectedType);
+  const sourceGenericContract = context.sourceLifetimes.contractFor(referencedDeclaration);
+  const sourceGenericArguments = sourceGenericContract === undefined
+    ? undefined
+    : resolveProjectGenericArguments(
+        typeArgumentNodes,
+        sourceGenericContract,
+        context,
+        options,
+        resolving,
+      );
+  const typeArguments = sourceGenericArguments === undefined
+    ? typeArgumentNodes.map((argument) =>
+        resolveRustAuthoredTargetType(argument, context, options, resolving))
+    : sourceGenericArguments.values.flatMap((argument) =>
+        argument.kind === "type" ? [argument.type] : []);
+  if (typeArguments === undefined || typeArguments.some((argument) => argument === undefined)) {
+    return undefined;
+  }
   const provider = resolveProviderTypeIdentity(
     context.semanticsFor(node).facts.authoredTypeSubjects(node),
     context,
   );
   if (provider !== undefined) {
     const relation = providerCarrierFromRelations(provider, options);
-    return relation === undefined
+    if (relation === undefined) return undefined;
+    const providerArguments = resolveRustProviderGenericArguments(
+      typeArgumentNodes,
+      relation.genericParameters ?? [],
+      context,
+      options,
+      resolving,
+    );
+    return providerArguments === undefined
       ? undefined
-      : instantiateProviderTargetType(relation, typeArguments as TargetTypeRef[]);
+      : instantiateProviderTargetType(relation, providerArguments);
   }
   const sourceProfileName = resolveOwnedSourceProfileTypeName(
     selectedTypeSymbol,
@@ -363,7 +404,10 @@ export function resolveRustTargetTypeSyntax(
   }
   const sourceType = resolveProjectSourceCarrier(
     selectedTypeSymbol,
-    typeArguments as readonly TargetTypeRef[],
+    sourceGenericArguments ?? {
+      values: Object.freeze((typeArguments as readonly TargetTypeRef[]).map((type) =>
+        Object.freeze({ kind: "type" as const, type }))),
+    },
     context,
     options,
     referencedDeclaration,
@@ -390,6 +434,131 @@ export function resolveRustTargetTypeSyntax(
         options,
         resolving,
       );
+}
+
+export function resolveRustProviderGenericArguments(
+  nodes: readonly Node[],
+  parameters: readonly import("../../../target-model/operations/model.js").RustProviderGenericParameter[],
+  context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions,
+  resolving: Set<object>,
+): readonly RustTargetGenericArgument[] | undefined {
+  if (nodes.length > parameters.length) return undefined;
+  const values: RustTargetGenericArgument[] = [];
+  for (const [index, node] of nodes.entries()) {
+    const parameter = parameters[index];
+    if (parameter === undefined) return undefined;
+    const value = resolveRustProviderGenericArgument(
+      node,
+      parameter,
+      context,
+      options,
+      resolving,
+    );
+    if (value === undefined) return undefined;
+    values.push(value);
+  }
+  return Object.freeze(values);
+}
+
+export function resolveRustProviderGenericArgument(
+  node: Node,
+  parameter: import("../../../target-model/operations/model.js").RustProviderGenericParameter,
+  context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions,
+  resolving: Set<object> = new Set<object>(),
+): RustTargetGenericArgument | undefined {
+  if (parameter.kind === "type") {
+    const type = resolveRustAuthoredTargetType(node, context, options, resolving);
+    return type === undefined
+      ? undefined
+      : Object.freeze({ kind: "type", type });
+  }
+  if (parameter.kind === "lifetime") {
+    const lifetime = context.sourceLifetimes.resolve(node);
+    return lifetime === undefined
+      ? undefined
+      : Object.freeze({ kind: "lifetime", lifetime });
+  }
+  const value = resolveRustConstGenericArgument(node, context);
+  return value === undefined
+    ? undefined
+    : Object.freeze({ kind: "const", value });
+}
+
+export function resolveRustConstGenericArgument(
+  node: Node,
+  context: RustTargetTypeResolutionContext,
+): RustTargetConstArgument | undefined {
+  const literal = context.ast.kindName(node) === "KindLiteralType"
+    ? context.ast.as.AsLiteralTypeNode(node)?.Literal
+    : node;
+  if (literal === undefined) return undefined;
+  const kind = context.ast.kindName(literal);
+  if (kind === "KindTrueKeyword" || kind === "KindFalseKeyword") {
+    return Object.freeze({ kind: "boolean", value: kind === "KindTrueKeyword" });
+  }
+  if (kind === "KindStringLiteral") {
+    const value = context.ast.text(literal);
+    return [...value].length === 1
+      ? Object.freeze({ kind: "char", value })
+      : undefined;
+  }
+  const integer = constIntegerText(literal, context);
+  return integer === undefined
+    ? undefined
+    : Object.freeze({ kind: "integer", value: integer });
+}
+
+function constIntegerText(
+  node: Node,
+  context: RustTargetTypeResolutionContext,
+): string | undefined {
+  if (context.ast.kindName(node) === "KindNumericLiteral") {
+    return parseSourceIntegerLiteral(context.ast.text(node))?.toString(10);
+  }
+  if (context.ast.kindName(node) !== "KindPrefixUnaryExpression") {
+    return undefined;
+  }
+  const operand = Node_Operand(context.ast, node);
+  if (operand === undefined || context.ast.kindName(operand) !== "KindNumericLiteral") {
+    return undefined;
+  }
+  const value = parseSourceIntegerLiteral(context.ast.text(operand));
+  if (value === undefined) return undefined;
+  const operator = context.ast.operatorKindName(node);
+  return operator === "KindMinusToken"
+    ? (-value).toString(10)
+    : operator === "KindPlusToken"
+      ? value.toString(10)
+      : undefined;
+}
+
+function resolveProjectGenericArguments(
+  argumentNodes: readonly Node[],
+  contract: import("../../../target-model/lifetimes/index.js").RustSourceGenericContract,
+  context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions,
+  resolving: Set<object>,
+): import("./project.js").RustResolvedProjectGenericArguments | undefined {
+  if (argumentNodes.length !== contract.parameters.length) return undefined;
+  const values: import("../../../target-model/types/model.js").RustTargetGenericArgument[] = [];
+  for (const [index, parameter] of contract.parameters.entries()) {
+    const argument = argumentNodes[index];
+    if (argument === undefined) return undefined;
+    if (parameter.kind === "lifetime") {
+      const lifetime = context.sourceLifetimes.resolve(argument);
+      if (lifetime === undefined) return undefined;
+      values.push(Object.freeze({ kind: "lifetime", lifetime }));
+    } else {
+      const type = resolveRustAuthoredTargetType(argument, context, options, resolving);
+      if (type === undefined) return undefined;
+      values.push(Object.freeze({ kind: "type", type }));
+    }
+  }
+  return Object.freeze({
+    values: Object.freeze(values),
+  });
 }
 
 function resolveRustCheckerTransformedType(
@@ -512,221 +681,4 @@ function resolveStandardSourceTypeTransformation(
     options,
     resolving,
   );
-}
-
-function resolveRustSignatureParameterListTarget(
-  parameters: SourceCallableTypeEvidence["parameters"],
-  elements: readonly TargetTypeRef[],
-  options: RustTargetTypeResolutionOptions,
-): TargetTypeRef | undefined {
-  const restIndexes = parameters.flatMap((parameter, index) =>
-    parameter.parameterKind === "rest" ? [index] : []
-  );
-  if (restIndexes.length === 0) {
-    return rustTupleTargetType(elements);
-  }
-  if (restIndexes.length !== 1) {
-    return undefined;
-  }
-  const restIndex = restIndexes[0]!;
-  const restCarrier = elements[restIndex];
-  const restElement = restCarrier?.kind === "array"
-    ? restCarrier.element
-    : isRustJsArrayCarrier(restCarrier)
-      ? restCarrier.typeArguments?.[0]
-      : undefined;
-  if (restElement === undefined) {
-    return undefined;
-  }
-  const homogeneous = elements.every((element, index) => {
-    const value = index === restIndex
-      ? restElement
-      : rustOptionElementCarrier(element) ?? element;
-    return rustTargetTypeRefEquals(value, restElement);
-  });
-  if (!homogeneous) {
-    return undefined;
-  }
-  return options.jsEnabled
-    ? rustJsArrayTargetType(restElement)
-    : rustVecTargetType(restElement);
-}
-
-export function resolveRustCallableEvidence(
-  callable: SourceCallableTypeEvidence,
-  context: RustTargetTypeResolutionContext,
-  options: RustTargetTypeResolutionOptions,
-  resolving: Set<object>,
-): TargetTypeRef | undefined {
-  const parameters = callable.parameters.map((parameter) =>
-      resolveRustSignatureParameterEvidence(
-        parameter,
-        context,
-        options,
-        resolving,
-        "callable",
-    )
-  );
-  if (parameters.some((parameter) => parameter === undefined)) {
-    return undefined;
-  }
-  const result = resolveRustTypeComponentEvidence(
-    callable.result,
-    context,
-    options,
-    resolving,
-  );
-  return result === undefined
-    ? undefined
-    : rustCallableTargetType(parameters as readonly TargetTypeRef[], result);
-}
-
-function resolveRustSignatureParameterEvidence(
-  parameter: SourceCallableTypeEvidence["parameters"][number],
-  context: RustTargetTypeResolutionContext,
-  options: RustTargetTypeResolutionOptions,
-  resolving: Set<object>,
-  use: "callable" | "parameter-list",
-): TargetTypeRef | undefined {
-  const authoredTypeNode = parameter.declaration === undefined
-    ? undefined
-    : context.ast.typeNode(parameter.declaration);
-  const resolved = resolveRustTypeComponentEvidence(
-    {
-      selectedType: parameter.type,
-      ...(parameter.declaration === undefined
-        ? {}
-        : {
-            declaration: parameter.declaration,
-            ...(authoredTypeNode === undefined ? {} : { authoredTypeNode }),
-          }),
-    },
-    context,
-    options,
-    resolving,
-  );
-  const optional = use === "parameter-list"
-    ? parameter.parameterKind === "optional"
-    : parameter.omissionKind === "undefined";
-  return resolved === undefined || !optional ||
-      rustOptionElementCarrier(resolved) !== undefined
-    ? resolved
-    : rustOptionTargetType(resolved);
-}
-
-export function resolveRustTypeComponentEvidence(
-  component: SourceTypeComponentEvidence,
-  context: RustTargetTypeResolutionContext,
-  options: RustTargetTypeResolutionOptions,
-  resolving: Set<object>,
-): TargetTypeRef | undefined {
-  if (component.authoredTypeNode === undefined) {
-    return resolveRustTargetType(
-      component.selectedType,
-      context,
-      options,
-      resolving,
-    );
-  }
-  const authoredSourceFile = context.ast.getSourceFile(component.authoredTypeNode);
-  const semantics = authoredSourceFile !== undefined &&
-      context.source.semantics.includes(authoredSourceFile)
-    ? context.semantics(authoredSourceFile)
-    : undefined;
-  const selected = resolveRustTargetType(
-    component.selectedType,
-    context,
-    options,
-    resolving,
-  );
-  if (semantics === undefined) {
-    return selected;
-  }
-  const authored = resolveRustAuthoredTargetType(
-    component.authoredTypeNode,
-    context,
-    options,
-    resolving,
-  );
-  const selection = semantics.types.authoredSelection(
-    component.authoredTypeNode,
-    component.selectedType,
-  );
-  if (selection.kind === "ambiguous") {
-    return undefined;
-  }
-  if (selection.kind === "authored-members") {
-    const targets = [
-      ...selection.nodes.map((node) =>
-        resolveRustAuthoredTargetType(node, context, options, resolving)),
-      ...selection.selectedNullishTypes.map((type) =>
-        resolveRustExactNullishValueCarrier(type, semantics)),
-    ];
-    if (targets.some((target) => target === undefined)) {
-      return undefined;
-    }
-    return combineRustSelectedTargets(
-      targets as readonly TargetTypeRef[],
-      selection.selectedNullishTypes.length,
-      options,
-    );
-  }
-  return selected ?? authored;
-}
-
-function combineRustSelectedTargets(
-  targets: readonly TargetTypeRef[],
-  nullishCount: number,
-  options: RustTargetTypeResolutionOptions,
-): TargetTypeRef | undefined {
-  if (targets.length === 0) {
-    return undefined;
-  }
-  if (targets.length === 1) {
-    return targets[0];
-  }
-  if (nullishCount === 1 && targets.length === 2) {
-    return rustOptionTargetType(targets[0]!);
-  }
-  const first = targets[0]!;
-  if (targets.every((target) => rustTargetTypeRefEquals(first, target))) {
-    return first;
-  }
-  return options.resolveProjectUnionCarrier(targets);
-}
-
-function resolveRustEvidenceNodesToCommonCarrier(
-  nodes: readonly Node[],
-  selectedType: Type,
-  context: RustTargetTypeResolutionContext,
-  options: RustTargetTypeResolutionOptions,
-  resolving: Set<object>,
-): TargetTypeRef | undefined {
-  if (nodes.length === 0) {
-    return undefined;
-  }
-  const carriers = [...new Set(nodes)].map((node) => {
-    const semantics = context.semanticsFor(node);
-    const selection = semantics.types.authoredSelection(node, selectedType);
-    if (selection.kind !== "authored-members") {
-      return undefined;
-    }
-    const selected = selection.nodes.map((member) =>
-      resolveRustAuthoredTargetType(member, context, options, resolving)
-    );
-    if (selected.length !== 1 || selected[0] === undefined ||
-      selection.selectedNullishTypes.length !== 0) {
-      return undefined;
-    }
-    return selected[0];
-  });
-  if (carriers.some((carrier) => carrier === undefined)) {
-    return undefined;
-  }
-  const first = carriers[0]!;
-  return carriers.every((carrier) =>
-      carrier !== undefined && rustTargetTypeRefEquals(first, carrier)
-    )
-    ? first
-    : undefined;
 }

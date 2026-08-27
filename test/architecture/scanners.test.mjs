@@ -142,6 +142,15 @@ test("Rust target-type validation and equality have one target-model owner", () 
   assert.doesNotMatch(carrierHelpers, /export function (?:isRustTargetTypeRef|rustTargetTypeRefEquals)\b/u);
 });
 
+test("Rust semantic-lifetime to syntax conversion has one planner owner", () => {
+  const owners = sourceFiles.filter(({ text }) =>
+    /export function rustLifetimeToAst\b/u.test(text));
+  assert.deepEqual(
+    owners.map(({ path }) => path.slice(sourceRoot.length + 1)),
+    ["backend/planner/types/lifetime-syntax.ts"],
+  );
+});
+
 test("no embedded JS engine or runtime interpretation dependencies", () => {
   const packageJson = readFileSync(join(repositoryRoot, "package.json"), "utf8");
   const banned = /quickjs|rquickjs|boa_engine|deno_core|"v8"/iu;
@@ -327,6 +336,7 @@ test("selected source operation identity is never reconstructed through checker 
   assert.deepEqual(broadCatchOwners, [
     "target-model/metadata/closed-data.ts|isClosedMetadata",
     "target-model/types/equality.ts|isRustTargetTypeRef",
+    "target-model/types/equality.ts|isRustTargetGenericArgument",
   ]);
 
   for (const { path, text } of semanticFiles) {
@@ -776,8 +786,8 @@ test("project-source backend calls require the exact finalized selected member A
   assert.match(selectedGate, /member\.targetName === expectedTargetName/u);
   assert.match(selectedGate, /member\.parameters\.length === fact\.parameters\.length/u);
   assert.match(selectedGate, /sourceSelectedMethodTypeArguments/u);
-  assert.match(selectedGate, /substituteRustTargetTypeParameters\(parameter\.type, substitutions\)/u);
-  assert.match(selectedGate, /fact\.targetTypeArguments/u);
+  assert.match(selectedGate, /substituteRustTargetGenerics/u);
+  assert.match(selectedGate, /fact\.targetGenericArguments/u);
   assert.match(selectedGate, /fact\.parameters\[index\]\?\.parameterCarrier/u);
   assert.match(selectedGate, /mode === fact\.parameters\[index\]\?\.mode/u);
   assert.doesNotMatch(selectedGate, /sourceName ===|memberName|includes\(|toLowerCase/u);

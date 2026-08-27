@@ -7,9 +7,13 @@ import {
   rustOptionTargetType,
   rustSliceElementCarrier,
 } from "../../target-model/types/index.js";
-import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import {
+  rustTargetTypeRefEquals,
+  rustTargetTypeRefEqualsWithinLifetimeBinders,
+} from "../../target-model/types/equality.js";
 import type { RustArgumentMode } from "../../target-model/operations/model.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustLifetimeBinder } from "../../target-model/lifetimes/index.js";
 import {
   resolveRustTargetTypeRef,
   rustParameterLaneTargetType,
@@ -143,6 +147,10 @@ export function resolveRustContextualParameterAbi(
   selectedParameterCarrier: TargetTypeRef,
   context: RustTargetTypeResolutionContext,
   options: RustTargetTypeResolutionOptions,
+  lifetimeBinders?: {
+    readonly authored: RustLifetimeBinder;
+    readonly selected: RustLifetimeBinder;
+  },
 ): RustSourceParameterAbi | undefined {
   const declaration = context.ast.as.AsParameterDeclaration(parameter);
   if (declaration === undefined) {
@@ -172,13 +180,26 @@ export function resolveRustContextualParameterAbi(
   const authoredExpectation = form === "optional"
     ? rustOptionElementCarrier(selectedParameterCarrier)
     : selectedValueCarrier;
+  const carriersEqual = lifetimeBinders === undefined
+    ? rustTargetTypeRefEquals
+    : (left: TargetTypeRef | undefined, right: TargetTypeRef | undefined): boolean =>
+        rustTargetTypeRefEqualsWithinLifetimeBinders(
+          left,
+          right,
+          lifetimeBinders.authored,
+          lifetimeBinders.selected,
+        );
   if (authoredType !== undefined &&
     (authoredCarrier === undefined || authoredExpectation === undefined ||
-      !rustTargetTypeRefEquals(authoredCarrier, authoredExpectation))) {
+      !carriersEqual(authoredCarrier, authoredExpectation))) {
     return undefined;
   }
   const mode = form === "required"
-    ? rustParameterModeForCarriers(selectedValueCarrier, selectedParameterCarrier)
+    ? rustParameterModeForCarriers(
+        selectedValueCarrier,
+        selectedParameterCarrier,
+        carriersEqual,
+      )
     : "value" as const;
   if (mode === undefined) {
     return undefined;
@@ -194,14 +215,18 @@ export function resolveRustContextualParameterAbi(
 function rustParameterModeForCarriers(
   valueCarrier: TargetTypeRef,
   parameterCarrier: TargetTypeRef,
+  carriersEqual: (
+    left: TargetTypeRef | undefined,
+    right: TargetTypeRef | undefined,
+  ) => boolean = rustTargetTypeRefEquals,
 ): RustArgumentMode | undefined {
-  if (rustTargetTypeRefEquals(valueCarrier, parameterCarrier)) {
+  if (carriersEqual(valueCarrier, parameterCarrier)) {
     return "value";
   }
   if (parameterCarrier.kind !== "reference" ||
-    !rustTargetTypeRefEquals(parameterCarrier.referent, valueCarrier) &&
+    !carriersEqual(parameterCarrier.referent, valueCarrier) &&
     !(isRustVecCarrier(valueCarrier) &&
-      rustTargetTypeRefEquals(rustSliceElementCarrier(parameterCarrier), valueCarrier.element))) {
+      carriersEqual(rustSliceElementCarrier(parameterCarrier), valueCarrier.element))) {
     return undefined;
   }
   return parameterCarrier.mutable ? "mut-ref" : "ref";

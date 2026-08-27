@@ -5,10 +5,12 @@ import {
 } from "../../target-ast/nodes.js";
 import type {
   RustItem,
+  RustGenericArgument,
+  RustGenericParameter,
+  RustGenerics,
   RustSourceFileModel,
   RustStructField,
   RustType,
-  RustTypeParameter,
   RustVisibility,
 } from "../../target-ast/nodes.js";
 import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
@@ -26,6 +28,8 @@ import {
   rustStructuralPropertyValueCarrier,
   rustStructuralMethodStorageCarrier,
 } from "../../../target-model/types/index.js";
+import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
+import { rustLifetimeToAst } from "../types/lifetime-syntax.js";
 
 export function planRustStructuralShapeModule(
   input: RustPlanningContext,
@@ -61,14 +65,33 @@ export function planRustStructuralShapeModule(
     const visibility: RustVisibility = publicShapeNames.has(definition.targetName)
       ? "public"
       : "crate";
-    const typeParams: readonly RustTypeParameter[] = definition.typeParameterNames.map((name) => ({
-      name,
-      bounds: [],
-    }));
-    const aliasTypeArguments: readonly RustType[] = definition.typeParameterNames.map((name) => ({
-      kind: "named",
-      path: name,
-    }));
+    const genericParameters: readonly RustGenericParameter[] = definition.genericParameters.map((parameter) =>
+      parameter.kind === "lifetime"
+        ? {
+            kind: "lifetime",
+            name: parameter.lifetime.name,
+            outlives: [],
+          }
+        : {
+            kind: "type",
+            name: parameter.name,
+            bounds: [],
+          });
+    const generics: RustGenerics = {
+      parameters: genericParameters,
+      wherePredicates: [],
+    };
+    const aliasGenericArguments: readonly RustGenericArgument[] = definition.genericParameters.map((parameter) =>
+      parameter.kind === "lifetime"
+        ? { kind: "lifetime", lifetime: rustLifetimeToAst(parameter.lifetime) }
+        : { kind: "type", type: { kind: "named", path: parameter.name } });
+    const definitionContext = {
+      ...context,
+      lifetimeSubstitutions: new Map(definition.genericParameters.flatMap((parameter) =>
+        parameter.kind === "lifetime"
+          ? [[rustLifetimeKey(parameter.lifetime), parameter.lifetime] as const]
+          : [])),
+    };
     const callableAliases: RustItem[] = [];
     const fields: RustStructField[] = [];
     for (const field of definition.fields) {
@@ -90,7 +113,7 @@ export function planRustStructuralShapeModule(
         });
         return undefined;
       }
-      const renderedStorageType = rustTypeFromCarrierInContext(storageCarrier, context);
+      const renderedStorageType = rustTypeFromCarrierInContext(storageCarrier, definitionContext);
       if (renderedStorageType === undefined) {
         diagnostics.push({
           code: "RUST_STRUCTURAL_SHAPE_FIELD_TYPE_MISSING",
@@ -106,8 +129,8 @@ export function planRustStructuralShapeModule(
           ? structuralCallableAlias(
               callableAliases,
               `${definition.targetName}${rustPascalCaseIdentifier(field.sourceName)}Method`,
-              typeParams,
-              aliasTypeArguments,
+              generics,
+              aliasGenericArguments,
               renderedStorageType,
               visibility,
             )
@@ -148,11 +171,11 @@ export function planRustStructuralShapeModule(
             field.carrier,
             field.presence,
           );
-      const storedType = rustTypeFromCarrierInContext(storedCarrier, context);
-      const getterType = rustTypeFromCarrierInContext(getterCarrier, context);
+      const storedType = rustTypeFromCarrierInContext(storedCarrier, definitionContext);
+      const getterType = rustTypeFromCarrierInContext(getterCarrier, definitionContext);
       const setterType = setterCarrier === undefined
         ? undefined
-        : rustTypeFromCarrierInContext(setterCarrier, context);
+        : rustTypeFromCarrierInContext(setterCarrier, definitionContext);
       if (storedType === undefined || getterType === undefined ||
         (!field.readonly && setterType === undefined)) {
         diagnostics.push({
@@ -173,8 +196,8 @@ export function planRustStructuralShapeModule(
       const getterAlias = structuralCallableAlias(
         callableAliases,
         `${definition.targetName}${rustPascalCaseIdentifier(field.sourceName)}Getter`,
-        typeParams,
-        aliasTypeArguments,
+        generics,
+        aliasGenericArguments,
         getterType,
         visibility,
       );
@@ -197,8 +220,8 @@ export function planRustStructuralShapeModule(
         const setterAlias = structuralCallableAlias(
           callableAliases,
           `${definition.targetName}${rustPascalCaseIdentifier(field.sourceName)}Setter`,
-          typeParams,
-          aliasTypeArguments,
+          generics,
+          aliasGenericArguments,
           setterType,
           visibility,
         );
@@ -216,7 +239,7 @@ export function planRustStructuralShapeModule(
       visibility,
       attrs: [rustLintAttributes.deadCode],
       derives: [],
-      ...(typeParams.length === 0 ? {} : { typeParams }),
+      generics,
       fields,
     });
   }
@@ -234,8 +257,8 @@ export function planRustStructuralShapeModule(
 function structuralCallableAlias(
   aliases: RustItem[],
   name: string,
-  typeParams: readonly RustTypeParameter[],
-  typeArguments: readonly RustType[],
+  generics: RustGenerics,
+  genericArguments: readonly RustGenericArgument[],
   target: RustType,
   visibility: RustVisibility,
 ): RustType {
@@ -243,12 +266,12 @@ function structuralCallableAlias(
     kind: "type-alias",
     name,
     visibility,
-    ...(typeParams.length === 0 ? {} : { typeParams }),
+    generics,
     target,
   });
   return {
     kind: "named",
     path: name,
-    ...(typeArguments.length === 0 ? {} : { typeArguments }),
+    ...(genericArguments.length === 0 ? {} : { genericArguments }),
   };
 }

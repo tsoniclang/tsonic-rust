@@ -1,12 +1,20 @@
 import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
-import { rustSourceTypeCarrier, rustSourceTypeCarrierValue } from "../../../target-model/types/index.js";
+import {
+  rustSourceTypeCarrier,
+  rustSourceTypeCarrierValue,
+} from "../../../target-model/types/index.js";
 import type { Node, Symbol } from "@tsonic/tsts";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustTargetGenericArgument } from "../../../target-model/types/model.js";
+
+export interface RustResolvedProjectGenericArguments {
+  readonly values: readonly RustTargetGenericArgument[];
+}
 
 export function resolveProjectSourceCarrier(
   symbol: Symbol | undefined,
-  typeArguments: readonly TargetTypeRef[],
+  genericArguments: RustResolvedProjectGenericArguments,
   context: RustTargetTypeResolutionContext,
   options: RustTargetTypeResolutionOptions,
   selectedDeclaration?: Node,
@@ -27,14 +35,22 @@ export function resolveProjectSourceCarrier(
     const carrier = options.sourceTypes.carrierForDeclaration(declaration, context.ast);
     const sourceType = rustSourceTypeCarrierValue(carrier);
     if (sourceType !== undefined) {
+      const contract = context.sourceLifetimes.contractFor(declaration);
+      if (contract === undefined
+        ? genericArguments.values.length !== 0
+        : genericArguments.values.length !== contract.parameters.length ||
+          contract.parameters.some((parameter, index) =>
+            genericArguments.values[index]?.kind !== parameter.kind)) {
+        continue;
+      }
       return rustSourceTypeCarrier(
         sourceType.fileName,
         sourceType.typeName,
         sourceType.shape,
-        typeArguments,
+        genericArguments.values,
       );
     }
-    if (carrier !== undefined && typeArguments.length === 0) {
+    if (carrier !== undefined && genericArguments.values.length === 0) {
       return carrier;
     }
   }

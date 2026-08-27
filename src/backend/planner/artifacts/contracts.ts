@@ -4,8 +4,8 @@ import type {
 } from "@tsonic/target-api/artifacts";
 import type {
   RustFunctionParam,
+  RustGenerics,
   RustType,
-  RustTypeParameter,
 } from "../../target-ast/nodes.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 
@@ -30,7 +30,7 @@ export function rustFunctionSurface(
     readonly name: string;
     readonly isAsync: boolean;
     readonly errorType?: RustType;
-    readonly typeParameters: readonly RustTypeParameter[];
+    readonly generics: RustGenerics;
     readonly parameters: readonly RustFunctionParam[];
     readonly returnType?: RustType;
   },
@@ -42,16 +42,7 @@ export function rustFunctionSurface(
     callable.errorType === undefined
       ? "infallible"
       : encodeRustContractParts(["fallible", closedMetadataKey(callable.errorType)]),
-    ...callable.typeParameters.map((parameter) =>
-      encodeRustContractParts([
-        "type-parameter",
-        parameter.name,
-        ...parameter.bounds.map((bound) =>
-          encodeRustContractParts([
-            bound.kind,
-            bound.kind === "trait" ? bound.path : bound.name,
-          ])),
-      ])),
+    encodeRustContractParts(["generics", closedMetadataKey(callable.generics)]),
     ...callable.parameters.map((parameter, index) =>
       encodeRustContractParts([
         "parameter",

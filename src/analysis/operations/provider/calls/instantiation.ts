@@ -1,17 +1,18 @@
 import {
   rustCallableProtocol,
+  rustLifetimeGenericArgument,
   rustStringTargetType,
-  inferRustTargetTypeParameterBindings,
-  rustTargetTypeContainsTypeParameter,
-  substituteRustTargetTypeParameters,
+  rustTargetGenericBindingsForArguments,
+  substituteRustTargetGenerics,
+  rustTypeGenericArgument,
 } from "../../../../target-model/types/index.js";
 import { acceptRustPolicy } from "../../../../policy/operations/contracts.js";
 import { asNode } from "../../../../policy/evidence/selected-source.js";
-import { finalizeRustProviderOperationAbi } from "../../../facts/finalized-operation-abi.js";
 import { isRustCVariadicArgumentCarrier } from "../../../facts/c-variadic.js";
 import {
   KindCallExpression,
   KindNewExpression,
+  sourceNodeIdentity,
 } from "@tsonic/target-api/source";
 import { normalizeSelectedArgumentCarrier, rejectSelectedOperation } from "../result.js";
 import { selectRustValueCarrierReconciliation } from "../../../../policy/types/value-carrier-reconciliation.js";
@@ -20,14 +21,18 @@ import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution.js
 import { rustArgumentPassingKey, rustSelectedCallKey, rustSelectedOperationKey } from "../../../../target-model/facts/selections.js";
 import { rustArgumentPassingMode } from "../../../facts/parameter-passing.js";
 import { rustOptionElementCarrier } from "../../../../target-model/types/index.js";
-import { rustProviderGenericRequirementsAreSatisfied } from "../../../../policy/types/provider-generic-requirements.js";
 import { rustTargetOperationFactKey, rustPreparedOperationResultFactKey, rustOptionalChainFactKey } from "../../../facts/keys.js";
 import { rustTargetOperationText } from "../../../facts/target-operation.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { selectedCallArgumentNodes, selectedCallCalleeDeclaration, selectedCallCalleeSymbol, selectedSourceValueCarrier } from "../operators.js";
 import { selectRustOptionalChain } from "../../../../policy/operations/optional-chains.js";
-import { substituteRustValueConversion } from "../../../../target-model/conversions/contracts.js";
 import { selectRustSourceValueConversion } from "../../../../policy/conversions/selection.js";
+import { resolveRustProviderGenericArgument } from "../../../../policy/types/resolution/source.js";
+import {
+  finalizeProviderOperationFact,
+  instantiateProviderOperationTemplate,
+} from "./template-instantiation.js";
+import type { InstantiatedProviderOperationTemplate } from "./template-instantiation.js";
 import type {
   RustCheckedCallSelectionInput,
   RustCheckedCallSelectionResult,
@@ -35,38 +40,97 @@ import type {
   RustPolicySelection,
   RustTargetOperationSelection,
 } from "../../../../policy/operations/contracts.js";
-import type {
-  RustProviderFactOperationKind,
-  RustProviderOperationForm,
-  RustProviderOperationTemplate,
-  RustRuntimeSetOperationKind,
-  RustTargetOperationFact,
-} from "../../../facts/keys.js";
+import type { RustProviderOperationForm, RustProviderOperationTemplate } from "../../../facts/keys.js";
 import type { ProviderDeclarationIdentity } from "@tsonic/tsts";
 import type { RustAppliedValueCarrierReconciliation } from "../../../../policy/types/value-carrier-reconciliation.js";
 import type { RustOperationsProviderOptions } from "../model.js";
 import type { RustOptionalCallGuard } from "./selection.js";
-import type { RustTargetMember, TargetTypeRef } from "../../../../target-model/types/model.js";
+import type {
+  RustTargetGenericArgument,
+  RustTargetGenericParameter,
+  RustTargetMember,
+  TargetTypeRef,
+} from "../../../../target-model/types/model.js";
+import {
+  rustCallScopedElisionLifetime,
+  rustLifetimeKey,
+} from "../../../../target-model/lifetimes/index.js";
+import type { RustLifetimeRef } from "../../../../target-model/lifetimes/index.js";
 
 export function instantiateExactSelectedConstructionCarrier(
   definition: import("../../../project-types/type-policy.js").RustProjectTypeDefinition,
-  sourceTypeArguments: NonNullable<
-    RustCheckedCallSelectionInput["source"]["sourceSelectedMethodTypeArguments"]
-  >,
-  targetTypeArguments: readonly TargetTypeRef[],
+  targetGenericArguments: readonly RustTargetGenericArgument[],
   options: RustOperationsProviderOptions,
 ): TargetTypeRef | undefined {
-  if (sourceTypeArguments.length !== definition.typeParameterNames.length ||
-    targetTypeArguments.length !== definition.typeParameterNames.length ||
-    sourceTypeArguments.some((argument, index) =>
-      argument.typeParameterName !== definition.typeParameterNames[index])) {
+  const parameters = definition.genericParameters.map((parameter): RustTargetGenericParameter =>
+    parameter.kind === "type"
+      ? { kind: "type", sourceName: parameter.sourceName }
+      : {
+          kind: "lifetime",
+          sourceName: parameter.sourceName,
+          targetIdentity: rustLifetimeKey(parameter.lifetime),
+        });
+  const substitutions = rustTargetGenericBindingsForArguments(
+    parameters,
+    targetGenericArguments,
+  );
+  if (substitutions === undefined) return undefined;
+  return substituteRustTargetGenerics(
+    options.projectTypes.openCarrier(definition),
+    substitutions.types,
+    substitutions.lifetimes,
+    substitutions.consts,
+  );
+}
+
+export function mapSelectedProjectGenericArguments(
+  request: RustCheckedCallSelectionInput,
+  genericOwner: import("@tsonic/tsts").Node,
+  context: RustOperationPolicyContext,
+  options: RustOperationsProviderOptions,
+): readonly RustTargetGenericArgument[] | undefined {
+  const selected = request.source.sourceSelectedMethodTypeArguments ?? [];
+  const sourceParameters = context.ast.typeParameters(genericOwner);
+  if (sourceParameters.some((parameter) => parameter === undefined)) return undefined;
+  if (sourceParameters.length === 0) {
+    return selected.length === 0 ? Object.freeze([]) : undefined;
+  }
+  const contract = context.sourceLifetimes.contractFor(genericOwner);
+  if (contract === undefined || selected.length !== contract.parameters.length) {
     return undefined;
   }
-  return substituteRustTargetTypeParameters(
-    options.projectTypes.openCarrier(definition),
-    new Map(definition.typeParameterNames.map((name, index) =>
-      [name, targetTypeArguments[index]!] as const)),
-  );
+  const call = asNode(request.source.call, context);
+  const callIdentity = call === undefined ? undefined : sourceNodeIdentity(context.ast, call);
+  const arguments_ = contract.parameters.map((parameter, index) => {
+    const evidence = selected[index];
+    if (evidence === undefined || evidence.typeParameterName !== parameter.sourceName ||
+      !context.currentSemantics.facts.typeSubjects(evidence.typeParameter).some((subject) =>
+        asNode(subject, context) === parameter.declaration)) {
+      return undefined;
+    }
+    if (parameter.kind === "type") {
+      const type = resolveRustTargetTypeRef(
+        evidence.explicitTypeNode ?? evidence.selectedType,
+        context,
+        options,
+      );
+      return type === undefined ? undefined : rustTypeGenericArgument(type);
+    }
+    const lifetime = resolveSelectedLifetimeArgument(
+      evidence,
+      context,
+      callIdentity === undefined
+        ? undefined
+        : rustCallScopedElisionLifetime(
+            callIdentity,
+            rustLifetimeKey(parameter.lifetime),
+          ),
+    );
+    return lifetime === undefined ? undefined : rustLifetimeGenericArgument(lifetime);
+  });
+  return arguments_.some((argument) => argument === undefined)
+    ? undefined
+    : Object.freeze(arguments_ as RustTargetGenericArgument[]);
 }
 
 export function selectedProjectConstructor(
@@ -109,6 +173,18 @@ export function mapSelectedTargetTypeArguments(
     : undefined;
 }
 
+function resolveSelectedLifetimeArgument(
+  evidence: NonNullable<
+    RustCheckedCallSelectionInput["source"]["sourceSelectedMethodTypeArguments"]
+  >[number],
+  context: RustOperationPolicyContext,
+  inferred: RustLifetimeRef | undefined,
+): RustLifetimeRef | undefined {
+  return evidence.explicitTypeNode === undefined
+    ? inferred
+    : context.sourceLifetimes.resolve(evidence.explicitTypeNode);
+}
+
 export function instantiateSelectedCallTemplate(
   request: RustCheckedCallSelectionInput,
   template: RustProviderOperationTemplate,
@@ -120,27 +196,101 @@ export function instantiateSelectedCallTemplate(
     context,
     resolutionOptions,
   );
-  const selectedParameterCarriers = request.source.sourceSelectedSignatureParameters.map((parameter) =>
-    resolveRustTargetTypeRef(parameter.selectedType, context, resolutionOptions));
+  const selectedParameterCarriers = selectedCallParameterInferenceCarriers(
+    request,
+    context,
+    resolutionOptions,
+  );
   const selectedResultCarrier = request.source.sourceResultType === undefined
     ? undefined
     : resolveRustTargetTypeRef(request.source.sourceResultType, context, resolutionOptions);
-  const directTypeArguments = new Map<string, TargetTypeRef>();
-  for (const argument of request.source.sourceSelectedMethodTypeArguments ?? []) {
-    const carrier = resolveRustTargetTypeRef(
-      argument.explicitTypeNode ?? argument.selectedType,
-      context,
-      resolutionOptions,
-    );
-    if (carrier !== undefined) {
-      directTypeArguments.set(argument.typeParameterName, carrier);
+  const directGenericArguments = new Map<string, RustTargetGenericArgument>();
+  const call = asNode(request.source.call, context);
+  const callIdentity = call === undefined ? undefined : sourceNodeIdentity(context.ast, call);
+  const callScopedElisionBindings = callIdentity === undefined
+    ? undefined
+    : new Map((template.genericParameters ?? []).flatMap((parameter) =>
+        parameter.kind !== "lifetime"
+          ? []
+          : [[
+              parameter.targetIdentity,
+              rustCallScopedElisionLifetime(callIdentity, parameter.targetIdentity),
+            ] as const]));
+  for (const parameter of template.genericParameters ?? []) {
+    const selected = (request.source.sourceSelectedMethodTypeArguments ?? []).filter((argument) =>
+      argument.typeParameterName === parameter.sourceName);
+    if (selected.length > 1) return undefined;
+    const argument = selected[0];
+    if (argument?.explicitTypeNode === undefined) continue;
+    const resolved = parameter.kind === "type"
+      ? (() => {
+          const type = resolveRustTargetTypeRef(
+            argument.explicitTypeNode,
+            context,
+            resolutionOptions,
+          );
+          return type === undefined
+            ? undefined
+            : Object.freeze({ kind: "type" as const, type });
+        })()
+      : parameter.kind === "lifetime"
+        ? (() => {
+            const lifetime = resolveSelectedLifetimeArgument(
+              argument,
+              context,
+              callScopedElisionBindings?.get(parameter.targetIdentity),
+            );
+            return lifetime === undefined
+              ? undefined
+              : rustLifetimeGenericArgument(lifetime);
+          })()
+        : resolveRustProviderGenericArgument(
+            argument.explicitTypeNode,
+            parameter,
+            context,
+            resolutionOptions,
+          );
+    if (resolved !== undefined) {
+      directGenericArguments.set(parameter.sourceName, resolved);
     }
   }
   return instantiateProviderOperationTemplate(template, {
     sourceReceiverCarrier: rawReceiverCarrier,
     sourceParameterCarriers: selectedParameterCarriers,
     sourceResultCarrier: selectedResultCarrier,
-    directTypeArguments,
+    directGenericArguments,
+    ...(callScopedElisionBindings === undefined
+      ? {}
+      : { callScopedElisionBindings }),
+  });
+}
+
+function selectedCallParameterInferenceCarriers(
+  request: RustCheckedCallSelectionInput,
+  context: RustOperationPolicyContext,
+  options: RustOperationsProviderOptions,
+): readonly (TargetTypeRef | undefined)[] {
+  return request.source.sourceSelectedSignatureParameters.map((_parameter, parameterIndex) => {
+    const bindings = request.source.sourceArgumentBindings.filter((binding) =>
+      binding.sourceParameterIndex === parameterIndex);
+    if (bindings.length === 0 || bindings.some((binding) => binding.sourceForm !== "value")) {
+      return undefined;
+    }
+    const sourceIndexes = [...new Set(bindings.map((binding) => binding.sourceArgumentIndex))];
+    const carriers = sourceIndexes.map((sourceIndex) => {
+      const sourceBindings = request.source.sourceArgumentBindings.filter((binding) =>
+        binding.sourceArgumentIndex === sourceIndex);
+      const argument = request.source.sourceArguments[sourceIndex];
+      return argument === undefined || sourceBindings.some((binding) =>
+        binding.sourceParameterIndex !== parameterIndex || binding.sourceForm !== "value")
+        ? undefined
+        : selectedSourceValueCarrier(argument, context, options);
+    });
+    const first = carriers[0];
+    return first === undefined || carriers.some((carrier) =>
+      carrier === undefined || !rustTargetTypeRefEquals(carrier, first))
+      ? undefined
+      : first;
   });
 }
 
@@ -198,11 +348,6 @@ export function acceptSelectedCall(
   const fact = finalizeProviderOperationFact(instantiatedTemplate, sourceArguments.carriers, selectedReceiverCarrier);
   if (fact === undefined) {
     return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_OPERATION_ABI_INCOMPLETE", `Selected call '${callIdentity.sourceName}' cannot finalize one total Rust operation ABI.`);
-  }
-  const targetTypeArguments = request.source.sourceSelectedMethodTypeArguments?.map((argument) =>
-    resolveRustTargetTypeRef(argument.explicitTypeNode ?? argument.selectedType, context, resolutionOptions));
-  if (targetTypeArguments?.some((argument) => argument === undefined) === true) {
-    return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_TYPE_ARGUMENT_CARRIER_MISSING", `Selected generic call '${callIdentity.sourceName}' has a source-selected type argument that cannot map to a closed Rust target type.`);
   }
   const optionalResult = selectRustOptionalCallResult(
     request,
@@ -322,7 +467,6 @@ export function acceptSelectedCall(
       sourceArgumentBindings: request.source.sourceArgumentBindings,
       sourceSelectedSignatureParameters: request.source.sourceSelectedSignatureParameters,
       ...(request.source.sourceSelectedMethodTypeArguments === undefined ? {} : { sourceSelectedMethodTypeArguments: request.source.sourceSelectedMethodTypeArguments }),
-      ...(targetTypeArguments === undefined ? {} : { targetTypeArguments: targetTypeArguments as TargetTypeRef[] }),
       ...(callIdentity.providerDeclaration === undefined ? {} : { providerDeclaration: callIdentity.providerDeclaration }),
     };
   context.facts.set(request.source.call, rustSelectedCallKey, selectedSignature, evidence);
@@ -389,8 +533,10 @@ function selectedCallSourceCarriers(
         expected,
         options.projectTypes,
       );
-      if (reconciliation.kind === "conversion" || reconciliation.kind === "project-upcast") {
-        if (reconciliation.kind === "project-upcast" || targetExpected === undefined) {
+      if (reconciliation.kind === "call-scoped-lifetime" ||
+        reconciliation.kind === "conversion" || reconciliation.kind === "project-upcast") {
+        if (reconciliation.kind === "call-scoped-lifetime" ||
+          reconciliation.kind === "project-upcast" || targetExpected === undefined) {
           reconciliations.push({ sourceIndex: index, reconciliation });
           effective = expected;
         }
@@ -594,232 +740,6 @@ export function providerFormRequiresSourceReceiver(form: RustProviderOperationFo
     form.form === "arg-receiver-method" ||
     form.form === "arg-structural-method" ||
     (form.form === "trait-call" && form.receiverMode !== undefined);
-}
-
-interface InstantiatedProviderOperationTemplate<
-  OperationKind extends RustProviderFactOperationKind | RustRuntimeSetOperationKind = RustProviderFactOperationKind,
-> {
-  readonly template: RustProviderOperationTemplate<OperationKind>;
-  readonly substitutions: ReadonlyMap<string, TargetTypeRef>;
-}
-
-export function instantiateProviderOperationTemplate<
-  OperationKind extends RustProviderFactOperationKind | RustRuntimeSetOperationKind,
->(
-  template: RustProviderOperationTemplate<OperationKind>,
-  evidence: {
-    readonly sourceReceiverCarrier?: TargetTypeRef;
-    readonly sourceParameterCarriers?: readonly (TargetTypeRef | undefined)[];
-    readonly sourceResultCarrier?: TargetTypeRef;
-    readonly directTypeArguments?: ReadonlyMap<string, TargetTypeRef>;
-  },
-): InstantiatedProviderOperationTemplate<OperationKind> | undefined {
-  const parameterNames = new Set(template.typeParameters ?? []);
-  if (parameterNames.size === 0) {
-    return { template, substitutions: new Map() };
-  }
-  const bindings = new Map<string, TargetTypeRef>();
-  for (const [name, carrier] of evidence.directTypeArguments ?? []) {
-    if (parameterNames.has(name) && !mergeTypeBinding(bindings, name, carrier)) {
-      return undefined;
-    }
-  }
-  if (!inferTemplateBindings(template.receiverCarrier, evidence.sourceReceiverCarrier, true) ||
-    !inferTemplateBindings(template.resultCarrier, evidence.sourceResultCarrier, false)) {
-    return undefined;
-  }
-  for (let index = 0; index < (template.parameterCarriers?.length ?? 0); index += 1) {
-    if (!inferTemplateBindings(
-      template.parameterCarriers?.[index],
-      evidence.sourceParameterCarriers?.[index],
-      false,
-    )) {
-      return undefined;
-    }
-  }
-  if ([...parameterNames].some((name) => !bindings.has(name))) {
-    return undefined;
-  }
-  if (!rustProviderGenericRequirementsAreSatisfied(template.typeRequirements, bindings)) {
-    return undefined;
-  }
-  return {
-    template: {
-      ...template,
-      target: substituteProviderOperationForm(template.target, bindings),
-      resultCarrier: substituteRustTargetTypeParameters(template.resultCarrier, bindings),
-      ...(template.sourceResultCarrier === undefined
-        ? {}
-        : {
-            sourceResultCarrier: substituteRustTargetTypeParameters(
-              template.sourceResultCarrier,
-              bindings,
-            ),
-          }),
-      ...(template.parameterCarriers === undefined
-        ? {}
-        : { parameterCarriers: template.parameterCarriers.map((carrier) =>
-            carrier === undefined ? undefined : substituteRustTargetTypeParameters(carrier, bindings)) }),
-      ...(template.receiverCarrier === undefined
-        ? {}
-        : { receiverCarrier: substituteRustTargetTypeParameters(template.receiverCarrier, bindings) }),
-      ...(template.targetTypeArguments === undefined
-        ? {}
-        : {
-            targetTypeArguments: template.targetTypeArguments.map((carrier) =>
-              substituteRustTargetTypeParameters(carrier, bindings)),
-          }),
-      ...(template.resultConversion === undefined
-        ? {}
-        : {
-            resultConversion: substituteRustValueConversion(
-              template.resultConversion,
-              bindings,
-            ),
-          }),
-      typeParameters: [],
-      typeRequirements: [],
-    },
-    substitutions: bindings,
-  };
-
-  function inferTemplateBindings(
-    pattern: TargetTypeRef | undefined,
-    actual: TargetTypeRef | undefined,
-    reconcileKnownBindings: boolean,
-  ): boolean {
-    if (pattern === undefined || !rustTargetTypeContainsTypeParameter(pattern, parameterNames)) {
-      return true;
-    }
-    const selectedNames = reconcileKnownBindings
-      ? parameterNames
-      : new Set([...parameterNames].filter((name) => !bindings.has(name)));
-    if (!rustTargetTypeContainsTypeParameter(pattern, selectedNames)) {
-      return true;
-    }
-    if (actual === undefined) {
-      return false;
-    }
-    const inferred = inferRustTargetTypeParameterBindings(pattern, actual, selectedNames);
-    if (inferred === undefined) {
-      return false;
-    }
-    for (const [name, carrier] of inferred) {
-      if (!mergeTypeBinding(bindings, name, carrier)) {
-        return false;
-      }
-    }
-    return true;
-  }
-}
-
-function mergeTypeBinding(
-  bindings: Map<string, TargetTypeRef>,
-  name: string,
-  carrier: TargetTypeRef,
-): boolean {
-  const existing = bindings.get(name);
-  if (existing !== undefined) {
-    return rustTargetTypeRefEquals(existing, carrier);
-  }
-  bindings.set(name, carrier);
-  return true;
-}
-
-export function substituteProviderOperationForm(
-  form: RustProviderOperationForm,
-  substitutions: ReadonlyMap<string, TargetTypeRef>,
-): RustProviderOperationForm {
-  switch (form.form) {
-    case "call-value-slice":
-    case "call-value-array":
-    case "receiver-value-array":
-      return {
-        ...form,
-        leadingArguments: form.leadingArguments.map((argument) => ({
-          ...argument,
-          carrier: substituteRustTargetTypeParameters(argument.carrier, substitutions),
-        })),
-        elementCarrier: substituteRustTargetTypeParameters(form.elementCarrier, substitutions),
-      };
-    case "receiver-tagged-array":
-      return {
-        ...form,
-        leadingArguments: form.leadingArguments.map((argument) => ({
-          ...argument,
-          carrier: substituteRustTargetTypeParameters(argument.carrier, substitutions),
-        })),
-        elementCarrier: substituteRustTargetTypeParameters(form.elementCarrier, substitutions),
-        alternatives: form.alternatives.map((alternative) => ({
-          ...alternative,
-          inputCarrier: substituteRustTargetTypeParameters(alternative.inputCarrier, substitutions),
-        })),
-      };
-    case "arg-structural-method":
-    case "arg-receiver-method":
-      return form.argConversions === undefined
-        ? form
-        : {
-            ...form,
-            argConversions: form.argConversions.map((conversion) =>
-              conversion === undefined
-                ? undefined
-                : substituteRustValueConversion(conversion, substitutions)),
-          };
-    case "trait-call":
-    case "trait-associated-value":
-      return {
-        ...form,
-        owner: substituteRustTargetTypeParameters(form.owner, substitutions),
-        traitTypeArguments: form.traitTypeArguments.map((argument) =>
-          substituteRustTargetTypeParameters(argument, substitutions)),
-      };
-    default:
-      return form;
-  }
-}
-
-export function finalizeProviderOperationFact(
-  template: RustProviderOperationTemplate,
-  sourceArgumentCarriers: readonly TargetTypeRef[],
-  sourceReceiverCarrier: TargetTypeRef | undefined,
-): Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }> | undefined {
-  const abi = finalizeRustProviderOperationAbi({
-    operationKind: template.operationKind,
-    form: template.target,
-    ...(sourceReceiverCarrier === undefined ? {} : { sourceReceiverCarrier }),
-    sourceArgumentCarriers,
-    declaredSourceArgumentCarriers: template.parameterCarriers,
-    ...(template.compileTimeSourceArgumentIndexes === undefined
-      ? {}
-      : { compileTimeSourceArgumentIndexes: template.compileTimeSourceArgumentIndexes }),
-    resultCarrier: template.resultCarrier,
-    ...(template.targetTypeArguments === undefined
-      ? {}
-      : { targetTypeArguments: template.targetTypeArguments }),
-    ...(template.resultConversion === undefined ? {} : { resultConversion: template.resultConversion }),
-    isAsync: template.isAsync,
-    isFallible: template.isFallible,
-    ...(template.evaluation === undefined ? {} : { evaluation: template.evaluation }),
-    ...(template.errorBoundary === "none" ? {} : { errorBoundary: template.errorBoundary }),
-    ...(template.errorCarrier === undefined ? {} : { errorCarrier: template.errorCarrier }),
-    isUnsafe: template.isUnsafe,
-  });
-  if (abi === undefined) {
-    return undefined;
-  }
-  return {
-    kind: "provider-operation",
-    operationId: template.operationId,
-    resultCarrier: abi.result.kind === "async" ? abi.result.futureCarrier : abi.result.carrier,
-    ...(template.sourceResultCarrier === undefined
-      ? {}
-      : { sourceResultCarrier: template.sourceResultCarrier }),
-    ...(template.sourceAbsenceCarrier === undefined
-      ? {}
-      : { sourceAbsenceCarrier: template.sourceAbsenceCarrier }),
-    abi,
-  };
 }
 
 export function checkedCallIsConstruction(

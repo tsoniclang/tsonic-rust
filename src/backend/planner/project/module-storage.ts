@@ -5,6 +5,7 @@ import type {
   RustType,
   RustVisibility,
 } from "../../target-ast/nodes.js";
+import { emptyRustGenerics } from "../../target-ast/nodes.js";
 import {
   allocateRustSyntheticName,
   allocateRustSyntheticTypeName,
@@ -37,6 +38,7 @@ export function planRustHoistedModuleCell(
           kind: "type-alias" as const,
           name: callableAlias,
           visibility: "private" as const,
+          generics: emptyRustGenerics,
           target: type,
         }]),
     {
@@ -47,7 +49,7 @@ export function planRustHoistedModuleCell(
       type: {
         kind: "named" as const,
         path: "rt::ModuleCell",
-        typeArguments: [storedType],
+        genericArguments: [{ kind: "type" as const, type: storedType }],
       },
       value: {
         kind: "call" as const,
@@ -83,6 +85,7 @@ export function planRustModuleCell(
             kind: "type-alias" as const,
             name: callableAlias,
             visibility: "private" as const,
+            generics: emptyRustGenerics,
             target: type,
           }]),
       {
@@ -93,7 +96,7 @@ export function planRustModuleCell(
         type: {
           kind: "named",
           path: "rt::ModuleCell",
-          typeArguments: [storedType],
+          genericArguments: [{ kind: "type", type: storedType }],
         },
         value: { kind: "call", path: "rt::ModuleCell::new", args: [] },
         constInitializer: true,

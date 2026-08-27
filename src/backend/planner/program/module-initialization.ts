@@ -3,6 +3,7 @@ import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustPlanningContext } from "../context.js";
 import { stronglyConnectedSourceFiles } from "../../../analysis/program/module-graph.js";
 import type { RustItem, RustStmt, RustType } from "../../target-ast/nodes.js";
+import { emptyRustGenerics } from "../../target-ast/nodes.js";
 import type { PlannedRustSourceFile } from "./source-file.js";
 import type { RustSourcePackageInitializerPlan } from "./source-package-initializers.js";
 import {
@@ -145,7 +146,10 @@ export function planRustCrateInitializer(
       expr: {
         kind: "call",
         path: "Ok",
-        typeArguments: [{ kind: "unit" }, errorType],
+        genericArguments: [
+          { kind: "type", type: { kind: "unit" } },
+          { kind: "type", type: errorType },
+        ],
         args: [{ kind: "path", path: "()" }],
       },
     });
@@ -154,6 +158,7 @@ export function planRustCrateInitializer(
     kind: "function",
     name: functionName,
     visibility: "public",
+    generics: emptyRustGenerics,
     attrs: ["#[doc(hidden)]"],
     ...(asynchronous ? { isAsync: true } : {}),
     params: [],

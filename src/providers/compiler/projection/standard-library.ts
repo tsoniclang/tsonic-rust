@@ -1,12 +1,13 @@
 import type {
   RustCompilerDependency,
   RustCompilerFunction,
+  RustCompilerGenericArgument,
+  RustCompilerGenericParameter,
   RustCompilerModuleModel,
   RustCompilerProjectSnapshot,
   RustCompilerStandardLibrarySnapshot,
   RustCompilerStandardTypeLocation,
   RustCompilerType,
-  RustCompilerTypeParameter,
 } from "../model/model.js";
 import {
   verifyRustCompilerDependencySource,
@@ -40,8 +41,9 @@ import {
 } from "../model/rustdoc-schema.js";
 import {
   canonicalPathKey,
-  normalizeTypeParameterShape,
-  sourceVisibleTypeParameterCount,
+  compilerTypeRequirementCanonicalPath,
+  normalizeGenericParameters,
+  rootNormalizationContext,
   standardTypePathKind,
 } from "../model/rustdoc-types.js";
 
@@ -209,7 +211,7 @@ function lookupStandardLibraryCanonicalItem(
 function standardTypeLocation(
   context: RustStandardLibraryContext,
   canonicalPath: readonly string[],
-): RustCompilerStandardTypeLocation {
+): RustCompilerStandardTypeLocation | undefined {
   const canonicalKey = canonicalPathKey(canonicalPath);
   const cached = context.typeLocationsByCanonicalPath.get(canonicalKey);
   if (cached !== undefined) {
@@ -223,7 +225,7 @@ function standardTypeLocation(
   const dependency = context.snapshot.dependencies.find((candidate) =>
     candidate.crateName === crateName);
   if (dependency === undefined) {
-    throw new Error(`Rust standard-library type '${canonicalPath.join("::")}' belongs to untracked sysroot crate '${crateName}'.`);
+    return undefined;
   }
   const document = loadStandardLibraryCrateDocument(context, dependency);
   const candidateIds = Object.entries(document.paths)
@@ -232,14 +234,12 @@ function standardTypeLocation(
       standardTypePathKind(candidate.kind))
     .map(([id]) => id);
   if (candidateIds.length !== 1) {
-    throw new Error(
-      `Rust standard-library type '${canonicalPath.join("::")}' has ${candidateIds.length} exact compiler type identities; expected one.`,
-    );
+    return undefined;
   }
   const item = itemById(document, candidateIds[0]!);
   const publicPath = preferredStandardLibraryPublicTypeAlias(context, canonicalPath);
   if (publicPath === undefined) {
-    throw new Error(`Rust standard-library type '${canonicalPath.join("::")}' has no exact public module export.`);
+    return undefined;
   }
   const publicCrateName = publicPath[0]!;
   const publicExportName = publicPath[publicPath.length - 1]!;
@@ -252,21 +252,30 @@ function standardTypeLocation(
         ? inner.union
         : isRecord(inner.type_alias)
           ? inner.type_alias
+          : isRecord(inner.trait)
+            ? inner.trait
           : undefined;
   if (declaration === undefined) {
-    throw new Error(`Rust standard-library item '${canonicalPath.join("::")}' is not a supported type declaration.`);
+    return undefined;
   }
-  const parameters = normalizeTypeParameterShape(
+  const parameters = normalizeGenericParameters(
     document,
     requireRecord(declaration.generics, `Rust standard-library type '${exportName}' generics`),
-  );
+    rootNormalizationContext(
+      document,
+      dependency,
+      item,
+      (sourceDocument, sourceDependency, id) =>
+        resolveStandardLibraryItem(context, sourceDocument, sourceDependency, id),
+    ),
+  ).parameters;
   const location: RustCompilerStandardTypeLocation = Object.freeze({
     canonicalPath: Object.freeze([...canonicalPath]),
     sourceModuleSpecifier: standardModuleSpecifier(publicCrateName, publicPath.slice(1, -1)),
     sourceExportName: publicExportName,
     targetPath: publicPath,
     targetId: `rust.std.${context.snapshot.digest.slice(0, 24)}.${digestText(canonicalPath.join("\0")).slice(0, 24)}`,
-    sourceTypeArgumentCount: sourceVisibleTypeParameterCount(parameters),
+    genericParameters: parameters,
   });
   context.typeLocationsByCanonicalPath.set(canonicalKey, location);
   return location;
@@ -451,7 +460,13 @@ export function collectModuleStandardTypeLocations(
       return;
     }
     const location = standardTypeLocation(context, canonicalPath);
-    selected.set(canonicalPathKey(location.canonicalPath), location);
+    const key = location === undefined
+      ? undefined
+      : canonicalPathKey(location.canonicalPath);
+    if (location !== undefined && key !== undefined && !selected.has(key)) {
+      selected.set(key, location);
+      visitParameters(location.genericParameters);
+    }
   };
   const visitType = (type: RustCompilerType): void => {
     switch (type.kind) {
@@ -473,35 +488,70 @@ export function collectModuleStandardTypeLocations(
         return;
       case "associated-type":
         visitType(type.owner);
-        type.trait.typeArguments.forEach(visitType);
+        visitTrait(type.trait);
+        type.genericArguments.forEach(visitArgument);
         return;
       case "function-pointer":
         type.parameters.forEach(visitType);
         visitType(type.result);
         return;
+      case "trait-object":
+        visitTrait(type.principal);
+        type.autoTraits.forEach(visitTrait);
+        return;
+      case "opaque":
+        type.bounds.forEach(visitTrait);
+        type.captures.forEach(visitArgument);
+        return;
       case "path": {
         selectCanonicalPath([type.crateName, ...type.modulePath, type.name]);
-        type.typeArguments.forEach(visitType);
+        type.genericArguments.forEach(visitArgument);
         return;
       }
     }
   };
-  const visitParameters = (parameters: readonly RustCompilerTypeParameter[]): void => {
+  const visitArgument = (argument: RustCompilerGenericArgument): void => {
+    if (argument.kind === "type") visitType(argument.type);
+  };
+  const visitTrait = (
+    trait: import("../model/model.js").RustCompilerTraitDispatch,
+  ): void => {
+    selectCanonicalPath(trait.identity.canonicalPath);
+    trait.genericArguments.forEach(visitArgument);
+    trait.associatedConstraints.forEach((constraint) => {
+      constraint.genericArguments.forEach(visitArgument);
+      if (constraint.kind === "equality") {
+        visitType(constraint.type);
+      } else {
+        constraint.traits.forEach(visitTrait);
+      }
+    });
+  };
+  const visitParameters = (parameters: readonly RustCompilerGenericParameter[]): void => {
     for (const parameter of parameters) {
-      if (parameter.defaultType !== undefined) {
-        visitType(parameter.defaultType);
+      if (parameter.kind === "type") {
+        parameter.requirements.forEach((requirement) => {
+          if (typeof requirement === "string") {
+            selectCanonicalPath(compilerTypeRequirementCanonicalPath(requirement));
+          } else {
+            visitTrait(requirement.trait);
+          }
+        });
+        if (parameter.defaultType !== undefined) visitType(parameter.defaultType);
+      } else if (parameter.kind === "const") {
+        visitType(parameter.type);
       }
     }
   };
   const visitFunction = (fn: RustCompilerFunction): void => {
-    visitParameters(fn.typeParameters);
+    visitParameters(fn.genericParameters);
     visitParameters(fn.typeRequirements);
     if (fn.receiver?.kind === "custom") {
       visitType(fn.receiver.type);
     }
     fn.parameters.forEach((parameter) => visitType(parameter.type));
     visitType(fn.result);
-    fn.traitDispatch?.typeArguments.forEach(visitType);
+    if (fn.traitDispatch !== undefined) visitTrait(fn.traitDispatch);
   };
   for (const exported of module.exports) {
     switch (exported.kind) {
@@ -513,28 +563,56 @@ export function collectModuleStandardTypeLocations(
         visitFunction(exported.function);
         break;
       case "type-alias":
-        visitParameters(exported.typeParameters);
+        visitParameters(exported.genericParameters);
         visitType(exported.type);
         break;
       case "struct":
       case "union":
         selectCanonicalPath(exported.canonicalPath);
-        visitParameters(exported.typeParameters);
+        visitParameters(exported.genericParameters);
         exported.fields.forEach((field) => visitType(field.type));
         exported.methods.forEach(visitFunction);
         exported.associatedConstants.forEach((constant) => {
           visitType(constant.type);
-          constant.traitDispatch.typeArguments.forEach(visitType);
+          visitTrait(constant.traitDispatch);
         });
         break;
       case "enum":
         selectCanonicalPath(exported.canonicalPath);
-        visitParameters(exported.typeParameters);
+        visitParameters(exported.genericParameters);
         exported.variants.forEach((variant) => variant.fields.forEach(visitType));
         exported.methods.forEach(visitFunction);
         exported.associatedConstants.forEach((constant) => {
           visitType(constant.type);
-          constant.traitDispatch.typeArguments.forEach(visitType);
+          visitTrait(constant.traitDispatch);
+        });
+        break;
+      case "trait":
+        selectCanonicalPath(exported.canonicalPath);
+        visitParameters(exported.genericParameters);
+        exported.superTraits.forEach(visitTrait);
+        exported.methods.forEach(visitFunction);
+        exported.associatedConstants.forEach((constant) => {
+          visitType(constant.type);
+          visitTrait(constant.traitDispatch);
+        });
+        exported.associatedTypes.forEach((associated) => {
+          visitParameters(associated.genericParameters);
+          associated.requirements.forEach((requirement) => {
+            if (typeof requirement === "string") {
+              selectCanonicalPath(compilerTypeRequirementCanonicalPath(requirement));
+            } else {
+              visitTrait(requirement.trait);
+            }
+          });
+          associated.ownerRequirements.forEach((requirement) => {
+            if (typeof requirement === "string") {
+              selectCanonicalPath(compilerTypeRequirementCanonicalPath(requirement));
+            } else {
+              visitTrait(requirement.trait);
+            }
+          });
+          if (associated.defaultType !== undefined) visitType(associated.defaultType);
         });
         break;
     }

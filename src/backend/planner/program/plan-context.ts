@@ -108,6 +108,10 @@ export interface RustPlanContext {
   readonly projectDispatchRoot?: RustExpr;
   readonly objectLiteralImplementations?: RustObjectLiteralImplementationRegistry;
   readonly typeParameterSubstitutions?: ReadonlyMap<string, import("../../../target-model/types/model.js").TargetTypeRef>;
+  readonly lifetimeSubstitutions?: ReadonlyMap<
+    string,
+    import("../../../target-model/lifetimes/index.js").RustLifetimeRef
+  >;
 }
 
 export function rustErrorBoundaryForDeclaration(

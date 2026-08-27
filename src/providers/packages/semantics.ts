@@ -2,6 +2,7 @@ import {
   canonicalizeProviderOperationRow,
   materializeProviderBinaryEpilogueRow,
   materializeProviderCarrier,
+  materializeProviderGenericParameter,
   materializeProviderOperationRow,
 } from "./materialization.js";
 import { rustProviderBindingProviderId } from "./source-provider.js";
@@ -66,7 +67,8 @@ export function providerOperationRowIdentity(row: RustProviderOperationRow): str
 }
 
 export function providerTypeRowIdentity(row: RustProviderTypeRow): string {
-  return `${providerExportRowIdentity(row)}\0${row.sourceTypeParameters.join("\0")}\0${JSON.stringify({
+  return `${providerExportRowIdentity(row)}\0${JSON.stringify({
+    genericParameters: row.genericParameters,
     targetCarrier: row.targetCarrier,
     typeRequirements: row.typeRequirements,
     objectLiteralConstruction: row.objectLiteralConstruction,
@@ -146,15 +148,22 @@ export function collectRustProviderSemanticsFromDefinitions(
       }
       types.push(Object.freeze({
         ...type,
+        ...(type.genericParameters === undefined
+          ? {}
+          : {
+              genericParameters: Object.freeze(type.genericParameters.map((parameter) =>
+                materializeProviderGenericParameter(
+                  parameter,
+                  carrierPathRows,
+                  carrierTraitRows,
+                ))),
+            }),
         targetCarrier: materializeProviderCarrier(type.targetCarrier, carrierPathRows, carrierTraitRows),
         providerPackageId: definition.id,
         providerId,
         providerVersion: definition.version,
         providerModuleId: owner.module.providerModuleId,
         moduleSpecifier: owner.module.moduleSpecifier,
-        sourceTypeParameters: Object.freeze(
-          (owner.exported.typeParameters ?? []).map((parameter) => parameter.name),
-        ),
       }));
     }
     const aliases = new Map((definition.aliasImports ?? []).map((entry) => [entry.alias, entry.path]));
@@ -193,6 +202,16 @@ export function collectRustProviderSemanticsFromDefinitions(
     carrierTraits: canonicalCarrierTraits,
     types: Object.freeze(types.map((row) => snapshotClosedMetadata({
       ...row,
+      ...(row.genericParameters === undefined
+        ? {}
+        : {
+            genericParameters: row.genericParameters.map((parameter) =>
+              materializeProviderGenericParameter(
+                parameter,
+                canonicalCarrierPaths,
+                canonicalCarrierTraits,
+              )),
+          }),
       targetCarrier: materializeProviderCarrier(row.targetCarrier, canonicalCarrierPaths, canonicalCarrierTraits),
     }))),
     binaryEpilogues: Object.freeze(binaryEpilogues),
@@ -232,6 +251,16 @@ export function mergeRustProviderSemantics(
   const types = mergeExactRows(
     inputs.flatMap((input) => input.types).map((row) => snapshotClosedMetadata({
       ...row,
+      ...(row.genericParameters === undefined
+        ? {}
+        : {
+            genericParameters: row.genericParameters.map((parameter) =>
+              materializeProviderGenericParameter(
+                parameter,
+                canonicalCarrierPaths,
+                canonicalCarrierTraits,
+              )),
+          }),
       targetCarrier: materializeProviderCarrier(row.targetCarrier, canonicalCarrierPaths, canonicalCarrierTraits),
     })),
     providerTypeRowIdentity,

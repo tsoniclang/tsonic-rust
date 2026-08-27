@@ -36,6 +36,7 @@ import type {
 import type {
   RustProviderSemantics,
 } from "../../providers/packages/model.js";
+import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 
 export interface RustTargetAnalysisRequest {
   readonly input: TargetCompileInput;
@@ -64,6 +65,7 @@ export interface RustTargetProgram {
   readonly projectMethodProperties: RustProjectMethodPropertyPlan;
   readonly projectFieldDispatch: RustProjectFieldDispatchQueries;
   readonly sourceCallableSpecializations: RustSourceCallableSpecializationPlan;
+  readonly sourceLifetimes: RustLifetimeIndex;
   readonly callableGenericRequirements: RustCallableGenericRequirementIndex;
   readonly valueLifetimes: RustValueLifetimePlan;
   readonly structuralShapes: RustStructuralShapePlan;

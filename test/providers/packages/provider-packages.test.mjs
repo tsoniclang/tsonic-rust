@@ -292,7 +292,8 @@ test("provider paths and named carriers materialize before facts reach the backe
       traits: {
         implementations: [{ traitPath: "core::clone::Clone", requirements: [] }],
       },
-      typeArguments: [],
+      genericArguments: [],
+      genericDefaults: [],
     },
   });
 });

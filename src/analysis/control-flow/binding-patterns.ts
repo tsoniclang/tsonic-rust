@@ -22,9 +22,11 @@ import {
 } from "../facts/keys.js";
 import {
   isRustJsArrayCarrier,
+  rustJsArrayLikeElementTargetType,
   isRustVecCarrier,
   rustFixedArrayCarrierValue,
   rustFixedArrayTargetType,
+  rustTargetConstSafeInteger,
   rustOptionElementCarrier,
   rustOptionTargetType,
   rustSourceTypeCarrierValue,
@@ -162,7 +164,10 @@ function selectArrayProjection(
     projection = { kind: "tuple-element", index };
   } else {
     const fixed = rustFixedArrayCarrierValue(sourceCarrier);
-    if (fixed !== undefined && index < fixed.length) {
+    const fixedLength = fixed === undefined
+      ? undefined
+      : rustTargetConstSafeInteger(fixed.length);
+    if (fixed !== undefined && fixedLength !== undefined && index < fixedLength) {
       projectedCarrier = fixed.element;
       projection = { kind: "fixed-array-element", index };
     } else if (isRustVecCarrier(sourceCarrier)) {
@@ -171,7 +176,7 @@ function selectArrayProjection(
         : sourceCarrier.element;
       projection = { kind: "vec-element", index, checked: hasDefault };
     } else if (isRustJsArrayCarrier(sourceCarrier)) {
-      const elementCarrier = sourceCarrier.typeArguments?.[0];
+      const elementCarrier = rustJsArrayLikeElementTargetType(sourceCarrier);
       projectedCarrier = elementCarrier === undefined
         ? undefined
         : rustOptionTargetType(elementCarrier);
@@ -480,8 +485,11 @@ function bindingCarrierForArrayRest(
     return rustTupleTargetType(sourceCarrier.elements.slice(start));
   }
   const fixed = rustFixedArrayCarrierValue(sourceCarrier);
-  if (fixed !== undefined && start <= fixed.length) {
-    return rustFixedArrayTargetType(fixed.element, fixed.length - start);
+  const fixedLength = fixed === undefined
+    ? undefined
+    : rustTargetConstSafeInteger(fixed.length);
+  if (fixed !== undefined && fixedLength !== undefined && start <= fixedLength) {
+    return rustFixedArrayTargetType(fixed.element, fixedLength - start);
   }
   return isRustVecCarrier(sourceCarrier) || isRustJsArrayCarrier(sourceCarrier)
     ? sourceCarrier

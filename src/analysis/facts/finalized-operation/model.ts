@@ -7,7 +7,10 @@ import type {
   RustValueConversion,
 } from "../../../target-model/operations/model.js";
 import type { RustErrorBoundary, RustFallibleErrorBoundary } from "../../../target-model/operations/error-boundary.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type {
+  RustTargetGenericArgument,
+  TargetTypeRef,
+} from "../../../target-model/types/model.js";
 
 export type RustFinalizedSourceArgumentRole = "parameter" | "index" | "compile-time";
 
@@ -99,7 +102,7 @@ export interface RustFinalizedOperationAbi {
   readonly sourceArguments: readonly RustFinalizedSourceArgument[];
   readonly targetReceiver: { readonly kind: "none" } | { readonly kind: "input"; readonly input: RustFinalizedSourceInput };
   readonly targetArguments: readonly RustFinalizedTargetInput[];
-  readonly targetTypeArguments: readonly TargetTypeRef[];
+  readonly targetGenericArguments: readonly RustTargetGenericArgument[];
   readonly result: RustFinalizedOperationResult;
   readonly effects: {
     readonly evaluation: RustOperationEvaluationEffect;
@@ -127,7 +130,7 @@ export interface FinalizeRustProviderOperationAbiOptions<
   readonly declaredSourceArgumentCarriers?: readonly (TargetTypeRef | undefined)[];
   readonly compileTimeSourceArgumentIndexes?: readonly number[];
   readonly resultCarrier: TargetTypeRef;
-  readonly targetTypeArguments?: readonly TargetTypeRef[];
+  readonly targetGenericArguments?: readonly RustTargetGenericArgument[];
   readonly resultConversion?: RustValueConversion;
   readonly isAsync: boolean;
   readonly isFallible: boolean;

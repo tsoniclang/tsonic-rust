@@ -9,21 +9,103 @@ import type {
   Symbol,
   Type,
 } from "@tsonic/tsts";
+import type {
+  RustLifetimeBinder,
+  RustLifetimeRef,
+} from "../lifetimes/index.js";
+
+export type RustTargetConstArgument =
+  | { readonly kind: "integer"; readonly value: string }
+  | { readonly kind: "boolean"; readonly value: boolean }
+  | { readonly kind: "char"; readonly value: string }
+  | { readonly kind: "parameter"; readonly identity: string; readonly name: string }
+  | { readonly kind: "infer" };
+
+export type RustTargetGenericArgument =
+  | { readonly kind: "lifetime"; readonly lifetime: RustLifetimeRef }
+  | { readonly kind: "type"; readonly type: RustTargetTypeRef }
+  | { readonly kind: "const"; readonly value: RustTargetConstArgument };
+
+export interface RustTargetTraitRef {
+  readonly kind: "trait-ref";
+  readonly id: string;
+  readonly path: string;
+  readonly genericArguments: readonly RustTargetGenericArgument[];
+  readonly associatedConstraints: readonly RustTargetAssociatedConstraint[];
+  readonly lifetimeBinder?: RustLifetimeBinder;
+}
+
+export type RustTargetAssociatedConstraint =
+  | {
+      readonly kind: "equality";
+      readonly identity: string;
+      readonly name: string;
+      readonly genericArguments: readonly RustTargetGenericArgument[];
+      readonly type: RustTargetTypeRef;
+    }
+  | {
+      readonly kind: "bounds";
+      readonly identity: string;
+      readonly name: string;
+      readonly genericArguments: readonly RustTargetGenericArgument[];
+      readonly traits: readonly RustTargetTraitRef[];
+      readonly outlives: readonly RustLifetimeRef[];
+    };
 
 export type RustTargetTypeRef =
   | { readonly kind: "source-primitive"; readonly name: SourcePrimitiveKind }
-  | { readonly kind: "target-named"; readonly id: string; readonly typeArguments?: readonly RustTargetTypeRef[] }
+  | {
+      readonly kind: "target-named";
+      readonly id: string;
+      readonly genericArguments?: readonly RustTargetGenericArgument[];
+    }
   | { readonly kind: "type-parameter"; readonly name: string }
   | { readonly kind: "array"; readonly element: RustTargetTypeRef; readonly rank?: number }
   | { readonly kind: "slice"; readonly element: RustTargetTypeRef }
   | { readonly kind: "tuple"; readonly elements: readonly RustTargetTypeRef[] }
-  | { readonly kind: "reference"; readonly referent: RustTargetTypeRef; readonly mutable: boolean; readonly lifetime?: string }
+  | {
+      readonly kind: "reference";
+      readonly referent: RustTargetTypeRef;
+      readonly mutable: boolean;
+      readonly lifetime?: RustLifetimeRef;
+    }
   | { readonly kind: "pointer"; readonly pointee: RustTargetTypeRef; readonly mutability?: "const" | "mut" | "target-defined" }
-  | { readonly kind: "function-pointer"; readonly args: readonly RustTargetTypeRef[]; readonly result: RustTargetTypeRef; readonly abi?: readonly string[]; readonly isUnsafe?: boolean }
-  | { readonly kind: "closure"; readonly args: readonly RustTargetTypeRef[]; readonly result: RustTargetTypeRef }
+  | {
+      readonly kind: "function-pointer";
+      readonly args: readonly RustTargetTypeRef[];
+      readonly result: RustTargetTypeRef;
+      readonly lifetimeBinder?: RustLifetimeBinder;
+      readonly abi?: readonly string[];
+      readonly isUnsafe?: boolean;
+    }
+  | RustTargetTraitRef
+  | {
+      readonly kind: "closure";
+      readonly args: readonly RustTargetTypeRef[];
+      readonly result: RustTargetTypeRef;
+      readonly lifetimeBinder?: RustLifetimeBinder;
+    }
   | { readonly kind: "opaque"; readonly id: string }
-  | { readonly kind: "associated-type"; readonly owner: RustTargetTypeRef; readonly name: string }
-  | { readonly kind: "lifetime"; readonly name: string }
+  | {
+      readonly kind: "trait-object";
+      readonly principal: RustTargetTraitRef;
+      readonly autoTraits: readonly RustTargetTraitRef[];
+      readonly lifetime?: RustLifetimeRef;
+    }
+  | {
+      readonly kind: "impl-trait";
+      readonly id: string;
+      readonly bounds: readonly RustTargetTraitRef[];
+      readonly outlives: readonly RustLifetimeRef[];
+      readonly captures: readonly RustLifetimeRef[];
+    }
+  | {
+      readonly kind: "associated-type";
+      readonly owner: RustTargetTypeRef;
+      readonly trait?: RustTargetTraitRef;
+      readonly name: string;
+      readonly genericArguments?: readonly RustTargetGenericArgument[];
+    }
   | { readonly kind: "target-specific"; readonly target: "rust"; readonly name: string; readonly value?: unknown };
 
 export type TargetTypeRef = RustTargetTypeRef;
@@ -50,9 +132,21 @@ export interface RustTargetParameter {
   readonly paramsArray?: boolean;
 }
 
-export interface RustTargetTypeParameter {
-  readonly name: string;
-}
+export type RustTargetGenericParameter =
+  | {
+      readonly kind: "type";
+      readonly sourceName: string;
+    }
+  | {
+      readonly kind: "lifetime";
+      readonly sourceName: string;
+      readonly targetIdentity: string;
+    }
+  | {
+      readonly kind: "const";
+      readonly sourceName: string;
+      readonly targetIdentity: string;
+    };
 
 export interface RustTargetMember {
   readonly id: string;
@@ -62,7 +156,7 @@ export interface RustTargetMember {
   readonly static?: boolean;
   readonly parameters: readonly RustTargetParameter[];
   readonly returnType?: RustTargetTypeRef;
-  readonly typeParameters?: readonly RustTargetTypeParameter[];
+  readonly genericParameters?: readonly RustTargetGenericParameter[];
   readonly providerDeclaration?: ProviderDeclarationIdentity;
 }
 
@@ -83,7 +177,7 @@ export interface RustSelectedTargetSignature {
     readonly receiverCarrier: RustTargetTypeRef;
     readonly storageIndex: number;
   };
-  readonly targetTypeArguments?: readonly RustTargetTypeRef[];
+  readonly targetGenericArguments?: readonly RustTargetGenericArgument[];
   readonly providerDeclaration?: ProviderDeclarationIdentity;
   readonly argumentConversions?: readonly RustTargetCallArgumentSlot[];
   readonly sourceSignature?: Signature;

@@ -24,7 +24,11 @@ import type {
 import type { Node, ProviderDeclarationIdentity, SourceCallMarkerKind } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "../model.js";
 import type { RustProviderOperationTemplate, RustTargetOperationFact } from "../../../facts/keys.js";
-import type { RustTargetMember, TargetTypeRef } from "../../../../target-model/types/model.js";
+import type {
+  RustSelectedTargetSignature,
+  RustTargetMember,
+  TargetTypeRef,
+} from "../../../../target-model/types/model.js";
 import type { RustRegExpReplacementCallbackContract } from "../regexp-replacement-callback.js";
 import { rustJsStringTargetType, rustStringTargetType } from "../../../../target-model/types/index.js";
 
@@ -447,13 +451,16 @@ function mapRustDefaultValueCall(
     static: true,
     parameters: [],
     returnType: resultCarrier,
-    typeParameters: [{ name: sourceTypeArguments[0]!.typeParameterName }],
+    genericParameters: [{
+      kind: "type",
+      sourceName: sourceTypeArguments[0]!.typeParameterName,
+    }],
     providerDeclaration: provider,
   };
-  const selectedSignature = {
+  const selectedSignature: RustSelectedTargetSignature = {
     member,
     providerDeclaration: provider,
-    targetTypeArguments,
+    targetGenericArguments: [{ kind: "type", type: targetTypeArguments[0]! }],
     ...(request.source.selectedSignature === undefined
       ? {}
       : { sourceSignature: request.source.selectedSignature }),

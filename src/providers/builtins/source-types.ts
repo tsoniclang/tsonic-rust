@@ -9,8 +9,8 @@ import {
   rustMutPointerExport,
   rustSourceProviderVersion,
   rustSourceVirtualModulesProviderId,
-} from "../../source/extension/source-extension.js";
-import { rustTypesModule } from "../../source/profiles/source-modules.js";
+  rustTypesModule,
+} from "../../source/semantics/identity.js";
 import type {
   RustProviderSemantics,
   RustProviderTypeRow,
@@ -78,6 +78,9 @@ function pointerType(
     providerVersion,
     providerModuleId: moduleSpecifier,
     moduleSpecifier,
-    sourceTypeParameters: Object.freeze(["T"]),
+    genericParameters: Object.freeze([Object.freeze({
+      kind: "type" as const,
+      sourceName: "T",
+    })]),
   });
 }

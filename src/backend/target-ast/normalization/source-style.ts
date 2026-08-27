@@ -1,12 +1,14 @@
 import type {
   RustBlock,
   RustExpr,
+  RustGenericArgument,
   RustImplFunction,
   RustItem,
   RustSourceFileModel,
   RustStmt,
   RustTraitFunction,
   RustType,
+  RustTypeBound,
 } from "../nodes.js";
 import { finalizeRustBlockLiveness } from "../inspection/source-liveness.js";
 import { rustLintAttributes } from "./lint-policy.js";
@@ -585,9 +587,23 @@ function rustTypeNames(type: RustType): readonly string[] {
     case "infer":
       return [];
     case "named":
-      return [type.path, ...(type.typeArguments?.flatMap(rustTypeNames) ?? [])];
+      return [
+        type.path,
+        ...rustGenericArgumentTypeNames(type.genericArguments),
+      ];
+    case "qualified":
+      return [
+        ...rustTypeNames(type.owner),
+        ...(type.trait === undefined ? [] : rustTypeNames(type.trait)),
+        ...rustGenericArgumentTypeNames(type.genericArguments),
+      ];
     case "trait-object":
-      return rustTypeNames(type.trait);
+      return [
+        ...rustTypeNames(type.principal.trait),
+        ...type.autoTraits.flatMap((trait) => rustTypeNames(trait.trait)),
+      ];
+    case "impl-trait":
+      return type.bounds.flatMap(rustTypeBoundNames);
     case "reference":
       return rustTypeNames(type.referent);
     case "raw-pointer":
@@ -601,11 +617,60 @@ function rustTypeNames(type: RustType): readonly string[] {
       return type.elements.flatMap(rustTypeNames);
     case "primitive":
     case "string":
-    case "str-ref":
+    case "str":
     case "unit":
     case "never":
       return [];
   }
+}
+
+function rustTypeBoundNames(bound: RustTypeBound): readonly string[] {
+  switch (bound.kind) {
+    case "trait":
+      return [bound.path];
+    case "trait-type":
+      return rustTypeNames(bound.reference.trait);
+    case "callable":
+      return [
+        ...bound.parameters.flatMap(rustTypeNames),
+        ...rustTypeNames(bound.result),
+      ];
+    case "lifetime":
+    case "maybe-sized":
+      return [];
+  }
+}
+
+function rustGenericArgumentTypeNames(
+  arguments_: readonly RustGenericArgument[] | undefined,
+): readonly string[] {
+  return (arguments_ ?? []).flatMap((argument) => {
+    switch (argument.kind) {
+      case "type":
+        return rustTypeNames(argument.type);
+      case "associated-equality":
+        return [
+          ...rustGenericArgumentTypeNames(argument.genericArguments),
+          ...rustTypeNames(argument.type),
+        ];
+      case "associated-bounds":
+        return [
+          ...rustGenericArgumentTypeNames(argument.genericArguments),
+          ...argument.bounds.flatMap((bound) =>
+            bound.kind === "trait-type"
+              ? rustTypeNames(bound.reference.trait)
+              : bound.kind === "callable"
+                ? [
+                    ...bound.parameters.flatMap(rustTypeNames),
+                    ...rustTypeNames(bound.result),
+                  ]
+                : []),
+        ];
+      case "lifetime":
+      case "const":
+        return [];
+    }
+  });
 }
 
 function appendRustAttribute(

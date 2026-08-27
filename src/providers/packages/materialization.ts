@@ -5,14 +5,22 @@ import {
   rustNamedTargetType,
   rustNamedTypeCarrierValue,
 } from "../../target-model/types/index.js";
-import type { RustNamedTypeTraitContract } from "../../target-model/types/model.js";
+import type {
+  RustNamedTypeTraitContract,
+  RustTargetGenericArgument,
+  RustTargetTraitRef,
+} from "../../target-model/types/model.js";
 import type {
   RustProviderBinaryEpilogueDefinition,
   RustProviderBinaryEpilogueRow,
   RustProviderOperationDefinition,
   RustProviderOperationRow,
 } from "./model.js";
-import type { RustProviderOperationForm, RustValueConversion } from "../../target-model/operations/model.js";
+import type {
+  RustProviderGenericParameter,
+  RustProviderOperationForm,
+  RustValueConversion,
+} from "../../target-model/operations/model.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export function canonicalizeProviderOperationRow(
@@ -53,6 +61,21 @@ export function materializeProviderOperationRow(
     ...(row.parameterCarriers === undefined
       ? {}
       : { parameterCarriers: row.parameterCarriers.map((carrier) => materializeProviderCarrier(carrier, carrierPaths, carrierTraits)) }),
+    ...(row.genericParameters === undefined
+      ? {}
+      : {
+          genericParameters: row.genericParameters.map((parameter) =>
+            materializeProviderGenericParameter(parameter, carrierPaths, carrierTraits)),
+        }),
+    ...(row.targetGenericArguments === undefined
+      ? {}
+      : {
+          targetGenericArguments: materializeProviderGenericArguments(
+            row.targetGenericArguments,
+            carrierPaths,
+            carrierTraits,
+          ),
+        }),
     ...(row.resultConversion === undefined
       ? {}
       : {
@@ -204,8 +227,17 @@ function materializeProviderOperationForm(
       ...form,
       owner: materializeProviderCarrier(form.owner, carrierPaths, carrierTraits),
       traitPath: expandProviderPath(form.traitPath, aliases),
-      traitTypeArguments: form.traitTypeArguments.map((argument) =>
-        materializeProviderCarrier(argument, carrierPaths, carrierTraits)),
+      traitGenericArguments: materializeProviderGenericArguments(
+        form.traitGenericArguments,
+        carrierPaths,
+        carrierTraits,
+      ),
+    };
+  }
+  if (form.form === "associated-value") {
+    return {
+      ...form,
+      owner: materializeProviderCarrier(form.owner, carrierPaths, carrierTraits),
     };
   }
   if (form.form === "index" && form.indexConversion !== undefined) {
@@ -234,25 +266,42 @@ export function materializeProviderCarrier(
 ): TargetTypeRef {
   const named = rustNamedTypeCarrierValue(carrier);
   if (named !== undefined) {
-    const typeArguments = named.typeArguments.map((argument) =>
-      materializeProviderCarrier(argument, carrierPaths, carrierTraits));
+    const genericArguments = materializeProviderGenericArguments(
+      named.genericArguments,
+      carrierPaths,
+      carrierTraits,
+    );
     const path = carrierPaths[named.id];
     const traits = carrierTraits[named.id];
     return rustNamedTargetType(
       named.id,
       path ?? named.path,
-      typeArguments,
+      genericArguments,
+      materializeProviderGenericArguments(
+        named.genericDefaults,
+        carrierPaths,
+        carrierTraits,
+      ),
       traits ?? named.traits,
     );
   }
   if (carrier.kind === "target-named") {
-    const typeArguments = (carrier.typeArguments ?? []).map((argument) =>
-      materializeProviderCarrier(argument, carrierPaths, carrierTraits));
+    const genericArguments = materializeProviderGenericArguments(
+      carrier.genericArguments ?? [],
+      carrierPaths,
+      carrierTraits,
+    );
     const path = carrierPaths[carrier.id];
     const traits = carrierTraits[carrier.id];
     return path === undefined
-      ? { ...carrier, ...(typeArguments.length === 0 ? {} : { typeArguments }) }
-      : rustNamedTargetType(carrier.id, path, typeArguments, traits ?? rustMoveOnlyNamedTypeTraits);
+      ? { ...carrier, ...(genericArguments.length === 0 ? {} : { genericArguments }) }
+      : rustNamedTargetType(
+          carrier.id,
+          path,
+          genericArguments,
+          [],
+          traits ?? rustMoveOnlyNamedTypeTraits,
+        );
   }
   if (carrier.kind === "array") {
     return { ...carrier, element: materializeProviderCarrier(carrier.element, carrierPaths, carrierTraits) };
@@ -276,10 +325,131 @@ export function materializeProviderCarrier(
       result: materializeProviderCarrier(carrier.result, carrierPaths, carrierTraits),
     };
   }
+  if (carrier.kind === "closure") {
+    return {
+      ...carrier,
+      args: carrier.args.map((argument) =>
+        materializeProviderCarrier(argument, carrierPaths, carrierTraits)),
+      result: materializeProviderCarrier(carrier.result, carrierPaths, carrierTraits),
+    };
+  }
+  if (carrier.kind === "trait-ref") {
+    return {
+      ...carrier,
+      path: carrierPaths[carrier.id] ?? carrier.path,
+      genericArguments: materializeProviderGenericArguments(
+        carrier.genericArguments,
+        carrierPaths,
+        carrierTraits,
+      ),
+      associatedConstraints: carrier.associatedConstraints.map((constraint) =>
+        constraint.kind === "equality"
+          ? {
+              ...constraint,
+              genericArguments: materializeProviderGenericArguments(
+                constraint.genericArguments,
+                carrierPaths,
+                carrierTraits,
+              ),
+              type: materializeProviderCarrier(
+                constraint.type,
+                carrierPaths,
+                carrierTraits,
+              ),
+            }
+          : {
+              ...constraint,
+              genericArguments: materializeProviderGenericArguments(
+                constraint.genericArguments,
+                carrierPaths,
+                carrierTraits,
+              ),
+              traits: constraint.traits.map((trait) =>
+                materializeProviderTraitRef(trait, carrierPaths, carrierTraits)),
+            }),
+    };
+  }
+  if (carrier.kind === "trait-object") {
+    return {
+      ...carrier,
+      principal: materializeProviderTraitRef(carrier.principal, carrierPaths, carrierTraits),
+      autoTraits: carrier.autoTraits.map((trait) =>
+        materializeProviderTraitRef(trait, carrierPaths, carrierTraits)),
+    };
+  }
+  if (carrier.kind === "impl-trait") {
+    return {
+      ...carrier,
+      bounds: carrier.bounds.map((bound) =>
+        materializeProviderTraitRef(bound, carrierPaths, carrierTraits)),
+    };
+  }
+  if (carrier.kind === "associated-type") {
+    return {
+      ...carrier,
+      owner: materializeProviderCarrier(carrier.owner, carrierPaths, carrierTraits),
+      ...(carrier.trait === undefined
+        ? {}
+        : { trait: materializeProviderTraitRef(carrier.trait, carrierPaths, carrierTraits) }),
+      ...(carrier.genericArguments === undefined
+        ? {}
+        : {
+            genericArguments: materializeProviderGenericArguments(
+              carrier.genericArguments,
+              carrierPaths,
+              carrierTraits,
+            ),
+          }),
+    };
+  }
   const fixedArray = rustFixedArrayCarrierValue(carrier);
   return fixedArray === undefined
     ? carrier
     : rustFixedArrayTargetType(materializeProviderCarrier(fixedArray.element, carrierPaths, carrierTraits), fixedArray.length);
+}
+
+function materializeProviderTraitRef(
+  trait: RustTargetTraitRef,
+  carrierPaths: Readonly<Record<string, string>>,
+  carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>>,
+): RustTargetTraitRef {
+  const materialized = materializeProviderCarrier(trait, carrierPaths, carrierTraits);
+  if (materialized.kind !== "trait-ref") {
+    throw new Error("Rust provider trait materialization changed the exact target trait carrier kind.");
+  }
+  return materialized;
+}
+
+function materializeProviderGenericArguments(
+  arguments_: readonly RustTargetGenericArgument[],
+  carrierPaths: Readonly<Record<string, string>>,
+  carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>>,
+): readonly RustTargetGenericArgument[] {
+  return Object.freeze(arguments_.map((argument): RustTargetGenericArgument =>
+    argument.kind === "type"
+      ? {
+          kind: "type",
+          type: materializeProviderCarrier(argument.type, carrierPaths, carrierTraits),
+        }
+      : argument));
+}
+
+export function materializeProviderGenericParameter(
+  parameter: RustProviderGenericParameter,
+  carrierPaths: Readonly<Record<string, string>>,
+  carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>>,
+): RustProviderGenericParameter {
+  if (parameter.kind === "lifetime" || parameter.defaultArgument === undefined) {
+    return parameter;
+  }
+  return Object.freeze({
+    ...parameter,
+    defaultArgument: materializeProviderGenericArguments(
+      [parameter.defaultArgument],
+      carrierPaths,
+      carrierTraits,
+    )[0]!,
+  });
 }
 
 function materializeProviderValueConversion(

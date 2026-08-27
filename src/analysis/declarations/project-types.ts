@@ -76,6 +76,13 @@ export function recordClassSignatureFacts(walk: RustFactWalk, declaration: Node)
     }
     if (memberKind === "KindConstructor" || memberKind === "KindMethodDeclaration" ||
       memberKind === "KindGetAccessor" || memberKind === "KindSetAccessor") {
+      const parameters = requireDenseSourceNodes(walk, ast.parameters(member), "Class callable contains an undefined or non-data parameter slot.");
+      if (parameters === undefined) {
+        return;
+      }
+      for (const parameter of parameters) {
+        recordParameterAbiFacts(walk, parameter);
+      }
       if (memberKind !== "KindConstructor") {
         recordCallableSuspensionFacts(walk, member);
         recordCallableReturnFact(walk, member);
@@ -85,13 +92,6 @@ export function recordClassSignatureFacts(walk: RustFactWalk, declaration: Node)
             returnCarrier: rustUnitTargetType(),
           }, [{ message: "rust setter unit return carrier" }]);
         }
-      }
-      const parameters = requireDenseSourceNodes(walk, ast.parameters(member), "Class callable contains an undefined or non-data parameter slot.");
-      if (parameters === undefined) {
-        return;
-      }
-      for (const parameter of parameters) {
-        recordParameterAbiFacts(walk, parameter);
       }
     }
   }

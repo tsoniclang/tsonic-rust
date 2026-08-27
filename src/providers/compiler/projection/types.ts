@@ -1,49 +1,89 @@
 import {
   rustFixedArrayTargetType,
+  rustNamedTargetType,
   rustNeverTargetType,
   rustOptionTargetId,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
   rustUnitTargetType,
 } from "../../../target-model/types/index.js";
-import { canonicalCompilerTypePathKey, importedSourceType, isRustOptionPath, isRustStringPath, requireCurrentType, rustCompilerTypeText, standardSourceTypeArguments, standardTargetTypeArguments } from "./utilities.js";
-import { compilerModuleSpecifier, compilerTargetTypeId, providerFunctionPointerAbi, recordCarrierPath, rustPath } from "./operations.js";
-import { rustConstPointerExport, rustMutPointerExport } from "../../../source/extension/source-extension.js";
+import {
+  canonicalCompilerTypePathKey,
+  importedSourceType,
+  isRustOptionPath,
+  isRustStringPath,
+  requireCurrentType,
+  requireSourceGenericName,
+  rustCompilerTypeText,
+  standardSourceGenericArguments,
+  standardTargetGenericArguments,
+  standardTargetGenericDefaults,
+  withProjectionGenericParameters,
+} from "./utilities.js";
+import {
+  compilerAssociatedSourceExportName,
+} from "../model/rustdoc-items.js";
+import {
+  compilerModuleSpecifier,
+  compilerTargetTypeId,
+  providerFunctionPointerAbi,
+  recordCarrierPath,
+  rustPath,
+} from "./operations.js";
+import {
+  rustConstPointerExport,
+  rustMutPointerExport,
+} from "../../../source/extension/source-extension.js";
 import { rustTypesModule } from "../../../source/profiles/source-modules.js";
+import { rustSourceTypeExportIds } from "../../../source/semantics/identity.js";
 import { sourcePrimitiveByRustName } from "./model.js";
 import type { ProjectionContext } from "./model.js";
-import type { ProviderTypeExpression } from "@tsonic/tsts";
-import type { RustCompilerType } from "../model/model.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type {
+  ProviderTypeExpression,
+  ProviderTypeParameterDeclaration,
+} from "@tsonic/tsts";
+import type {
+  RustCompilerAssociatedConstraint,
+  RustCompilerGenericArgument,
+  RustCompilerGenericParameter,
+  RustCompilerTraitDispatch,
+  RustCompilerType,
+} from "../model/model.js";
+import type {
+  RustTargetAssociatedConstraint,
+  RustTargetGenericArgument,
+  RustTargetTraitRef,
+  TargetTypeRef,
+} from "../../../target-model/types/model.js";
+import type {
+  RustProviderGenericParameter,
+} from "../../../target-model/operations/model.js";
+import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
+import {
+  compilerModuleSpecifierForIdentity,
+  requireSourceLifetimeFor,
+  requireTargetLifetimes,
+  sourceConstFor,
+  sourceGenericParameterName,
+  sourceLifetimeFor,
+  targetConstFor,
+  targetLifetimeBinderFor,
+  targetLifetimeFor,
+  targetPathForIdentity,
+  withCompilerLifetimeBinder,
+} from "./type-arguments.js";
 
 export function sourceTypeFor(
   type: RustCompilerType,
   context: ProjectionContext,
   position: "parameter" | "result",
-  nested = false,
 ): ProviderTypeExpression {
-  if (type.kind === "generic") {
-    const bound = context.defaultTypeBindings?.get(type.name);
-    if (bound !== undefined) {
-      return sourceTypeFor(bound, context, position, nested);
-    }
-  }
-  if (type.kind === "reference") {
-    if (position === "result") {
-      throw new Error("Borrowed Rust results require an explicit lifetime-bearing source contract.");
-    }
-    return sourceTypeFor(type.target, context, position, nested);
-  }
   switch (type.kind) {
     case "unit":
       return { kind: "void" };
     case "primitive": {
-      if (type.name === "str") {
-        return { kind: "string" };
-      }
-      if (type.name === "never") {
-        return { kind: "never" };
-      }
+      if (type.name === "str") return { kind: "string" };
+      if (type.name === "never") return { kind: "never" };
       const primitive = sourcePrimitiveByRustName.get(type.name);
       if (primitive === undefined) {
         throw new Error(`Rust primitive '${type.name}' has no source primitive contract.`);
@@ -51,73 +91,167 @@ export function sourceTypeFor(
       return { kind: "source-primitive", name: primitive };
     }
     case "generic":
-      return { kind: "type-parameter", name: type.name };
+      return {
+        kind: "type-parameter",
+        name: requireSourceGenericName(type.identity.itemId, context),
+      };
     case "self":
       return requireCurrentType(context).sourceType;
     case "tuple":
-      return { kind: "tuple", elementTypes: type.elements.map((element) => sourceTypeFor(element, context, position, true)) };
+      return {
+        kind: "tuple",
+        elementTypes: type.elements.map((element) =>
+          sourceTypeFor(element, context, position)),
+      };
     case "array":
-      return { kind: "array", elementType: sourceTypeFor(type.element, context, position, true) };
     case "slice":
-      if (position === "result" && !nested) {
-        throw new Error("Borrowed Rust slice results require an explicit lifetime-bearing source contract.");
-      }
-      return { kind: "array", elementType: sourceTypeFor(type.element, context, position, true) };
+      return {
+        kind: "array",
+        elementType: sourceTypeFor(type.element, context, position),
+      };
+    case "reference": {
+      const lifetime = sourceLifetimeFor(type.lifetime, context);
+      return importedSourceType(
+        context,
+        rustTypesModule,
+        type.mutable
+          ? rustSourceTypeExportIds.mutableReference
+          : rustSourceTypeExportIds.sharedReference,
+        [
+          sourceTypeFor(type.target, context, position),
+          ...(lifetime === undefined ? [] : [lifetime]),
+        ],
+      );
+    }
     case "raw-pointer":
       return importedSourceType(
         context,
         rustTypesModule,
         type.mutable ? rustMutPointerExport : rustConstPointerExport,
-        [sourceTypeFor(type.target, context, position, true)],
+        [sourceTypeFor(type.target, context, position)],
       );
-    case "function-pointer":
-      return importedSourceType(context, "@tsonic/core/types.js", "FunctionPointer", [{
-          kind: "tuple",
-          elementTypes: type.parameters.map((parameter) =>
-            sourceTypeFor(parameter, context, position, true)),
-        }, sourceTypeFor(type.result, context, position, true)]);
-    case "associated-type":
-      throw new Error("Unresolved Rust associated type reached source provider projection.");
-    case "path": {
-      if (isRustStringPath(type)) {
-        return { kind: "string" };
+    case "function-pointer": {
+      const binderContext = withCompilerLifetimeBinder(context, type.lifetimeBinder);
+      return importedSourceType(
+        binderContext,
+        "@tsonic/core/types.js",
+        "FunctionPointer",
+        [
+          {
+            kind: "tuple",
+            elementTypes: type.parameters.map((parameter) =>
+              sourceTypeFor(parameter, binderContext, position)),
+          },
+          sourceTypeFor(type.result, binderContext, position),
+        ],
+      );
+    }
+    case "trait-object": {
+      const traits = [type.principal, ...type.autoTraits].map((trait) =>
+        sourceTraitFor(trait, context, position));
+      const lifetime = sourceLifetimeFor(type.lifetime, context);
+      return importedSourceType(
+        context,
+        rustTypesModule,
+        rustSourceTypeExportIds.dynamicTrait,
+        [
+          traits.length === 1
+            ? traits[0]!
+            : { kind: "intersection", types: traits },
+          ...(lifetime === undefined ? [] : [lifetime]),
+        ],
+      );
+    }
+    case "opaque": {
+      const bounds = type.bounds.map((bound) =>
+        sourceTraitFor(bound, context, position));
+      if (bounds.length === 0) {
+        throw new Error("Rust opaque type has no exact principal source bound.");
       }
+      const captures = type.captures.map((capture) => {
+        if (capture.kind !== "lifetime") {
+          throw new Error(
+            "Rust opaque type captures outside the approved lifetime-only contract.",
+          );
+        }
+        const selected = sourceLifetimeFor(capture.lifetime, context);
+        if (selected === undefined) {
+          throw new Error("Rust opaque type cannot precisely capture an elided lifetime.");
+        }
+        return selected;
+      });
+      return importedSourceType(
+        context,
+        rustTypesModule,
+        rustSourceTypeExportIds.opaqueType,
+        [
+          bounds.length === 1
+            ? bounds[0]!
+            : { kind: "intersection", types: bounds },
+          importedSourceType(
+            context,
+            rustTypesModule,
+            rustSourceTypeExportIds.captureSet,
+            [{ kind: "tuple", elementTypes: captures }],
+          ),
+        ],
+      );
+    }
+    case "associated-type":
+      return sourceAssociatedTypeFor(type, context, position);
+    case "path": {
+      if (isRustStringPath(type)) return { kind: "string" };
       if (isRustOptionPath(type)) {
-        const arguments_ = type.typeArguments.map((argument) =>
-          sourceTypeFor(argument, context, position, true));
-        if (arguments_.length !== 1) {
+        const argument = type.genericArguments[0];
+        if (argument?.kind !== "type") {
           throw new Error("Rust Option must carry exactly one source type argument.");
         }
-        return { kind: "union", types: [arguments_[0]!, { kind: "undefined" }] };
+        return {
+          kind: "union",
+          types: [
+            sourceTypeFor(argument.type, context, position),
+            { kind: "undefined" },
+          ],
+        };
       }
-      const standard = context.standardTypes.get(canonicalCompilerTypePathKey(type));
+      const standard = context.standardTypes.get(
+        canonicalCompilerTypePathKey(type),
+      );
       if (standard !== undefined) {
-        const typeArguments = standardSourceTypeArguments(type, standard, context, position);
-        const localName = context.localStandardTypeNames.get(canonicalCompilerTypePathKey(type));
+        const arguments_ = standardSourceGenericArguments(
+          type,
+          standard,
+          context,
+          position,
+        );
+        const localName = context.localStandardTypeNames.get(
+          canonicalCompilerTypePathKey(type),
+        );
         return importedSourceType(
           context,
-          localName === undefined ? standard.sourceModuleSpecifier : context.owner.moduleSpecifier,
+          localName === undefined
+            ? standard.sourceModuleSpecifier
+            : context.owner.moduleSpecifier,
           localName ?? standard.sourceExportName,
-          typeArguments,
+          arguments_,
         );
       }
       if (type.crateName !== context.dependency.crateName) {
-        throw new Error(`External Rust type '${rustCompilerTypeText(type)}' has no imported provider contract.`);
+        throw new Error(
+          `External Rust type '${rustCompilerTypeText(type)}' has no imported provider contract.`,
+        );
       }
-      const moduleSpecifier = compilerModuleSpecifier(context.dependency.alias, type.modulePath);
-      if (moduleSpecifier !== context.owner.moduleSpecifier) {
-        const names = context.imports.get(moduleSpecifier) ?? new Set<string>();
-        names.add(type.name);
-        context.imports.set(moduleSpecifier, names);
-      }
-      return {
-        kind: "provider-ref",
+      const moduleSpecifier = compilerModuleSpecifier(
+        context.dependency.alias,
+        type.modulePath,
+      );
+      return importedSourceType(
+        context,
         moduleSpecifier,
-        exportName: type.name,
-        ...(type.typeArguments.length === 0
-          ? {}
-          : { typeArguments: type.typeArguments.map((argument) => sourceTypeFor(argument, context, position, true)) }),
-      };
+        type.name,
+        type.genericArguments.map((argument) =>
+          sourceGenericArgumentFor(argument, context, position)),
+      );
     }
   }
 }
@@ -127,23 +261,14 @@ export function targetTypeFor(
   context: ProjectionContext,
   position: "parameter" | "result",
   nested = false,
+  pathResolution: "source-visible" | "target-default" = "source-visible",
 ): TargetTypeRef {
-  if (type.kind === "generic") {
-    const bound = context.defaultTypeBindings?.get(type.name);
-    if (bound !== undefined) {
-      return targetTypeFor(bound, context, position, nested);
-    }
-  }
   switch (type.kind) {
     case "unit":
       return rustUnitTargetType();
     case "primitive": {
-      if (type.name === "str") {
-        return rustStringTargetType();
-      }
-      if (type.name === "never") {
-        return rustNeverTargetType();
-      }
+      if (type.name === "str") return rustStringTargetType();
+      if (type.name === "never") return rustNeverTargetType();
       const primitive = sourcePrimitiveByRustName.get(type.name);
       if (primitive === undefined) {
         throw new Error(`Rust primitive '${type.name}' has no target carrier contract.`);
@@ -151,83 +276,387 @@ export function targetTypeFor(
       return rustSourcePrimitiveTargetType(primitive);
     }
     case "generic":
-      return { kind: "type-parameter", name: type.name };
+      return {
+        kind: "type-parameter",
+        name: requireSourceGenericName(type.identity.itemId, context),
+      };
     case "self":
       return requireCurrentType(context).carrier;
     case "tuple":
-      return { kind: "tuple", elements: type.elements.map((element) => targetTypeFor(element, context, position, true)) };
+      return {
+        kind: "tuple",
+        elements: type.elements.map((element) =>
+          targetTypeFor(element, context, position, true, pathResolution)),
+      };
     case "array":
-      return rustFixedArrayTargetType(targetTypeFor(type.element, context, position, true), type.length);
+      return rustFixedArrayTargetType(
+        targetTypeFor(type.element, context, position, true, pathResolution),
+        targetConstFor(type.length, context),
+      );
     case "slice":
-      if (position === "result" && !nested) {
-        throw new Error("Borrowed Rust slice results require an explicit lifetime-bearing target carrier.");
-      }
       return nested
-        ? { kind: "slice", element: targetTypeFor(type.element, context, position, true) }
-        : { kind: "array", element: targetTypeFor(type.element, context, position, true) };
-    case "reference":
+        ? {
+            kind: "slice",
+            element: targetTypeFor(type.element, context, position, true, pathResolution),
+          }
+        : {
+            kind: "array",
+            element: targetTypeFor(type.element, context, position, true, pathResolution),
+          };
+    case "reference": {
+      const lifetime = targetLifetimeFor(type.lifetime, context);
       return {
         kind: "reference",
-        referent: targetTypeFor(type.target, context, "parameter", true),
+        referent: targetTypeFor(type.target, context, position, true, pathResolution),
         mutable: type.mutable,
-        ...(type.lifetime === undefined ? {} : { lifetime: type.lifetime }),
+        ...(lifetime === undefined ? {} : { lifetime }),
       };
+    }
     case "raw-pointer":
       return {
         kind: "pointer",
-        pointee: targetTypeFor(type.target, context, position, true),
+        pointee: targetTypeFor(type.target, context, position, true, pathResolution),
         mutability: type.mutable ? "mut" : "const",
       };
-    case "function-pointer":
+    case "function-pointer": {
+      const binderContext = withCompilerLifetimeBinder(context, type.lifetimeBinder);
       return {
         kind: "function-pointer",
         args: type.parameters.map((parameter) =>
-          targetTypeFor(parameter, context, position, true)),
-        result: targetTypeFor(type.result, context, position, true),
+          targetTypeFor(parameter, binderContext, position, true, pathResolution)),
+        result: targetTypeFor(type.result, binderContext, position, true, pathResolution),
+        ...(type.lifetimeBinder === undefined
+          ? {}
+          : { lifetimeBinder: targetLifetimeBinderFor(type.lifetimeBinder, binderContext) }),
         abi: [providerFunctionPointerAbi(type.abi)],
         ...(type.unsafe ? { isUnsafe: true } : {}),
       };
-    case "associated-type":
-      throw new Error("Unresolved Rust associated type reached target provider projection.");
-    case "path": {
-      if (isRustStringPath(type)) {
-        return rustStringTargetType();
-      }
-      if (isRustOptionPath(type)) {
-        const arguments_ = type.typeArguments.map((argument) =>
-          targetTypeFor(argument, context, position, true));
-        if (arguments_.length !== 1) {
-          throw new Error("Rust Option must carry exactly one target type argument.");
-        }
-        return { kind: "target-named", id: rustOptionTargetId, typeArguments: arguments_ };
-      }
-      const standard = context.standardTypes.get(canonicalCompilerTypePathKey(type));
-      if (standard !== undefined) {
-        const arguments_ = standardTargetTypeArguments(type, standard, context, position);
-        const path = standard.targetPath.join("::");
-        recordCarrierPath(context.carrierPaths, standard.targetId, path);
-        return {
-          kind: "target-named",
-          id: standard.targetId,
-          ...(arguments_.length === 0 ? {} : { typeArguments: arguments_ }),
-        };
-      }
-      if (type.crateName !== context.dependency.crateName) {
-        throw new Error(`External Rust type '${rustCompilerTypeText(type)}' has no target carrier contract.`);
-      }
-      const canonicalPath = [type.crateName, ...type.modulePath, type.name];
-      const id = compilerTargetTypeId(context.dependency, canonicalPath);
-      const path = rustPath(context.dependency.targetCrateName, type.modulePath, type.name);
-      recordCarrierPath(context.carrierPaths, id, path);
-      const typeArguments = type.typeArguments.map((argument) =>
-        targetTypeFor(argument, context, position, true));
+    }
+    case "trait-object": {
+      const lifetime = targetLifetimeFor(type.lifetime, context);
       return {
-        kind: "target-named",
-        id,
-        ...(typeArguments.length === 0 ? {} : { typeArguments }),
+        kind: "trait-object",
+        principal: targetTraitFor(type.principal, context, position, pathResolution),
+        autoTraits: type.autoTraits.map((trait) =>
+          targetTraitFor(trait, context, position, pathResolution)),
+        ...(lifetime === undefined ? {} : { lifetime }),
       };
     }
+    case "opaque": {
+      const outlives = requireTargetLifetimes(type.outlives, context, "opaque outlives");
+      const captures = type.captures.map((capture) => {
+        if (capture.kind !== "lifetime") {
+          throw new Error(
+            "Rust opaque type captures outside the approved lifetime-only contract.",
+          );
+        }
+        const selected = targetLifetimeFor(capture.lifetime, context);
+        if (selected === undefined) {
+          throw new Error("Rust opaque type cannot precisely capture an elided lifetime.");
+        }
+        return selected;
+      });
+      return {
+        kind: "impl-trait",
+        id: type.identity.itemId,
+        bounds: type.bounds.map((bound) =>
+          targetTraitFor(bound, context, position, pathResolution)),
+        outlives,
+        captures,
+      };
+    }
+    case "associated-type":
+      return {
+        kind: "associated-type",
+        owner: targetTypeFor(type.owner, context, position, true, pathResolution),
+        trait: targetTraitFor(type.trait, context, position, pathResolution),
+        name: type.name,
+        ...(type.genericArguments.length === 0
+          ? {}
+          : {
+              genericArguments: type.genericArguments.map((argument) =>
+                targetGenericArgumentFor(argument, context, position, pathResolution)),
+            }),
+      };
+    case "path": {
+      if (isRustStringPath(type)) return rustStringTargetType();
+      if (isRustOptionPath(type)) {
+        const argument = type.genericArguments[0];
+        if (argument?.kind !== "type") {
+          throw new Error("Rust Option must carry exactly one target type argument.");
+        }
+        return {
+          kind: "target-named",
+          id: rustOptionTargetId,
+          genericArguments: [{
+            kind: "type",
+            type: targetTypeFor(argument.type, context, position, true, pathResolution),
+          }],
+        };
+      }
+      const standard = context.standardTypes.get(
+        canonicalCompilerTypePathKey(type),
+      );
+      if (standard !== undefined) {
+        const arguments_ = standardTargetGenericArguments(
+          type,
+          standard,
+          context,
+          position,
+        );
+        const genericDefaults = standardTargetGenericDefaults(
+          type,
+          standard,
+          context,
+          position,
+        );
+        const path = standard.targetPath.join("::");
+        recordCarrierPath(context.carrierPaths, standard.targetId, path);
+        return rustNamedTargetType(
+          standard.targetId,
+          path,
+          arguments_,
+          genericDefaults,
+        );
+      }
+      if (type.crateName !== context.dependency.crateName && pathResolution === "source-visible") {
+        throw new Error(
+          `External Rust type '${rustCompilerTypeText(type)}' has no target carrier contract.`,
+        );
+      }
+      const id = compilerTargetTypeId(
+        context.dependency,
+        type.identity.canonicalPath,
+      );
+      const path = type.crateName === context.dependency.crateName
+        ? rustPath(context.dependency.targetCrateName, type.modulePath, type.name)
+        : type.identity.canonicalPath.join("::");
+      recordCarrierPath(context.carrierPaths, id, path);
+      const genericArguments = type.genericArguments.map((argument) =>
+        targetGenericArgumentFor(argument, context, position, pathResolution));
+      return rustNamedTargetType(id, path, genericArguments);
+    }
   }
+}
+
+export function sourceGenericArgumentFor(
+  argument: RustCompilerGenericArgument,
+  context: ProjectionContext,
+  position: "parameter" | "result",
+): ProviderTypeExpression {
+  switch (argument.kind) {
+    case "type":
+      return sourceTypeFor(argument.type, context, position);
+    case "lifetime": {
+      const selected = sourceLifetimeFor(argument.lifetime, context);
+      return selected ?? importedSourceType(
+        context,
+        rustTypesModule,
+        rustSourceTypeExportIds.life,
+        [],
+      );
+    }
+    case "const":
+      return sourceConstFor(argument.value, context);
+  }
+}
+
+export function targetGenericArgumentFor(
+  argument: RustCompilerGenericArgument,
+  context: ProjectionContext,
+  position: "parameter" | "result",
+  pathResolution: "source-visible" | "target-default" = "source-visible",
+): RustTargetGenericArgument {
+  switch (argument.kind) {
+    case "type":
+      return {
+        kind: "type",
+        type: targetTypeFor(argument.type, context, position, true, pathResolution),
+      };
+    case "lifetime": {
+      const lifetime = targetLifetimeFor(argument.lifetime, context);
+      if (lifetime === undefined) {
+        throw new Error(
+          "An elided Rust lifetime cannot occupy an explicit generic argument slot.",
+        );
+      }
+      return { kind: "lifetime", lifetime };
+    }
+    case "const":
+      return { kind: "const", value: targetConstFor(argument.value, context) };
+  }
+}
+
+export function providerGenericParametersFor(
+  parameters: readonly RustCompilerGenericParameter[],
+  context: ProjectionContext,
+): readonly ProviderTypeParameterDeclaration[] {
+  const selectedContext = withProjectionGenericParameters(context, parameters);
+  return Object.freeze(parameters.map((parameter): ProviderTypeParameterDeclaration => {
+    const name = sourceGenericParameterName(parameter, selectedContext);
+    if (parameter.kind === "lifetime") {
+      return Object.freeze({
+        name,
+        constraints: Object.freeze([
+          importedSourceType(
+            selectedContext,
+            rustTypesModule,
+            rustSourceTypeExportIds.life,
+            [],
+          ),
+          ...parameter.outlives.map((lifetime) =>
+            importedSourceType(
+              selectedContext,
+              rustTypesModule,
+              rustSourceTypeExportIds.outlives,
+              [requireSourceLifetimeFor(lifetime, selectedContext, "lifetime outlives")],
+            )),
+        ]),
+      });
+    }
+    if (parameter.kind === "const") {
+      return Object.freeze({
+        name,
+        constraints: Object.freeze([
+          sourceTypeFor(parameter.type, selectedContext, "parameter"),
+        ]),
+        ...(parameter.defaultValue === undefined
+          ? {}
+          : { defaultType: sourceConstFor(parameter.defaultValue, selectedContext) }),
+      });
+    }
+    const constraints = [
+      ...parameter.outlives.map((lifetime) =>
+        importedSourceType(
+          selectedContext,
+          rustTypesModule,
+          rustSourceTypeExportIds.validFor,
+          [requireSourceLifetimeFor(lifetime, selectedContext, "type outlives")],
+        )),
+      ...(parameter.maybeSized
+        ? [importedSourceType(
+            selectedContext,
+            rustTypesModule,
+            rustSourceTypeExportIds.maybeSized,
+            [],
+          )]
+        : []),
+    ];
+    return Object.freeze({
+      name,
+      ...(constraints.length === 0 ? {} : { constraints: Object.freeze(constraints) }),
+      ...(parameter.defaultType === undefined
+        ? {}
+        : {
+            defaultType: sourceTypeFor(
+              parameter.defaultType,
+              selectedContext,
+              "parameter",
+            ),
+          }),
+    });
+  }));
+}
+
+export function providerGenericBindingsFor(
+  parameters: readonly RustCompilerGenericParameter[],
+  context: ProjectionContext,
+): readonly RustProviderGenericParameter[] {
+  const selected = withProjectionGenericParameters(context, parameters);
+  return Object.freeze(parameters.map((parameter): RustProviderGenericParameter => {
+    const sourceName = sourceGenericParameterName(parameter, selected);
+    if (parameter.kind === "lifetime") {
+      const lifetime = targetLifetimeFor(parameter.lifetime, selected);
+      if (lifetime === undefined) {
+        throw new Error("A provider lifetime parameter cannot be elided.");
+      }
+      return Object.freeze({
+        kind: "lifetime",
+        sourceName,
+        targetIdentity: rustLifetimeKey(lifetime),
+      });
+    }
+    if (parameter.kind === "const") {
+      return Object.freeze({
+        kind: "const",
+        sourceName,
+        targetIdentity: parameter.identity.itemId,
+        ...(parameter.defaultValue === undefined
+          ? {}
+          : {
+              defaultArgument: Object.freeze({
+                kind: "const" as const,
+                value: targetConstFor(parameter.defaultValue, selected),
+              }),
+            }),
+      });
+    }
+    return Object.freeze({
+      kind: "type",
+      sourceName,
+      ...(parameter.defaultType === undefined
+        ? {}
+        : {
+            defaultArgument: Object.freeze({
+              kind: "type" as const,
+              type: targetTypeFor(parameter.defaultType, selected, "parameter", true),
+            }),
+          }),
+    });
+  }));
+}
+
+export function sourceGenericParameterNames(
+  parameters: readonly RustCompilerGenericParameter[],
+  context: ProjectionContext,
+): readonly string[] {
+  const selected = withProjectionGenericParameters(context, parameters);
+  return Object.freeze(parameters.map((parameter) =>
+    sourceGenericParameterName(parameter, selected)));
+}
+
+export function sourceGenericParameterArguments(
+  parameters: readonly RustCompilerGenericParameter[],
+  context: ProjectionContext,
+): readonly ProviderTypeExpression[] {
+  const selected = withProjectionGenericParameters(context, parameters);
+  return Object.freeze(parameters.map((parameter): ProviderTypeExpression => ({
+    kind: "type-parameter",
+    name: sourceGenericParameterName(parameter, selected),
+  })));
+}
+
+export function targetGenericParameterArguments(
+  parameters: readonly RustCompilerGenericParameter[],
+  context: ProjectionContext,
+): readonly RustTargetGenericArgument[] {
+  const selected = withProjectionGenericParameters(context, parameters);
+  return Object.freeze(parameters.map((parameter): RustTargetGenericArgument => {
+    if (parameter.kind === "lifetime") {
+      const lifetime = targetLifetimeFor(parameter.lifetime, selected);
+      if (lifetime === undefined) {
+        throw new Error("A declared Rust lifetime parameter cannot be elided.");
+      }
+      return { kind: "lifetime", lifetime };
+    }
+    if (parameter.kind === "type") {
+      return {
+        kind: "type",
+        type: {
+          kind: "type-parameter",
+          name: requireSourceGenericName(parameter.identity.itemId, selected),
+        },
+      };
+    }
+    return {
+      kind: "const",
+      value: {
+        kind: "parameter",
+        identity: parameter.identity.itemId,
+        name: requireSourceGenericName(parameter.identity.itemId, selected),
+      },
+    };
+  }));
 }
 
 export function parameterPassing(type: RustCompilerType): {
@@ -241,4 +670,122 @@ export function parameterPassing(type: RustCompilerType): {
   return type.mutable
     ? { type: type.target, sourceMode: "borrow-mut", targetMode: "mut-ref" }
     : { type: type.target, sourceMode: "borrow-shared", targetMode: "ref" };
+}
+
+function sourceAssociatedTypeFor(
+  type: Extract<RustCompilerType, { readonly kind: "associated-type" }>,
+  context: ProjectionContext,
+  position: "parameter" | "result",
+): ProviderTypeExpression {
+  const canonicalPath = type.trait.identity.canonicalPath;
+  const standard = context.standardTypes.get(
+    canonicalPath.join("\0"),
+  );
+  const moduleSpecifier = standard?.sourceModuleSpecifier ??
+    compilerModuleSpecifierForIdentity(canonicalPath, context);
+  return importedSourceType(
+    context,
+    moduleSpecifier,
+    compilerAssociatedSourceExportName(type.identity.itemId, type.name),
+    [
+      ...type.trait.genericArguments.map((argument) =>
+        sourceGenericArgumentFor(argument, context, position)),
+      sourceTypeFor(type.owner, context, position),
+      ...type.genericArguments.map((argument) =>
+        sourceGenericArgumentFor(argument, context, position)),
+    ],
+  );
+}
+
+export function sourceTraitFor(
+  trait: RustCompilerTraitDispatch,
+  context: ProjectionContext,
+  position: "parameter" | "result",
+): ProviderTypeExpression {
+  const binderContext = withCompilerLifetimeBinder(context, trait.lifetimeBinder);
+  const standard = binderContext.standardTypes.get(
+    trait.identity.canonicalPath.join("\0"),
+  );
+  const moduleSpecifier = standard?.sourceModuleSpecifier ??
+    compilerModuleSpecifierForIdentity(trait.identity.canonicalPath, binderContext);
+  const exportName = standard?.sourceExportName ??
+    trait.identity.canonicalPath[trait.identity.canonicalPath.length - 1];
+  if (exportName === undefined) {
+    throw new Error(`Rust trait '${trait.path}' has no source export name.`);
+  }
+  return importedSourceType(
+    binderContext,
+    moduleSpecifier,
+    exportName,
+    trait.genericArguments.map((argument) =>
+      sourceGenericArgumentFor(argument, binderContext, position)),
+  );
+}
+
+export function targetTraitFor(
+  trait: RustCompilerTraitDispatch,
+  context: ProjectionContext,
+  position: "parameter" | "result",
+  pathResolution: "source-visible" | "target-default" = "source-visible",
+): RustTargetTraitRef {
+  const binderContext = withCompilerLifetimeBinder(context, trait.lifetimeBinder);
+  const standard = binderContext.standardTypes.get(
+    trait.identity.canonicalPath.join("\0"),
+  );
+  const id = standard?.targetId ??
+    compilerTargetTypeId(context.dependency, trait.identity.canonicalPath);
+  const path = standard?.targetPath.join("::") ??
+    (pathResolution === "target-default" &&
+        trait.identity.canonicalPath[0] !== context.dependency.crateName
+      ? trait.identity.canonicalPath.join("::")
+      : targetPathForIdentity(trait.identity.canonicalPath, context));
+  recordCarrierPath(context.carrierPaths, id, path);
+  return {
+    kind: "trait-ref",
+    id,
+    path,
+    genericArguments: trait.genericArguments.map((argument) =>
+      targetGenericArgumentFor(argument, binderContext, position, pathResolution)),
+    associatedConstraints: trait.associatedConstraints.map((constraint) =>
+      targetAssociatedConstraintFor(constraint, binderContext, position, pathResolution)),
+    ...(trait.lifetimeBinder === undefined
+      ? {}
+      : {
+          lifetimeBinder: targetLifetimeBinderFor(
+            trait.lifetimeBinder,
+            binderContext,
+          ),
+        }),
+  };
+}
+
+function targetAssociatedConstraintFor(
+  constraint: RustCompilerAssociatedConstraint,
+  context: ProjectionContext,
+  position: "parameter" | "result",
+  pathResolution: "source-visible" | "target-default",
+): RustTargetAssociatedConstraint {
+  const genericArguments = constraint.genericArguments.map((argument) =>
+    targetGenericArgumentFor(argument, context, position, pathResolution));
+  return constraint.kind === "equality"
+    ? {
+        kind: "equality",
+        identity: constraint.identity.itemId,
+        name: constraint.name,
+        genericArguments,
+        type: targetTypeFor(constraint.type, context, position, true, pathResolution),
+      }
+    : {
+        kind: "bounds",
+        identity: constraint.identity.itemId,
+        name: constraint.name,
+        genericArguments,
+        traits: constraint.traits.map((trait) =>
+          targetTraitFor(trait, context, position, pathResolution)),
+        outlives: requireTargetLifetimes(
+          constraint.outlives,
+          context,
+          `associated constraint '${constraint.name}'`,
+        ),
+      };
 }

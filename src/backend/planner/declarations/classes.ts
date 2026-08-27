@@ -29,7 +29,7 @@ import { rustDefaultImplementation } from "./default-implementation.js";
 import { rustFallibleFactKey } from "../../../analysis/facts/keys.js";
 import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
 import { rustProjectObjectLayout } from "../../../analysis/project-types/object-layout.js";
-import { rustProjectStateType, rustProjectStateMarker, rustProjectTypeParameters } from "../objects/polymorphism/names.js";
+import { rustProjectGenerics, rustProjectStateType, rustProjectStateMarker } from "../objects/polymorphism/names.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { structAttributes } from "./types.js";
 import type {
@@ -40,6 +40,7 @@ import type {
   RustStmt,
   RustStructField,
 } from "../../target-ast/nodes.js";
+import { emptyRustGenerics } from "../../target-ast/nodes.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
@@ -131,7 +132,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     ));
     return undefined;
   }
-  const typeParams = rustProjectTypeParameters(definition);
+  const generics = rustProjectGenerics(definition);
   const stateMarker = rustProjectStateMarker(definition, context);
 
   const layout = rustProjectObjectLayout(node, ast);
@@ -338,7 +339,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
       type: {
         kind: "named" as const,
         path: "Option",
-        typeArguments: [property.callableType],
+        genericArguments: [{ kind: "type" as const, type: property.callableType }],
       },
       visibility: storageVisibility,
       ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
@@ -372,7 +373,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
       rustLintAttributes.deadCode,
     ],
     derives: [],
-    ...(typeParams.length === 0 ? {} : { typeParams }),
+    generics,
     fields: valueFields,
   };
   const structFields = representation.kind === "value"
@@ -389,16 +390,16 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     ...(generatedStructAttributes.length === 0 ? {} : { attrs: generatedStructAttributes }),
     visibility: exported || publiclyReachable ? "public" : "crate",
     derives: ["Clone", "Debug", "PartialEq"],
-    ...(typeParams.length === 0 ? {} : { typeParams }),
+    generics,
     fields: structFields,
   };
   const implementation: RustItem = {
     kind: "impl",
-    ...(typeParams.length === 0 ? {} : { typeParams }),
+    generics,
     target: openType,
     functions: implFunctions,
   };
-  const defaultImplementation = rustDefaultImplementation(openType, typeParams, constructorFn);
+  const defaultImplementation = rustDefaultImplementation(openType, generics, constructorFn);
   return [
     ...(representation.kind === "value" ? [] : [stateItem]),
     structItem,
@@ -447,7 +448,7 @@ function planConstructor(
   );
   const parameterPlan = member === undefined
     ? { params: [], prelude: [] } satisfies RustCallableParameterPlan
-    : planRustCallableParameters(member, context, syntheticNames, { requireStatic: false });
+    : planRustCallableParameters(member, context, syntheticNames);
   if (parameterPlan === undefined) {
     return undefined;
   }
@@ -594,6 +595,7 @@ function planConstructor(
   ];
   return {
     name: "new",
+    generics: emptyRustGenerics,
     ...(isUnsafe ? { isUnsafe: true } : {}),
     visibility: member === undefined ||
         (!ast.hasModifierKind(member, "private") && !ast.hasModifierKind(member, "protected"))

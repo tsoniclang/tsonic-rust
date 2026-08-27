@@ -1,12 +1,18 @@
 import { asRecord, requireExactKeys, requireRustIdentifier, requireRustPath, validateCarrier, validateValueConversion } from "./carriers.js";
 import { isRustFallibleErrorBoundary } from "../../../target-model/operations/error-boundary.js";
 import {
-  rustProviderOperationFormAcceptsTargetTypeArguments,
+  rustProviderOperationFormAcceptsTargetGenericArguments,
   rustProviderOperationFormContractViolation,
   rustProviderOperationFormDeclaresWritableInput,
 } from "../../../policy/operations/forms.js";
-import { rustTargetTypeParameterNames, isRustUnitCarrier } from "../../../target-model/types/index.js";
+import { isRustUnitCarrier, rustTargetGenericReferences } from "../../../target-model/types/index.js";
 import { validateOperationForm } from "./forms.js";
+import {
+  genericArgumentCarriers,
+  validateGenericReferences,
+  validateProviderGenericParameters,
+  validateTargetGenericArguments,
+} from "./generics.js";
 import type { ExportRecord, Fail, MemberRecord, SignatureRecord } from "./model.js";
 import type { RustProviderOperationForm } from "../../../target-model/operations/model.js";
 import type { RustProviderPackageDefinition } from "../model.js";
@@ -24,7 +30,7 @@ export function validateOperationRows(
   for (const row of definition.operations) {
     requireExactKeys(asRecord(row), [
       "exportId", "memberId", "signatureId", "operationKind", "target", "resultCarrier",
-      "parameterCarriers", "receiverCarrier", "typeParameters", "typeRequirements", "targetTypeArguments", "resultConversion", "evaluation", "isAsync", "isFallible", "errorBoundary", "errorCarrier", "isUnsafe", "immediateCallback",
+      "parameterCarriers", "receiverCarrier", "genericParameters", "typeRequirements", "targetGenericArguments", "resultConversion", "evaluation", "isAsync", "isFallible", "errorBoundary", "errorCarrier", "isUnsafe", "immediateCallback",
     ], `operation row '${String((row as { readonly memberId?: unknown; readonly exportId?: unknown }).memberId ?? row.exportId)}'`, fail);
     const label = row.memberId ?? row.exportId;
     if (row.operationKind !== "method" && row.operationKind !== "constructor" &&
@@ -120,29 +126,32 @@ export function validateOperationRows(
     if (row.receiverCarrier !== undefined) {
       validateCarrier(row.receiverCarrier, definition, `${label}.receiverCarrier`, fail);
     }
-    const typeParameterNames = new Set<string>();
-    for (const [index, name] of (row.typeParameters ?? []).entries()) {
-      requireRustIdentifier(name, `${label}.typeParameters[${index}]`, fail);
-      if (typeParameterNames.has(name)) {
-        fail(`${label}.typeParameters contains duplicate '${name}'`);
-      }
-      typeParameterNames.add(name);
-    }
+    const declaredGenerics = validateProviderGenericParameters(
+      row.genericParameters,
+      undefined,
+      definition,
+      `${label}.genericParameters`,
+      fail,
+      { alignSourceParameters: false },
+    );
     validateTypeParameterRequirements(
       row.typeRequirements,
-      typeParameterNames,
+      declaredGenerics.typeNames,
       `${label}.typeRequirements`,
       fail,
     );
-    if (row.targetTypeArguments !== undefined && (
-      !Array.isArray(row.targetTypeArguments) || row.targetTypeArguments.length === 0 ||
-      !rustProviderOperationFormAcceptsTargetTypeArguments(row.target)
+    if (row.targetGenericArguments !== undefined && (
+      !Array.isArray(row.targetGenericArguments) || row.targetGenericArguments.length === 0 ||
+      !rustProviderOperationFormAcceptsTargetGenericArguments(row.target)
     )) {
-      fail(`${label}.targetTypeArguments requires a non-empty native call or method type-argument list`);
+      fail(`${label}.targetGenericArguments requires a non-empty native call or method generic-argument list`);
     }
-    for (const [index, carrier] of (row.targetTypeArguments ?? []).entries()) {
-      validateCarrier(carrier, definition, `${label}.targetTypeArguments[${index}]`, fail);
-    }
+    validateTargetGenericArguments(
+      row.targetGenericArguments ?? [],
+      definition,
+      `${label}.targetGenericArguments`,
+      fail,
+    );
     for (const [index, carrier] of (row.parameterCarriers ?? []).entries()) {
       validateCarrier(
         carrier,
@@ -152,25 +161,41 @@ export function validateOperationRows(
         { allowImmediateClosure: row.immediateCallback?.sourceArgumentIndex === index },
       );
     }
-    const referencedTypeParameters = new Set([
-      ...rustTargetTypeParameterNames(row.resultCarrier),
-      ...(row.receiverCarrier === undefined ? [] : rustTargetTypeParameterNames(row.receiverCarrier)),
-      ...(row.parameterCarriers ?? []).flatMap((carrier) => rustTargetTypeParameterNames(carrier)),
-      ...(row.targetTypeArguments ?? []).flatMap((carrier) => rustTargetTypeParameterNames(carrier)),
-      ...operationFormCarriers(row.target).flatMap((carrier) => rustTargetTypeParameterNames(carrier)),
+    const genericCarriers = [
+      row.resultCarrier,
+      ...(row.receiverCarrier === undefined ? [] : [row.receiverCarrier]),
+      ...(row.parameterCarriers ?? []),
+      ...genericArgumentCarriers(row.targetGenericArguments),
+      ...operationFormCarriers(row.target),
       ...(row.immediateCallback === undefined
         ? []
-        : operationFormCarriers(row.immediateCallback.fallibleTarget)
-            .flatMap((carrier) => rustTargetTypeParameterNames(carrier))),
-    ]);
-    for (const name of referencedTypeParameters) {
-      if (!typeParameterNames.has(name)) {
-        fail(`${label} carrier references undeclared operation type parameter '${name}'`);
+        : operationFormCarriers(row.immediateCallback.fallibleTarget)),
+      ...(row.genericParameters ?? []).flatMap((parameter) =>
+        parameter.kind === "lifetime" || parameter.defaultArgument === undefined
+          ? []
+          : genericArgumentCarriers([parameter.defaultArgument])),
+      ...valueConversionCarriers(row.resultConversion),
+    ];
+    validateGenericReferences(
+      genericCarriers,
+      declaredGenerics,
+      `${label} operation contract`,
+      fail,
+    );
+    const referenced = combineGenericReferences(genericCarriers);
+    for (const name of declaredGenerics.typeNames) {
+      if (!referenced.typeNames.has(name)) {
+        fail(`${label}.genericParameters declares unused type parameter '${name}'`);
       }
     }
-    for (const name of typeParameterNames) {
-      if (!referencedTypeParameters.has(name)) {
-        fail(`${label}.typeParameters declares unused operation type parameter '${name}'`);
+    for (const identity of declaredGenerics.lifetimeIdentities) {
+      if (!referenced.lifetimeIdentities.has(identity)) {
+        fail(`${label}.genericParameters declares unused lifetime parameter '${identity}'`);
+      }
+    }
+    for (const identity of declaredGenerics.constIdentities) {
+      if (!referenced.constIdentities.has(identity)) {
+        fail(`${label}.genericParameters declares unused const parameter '${identity}'`);
       }
     }
     if (row.resultConversion !== undefined) {
@@ -291,9 +316,44 @@ function operationFormCarriers(form: RustProviderOperationForm): readonly Target
     ];
   }
   if (form.form === "trait-call" || form.form === "trait-associated-value") {
-    return [form.owner, ...form.traitTypeArguments];
+    return [form.owner, ...genericArgumentCarriers(form.traitGenericArguments)];
+  }
+  if (form.form === "associated-value") {
+    return [form.owner];
   }
   return [];
+}
+
+function valueConversionCarriers(
+  conversion: import("../../../target-model/operations/model.js").RustValueConversion | undefined,
+): readonly TargetTypeRef[] {
+  if (conversion === undefined || conversion.kind === "semantic-conversion" ||
+    conversion.kind === "numeric-promotion") return [];
+  if (conversion.kind === "raw-pointer-mut-to-const") return [conversion.pointee];
+  if (conversion.kind === "copy-from-reference") return [conversion.target];
+  if (conversion.kind === "source-union-variant" || conversion.kind === "bottom-coercion" ||
+    conversion.kind === "js-argument-vector-callback") {
+    return [conversion.source, conversion.target];
+  }
+  if (conversion.kind === "option-some") return [conversion.element];
+  return valueConversionCarriers(conversion.elementConversion);
+}
+
+function combineGenericReferences(carriers: readonly TargetTypeRef[]): {
+  readonly typeNames: ReadonlySet<string>;
+  readonly lifetimeIdentities: ReadonlySet<string>;
+  readonly constIdentities: ReadonlySet<string>;
+} {
+  const typeNames = new Set<string>();
+  const lifetimeIdentities = new Set<string>();
+  const constIdentities = new Set<string>();
+  for (const carrier of carriers) {
+    const references = rustTargetGenericReferences(carrier);
+    references.typeNames.forEach((name) => typeNames.add(name));
+    references.lifetimeIdentities.forEach((identity) => lifetimeIdentities.add(identity));
+    references.constIdentities.forEach((identity) => constIdentities.add(identity));
+  }
+  return { typeNames, lifetimeIdentities, constIdentities };
 }
 
 function validateOperationParameters(

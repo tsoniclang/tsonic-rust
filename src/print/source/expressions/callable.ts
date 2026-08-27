@@ -1,39 +1,39 @@
-import { printRustType } from "../types.js";
-import type { RustExpr, RustType } from "../../../backend/target-ast/nodes.js";
+import { printRustGenericArgument } from "../types.js";
+import type { RustCallGenericArgument, RustExpr } from "../../../backend/target-ast/nodes.js";
 
 type RustDirectCall = Extract<RustExpr, { readonly kind: "call" }>;
 type RustAssociatedCall = Extract<RustExpr, { readonly kind: "associated-call" }>;
 type RustMethodCall = Extract<RustExpr, { readonly kind: "method-call" }>;
 
-export function printRustCallTypeArguments(
-  typeArguments: readonly RustType[] | undefined,
+export function printRustCallGenericArguments(
+  genericArguments: readonly RustCallGenericArgument[] | undefined,
 ): string {
-  return typeArguments === undefined || typeArguments.length === 0
+  return genericArguments === undefined || genericArguments.length === 0
     ? ""
-    : `::<${typeArguments.map(printRustType).join(", ")}>`;
+    : `::<${genericArguments.map(printRustGenericArgument).join(", ")}>`;
 }
 
 export function printRustCallMember(
   member: string,
-  typeArguments: readonly RustType[] | undefined,
+  genericArguments: readonly RustCallGenericArgument[] | undefined,
 ): string {
-  return `${member}${printRustCallTypeArguments(typeArguments)}`;
+  return `${member}${printRustCallGenericArguments(genericArguments)}`;
 }
 
 export function printRustDirectCallTarget(expression: RustDirectCall): string {
-  return printRustCallMember(expression.path, expression.typeArguments);
+  return printRustCallMember(expression.path, expression.genericArguments);
 }
 
 export function printRustAssociatedCallTarget(
   expression: RustAssociatedCall,
   owner: string,
 ): string {
-  return `${owner}::${printRustCallMember(expression.method, expression.typeArguments)}`;
+  return `${owner}::${printRustCallMember(expression.method, expression.genericArguments)}`;
 }
 
 export function printRustMethodCallTarget(
   expression: RustMethodCall,
   receiver: string,
 ): string {
-  return `${receiver}.${printRustCallMember(expression.method, expression.typeArguments)}`;
+  return `${receiver}.${printRustCallMember(expression.method, expression.genericArguments)}`;
 }

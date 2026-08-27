@@ -1,4 +1,8 @@
-import type { TargetTypeRef } from "../types/model.js";
+import type {
+  RustTargetConstArgument,
+  TargetTypeRef,
+} from "../types/model.js";
+import type { RustLifetimeRef } from "../lifetimes/index.js";
 import {
   isRustTargetTypeRef,
   rustTargetTypeRefEquals,
@@ -22,7 +26,7 @@ import {
   rustSourcePrimitiveTargetType,
   rustBorrowedStrTargetType,
   rustStringTargetType,
-  substituteRustTargetTypeParameters,
+  substituteRustTargetGenerics,
 } from "../types/index.js";
 import type { RustPrimitiveTypeName } from "../syntax/tokens.js";
 import { rustNumericPromotionKind } from "./numeric-promotion.js";
@@ -329,30 +333,57 @@ export function rustValueConversionIdentity(value: RustValueConversion): string 
 export function substituteRustValueConversion(
   value: RustValueConversion,
   substitutions: ReadonlyMap<string, TargetTypeRef>,
+  lifetimeSubstitutions: ReadonlyMap<string, RustLifetimeRef> = new Map(),
+  constSubstitutions: ReadonlyMap<string, RustTargetConstArgument> = new Map(),
 ): RustValueConversion {
   switch (value.kind) {
     case "copy-from-reference":
       return Object.freeze({
         ...value,
-        target: substituteRustTargetTypeParameters(value.target, substitutions),
+        target: substituteRustTargetGenerics(
+          value.target,
+          substitutions,
+          lifetimeSubstitutions,
+          constSubstitutions,
+        ),
       });
     case "raw-pointer-mut-to-const":
       return Object.freeze({
         ...value,
-        pointee: substituteRustTargetTypeParameters(value.pointee, substitutions),
+        pointee: substituteRustTargetGenerics(
+          value.pointee,
+          substitutions,
+          lifetimeSubstitutions,
+          constSubstitutions,
+        ),
       });
     case "source-union-variant":
     case "bottom-coercion":
     case "js-argument-vector-callback":
       return Object.freeze({
         ...value,
-        source: substituteRustTargetTypeParameters(value.source, substitutions),
-        target: substituteRustTargetTypeParameters(value.target, substitutions),
+        source: substituteRustTargetGenerics(
+          value.source,
+          substitutions,
+          lifetimeSubstitutions,
+          constSubstitutions,
+        ),
+        target: substituteRustTargetGenerics(
+          value.target,
+          substitutions,
+          lifetimeSubstitutions,
+          constSubstitutions,
+        ),
       });
     case "option-some":
       return Object.freeze({
         ...value,
-        element: substituteRustTargetTypeParameters(value.element, substitutions),
+        element: substituteRustTargetGenerics(
+          value.element,
+          substitutions,
+          lifetimeSubstitutions,
+          constSubstitutions,
+        ),
       });
     case "option-map":
       return Object.freeze({
@@ -360,6 +391,8 @@ export function substituteRustValueConversion(
         elementConversion: substituteRustValueConversion(
           value.elementConversion,
           substitutions,
+          lifetimeSubstitutions,
+          constSubstitutions,
         ) as typeof value.elementConversion,
       });
     case "semantic-conversion":

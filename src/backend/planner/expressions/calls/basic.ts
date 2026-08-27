@@ -1,5 +1,6 @@
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
-import { applyRustValueConversion, finishProviderOperationExpression, planProviderOperationExpression } from "../conversions.js";
+import { finishProviderOperationExpression, planProviderOperationExpression } from "../conversions.js";
+import { applyRustValueConversion } from "../value-conversions.js";
 import { planRustCallArguments } from "../input-shaping.js";
 import { diagnosticInput } from "../../program/plan-context.js";
 import { effectiveMemberResultCarrier, planOptionalChainExpression } from "../special.js";
@@ -25,6 +26,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
+import { planRustReferenceOperationCall } from "../reference-operations.js";
 
 export function planCallExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
   return planOptionalChainExpression(
@@ -43,7 +45,8 @@ function planCallExpressionInner(node: Node, context: RustPlanContext): RustExpr
       fact?.kind === "provider-operation" ||
       fact?.kind === "object-shape-projection" ||
       fact?.kind === "default-value" ||
-      fact?.kind === "typed-location"
+      fact?.kind === "typed-location" ||
+      fact?.kind === "reference-operation"
     ? fact.resultCarrier
     : undefined;
   const selectedResultCarrier = innerResultCarrier === undefined
@@ -73,6 +76,9 @@ function planCallExpressionInner(node: Node, context: RustPlanContext): RustExpr
     return undefined;
   }
   const callee = Node_Expression(context.input.program.source.ast, node);
+  if (fact?.kind === "reference-operation") {
+    return planRustReferenceOperationCall(node, fact, context, planExpression);
+  }
   if (fact?.kind === "typed-location") {
     return planRustTypedLocationCall(node, fact, context, planExpression);
   }
@@ -200,9 +206,11 @@ function planRustDefaultValueCall(
     selected.member.kind !== "method" || selected.member.static !== true ||
     selected.member.parameters.length !== 0 || selected.member.returnType === undefined ||
     !rustTargetTypeRefEquals(selected.member.returnType, fact.resultCarrier) ||
-    selected.member.typeParameters?.length !== 1 ||
-    selected.targetTypeArguments?.length !== 1 ||
-    !rustTargetTypeRefEquals(selected.targetTypeArguments[0], fact.resultCarrier) ||
+    selected.member.genericParameters?.length !== 1 ||
+    selected.member.genericParameters[0]?.kind !== "type" ||
+    selected.targetGenericArguments?.length !== 1 ||
+    selected.targetGenericArguments[0]?.kind !== "type" ||
+    !rustTargetTypeRefEquals(selected.targetGenericArguments[0].type, fact.resultCarrier) ||
     operation === undefined || operation.operationId !== fact.operationId ||
     operation.operationKind !== "method" || operation.targetOperation !== "Default::default" ||
     operation.resultType === undefined ||

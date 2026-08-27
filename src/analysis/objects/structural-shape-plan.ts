@@ -7,8 +7,9 @@ import {
 } from "../../target-model/names/identifiers.js";
 import {
   rustStructuralObjectCarrierValue,
-  rustTargetTypeParameterNames,
+  rustTargetGenericReferences,
 } from "../../target-model/types/index.js";
+import type { RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import type {
   RustSourceObjectShape,
   RustStructuralFieldImplementation,
@@ -33,9 +34,16 @@ export interface RustStructuralShapeDefinition {
   readonly ownerFileName: string;
   readonly componentId: string;
   readonly targetName: string;
-  readonly typeParameterNames: readonly string[];
+  readonly genericParameters: readonly RustStructuralShapeGenericParameter[];
   readonly fields: readonly RustStructuralShapeField[];
 }
+
+export type RustStructuralShapeGenericParameter =
+  | {
+      readonly kind: "lifetime";
+      readonly lifetime: Extract<RustLifetimeRef, { readonly kind: "parameter" }>;
+    }
+  | { readonly kind: "type"; readonly name: string };
 
 export interface RustStructuralShapePlan {
   readonly definitions: readonly RustStructuralShapeDefinition[];
@@ -164,12 +172,26 @@ export function createRustStructuralShapePlan(
           ...(field.method === true ? { method: true as const } : {}),
         });
       });
+      const genericReferences = rustTargetGenericReferences(carrier);
+      if (genericReferences.constIdentities.length !== 0 ||
+        genericReferences.lifetimes.some((lifetime) => lifetime.kind !== "parameter")) {
+        throw new Error("Rust structural source shapes cannot capture const or higher-ranked generic parameters.");
+      }
       return Object.freeze({
         carrier,
         ownerFileName: structural.ownerFileName,
         componentId,
         targetName: allocatePascalName(usedTypeNames, preferredShapeName(fields)),
-        typeParameterNames: rustTargetTypeParameterNames(carrier),
+        genericParameters: Object.freeze([
+          ...genericReferences.lifetimes.map((lifetime) => Object.freeze({
+            kind: "lifetime" as const,
+            lifetime: lifetime as Extract<RustLifetimeRef, { readonly kind: "parameter" }>,
+          })),
+          ...genericReferences.typeNames.map((name) => Object.freeze({
+            kind: "type" as const,
+            name,
+          })),
+        ]),
         fields: Object.freeze(fields),
       });
     });

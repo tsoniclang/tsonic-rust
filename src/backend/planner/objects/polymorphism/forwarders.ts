@@ -2,6 +2,7 @@ import {
   cloneExpression,
   cloneField,
   projectCallableShape,
+  projectLifetimeSubstitutions,
   projectTypeSubstitutions,
   rustFunctionTypesMatch,
 } from "./model.js";
@@ -17,8 +18,10 @@ import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js"
 import { planProjectMethod } from "../../declarations/nominal.js";
 import { readRustProjectMethodOverride, rustProjectObjectDispatchField, rustProjectObjectIdentityField } from "../project-objects.js";
 import { rustCallableSpecialization } from "../../declarations/callable-generics.js";
-import { rustProjectDispatchTraitType } from "./names.js";
+import { rustProjectDispatchObjectType, rustProjectDispatchTraitType } from "./names.js";
 import { rustSourceTypeCarrierValue } from "../../../../target-model/types/index.js";
+import { emptyRustGenerics } from "../../../target-ast/nodes.js";
+import { rustSelfParameter } from "../../declarations/self-parameter.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustEffectiveExpressionOverride, RustPlanContext } from "../../program/plan-context.js";
 import type { RustExpr, RustImplFunction, RustType } from "../../../target-ast/nodes.js";
@@ -36,7 +39,7 @@ export function planProjectFieldAccessorCall(
 ): { readonly expression: RustExpr; readonly errorType?: RustType } | undefined {
   const read = value === undefined;
   const expectedParameters = read ? [] : [{ name: "value", type: valueType }];
-  if (helper === undefined || helper.selfParam !== "rc" || helper.isAsync === true ||
+  if (helper === undefined || helper.selfParam?.kind !== "rc" || helper.isAsync === true ||
     helper.isUnsafe === true || !rustFunctionTypesMatch(
       helper.params,
       helper.returnType,
@@ -60,16 +63,22 @@ export function projectDowncastReturnType(
   route: RustProjectDowncastRoute,
   context: RustPlanContext,
 ): RustType | undefined {
-  const dispatch = rustProjectDispatchTraitType(route.targetCarrier, context);
-  return dispatch === undefined
+  const dispatchObject = rustProjectDispatchObjectType(route.targetCarrier, context);
+  return dispatchObject === undefined
     ? undefined
     : {
         kind: "named",
         path: "Option",
-        typeArguments: [{
-          kind: "named",
-          path: "std::rc::Rc",
-          typeArguments: [{ kind: "trait-object", trait: dispatch }],
+        genericArguments: [{
+          kind: "type",
+          type: {
+            kind: "named",
+            path: "std::rc::Rc",
+            genericArguments: [{
+              kind: "type",
+              type: dispatchObject,
+            }],
+          },
         }],
       };
 }
@@ -85,7 +94,8 @@ export function planProjectDowncastRouteImplementation(
     : {
         name: route.slot,
         visibility: "private",
-        selfParam: "rc",
+        generics: emptyRustGenerics,
+        selfParam: rustSelfParameter("rc"),
         params: [],
         returnType,
         body: {
@@ -217,6 +227,7 @@ function planRootCallableImplementation(
     ...context,
     syntheticNames,
     typeParameterSubstitutions: projectTypeSubstitutions(owner, ownerRelation.targetType),
+    lifetimeSubstitutions: projectLifetimeSubstitutions(owner, ownerRelation.targetType),
     expressionOverrides: thisPlan.overrides,
     projectDispatchRoot: { kind: "path", path: "self" },
   }, {
@@ -238,7 +249,7 @@ function planRootCallableImplementation(
     ...planned,
     name: options.targetName,
     visibility: "private",
-    selfParam: "rc",
+    selfParam: rustSelfParameter("rc"),
     body: thisPlan.binding === undefined
       ? planned.body
       : {
@@ -277,6 +288,10 @@ export function planRootMethodForwarder(
     ? projectCallableShape(contractMember, {
         ...context,
         typeParameterSubstitutions: projectTypeSubstitutions(
+          contractOwner,
+          contractRelation.targetType,
+        ),
+        lifetimeSubstitutions: projectLifetimeSubstitutions(
           contractOwner,
           contractRelation.targetType,
         ),
@@ -361,7 +376,8 @@ export function planRootCallableForwarder(
     {
     name: slot,
     visibility: "private",
-    selfParam: "rc",
+    generics: helper.generics,
+    selfParam: rustSelfParameter("rc"),
     params: helper.params,
     ...(helper.returnType === undefined ? {} : { returnType: helper.returnType }),
     ...(helper.errorType === undefined ? {} : { errorType: helper.errorType }),
@@ -471,6 +487,7 @@ export function projectAccessorCallableShape(
     {
       ...context,
       typeParameterSubstitutions: projectTypeSubstitutions(definition, carrier),
+      lifetimeSubstitutions: projectLifetimeSubstitutions(definition, carrier),
     },
     { safetyPlacement: role === "read" ? "getter" : "setter" },
   );

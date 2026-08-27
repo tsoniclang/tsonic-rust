@@ -1,4 +1,5 @@
 import { compareText, digestText, typeRequirementKey } from "./utilities.js";
+import { compilerTypeRequirementCanonicalPath } from "../model/rustdoc-types.js";
 import type {
   RustCompilerDependency,
   RustCompilerFunction,
@@ -52,14 +53,18 @@ export function recordCarrierTraits(
 export function projectCompilerTraitContract(
   contract: RustCompilerTypeTraits,
 ): RustNamedTypeTraitContract {
-  const implementations = contract.implementations.map((implementation) => Object.freeze({
+  const projected = contract.implementations.map((implementation) => Object.freeze({
     traitPath: compilerRequirementTraitPath(implementation.trait),
     requirements: Object.freeze(implementation.requirements.map((requirement) => Object.freeze({
       typeArgumentIndex: requirement.typeArgumentIndex,
       traitPath: compilerRequirementTraitPath(requirement.requirement),
     })).sort((left, right) =>
       left.typeArgumentIndex - right.typeArgumentIndex || compareText(left.traitPath, right.traitPath))),
-  })).sort((left, right) => compareText(
+  }));
+  const implementations = [...new Map(projected.map((implementation) => [
+    `${implementation.traitPath}\0${JSON.stringify(implementation.requirements)}`,
+    implementation,
+  ])).values()].sort((left, right) => compareText(
     `${left.traitPath}\0${JSON.stringify(left.requirements)}`,
     `${right.traitPath}\0${JSON.stringify(right.requirements)}`,
   ));
@@ -69,11 +74,7 @@ export function projectCompilerTraitContract(
 function compilerRequirementTraitPath(
   requirement: RustCompilerTypeParameter["requirements"][number],
 ): string {
-  return requirement === "clone"
-    ? "core::clone::Clone"
-    : requirement === "copy"
-      ? "core::marker::Copy"
-      : requirement.path;
+  return compilerTypeRequirementCanonicalPath(requirement).join("::");
 }
 
 export function typeRequirements(
@@ -86,7 +87,10 @@ export function typeRequirements(
     .map((parameter) => Object.freeze({
       name: parameter.name,
       requirements: Object.freeze([...parameter.requirements]
-        .sort((left, right) => compareText(typeRequirementKey(left), typeRequirementKey(right)))),
+        .sort((left, right) => compareText(typeRequirementKey(left), typeRequirementKey(right)))
+        .map((requirement) => requirement === "clone" || requirement === "copy"
+          ? requirement
+          : Object.freeze({ kind: "trait" as const, path: requirement.trait.path }))),
     }))
     .sort((left, right) => compareText(left.name, right.name));
   return requirements.length === 0

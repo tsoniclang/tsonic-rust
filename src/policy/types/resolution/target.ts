@@ -97,7 +97,10 @@ export function resolveRustTargetType(
       ? undefined
       : resolveProjectSourceCarrier(
           symbol,
-          resolvedSourceTypeArguments as readonly TargetTypeRef[],
+          {
+            values: Object.freeze((resolvedSourceTypeArguments as readonly TargetTypeRef[])
+              .map((argument) => Object.freeze({ kind: "type" as const, type: argument }))),
+          },
           context,
           options,
         );

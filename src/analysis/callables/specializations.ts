@@ -2,6 +2,7 @@ import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import { closedMetadataKey, isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
+import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import {
@@ -50,6 +51,7 @@ export interface RustSourceCallableSpecializationPlanRegistry
     readonly callee: Node;
     readonly targetTypeArguments: readonly TargetTypeRef[];
     readonly ast: AstReader;
+    readonly sourceLifetimes: RustLifetimeIndex;
   }): RustSourceCallableSpecializationRegistration;
   recordProjectMethodCall(input: {
     readonly subject: Node;
@@ -58,11 +60,13 @@ export interface RustSourceCallableSpecializationPlanRegistry
     readonly targetTypeArguments: readonly TargetTypeRef[];
     readonly ast: AstReader;
     readonly projectTypes: RustProjectTypePolicy;
+    readonly sourceLifetimes: RustLifetimeIndex;
   }): RustSourceCallableSpecializationRegistration;
   initialize(input: {
     readonly ast: AstReader;
     readonly names: RustNamePlan;
     readonly projectTypes: RustProjectTypePolicy;
+    readonly sourceLifetimes: RustLifetimeIndex;
   }): RustSourceCallableSpecializationPlan;
   seal(): RustSourceCallableSpecializationPlan;
 }
@@ -103,7 +107,11 @@ export function createRustSourceCallableSpecializationPlanRegistry(): RustSource
       if (current !== undefined) {
         throw new Error("Rust source-callable specialization requests cannot be recorded after initialization.");
       }
-      const names = callableTypeParameterNames(input.callee, input.ast);
+      const names = callableTypeParameterNames(
+        input.callee,
+        input.ast,
+        input.sourceLifetimes,
+      );
       if (names === undefined || names.length !== input.targetTypeArguments.length) {
         return rejected("Selected project-source call type arguments do not match the exact callee declaration arity.");
       }
@@ -120,7 +128,11 @@ export function createRustSourceCallableSpecializationPlanRegistry(): RustSource
         throw new Error("Rust project-method specialization requests cannot be recorded after initialization.");
       }
       const owner = input.projectTypes.definitionContainingDeclaration(input.declaration);
-      const names = callableTypeParameterNames(input.declaration, input.ast);
+      const names = callableTypeParameterNames(
+        input.declaration,
+        input.ast,
+        input.sourceLifetimes,
+      );
       if (owner === undefined || names === undefined || names.length !== input.targetTypeArguments.length) {
         return rejected("Selected project method has no exact owner or matching type-parameter arity.");
       }
@@ -172,9 +184,15 @@ function createRustSourceCallableSpecializationPlan(
     readonly ast: AstReader;
     readonly names: RustNamePlan;
     readonly projectTypes: RustProjectTypePolicy;
+    readonly sourceLifetimes: RustLifetimeIndex;
   },
 ): RustSourceCallableSpecializationPlan {
-  const required = requiredCallableSpecializations(sourceCalls, projectMethodCalls, input.ast);
+  const required = requiredCallableSpecializations(
+    sourceCalls,
+    projectMethodCalls,
+    input.ast,
+    input.sourceLifetimes,
+  );
   const variants = new Map<Node, MutableSpecializationVariant[]>();
   const methodRequests: RustProjectMethodSpecializationRequest[] = [];
   const issues: RustSourceCallableSpecializationIssue[] = [];
@@ -192,7 +210,11 @@ function createRustSourceCallableSpecializationPlan(
     targetTypeArguments: readonly TargetTypeRef[],
     subject: Node,
   ): boolean => {
-    const parameterNames = callableTypeParameterNames(declaration, input.ast);
+    const parameterNames = callableTypeParameterNames(
+      declaration,
+      input.ast,
+      input.sourceLifetimes,
+    );
     if (parameterNames === undefined || parameterNames.length !== targetTypeArguments.length) {
       addIssue(subject, "A required Rust source-callable specialization conflicts with its exact declaration arity.");
       return false;
@@ -245,13 +267,21 @@ function createRustSourceCallableSpecializationPlan(
     if (!required.has(edge.callee)) {
       continue;
     }
-    const callerNames = callableTypeParameterNameSet(edge.caller, input.ast);
+    const callerNames = callableTypeParameterNameSet(
+      edge.caller,
+      input.ast,
+      input.sourceLifetimes,
+    );
     if (edge.caller === undefined || !targetArgumentsUseNames(edge.targetTypeArguments, callerNames)) {
       addCallableVariant(edge.callee, edge.targetTypeArguments, edge.subject);
     }
   }
   for (const edge of projectMethodCalls) {
-    const callerNames = callableTypeParameterNameSet(edge.caller, input.ast);
+    const callerNames = callableTypeParameterNameSet(
+      edge.caller,
+      input.ast,
+      input.sourceLifetimes,
+    );
     if (edge.caller === undefined || !targetArgumentsUseNames(edge.targetTypeArguments, callerNames)) {
       addMethodRequest(edge.declaration, edge.targetTypeArguments, edge.subject);
     }
@@ -360,10 +390,11 @@ function requiredCallableSpecializations(
   sourceCalls: readonly SourceCallEdge[],
   projectMethodCalls: readonly ProjectMethodEdge[],
   ast: AstReader,
+  sourceLifetimes: RustLifetimeIndex,
 ): Set<Node> {
   const required = new Set<Node>();
   for (const edge of projectMethodCalls) {
-    const names = callableTypeParameterNameSet(edge.caller, ast);
+    const names = callableTypeParameterNameSet(edge.caller, ast, sourceLifetimes);
     if (edge.caller !== undefined && targetArgumentsUseNames(edge.targetTypeArguments, names)) {
       required.add(edge.caller);
     }
@@ -375,7 +406,7 @@ function requiredCallableSpecializations(
       if (!required.has(edge.callee) || edge.caller === undefined) {
         continue;
       }
-      const names = callableTypeParameterNameSet(edge.caller, ast);
+      const names = callableTypeParameterNameSet(edge.caller, ast, sourceLifetimes);
       if (targetArgumentsUseNames(edge.targetTypeArguments, names) && !required.has(edge.caller)) {
         required.add(edge.caller);
         changed = true;
@@ -465,25 +496,29 @@ function callableIsExternallyReachable(declaration: Node, ast: AstReader): boole
 function callableTypeParameterNames(
   declaration: Node,
   ast: AstReader,
+  sourceLifetimes: RustLifetimeIndex,
 ): readonly string[] | undefined {
   const parameters = ast.typeParameters(declaration);
   if (!isDenseDataArray(parameters) || parameters.some((parameter) => parameter === undefined)) {
     return undefined;
   }
-  const names = (parameters as readonly Node[]).map((parameter) => {
-    const name = ast.name(parameter);
-    return name === undefined ? "" : ast.text(name);
-  });
+  const names = (parameters as readonly Node[])
+    .filter((parameter) => sourceLifetimes.parameterFor(parameter)?.kind !== "lifetime")
+    .map((parameter) => {
+      const name = ast.name(parameter);
+      return name === undefined ? "" : ast.text(name);
+    });
   return names.some((name) => name.length === 0) ? undefined : Object.freeze(names);
 }
 
 function callableTypeParameterNameSet(
   declaration: Node | undefined,
   ast: AstReader,
+  sourceLifetimes: RustLifetimeIndex,
 ): ReadonlySet<string> {
   return new Set(declaration === undefined
     ? []
-    : callableTypeParameterNames(declaration, ast) ?? []);
+    : callableTypeParameterNames(declaration, ast, sourceLifetimes) ?? []);
 }
 
 function targetArgumentsUseNames(

@@ -1,7 +1,11 @@
 import { acceptRustMemberOperation, acceptRustOperation, normalizeSelectedOperationInputCarrier, providerIdentityText, providerOperationFact, rejectSelectedOperation, sourceLiteralIsRepresentableAsPrimitive } from "./result.js";
 import { acceptRustPolicy } from "../../../policy/operations/contracts.js";
 import { asNode } from "../../../policy/evidence/selected-source.js";
-import { finalizeProviderOperationFact, instantiateProviderOperationTemplate, providerFormRequiresSourceReceiver } from "./calls/instantiation.js";
+import { providerFormRequiresSourceReceiver } from "./calls/instantiation.js";
+import {
+  finalizeProviderOperationFact,
+  instantiateProviderOperationTemplate,
+} from "./calls/template-instantiation.js";
 import { isRustNullishSourceCarrier, rustOptionElementCarrier } from "../../../target-model/types/index.js";
 import { selectRustValueCarrierReconciliation } from "../../../policy/types/value-carrier-reconciliation.js";
 import { recordRustValueCarrierReconciliation, rustEffectiveValueCarrier } from "../../facts/value-carrier-queries.js";
@@ -74,10 +78,13 @@ export function selectRustCheckedConversion(
     const reconciliation = sourceCarrier === undefined
       ? undefined
       : selectRustValueCarrierReconciliation(sourceCarrier, targetCarrier, options.projectTypes);
-    if (reconciliation?.kind === "project-upcast") {
+    if (reconciliation?.kind === "call-scoped-lifetime" ||
+      reconciliation?.kind === "project-upcast") {
       recordRustValueCarrierReconciliation(context.facts, request.expression, reconciliation);
       return acceptRustPolicy({ convertedType: targetCarrier }, [
-        { message: "rust selected call argument uses an exact project-type upcast" },
+        { message: reconciliation.kind === "call-scoped-lifetime"
+          ? "rust selected call argument uses an exact call-scoped lifetime reconciliation"
+          : "rust selected call argument uses an exact project-type upcast" },
       ]);
     }
     const optionElement = rustOptionElementCarrier(targetCarrier);
@@ -198,7 +205,7 @@ function selectProjectDowncast(
   const sourceDefinition = options.projectTypes.definitionForCarrier(dispatchCarrier);
   const targetDefinition = options.projectTypes.definitionForCarrier(targetCarrier);
   const relationship = sourceDefinition === undefined || targetDefinition === undefined ||
-      targetDefinition.kind !== "class" || targetDefinition.typeParameterNames.length !== 0
+      targetDefinition.kind !== "class" || targetDefinition.genericParameters.length !== 0
     ? { kind: "unrelated" as const }
     : options.projectTypes.relationship(targetCarrier, sourceDefinition);
   if (sourceDefinition === undefined || relationship.kind !== "related" ||

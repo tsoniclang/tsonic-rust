@@ -1,8 +1,11 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustArgumentMode, RustProviderFactOperationKind, RustRuntimeSetOperationKind, RustSourceCallParameterPlan, RustValueConversion } from "../../../target-model/operations/model.js";
 import type { RustFinalizedOperationAbiFor } from "../finalized-operation-abi.js";
-import type { RustOperationSymbol, RustOperatorToken } from "../../../target-model/syntax/tokens.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustAssignmentOperator, RustOperationSymbol, RustOperatorToken } from "../../../target-model/syntax/tokens.js";
+import type {
+  RustTargetGenericArgument,
+  TargetTypeRef,
+} from "../../../target-model/types/model.js";
 
 export type RustTargetOperationFact =
   | {
@@ -327,7 +330,7 @@ export type RustTargetOperationFact =
             readonly typeCarrier: TargetTypeRef;
           };
       readonly parameters: readonly RustSourceCallParameterPlan[];
-      readonly targetTypeArguments?: readonly TargetTypeRef[];
+      readonly targetGenericArguments?: readonly RustTargetGenericArgument[];
       readonly resultCarrier: TargetTypeRef;
     }
   | {
@@ -513,6 +516,41 @@ export type RustTargetOperationFact =
       readonly state: "borrowed-shared" | "borrowed-mut" | "moved";
     }
   | {
+      readonly kind: "reference-operation";
+      readonly operationId: string;
+      readonly operation: "shared-reference" | "mutable-reference";
+      readonly operandExpression: Node;
+      readonly operandCarrier: TargetTypeRef;
+      readonly referenceCarrier: Extract<TargetTypeRef, { readonly kind: "reference" }>;
+      readonly resultCarrier: Extract<TargetTypeRef, { readonly kind: "reference" }>;
+    }
+  | {
+      readonly kind: "reference-operation";
+      readonly operationId: string;
+      readonly operation: "load";
+      readonly operandExpression: Node;
+      readonly operandCarrier: Extract<TargetTypeRef, { readonly kind: "reference" }>;
+      readonly referenceCarrier: Extract<TargetTypeRef, { readonly kind: "reference" }>;
+      readonly resultCarrier: TargetTypeRef;
+    }
+  | {
+      readonly kind: "reference-operation";
+      readonly operationId: string;
+      readonly operation: "store";
+      readonly operandExpression: Node;
+      readonly operandCarrier: Extract<TargetTypeRef, { readonly kind: "reference" }>;
+      readonly referenceCarrier: Extract<TargetTypeRef, { readonly kind: "reference" }>;
+      readonly valueExpression: Node;
+      readonly valueCarrier: TargetTypeRef;
+      readonly writeStrategy?: {
+        readonly kind: "compound-assignment";
+        readonly operator: Exclude<RustAssignmentOperator, "=">;
+        readonly readExpression: Node;
+        readonly rightExpression: Node;
+      };
+      readonly resultCarrier: TargetTypeRef;
+    }
+  | {
       readonly kind: "typed-location";
       readonly operationId: string;
       readonly operation: RustTypedLocationOperationKind;
@@ -606,6 +644,7 @@ export function rustTargetOperationResultCarrier(fact: RustTargetOperationFact):
     case "await-op":
     case "closure":
     case "source-conversion":
+    case "reference-operation":
     case "option-coalesce":
     case "nullish-identity":
     case "non-null-expression":

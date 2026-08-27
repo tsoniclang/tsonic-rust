@@ -6,6 +6,8 @@ import type { RustArgumentMode, RustProviderOperationForm } from "../../target-m
 import type { RustFallibleErrorBoundary } from "../../target-model/operations/error-boundary.js";
 import type { RustPlanKey } from "../../target-model/facts/keys.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
+import type { RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 
 export type RustTypeAliasDeclarationFact =
   | {
@@ -22,10 +24,17 @@ export type RustTypeAliasDeclarationFact =
         readonly carrier: TargetTypeRef;
       }[];
     }
+  | {
+      readonly kind: "native-alias";
+      readonly target: TargetTypeRef;
+    }
   | { readonly kind: "erased" };
 
 export const rustTypeAliasDeclarationFactKey: RustPlanKey<RustTypeAliasDeclarationFact> =
-  defineRustPlanKey("typeAliasDeclaration", closedMetadataEquals);
+  defineRustPlanKey("typeAliasDeclaration", (left, right) =>
+    left.kind === right.kind && (left.kind !== "native-alias" ||
+      right.kind === "native-alias" && rustTargetTypeRefEquals(left.target, right.target)) &&
+    (left.kind === "native-alias" || closedMetadataEquals(left, right)));
 
 export interface RustAsyncFunctionFact {
   readonly isAsync: true;
@@ -37,19 +46,31 @@ export const rustAsyncFunctionFactKey: RustPlanKey<RustAsyncFunctionFact> =
 
 export interface RustGeneratorFact {
   readonly kind: "sync" | "async";
-  readonly carrier: TargetTypeRef;
+  readonly resultCarrier: TargetTypeRef;
   readonly yieldType: TargetTypeRef;
   readonly returnType: TargetTypeRef;
   readonly nextType: TargetTypeRef;
+  readonly capturedParameters: readonly Node[];
+  readonly storage:
+    | { readonly kind: "static" }
+    | { readonly kind: "receiver" }
+    | { readonly kind: "lifetime"; readonly lifetime: RustLifetimeRef };
 }
 
 export const rustGeneratorFactKey: RustPlanKey<RustGeneratorFact> =
   defineRustPlanKey("generator", (left, right) =>
     left.kind === right.kind &&
-    rustTargetTypeRefEquals(left.carrier, right.carrier) &&
+    rustTargetTypeRefEquals(left.resultCarrier, right.resultCarrier) &&
     rustTargetTypeRefEquals(left.yieldType, right.yieldType) &&
     rustTargetTypeRefEquals(left.returnType, right.returnType) &&
-    rustTargetTypeRefEquals(left.nextType, right.nextType));
+    rustTargetTypeRefEquals(left.nextType, right.nextType) &&
+    left.capturedParameters.length === right.capturedParameters.length &&
+    left.capturedParameters.every((parameter, index) =>
+      parameter === right.capturedParameters[index]) &&
+    left.storage.kind === right.storage.kind &&
+    (left.storage.kind !== "lifetime" ||
+      right.storage.kind === "lifetime" &&
+      rustLifetimesEqual(left.storage.lifetime, right.storage.lifetime)));
 
 export interface RustYieldFact {
   readonly generatorDeclaration: Node;

@@ -23,7 +23,7 @@ import {
   rustRegExpStringIteratorTargetType,
   rustStringTargetType,
   rustVecTargetType,
-  substituteRustTargetTypeParameters,
+  substituteRustTargetGenerics,
 } from "../../../target-model/types/index.js";
 import { denseDefined } from "./project.js";
 import { mergeProviderDeclarationIdentities } from "../../evidence/selected-source.js";
@@ -41,9 +41,14 @@ import type {
 import type { RustProviderTypeRow } from "../../../providers/packages/model.js";
 import type { RustSourceProfileRegistry } from "../source-profile.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type {
+  RustTargetGenericArgument,
+  TargetTypeRef,
+} from "../../../target-model/types/model.js";
 import { jsRegExpSourceProfileIdentity } from "@tsonic/js-source-profile";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
+import type { RustSourcePolicyContext } from "../../model/context.js";
 
 const regExpIdentity = jsRegExpSourceProfileIdentity;
 const regExpResultCarrierByOwner = new Map<string, () => TargetTypeRef>([
@@ -70,7 +75,7 @@ export type RustProviderObjectLiteralConstructionSelection =
 
 export function resolveProviderTypeIdentity(
   subjects: readonly ExtensionFactSubject[],
-  context: RustTargetTypeResolutionContext,
+  context: Pick<RustSourcePolicyContext, "facts">,
 ): ProviderDeclarationIdentity | undefined {
   let selected: ProviderDeclarationIdentity | undefined;
   for (const subject of subjects) {
@@ -164,23 +169,91 @@ export function instantiateTargetType(
   if (targetArguments.some((argument) => argument === undefined)) {
     return undefined;
   }
-  return instantiateProviderTargetType(base, targetArguments as TargetTypeRef[]);
+  if ((base.genericParameters ?? []).some((parameter) => parameter.kind !== "type")) {
+    return undefined;
+  }
+  return instantiateProviderTargetType(
+    base,
+    (targetArguments as TargetTypeRef[]).map((argument) => ({
+      kind: "type" as const,
+      type: argument,
+    })),
+  );
 }
 
 export function instantiateProviderTargetType(
   relation: RustProviderTypeRow,
-  arguments_: readonly TargetTypeRef[],
+  arguments_: readonly RustTargetGenericArgument[],
 ): TargetTypeRef | undefined {
-  if (relation.sourceTypeParameters.length !== arguments_.length) {
+  const parameters = relation.genericParameters ?? [];
+  if (arguments_.length > parameters.length) {
     return undefined;
   }
-  const substitutions = new Map(
-    relation.sourceTypeParameters.map((name, index) => [name, arguments_[index]!] as const),
+  const typeSubstitutions = new Map<string, TargetTypeRef>();
+  const lifetimeSubstitutions = new Map<string, import("../../../target-model/lifetimes/index.js").RustLifetimeRef>();
+  const constSubstitutions = new Map<string, import("../../../target-model/types/model.js").RustTargetConstArgument>();
+  for (const [index, parameter] of parameters.entries()) {
+    const authored = arguments_[index];
+    const selected = authored ?? (parameter.kind === "lifetime"
+      ? undefined
+      : parameter.defaultArgument === undefined
+        ? undefined
+        : substituteGenericArgument(
+            parameter.defaultArgument,
+            typeSubstitutions,
+            lifetimeSubstitutions,
+            constSubstitutions,
+          ));
+    if (selected === undefined || selected.kind !== parameter.kind) {
+      return undefined;
+    }
+    if (parameter.kind === "type" && selected.kind === "type") {
+      typeSubstitutions.set(parameter.sourceName, selected.type);
+    } else if (parameter.kind === "lifetime" && selected.kind === "lifetime") {
+      lifetimeSubstitutions.set(parameter.targetIdentity, selected.lifetime);
+    } else if (parameter.kind === "const" && selected.kind === "const") {
+      constSubstitutions.set(parameter.targetIdentity, selected.value);
+    }
+  }
+  if (!rustProviderGenericRequirementsAreSatisfied(
+    relation.typeRequirements,
+    typeSubstitutions,
+  )) {
+    return undefined;
+  }
+  return substituteRustTargetGenerics(
+    relation.targetCarrier,
+    typeSubstitutions,
+    lifetimeSubstitutions,
+    constSubstitutions,
   );
-  if (!rustProviderGenericRequirementsAreSatisfied(relation.typeRequirements, substitutions)) {
-    return undefined;
+}
+
+function substituteGenericArgument(
+  argument: RustTargetGenericArgument,
+  types: ReadonlyMap<string, TargetTypeRef>,
+  lifetimes: ReadonlyMap<string, import("../../../target-model/lifetimes/index.js").RustLifetimeRef>,
+  consts: ReadonlyMap<string, import("../../../target-model/types/model.js").RustTargetConstArgument>,
+): RustTargetGenericArgument {
+  if (argument.kind === "type") {
+    return {
+      kind: "type",
+      type: substituteRustTargetGenerics(argument.type, types, lifetimes, consts),
+    };
   }
-  return substituteRustTargetTypeParameters(relation.targetCarrier, substitutions);
+  if (argument.kind === "lifetime") {
+    return {
+      kind: "lifetime",
+      lifetime: lifetimes.get(rustLifetimeKey(argument.lifetime)) ??
+        argument.lifetime,
+    };
+  }
+  return argument.value.kind === "parameter"
+    ? {
+        kind: "const",
+        value: consts.get(argument.value.identity) ?? argument.value,
+      }
+    : argument;
 }
 
 export function resolveOwnedSourceProfileTypeName(

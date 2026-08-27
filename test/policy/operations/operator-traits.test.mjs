@@ -65,7 +65,7 @@ test("generated cargo binary proves operator-trait lowering at runtime", { timeo
     files: {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
-import { borrow, borrowMut, move } from "@tsonic/rust/lang.js";
+import { move, mutableBorrow, sharedBorrow } from "@tsonic/core/lang.js";
 import { Vector, magnitude, consume, scale } from "@acme/vectors";
 import { check } from "@acme/testing";
 
@@ -75,8 +75,8 @@ export function main(): void {
   const c = Vector.add(a, b);
   check(c.x === 4);
   check(c.y === 6);
-  check(magnitude(borrow(c)) === 52);
-  scale(borrowMut(c), 2);
+  check(magnitude(sharedBorrow(c)) === 52);
+  scale(mutableBorrow(c), 2);
   check(c.x === 8);
   check(c.y === 12);
   check(consume(move(c)) === 20);

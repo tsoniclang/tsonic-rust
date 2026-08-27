@@ -1,4 +1,23 @@
-export type { TargetTypeRef } from "./model.js";
+export type {
+  RustTargetAssociatedConstraint,
+  RustTargetConstArgument,
+  RustTargetGenericArgument,
+  RustTargetGenericParameter,
+  RustTargetTraitRef,
+  TargetTypeRef,
+} from "./model.js";
+export {
+  rustConstGenericArgument,
+  rustLifetimeGenericArgument,
+  rustOnlyTypeGenericArguments,
+  rustTargetConstArguments,
+  rustTargetConstSafeInteger,
+  rustTargetGenericBindingsForArguments,
+  rustTargetGenericTypeArguments,
+  rustTargetLifetimeArguments,
+  rustTypeGenericArgument,
+  rustTypeGenericArguments,
+} from "./generic-arguments.js";
 export type { RustPrimitiveTypeName } from "../syntax/tokens.js";
 export {
   getRustGeneratorProtocol,
@@ -11,9 +30,11 @@ export {
   rustClosureProtocol,
   rustClosureTargetType,
   rustGeneratorTargetType,
+  rustGeneratorStorageTargetType,
   rustIteratorResultTargetType,
   rustLocationPointeeCarrier,
   rustLocationTargetType,
+  rustNativeCallableProtocol,
   rustOptionalLocationPointeeCarrier,
   rustStructuralMethodCallableCarrier,
   rustStructuralMethodStorageCarrier,
@@ -115,6 +136,8 @@ export {
 } from "./carriers/primitives.js";
 export {
   rustAsyncGeneratorTargetId,
+  rustBorrowedAsyncGeneratorTargetId,
+  rustBorrowedGeneratorTargetId,
   rustBigIntTargetId,
   rustCallableTargetId,
   rustGeneratorTargetId,
@@ -165,9 +188,23 @@ export type {
   RustStructuralObjectFieldCarrierValue,
 } from "./carriers/source-types.js";
 export {
+  inferRustTargetGenericBindings,
   inferRustTargetTypeParameterBindings,
+} from "./carriers/generic-inference.js";
+export type {
+  RustTargetGenericBindings,
+  RustTargetGenericInferenceOptions,
+  RustTargetGenericParameterSet,
+} from "./carriers/generic-inference.js";
+export {
+  rustTargetGenericReferences,
   rustTargetTypeContainsTypeParameter,
   rustTargetTypeParameterNames,
+} from "./carriers/generic-references.js";
+export type { RustTargetGenericReferences } from "./carriers/generic-references.js";
+export {
+  substituteRustTargetGenericArgument,
+  substituteRustTargetGenerics,
   substituteRustTargetTypeParameters,
 } from "./carriers/substitution.js";
 export {

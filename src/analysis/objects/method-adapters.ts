@@ -26,6 +26,7 @@ import {
   rustClosureProtocol,
   rustOptionElementCarrier,
   rustSourceTypeCarrierValue,
+  rustTargetGenericTypeArguments,
   rustTargetTypeContainsTypeParameter,
   substituteRustTargetTypeParameters,
 } from "../../target-model/types/index.js";
@@ -303,8 +304,9 @@ function projectOwnerTypeSubstitutions(
   carrier: TargetTypeRef,
 ): Map<string, TargetTypeRef> {
   const value = rustSourceTypeCarrierValue(carrier);
+  const typeArguments = rustTargetGenericTypeArguments(value?.genericArguments);
   return new Map(owner.typeParameterNames.map((name, index) =>
-    [name, value?.typeArguments[index] ?? { kind: "type-parameter", name }] as const));
+    [name, typeArguments[index] ?? { kind: "type-parameter", name }] as const));
 }
 
 function inferObjectLiteralImplementationSubstitutions(
@@ -499,6 +501,8 @@ function selectObjectLiteralValueAdapter(
       });
     case "project-upcast":
       return Object.freeze({ kind: "project-upcast", sourceCarrier, targetCarrier });
+    case "call-scoped-lifetime":
+      return Object.freeze({ kind: "call-scoped-lifetime", sourceCarrier, targetCarrier });
     case "incompatible":
       return undefined;
   }
@@ -512,6 +516,7 @@ function objectLiteralValueAdapterIsFallible(adapter: RustObjectLiteralValueAdap
     case "option-map":
       return objectLiteralValueAdapterIsFallible(adapter.element);
     case "identity":
+    case "call-scoped-lifetime":
     case "project-upcast":
       return false;
   }

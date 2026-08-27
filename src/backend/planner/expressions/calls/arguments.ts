@@ -4,7 +4,8 @@ import {
   rustCallableProtocol,
   rustFixedArrayCarrierValue,
   rustSliceElementCarrier,
-  substituteRustTargetTypeParameters,
+  rustTargetGenericBindingsForArguments,
+  substituteRustTargetGenerics,
 } from "../../../../target-model/types/index.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
 import { diagnosticInput } from "../../program/plan-context.js";
@@ -22,10 +23,17 @@ import { planExpression } from "../entry.js";
 import { planRustNonConsumingValue } from "../typed-locations.js";
 import { rustArgumentPassingMode } from "../../../../analysis/facts/parameter-passing.js";
 import { rustFinalizedCarrierTransitionMatches } from "../../../../analysis/facts/target-operation.js";
-import { rustSourceParameterAbiFactKey, rustTargetOperationFactKey } from "../../../../analysis/facts/keys.js";
-import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
+import {
+  rustGeneratorFactKey,
+  rustSourceParameterAbiFactKey,
+  rustTargetOperationFactKey,
+} from "../../../../analysis/facts/keys.js";
+import {
+  rustTargetGenericArgumentEquals,
+  rustTargetTypeRefEquals,
+} from "../../../../target-model/types/equality.js";
 import { rustValueCarrierTransitionTarget } from "../../../../analysis/facts/value-carrier-queries.js";
-import { rustVecRestAssembly } from "../../../../target-model/operations/rest-assembly.js";
+import { rustSpreadElementCarrier, rustVecRestAssembly } from "../../../../target-model/operations/rest-assembly.js";
 import { validateRustFinalizedOperationAbi } from "../../../../analysis/facts/finalized-operation-abi.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../../target-ast/nodes.js";
@@ -233,7 +241,11 @@ export function planRustSelectedSourceCallArguments(
   const fact = context.input.program.facts.getFact(call, rustTargetOperationFactKey);
   const selected = context.input.program.facts.getSelectedTargetCall(call);
   if (fact?.kind !== "source-call" || selected === undefined ||
-    !sourceCallSelectedMemberMatches(fact, selected)) {
+    !sourceCallSelectedMemberMatches(
+      fact,
+      selected,
+      sourceCallFinalizedResultCarrier(selected, context),
+    )) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, call),
       "rust.backend.source-call-selected-arguments",
@@ -374,22 +386,6 @@ function resolveFinalizedRustSpreadInput(
     : selected;
 }
 
-function rustSpreadElementCarrier(
-  sourceCarrier: TargetTypeRef,
-  index: number,
-): TargetTypeRef | undefined {
-  if (!Number.isSafeInteger(index) || index < 0) {
-    return undefined;
-  }
-  if (sourceCarrier.kind === "tuple") {
-    return sourceCarrier.elements[index];
-  }
-  const fixedArray = rustFixedArrayCarrierValue(sourceCarrier);
-  return fixedArray !== undefined && index < fixedArray.length
-    ? fixedArray.element
-    : undefined;
-}
-
 export function planPromotedSourceMethodCall(
   node: Node,
   location: RustExpr,
@@ -439,17 +435,32 @@ export function planPromotedSourceMethodCall(
 export function sourceCallSelectedMemberMatches(
   fact: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>,
   selected: SelectedTargetSignatureFact,
+  declaredResultCarrier: TargetTypeRef | undefined,
 ): boolean {
   const member = selected.member;
-  const sourceTypeArguments = selected.sourceSelectedMethodTypeArguments ?? [];
-  const targetTypeArguments = fact.targetTypeArguments ?? [];
-  if (sourceTypeArguments.length !== targetTypeArguments.length) {
+  const sourceArguments = selected.sourceSelectedMethodTypeArguments ?? [];
+  const parameters = member.genericParameters ?? [];
+  const targetArguments = fact.targetGenericArguments ?? [];
+  const selectedArguments = selected.targetGenericArguments ?? [];
+  if (sourceArguments.length !== parameters.length ||
+    parameters.length !== targetArguments.length ||
+    selectedArguments.length !== targetArguments.length ||
+    parameters.some((parameter, index) =>
+      parameter.sourceName !== sourceArguments[index]?.typeParameterName) ||
+    selectedArguments.some((argument, index) => {
+      const parameter = parameters[index];
+      const sourceArgument = sourceArguments[index];
+      const targetArgument = targetArguments[index];
+      const targetFinalizesInferredType = parameter?.kind === "type" &&
+        sourceArgument?.explicitTypeNode === undefined &&
+        argument.kind === "type" && targetArgument?.kind === "type";
+      return !targetFinalizesInferredType &&
+        !rustTargetGenericArgumentEquals(argument, targetArgument);
+    })) {
     return false;
   }
-  const substitutions = new Map<string, TargetTypeRef>();
-  for (let index = 0; index < sourceTypeArguments.length; index += 1) {
-    substitutions.set(sourceTypeArguments[index]!.typeParameterName, targetTypeArguments[index]!);
-  }
+  const substitutions = rustTargetGenericBindingsForArguments(parameters, targetArguments);
+  if (substitutions === undefined) return false;
   const expectedKind = fact.target.form === "constructor" ? "constructor" : "method";
   const expectedTargetName = fact.target.form === "constructor"
     ? fact.target.name
@@ -458,9 +469,14 @@ export function sourceCallSelectedMemberMatches(
       : fact.target.form === "function"
         ? fact.target.selectedTargetName
         : fact.target.name;
-  const selectedReturn = member.returnType === undefined
+  const selectedReturn = declaredResultCarrier === undefined
     ? undefined
-    : substituteRustTargetTypeParameters(member.returnType, substitutions);
+    : substituteRustTargetGenerics(
+        declaredResultCarrier,
+        substitutions.types,
+        substitutions.lifetimes,
+        substitutions.consts,
+      );
   const identityMatches = member.id === fact.operationId &&
     member.kind === expectedKind &&
     member.targetName === expectedTargetName &&
@@ -487,10 +503,25 @@ export function sourceCallSelectedMemberMatches(
           ? "ref"
           : "value";
       return rustTargetTypeRefEquals(
-        substituteRustTargetTypeParameters(parameter.type, substitutions),
+        substituteRustTargetGenerics(
+          parameter.type,
+          substitutions.types,
+          substitutions.lifetimes,
+          substitutions.consts,
+        ),
         fact.parameters[index]?.parameterCarrier,
       ) && mode === fact.parameters[index]?.mode;
     });
+}
+
+export function sourceCallFinalizedResultCarrier(
+  selected: SelectedTargetSignatureFact,
+  context: RustPlanContext,
+): TargetTypeRef | undefined {
+  return context.input.program.facts.getFact(
+    selected.sourceDeclaration,
+    rustGeneratorFactKey,
+  )?.resultCarrier ?? selected.member.returnType;
 }
 
 export function requireProviderArgumentPassingFacts(

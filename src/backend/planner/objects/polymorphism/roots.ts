@@ -15,7 +15,9 @@ import {
   writeRustProjectObjectField,
   writeRustProjectPrivateField,
 } from "../project-objects.js";
-import { rustProjectDispatchTraitType, rustProjectTypeParameters } from "./names.js";
+import { rustProjectDispatchTraitType, rustProjectRepresentationGenerics } from "./names.js";
+import { emptyRustGenerics } from "../../../target-ast/nodes.js";
+import { rustSelfParameter } from "../../declarations/self-parameter.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr, RustImplFunction, RustItem, RustType } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
@@ -46,7 +48,7 @@ export function planProjectRootImplementations(
     return undefined;
   }
   const items: RustItem[] = [];
-  const typeParams = rustProjectTypeParameters(concrete);
+  const generics = rustProjectRepresentationGenerics(representation);
   const methodImplementations = new Map<Node, RustImplFunction[]>();
   const accessorImplementations = new Map<Node, RustImplFunction>();
   const implementationFor = (
@@ -120,7 +122,7 @@ export function planProjectRootImplementations(
     }
     items.push({
       kind: "impl",
-      ...(typeParams.length === 0 ? {} : { typeParams }),
+      generics,
       trait: traitType,
       target: rootType,
       functions,
@@ -135,7 +137,7 @@ export function planProjectRootImplementations(
     ? items
     : [{
         kind: "impl",
-        ...(typeParams.length === 0 ? {} : { typeParams }),
+        generics,
         target: rootType,
         functions: helpers,
       }, ...items];
@@ -256,7 +258,8 @@ function planRootContractFunctions(
     functions.push({
       name: read,
       visibility: "private",
-      selfParam: dispatch.read.selfMode,
+      generics: emptyRustGenerics,
+      selfParam: rustSelfParameter(dispatch.read.selfMode),
       params: [],
       returnType: field.type,
       ...(dispatch.read.fallible ? { errorType: fieldErrorType! } : {}),
@@ -313,7 +316,8 @@ function planRootContractFunctions(
       functions.push({
         name: write!,
         visibility: "private",
-        selfParam: dispatch.write.selfMode,
+        generics: emptyRustGenerics,
+        selfParam: rustSelfParameter(dispatch.write.selfMode),
         params: [{ name: "value", type: field.type }],
         ...(dispatch.write.fallible ? { errorType: fieldErrorType! } : {}),
         body: dispatch.write.fallible
@@ -482,7 +486,8 @@ function planRootContractFunctions(
           functions.push({
             name: write,
             visibility: "private",
-            selfParam: "ref",
+            generics: emptyRustGenerics,
+            selfParam: rustSelfParameter("ref"),
             params: [{ name: "value", type: property.callableType }],
             body: {
               statements: [{

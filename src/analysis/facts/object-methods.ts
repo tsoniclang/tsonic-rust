@@ -26,6 +26,11 @@ export type RustObjectLiteralValueAdapter =
       readonly targetCarrier: TargetTypeRef;
     }
   | {
+      readonly kind: "call-scoped-lifetime";
+      readonly sourceCarrier: TargetTypeRef;
+      readonly targetCarrier: TargetTypeRef;
+    }
+  | {
       readonly kind: "option-some";
       readonly sourceCarrier: TargetTypeRef;
       readonly targetCarrier: TargetTypeRef;

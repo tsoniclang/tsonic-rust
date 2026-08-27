@@ -1,6 +1,6 @@
 import { asNode } from "../../evidence/selected-source.js";
 import { denseDefined } from "./project.js";
-import { resolveRustCallableEvidence } from "./source.js";
+import { resolveRustCallableEvidence } from "./source-evidence.js";
 import { resolveRustTargetType } from "./target.js";
 import { rustOptionTargetType, rustSourcePrimitiveTargetType, rustStringTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -27,7 +27,11 @@ export function resolveCallableType(
   }
   const declaration = callable.result.declaration;
   if (declaration !== undefined && context.ast.typeParameters(declaration).length > 0) {
-    return undefined;
+    const contract = context.sourceLifetimes.contractFor(declaration);
+    if (contract?.lifetimeBinder === undefined || contract.parameters.some((parameter) =>
+      parameter.kind !== "lifetime")) {
+      return undefined;
+    }
   }
   return resolveRustCallableEvidence(
     callable,

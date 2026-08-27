@@ -1,24 +1,14 @@
 import {
-  isRustNumericCarrier,
   rustCallableProtocol,
-  inferRustTargetTypeParameterBindings,
-  substituteRustTargetTypeParameters,
+  rustNativeCallableProtocol,
+  rustTargetGenericTypeArguments,
+  substituteRustTargetGenerics,
 } from "../../target-model/types/index.js";
 import {
-  KindBinaryExpression,
-  KindCallExpression,
-  KindElementAccessExpression,
   KindFunctionDeclaration,
   KindFunctionExpression,
-  KindIdentifier,
   KindNewExpression,
-  KindNonNullExpression,
-  KindNumericLiteral,
-  KindParenthesizedExpression,
-  KindPostfixUnaryExpression,
-  KindPrefixUnaryExpression,
   KindPropertyAccessExpression,
-  KindSatisfiesExpression,
   KindSpreadElement,
   Node_Expression,
   asSourceNode,
@@ -28,24 +18,25 @@ import {
   rustOptionalChainFactKey,
   rustSelfModeFactKey,
   rustTargetOperationFactKey,
+  rustGeneratorFactKey,
 } from "../facts/keys.js";
 import { appendMalformedSourceAst } from "../declarations/project-types.js";
-import { appendRustDiagnostic, rustOperationContext } from "../program/walk.js";
+import { appendRustDiagnostic } from "../program/walk.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { recordBindingWrite, resolveParameterAbi, validateFlowMarkerAgainstMode } from "../declarations/types-and-bindings.js";
 import { selectRustFlowReadProjection } from "../../policy/types/value-carrier-reconciliation.js";
 import { recordRustFlowReadProjection } from "../facts/value-carrier-queries.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
-import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { rustArgumentPassingKey, rustRuntimeCarrierKey, rustSelectedOperationKey } from "../../target-model/facts/selections.js";
 import { rustArgumentPassingMode } from "../facts/parameter-passing.js";
 import { rustProjectCallableTargetName } from "../facts/source-member-name.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { selectedSourceLiteralIsRepresentable } from "../../policy/types/selected-numeric-literal.js";
+import { finalizeProjectSourceGenericArguments } from "./project-call-generics.js";
 import { sourceTypeCarrierForDeclaration } from "./inputs.js";
+import { rustSpreadElementCarrier } from "../../target-model/operations/rest-assembly.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
-import type { RustSelectedTargetSignature, RustTargetMember, TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustSelectedTargetSignature, TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTargetOperationFact } from "../facts/keys.js";
 
 export function applySelectedProjectSourceCall(
@@ -65,24 +56,17 @@ export function applySelectedProjectSourceCall(
     appendMalformedSourceAst(walk, "Checked project-source call contains an undefined or non-data argument slot.");
     return undefined;
   }
-  const targetTypeArguments = finalizeProjectSourceTargetTypeArguments(
+  const genericInstantiation = finalizeProjectSourceGenericArguments(
     walk,
     selectedSignature,
     callArguments as readonly Node[],
     expected,
   );
-  if (targetTypeArguments === undefined) {
+  if (genericInstantiation === undefined) {
     return undefined;
   }
-  const substitutions = new Map<string, TargetTypeRef>();
-  for (let index = 0; index < (selectedSignature.sourceSelectedMethodTypeArguments?.length ?? 0); index += 1) {
-    const name = selectedSignature.sourceSelectedMethodTypeArguments?.[index]?.typeParameterName;
-    const target = targetTypeArguments[index];
-    if (name === undefined || target === undefined) {
-      return undefined;
-    }
-    substitutions.set(name, target);
-  }
+  const { substitutions, targetGenericArguments } = genericInstantiation;
+  const targetTypeArguments = rustTargetGenericTypeArguments(targetGenericArguments);
   const bindings = selectedSignature.sourceArgumentBindings;
   const selectedParameters = selectedSignature.sourceSelectedSignatureParameters;
   if (bindings === undefined || selectedParameters === undefined) {
@@ -134,8 +118,18 @@ export function applySelectedProjectSourceCall(
       );
       return undefined;
     }
-    const parameterCarrier = substituteRustTargetTypeParameters(targetParameter.type, substitutions);
-    const valueCarrier = substituteRustTargetTypeParameters(parameterAbi.valueCarrier, substitutions);
+    const parameterCarrier = substituteRustTargetGenerics(
+      targetParameter.type,
+      substitutions.types,
+      substitutions.lifetimes,
+      substitutions.consts,
+    );
+    const valueCarrier = substituteRustTargetGenerics(
+      parameterAbi.valueCarrier,
+      substitutions.types,
+      substitutions.lifetimes,
+      substitutions.consts,
+    );
     const mode = targetParameter.passingMode === "borrow-mut"
       ? "mut-ref" as const
       : targetParameter.passingMode === "borrow-shared"
@@ -180,9 +174,18 @@ export function applySelectedProjectSourceCall(
       inputs: inputs as NonNullable<(typeof inputs)[number]>[],
     });
   }
-  const resultCarrier = selectedMember.returnType === undefined
+  const declaredResultCarrier = walk.context.facts.get(
+    selectedDeclaration,
+    rustGeneratorFactKey,
+  )?.resultCarrier ?? selectedMember.returnType;
+  const resultCarrier = declaredResultCarrier === undefined
     ? undefined
-    : substituteRustTargetTypeParameters(selectedMember.returnType, substitutions);
+    : substituteRustTargetGenerics(
+        declaredResultCarrier,
+        substitutions.types,
+        substitutions.lifetimes,
+        substitutions.consts,
+      );
   if (resultCarrier === undefined) {
     return undefined;
   }
@@ -211,8 +214,9 @@ export function applySelectedProjectSourceCall(
   const optionalCall = walk.context.facts.get(expression, rustOptionalChainFactKey) ??
     walk.context.facts.resolve(expression, rustOptionalChainFactKey);
   const selectedCallableCarrier = optionalCall?.selectedGuardCarrier ?? callableCalleeCarrier;
+  const selectedNativeCallable = rustNativeCallableProtocol(selectedCallableCarrier);
   const indirectCallable = selectedCallableCarrier !== undefined &&
-    (selectedCallableCarrier.kind === "function-pointer" ||
+    (selectedNativeCallable !== undefined ||
       rustCallableProtocol(selectedCallableCarrier) !== undefined) &&
     (!directCallableDeclaration ||
       ast.kindName(callee) === "KindArrowFunction" || ast.kindName(callee) === KindFunctionExpression);
@@ -326,6 +330,7 @@ export function applySelectedProjectSourceCall(
           targetTypeArguments,
           ast,
           projectTypes: walk.context.projectTypes,
+          sourceLifetimes: walk.context.sourceLifetimes,
         });
         if (registration.kind === "rejected") {
           appendRustDiagnostic(
@@ -374,7 +379,8 @@ export function applySelectedProjectSourceCall(
     declarationKind === KindFunctionExpression) {
     const calleeCarrier = selectedCallableCarrier;
     if (calleeCarrier === undefined ||
-      (calleeCarrier.kind !== "function-pointer" && rustCallableProtocol(calleeCarrier) === undefined)) {
+      (rustNativeCallableProtocol(calleeCarrier) === undefined &&
+        rustCallableProtocol(calleeCarrier) === undefined)) {
       return undefined;
     }
     target = { form: "callable", carrier: calleeCarrier };
@@ -392,6 +398,7 @@ export function applySelectedProjectSourceCall(
       callee: selectedDeclaration,
       targetTypeArguments,
       ast,
+      sourceLifetimes: walk.context.sourceLifetimes,
     });
     if (registration.kind === "rejected") {
       appendRustDiagnostic(
@@ -405,7 +412,8 @@ export function applySelectedProjectSourceCall(
     }
   }
   if (target.form === "callable") {
-    const callable = rustCallableProtocol(target.carrier);
+    const callable = rustNativeCallableProtocol(target.carrier) ??
+      rustCallableProtocol(target.carrier);
     if (callable !== undefined) {
       if (callable.parameters.length !== parameters.length) {
         appendRustDiagnostic(
@@ -417,13 +425,38 @@ export function applySelectedProjectSourceCall(
         );
         return undefined;
       }
+      const callableResult = substituteRustTargetGenerics(
+        callable.result,
+        substitutions.types,
+        substitutions.lifetimes,
+        substitutions.consts,
+      );
+      if (!rustTargetTypeRefEquals(callableResult, resultCarrier)) {
+        appendRustDiagnostic(
+          walk,
+          "RUST_SOURCE_CALL_CALLABLE_RESULT_CONFLICT",
+          "The exact runtime-callable carrier conflicts with the selected source result ABI.",
+          expression,
+          ["target.capability=rust.source-call.callable-abi"],
+        );
+        return undefined;
+      }
       const callableParameters = parameters.map((parameter, index) => {
         const carrier = callable.parameters[index];
+        const instantiatedCarrier = carrier === undefined
+          ? undefined
+          : substituteRustTargetGenerics(
+              carrier,
+              substitutions.types,
+              substitutions.lifetimes,
+              substitutions.consts,
+            );
         const contractCarrier = parameter.mode === "value"
           ? parameter.parameterCarrier
           : parameter.valueCarrier;
-        return carrier !== undefined && rustTargetTypeRefEquals(carrier, contractCarrier)
-          ? { ...parameter, parameterCarrier: carrier, mode: "value" as const }
+        return instantiatedCarrier !== undefined &&
+            rustTargetTypeRefEquals(instantiatedCarrier, contractCarrier)
+          ? { ...parameter, parameterCarrier: instantiatedCarrier, mode: "value" as const }
           : undefined;
       });
       if (callableParameters.some((parameter) => parameter === undefined)) {
@@ -474,7 +507,7 @@ export function applySelectedProjectSourceCall(
     operationId,
     target,
     parameters,
-    ...(targetTypeArguments.length === 0 ? {} : { targetTypeArguments }),
+    ...(targetGenericArguments.length === 0 ? {} : { targetGenericArguments }),
     resultCarrier,
   });
   return setCarrierFact(walk, expression, finalResultCarrier);
@@ -511,7 +544,28 @@ export function applySelectedSourceCallArguments(
           rustTargetTypeRefEquals(carrier, bindingCarriers[0]))
         ? bindingCarriers[0]
         : undefined;
-    resolveExpressionCarrier(walk, argument, sourceFile, expected);
+    const resolvedArgumentCarrier = resolveExpressionCarrier(
+      walk,
+      argument,
+      sourceFile,
+      expected,
+    );
+    if (resolvedArgumentCarrier === undefined ||
+      ast.kindName(argument) === KindSpreadElement &&
+        !selectedSpreadArgumentMatches(
+          resolvedArgumentCarrier,
+          parameters.flatMap((parameter) => parameter.inputs.filter((input) =>
+            input.sourceArgumentIndex === index)),
+        )) {
+      appendRustDiagnostic(
+        walk,
+        "RUST_SOURCE_CALL_ARGUMENT_CARRIER_MISSING",
+        `Selected source argument ${index} has no exact carrier matching its effective parameter bindings.`,
+        argument,
+        ["target.capability=rust.source-call.argument-carrier"],
+      );
+      return false;
+    }
     const modes = parameters
       .filter((parameter) => parameter.inputs.some((input) =>
         input.sourceArgumentIndex === index))
@@ -542,168 +596,21 @@ export function applySelectedSourceCallArguments(
   return true;
 }
 
-function finalizeProjectSourceTargetTypeArguments(
-  walk: RustFactWalk,
-  selected: RustSelectedTargetSignature,
-  callArguments: readonly Node[],
-  expected: TargetTypeRef | undefined,
-): readonly TargetTypeRef[] | undefined {
-  const sourceArguments = selected.sourceSelectedMethodTypeArguments ?? [];
-  const selectedTargets = selected.targetTypeArguments ?? [];
-  if (sourceArguments.length !== selectedTargets.length) {
-    return undefined;
-  }
-  if (sourceArguments.length === 0) {
-    return selectedTargets;
-  }
-  const parameterNames = new Set(sourceArguments.map((argument) => argument.typeParameterName));
-  const finalized = [...selectedTargets];
-  const inferred = reconcileProjectSourceArgumentTypeParameters(
-    walk,
-    selected,
-    callArguments,
-    parameterNames,
-  );
-  if (inferred === undefined) {
-    return undefined;
-  }
-  for (let index = 0; index < sourceArguments.length; index += 1) {
-    const source = sourceArguments[index]!;
-    const target = inferred.get(source.typeParameterName);
-    if (target !== undefined && source.explicitTypeNode === undefined) {
-      finalized[index] = target;
-    }
-  }
-  if (expected === undefined || selected.member.returnType === undefined) {
-    return finalized;
-  }
-  const contextual = inferRustTargetTypeParameterBindings(
-    selected.member.returnType,
-    expected,
-    parameterNames,
-  );
-  if (contextual === undefined || contextual.size === 0) {
-    return finalized;
-  }
-  for (let index = 0; index < sourceArguments.length; index += 1) {
-    const source = sourceArguments[index]!;
-    const selectedTarget = finalized[index]!;
-    const contextualTarget = contextual.get(source.typeParameterName);
-    if (contextualTarget === undefined || rustTargetTypeRefEquals(selectedTarget, contextualTarget)) {
-      continue;
-    }
-    const argumentTarget = inferred.get(source.typeParameterName);
-    if (argumentTarget !== undefined && !rustTargetTypeRefEquals(argumentTarget, contextualTarget)) {
-      continue;
-    }
-    if (source.explicitTypeNode !== undefined || !isRustNumericCarrier(selectedTarget) ||
-      contextualTarget.kind !== "source-primitive" || !isRustNumericCarrier(contextualTarget) ||
-      !projectSourceTypeArgumentHasLiteralProof(
-        walk,
-        selected.member,
-        source.typeParameterName,
-        callArguments,
-        contextualTarget,
-      )) {
-      continue;
-    }
-    finalized[index] = contextualTarget;
-  }
-  return finalized;
-}
-
-function reconcileProjectSourceArgumentTypeParameters(
-  walk: RustFactWalk,
-  selected: RustSelectedTargetSignature,
-  callArguments: readonly Node[],
-  parameterNames: ReadonlySet<string>,
-): ReadonlyMap<string, TargetTypeRef> | undefined {
-  const reconciled = new Map<string, TargetTypeRef>();
-  const bindings = selected.sourceArgumentBindings;
-  if (bindings === undefined) {
-    return reconciled;
-  }
-  for (const [argumentIndex, argument] of callArguments.entries()) {
-    if (walk.context.ast.kindName(argument) === KindNumericLiteral) {
-      continue;
-    }
-    const matches = bindings.filter((binding) =>
-      binding.sourceArgumentIndex === argumentIndex);
-    const first = matches[0];
-    if (first === undefined || matches.some((binding) =>
-      binding.sourceParameterIndex !== first.sourceParameterIndex ||
-      binding.sourceForm !== first.sourceForm)) {
-      return undefined;
-    }
-    const parameter = selected.member.parameters[first.sourceParameterIndex];
-    const actual = walk.context.facts.getRuntimeCarrierFact(argument)?.carrier ??
-      resolveProjectSourceInferenceCarrier(walk, argument);
-    if (parameter === undefined || actual === undefined) {
-      continue;
-    }
-    const candidate = inferRustTargetTypeParameterBindings(
-      parameter.type,
-      actual,
-      parameterNames,
-    );
-    if (candidate === undefined) {
-      continue;
-    }
-    for (const [name, carrier] of candidate) {
-      const existing = reconciled.get(name);
-      if (existing !== undefined && !rustTargetTypeRefEquals(existing, carrier)) {
-        return undefined;
-      }
-      reconciled.set(name, carrier);
-    }
-  }
-  return reconciled;
-}
-
-function resolveProjectSourceInferenceCarrier(
-  walk: RustFactWalk,
-  argument: Node,
-): TargetTypeRef | undefined {
-  const kind = walk.context.ast.kindName(argument);
-  if (kind !== KindIdentifier && kind !== KindCallExpression &&
-    kind !== KindNewExpression && kind !== KindPropertyAccessExpression &&
-    kind !== KindElementAccessExpression && kind !== KindBinaryExpression &&
-    kind !== KindPrefixUnaryExpression && kind !== KindPostfixUnaryExpression &&
-    kind !== KindParenthesizedExpression && kind !== KindNonNullExpression &&
-    kind !== KindSatisfiesExpression && kind !== "KindAsExpression" &&
-    kind !== "KindTypeAssertionExpression") {
-    return undefined;
-  }
-  return resolveRustTargetTypeRef(
-    argument,
-    rustOperationContext(walk, argument),
-    walk.operationOptions,
-  );
-}
-
-function projectSourceTypeArgumentHasLiteralProof(
-  walk: RustFactWalk,
-  member: RustTargetMember,
-  typeParameterName: string,
-  callArguments: readonly Node[],
-  target: Extract<TargetTypeRef, { readonly kind: "source-primitive" }>,
+function selectedSpreadArgumentMatches(
+  sourceCarrier: TargetTypeRef,
+  inputs: readonly import("../facts/keys.js").RustSourceCallParameterPlan["inputs"][number][],
 ): boolean {
-  let proven = false;
-  for (let index = 0; index < member.parameters.length; index += 1) {
-    const parameter = member.parameters[index];
-    if (parameter?.type.kind !== "type-parameter" || parameter.type.name !== typeParameterName) {
-      continue;
-    }
-    const argument = callArguments[index];
-    if (argument === undefined) {
-      return false;
-    }
-    if (!selectedSourceLiteralIsRepresentable(argument, target.name, walk.context.ast)) {
-      return false;
-    }
-    proven = true;
-  }
-  return proven;
+  return inputs.length > 0 && inputs.every((input) => {
+    const selectedCarrier = input.sourceForm === "spread-element"
+      ? input.spreadElementIndex === undefined
+        ? undefined
+        : rustSpreadElementCarrier(sourceCarrier, input.spreadElementIndex)
+      : input.sourceForm === "spread-sequence"
+        ? sourceCarrier
+        : undefined;
+    return selectedCarrier !== undefined &&
+      rustTargetTypeRefEquals(selectedCarrier, input.carrier);
+  });
 }
 
 export function recordTargetOperation(

@@ -78,7 +78,7 @@ export function selectedMemberReceiverCarrier(
   options: RustOperationsProviderOptions,
 ): TargetTypeRef | undefined {
   const receiver = asNode(request.receiver, context);
-  const sourceCarrier = resolveRustTargetTypeRef(
+  const resolvedSourceCarrier = resolveRustTargetTypeRef(
     request.receiver,
     context,
     options,
@@ -86,6 +86,14 @@ export function selectedMemberReceiverCarrier(
   if (receiver === undefined) {
     return undefined;
   }
+  const receiverKind = context.ast.kindName(receiver);
+  const containingThisDefinition = receiverKind === "KindThisExpression" ||
+      receiverKind === "KindThisKeyword"
+    ? options.projectTypes.definitionContainingDeclaration(receiver)
+    : undefined;
+  const sourceCarrier = containingThisDefinition === undefined
+    ? resolvedSourceCarrier
+    : options.projectTypes.openCarrier(containingThisDefinition);
   if (request.sourceReceiverType === undefined) {
     return undefined;
   }
@@ -94,7 +102,22 @@ export function selectedMemberReceiverCarrier(
     context,
     options,
   );
+  const selectedOwner = options.projectTypes.definitionContainingDeclaration(
+    request.sourceSelectedDeclaration,
+  );
+  if (
+    containingThisDefinition !== undefined &&
+    sourceCarrier !== undefined &&
+    selectedOwner === containingThisDefinition &&
+    !context.ast.hasModifierKind(request.sourceSelectedDeclaration, "static")
+  ) {
+    return sourceCarrier;
+  }
   if (selectedCarrier === undefined) {
+    if (sourceCarrier !== undefined && selectedOwner !== undefined &&
+      options.projectTypes.relationship(sourceCarrier, selectedOwner).kind === "related") {
+      return sourceCarrier;
+    }
     const selectedSourceProfileMember = resolveSelectedSourceProfilePropertyMembers(
       context,
       request.expression,
@@ -110,7 +133,6 @@ export function selectedMemberReceiverCarrier(
       : sourceCarrier;
   }
   if (sourceCarrier === undefined) {
-    const receiverKind = context.ast.kindName(receiver);
     return (receiverKind === "KindThisExpression" || receiverKind === "KindThisKeyword") &&
         rustStructuralObjectCarrierValue(selectedCarrier) !== undefined
       ? selectedCarrier
@@ -308,9 +330,9 @@ export function providerOperationTemplate<
     resultCarrier: row.resultCarrier,
     ...(row.parameterCarriers === undefined ? {} : { parameterCarriers: row.parameterCarriers }),
     ...(row.receiverCarrier === undefined ? {} : { receiverCarrier: row.receiverCarrier }),
-    ...(row.typeParameters === undefined ? {} : { typeParameters: row.typeParameters }),
+    ...(row.genericParameters === undefined ? {} : { genericParameters: row.genericParameters }),
     ...(row.typeRequirements === undefined ? {} : { typeRequirements: row.typeRequirements }),
-    ...(row.targetTypeArguments === undefined ? {} : { targetTypeArguments: row.targetTypeArguments }),
+    ...(row.targetGenericArguments === undefined ? {} : { targetGenericArguments: row.targetGenericArguments }),
     ...(row.resultConversion === undefined ? {} : { resultConversion: row.resultConversion }),
     isAsync: row.isAsync === true,
     isFallible: row.isFallible === true,
@@ -590,7 +612,8 @@ export function selectedArgumentMatchScore(
       expected,
       options.projectTypes,
     );
-    if (reconciliation.kind === "conversion" || reconciliation.kind === "project-upcast") {
+    if (reconciliation.kind === "call-scoped-lifetime" ||
+      reconciliation.kind === "conversion" || reconciliation.kind === "project-upcast") {
       return 1;
     }
     return expected.kind === "source-primitive" && isRustNumericCarrier(expected) &&

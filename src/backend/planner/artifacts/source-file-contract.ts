@@ -50,7 +50,7 @@ function publicItemSurface(item: RustItem): readonly string[] {
             name: item.name,
             isAsync: item.isAsync === true,
             ...(item.errorType === undefined ? {} : { errorType: item.errorType }),
-            typeParameters: item.typeParams ?? [],
+            generics: item.generics,
             parameters: item.params,
             ...(item.returnType === undefined
               ? {}
@@ -69,13 +69,7 @@ function publicItemSurface(item: RustItem): readonly string[] {
             item.name,
             ...item.attrs ?? [],
             ...item.derives,
-            ...(item.typeParams ?? []).map((parameter) =>
-              encodeRustContractParts([
-                "type-parameter",
-                parameter.name,
-                ...parameter.bounds.map((bound) =>
-                  bound.kind === "trait" ? bound.path : `'${bound.name}`),
-              ])),
+            encodeRustContractParts(["generics", closedMetadataKey(item.generics)]),
             ...item.fields.map((field) =>
               encodeRustContractParts([
                 "field",
@@ -111,7 +105,10 @@ function publicMethodSurface(
     "method",
     owner,
     method.name,
-    method.selfParam ?? "static",
+    method.selfParam === undefined
+      ? "static"
+      : encodeRustContractParts(["self", closedMetadataKey(method.selfParam)]),
+    encodeRustContractParts(["generics", closedMetadataKey(method.generics)]),
     method.errorType === undefined
       ? "infallible"
       : encodeRustContractParts(["fallible", closedMetadataKey(method.errorType)]),

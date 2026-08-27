@@ -651,7 +651,8 @@ function applyOptionLane(
       );
       return undefined;
     }
-    if (reconciliation.kind === "conversion" || reconciliation.kind === "project-upcast") {
+    if (reconciliation.kind === "call-scoped-lifetime" ||
+      reconciliation.kind === "conversion" || reconciliation.kind === "project-upcast") {
       recordRustValueCarrierReconciliation(walk.context.facts, expression, reconciliation);
       projected = target;
       if (reconciliation.kind === "project-upcast" && !isRustOptionCarrier(expected)) {
@@ -711,7 +712,8 @@ export function reconcileRequiredCarrier(
   if (reconciliation.kind === "incompatible") {
     return false;
   }
-  if (reconciliation.kind === "conversion" || reconciliation.kind === "project-upcast") {
+  if (reconciliation.kind === "call-scoped-lifetime" ||
+    reconciliation.kind === "conversion" || reconciliation.kind === "project-upcast") {
     recordRustValueCarrierReconciliation(
       walk.context.facts,
       expression,

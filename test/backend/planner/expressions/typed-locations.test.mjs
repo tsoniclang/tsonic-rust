@@ -456,15 +456,14 @@ test("promoted storage preserves selected mutable provider arguments", { timeout
     },
     files: {
       "index.ts": `
-import { addressOf, loadPointer } from "@tsonic/core/lang.js";
-import { borrowMut } from "@tsonic/rust/lang.js";
+import { addressOf, loadPointer, mutableBorrow } from "@tsonic/core/lang.js";
 import { Vector, scale } from "@acme/vectors";
 import { check } from "@acme/testing";
 
 export function main(): void {
   let value = new Vector(3, 4);
   const alias = addressOf(value);
-  scale(borrowMut(value), 2);
+  scale(mutableBorrow(value), 2);
   check(loadPointer(alias).x === 6);
   check(loadPointer(alias).y === 8);
 }
@@ -490,8 +489,7 @@ test("multiple promoted mutable inputs require disjoint storage roots", { timeou
     },
     files: {
       "index.ts": `
-import { addressOf, loadPointer } from "@tsonic/core/lang.js";
-import { borrowMut } from "@tsonic/rust/lang.js";
+import { addressOf, loadPointer, mutableBorrow } from "@tsonic/core/lang.js";
 import { Vector, mutateBoth } from "@acme/vectors";
 import { check } from "@acme/testing";
 
@@ -500,7 +498,7 @@ export function main(): void {
   let right = new Vector(3, 4);
   const leftAlias = addressOf(left);
   const rightAlias = addressOf(right);
-  mutateBoth(borrowMut(left), borrowMut(right));
+  mutateBoth(mutableBorrow(left), mutableBorrow(right));
   check(loadPointer(leftAlias).x === 2);
   check(loadPointer(rightAlias).y === 5);
 }
@@ -519,8 +517,7 @@ export function main(): void {
     packages: [acmeVectorsPackage()],
     files: {
       "index.ts": `
-import { addressOf } from "@tsonic/core/lang.js";
-import { borrowMut } from "@tsonic/rust/lang.js";
+import { addressOf, mutableBorrow } from "@tsonic/core/lang.js";
 import { Vector, mutateBoth } from "@acme/vectors";
 
 class Pair {
@@ -537,7 +534,7 @@ export function reject(): void {
   let pair = new Pair(new Vector(1, 2), new Vector(3, 4));
   addressOf(pair.left);
   addressOf(pair.right);
-  mutateBoth(borrowMut(pair.left), borrowMut(pair.right));
+  mutateBoth(mutableBorrow(pair.left), mutableBorrow(pair.right));
 }
 `,
     },

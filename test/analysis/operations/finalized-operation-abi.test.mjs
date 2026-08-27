@@ -5,6 +5,7 @@ import {
   validateRustFinalizedOperationAbi,
 } from "../../../dist/analysis/facts/finalized-operation-abi.js";
 import {
+  closedMetadataKey,
   isClosedMetadata,
   snapshotClosedMetadata,
 } from "../../../dist/target-model/metadata/closed-data.js";
@@ -26,6 +27,7 @@ const string = { kind: "target-named", id: "rust.std.String" };
 const sourceNullish = { kind: "target-specific", target: "rust", name: "source-nullish" };
 const unit = { kind: "tuple", elements: [] };
 const usize = { kind: "source-primitive", name: "native-uint" };
+const typeArgument = (type) => ({ kind: "type", type });
 
 test("provider calls retain closed target-only generic arguments", () => {
   const abi = finalizeRustProviderOperationAbi({
@@ -33,20 +35,20 @@ test("provider calls retain closed target-only generic arguments", () => {
     form: { form: "call", path: "core::mem::size_of" },
     sourceArgumentCarriers: [],
     resultCarrier: usize,
-    targetTypeArguments: [int32],
+    targetGenericArguments: [typeArgument(int32)],
     isAsync: false,
     isFallible: false,
   });
 
   assert.ok(abi);
-  assert.deepEqual(abi.targetTypeArguments, [int32]);
+  assert.deepEqual(abi.targetGenericArguments, [typeArgument(int32)]);
   assert.equal(validateRustFinalizedOperationAbi(abi), true);
   assert.equal(finalizeRustProviderOperationAbi({
     operationKind: "method",
     form: { form: "call", path: "core::mem::size_of" },
     sourceArgumentCarriers: [],
     resultCarrier: usize,
-    targetTypeArguments: [{ kind: "type-parameter", name: "T" }],
+    targetGenericArguments: [typeArgument({ kind: "type-parameter", name: "" })],
     isAsync: false,
     isFallible: false,
   }), undefined);
@@ -55,7 +57,7 @@ test("provider calls retain closed target-only generic arguments", () => {
     form: { form: "path", path: "acme::VALUE" },
     sourceArgumentCarriers: [],
     resultCarrier: int32,
-    targetTypeArguments: [int32],
+    targetGenericArguments: [typeArgument(int32)],
     isAsync: false,
     isFallible: false,
   }), undefined);
@@ -65,7 +67,7 @@ test("provider evaluation effects are conservative by default and require an exa
   const array = {
     kind: "target-named",
     id: "rust.js.JsArray",
-    typeArguments: [int32],
+    genericArguments: [typeArgument(int32)],
   };
   const taggedForm = {
     form: "receiver-tagged-array",
@@ -75,7 +77,7 @@ test("provider evaluation effects are conservative by default and require an exa
     elementCarrier: {
       kind: "target-named",
       id: "acme.MutableInput",
-      typeArguments: [int32],
+      genericArguments: [typeArgument(int32)],
     },
     alternatives: [{
       inputCarrier: int32,
@@ -213,7 +215,7 @@ test("operation-form writability is one exhaustive structural policy", () => {
       form: "trait-call",
       owner: int32,
       traitPath: "acme::Trait",
-      traitTypeArguments: [],
+      traitGenericArguments: [],
       method: "mutate",
       receiverMode: "mut-ref",
     },
@@ -347,7 +349,8 @@ test("provider receivers distinguish runtime values from compile-time owner iden
     value: {
       id: "rust.test.Environment",
       path: "acme::Environment",
-      typeArguments: [],
+      genericArguments: [],
+      genericDefaults: [],
       traits: { implementations: [] },
     },
   };
@@ -589,7 +592,11 @@ test("variadic value arrays move each source value into one owned fixed Rust arr
     operationKind: "method",
     form,
     sourceArgumentCarriers: [int32, int32],
-    resultCarrier: { kind: "target-named", id: "rust.js.JsArray", typeArguments: [int32] },
+    resultCarrier: {
+      kind: "target-named",
+      id: "rust.js.JsArray",
+      genericArguments: [typeArgument(int32)],
+    },
     isAsync: false,
     isFallible: false,
   });
@@ -597,7 +604,11 @@ test("variadic value arrays move each source value into one owned fixed Rust arr
     operationKind: "method",
     form,
     sourceArgumentCarriers: [],
-    resultCarrier: { kind: "target-named", id: "rust.js.JsArray", typeArguments: [int32] },
+    resultCarrier: {
+      kind: "target-named",
+      id: "rust.js.JsArray",
+      genericArguments: [typeArgument(int32)],
+    },
     isAsync: false,
     isFallible: false,
   });
@@ -605,7 +616,11 @@ test("variadic value arrays move each source value into one owned fixed Rust arr
     operationKind: "method",
     form,
     sourceArgumentCarriers: [string],
-    resultCarrier: { kind: "target-named", id: "rust.js.JsArray", typeArguments: [int32] },
+    resultCarrier: {
+      kind: "target-named",
+      id: "rust.js.JsArray",
+      genericArguments: [typeArgument(int32)],
+    },
     isAsync: false,
     isFallible: false,
   });
@@ -627,7 +642,7 @@ test("receiver value arrays move every variadic source value into one fixed Rust
   const receiver = {
     kind: "target-named",
     id: "rust.js.JsArray",
-    typeArguments: [int32],
+    genericArguments: [typeArgument(int32)],
   };
   const form = {
     form: "receiver-value-array",
@@ -684,8 +699,16 @@ test("receiver value arrays move every variadic source value into one fixed Rust
 });
 
 test("tagged value arrays select one exact constructor for every variadic source value", () => {
-  const array = { kind: "target-named", id: "rust.js.JsArray", typeArguments: [int32] };
-  const tagged = { kind: "target-named", id: "rust.js.JsArrayConcatItem", typeArguments: [int32] };
+  const array = {
+    kind: "target-named",
+    id: "rust.js.JsArray",
+    genericArguments: [typeArgument(int32)],
+  };
+  const tagged = {
+    kind: "target-named",
+    id: "rust.js.JsArrayConcatItem",
+    genericArguments: [typeArgument(int32)],
+  };
   const form = {
     form: "receiver-tagged-array",
     name: "concat",
@@ -749,7 +772,7 @@ test("async ABI separates invocation, await fallibility, and post-await conversi
   assert.deepEqual(abi.result.futureCarrier, {
     kind: "target-named",
     id: "rust.core.Future",
-    typeArguments: [int32],
+    genericArguments: [typeArgument(int32)],
   });
   assert.equal(validateRustFinalizedOperationAbi({
     ...abi,
@@ -851,7 +874,10 @@ test("finalized ABI validation is total and rejects every mutated closed-contrac
     { ...abi, target: { ...abi.target, argModes: [] } },
     { ...abi, target: { ...abi.target, argOrder: [0, 0] } },
     { ...abi, targetArguments: [{ ...abi.targetArguments[0], source: { kind: "argument", sourceIndex: 7 } }] },
-    { ...abi, targetTypeArguments: [{ kind: "type-parameter", name: "T" }] },
+    {
+      ...abi,
+      targetGenericArguments: [typeArgument({ kind: "type-parameter", name: "" })],
+    },
     { ...abi, result: { ...abi.result, unexpected: true } },
   ];
 
@@ -967,7 +993,7 @@ test("finalized ABI rejects sparse arrays at every nested contract boundary", ()
   const malformed = [
     { ...abi, sourceArguments: sparse },
     { ...abi, targetArguments: Array(abi.targetArguments.length) },
-    { ...abi, targetTypeArguments: Array(1) },
+    { ...abi, targetGenericArguments: Array(1) },
     { ...abi, target: { ...abi.target, argModes: Array(1) } },
   ];
   for (const candidate of malformed) {
@@ -978,6 +1004,7 @@ test("finalized ABI rejects sparse arrays at every nested contract boundary", ()
 
 test("target type references honor optional target-specific payloads and reject malformed children", () => {
   const sparseTypes = Array(1);
+  const sparseGenericArguments = Array(1);
   const payloadFree = { kind: "target-specific", target: "rust", name: "source-nullish" };
   const slice = { kind: "slice", element: int32 };
   assert.equal(isRustTargetTypeRef(payloadFree), true);
@@ -985,7 +1012,7 @@ test("target type references honor optional target-specific payloads and reject 
   assert.equal(isRustTargetTypeRef(slice), true);
   assert.equal(rustTargetTypeRefEquals(slice, { kind: "slice", element: { ...int32 } }), true);
   const malformed = [
-    { kind: "target-named", id: "acme.Type", typeArguments: sparseTypes },
+    { kind: "target-named", id: "acme.Type", genericArguments: sparseGenericArguments },
     { kind: "tuple", elements: sparseTypes },
     { kind: "function-pointer", args: sparseTypes, result: unit },
     { kind: "target-specific", target: "rust", name: "opaque", value: () => undefined },
@@ -1022,4 +1049,14 @@ test("closed metadata rejects sparse, accessor-backed, and custom-property array
     assert.throws(() => snapshotClosedMetadata(candidate), /sparse, accessor-backed, or custom-property array/u);
   }
   assert.equal(getterCalls, 0);
+});
+
+test("closed metadata preserves exact arbitrary-width Rust const integers", () => {
+  const value = { kind: "integer", value: 18446744073709551615n };
+  assert.equal(isClosedMetadata(value), true);
+  assert.deepEqual(snapshotClosedMetadata(value), value);
+  assert.equal(
+    closedMetadataKey(value),
+    "{4:kind=s:7:integer,5:value=i:18446744073709551615}",
+  );
 });

@@ -21,6 +21,7 @@ import {
   rustOptionElementCarrier,
   rustCallableProtocol,
   rustCallableTargetType,
+  rustNativeCallableProtocol,
   rustSourcePrimitiveTargetType,
   rustUnitTargetType,
 } from "../../target-model/types/index.js";
@@ -32,6 +33,10 @@ import { prepareRustDeferredCheckedCall } from "../operations/provider/index.js"
 import { readRustSourceNativePointerOperation, readRustSourceSafetyBuilder, readRustSourceUnsafeContext } from "../../policy/safety/source-explicit-safety.js";
 import { recordExportAssignmentFacts, resolveTypeNodeCarrier } from "../control-flow/statements.js";
 import { resolveExpressionCarrier } from "./carriers.js";
+import {
+  readRustReferenceOperation,
+  resolvedRustReferenceOperationCarrier,
+} from "./reference-operations.js";
 import { resolveRustExactNullishValueCarrier, resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { rustPolicyTargetDiagnostic } from "../../policy/operations/contracts.js";
 import { rustRuntimeCarrierKey, rustSelectedCallKey } from "../../target-model/facts/selections.js";
@@ -261,7 +266,8 @@ export function isSharedSourceMarkerOperation(
   expression: Node,
 ): boolean {
   const sourceFacts = walk.context.source.sourceFacts;
-  return readRustSourceNativePointerOperation(sourceFacts, expression) !== undefined ||
+  return readRustReferenceOperation(walk, expression) !== undefined ||
+    readRustSourceNativePointerOperation(sourceFacts, expression) !== undefined ||
     readRustSourceUnsafeContext(sourceFacts, expression) !== undefined ||
     readRustSourceSafetyBuilder(sourceFacts, expression) !== undefined;
 }
@@ -277,6 +283,19 @@ function resolveSharedSourceMarkerCarrier(
   expected: TargetTypeRef | undefined,
 ): RustSharedSourceMarkerCarrierResolution {
   const sourceFacts = walk.context.source.sourceFacts;
+  const referenceOperation = readRustReferenceOperation(walk, expression);
+  if (referenceOperation !== undefined) {
+    return {
+      handled: true,
+      ...resolvedRustReferenceOperationCarrier(
+        walk,
+        expression,
+        sourceFile,
+        referenceOperation,
+        expected,
+      ),
+    };
+  }
   const nativePointer = readRustSourceNativePointerOperation(
     sourceFacts,
     expression,
@@ -473,9 +492,7 @@ function applySelectedRuntimeCallableCall(
   selectedSignature: RustSelectedTargetSignature,
 ): TargetTypeRef | undefined {
   const carrier = selectedSignature.sourceCallableCarrier;
-  const callable = carrier?.kind === "function-pointer"
-    ? { parameters: carrier.args, result: carrier.result }
-    : rustCallableProtocol(carrier);
+  const callable = rustNativeCallableProtocol(carrier) ?? rustCallableProtocol(carrier);
   const bindings = selectedSignature.sourceArgumentBindings;
   const memberParameters = selectedSignature.member.parameters;
   const sourceParameterIndexes = selectedSignature.sourceCallableParameterIndexes;
@@ -489,7 +506,7 @@ function applySelectedRuntimeCallableCall(
     !isDenseDataArray(callArguments) ||
     callArguments.some((argument) => argument === undefined) ||
     (selectedSignature.sourceSelectedMethodTypeArguments?.length ?? 0) !== 0 ||
-    (selectedSignature.targetTypeArguments?.length ?? 0) !== 0 ||
+    (selectedSignature.targetGenericArguments?.length ?? 0) !== 0 ||
     callable.parameters.length !== memberParameters.length ||
     sourceParameterIndexes.length !== memberParameters.length ||
     sourceParameterIndexes.some((index) => !Number.isSafeInteger(index) || index < 0 ||

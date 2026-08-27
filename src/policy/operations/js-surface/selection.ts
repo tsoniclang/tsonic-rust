@@ -50,7 +50,11 @@ import { jsOperationRows, rustInferCarrier } from "./rows.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { JsCarrierRef, JsLane, JsOperationRequest, JsOperationRowData, JsOperationSelection } from "./model.js";
 import type { RustProviderOperationForm } from "../../../target-model/operations/model.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type {
+  RustTargetGenericArgument,
+  RustTargetTraitRef,
+  TargetTypeRef,
+} from "../../../target-model/types/model.js";
 
 interface JsLaneBindings {
   readonly element?: TargetTypeRef;
@@ -414,9 +418,15 @@ function materializeInferredCarrier(carrier: TargetTypeRef, inferred: TargetType
   }
   switch (carrier.kind) {
     case "target-named":
-      return carrier.typeArguments === undefined
+      return carrier.genericArguments === undefined
         ? carrier
-        : { ...carrier, typeArguments: carrier.typeArguments.map((argument) => materializeInferredCarrier(argument, inferred)) };
+        : {
+            ...carrier,
+            genericArguments: materializeInferredGenericArguments(
+              carrier.genericArguments,
+              inferred,
+            ),
+          };
     case "array":
       return { ...carrier, element: materializeInferredCarrier(carrier.element, inferred) };
     case "tuple":
@@ -432,11 +442,85 @@ function materializeInferredCarrier(carrier: TargetTypeRef, inferred: TargetType
         args: carrier.args.map((argument) => materializeInferredCarrier(argument, inferred)),
         result: materializeInferredCarrier(carrier.result, inferred),
       };
+    case "trait-ref":
+      return materializeInferredTraitRef(carrier, inferred);
+    case "trait-object":
+      return {
+        ...carrier,
+        principal: materializeInferredTraitRef(carrier.principal, inferred),
+        autoTraits: carrier.autoTraits.map((trait) =>
+          materializeInferredTraitRef(trait, inferred)),
+      };
+    case "impl-trait":
+      return {
+        ...carrier,
+        bounds: carrier.bounds.map((trait) =>
+          materializeInferredTraitRef(trait, inferred)),
+      };
     case "associated-type":
-      return { ...carrier, owner: materializeInferredCarrier(carrier.owner, inferred) };
+      return {
+        ...carrier,
+        owner: materializeInferredCarrier(carrier.owner, inferred),
+        ...(carrier.trait === undefined
+          ? {}
+          : { trait: materializeInferredTraitRef(carrier.trait, inferred) }),
+        ...(carrier.genericArguments === undefined
+          ? {}
+          : {
+              genericArguments: materializeInferredGenericArguments(
+                carrier.genericArguments,
+                inferred,
+              ),
+            }),
+      };
     default:
       return carrier;
   }
+}
+
+function materializeInferredTraitRef(
+  trait: RustTargetTraitRef,
+  inferred: TargetTypeRef,
+): RustTargetTraitRef {
+  return {
+    ...trait,
+    genericArguments: materializeInferredGenericArguments(
+      trait.genericArguments,
+      inferred,
+    ),
+    associatedConstraints: trait.associatedConstraints.map((constraint) =>
+      constraint.kind === "equality"
+        ? {
+            ...constraint,
+            genericArguments: materializeInferredGenericArguments(
+              constraint.genericArguments,
+              inferred,
+            ),
+            type: materializeInferredCarrier(constraint.type, inferred),
+          }
+        : {
+            ...constraint,
+            genericArguments: materializeInferredGenericArguments(
+              constraint.genericArguments,
+              inferred,
+            ),
+            traits: constraint.traits.map((bound) =>
+              materializeInferredTraitRef(bound, inferred)),
+          }),
+  };
+}
+
+function materializeInferredGenericArguments(
+  arguments_: readonly RustTargetGenericArgument[],
+  inferred: TargetTypeRef,
+): readonly RustTargetGenericArgument[] {
+  return arguments_.map((argument): RustTargetGenericArgument =>
+    argument.kind === "type"
+      ? {
+          kind: "type",
+          type: materializeInferredCarrier(argument.type, inferred),
+        }
+      : argument);
 }
 
 function firstArgumentId(request: JsOperationRequest): string | undefined {

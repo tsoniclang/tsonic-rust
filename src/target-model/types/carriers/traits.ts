@@ -1,9 +1,13 @@
 import { isRustBigIntCarrier, isRustJsStringCarrier, isRustNullCarrier, isRustStringCarrier, isRustUndefinedCarrier, isRustUnitCarrier } from "./js.js";
-import { isRustIntegerCarrier, rustPrimitiveTypeName } from "./primitives.js";
+import { isRustIntegerCarrier, rustFutureTargetId, rustPrimitiveTypeName } from "./primitives.js";
 import { rustBigIntTargetId, rustCallableTargetId, rustJsArrayTargetId, rustJsDateTargetId, rustJsErrorTargetId, rustJsMapTargetId, rustJsRegExpExecArrayTargetId, rustJsRegExpIndicesTargetId, rustJsRegExpMatchArrayTargetId, rustJsRegExpNamedGroupsTargetId, rustJsRegExpNamedIndicesTargetId, rustJsRegExpStringIteratorTargetId, rustJsRegExpTargetId, rustJsSetTargetId, rustJsStringTargetId, rustJsValueTargetId, rustLocationTargetId, rustNullTargetId, rustOptionTargetId, rustProgramErrorTargetId, rustRegExpExecArrayTargetId, rustRegExpIndicesTargetId, rustRegExpMatchArrayTargetId, rustRegExpNamedGroupsTargetId, rustRegExpNamedIndicesTargetId, rustRegExpStringIteratorTargetId, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustStringTargetId, rustStructuralObjectCarrierValue, rustUndefinedTargetId } from "./source-types.js";
 import { rustFixedArrayCarrierValue, rustNamedTypeCarrierValue } from "./native.js";
 import type { RustNamedTypeCarrierValue } from "./native.js";
 import type { TargetTypeRef } from "../model.js";
+import {
+  rustOnlyTypeGenericArguments,
+  rustTargetGenericTypeArguments,
+} from "../generic-arguments.js";
 
 export function isRustCopyCarrier(carrier: TargetTypeRef | undefined): boolean {
   if (carrier === undefined) {
@@ -18,7 +22,7 @@ export function isRustCopyCarrier(carrier: TargetTypeRef | undefined): boolean {
   }
   if (carrier.kind === "target-named") {
     if (carrier.id === rustOptionTargetId) {
-      const [value] = carrier.typeArguments ?? [];
+      const [value] = rustOnlyTypeGenericArguments(carrier.genericArguments) ?? [];
       return value !== undefined && isRustCopyCarrier(value);
     }
     if (rustUnconditionallyCopyTargetIds.has(carrier.id)) {
@@ -47,7 +51,7 @@ export function isRustJsStrictEqualityCarrier(carrier: TargetTypeRef | undefined
 
 export function rustCarrierSupportsClone(carrier: TargetTypeRef | undefined): boolean {
   if (carrier === undefined || carrier.kind === "type-parameter" ||
-    carrier.kind === "associated-type" || carrier.kind === "lifetime" ||
+    carrier.kind === "associated-type" ||
     carrier.kind === "opaque" || carrier.kind === "closure" ||
     carrier.kind === "slice" ||
     carrier.kind === "reference" && carrier.mutable) {
@@ -65,7 +69,7 @@ export function rustCarrierSupportsClone(carrier: TargetTypeRef | undefined): bo
   }
   if (carrier.kind === "target-named") {
     if (carrier.id === rustOptionTargetId) {
-      const [value] = carrier.typeArguments ?? [];
+      const [value] = rustOnlyTypeGenericArguments(carrier.genericArguments) ?? [];
       return value !== undefined && rustCarrierSupportsClone(value);
     }
     return rustUnconditionallyCloneTargetIds.has(carrier.id);
@@ -86,7 +90,8 @@ export function rustCarrierSupportsClone(carrier: TargetTypeRef | undefined): bo
   if (sourceUnion !== undefined) {
     return sourceUnion.variants.every((variant) => rustCarrierSupportsClone(variant.carrier));
   }
-  return carrier.target === "rust" && carrier.name === "source-type";
+  return carrier.kind === "target-specific" &&
+    carrier.target === "rust" && carrier.name === "source-type";
 }
 
 export function rustCarrierReferentMutationRequiresMutableBinding(
@@ -133,6 +138,9 @@ export function rustCarrierSupportsTrait(
   if (traitPath === "core::marker::Copy") {
     return isRustCopyCarrier(carrier);
   }
+  if (carrier.kind === "target-named" && carrier.id === rustFutureTargetId) {
+    return traitPath === "core::future::future::Future";
+  }
   if (carrier.kind === "source-primitive") {
     return carrier.name !== "float32" && carrier.name !== "float64" &&
       rustEqHashTraitPaths.has(traitPath) &&
@@ -156,7 +164,7 @@ export function rustCarrierSupportsTrait(
     return rustEqHashTraitPaths.has(traitPath) && rustCarrierSupportsTrait(fixedArray.element, traitPath);
   }
   if (carrier.kind === "target-named" && carrier.id === rustOptionTargetId) {
-    const [element] = carrier.typeArguments ?? [];
+    const [element] = rustOnlyTypeGenericArguments(carrier.genericArguments) ?? [];
     return rustEqHashTraitPaths.has(traitPath) && element !== undefined &&
       rustCarrierSupportsTrait(element, traitPath);
   }
@@ -213,9 +221,10 @@ export function rustNamedTypeSupportsTrait(
   traitPath: string,
   typeParameterSupports: (name: string, traitPath: string) => boolean = () => false,
 ): boolean {
+  const typeArguments = rustTargetGenericTypeArguments(namedType.genericArguments);
   return namedType.traits.implementations.some((implementation) =>
     implementation.traitPath === traitPath && implementation.requirements.every((requirement) => {
-      const argument = namedType.typeArguments[requirement.typeArgumentIndex];
+      const argument = typeArguments[requirement.typeArgumentIndex];
       return argument !== undefined && rustCarrierSupportsTrait(
         argument,
         requirement.traitPath,

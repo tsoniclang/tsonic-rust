@@ -237,6 +237,7 @@ export function finalizeTargetInputs(
             ],
           };
     }
+    case "associated-value":
     case "trait-associated-value":
       return sourceArgumentCount === 0
         ? { targetReceiver: none, targetArguments: [] }

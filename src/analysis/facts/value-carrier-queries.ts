@@ -10,6 +10,7 @@ import type {
 } from "../../policy/types/value-carrier-reconciliation.js";
 import type { RustFlowReadProjectionFact } from "../../policy/types/value-projections.js";
 import {
+  rustCallScopedLifetimeReconciliationFactKey,
   rustContextualValueConversionFactKey,
   rustFlowReadProjectionFactKey,
   rustOptionProjectionFactKey,
@@ -31,6 +32,12 @@ export function recordRustValueCarrierReconciliation(
   subject: ExtensionFactSubject,
   reconciliation: RustAppliedValueCarrierReconciliation,
 ): void {
+  if (reconciliation.kind === "call-scoped-lifetime") {
+    facts.set(subject, rustCallScopedLifetimeReconciliationFactKey, reconciliation.fact, [
+      { message: "rust exact call-scoped lifetime reconciliation" },
+    ]);
+    return;
+  }
   if (reconciliation.kind === "project-upcast") {
     facts.set(subject, rustProjectUpcastFactKey, reconciliation.fact, [
       { message: "rust exact project-type upcast" },
@@ -46,6 +53,14 @@ export function recordRustValueCarrierReconciliation(
 }
 
 export function rustValueCarrierBeforeContextualConversion(
+  facts: RustPlanQueries,
+  subject: ExtensionFactSubject | undefined,
+): TargetTypeRef | undefined {
+  return facts.getFact(subject, rustCallScopedLifetimeReconciliationFactKey)?.selectedCarrier ??
+    rustValueCarrierBeforeCallScopedLifetimeReconciliation(facts, subject);
+}
+
+export function rustValueCarrierBeforeCallScopedLifetimeReconciliation(
   facts: RustPlanQueries,
   subject: ExtensionFactSubject | undefined,
 ): TargetTypeRef | undefined {

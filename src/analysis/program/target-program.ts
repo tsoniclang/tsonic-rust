@@ -84,6 +84,7 @@ export function analyzeRustTargetProgram(
     context.sourceFiles,
     facts,
     context.names,
+    context.sourceLifetimes,
   );
   if (callableGenericRequirements.kind === "rejected") {
     return rejectedTargetStage(callableGenericRequirements.diagnostics);
@@ -105,6 +106,7 @@ export function analyzeRustTargetProgram(
     projectMethodProperties: context.projectMethodProperties.seal(),
     projectFieldDispatch: context.projectFieldDispatch.seal(),
     sourceCallableSpecializations: context.sourceCallableSpecializations.seal(),
+    sourceLifetimes: context.sourceLifetimes,
     callableGenericRequirements: callableGenericRequirements.index,
     valueLifetimes: analyzeRustValueLifetimes({
       ast: context.ast,

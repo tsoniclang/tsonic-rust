@@ -20,6 +20,7 @@ import {
   isRustVecCarrier,
   rustCarrierSupportsClone,
   rustFixedArrayCarrierValue,
+  rustTargetConstSafeInteger,
   rustStructuralObjectCarrierValue,
   rustTupleTargetType,
 } from "../../../target-model/types/index.js";
@@ -320,20 +321,27 @@ function planArrayRest(
 ): RustExpr | undefined {
   const fixedSource = rustFixedArrayCarrierValue(fact.sourceCarrier);
   const fixedBinding = rustFixedArrayCarrierValue(fact.bindingCarrier);
+  const sourceLength = fixedSource === undefined
+    ? undefined
+    : rustTargetConstSafeInteger(fixedSource.length);
+  const bindingLength = fixedBinding === undefined
+    ? undefined
+    : rustTargetConstSafeInteger(fixedBinding.length);
   const start = fact.projection.kind === "fixed-array-rest" ? fact.projection.start : 0;
-  if (fixedSource === undefined || start > fixedSource.length ||
-    (fixedBinding === undefined && !isRustVecCarrier(fact.bindingCarrier))) {
+  if (fixedSource === undefined || sourceLength === undefined || start > sourceLength ||
+    (fixedBinding === undefined && !isRustVecCarrier(fact.bindingCarrier)) ||
+    (fixedBinding !== undefined && bindingLength === undefined)) {
     return rejectProjection(node, context, "Fixed-array rest projection has incompatible finalized carriers.");
   }
   const slice: RustExpr = {
     kind: "index",
     receiver: source,
-    index: { kind: "range", start: integer(start), end: integer(fixedSource.length) },
+    index: { kind: "range", start: integer(start), end: integer(sourceLength) },
   };
   if (fixedBinding === undefined) {
     return { kind: "method-call", receiver: slice, method: "to_vec", args: [] };
   }
-  if (fixedBinding.length !== fixedSource.length - start ||
+  if (bindingLength !== sourceLength - start ||
     !rustTargetTypeRefEquals(fixedBinding.element, fixedSource.element)) {
     return rejectProjection(node, context, "Fixed-array rest length or element carrier is inconsistent.");
   }
@@ -418,7 +426,10 @@ function normalizeBindingValue(
   const result = (value: RustExpr): RustExpr => ({
     kind: "call",
     path: "Ok",
-    typeArguments: [{ kind: "infer" }, activeErrorType],
+    genericArguments: [
+      { kind: "type", type: { kind: "infer" } },
+      { kind: "type", type: activeErrorType },
+    ],
     args: [value],
   });
   return {

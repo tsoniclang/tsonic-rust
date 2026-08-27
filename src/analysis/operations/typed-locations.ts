@@ -21,6 +21,7 @@ import {
   rustSelectedOperationKey,
 } from "../../target-model/facts/selections.js";
 import type {
+  RustSelectedTargetSignature,
   RustTargetMember,
   TargetTypeRef,
 } from "../../target-model/types/model.js";
@@ -217,6 +218,15 @@ function acceptRustTypedLocationCall(
       mode: "by-value",
     }, evidence);
   }
+  const selectedGenericParameters = request.source.sourceSelectedMethodTypeArguments ?? [];
+  if (selectedGenericParameters.length !== 1) {
+    return rejectRustTypedLocation(
+      request.source.call,
+      context,
+      "RUST_POINTER_GENERIC_EVIDENCE_CONFLICT",
+      `Selected '${sourceOperation.operation}' operation has no exact pointee type parameter.`,
+    );
+  }
   const member: RustTargetMember = {
     id: operationId,
     sourceName: sourceOperation.operation,
@@ -228,9 +238,13 @@ function acceptRustTypedLocationCall(
       passingMode: "by-value",
     })),
     returnType: resultCarrier,
+    genericParameters: [{
+      kind: "type",
+      sourceName: selectedGenericParameters[0]!.typeParameterName,
+    }],
     providerDeclaration: provider,
   };
-  const selectedSignature = {
+  const selectedSignature: RustSelectedTargetSignature = {
     member,
     providerDeclaration: provider,
     ...(request.source.selectedSignature === undefined
@@ -256,7 +270,7 @@ function acceptRustTypedLocationCall(
           sourceSelectedMethodTypeArguments:
             request.source.sourceSelectedMethodTypeArguments,
         }),
-    targetTypeArguments: [pointeeCarrier],
+    targetGenericArguments: [{ kind: "type", type: pointeeCarrier }],
   };
   context.facts.set(request.source.call, rustSelectedCallKey, selectedSignature, evidence);
   return acceptRustPolicy({ selectedSignature }, evidence);

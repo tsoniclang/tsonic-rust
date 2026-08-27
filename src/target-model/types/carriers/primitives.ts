@@ -2,6 +2,7 @@ import { isRustNullCarrier, isRustUndefinedCarrier } from "./js.js";
 import type { RustPrimitiveTypeName } from "../../syntax/tokens.js";
 import type { SourcePrimitiveKind } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../model.js";
+import { rustOnlyTypeGenericArguments, rustTypeGenericArguments } from "../generic-arguments.js";
 
 const rustPrimitiveNames: Readonly<Partial<Record<SourcePrimitiveKind, RustPrimitiveTypeName>>> = {
   char: "u16",
@@ -129,11 +130,15 @@ export function isRustDefinitelyNullishCarrier(carrier: TargetTypeRef | undefine
 }
 
 export function rustFutureTargetType(output: TargetTypeRef): TargetTypeRef {
-  return { kind: "target-named", id: rustFutureTargetId, typeArguments: [output] };
+  return {
+    kind: "target-named",
+    id: rustFutureTargetId,
+    genericArguments: rustTypeGenericArguments([output]),
+  };
 }
 
 export function rustFutureOutputCarrier(carrier: TargetTypeRef | undefined): TargetTypeRef | undefined {
-  return carrier?.kind === "target-named" && carrier.id === rustFutureTargetId
-    ? carrier.typeArguments?.[0]
-    : undefined;
+  if (carrier?.kind !== "target-named" || carrier.id !== rustFutureTargetId) return undefined;
+  const arguments_ = rustOnlyTypeGenericArguments(carrier.genericArguments);
+  return arguments_?.length === 1 ? arguments_[0] : undefined;
 }

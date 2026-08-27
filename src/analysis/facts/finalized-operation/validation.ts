@@ -10,9 +10,13 @@ import {
 import { closedMetadataEquals, isClosedMetadata } from "../../../target-model/metadata/closed-data.js";
 import { createInputFactory, finalizeTargetInputs } from "./inputs.js";
 import { isRustErrorBoundary } from "../../../target-model/operations/error-boundary.js";
-import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { rustFutureTargetType, rustSliceRefTargetType, rustTargetTypeParameterNames } from "../../../target-model/types/index.js";
-import { rustProviderOperationFormAcceptsTargetTypeArguments, rustProviderOperationFormContractViolation } from "../../../policy/operations/forms.js";
+import {
+  isRustTargetGenericArgument,
+  isRustTargetTypeRef,
+  rustTargetTypeRefEquals,
+} from "../../../target-model/types/equality.js";
+import { rustFutureTargetType, rustSliceRefTargetType } from "../../../target-model/types/index.js";
+import { rustProviderOperationFormAcceptsTargetGenericArguments, rustProviderOperationFormContractViolation } from "../../../policy/operations/forms.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import type { RustFinalizedOperationAbi, RustFinalizedOperationResult, RustFinalizedSourceArgument, RustFinalizedSourceArgumentRole, RustFinalizedSourceInput, RustFinalizedTargetInput, RustFinalizedValueConversion } from "./model.js";
 import type { RustProviderConstantArgument, RustValueConversion } from "../keys.js";
@@ -28,8 +32,8 @@ export function validateRustFinalizedOperationAbi(candidate: unknown): candidate
     abi.sourceArguments.length,
     abi.sourceArguments.filter((argument) => argument.disposition === "runtime").map((argument) => argument.sourceIndex),
   ) !== undefined ||
-    (abi.targetTypeArguments.length > 0 &&
-      !rustProviderOperationFormAcceptsTargetTypeArguments(abi.target)) ||
+    (abi.targetGenericArguments.length > 0 &&
+      !rustProviderOperationFormAcceptsTargetGenericArguments(abi.target)) ||
     (abi.effects.evaluation !== "observable" && abi.effects.evaluation !== "pure") ||
     (abi.effects.invocation !== "infallible" && abi.effects.invocation !== "fallible") ||
     (abi.effects.awaiting !== "not-applicable" && abi.effects.awaiting !== "infallible" && abi.effects.awaiting !== "fallible") ||
@@ -170,20 +174,19 @@ function isRustFinalizedOperationAbiShape(value: unknown): value is RustFinalize
     "sourceArguments",
     "targetReceiver",
     "targetArguments",
-    "targetTypeArguments",
+    "targetGenericArguments",
     "result",
     "effects",
   ]) || !operationKinds.has(value.operationKind) || !isRecord(value.target) ||
     !Array.isArray(value.sourceArguments) || !Array.isArray(value.targetArguments) ||
-    !Array.isArray(value.targetTypeArguments)) {
+    !Array.isArray(value.targetGenericArguments)) {
     return false;
   }
   if (!isSourceReceiver(value.sourceReceiver) ||
     !value.sourceArguments.every(isSourceArgument) ||
     !isTargetReceiver(value.targetReceiver) ||
     !value.targetArguments.every(isTargetInput) ||
-    !value.targetTypeArguments.every((carrier) =>
-      isRustTargetTypeRef(carrier) && rustTargetTypeParameterNames(carrier).length === 0) ||
+    !value.targetGenericArguments.every(isRustTargetGenericArgument) ||
     !isOperationResult(value.result) || !isEffects(value.effects)) {
     return false;
   }

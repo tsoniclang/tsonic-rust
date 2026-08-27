@@ -123,10 +123,13 @@ export function planRustObjectLiteralMethodArguments(
         }],
       };
       const collectionType: RustType = raw.fallible
-        ? {
+          ? {
             kind: "named",
             path: "Result",
-            typeArguments: [targetType, rustTargetRuntimeErrorType],
+            genericArguments: [
+              { kind: "type", type: targetType },
+              { kind: "type", type: rustTargetRuntimeErrorType },
+            ],
           }
         : targetType;
       if (raw.fallible) {
@@ -136,7 +139,7 @@ export function planRustObjectLiteralMethodArguments(
         kind: "method-call",
         receiver: mapped,
         method: "collect",
-        typeArguments: [collectionType],
+        genericArguments: [{ kind: "type", type: collectionType }],
         args: [],
       };
       const activeErrorType = rustActiveErrorType(context);
@@ -297,6 +300,8 @@ function applyRustObjectLiteralValueAdapterRaw(
       );
       return projected === undefined ? undefined : { expression: projected, fallible: false };
     }
+    case "call-scoped-lifetime":
+      return { expression, fallible: false };
     case "option-some": {
       const element = applyRustObjectLiteralValueAdapterRaw(expression, adapter.element, node, context);
       if (element === undefined) {

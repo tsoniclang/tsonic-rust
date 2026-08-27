@@ -13,7 +13,7 @@ import {
   Node_Name,
 } from "@tsonic/target-api/source";
 import { isRustUnitCarrier } from "../../../target-model/types/index.js";
-import { createRustSourceFile } from "../../target-ast/nodes.js";
+import { createRustSourceFile, emptyRustGenerics } from "../../target-ast/nodes.js";
 import type { RustItem } from "../../target-ast/nodes.js";
 import { finalizeRustSourceStyle } from "../../target-ast/normalization/source-style.js";
 import { planRustCargoProject } from "../project/cargo.js";
@@ -472,7 +472,10 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
           expr: {
             kind: "call" as const,
             path: "Ok",
-            typeArguments: [{ kind: "unit" as const }, mainErrorType],
+            genericArguments: [
+              { kind: "type" as const, type: { kind: "unit" as const } },
+              { kind: "type" as const, type: mainErrorType },
+            ],
             args: [{ kind: "path" as const, path: "()" }],
           },
         }]
@@ -481,6 +484,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
       kind: "function",
       name: "main",
       visibility: "private",
+      generics: emptyRustGenerics,
       params: [],
       ...(mainFallible
         ? {

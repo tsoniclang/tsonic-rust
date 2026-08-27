@@ -56,6 +56,13 @@ import {
   createRustRuntimeValueUsePlan,
   type RustRuntimeValueUsePlan,
 } from "./runtime-value-uses.js";
+import {
+  analyzeRustLifetimes,
+} from "../declarations/lifetimes.js";
+import {
+  emptyRustLifetimeIndex,
+  type RustLifetimeIndex,
+} from "../../target-model/lifetimes/index.js";
 
 export interface RustAnalysisContext extends RustSourcePolicyContext {
   readonly target: TargetSelection;
@@ -71,6 +78,7 @@ export interface RustAnalysisContext extends RustSourcePolicyContext {
   readonly projectMethodProperties: RustProjectMethodPropertyPlanRegistry;
   readonly projectFieldDispatch: RustProjectFieldDispatchPlanRegistry;
   readonly sourceCallableSpecializations: RustSourceCallableSpecializationPlanRegistry;
+  readonly sourceLifetimes: RustLifetimeIndex;
   readonly structuralShapes: RustStructuralShapePlanRegistry;
   readonly providerSemantics: RustProviderSemantics;
   readonly safetyApplications: RustSafetyApplicationFactIndex;
@@ -106,6 +114,24 @@ export function createRustAnalysisContext(
     navigation: input.source.navigation,
     safetyApplications,
   });
+  const facts = createRustPlanBuilder(input.source.sourceFacts);
+  const names = createRustNamePlan({
+    ast,
+    navigation: input.source.navigation,
+    runtimeValueUses,
+    sourceFiles,
+  });
+  const lifetimes = analyzeRustLifetimes({
+    source: input.source,
+    ast,
+    sourceFiles,
+    facts,
+    names,
+    referencedDeclaration(node) {
+      return input.source.navigation.sourceReferenceFor(node)?.declaration;
+    },
+    semanticsFor: input.source.semantics.forNode,
+  });
   return Object.freeze({
     source: input.source,
     target: input.target,
@@ -114,24 +140,20 @@ export function createRustAnalysisContext(
     sourceFiles,
     sourcePackages: input.sourcePackages,
     rootPublishesLibrary,
-    facts: createRustPlanBuilder(input.source.sourceFacts),
+    facts,
     projectTypes: createRustProjectTypePolicyRegistry(),
     objectRepresentations: createRustObjectRepresentationPlanRegistry(),
     projectMethodDispatch: createRustProjectMethodDispatchPlanRegistry(),
     projectMethodProperties: createRustProjectMethodPropertyPlanRegistry(),
     projectFieldDispatch: createRustProjectFieldDispatchPlanRegistry(),
     sourceCallableSpecializations: createRustSourceCallableSpecializationPlanRegistry(),
+    sourceLifetimes: lifetimes.index ?? emptyRustLifetimeIndex,
     structuralShapes: createRustStructuralShapePlanRegistry(),
     providerSemantics,
     safetyApplications,
     runtimeValueUses,
-    names: createRustNamePlan({
-      ast,
-      navigation: input.source.navigation,
-      runtimeValueUses,
-      sourceFiles,
-    }),
-    diagnostics: [],
+    names,
+    diagnostics: [...lifetimes.diagnostics],
     semantics: input.source.semantics.forFile,
     semanticsFor: input.source.semantics.forNode,
   });

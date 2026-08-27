@@ -1,6 +1,7 @@
 import { rustBigIntTargetId, rustJsArrayConcatItemTargetId, rustJsArrayTargetId, rustJsDateTargetId, rustJsErrorTargetId, rustJsMapTargetId, rustJsRegExpExecArrayTargetId, rustJsRegExpIndicesTargetId, rustJsRegExpMatchArrayTargetId, rustJsRegExpNamedGroupsTargetId, rustJsRegExpNamedIndicesTargetId, rustJsRegExpStringIteratorTargetId, rustJsRegExpTargetId, rustJsSetTargetId, rustJsStringTargetId, rustJsValueTargetId, rustNeverCarrierName, rustNullTargetId, rustProgramErrorTargetId, rustRegExpExecArrayTargetId, rustRegExpIndicesTargetId, rustRegExpMatchArrayTargetId, rustRegExpNamedGroupsTargetId, rustRegExpNamedIndicesTargetId, rustRegExpStringIteratorTargetId, rustStringTargetId, rustUndefinedTargetId } from "./source-types.js";
 import { rustOptionTargetType } from "./optional.js";
 import type { TargetTypeRef } from "../model.js";
+import { rustOnlyTypeGenericArguments, rustTypeGenericArguments } from "../generic-arguments.js";
 
 export function rustJsValueTargetType(): TargetTypeRef {
   return { kind: "target-named", id: rustJsValueTargetId };
@@ -23,39 +24,39 @@ export function isRustProgramErrorCarrier(carrier: TargetTypeRef | undefined): b
 }
 
 export function rustJsArrayTargetType(element: TargetTypeRef): TargetTypeRef {
-  return { kind: "target-named", id: rustJsArrayTargetId, typeArguments: [element] };
+  return { kind: "target-named", id: rustJsArrayTargetId, genericArguments: rustTypeGenericArguments([element]) };
 }
 
 export function rustJsArrayConcatItemTargetType(element: TargetTypeRef): TargetTypeRef {
-  return { kind: "target-named", id: rustJsArrayConcatItemTargetId, typeArguments: [element] };
+  return { kind: "target-named", id: rustJsArrayConcatItemTargetId, genericArguments: rustTypeGenericArguments([element]) };
 }
 
 export function rustJsMapTargetType(key: TargetTypeRef, value: TargetTypeRef): TargetTypeRef {
-  return { kind: "target-named", id: rustJsMapTargetId, typeArguments: [key, value] };
+  return { kind: "target-named", id: rustJsMapTargetId, genericArguments: rustTypeGenericArguments([key, value]) };
 }
 
 export function rustJsSetTargetType(value: TargetTypeRef): TargetTypeRef {
-  return { kind: "target-named", id: rustJsSetTargetId, typeArguments: [value] };
+  return { kind: "target-named", id: rustJsSetTargetId, genericArguments: rustTypeGenericArguments([value]) };
 }
 
 export function getRustJsMapTargetTypes(
   carrier: TargetTypeRef | undefined,
 ): { readonly key: TargetTypeRef; readonly value: TargetTypeRef } | undefined {
-  if (carrier?.kind !== "target-named" || carrier.id !== rustJsMapTargetId ||
-    carrier.typeArguments?.length !== 2) {
+  if (carrier?.kind !== "target-named" || carrier.id !== rustJsMapTargetId) {
     return undefined;
   }
-  const [key, value] = carrier.typeArguments;
+  const arguments_ = rustOnlyTypeGenericArguments(carrier.genericArguments);
+  if (arguments_?.length !== 2) return undefined;
+  const [key, value] = arguments_;
   return key === undefined || value === undefined ? undefined : { key, value };
 }
 
 export function getRustJsSetElementTargetType(
   carrier: TargetTypeRef | undefined,
 ): TargetTypeRef | undefined {
-  return carrier?.kind === "target-named" && carrier.id === rustJsSetTargetId &&
-    carrier.typeArguments?.length === 1
-    ? carrier.typeArguments[0]
-    : undefined;
+  if (carrier?.kind !== "target-named" || carrier.id !== rustJsSetTargetId) return undefined;
+  const arguments_ = rustOnlyTypeGenericArguments(carrier.genericArguments);
+  return arguments_?.length === 1 ? arguments_[0] : undefined;
 }
 
 export function rustJsDateTargetType(): TargetTypeRef {
@@ -123,7 +124,7 @@ export function isRustJsArrayCarrier(
 ): carrier is TargetTypeRef & {
   readonly kind: "target-named";
   readonly id: typeof rustJsArrayTargetId;
-  readonly typeArguments?: readonly TargetTypeRef[];
+  readonly genericArguments?: readonly import("../model.js").RustTargetGenericArgument[];
 } {
   return carrier?.kind === "target-named" && carrier.id === rustJsArrayTargetId;
 }
@@ -135,7 +136,8 @@ export function rustJsArrayLikeElementTargetType(
     return undefined;
   }
   if (carrier.id === rustJsArrayTargetId) {
-    return carrier.typeArguments?.length === 1 ? carrier.typeArguments[0] : undefined;
+    const arguments_ = rustOnlyTypeGenericArguments(carrier.genericArguments);
+    return arguments_?.length === 1 ? arguments_[0] : undefined;
   }
   if (carrier.id === rustRegExpExecArrayTargetId || carrier.id === rustRegExpMatchArrayTargetId) {
     return { kind: "target-named", id: rustStringTargetId };

@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { emptyRustGenerics } from "../../../dist/backend/target-ast/nodes.js";
 import { printRustSourceFile as printFinalRustSourceFile } from "../../../dist/print/source/index.js";
 import { finalizeRustSourceStyle } from "../../../dist/backend/target-ast/normalization/source-style.js";
 
@@ -20,52 +21,61 @@ test("source style attributes are item-local and derived from exact Rust signatu
     headerComment,
     items: [{
       kind: "struct",
+      generics: emptyRustGenerics,
       name: "Hidden",
       visibility: "crate",
       derives: [],
       fields: [],
     }, {
       kind: "struct",
+      generics: emptyRustGenerics,
       name: "Owner",
       visibility: "public",
       derives: [],
       fields: [],
     }, {
       kind: "struct",
+      generics: emptyRustGenerics,
       name: "InternalCursor",
       visibility: "crate",
       derives: [],
       fields: [],
     }, {
       kind: "impl",
+      generics: emptyRustGenerics,
       target: { kind: "named", path: "Owner" },
       functions: [{
         name: "to_string",
+        generics: emptyRustGenerics,
         visibility: "public",
-        selfParam: "ref",
+        selfParam: { kind: "reference", mutable: false },
         params: [],
         returnType: { kind: "string" },
         body: { statements: [{ kind: "tail", expr: { kind: "string-literal", value: "owner" } }] },
       }, {
         name: "next",
+        generics: emptyRustGenerics,
         visibility: "public",
-        selfParam: "mut-ref",
+        selfParam: { kind: "reference", mutable: true },
         params: [],
         returnType: { kind: "string" },
         body: { statements: [{ kind: "tail", expr: { kind: "string-literal", value: "value" } }] },
       }, {
         name: "configure",
+        generics: emptyRustGenerics,
         visibility: "public",
         params: parameters,
         body: { statements: [] },
       }],
     }, {
       kind: "impl",
+      generics: emptyRustGenerics,
       target: { kind: "named", path: "InternalCursor" },
       functions: [{
         name: "next",
+        generics: emptyRustGenerics,
         visibility: "public",
-        selfParam: "mut-ref",
+        selfParam: { kind: "reference", mutable: true },
         params: [],
         returnType: { kind: "string" },
         body: { statements: [{ kind: "tail", expr: { kind: "string-literal", value: "internal" } }] },
@@ -90,6 +100,7 @@ test("source style keeps intentional control-flow policy statement-local", () =>
     headerComment,
     items: [{
       kind: "function",
+      generics: emptyRustGenerics,
       name: "proof",
       visibility: "public",
       params: [],
@@ -145,6 +156,7 @@ test("source liveness policy is attached only to proven dead local values", () =
     headerComment,
     items: [{
       kind: "function",
+      generics: emptyRustGenerics,
       name: "proof",
       visibility: "public",
       params: [{ name: "condition", type: { kind: "primitive", name: "bool" } }],
@@ -277,6 +289,7 @@ test("multiline method-chain arguments use rustfmt-compatible outer-call layout"
     headerComment,
     items: [{
       kind: "function",
+      generics: emptyRustGenerics,
       name: "proof",
       visibility: "public",
       params: [],
@@ -297,6 +310,7 @@ test("nested collection initializers reserve the trailing semicolon at continuat
     headerComment,
     items: [{
       kind: "function",
+      generics: emptyRustGenerics,
       name: "proof",
       visibility: "public",
       params: [],
@@ -348,6 +362,7 @@ test("fitted multi-argument calls stay horizontal inside assignments", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: emptyRustGenerics,
       name: "proof",
       visibility: "public",
       params: [],
@@ -380,6 +395,7 @@ test("assignment continuations keep newly fitting nested calls horizontal", () =
     headerComment,
     items: [{
       kind: "function",
+      generics: emptyRustGenerics,
       name: "proof",
       visibility: "public",
       params: [],
@@ -416,6 +432,7 @@ test("a fitted outer call stays attached to its multiline nested call", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: emptyRustGenerics,
       name: "proof",
       visibility: "public",
       params: [],
@@ -455,6 +472,7 @@ test("a nested call owns the fitting break inside a wider expression", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: emptyRustGenerics,
       name: "proof",
       visibility: "public",
       params: [],
@@ -502,6 +520,7 @@ test("fallible statement calls reserve the trailing semicolon before fitting nes
     headerComment,
     items: [{
       kind: "function",
+      generics: emptyRustGenerics,
       name: "proof",
       visibility: "public",
       params: [],
@@ -545,6 +564,7 @@ test("an outer call stays attached to an expanded fallible inner call", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: emptyRustGenerics,
       name: "proof",
       visibility: "public",
       params: [],
@@ -582,6 +602,7 @@ test("a multiline fallible method chain expands inside its outer call", () => {
     headerComment,
     items: [{
       kind: "function",
+      generics: emptyRustGenerics,
       name: "proof",
       visibility: "public",
       params: [],
@@ -632,6 +653,7 @@ test("a long outer call expands before a jointly fitting method argument", () =>
     headerComment,
     items: [{
       kind: "function",
+      generics: emptyRustGenerics,
       visibility: "public",
       name: "proof",
       params: [],
