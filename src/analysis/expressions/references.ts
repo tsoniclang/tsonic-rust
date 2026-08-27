@@ -457,15 +457,6 @@ function resolvedNativePointerCarrier(
       };
       break;
     }
-    case "offset-bytes":
-      appendRustDiagnostic(
-        walk,
-        "RUST_NATIVE_POINTER_OPERATION_NOT_MAPPED",
-        "Rust native-pointer byte offsets have no approved exact target operation.",
-        expression,
-        ["target.capability=rust.native-pointer.offset-bytes"],
-      );
-      return {};
   }
   setRustOperationFact(walk, expression, fact);
   return { carrier: setCarrierFact(walk, expression, resultCarrier) };
