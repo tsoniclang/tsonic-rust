@@ -4,7 +4,7 @@ import {
   substituteRustTargetGenerics,
 } from "../../../../target-model/types/index.js";
 import { finalizeRustProviderOperationAbi } from "../../../facts/finalized-operation-abi.js";
-import { rustProviderGenericRequirementsAreSatisfied } from "../../../../policy/types/provider-generic-requirements.js";
+import { rustProviderOperationGenericRequirementsAreSelectable } from "../../../../policy/types/provider-generic-requirements.js";
 import {
   rustTargetGenericArgumentEquals,
   rustTargetTypeRefEquals,
@@ -119,7 +119,10 @@ export function instantiateProviderOperationTemplate<
       return undefined;
     }
   }
-  if (!rustProviderGenericRequirementsAreSatisfied(template.typeRequirements, bindings.types)) {
+  if (!rustProviderOperationGenericRequirementsAreSelectable(
+    template.typeRequirements,
+    bindings.types,
+  )) {
     return undefined;
   }
   const substitutions: RustTargetGenericBindings = Object.freeze({

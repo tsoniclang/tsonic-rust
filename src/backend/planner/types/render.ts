@@ -65,6 +65,7 @@ import {
   rustRegExpStringIteratorTargetId,
   isRustNeverCarrier,
   rustOnlyTypeGenericArguments,
+  rustFutureTargetId,
 } from "../../../target-model/types/index.js";
 
 const namedCarrierPaths: Readonly<Record<string, string>> = {
@@ -822,6 +823,13 @@ export function rustTargetCallGenericArgumentToAstInContext(
   argument: Extract<RustTargetGenericArgument, { readonly kind: "type" | "const" }>,
   context: RustTypeRenderingContext,
 ): RustCallGenericArgument | undefined {
+  if (
+    argument.kind === "type" &&
+    argument.type.kind === "target-named" &&
+    argument.type.id === rustFutureTargetId
+  ) {
+    return { kind: "type", type: { kind: "infer" } };
+  }
   const rendered = rustTargetGenericArgumentToAstInContext(argument, context);
   return rendered?.kind === "type" || rendered?.kind === "const"
     ? rendered

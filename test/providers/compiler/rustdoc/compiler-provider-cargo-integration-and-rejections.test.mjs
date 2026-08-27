@@ -250,6 +250,43 @@ export function invalid(widget: Widget<string>): string {
     code === "RUST_PROVIDER_TYPE_INSTANTIATION_NOT_PROVEN"));
 });
 
+test("compiler provider delegates exact anonymous future requirements to Rust inference", { timeout: 300_000 }, () => {
+  const project = createUserCargoProject();
+  const { result } = compileRustThroughTargetPack({
+    target: {
+      id: "rust",
+      options: {
+        outputType: "bin",
+        crateName: "compiler_provider_proof",
+        projectFile: project.manifestPath,
+      },
+    },
+    files: {
+      "index.ts": `
+import {
+  require_local_future,
+  require_send_static_future,
+} from "@tsonic/rust/crates/widget_alias/index.js";
+
+async function completeLater(): Promise<void> {}
+
+export function main(): void {
+  require_local_future(completeLater());
+  require_send_static_future(completeLater());
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "";
+  assert.match(source, /widget_alias::require_local_future::<_>\(complete_later\(\)\)/u);
+  assert.match(source, /widget_alias::require_send_static_future::<_>\(complete_later\(\)\)/u);
+  writeGeneratedArtifacts(project.root, result.artifacts);
+  const run = runCargo(project.manifestPath, ["run", "--quiet", "--locked"]);
+  assert.equal(run.status, 0, run.stderr);
+});
+
 test("compiler provider keeps native Result separate from the runtime error boundary", { timeout: 300_000 }, () => {
   const project = createUserCargoProject();
   const harness = createRustSession({

@@ -23,6 +23,7 @@ import { rustValueCarrierTransitionTarget } from "../../../analysis/facts/value-
 import { rustFinalizedCarrierTransitionMatches } from "../../../analysis/facts/target-operation.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import {
+  rustTargetCallGenericArgumentToAstInContext,
   rustTargetGenericArgumentToAstInContext,
   rustTypeFromCarrierInContext,
 } from "../types/render.js";
@@ -155,7 +156,7 @@ export function planProviderOperationExpression(
     : undefined;
   const targetGenericArguments = fact.abi.targetGenericArguments.flatMap((argument) => {
     if (argument.kind === "lifetime") return [];
-    const planned = rustTargetGenericArgumentToAstInContext(argument, context);
+    const planned = rustTargetCallGenericArgumentToAstInContext(argument, context);
     return planned === undefined ? [undefined] : [planned];
   });
   if (targetGenericArguments.some((argument) => argument === undefined)) {

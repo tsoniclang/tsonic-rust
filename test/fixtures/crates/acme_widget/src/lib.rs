@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::boxed::Box;
+use std::future::Future;
 use std::pin::Pin;
 use tsonic_rust_runtime::{TsonicError, TsonicResult};
 
@@ -237,6 +238,17 @@ where
     T: Copy,
 {
     value
+}
+
+pub fn require_local_future<F: Future<Output = ()>>(future: F) {
+    drop(future);
+}
+
+pub fn require_send_static_future<F>(future: F)
+where
+    F: Future<Output = ()> + Send + 'static,
+{
+    drop(future);
 }
 
 pub fn integer_bits(value: u32) -> NumberBits {
