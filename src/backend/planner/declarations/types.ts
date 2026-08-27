@@ -3,6 +3,7 @@ import {
   diagnosticInput,
   isValidRustIdentifier,
   rustProjectTypeHasPublicImplementationAbi,
+  rustSourceItemIsPubliclyReachable,
 } from "../program/plan-context.js";
 import { isRustIntegerCarrier, isRustStringCarrier, rustCarrierSupportsClone } from "../../../target-model/types/index.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
@@ -335,6 +336,9 @@ export function planTypeAliasDeclaration(node: Node, context: RustPlanContext): 
     return [{
       kind: "type-alias",
       name: aliasName,
+      ...(rustSourceItemIsPubliclyReachable(context, aliasName)
+        ? {}
+        : { attrs: [rustLintAttributes.deadCode] }),
       visibility: ast.hasModifierKind(node, "export") ? "public" : "crate",
       generics,
       target,
