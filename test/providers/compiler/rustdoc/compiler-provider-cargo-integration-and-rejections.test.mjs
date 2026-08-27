@@ -287,6 +287,124 @@ export function main(): void {
   assert.equal(run.status, 0, run.stderr);
 });
 
+test("compiler provider lifetime contracts compile and execute through exact selected carriers", { timeout: 300_000 }, () => {
+  const project = createUserCargoProject();
+  const { result } = compileRustThroughTargetPack({
+    target: {
+      id: "rust",
+      options: {
+        outputType: "bin",
+        crateName: "compiler_provider_proof",
+        projectFile: project.manifestPath,
+      },
+    },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import type {
+  Life,
+  Mut,
+  Outlives,
+  Ref,
+} from "@tsonic/rust/types.js";
+import { mut, ref } from "@tsonic/rust/lang.js";
+import {
+  LifetimeView,
+  LendingValue,
+  apply_borrowed,
+  choose_borrowed_mixed,
+  constrained_lending,
+  increment_borrowed,
+  inspect_view,
+  lending_value,
+  opaque_borrow,
+  read_lending_value,
+} from "@tsonic/rust/crates/widget_alias/index.js";
+
+function borrowedIdentity<L extends Life>(value: Ref<int32, L>): Ref<int32, L> {
+  return value;
+}
+
+function chooseMixed<
+  Short extends Life,
+  Long extends Life & Outlives<Short>,
+>(short: Ref<int32, Short>, long: Ref<int32, Long>): int32 {
+  return choose_borrowed_mixed<Short, Long, int32, 3>(short, long);
+}
+
+function incrementBorrowed<L extends Life>(value: Mut<int32, L>): void {
+  increment_borrowed(value);
+}
+
+function readView<L extends Life>(view: Ref<LifetimeView, L>): int32 {
+  return view.value();
+}
+
+function incrementView<L extends Life>(view: Mut<LifetimeView, L>): void {
+  view.increment();
+}
+
+export function main(): void {
+  const short: int32 = 31;
+  const long: int32 = 47;
+  let mutable: int32 = 10;
+  incrementBorrowed(mut(mutable));
+  if (mutable !== 11) {
+    throw new Error("mutable provider reborrow failed");
+  }
+  if (chooseMixed(ref(short), ref(long)) !== 31) {
+    throw new Error("mixed lifetime/type/const provider call failed");
+  }
+  if (apply_borrowed(borrowedIdentity, short) !== 31) {
+    throw new Error("higher-ranked function-pointer call failed");
+  }
+
+  let view = new LifetimeView(53);
+  incrementView(mut(view));
+  if (view.value() !== 54) {
+    throw new Error("mutable receiver lifetime call failed");
+  }
+  if (inspect_view(view) !== 54) {
+    throw new Error("trait-object lifetime call failed");
+  }
+  opaque_borrow(short);
+
+  const family = new LendingValue(59);
+  const item = lending_value(family);
+  const constrained = constrained_lending(family, item);
+  if (read_lending_value(constrained) !== 59) {
+    throw new Error("GAT or associated constraint call failed");
+  }
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "";
+  assert.match(source, /widget_alias::choose_borrowed_mixed::<i32, 3>\(short, long\)/u);
+  assert.match(source, /fn increment_borrowed<'l>\(value: &'l mut i32\)/u);
+  assert.match(source, /widget_alias::increment_borrowed\(value\)/u);
+  assert.match(source, /ModuleCell<for<'l> fn\(&'l i32\) -> &'l i32> = rt::ModuleCell::initialized\(borrowed_identity\)/u);
+  assert.match(source, /widget_alias::apply_borrowed\([^,]+, &short\)/u);
+  assert.doesNotMatch(source, /for<'l> fn\([^;]+::new/u);
+  assert.match(source, /widget_alias::inspect_view\(&view\)/u);
+  assert.match(source, /fn read_view<'l>\(view: &'l widget_alias::LifetimeView\) -> i32/u);
+  assert.match(
+    source,
+    /fn read_view<'l>[^}]+<widget_alias::LifetimeView as widget_alias::View>::value\(view\)/u,
+  );
+  assert.match(source, /fn increment_view<'l>\(view: &'l mut widget_alias::LifetimeView\)/u);
+  assert.match(source, /fn increment_view<'l>[^}]+view\.increment\(\)/u);
+  assert.doesNotMatch(source, /widget_alias::LifetimeView::increment\(&mut view\)/u);
+  assert.match(source, /widget_alias::opaque_borrow\(&short\)/u);
+  assert.match(source, /widget_alias::lending_value\(&family\)/u);
+  assert.match(source, /widget_alias::constrained_lending::<widget_alias::LendingValue>\(&family, item\)/u);
+  writeGeneratedArtifacts(project.root, result.artifacts);
+  const run = runCargo(project.manifestPath, ["run", "--quiet", "--locked"]);
+  assert.equal(run.status, 0, run.stderr);
+});
+
 test("compiler provider keeps native Result separate from the runtime error boundary", { timeout: 300_000 }, () => {
   const project = createUserCargoProject();
   const harness = createRustSession({

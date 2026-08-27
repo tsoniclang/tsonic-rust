@@ -24,6 +24,7 @@ import {
   allocateRustSyntheticName,
   createRustSyntheticNameState,
 } from "../names/synthetic.js";
+import { rustCompilerOwnedContextualConversionMatches } from "../../../target-model/conversions/contextual.js";
 
 export function planRustObjectLiteralMethodArguments(
   method: RustObjectLiteralMethodDispatchPlan,
@@ -273,6 +274,16 @@ function applyRustObjectLiteralValueAdapterRaw(
         ? { expression, fallible: false }
         : undefined;
     case "conversion": {
+      if (adapter.conversion.kind === "native-trait-object-upcast" ||
+        adapter.conversion.kind === "reference-reborrow") {
+        return rustCompilerOwnedContextualConversionMatches(
+          adapter.sourceCarrier,
+          adapter.targetCarrier,
+          adapter.conversion,
+        )
+          ? { expression, fallible: false }
+          : undefined;
+      }
       const contract = rustValueConversionContract(adapter.conversion);
       if (contract === undefined ||
         !rustTargetTypeRefEquals(contract.source, adapter.sourceCarrier) ||

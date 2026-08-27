@@ -35,6 +35,8 @@ import { rustSelectedAccessorRequiresUnsafe, rustSelectedCallRequiresUnsafe, try
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustValueCarrierBeforeContextualConversion } from "../../../analysis/facts/value-carrier-queries.js";
+import { rustCompilerOwnedContextualConversionMatches } from "../../../target-model/conversions/contextual.js";
+import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import { tryPlanRustNativePointerOperation } from "./native-pointers.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/nodes.js";
@@ -305,6 +307,32 @@ function applyRustContextualValueConversion(
         `operation=${JSON.stringify(context.input.program.facts.getFact(node, rustTargetOperationFactKey))}`,
       ],
     });
+    return undefined;
+  }
+  if (fact.conversion.kind === "native-trait-object-upcast" ||
+    fact.conversion.kind === "reference-reborrow") {
+    if (!rustCompilerOwnedContextualConversionMatches(
+      fact.sourceCarrier,
+      fact.targetCarrier,
+      fact.conversion,
+    )) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, node),
+        "rust.backend.contextual-value-conversion",
+        "Compiler-owned contextual Rust conversion is not an exact closed carrier transition.",
+      ));
+      return undefined;
+    }
+    return expression;
+  }
+  const contract = rustValueConversionContract(fact.conversion);
+  if (contract === undefined ||
+    !rustTargetTypeRefEquals(contract.target, fact.targetCarrier)) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.contextual-value-conversion",
+      "Contextual Rust value conversion has no exact finalized target carrier.",
+    ));
     return undefined;
   }
   return applyRustValueConversion(context, expression, fact.conversion, node, false);

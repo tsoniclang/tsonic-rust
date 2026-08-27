@@ -32,6 +32,7 @@ import {
   finalizeProviderOperationFact,
   instantiateProviderOperationTemplate,
 } from "./template-instantiation.js";
+import { isRustFinalizedSourceInput } from "../../../facts/finalized-operation-abi.js";
 import type { InstantiatedProviderOperationTemplate } from "./template-instantiation.js";
 import type {
   RustCheckedCallSelectionInput,
@@ -349,6 +350,12 @@ export function acceptSelectedCall(
   if (fact === undefined) {
     return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_OPERATION_ABI_INCOMPLETE", `Selected call '${callIdentity.sourceName}' cannot finalize one total Rust operation ABI.`);
   }
+  const receiverReconciliation = selectReceiverReferenceReborrow(
+    request,
+    fact.abi,
+    context,
+    resolutionOptions,
+  );
   const optionalResult = selectRustOptionalCallResult(
     request,
     fact.resultCarrier,
@@ -410,6 +417,13 @@ export function acceptSelectedCall(
       );
     }
     recordRustValueCarrierReconciliation(context.facts, argument, pending.reconciliation);
+  }
+  if (receiverReconciliation !== undefined && request.source.sourceReceiver !== undefined) {
+    recordRustValueCarrierReconciliation(
+      context.facts,
+      request.source.sourceReceiver.expression,
+      receiverReconciliation,
+    );
   }
   for (const sourceArgument of fact.abi.sourceArguments) {
     if (sourceArgument.disposition !== "runtime") {
@@ -528,6 +542,28 @@ function selectedCallSourceCarriers(
     let effective = rustEffectiveValueCarrier(context.facts, argument) ?? normalized;
     if (effective !== undefined && expected !== undefined &&
       !rustTargetTypeRefEquals(effective, expected)) {
+      const reborrow = selectReferenceReborrow(
+        effective,
+        expected,
+        selectedCallArgumentMode(fact.target, index),
+      );
+      if (reborrow !== undefined) {
+        reconciliations.push({
+          sourceIndex: index,
+          reconciliation: {
+            kind: "conversion",
+            fact: {
+              sourceCarrier: effective,
+              targetCarrier: expected,
+              conversion: reborrow,
+            },
+          },
+        });
+        effective = expected;
+      }
+    }
+    if (effective !== undefined && expected !== undefined &&
+      !rustTargetTypeRefEquals(effective, expected)) {
       const reconciliation = selectRustValueCarrierReconciliation(
         effective,
         expected,
@@ -605,6 +641,97 @@ function selectedCallSourceCarriers(
       : { kind: "incompatible", sourceIndex: incompatible };
   }
   return { kind: "resolved", carriers: actual as TargetTypeRef[], reconciliations };
+}
+
+function selectReferenceReborrow(
+  source: TargetTypeRef,
+  target: TargetTypeRef,
+  mode: import("../../../../target-model/operations/model.js").RustArgumentMode | undefined,
+): Extract<
+  import("../../../../target-model/conversions/contextual.js").RustContextualValueConversion,
+  { readonly kind: "reference-reborrow" }
+> | undefined {
+  return source.kind === "reference" &&
+      (mode === "ref" || mode === "mut-ref" && source.mutable) &&
+      rustTargetTypeRefEquals(source.referent, target)
+    ? Object.freeze({ kind: "reference-reborrow", source, target })
+    : undefined;
+}
+
+function selectReceiverReferenceReborrow(
+  request: RustCheckedCallSelectionInput,
+  abi: import("../../../facts/finalized-operation-abi.js").RustFinalizedOperationAbi,
+  context: RustOperationPolicyContext,
+  options: RustOperationsProviderOptions,
+): Extract<
+  RustAppliedValueCarrierReconciliation,
+  { readonly kind: "conversion" }
+> | undefined {
+  const receiver = request.source.sourceReceiver;
+  if (receiver === undefined || abi.sourceReceiver.kind !== "receiver") {
+    return undefined;
+  }
+  const source = rustEffectiveValueCarrier(context.facts, receiver.expression) ??
+    resolveRustTargetTypeRef(receiver.expression, context, options);
+  const target = abi.sourceReceiver.carrier;
+  if (source === undefined || rustTargetTypeRefEquals(source, target)) {
+    return undefined;
+  }
+  const modes = new Set<import("../../../../target-model/operations/model.js").RustArgumentMode>();
+  const collect = (
+    input: import("../../../facts/finalized-operation-abi.js").RustFinalizedTargetInput,
+  ): void => {
+    if (isRustFinalizedSourceInput(input) && input.source.kind === "receiver") {
+      modes.add(input.mode);
+    }
+  };
+  if (abi.targetReceiver.kind === "input") {
+    collect(abi.targetReceiver.input);
+  }
+  abi.targetArguments.forEach(collect);
+  if (modes.size !== 1) {
+    return undefined;
+  }
+  const conversion = selectReferenceReborrow(
+    source,
+    target,
+    modes.values().next().value,
+  );
+  return conversion === undefined
+    ? undefined
+    : {
+        kind: "conversion",
+        fact: {
+          sourceCarrier: source,
+          targetCarrier: target,
+          conversion,
+        },
+      };
+}
+
+function selectedCallArgumentMode(
+  form: RustProviderOperationForm,
+  sourceIndex: number,
+): import("../../../../target-model/operations/model.js").RustArgumentMode | undefined {
+  const orderedMode = (
+    modes: readonly import("../../../../target-model/operations/model.js").RustArgumentMode[] | undefined,
+    order: readonly number[] | undefined,
+  ) => {
+    const targetIndex = order === undefined ? sourceIndex : order.indexOf(sourceIndex);
+    return targetIndex < 0 ? undefined : modes?.[targetIndex] ?? "value";
+  };
+  switch (form.form) {
+    case "call":
+    case "free-call":
+    case "receiver-method":
+      return orderedMode(form.argModes, form.argOrder);
+    case "trait-call":
+      return form.argModes?.[sourceIndex] ?? "value";
+    case "call-c-variadic":
+      return form.fixedArgumentModes[sourceIndex] ?? "value";
+    default:
+      return undefined;
+  }
 }
 
 function selectedCallArgumentTargetCarrier(

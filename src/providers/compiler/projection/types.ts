@@ -9,6 +9,7 @@ import {
 } from "../../../target-model/types/index.js";
 import {
   canonicalCompilerTypePathKey,
+  digestText,
   importedSourceType,
   isRustOptionPath,
   isRustStringPath,
@@ -72,6 +73,7 @@ import {
   targetPathForIdentity,
   withCompilerLifetimeBinder,
 } from "./type-arguments.js";
+import { rustCompilerTypeSemanticKey } from "../model/types/substitution.js";
 
 export function sourceTypeFor(
   type: RustCompilerType,
@@ -131,20 +133,36 @@ export function sourceTypeFor(
         [sourceTypeFor(type.target, context, position)],
       );
     case "function-pointer": {
+      if (type.lifetimeBinder === undefined) {
+        return importedSourceType(
+          context,
+          "@tsonic/core/types.js",
+          "FunctionPointer",
+          [
+            {
+              kind: "tuple",
+              elementTypes: type.parameters.map((parameter) =>
+                sourceTypeFor(parameter, context, position)),
+            },
+            sourceTypeFor(type.result, context, position),
+          ],
+        );
+      }
       const binderContext = withCompilerLifetimeBinder(context, type.lifetimeBinder);
-      return importedSourceType(
+      const typeParameters = providerGenericParametersFor(
+        type.lifetimeBinder?.parameters ?? [],
         binderContext,
-        "@tsonic/core/types.js",
-        "FunctionPointer",
-        [
-          {
-            kind: "tuple",
-            elementTypes: type.parameters.map((parameter) =>
-              sourceTypeFor(parameter, binderContext, position)),
-          },
-          sourceTypeFor(type.result, binderContext, position),
-        ],
       );
+      return {
+        kind: "function",
+        id: `rust-function-pointer:${digestText(rustCompilerTypeSemanticKey(type))}`,
+        parameters: type.parameters.map((parameter, index) => ({
+          name: `argument${index}`,
+          type: sourceTypeFor(parameter, binderContext, position),
+        })),
+        returnType: sourceTypeFor(type.result, binderContext, position),
+        ...(typeParameters.length === 0 ? {} : { typeParameters }),
+      };
     }
     case "trait-object": {
       const traits = [type.principal, ...type.autoTraits].map((trait) =>

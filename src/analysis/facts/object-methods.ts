@@ -1,7 +1,8 @@
 import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
 import { defineRustPlanKey } from "../../target-model/facts/keys.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustArgumentMode, RustValueConversion } from "../../target-model/operations/model.js";
+import type { RustArgumentMode } from "../../target-model/operations/model.js";
+import type { RustContextualValueConversion } from "../../target-model/conversions/contextual.js";
 import type { RustErrorBoundary } from "../../target-model/operations/error-boundary.js";
 import type { RustFinalizedValueConversion } from "./finalized-operation-abi.js";
 import type { RustPlanKey } from "../../target-model/facts/keys.js";
@@ -18,7 +19,7 @@ export type RustObjectLiteralValueAdapter =
       readonly kind: "conversion";
       readonly sourceCarrier: TargetTypeRef;
       readonly targetCarrier: TargetTypeRef;
-      readonly conversion: RustValueConversion;
+      readonly conversion: RustContextualValueConversion;
     }
   | {
       readonly kind: "project-upcast";

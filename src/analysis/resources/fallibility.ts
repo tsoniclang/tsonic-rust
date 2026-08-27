@@ -41,7 +41,7 @@ import { rustInheritedProjectConstructor } from "../project-types/type-policy.js
 import { rustOperationAbiAwaitIsFallible, rustTargetOperationIsFallible } from "../facts/target-operation.js";
 import { rustPolicyTargetDiagnostic } from "../../policy/operations/contracts.js";
 import { rustSelectedCallKey, rustSelectedOperationKey } from "../../target-model/facts/selections.js";
-import { rustValueConversionIsFallible } from "../../target-model/conversions/contracts.js";
+import { rustContextualValueConversionIsFallible } from "../../target-model/conversions/contextual.js";
 import { selectedDeclarationIsProjectSource } from "../expressions/references.js";
 import { selectRustResourceManagement } from "./management.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
@@ -344,7 +344,7 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
       walk.context.projectFieldDispatch,
     ) ||
       bindingProjectionIsFallible ||
-      rustValueConversionIsFallible(contextualConversion?.conversion);
+      rustContextualValueConversionIsFallible(contextualConversion?.conversion);
   };
   const selectedAccessorDeclarations = (node: Node): readonly Node[] => {
     const operation = walk.context.facts.get(node, rustTargetOperationFactKey) ??

@@ -206,13 +206,18 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
       dependency,
       modulePath: [],
       requestedExports: [
+        "LifetimeView",
+        "LendingValue",
         "apply_borrowed",
         "borrowed_owned_string",
         "borrowed_slice",
         "choose_borrowed",
+        "constrained_lending",
         "inspect_view",
+        "lending_value",
         "opaque_borrow",
         "pass_lending_item",
+        "read_lending_value",
       ],
     });
     assert.deepEqual(lifetimeModule.unsupportedExports, []);
@@ -316,6 +321,36 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
       chooseOperation?.genericParameters?.map(({ kind }) => kind),
       ["lifetime", "lifetime", "type", "const"],
     );
+    const projectedApplyBorrowed = lifetimeProjection.declarationModel.exports
+      .find(({ name }) => name === "apply_borrowed")?.signatures?.[0];
+    const projectedCallback = projectedApplyBorrowed?.parameters[0]?.type;
+    assert.equal(projectedCallback?.kind, "function");
+    assert.deepEqual(projectedCallback?.typeParameters?.map(({ name }) => name), ["a"]);
+    assert.equal(projectedCallback?.parameters[0]?.type.exportName, "Ref");
+    assert.equal(projectedCallback?.returnType?.exportName, "Ref");
+    assert.equal(
+      lifetimeProjection.declarationModel.imports.some(({ moduleSpecifier, namedImports }) =>
+        moduleSpecifier === "@tsonic/core/types.js" &&
+        namedImports.some(({ exportedName }) => exportedName === "FunctionPointer")),
+      false,
+      "higher-ranked source functions bind their lifetime in the source callable contract",
+    );
+    const lifetimeViewConstructor = lifetimeProjection.operations.find(({ exportId, operationKind }) =>
+      exportId.endsWith("::LifetimeView") && operationKind === "constructor");
+    assert.deepEqual(
+      rustNamedTypeCarrierValue(lifetimeViewConstructor?.resultCarrier)?.traits,
+      {
+        implementations: [{ traitPath: "widget_alias::View", requirements: [] }],
+      },
+      "compiler trait evidence uses the exact Cargo target alias",
+    );
+    const constrainedLending = lifetimeProjection.operations.find(
+      ({ exportId }) => exportId.endsWith("::constrained_lending"),
+    );
+    assert.deepEqual(constrainedLending?.typeRequirements, [{
+      name: "F",
+      requirements: [{ kind: "trait", path: "widget_alias::LendingFamily" }],
+    }]);
     const lendingOperation = lifetimeProjection.operations.find(
       ({ exportId }) => exportId.endsWith("::pass_lending_item"),
     );

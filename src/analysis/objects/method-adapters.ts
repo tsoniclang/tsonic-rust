@@ -16,7 +16,6 @@ import type {
   RustObjectLiteralValueAdapter,
   RustTargetOperationFact,
 } from "../facts/keys.js";
-import { rustValueConversionIsFallible } from "../../target-model/conversions/contracts.js";
 import {
   inferRustTargetTypeParameterBindings,
   isRustCopyCarrier,
@@ -36,6 +35,7 @@ import type {
   RustProjectTypePolicy,
 } from "../project-types/type-policy.js";
 import { selectRustValueCarrierReconciliation } from "../../policy/types/value-carrier-reconciliation.js";
+import { rustContextualValueConversionIsFallible } from "../../target-model/conversions/contextual.js";
 
 export interface RustObjectLiteralMethodAdapterIssue {
   readonly expression: Node;
@@ -511,7 +511,7 @@ function selectObjectLiteralValueAdapter(
 function objectLiteralValueAdapterIsFallible(adapter: RustObjectLiteralValueAdapter): boolean {
   switch (adapter.kind) {
     case "conversion":
-      return rustValueConversionIsFallible(adapter.conversion);
+      return rustContextualValueConversionIsFallible(adapter.conversion);
     case "option-some":
     case "option-map":
       return objectLiteralValueAdapterIsFallible(adapter.element);

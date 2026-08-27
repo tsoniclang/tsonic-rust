@@ -80,6 +80,40 @@ pub trait View {
     fn value(&self) -> i32;
 }
 
+pub struct LifetimeView {
+    value: i32,
+}
+
+impl LifetimeView {
+    pub fn new(value: i32) -> Self {
+        Self { value }
+    }
+
+    pub fn increment(&mut self) {
+        self.value += 1;
+    }
+}
+
+impl View for LifetimeView {
+    fn value(&self) -> i32 {
+        self.value
+    }
+}
+
+pub struct LendingValue {
+    value: i32,
+}
+
+impl LendingValue {
+    pub fn new(value: i32) -> Self {
+        Self { value }
+    }
+}
+
+impl LendingFamily for LendingValue {
+    type Item<'a> = &'a i32;
+}
+
 pub fn pass_lending_item<'a, F>(value: F::Item<'a>) -> F::Item<'a>
 where
     F: LendingFamily + 'a,
@@ -95,6 +129,19 @@ pub fn choose_borrowed<'short, 'long: 'short, T: 'short + ?Sized, const N: usize
     short
 }
 
+pub fn choose_borrowed_mixed<
+    'short,
+    'long: 'short,
+    T: 'short + ?Sized,
+    const N: usize,
+>(
+    short: &'short T,
+    _long: &'long T,
+) -> &'short T {
+    let _ = N;
+    short
+}
+
 pub fn preserve_borrowed<'a, T: ?Sized + 'a>(value: &'a T) -> &'a T {
     value
 }
@@ -104,6 +151,30 @@ pub fn apply_borrowed(
     value: &i32,
 ) -> &i32 {
     callback(value)
+}
+
+pub fn increment_borrowed(value: &mut i32) {
+    *value += 1;
+}
+
+pub fn lending_value(value: &LendingValue) -> <LendingValue as LendingFamily>::Item<'_> {
+    &value.value
+}
+
+pub fn constrained_lending<'a, F>(
+    _family: &'a F,
+    value: <F as LendingFamily>::Item<'a>,
+) -> <F as LendingFamily>::Item<'a>
+where
+    F: LendingFamily<Item<'a> = &'a i32>,
+{
+    value
+}
+
+pub fn read_lending_value(
+    value: <LendingValue as LendingFamily>::Item<'_>,
+) -> i32 {
+    *value
 }
 
 pub fn inspect_view(value: &(dyn View + '_)) -> i32 {

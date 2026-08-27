@@ -63,6 +63,10 @@ export class View<L extends Life> {
   }
 }
 
+export function openView<L extends Life>(value: Ref<int32, L>): View<L> {
+  return new View<L>(value);
+}
+
 export function pick<
   A extends Life,
   B extends Life & Outlives<A>,
@@ -93,6 +97,7 @@ export function inferred(value: Ref<int32, Placeholder>): Ref<int32, Placeholder
   assert.match(source, /pub type Shared<'l> = &'l i32;/u);
   assert.match(source, /pub struct View<'l>/u);
   assert.match(source, /value: &'l i32/u);
+  assert.match(source, /pub fn open_view<'l>\(value: &'l i32\) -> View<'l>/u);
   assert.match(source, /pub fn pick<'a, 'b: 'a, T: 'a \+ \?Sized>/u);
   assert.match(source, /short: &'a T/u);
   assert.match(source, /long: &'b T/u);
@@ -100,6 +105,7 @@ export function inferred(value: Ref<int32, Placeholder>): Ref<int32, Placeholder
   assert.match(source, /value: &'a &'b mut i32/u);
   assert.match(source, /value: &'static i32/u);
   assert.match(source, /value: &'_ i32/u);
+  validateGeneratedProject("native-lifetime-declaration-proof", result.artifacts);
 });
 
 test("Rust lifetime and reference identities survive aliases, re-exports, and namespace imports without matching local spellings", () => {
@@ -352,6 +358,38 @@ export function* ambiguous<Left extends Life, Right extends Life>(
   assert.match(
     result.diagnostics[0]?.message ?? "",
     /no single exact authored storage lifetime/u,
+  );
+});
+
+test("unresolved authored lifetime bounds fail at target analysis without guessed output", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import type {
+  Life,
+  Outlives,
+  Placeholder,
+  Ref,
+} from "@tsonic/rust/types.js";
+
+export function invalidBound<
+  L extends Life & Outlives<Placeholder>,
+>(value: Ref<int32, L>): Ref<int32, L> {
+  return value;
+}
+`,
+    },
+  });
+
+  assert.equal(result.artifacts.length, 0);
+  assert.deepEqual(
+    result.diagnostics.map(({ code }) => code),
+    ["RUST_LIFETIME_BOUND_NOT_PROVEN"],
+  );
+  assert.match(
+    result.diagnostics[0]?.message ?? "",
+    /no exact named or static lifetime identity/u,
   );
 });
 

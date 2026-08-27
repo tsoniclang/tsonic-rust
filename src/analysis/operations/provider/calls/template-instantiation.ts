@@ -62,6 +62,20 @@ export function instantiateProviderOperationTemplate<
       return undefined;
     }
   }
+  for (const parameter of parameters) {
+    if (parameter.kind !== "lifetime" ||
+      bindings.lifetimes.has(parameter.targetIdentity)) {
+      continue;
+    }
+    const inferred = evidence.callScopedElisionBindings?.get(parameter.targetIdentity);
+    if (inferred === undefined || !mergeLifetimeBinding(
+      bindings.lifetimes,
+      parameter.targetIdentity,
+      inferred,
+    )) {
+      return undefined;
+    }
+  }
   if (!inferExactTemplateBindings(
     template.receiverCarrier,
     evidence.sourceReceiverCarrier,

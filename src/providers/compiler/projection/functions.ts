@@ -179,7 +179,7 @@ export function projectFunction(
     ...(operationGenericBindings.length === 0
       ? {}
       : { genericParameters: operationGenericBindings }),
-    ...typeRequirements(fn.typeRequirements, operationTypeNames),
+    ...typeRequirements(fn.typeRequirements, operationTypeNames, context),
     ...(targetGenericArguments.length === 0
       ? {}
       : { targetGenericArguments }),

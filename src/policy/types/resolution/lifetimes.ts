@@ -49,16 +49,15 @@ export function rustSourceLifetimeTypeContract(
   const semantics = context.semanticsFor(node);
   const typeName = context.ast.as.AsTypeReferenceNode(node)?.TypeName;
   const selected = context.source.navigation.sourceReferenceFor(typeName);
-  const subjects = new Set(semantics.facts.authoredTypeSubjects(node));
-  if (selected !== undefined) {
-    for (const subject of semantics.facts.selectedSubjects(
-      selected.symbol,
-      selected.declaration,
-    )) {
-      subjects.add(subject);
-    }
-  }
-  const identity = resolveProviderTypeIdentity([...subjects], context);
+  const identity = selected === undefined
+    ? resolveProviderTypeIdentity(semantics.facts.authoredTypeSubjects(node), context)
+    : resolveProviderTypeIdentity(
+        semantics.facts.selectedSubjects(
+          selected.symbol,
+          selected.declaration,
+        ),
+        context,
+      );
   if (identity?.providerId !== rustSourceVirtualModulesProviderId ||
     identity.providerVersion !== rustSourceProviderVersion ||
     identity.providerModuleId !== rustTypesModule ||
