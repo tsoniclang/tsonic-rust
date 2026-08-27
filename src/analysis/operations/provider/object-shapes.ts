@@ -9,6 +9,7 @@ import { acceptRustPolicy } from "../../../policy/operations/contracts.js";
 import {
   acceptSelectedCall,
   checkedCallIsConstruction,
+  instantiateExactSelectedConstructionCarrier,
   mapSelectedProjectGenericArguments,
   selectedCallReceiverValueCarrier,
   selectedProjectConstructor,
@@ -688,11 +689,20 @@ export function acceptProjectSourceCall(
         options,
       )
     : undefined;
+  const selectedAuthoredOwnerCarrier = construction &&
+      selectedOwnerDefinition !== undefined &&
+      selectedOwnerDefinition === callableOwner
+    ? instantiateExactSelectedConstructionCarrier(
+        selectedOwnerDefinition,
+        targetGenericArguments,
+        options,
+      )
+    : undefined;
   const selectedOwnerCarrier = superConstruction
     ? selectedOwnerRelationship?.kind === "related"
       ? selectedOwnerRelationship.targetType
       : undefined
-    : selectedResultOwnerCarrier;
+    : selectedAuthoredOwnerCarrier ?? selectedResultOwnerCarrier;
   if (construction && selectedOwnerCarrier === undefined) {
     return rejectSelectedOperation(
       request.source.call,
