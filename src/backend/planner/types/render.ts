@@ -8,7 +8,6 @@ import type {
   RustCallGenericArgument,
   RustGenericArgument,
   RustConstArgument,
-  RustLifetime,
   RustLifetimeParameter,
   RustTraitReference,
   RustType,
@@ -16,7 +15,6 @@ import type {
 } from "../../target-ast/nodes.js";
 import {
   rustLifetimeKey,
-  rustLifetimeName,
   type RustLifetimeBinder,
   type RustLifetimeRef,
 } from "../../../target-model/lifetimes/index.js";
@@ -27,6 +25,7 @@ import {
 } from "../../../target-model/types/index.js";
 import { rustSourceItemIdentity } from "../program/source-package-facades.js";
 import { rustExplicitNamedTypeArguments } from "./generic-defaults.js";
+import { rustLifetimeToAst } from "./lifetime-syntax.js";
 import {
   rustBigIntTargetId,
   rustJsArrayTargetId,
@@ -795,14 +794,6 @@ function collectAliasesFromRustTypeBound(
     case "maybe-sized":
       return;
   }
-}
-
-export function rustLifetimeToAst(lifetime: RustLifetimeRef): RustLifetime {
-  return lifetime.kind === "static"
-    ? { kind: "static" }
-    : lifetime.kind === "placeholder"
-      ? { kind: "placeholder" }
-      : { kind: "named", name: rustLifetimeName(lifetime) };
 }
 
 export function rustTargetGenericArgumentToAstInContext(

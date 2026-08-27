@@ -14,6 +14,7 @@ import {
 } from "@tsonic/target-api/source";
 import {
   rustContextualValueConversionFactKey,
+  rustCallScopedLifetimeReconciliationFactKey,
   rustFlowReadProjectionFactKey,
   rustOptionProjectionFactKey,
   rustProjectDowncastFactKey,
@@ -55,6 +56,10 @@ export function planExpression(
   const flowRead = context.input.program.facts.getFact(node, rustFlowReadProjectionFactKey);
   const upcast = context.input.program.facts.getFact(node, rustProjectUpcastFactKey);
   const downcast = context.input.program.facts.getFact(node, rustProjectDowncastFactKey);
+  const lifetimeReconciliation = context.input.program.facts.getFact(
+    node,
+    rustCallScopedLifetimeReconciliationFactKey,
+  );
   const contextualConversion = context.input.program.facts.getFact(
     node,
     rustContextualValueConversionFactKey,
@@ -64,6 +69,7 @@ export function planExpression(
     flowRead?.sourceCarrier ??
     upcast?.sourceCarrier ??
     downcast?.sourceCarrier ??
+    lifetimeReconciliation?.sourceCarrier ??
     contextualConversion?.sourceCarrier ??
     projection?.sourceCarrier ??
     context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
@@ -123,6 +129,18 @@ export function planExpression(
   }
   if (converted === undefined) {
     return undefined;
+  }
+  if (lifetimeReconciliation !== undefined) {
+    if (rustTargetTypeRefEquals(currentCarrier, lifetimeReconciliation.sourceCarrier)) {
+      currentCarrier = lifetimeReconciliation.selectedCarrier;
+    } else if (!rustTargetTypeRefEquals(currentCarrier, lifetimeReconciliation.selectedCarrier)) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, node),
+        "rust.backend.call-scoped-lifetime-reconciliation-order",
+        "The finalized call-scoped lifetime reconciliation is not composable with the expression's current exact carrier.",
+      ));
+      return undefined;
+    }
   }
   let contextuallyConverted = converted;
   if (contextualConversion !== undefined) {

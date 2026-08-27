@@ -46,6 +46,7 @@ export function instantiateProviderOperationTemplate<
     readonly sourceParameterCarriers?: readonly (TargetTypeRef | undefined)[];
     readonly sourceResultCarrier?: TargetTypeRef;
     readonly directGenericArguments?: ReadonlyMap<string, RustTargetGenericArgument>;
+    readonly callScopedElisionBindings?: ReadonlyMap<string, RustLifetimeRef>;
   },
 ): InstantiatedProviderOperationTemplate<OperationKind> | undefined {
   const parameters = template.genericParameters ?? [];
@@ -96,7 +97,18 @@ export function instantiateProviderOperationTemplate<
   }
   for (const parameter of parameters) {
     if (providerGenericParameterIsBound(bindings, parameter)) continue;
-    if (parameter.kind === "lifetime" || parameter.defaultArgument === undefined) {
+    if (parameter.kind === "lifetime") {
+      const inferred = evidence.callScopedElisionBindings?.get(parameter.targetIdentity);
+      if (inferred === undefined || !mergeLifetimeBinding(
+        bindings.lifetimes,
+        parameter.targetIdentity,
+        inferred,
+      )) {
+        return undefined;
+      }
+      continue;
+    }
+    if (parameter.defaultArgument === undefined) {
       return undefined;
     }
     const defaultArgument = substituteTargetGenericArgument(
@@ -175,7 +187,9 @@ export function instantiateProviderOperationTemplate<
     if (actual === undefined) {
       return false;
     }
-    const inferred = inferRustTargetGenericBindings(pattern, actual, parameterSet);
+    const inferred = inferRustTargetGenericBindings(pattern, actual, parameterSet, {
+      callScopedElisionBindings: evidence.callScopedElisionBindings,
+    });
     if (inferred === undefined) {
       return false;
     }
@@ -195,7 +209,9 @@ export function instantiateProviderOperationTemplate<
       return true;
     }
     if (actual === undefined) return false;
-    const inferred = inferRustTargetGenericBindings(pattern, actual, parameterSet);
+    const inferred = inferRustTargetGenericBindings(pattern, actual, parameterSet, {
+      callScopedElisionBindings: evidence.callScopedElisionBindings,
+    });
     return inferred !== undefined && mergeUnboundGenericBindings(
       inferredBindings,
       inferred,

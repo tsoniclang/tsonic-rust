@@ -112,6 +112,10 @@ export interface RustTargetGenericReferences {
     { readonly kind: "parameter" | "bound" }
   >[];
   readonly lifetimeIdentities: readonly string[];
+  readonly callScopedElisions: readonly Extract<
+    RustLifetimeRef,
+    { readonly kind: "call-scoped-elision" }
+  >[];
   readonly constIdentities: readonly string[];
 }
 
@@ -123,6 +127,10 @@ export function rustTargetGenericReferences(
     RustLifetimeRef,
     { readonly kind: "parameter" | "bound" }
   >>();
+  const callScopedElisions = new Map<string, Extract<
+    RustLifetimeRef,
+    { readonly kind: "call-scoped-elision" }
+  >>();
   const constIdentities = new Set<string>();
   visitType(type, new Set());
   return Object.freeze({
@@ -131,6 +139,9 @@ export function rustTargetGenericReferences(
       .sort(([left], [right]) => left.localeCompare(right, "en"))
       .map(([, lifetime]) => lifetime)),
     lifetimeIdentities: Object.freeze([...lifetimes.keys()].sort()),
+    callScopedElisions: Object.freeze([...callScopedElisions]
+      .sort(([left], [right]) => left.localeCompare(right, "en"))
+      .map(([, lifetime]) => lifetime)),
     constIdentities: Object.freeze([...constIdentities].sort()),
   });
 
@@ -140,6 +151,10 @@ export function rustTargetGenericReferences(
   ): void {
     if (lifetime === undefined) return;
     const identity = rustLifetimeKey(lifetime);
+    if (lifetime.kind === "call-scoped-elision") {
+      callScopedElisions.set(identity, lifetime);
+      return;
+    }
     if ((lifetime.kind === "parameter" || lifetime.kind === "bound") &&
       !bound.has(identity)) {
       const existing = lifetimes.get(identity);

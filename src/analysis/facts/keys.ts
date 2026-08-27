@@ -82,6 +82,7 @@ export type {
 } from "../../target-model/operations/model.js";
 export {
   rustBindingProjectionFactKey,
+  rustCallScopedLifetimeReconciliationFactKey,
   rustContextualValueConversionFactKey,
   rustFlowReadProjectionFactKey,
   rustMutatedBindingFactKey,
@@ -96,6 +97,7 @@ export type {
   RustBindingNormalization,
   RustBindingProjection,
   RustBindingProjectionFact,
+  RustCallScopedLifetimeReconciliationFact,
   RustContextualValueConversionFact,
   RustFlowReadProjectionFact,
   RustOptionProjectionFact,

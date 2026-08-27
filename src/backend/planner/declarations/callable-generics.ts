@@ -1,19 +1,17 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import {
-  rustLifetimeName,
-  type RustLifetimeRef,
   type RustSourceGenericParameterContract,
 } from "../../../target-model/lifetimes/index.js";
 import {
   emptyRustGenerics,
   type RustGenerics,
   type RustGenericParameter,
-  type RustLifetime,
   type RustTypeBound,
 } from "../../target-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { diagnosticInput, isValidRustIdentifier } from "../program/plan-context.js";
+import { rustLifetimeToAst } from "../types/lifetime-syntax.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 
 export interface RustCallableGenericPlan {
@@ -204,14 +202,6 @@ export function rustCallableSpecialization(
   }
   return new Map(sourceTypeParameterNames.map((name, index) =>
     [name, targetTypeArguments[index]!] as const));
-}
-
-export function rustLifetimeToAst(lifetime: RustLifetimeRef): RustLifetime {
-  return lifetime.kind === "static"
-    ? { kind: "static" }
-    : lifetime.kind === "placeholder"
-      ? { kind: "placeholder" }
-      : { kind: "named", name: rustLifetimeName(lifetime) };
 }
 
 function mergeTypeBounds(

@@ -41,6 +41,10 @@ export interface RustTargetGenericBindings {
   readonly consts: ReadonlyMap<string, RustTargetConstArgument>;
 }
 
+export interface RustTargetGenericInferenceOptions {
+  readonly callScopedElisionBindings?: ReadonlyMap<string, RustLifetimeRef>;
+}
+
 interface LifetimeInferenceContext {
   readonly leftToRight: ReadonlyMap<string, string>;
   readonly rightToLeft: ReadonlyMap<string, string>;
@@ -55,6 +59,7 @@ export function inferRustTargetGenericBindings(
   pattern: TargetTypeRef,
   actual: TargetTypeRef,
   parameters: RustTargetGenericParameterSet,
+  options: RustTargetGenericInferenceOptions = {},
 ): RustTargetGenericBindings | undefined {
   const types = new Map<string, TargetTypeRef>();
   const lifetimes = new Map<string, RustLifetimeRef>();
@@ -68,8 +73,17 @@ export function inferRustTargetGenericBindings(
     right: RustLifetimeRef | undefined,
     context: LifetimeInferenceContext,
   ): boolean {
-    if (left === undefined || right === undefined) return left === right;
+    if (left === undefined) return right === undefined;
     const identity = rustLifetimeKey(left);
+    if (right === undefined) {
+      if (!parameters.lifetimeIdentities.has(identity)) return false;
+      const existing = lifetimes.get(identity);
+      if (existing !== undefined) return true;
+      const inferred = options.callScopedElisionBindings?.get(identity);
+      if (inferred === undefined) return false;
+      lifetimes.set(identity, inferred);
+      return true;
+    }
     if (left.kind === "bound" && right.kind === "bound") {
       const rightIdentity = rustLifetimeKey(right);
       const selectedRight = context.leftToRight.get(identity);

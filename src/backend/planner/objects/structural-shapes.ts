@@ -29,7 +29,7 @@ import {
   rustStructuralMethodStorageCarrier,
 } from "../../../target-model/types/index.js";
 import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
-import { rustLifetimeToAst } from "../types/render.js";
+import { rustLifetimeToAst } from "../types/lifetime-syntax.js";
 
 export function planRustStructuralShapeModule(
   input: RustPlanningContext,

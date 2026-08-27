@@ -612,7 +612,8 @@ export function selectedArgumentMatchScore(
       expected,
       options.projectTypes,
     );
-    if (reconciliation.kind === "conversion" || reconciliation.kind === "project-upcast") {
+    if (reconciliation.kind === "call-scoped-lifetime" ||
+      reconciliation.kind === "conversion" || reconciliation.kind === "project-upcast") {
       return 1;
     }
     return expected.kind === "source-primitive" && isRustNumericCarrier(expected) &&

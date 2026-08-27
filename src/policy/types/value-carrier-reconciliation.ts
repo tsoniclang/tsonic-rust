@@ -1,6 +1,7 @@
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type {
+  RustCallScopedLifetimeReconciliationFact,
   RustContextualValueConversionFact,
   RustFlowReadProjectionFact,
   RustProjectUpcastFact,
@@ -12,16 +13,23 @@ import {
 } from "../../target-model/types/index.js";
 import type { RustProjectTypePolicy } from "./project-types.js";
 import { selectRustSourceValueConversion } from "../conversions/selection.js";
+import { inferRustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
+import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
+import { rustLifetimeKey, rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
 
 export type RustValueCarrierReconciliation =
   | { readonly kind: "identity" }
+  | {
+      readonly kind: "call-scoped-lifetime";
+      readonly fact: RustCallScopedLifetimeReconciliationFact;
+    }
   | { readonly kind: "conversion"; readonly fact: RustContextualValueConversionFact }
   | { readonly kind: "project-upcast"; readonly fact: RustProjectUpcastFact }
   | { readonly kind: "incompatible"; readonly reason: "ambiguous" | "unrelated" };
 
 export type RustAppliedValueCarrierReconciliation = Extract<
   RustValueCarrierReconciliation,
-  { readonly kind: "conversion" | "project-upcast" }
+  { readonly kind: "call-scoped-lifetime" | "conversion" | "project-upcast" }
 >;
 
 export type RustFlowReadProjectionSelection =
@@ -98,6 +106,13 @@ export function selectRustValueCarrierReconciliation(
   if (rustTargetTypeRefEquals(sourceCarrier, targetCarrier)) {
     return { kind: "identity" };
   }
+  const lifetimeReconciliation = selectRustCallScopedLifetimeReconciliation(
+    sourceCarrier,
+    targetCarrier,
+  );
+  if (lifetimeReconciliation !== undefined) {
+    return { kind: "call-scoped-lifetime", fact: lifetimeReconciliation };
+  }
   const targetDefinition = projectTypes.definitionForCarrier(targetCarrier);
   const relationship = targetDefinition === undefined
     ? { kind: "unrelated" as const }
@@ -119,4 +134,41 @@ export function selectRustValueCarrierReconciliation(
         kind: "conversion",
         fact: { sourceCarrier, targetCarrier, conversion },
       };
+}
+
+export function selectRustCallScopedLifetimeReconciliation(
+  sourceCarrier: TargetTypeRef,
+  selectedCarrier: TargetTypeRef,
+): RustCallScopedLifetimeReconciliationFact | undefined {
+  if (!matchesByElidingCallScopedLifetimes(selectedCarrier, sourceCarrier) &&
+    !matchesByElidingCallScopedLifetimes(sourceCarrier, selectedCarrier)) {
+    return undefined;
+  }
+  return Object.freeze({ sourceCarrier, selectedCarrier });
+}
+
+function matchesByElidingCallScopedLifetimes(
+  pattern: TargetTypeRef,
+  actual: TargetTypeRef,
+): boolean {
+  const references = rustTargetGenericReferences(pattern);
+  if (references.callScopedElisions.length === 0) return false;
+  const lifetimes = new Map(references.callScopedElisions.map((lifetime) => [
+    rustLifetimeKey(lifetime),
+    lifetime,
+  ]));
+  const inferred = inferRustTargetGenericBindings(
+    pattern,
+    actual,
+    {
+      typeNames: new Set(),
+      lifetimeIdentities: new Set(lifetimes.keys()),
+      constIdentities: new Set(),
+    },
+    { callScopedElisionBindings: lifetimes },
+  );
+  return inferred !== undefined && inferred.types.size === 0 && inferred.consts.size === 0 &&
+    inferred.lifetimes.size === lifetimes.size &&
+    [...lifetimes].every(([identity, lifetime]) =>
+      rustLifetimesEqual(inferred.lifetimes.get(identity), lifetime));
 }

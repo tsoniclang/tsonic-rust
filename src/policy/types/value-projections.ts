@@ -40,6 +40,11 @@ export interface RustContextualValueConversionFact {
   readonly conversion: RustValueConversion;
 }
 
+export interface RustCallScopedLifetimeReconciliationFact {
+  readonly sourceCarrier: TargetTypeRef;
+  readonly selectedCarrier: TargetTypeRef;
+}
+
 export interface RustProjectUpcastFact {
   readonly sourceCarrier: TargetTypeRef;
   readonly targetCarrier: TargetTypeRef;

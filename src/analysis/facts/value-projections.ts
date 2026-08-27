@@ -4,6 +4,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustPlanKey } from "../../target-model/facts/keys.js";
 import type {
   RustBindingProjectionFact,
+  RustCallScopedLifetimeReconciliationFact,
   RustContextualValueConversionFact,
   RustFlowReadProjectionFact,
   RustOptionProjectionFact,
@@ -28,6 +29,12 @@ export const rustFlowReadProjectionFactKey: RustPlanKey<RustFlowReadProjectionFa
 
 export const rustContextualValueConversionFactKey: RustPlanKey<RustContextualValueConversionFact> =
   defineRustPlanKey("contextualValueConversion", closedMetadataEquals);
+
+export const rustCallScopedLifetimeReconciliationFactKey:
+  RustPlanKey<RustCallScopedLifetimeReconciliationFact> =
+  defineRustPlanKey("callScopedLifetimeReconciliation", (left, right) =>
+    rustTargetTypeRefEquals(left.sourceCarrier, right.sourceCarrier) &&
+    rustTargetTypeRefEquals(left.selectedCarrier, right.selectedCarrier));
 
 export const rustProjectUpcastFactKey: RustPlanKey<RustProjectUpcastFact> =
   defineRustPlanKey("projectUpcast", (left, right) =>

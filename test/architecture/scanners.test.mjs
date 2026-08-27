@@ -142,6 +142,15 @@ test("Rust target-type validation and equality have one target-model owner", () 
   assert.doesNotMatch(carrierHelpers, /export function (?:isRustTargetTypeRef|rustTargetTypeRefEquals)\b/u);
 });
 
+test("Rust semantic-lifetime to syntax conversion has one planner owner", () => {
+  const owners = sourceFiles.filter(({ text }) =>
+    /export function rustLifetimeToAst\b/u.test(text));
+  assert.deepEqual(
+    owners.map(({ path }) => path.slice(sourceRoot.length + 1)),
+    ["backend/planner/types/lifetime-syntax.ts"],
+  );
+});
+
 test("no embedded JS engine or runtime interpretation dependencies", () => {
   const packageJson = readFileSync(join(repositoryRoot, "package.json"), "utf8");
   const banned = /quickjs|rquickjs|boa_engine|deno_core|"v8"/iu;

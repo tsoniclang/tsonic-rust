@@ -195,6 +195,19 @@ test("provider carrier validation preserves exact lifetime, HRTB, mixed-generic,
     })),
     /not a closed Rust target type/u,
   );
+  assert.throws(
+    () => createRustProviderPackage(withCarrier({
+      kind: "reference",
+      referent: int32Carrier,
+      mutable: false,
+      lifetime: {
+        kind: "call-scoped-elision",
+        callIdentity: "forged-call",
+        parameterIdentity: "forged-parameter",
+      },
+    })),
+    /compiler-owned call-scoped lifetime identity/u,
+  );
 });
 
 test("provider operation metadata rejects unknown and missing operation kinds", () => {

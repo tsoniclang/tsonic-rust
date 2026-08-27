@@ -153,6 +153,9 @@ export function validateTargetGenericArgument(
     if (!isRustLifetimeRef(value.lifetime)) {
       fail(`${where}.lifetime is not an exact Rust lifetime reference`);
     }
+    if (value.lifetime.kind === "call-scoped-elision") {
+      fail(`${where}.lifetime uses a compiler-owned call-scoped lifetime identity`);
+    }
     return;
   }
   requireExactKeys(record, ["kind", "value"], where, fail);

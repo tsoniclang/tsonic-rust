@@ -12,6 +12,7 @@ import { isRustCVariadicArgumentCarrier } from "../../../facts/c-variadic.js";
 import {
   KindCallExpression,
   KindNewExpression,
+  sourceNodeIdentity,
 } from "@tsonic/target-api/source";
 import { normalizeSelectedArgumentCarrier, rejectSelectedOperation } from "../result.js";
 import { selectRustValueCarrierReconciliation } from "../../../../policy/types/value-carrier-reconciliation.js";
@@ -50,7 +51,10 @@ import type {
   RustTargetMember,
   TargetTypeRef,
 } from "../../../../target-model/types/model.js";
-import { rustLifetimeKey } from "../../../../target-model/lifetimes/index.js";
+import {
+  rustCallScopedElisionLifetime,
+  rustLifetimeKey,
+} from "../../../../target-model/lifetimes/index.js";
 import type { RustLifetimeRef } from "../../../../target-model/lifetimes/index.js";
 
 export function instantiateExactSelectedConstructionCarrier(
@@ -95,6 +99,8 @@ export function mapSelectedProjectGenericArguments(
   if (contract === undefined || selected.length !== contract.parameters.length) {
     return undefined;
   }
+  const call = asNode(request.source.call, context);
+  const callIdentity = call === undefined ? undefined : sourceNodeIdentity(context.ast, call);
   const arguments_ = contract.parameters.map((parameter, index) => {
     const evidence = selected[index];
     if (evidence === undefined || evidence.typeParameterName !== parameter.sourceName ||
@@ -110,7 +116,16 @@ export function mapSelectedProjectGenericArguments(
       );
       return type === undefined ? undefined : rustTypeGenericArgument(type);
     }
-    const lifetime = resolveSelectedLifetimeArgument(evidence, context);
+    const lifetime = resolveSelectedLifetimeArgument(
+      evidence,
+      context,
+      callIdentity === undefined
+        ? undefined
+        : rustCallScopedElisionLifetime(
+            callIdentity,
+            rustLifetimeKey(parameter.lifetime),
+          ),
+    );
     return lifetime === undefined ? undefined : rustLifetimeGenericArgument(lifetime);
   });
   return arguments_.some((argument) => argument === undefined)
@@ -163,23 +178,11 @@ function resolveSelectedLifetimeArgument(
     RustCheckedCallSelectionInput["source"]["sourceSelectedMethodTypeArguments"]
   >[number],
   context: RustOperationPolicyContext,
+  inferred: RustLifetimeRef | undefined,
 ): RustLifetimeRef | undefined {
-  const authored = evidence.explicitTypeNode === undefined
-    ? undefined
+  return evidence.explicitTypeNode === undefined
+    ? inferred
     : context.sourceLifetimes.resolve(evidence.explicitTypeNode);
-  const semantic = new Map<string, RustLifetimeRef>();
-  for (const subject of context.currentSemantics.facts.typeSubjects(evidence.selectedType)) {
-    const node = asNode(subject, context);
-    const lifetime = node === undefined ? undefined : context.sourceLifetimes.resolve(node);
-    if (lifetime !== undefined) semantic.set(rustLifetimeKey(lifetime), lifetime);
-  }
-  if (semantic.size > 1) return undefined;
-  const selected = semantic.values().next().value as RustLifetimeRef | undefined;
-  if (authored !== undefined && selected !== undefined &&
-    rustLifetimeKey(authored) !== rustLifetimeKey(selected)) {
-    return undefined;
-  }
-  return authored ?? selected;
 }
 
 export function instantiateSelectedCallTemplate(
@@ -202,6 +205,17 @@ export function instantiateSelectedCallTemplate(
     ? undefined
     : resolveRustTargetTypeRef(request.source.sourceResultType, context, resolutionOptions);
   const directGenericArguments = new Map<string, RustTargetGenericArgument>();
+  const call = asNode(request.source.call, context);
+  const callIdentity = call === undefined ? undefined : sourceNodeIdentity(context.ast, call);
+  const callScopedElisionBindings = callIdentity === undefined
+    ? undefined
+    : new Map((template.genericParameters ?? []).flatMap((parameter) =>
+        parameter.kind !== "lifetime"
+          ? []
+          : [[
+              parameter.targetIdentity,
+              rustCallScopedElisionLifetime(callIdentity, parameter.targetIdentity),
+            ] as const]));
   for (const parameter of template.genericParameters ?? []) {
     const selected = (request.source.sourceSelectedMethodTypeArguments ?? []).filter((argument) =>
       argument.typeParameterName === parameter.sourceName);
@@ -221,7 +235,11 @@ export function instantiateSelectedCallTemplate(
         })()
       : parameter.kind === "lifetime"
         ? (() => {
-            const lifetime = resolveSelectedLifetimeArgument(argument, context);
+            const lifetime = resolveSelectedLifetimeArgument(
+              argument,
+              context,
+              callScopedElisionBindings?.get(parameter.targetIdentity),
+            );
             return lifetime === undefined
               ? undefined
               : rustLifetimeGenericArgument(lifetime);
@@ -241,6 +259,9 @@ export function instantiateSelectedCallTemplate(
     sourceParameterCarriers: selectedParameterCarriers,
     sourceResultCarrier: selectedResultCarrier,
     directGenericArguments,
+    ...(callScopedElisionBindings === undefined
+      ? {}
+      : { callScopedElisionBindings }),
   });
 }
 
@@ -512,8 +533,10 @@ function selectedCallSourceCarriers(
         expected,
         options.projectTypes,
       );
-      if (reconciliation.kind === "conversion" || reconciliation.kind === "project-upcast") {
-        if (reconciliation.kind === "project-upcast" || targetExpected === undefined) {
+      if (reconciliation.kind === "call-scoped-lifetime" ||
+        reconciliation.kind === "conversion" || reconciliation.kind === "project-upcast") {
+        if (reconciliation.kind === "call-scoped-lifetime" ||
+          reconciliation.kind === "project-upcast" || targetExpected === undefined) {
           reconciliations.push({ sourceIndex: index, reconciliation });
           effective = expected;
         }

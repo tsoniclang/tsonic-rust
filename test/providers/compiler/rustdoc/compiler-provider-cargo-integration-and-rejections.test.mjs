@@ -44,7 +44,7 @@ import { unsafeContext } from "@tsonic/core/lang.js";
 import type { constPtr, i8, mutPtr, u8 } from "@tsonic/rust/types.js";
 import { Box } from "@tsonic/rust/std/boxed.js";
 import type { Pair } from "@tsonic/rust/crates/widget_alias/index.js";
-import { ANSWER, CheckedWidget, GenericFactory, GLOBAL_COUNT, MUTABLE_COUNT, Mode, NumberBits, SimpleMode, Widget, apply, borrowed_answer, borrowed_label, byte_ptr, checked_double, cloned, copied, dangerous, double, duplicate, featured, fill, first_byte, identity, integer_bits, integer_format, maybe_positive, mode_code, pair_sum, simple_mode_code, singleton_map, sum, variadic_printf } from "@tsonic/rust/crates/widget_alias/index.js";
+import { ANSWER, CheckedWidget, GenericFactory, GLOBAL_COUNT, MUTABLE_COUNT, Mode, NumberBits, SimpleMode, Widget, apply, borrowed_answer, borrowed_label, byte_ptr, checked_double, cloned, copied, dangerous, double, duplicate, featured, fill, first_byte, identity, integer_bits, integer_format, maybe_positive, mode_code, pair_sum, preserve_borrowed, simple_mode_code, singleton_map, sum, variadic_printf } from "@tsonic/rust/crates/widget_alias/index.js";
 import { int_widget } from "@tsonic/rust/crates/widget_alias/factory.js";
 import { triple } from "@tsonic/rust/crates/widget_alias/math.js";
 
@@ -108,6 +108,10 @@ export function main(): void {
   }
   if (double(4) !== 8 || identity<int32>(5) !== 5 || featured(1) !== 101 || triple(3) !== 9) {
     throw new Error("function mapping failed");
+  }
+  const borrowed: int32 = 6;
+  if (preserve_borrowed(borrowed) !== 6) {
+    throw new Error("inferred provider lifetime mapping failed");
   }
   if (unsafeContext(dangerous(12)) !== 12) {
     throw new Error("unsafe function mapping failed");
@@ -204,6 +208,7 @@ export function main(): void {
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::Mode::Payload\(9\)/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::fill\(&mut bytes, 7\)/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::apply\(value, callback\)/u);
+  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /\*widget_alias::preserve_borrowed::<i32>\(&borrowed\)/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /\*widget_alias::borrowed_answer\(&18\)/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /let owned_borrowed_label: String = String::from\(widget_alias::borrowed_label\(\)\);/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::borrowed_label\(\) != "widget"/u);

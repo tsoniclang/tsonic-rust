@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { rustLifetimeKey } from "../../dist/target-model/lifetimes/index.js";
+import {
+  rustCallScopedElisionLifetime,
+  rustLifetimeKey,
+} from "../../dist/target-model/lifetimes/index.js";
 import {
   substituteRustTargetGenerics,
 } from "../../dist/target-model/types/carriers/substitution.js";
@@ -10,6 +13,9 @@ import {
   rustTargetTypeRefEquals,
   rustTargetTypeRefEqualsWithinLifetimeBinders,
 } from "../../dist/target-model/types/equality.js";
+import {
+  selectRustCallScopedLifetimeReconciliation,
+} from "../../dist/policy/types/value-carrier-reconciliation.js";
 
 const int32 = Object.freeze({ kind: "source-primitive", name: "int32" });
 const parameterLifetime = (identity, name) => ({ kind: "parameter", identity, name });
@@ -140,6 +146,72 @@ test("generic substitution replaces free lifetimes without capturing higher-rank
   assert.deepEqual(substituted.result.lifetime, { kind: "static" });
 });
 
+test("call-scoped elided lifetimes are exact per call and generic parameter", () => {
+  const first = rustCallScopedElisionLifetime("source.ts:10:20", "provider::lifetime::a");
+  const same = rustCallScopedElisionLifetime("source.ts:10:20", "provider::lifetime::a");
+  const otherCall = rustCallScopedElisionLifetime("source.ts:30:40", "provider::lifetime::a");
+  const otherParameter = rustCallScopedElisionLifetime(
+    "source.ts:10:20",
+    "provider::lifetime::b",
+  );
+
+  assert.equal(isRustTargetTypeRef(reference(first)), true);
+  assert.equal(rustTargetTypeRefEquals(reference(first), reference(same)), true);
+  assert.equal(rustTargetTypeRefEquals(reference(first), reference(otherCall)), false);
+  assert.equal(rustTargetTypeRefEquals(reference(first), reference(otherParameter)), false);
+  assert.equal(
+    rustTargetTypeRefEquals(reference(first), reference({ kind: "placeholder" })),
+    false,
+  );
+  assert.throws(
+    () => rustCallScopedElisionLifetime("", "provider::lifetime::a"),
+    /exact call and parameter identities/u,
+  );
+  assert.throws(
+    () => rustCallScopedElisionLifetime("source.ts:10:20", ""),
+    /exact call and parameter identities/u,
+  );
+});
+
+test("call-scoped lifetime reconciliation accepts only omitted lifetime slots", () => {
+  const selectedLifetime = rustCallScopedElisionLifetime(
+    "source.ts:10:20",
+    "provider::lifetime::a",
+  );
+  const source = reference(undefined);
+  const selected = reference(selectedLifetime);
+
+  assert.deepEqual(
+    selectRustCallScopedLifetimeReconciliation(source, selected),
+    { sourceCarrier: source, selectedCarrier: selected },
+  );
+  assert.deepEqual(
+    selectRustCallScopedLifetimeReconciliation(selected, source),
+    { sourceCarrier: selected, selectedCarrier: source },
+  );
+  assert.equal(
+    selectRustCallScopedLifetimeReconciliation(
+      reference({ kind: "static" }),
+      selected,
+    ),
+    undefined,
+  );
+  assert.equal(
+    selectRustCallScopedLifetimeReconciliation(
+      reference(undefined, int32, true),
+      selected,
+    ),
+    undefined,
+  );
+  assert.equal(
+    selectRustCallScopedLifetimeReconciliation(
+      reference(undefined, { kind: "source-primitive", name: "uint32" }),
+      selected,
+    ),
+    undefined,
+  );
+});
+
 test("malformed, duplicate, and wrong-kind lifetime carrier shapes fail closed", () => {
   const bound = boundLifetime("binder", "a", "a");
   const invalid = [
@@ -183,6 +255,11 @@ test("malformed, duplicate, and wrong-kind lifetime carrier shapes fail closed",
       id: "acme.Value",
       genericArguments: [{ kind: "lifetime", lifetime: int32 }],
     },
+    reference({
+      kind: "call-scoped-elision",
+      callIdentity: "source.ts:10:20",
+      parameterIdentity: "",
+    }),
     {
       kind: "trait-object",
       principal: int32,

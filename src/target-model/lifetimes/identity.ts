@@ -6,6 +6,8 @@ export function rustLifetimeKey(lifetime: RustLifetimeRef): string {
       return "static";
     case "placeholder":
       return "placeholder";
+    case "call-scoped-elision":
+      return `call-scoped-elision\0${lifetime.callIdentity}\0${lifetime.parameterIdentity}`;
     case "parameter":
       return `parameter\0${lifetime.identity}`;
     case "bound":
@@ -28,6 +30,8 @@ export function rustLifetimeName(lifetime: RustLifetimeRef): string {
       return "static";
     case "placeholder":
       return "_";
+    case "call-scoped-elision":
+      return "_";
     case "parameter":
     case "bound":
       return lifetime.name;
@@ -42,6 +46,10 @@ export function isRustLifetimeRef(value: unknown): value is RustLifetimeRef {
     case "static":
     case "placeholder":
       return keys.length === 1 && keys[0] === "kind";
+    case "call-scoped-elision":
+      return keys.length === 3 && keys[0] === "callIdentity" && keys[1] === "kind" &&
+        keys[2] === "parameterIdentity" && nonEmptyString(candidate.callIdentity) &&
+        nonEmptyString(candidate.parameterIdentity);
     case "parameter":
       return keys.length === 3 && keys[0] === "identity" && keys[1] === "kind" &&
         keys[2] === "name" && nonEmptyString(candidate.identity) &&
@@ -54,6 +62,20 @@ export function isRustLifetimeRef(value: unknown): value is RustLifetimeRef {
     default:
       return false;
   }
+}
+
+export function rustCallScopedElisionLifetime(
+  callIdentity: string,
+  parameterIdentity: string,
+): Extract<RustLifetimeRef, { readonly kind: "call-scoped-elision" }> {
+  if (callIdentity.length === 0 || parameterIdentity.length === 0) {
+    throw new Error("Rust call-scoped lifetime elision requires exact call and parameter identities.");
+  }
+  return Object.freeze({
+    kind: "call-scoped-elision",
+    callIdentity,
+    parameterIdentity,
+  });
 }
 
 function nonEmptyString(value: unknown): value is string {

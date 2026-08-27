@@ -12,7 +12,7 @@ import type {
   RustType,
   RustTypeBound,
 } from "../../../target-ast/nodes.js";
-import { rustLifetimeToAst } from "../../types/render.js";
+import { rustLifetimeToAst } from "../../types/lifetime-syntax.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { sourceModuleItemPath } from "../../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";

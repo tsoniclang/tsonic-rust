@@ -2,6 +2,7 @@ export {
   rustLifetimeKey,
   rustLifetimeName,
   rustLifetimesEqual,
+  rustCallScopedElisionLifetime,
   isRustLifetimeRef,
 } from "./identity.js";
 export type {

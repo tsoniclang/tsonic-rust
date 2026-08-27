@@ -189,6 +189,7 @@ export {
 } from "./carriers/generic-inference.js";
 export type {
   RustTargetGenericBindings,
+  RustTargetGenericInferenceOptions,
   RustTargetGenericParameterSet,
 } from "./carriers/generic-inference.js";
 export {

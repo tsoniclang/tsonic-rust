@@ -94,6 +94,10 @@ pub fn choose_borrowed<'short, 'long: 'short, T: 'short + ?Sized, const N: usize
     short
 }
 
+pub fn preserve_borrowed<'a, T: ?Sized + 'a>(value: &'a T) -> &'a T {
+    value
+}
+
 pub fn apply_borrowed(
     callback: for<'a> fn(&'a i32) -> &'a i32,
     value: &i32,

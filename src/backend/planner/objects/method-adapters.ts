@@ -300,6 +300,8 @@ function applyRustObjectLiteralValueAdapterRaw(
       );
       return projected === undefined ? undefined : { expression: projected, fallible: false };
     }
+    case "call-scoped-lifetime":
+      return { expression, fallible: false };
     case "option-some": {
       const element = applyRustObjectLiteralValueAdapterRaw(expression, adapter.element, node, context);
       if (element === undefined) {

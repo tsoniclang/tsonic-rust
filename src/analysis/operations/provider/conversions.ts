@@ -78,10 +78,13 @@ export function selectRustCheckedConversion(
     const reconciliation = sourceCarrier === undefined
       ? undefined
       : selectRustValueCarrierReconciliation(sourceCarrier, targetCarrier, options.projectTypes);
-    if (reconciliation?.kind === "project-upcast") {
+    if (reconciliation?.kind === "call-scoped-lifetime" ||
+      reconciliation?.kind === "project-upcast") {
       recordRustValueCarrierReconciliation(context.facts, request.expression, reconciliation);
       return acceptRustPolicy({ convertedType: targetCarrier }, [
-        { message: "rust selected call argument uses an exact project-type upcast" },
+        { message: reconciliation.kind === "call-scoped-lifetime"
+          ? "rust selected call argument uses an exact call-scoped lifetime reconciliation"
+          : "rust selected call argument uses an exact project-type upcast" },
       ]);
     }
     const optionElement = rustOptionElementCarrier(targetCarrier);

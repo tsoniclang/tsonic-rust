@@ -501,6 +501,8 @@ function selectObjectLiteralValueAdapter(
       });
     case "project-upcast":
       return Object.freeze({ kind: "project-upcast", sourceCarrier, targetCarrier });
+    case "call-scoped-lifetime":
+      return Object.freeze({ kind: "call-scoped-lifetime", sourceCarrier, targetCarrier });
     case "incompatible":
       return undefined;
   }
@@ -514,6 +516,7 @@ function objectLiteralValueAdapterIsFallible(adapter: RustObjectLiteralValueAdap
     case "option-map":
       return objectLiteralValueAdapterIsFallible(adapter.element);
     case "identity":
+    case "call-scoped-lifetime":
     case "project-upcast":
       return false;
   }

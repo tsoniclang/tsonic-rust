@@ -521,6 +521,12 @@ function validateLifetime(value: unknown): value is RustLifetimeRef {
     case "static":
     case "placeholder":
       return hasExactKeys(value, ["kind"], ["kind"]);
+    case "call-scoped-elision":
+      return hasExactKeys(
+        value,
+        ["kind", "callIdentity", "parameterIdentity"],
+        ["kind", "callIdentity", "parameterIdentity"],
+      ) && nonEmptyString(value.callIdentity) && nonEmptyString(value.parameterIdentity);
     case "parameter":
       return hasExactKeys(
         value,

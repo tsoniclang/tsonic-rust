@@ -173,7 +173,7 @@ test("elided native references execute as zero-wrapper Rust borrows", { timeout:
     files: {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
-import type { Mut, Ref } from "@tsonic/rust/types.js";
+import type { Life, Mut, Outlives, Ref } from "@tsonic/rust/types.js";
 import { load, mut, ref, store } from "@tsonic/rust/lang.js";
 import { check } from "@acme/testing";
 
@@ -185,6 +185,13 @@ function read(value: Ref<int32>): int32 {
   return load(value);
 }
 
+function choose<A extends Life, B extends Life & Outlives<A>>(
+  left: Ref<int32, A>,
+  _right: Ref<int32, B>,
+): Ref<int32, A> {
+  return left;
+}
+
 function copyPlusOne(target: Mut<int32>, source: Ref<int32>): void {
   store(target, load(source) + 1);
 }
@@ -194,6 +201,7 @@ export function main(): void {
   let copied: int32 = 0;
   increment(mut(value));
   check(read(ref(value)) === 42);
+  check(read(choose(ref(value), ref(copied))) === 42);
   copyPlusOne(mut(copied), ref(value));
   check(copied === 43);
 }
@@ -207,6 +215,8 @@ export function main(): void {
   assert.match(source, /\*value \+= 1;/u);
   assert.match(source, /\*target = \*source \+ 1;/u);
   assert.match(source, /fn read\(value: &i32\) -> i32/u);
+  assert.match(source, /fn choose<'a, 'b: 'a>/u);
+  assert.match(source, /read\(choose\(&value, &copied\)\)/u);
   assert.match(source, /increment\(&mut value\)/u);
   assert.match(source, /read\(&value\)/u);
   assert.doesNotMatch(source, /Location|Rc<|RefCell</u);

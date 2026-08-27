@@ -4,6 +4,7 @@ import {
   rustPrimitiveTypeName,
   isRustNeverCarrier,
   rustOptionElementCarrier,
+  rustTargetGenericReferences,
 } from "../../../target-model/types/index.js";
 import { builtInTargetCarrierIds, rustIdentifierPattern, rustPathPattern } from "./model.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -69,6 +70,9 @@ export function validateCarrier(
   requireExactKeys(record, allowedFields, where, fail);
   if (!isRustTargetTypeRef(carrier)) {
     fail(`${where} is not a closed Rust target type`);
+  }
+  if (rustTargetGenericReferences(carrier).callScopedElisions.length > 0) {
+    fail(`${where} uses a compiler-owned call-scoped lifetime identity`);
   }
   switch (carrier.kind) {
     case "source-primitive":

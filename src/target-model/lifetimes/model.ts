@@ -4,6 +4,11 @@ export type RustLifetimeRef =
   | { readonly kind: "static" }
   | { readonly kind: "placeholder" }
   | {
+      readonly kind: "call-scoped-elision";
+      readonly callIdentity: string;
+      readonly parameterIdentity: string;
+    }
+  | {
       readonly kind: "parameter";
       readonly identity: string;
       readonly name: string;
