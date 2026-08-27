@@ -9,8 +9,10 @@ import type {
 import {
   isRustProgramErrorCarrier,
   rustCarrierSupportsClone,
+  rustCarrierSupportsTrait,
   rustOptionElementCarrier,
 } from "../../target-model/types/index.js";
+import type { RustContextualValueConversion } from "../../target-model/conversions/contextual.js";
 import type { RustProjectTypePolicy } from "./project-types.js";
 import { selectRustSourceValueConversion } from "../conversions/selection.js";
 import { inferRustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
@@ -127,6 +129,20 @@ export function selectRustValueCarrierReconciliation(
       fact: { sourceCarrier, targetCarrier },
     };
   }
+  const nativeTraitObjectUpcast = selectRustNativeTraitObjectUpcast(
+    sourceCarrier,
+    targetCarrier,
+  );
+  if (nativeTraitObjectUpcast !== undefined) {
+    return {
+      kind: "conversion",
+      fact: {
+        sourceCarrier,
+        targetCarrier,
+        conversion: nativeTraitObjectUpcast,
+      },
+    };
+  }
   const conversion = selectRustSourceValueConversion(sourceCarrier, targetCarrier);
   return conversion === undefined
     ? { kind: "incompatible", reason: "unrelated" }
@@ -134,6 +150,30 @@ export function selectRustValueCarrierReconciliation(
         kind: "conversion",
         fact: { sourceCarrier, targetCarrier, conversion },
       };
+}
+
+export function selectRustNativeTraitObjectUpcast(
+  source: TargetTypeRef,
+  target: TargetTypeRef,
+): Extract<
+  RustContextualValueConversion,
+  { readonly kind: "native-trait-object-upcast" }
+> | undefined {
+  if (target.kind !== "trait-object") {
+    return undefined;
+  }
+  const traits = [target.principal, ...target.autoTraits];
+  if (traits.some((trait) => trait.lifetimeBinder !== undefined ||
+    trait.genericArguments.length !== 0 ||
+    trait.associatedConstraints.length !== 0 ||
+    !rustCarrierSupportsTrait(source, trait.path))) {
+    return undefined;
+  }
+  return Object.freeze({
+    kind: "native-trait-object-upcast",
+    source,
+    target,
+  });
 }
 
 export function selectRustCallScopedLifetimeReconciliation(
@@ -170,5 +210,6 @@ function matchesByElidingCallScopedLifetimes(
   return inferred !== undefined && inferred.types.size === 0 && inferred.consts.size === 0 &&
     inferred.lifetimes.size === lifetimes.size &&
     [...lifetimes].every(([identity, lifetime]) =>
+      inferred.lifetimes.get(identity)?.kind === "placeholder" ||
       rustLifetimesEqual(inferred.lifetimes.get(identity), lifetime));
 }

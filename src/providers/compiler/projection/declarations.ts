@@ -265,7 +265,7 @@ function projectTypeAlias(
             ),
           }),
       targetCarrier: targetTypeFor(exported.type, typeContext, "result"),
-      ...typeRequirements(typeParametersOf(exported.genericParameters), typeNames),
+      ...typeRequirements(typeParametersOf(exported.genericParameters), typeNames, typeContext),
     }),
   };
 }
@@ -315,7 +315,7 @@ function projectNominalExport(
   const genericDefaults = trailingProviderGenericDefaults(providerGenericBindings);
   const namedTraits = exported.kind === "trait"
     ? undefined
-    : projectCompilerTraitContract(exported.traits);
+    : projectCompilerTraitContract(exported.traits, genericContext);
   const declaredCarrier: TargetTypeRef = exported.kind === "trait"
     ? targetTraitFor(
         traitDispatchFor(exported),
@@ -429,7 +429,7 @@ function projectNominalExport(
             genericParameters: providerGenericBindings,
           }),
       targetCarrier: declaredCarrier,
-      ...typeRequirements(typeParametersOf(sourceGenerics), typeNames),
+      ...typeRequirements(typeParametersOf(sourceGenerics), typeNames, genericContext),
     }),
   };
 }

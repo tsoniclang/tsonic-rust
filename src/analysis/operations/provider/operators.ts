@@ -577,6 +577,10 @@ export function selectedValueCarrier(
     rustTargetTypeRefEquals(optionalElement, selected)) {
     return selected;
   }
+  if (stored.kind === "reference" &&
+    rustTargetTypeRefEquals(stored.referent, selected)) {
+    return selected;
+  }
   const sourceDefinition = options.projectTypes.definitionForCarrier(
     optionalElement ?? stored,
   );

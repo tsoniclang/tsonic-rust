@@ -43,6 +43,7 @@ import type { ExtensionFactSubject, Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { resolveRustGeneratorStorage } from "./generator-storage.js";
+import { rustHigherRankedNativeFunctionCarrier } from "./higher-ranked-function.js";
 
 function promiseInnerCarrier(
   walk: RustFactWalk,
@@ -216,9 +217,15 @@ function finalizedNativeCallableValue(
     return undefined;
   }
   const closed = parameterAbis as import("../facts/keys.js").RustSourceParameterAbiFact[];
+  const higherRankedCarrier = rustHigherRankedNativeFunctionCarrier(
+    walk,
+    callableDeclaration,
+    closed,
+    resultCarrier,
+  );
   return {
     name: valueName,
-    carrier: rustCallableTargetType(
+    carrier: higherRankedCarrier ?? rustCallableTargetType(
       closed.map((abi) => abi.parameterCarrier),
       resultCarrier,
     ),

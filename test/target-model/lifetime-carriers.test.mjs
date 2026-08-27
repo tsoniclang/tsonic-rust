@@ -14,8 +14,11 @@ import {
   rustTargetTypeRefEqualsWithinLifetimeBinders,
 } from "../../dist/target-model/types/equality.js";
 import {
+  selectRustNativeTraitObjectUpcast,
   selectRustCallScopedLifetimeReconciliation,
 } from "../../dist/policy/types/value-carrier-reconciliation.js";
+import { rustCompilerOwnedContextualConversionMatches } from "../../dist/target-model/conversions/contextual.js";
+import { rustNamedTargetType } from "../../dist/target-model/types/index.js";
 
 const int32 = Object.freeze({ kind: "source-primitive", name: "int32" });
 const parameterLifetime = (identity, name) => ({ kind: "parameter", identity, name });
@@ -189,6 +192,16 @@ test("call-scoped lifetime reconciliation accepts only omitted lifetime slots", 
     selectRustCallScopedLifetimeReconciliation(selected, source),
     { sourceCarrier: selected, selectedCarrier: source },
   );
+  assert.deepEqual(
+    selectRustCallScopedLifetimeReconciliation(
+      reference({ kind: "placeholder" }),
+      selected,
+    ),
+    {
+      sourceCarrier: reference({ kind: "placeholder" }),
+      selectedCarrier: selected,
+    },
+  );
   assert.equal(
     selectRustCallScopedLifetimeReconciliation(
       reference({ kind: "static" }),
@@ -210,6 +223,96 @@ test("call-scoped lifetime reconciliation accepts only omitted lifetime slots", 
     ),
     undefined,
   );
+});
+
+test("native trait-object coercion requires exact target-path trait evidence", () => {
+  const source = rustNamedTargetType(
+    "acme.LifetimeView",
+    "widget_alias::LifetimeView",
+    [],
+    [],
+    {
+      implementations: [{
+        traitPath: "widget_alias::View",
+        requirements: [],
+      }],
+    },
+  );
+  const target = {
+    kind: "trait-object",
+    principal: {
+      kind: "trait-ref",
+      id: "acme.View",
+      path: "widget_alias::View",
+      genericArguments: [],
+      associatedConstraints: [],
+    },
+    autoTraits: [],
+    lifetime: { kind: "placeholder" },
+  };
+  const conversion = selectRustNativeTraitObjectUpcast(source, target);
+
+  assert.deepEqual(conversion, {
+    kind: "native-trait-object-upcast",
+    source,
+    target,
+  });
+  assert.equal(rustCompilerOwnedContextualConversionMatches(source, target, conversion), true);
+  assert.equal(selectRustNativeTraitObjectUpcast(
+    rustNamedTargetType(
+      "acme.LifetimeView",
+      "widget_alias::LifetimeView",
+      [],
+      [],
+      {
+        implementations: [{
+          traitPath: "acme_widget::View",
+          requirements: [],
+        }],
+      },
+    ),
+    target,
+  ), undefined);
+  assert.equal(selectRustNativeTraitObjectUpcast(source, {
+    ...target,
+    principal: {
+      ...target.principal,
+      genericArguments: [{ kind: "type", type: int32 }],
+    },
+  }), undefined);
+  assert.equal(selectRustNativeTraitObjectUpcast(source, {
+    ...target,
+    principal: {
+      ...target.principal,
+      associatedConstraints: [{
+        kind: "equality",
+        identity: "acme.View.Item",
+        name: "Item",
+        genericArguments: [],
+        type: int32,
+      }],
+    },
+  }), undefined);
+});
+
+test("reference reborrow facts are exact compiler-owned carrier transitions", () => {
+  const source = reference({ kind: "placeholder" });
+  const conversion = { kind: "reference-reborrow", source, target: int32 };
+
+  assert.equal(rustCompilerOwnedContextualConversionMatches(source, int32, conversion), true);
+  assert.equal(rustCompilerOwnedContextualConversionMatches(
+    source,
+    { kind: "source-primitive", name: "uint32" },
+    conversion,
+  ), false);
+  assert.equal(rustCompilerOwnedContextualConversionMatches(
+    source,
+    int32,
+    {
+      ...conversion,
+      target: { kind: "source-primitive", name: "uint32" },
+    },
+  ), false);
 });
 
 test("malformed, duplicate, and wrong-kind lifetime carrier shapes fail closed", () => {

@@ -9,7 +9,10 @@ import type {
   RustProjectTypeDefinition,
   RustProjectTypePolicy,
 } from "./type-policy.js";
-import { rustStaticLifetime } from "../../target-model/lifetimes/index.js";
+import {
+  rustLifetimeOutlives,
+  rustStaticLifetime,
+} from "../../target-model/lifetimes/index.js";
 import type { RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 
 export type RustObjectRepresentationKind =
@@ -127,9 +130,7 @@ export function createRustObjectRepresentationPlan(
       identityObserved,
       escapes,
       constructionCount: creationFlows.length,
-      dispatchObjectLifetime: kind === "open-hierarchy"
-        ? rustStaticLifetime
-        : undefined,
+      dispatchObjectLifetime: selectDispatchObjectLifetime(definition, kind),
     });
   });
   const byDefinition = new Map(representations.map((representation) =>
@@ -147,6 +148,22 @@ export function createRustObjectRepresentationPlan(
         : "ref";
     },
   });
+}
+
+function selectDispatchObjectLifetime(
+  definition: RustProjectTypeDefinition,
+  kind: RustObjectRepresentationKind,
+): RustLifetimeRef | undefined {
+  if (kind !== "open-hierarchy") return undefined;
+  const lifetimes = definition.genericParameters.flatMap((parameter) =>
+    parameter.kind === "lifetime" ? [parameter.lifetime] : []);
+  if (lifetimes.length === 0) return rustStaticLifetime;
+  const contract = Object.freeze({
+    declaration: definition.declaration,
+    parameters: definition.genericParameters,
+  });
+  return lifetimes.find((candidate) =>
+    lifetimes.every((source) => rustLifetimeOutlives(source, candidate, contract)));
 }
 
 function collectProjectObjectOrigins(input: {

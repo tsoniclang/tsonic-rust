@@ -52,12 +52,19 @@ export function recordCarrierTraits(
 
 export function projectCompilerTraitContract(
   contract: RustCompilerTypeTraits,
+  context: ProjectionContext,
 ): RustNamedTypeTraitContract {
   const projected = contract.implementations.map((implementation) => Object.freeze({
-    traitPath: compilerRequirementTraitPath(implementation.trait),
+    traitPath: targetTraitPath(
+      compilerRequirementTraitPath(implementation.trait),
+      context,
+    ),
     requirements: Object.freeze(implementation.requirements.map((requirement) => Object.freeze({
       typeArgumentIndex: requirement.typeArgumentIndex,
-      traitPath: compilerRequirementTraitPath(requirement.requirement),
+      traitPath: targetTraitPath(
+        compilerRequirementTraitPath(requirement.requirement),
+        context,
+      ),
     })).sort((left, right) =>
       left.typeArgumentIndex - right.typeArgumentIndex || compareText(left.traitPath, right.traitPath))),
   }));
@@ -80,6 +87,7 @@ function compilerRequirementTraitPath(
 export function typeRequirements(
   parameters: readonly RustCompilerTypeParameter[],
   allowedTypeParameters: readonly string[],
+  context: ProjectionContext,
 ): { readonly typeRequirements?: readonly RustProviderTypeParameterRequirement[] } {
   const allowed = new Set(allowedTypeParameters);
   const requirements = parameters
@@ -90,7 +98,10 @@ export function typeRequirements(
         .sort((left, right) => compareText(typeRequirementKey(left), typeRequirementKey(right)))
         .map((requirement) => requirement === "clone" || requirement === "copy"
           ? requirement
-          : Object.freeze({ kind: "trait" as const, path: requirement.trait.path }))),
+          : Object.freeze({
+              kind: "trait" as const,
+              path: targetTraitPath(requirement.trait.path, context),
+            }))),
     }))
     .sort((left, right) => compareText(left.name, right.name));
   return requirements.length === 0

@@ -74,7 +74,7 @@ export function projectFields(
       target: { form: "field" as const, name: field.name },
       receiverCarrier: carrier,
       ...(generics.length === 0 ? {} : { genericParameters: generics }),
-      ...typeRequirements(typeParametersOf(exported.genericParameters), typeNames),
+      ...typeRequirements(typeParametersOf(exported.genericParameters), typeNames, context),
     };
     operations.push(operationRow({
       ...common,
@@ -136,7 +136,7 @@ export function projectVariants(
           },
           resultCarrier: carrier,
           genericParameters: generics,
-          ...typeRequirements(typeParametersOf(exported.genericParameters), typeNames),
+          ...typeRequirements(typeParametersOf(exported.genericParameters), typeNames, context),
         }));
         continue;
       }
@@ -156,7 +156,7 @@ export function projectVariants(
         },
         resultCarrier: carrier,
         ...(generics.length === 0 ? {} : { genericParameters: generics }),
-        ...typeRequirements(typeParametersOf(exported.genericParameters), typeNames),
+        ...typeRequirements(typeParametersOf(exported.genericParameters), typeNames, context),
       }));
       continue;
     }
@@ -192,7 +192,7 @@ export function projectVariants(
       parameterCarriers: Object.freeze(variant.fields.map((field) =>
         targetTypeFor(field, context, "parameter"))),
       ...(generics.length === 0 ? {} : { genericParameters: generics }),
-      ...typeRequirements(typeParametersOf(exported.genericParameters), typeNames),
+      ...typeRequirements(typeParametersOf(exported.genericParameters), typeNames, context),
     }));
   }
 }
@@ -303,6 +303,7 @@ export function projectAssociatedConstants(
     const requirements = typeRequirements(
       [...typeParametersOf(ownerGenerics), ...constant.typeRequirements],
       typeNames,
+      context,
     );
     if (genericBindings.length === 0) {
       members.push(Object.freeze({
@@ -390,7 +391,10 @@ export function projectAssociatedTypes(
         targetPath: exported.targetPath,
       }),
     });
-    const sourceParameters = providerGenericParametersFor(parameters, associatedContext);
+    const sourceParameters = providerGenericParametersFor(parameters, associatedContext)
+      .map((parameter, index) => parameters[index] === self
+        ? Object.freeze({ name: parameter.name })
+        : parameter);
     const trait = targetTraitFor(
       traitDispatchFor(exported),
       associatedContext,
@@ -425,7 +429,7 @@ export function projectAssociatedTypes(
       exportId,
       genericParameters: providerGenericBindingsFor(parameters, associatedContext),
       targetCarrier: carrier,
-      ...typeRequirements(typeParametersOf(parameters), typeNames),
+      ...typeRequirements(typeParametersOf(parameters), typeNames, associatedContext),
     }));
   }
   return Object.freeze({

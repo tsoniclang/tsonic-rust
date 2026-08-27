@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustValueConversion } from "../../target-model/operations/model.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustContextualValueConversion } from "../../target-model/conversions/contextual.js";
 
 export type RustOptionProjectionFact =
   | {
@@ -37,7 +37,7 @@ export type RustFlowReadProjectionFact =
 export interface RustContextualValueConversionFact {
   readonly sourceCarrier: TargetTypeRef;
   readonly targetCarrier: TargetTypeRef;
-  readonly conversion: RustValueConversion;
+  readonly conversion: RustContextualValueConversion;
 }
 
 export interface RustCallScopedLifetimeReconciliationFact {

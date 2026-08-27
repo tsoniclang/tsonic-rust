@@ -47,6 +47,7 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustSelectedTargetSignature, TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustSourceBindingFact, RustTargetOperationFact } from "../facts/keys.js";
+import { rustHigherRankedNativeFunctionCarrier } from "../callables/higher-ranked-function.js";
 
 export function resolveIdentifierCarrier(walk: RustFactWalk, identifier: Node, sourceFile: SourceFile): TargetTypeRef | undefined {
   const { ast } = walk.context;
@@ -103,10 +104,15 @@ export function resolveIdentifierCarrier(walk: RustFactWalk, identifier: Node, s
       if (name !== undefined && parameterAbis.every((abi) => abi !== undefined) &&
         returnCarrier !== undefined && targetName !== undefined) {
         const closedParameterAbis = parameterAbis as import("../facts/keys.js").RustSourceParameterAbiFact[];
-        const callableCarrier = rustCallableTargetType(
-          closedParameterAbis.map(rustSourceParameterContractCarrier),
+        const callableCarrier = rustHigherRankedNativeFunctionCarrier(
+          walk,
+          declaration,
+          closedParameterAbis,
           returnCarrier,
-        );
+        ) ?? rustCallableTargetType(
+            closedParameterAbis.map(rustSourceParameterContractCarrier),
+            returnCarrier,
+          );
         walk.context.facts.set(identifier, rustSourceCallableValueFactKey, {
           form: "function",
           sourceDeclaration: declaration,

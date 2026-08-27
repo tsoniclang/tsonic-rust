@@ -29,8 +29,13 @@ export function planRustSourceCallableValue(
   }
   const callableType = rustCallableConstructionType(value.carrier, context);
   const path = sourceModuleItemPath(context, value.fileName, value.name);
-  if (callableType === undefined || path === undefined ||
-    !isValidRustIdentifier(value.name)) {
+  if (path === undefined || !isValidRustIdentifier(value.name)) {
+    return undefined;
+  }
+  if (value.carrier.kind === "function-pointer") {
+    return { kind: "path", path };
+  }
+  if (callableType === undefined) {
     return undefined;
   }
   const allocatedArgumentsName = allocateRustSyntheticName(
