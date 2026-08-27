@@ -46,7 +46,7 @@ export const rustAsyncFunctionFactKey: RustPlanKey<RustAsyncFunctionFact> =
 
 export interface RustGeneratorFact {
   readonly kind: "sync" | "async";
-  readonly carrier: TargetTypeRef;
+  readonly resultCarrier: TargetTypeRef;
   readonly yieldType: TargetTypeRef;
   readonly returnType: TargetTypeRef;
   readonly nextType: TargetTypeRef;
@@ -60,7 +60,7 @@ export interface RustGeneratorFact {
 export const rustGeneratorFactKey: RustPlanKey<RustGeneratorFact> =
   defineRustPlanKey("generator", (left, right) =>
     left.kind === right.kind &&
-    rustTargetTypeRefEquals(left.carrier, right.carrier) &&
+    rustTargetTypeRefEquals(left.resultCarrier, right.resultCarrier) &&
     rustTargetTypeRefEquals(left.yieldType, right.yieldType) &&
     rustTargetTypeRefEquals(left.returnType, right.returnType) &&
     rustTargetTypeRefEquals(left.nextType, right.nextType) &&

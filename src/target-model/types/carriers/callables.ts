@@ -1,8 +1,21 @@
-import { rustAsyncGeneratorTargetId, rustCallableTargetId, rustGeneratorTargetId, rustIteratorResultTargetId, rustLocationTargetId } from "./source-types.js";
+import {
+  rustAsyncGeneratorTargetId,
+  rustBorrowedAsyncGeneratorTargetId,
+  rustBorrowedGeneratorTargetId,
+  rustCallableTargetId,
+  rustGeneratorTargetId,
+  rustIteratorResultTargetId,
+  rustLocationTargetId,
+} from "./source-types.js";
 import { rustOptionElementCarrier, rustOptionTargetType } from "./optional.js";
 import { rustTupleTargetType, rustUnitTargetType } from "./native.js";
 import type { TargetTypeRef } from "../model.js";
-import { rustOnlyTypeGenericArguments, rustTypeGenericArguments } from "../generic-arguments.js";
+import {
+  rustLifetimeGenericArgument,
+  rustOnlyTypeGenericArguments,
+  rustTypeGenericArguments,
+} from "../generic-arguments.js";
+import type { RustLifetimeRef } from "../../lifetimes/index.js";
 
 export function rustLocationTargetType(pointee: TargetTypeRef): TargetTypeRef {
   return {
@@ -166,6 +179,31 @@ export function rustAsyncGeneratorTargetType(
   };
 }
 
+export function rustGeneratorStorageTargetType(
+  protocol: RustGeneratorProtocol,
+  lifetime: RustLifetimeRef | undefined,
+): TargetTypeRef {
+  if (lifetime === undefined) {
+    return protocol.kind === "sync"
+      ? rustGeneratorTargetType(protocol)
+      : rustAsyncGeneratorTargetType(protocol);
+  }
+  return {
+    kind: "target-named",
+    id: protocol.kind === "sync"
+      ? rustBorrowedGeneratorTargetId
+      : rustBorrowedAsyncGeneratorTargetId,
+    genericArguments: Object.freeze([
+      rustLifetimeGenericArgument(lifetime),
+      ...rustTypeGenericArguments([
+        protocol.yieldType,
+        protocol.returnType,
+        protocol.nextType,
+      ]),
+    ]),
+  };
+}
+
 export function rustIteratorResultTargetType(
   protocol: RustIteratorResultProtocol,
 ): TargetTypeRef {
@@ -179,17 +217,31 @@ export function rustIteratorResultTargetType(
 export function getRustGeneratorProtocol(
   carrier: TargetTypeRef | undefined,
 ): RustGeneratorProtocol | undefined {
-  if (carrier?.kind !== "target-named" ||
-    (carrier.id !== rustGeneratorTargetId && carrier.id !== rustAsyncGeneratorTargetId)) {
+  if (carrier?.kind !== "target-named") {
     return undefined;
   }
-  const arguments_ = rustOnlyTypeGenericArguments(carrier.genericArguments);
+  const borrowed = carrier.id === rustBorrowedGeneratorTargetId ||
+    carrier.id === rustBorrowedAsyncGeneratorTargetId;
+  const standard = carrier.id === rustGeneratorTargetId ||
+    carrier.id === rustAsyncGeneratorTargetId;
+  if (!standard && !borrowed) return undefined;
+  const genericArguments = borrowed
+    ? carrier.genericArguments?.slice(1)
+    : carrier.genericArguments;
+  if (borrowed && (carrier.genericArguments?.length !== 4 ||
+    carrier.genericArguments[0]?.kind !== "lifetime")) {
+    return undefined;
+  }
+  const arguments_ = rustOnlyTypeGenericArguments(genericArguments);
   if (arguments_?.length !== 3) return undefined;
   const [yieldType, returnType, nextType] = arguments_;
   return yieldType === undefined || returnType === undefined || nextType === undefined
     ? undefined
     : {
-        kind: carrier.id === rustGeneratorTargetId ? "sync" : "async",
+        kind: carrier.id === rustGeneratorTargetId ||
+            carrier.id === rustBorrowedGeneratorTargetId
+          ? "sync"
+          : "async",
         yieldType,
         returnType,
         nextType,

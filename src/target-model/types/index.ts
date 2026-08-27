@@ -30,6 +30,7 @@ export {
   rustClosureProtocol,
   rustClosureTargetType,
   rustGeneratorTargetType,
+  rustGeneratorStorageTargetType,
   rustIteratorResultTargetType,
   rustLocationPointeeCarrier,
   rustLocationTargetType,
@@ -135,6 +136,8 @@ export {
 } from "./carriers/primitives.js";
 export {
   rustAsyncGeneratorTargetId,
+  rustBorrowedAsyncGeneratorTargetId,
+  rustBorrowedGeneratorTargetId,
   rustBigIntTargetId,
   rustCallableTargetId,
   rustGeneratorTargetId,

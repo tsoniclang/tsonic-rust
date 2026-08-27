@@ -18,6 +18,7 @@ import {
   rustOptionalChainFactKey,
   rustSelfModeFactKey,
   rustTargetOperationFactKey,
+  rustGeneratorFactKey,
 } from "../facts/keys.js";
 import { appendMalformedSourceAst } from "../declarations/project-types.js";
 import { appendRustDiagnostic } from "../program/walk.js";
@@ -173,10 +174,14 @@ export function applySelectedProjectSourceCall(
       inputs: inputs as NonNullable<(typeof inputs)[number]>[],
     });
   }
-  const resultCarrier = selectedMember.returnType === undefined
+  const declaredResultCarrier = walk.context.facts.get(
+    selectedDeclaration,
+    rustGeneratorFactKey,
+  )?.resultCarrier ?? selectedMember.returnType;
+  const resultCarrier = declaredResultCarrier === undefined
     ? undefined
     : substituteRustTargetGenerics(
-        selectedMember.returnType,
+        declaredResultCarrier,
         substitutions.types,
         substitutions.lifetimes,
         substitutions.consts,

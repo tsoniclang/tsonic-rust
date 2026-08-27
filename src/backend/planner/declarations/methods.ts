@@ -29,11 +29,10 @@ import { resolveRustCallableBodyReturnType } from "./callable-body-return.js";
 import { rustDeclarationRequiresUnsafe, rustSafetyAttributesForDeclaration } from "../safety/explicit-safety.js";
 import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
 import { rustReturnTypeFromCarrierInContext } from "../types/render.js";
-import { rustLifetimeToAst } from "../types/lifetime-syntax.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustProjectTypeDefinition } from "../../../analysis/project-types/type-policy.js";
-import type { RustType, RustImplFunction, RustStmt } from "../../target-ast/nodes.js";
+import type { RustImplFunction, RustStmt } from "../../target-ast/nodes.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function planProjectMethod(
@@ -109,7 +108,7 @@ export function planProjectMethod(
     ));
     return undefined;
   }
-  const returnCarrier = generatorFact?.carrier ?? asyncFact?.outputCarrier ??
+  const returnCarrier = generatorFact?.resultCarrier ?? asyncFact?.outputCarrier ??
     context.input.program.facts.getFact(member, rustSourceCallableReturnFactKey)?.returnCarrier;
   if (returnCarrier === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -237,16 +236,7 @@ export function planProjectMethod(
       return undefined;
     }
     context.usedAliases?.add("rt");
-    const generatorReturnType = generatorFact.storage.kind === "static"
-      ? returnType
-      : borrowedGeneratorType(
-          returnType,
-          generatorFact.kind,
-          generatorFact.storage.kind === "receiver"
-            ? { kind: "placeholder" }
-            : rustLifetimeToAst(generatorFact.storage.lifetime),
-        );
-    if (generatorReturnType === undefined) {
+    if (returnType === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, member),
         "rust.backend.instance-generator-carrier",
@@ -263,7 +253,7 @@ export function planProjectMethod(
       ...(isStatic ? {} : { selfParam: rustSelfParameter(selfMode!.mode) }),
       generics,
       params,
-      returnType: generatorReturnType,
+      returnType,
       body: {
         statements: [...parameterStatements, {
           kind: "tail",
@@ -436,23 +426,4 @@ export function planProjectStaticMethods(
     methods.push(...planned);
   }
   return methods;
-}
-
-function borrowedGeneratorType(
-  type: RustType | undefined,
-  kind: "sync" | "async",
-  lifetime: import("../../target-ast/nodes.js").RustLifetime,
-): RustType | undefined {
-  if (type?.kind !== "named" ||
-    type.path !== (kind === "sync" ? "rt::Generator" : "rt::AsyncGenerator")) {
-    return undefined;
-  }
-  return {
-    ...type,
-    path: kind === "sync" ? "rt::BorrowedGenerator" : "rt::BorrowedAsyncGenerator",
-    genericArguments: [
-      { kind: "lifetime", lifetime },
-      ...(type.genericArguments ?? []),
-    ],
-  };
 }

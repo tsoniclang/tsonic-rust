@@ -23,7 +23,11 @@ import { planExpression } from "../entry.js";
 import { planRustNonConsumingValue } from "../typed-locations.js";
 import { rustArgumentPassingMode } from "../../../../analysis/facts/parameter-passing.js";
 import { rustFinalizedCarrierTransitionMatches } from "../../../../analysis/facts/target-operation.js";
-import { rustSourceParameterAbiFactKey, rustTargetOperationFactKey } from "../../../../analysis/facts/keys.js";
+import {
+  rustGeneratorFactKey,
+  rustSourceParameterAbiFactKey,
+  rustTargetOperationFactKey,
+} from "../../../../analysis/facts/keys.js";
 import {
   rustTargetGenericArgumentEquals,
   rustTargetTypeRefEquals,
@@ -237,7 +241,11 @@ export function planRustSelectedSourceCallArguments(
   const fact = context.input.program.facts.getFact(call, rustTargetOperationFactKey);
   const selected = context.input.program.facts.getSelectedTargetCall(call);
   if (fact?.kind !== "source-call" || selected === undefined ||
-    !sourceCallSelectedMemberMatches(fact, selected)) {
+    !sourceCallSelectedMemberMatches(
+      fact,
+      selected,
+      sourceCallFinalizedResultCarrier(selected, context),
+    )) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, call),
       "rust.backend.source-call-selected-arguments",
@@ -427,6 +435,7 @@ export function planPromotedSourceMethodCall(
 export function sourceCallSelectedMemberMatches(
   fact: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>,
   selected: SelectedTargetSignatureFact,
+  declaredResultCarrier: TargetTypeRef | undefined,
 ): boolean {
   const member = selected.member;
   const sourceArguments = selected.sourceSelectedMethodTypeArguments ?? [];
@@ -460,10 +469,10 @@ export function sourceCallSelectedMemberMatches(
       : fact.target.form === "function"
         ? fact.target.selectedTargetName
         : fact.target.name;
-  const selectedReturn = member.returnType === undefined
+  const selectedReturn = declaredResultCarrier === undefined
     ? undefined
     : substituteRustTargetGenerics(
-        member.returnType,
+        declaredResultCarrier,
         substitutions.types,
         substitutions.lifetimes,
         substitutions.consts,
@@ -503,6 +512,16 @@ export function sourceCallSelectedMemberMatches(
         fact.parameters[index]?.parameterCarrier,
       ) && mode === fact.parameters[index]?.mode;
     });
+}
+
+export function sourceCallFinalizedResultCarrier(
+  selected: SelectedTargetSignatureFact,
+  context: RustPlanContext,
+): TargetTypeRef | undefined {
+  return context.input.program.facts.getFact(
+    selected.sourceDeclaration,
+    rustGeneratorFactKey,
+  )?.resultCarrier ?? selected.member.returnType;
 }
 
 export function requireProviderArgumentPassingFacts(

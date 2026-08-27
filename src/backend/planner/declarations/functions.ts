@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { Node_Type } from "@tsonic/target-api/source";
 import { isRustNeverCarrier, isRustUnitCarrier } from "../../../target-model/types/index.js";
-import type { RustBlock, RustItem, RustType } from "../../target-ast/nodes.js";
+import type { RustBlock, RustItem } from "../../target-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planBlockLike } from "../statements/index.js";
 import {
@@ -14,7 +14,6 @@ import {
 } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustReturnTypeFromCarrierInContext } from "../types/render.js";
-import { rustLifetimeToAst } from "../types/lifetime-syntax.js";
 import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustGeneratorFactKey, rustSourceCallableReturnFactKey } from "../../../analysis/facts/keys.js";
 import type { RustGeneratorFact } from "../../../analysis/facts/keys.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
@@ -177,7 +176,7 @@ function planRustFunctionItem(
   }
   const params = parameterPlan.params;
   const returnTypeNode = Node_Type(ast, node);
-  const returnCarrier = generatorFact?.carrier ?? asyncFact?.outputCarrier ??
+  const returnCarrier = generatorFact?.resultCarrier ?? asyncFact?.outputCarrier ??
     context.input.program.facts.getFact(node, rustSourceCallableReturnFactKey)?.returnCarrier;
   const fallible = context.input.program.facts.getFact(node, rustFallibleFactKey) !== undefined;
   const callableErrorBoundary = fallible
@@ -300,8 +299,7 @@ function planRustFunctionItem(
       return undefined;
     }
     context.usedAliases?.add("rt");
-    const generatorReturnType = rustFunctionGeneratorReturnType(returnType, generatorFact);
-    if (generatorReturnType === undefined) {
+    if (returnType === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, node),
         "rust.backend.generator-storage-carrier",
@@ -322,7 +320,7 @@ function planRustFunctionItem(
       ...(isUnsafe ? { isUnsafe: true } : {}),
       generics,
       params,
-      returnType: generatorReturnType,
+      returnType,
       body: {
         statements: [...parameterStatements, {
           kind: "tail",
@@ -391,30 +389,6 @@ function planRustFunctionItem(
     },
   };
   return item;
-}
-
-function rustFunctionGeneratorReturnType(
-  type: RustType | undefined,
-  fact: RustGeneratorFact,
-): RustType | undefined {
-  if (type?.kind !== "named" ||
-    type.path !== (fact.kind === "sync" ? "rt::Generator" : "rt::AsyncGenerator")) {
-    return undefined;
-  }
-  if (fact.storage.kind === "static") return type;
-  return {
-    ...type,
-    path: fact.kind === "sync" ? "rt::BorrowedGenerator" : "rt::BorrowedAsyncGenerator",
-    genericArguments: [
-      {
-        kind: "lifetime",
-        lifetime: fact.storage.kind === "receiver"
-          ? { kind: "placeholder" }
-          : rustLifetimeToAst(fact.storage.lifetime),
-      },
-      ...(type.genericArguments ?? []),
-    ],
-  };
 }
 
 function rustGeneratorConstructorPath(fact: RustGeneratorFact): string {

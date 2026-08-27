@@ -24,7 +24,12 @@ import {
 } from "@tsonic/target-api/source";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
 import { planExpression } from "../entry.js";
-import { planPromotedSourceMethodCall, shapeRustSourceCallParameters, sourceCallSelectedMemberMatches } from "./arguments.js";
+import {
+  planPromotedSourceMethodCall,
+  shapeRustSourceCallParameters,
+  sourceCallFinalizedResultCarrier,
+  sourceCallSelectedMemberMatches,
+} from "./arguments.js";
 import { planRustNonConsumingValue, planRustPromotedStorageLocation } from "../typed-locations.js";
 import { rustBottomAfterEffect, rustBottomExpression } from "../../types/fallible-shape.js";
 import {
@@ -71,7 +76,11 @@ export function planSelectedSourceCall(
   context: RustPlanContext,
 ): RustExpr | undefined {
   const selected = context.input.program.facts.getSelectedTargetCall(node);
-  const selectedMatches = selected !== undefined && sourceCallSelectedMemberMatches(fact, selected);
+  const selectedMatches = selected !== undefined && sourceCallSelectedMemberMatches(
+    fact,
+    selected,
+    sourceCallFinalizedResultCarrier(selected, context),
+  );
   if (!selectedMatches) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),

@@ -276,6 +276,12 @@ export function* borrowedValues<L extends Life>(
   yield load(value);
 }
 
+export function consumeBorrowedValues(): void {
+  const value: int32 = 17;
+  const generator = borrowedValues(ref(value));
+  generator.next();
+}
+
 export function* borrowedPair<
   Short extends Life,
   Middle extends Life & Outlives<Short>,
@@ -311,6 +317,7 @@ export async function* borrowedAsyncValues<L extends Life>(
   assert.match(source, /value: &'static i32/u);
   assert.match(source, /\*value/u);
   assert.match(source, /pub fn borrowed_values<'l>\(value: &'l i32\) -> rt::BorrowedGenerator<'l, i32, \(\), \(\)>/u);
+  assert.match(source, /let mut generator: rt::BorrowedGenerator<'_, i32, \(\), \(\)> = borrowed_values\(&value\);/u);
   assert.match(source, /pub fn borrowed_pair<'short, 'middle: 'short, 'long: 'middle>/u);
   assert.match(source, /-> rt::BorrowedGenerator<'short, i32, i32, \(\)>/u);
   assert.match(source, /pub fn borrowed_async_values<'l>\(value: &'l i32\) -> rt::BorrowedAsyncGenerator<'l, i32, \(\), \(\)>/u);

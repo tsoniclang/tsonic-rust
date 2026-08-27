@@ -29,6 +29,7 @@ import {
   rustCallableProtocol,
   rustClosureProtocol,
   rustCallableTargetType,
+  rustGeneratorStorageTargetType,
 } from "../../target-model/types/index.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
@@ -467,7 +468,14 @@ export function recordCallableSuspensionFacts(walk: RustFactWalk, declaration: N
       }
       walk.context.facts.set(declaration, rustGeneratorFactKey, {
         kind: protocol.kind,
-        carrier,
+        resultCarrier: rustGeneratorStorageTargetType(
+          protocol,
+          storage.storage.kind === "static"
+            ? undefined
+            : storage.storage.kind === "receiver"
+              ? { kind: "placeholder" }
+              : storage.storage.lifetime,
+        ),
         yieldType: protocol.yieldType,
         returnType: protocol.returnType,
         nextType: protocol.nextType,
@@ -510,7 +518,7 @@ export function recordCallableReturnFact(walk: RustFactWalk, declaration: Node):
   const generator = walk.context.facts.get(declaration, rustGeneratorFactKey);
   const asynchronous = walk.context.facts.get(declaration, rustAsyncFunctionFactKey);
   const sourceReturn = selectedSourceCallableReturn(walk, declaration);
-  const carrier = generator?.carrier ?? asynchronous?.outputCarrier ??
+  const carrier = generator?.resultCarrier ?? asynchronous?.outputCarrier ??
     resolveRustTargetTypeRef(
       Node_Type(walk.context.ast, declaration) ?? sourceReturn,
       rustResolutionContext(walk, declaration),

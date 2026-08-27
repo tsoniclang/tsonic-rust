@@ -247,10 +247,10 @@ test("project-source call consumption requires exact selected member kind, targe
     returnType: int32,
   };
   const selected = { member };
-  assert.equal(sourceCallSelectedMemberMatches(fact, selected), true);
-  assert.equal(sourceCallSelectedMemberMatches(fact, { member: { ...member, kind: "property" } }), false);
-  assert.equal(sourceCallSelectedMemberMatches(fact, { member: { ...member, targetName: "other" } }), false);
-  assert.equal(sourceCallSelectedMemberMatches(fact, { member: { ...member, parameters: [,] } }), false);
+  assert.equal(sourceCallSelectedMemberMatches(fact, selected, member.returnType), true);
+  assert.equal(sourceCallSelectedMemberMatches(fact, { member: { ...member, kind: "property" } }, member.returnType), false);
+  assert.equal(sourceCallSelectedMemberMatches(fact, { member: { ...member, targetName: "other" } }, member.returnType), false);
+  assert.equal(sourceCallSelectedMemberMatches(fact, { member: { ...member, parameters: [,] } }, member.returnType), false);
 });
 
 test("project-source call consumption accepts only proven target-finalized inferred type arguments", () => {
@@ -303,21 +303,21 @@ test("project-source call consumption accepts only proven target-finalized infer
     sourceSelectedMethodTypeArguments: [inferredSourceArgument],
   };
 
-  assert.equal(sourceCallSelectedMemberMatches(fact, selected), true);
+  assert.equal(sourceCallSelectedMemberMatches(fact, selected, member.returnType), true);
   assert.equal(sourceCallSelectedMemberMatches(fact, {
     ...selected,
     sourceSelectedMethodTypeArguments: [{
       ...inferredSourceArgument,
       explicitTypeNode: {},
     }],
-  }), false);
+  }, member.returnType), false);
   assert.equal(sourceCallSelectedMemberMatches(fact, {
     ...selected,
     member: {
       ...member,
       genericParameters: [{ kind: "lifetime", sourceName: "T", targetIdentity: "life:T" }],
     },
-  }), false);
+  }, member.returnType), false);
 });
 
 test("compile-time provider arguments never require runtime carrier or passing facts", () => {
