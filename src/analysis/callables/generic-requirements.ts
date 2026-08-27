@@ -274,22 +274,22 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
   };
   const generator = facts.getFact(declaration, rustGeneratorFactKey);
   if (generator !== undefined) {
-    for (const parameter of ast.parameters(declaration)) {
-      const error = parameter === undefined
-        ? "A generator contains an undefined parameter slot."
-        : addUse(
-            parameter,
-            facts.getFact(parameter, rustSourceParameterAbiFactKey)?.parameterCarrier,
-            ["static"],
-          );
-      if (error !== undefined) {
-        return { kind: "rejected", reason: error };
+    if (generator.storage.kind !== "lifetime") {
+      for (const parameter of generator.capturedParameters) {
+        const error = addUse(
+          parameter,
+          facts.getFact(parameter, rustSourceParameterAbiFactKey)?.parameterCarrier,
+          ["static"],
+        );
+        if (error !== undefined) {
+          return { kind: "rejected", reason: error };
+        }
       }
-    }
-    for (const carrier of [generator.yieldType, generator.returnType, generator.nextType]) {
-      const error = addUse(declaration, carrier, ["static"]);
-      if (error !== undefined) {
-        return { kind: "rejected", reason: error };
+      for (const carrier of [generator.yieldType, generator.returnType, generator.nextType]) {
+        const error = addUse(declaration, carrier, ["static"]);
+        if (error !== undefined) {
+          return { kind: "rejected", reason: error };
+        }
       }
     }
   }

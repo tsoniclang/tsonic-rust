@@ -29,6 +29,7 @@ import { resolveRustCallableBodyReturnType } from "./callable-body-return.js";
 import { rustDeclarationRequiresUnsafe, rustSafetyAttributesForDeclaration } from "../safety/explicit-safety.js";
 import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
 import { rustReturnTypeFromCarrierInContext } from "../types/render.js";
+import { rustLifetimeToAst } from "../types/lifetime-syntax.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustProjectTypeDefinition } from "../../../analysis/project-types/type-policy.js";
@@ -89,7 +90,9 @@ export function planProjectMethod(
   const generatorFact = context.input.program.facts.getFact(member, rustGeneratorFactKey);
   const syntheticNames = context.syntheticNames ?? createRustSyntheticNameState(ast, member, []);
   const parameterPlan = planRustCallableParameters(member, context, syntheticNames, {
-    requireStatic: generatorFact !== undefined,
+    ...(generatorFact !== undefined && generatorFact.storage.kind !== "lifetime"
+      ? { requiredStaticParameters: generatorFact.capturedParameters }
+      : {}),
   });
   if (parameterPlan === undefined) {
     return undefined;
@@ -234,9 +237,15 @@ export function planProjectMethod(
       return undefined;
     }
     context.usedAliases?.add("rt");
-    const generatorReturnType = isStatic
+    const generatorReturnType = generatorFact.storage.kind === "static"
       ? returnType
-      : borrowedGeneratorType(returnType, generatorFact.kind);
+      : borrowedGeneratorType(
+          returnType,
+          generatorFact.kind,
+          generatorFact.storage.kind === "receiver"
+            ? { kind: "placeholder" }
+            : rustLifetimeToAst(generatorFact.storage.lifetime),
+        );
     if (generatorReturnType === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, member),
@@ -261,8 +270,12 @@ export function planProjectMethod(
           expr: {
             kind: "call",
             path: generatorFact.kind === "sync"
-              ? isStatic ? "rt::Generator::new" : "rt::BorrowedGenerator::new"
-              : isStatic ? "rt::AsyncGenerator::new" : "rt::BorrowedAsyncGenerator::new",
+              ? generatorFact.storage.kind === "static"
+                ? "rt::Generator::new"
+                : "rt::BorrowedGenerator::new"
+              : generatorFact.storage.kind === "static"
+                ? "rt::AsyncGenerator::new"
+                : "rt::BorrowedAsyncGenerator::new",
             args: [{
               kind: "closure-block",
               params: [{ name: generatorControllerName!, mutable: false }],
@@ -428,6 +441,7 @@ export function planProjectStaticMethods(
 function borrowedGeneratorType(
   type: RustType | undefined,
   kind: "sync" | "async",
+  lifetime: import("../../target-ast/nodes.js").RustLifetime,
 ): RustType | undefined {
   if (type?.kind !== "named" ||
     type.path !== (kind === "sync" ? "rt::Generator" : "rt::AsyncGenerator")) {
@@ -437,7 +451,7 @@ function borrowedGeneratorType(
     ...type,
     path: kind === "sync" ? "rt::BorrowedGenerator" : "rt::BorrowedAsyncGenerator",
     genericArguments: [
-      { kind: "lifetime", lifetime: { kind: "placeholder" } },
+      { kind: "lifetime", lifetime },
       ...(type.genericArguments ?? []),
     ],
   };

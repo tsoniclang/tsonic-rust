@@ -233,7 +233,7 @@ test("borrowed contracts survive async, HRTB callback, closure, and generator lo
     files: {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
-import type { Life, Ref, Static } from "@tsonic/rust/types.js";
+import type { Life, Outlives, Ref, Static } from "@tsonic/rust/types.js";
 import { load } from "@tsonic/rust/lang.js";
 
 export type Reader = <L extends Life>(value: Ref<int32, L>) => int32;
@@ -260,6 +260,30 @@ export function* staticValues(
 ): Generator<int32, void, void> {
   yield load(value);
 }
+
+export function* borrowedValues<L extends Life>(
+  value: Ref<int32, L>,
+): Generator<int32, void, void> {
+  yield load(value);
+}
+
+export function* borrowedPair<
+  Short extends Life,
+  Middle extends Life & Outlives<Short>,
+  Long extends Life & Outlives<Middle>,
+>(
+  short: Ref<int32, Short>,
+  long: Ref<int32, Long>,
+): Generator<int32, int32, void> {
+  yield load(long);
+  return load(short);
+}
+
+export async function* borrowedAsyncValues<L extends Life>(
+  value: Ref<int32, L>,
+): AsyncGenerator<int32, void, void> {
+  yield load(value);
+}
 `,
     },
   });
@@ -276,7 +300,42 @@ export function* staticValues(
   assert.match(source, /pub fn invoke_captured\(value: &'static i32\)/u);
   assert.match(source, /value: &'static i32/u);
   assert.match(source, /\*value/u);
+  assert.match(source, /pub fn borrowed_values<'l>\(value: &'l i32\) -> rt::BorrowedGenerator<'l, i32, \(\), \(\)>/u);
+  assert.match(source, /pub fn borrowed_pair<'short, 'middle: 'short, 'long: 'middle>/u);
+  assert.match(source, /-> rt::BorrowedGenerator<'short, i32, i32, \(\)>/u);
+  assert.match(source, /pub fn borrowed_async_values<'l>\(value: &'l i32\) -> rt::BorrowedAsyncGenerator<'l, i32, \(\), \(\)>/u);
+  assert.match(source, /rt::BorrowedGenerator::new/u);
   validateGeneratedProject("native-lifetime-retention-proof", result.artifacts);
+});
+
+test("generator storage rejects unrelated authored capture lifetimes", () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import type { Life, Ref } from "@tsonic/rust/types.js";
+import { load } from "@tsonic/rust/lang.js";
+
+export function* ambiguous<Left extends Life, Right extends Life>(
+  left: Ref<int32, Left>,
+  right: Ref<int32, Right>,
+): Generator<int32, int32, void> {
+  yield load(left);
+  return load(right);
+}
+`,
+    },
+  });
+
+  assert.equal(result.artifacts.length, 0);
+  assert.deepEqual(
+    result.diagnostics.map(({ code }) => code),
+    ["RUST_GENERATOR_STORAGE_LIFETIME_NOT_PROVEN"],
+  );
+  assert.match(
+    result.diagnostics[0]?.message ?? "",
+    /no single exact authored storage lifetime/u,
+  );
 });
 
 test("Tsonic emits exact declared lifetimes while rustc rejects an invalid returned borrow", { timeout: 300_000 }, () => {

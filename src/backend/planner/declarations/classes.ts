@@ -448,7 +448,7 @@ function planConstructor(
   );
   const parameterPlan = member === undefined
     ? { params: [], prelude: [] } satisfies RustCallableParameterPlan
-    : planRustCallableParameters(member, context, syntheticNames, { requireStatic: false });
+    : planRustCallableParameters(member, context, syntheticNames);
   if (parameterPlan === undefined) {
     return undefined;
   }

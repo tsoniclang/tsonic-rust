@@ -58,7 +58,7 @@ export function planRustCallableParameters(
   callable: Node,
   context: RustPlanContext,
   syntheticNames: RustSyntheticNameState,
-  options: { readonly requireStatic: boolean },
+  options?: { readonly requiredStaticParameters?: readonly Node[] },
 ): RustCallableParameterPlan | undefined {
   const { ast } = context.input.program.source;
   const params: RustFunctionParam[] = [];
@@ -92,7 +92,8 @@ export function planRustCallableParameters(
       ));
       return undefined;
     }
-    if (options.requireStatic && parameterCarrier !== undefined &&
+    if (options?.requiredStaticParameters?.includes(parameter) === true &&
+      parameterCarrier !== undefined &&
       !requireRustCarrierRequirements(parameterCarrier, ["static"], parameter, context)) {
       return undefined;
     }

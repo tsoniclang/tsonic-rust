@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { Node_Type } from "@tsonic/target-api/source";
 import { isRustNeverCarrier, isRustUnitCarrier } from "../../../target-model/types/index.js";
-import type { RustBlock, RustItem } from "../../target-ast/nodes.js";
+import type { RustBlock, RustItem, RustType } from "../../target-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planBlockLike } from "../statements/index.js";
 import {
@@ -14,7 +14,9 @@ import {
 } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustReturnTypeFromCarrierInContext } from "../types/render.js";
+import { rustLifetimeToAst } from "../types/lifetime-syntax.js";
 import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustGeneratorFactKey, rustSourceCallableReturnFactKey } from "../../../analysis/facts/keys.js";
+import type { RustGeneratorFact } from "../../../analysis/facts/keys.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import {
   planRustCallableGenerics,
@@ -166,7 +168,9 @@ function planRustFunctionItem(
   }
   const syntheticNames = createRustSyntheticNameState(ast, node, []);
   const parameterPlan = planRustCallableParameters(node, context, syntheticNames, {
-    requireStatic: generatorFact !== undefined,
+    ...(generatorFact !== undefined && generatorFact.storage.kind !== "lifetime"
+      ? { requiredStaticParameters: generatorFact.capturedParameters }
+      : {}),
   });
   if (parameterPlan === undefined) {
     return undefined;
@@ -212,7 +216,7 @@ function planRustFunctionItem(
     ));
     return undefined;
   }
-  if (generatorFact !== undefined && ![
+  if (generatorFact !== undefined && generatorFact.storage.kind !== "lifetime" && ![
     generatorFact.yieldType,
     generatorFact.returnType,
     generatorFact.nextType,
@@ -296,6 +300,15 @@ function planRustFunctionItem(
       return undefined;
     }
     context.usedAliases?.add("rt");
+    const generatorReturnType = rustFunctionGeneratorReturnType(returnType, generatorFact);
+    if (generatorReturnType === undefined) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, node),
+        "rust.backend.generator-storage-carrier",
+        "Generator function has no exact lifetime-bound Rust storage carrier.",
+      ));
+      return undefined;
+    }
     const generics = genericPlan.finalizeGenerics();
     const item: Extract<RustItem, { readonly kind: "function" }> = {
       kind: "function",
@@ -309,13 +322,13 @@ function planRustFunctionItem(
       ...(isUnsafe ? { isUnsafe: true } : {}),
       generics,
       params,
-      ...(returnType === undefined ? {} : { returnType }),
+      returnType: generatorReturnType,
       body: {
         statements: [...parameterStatements, {
           kind: "tail",
           expr: {
             kind: "call",
-            path: generatorFact.kind === "sync" ? "rt::Generator::new" : "rt::AsyncGenerator::new",
+            path: rustGeneratorConstructorPath(generatorFact),
             args: [{
               kind: "closure-block",
               params: [{ name: generatorControllerName!, mutable: false }],
@@ -378,4 +391,37 @@ function planRustFunctionItem(
     },
   };
   return item;
+}
+
+function rustFunctionGeneratorReturnType(
+  type: RustType | undefined,
+  fact: RustGeneratorFact,
+): RustType | undefined {
+  if (type?.kind !== "named" ||
+    type.path !== (fact.kind === "sync" ? "rt::Generator" : "rt::AsyncGenerator")) {
+    return undefined;
+  }
+  if (fact.storage.kind === "static") return type;
+  return {
+    ...type,
+    path: fact.kind === "sync" ? "rt::BorrowedGenerator" : "rt::BorrowedAsyncGenerator",
+    genericArguments: [
+      {
+        kind: "lifetime",
+        lifetime: fact.storage.kind === "receiver"
+          ? { kind: "placeholder" }
+          : rustLifetimeToAst(fact.storage.lifetime),
+      },
+      ...(type.genericArguments ?? []),
+    ],
+  };
+}
+
+function rustGeneratorConstructorPath(fact: RustGeneratorFact): string {
+  if (fact.storage.kind === "static") {
+    return fact.kind === "sync" ? "rt::Generator::new" : "rt::AsyncGenerator::new";
+  }
+  return fact.kind === "sync"
+    ? "rt::BorrowedGenerator::new"
+    : "rt::BorrowedAsyncGenerator::new";
 }

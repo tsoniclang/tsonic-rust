@@ -449,14 +449,14 @@ ${generatorTypes}
 
 class Values {
   constructor() {}
-  static *items(): Generator<int32, void, void> {
-    yield 1;
+  static *items(value: int32): Generator<int32, void, void> {
+    yield value;
   }
 }
 
 export function run(): void {
   const _values = new Values();
-  Values.items().next();
+  Values.items(1).next();
 }
 `,
     },
@@ -464,7 +464,7 @@ export function run(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /pub fn items\(\) -> rt::Generator<i32, \(\), \(\)>/u);
+  assert.match(source, /pub fn items\(value: i32\) -> rt::Generator<i32, \(\), \(\)>/u);
   validateGeneratedProject("static-generator-method", result.artifacts);
 });
 

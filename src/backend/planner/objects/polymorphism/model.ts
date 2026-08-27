@@ -344,7 +344,7 @@ export function projectCallableShape(
     ? context
     : { ...context, typeParameterSubstitutions: substitutions };
   const syntheticNames = createRustSyntheticNameState(selectedContext.input.program.source.ast, member, []);
-  const parameterPlan = planRustCallableParameters(member, selectedContext, syntheticNames, { requireStatic: false });
+  const parameterPlan = planRustCallableParameters(member, selectedContext, syntheticNames);
   const returnCarrier = selectedContext.input.program.facts.getFact(member, rustSourceCallableReturnFactKey)?.returnCarrier;
   if (parameterPlan === undefined || returnCarrier === undefined) {
     return undefined;

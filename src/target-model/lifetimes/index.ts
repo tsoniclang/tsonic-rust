@@ -5,6 +5,7 @@ export {
   rustCallScopedElisionLifetime,
   isRustLifetimeRef,
 } from "./identity.js";
+export { rustLifetimeOutlives } from "./outlives.js";
 export type {
   RustBoundLifetimeParameterContract,
   RustLifetimeIndex,

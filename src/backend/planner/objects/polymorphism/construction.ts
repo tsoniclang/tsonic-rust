@@ -145,7 +145,7 @@ export function planProjectClassConstructor(
         constructorSignature,
         context,
       )
-    : planRustCallableParameters(constructor, context, syntheticNames, { requireStatic: false });
+    : planRustCallableParameters(constructor, context, syntheticNames);
   if (parameterPlan === undefined) {
     return undefined;
   }

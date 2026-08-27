@@ -116,6 +116,7 @@ export interface RustTargetGenericReferences {
     RustLifetimeRef,
     { readonly kind: "call-scoped-elision" }
   >[];
+  readonly hasUnnameableLifetime: boolean;
   readonly constIdentities: readonly string[];
 }
 
@@ -132,6 +133,7 @@ export function rustTargetGenericReferences(
     { readonly kind: "call-scoped-elision" }
   >>();
   const constIdentities = new Set<string>();
+  let hasUnnameableLifetime = false;
   visitType(type, new Set());
   return Object.freeze({
     typeNames: Object.freeze([...typeNames].sort()),
@@ -142,6 +144,7 @@ export function rustTargetGenericReferences(
     callScopedElisions: Object.freeze([...callScopedElisions]
       .sort(([left], [right]) => left.localeCompare(right, "en"))
       .map(([, lifetime]) => lifetime)),
+    hasUnnameableLifetime,
     constIdentities: Object.freeze([...constIdentities].sort()),
   });
 
@@ -153,6 +156,11 @@ export function rustTargetGenericReferences(
     const identity = rustLifetimeKey(lifetime);
     if (lifetime.kind === "call-scoped-elision") {
       callScopedElisions.set(identity, lifetime);
+      hasUnnameableLifetime = true;
+      return;
+    }
+    if (lifetime.kind === "placeholder") {
+      hasUnnameableLifetime = true;
       return;
     }
     if ((lifetime.kind === "parameter" || lifetime.kind === "bound") &&
@@ -209,6 +217,7 @@ export function rustTargetGenericReferences(
         value.elements.forEach((element) => visitType(element, bound));
         return;
       case "reference":
+        if (value.lifetime === undefined) hasUnnameableLifetime = true;
         visitLifetime(value.lifetime, bound);
         visitType(value.referent, bound);
         return;

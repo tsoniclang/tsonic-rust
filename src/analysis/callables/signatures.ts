@@ -41,6 +41,7 @@ import { setCarrierFact } from "../operations/project-calls.js";
 import type { ExtensionFactSubject, Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { resolveRustGeneratorStorage } from "./generator-storage.js";
 
 function promiseInnerCarrier(
   walk: RustFactWalk,
@@ -55,12 +56,17 @@ function promiseInnerCarrier(
 }
 
 export function recordFunctionSignatureFacts(walk: RustFactWalk, declaration: Node): void {
+  recordCallableParameterSignatureFacts(walk, declaration);
   recordCallableSuspensionFacts(walk, declaration);
-  recordCallableTypeSignatureFacts(walk, declaration);
+  recordCallableReturnFact(walk, declaration);
 }
 
 function recordCallableTypeSignatureFacts(walk: RustFactWalk, declaration: Node): void {
   recordCallableReturnFact(walk, declaration);
+  recordCallableParameterSignatureFacts(walk, declaration);
+}
+
+function recordCallableParameterSignatureFacts(walk: RustFactWalk, declaration: Node): void {
   const parameters = requireDenseSourceNodes(walk, walk.context.ast.parameters(declaration), "Function declaration contains an undefined or non-data parameter slot.");
   if (parameters === undefined) {
     return;
@@ -444,12 +450,29 @@ export function recordCallableSuspensionFacts(walk: RustFactWalk, declaration: N
         ["target.capability=rust.generator.protocol"],
       );
     } else {
+      const storage = resolveRustGeneratorStorage(walk, declaration, [
+        protocol.yieldType,
+        protocol.returnType,
+        protocol.nextType,
+      ]);
+      if (storage.kind === "rejected") {
+        appendRustDiagnostic(
+          walk,
+          "RUST_GENERATOR_STORAGE_LIFETIME_NOT_PROVEN",
+          storage.reason,
+          declaration,
+          ["target.capability=rust.generator.storage-lifetime"],
+        );
+        return;
+      }
       walk.context.facts.set(declaration, rustGeneratorFactKey, {
         kind: protocol.kind,
         carrier,
         yieldType: protocol.yieldType,
         returnType: protocol.returnType,
         nextType: protocol.nextType,
+        capturedParameters: storage.capturedParameters,
+        storage: storage.storage,
       }, [{ message: "rust generator protocol" }]);
       const typeNode = Node_Type(ast, declaration);
       if (typeNode !== undefined) {
