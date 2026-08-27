@@ -411,4 +411,3 @@ function rejectRustReferenceOperation(
   );
   return {};
 }
-
