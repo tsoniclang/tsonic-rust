@@ -41,7 +41,7 @@ const rustJsTimerEpilogue: RustProviderBinaryEpilogueRow = Object.freeze({
   path: "js_abi::run_timers",
   requiredCrate: "tsonic_rust_js",
   isFallible: true,
-  errorBoundary: "runtime",
+  errorBoundary: "target-runtime",
   providerPackageId: "tsonic.rust.js-surface",
   providerVersion: "1",
 });

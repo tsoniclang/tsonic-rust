@@ -165,38 +165,15 @@ export function selectRustSourceValueConversion(
     }
     const structural = rustStructuralObjectCarrierValue(source);
     if (structural !== undefined) {
-      const fields = structural.fields.flatMap((field, storageIndex) => {
-        if (field.method === true) {
-          return [];
-        }
-        if (field.accessor !== undefined) {
-          return [undefined];
-        }
-        const sourceCarrier = field.presence === "optional"
-          ? rustOptionElementCarrier(field.type)
-          : field.type;
-        const conversion = sourceCarrier === undefined
-          ? undefined
-          : selectRustSourceValueConversion(sourceCarrier, jsValueCarrier);
-        return conversion === undefined ||
-            conversion.kind === "option-map" ||
-            conversion.kind === "option-some"
-          ? [undefined]
-          : [Object.freeze({
-              sourceName: field.sourceName,
-              storageIndex,
-              sourceCarrier,
-              presence: field.presence,
-              conversion,
-            })];
+      const fields = selectStructuralObjectConversionFields(
+        structural,
+        (sourceCarrier) => selectRustSourceValueConversion(sourceCarrier, jsValueCarrier),
+      );
+      return fields === undefined ? undefined : Object.freeze({
+        kind: "js-value-from-structural-object" as const,
+        source,
+        fields,
       });
-      return fields.some((field) => field === undefined)
-        ? undefined
-        : Object.freeze({
-            kind: "js-value-from-structural-object" as const,
-            source,
-            fields: Object.freeze(fields as NonNullable<typeof fields[number]>[]),
-          });
     }
     return undefined;
   }
@@ -262,7 +239,7 @@ function selectJsonValueConversion(
     if (callable === undefined || !validParameters || resultConversion === undefined ||
         resultConversion.kind === "option-map" ||
         resultConversion.kind === "option-some" ||
-        rustTargetGenericReferences(source).lifetimeIdentities.size !== 0) {
+        rustTargetGenericReferences(source).lifetimeIdentities.length !== 0) {
       return undefined;
     }
     return Object.freeze({
@@ -344,38 +321,48 @@ function selectJsonValueConversion(
         });
   }
   if (structural !== undefined) {
-    const fields = structural.fields.flatMap((field, storageIndex) => {
-      if (field.method === true) {
-        return [];
-      }
-      if (field.accessor !== undefined) {
-        return [undefined];
-      }
-      const sourceCarrier = field.presence === "optional"
-        ? rustOptionElementCarrier(field.type)
-        : field.type;
-      const conversion = sourceCarrier === undefined
-        ? undefined
-        : selectJsonValueConversion(sourceCarrier, true, nextAncestors);
-      return conversion === undefined ||
-          conversion.kind === "option-map" ||
-          conversion.kind === "option-some"
-        ? [undefined]
-        : [Object.freeze({
-            sourceName: field.sourceName,
-            storageIndex,
-            sourceCarrier,
-            presence: field.presence,
-            conversion,
-          })];
+    const fields = selectStructuralObjectConversionFields(
+      structural,
+      (sourceCarrier) => selectJsonValueConversion(sourceCarrier, true, nextAncestors),
+    );
+    return fields === undefined ? undefined : Object.freeze({
+      kind: "js-value-from-structural-object" as const,
+      source,
+      fields,
     });
-    return fields.some((field) => field === undefined)
-      ? undefined
-      : Object.freeze({
-          kind: "js-value-from-structural-object" as const,
-          source,
-          fields: Object.freeze(fields as NonNullable<typeof fields[number]>[]),
-        });
   }
   return selectRustSourceValueConversion(source, jsValueCarrier);
+}
+
+type StructuralObjectConversion = Extract<
+  RustValueConversion,
+  { readonly kind: "js-value-from-structural-object" }
+>;
+
+function selectStructuralObjectConversionFields(
+  structural: NonNullable<ReturnType<typeof rustStructuralObjectCarrierValue>>,
+  select: (sourceCarrier: TargetTypeRef) => RustValueConversion | undefined,
+): StructuralObjectConversion["fields"] | undefined {
+  const fields: StructuralObjectConversion["fields"][number][] = [];
+  for (const [storageIndex, field] of structural.fields.entries()) {
+    if (field.method === true) continue;
+    if (field.accessor !== undefined) return undefined;
+    const sourceCarrier = field.presence === "optional"
+      ? rustOptionElementCarrier(field.type)
+      : field.type;
+    if (sourceCarrier === undefined) return undefined;
+    const conversion = select(sourceCarrier);
+    if (conversion === undefined || conversion.kind === "option-map" ||
+      conversion.kind === "option-some") {
+      return undefined;
+    }
+    fields.push(Object.freeze({
+      sourceName: field.sourceName,
+      storageIndex,
+      sourceCarrier,
+      presence: field.presence,
+      conversion,
+    }));
+  }
+  return Object.freeze(fields);
 }

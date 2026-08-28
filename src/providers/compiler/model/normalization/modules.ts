@@ -499,8 +499,13 @@ function sameModuleExportDependencies(
       break;
     case "enum":
       visitGenericParameters(exported.genericParameters);
-      exported.variants.forEach((variant) => variant.fields.forEach((field) =>
-        visitType(variant.kind === "struct" ? field.type : field)));
+      exported.variants.forEach((variant) => {
+        if (variant.kind === "struct") {
+          variant.fields.forEach((field) => visitType(field.type));
+        } else {
+          variant.fields.forEach(visitType);
+        }
+      });
       exported.methods.forEach(visitFunction);
       exported.associatedConstants.forEach((constant) => {
         visitType(constant.type);

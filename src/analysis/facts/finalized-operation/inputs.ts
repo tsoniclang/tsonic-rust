@@ -144,7 +144,7 @@ export function finalizeTargetInputs(
       const args = mappedArguments(form.argOrder, form.argModes, form.argConversions);
       return receiver === undefined || args === undefined ? undefined : {
         targetReceiver: { kind: "input", input: receiver },
-        targetArguments: args,
+        targetArguments: [...args, ...constants(form.trailingArguments)],
       };
     }
     case "method": {

@@ -276,12 +276,13 @@ export function validateOperationForm(
       requireRustIdentifier(form.name, `${label}.target.name`, fail);
       return;
     case "receiver-method":
-      requireExactKeys(record, ["form", "name", "argModes", "argConversions", "argOrder", "chain", "mutatesReceiver"], `${label}.target`, fail);
+      requireExactKeys(record, ["form", "name", "argModes", "argConversions", "argOrder", "trailingArguments", "chain", "mutatesReceiver"], `${label}.target`, fail);
       requireRustIdentifier(form.name, `${label}.target.name`, fail);
       if (form.mutatesReceiver !== undefined && typeof form.mutatesReceiver !== "boolean") {
         fail(`${label}.target.mutatesReceiver must be boolean when present`);
       }
       validateArgumentMetadata(form, definition, label, parameterCarriers, fail);
+      validateTrailingArguments(form.trailingArguments, label, fail);
       validateChain(form.chain, label, fail);
       return;
     default:

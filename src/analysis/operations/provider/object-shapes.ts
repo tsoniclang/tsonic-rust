@@ -4,7 +4,6 @@ import {
 } from "../../../target-model/types/index.js";
 import { acceptRustPolicy } from "../../../policy/operations/contracts.js";
 import {
-  acceptSelectedCall,
   checkedCallIsConstruction,
   instantiateExactSelectedConstructionCarrier,
   mapSelectedProjectGenericArguments,
@@ -31,7 +30,7 @@ import { rustProjectCallableTargetName } from "../../facts/source-member-name.js
 import { rustTargetOperationFactKey, rustOptionalChainFactKey } from "../../facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
-import { selectedCallArgumentNodes, selectedCallCalleeDeclaration, selectedCallCalleeSymbol, selectedSourceValueCarrier, selectedValueCarrier } from "./operators.js";
+import { selectedCallCalleeDeclaration, selectedCallCalleeSymbol, selectedSourceValueCarrier, selectedValueCarrier } from "./operators.js";
 import { rustValueConversionIsFallible } from "../../../target-model/conversions/contracts.js";
 import { selectRustSourceValueConversion } from "../../../policy/conversions/selection.js";
 import type {

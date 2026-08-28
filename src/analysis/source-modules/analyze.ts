@@ -1,5 +1,5 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
-import type { TargetSourceProgram } from "@tsonic/target-api";
+import type { TargetSourceProgram } from "@tsonic/target-api/source";
 import { rustTargetOperationFactKey } from "../facts/keys.js";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 import type { RustOutputType } from "../../target-model/project/model.js";

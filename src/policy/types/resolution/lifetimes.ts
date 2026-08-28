@@ -6,7 +6,10 @@ import {
   rustSourceVirtualModulesProviderId,
   rustTypesModule,
 } from "../../../source/semantics/identity.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type {
+  RustTargetGenericArgument,
+  TargetTypeRef,
+} from "../../../target-model/types/model.js";
 import type { RustSourcePolicyContext } from "../../model/context.js";
 import { resolveProviderTypeIdentity } from "./providers.js";
 import type {
@@ -223,7 +226,7 @@ export function resolveRustLifetimeSourceType(
 function resolveLifetimeCaptures(
   tupleNode: Node,
   context: RustTargetTypeResolutionContext,
-): readonly import("../../../target-model/lifetimes/index.js").RustLifetimeRef[] | undefined {
+): readonly RustTargetGenericArgument[] | undefined {
   const contract = rustSourceLifetimeTypeContract(tupleNode, context);
   const selectedTuple = contract?.kind === "capture-set"
     ? contract.tupleTypeNode
@@ -231,8 +234,11 @@ function resolveLifetimeCaptures(
   if (context.ast.kindName(selectedTuple) !== "KindTupleType") return undefined;
   const elements = context.ast.elements(selectedTuple);
   if (elements.some((element) => element === undefined)) return undefined;
-  const captures = elements.map((element) => context.sourceLifetimes.resolve(element));
-  return captures.some((capture) => capture === undefined)
+  const lifetimes = elements.map((element) => context.sourceLifetimes.resolve(element));
+  return lifetimes.some((lifetime) => lifetime === undefined)
     ? undefined
-    : Object.freeze(captures as readonly import("../../../target-model/lifetimes/index.js").RustLifetimeRef[]);
+    : Object.freeze(lifetimes.map((lifetime) => Object.freeze({
+        kind: "lifetime" as const,
+        lifetime: lifetime!,
+      })));
 }

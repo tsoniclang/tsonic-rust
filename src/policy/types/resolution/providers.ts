@@ -29,7 +29,6 @@ import {
   rustJsRegExpTargetType,
   rustJsSetTargetType,
   rustJsTypedArrayTargetType,
-  rustJsValueTargetType,
   rustJsWeakMapTargetType,
   rustJsWeakSetTargetType,
   rustJsErrorTargetType,

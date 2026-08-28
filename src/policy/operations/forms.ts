@@ -371,7 +371,7 @@ export function rustProviderOperationFormContractViolation(
       }
       return validateArguments(form);
     case "receiver-method":
-      if (!hasExactKeys(form, ["form", "name", "argModes", "argConversions", "argOrder", "chain", "mutatesReceiver"], ["form", "name"]) ||
+      if (!hasExactKeys(form, ["form", "name", "argModes", "argConversions", "argOrder", "trailingArguments", "chain", "mutatesReceiver"], ["form", "name"]) ||
         typeof form.name !== "string" || !rustIdentifierPattern.test(form.name) ||
         (form.mutatesReceiver !== undefined && typeof form.mutatesReceiver !== "boolean")) {
         return "receiver-method form is malformed";

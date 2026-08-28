@@ -1,6 +1,6 @@
 import type { Node, SourcePrimitiveKind } from "@tsonic/tsts";
 import type { RustBinaryOperator } from "../syntax/tokens.js";
-import type { RustErrorBoundary } from "./error-boundary.js";
+import type { RustErrorBoundary, RustFallibleErrorBoundary } from "./error-boundary.js";
 import type {
   RustTargetGenericArgument,
   TargetTypeRef,
@@ -354,6 +354,7 @@ export type RustProviderOperationForm =
       readonly argModes?: readonly RustArgumentMode[];
       readonly argConversions?: readonly (RustValueConversion | undefined)[];
       readonly argOrder?: readonly number[];
+      readonly trailingArguments?: readonly RustProviderConstantArgument[];
       readonly chain?: readonly RustProviderChainStep[];
       readonly mutatesReceiver?: boolean;
     };

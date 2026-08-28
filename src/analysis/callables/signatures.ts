@@ -39,7 +39,7 @@ import { resolveRustContextualParameterAbi } from "../../policy/ownership/source
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
 import { setCarrierFact } from "../operations/project-calls.js";
-import type { ExtensionFactSubject, Node, SourceFile } from "@tsonic/tsts";
+import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { resolveRustGeneratorStorage } from "./generator-storage.js";

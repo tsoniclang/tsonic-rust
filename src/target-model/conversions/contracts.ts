@@ -22,6 +22,7 @@ import {
   rustNeverTargetType,
   rustOptionTargetType,
   rustJsValueTargetType,
+  rustOptionElementCarrier,
   rustPrimitiveTypeName,
   rustSourceUnionCarrierValue,
   rustSourcePrimitiveTargetType,
@@ -226,7 +227,7 @@ export function rustValueConversionContract(
         resultConversion === undefined || resultConversion.fallible ||
         !rustTargetTypeRefEquals(resultConversion.source, value.resultCarrier) ||
         !rustTargetTypeRefEquals(resultConversion.target, jsValueCarrier) ||
-        rustTargetGenericReferences(value.source).lifetimeIdentities.size !== 0
+        rustTargetGenericReferences(value.source).lifetimeIdentities.length !== 0
       ? undefined
       : {
           category: "projection",
