@@ -32,6 +32,9 @@ import {
   rustJsArrayLikeElementTargetType,
   isRustJsArrayCarrier,
   rustTargetGenericReferences,
+  rustCarrierSupportsClone,
+  rustCarrierSupportsTrait,
+  rustJsClosedValueCarrierTraitPath,
   substituteRustTargetGenerics,
 } from "../types/index.js";
 import type { RustPrimitiveTypeName } from "../syntax/tokens.js";
@@ -138,6 +141,20 @@ export type RustValueConversionContract = RustValueConversionContractBase & (
 export function rustValueConversionContract(
   value: RustValueConversion,
 ): RustValueConversionContract | undefined {
+  if (value.kind === "js-value-from-closed-carrier") {
+    return !rustCarrierSupportsClone(value.source) ||
+        !rustCarrierSupportsTrait(value.source, rustJsClosedValueCarrierTraitPath)
+      ? undefined
+      : {
+          category: "projection",
+          lowering: "call",
+          path: "tsonic_rust_js::abi::js_value_from_closed",
+          sourceMode: "ref",
+          source: value.source,
+          target: jsValueCarrier,
+          fallible: false,
+        };
+  }
   if (value.kind === "js-value-from-option") {
     const elementConversion = rustValueConversionContract(value.elementConversion);
     return !rustTargetTypeRefEquals(value.source, rustOptionTargetType(value.element)) ||
@@ -524,6 +541,8 @@ export function rustValueConversionIdentity(value: RustValueConversion): string 
               ? `js-value-from-option.${JSON.stringify(value.source)}.${rustValueConversionIdentity(value.elementConversion)}`
             : value.kind === "js-value-from-array"
               ? `js-value-from-array.${JSON.stringify(value.source)}.${rustValueConversionIdentity(value.elementConversion)}`
+            : value.kind === "js-value-from-closed-carrier"
+              ? `js-value-from-closed-carrier.${JSON.stringify(value.source)}`
             : value.kind === "js-value-from-source-union"
               ? `js-value-from-source-union.${JSON.stringify(value.source)}.${value.variants.map((variant) => `${variant.name}:${rustValueConversionIdentity(variant.conversion)}`).join("|")}`
             : value.kind === "js-value-from-structural-to-json"
@@ -602,6 +621,16 @@ export function substituteRustValueConversion(
           lifetimeSubstitutions,
           constSubstitutions,
         ) as typeof value.elementConversion,
+      });
+    case "js-value-from-closed-carrier":
+      return Object.freeze({
+        ...value,
+        source: substituteRustTargetGenerics(
+          value.source,
+          substitutions,
+          lifetimeSubstitutions,
+          constSubstitutions,
+        ),
       });
     case "js-value-from-source-union":
       return Object.freeze({

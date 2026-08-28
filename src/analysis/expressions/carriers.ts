@@ -103,8 +103,24 @@ export function resolveExpressionCarrier(
   walk.resolving.add(expression);
   try {
     if (existing !== undefined) {
-      const operation = facts.get(expression, rustTargetOperationFactKey) ??
+      let operation = facts.get(expression, rustTargetOperationFactKey) ??
         walk.context.facts.resolve(expression, rustTargetOperationFactKey);
+      const expressionKind = walk.context.ast.kindName(expression);
+      if ((expressionKind === "KindArrowFunction" || expressionKind === "KindFunctionExpression") &&
+        operation?.kind !== "closure") {
+        const callableCarrier = resolveExpressionCarrierUncached(
+          walk,
+          expression,
+          sourceFile,
+          contextualExpected ?? existing.carrier,
+        );
+        if (callableCarrier === undefined ||
+          !rustTargetTypeRefEquals(callableCarrier, existing.carrier)) {
+          return undefined;
+        }
+        operation = facts.get(expression, rustTargetOperationFactKey) ??
+          walk.context.facts.resolve(expression, rustTargetOperationFactKey);
+      }
       recordSelectedOperationInputs(walk, expression, sourceFile, operation);
       return finalize(existing.carrier);
     }

@@ -1,9 +1,9 @@
 import { asRecord, requireExactKeys, requireNonEmpty, requireRustIdentifier, requireRustPath, rustSourcePrimitiveHasCarrier, validateCarrier } from "./carriers.js";
-import { builtInTargetCarrierIds } from "./model.js";
 import { isClosedMetadata } from "../../../target-model/metadata/closed-data.js";
 import { isRustFallibleErrorBoundary } from "../../../target-model/operations/error-boundary.js";
 import {
   isRustNamedTypeTraitContract,
+  isRustBuiltInTargetCarrierId,
   rustNamedTypeCarrierValue,
   rustTargetGenericReferences,
 } from "../../../target-model/types/index.js";
@@ -625,7 +625,7 @@ function validateTypeRelations(
       }
     }
     for (const targetTypeId of targetCarrierNamedIds(relation.targetCarrier)) {
-      if (!builtInTargetCarrierIds.has(targetTypeId) && definition.carrierPaths?.[targetTypeId] === undefined) {
+      if (!isRustBuiltInTargetCarrierId(targetTypeId) && definition.carrierPaths?.[targetTypeId] === undefined) {
         fail(`export '${relation.exportId}' target type '${targetTypeId}' has no closed Rust carrier path`);
       }
     }

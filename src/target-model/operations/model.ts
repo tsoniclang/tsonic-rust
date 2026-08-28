@@ -145,6 +145,10 @@ export type RustNonOptionValueConversion =
       readonly elementConversion: RustNonOptionValueConversion;
     }
   | {
+      readonly kind: "js-value-from-closed-carrier";
+      readonly source: TargetTypeRef;
+    }
+  | {
       readonly kind: "js-value-from-source-union";
       readonly source: TargetTypeRef;
       readonly variants: readonly {

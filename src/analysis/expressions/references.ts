@@ -49,7 +49,12 @@ import type { RustSelectedTargetSignature, TargetTypeRef } from "../../target-mo
 import type { RustSourceBindingFact, RustTargetOperationFact } from "../facts/keys.js";
 import { rustHigherRankedNativeFunctionCarrier } from "../callables/higher-ranked-function.js";
 
-export function resolveIdentifierCarrier(walk: RustFactWalk, identifier: Node, sourceFile: SourceFile): TargetTypeRef | undefined {
+export function resolveIdentifierCarrier(
+  walk: RustFactWalk,
+  identifier: Node,
+  sourceFile: SourceFile,
+  expected: TargetTypeRef | undefined,
+): TargetTypeRef | undefined {
   const { ast } = walk.context;
   const reference = walk.context.source.navigation.sourceReferenceFor(identifier);
   const declaration = reference?.declaration;
@@ -84,7 +89,12 @@ export function resolveIdentifierCarrier(walk: RustFactWalk, identifier: Node, s
       }
       const initializer = Node_Initializer(walk.context.ast, declaration);
       if (initializer !== undefined) {
-        const initializerCarrier = resolveExpressionCarrier(walk, initializer, sourceFile, undefined);
+        const initializerCarrier = resolveExpressionCarrier(
+          walk,
+          initializer,
+          sourceFile,
+          expected,
+        );
         if (initializerCarrier !== undefined) {
           setCarrierFact(walk, declaration, initializerCarrier);
           return setCarrierFact(walk, identifier, initializerCarrier);

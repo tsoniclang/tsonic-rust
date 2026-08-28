@@ -28,6 +28,7 @@ import { rustLocationStorageFactKey } from "../facts/keys.js";
 import { rustTypedLocationStorageRootReference } from "../operations/typed-locations.js";
 import { selectRustAddressOfSourceOperation } from "../../policy/operations/typed-location-source.js";
 import { rustProjectCallableTargetName } from "../facts/source-member-name.js";
+import { collectRustMutableProjectStorageRequirements } from "../project-types/mutable-storage-requirements.js";
 
 export function analyzeRustProgram(context: RustAnalysisContext): void {
   const { ast } = context;
@@ -166,6 +167,12 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   for (const sourceFile of projectSourceFiles) {
     collectPromotedStorage(sourceFile);
   }
+  const mutableStorageDeclarations = collectRustMutableProjectStorageRequirements(
+    context,
+    projectTypes,
+    projectSourceFiles,
+    providerRows,
+  );
   context.objectRepresentations.initialize({
     ast,
     navigation: context.source.navigation,
@@ -175,6 +182,9 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
       return promotedStorageDeclarations.has(declaration) ||
         context.facts.get(declaration, rustLocationStorageFactKey) !== undefined ||
         context.facts.resolve(declaration, rustLocationStorageFactKey) !== undefined;
+    },
+    hasMutableStorageUse(declaration) {
+      return mutableStorageDeclarations.has(declaration);
     },
   });
   for (const sourceFile of projectSourceFiles) {

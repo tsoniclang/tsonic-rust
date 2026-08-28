@@ -506,6 +506,11 @@ function materializeProviderValueConversion(
           carrierTraits,
         ) as typeof conversion.elementConversion,
       };
+    case "js-value-from-closed-carrier":
+      return {
+        ...conversion,
+        source: materializeProviderCarrier(conversion.source, carrierPaths, carrierTraits),
+      };
     case "js-value-from-source-union":
       return {
         ...conversion,

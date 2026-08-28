@@ -217,7 +217,7 @@ export function resolveExpressionCarrierUncached(
       return superCarrier === undefined ? undefined : setCarrierFact(walk, expression, superCarrier);
     }
     case KindIdentifier: {
-      return resolveIdentifierCarrier(walk, expression, sourceFile);
+      return resolveIdentifierCarrier(walk, expression, sourceFile, expected);
     }
     case KindArrayLiteralExpression: {
       return resolveArrayLiteralCarrier(walk, expression, sourceFile, expected);

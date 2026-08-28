@@ -11,6 +11,27 @@ export const rustProjectObjectDispatchField = "dispatch";
 
 const rustProjectObjectStateBinding = "state";
 
+export function enterRustProjectObjectMutableState(
+  receiver: RustExpr,
+  stateName: string,
+  body: RustExpr,
+): RustExpr {
+  return {
+    kind: "method-call",
+    receiver: {
+      kind: "field",
+      receiver,
+      name: rustProjectObjectStateField,
+    },
+    method: "with_mut",
+    args: [{
+      kind: "closure",
+      params: [{ name: stateName, byRefCopy: false }],
+      body,
+    }],
+  };
+}
+
 export function rustProjectObjectType(
   stateType: RustType,
   representation: RustObjectRepresentation,

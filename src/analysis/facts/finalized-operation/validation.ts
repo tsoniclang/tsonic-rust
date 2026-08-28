@@ -359,6 +359,10 @@ function isNonOptionValueConversion(value: unknown): boolean {
 }
 
 function isJsValueProjectionConversion(value: Record<string, unknown>): boolean {
+  if (value.kind === "js-value-from-closed-carrier") {
+    return hasExactKeys(value, ["kind", "source"]) &&
+      isRustTargetTypeRef(value.source);
+  }
   if (value.kind === "js-value-from-option" || value.kind === "js-value-from-array") {
     return hasExactKeys(value, [
       "kind", "source", "element", "elementConversion",

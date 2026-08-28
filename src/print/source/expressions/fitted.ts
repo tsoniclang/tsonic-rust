@@ -239,6 +239,15 @@ export function printRustExprFitted(
     case "associated-call":
       {
         const method = printRustCallMember(expression.method, expression.genericArguments);
+        const flatCallable = `${printRustAssociatedCallOwner(expression)}::${method}`;
+        if (renderedFits(`${flatCallable}(`, column)) {
+          return printFittedCall(
+            flatCallable,
+            expression.args,
+            depth,
+            column,
+          );
+        }
         const owner = printRustAssociatedCallOwnerFitted(
           expression,
           depth,
@@ -329,6 +338,8 @@ export function printRustExprFitted(
         const borrowedBlockArgument = expression.args.length === 1 &&
           expression.args[0]?.kind === "reference" &&
           expressionIsRightHandBlock(expression.args[0].expr);
+        const attachedStatementBlockArgument = expression.args.length === 1 &&
+          expressionIsRightHandBlock(expression.args[0]!);
         if (attached.includes("\n") &&
           column + firstLine(attached).length > rustMethodChainWidth &&
           !borrowedBlockArgument) {
@@ -346,7 +357,7 @@ export function printRustExprFitted(
           (chain === undefined || attachedArgumentsPreferExpansion ||
             !rustMethodChainBreaksReceiverWhenExpanded(chain)) &&
           (!columnRequiresVerticalLayout || attachedArgumentsPreferExpansion) &&
-          (!verticalLayout ||
+          (!verticalLayout || attachedStatementBlockArgument ||
           chain !== undefined && (!rustMethodChainContainsClosure(chain) ||
             expression.args.length === 1 && expression.args[0]?.kind === "tuple-literal"))) {
           return attached;
@@ -384,6 +395,7 @@ export function printRustExprFitted(
           column,
           firstStep?.kind === "field" && !attachFirstMethodAfterField ||
             containingExpressionRequiresReceiverBreak ||
+            rustMethodChainRequiresVerticalLayout(expression) ||
             rustMethodChainBreaksReceiverWhenExpanded(chain) ||
             rustMethodChainBreaksReceiverForClosure(chain, flat, column) ||
             column > indentText(depth + 1).length,
@@ -783,14 +795,18 @@ export function printRustExprFitted(
         return appendToLastLine(`(${rendered}`, ",)");
       }
       if (expression.kind !== "tuple-literal" && expression.elements.length === 1 &&
-        onlyElement !== undefined && rustExpressionContainsStatementBlock(onlyElement)) {
+        onlyElement !== undefined) {
         const opening = expression.kind === "vec-literal" ? "vec![" : "[";
         const rendered = printRustExprFitted(
           onlyElement,
           depth,
           column + opening.length,
         );
-        return appendToLastLine(`${opening}${rendered}`, "]");
+        const attached = appendToLastLine(`${opening}${rendered}`, "]");
+        if (rendered.includes("\n") && renderedFits(attached, column) ||
+          rustExpressionContainsStatementBlock(onlyElement)) {
+          return attached;
+        }
       }
       const elementIndent = indentText(depth + 1);
       const compactElements = expression.elements.map(printRustExpr).join(", ");

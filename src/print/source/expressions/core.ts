@@ -159,7 +159,8 @@ export function printRustExpr(expression: RustExpr): string {
         : expression.delimiter === "brackets"
           ? ["[", "]"]
           : ["{", "}"];
-      return `${expression.path}!${open}${expression.args.map(printRustExpr).join(", ")}${close}`;
+      const separator = expression.delimiter === "braces" ? " " : "";
+      return `${expression.path}!${separator}${open}${expression.args.map(printRustExpr).join(", ")}${close}`;
     }
     case "struct-literal": {
       if (expression.fields.length === 0 && expression.base === undefined) {

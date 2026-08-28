@@ -42,6 +42,7 @@ import {
 } from "./source-package-initializers.js";
 import {
   planRustSourcePackageErrors,
+  rustRuntimeErrorTypeIdentity,
   rustSourcePackageErrorTypeIdentity,
 } from "./source-package-errors.js";
 import { planRustSourcePackageComponents } from "./source-package-components.js";
@@ -630,6 +631,23 @@ function planRustWorkerDispatch(
       mainErrorType,
       providerErrorType,
     );
+    const unsupportedWorkerEntryError = {
+      kind: "call" as const,
+      path: "tsonic_rust_runtime::TsonicError::unsupported",
+      args: [{
+        kind: "str-literal" as const,
+        value: "Worker process selected an entry absent from the closed generated dispatch table.",
+      }],
+    };
+    const workerEntryError = mainErrorType.kind === "named" &&
+      mainErrorType.identity === rustRuntimeErrorTypeIdentity
+      ? unsupportedWorkerEntryError
+      : {
+          kind: "method-call" as const,
+          receiver: unsupportedWorkerEntryError,
+          method: "into",
+          args: [],
+        };
     statements.push({
       kind: "let",
       name: entryName,
@@ -684,19 +702,7 @@ function planRustWorkerDispatch(
             expr: {
               kind: "call",
               path: "Err",
-              args: [{
-                kind: "method-call",
-                receiver: {
-                  kind: "call",
-                  path: "tsonic_rust_runtime::TsonicError::unsupported",
-                  args: [{
-                    kind: "str-literal",
-                    value: "Worker process selected an entry absent from the closed generated dispatch table.",
-                  }],
-                },
-                method: "into",
-                args: [],
-              }],
+              args: [workerEntryError],
             },
           },
         ],

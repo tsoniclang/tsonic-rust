@@ -302,7 +302,7 @@ export function observe(path: string): void {
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /tsonic_rust_node::fs::watch(&path)?/u);
   assert.match(source, /watcher\.unref\(\)/u);
-  assert.match(source, /watcher\.ref_chain\(\)/u);
+  assert.match(source, /watcher\.ref_\(\)/u);
   assert.match(source, /watcher\.close\(\)/u);
 });
 
@@ -493,10 +493,10 @@ export function exerciseNodeFamilies(
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /node_events::EventEmitter::new|emit_callable/u);
   assert.match(source, /\.pipe_to\(/u);
-  assert.match(source, /node_dns::lookup_callable/u);
-  assert.match(source, /node_zlib::gzip_sync/u);
-  assert.match(source, /node_net::create_connection_source/u);
-  assert.match(source, /node_readline::create_interface/u);
+  assert.match(source, /tsonic_rust_node::dns::lookup_callable/u);
+  assert.match(source, /tsonic_rust_node::zlib::gzip_sync/u);
+  assert.match(source, /tsonic_rust_node::net::create_connection_source/u);
+  assert.match(source, /tsonic_rust_node::readline::create_interface/u);
   validateGeneratedProject("node-required-families", result.artifacts);
 });
 
@@ -544,7 +544,7 @@ export function secure(
   httpsServer.close();
 
   const outgoing = request("https://example.test/", (response): void => {
-    response.readAll();
+    response.read();
   });
   outgoing.write("body");
   outgoing.end();
@@ -587,10 +587,10 @@ if (parentPort !== undefined) {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /node_tls::connect_callable/u);
-  assert.match(source, /node_tls::create_server/u);
-  assert.match(source, /node_https::create_server_callable/u);
-  assert.match(source, /node_worker_threads::Worker::spawn_with_options/u);
+  assert.match(source, /tsonic_rust_node::tls::connect_callable/u);
+  assert.match(source, /tsonic_rust_node::tls::create_server/u);
+  assert.match(source, /tsonic_rust_node::https::create_server_callable/u);
+  assert.match(source, /tsonic_rust_node::worker_threads::Worker::spawn_with_options/u);
   assert.match(artifactText(result, "src/main.rs"), /initialize_worker_process/u);
   validateGeneratedProject("node-secure-worker-contract", result.artifacts);
 });

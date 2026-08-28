@@ -4,6 +4,8 @@ import {
   isRustJsArrayCarrier,
   isRustNeverCarrier,
   rustCarrierSupportsClone,
+  rustCarrierSupportsTrait,
+  rustJsClosedValueCarrierTraitPath,
   rustJsArrayLikeElementTargetType,
   rustJsSymbolTargetType,
   rustJsValueTargetType,
@@ -96,6 +98,13 @@ export function selectRustSourceValueConversion(
     }
     if (rustTargetTypeRefEquals(source, symbolCarrier)) {
       return rustSymbolToJsValueConversion;
+    }
+    if (rustCarrierSupportsClone(source) &&
+      rustCarrierSupportsTrait(source, rustJsClosedValueCarrierTraitPath)) {
+      return Object.freeze({
+        kind: "js-value-from-closed-carrier" as const,
+        source,
+      });
     }
     const optionElement = rustOptionElementCarrier(source);
     if (optionElement !== undefined) {

@@ -148,8 +148,8 @@ export function normalizeType(
     );
     if (declaration.genericParameters.length !== selected.genericArguments.length ||
       declaration.genericParameters.some((parameter, index) =>
-        parameter.kind !== "lifetime" || selected.genericArguments[index]?.kind !== "lifetime")) {
-      throw new Error("Generic associated Rust types have no closed provider type contract.");
+        parameter.kind !== selected.genericArguments[index]?.kind)) {
+      throw new Error("Associated Rust type arguments do not match their exact declared generic parameter kinds.");
     }
     return Object.freeze({
       kind: "associated-type",

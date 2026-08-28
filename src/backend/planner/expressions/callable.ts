@@ -11,6 +11,7 @@ import {
 } from "../program/plan-context.js";
 import {
   isRustUnitCarrier,
+  rustCarrierReferentMutationRequiresMutableBinding,
   rustCallableProtocol,
   rustClosureProtocol,
 } from "../../../target-model/types/index.js";
@@ -25,6 +26,7 @@ import {
   rustClosureCaptureFactKey,
   rustFallibleFactKey,
   rustMutatedBindingFactKey,
+  rustMutatedReferentFactKey,
   rustSourceBindingFactKey,
   rustSourceParameterAbiFactKey,
 } from "../../../analysis/facts/keys.js";
@@ -191,6 +193,13 @@ export function planCallableExpression(
       return undefined;
     }
     const byRefCopy = closureFact.byRefCopyParams[index] === true;
+    const ownedBinding = parameterCarrier.kind !== "pointer" && parameterCarrier.kind !== "reference";
+    const objectRepresentation = context.input.program.objectRepresentations.representationFor(
+      context.input.program.projectTypes.definitionForCarrier(parameterCarrier),
+    );
+    const referentMutationRequiresMutableBinding =
+      rustCarrierReferentMutationRequiresMutableBinding(parameterCarrier) &&
+      (objectRepresentation === undefined || objectRepresentation.kind === "value");
     sourceParameterPlans.push({
       parameter,
       name: parameterName,
@@ -200,7 +209,9 @@ export function planCallableExpression(
       form: parameterAbi.form,
       byRefCopy,
       mutable: bindingPattern === undefined &&
-        context.input.program.facts.getFact(parameter, rustMutatedBindingFactKey) !== undefined,
+        (context.input.program.facts.getFact(parameter, rustMutatedBindingFactKey) !== undefined ||
+          ownedBinding && referentMutationRequiresMutableBinding &&
+            context.input.program.facts.getFact(parameter, rustMutatedReferentFactKey) !== undefined),
     });
     if (bindingPattern !== undefined) {
       if (byRefCopy) {

@@ -115,12 +115,12 @@ test("unavailable argument carriers defer only when one operation row remains", 
   const unresolvedMatchScore = (_expected, actual) => actual === undefined ? 100 : undefined;
   const json = selectJsSurfaceOperation({
     ownerName: "JSON",
-    memberName: "stringify",
+    memberName: "parse",
     operationKind: "call",
     argumentCarriers: [undefined],
     argumentMatchScore: unresolvedMatchScore,
   });
-  assert.equal(json?.fact.operationId, "tsonic.rust.js.JSON.stringify.call");
+  assert.equal(json?.fact.operationId, "tsonic.rust.js.JSON.parse.call");
 
   assert.equal(selectJsSurfaceOperation({
     ownerName: "String",
@@ -176,7 +176,7 @@ export function same(): boolean {
   assert.match(text, /js_abi::object_is\(\[[\s\S]*?js_value_from_string\("same"\),[\s\S]*?js_value_from_string\("same"\),[\s\S]*?\]\)/u);
 });
 
-test("console calls lower closed primitive values and reject unsupported object carriers", () => {
+test("console calls lower closed primitive and object values", () => {
   const { result } = compileRust({
     surfaces: ["js"],
     files: {
@@ -196,15 +196,15 @@ export function write(label: string, count: int32, ok: boolean): void {
   assert.match(text, /js_abi::console_log\(&\[\n        tsonic_rust_js::abi::js_value_from_string\(&label\),\n        tsonic_rust_js::abi::JsValue::from\(count\),\n        tsonic_rust_js::abi::JsValue::from\(ok\),\n    \]\);/u);
   assert.match(text, /js_abi::console_info\(&\[\]\);/u);
 
-  assertRustTargetRejection({
+  const object = compileRust({
     surfaces: ["js"],
     files: {
       "index.ts": "export function write(): void { console.log({ ok: true }); }\n",
     },
-  }, [{
-    code: "RUST_CALL_ARGUMENT_CONVERSION_UNSUPPORTED",
-    message: "The TSTS-selected call argument cannot be represented by the selected Rust target parameter carrier.",
-  }]);
+  });
+  assert.deepEqual(object.result.diagnostics, []);
+  const objectText = artifactText(object.result, "src/index.rs");
+  assert.match(objectText, /js_abi::console_log\(&\[\{[\s\S]*?js_value_from_optional_pairs\(vec!\[[\s\S]*?Some\(\([\s\S]*?"ok",[\s\S]*?JsValue::from\([\s\S]*?state\.ok[\s\S]*?\)\),[\s\S]*?\]\)[\s\S]*?\}\]\);/u);
 });
 
 test("string padding emits fallible runtime calls for explicit and default fillers", () => {

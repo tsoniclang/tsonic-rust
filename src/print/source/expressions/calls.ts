@@ -293,7 +293,7 @@ export function printFittedCall(
       return attached;
     }
   }
-  if (!forceExpanded && arguments_.length === 1 && arguments_[0]?.kind === "reference" &&
+  if (arguments_.length === 1 && arguments_[0]?.kind === "reference" &&
     rustExpressionContainsStatementBlock(arguments_[0])) {
     const prefix = `${callable}(`;
     const rendered = printRustExprFitted(

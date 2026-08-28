@@ -239,6 +239,10 @@ export type {
   RustStructuralObjectFieldCarrierValue,
 } from "./carriers/source-types.js";
 export {
+  isRustBuiltInTargetCarrierId,
+  rustBuiltInCarrierRenderPaths,
+} from "./carriers/built-ins.js";
+export {
   inferRustTargetGenericBindings,
   inferRustTargetTypeParameterBindings,
 } from "./carriers/generic-inference.js";
@@ -267,4 +271,5 @@ export {
   rustCarrierSupportsJsEquality,
   rustCarrierSupportsObjectIdentity,
   rustCarrierSupportsTrait,
+  rustJsClosedValueCarrierTraitPath,
 } from "./carriers/traits.js";

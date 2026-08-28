@@ -32,6 +32,9 @@ import {
   rustTargetGenericTypeArguments,
 } from "../generic-arguments.js";
 
+export const rustJsClosedValueCarrierTraitPath =
+  "tsonic_rust_js::value::JsClosedValueCarrier";
+
 export function isRustCopyCarrier(carrier: TargetTypeRef | undefined): boolean {
   if (carrier === undefined) {
     return false;

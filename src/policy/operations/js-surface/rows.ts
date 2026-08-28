@@ -531,7 +531,7 @@ export const jsOperationRows = defineJsOperationRows([
 
   // JSON lane (static owner; fallible rows require a fallible context).
   { owner: "JSON", member: "parse", operationKind: "call", lane: "json", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::json_parse", argModes: ["ref"] }, result: { ref: "jsvalue" }, params: [{ ref: "string" }] } },
-  { owner: "JSON", member: "stringify", operationKind: "call", lane: "json", fallible: true, jsonValueSourceArgumentIndexes: [0], shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::json_stringify", argModes: ["ref"] }, result: { ref: "option-of-string" }, params: [{ ref: "jsvalue" }] } },
+  { owner: "JSON", member: "stringify", operationKind: "call", lane: "json", variant: "value-only", fallible: true, jsonValueSourceArgumentIndexes: [0], shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::json_stringify", argModes: ["ref"] }, result: { ref: "option-of-string" }, params: [{ ref: "jsvalue" }] } },
 
   ...consoleRows.map(({ member, path }) => ({
     owner: "Console",

@@ -1,6 +1,7 @@
 import { carrierOf } from "./classes.js";
 import {
   diagnosticInput,
+  isUpperSnakeName,
   isValidRustIdentifier,
   rustProjectTypeHasPublicImplementationAbi,
   rustSourceItemIsPubliclyReachable,
@@ -100,6 +101,9 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
       constants: variants.map((variant) => ({
         name: variant.name,
         visibility: "public",
+        ...(isUpperSnakeName(variant.name)
+          ? {}
+          : { attrs: [rustLintAttributes.nonUpperCaseGlobal] }),
         type: { kind: "named", path: "Self" },
         value: {
           kind: "struct-literal",

@@ -59,6 +59,12 @@ interface PromiseConstructor {
 }
 declare var Promise: PromiseConstructor;
 
+interface Symbol {
+  readonly description: string | undefined;
+  toString(): string;
+  valueOf(): symbol;
+}
+
 interface SymbolConstructor {
   readonly iterator: unique symbol;
   readonly asyncIterator: unique symbol;
@@ -294,11 +300,6 @@ interface ArrayConstructor {
   of<T>(...items: T[]): T[];
 }
 declare var Array: ArrayConstructor;
-
-interface ArrayLike<T> {
-  readonly length: number;
-  readonly [index: number]: T;
-}
 
 interface ReadonlyMap<K, V> extends Iterable<[K, V]> {
   readonly size: number;

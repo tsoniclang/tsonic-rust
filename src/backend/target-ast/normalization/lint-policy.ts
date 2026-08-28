@@ -18,7 +18,7 @@ export const rustLintAttributes = Object.freeze({
   nonCamelCaseType:
     '#[allow(non_camel_case_types, reason = "preserves an exact target type identity")]',
   nonUpperCaseGlobal:
-    '#[allow(non_upper_case_globals, reason = "preserves the authored module export name")]',
+    '#[allow(non_upper_case_globals, reason = "preserves the authored source name")]',
   pointerDerefOutsideUnsafeFunction:
     '#[allow(clippy::not_unsafe_ptr_arg_deref, reason = "explicit unsafe region")]',
   shouldImplementTrait:

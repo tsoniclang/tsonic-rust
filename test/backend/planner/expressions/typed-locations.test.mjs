@@ -599,7 +599,7 @@ export function reject(): void {
     },
   }, [{
     code: "RUST_UNSUPPORTED_AST",
-    message: "One source value cannot supply multiple mutable inputs to one Rust provider operation. Node kind: KindIdentifier.",
+    message: "One provider operation cannot hold overlapping mutable Rust locations from the same exact source storage root. Node kind: KindIdentifier.",
   }]);
 });
 

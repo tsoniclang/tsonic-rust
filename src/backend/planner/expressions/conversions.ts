@@ -8,6 +8,7 @@ import {
   isRustFinalizedArrayInput,
   isRustFinalizedConstantInput,
   isRustFinalizedSliceInput,
+  isRustFinalizedSourceInput,
   isRustFinalizedTaggedArrayInput,
   validateRustFinalizedOperationAbi,
 } from "../../../analysis/facts/finalized-operation-abi.js";
@@ -107,6 +108,7 @@ export function planProviderOperationExpression(
     receiverNode,
     argumentNodes,
     planExpression,
+    planProviderOperationExpression,
     options.overrides?.inputs,
   );
   if (evaluationScope.kind === "failed") {
@@ -228,11 +230,22 @@ export function planProviderOperationExpression(
         construction.targetSourceFile,
       );
       const entryIdentity = context.workerEntryIdentityByFileName.get(targetFileName);
-      if (entryIdentity === undefined || args[form.targetArgumentIndex] === undefined) {
+      const moduleInput = fact.abi.targetArguments[form.targetArgumentIndex];
+      const moduleIdentity = moduleInput !== undefined && isRustFinalizedSourceInput(moduleInput) &&
+          moduleInput.source.kind === "argument" &&
+          moduleInput.source.sourceIndex === form.sourceArgumentIndex
+        ? moduleInput.mode === "ref"
+          ? { kind: "str-literal" as const, value: entryIdentity ?? "" }
+          : moduleInput.mode === "value"
+            ? { kind: "string-literal" as const, value: entryIdentity ?? "" }
+            : undefined
+        : undefined;
+      if (entryIdentity === undefined || args[form.targetArgumentIndex] === undefined ||
+        moduleIdentity === undefined) {
         context.diagnostics.push(missingFactDiagnostic(
           diagnosticInput(context, operationNode),
           "rust.backend.source-module-entry-identity",
-          "Selected source-module constructor has no exact generated worker-entry identity.",
+          "Selected source-module constructor has no exact generated worker-entry identity and immutable target argument mode.",
         ));
         return undefined;
       }
@@ -242,7 +255,7 @@ export function planProviderOperationExpression(
         path: form.path,
         args: args.map((argument, index) =>
           index === form.targetArgumentIndex
-            ? { kind: "string-literal", value: entryIdentity }
+            ? moduleIdentity
             : argument),
         ...(concreteTargetGenericArguments === undefined
           ? {}

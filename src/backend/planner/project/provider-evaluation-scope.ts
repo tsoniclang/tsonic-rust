@@ -1,5 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import {
+  ElementAccessExpression_ArgumentExpression,
   Node_Expression,
   type SourceExpressionEffects,
 } from "@tsonic/target-api/source";
@@ -45,6 +46,17 @@ import {
   allocateRustSyntheticName,
   createRustSyntheticNameState,
 } from "../names/synthetic.js";
+import {
+  planRustDirectStorageCore,
+  type RustProviderOperationExpressionPlanner,
+} from "../expressions/updates/direct-storage.js";
+import {
+  rustDirectProjectFieldStoragePath,
+  rustProjectObjectRepresentation,
+} from "../objects/project-storage.js";
+import {
+  enterRustProjectObjectMutableState,
+} from "../objects/project-objects.js";
 
 export interface RustFinalizedInputPlanOverrides {
   readonly sourceValues: ReadonlyMap<Node, RustExpr>;
@@ -65,6 +77,10 @@ export type RustProviderEvaluationScopeSelection =
         readonly name: string;
         readonly ownerName: string;
       }[];
+      readonly mutableProjectStates: readonly {
+        readonly receiver: RustExpr;
+        readonly stateName: string;
+      }[];
       readonly overrides: RustFinalizedInputPlanOverrides;
     };
 
@@ -74,6 +90,7 @@ export function planRustProviderEvaluationScope(
   receiverNode: Node | undefined,
   argumentNodes: readonly (Node | undefined)[],
   planExpression: RustExpressionPlanner,
+  planProviderOperation: RustProviderOperationExpressionPlanner,
   preplannedInputs?: ReadonlyMap<RustFinalizedSourceInput, RustExpr>,
 ): RustProviderEvaluationScopeSelection {
   const mutableInputs = collectMutableInputs(
@@ -105,9 +122,9 @@ export function planRustProviderEvaluationScope(
     mutableInputs,
     preplannedInputs,
   );
-  const hasPromotedInput = [...mutableInputs.values()].some((input) =>
-    input.kind === "promoted");
-  if (!hasPromotedInput && stabilizationKeys.size === 0) {
+  const hasManagedInput = [...mutableInputs.values()].some((input) =>
+    input.kind !== "owned");
+  if (!hasManagedInput && stabilizationKeys.size === 0) {
     return { kind: "none" };
   }
   const bindings: {
@@ -116,6 +133,11 @@ export function planRustProviderEvaluationScope(
     readonly mutable?: boolean;
   }[] = [];
   const mutableLocations: { readonly name: string; readonly ownerName: string }[] = [];
+  const mutableProjectStates: { readonly receiver: RustExpr; readonly stateName: string }[] = [];
+  const mutableProjectStateByRoot = new Map<Node, {
+    readonly receiver: RustExpr;
+    readonly stateName: string;
+  }>();
   const sourceValues = new Map<Node, RustExpr>();
   const inputOverrides = new Map<RustFinalizedSourceInput, RustExpr>();
   const nameRoot = receiverNode ?? argumentNodes.find((node): node is Node => node !== undefined) ??
@@ -134,16 +156,71 @@ export function planRustProviderEvaluationScope(
       }
       continue;
     }
-    if (!stabilizationKeys.has(slot.key)) {
+    if (mutable?.kind === "project-field") {
+      if (stabilizationKeys.has(slot.key)) {
+        context.diagnostics.push(unsupportedConstructDiagnostic(
+          diagnosticInput(context, mutable.node),
+          "rust.backend.provider-project-field-order",
+          "Mutable project-field provider input cannot move across another effectful source input.",
+        ));
+        return { kind: "failed" };
+      }
+      const rootKey = mutable.rootDeclaration ?? mutable.node;
+      let projectState = mutableProjectStateByRoot.get(rootKey);
+      if (projectState === undefined) {
+        const receiver = planExpression(mutable.receiverNode, context);
+        if (receiver === undefined) {
+          return { kind: "failed" };
+        }
+        projectState = {
+          receiver,
+          stateName: allocateRustSyntheticName(syntheticNames, `project_state_${index}`),
+        };
+        mutableProjectStateByRoot.set(rootKey, projectState);
+        mutableProjectStates.push(projectState);
+      }
+      const storage = mutable.storagePath.reduce<RustExpr>(
+        (receiver, name) => ({ kind: "field", receiver, name }),
+        { kind: "path", path: projectState.stateName },
+      );
+      for (const input of mutable.inputs) {
+        inputOverrides.set(input, {
+          kind: "reference",
+          expr: storage,
+          mutable: true,
+        });
+      }
       continue;
     }
     if (mutable?.kind === "direct") {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        diagnosticInput(context, mutable.node),
-        "rust.backend.provider-direct-mutable-stabilization",
-        "Direct mutable provider input cannot be materialized without changing its exact storage identity.",
-      ));
-      return { kind: "failed" };
+      if (stabilizationKeys.has(slot.key)) {
+        context.diagnostics.push(unsupportedConstructDiagnostic(
+          diagnosticInput(context, mutable.node),
+          "rust.backend.provider-direct-mutable-stabilization",
+          "Direct mutable provider input cannot move across another effectful source input without changing its exact storage identity.",
+        ));
+        return { kind: "failed" };
+      }
+      const storage = planRustDirectStorageCore(
+        mutable.node,
+        context,
+        preplannedInputs,
+        planExpression,
+        planProviderOperation,
+      );
+      if (storage === undefined) {
+        context.diagnostics.push(missingFactDiagnostic(
+          diagnosticInput(context, mutable.node),
+          "rust.backend.provider-direct-mutable-storage",
+          "Direct mutable provider input has no exact Rust storage expression.",
+        ));
+        return { kind: "failed" };
+      }
+      sourceValues.set(slot.node, storage);
+      continue;
+    }
+    if (!stabilizationKeys.has(slot.key)) {
+      continue;
     }
     const value = planExpression(slot.node, context);
     if (value === undefined) {
@@ -161,6 +238,7 @@ export function planRustProviderEvaluationScope(
     kind: "selected",
     bindings,
     mutableLocations,
+    mutableProjectStates,
     overrides: { sourceValues, inputs: inputOverrides },
   };
 }
@@ -181,6 +259,16 @@ export function applyRustProviderEvaluationScope(
         body: value,
       }],
     };
+  }
+  for (const projectState of [...scope.mutableProjectStates].reverse()) {
+    value = enterRustProjectObjectMutableState(
+      projectState.receiver,
+      projectState.stateName,
+      value,
+    );
+  }
+  if (scope.bindings.length === 0) {
+    return value;
   }
   return {
     kind: "block",
@@ -214,10 +302,15 @@ function providerInputStabilizationKeys(
   for (const key of targetOrder) {
     targetCounts.set(key, (targetCounts.get(key) ?? 0) + 1);
   }
-  const effects = new Map(sourceSlots.map((slot) => [
-    slot.key,
-    context.input.program.sourceNavigation.expressionEffects(slot.node),
-  ]));
+  const effects = new Map(sourceSlots.map((slot) => {
+    const mutable = mutableInputs.get(slot.key);
+    return [
+      slot.key,
+      mutable?.kind === "direct" || mutable?.kind === "project-field"
+        ? providerMutableStorageEffects(mutable.node, context)
+        : context.input.program.sourceNavigation.expressionEffects(slot.node),
+    ] as const;
+  }));
   const sourceEffectOrder = sourceSlots
     .filter((slot) => !preplannedKeys.has(slot.key) &&
       expressionHasEffects(effects.get(slot.key)))
@@ -336,6 +429,14 @@ type MutableProviderInput =
       readonly rootDeclaration?: Node;
     }
   | {
+      readonly kind: "project-field";
+      readonly node: Node;
+      readonly inputs: RustFinalizedSourceInput[];
+      readonly receiverNode: Node;
+      readonly storagePath: readonly string[];
+      readonly rootDeclaration?: Node;
+    }
+  | {
       readonly kind: "owned";
       readonly node: Node;
       readonly inputs: RustFinalizedSourceInput[];
@@ -399,13 +500,22 @@ function collectMutableInputs(
           rootDeclaration: location.rootDeclaration,
         });
       } else {
-        const direct = providerMutableInputIsDirect(node, context);
-        const rootDeclaration = direct
-          ? providerDirectMutableRoot(node, context)
-          : undefined;
+        const projectField = providerMutableProjectField(node, context);
+        const direct = projectField === undefined && providerMutableInputIsDirect(node, context);
+        const rootDeclaration = projectField?.rootDeclaration ??
+          (direct ? providerDirectMutableRoot(node, context) : undefined);
         mutableInputs.set(
           key,
-          direct
+          projectField !== undefined
+            ? {
+                kind: "project-field",
+                node,
+                inputs: [input],
+                receiverNode: projectField.receiverNode,
+                storagePath: projectField.storagePath,
+                ...(rootDeclaration === undefined ? {} : { rootDeclaration }),
+              }
+            : direct
             ? {
                 kind: "direct",
                 node,
@@ -449,10 +559,11 @@ function mutableRootsAreDisjoint(
   for (const mutable of mutableInputs.values()) {
     const root = mutable.kind === "promoted"
       ? mutable.rootDeclaration
-      : mutable.kind === "direct"
+      : mutable.kind === "direct" || mutable.kind === "project-field"
         ? mutable.rootDeclaration
         : undefined;
-    if (mutable.kind === "direct" && root === undefined && mutableInputs.size > 1) {
+    if ((mutable.kind === "direct" || mutable.kind === "project-field") &&
+      root === undefined && mutableInputs.size > 1) {
       context.diagnostics.push(unsupportedConstructDiagnostic(
         diagnosticInput(context, mutable.node),
         "rust.backend.typed-location-mutable-alias",
@@ -558,7 +669,99 @@ function providerMutableInputIsDirect(
     operation?.kind === "source-field" &&
       operation.storage === "project-object" &&
       operation.valueSemantics.kind === "stored" &&
-      operation.dispatch === undefined;
+      operation.dispatch === undefined &&
+      rustProjectObjectRepresentation(operation.receiverCarrier, context)?.kind === "value";
+}
+
+function providerMutableProjectField(
+  node: Node,
+  context: RustPlanContext,
+): {
+  readonly receiverNode: Node;
+  readonly storagePath: readonly string[];
+  readonly rootDeclaration?: Node;
+} | undefined {
+  const operation = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
+  if (operation?.kind !== "source-field" || operation.storage !== "project-object" ||
+    operation.valueSemantics.kind !== "stored" || operation.dispatch !== undefined) {
+    return undefined;
+  }
+  const representation = rustProjectObjectRepresentation(operation.receiverCarrier, context);
+  const storagePath = rustDirectProjectFieldStoragePath(
+    operation.receiverCarrier,
+    operation.storageIndex,
+    context,
+  );
+  const receiverNode = Node_Expression(context.input.program.source.ast, node);
+  if (representation === undefined || representation.kind === "value" ||
+    representation.kind === "shared-immutable" || storagePath === undefined ||
+    receiverNode === undefined) {
+    return undefined;
+  }
+  const rootDeclaration = providerDirectMutableRoot(receiverNode, context);
+  return {
+    receiverNode,
+    storagePath,
+    ...(rootDeclaration === undefined ? {} : { rootDeclaration }),
+  };
+}
+
+function providerMutableStorageEffects(
+  node: Node,
+  context: RustPlanContext,
+): SourceExpressionEffects {
+  const { ast } = context.input.program.source;
+  const kind = ast.kindName(node);
+  if (kind === "KindParenthesizedExpression") {
+    const inner = Node_Expression(ast, node);
+    return inner === undefined
+      ? context.input.program.sourceNavigation.expressionEffects(node)
+      : providerMutableStorageEffects(inner, context);
+  }
+  if (kind === "KindIdentifier" || kind === "KindThisExpression" ||
+    kind === "KindThisKeyword") {
+    return noSourceExpressionEffects;
+  }
+  const operation = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
+  const receiver = Node_Expression(ast, node);
+  if (receiver === undefined) {
+    return context.input.program.sourceNavigation.expressionEffects(node);
+  }
+  if (kind === "KindPropertyAccessExpression" &&
+    (rustTargetOperationIsDirectLocation(operation) ||
+      operation?.kind === "source-field" && operation.valueSemantics.kind === "stored" &&
+        operation.dispatch === undefined)) {
+    return providerMutableStorageEffects(receiver, context);
+  }
+  if (kind === "KindElementAccessExpression" && rustTargetOperationIsDirectLocation(operation)) {
+    const index = ElementAccessExpression_ArgumentExpression(ast, node);
+    return mergeSourceExpressionEffects(
+      providerMutableStorageEffects(receiver, context),
+      index === undefined
+        ? context.input.program.sourceNavigation.expressionEffects(node)
+        : context.input.program.sourceNavigation.expressionEffects(index),
+    );
+  }
+  return context.input.program.sourceNavigation.expressionEffects(node);
+}
+
+const noSourceExpressionEffects: SourceExpressionEffects = Object.freeze({
+  invokes: false,
+  mutates: false,
+  suspends: false,
+  mayThrow: false,
+});
+
+function mergeSourceExpressionEffects(
+  left: SourceExpressionEffects,
+  right: SourceExpressionEffects,
+): SourceExpressionEffects {
+  return {
+    invokes: left.invokes || right.invokes,
+    mutates: left.mutates || right.mutates,
+    suspends: left.suspends || right.suspends,
+    mayThrow: left.mayThrow || right.mayThrow,
+  };
 }
 
 function providerDirectMutableRoot(

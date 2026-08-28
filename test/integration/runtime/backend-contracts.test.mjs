@@ -455,8 +455,12 @@ export enum Duplicate {
   Third = 2,
 }
 
+function same(left: Duplicate, right: Duplicate): boolean {
+  return left === right;
+}
+
 export function main(): void {
-  if (Duplicate.First !== Duplicate.Second || Duplicate.First === Duplicate.Third) {
+  if (!same(Duplicate.First, Duplicate.Second) || same(Duplicate.First, Duplicate.Third)) {
     throw new Error("duplicate enum discriminants were not preserved");
   }
 }
@@ -466,10 +470,17 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /#\[repr\(transparent\)\]\npub struct Duplicate \{/u);
-  assert.match(text, /pub const First: Self = Self \{\n\s+value: 1,/u);
-  assert.match(text, /pub const Second: Self = Self \{\n\s+value: 1,/u);
-  assert.match(text, /pub const Third: Self = Self \{\n\s+value: 2,/u);
+  assert.match(
+    text,
+    /#\[repr\(transparent\)\]\n#\[derive\(Clone, Copy, Debug, PartialEq, Eq, Hash\)\]\npub struct Duplicate \{/u,
+  );
+  assert.equal(
+    text.match(/#\[allow\(non_upper_case_globals, reason = "preserves the authored source name"\)\]/gu)?.length,
+    3,
+  );
+  assert.match(text, /pub const First: Self = Self \{ value: 1 \};/u);
+  assert.match(text, /pub const Second: Self = Self \{ value: 1 \};/u);
+  assert.match(text, /pub const Third: Self = Self \{ value: 2 \};/u);
   validateGeneratedProject("duplicate-enum-discriminants", result.artifacts, { run: true });
 });
 

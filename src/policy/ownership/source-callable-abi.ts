@@ -167,6 +167,12 @@ export function resolveRustContextualParameterAbi(
   const authoredCarrier = authoredType === undefined
     ? resolveRustTargetTypeRef(parameter, context, options)
     : resolveRustTargetTypeRef(authoredType, context, options);
+  const authoredSemanticType = authoredType === undefined
+    ? undefined
+    : context.currentSemantics.types.authoredType(authoredType);
+  const authoredTypeAcceptsContextualCarrier = authoredSemanticType !== undefined &&
+    (context.currentSemantics.types.isAny(authoredSemanticType) ||
+      context.currentSemantics.types.isUnknown(authoredSemanticType));
   const selectedValueCarrier = form === "optional"
     ? selectedParameterCarrier
     : form === "default"
@@ -189,7 +195,7 @@ export function resolveRustContextualParameterAbi(
           lifetimeBinders.authored,
           lifetimeBinders.selected,
         );
-  if (authoredType !== undefined &&
+  if (authoredType !== undefined && !authoredTypeAcceptsContextualCarrier &&
     (authoredCarrier === undefined || authoredExpectation === undefined ||
       !carriersEqual(authoredCarrier, authoredExpectation))) {
     return undefined;

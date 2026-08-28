@@ -38,7 +38,7 @@ import { analyzeRustSourceModuleConstructions } from "../source-modules/index.js
 
 const rustJsTimerEpilogue: RustProviderBinaryEpilogueRow = Object.freeze({
   id: "tsonic.rust.js.timers",
-  path: "js_abi::run_timers",
+  path: "tsonic_rust_js::abi::run_timers",
   requiredCrate: "tsonic_rust_js",
   isFallible: true,
   errorBoundary: "target-runtime",

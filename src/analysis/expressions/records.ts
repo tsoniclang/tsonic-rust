@@ -32,6 +32,8 @@ import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { selectSourceObjectLiteralAccessors } from "@tsonic/target-api/source";
 import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
+import { selectRustValueCarrierReconciliation } from "../../policy/types/value-carrier-reconciliation.js";
+import { recordRustValueCarrierReconciliation } from "../facts/value-carrier-queries.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustTargetOperationFact } from "../facts/keys.js";
@@ -159,13 +161,34 @@ export function resolveRecordLiteralCarrier(
   const selectedSourceType = contextualSelection.kind === "selected"
     ? contextualSelection.type
     : sourceType;
-  const selectedExpected = expected ?? resolveRustTargetTypeRef(
+  let selectedExpected = expected ?? resolveRustTargetTypeRef(
     selectedSourceType,
     rustResolutionContext(walk, expression),
     walk.operationOptions,
   );
   if (selectedExpected === undefined) {
     return undefined;
+  }
+  let contextualReconciliation: import("../../policy/types/value-carrier-reconciliation.js").RustAppliedValueCarrierReconciliation | undefined;
+  if (expected !== undefined && rustSourceTypeCarrierValue(selectedExpected)?.shape !== "object" &&
+    rustSourceUnionCarrierValue(selectedExpected) === undefined &&
+    rustStructuralObjectCarrierValue(selectedExpected) === undefined) {
+    const sourceCarrier = resolveRustTargetTypeRef(
+      sourceType,
+      rustResolutionContext(walk, expression),
+      walk.operationOptions,
+    );
+    const reconciliation = sourceCarrier === undefined
+      ? undefined
+      : selectRustValueCarrierReconciliation(
+          sourceCarrier,
+          selectedExpected,
+          walk.context.projectTypes,
+        );
+    if (reconciliation?.kind === "conversion") {
+      selectedExpected = sourceCarrier!;
+      contextualReconciliation = reconciliation;
+    }
   }
   const indexedDefinition = walk.context.projectTypes.definitionForCarrier(selectedExpected);
   const indexedLayout = indexedDefinition?.kind === "interface"
@@ -864,5 +887,13 @@ export function resolveRecordLiteralCarrier(
     contribution.kind === "spread" && contribution.methods.length > 0)) {
     walk.objectLiteralMethodSpreadExpressions.push(expression);
   }
-  return setCarrierFact(walk, expression, resultCarrier);
+  const finalizedCarrier = setCarrierFact(walk, expression, resultCarrier);
+  if (finalizedCarrier !== undefined && contextualReconciliation !== undefined) {
+    recordRustValueCarrierReconciliation(
+      walk.context.facts,
+      expression,
+      contextualReconciliation,
+    );
+  }
+  return finalizedCarrier;
 }

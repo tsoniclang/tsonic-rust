@@ -46,6 +46,7 @@ export interface RustObjectRepresentationAnalysisInput {
   readonly projectTypes: RustProjectTypePolicy;
   readonly sourceFiles: readonly SourceFile[];
   readonly hasPromotedStorage: (declaration: Node) => boolean;
+  readonly hasMutableStorageUse: (declaration: Node) => boolean;
 }
 
 export interface RustObjectRepresentationPlanRegistry
@@ -248,11 +249,13 @@ function projectDefinitionIsMutable(
   input: {
     readonly ast: AstReader;
     readonly navigation: SourceProgramNavigation;
+    readonly hasMutableStorageUse: (declaration: Node) => boolean;
   },
 ): boolean {
   return input.ast.members(definition.declaration).some((member) =>
     member !== undefined && !input.ast.hasModifierKind(member, "static") &&
     (mutatingMethods.has(member) ||
+      input.hasMutableStorageUse(member) ||
       input.navigation.declarationUseSummary(member).mutatedAfterInitialization));
 }
 
