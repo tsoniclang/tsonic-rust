@@ -8,3 +8,10 @@ pub fn check(condition: bool) {
 pub fn fail(message: String) -> ! {
     panic!("{message}");
 }
+
+#[macro_export]
+macro_rules! sum_pair {
+    ($left:expr, $right:expr) => {
+        $left + $right
+    };
+}

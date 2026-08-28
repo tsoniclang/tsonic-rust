@@ -315,6 +315,48 @@ test("reference reborrow facts are exact compiler-owned carrier transitions", ()
   ), false);
 });
 
+test("opaque carriers preserve and substitute lifetime, type, and const captures", () => {
+  const lifetime = parameterLifetime("lifetime-a", "a");
+  const constParameter = { kind: "parameter", identity: "const-n", name: "N" };
+  const carrier = {
+    kind: "impl-trait",
+    id: "acme.opaque",
+    bounds: [{
+      kind: "trait-ref",
+      id: "core.Copy",
+      path: "core::marker::Copy",
+      genericArguments: [],
+      associatedConstraints: [],
+    }],
+    outlives: [lifetime],
+    captures: [
+      { kind: "lifetime", lifetime },
+      { kind: "type", type: { kind: "type-parameter", name: "T" } },
+      { kind: "const", value: constParameter },
+    ],
+  };
+
+  assert.equal(isRustTargetTypeRef(carrier), true);
+  assert.equal(rustTargetTypeRefEquals(carrier, structuredClone(carrier)), true);
+  assert.equal(rustTargetTypeRefEquals(carrier, {
+    ...carrier,
+    captures: carrier.captures.slice(0, 2),
+  }), false);
+
+  const substituted = substituteRustTargetGenerics(
+    carrier,
+    new Map([["T", int32]]),
+    new Map([[rustLifetimeKey(lifetime), { kind: "static" }]]),
+    new Map([[constParameter.identity, { kind: "integer", value: "4" }]]),
+  );
+  assert.deepEqual(substituted.outlives, [{ kind: "static" }]);
+  assert.deepEqual(substituted.captures, [
+    { kind: "lifetime", lifetime: { kind: "static" } },
+    { kind: "type", type: int32 },
+    { kind: "const", value: { kind: "integer", value: "4" } },
+  ]);
+});
+
 test("malformed, duplicate, and wrong-kind lifetime carrier shapes fail closed", () => {
   const bound = boundLifetime("binder", "a", "a");
   const invalid = [

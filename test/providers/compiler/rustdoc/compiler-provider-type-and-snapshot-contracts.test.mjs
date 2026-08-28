@@ -35,7 +35,7 @@ const fixtureCrate = resolve(repositoryRoot, "test/fixtures/crates/acme_widget")
 const runtimeCrate = resolve(repositoryRoot, "../rust-runtime/crates/tsonic_rust_runtime");
 const testRoot = resolve(repositoryRoot, ".temp/compiler-provider-tests");
 
-test("compiler provider rejects Rust scalar char instead of conflating it with neutral UTF-16 char", () => {
+test("compiler provider preserves Rust scalar char without conflating neutral UTF-16 char", () => {
   const module = {
     protocolVersion: rustCompilerProviderProtocolVersion,
     projectDigest: "char-contract",
@@ -79,13 +79,25 @@ test("compiler provider rejects Rust scalar char instead of conflating it with n
     standardTypeLocations: [],
   };
 
-  assert.throws(
-    () => projectRustCompilerModule(module, {
-      providerModuleId: "char_contract",
-      moduleSpecifier: "@tsonic/rust/crates/char_contract/index.js",
-    }),
-    /Rust primitive 'char' has no source primitive contract/u,
-  );
+  const projection = projectRustCompilerModule(module, {
+    providerModuleId: "char_contract",
+    moduleSpecifier: "@tsonic/rust/crates/char_contract/index.js",
+  });
+  assert.deepEqual(projection.declarationModel.imports, [{
+    moduleSpecifier: "@tsonic/rust/types.js",
+    namedImports: [{ exportedName: "scalar" }],
+  }]);
+  const declaration = projection.declarationModel.exports[0];
+  assert.equal(declaration.signatures[0].parameters[0].type.exportName, "scalar");
+  assert.equal(declaration.signatures[0].returnType.exportName, "scalar");
+  assert.deepEqual(projection.operations[0].parameterCarriers, [{
+    kind: "target-named",
+    id: "rust.native.char",
+  }]);
+  assert.deepEqual(projection.operations[0].resultCarrier, {
+    kind: "target-named",
+    id: "rust.native.char",
+  });
 });
 
 test("compiler provider retains incomplete Rust enums as opaque native types", () => {

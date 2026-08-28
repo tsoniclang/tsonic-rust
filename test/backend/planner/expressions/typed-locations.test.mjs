@@ -480,6 +480,63 @@ export function main(): void {
   assert.equal(run.status, 0);
 });
 
+test("mutable provider field and element inputs evaluate each selected place once", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    packages: [acmeVectorsPackage(), acmeTestingPackage()],
+    target: {
+      id: "rust",
+      options: { outputType: "bin", crateName: "typed_location_element_argument_proof" },
+    },
+    files: {
+      "index.ts": `
+import { mutableBorrow } from "@tsonic/core/lang.js";
+import type { int32 } from "@tsonic/core/types.js";
+import { Vector, scale } from "@acme/vectors";
+import { check } from "@acme/testing";
+
+class Holder {
+  value: Vector;
+
+  constructor(value: Vector) {
+    this.value = value;
+  }
+}
+
+let receiverCalls: int32 = 0;
+
+function select(holder: Holder): Holder {
+  receiverCalls++;
+  return holder;
+}
+
+export function main(): void {
+  let holder = new Holder(new Vector(11, 13));
+  scale(mutableBorrow(select(holder).value), 2);
+  check(receiverCalls === 1);
+  check(holder.value.x === 22);
+  check(holder.value.y === 26);
+
+  let values: Vector[] = [new Vector(2, 3), new Vector(5, 7)];
+  let selected: int32 = 0;
+  scale(mutableBorrow(values[selected++]), 3);
+  check(selected === 1);
+  check(values[0].x === 6);
+  check(values[0].y === 9);
+  check(values[1].x === 5);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const run = validateGeneratedProject(
+    "typed-location-element-argument-proof-bin",
+    result.artifacts,
+    { run: true },
+  );
+  assert.equal(run.status, 0);
+});
+
 test("multiple promoted mutable inputs require disjoint storage roots", { timeout: 300_000 }, () => {
   const distinct = compileRust({
     packages: [acmeVectorsPackage(), acmeTestingPackage()],
@@ -493,6 +550,16 @@ import { addressOf, loadPointer, mutableBorrow } from "@tsonic/core/lang.js";
 import { Vector, mutateBoth } from "@acme/vectors";
 import { check } from "@acme/testing";
 
+class Pair {
+  left: Vector;
+  right: Vector;
+
+  constructor(left: Vector, right: Vector) {
+    this.left = left;
+    this.right = right;
+  }
+}
+
 export function main(): void {
   let left = new Vector(1, 2);
   let right = new Vector(3, 4);
@@ -501,6 +568,11 @@ export function main(): void {
   mutateBoth(mutableBorrow(left), mutableBorrow(right));
   check(loadPointer(leftAlias).x === 2);
   check(loadPointer(rightAlias).y === 5);
+
+  let pair = new Pair(new Vector(10, 20), new Vector(30, 40));
+  mutateBoth(mutableBorrow(pair.left), mutableBorrow(pair.right));
+  check(pair.left.x === 11);
+  check(pair.right.y === 41);
 }
 `,
     },
@@ -517,36 +589,6 @@ export function main(): void {
     packages: [acmeVectorsPackage()],
     files: {
       "index.ts": `
-import { addressOf, mutableBorrow } from "@tsonic/core/lang.js";
-import { Vector, mutateBoth } from "@acme/vectors";
-
-class Pair {
-  left: Vector;
-  right: Vector;
-
-  constructor(left: Vector, right: Vector) {
-    this.left = left;
-    this.right = right;
-  }
-}
-
-export function reject(): void {
-  let pair = new Pair(new Vector(1, 2), new Vector(3, 4));
-  addressOf(pair.left);
-  addressOf(pair.right);
-  mutateBoth(mutableBorrow(pair.left), mutableBorrow(pair.right));
-}
-`,
-    },
-  }, [{
-    code: "RUST_UNSUPPORTED_AST",
-    message: "One provider operation cannot hold multiple mutable Rust locations with the same exact source storage root. Node kind: KindPropertyAccessExpression.",
-  }]);
-
-  assertRustTargetRejection({
-    packages: [acmeVectorsPackage()],
-    files: {
-      "index.ts": `
 import { Vector, mutateBoth } from "@acme/vectors";
 
 export function reject(): void {
@@ -557,7 +599,7 @@ export function reject(): void {
     },
   }, [{
     code: "RUST_UNSUPPORTED_AST",
-    message: "One provider operation cannot hold multiple mutable Rust locations with the same exact source storage root. Node kind: KindIdentifier.",
+    message: "One source value cannot supply multiple mutable inputs to one Rust provider operation. Node kind: KindIdentifier.",
   }]);
 });
 

@@ -38,13 +38,13 @@ const testRoot = resolve(repositoryRoot, ".temp/compiler-provider-tests");
 test("Cargo provider virtual imports compile, execute, and preserve the user-owned manifest", { timeout: 300_000 }, () => {
   const project = createUserCargoProject();
   const source = `
-import type { int32 } from "@tsonic/core/types.js";
+import type { FixedArray, int32 } from "@tsonic/core/types.js";
 import type { FunctionPointer } from "@tsonic/core/types.js";
 import { unsafeContext } from "@tsonic/core/lang.js";
 import type { constPtr, i8, mutPtr, u8 } from "@tsonic/rust/types.js";
 import { Box } from "@tsonic/rust/std/boxed.js";
 import type { Pair } from "@tsonic/rust/crates/widget_alias/index.js";
-import { ANSWER, CheckedWidget, GenericFactory, GLOBAL_COUNT, MUTABLE_COUNT, Mode, NumberBits, SimpleMode, Widget, apply, borrowed_answer, borrowed_label, byte_ptr, checked_double, cloned, copied, dangerous, double, duplicate, featured, fill, first_byte, identity, integer_bits, integer_format, maybe_positive, mode_code, pair_sum, preserve_borrowed, simple_mode_code, singleton_map, sum, variadic_printf } from "@tsonic/rust/crates/widget_alias/index.js";
+import { ANSWER, CheckedWidget, GenericFactory, GLOBAL_COUNT, MUTABLE_COUNT, Mode, NON_CLONE_STATIC, NumberBits, SimpleMode, StructuredMode, Widget, apply, borrowed_answer, borrowed_label, byte_ptr, checked_double, cloned, copied, dangerous, double, duplicate, featured, fill, first_byte, first_mixed_item, identity, integer_bits, integer_format, maybe_positive, mixed_item, mode_code, non_clone_static_value, pair_sum, pin_widget, preserve_borrowed, scalar_code, scalar_smile, simple_mode_code, singleton_map, structured_mode_value, sum, variadic_printf } from "@tsonic/rust/crates/widget_alias/index.js";
 import { int_widget } from "@tsonic/rust/crates/widget_alias/factory.js";
 import { triple } from "@tsonic/rust/crates/widget_alias/math.js";
 
@@ -94,6 +94,11 @@ export function main(): void {
   if (Widget.into_box_value<int32>(boxed) !== 13) {
     throw new Error("custom receiver mapping failed");
   }
+  let pinnedWidget = new Widget<int32>(19);
+  const pinned = pin_widget(pinnedWidget);
+  if (Widget.pinned_count<int32>(pinned) !== 1) {
+    throw new Error("borrowed custom receiver mapping failed");
+  }
   const metric = Widget.from_metric<int32>(14);
   if (metric.measure(2) !== 2 || Widget.UNIT<int32>() !== 1) {
     throw new Error("trait method or associated constant mapping failed");
@@ -125,6 +130,15 @@ export function main(): void {
   if (ANSWER !== 42 || mode_code(Mode.Read) !== 1 || mode_code(Mode.Payload(9)) !== 9) {
     throw new Error("constant or enum mapping failed");
   }
+  if (structured_mode_value(StructuredMode.Named(23)) !== 23) {
+    throw new Error("struct-payload enum variant mapping failed");
+  }
+  if (non_clone_static_value(NON_CLONE_STATIC) !== 37) {
+    throw new Error("non-Clone static reference mapping failed");
+  }
+  if (scalar_code(scalar_smile()) !== 128512) {
+    throw new Error("native Rust scalar char mapping failed");
+  }
   if (GLOBAL_COUNT !== 1 || simple_mode_code(SimpleMode.On) !== 1) {
     throw new Error("static or unit enum mapping failed");
   }
@@ -155,6 +169,10 @@ export function main(): void {
   const pair: Pair<int32> = [4, 5];
   if (pair_sum(pair) !== 9) {
     throw new Error("type alias mapping failed");
+  }
+  const mixedValues: FixedArray<int32, 2> = [61, 67];
+  if (first_mixed_item(mixed_item(mixedValues)) !== 61) {
+    throw new Error("mixed lifetime/type/const GAT mapping failed");
   }
   const numbers: int32[] = [1, 2, 3];
   const bytes: u8[] = [1, 2, 3];
@@ -213,6 +231,10 @@ export function main(): void {
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /let owned_borrowed_label: String = String::from\(widget_alias::borrowed_label\(\)\);/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::borrowed_label\(\) != "widget"/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::Widget::into_box_value\(boxed\)/u);
+  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::Widget::pinned_count\(widget_alias::pin_widget\(&mut pinned_widget\)\)/u);
+  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::StructuredMode::Named \{ value: 23 \}/u);
+  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::non_clone_static_value\(&?widget_alias::NON_CLONE_STATIC\)/u);
+  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::scalar_code\(widget_alias::scalar_smile\(\)\)/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /<widget_alias::Widget<i32> as widget_alias::Metric<i32>>::measure/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /<widget_alias::Widget<i32> as widget_alias::Metric<i32>>::UNIT/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /unsafe \{[\s\S]*widget_alias::MUTABLE_COUNT = 4;[\s\S]*widget_alias::MUTABLE_COUNT[\s\S]*bits\.integer[\s\S]*widget_alias::variadic_printf\(format, variadic_value\)/u);
@@ -318,6 +340,7 @@ import {
   inspect_view,
   lending_value,
   opaque_borrow,
+  opaque_mixed,
   read_lending_value,
 } from "@tsonic/rust/crates/widget_alias/index.js";
 
@@ -344,6 +367,10 @@ function incrementView<L extends Life>(view: Mut<LifetimeView, L>): void {
   view.increment();
 }
 
+function retainMixedOpaque<L extends Life>(value: Ref<int32, L>): void {
+  opaque_mixed<L, int32, 3>(value);
+}
+
 export function main(): void {
   const short: int32 = 31;
   const long: int32 = 47;
@@ -368,6 +395,7 @@ export function main(): void {
     throw new Error("trait-object lifetime call failed");
   }
   opaque_borrow(short);
+  retainMixedOpaque(ref(short));
 
   const family = new LendingValue(59);
   const item = lending_value(family);
@@ -398,6 +426,7 @@ export function main(): void {
   assert.match(source, /fn increment_view<'l>[^}]+view\.increment\(\)/u);
   assert.doesNotMatch(source, /widget_alias::LifetimeView::increment\(&mut view\)/u);
   assert.match(source, /widget_alias::opaque_borrow\(&short\)/u);
+  assert.match(source, /widget_alias::opaque_mixed::<i32, 3>\(value\)/u);
   assert.match(source, /widget_alias::lending_value\(&family\)/u);
   assert.match(source, /widget_alias::constrained_lending::<widget_alias::LendingValue>\(&family, item\)/u);
   writeGeneratedArtifacts(project.root, result.artifacts);

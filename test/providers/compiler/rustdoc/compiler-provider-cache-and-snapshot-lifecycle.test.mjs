@@ -86,10 +86,13 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
       widget.methods.find(({ name }) => name === "into_box_value")?.receiver?.kind,
       "custom",
     );
-    assert.match(
-      widget.unsupportedMembers.find(({ name }) => name === "pinned_count")?.reason ?? "",
-      /borrowed custom receiver with no exact source receiver contract/u,
+    const pinnedCount = widget.methods.find(({ name }) => name === "pinned_count");
+    assert.equal(pinnedCount?.receiver?.kind, "custom");
+    assert.equal(
+      pinnedCount?.receiver?.kind === "custom" ? pinnedCount.receiver.type.kind : undefined,
+      "path",
     );
+    assert.equal(widget.unsupportedMembers.some(({ name }) => name === "pinned_count"), false);
     assert.ok(widget.methods.some(({ name, traitDispatch }) =>
       name === "measure" && traitDispatch?.path === "acme_widget::Metric"));
     assert.ok(widget.methods.some(({ name, traitDispatch }) =>
@@ -384,18 +387,37 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
       ["Mode", "mode_code"],
       "an explicitly requested export is emitted once when another requested export also depends on it",
     );
-    const unsupportedModule = worker.module({
+    const structuredModule = worker.module({
       snapshot,
       dependency,
       modulePath: [],
       requestedExports: ["StructuredMode"],
     });
-    assert.deepEqual(unsupportedModule.exports.map(({ name }) => name), ["StructuredMode"]);
-    assert.deepEqual(unsupportedModule.unsupportedExports, []);
-    assert.match(
-      unsupportedModule.exports.find(({ name }) => name === "StructuredMode")?.unsupportedMembers
-        .find(({ name }) => name === "Named")?.reason ?? "",
-      /struct payload/u,
+    assert.deepEqual(structuredModule.exports.map(({ name }) => name), ["StructuredMode"]);
+    assert.deepEqual(structuredModule.unsupportedExports, []);
+    const structuredMode = structuredModule.exports.find(({ name }) => name === "StructuredMode");
+    assert.deepEqual(
+      structuredMode?.kind === "enum"
+        ? structuredMode.variants.map(({ name, kind, fields }) => ({
+            name,
+            kind,
+            fields: fields.map((field) => field.name),
+          }))
+        : undefined,
+      [{ name: "Named", kind: "struct", fields: ["value"] }],
+    );
+    const structuredProjection = projectRustCompilerModule(structuredModule, {
+      providerModuleId: compilerProviderModuleId(dependency, []),
+      moduleSpecifier: "@tsonic/rust/crates/widget_alias/index.js",
+    });
+    assert.deepEqual(
+      structuredProjection.operations.find(({ memberId }) =>
+        memberId?.endsWith("::variant:Named"))?.target,
+      {
+        form: "struct-variant",
+        path: "widget_alias::StructuredMode::Named",
+        fields: ["value"],
+      },
     );
     const dangerous = functionModule.exports.find(({ name }) => name === "dangerous");
     assert.equal(dangerous?.kind, "function");
@@ -550,8 +572,8 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
       .find(({ name }) => name === "Widget")?.members ?? [];
     assert.equal(
       projectedWidgetMembers.some(({ name }) => name === "pinned_count"),
-      false,
-      "an unsupported custom receiver is omitted without hiding supported members",
+      true,
+      "a declaration-backed borrowed custom receiver remains callable",
     );
     assert.equal(
       projectedWidgetMembers.some(({ name }) => name === "measure"),
@@ -564,16 +586,95 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
       "a trait constant and trait method occupying one source static slot are both omitted",
     );
 
-    const unsupportedOpenAssociatedType = worker.module({
+    const openAssociatedType = worker.module({
       snapshot,
       dependency,
       modulePath: [],
       requestedExports: ["pass_family_item"],
     });
-    assert.match(
-      unsupportedOpenAssociatedType.unsupportedExports.find(({ name }) =>
-        name === "pass_family_item")?.reason ?? "",
-      /Generic associated Rust types have no closed provider type contract/u,
+    assert.equal(
+      openAssociatedType.exports.some(({ name }) => name === "pass_family_item"),
+      true,
+    );
+    assert.deepEqual(openAssociatedType.unsupportedExports, []);
+
+    const advancedTypeModule = worker.module({
+      snapshot,
+      dependency,
+      modulePath: [],
+      requestedExports: [
+        "MixedFamily",
+        "MixedValue",
+        "NON_CLONE_STATIC",
+        "first_mixed_item",
+        "mixed_item",
+        "opaque_mixed",
+        "scalar_code",
+        "scalar_smile",
+      ],
+    });
+    assert.deepEqual(advancedTypeModule.unsupportedExports, []);
+    const nonCloneStatic = advancedTypeModule.exports.find(
+      ({ name }) => name === "NON_CLONE_STATIC",
+    );
+    assert.equal(nonCloneStatic?.kind, "static");
+    assert.equal(nonCloneStatic?.copy, false);
+    const scalarCode = advancedTypeModule.exports.find(
+      ({ name }) => name === "scalar_code",
+    );
+    assert.equal(scalarCode?.kind, "function");
+    assert.equal(scalarCode?.function.parameters[0].type.name, "char");
+    const mixedItem = advancedTypeModule.exports.find(
+      ({ name }) => name === "mixed_item",
+    );
+    assert.equal(mixedItem?.kind, "function");
+    assert.equal(mixedItem?.function.result.kind, "associated-type");
+    assert.deepEqual(
+      mixedItem?.function.result.kind === "associated-type"
+        ? mixedItem.function.result.genericArguments.map(({ kind }) => kind)
+        : undefined,
+      ["lifetime", "type", "const"],
+    );
+    const opaqueMixed = advancedTypeModule.exports.find(
+      ({ name }) => name === "opaque_mixed",
+    );
+    assert.equal(opaqueMixed?.kind, "function");
+    assert.equal(opaqueMixed?.function.result.kind, "opaque");
+    assert.deepEqual(
+      opaqueMixed?.function.result.kind === "opaque"
+        ? opaqueMixed.function.result.captures.map(({ kind }) => kind)
+        : undefined,
+      ["lifetime", "type", "const"],
+    );
+
+    const advancedTypeProjection = projectRustCompilerModule(advancedTypeModule, {
+      providerModuleId: compilerProviderModuleId(dependency, []),
+      moduleSpecifier: "@tsonic/rust/crates/widget_alias/index.js",
+    });
+    const nonCloneOperation = advancedTypeProjection.operations.find(
+      ({ exportId }) => exportId.endsWith("::NON_CLONE_STATIC"),
+    );
+    assert.deepEqual(nonCloneOperation?.target, {
+      form: "reference-path",
+      path: "widget_alias::NON_CLONE_STATIC",
+      mutable: false,
+    });
+    assert.equal(nonCloneOperation?.resultCarrier.kind, "reference");
+    const scalarOperation = advancedTypeProjection.operations.find(
+      ({ exportId }) => exportId.endsWith("::scalar_code"),
+    );
+    assert.deepEqual(scalarOperation?.parameterCarriers, [{
+      kind: "target-named",
+      id: "rust.native.char",
+    }]);
+    const opaqueOperation = advancedTypeProjection.operations.find(
+      ({ exportId }) => exportId.endsWith("::opaque_mixed"),
+    );
+    assert.deepEqual(
+      opaqueOperation?.resultCarrier.kind === "impl-trait"
+        ? opaqueOperation.resultCarrier.captures.map(({ kind }) => kind)
+        : undefined,
+      ["lifetime", "type", "const"],
     );
 
     const standardSnapshot = worker.standardSnapshot();

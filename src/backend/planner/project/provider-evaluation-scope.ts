@@ -432,7 +432,6 @@ function mutableRootsAreDisjoint(
   mutableInputs: ReadonlyMap<string, MutableProviderInput>,
   context: RustPlanContext,
 ): boolean {
-  const selected: { readonly root: Node; readonly projections: readonly string[] }[] = [];
   for (const mutable of mutableInputs.values()) {
     if (mutable.inputs.length !== 1) {
       context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -442,6 +441,12 @@ function mutableRootsAreDisjoint(
       ));
       return false;
     }
+  }
+  if (mutableInputs.size <= 1) {
+    return true;
+  }
+  const selected: { readonly root: Node; readonly projections: readonly string[] }[] = [];
+  for (const mutable of mutableInputs.values()) {
     const root = mutable.kind === "promoted"
       ? mutable.rootDeclaration
       : mutable.kind === "direct"

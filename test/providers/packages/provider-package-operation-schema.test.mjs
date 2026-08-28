@@ -111,6 +111,108 @@ test("provider operation metadata accepts only structured Rust forms", () => {
   }
 });
 
+test("provider operation metadata preserves native reference, variant, and macro forms exactly", () => {
+  const valueDefinition = definition({
+    modules: [{
+      moduleSpecifier: "@acme/validation",
+      providerModuleId: "acme.validation",
+      exports: [{
+        id: "@acme/validation::VALUE",
+        name: "VALUE",
+        kind: "value",
+        type: { kind: "source-primitive", name: "int32" },
+      }],
+    }],
+    operations: [{
+      exportId: "@acme/validation::VALUE",
+      operationKind: "property",
+      target: {
+        form: "reference-path",
+        path: "acme_validation::VALUE",
+        mutable: false,
+      },
+      resultCarrier: {
+        kind: "reference",
+        referent: int32Carrier,
+        mutable: false,
+        lifetime: { kind: "static" },
+      },
+    }],
+  });
+  const binaryExport = functionExport("@acme/validation");
+  binaryExport.signatures[0].parameters = [
+    { name: "left", type: { kind: "source-primitive", name: "int32" } },
+    { name: "right", type: { kind: "source-primitive", name: "int32" } },
+  ];
+  const binaryDefinition = (target) => definition({
+    modules: [{
+      moduleSpecifier: "@acme/validation",
+      providerModuleId: "acme.validation",
+      exports: [binaryExport],
+    }],
+    operations: [{
+      exportId: "@acme/validation::run",
+      operationKind: "method",
+      target,
+      resultCarrier: int32Carrier,
+      parameterCarriers: [int32Carrier, int32Carrier],
+    }],
+  });
+
+  assert.doesNotThrow(() => createRustProviderPackage(valueDefinition));
+  assert.doesNotThrow(() => createRustProviderPackage(binaryDefinition({
+    form: "struct-variant",
+    path: "acme_validation::Pair::Values",
+    fields: ["left", "right"],
+  })));
+  for (const delimiter of ["parentheses", "brackets", "braces"]) {
+    assert.doesNotThrow(() => createRustProviderPackage(binaryDefinition({
+      form: "expression-macro",
+      path: "acme_validation::sum_pair",
+      delimiter,
+    })));
+  }
+
+  assert.throws(
+    () => createRustProviderPackage(binaryDefinition({
+      form: "struct-variant",
+      path: "acme_validation::Pair::Values",
+      fields: ["value", "value"],
+    })),
+    /repeats Rust field 'value'/u,
+  );
+  assert.throws(
+    () => createRustProviderPackage(binaryDefinition({
+      form: "struct-variant",
+      path: "acme_validation::Pair::Values",
+      fields: ["onlyOne"],
+    })),
+    /must exactly cover all declared parameter carriers/u,
+  );
+  assert.throws(
+    () => createRustProviderPackage(binaryDefinition({
+      form: "expression-macro",
+      path: "acme_validation::sum_pair",
+      delimiter: "guess",
+    })),
+    /not an exact Rust macro delimiter/u,
+  );
+  assert.throws(
+    () => createRustProviderPackage({
+      ...valueDefinition,
+      operations: [{
+        ...valueDefinition.operations[0],
+        target: {
+          form: "reference-path",
+          path: "acme_validation::VALUE",
+          mutable: "guess",
+        },
+      }],
+    }),
+    /mutable must be an exact boolean/u,
+  );
+});
+
 test("provider carrier validation preserves exact lifetime, HRTB, mixed-generic, and associated-type contracts", () => {
   const lifetime = { kind: "parameter", identity: "lifetime-a", name: "a" };
   const bound = {
@@ -163,6 +265,25 @@ test("provider carrier validation preserves exact lifetime, HRTB, mixed-generic,
     });
 
   assert.doesNotThrow(() => createRustProviderPackage(withCarrier(carrier)));
+  const opaqueCarrier = {
+    kind: "impl-trait",
+    id: "acme.opaque",
+    bounds: [carrier],
+    outlives: [{ kind: "static" }],
+    captures: [
+      { kind: "lifetime", lifetime: { kind: "static" } },
+      { kind: "type", type: int32Carrier },
+      { kind: "const", value: { kind: "integer", value: "4" } },
+    ],
+  };
+  assert.doesNotThrow(() => createRustProviderPackage(withCarrier(opaqueCarrier)));
+  assert.throws(
+    () => createRustProviderPackage(withCarrier({
+      ...opaqueCarrier,
+      captures: [{ kind: "static" }],
+    })),
+    /captures\[0\] is not an exact generic argument/u,
+  );
   assert.throws(
     () => createRustProviderPackage(withCarrier(carrier, "other::Family")),
     /path conflicts with carrierPaths/u,
