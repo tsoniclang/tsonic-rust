@@ -280,8 +280,8 @@ export function render(label: string, count: number, ok: boolean): string {
   );
 });
 
-test("declared-but-unsupported node APIs diagnose deterministically", async () => {
-  const options = {
+test("filesystem watchers lower through exact selected provider evidence", async () => {
+  const { result } = compileRust({
     surfaces: ["js"],
     capabilities: [await nodejsCapability()],
     files: {
@@ -289,15 +289,21 @@ test("declared-but-unsupported node APIs diagnose deterministically", async () =
 import { watch } from "node:fs";
 
 export function observe(path: string): void {
-  watch(path);
+  const watcher = watch(path);
+  watcher.unref();
+  watcher.ref();
+  watcher.close();
 }
 `,
     },
-  };
-  assertRustTargetRejection(options, [{
-    code: "RUST_PROVIDER_OPERATION_NOT_MAPPED",
-    message: "No Rust operation row matches selected provider declaration 'tsonic.rust.provider-package.@tsonic/rust-nodejs.binding::tsonic.rust.node.fs::node:fs::watch::node:fs::watch(...)' as method.",
-  }]);
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /tsonic_rust_node::fs::watch(&path)?/u);
+  assert.match(source, /watcher\.unref\(\)/u);
+  assert.match(source, /watcher\.ref_chain\(\)/u);
+  assert.match(source, /watcher\.close\(\)/u);
 });
 
 test("node package is a target capability independent of the js source surface", async () => {
@@ -425,6 +431,168 @@ export function register(
   assert.match(source, /tsonic_rust_node::http::create_server_callable\(handler\)/u);
   assert.doesNotMatch(source, /handler\.clone\(\)/u);
   validateGeneratedProject("node-retained-callback", result.artifacts);
+});
+
+test("required Node event, stream, DNS, compression, net, and readline families lower together", async () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    capabilities: [await nodejsCapability()],
+    files: {
+      "index.ts": `
+import { Buffer } from "node:buffer";
+import { lookup } from "node:dns";
+import { EventEmitter } from "node:events";
+import { createConnection, isIP } from "node:net";
+import { createInterface, type ReadLineOptions } from "node:readline";
+import type { Readable, Writable } from "node:stream";
+import { gzipSync } from "node:zlib";
+
+export function exerciseNodeFamilies(
+  emitter: EventEmitter,
+  readable: Readable,
+  writable: Writable,
+  payload: Buffer,
+  options: ReadLineOptions,
+  host: string,
+  port: number,
+): boolean {
+  const listener = (value: any): void => {
+    JSON.stringify(value);
+  };
+  emitter.on("data", listener);
+  const emitted = emitter.emit("data", payload);
+  emitter.off("data", listener);
+
+  readable.pause().resume().pipe(writable);
+  writable.write(payload);
+  writable.end("done");
+
+  lookup(host, (_error: any, address: string, family: number): void => {
+    JSON.stringify({ address, family });
+  });
+  const compressed = gzipSync(payload);
+  const socket = createConnection(port, host);
+  socket.write(compressed);
+  socket.end();
+
+  const lines = createInterface(options);
+  lines.setPrompt("> ");
+  lines.question("value? ", (answer: string): void => {
+    JSON.stringify(answer);
+  });
+  lines.pause().resume();
+  lines.prompt();
+  lines.close();
+  return emitted && isIP(host) >= 0;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /node_events::EventEmitter::new|emit_callable/u);
+  assert.match(source, /\.pipe_to\(/u);
+  assert.match(source, /node_dns::lookup_callable/u);
+  assert.match(source, /node_zlib::gzip_sync/u);
+  assert.match(source, /node_net::create_connection_source/u);
+  assert.match(source, /node_readline::create_interface/u);
+  validateGeneratedProject("node-required-families", result.artifacts);
+});
+
+test("required Node TLS, HTTPS, and module-worker families lower through closed artifacts", async () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    capabilities: [await nodejsCapability()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "node_secure_worker_contract" } },
+    files: {
+      "index.ts": `
+import { createServer as createHttpsServer, request, type ServerOptions as HttpsServerOptions } from "node:https";
+import { connect, createServer as createTlsServer, type ConnectionOptions, type TlsOptions } from "node:tls";
+import {
+  isMarkedAsUntransferable,
+  markAsUntransferable,
+  MessageChannel,
+  Worker,
+} from "node:worker_threads";
+
+export function secure(
+  connection: ConnectionOptions,
+  tlsOptions: TlsOptions,
+  httpsOptions: HttpsServerOptions,
+  port: number,
+  host: string,
+): void {
+  const socket = connect(connection, (): void => {});
+  socket.write("ping");
+  socket.ref().unref();
+  socket.end();
+
+  const tlsServer = createTlsServer(tlsOptions, (peer): void => {
+    peer.write("ready");
+    peer.end();
+  });
+  tlsServer.listen(port, host, (): void => {});
+  tlsServer.unref();
+  tlsServer.close();
+
+  const httpsServer = createHttpsServer(httpsOptions, (_incoming, response): void => {
+    response.end("ok");
+  });
+  httpsServer.listen(port, host, (): void => {});
+  httpsServer.unref();
+  httpsServer.close();
+
+  const outgoing = request("https://example.test/", (response): void => {
+    response.readAll();
+  });
+  outgoing.write("body");
+  outgoing.end();
+}
+
+export function workers(): void {
+  const worker = new Worker("./worker.js", { name: "proof", argv: ["one"] });
+  worker.on("message", (value: any): void => {
+    JSON.stringify(value);
+  });
+  worker.postMessage({ ready: true });
+  worker.ref().unref();
+  worker.terminate();
+
+  const channel = new MessageChannel();
+  channel.port1.start();
+  channel.port1.postMessage("message");
+  channel.port1.unref();
+  channel.port1.ref();
+  channel.port1.close();
+
+  const exact = { value: 1 };
+  markAsUntransferable(exact);
+  isMarkedAsUntransferable(exact);
+}
+
+export function main(): void {
+  workers();
+}
+`,
+      "worker.ts": `
+import { parentPort, workerData } from "node:worker_threads";
+
+if (parentPort !== undefined) {
+  parentPort.postMessage(workerData);
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /node_tls::connect_callable/u);
+  assert.match(source, /node_tls::create_server/u);
+  assert.match(source, /node_https::create_server_callable/u);
+  assert.match(source, /node_worker_threads::Worker::spawn_with_options/u);
+  assert.match(artifactText(result, "src/main.rs"), /initialize_worker_process/u);
+  validateGeneratedProject("node-secure-worker-contract", result.artifacts);
 });
 
 test("async third-party provider rows lower through the same generic infrastructure", async () => {
