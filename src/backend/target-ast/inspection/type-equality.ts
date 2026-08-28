@@ -38,7 +38,7 @@ export function rustTypeEquals(
       return right.kind === "impl-trait" &&
         boundsEqual(left.bounds, right.bounds) &&
         lifetimeListsEqual(left.outlives, right.outlives) &&
-        lifetimeListsEqual(left.captures, right.captures);
+        genericArgumentsEqual(left.captures, right.captures);
     case "reference":
       return right.kind === "reference" && left.mutable === right.mutable &&
         lifetimeEqual(left.lifetime, right.lifetime) &&

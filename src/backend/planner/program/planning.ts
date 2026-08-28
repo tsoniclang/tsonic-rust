@@ -50,6 +50,11 @@ import {
   planRustSourcePackageCargo,
   planRustSourcePackageCrateContent,
 } from "./source-package-crates.js";
+import {
+  planRustWorkerEntries,
+  rustWorkerEntryIdentity,
+  type RustWorkerEntryPlan,
+} from "./worker-entries.js";
 
 export function planRustOutput(input: RustPlanningContext): TargetStageResult<RustOutputPlan> {
   const diagnostics: TargetDiagnostic[] = [];
@@ -128,6 +133,29 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
           `${identity.externalCrateName}::${component.structuralShapesModuleName}`] as const];
     }),
   );
+  const workerEntryIdentityByFileName = new Map<string, string>();
+  for (const sourceFile of input.program.sourceModuleConstructions.targets()) {
+    const fileName = input.program.source.ast.getFileName(sourceFile);
+    const identity = identityPlan.identities.get(fileName);
+    if (identity === undefined) {
+      diagnostics.push({
+        code: "RUST_WORKER_ENTRY_OUTPUT_IDENTITY_MISSING",
+        category: "error",
+        source: "tsonic-rust",
+        message: `Worker source module '${fileName}' has no exact generated output identity.`,
+        sourceNode: sourceFile,
+        evidence: ["target.capability=rust.backend.source-module-construction"],
+      });
+    } else {
+      workerEntryIdentityByFileName.set(
+        fileName,
+        rustWorkerEntryIdentity(identity),
+      );
+    }
+  }
+  if (diagnostics.length > 0) {
+    return rejectedTargetStage(diagnostics);
+  }
   const programModuleName = rootComponentPlan.programModuleName;
   const initializerFacadeModuleName = packageInitializers.facadeModuleNameByComponent.get(
     facadePlan.rootComponentId,
@@ -177,6 +205,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     identityPlan.identities,
     facadePlan.externalItemPathByIdentity,
     externalStructuralShapeModuleByFileName,
+    workerEntryIdentityByFileName,
     componentPlans,
     sourcePackageErrors,
     diagnostics,
@@ -307,6 +336,21 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
       : `crate::${programModuleName}::TsonicError`,
     identity: rootErrorTypeIdentity,
   };
+  const workerEntries = planRustWorkerEntries({
+    planning: input,
+    identities: identityPlan.identities,
+    components: componentPlans,
+    contentByComponentId: crateContentByComponentId,
+    packageInitializers,
+    sourcePackageErrors,
+    rootComponentId: facadePlan.rootComponentId,
+    rootCrateName: input.program.configuration.crateName,
+    rootErrorType: rootCrateErrorType,
+    diagnostics,
+  });
+  if (workerEntries === undefined || diagnostics.length > 0) {
+    return rejectedTargetStage(diagnostics);
+  }
   const crateInitializer = planRustCrateInitializer(
     moduleInitializers ?? [],
     crateInitializerFunctionName,
@@ -333,6 +377,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
               alias: binaryEntryExportName,
             }]),
         ...(crateInitializer === undefined ? [] : [crateInitializer.item]),
+        ...(workerEntries.itemsByComponentId.get(rootComponentPlan.componentId) ?? []),
       ],
     },
   );
@@ -362,7 +407,12 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
         identityPlan.identities,
         facadePlan,
         diagnostics,
-        { prefix: cargo.directory, manifest: cargo.manifest },
+        {
+          prefix: cargo.directory,
+          manifest: cargo.manifest,
+          additionalLibraryItems:
+            workerEntries.itemsByComponentId.get(component.componentId) ?? [],
+        },
       );
       if (externalArtifacts !== undefined) {
         artifacts.push(...externalArtifacts);
@@ -452,8 +502,19 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
         ),
       };
     });
+    const workerDispatchStatements = planRustWorkerDispatch(
+      input,
+      workerEntries.entries,
+      mainErrorType,
+      epilogueStatements,
+      diagnostics,
+    );
+    if (workerDispatchStatements === undefined || diagnostics.length > 0) {
+      return rejectedTargetStage(diagnostics);
+    }
     const mainFallible = entryFunction.fallible ||
       crateInitializer?.errorType !== undefined ||
+      workerEntries.entries.length > 0 ||
       activeEpilogues.some((epilogue) => epilogue.isFallible === true);
     const entryStatement = {
       kind: "expr" as const,
@@ -489,9 +550,9 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
       ...(mainFallible
         ? {
             errorType: mainErrorType,
-            body: { statements: [...initializationStatements, entryStatement, ...epilogueStatements, ...completionStatements] },
+            body: { statements: [...workerDispatchStatements, ...initializationStatements, entryStatement, ...epilogueStatements, ...completionStatements] },
           }
-        : { body: { statements: [...initializationStatements, entryStatement, ...epilogueStatements] } }),
+        : { body: { statements: [...workerDispatchStatements, ...initializationStatements, entryStatement, ...epilogueStatements] } }),
     };
     artifacts.push(rustSourceArtifact("src/main.rs", createRustSourceFile([mainItem])));
   }
@@ -507,6 +568,159 @@ function finalizeRustPlannedArtifact(artifact: RustPlannedArtifact): RustPlanned
         ...artifact,
         model: finalizeRustSourceStyle(artifact.model),
       });
+}
+
+function planRustWorkerDispatch(
+  input: RustPlanningContext,
+  entries: readonly RustWorkerEntryPlan[],
+  mainErrorType: import("../../target-ast/nodes.js").RustType,
+  epilogueStatements: readonly import("../../target-ast/nodes.js").RustStmt[],
+  diagnostics: TargetDiagnostic[],
+): readonly import("../../target-ast/nodes.js").RustStmt[] | undefined {
+  if (entries.length === 0) return Object.freeze([]);
+  const entryBySourceFile = new Map(entries.map((entry) =>
+    [entry.sourceFile, entry] as const));
+  const constructionsByBootstrapId = new Map<string, Set<RustWorkerEntryPlan>>();
+  for (const construction of input.program.sourceModuleConstructions.entries()) {
+    const entry = entryBySourceFile.get(construction.targetSourceFile);
+    if (entry === undefined) {
+      diagnostics.push({
+        code: "RUST_WORKER_ENTRY_DISPATCH_IDENTITY_MISSING",
+        category: "error",
+        source: "tsonic-rust",
+        message: "A selected source-module construction has no exact worker dispatch entry.",
+        sourceNode: construction.expression,
+        evidence: ["target.capability=rust.backend.source-module-construction"],
+      });
+      continue;
+    }
+    const selected = constructionsByBootstrapId.get(construction.bootstrap.id) ??
+      new Set<RustWorkerEntryPlan>();
+    selected.add(entry);
+    constructionsByBootstrapId.set(construction.bootstrap.id, selected);
+  }
+  if (diagnostics.length > 0) return undefined;
+
+  const statements: import("../../target-ast/nodes.js").RustStmt[] = [];
+  const bootstraps = [...input.program.sourceModuleConstructions.bootstraps()]
+    .sort((left, right) => left.id.localeCompare(right.id, "en"));
+  for (const [bootstrapIndex, bootstrap] of bootstraps.entries()) {
+    const selectedEntries = [...(constructionsByBootstrapId.get(bootstrap.id) ?? [])]
+      .sort((left, right) => left.identity.localeCompare(right.identity, "en"));
+    if (selectedEntries.length === 0) continue;
+    const providerErrorType = bootstrap.errorBoundary === "provider-native"
+      ? bootstrap.errorCarrier === undefined
+        ? undefined
+        : rustTypeFromCarrier(bootstrap.errorCarrier)
+      : undefined;
+    if (bootstrap.errorBoundary === "provider-native" && providerErrorType === undefined) {
+      diagnostics.push({
+        code: "RUST_WORKER_BOOTSTRAP_ERROR_TYPE_MISSING",
+        category: "error",
+        source: "tsonic-rust",
+        message: `Source-module bootstrap '${bootstrap.id}' has no exact renderable provider error type.`,
+        evidence: ["target.capability=rust.backend.source-module-construction"],
+      });
+      continue;
+    }
+    const entryName = `__tsonic_worker_entry_${bootstrapIndex + 1}`;
+    const bootstrapCall = applyRustErrorBoundary(
+      { kind: "call", path: bootstrap.path, args: [] },
+      bootstrap.errorBoundary,
+      mainErrorType,
+      providerErrorType,
+    );
+    statements.push({
+      kind: "let",
+      name: entryName,
+      mutable: false,
+      init: bootstrapCall,
+    }, {
+      kind: "if-let-some",
+      binding: entryName,
+      expression: { kind: "path", path: entryName },
+      body: {
+        statements: [
+          ...selectedEntries.map((entry): import("../../target-ast/nodes.js").RustStmt => {
+            const call = {
+              kind: "call" as const,
+              path: entry.callPath,
+              args: [],
+            };
+            const execution = entry.asynchronous
+              ? {
+                  kind: "call" as const,
+                  path: "tsonic_rust_runtime::block_on",
+                  args: [call],
+                }
+              : call;
+            const invoke = entry.operandErrorType === undefined
+              ? execution
+              : {
+                  kind: "try" as const,
+                  expr: execution,
+                  resultErrorType: mainErrorType,
+                  operandErrorType: entry.operandErrorType,
+                };
+            return {
+              kind: "if",
+              condition: {
+                kind: "binary",
+                operator: "==",
+                left: { kind: "path", path: entryName },
+                right: { kind: "str-literal", value: entry.identity },
+              },
+              then: {
+                statements: [
+                  { kind: "expr", expr: invoke },
+                  ...epilogueStatements,
+                  okReturn(mainErrorType),
+                ],
+              },
+            };
+          }),
+          {
+            kind: "return",
+            expr: {
+              kind: "call",
+              path: "Err",
+              args: [{
+                kind: "method-call",
+                receiver: {
+                  kind: "call",
+                  path: "tsonic_rust_runtime::TsonicError::unsupported",
+                  args: [{
+                    kind: "str-literal",
+                    value: "Worker process selected an entry absent from the closed generated dispatch table.",
+                  }],
+                },
+                method: "into",
+                args: [],
+              }],
+            },
+          },
+        ],
+      },
+    });
+  }
+  return diagnostics.length === 0 ? Object.freeze(statements) : undefined;
+}
+
+function okReturn(
+  errorType: import("../../target-ast/nodes.js").RustType,
+): import("../../target-ast/nodes.js").RustStmt {
+  return {
+    kind: "return",
+    expr: {
+      kind: "call",
+      path: "Ok",
+      genericArguments: [
+        { kind: "type", type: { kind: "unit" } },
+        { kind: "type", type: errorType },
+      ],
+      args: [{ kind: "path", path: "()" }],
+    },
+  };
 }
 
 function compareRustArtifactNames(left: string, right: string): number {

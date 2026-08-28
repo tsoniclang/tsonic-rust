@@ -4,8 +4,22 @@ import {
   rustAsyncGeneratorTargetType,
   rustIteratorResultTargetType,
   rustJsArrayTargetType,
+  rustJsArrayBufferTargetType,
+  rustJsDataViewTargetType,
   rustJsDateTargetType,
   rustJsMapTargetType,
+  rustJsPromiseTargetType,
+  rustJsPromiseFulfilledResultTargetType,
+  rustJsPromiseRejectedResultTargetType,
+  rustJsPromiseSettledResultTargetType,
+  rustJsIntlCollatorTargetType,
+  rustJsIntlDateTimeFormatPartTargetType,
+  rustJsIntlDateTimeFormatTargetType,
+  rustJsIntlNumberFormatPartTargetType,
+  rustJsIntlNumberFormatTargetType,
+  rustJsIntlResolvedCollatorOptionsTargetType,
+  rustJsIntlResolvedDateTimeFormatOptionsTargetType,
+  rustJsIntlResolvedNumberFormatOptionsTargetType,
   rustJsRegExpExecArrayTargetType,
   rustJsRegExpIndicesTargetType,
   rustJsRegExpMatchArrayTargetType,
@@ -14,6 +28,10 @@ import {
   rustJsRegExpStringIteratorTargetType,
   rustJsRegExpTargetType,
   rustJsSetTargetType,
+  rustJsTypedArrayTargetType,
+  rustJsValueTargetType,
+  rustJsWeakMapTargetType,
+  rustJsWeakSetTargetType,
   rustJsErrorTargetType,
   rustRegExpExecArrayTargetType,
   rustRegExpIndicesTargetType,
@@ -319,6 +337,10 @@ export function resolveSourceProfileCarrier(
   if (options.jsEnabled && name === "Date") {
     return rustJsDateTargetType();
   }
+  const directJsCarrier = options.jsEnabled ? rustDirectJsSourceProfileCarrier(name) : undefined;
+  if (directJsCarrier !== undefined) {
+    return directJsCarrier;
+  }
   if (options.jsEnabled && name === regExpIdentity.owners.regExp) {
     return rustJsRegExpTargetType();
   }
@@ -355,7 +377,11 @@ export function resolveSourceProfileCarrier(
   }
   if (name === "Promise" || name === "PromiseLike") {
     const output = resolveRustTargetType(arguments_[0], context, options, resolving);
-    return output === undefined ? undefined : rustFutureTargetType(output);
+    return output === undefined
+      ? undefined
+      : options.jsEnabled
+        ? rustJsPromiseTargetType(output)
+        : rustFutureTargetType(output);
   }
   if (name === "Generator" || name === "AsyncGenerator") {
     const [yieldType, returnType, nextType] = targetArguments;
@@ -392,6 +418,14 @@ export function resolveSourceProfileCarrier(
     const value = resolveRustTargetType(arguments_[0], context, options, resolving);
     return value === undefined ? undefined : rustJsSetTargetType(value);
   }
+  if (options.jsEnabled && name === "WeakMap") {
+    const [key, value] = targetArguments;
+    return key === undefined || value === undefined ? undefined : rustJsWeakMapTargetType(key, value);
+  }
+  if (options.jsEnabled && name === "WeakSet") {
+    const [value] = targetArguments;
+    return value === undefined ? undefined : rustJsWeakSetTargetType(value);
+  }
   return undefined;
 }
 
@@ -408,7 +442,22 @@ export function resolveSourceProfileCarrierFromArguments(
   }
   if (name === "Promise" || name === "PromiseLike") {
     const [output] = arguments_;
-    return output === undefined ? undefined : rustFutureTargetType(output);
+    return output === undefined
+      ? undefined
+      : options.jsEnabled
+        ? rustJsPromiseTargetType(output)
+        : rustFutureTargetType(output);
+  }
+  if (options.jsEnabled && name === "PromiseFulfilledResult") {
+    const [value] = arguments_;
+    return value === undefined ? undefined : rustJsPromiseFulfilledResultTargetType(value);
+  }
+  if (options.jsEnabled && name === "PromiseRejectedResult" && arguments_.length === 0) {
+    return rustJsPromiseRejectedResultTargetType();
+  }
+  if (options.jsEnabled && name === "PromiseSettledResult") {
+    const [value] = arguments_;
+    return value === undefined ? undefined : rustJsPromiseSettledResultTargetType(value);
   }
   if (name === "Generator" || name === "AsyncGenerator") {
     const [yieldType, returnType, nextType] = arguments_;
@@ -442,8 +491,20 @@ export function resolveSourceProfileCarrierFromArguments(
     const [value] = arguments_;
     return value === undefined ? undefined : rustJsSetTargetType(value);
   }
+  if (options.jsEnabled && name === "WeakMap") {
+    const [key, value] = arguments_;
+    return key === undefined || value === undefined ? undefined : rustJsWeakMapTargetType(key, value);
+  }
+  if (options.jsEnabled && name === "WeakSet") {
+    const [value] = arguments_;
+    return value === undefined ? undefined : rustJsWeakSetTargetType(value);
+  }
   if (options.jsEnabled && name === "Date") {
     return rustJsDateTargetType();
+  }
+  const directJsCarrier = options.jsEnabled ? rustDirectJsSourceProfileCarrier(name) : undefined;
+  if (directJsCarrier !== undefined) {
+    return directJsCarrier;
   }
   if (options.jsEnabled && name === regExpIdentity.owners.regExp) {
     return rustJsRegExpTargetType();
@@ -469,4 +530,29 @@ export function resolveSourceProfileCarrierFromArguments(
       : undefined;
   }
   return undefined;
+}
+
+function rustDirectJsSourceProfileCarrier(name: string): TargetTypeRef | undefined {
+  switch (name) {
+    case "ArrayBuffer": return rustJsArrayBufferTargetType();
+    case "DataView": return rustJsDataViewTargetType();
+    case "Int8Array": return rustJsTypedArrayTargetType("Int8Array");
+    case "Uint8Array": return rustJsTypedArrayTargetType("Uint8Array");
+    case "Uint8ClampedArray": return rustJsTypedArrayTargetType("Uint8ClampedArray");
+    case "Int16Array": return rustJsTypedArrayTargetType("Int16Array");
+    case "Uint16Array": return rustJsTypedArrayTargetType("Uint16Array");
+    case "Int32Array": return rustJsTypedArrayTargetType("Int32Array");
+    case "Uint32Array": return rustJsTypedArrayTargetType("Uint32Array");
+    case "Float32Array": return rustJsTypedArrayTargetType("Float32Array");
+    case "Float64Array": return rustJsTypedArrayTargetType("Float64Array");
+    case "IntlDateTimeFormat": return rustJsIntlDateTimeFormatTargetType();
+    case "IntlNumberFormat": return rustJsIntlNumberFormatTargetType();
+    case "IntlCollator": return rustJsIntlCollatorTargetType();
+    case "IntlDateTimeFormatPart": return rustJsIntlDateTimeFormatPartTargetType();
+    case "IntlNumberFormatPart": return rustJsIntlNumberFormatPartTargetType();
+    case "IntlResolvedDateTimeFormatOptions": return rustJsIntlResolvedDateTimeFormatOptionsTargetType();
+    case "IntlResolvedNumberFormatOptions": return rustJsIntlResolvedNumberFormatOptionsTargetType();
+    case "IntlResolvedCollatorOptions": return rustJsIntlResolvedCollatorOptionsTargetType();
+    default: return undefined;
+  }
 }

@@ -3,6 +3,7 @@ import type { RustPrimitiveTypeName } from "../../syntax/tokens.js";
 import type { SourcePrimitiveKind } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../model.js";
 import { rustOnlyTypeGenericArguments, rustTypeGenericArguments } from "../generic-arguments.js";
+import { rustJsPromiseTargetId } from "./source-types.js";
 
 const rustPrimitiveNames: Readonly<Partial<Record<SourcePrimitiveKind, RustPrimitiveTypeName>>> = {
   char: "u16",
@@ -138,7 +139,8 @@ export function rustFutureTargetType(output: TargetTypeRef): TargetTypeRef {
 }
 
 export function rustFutureOutputCarrier(carrier: TargetTypeRef | undefined): TargetTypeRef | undefined {
-  if (carrier?.kind !== "target-named" || carrier.id !== rustFutureTargetId) return undefined;
+  if (carrier?.kind !== "target-named" ||
+    (carrier.id !== rustFutureTargetId && carrier.id !== rustJsPromiseTargetId)) return undefined;
   const arguments_ = rustOnlyTypeGenericArguments(carrier.genericArguments);
   return arguments_?.length === 1 ? arguments_[0] : undefined;
 }

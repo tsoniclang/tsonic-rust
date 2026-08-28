@@ -178,18 +178,9 @@ function receiverKind(type: RustCompilerType, functionName: string): RustCompile
     });
   }
   if (compilerTypeContainsSelf(type)) {
-    if (compilerTypeContainsReference(type)) {
-      throw new Error(
-        `Rust method '${functionName}' has a borrowed custom receiver with no exact source receiver contract.`,
-      );
-    }
     return Object.freeze({ kind: "custom", type });
   }
   throw new Error(`Rust method '${functionName}' has a custom receiver that does not contain Self.`);
-}
-
-function compilerTypeContainsReference(type: RustCompilerType): boolean {
-  return visitCompilerType(type, (selected) => selected.kind === "reference");
 }
 
 function compilerTypeContainsSelf(type: RustCompilerType): boolean {

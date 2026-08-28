@@ -300,7 +300,7 @@ function rustTargetTypeRefEqualsValidated(
       return right.kind === left.kind && left.id === right.id &&
         targetTypeRefListsEqual(left.bounds, right.bounds, lifetimeContext) &&
         lifetimeListsEqual(left.outlives, right.outlives, lifetimeContext) &&
-        lifetimeListsEqual(left.captures, right.captures, lifetimeContext);
+        genericArgumentListsEqual(left.captures, right.captures, lifetimeContext);
     case "associated-type":
       return right.kind === left.kind && left.name === right.name &&
         genericArgumentListsEqual(left.genericArguments, right.genericArguments, lifetimeContext) &&
@@ -410,7 +410,7 @@ function validateRustTargetTypeRef(
           isDenseDataArray(value.bounds) && value.bounds.every((bound) =>
             isPlainRecord(bound) && bound.kind === "trait-ref" && validateChild(bound)) &&
           validateLifetimeList(value.outlives) &&
-          validateLifetimeList(value.captures);
+          validateGenericArguments(value.captures, validateChild);
       case "associated-type":
         return hasExactKeys(
           value,

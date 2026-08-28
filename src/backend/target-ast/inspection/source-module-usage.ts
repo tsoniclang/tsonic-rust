@@ -154,7 +154,8 @@ function rustTypeReferencesModuleAlias(type: RustType, alias: string): boolean {
         type.autoTraits.some((trait) => rustTypeReferencesModuleAlias(trait.trait, alias));
     case "impl-trait":
       return type.bounds.some((bound) =>
-        rustTypeBoundReferencesModuleAlias(bound, alias));
+        rustTypeBoundReferencesModuleAlias(bound, alias)) ||
+        rustGenericArgumentsReferenceModuleAlias(type.captures, alias);
     case "reference":
       return rustTypeReferencesModuleAlias(type.referent, alias);
     case "raw-pointer":
@@ -337,6 +338,10 @@ function rustExpressionReferencesModuleAlias(expression: RustExpr, alias: string
     case "method-call":
       return rustExpressionReferencesModuleAlias(expression.receiver, alias) ||
         rustGenericArgumentsReferenceModuleAlias(expression.genericArguments, alias) ||
+        expression.args.some((argument) =>
+          rustExpressionReferencesModuleAlias(argument, alias));
+    case "macro-invocation":
+      return rustPathReferencesModuleAlias(expression.path, alias) ||
         expression.args.some((argument) =>
           rustExpressionReferencesModuleAlias(argument, alias));
     case "field":

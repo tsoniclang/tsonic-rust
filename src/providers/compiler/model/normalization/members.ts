@@ -77,22 +77,47 @@ export function normalizeEnumVariants(
         continue;
       }
       const kind = requireRecord(variant.kind, `Rust enum variant '${name}' kind`);
-      if (!Array.isArray(kind.tuple)) {
-        throw new Error(`Rust enum variant '${name}' has a struct payload with no canonical source-call contract.`);
+      if (Array.isArray(kind.tuple)) {
+        const fields = kind.tuple.map((fieldId, fieldIndex) => {
+          const field = itemById(document, fieldId);
+          return normalizeMemberType(
+            document,
+            requireInnerRecord(field, "struct_field", `Rust enum variant '${name}' field`),
+            childNormalizationContext(context, `variant:${variantIndex}:field:${fieldIndex}`),
+            emptyRustCompilerSubstitutions,
+            new Map(),
+            undefined,
+          );
+        });
+        values.push(Object.freeze({
+          kind: "tuple" as const,
+          id: canonicalItemId(dependency, item),
+          name,
+          fields: Object.freeze(fields),
+        }));
+        continue;
       }
-      const fields = kind.tuple.map((fieldId, fieldIndex) => {
+      const struct = requireRecord(kind.struct, `Rust enum variant '${name}' struct payload`);
+      if (struct.has_stripped_fields === true) {
+        throw new Error(`Rust enum variant '${name}' has stripped struct fields.`);
+      }
+      const fields = requireArray(struct.fields, `Rust enum variant '${name}' struct fields`).map((fieldId, fieldIndex) => {
         const field = itemById(document, fieldId);
-        return normalizeMemberType(
-          document,
-          requireInnerRecord(field, "struct_field", `Rust enum variant '${name}' field`),
-          childNormalizationContext(context, `variant:${variantIndex}:field:${fieldIndex}`),
-          emptyRustCompilerSubstitutions,
-          new Map(),
-          undefined,
-        );
+        return Object.freeze({
+          id: canonicalItemId(dependency, field),
+          name: requireString(field.name, `Rust enum variant '${name}' field name`),
+          type: normalizeMemberType(
+            document,
+            requireInnerRecord(field, "struct_field", `Rust enum variant '${name}' field`),
+            childNormalizationContext(context, `variant:${variantIndex}:field:${fieldIndex}`),
+            emptyRustCompilerSubstitutions,
+            new Map(),
+            undefined,
+          ),
+        });
       });
       values.push(Object.freeze({
-        kind: "tuple" as const,
+        kind: "struct" as const,
         id: canonicalItemId(dependency, item),
         name,
         fields: Object.freeze(fields),

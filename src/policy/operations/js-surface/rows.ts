@@ -13,6 +13,7 @@ import {
 } from "../../../target-model/types/index.js";
 import { defineJsOperationRows } from "./model.js";
 import { exactJsStringOperationRows } from "./exact-string-rows.js";
+import { jsCapabilityOperationRows } from "./capability-rows.js";
 import { regexpOperationRows } from "./regexp-rows.js";
 import type { JsOperationRowData } from "./model.js";
 import type { RustCallbackOperationTemplate, RustProviderOperationForm, RustValueConversion } from "../../../target-model/operations/model.js";
@@ -279,6 +280,7 @@ const sharedArrayOperationRows = sharedArrayOwners.flatMap((owner): readonly JsO
 ]);
 
 export const jsOperationRows = defineJsOperationRows([
+  ...jsCapabilityOperationRows,
   { owner: "ObjectConstructor", member: "is", operationKind: "call", lane: "object", variadic: true, shape: { op: "operation", operationKind: "method", target: { form: "call-value-array", path: "js_abi::object_is", leadingArguments: [], elementCarrier: rustJsValueTargetType() }, result: { ref: "bool" } } },
   ...sharedArrayOperationRows,
   { owner: "ArrayConstructor", member: "isArray", operationKind: "call", lane: "js-array", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::array_is_array_value", argModes: ["ref"] }, result: { ref: "bool" }, params: [{ ref: "jsvalue" }] } },
@@ -529,7 +531,7 @@ export const jsOperationRows = defineJsOperationRows([
 
   // JSON lane (static owner; fallible rows require a fallible context).
   { owner: "JSON", member: "parse", operationKind: "call", lane: "json", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::json_parse", argModes: ["ref"] }, result: { ref: "jsvalue" }, params: [{ ref: "string" }] } },
-  { owner: "JSON", member: "stringify", operationKind: "call", lane: "json", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::json_stringify", argModes: ["ref"] }, result: { ref: "option-of-string" }, params: [{ ref: "jsvalue" }] } },
+  { owner: "JSON", member: "stringify", operationKind: "call", lane: "json", fallible: true, jsonValueSourceArgumentIndexes: [0], shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::json_stringify", argModes: ["ref"] }, result: { ref: "option-of-string" }, params: [{ ref: "jsvalue" }] } },
 
   ...consoleRows.map(({ member, path }) => ({
     owner: "Console",

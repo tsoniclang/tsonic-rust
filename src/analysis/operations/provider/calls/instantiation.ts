@@ -721,7 +721,11 @@ function selectedCallArgumentMode(
     return targetIndex < 0 ? undefined : modes?.[targetIndex] ?? "value";
   };
   switch (form.form) {
+    case "struct-variant":
+    case "expression-macro":
+      return "value";
     case "call":
+    case "source-module-construction":
     case "free-call":
     case "receiver-method":
       return orderedMode(form.argModes, form.argOrder);

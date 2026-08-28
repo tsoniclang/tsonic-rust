@@ -14,7 +14,7 @@ import {
   isRustTargetTypeRef,
 } from "../../../target-model/types/equality.js";
 import { operationKinds, validateRustFinalizedOperationAbi } from "./validation.js";
-import { rustFutureTargetType } from "../../../target-model/types/index.js";
+import { rustFutureOutputCarrier, rustFutureTargetType } from "../../../target-model/types/index.js";
 import { rustProviderOperationFormAcceptsTargetGenericArguments, rustProviderOperationFormContractViolation } from "../../../policy/operations/forms.js";
 import type { FinalizeRustProviderOperationAbiOptions, RustFinalizedOperationAbiFor, RustFinalizedOperationResult, RustFinalizedTargetInput } from "./model.js";
 import type { RustFinalizedOperationKind } from "../../../target-model/operations/model.js";
@@ -40,6 +40,18 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
           !isRustTargetGenericArgument(argument)) ||
         !rustProviderOperationFormAcceptsTargetGenericArguments(options.form))) ||
     typeof options.isAsync !== "boolean" || typeof options.isFallible !== "boolean" ||
+    (options.returnedFuture !== undefined && (
+      options.isAsync || options.isFallible ||
+      rustFutureOutputCarrier(options.resultCarrier) === undefined ||
+      (options.returnedFuture.awaiting !== "infallible" &&
+        options.returnedFuture.awaiting !== "fallible") ||
+      (options.returnedFuture.awaiting === "infallible"
+        ? options.returnedFuture.errorBoundary !== "none" ||
+          options.returnedFuture.errorCarrier !== undefined
+        : !isRustFallibleErrorBoundary(options.returnedFuture.errorBoundary) ||
+          (options.returnedFuture.errorBoundary === "provider-native"
+            ? !isRustTargetTypeRef(options.returnedFuture.errorCarrier)
+            : options.returnedFuture.errorCarrier !== undefined)))) ||
     (options.evaluation !== undefined && options.evaluation !== "pure") ||
     (options.isFallible && !isRustFallibleErrorBoundary(options.errorBoundary)) ||
     (!options.isFallible && options.errorBoundary !== undefined) ||
@@ -136,15 +148,19 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
     effects: {
       evaluation: options.evaluation === "pure" ? "pure" : "observable",
       invocation: options.isFallible && !options.isAsync ? "fallible" : "infallible",
-      awaiting: options.isAsync
+      awaiting: options.returnedFuture?.awaiting ?? (options.isAsync
         ? options.isFallible ? "fallible" : "infallible"
-        : "not-applicable",
-      errorBoundary: options.isFallible && isRustFallibleErrorBoundary(options.errorBoundary)
-        ? options.errorBoundary
-        : "none",
-      ...(options.errorBoundary === "provider-native" && options.errorCarrier !== undefined
-        ? { errorCarrier: options.errorCarrier }
-        : {}),
+        : "not-applicable"),
+      errorBoundary: options.returnedFuture?.errorBoundary ??
+        (options.isFallible && isRustFallibleErrorBoundary(options.errorBoundary)
+          ? options.errorBoundary
+          : "none"),
+      ...((options.returnedFuture?.errorBoundary === "provider-native" &&
+          options.returnedFuture.errorCarrier !== undefined)
+        ? { errorCarrier: options.returnedFuture.errorCarrier }
+        : options.errorBoundary === "provider-native" && options.errorCarrier !== undefined
+          ? { errorCarrier: options.errorCarrier }
+          : {}),
       safety: options.isUnsafe ? "requires-unsafe" : "safe",
     },
   };

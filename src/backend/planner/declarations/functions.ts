@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { Node_Type } from "@tsonic/target-api/source";
-import { isRustNeverCarrier, isRustUnitCarrier } from "../../../target-model/types/index.js";
+import { isRustNeverCarrier, isRustUnitCarrier, rustJsPromiseTargetId } from "../../../target-model/types/index.js";
 import type { RustBlock, RustItem } from "../../target-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planBlockLike } from "../statements/index.js";
@@ -39,6 +39,7 @@ import { rustDeclarationRequiresUnsafe } from "../safety/explicit-safety.js";
 import { rustSafetyAttributesForDeclaration } from "../safety/explicit-safety.js";
 import { applyFallibleShape } from "../types/fallible-shape.js";
 import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
+import { wrapRustJsPromiseBody } from "./async-promise.js";
 
 export { applyRustTailShape, rustBlockTerminates } from "../statements/block-flow.js";
 
@@ -117,6 +118,8 @@ function planRustFunctionItem(
     outerContext.input,
   );
   const asyncFact = outerContext.input.program.facts.getFact(node, rustAsyncFunctionFactKey);
+  const returnsJsPromise = asyncFact?.futureCarrier.kind === "target-named" &&
+    asyncFact.futureCarrier.id === rustJsPromiseTargetId;
   if (isAsync && generatorFact === undefined && asyncFact === undefined) {
     outerContext.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(outerContext, node),
@@ -204,6 +207,25 @@ function planRustFunctionItem(
       "rust.backend.function",
       "Function return type has no supported Rust carrier fact.",
     ));
+    return undefined;
+  }
+  const emittedReturnType = returnsJsPromise
+    ? rustReturnTypeFromCarrierInContext(asyncFact.futureCarrier, context)
+    : returnType;
+  if (returnsJsPromise && emittedReturnType === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, returnTypeNode ?? node),
+      "rust.backend.js-promise-return",
+      "JavaScript-surface async functions require one renderable finalized Promise carrier.",
+    ));
+    return undefined;
+  }
+  if (returnsJsPromise && !requireRustCarrierRequirements(
+    asyncFact.outputCarrier,
+    ["clone"],
+    node,
+    context,
+  )) {
     return undefined;
   }
   const bodyNode = ast.body(node);
@@ -357,6 +379,17 @@ function planRustFunctionItem(
     return undefined;
   }
   const generics = genericPlan.finalizeGenerics();
+  const finalizedBody = applyFallibleShape(
+    applyRustTailShape({ statements: [...parameterStatements, ...body.statements] }, returnType !== undefined),
+    fallible
+      ? {
+          fallible: true,
+          hasReturnValue: returnType !== undefined,
+          errorType: rustErrorType(callableErrorBoundary!),
+          inferErrorTypeFromReturnType: true,
+        }
+      : { fallible: false, hasReturnValue: returnType !== undefined },
+  );
   const item: Extract<RustItem, { readonly kind: "function" }> = {
     kind: "function",
     name,
@@ -366,27 +399,17 @@ function planRustFunctionItem(
     ...(declarationAttributes.length === 0
       ? {}
       : { attrs: declarationAttributes }),
-    ...(isAsync ? { isAsync: true } : {}),
+    ...(isAsync && !returnsJsPromise ? { isAsync: true } : {}),
     ...(isUnsafe ? { isUnsafe: true } : {}),
-    ...(callableErrorBoundary === undefined
+    ...(callableErrorBoundary === undefined || returnsJsPromise
       ? {}
       : { errorType: rustErrorType(callableErrorBoundary) }),
     generics,
     params,
-    ...(returnType === undefined ? {} : { returnType }),
-    body: {
-      ...applyFallibleShape(
-        applyRustTailShape({ statements: [...parameterStatements, ...body.statements] }, returnType !== undefined),
-        fallible
-          ? {
-              fallible: true,
-              hasReturnValue: returnType !== undefined,
-              errorType: rustErrorType(callableErrorBoundary!),
-              inferErrorTypeFromReturnType: true,
-            }
-          : { fallible: false, hasReturnValue: returnType !== undefined },
-      ),
-    },
+    ...(emittedReturnType === undefined ? {} : { returnType: emittedReturnType }),
+    body: returnsJsPromise
+      ? wrapRustJsPromiseBody(finalizedBody, fallible)
+      : finalizedBody,
   };
   return item;
 }

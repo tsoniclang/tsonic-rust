@@ -47,6 +47,7 @@ export function rustExpressionContainsExpandedStructLiteral(expression: RustExpr
           rustExpressionContainsExpandedStructLiteral(expression.base));
     }
     case "call":
+    case "macro-invocation":
     case "invoke":
     case "associated-call":
       return (expression.kind === "invoke" &&
@@ -125,6 +126,7 @@ export function rustExpressionContainsExpandedCollectionLiteral(expression: Rust
       return rustExpressionContainsExpandedCollectionLiteral(expression.target) ||
         rustExpressionContainsExpandedCollectionLiteral(expression.value);
     case "call":
+    case "macro-invocation":
     case "associated-call":
       return expression.args.some(rustExpressionContainsExpandedCollectionLiteral);
     case "invoke":

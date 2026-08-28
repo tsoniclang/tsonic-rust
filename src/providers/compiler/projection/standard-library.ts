@@ -580,7 +580,8 @@ export function collectModuleStandardTypeLocations(
       case "enum":
         selectCanonicalPath(exported.canonicalPath);
         visitParameters(exported.genericParameters);
-        exported.variants.forEach((variant) => variant.fields.forEach(visitType));
+        exported.variants.forEach((variant) => variant.fields.forEach((field) =>
+          visitType(variant.kind === "struct" ? field.type : field)));
         exported.methods.forEach(visitFunction);
         exported.associatedConstants.forEach((constant) => {
           visitType(constant.type);

@@ -97,7 +97,7 @@ export type RustTargetTypeRef =
       readonly id: string;
       readonly bounds: readonly RustTargetTraitRef[];
       readonly outlives: readonly RustLifetimeRef[];
-      readonly captures: readonly RustLifetimeRef[];
+      readonly captures: readonly RustTargetGenericArgument[];
     }
   | {
       readonly kind: "associated-type";

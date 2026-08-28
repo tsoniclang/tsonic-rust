@@ -18,6 +18,7 @@ import {
   rustClosureProtocol,
   rustJsArrayTargetType,
   rustJsStringTargetType,
+  rustJsSymbolTargetType,
   rustNeverTargetType,
   rustOptionTargetType,
   rustJsValueTargetType,
@@ -26,6 +27,10 @@ import {
   rustSourcePrimitiveTargetType,
   rustBorrowedStrTargetType,
   rustStringTargetType,
+  rustStructuralObjectCarrierValue,
+  rustJsArrayLikeElementTargetType,
+  isRustJsArrayCarrier,
+  rustTargetGenericReferences,
   substituteRustTargetGenerics,
 } from "../types/index.js";
 import type { RustPrimitiveTypeName } from "../syntax/tokens.js";
@@ -41,10 +46,11 @@ const usizeCarrier = rustSourcePrimitiveTargetType("native-uint");
 const isizeCarrier = rustSourcePrimitiveTargetType("native-int");
 const stringCarrier = rustStringTargetType();
 const exactStringCarrier = rustJsStringTargetType();
+const symbolCarrier = rustJsSymbolTargetType();
 const jsValueCarrier = rustJsValueTargetType();
 
 interface RustValueConversionContractBase {
-  readonly category: "exact" | "checked-range" | "js-number" | "numeric-promotion" | "ownership";
+  readonly category: "exact" | "checked-range" | "js-number" | "numeric-promotion" | "ownership" | "projection";
   readonly sourceMode: "value" | "ref";
   readonly source: TargetTypeRef;
   readonly target: TargetTypeRef;
@@ -91,11 +97,197 @@ export type RustValueConversionContract = RustValueConversionContractBase & (
   | {
       readonly lowering: "copy-from-reference";
     }
+  | {
+      readonly lowering: "js-value-from-option";
+      readonly element: TargetTypeRef;
+      readonly elementConversion: RustValueConversionContract;
+    }
+  | {
+      readonly lowering: "js-value-from-array";
+      readonly element: TargetTypeRef;
+      readonly elementConversion: RustValueConversionContract;
+    }
+  | {
+      readonly lowering: "js-value-from-source-union";
+      readonly variants: readonly {
+        readonly name: string;
+        readonly carrier: TargetTypeRef;
+        readonly conversion: RustValueConversionContract;
+      }[];
+    }
+  | {
+      readonly lowering: "js-value-from-structural-to-json";
+      readonly storageIndex: number;
+      readonly resultCarrier: TargetTypeRef;
+      readonly passesPropertyKey: boolean;
+      readonly resultConversion: RustValueConversionContract;
+    }
+  | {
+      readonly lowering: "js-value-from-structural-object";
+      readonly fields: readonly {
+        readonly sourceName: string;
+        readonly storageIndex: number;
+        readonly sourceCarrier: TargetTypeRef;
+        readonly presence: "required" | "optional";
+        readonly conversion: RustValueConversionContract;
+      }[];
+    }
 );
 
 export function rustValueConversionContract(
   value: RustValueConversion,
 ): RustValueConversionContract | undefined {
+  if (value.kind === "js-value-from-option") {
+    const elementConversion = rustValueConversionContract(value.elementConversion);
+    return !rustTargetTypeRefEquals(value.source, rustOptionTargetType(value.element)) ||
+        elementConversion === undefined || elementConversion.fallible ||
+        !rustTargetTypeRefEquals(elementConversion.source, value.element) ||
+        !rustTargetTypeRefEquals(elementConversion.target, jsValueCarrier)
+      ? undefined
+      : {
+          category: "projection",
+          lowering: "js-value-from-option",
+          sourceMode: "value",
+          source: value.source,
+          target: jsValueCarrier,
+          element: value.element,
+          elementConversion,
+          fallible: false,
+        };
+  }
+  if (value.kind === "js-value-from-array") {
+    const elementConversion = rustValueConversionContract(value.elementConversion);
+    return !isRustJsArrayCarrier(value.source) ||
+        !rustTargetTypeRefEquals(
+          rustJsArrayLikeElementTargetType(value.source),
+          value.element,
+        ) || elementConversion === undefined || elementConversion.fallible ||
+        !rustTargetTypeRefEquals(elementConversion.source, value.element) ||
+        !rustTargetTypeRefEquals(elementConversion.target, jsValueCarrier)
+      ? undefined
+      : {
+          category: "projection",
+          lowering: "js-value-from-array",
+          sourceMode: "ref",
+          source: value.source,
+          target: jsValueCarrier,
+          element: value.element,
+          elementConversion,
+          fallible: false,
+        };
+  }
+  if (value.kind === "js-value-from-source-union") {
+    const union = rustSourceUnionCarrierValue(value.source);
+    if (union === undefined || union.variants.length !== value.variants.length) {
+      return undefined;
+    }
+    const variants = value.variants.map((variant, index) => {
+      const sourceVariant = union.variants[index];
+      const conversion = rustValueConversionContract(variant.conversion);
+      return sourceVariant === undefined || sourceVariant.name !== variant.name ||
+          !rustTargetTypeRefEquals(sourceVariant.carrier, variant.carrier) ||
+          conversion === undefined || conversion.fallible ||
+          !rustTargetTypeRefEquals(conversion.source, variant.carrier) ||
+          !rustTargetTypeRefEquals(conversion.target, jsValueCarrier)
+        ? undefined
+        : {
+            name: variant.name,
+            carrier: variant.carrier,
+            conversion,
+          };
+    });
+    return variants.some((variant) => variant === undefined)
+      ? undefined
+      : {
+          category: "projection",
+          lowering: "js-value-from-source-union",
+          sourceMode: "value",
+          source: value.source,
+          target: jsValueCarrier,
+          variants: variants as NonNullable<typeof variants[number]>[],
+          fallible: false,
+        };
+  }
+  if (value.kind === "js-value-from-structural-to-json") {
+    const structural = rustStructuralObjectCarrierValue(value.source);
+    const field = structural?.fields[value.storageIndex];
+    const callable = field?.method === true && field.presence === "required" &&
+        field.sourceName === "toJSON"
+      ? rustCallableProtocol(field.type)
+      : undefined;
+    const resultConversion = rustValueConversionContract(value.resultConversion);
+    const parametersMatch = callable?.parameters.length === 0
+      ? value.passesPropertyKey === false
+      : callable?.parameters.length === 1 &&
+        value.passesPropertyKey === true &&
+        rustTargetTypeRefEquals(callable.parameters[0], stringCarrier);
+    return structural === undefined || field === undefined || callable === undefined ||
+        !parametersMatch || !rustTargetTypeRefEquals(callable.result, value.resultCarrier) ||
+        resultConversion === undefined || resultConversion.fallible ||
+        !rustTargetTypeRefEquals(resultConversion.source, value.resultCarrier) ||
+        !rustTargetTypeRefEquals(resultConversion.target, jsValueCarrier) ||
+        rustTargetGenericReferences(value.source).lifetimeIdentities.size !== 0
+      ? undefined
+      : {
+          category: "projection",
+          lowering: "js-value-from-structural-to-json",
+          sourceMode: "value",
+          source: value.source,
+          target: jsValueCarrier,
+          storageIndex: value.storageIndex,
+          resultCarrier: value.resultCarrier,
+          passesPropertyKey: value.passesPropertyKey,
+          resultConversion,
+          fallible: false,
+        };
+  }
+  if (value.kind === "js-value-from-structural-object") {
+    const structural = rustStructuralObjectCarrierValue(value.source);
+    if (structural === undefined ||
+      structural.fields.filter((field) => field.method !== true).length !==
+        value.fields.length ||
+      new Set(value.fields.map((field) => field.storageIndex)).size !==
+        value.fields.length) {
+      return undefined;
+    }
+    const fields = value.fields.map((field) => {
+      const sourceField = structural.fields[field.storageIndex];
+      const conversion = rustValueConversionContract(field.conversion);
+      const expectedCarrier = sourceField?.presence === "optional"
+        ? rustOptionElementCarrier(sourceField.type)
+        : sourceField?.type;
+      return sourceField === undefined || sourceField.method === true ||
+          sourceField.accessor !== undefined ||
+          field.sourceName !== sourceField.sourceName ||
+          field.presence !== sourceField.presence || expectedCarrier === undefined ||
+          !rustTargetTypeRefEquals(field.sourceCarrier, expectedCarrier) ||
+          conversion === undefined || conversion.fallible ||
+          !rustTargetTypeRefEquals(conversion.source, field.sourceCarrier) ||
+          !rustTargetTypeRefEquals(conversion.target, jsValueCarrier)
+        ? undefined
+        : {
+            sourceName: field.sourceName,
+            storageIndex: field.storageIndex,
+            sourceCarrier: field.sourceCarrier,
+            presence: field.presence,
+            conversion,
+          };
+    });
+    const selectedStorage = new Set(value.fields.map((field) => field.storageIndex));
+    return fields.some((field) => field === undefined) ||
+        structural.fields.some((field, index) =>
+          field.method !== true && !selectedStorage.has(index))
+      ? undefined
+      : {
+          category: "projection",
+          lowering: "js-value-from-structural-object",
+          sourceMode: "value",
+          source: value.source,
+          target: jsValueCarrier,
+          fields: fields as NonNullable<typeof fields[number]>[],
+          fallible: false,
+        };
+  }
   if (value.kind === "js-argument-vector-callback") {
     const source = callbackProtocol(value.source);
     const target = rustClosureProtocol(value.target);
@@ -280,6 +472,8 @@ export function rustValueConversionContract(
       return contract(value.id, "exact", "tsonic_rust_js::abi::JsValue::from", "value", int32Carrier, jsValueCarrier, false);
     case "js-value-from-string":
       return contract(value.id, "exact", "tsonic_rust_js::abi::js_value_from_string", "ref", stringCarrier, jsValueCarrier, false);
+    case "js-value-from-symbol":
+      return contract(value.id, "exact", "tsonic_rust_js::abi::JsValue::from", "value", symbolCarrier, jsValueCarrier, false);
     case "js-value-clone":
       return contract(value.id, "exact", "tsonic_rust_js::abi::clone_js_value", "ref", jsValueCarrier, jsValueCarrier, false);
     case "owned-string-from-borrowed-str":
@@ -325,6 +519,16 @@ export function rustValueConversionIdentity(value: RustValueConversion): string 
             ? `bottom-coercion.${JSON.stringify(value.target)}`
             : value.kind === "js-argument-vector-callback"
               ? `js-argument-vector-callback.${value.lane}.${value.sourceFallible}.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}.${value.projections.join(".")}`
+            : value.kind === "js-value-from-option"
+              ? `js-value-from-option.${JSON.stringify(value.source)}.${rustValueConversionIdentity(value.elementConversion)}`
+            : value.kind === "js-value-from-array"
+              ? `js-value-from-array.${JSON.stringify(value.source)}.${rustValueConversionIdentity(value.elementConversion)}`
+            : value.kind === "js-value-from-source-union"
+              ? `js-value-from-source-union.${JSON.stringify(value.source)}.${value.variants.map((variant) => `${variant.name}:${rustValueConversionIdentity(variant.conversion)}`).join("|")}`
+            : value.kind === "js-value-from-structural-to-json"
+              ? `js-value-from-structural-to-json.${JSON.stringify(value.source)}.${value.storageIndex}.${value.passesPropertyKey}.${rustValueConversionIdentity(value.resultConversion)}`
+            : value.kind === "js-value-from-structural-object"
+              ? `js-value-from-structural-object.${JSON.stringify(value.source)}.${value.fields.map((field) => `${field.sourceName}:${rustValueConversionIdentity(field.conversion)}`).join("|")}`
             : value.kind === "option-some"
               ? `option-some.${JSON.stringify(value.element)}`
             : `option-map.${rustValueConversionIdentity(value.elementConversion)}`;
@@ -374,6 +578,101 @@ export function substituteRustValueConversion(
           lifetimeSubstitutions,
           constSubstitutions,
         ),
+      });
+    case "js-value-from-option":
+    case "js-value-from-array":
+      return Object.freeze({
+        ...value,
+        source: substituteRustTargetGenerics(
+          value.source,
+          substitutions,
+          lifetimeSubstitutions,
+          constSubstitutions,
+        ),
+        element: substituteRustTargetGenerics(
+          value.element,
+          substitutions,
+          lifetimeSubstitutions,
+          constSubstitutions,
+        ),
+        elementConversion: substituteRustValueConversion(
+          value.elementConversion,
+          substitutions,
+          lifetimeSubstitutions,
+          constSubstitutions,
+        ) as typeof value.elementConversion,
+      });
+    case "js-value-from-source-union":
+      return Object.freeze({
+        ...value,
+        source: substituteRustTargetGenerics(
+          value.source,
+          substitutions,
+          lifetimeSubstitutions,
+          constSubstitutions,
+        ),
+        variants: Object.freeze(value.variants.map((variant) => Object.freeze({
+          ...variant,
+          carrier: substituteRustTargetGenerics(
+            variant.carrier,
+            substitutions,
+            lifetimeSubstitutions,
+            constSubstitutions,
+          ),
+          conversion: substituteRustValueConversion(
+            variant.conversion,
+            substitutions,
+            lifetimeSubstitutions,
+            constSubstitutions,
+          ) as typeof variant.conversion,
+        }))),
+      });
+    case "js-value-from-structural-to-json":
+      return Object.freeze({
+        ...value,
+        source: substituteRustTargetGenerics(
+          value.source,
+          substitutions,
+          lifetimeSubstitutions,
+          constSubstitutions,
+        ),
+        resultCarrier: substituteRustTargetGenerics(
+          value.resultCarrier,
+          substitutions,
+          lifetimeSubstitutions,
+          constSubstitutions,
+        ),
+        resultConversion: substituteRustValueConversion(
+          value.resultConversion,
+          substitutions,
+          lifetimeSubstitutions,
+          constSubstitutions,
+        ) as typeof value.resultConversion,
+      });
+    case "js-value-from-structural-object":
+      return Object.freeze({
+        ...value,
+        source: substituteRustTargetGenerics(
+          value.source,
+          substitutions,
+          lifetimeSubstitutions,
+          constSubstitutions,
+        ),
+        fields: Object.freeze(value.fields.map((field) => Object.freeze({
+          ...field,
+          sourceCarrier: substituteRustTargetGenerics(
+            field.sourceCarrier,
+            substitutions,
+            lifetimeSubstitutions,
+            constSubstitutions,
+          ),
+          conversion: substituteRustValueConversion(
+            field.conversion,
+            substitutions,
+            lifetimeSubstitutions,
+            constSubstitutions,
+          ) as typeof field.conversion,
+        }))),
       });
     case "option-some":
       return Object.freeze({

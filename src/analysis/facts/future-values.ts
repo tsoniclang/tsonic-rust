@@ -1,6 +1,6 @@
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { rustFutureOutputCarrier, rustFutureTargetType } from "../../target-model/types/index.js";
+import { rustFutureOutputCarrier } from "../../target-model/types/index.js";
 import { validateRustFinalizedOperationAbi } from "./finalized-operation-abi.js";
 import type {
   RustFutureValueFact,
@@ -13,16 +13,29 @@ export function rustFutureValueForOperation(
   sourceCallEffects?: RustSourceCallEffectsFact,
 ): RustFutureValueFact | undefined {
   if (operation?.kind === "provider-operation") {
-    if (!validateRustFinalizedOperationAbi(operation.abi) || operation.abi.result.kind !== "async") {
+    if (!validateRustFinalizedOperationAbi(operation.abi)) {
       return undefined;
     }
     const awaiting = operation.abi.effects.awaiting;
     if (awaiting === "not-applicable") {
       return undefined;
     }
+    const outputCarrier = operation.abi.result.kind === "async"
+      ? operation.abi.result.awaitedCarrier
+      : rustFutureOutputCarrier(operation.abi.result.carrier);
+    if (outputCarrier === undefined) {
+      return undefined;
+    }
     return {
-      outputCarrier: operation.abi.result.awaitedCarrier,
-      awaitedConversion: operation.abi.result.awaitedConversion,
+      outputCarrier,
+      awaitedConversion: operation.abi.result.kind === "async"
+        ? operation.abi.result.awaitedConversion
+        : {
+            kind: "identity",
+            sourceCarrier: outputCarrier,
+            targetCarrier: outputCarrier,
+            fallible: false,
+          },
       awaiting,
       errorBoundary: operation.abi.effects.errorBoundary,
       ...(operation.abi.effects.errorCarrier === undefined
@@ -62,6 +75,6 @@ export function rustFutureValueMatchesCarrier(
     (fact.errorBoundary === "provider-native"
       ? fact.errorCarrier !== undefined
       : fact.errorCarrier === undefined) &&
-    rustTargetTypeRefEquals(carrier, rustFutureTargetType(fact.outputCarrier)) &&
+    rustTargetTypeRefEquals(rustFutureOutputCarrier(carrier), fact.outputCarrier) &&
     rustTargetTypeRefEquals(fact.awaitedConversion.targetCarrier, fact.outputCarrier);
 }

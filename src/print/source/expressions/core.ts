@@ -153,6 +153,14 @@ export function printRustExpr(expression: RustExpr): string {
       const elements = expression.elements.map(printRustExpr).join(", ");
       return `(${elements}${expression.elements.length === 1 ? "," : ""})`;
     }
+    case "macro-invocation": {
+      const [open, close] = expression.delimiter === "parentheses"
+        ? ["(", ")"]
+        : expression.delimiter === "brackets"
+          ? ["[", "]"]
+          : ["{", "}"];
+      return `${expression.path}!${open}${expression.args.map(printRustExpr).join(", ")}${close}`;
+    }
     case "struct-literal": {
       if (expression.fields.length === 0 && expression.base === undefined) {
         return `${expression.path} {}`;

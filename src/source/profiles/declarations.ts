@@ -2,7 +2,7 @@ import {
   targetSourceProfileDeclaration,
   typescriptNoLibUtilityDeclarations,
 } from "@tsonic/target-api/provider";
-import { jsRegExpSourceProfileDeclarations } from "@tsonic/js-source-profile";
+import { jsStandardSourceProfileDeclarations } from "@tsonic/js-source-profile";
 import type { TargetSourceProfileContributions } from "@tsonic/target-api/provider";
 import { rustTargetId } from "../../target-model/identities/target.js";
 
@@ -438,7 +438,7 @@ interface Console {
 }
 declare var console: Console;
 
-${jsRegExpSourceProfileDeclarations}
+${jsStandardSourceProfileDeclarations}
 `.trim();
 
 export function rustNativeSourceProfileContributions(): TargetSourceProfileContributions {

@@ -38,6 +38,7 @@ export const rustTypeAliasDeclarationFactKey: RustPlanKey<RustTypeAliasDeclarati
 
 export interface RustAsyncFunctionFact {
   readonly isAsync: true;
+  readonly futureCarrier: TargetTypeRef;
   readonly outputCarrier: TargetTypeRef;
 }
 

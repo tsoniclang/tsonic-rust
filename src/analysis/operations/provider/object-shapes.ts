@@ -1,7 +1,4 @@
 import {
-  rustJsErrorTargetType,
-  rustJsValueTargetType,
-  rustOptionTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
 } from "../../../target-model/types/index.js";
@@ -69,45 +66,7 @@ export function mapSelectedJsSpecialCall(
       options,
     );
   }
-  if (ownerName !== "JSON" || memberName !== "stringify" || selectedCallArgumentNodes(request).length !== 3) {
-    return undefined;
-  }
-  const [valueNode, replacerNode, spaceNode] = selectedCallArgumentNodes(request).map((argument) => asNode(argument, context));
-  const ast = context.ast;
-  if (valueNode === undefined || replacerNode === undefined || spaceNode === undefined || ast.kindName(replacerNode) !== "KindNullKeyword") {
-    return rejectSelectedOperation(request.source.call, context, "RUST_JSON_STRINGIFY_REPLACER_UNSUPPORTED", "Rust JSON.stringify supports the selected three-argument overload only with a null replacer and compile-time string/number indentation.");
-  }
-  let indent: string | undefined;
-  if (ast.kindName(spaceNode) === "KindNumericLiteral") {
-    indent = " ".repeat(Math.min(10, Math.max(0, Math.trunc(Number(ast.text(spaceNode))))));
-  } else if (ast.kindName(spaceNode) === "KindStringLiteral") {
-    indent = ast.text(spaceNode).slice(0, 10);
-  }
-  if (indent === undefined) {
-    return rejectSelectedOperation(request.source.call, context, "RUST_JSON_STRINGIFY_INDENT_UNSUPPORTED", "Rust JSON.stringify indentation must be a compile-time string or number selected by the checked source call.");
-  }
-  const resultCarrier = rustOptionTargetType(rustStringTargetType());
-  return acceptSelectedCall(request, {
-    kind: "provider-operation",
-    operationId: "tsonic.rust.js.JSON.stringify.indent",
-    operationKind: "method",
-    target: {
-      form: "call",
-      path: "js_abi::json_stringify_with_indent",
-      argModes: ["ref"],
-      argOrder: [0],
-      trailingArguments: [{ kind: "string", value: indent }],
-    },
-    parameterCarriers: [rustJsValueTargetType()],
-    compileTimeSourceArgumentIndexes: [1, 2],
-    resultCarrier,
-    isAsync: false,
-    isFallible: true,
-    errorBoundary: "provider-native",
-    errorCarrier: rustJsErrorTargetType(),
-  }, [rustJsValueTargetType()], context, options, {
-    sourceName: memberName,
-  });
+  return undefined;
 }
 
 interface SelectedObjectShapeProjection {
@@ -118,6 +77,7 @@ interface SelectedObjectShapeProjection {
   readonly sourceName: string;
   readonly sourceValue: "first-argument" | "receiver";
   readonly keyArgumentIndex?: number;
+  readonly assignmentSourceArgumentIndex?: number;
   readonly expectedArgumentCount: number;
   readonly static: boolean;
 }
@@ -127,6 +87,16 @@ function selectedObjectShapeProjection(
   memberName: string,
 ): SelectedObjectShapeProjection | undefined {
   if (ownerName === "ObjectConstructor") {
+    if (memberName === "assign") {
+      return {
+        projection: "assign",
+        sourceName: memberName,
+        sourceValue: "first-argument",
+        assignmentSourceArgumentIndex: 1,
+        expectedArgumentCount: 2,
+        static: true,
+      };
+    }
     if (memberName === "keys" || memberName === "values" || memberName === "entries") {
       return {
         projection: memberName,
@@ -198,6 +168,39 @@ function mapSelectedObjectShapeProjection(
       `Selected Object.${selection.sourceName} call requires one exact generated structural object carrier.`,
     );
   }
+  const assignmentSource = selection.assignmentSourceArgumentIndex === undefined
+    ? undefined
+    : sourceArguments[selection.assignmentSourceArgumentIndex];
+  const assignmentSourceNode = assignmentSource === undefined
+    ? undefined
+    : asNode(assignmentSource.expression, context);
+  const assignmentSourceCarrier = assignmentSource === undefined
+    ? undefined
+    : selectedValueCarrier(
+        assignmentSource.expression,
+        assignmentSource.type,
+        context,
+        options,
+      );
+  const assignmentShape = assignmentSource === undefined ||
+      assignmentSourceCarrier === undefined
+    ? undefined
+    : options.sourceTypes.structuralObjectForType(
+        assignmentSource.type,
+        assignmentSourceCarrier,
+      );
+  if (selection.projection === "assign" && (
+    assignmentSourceNode === undefined || assignmentSourceCarrier === undefined ||
+    assignmentShape === undefined || assignmentShape.storage !== "object-handle" ||
+    !rustTargetTypeRefEquals(assignmentShape.carrier, assignmentSourceCarrier)
+  )) {
+    return rejectSelectedOperation(
+      request.source.call,
+      context,
+      "RUST_OBJECT_ASSIGN_SOURCE_NOT_CLOSED",
+      "Selected Object.assign requires exact generated target and source structural object carriers.",
+    );
+  }
   const orderedFields = selectedAuthoredObjectFields(shape, context);
   if (orderedFields.kind === "rejected") {
     return rejectSelectedOperation(
@@ -205,6 +208,20 @@ function mapSelectedObjectShapeProjection(
       context,
       "RUST_OBJECT_SHAPE_PROJECTION_NOT_CLOSED",
       orderedFields.reason,
+    );
+  }
+  const orderedAssignmentFields = assignmentShape === undefined
+    ? undefined
+    : selectedAuthoredObjectFields(assignmentShape, context);
+  if (selection.projection === "assign" &&
+    (orderedAssignmentFields === undefined || orderedAssignmentFields.kind === "rejected")) {
+    return rejectSelectedOperation(
+      request.source.call,
+      context,
+      "RUST_OBJECT_ASSIGN_SOURCE_NOT_CLOSED",
+      orderedAssignmentFields?.kind === "rejected"
+        ? orderedAssignmentFields.reason
+        : "Selected Object.assign source has no exact enumerable own-property order.",
     );
   }
   const resolvedSourceResult = resolveRustTargetTypeRef(
@@ -223,11 +240,38 @@ function mapSelectedObjectShapeProjection(
       `Selected Object.${selection.sourceName} call has no exact closed result carrier.`,
     );
   }
-  const projectedFields = selectObjectShapeProjectionFields(
-    selection.projection,
-    orderedFields.fields,
-    innerResultCarrier,
-  );
+  if (selection.projection === "assign" &&
+    !rustTargetTypeRefEquals(innerResultCarrier, sourceValueCarrier)) {
+    return rejectSelectedOperation(
+      request.source.call,
+      context,
+      "RUST_OBJECT_ASSIGN_RESULT_NOT_IDENTICAL",
+      "Selected Object.assign result must preserve the exact target object-handle carrier.",
+    );
+  }
+  const assignmentFields = selection.projection === "assign"
+    ? selectObjectAssignmentFields(
+        orderedFields.fields,
+        orderedAssignmentFields?.kind === "resolved"
+          ? orderedAssignmentFields.fields
+          : [],
+      )
+    : undefined;
+  if (assignmentFields?.kind === "rejected") {
+    return rejectSelectedOperation(
+      request.source.call,
+      context,
+      "RUST_OBJECT_ASSIGN_RESULT_INVALID",
+      assignmentFields.reason,
+    );
+  }
+  const projectedFields = selection.projection === "assign"
+    ? { kind: "resolved" as const, fields: [] }
+    : selectObjectShapeProjectionFields(
+        selection.projection,
+        orderedFields.fields,
+        innerResultCarrier,
+      );
   if (projectedFields.kind === "rejected") {
     return rejectSelectedOperation(
       request.source.call,
@@ -275,6 +319,13 @@ function mapSelectedObjectShapeProjection(
       : { kind: "argument", index: 0 },
     sourceValueCarrier,
     ...(keyExpression === undefined ? {} : { keyExpression }),
+    ...(assignmentSourceNode === undefined ? {} : { assignmentSource: assignmentSourceNode }),
+    ...(assignmentSourceCarrier === undefined
+      ? {}
+      : { assignmentSourceCarrier }),
+    ...(assignmentFields?.kind !== "resolved"
+      ? {}
+      : { assignmentFields: assignmentFields.fields }),
     fields: projectedFields.fields,
     storage: shape.storage,
     resultCarrier: innerResultCarrier,
@@ -303,7 +354,9 @@ function mapSelectedObjectShapeProjection(
     );
   }
   const parameterModes = sourceArguments.map((_, index) =>
-    selection.static && index === 0 ? "borrow-shared" as const : "by-value" as const);
+    selection.static && (index === 0 || selection.projection === "assign" && index === 1)
+      ? "borrow-shared" as const
+      : "by-value" as const);
   for (const [index, argument] of sourceArguments.entries()) {
     const mode = parameterModes[index]!;
     context.facts.set(argument.expression, rustArgumentPassingKey, {
@@ -491,6 +544,9 @@ function selectObjectShapeProjectionFields(
       ? { kind: "resolved", fields: fields.map(projectIdentityField) }
       : { kind: "rejected", reason: "Object.hasOwn requires an exact boolean result carrier." };
   }
+  if (projection === "assign") {
+    return { kind: "rejected", reason: "Object.assign requires an exact source-to-target field relation." };
+  }
   const elementCarrier = isRustJsArrayCarrier(resultCarrier)
     ? rustJsArrayLikeElementTargetType(resultCarrier)
     : undefined;
@@ -549,6 +605,82 @@ function selectObjectShapeProjectionFields(
     : {
         kind: "rejected",
         reason: `Object.${projection} member '${fields[unresolvedIndex]!.sourceName}' has no exact infallible result conversion.`,
+      };
+}
+
+type SelectedAssignmentFields =
+  | {
+      readonly kind: "resolved";
+      readonly fields: NonNullable<
+        Extract<
+          RustTargetOperationFact,
+          { readonly kind: "object-shape-projection" }
+        >["assignmentFields"]
+      >;
+    }
+  | { readonly kind: "rejected"; readonly reason: string };
+
+function selectObjectAssignmentFields(
+  targetFields: readonly RustSourceObjectField[],
+  sourceFields: readonly RustSourceObjectField[],
+): SelectedAssignmentFields {
+  const relations = sourceFields.map((sourceField) => {
+    const targets = targetFields.filter((targetField) =>
+      targetField.sourceName === sourceField.sourceName);
+    const targetField = targets.length === 1 ? targets[0] : undefined;
+    if (sourceField.method === true || sourceField.accessor !== undefined ||
+      sourceField.presence !== "required") {
+      return {
+        kind: "rejected" as const,
+        reason: `Object.assign source member '${sourceField.sourceName}' is not an exact required data property.`,
+      };
+    }
+    if (targetField === undefined || targetField.method === true ||
+      targetField.accessor !== undefined || targetField.presence !== "required" ||
+      targetField.readonly) {
+      return {
+        kind: "rejected" as const,
+        reason: `Object.assign source member '${sourceField.sourceName}' has no unique writable required target property.`,
+      };
+    }
+    const conversion = rustTargetTypeRefEquals(
+      sourceField.resultCarrier,
+      targetField.resultCarrier,
+    )
+      ? undefined
+      : selectRustSourceValueConversion(
+          sourceField.resultCarrier,
+          targetField.resultCarrier,
+        );
+    if (conversion !== undefined && rustValueConversionIsFallible(conversion) ||
+      conversion === undefined && !rustTargetTypeRefEquals(
+        sourceField.resultCarrier,
+        targetField.resultCarrier,
+      )) {
+      return {
+        kind: "rejected" as const,
+        reason: `Object.assign source member '${sourceField.sourceName}' has no exact infallible target conversion.`,
+      };
+    }
+    return {
+      kind: "resolved" as const,
+      field: {
+        sourceName: sourceField.sourceName,
+        sourceStorageIndex: sourceField.storageIndex,
+        targetStorageIndex: targetField.storageIndex,
+        sourceCarrier: sourceField.resultCarrier,
+        targetCarrier: targetField.resultCarrier,
+        ...(conversion === undefined ? {} : { conversion }),
+      },
+    };
+  });
+  const rejection = relations.find((relation) => relation.kind === "rejected");
+  return rejection?.kind === "rejected"
+    ? rejection
+    : {
+        kind: "resolved",
+        fields: relations.map((relation) =>
+          (relation as Extract<typeof relation, { readonly kind: "resolved" }>).field),
       };
 }
 

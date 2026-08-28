@@ -86,6 +86,7 @@ export type RustValueConversionId =
   | "js-value-from-f64"
   | "js-value-from-i32"
   | "js-value-from-string"
+  | "js-value-from-symbol"
   | "js-value-clone"
   | "owned-string-from-borrowed-str";
 
@@ -130,6 +131,46 @@ export type RustNonOptionValueConversion =
         | "rest-values"
       )[];
       readonly sourceFallible: boolean;
+    }
+  | {
+      readonly kind: "js-value-from-option";
+      readonly source: TargetTypeRef;
+      readonly element: TargetTypeRef;
+      readonly elementConversion: RustNonOptionValueConversion;
+    }
+  | {
+      readonly kind: "js-value-from-array";
+      readonly source: TargetTypeRef;
+      readonly element: TargetTypeRef;
+      readonly elementConversion: RustNonOptionValueConversion;
+    }
+  | {
+      readonly kind: "js-value-from-source-union";
+      readonly source: TargetTypeRef;
+      readonly variants: readonly {
+        readonly name: string;
+        readonly carrier: TargetTypeRef;
+        readonly conversion: RustNonOptionValueConversion;
+      }[];
+    }
+  | {
+      readonly kind: "js-value-from-structural-to-json";
+      readonly source: TargetTypeRef;
+      readonly storageIndex: number;
+      readonly resultCarrier: TargetTypeRef;
+      readonly passesPropertyKey: boolean;
+      readonly resultConversion: RustNonOptionValueConversion;
+    }
+  | {
+      readonly kind: "js-value-from-structural-object";
+      readonly source: TargetTypeRef;
+      readonly fields: readonly {
+        readonly sourceName: string;
+        readonly storageIndex: number;
+        readonly sourceCarrier: TargetTypeRef;
+        readonly presence: "required" | "optional";
+        readonly conversion: RustNonOptionValueConversion;
+      }[];
     };
 
 export type RustValueConversion =
@@ -150,6 +191,23 @@ export type RustProviderOperationForm =
       readonly form: "marker";
     }
   | { readonly form: "call"; readonly path: string; readonly argModes?: readonly RustArgumentMode[]; readonly argConversions?: readonly (RustValueConversion | undefined)[]; readonly argOrder?: readonly number[]; readonly trailingArguments?: readonly RustProviderConstantArgument[]; readonly chain?: readonly RustProviderChainStep[] }
+  | {
+      readonly form: "source-module-construction";
+      readonly path: string;
+      readonly sourceArgumentIndex: number;
+      readonly targetArgumentIndex: number;
+      readonly bootstrap: {
+        readonly id: string;
+        readonly path: string;
+        readonly errorBoundary: RustFallibleErrorBoundary;
+        readonly errorCarrier?: TargetTypeRef;
+      };
+      readonly argModes?: readonly RustArgumentMode[];
+      readonly argConversions?: readonly (RustValueConversion | undefined)[];
+      readonly argOrder?: readonly number[];
+    }
+  | { readonly form: "struct-variant"; readonly path: string; readonly fields: readonly string[] }
+  | { readonly form: "expression-macro"; readonly path: string; readonly delimiter: "parentheses" | "brackets" | "braces" }
   | {
       readonly form: "call-c-variadic";
       readonly path: string;
@@ -217,6 +275,7 @@ export type RustProviderOperationForm =
       }[];
     }
   | { readonly form: "path"; readonly path: string }
+  | { readonly form: "reference-path"; readonly path: string; readonly mutable: boolean }
   | { readonly form: "static"; readonly path: string }
   | { readonly form: "method"; readonly name: string }
   | {
@@ -318,6 +377,11 @@ export interface RustProviderOperationTemplate<
   readonly compileTimeSourceArgumentIndexes?: readonly number[];
   readonly isAsync: boolean;
   readonly isFallible: boolean;
+  readonly returnedFuture?: {
+    readonly awaiting: "infallible" | "fallible";
+    readonly errorBoundary: RustErrorBoundary;
+    readonly errorCarrier?: TargetTypeRef;
+  };
   readonly evaluation?: "pure";
   readonly errorBoundary: RustErrorBoundary;
   readonly errorCarrier?: TargetTypeRef;

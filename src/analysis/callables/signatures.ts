@@ -45,18 +45,6 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { resolveRustGeneratorStorage } from "./generator-storage.js";
 import { rustHigherRankedNativeFunctionCarrier } from "./higher-ranked-function.js";
 
-function promiseInnerCarrier(
-  walk: RustFactWalk,
-  declaration: Node,
-  subject: ExtensionFactSubject | undefined,
-): TargetTypeRef | undefined {
-  return rustFutureOutputCarrier(resolveRustTargetTypeRef(
-    subject,
-    rustResolutionContext(walk, declaration),
-    walk.operationOptions,
-  ));
-}
-
 export function recordFunctionSignatureFacts(walk: RustFactWalk, declaration: Node): void {
   recordCallableParameterSignatureFacts(walk, declaration);
   recordCallableSuspensionFacts(walk, declaration);
@@ -495,13 +483,18 @@ export function recordCallableSuspensionFacts(walk: RustFactWalk, declaration: N
       }
     }
   } else if (ast.hasModifierKind(declaration, "async")) {
-    const inner = promiseInnerCarrier(
-      walk,
-      declaration,
+    const futureCarrier = resolveRustTargetTypeRef(
       Node_Type(walk.context.ast, declaration) ?? sourceReturn,
+      rustResolutionContext(walk, declaration),
+      walk.operationOptions,
     );
+    const inner = rustFutureOutputCarrier(futureCarrier);
     if (inner !== undefined) {
-      walk.context.facts.set(declaration, rustAsyncFunctionFactKey, { isAsync: true, outputCarrier: inner }, [
+      walk.context.facts.set(declaration, rustAsyncFunctionFactKey, {
+        isAsync: true,
+        futureCarrier: futureCarrier!,
+        outputCarrier: inner,
+      }, [
         { message: "rust async function" },
       ]);
     }

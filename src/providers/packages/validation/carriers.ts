@@ -7,7 +7,7 @@ import {
   rustTargetGenericReferences,
 } from "../../../target-model/types/index.js";
 import { builtInTargetCarrierIds, rustIdentifierPattern, rustPathPattern } from "./model.js";
-import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { isRustTargetGenericArgument, isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import type { Fail } from "./model.js";
 import type { RustProviderPackageDefinition } from "../index.js";
@@ -219,9 +219,23 @@ export function validateCarrier(
           allowUnsized: true,
         });
       }
-      if ([...carrier.outlives, ...carrier.captures].some((lifetime) =>
-        !isRustLifetimeRef(lifetime))) {
-        fail(`${where} contains an invalid opaque lifetime`);
+      if (carrier.outlives.some((lifetime) => !isRustLifetimeRef(lifetime))) {
+        fail(`${where} contains an invalid opaque outlives lifetime`);
+      }
+      for (const [index, capture] of carrier.captures.entries()) {
+        if (!isRustTargetGenericArgument(capture)) {
+          fail(`${where}.captures[${index}] is not an exact generic argument`);
+          continue;
+        }
+        if (capture.kind === "type") {
+          validateCarrier(
+            capture.type,
+            definition,
+            `${where}.captures[${index}].type`,
+            fail,
+            { allowUnsized: true },
+          );
+        }
       }
       return;
     case "associated-type":

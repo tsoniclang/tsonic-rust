@@ -517,6 +517,34 @@ export function substituteProviderOperationForm(
                     substitutions.consts,
                   )),
           };
+    case "source-module-construction": {
+      const argConversions = form.argConversions === undefined
+        ? undefined
+        : form.argConversions.map((conversion) =>
+            conversion === undefined
+              ? undefined
+              : substituteRustValueConversion(
+                  conversion,
+                  substitutions.types,
+                  substitutions.lifetimes,
+                  substitutions.consts,
+                ));
+      return {
+        ...form,
+        bootstrap: {
+          ...form.bootstrap,
+          ...(form.bootstrap.errorCarrier === undefined
+            ? {}
+            : {
+                errorCarrier: substituteProviderCarrier(
+                  form.bootstrap.errorCarrier,
+                  substitutions,
+                ),
+              }),
+        },
+        ...(argConversions === undefined ? {} : { argConversions }),
+      };
+    }
     case "index":
       return form.indexConversion === undefined
         ? form
@@ -530,10 +558,13 @@ export function substituteProviderOperationForm(
             ),
           };
     case "marker":
+    case "struct-variant":
+    case "expression-macro":
     case "call-c-variadic":
     case "call-str-slice":
     case "free-call-str-slice":
     case "path":
+    case "reference-path":
     case "static":
     case "method":
     case "arg-method":
@@ -564,6 +595,9 @@ export function finalizeProviderOperationFact(
     ...(template.resultConversion === undefined ? {} : { resultConversion: template.resultConversion }),
     isAsync: template.isAsync,
     isFallible: template.isFallible,
+    ...(template.returnedFuture === undefined
+      ? {}
+      : { returnedFuture: template.returnedFuture }),
     ...(template.evaluation === undefined ? {} : { evaluation: template.evaluation }),
     ...(template.errorBoundary === "none" ? {} : { errorBoundary: template.errorBoundary }),
     ...(template.errorCarrier === undefined ? {} : { errorCarrier: template.errorCarrier }),

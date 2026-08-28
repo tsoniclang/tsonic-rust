@@ -134,6 +134,11 @@ export interface FinalizeRustProviderOperationAbiOptions<
   readonly resultConversion?: RustValueConversion;
   readonly isAsync: boolean;
   readonly isFallible: boolean;
+  readonly returnedFuture?: {
+    readonly awaiting: "infallible" | "fallible";
+    readonly errorBoundary: RustErrorBoundary;
+    readonly errorCarrier?: TargetTypeRef;
+  };
   readonly evaluation?: "pure";
   readonly errorBoundary?: RustFallibleErrorBoundary;
   readonly errorCarrier?: TargetTypeRef;

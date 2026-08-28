@@ -35,6 +35,7 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
   }
   const variants: { name: string; discriminant?: string }[] = [];
   const discriminants = new Map<number, string>();
+  let hasDuplicateDiscriminant = false;
   for (const member of ast.members(node)) {
     if (member === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
@@ -65,27 +66,59 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
     }
     const previousMember = discriminants.get(value);
     if (previousMember !== undefined) {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        diagnosticInput(context, member),
-        "rust.backend.enum",
-        `Enum members '${previousMember}' and '${memberName}' have the same discriminant ${value}, which Rust rejects.`,
-      ));
-      return undefined;
+      hasDuplicateDiscriminant = true;
+    } else {
+      discriminants.set(value, memberName);
     }
-    discriminants.set(value, memberName);
     variants.push({ name: memberName, discriminant: String(value) });
+  }
+  const visibility = ast.hasModifierKind(node, "export") ||
+      rustProjectTypeHasPublicImplementationAbi(context, enumName)
+    ? "public" as const
+    : "crate" as const;
+  const attrs = rustProjectTypeHasPublicImplementationAbi(context, enumName)
+    ? []
+    : [rustLintAttributes.deadCode];
+  if (hasDuplicateDiscriminant) {
+    const enumType = { kind: "named" as const, path: enumName };
+    return [{
+      kind: "struct",
+      name: enumName,
+      visibility,
+      attrs: ["#[repr(transparent)]", ...attrs],
+      derives: ["Clone", "Copy", "Debug", "PartialEq", "Eq", "Hash"],
+      generics: emptyRustGenerics,
+      fields: [{
+        name: "value",
+        type: { kind: "primitive", name: "i64" },
+        visibility: "private",
+      }],
+    }, {
+      kind: "impl",
+      generics: emptyRustGenerics,
+      target: enumType,
+      constants: variants.map((variant) => ({
+        name: variant.name,
+        visibility: "public",
+        type: { kind: "named", path: "Self" },
+        value: {
+          kind: "struct-literal",
+          path: "Self",
+          fields: [{
+            name: "value",
+            value: { kind: "int-literal", text: variant.discriminant! },
+          }],
+        },
+      })),
+      functions: [],
+    }];
   }
   return [{
     kind: "enum",
     generics: emptyRustGenerics,
     name: enumName,
-    visibility: ast.hasModifierKind(node, "export") ||
-        rustProjectTypeHasPublicImplementationAbi(context, enumName)
-      ? "public"
-      : "crate",
-    ...(rustProjectTypeHasPublicImplementationAbi(context, enumName)
-      ? {}
-      : { attrs: [rustLintAttributes.deadCode] }),
+    visibility,
+    ...(attrs.length === 0 ? {} : { attrs }),
     derives: ["Clone", "Copy", "Debug", "PartialEq"],
     variants,
   }];

@@ -19,6 +19,7 @@ export const rustSourceTypeExportIds = Object.freeze({
   captureSet: "Capture",
   opaqueType: "Impl",
   maybeSized: "MaybeSized",
+  scalar: "scalar",
 } as const);
 
 export const rustSourceOperationExportIds = Object.freeze({

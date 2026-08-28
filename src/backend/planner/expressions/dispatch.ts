@@ -16,6 +16,7 @@ import {
   isRustUndefinedCarrier,
   isRustUnitCarrier,
   rustOptionElementCarrier,
+  rustJsPromiseTargetId,
   rustSourceTypeCarrierValue,
 } from "../../../target-model/types/index.js";
 import {
@@ -436,7 +437,6 @@ export function planExpressionInner(
       if (planned === undefined) {
         return undefined;
       }
-      let awaited: RustExpr = { kind: "await", expr: planned };
       const future = operand === undefined
         ? undefined
         : context.input.program.facts.getFact(operand, rustFutureValueFactKey);
@@ -452,6 +452,25 @@ export function planExpressionInner(
         ));
         return undefined;
       }
+      if (operandCarrier?.kind === "target-named" && operandCarrier.id === rustJsPromiseTargetId &&
+        !requireRustCarrierRequirements(
+          future.outputCarrier,
+          ["clone"],
+          node,
+          context,
+        )) {
+        return undefined;
+      }
+      const awaitOperand: RustExpr = operandCarrier?.kind === "target-named" &&
+          operandCarrier.id === rustJsPromiseTargetId
+        ? {
+            kind: "method-call",
+            receiver: planned,
+            method: future.awaiting === "fallible" ? "await_result" : "await_value",
+            args: [],
+          }
+        : planned;
+      let awaited: RustExpr = { kind: "await", expr: awaitOperand };
       if (future.awaiting === "fallible") {
         const activeErrorType = rustActiveErrorType(context);
         if (activeErrorType === undefined) {

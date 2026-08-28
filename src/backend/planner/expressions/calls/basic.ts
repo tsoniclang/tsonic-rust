@@ -15,7 +15,7 @@ import { planRustNonConsumingValue, planRustSharedReceiver, planRustTypedLocatio
 import { planRustSourceCallArgumentEvaluation, requireProviderArgumentPassingFacts } from "./arguments.js";
 import { planSelectedSourceCall, sourceCallEffectsMatch } from "./source.js";
 import { providerSelectedCallMatches, rustOperationFact } from "../fundamentals.js";
-import { readRustStoredObjectField } from "../../objects/project-storage.js";
+import { readRustStoredObjectField, writeRustStoredObjectField } from "../../objects/project-storage.js";
 import { requireRustDefaultValueCarrier } from "../../types/generic-requirements.js";
 import { rustArgumentPassingKey } from "../../../../target-model/facts/selections.js";
 import { rustSourceCallEffectsFactKey } from "../../../../analysis/facts/keys.js";
@@ -258,6 +258,8 @@ function planObjectShapeProjectionCall(
   const expectedParameterCarriers = staticCall
     ? fact.projection === "has-own"
       ? [fact.sourceValueCarrier, rustStringTargetType()]
+      : fact.projection === "assign"
+        ? [fact.sourceValueCarrier, fact.assignmentSourceCarrier]
       : [fact.sourceValueCarrier]
     : fact.projection === "has-own"
       ? [rustStringTargetType()]
@@ -268,10 +270,14 @@ function planObjectShapeProjectionCall(
     (selected.member.static === true) !== staticCall ||
     selected.member.returnType === undefined ||
     !rustTargetTypeRefEquals(selected.member.returnType, fact.resultCarrier) ||
+    expectedParameterCarriers.some((carrier) => carrier === undefined) ||
     selected.member.parameters.length !== expectedParameterCarriers.length ||
     !selected.member.parameters.every((parameter, index) =>
-      rustTargetTypeRefEquals(parameter.type, expectedParameterCarriers[index]) &&
-      parameter.passingMode === (staticCall && index === 0 ? "borrow-shared" : "by-value")) ||
+      rustTargetTypeRefEquals(parameter.type, expectedParameterCarriers[index]!) &&
+      parameter.passingMode === (staticCall &&
+          (index === 0 || fact.projection === "assign" && index === 1)
+        ? "borrow-shared"
+        : "by-value")) ||
     (!staticCall && !rustTargetTypeRefEquals(
       selected.sourceSelectedReceiverCarrier,
       fact.sourceValueCarrier,
@@ -287,7 +293,10 @@ function planObjectShapeProjectionCall(
     sourceArguments.length !== expectedParameterCarriers.length ||
     sourceArguments.some((argument, index) => {
       const passing = context.input.program.facts.getFact(argument!, rustArgumentPassingKey);
-      return passing?.mode !== (staticCall && index === 0 ? "borrow-shared" : "by-value");
+      return passing?.mode !== (staticCall &&
+          (index === 0 || fact.projection === "assign" && index === 1)
+        ? "borrow-shared"
+        : "by-value");
     })) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -310,7 +319,8 @@ function planObjectShapeProjectionCall(
   }
   const receiverName = allocateRustSyntheticName(
     context.syntheticNames,
-    fact.projection === "values" || fact.projection === "entries"
+    fact.projection === "values" || fact.projection === "entries" ||
+        fact.projection === "assign"
       ? "object_projection_value"
       : "_object_projection_value",
   );
@@ -329,6 +339,33 @@ function planObjectShapeProjectionCall(
       "object_projection_key",
     );
     bindings.push({ name: keyName, value: plannedKey });
+  }
+  let assignmentSourceName: string | undefined;
+  if (fact.assignmentSource !== undefined) {
+    if (sourceArguments[1] !== fact.assignmentSource) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, node),
+        "rust.backend.object-assign-source",
+        "Closed Object.assign source conflicts with its finalized second argument.",
+      ));
+      return undefined;
+    }
+    const plannedAssignmentSource = planExpression(fact.assignmentSource, context);
+    if (plannedAssignmentSource === undefined) {
+      return undefined;
+    }
+    assignmentSourceName = allocateRustSyntheticName(
+      context.syntheticNames,
+      "object_assignment_source",
+    );
+    bindings.push({
+      name: assignmentSourceName,
+      value: planRustSharedReceiver(
+        fact.assignmentSource,
+        plannedAssignmentSource,
+        context,
+      ),
+    });
   }
   const receiver: RustExpr = { kind: "path", path: receiverName };
   let value: RustExpr | undefined;
@@ -416,6 +453,73 @@ function planObjectShapeProjectionCall(
         comparisons[0]!,
       );
       break;
+    case "assign": {
+      if (assignmentSourceName === undefined || fact.storage !== "object-handle" ||
+        fact.assignmentSourceCarrier === undefined || fact.assignmentFields === undefined) {
+        context.diagnostics.push(missingFactDiagnostic(
+          diagnosticInput(context, node),
+          "rust.backend.object-assign-source",
+          "Closed Object.assign has no exact generated source object handle.",
+        ));
+        return undefined;
+      }
+      const source: RustExpr = { kind: "path", path: assignmentSourceName };
+      const effects: RustExpr[] = [];
+      for (const field of fact.assignmentFields) {
+        const stored = readRustStoredObjectField(
+          fact.storage,
+          fact.assignmentSourceCarrier,
+          source,
+          field.sourceStorageIndex,
+          field.sourceCarrier,
+          context,
+        );
+        const converted = stored === undefined
+          ? undefined
+          : applyRustValueConversion(
+              context,
+              stored,
+              field.conversion,
+              undefined,
+              false,
+            );
+        const write = converted === undefined
+          ? undefined
+          : writeRustStoredObjectField(
+              fact.storage,
+              fact.sourceValueCarrier,
+              receiver,
+              field.targetStorageIndex,
+              "=",
+              converted,
+              context,
+            );
+        if (write === undefined) {
+          context.diagnostics.push(missingFactDiagnostic(
+            diagnosticInput(context, node),
+            "rust.backend.object-assign-field",
+            `Closed Object.assign member '${field.sourceName}' has no exact writable target storage.`,
+          ));
+          return undefined;
+        }
+        effects.push(write);
+      }
+      value = effects.reduceRight<RustExpr>(
+        (next, effect) => ({
+          kind: "evaluate-then",
+          effect,
+          discard: "unit",
+          value: next,
+        }),
+        {
+          kind: "method-call",
+          receiver,
+          method: "clone",
+          args: [],
+        },
+      );
+      break;
+    }
   }
   return value === undefined
     ? undefined

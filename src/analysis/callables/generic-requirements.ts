@@ -509,7 +509,11 @@ function classifyStaticCarrier(
         carrier.autoTraits.every((trait) =>
           classifyStaticCarrier(trait, declared, byParameter));
     case "impl-trait":
-      return carrier.captures.every((lifetime) => lifetime.kind === "static") &&
+      return carrier.captures.every((capture) => {
+        if (capture.kind === "const") return true;
+        if (capture.kind === "lifetime") return capture.lifetime.kind === "static";
+        return classifyStaticCarrier(capture.type, declared, byParameter);
+      }) &&
         carrier.bounds.every((bound) =>
           classifyStaticCarrier(bound, declared, byParameter));
     case "closure":
@@ -560,7 +564,9 @@ function containsDeclaredTypeParameter(
           containsDeclaredTypeParameter(trait, declared));
     case "impl-trait":
       return carrier.bounds.some((bound) =>
-        containsDeclaredTypeParameter(bound, declared));
+        containsDeclaredTypeParameter(bound, declared)) ||
+        carrier.captures.some((capture) => capture.kind === "type" &&
+          containsDeclaredTypeParameter(capture.type, declared));
     case "target-specific": {
       const fixedArray = rustFixedArrayCarrierValue(carrier);
       if (fixedArray !== undefined) {

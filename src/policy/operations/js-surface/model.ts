@@ -13,6 +13,7 @@ export interface JsOperationRequest {
   readonly memberName: string;
   readonly operationKind: "call" | "property" | "indexer" | "constructor" | "property-set" | "index-set" | "delete";
   readonly receiverCarrier?: TargetTypeRef;
+  readonly sourceResultCarrier?: TargetTypeRef;
   readonly argumentCarriers?: readonly (TargetTypeRef | undefined)[];
   readonly selectedMethodTypeArgumentCarriers?: readonly (TargetTypeRef | undefined)[];
   readonly authoredMethodTypeArgumentCarriers?: readonly (TargetTypeRef | undefined)[];
@@ -42,6 +43,19 @@ export type JsLane =
   | "js-string"
   | "map"
   | "set"
+  | "weak-map"
+  | "weak-set"
+  | "symbol"
+  | "array-buffer"
+  | "data-view"
+  | "typed-array"
+  | "promise"
+  | "promise-record"
+  | "intl-date-time"
+  | "intl-number"
+  | "intl-collator"
+  | "intl-record"
+  | "timer"
   | "date"
   | "json"
   | "math"
@@ -75,6 +89,7 @@ export type JsCarrierRef =
   | { readonly ref: "bool" }
   | { readonly ref: "unit" }
   | { readonly ref: "string-array" }
+  | { readonly ref: "float64-array" }
   | { readonly ref: "js-string-array" }
   | { readonly ref: "regexp" }
   | { readonly ref: "regexp-exec-array" }
@@ -122,9 +137,24 @@ export type JsCarrierRef =
   | { readonly ref: "set-value" }
   | { readonly ref: "set-value-array" }
   | { readonly ref: "set-entry-array" }
+  | { readonly ref: "symbol" }
+  | { readonly ref: "weak-key" }
+  | { readonly ref: "weak-value" }
+  | { readonly ref: "option-of-weak-value" }
+  | { readonly ref: "weak-map-entry-array" }
+  | { readonly ref: "weak-key-array" }
+  | { readonly ref: "array-buffer" }
+  | { readonly ref: "date" }
+  | { readonly ref: "future-output" }
+  | { readonly ref: "promise-output" }
+  | { readonly ref: "promise-input-output" }
+  | { readonly ref: "promise-finally-callback" }
+  | { readonly ref: "json-replacer-callback" }
+  | { readonly ref: "null" }
+  | { readonly ref: "source-result" }
   | { readonly ref: "argument"; readonly index: number };
 
-type JsCarrierCapability = "numeric" | "integer" | "clone" | "stringifiable" | "js-equality" | "project-identity-equality";
+type JsCarrierCapability = "numeric" | "integer" | "clone" | "stringifiable" | "js-equality" | "project-identity-equality" | "object-identity";
 
 export interface JsOperationRowData {
   readonly owner: string;
@@ -139,6 +169,13 @@ export interface JsOperationRowData {
   readonly callback?: RustCallbackOperationTemplate;
   readonly selectedMethodTypeArgumentArity?: number;
   readonly fallible?: boolean;
+  readonly asynchronous?: true;
+  readonly returnedFuture?: {
+    readonly awaiting: "infallible" | "fallible";
+    readonly errorBoundary: "none" | "source-program";
+  };
+  readonly compileTimeSourceArgumentIndexes?: readonly number[];
+  readonly jsonValueSourceArgumentIndexes?: readonly number[];
   readonly variadic?: true;
   readonly firstArgCarrierId?: string;
   readonly authoredPropertyKey?: true;
@@ -173,6 +210,19 @@ export function defineJsOperationRows(rows: readonly JsOperationRowData[]): read
         rustProviderOperationFormDeclaresWritableInput(row.shape.target))) {
       throw new Error(
         `Pure JavaScript operation row '${row.owner}.${row.member}' cannot construct identity, invoke a source callback, or declare writable source inputs.`,
+      );
+    }
+    if (row.jsonValueSourceArgumentIndexes !== undefined && (
+      row.shape.op !== "operation" || row.variadic === true ||
+      new Set(row.jsonValueSourceArgumentIndexes).size !==
+        row.jsonValueSourceArgumentIndexes.length ||
+      row.jsonValueSourceArgumentIndexes.some((index) =>
+        !Number.isSafeInteger(index) || index < 0 ||
+        index >= (row.shape.params?.length ?? 0) ||
+        row.compileTimeSourceArgumentIndexes?.includes(index) === true)
+    )) {
+      throw new Error(
+        `JavaScript operation row '${row.owner}.${row.member}' has an invalid JSON-value source projection.`,
       );
     }
     const operation = [

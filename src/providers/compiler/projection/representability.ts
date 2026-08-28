@@ -64,7 +64,7 @@ function typeHasCarrierContracts(type: RustCompilerType, context: ProjectionCont
     case "self":
       return true;
     case "primitive":
-      return type.name === "str" || type.name === "never" ||
+      return type.name === "str" || type.name === "never" || type.name === "char" ||
         sourcePrimitiveByRustName.has(type.name);
     case "tuple":
       return type.elements.every((element) => typeHasCarrierContracts(element, context));

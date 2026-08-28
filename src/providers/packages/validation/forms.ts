@@ -27,6 +27,79 @@ export function validateOperationForm(
       validateTrailingArguments(form.trailingArguments, label, fail);
       validateChain(form.chain, label, fail);
       return;
+    case "source-module-construction":
+      requireExactKeys(
+        record,
+        ["form", "path", "sourceArgumentIndex", "targetArgumentIndex", "bootstrap", "argModes", "argConversions", "argOrder"],
+        `${label}.target`,
+        fail,
+      );
+      requireRustPath(form.path, `${label}.target.path`, fail);
+      requireExactKeys(
+        form.bootstrap as unknown as Readonly<Record<string, unknown>>,
+        ["id", "path", "errorBoundary", "errorCarrier"],
+        `${label}.target.bootstrap`,
+        fail,
+      );
+      if (typeof form.bootstrap.id !== "string" || form.bootstrap.id.length === 0) {
+        fail(`${label}.target.bootstrap.id must be one non-empty opaque provider identity`);
+      }
+      requireRustPath(form.bootstrap.path, `${label}.target.bootstrap.path`, fail);
+      if (form.bootstrap.errorBoundary === "provider-native") {
+        if (form.bootstrap.errorCarrier === undefined) {
+          fail(`${label}.target.bootstrap provider-native boundary requires an exact error carrier`);
+        } else {
+          validateCarrier(
+            form.bootstrap.errorCarrier,
+            definition,
+            `${label}.target.bootstrap.errorCarrier`,
+            fail,
+          );
+        }
+      } else if (form.bootstrap.errorBoundary !== "target-runtime" &&
+        form.bootstrap.errorBoundary !== "source-program") {
+        fail(`${label}.target.bootstrap.errorBoundary is not one exact Rust error boundary`);
+      } else if (form.bootstrap.errorCarrier !== undefined) {
+        fail(`${label}.target.bootstrap.errorCarrier is valid only for provider-native errors`);
+      }
+      if (operationKind !== "constructor") {
+        fail(`${label}.target source-module construction is valid only for a constructor`);
+      }
+      if (!Number.isSafeInteger(form.sourceArgumentIndex) || form.sourceArgumentIndex < 0 ||
+        form.sourceArgumentIndex >= (parameterCarriers?.length ?? 0)) {
+        fail(`${label}.target.sourceArgumentIndex must select one declared source parameter`);
+      }
+      if (!Number.isSafeInteger(form.targetArgumentIndex) || form.targetArgumentIndex < 0 ||
+        form.targetArgumentIndex >= (parameterCarriers?.length ?? 0)) {
+        fail(`${label}.target.targetArgumentIndex must select one mapped target argument`);
+      }
+      validateArgumentMetadata(form, definition, label, parameterCarriers, fail);
+      if ((form.argOrder ?? parameterCarriers?.map((_, index) => index) ?? [])[form.targetArgumentIndex] !==
+        form.sourceArgumentIndex) {
+        fail(`${label}.target source/target module argument indexes must identify the same exact mapped argument`);
+      }
+      return;
+    case "struct-variant":
+      requireExactKeys(record, ["form", "path", "fields"], `${label}.target`, fail);
+      requireRustPath(form.path, `${label}.target.path`, fail);
+      if (!Array.isArray(form.fields) || form.fields.length !== (parameterCarriers?.length ?? 0)) {
+        fail(`${label}.target.fields must exactly cover all declared parameter carriers`);
+        return;
+      }
+      for (const [index, field] of form.fields.entries()) {
+        requireRustIdentifier(field, `${label}.target.fields[${index}]`, fail);
+        if (form.fields.indexOf(field) !== index) {
+          fail(`${label}.target.fields repeats Rust field '${field}'`);
+        }
+      }
+      return;
+    case "expression-macro":
+      requireExactKeys(record, ["form", "path", "delimiter"], `${label}.target`, fail);
+      requireRustPath(form.path, `${label}.target.path`, fail);
+      if (form.delimiter !== "parentheses" && form.delimiter !== "brackets" && form.delimiter !== "braces") {
+        fail(`${label}.target.delimiter is not an exact Rust macro delimiter`);
+      }
+      return;
     case "call-c-variadic":
       requireExactKeys(record, ["form", "path", "fixedArgumentModes"], `${label}.target`, fail);
       requireRustPath(form.path, `${label}.target.path`, fail);
@@ -37,6 +110,13 @@ export function validateOperationForm(
     case "static":
       requireExactKeys(record, ["form", "path"], `${label}.target`, fail);
       requireRustPath(form.path, `${label}.target.path`, fail);
+      return;
+    case "reference-path":
+      requireExactKeys(record, ["form", "path", "mutable"], `${label}.target`, fail);
+      requireRustPath(form.path, `${label}.target.path`, fail);
+      if (typeof form.mutable !== "boolean") {
+        fail(`${label}.target.mutable must be an exact boolean`);
+      }
       return;
     case "free-call-str-slice":
       requireExactKeys(record, ["form", "path", "receiverMode"], `${label}.target`, fail);
@@ -244,7 +324,7 @@ function expandValidationAlias(
 
 function validateArgumentMetadata(
   form: Extract<RustProviderOperationForm, {
-    readonly form: "call" | "free-call" | "receiver-method" | "arg-receiver-method";
+    readonly form: "call" | "source-module-construction" | "free-call" | "receiver-method" | "arg-receiver-method";
   }>,
   definition: RustProviderPackageDefinition,
   label: string,

@@ -193,6 +193,8 @@ export function selectRustCheckedCall(
         sourceOwnerName: selectedSourceMember.ownerName,
         typeArgumentCarriers,
         argumentCarriers,
+        carrierSupportsProjectIdentity: (carrier) =>
+          options.projectTypes.definitionForCarrier(carrier) !== undefined,
       });
       if (selection === undefined || selection.fact.kind !== "provider-operation" || selection.resultCarrier === undefined) {
         return rejectSelectedOperation(
@@ -247,11 +249,15 @@ export function selectRustCheckedCall(
     if (special !== undefined) {
       return special;
     }
+    const sourceResultCarrier = request.source.sourceResultType === undefined
+      ? undefined
+      : resolveRustTargetTypeRef(request.source.sourceResultType, context, options);
     const selection = selectJsSurfaceOperation({
       ownerName: selectedSourceMember.ownerName,
       memberName: selectedSourceMember.memberName,
       operationKind: "call",
       ...(receiverCarrier === undefined ? {} : { receiverCarrier }),
+      ...(sourceResultCarrier === undefined ? {} : { sourceResultCarrier }),
       ...(argumentCarriers.length === 0 ? {} : { argumentCarriers }),
       selectedMethodTypeArgumentCarriers,
       authoredMethodTypeArgumentCarriers,

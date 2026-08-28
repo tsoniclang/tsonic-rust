@@ -21,6 +21,7 @@ export function rustProviderOperationFormAcceptsTargetGenericArguments(
   form: RustProviderOperationForm,
 ): boolean {
   return form.form === "call" || form.form === "free-call" || form.form === "method" ||
+    form.form === "source-module-construction" ||
     form.form === "receiver-method" || form.form === "arg-method" ||
     form.form === "arg-receiver-method" || form.form === "trait-call";
 }
@@ -30,6 +31,7 @@ export function rustProviderOperationFormDeclaresWritableInput(
 ): boolean {
   switch (form.form) {
     case "call":
+    case "source-module-construction":
     case "arg-receiver-method":
     case "arg-structural-method":
       return form.argModes?.includes("mut-ref") === true;
@@ -57,8 +59,11 @@ export function rustProviderOperationFormDeclaresWritableInput(
       return form.mutatesReceiver === true ||
         form.argModes?.includes("mut-ref") === true;
     case "marker":
+    case "struct-variant":
+    case "expression-macro":
     case "call-str-slice":
     case "path":
+    case "reference-path":
     case "static":
     case "method":
     case "arg-method":
@@ -92,7 +97,9 @@ export function rustProviderOperationFormContractViolation(
     return undefined;
   };
   const validateArguments = (
-    value: Extract<RustProviderOperationForm, { readonly form: "call" | "free-call" | "receiver-method" }>,
+    value: Extract<RustProviderOperationForm, {
+      readonly form: "call" | "source-module-construction" | "free-call" | "receiver-method";
+    }>,
   ): string | undefined => {
     const modeViolation = validateModes(value.argModes);
     if (modeViolation !== undefined) {
@@ -126,6 +133,13 @@ export function rustProviderOperationFormContractViolation(
       return hasExactKeys(form, ["form", "path"], ["form", "path"]) && typeof form.path === "string" && rustPathPattern.test(form.path) && runtimeSourceIndexes.length === 0
         ? undefined
         : "path form must be a zero-argument closed Rust path";
+    case "reference-path":
+      return hasExactKeys(form, ["form", "path", "mutable"], ["form", "path", "mutable"]) &&
+          typeof form.path === "string" && rustPathPattern.test(form.path) &&
+          typeof form.mutable === "boolean" && operationKind === "property" &&
+          runtimeSourceIndexes.length === 0
+        ? undefined
+        : "reference-path form must be one zero-argument closed Rust property path";
     case "static":
       return hasExactKeys(form, ["form", "path"], ["form", "path"]) &&
           typeof form.path === "string" && rustPathPattern.test(form.path) &&
@@ -137,6 +151,20 @@ export function rustProviderOperationFormContractViolation(
       return hasExactKeys(form, ["form", "path"], ["form", "path"]) && typeof form.path === "string" && rustPathPattern.test(form.path)
         ? undefined
         : "slice-call form must contain one closed Rust path";
+    case "struct-variant":
+      return hasExactKeys(form, ["form", "path", "fields"], ["form", "path", "fields"]) &&
+          typeof form.path === "string" && rustPathPattern.test(form.path) &&
+          isDenseDataArray(form.fields) && form.fields.length === runtimeSourceIndexes.length &&
+          form.fields.every((field, index) => typeof field === "string" &&
+            rustIdentifierPattern.test(field) && form.fields.indexOf(field) === index)
+        ? undefined
+        : "struct-variant form must contain one path and one distinct Rust field for each source argument";
+    case "expression-macro":
+      return hasExactKeys(form, ["form", "path", "delimiter"], ["form", "path", "delimiter"]) &&
+          typeof form.path === "string" && rustPathPattern.test(form.path) &&
+          (form.delimiter === "parentheses" || form.delimiter === "brackets" || form.delimiter === "braces")
+        ? undefined
+        : "expression-macro form must contain one closed Rust path and delimiter";
     case "call-c-variadic":
       return hasExactKeys(
         form,
@@ -315,6 +343,27 @@ export function rustProviderOperationFormContractViolation(
         return "call form is malformed";
       }
       return validateArguments(form);
+    case "source-module-construction": {
+      if (!hasExactKeys(
+        form,
+        ["form", "path", "sourceArgumentIndex", "targetArgumentIndex", "bootstrap", "argModes", "argConversions", "argOrder"],
+        ["form", "path", "sourceArgumentIndex", "targetArgumentIndex", "bootstrap"],
+      ) || operationKind !== "constructor" || typeof form.path !== "string" ||
+        !rustPathPattern.test(form.path) ||
+        !Number.isSafeInteger(form.sourceArgumentIndex) || form.sourceArgumentIndex < 0 ||
+        !Number.isSafeInteger(form.targetArgumentIndex) || form.targetArgumentIndex < 0 ||
+        form.sourceArgumentIndex >= sourceArgumentCount ||
+        form.targetArgumentIndex >= runtimeSourceIndexes.length ||
+        !sourceModuleBootstrapIsValid(form.bootstrap)) {
+        return "source-module construction form is malformed";
+      }
+      const violation = validateArguments(form);
+      if (violation !== undefined) return violation;
+      const order = form.argOrder ?? runtimeSourceIndexes;
+      return order[form.targetArgumentIndex] === form.sourceArgumentIndex
+        ? undefined
+        : "source-module construction indexes do not identify one exact target argument";
+    }
     case "free-call":
       if (!hasExactKeys(form, ["form", "path", "receiverMode", "argModes", "argConversions", "trailingArguments", "argOrder"], ["form", "path", "receiverMode"]) ||
         typeof form.path !== "string" || !rustPathPattern.test(form.path) || !modes.has(form.receiverMode)) {
@@ -331,6 +380,24 @@ export function rustProviderOperationFormContractViolation(
     default:
       return `unsupported operation form '${String((form as { readonly form?: unknown }).form)}'`;
   }
+}
+
+function sourceModuleBootstrapIsValid(
+  value: Extract<RustProviderOperationForm, {
+    readonly form: "source-module-construction";
+  }>["bootstrap"],
+): boolean {
+  return isRecord(value) &&
+    hasExactKeys(
+      value,
+      ["id", "path", "errorBoundary", "errorCarrier"],
+      ["id", "path", "errorBoundary"],
+    ) && typeof value.id === "string" && value.id.length > 0 &&
+    typeof value.path === "string" && rustPathPattern.test(value.path) &&
+    (value.errorBoundary === "provider-native"
+      ? value.errorCarrier !== undefined && isRustTargetTypeRef(value.errorCarrier)
+      : (value.errorBoundary === "target-runtime" || value.errorBoundary === "source-program") &&
+        value.errorCarrier === undefined);
 }
 
 function isPermutation(values: readonly number[], expected: readonly number[]): boolean {

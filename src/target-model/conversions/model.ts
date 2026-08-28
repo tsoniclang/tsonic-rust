@@ -24,5 +24,6 @@ export const rustBoolToJsValueConversion = semanticConversion("js-value-from-boo
 export const rustFloat64ToJsValueConversion = semanticConversion("js-value-from-f64");
 export const rustInt32ToJsValueConversion = semanticConversion("js-value-from-i32");
 export const rustStringToJsValueConversion = semanticConversion("js-value-from-string");
+export const rustSymbolToJsValueConversion = semanticConversion("js-value-from-symbol");
 export const rustJsValueCloneConversion = semanticConversion("js-value-clone");
 export const rustBorrowedStrToStringValueConversion = semanticConversion("owned-string-from-borrowed-str");

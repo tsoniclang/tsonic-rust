@@ -432,7 +432,7 @@ function mutableRootsAreDisjoint(
   mutableInputs: ReadonlyMap<string, MutableProviderInput>,
   context: RustPlanContext,
 ): boolean {
-  const roots = new Set<Node>();
+  const selected: { readonly root: Node; readonly projections: readonly string[] }[] = [];
   for (const mutable of mutableInputs.values()) {
     if (mutable.inputs.length !== 1) {
       context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -458,17 +458,80 @@ function mutableRootsAreDisjoint(
     if (root === undefined) {
       continue;
     }
-    if (roots.has(root)) {
+    const projections = providerMutableStorageProjections(mutable.node, root, context);
+    if (projections === undefined) {
       context.diagnostics.push(unsupportedConstructDiagnostic(
         diagnosticInput(context, mutable.node),
         "rust.backend.typed-location-mutable-alias",
-        "One provider operation cannot hold multiple mutable Rust locations with the same exact source storage root.",
+        "Mutable provider input has no exact projection path from its source storage root.",
       ));
       return false;
     }
-    roots.add(root);
+    for (const previous of selected) {
+      if (previous.root === root && !providerProjectionPathsAreDisjoint(
+        previous.projections,
+        projections,
+      )) {
+        context.diagnostics.push(unsupportedConstructDiagnostic(
+          diagnosticInput(context, mutable.node),
+          "rust.backend.typed-location-mutable-alias",
+          "One provider operation cannot hold overlapping mutable Rust locations from the same exact source storage root.",
+        ));
+        return false;
+      }
+    }
+    selected.push({ root, projections });
   }
   return true;
+}
+
+function providerMutableStorageProjections(
+  node: Node,
+  rootDeclaration: Node,
+  context: RustPlanContext,
+): readonly string[] | undefined {
+  const { ast } = context.input.program.source;
+  const projections: string[] = [];
+  let selected = node;
+  while (true) {
+    const kind = ast.kindName(selected);
+    if (kind === "KindParenthesizedExpression") {
+      const inner = Node_Expression(ast, selected);
+      if (inner === undefined) return undefined;
+      selected = inner;
+      continue;
+    }
+    if (kind === "KindIdentifier") {
+      const declaration = context.input.program.sourceNavigation.sourceReferenceFor(selected)?.declaration;
+      return declaration === rootDeclaration ? Object.freeze(projections) : undefined;
+    }
+    if (kind === "KindThisExpression" || kind === "KindThisKeyword") {
+      return ast.getSourceFile(selected) === rootDeclaration
+        ? Object.freeze(projections)
+        : undefined;
+    }
+    if (kind !== "KindPropertyAccessExpression") return undefined;
+    const operation = context.input.program.facts.getFact(selected, rustTargetOperationFactKey);
+    if (operation?.kind !== "source-field" || operation.valueSemantics.kind !== "stored" ||
+      operation.dispatch !== undefined) {
+      return undefined;
+    }
+    projections.unshift(`${operation.operationId}\0${operation.storageIndex}`);
+    const receiver = Node_Expression(ast, selected);
+    if (receiver === undefined) return undefined;
+    selected = receiver;
+  }
+}
+
+function providerProjectionPathsAreDisjoint(
+  left: readonly string[],
+  right: readonly string[],
+): boolean {
+  const commonLength = Math.min(left.length, right.length);
+  for (let index = 0; index < commonLength; index += 1) {
+    if (left[index] !== right[index]) return true;
+  }
+  return false;
 }
 
 function providerMutableInputIsDirect(
