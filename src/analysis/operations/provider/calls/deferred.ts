@@ -248,10 +248,13 @@ export function finalizeRustPreparedCheckedCall(
 function callbackFallibleTemplate(
   prepared: RustPreparedDeferredCheckedCall,
 ): RustProviderOperationTemplate {
+  if (prepared.callback.failure.kind === "returned-future") {
+    return prepared.template;
+  }
   const { errorCarrier: _providerErrorCarrier, ...template } = prepared.template;
   return {
     ...template,
-    target: prepared.callback.fallibleTarget,
+    target: prepared.callback.failure.fallibleTarget,
     isFallible: true,
     errorBoundary: "source-program",
   };

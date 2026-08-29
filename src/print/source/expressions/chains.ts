@@ -158,7 +158,7 @@ export function printFittedLeftAssociativeBinaryChain(
   }
   let rendered = printRustExprFitted(first, depth, column, undefined, grammarPosition);
   const continuationIndent = indentText(depth + 1);
-  for (const operand of operands.slice(1)) {
+  for (const [operandIndex, operand] of operands.slice(1).entries()) {
     const right = printFittedBinaryOperand(
       operand,
       printRustExprFitted(
@@ -169,7 +169,12 @@ export function printFittedLeftAssociativeBinaryChain(
       operator,
       true,
     );
-    rendered += `\n${continuationIndent}${operator} ${firstLine(right)}`;
+    const continuation = `${operator} ${firstLine(right)}`;
+    const attachedToClosingBlock = operandIndex === 0 && lastLine(rendered).trim() === "}" &&
+      renderedFits(appendToLastLine(rendered, ` ${continuation}`), column);
+    rendered = attachedToClosingBlock
+      ? appendToLastLine(rendered, ` ${continuation}`)
+      : `${rendered}\n${continuationIndent}${continuation}`;
     const rest = remainingLines(right);
     if (rest.length > 0) {
       rendered += `\n${rest.join("\n")}`;
@@ -467,8 +472,8 @@ export function rustMethodChainBreaksReceiverForClosure(
     step.kind === "method" && step.args.length === 1 && step.args.some((argument) =>
       argument.kind !== "closure" && argument.kind !== "closure-block" &&
       rustExpressionContainsClosure(argument)));
-  return (selectorCount > 1 && rustMethodChainContainsClosure(chain) ||
-      selectorCount === 1 && containsNestedClosureInSingleArgument) &&
+  return (selectorCount > 1 || containsNestedClosureInSingleArgument) &&
+    rustMethodChainContainsClosure(chain) &&
     (!renderedFits(flat, column) ||
       flat.length > rustMethodChainWidth &&
         rustMethodChainLastSelectorWidth(chain) <= rustMethodChainWidth);
@@ -578,7 +583,7 @@ export function printFittedMethodChain(
           selectedContinuationIndent.length + 1,
           false,
           false,
-          depth,
+          depth + 1,
         );
     rendered = inlineFirstMethod
       ? appendToLastLine(rendered, method)

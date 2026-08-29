@@ -6,6 +6,7 @@ export const rustStructLiteralWidth = 18;
 export const rustNestedCallWidth = 60;
 export const rustCompactTrailingClosureWidth = rustNestedCallWidth + " || {".length;
 export const rustNestedClosureOpeningWidth = 80;
+export const rustCompactInitializerWidth = 80;
 export const rustMatchArmWidth = 80;
 export const rustInlineFormatArgumentWidth = 40;
 export const rustMethodChainWidth = 60;

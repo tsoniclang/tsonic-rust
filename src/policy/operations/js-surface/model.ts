@@ -134,6 +134,7 @@ export type JsCarrierRef =
   | { readonly ref: "map-key-array" }
   | { readonly ref: "map-value-array" }
   | { readonly ref: "map-entry-array" }
+  | { readonly ref: "js-map-entry-array" }
   | { readonly ref: "set-value" }
   | { readonly ref: "set-value-array" }
   | { readonly ref: "set-entry-array" }
@@ -148,6 +149,8 @@ export type JsCarrierRef =
   | { readonly ref: "future-output" }
   | { readonly ref: "promise-output" }
   | { readonly ref: "promise-input-output" }
+  | { readonly ref: "promise-of-input-output" }
+  | { readonly ref: "promise-of-settled-input-output-array" }
   | { readonly ref: "promise-finally-callback" }
   | { readonly ref: "json-replacer-callback" }
   | { readonly ref: "null" }

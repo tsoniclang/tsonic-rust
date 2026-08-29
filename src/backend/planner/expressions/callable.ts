@@ -449,12 +449,15 @@ export function planCallableExpression(
     if (body === undefined) {
       return undefined;
     }
-    const resultBody = resultIsFallible
-      ? applyRustFallibleResultExpression(body, {
-          errorType: rustActiveErrorType(callableClosureContext)!,
-        })
-      : body;
-    const closure: RustExpr = bindingStatements.length === 0 &&
+    const unitFallibleEffect = resultIsFallible &&
+      isRustUnitCarrier(resultCarrier) && body.kind !== "bottom";
+    const resultBody = !resultIsFallible || body.kind === "bottom"
+      ? body
+      : applyRustFallibleResultExpression(
+          unitFallibleEffect ? { kind: "path", path: "()" } : body,
+          { errorType: rustActiveErrorType(callableClosureContext)! },
+        );
+    const closure: RustExpr = !unitFallibleEffect && bindingStatements.length === 0 &&
         closureParams.every((parameter) => !parameter.mutable)
       ? {
           kind: "closure",
@@ -470,7 +473,13 @@ export function planCallableExpression(
           params: closureParams,
           move: closureMove,
           async: false,
-          body: { statements: [...bindingStatements, { kind: "tail", expr: resultBody }] },
+          body: {
+            statements: [
+              ...bindingStatements,
+              ...(unitFallibleEffect ? [{ kind: "expr" as const, expr: body }] : []),
+              { kind: "tail", expr: resultBody },
+            ],
+          },
         };
     if (callableProtocol === undefined) {
       const nativeCallable = collapseExactForwardingClosure(closure, captureBindings.length);

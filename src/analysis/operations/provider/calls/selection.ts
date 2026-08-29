@@ -71,10 +71,8 @@ export function selectRustCheckedCall(
     return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_SOURCE_DECLARATION_MISSING", "Checked source-profile call has callee evidence but no exact selected declaration evidence.");
   }
   if (selectedSourceMember !== undefined && calleeSourceMember !== undefined &&
-    (selectedSourceMember.profile !== calleeSourceMember.profile ||
-      selectedSourceMember.ownerName !== calleeSourceMember.ownerName ||
-      selectedSourceMember.memberName !== calleeSourceMember.memberName)) {
-    return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_SOURCE_EVIDENCE_CONFLICT", "Checked source-profile call carries conflicting selected and callee declaration identities.");
+    selectedSourceMember.profile !== calleeSourceMember.profile) {
+    return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_SOURCE_EVIDENCE_CONFLICT", "Checked source-profile call carries declarations from conflicting source profiles.");
   }
   if (providerEvidence.kind === "selected" && selectedSourceMember === undefined) {
     const provider = providerEvidence.identity;
@@ -107,10 +105,13 @@ export function selectRustCheckedCall(
         callback: {
           shape: "direct",
           sourceArgumentIndex: selection.row.immediateCallback.sourceArgumentIndex,
-          fallibleTarget: substituteProviderOperationForm(
-            selection.row.immediateCallback.fallibleTarget,
-            instantiation.substitutions,
-          ),
+          failure: {
+            kind: "invocation",
+            fallibleTarget: substituteProviderOperationForm(
+              selection.row.immediateCallback.fallibleTarget,
+              instantiation.substitutions,
+            ),
+          },
         },
         sourceName: provider.memberName ?? provider.exportName ?? provider.exportId ?? provider.moduleSpecifier,
         providerDeclaration: provider,
@@ -193,8 +194,7 @@ export function selectRustCheckedCall(
         sourceOwnerName: selectedSourceMember.ownerName,
         typeArgumentCarriers,
         argumentCarriers,
-        carrierSupportsProjectIdentity: (carrier) =>
-          options.projectTypes.definitionForCarrier(carrier) !== undefined,
+        carrierSupportsProjectIdentity: options.projectCarrierSupportsObjectIdentity,
       });
       if (selection === undefined || selection.fact.kind !== "provider-operation" || selection.resultCarrier === undefined) {
         return rejectSelectedOperation(
@@ -274,8 +274,7 @@ export function selectRustCheckedCall(
             )?.sourceCarrier
           : undefined;
       },
-      carrierSupportsProjectIdentity: (carrier) =>
-        options.projectTypes.definitionForCarrier(carrier) !== undefined,
+      carrierSupportsProjectIdentity: options.projectCarrierSupportsObjectIdentity,
       resultUse: context.source.navigation.expressionResultUse(request.source.call),
     });
     if (selection === undefined || selection.fact.kind !== "provider-operation" || selection.resultCarrier === undefined) {

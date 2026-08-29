@@ -85,8 +85,10 @@ export type RustValueConversionId =
   | "js-value-from-bool"
   | "js-value-from-f64"
   | "js-value-from-i32"
+  | "js-value-from-null"
   | "js-value-from-string"
   | "js-value-from-symbol"
+  | "js-value-from-undefined"
   | "js-value-clone"
   | "owned-string-from-borrowed-str";
 
@@ -401,7 +403,12 @@ export interface RustCallbackOperationTemplate {
     readonly kind: "regexp-replacement";
     readonly lane: "native" | "exact";
   };
-  readonly fallibleTarget: RustProviderOperationForm;
+  readonly failure:
+    | {
+        readonly kind: "invocation";
+        readonly fallibleTarget: RustProviderOperationForm;
+      }
+    | { readonly kind: "returned-future" };
 }
 
 export interface RustRuntimeSetTemplate {

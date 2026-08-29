@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { Node_Type } from "@tsonic/target-api/source";
-import { isRustNeverCarrier, isRustUnitCarrier, rustJsPromiseTargetId } from "../../../target-model/types/index.js";
+import { isRustNeverCarrier, isRustUnitCarrier } from "../../../target-model/types/index.js";
 import type { RustBlock, RustItem } from "../../target-ast/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planBlockLike } from "../statements/index.js";
@@ -118,8 +118,7 @@ function planRustFunctionItem(
     outerContext.input,
   );
   const asyncFact = outerContext.input.program.facts.getFact(node, rustAsyncFunctionFactKey);
-  const returnsJsPromise = asyncFact?.futureCarrier.kind === "target-named" &&
-    asyncFact.futureCarrier.id === rustJsPromiseTargetId;
+  const returnsJsPromise = asyncFact?.kind === "js-promise";
   if (isAsync && generatorFact === undefined && asyncFact === undefined) {
     outerContext.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(outerContext, node),
@@ -170,8 +169,12 @@ function planRustFunctionItem(
   }
   const syntheticNames = createRustSyntheticNameState(ast, node, []);
   const parameterPlan = planRustCallableParameters(node, context, syntheticNames, {
-    ...(generatorFact !== undefined && generatorFact.storage.kind !== "lifetime"
-      ? { requiredStaticParameters: generatorFact.capturedParameters }
+    ...((generatorFact !== undefined && generatorFact.storage.kind !== "lifetime") ||
+        asyncFact?.kind === "js-promise" && asyncFact.storage.kind === "static"
+      ? {
+          requiredStaticParameters: generatorFact?.capturedParameters ??
+            (asyncFact?.kind === "js-promise" ? asyncFact.capturedParameters : []),
+        }
       : {}),
   });
   if (parameterPlan === undefined) {
@@ -222,7 +225,7 @@ function planRustFunctionItem(
   }
   if (returnsJsPromise && !requireRustCarrierRequirements(
     asyncFact.outputCarrier,
-    ["clone"],
+    asyncFact.storage.kind === "static" ? ["clone", "static"] : ["clone"],
     node,
     context,
   )) {

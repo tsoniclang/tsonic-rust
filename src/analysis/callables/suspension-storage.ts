@@ -1,5 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { rustSourceParameterAbiFactKey } from "../facts/keys.js";
+import type { RustSuspendedCallableStorage } from "../facts/keys.js";
 import {
   rustLifetimeKey,
   rustLifetimeOutlives,
@@ -12,30 +13,27 @@ import { rustTargetGenericReferences } from "../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustFactWalk } from "../program/walk.js";
 
-export type RustGeneratorStorageResolution =
+export type RustSuspendedCallableStorageResolution =
   | {
       readonly kind: "resolved";
       readonly capturedParameters: readonly Node[];
-      readonly storage:
-        | { readonly kind: "static" }
-        | { readonly kind: "receiver" }
-        | { readonly kind: "lifetime"; readonly lifetime: RustLifetimeRef };
+      readonly storage: RustSuspendedCallableStorage;
     }
   | { readonly kind: "rejected"; readonly reason: string };
 
-export function resolveRustGeneratorStorage(
+export function resolveRustSuspendedCallableStorage(
   walk: RustFactWalk,
   declaration: Node,
-  protocolCarriers: readonly TargetTypeRef[],
-): RustGeneratorStorageResolution {
+  storedCarriers: readonly TargetTypeRef[],
+): RustSuspendedCallableStorageResolution {
   const { ast } = walk.context;
   const body = ast.body(declaration);
   if (body === undefined) {
-    return { kind: "rejected", reason: "A generator has no concrete source body." };
+    return { kind: "rejected", reason: "A suspended callable has no concrete source body." };
   }
   const parameters = ast.parameters(declaration);
   if (parameters.some((parameter) => parameter === undefined)) {
-    return { kind: "rejected", reason: "A generator contains an undefined parameter slot." };
+    return { kind: "rejected", reason: "A suspended callable contains an undefined parameter slot." };
   }
   const exactParameters = parameters as readonly Node[];
   const parameterSet = new Set(exactParameters);
@@ -69,14 +67,14 @@ export function resolveRustGeneratorStorage(
     };
   }
 
-  const carriers: TargetTypeRef[] = [...protocolCarriers];
+  const carriers: TargetTypeRef[] = [...storedCarriers];
   for (const parameter of capturedParameters) {
     const carrier = walk.context.facts.get(parameter, rustSourceParameterAbiFactKey)
       ?.parameterCarrier;
     if (carrier === undefined) {
       return {
         kind: "rejected",
-        reason: "A captured generator parameter has no exact finalized Rust ABI carrier.",
+        reason: "A captured suspended-callable parameter has no exact finalized Rust ABI carrier.",
       };
     }
     carriers.push(carrier);
@@ -88,7 +86,7 @@ export function resolveRustGeneratorStorage(
     if (references.hasUnnameableLifetime) {
       return {
         kind: "rejected",
-        reason: "A generator storage lifetime cannot be named from an elided, placeholder, or call-scoped captured lifetime.",
+        reason: "A suspended-callable storage lifetime cannot be named from an elided, placeholder, or call-scoped captured lifetime.",
       };
     }
     for (const lifetime of references.lifetimes) {
@@ -114,14 +112,14 @@ export function resolveRustGeneratorStorage(
   if (contract === undefined) {
     return {
       kind: "rejected",
-      reason: "A borrowed generator has no exact source generic lifetime contract.",
+      reason: "A borrowed suspended callable has no exact source generic lifetime contract.",
     };
   }
   const lifetime = selectShortestAuthoredLifetime([...candidates.values()], contract);
   if (lifetime === undefined) {
     return {
       kind: "rejected",
-      reason: "A generator's captured lifetimes have no single exact authored storage lifetime.",
+      reason: "A suspended callable's captured lifetimes have no single exact authored storage lifetime.",
     };
   }
   if (lifetime.kind === "static") {

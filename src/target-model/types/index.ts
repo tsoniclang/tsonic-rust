@@ -75,6 +75,7 @@ export {
   rustJsPromiseRejectedResultTargetType,
   rustJsPromiseSettledResultTargetType,
   rustJsPromiseTargetType,
+  rustJsPromiseTargetTypeWithLifetime,
   rustJsIntlCollatorTargetType,
   rustJsIntlDateTimeFormatPartTargetType,
   rustJsIntlDateTimeFormatTargetType,

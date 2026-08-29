@@ -13,7 +13,7 @@ import { printRustBlockStatements } from "../blocks.js";
 import { printRustExpr, rustExpressionContainsClosure } from "./core.js";
 import { rustExpressionContainsExpandedCollectionLiteral, rustExpressionContainsExpandedStructLiteral, rustFormatArgumentCanShareLine, rustFormatArgumentIsAtomic } from "./inspection.js";
 import { rustExpressionContainsStatementBlock } from "../../../backend/target-ast/expressions.js";
-import { rustFormatWidth, rustInlineFormatArgumentWidth, rustMethodChainWidth, rustNestedCallWidth, rustSingleLineConditionalWidth, rustStructLiteralWidth } from "../formatting.js";
+import { rustCompactInitializerWidth, rustFormatWidth, rustInlineFormatArgumentWidth, rustMethodChainWidth, rustNestedCallWidth, rustSingleLineConditionalWidth, rustStructLiteralWidth } from "../formatting.js";
 import type { RustExpr } from "../../../backend/target-ast/nodes.js";
 import type { RustExpressionGrammarPosition } from "./precedence.js";
 
@@ -23,7 +23,7 @@ export function printRustExprFitted(
   column: number,
   methodChainContinuationIndent?: string,
   grammarPosition: RustExpressionGrammarPosition = "expression",
-  layoutRegion: "default" | "logical-chain-operand" = "default",
+  layoutRegion: "default" | "initializer-continuation" | "logical-chain-operand" = "default",
 ): string {
   const flat = printRustExpr(expression);
   switch (expression.kind) {
@@ -228,6 +228,8 @@ export function printRustExprFitted(
         expression.args,
         depth,
         column,
+        false,
+        initializerPrefersReferencedNestedBreak(expression, flat, layoutRegion),
       );
     case "invoke":
       return printFittedCall(
@@ -235,6 +237,8 @@ export function printRustExprFitted(
         expression.args,
         depth,
         column,
+        false,
+        initializerPrefersReferencedNestedBreak(expression, flat, layoutRegion),
       );
     case "associated-call":
       {
@@ -246,6 +250,8 @@ export function printRustExprFitted(
             expression.args,
             depth,
             column,
+            false,
+            initializerPrefersReferencedNestedBreak(expression, flat, layoutRegion),
           );
         }
         const owner = printRustAssociatedCallOwnerFitted(
@@ -269,6 +275,7 @@ export function printRustExprFitted(
           depth,
           column,
           owner.includes("\n"),
+          initializerPrefersReferencedNestedBreak(expression, flat, layoutRegion),
         );
     }
     case "method-call": {
@@ -424,6 +431,19 @@ export function printRustExprFitted(
     case "closure-block": {
       const params = printRustClosureParams(expression.params);
       const prefix = `${expression.move ? "move " : ""}|${params}| ${expression.async ? "async move " : ""}{`;
+      const onlyStatement = (expression.body.innerAttrs?.length ?? 0) === 0 &&
+          expression.body.statements.length === 1
+        ? expression.body.statements[0]
+        : undefined;
+      if (onlyStatement?.kind === "tail") {
+        const tail = printRustExpr(onlyStatement.expr);
+        const compact = `${prefix} ${tail} }`;
+        if (!tail.includes("\n") &&
+          !rustExpressionContainsStatementBlock(onlyStatement.expr) &&
+          renderedFits(compact, column)) {
+          return compact;
+        }
+      }
       const body = printRustBlockStatements(expression.body, depth + 1);
       return body.length === 0
         ? `${prefix}}`
@@ -869,4 +889,27 @@ export function printRustExprFitted(
     default:
       return flat;
   }
+}
+
+function initializerPrefersReferencedNestedBreak(
+  expression: Extract<RustExpr, { readonly kind: "call" | "associated-call" | "invoke" }>,
+  flat: string,
+  layoutRegion: "default" | "initializer-continuation" | "logical-chain-operand",
+): boolean {
+  if (layoutRegion !== "initializer-continuation" ||
+    flat.length <= rustCompactInitializerWidth || expression.args.length !== 1) {
+    return false;
+  }
+  const argument = expression.args[0];
+  if (argument?.kind !== "reference") {
+    return false;
+  }
+  const nested = argument.expr;
+  if (nested.kind !== "call" && nested.kind !== "associated-call" &&
+    nested.kind !== "invoke" && nested.kind !== "method-call") {
+    return false;
+  }
+  return nested.args.some((nestedArgument) =>
+    nestedArgument.kind === "vec-literal" || nestedArgument.kind === "slice-literal" ||
+    nestedArgument.kind === "tuple-literal");
 }

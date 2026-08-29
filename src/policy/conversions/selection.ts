@@ -3,6 +3,8 @@ import { rustNumericPromotionKind } from "../../target-model/conversions/numeric
 import {
   isRustJsArrayCarrier,
   isRustNeverCarrier,
+  isRustNullCarrier,
+  isRustUndefinedCarrier,
   rustCarrierSupportsClone,
   rustCarrierSupportsTrait,
   rustJsClosedValueCarrierTraitPath,
@@ -27,8 +29,10 @@ import {
   rustInt32ToJsValueConversion,
   rustInt32ToUint8ValueConversion,
   rustJsValueCloneConversion,
+  rustNullToJsValueConversion,
   rustStringToJsValueConversion,
   rustSymbolToJsValueConversion,
+  rustUndefinedToJsValueConversion,
   rustUint32ToInt32ValueConversion,
   rustUint64ToFloat64ValueConversion,
   rustUint8ToInt32ValueConversion,
@@ -93,11 +97,17 @@ export function selectRustSourceValueConversion(
     if (rustTargetTypeRefEquals(source, int32Carrier)) {
       return rustInt32ToJsValueConversion;
     }
+    if (isRustNullCarrier(source)) {
+      return rustNullToJsValueConversion;
+    }
     if (rustTargetTypeRefEquals(source, stringCarrier)) {
       return rustStringToJsValueConversion;
     }
     if (rustTargetTypeRefEquals(source, symbolCarrier)) {
       return rustSymbolToJsValueConversion;
+    }
+    if (isRustUndefinedCarrier(source)) {
+      return rustUndefinedToJsValueConversion;
     }
     if (rustCarrierSupportsClone(source) &&
       rustCarrierSupportsTrait(source, rustJsClosedValueCarrierTraitPath)) {

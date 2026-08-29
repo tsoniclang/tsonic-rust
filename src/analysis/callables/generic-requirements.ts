@@ -3,7 +3,7 @@ import {
   resolveTargetContractFixedPoint,
 } from "@tsonic/target-api/analysis";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import { sourceNodeIdentity } from "@tsonic/target-api/source";
+import { Node_Expression, sourceNodeIdentity } from "@tsonic/target-api/source";
 import type { TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
@@ -13,6 +13,7 @@ import {
   rustCarrierSupportsTrait,
   rustClosureProtocol,
   rustFixedArrayCarrierValue,
+  rustJsPromiseTargetId,
   rustLocationTargetId,
   rustNamedTypeCarrierValue,
   rustOptionTargetId,
@@ -23,8 +24,10 @@ import {
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import {
+  rustAsyncFunctionFactKey,
   rustClosureCaptureFactKey,
   rustGeneratorFactKey,
+  rustFutureValueFactKey,
   rustLocationStorageFactKey,
   rustSourceParameterAbiFactKey,
   rustTargetOperationFactKey,
@@ -293,6 +296,29 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       }
     }
   }
+  const asynchronous = facts.getFact(declaration, rustAsyncFunctionFactKey);
+  if (asynchronous?.kind === "js-promise") {
+    const error = addUse(
+      declaration,
+      asynchronous.outputCarrier,
+      asynchronous.storage.kind === "static" ? ["clone", "static"] : ["clone"],
+    );
+    if (error !== undefined) {
+      return { kind: "rejected", reason: error };
+    }
+    if (asynchronous.storage.kind === "static") {
+      for (const parameter of asynchronous.capturedParameters) {
+        const parameterError = addUse(
+          parameter,
+          facts.getFact(parameter, rustSourceParameterAbiFactKey)?.parameterCarrier,
+          ["static"],
+        );
+        if (parameterError !== undefined) {
+          return { kind: "rejected", reason: parameterError };
+        }
+      }
+    }
+  }
   const visit = (node: Node): string | undefined => {
     if (node !== declaration && isIndependentCallable(ast, node)) {
       return undefined;
@@ -308,6 +334,20 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       if (error !== undefined) return error;
     }
     const operation = facts.getFact(node, rustTargetOperationFactKey);
+    if (ast.kindName(node) === "KindAwaitExpression") {
+      const operand = Node_Expression(ast, node);
+      const operandCarrier = operand === undefined
+        ? undefined
+        : facts.getRuntimeCarrierFact(operand)?.carrier;
+      const future = operand === undefined
+        ? undefined
+        : facts.getFact(operand, rustFutureValueFactKey);
+      if (operandCarrier?.kind === "target-named" &&
+        operandCarrier.id === rustJsPromiseTargetId && future !== undefined) {
+        const error = addUse(node, future.outputCarrier, ["clone"]);
+        if (error !== undefined) return error;
+      }
+    }
     if (operation?.kind === "default-value") {
       const error = addUse(node, operation.resultCarrier, ["default"]);
       if (error !== undefined) return error;

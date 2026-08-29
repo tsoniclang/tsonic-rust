@@ -31,6 +31,8 @@ import {
   rustStructuralObjectCarrierValue,
   rustJsArrayLikeElementTargetType,
   isRustJsArrayCarrier,
+  rustNullTargetType,
+  rustUndefinedTargetType,
   rustTargetGenericReferences,
   rustCarrierSupportsClone,
   rustCarrierSupportsTrait,
@@ -52,6 +54,8 @@ const stringCarrier = rustStringTargetType();
 const exactStringCarrier = rustJsStringTargetType();
 const symbolCarrier = rustJsSymbolTargetType();
 const jsValueCarrier = rustJsValueTargetType();
+const nullCarrier = rustNullTargetType();
+const undefinedCarrier = rustUndefinedTargetType();
 
 interface RustValueConversionContractBase {
   readonly category: "exact" | "checked-range" | "js-number" | "numeric-promotion" | "ownership" | "projection";
@@ -488,10 +492,14 @@ export function rustValueConversionContract(
       return contract(value.id, "exact", "tsonic_rust_js::abi::JsValue::from", "value", float64Carrier, jsValueCarrier, false);
     case "js-value-from-i32":
       return contract(value.id, "exact", "tsonic_rust_js::abi::JsValue::from", "value", int32Carrier, jsValueCarrier, false);
+    case "js-value-from-null":
+      return contract(value.id, "exact", "tsonic_rust_js::abi::JsValue::from", "value", nullCarrier, jsValueCarrier, false);
     case "js-value-from-string":
       return contract(value.id, "exact", "tsonic_rust_js::abi::js_value_from_string", "ref", stringCarrier, jsValueCarrier, false);
     case "js-value-from-symbol":
       return contract(value.id, "exact", "tsonic_rust_js::abi::JsValue::from", "value", symbolCarrier, jsValueCarrier, false);
+    case "js-value-from-undefined":
+      return contract(value.id, "exact", "tsonic_rust_js::abi::JsValue::from", "value", undefinedCarrier, jsValueCarrier, false);
     case "js-value-clone":
       return contract(value.id, "exact", "tsonic_rust_js::abi::clone_js_value", "ref", jsValueCarrier, jsValueCarrier, false);
     case "owned-string-from-borrowed-str":

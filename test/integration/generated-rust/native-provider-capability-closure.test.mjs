@@ -34,6 +34,6 @@ export function main(): void {
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /acme_testing::sum_pair!\(1, 2\)/u);
   assert.match(source, /acme_testing::sum_pair!\[3, 4\]/u);
-  assert.match(source, /acme_testing::sum_pair!\{5, 6\}/u);
+  assert.match(source, /acme_testing::sum_pair! \{5, 6\}/u);
   validateGeneratedProject("provider-macro-contract", result.artifacts, { run: true });
 });

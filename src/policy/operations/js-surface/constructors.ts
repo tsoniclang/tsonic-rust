@@ -15,7 +15,11 @@ import {
   rustJsWeakSetTargetType,
   rustCarrierSupportsObjectIdentity,
 } from "../../../target-model/types/index.js";
-import { resolveCarrierRef } from "./selection.js";
+import {
+  materializeJsonValueConversions,
+  resolveCarrierRef,
+} from "./selection.js";
+import { selectRustJsonValueConversion } from "../../conversions/selection.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { JsCarrierRef, JsOperationSelection } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
@@ -48,7 +52,39 @@ interface JsConstructorRowData {
   readonly inputShape?: "js-array-of-element" | "fixed-array-of-element";
   readonly trailingArguments?: readonly ({ readonly kind: "float64"; readonly value: number } | { readonly kind: "none" })[];
   readonly requiresObjectIdentityTypeArgument?: number;
+  readonly jsonValueSourceArgumentIndexes?: readonly number[];
   readonly variant?: string;
+}
+
+function defineJsConstructorRows(
+  rows: readonly JsConstructorRowData[],
+): readonly JsConstructorRowData[] {
+  const identities = new Set<string>();
+  for (const row of rows) {
+    const identity = [
+      row.sourceOwnerName,
+      row.typeArgumentCount,
+      row.argumentCount,
+      row.variant ?? "",
+    ].join("|");
+    if (identities.has(identity)) {
+      throw new Error("Duplicate JavaScript constructor row '" + identity + "'.");
+    }
+    identities.add(identity);
+    if (row.jsonValueSourceArgumentIndexes !== undefined && (
+      new Set(row.jsonValueSourceArgumentIndexes).size !==
+        row.jsonValueSourceArgumentIndexes.length ||
+      row.jsonValueSourceArgumentIndexes.some((index) =>
+        !Number.isSafeInteger(index) || index < 0 ||
+        index >= row.argumentCount || index >= (row.params?.length ?? 0))
+    )) {
+      throw new Error(
+        "JavaScript constructor row '" + identity +
+          "' has an invalid JSON-value source projection.",
+      );
+    }
+  }
+  return Object.freeze(rows);
 }
 
 const typedArrayNames: readonly RustJsTypedArrayName[] = [
@@ -85,13 +121,14 @@ function intlConstructorRows(
     { className, sourceOwnerName, typeArgumentCount: 0, argumentCount: 0, path: `${path}::new`, result },
     { className, sourceOwnerName, typeArgumentCount: 0, argumentCount: 1, path: `${path}::with_locale`, result, fallible: true, params: [{ ref: "string" }], argModes: ["ref"], variant: "locale" },
     { className, sourceOwnerName, typeArgumentCount: 0, argumentCount: 1, path: `${path}::with_locales`, result, fallible: true, params: [{ ref: "string-array" }], argModes: ["ref"], variant: "locales" },
-    { className, sourceOwnerName, typeArgumentCount: 0, argumentCount: 2, path: `${path}::with_locale_options`, result, fallible: true, params: [{ ref: "string" }, { ref: "jsvalue" }], argModes: ["ref", "ref"], variant: "locale-options" },
-    { className, sourceOwnerName, typeArgumentCount: 0, argumentCount: 2, path: `${path}::with_locales_options`, result, fallible: true, params: [{ ref: "string-array" }, { ref: "jsvalue" }], argModes: ["ref", "ref"], variant: "locales-options" },
+    { className, sourceOwnerName, typeArgumentCount: 0, argumentCount: 2, path: `${path}::with_locale_options`, result, fallible: true, params: [{ ref: "string" }, { ref: "jsvalue" }], argModes: ["ref", "ref"], jsonValueSourceArgumentIndexes: [1], variant: "locale-options" },
+    { className, sourceOwnerName, typeArgumentCount: 0, argumentCount: 2, path: `${path}::with_locales_options`, result, fallible: true, params: [{ ref: "string-array" }, { ref: "jsvalue" }], argModes: ["ref", "ref"], jsonValueSourceArgumentIndexes: [1], variant: "locales-options" },
   ];
 }
 
-const jsConstructorRows: readonly JsConstructorRowData[] = [
+const jsConstructorRows = defineJsConstructorRows([
   { className: "Map", sourceOwnerName: "MapConstructor", typeArgumentCount: 2, argumentCount: 0, path: "js_abi::JsMap::new", result: { kind: "map" } },
+  { className: "Map", sourceOwnerName: "MapConstructor", typeArgumentCount: 2, argumentCount: 1, path: "js_abi::JsMap::from_array", result: { kind: "map" }, params: [{ ref: "js-map-entry-array" }], argModes: ["ref"], variant: "js-array" },
   { className: "Set", sourceOwnerName: "SetConstructor", typeArgumentCount: 1, argumentCount: 0, path: "js_abi::JsSet::new", result: { kind: "set" } },
   { className: "Set", sourceOwnerName: "SetConstructor", typeArgumentCount: 1, argumentCount: 1, path: "js_abi::JsSet::from_array", result: { kind: "set" }, params: [{ ref: "element-array" }], argModes: ["ref"], inputShape: "js-array-of-element", variant: "js-array" },
   { className: "Set", sourceOwnerName: "SetConstructor", typeArgumentCount: 1, argumentCount: 1, path: "js_abi::JsSet::from_fixed_array", result: { kind: "set" }, argModes: ["ref"], inputShape: "fixed-array-of-element", variant: "fixed-array" },
@@ -102,8 +139,8 @@ const jsConstructorRows: readonly JsConstructorRowData[] = [
   { className: "WeakSet", sourceOwnerName: "WeakSetConstructor", typeArgumentCount: 1, argumentCount: 1, path: "js_abi::JsWeakSet::from_null", result: { kind: "weak-set" }, params: [{ ref: "null" }], requiresObjectIdentityTypeArgument: 0, variant: "null" },
   { className: "WeakSet", sourceOwnerName: "WeakSetConstructor", typeArgumentCount: 1, argumentCount: 1, path: "js_abi::JsWeakSet::from_array", result: { kind: "weak-set" }, params: [{ ref: "weak-key-array" }], argModes: ["ref"], requiresObjectIdentityTypeArgument: 0, variant: "array" },
   { className: "Date", sourceOwnerName: "DateConstructor", typeArgumentCount: 0, argumentCount: 0, path: "js_abi::JsDate::new", result: { kind: "date" } },
-  { className: "Date", sourceOwnerName: "DateConstructor", typeArgumentCount: 0, argumentCount: 1, path: "js_abi::JsDate::from_millis", result: { kind: "date" }, params: [{ ref: "float64" }] },
-  { className: "Date", sourceOwnerName: "DateConstructor", typeArgumentCount: 0, argumentCount: 1, path: "js_abi::JsDate::from_string", result: { kind: "date" }, params: [{ ref: "string" }], argModes: ["ref"] },
+  { className: "Date", sourceOwnerName: "DateConstructor", typeArgumentCount: 0, argumentCount: 1, path: "js_abi::JsDate::from_millis", result: { kind: "date" }, params: [{ ref: "float64" }], variant: "millis" },
+  { className: "Date", sourceOwnerName: "DateConstructor", typeArgumentCount: 0, argumentCount: 1, path: "js_abi::JsDate::from_string", result: { kind: "date" }, params: [{ ref: "string" }], argModes: ["ref"], variant: "string" },
   { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 0, path: "js_abi::regexp_empty_native", result: { kind: "regexp" }, fallible: true, variant: "empty" },
   { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 1, path: "js_abi::regexp_from_string_native", result: { kind: "regexp" }, fallible: true, params: [{ ref: "string" }], argModes: ["ref"], variant: "native" },
   { className: "RegExp", sourceOwnerName: "RegExpConstructor", typeArgumentCount: 0, argumentCount: 1, path: "js_abi::regexp_from_exact", result: { kind: "regexp" }, fallible: true, params: [{ ref: "js-string" }], argModes: ["ref"], variant: "exact" },
@@ -125,7 +162,7 @@ const jsConstructorRows: readonly JsConstructorRowData[] = [
   ...intlConstructorRows("Intl.DateTimeFormat", "IntlDateTimeFormatConstructor", { kind: "intl-date-time" }, "js_abi::IntlDateTimeFormat"),
   ...intlConstructorRows("Intl.NumberFormat", "IntlNumberFormatConstructor", { kind: "intl-number" }, "js_abi::IntlNumberFormat"),
   ...intlConstructorRows("Intl.Collator", "IntlCollatorConstructor", { kind: "intl-collator" }, "js_abi::IntlCollator"),
-];
+]);
 
 export interface JsConstructorRequest {
   readonly className: string;
@@ -192,7 +229,11 @@ export function selectJsSurfaceConstructor(request: JsConstructorRequest): JsOpe
     let parameterCarriers = (row.params ?? []).map((reference) =>
       reference === undefined ? undefined : resolveCarrierRef(reference, {
         element: typeArguments[0],
+        mapKey: typeArguments[0],
+        mapValue: typeArguments[1],
         setValue: typeArguments[0],
+        weakKey: typeArguments[0],
+        weakValue: typeArguments[1],
       }));
     if (row.inputShape === "fixed-array-of-element") {
       const actual = request.argumentCarriers[0];
@@ -203,28 +244,49 @@ export function selectJsSurfaceConstructor(request: JsConstructorRequest): JsOpe
       }
       parameterCarriers = [actual];
     }
-    if (parameterCarriers.some((carrier, index) =>
-      carrier === undefined || request.argumentCarriers[index] === undefined ||
-      !rustTargetTypeRefEquals(carrier, request.argumentCarriers[index]!))) {
+    if (parameterCarriers.some((carrier, index) => {
+      const actual = request.argumentCarriers[index];
+      return row.jsonValueSourceArgumentIndexes?.includes(index) === true
+        ? actual === undefined || selectRustJsonValueConversion(actual) === undefined
+        : carrier === undefined || actual === undefined ||
+          !rustTargetTypeRefEquals(carrier, actual);
+    })) {
       return [];
     }
-    return [{ row, parameterCarriers }];
+    const target = materializeJsonValueConversions(
+      {
+        form: "call",
+        path: row.path,
+        ...(row.argModes === undefined ? {} : { argModes: row.argModes }),
+        ...(row.trailingArguments === undefined
+          ? {}
+          : { trailingArguments: row.trailingArguments }),
+      },
+      row.jsonValueSourceArgumentIndexes,
+      request.argumentCarriers,
+    );
+    if (target === undefined) {
+      return [];
+    }
+    return [{
+      row,
+      target,
+      parameterCarriers: parameterCarriers.map((carrier, index) =>
+        row.jsonValueSourceArgumentIndexes?.includes(index) === true
+          ? request.argumentCarriers[index]
+          : carrier),
+    }];
   });
   if (matches.length !== 1) {
     return undefined;
   }
-  const { row, parameterCarriers } = matches[0]!;
+  const { row, target, parameterCarriers } = matches[0]!;
   return {
     fact: {
       kind: "provider-operation",
       operationId: `tsonic.rust.js.${row.className}.constructor${row.variant === undefined ? "" : `.${row.variant}`}`,
       operationKind: "constructor",
-      target: {
-        form: "call",
-        path: row.path,
-        ...(row.argModes === undefined ? {} : { argModes: row.argModes }),
-        ...(row.trailingArguments === undefined ? {} : { trailingArguments: row.trailingArguments }),
-      },
+      target,
       resultCarrier,
       parameterCarriers,
       isAsync: false,

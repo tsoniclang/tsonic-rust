@@ -20,7 +20,8 @@ import type { RustCallbackOperationTemplate, RustProviderOperationForm, RustValu
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 const zeroArgument = { kind: "integer", value: 0 } as const;
-const oneArgument = { kind: "integer", value: 1 } as const;
+const dateZeroArgument = { kind: "float64", value: 0 } as const;
+const dateOneArgument = { kind: "float64", value: 1 } as const;
 const noneArgument = { kind: "none" } as const;
 export const rustInferCarrier: TargetTypeRef = { kind: "opaque", id: "tsonic.rust.infer" };
 const jsNumberArgumentRows = [
@@ -82,7 +83,13 @@ function dateReceiverNumberRows(
 }
 
 function dateUtcRows(): readonly JsOperationRowData[] {
-  const defaults = [oneArgument, zeroArgument, zeroArgument, zeroArgument, zeroArgument] as const;
+  const defaults = [
+    dateOneArgument,
+    dateZeroArgument,
+    dateZeroArgument,
+    dateZeroArgument,
+    dateZeroArgument,
+  ] as const;
   return [2, 3, 4, 5, 6, 7].flatMap((arity) =>
     jsNumberArgumentCombinations(arity).map(({ variant, carriers, conversions }) => ({
       owner: "DateConstructor",
@@ -156,10 +163,13 @@ function callbackOperation(
     shape,
     sourceArgumentIndex: 0,
     ...(shape === "reduce" ? { accumulatorArgumentIndex: 1 } : {}),
-    fallibleTarget: {
-      form: "receiver-method",
-      name: `try_${targetName}`,
-      ...targetOptions,
+    failure: {
+      kind: "invocation",
+      fallibleTarget: {
+        form: "receiver-method",
+        name: `try_${targetName}`,
+        ...targetOptions,
+      },
     },
   };
 }
@@ -171,10 +181,13 @@ function staticCallbackOperation(
   return {
     shape: "map",
     sourceArgumentIndex,
-    fallibleTarget: {
-      form: "call",
-      path: falliblePath,
-      argModes: ["ref", "value"],
+    failure: {
+      kind: "invocation",
+      fallibleTarget: {
+        form: "call",
+        path: falliblePath,
+        argModes: ["ref", "value"],
+      },
     },
   };
 }

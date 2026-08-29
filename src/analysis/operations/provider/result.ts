@@ -114,6 +114,17 @@ export function selectedMemberReceiverCarrier(
     return sourceCarrier;
   }
   if (selectedCarrier === undefined) {
+    if (sourceCarrier !== undefined && request.sourceSelectedSymbol !== undefined) {
+      const selectedDeclarations = context.currentSemantics.declarations
+        .symbolDeclarations(request.sourceSelectedSymbol);
+      if (selectedDeclarations.some((declaration) =>
+        options.sourceTypes.structuralFieldProjectionForDeclaration(
+          declaration,
+          sourceCarrier,
+        ) !== undefined)) {
+        return sourceCarrier;
+      }
+    }
     if (sourceCarrier !== undefined && selectedOwner !== undefined &&
       options.projectTypes.relationship(sourceCarrier, selectedOwner).kind === "related") {
       return sourceCarrier;

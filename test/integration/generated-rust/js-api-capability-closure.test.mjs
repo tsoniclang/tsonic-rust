@@ -13,9 +13,7 @@ test("generated Rust closes identity, binary, collection, Date, and object APIs"
     surfaces: ["js"],
     files: {
       "index.ts": `
-        class Owner {
-          value = 1;
-        }
+        class Owner {}
 
         export function identityAndBinary(): number {
           const fresh = Symbol("state");
@@ -55,10 +53,16 @@ test("generated Rust closes identity, binary, collection, Date, and object APIs"
           const date = new Date(Date.UTC(2023, 0, 31, 12, 30));
           date.setUTCMonth(1);
           date.setUTCHours(24, 5);
-          const assigned = Object.assign({ count: seen }, { label: date.toUTCString() });
+          const assigned = Object.assign(
+            { count: seen, label: "" },
+            { label: date.toUTCString() },
+          );
           const invalidJson = new Date(Number.NaN).toJSON() ?? "invalid";
-          return assigned.label + invalidJson + intersection.size + left.isSubsetOf(union) +
-            union.isSupersetOf(left) + left.isDisjointFrom(new Set<number>([9]));
+          if (intersection.size !== 1 || !left.isSubsetOf(union) ||
+            !union.isSupersetOf(left) || !left.isDisjointFrom(new Set<number>([9]))) {
+            throw new Error("set contract failed");
+          }
+          return assigned.label + invalidJson;
         }
       `,
     },
@@ -92,13 +96,24 @@ test("generated Rust closes Promise, Intl, JSON, console, and timer APIs", { tim
     surfaces: ["js"],
     files: {
       "index.ts": `
+        async function fulfilled(value: number): Promise<number> {
+          return value;
+        }
+        async function rejected(): Promise<number> {
+          throw new Error("no");
+        }
         export async function asynchronous(): Promise<string> {
-          const first = Promise.resolve(1);
-          const second = Promise.resolve(2);
+          const first = fulfilled(1);
+          const second = fulfilled(2);
           const raced = await Promise.race([first, second]);
-          const any = await Promise.any([Promise.reject<number>("no"), second]);
-          const settled = await Promise.allSettled([first, Promise.reject<number>("no")]);
-          const finalized = await first.finally(() => console.count("finally"));
+          const any = await Promise.any([rejected(), second]);
+          const settled = await Promise.allSettled([first, rejected()]);
+          const finalized = await first.finally(() => {
+            if (settled.length < 0) {
+              throw new Error("finalizer");
+            }
+            console.count("finally");
+          });
 
           const date = new Intl.DateTimeFormat("en-US", {
             timeZone: "UTC",
@@ -114,7 +129,7 @@ test("generated Rust closes Promise, Intl, JSON, console, and timer APIs", { tim
             .compare("item2", "item10");
           const json = JSON.stringify(
             { keep: raced + any + finalized, drop: order },
-            (key, value) => key === "drop" ? undefined : value,
+            (key, value) => key === "drop" ? undefined : key === "null" ? null : value,
             2,
           ) ?? "";
 

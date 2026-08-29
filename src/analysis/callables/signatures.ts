@@ -30,7 +30,10 @@ import {
   rustClosureProtocol,
   rustCallableTargetType,
   rustGeneratorStorageTargetType,
+  rustJsPromiseTargetId,
+  rustJsPromiseTargetTypeWithLifetime,
 } from "../../target-model/types/index.js";
+import { rustPlaceholderLifetime, rustStaticLifetime } from "../../target-model/lifetimes/index.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { recordBindingPatternFacts, recordDefaultParameterInitializerFacts, recordParameterAbiFacts, resolveParameterAbi, setParameterAbiFact } from "../declarations/types-and-bindings.js";
@@ -42,7 +45,7 @@ import { setCarrierFact } from "../operations/project-calls.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { resolveRustGeneratorStorage } from "./generator-storage.js";
+import { resolveRustSuspendedCallableStorage } from "./suspension-storage.js";
 import { rustHigherRankedNativeFunctionCarrier } from "./higher-ranked-function.js";
 
 export function recordFunctionSignatureFacts(walk: RustFactWalk, declaration: Node): void {
@@ -446,7 +449,7 @@ export function recordCallableSuspensionFacts(walk: RustFactWalk, declaration: N
         ["target.capability=rust.generator.protocol"],
       );
     } else {
-      const storage = resolveRustGeneratorStorage(walk, declaration, [
+      const storage = resolveRustSuspendedCallableStorage(walk, declaration, [
         protocol.yieldType,
         protocol.returnType,
         protocol.nextType,
@@ -490,11 +493,47 @@ export function recordCallableSuspensionFacts(walk: RustFactWalk, declaration: N
     );
     const inner = rustFutureOutputCarrier(futureCarrier);
     if (inner !== undefined) {
-      walk.context.facts.set(declaration, rustAsyncFunctionFactKey, {
-        isAsync: true,
-        futureCarrier: futureCarrier!,
-        outputCarrier: inner,
-      }, [
+      const isJsPromise = futureCarrier?.kind === "target-named" &&
+        futureCarrier.id === rustJsPromiseTargetId;
+      const storage = isJsPromise
+        ? resolveRustSuspendedCallableStorage(walk, declaration, [inner])
+        : undefined;
+      if (storage?.kind === "rejected") {
+        appendRustDiagnostic(
+          walk,
+          "RUST_ASYNC_PROMISE_STORAGE_LIFETIME_NOT_PROVEN",
+          storage.reason,
+          declaration,
+          ["target.capability=rust.async.js-promise-storage-lifetime"],
+        );
+        return;
+      }
+      const closedFutureCarrier = storage?.kind === "resolved"
+        ? rustJsPromiseTargetTypeWithLifetime(
+            inner,
+            storage.storage.kind === "static"
+              ? rustStaticLifetime
+              : storage.storage.kind === "receiver"
+                ? rustPlaceholderLifetime
+                : storage.storage.lifetime,
+          )
+        : futureCarrier!;
+      walk.context.facts.set(declaration, rustAsyncFunctionFactKey,
+        storage?.kind === "resolved"
+          ? {
+              kind: "js-promise",
+              isAsync: true,
+              futureCarrier: closedFutureCarrier,
+              outputCarrier: inner,
+              capturedParameters: storage.capturedParameters,
+              storage: storage.storage,
+            }
+          : {
+              kind: "native-future",
+              isAsync: true,
+              futureCarrier: closedFutureCarrier,
+              outputCarrier: inner,
+            }, [
         { message: "rust async function" },
       ]);
     }

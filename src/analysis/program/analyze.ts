@@ -75,6 +75,11 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     },
     sourceCallableAbi,
     projectTypes: context.projectTypes,
+    projectCarrierSupportsObjectIdentity(carrier) {
+      const definition = context.projectTypes.definitionForCarrier(carrier);
+      const representation = context.objectRepresentations.representationFor(definition);
+      return representation !== undefined && representation.kind !== "value";
+    },
     projectMethodDispatch: context.projectMethodDispatch,
     projectMethodProperties: context.projectMethodProperties,
   };

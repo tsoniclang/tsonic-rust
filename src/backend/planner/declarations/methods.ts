@@ -15,7 +15,7 @@ import {
   rustErrorBoundaryForProjectMember,
   rustErrorType,
 } from "../program/plan-context.js";
-import { isRustNeverCarrier, isRustUnitCarrier, rustJsPromiseTargetId } from "../../../target-model/types/index.js";
+import { isRustNeverCarrier, isRustUnitCarrier } from "../../../target-model/types/index.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { Node_Type } from "@tsonic/target-api/source";
 import { planBlockLike } from "../statements/index.js";
@@ -90,9 +90,14 @@ export function planProjectMethod(
   context = genericPlan.context;
   const generatorFact = context.input.program.facts.getFact(member, rustGeneratorFactKey);
   const syntheticNames = context.syntheticNames ?? createRustSyntheticNameState(ast, member, []);
+  const asyncFact = context.input.program.facts.getFact(member, rustAsyncFunctionFactKey);
   const parameterPlan = planRustCallableParameters(member, context, syntheticNames, {
-    ...(generatorFact !== undefined && generatorFact.storage.kind !== "lifetime"
-      ? { requiredStaticParameters: generatorFact.capturedParameters }
+    ...((generatorFact !== undefined && generatorFact.storage.kind !== "lifetime") ||
+        asyncFact?.kind === "js-promise" && asyncFact.storage.kind === "static"
+      ? {
+          requiredStaticParameters: generatorFact?.capturedParameters ??
+            (asyncFact?.kind === "js-promise" ? asyncFact.capturedParameters : []),
+        }
       : {}),
   });
   if (parameterPlan === undefined) {
@@ -100,9 +105,7 @@ export function planProjectMethod(
   }
   const params = parameterPlan.params;
   const returnTypeNode = Node_Type(ast, member);
-  const asyncFact = context.input.program.facts.getFact(member, rustAsyncFunctionFactKey);
-  const returnsJsPromise = asyncFact?.futureCarrier.kind === "target-named" &&
-    asyncFact.futureCarrier.id === rustJsPromiseTargetId;
+  const returnsJsPromise = asyncFact?.kind === "js-promise";
   const sourceAsync = ast.hasModifierKind(member, "async");
   if (sourceAsync && generatorFact === undefined && asyncFact === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -163,7 +166,7 @@ export function planProjectMethod(
   }
   if (returnsJsPromise && !requireRustCarrierRequirements(
     asyncFact.outputCarrier,
-    ["clone"],
+    asyncFact.storage.kind === "static" ? ["clone", "static"] : ["clone"],
     member,
     context,
   )) {

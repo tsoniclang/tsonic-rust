@@ -4,7 +4,7 @@ import { printRustAssociatedOwner, printRustSingleCollectionCallContinuation, ru
 import { printRustClosureParams } from "./closure-params.js";
 import { printRustExpr } from "./core.js";
 import { printRustExprFitted } from "./fitted.js";
-import { rustCompactTrailingClosureWidth, rustFormatWidth, rustMethodChainWidth, rustNestedCallWidth, rustSingleLineConditionalWidth } from "../formatting.js";
+import { rustCompactInitializerWidth, rustCompactTrailingClosureWidth, rustFormatWidth, rustMethodChainWidth, rustNestedCallWidth, rustSingleLineConditionalWidth } from "../formatting.js";
 import { rustExpressionContainsExpandedStructLiteral, rustFormatArgumentCanShareLine, rustFormatArgumentIsAtomic, rustInvocationHasNestedExpandedCollection } from "./inspection.js";
 import { rustExpressionContainsStatementBlock } from "../../../backend/target-ast/expressions.js";
 import type { RustExpr, RustType } from "../../../backend/target-ast/nodes.js";
@@ -229,6 +229,14 @@ export function printRustLetInitializer(
       prefix.length + flat.length + 1 >= rustFormatWidth)) {
     return `${prefix}${flat};`;
   }
+  const directContinuationIndent = indentText(depth + 1);
+  const initializerIsInvocation = initializer.kind === "call" || initializer.kind === "invoke" ||
+    initializer.kind === "associated-call";
+  if (initializerIsInvocation && !flat.includes("\n") &&
+    flat.length <= rustCompactInitializerWidth &&
+    renderedFits(`${flat};`, directContinuationIndent.length)) {
+    return `${prefix.trimEnd()}\n${directContinuationIndent}${flat};`;
+  }
   const fittedAtPrefix = printRustExprFitted(initializer, depth, prefix.length + 1);
   const methodChain = rustMethodChain(initializer);
   const chainBaseAtPrefix = methodChain === undefined
@@ -270,6 +278,9 @@ export function printRustLetInitializer(
           initializer,
           depth + 1,
           continuationIndent.length,
+          undefined,
+          "expression",
+          "initializer-continuation",
         );
     const compactClosureOwnsContinuation = initializerArguments?.length === 1 ||
       trailingClosure.kind === "closure" &&
@@ -304,6 +315,9 @@ export function printRustLetInitializer(
       initializer,
       depth + 1,
       continuationIndent.length,
+      undefined,
+      "expression",
+      "initializer-continuation",
     );
     if (continuation.includes("\n") &&
       continuation.split("\n").length < fittedAtPrefix.split("\n").length &&
@@ -333,6 +347,9 @@ export function printRustLetInitializer(
       initializer,
       depth + 1,
       continuationIndent.length,
+      undefined,
+      "expression",
+      "initializer-continuation",
     );
     const collectionCallContinuation = printRustSingleCollectionCallContinuation(
       initializer,
@@ -388,6 +405,9 @@ export function printRustLetInitializer(
         initializer,
         depth + 1,
         continuationIndent.length,
+        undefined,
+        "expression",
+        "initializer-continuation",
       );
       return `${prefix.trimEnd()}\n${continuationIndent}${continuation};`;
     }

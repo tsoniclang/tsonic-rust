@@ -139,8 +139,15 @@ export function rustFutureTargetType(output: TargetTypeRef): TargetTypeRef {
 }
 
 export function rustFutureOutputCarrier(carrier: TargetTypeRef | undefined): TargetTypeRef | undefined {
-  if (carrier?.kind !== "target-named" ||
-    (carrier.id !== rustFutureTargetId && carrier.id !== rustJsPromiseTargetId)) return undefined;
-  const arguments_ = rustOnlyTypeGenericArguments(carrier.genericArguments);
-  return arguments_?.length === 1 ? arguments_[0] : undefined;
+  if (carrier?.kind !== "target-named") return undefined;
+  if (carrier.id === rustFutureTargetId) {
+    const arguments_ = rustOnlyTypeGenericArguments(carrier.genericArguments);
+    return arguments_?.length === 1 ? arguments_[0] : undefined;
+  }
+  if (carrier.id !== rustJsPromiseTargetId) return undefined;
+  const [lifetime, output] = carrier.genericArguments ?? [];
+  return carrier.genericArguments?.length === 2 &&
+      lifetime?.kind === "lifetime" && output?.kind === "type"
+    ? output.type
+    : undefined;
 }

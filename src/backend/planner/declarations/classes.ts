@@ -49,6 +49,7 @@ import {
   rustProjectImplementationVisibility,
   rustProjectMemberStorageVisibility,
 } from "../objects/project-storage-abi.js";
+import { rustProjectObjectIdentityImplementation } from "../objects/project-identity.js";
 
 export interface PlannedProjectObjectField {
   readonly declaration: Node;
@@ -403,6 +404,18 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   return [
     ...(representation.kind === "value" ? [] : [stateItem]),
     structItem,
+    ...(representation.kind === "value"
+      ? []
+      : [rustProjectObjectIdentityImplementation(openType, generics, {
+          kind: "method-call",
+          receiver: {
+            kind: "field",
+            receiver: { kind: "path", path: "self" },
+            name: rustProjectObjectStateField,
+          },
+          method: "object_identity",
+          args: [],
+        })]),
     implementation,
     ...(defaultImplementation === undefined ? [] : [defaultImplementation]),
   ];

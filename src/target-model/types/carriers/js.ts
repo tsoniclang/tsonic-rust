@@ -1,6 +1,7 @@
 import { rustBigIntTargetId, rustJsArrayBufferTargetId, rustJsArrayConcatItemTargetId, rustJsArrayTargetId, rustJsDataViewTargetId, rustJsDateTargetId, rustJsErrorTargetId, rustJsFloat32ArrayTargetId, rustJsFloat64ArrayTargetId, rustJsInt16ArrayTargetId, rustJsInt32ArrayTargetId, rustJsInt8ArrayTargetId, rustJsIntlCollatorTargetId, rustJsIntlDateTimeFormatPartTargetId, rustJsIntlDateTimeFormatTargetId, rustJsIntlNumberFormatPartTargetId, rustJsIntlNumberFormatTargetId, rustJsIntlResolvedCollatorOptionsTargetId, rustJsIntlResolvedDateTimeFormatOptionsTargetId, rustJsIntlResolvedNumberFormatOptionsTargetId, rustJsMapTargetId, rustJsPromiseFulfilledResultTargetId, rustJsPromiseRejectedResultTargetId, rustJsPromiseSettledResultTargetId, rustJsPromiseTargetId, rustJsRegExpExecArrayTargetId, rustJsRegExpIndicesTargetId, rustJsRegExpMatchArrayTargetId, rustJsRegExpNamedGroupsTargetId, rustJsRegExpNamedIndicesTargetId, rustJsRegExpStringIteratorTargetId, rustJsRegExpTargetId, rustJsSetTargetId, rustJsStringTargetId, rustJsSymbolTargetId, rustJsUint16ArrayTargetId, rustJsUint32ArrayTargetId, rustJsUint8ArrayTargetId, rustJsUint8ClampedArrayTargetId, rustJsValueTargetId, rustJsWeakMapTargetId, rustJsWeakSetTargetId, rustNeverCarrierName, rustNullTargetId, rustProgramErrorTargetId, rustRegExpExecArrayTargetId, rustRegExpIndicesTargetId, rustRegExpMatchArrayTargetId, rustRegExpNamedGroupsTargetId, rustRegExpNamedIndicesTargetId, rustRegExpStringIteratorTargetId, rustStringTargetId, rustUndefinedTargetId } from "./source-types.js";
 import { rustOptionTargetType } from "./optional.js";
 import type { TargetTypeRef } from "../model.js";
+import type { RustLifetimeRef } from "../../lifetimes/index.js";
 import {
   rustLifetimeGenericArgument,
   rustOnlyTypeGenericArguments,
@@ -82,11 +83,18 @@ export function rustJsWeakSetTargetType(value: TargetTypeRef): TargetTypeRef {
 }
 
 export function rustJsPromiseTargetType(output: TargetTypeRef): TargetTypeRef {
+  return rustJsPromiseTargetTypeWithLifetime(output, rustPlaceholderLifetime);
+}
+
+export function rustJsPromiseTargetTypeWithLifetime(
+  output: TargetTypeRef,
+  lifetime: RustLifetimeRef,
+): TargetTypeRef {
   return {
     kind: "target-named",
     id: rustJsPromiseTargetId,
     genericArguments: [
-      rustLifetimeGenericArgument(rustPlaceholderLifetime),
+      rustLifetimeGenericArgument(lifetime),
       rustTypeGenericArgument(output),
     ],
   };

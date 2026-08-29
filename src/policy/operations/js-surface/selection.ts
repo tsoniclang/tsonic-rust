@@ -34,6 +34,8 @@ import {
   rustJsTypedArrayName,
   rustFutureOutputCarrier,
   rustJsPromiseOutputTargetType,
+  rustJsPromiseSettledResultTargetType,
+  rustJsPromiseTargetType,
   rustJsPromiseFulfilledResultTargetId,
   rustJsPromiseRejectedResultTargetId,
   rustJsPromiseSettledResultTargetId,
@@ -59,6 +61,7 @@ import {
   rustRegExpStringIteratorTargetType,
   rustJsArrayTargetType,
   isRustCallableCarrier,
+  rustCallableTargetType,
   rustClosureTargetType,
   rustNullTargetType,
   rustOptionTargetType,
@@ -404,6 +407,13 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
       return bindings.mapKey === undefined || bindings.mapValue === undefined
         ? undefined
         : rustVecTargetType({ kind: "tuple", elements: [bindings.mapKey, bindings.mapValue] });
+    case "js-map-entry-array":
+      return bindings.mapKey === undefined || bindings.mapValue === undefined
+        ? undefined
+        : rustJsArrayTargetType({
+            kind: "tuple",
+            elements: [bindings.mapKey, bindings.mapValue],
+          });
     case "set-value":
       return bindings.setValue;
     case "set-value-array":
@@ -443,8 +453,18 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
       return bindings.promiseOutput;
     case "promise-input-output":
       return bindings.promiseInputOutput;
+    case "promise-of-input-output":
+      return bindings.promiseInputOutput === undefined
+        ? undefined
+        : rustJsPromiseTargetType(bindings.promiseInputOutput);
+    case "promise-of-settled-input-output-array":
+      return bindings.promiseInputOutput === undefined
+        ? undefined
+        : rustJsPromiseTargetType(rustJsArrayTargetType(
+            rustJsPromiseSettledResultTargetType(bindings.promiseInputOutput),
+          ));
     case "promise-finally-callback":
-      return rustClosureTargetType([], rustUnitTargetType());
+      return rustCallableTargetType([], rustUnitTargetType());
     case "json-replacer-callback":
       return rustClosureTargetType(
         [rustStringTargetType(), rustJsValueTargetType()],
@@ -547,7 +567,7 @@ function materializeVariadicTarget(
     : { ...target, elementCarrier: resolvedElementCarrier };
 }
 
-function materializeJsonValueConversions(
+export function materializeJsonValueConversions(
   target: RustProviderOperationForm,
   sourceIndexes: readonly number[] | undefined,
   sourceCarriers: readonly (TargetTypeRef | undefined)[],
@@ -743,7 +763,8 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
       (candidate.selectedMethodTypeArgumentArity === undefined ||
         candidate.selectedMethodTypeArgumentArity ===
           (request.selectedMethodTypeArgumentCarriers?.length ?? 0)) &&
-      (candidate.callback === undefined || isRustCallableCarrier(callbackArgumentCarrier)) &&
+      (candidate.callback === undefined || callbackArgumentCarrier === undefined ||
+        isRustCallableCarrier(callbackArgumentCarrier)) &&
       carrierRequirementsMatch(candidate.requirements, candidateBindings, request) &&
       (candidate.firstArgCarrierId === undefined
         ? firstArgumentId(request) === undefined || !jsOperationRows.some((other) =>
@@ -759,13 +780,20 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
       (candidate.variadic === true && candidateArgumentCarriers.length < parameterCarriers.length)) {
       return [];
     }
-    const argumentScores = parameterCarriers.map((carrier, index) =>
-          jsArgumentCarrierMatchScore(
-            carrier,
-            candidateArgumentCarriers[index],
-            index,
-            request.argumentMatchScore,
-          ));
+    const argumentScores = parameterCarriers.map((carrier, index) => {
+      const actual = candidateArgumentCarriers[index];
+      if (candidate.jsonValueSourceArgumentIndexes?.includes(index) === true) {
+        return actual !== undefined && selectRustJsonValueConversion(actual) !== undefined
+          ? 1
+          : undefined;
+      }
+      return jsArgumentCarrierMatchScore(
+        carrier,
+        actual,
+        index,
+        request.argumentMatchScore,
+      );
+    });
     if (argumentScores.some((score) => score === undefined)) {
       return [];
     }
@@ -855,7 +883,15 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
     ? undefined
     : {
         ...row.callback,
-        fallibleTarget: materializeTarget(row.callback.fallibleTarget, copyReference),
+        failure: row.callback.failure.kind === "returned-future"
+          ? row.callback.failure
+          : {
+              kind: "invocation" as const,
+              fallibleTarget: materializeTarget(
+                row.callback.failure.fallibleTarget,
+                copyReference,
+              ),
+            },
       };
   return {
     fact: {

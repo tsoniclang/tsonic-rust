@@ -228,24 +228,17 @@ function mapSelectedObjectShapeProjection(
     context,
     options,
   );
-  const innerResultCarrier = request.source.optionalChain
-    ? rustOptionElementCarrier(resolvedSourceResult)
-    : resolvedSourceResult;
+  const innerResultCarrier = selection.projection === "assign"
+    ? sourceValueCarrier
+    : request.source.optionalChain
+      ? rustOptionElementCarrier(resolvedSourceResult)
+      : resolvedSourceResult;
   if (innerResultCarrier === undefined) {
     return rejectSelectedOperation(
       request.source.call,
       context,
       "RUST_OBJECT_SHAPE_PROJECTION_RESULT_MISSING",
       `Selected Object.${selection.sourceName} call has no exact closed result carrier.`,
-    );
-  }
-  if (selection.projection === "assign" &&
-    !rustTargetTypeRefEquals(innerResultCarrier, sourceValueCarrier)) {
-    return rejectSelectedOperation(
-      request.source.call,
-      context,
-      "RUST_OBJECT_ASSIGN_RESULT_NOT_IDENTICAL",
-      "Selected Object.assign result must preserve the exact target object-handle carrier.",
     );
   }
   const assignmentFields = selection.projection === "assign"
@@ -296,8 +289,11 @@ function mapSelectedObjectShapeProjection(
     context,
     options,
   );
-  if (optionalResult.kind === "rejected" || resolvedSourceResult === undefined ||
-    !rustTargetTypeRefEquals(optionalResult.resultCarrier, resolvedSourceResult)) {
+  if (optionalResult.kind === "rejected" ||
+    selection.projection !== "assign" && (
+      resolvedSourceResult === undefined ||
+      !rustTargetTypeRefEquals(optionalResult.resultCarrier, resolvedSourceResult)
+    )) {
     return rejectSelectedOperation(
       request.source.call,
       context,

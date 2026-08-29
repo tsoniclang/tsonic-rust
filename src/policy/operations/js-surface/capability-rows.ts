@@ -81,7 +81,7 @@ const typedArrayRows: readonly JsOperationRowData[] = [
     { owner: "TypedArray", member, operationKind: "call", lane: "typed-array", variant: "start-end", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: `${member}_to` }, result: { ref: "receiver" }, params: [{ ref: "float64" }, { ref: "float64" }] } },
   ]),
   { owner: "TypedArray", member: "sort", operationKind: "call", lane: "typed-array", variant: "default", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "sort_default" }, result: { ref: "receiver" } } },
-  { owner: "TypedArray", member: "sort", operationKind: "call", lane: "typed-array", variant: "compare", callback: { shape: "direct", sourceArgumentIndex: 0, fallibleTarget: { form: "receiver-method", name: "try_sort_by" } }, shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "sort_by" }, result: { ref: "receiver" }, params: [{ ref: "cb-array-comparator", arity: 2 }] } },
+  { owner: "TypedArray", member: "sort", operationKind: "call", lane: "typed-array", variant: "compare", callback: { shape: "direct", sourceArgumentIndex: 0, failure: { kind: "invocation", fallibleTarget: { form: "receiver-method", name: "try_sort_by" } } }, shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "sort_by" }, result: { ref: "receiver" }, params: [{ ref: "cb-array-comparator", arity: 2 }] } },
 ];
 
 const intlRows: readonly JsOperationRowData[] = [
@@ -169,7 +169,7 @@ const promiseRows: readonly JsOperationRowData[] = [
     member,
     operationKind: "call",
     lane: "promise",
-    requirements: [{ carrier: { ref: "future-output" }, capability: "clone" }],
+    requirements: [{ carrier: { ref: "promise-input-output" }, capability: "clone" }],
     returnedFuture: { awaiting: "fallible", errorBoundary: "source-program" },
     shape: {
       op: "operation",
@@ -179,7 +179,7 @@ const promiseRows: readonly JsOperationRowData[] = [
         path: member === "race" ? "js_abi::promise_race" : "js_abi::promise_any",
         argModes: ["ref"],
       },
-      result: { ref: "source-result" },
+      result: { ref: "promise-of-input-output" },
       params: [{ ref: "argument", index: 0 }],
     },
   })),
@@ -194,7 +194,7 @@ const promiseRows: readonly JsOperationRowData[] = [
       op: "operation",
       operationKind: "method",
       target: { form: "call", path: "js_abi::promise_all_settled", argModes: ["ref"] },
-      result: { ref: "source-result" },
+      result: { ref: "promise-of-settled-input-output-array" },
       params: [{ ref: "argument", index: 0 }],
     },
   },
@@ -210,7 +210,7 @@ const promiseRows: readonly JsOperationRowData[] = [
       op: "operation",
       operationKind: "method",
       target: { form: "receiver-method", name: "finally_default" },
-      result: { ref: "source-result" },
+      result: { ref: "receiver" },
     },
   },
   {
@@ -223,14 +223,14 @@ const promiseRows: readonly JsOperationRowData[] = [
     callback: {
       shape: "direct",
       sourceArgumentIndex: 0,
-      fallibleTarget: { form: "receiver-method", name: "try_finally" },
+      failure: { kind: "returned-future" },
     },
     returnedFuture: { awaiting: "fallible", errorBoundary: "source-program" },
     shape: {
       op: "operation",
       operationKind: "method",
       target: { form: "receiver-method", name: "finally" },
-      result: { ref: "source-result" },
+      result: { ref: "receiver" },
       params: [{ ref: "promise-finally-callback" }],
     },
   },
@@ -354,7 +354,7 @@ const jsonRows: readonly JsOperationRowData[] = ([
     callback: {
       shape: "direct",
       sourceArgumentIndex: 1,
-      fallibleTarget: { form: "call", path: "js_abi::json_try_stringify_with_replacer", argModes: ["ref", "value"] },
+      failure: { kind: "invocation", fallibleTarget: { form: "call", path: "js_abi::json_try_stringify_with_replacer", argModes: ["ref", "value"] } },
     },
     shape: {
       op: "operation",
@@ -374,12 +374,15 @@ const jsonRows: readonly JsOperationRowData[] = ([
     callback: {
       shape: "direct",
       sourceArgumentIndex: 1,
-      fallibleTarget: {
-        form: "call",
-        path: space === "number"
-          ? "js_abi::json_try_stringify_with_replacer_and_space_number"
-          : "js_abi::json_try_stringify_with_replacer_and_space_string",
-        argModes: ["ref", "value", space === "number" ? "value" : "ref"],
+      failure: {
+        kind: "invocation",
+        fallibleTarget: {
+          form: "call",
+          path: space === "number"
+            ? "js_abi::json_try_stringify_with_replacer_and_space_number"
+            : "js_abi::json_try_stringify_with_replacer_and_space_string",
+          argModes: ["ref", "value", space === "number" ? "value" : "ref"],
+        },
       },
     },
     shape: {
@@ -411,7 +414,7 @@ const jsonRows: readonly JsOperationRowData[] = ([
     callback: {
       shape: "direct",
       sourceArgumentIndex: 1,
-      fallibleTarget: { form: "call", path: "js_abi::json_try_stringify_with_replacer", argModes: ["ref", "value"], argOrder: [0, 1] },
+      failure: { kind: "invocation", fallibleTarget: { form: "call", path: "js_abi::json_try_stringify_with_replacer", argModes: ["ref", "value"], argOrder: [0, 1] } },
     },
     shape: {
       op: "operation",
