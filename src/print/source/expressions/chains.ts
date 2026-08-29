@@ -260,13 +260,14 @@ export function rustMethodChainRequiresVerticalLayout(expression: RustExpr): boo
   const chain = rustMethodChain(expression);
   const expandedClosureOpening = rustExpandedMethodClosureOpeningWidth(expression);
   const renderedLength = printRustExpr(expression).length;
+  const selectorCount = chain?.steps.filter((step) =>
+    step.kind === "method" || step.kind === "field" || step.kind === "await").length ?? 0;
   return chain !== undefined &&
     (expandedClosureOpening === undefined || expandedClosureOpening > rustMethodChainWidth) &&
     (expression.kind === "try"
       ? renderedLength >= rustMethodChainWidth
       : renderedLength > rustMethodChainWidth) &&
-    chain.steps.filter((step) =>
-      step.kind === "method" || step.kind === "field" || step.kind === "await").length > 1;
+    selectorCount > 1;
 }
 
 export function rustExpandedMethodClosureOpeningWidth(

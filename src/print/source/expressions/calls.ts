@@ -321,22 +321,33 @@ export function printFittedCall(
       return attached;
     }
   }
-  if (arguments_.length === 1 && arguments_[0]?.kind === "binary" &&
-    (arguments_[0].operator === "+" || arguments_[0].operator === "-" ||
-      arguments_[0].operator === "*" || arguments_[0].operator === "/" ||
-      arguments_[0].operator === "%") &&
-    !rustExpressionContainsStatementBlock(arguments_[0])) {
+  const soleArithmeticArgument = arguments_.length === 1 && arguments_[0]?.kind === "binary" &&
+      (arguments_[0].operator === "+" || arguments_[0].operator === "-" ||
+        arguments_[0].operator === "*" || arguments_[0].operator === "/" ||
+        arguments_[0].operator === "%")
+    ? arguments_[0]
+    : undefined;
+  let firstArithmeticOperand: RustExpr | undefined = soleArithmeticArgument;
+  while (firstArithmeticOperand?.kind === "binary" &&
+    (firstArithmeticOperand.operator === "+" || firstArithmeticOperand.operator === "-" ||
+      firstArithmeticOperand.operator === "*" || firstArithmeticOperand.operator === "/" ||
+      firstArithmeticOperand.operator === "%")) {
+    firstArithmeticOperand = firstArithmeticOperand.left;
+  }
+  if (soleArithmeticArgument !== undefined &&
+    (!rustExpressionContainsStatementBlock(soleArithmeticArgument) ||
+      firstArithmeticOperand?.kind === "conditional")) {
     const prefix = `${callable}(`;
     const rendered = printRustExprFitted(
-      arguments_[0],
+      soleArithmeticArgument,
       inlineArgumentDepth,
       column + prefix.length,
     );
     const attached = appendToLastLine(`${prefix}${rendered}`, ")");
-    const attachedBinaryContinuation = /^[A-Za-z_][A-Za-z0-9_]*$/u.test(callable) &&
-      callable.length <= rustInlineFieldReceiverWidth &&
-      rendered.split("\n").length === 2;
-    if ((!rendered.includes("\n") || attachedBinaryContinuation) &&
+    const callableCanOwnMultilineArithmetic =
+      /^[A-Za-z_][A-Za-z0-9_]*$/u.test(callable) &&
+      callable.length <= rustInlineFieldReceiverWidth;
+    if ((!rendered.includes("\n") || callableCanOwnMultilineArithmetic) &&
       renderedFits(attached, column)) {
       return attached;
     }

@@ -476,7 +476,7 @@ export function printRustExprFitted(
     case "try": {
       const chain = rustMethodChain(expression);
       if (chain !== undefined && expression.expr.kind === "method-call" &&
-        expression.expr.args.length === 0 &&
+        expression.expr.args.every(rustFormatArgumentCanShareLine) &&
         rustMethodChainRequiresVerticalLayout(expression)) {
         return printFittedMethodChain(
           chain,
