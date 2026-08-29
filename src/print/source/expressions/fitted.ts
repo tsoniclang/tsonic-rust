@@ -476,6 +476,7 @@ export function printRustExprFitted(
     case "try": {
       const chain = rustMethodChain(expression);
       if (chain !== undefined && expression.expr.kind === "method-call" &&
+        expression.expr.args.length === 0 &&
         rustMethodChainRequiresVerticalLayout(expression)) {
         return printFittedMethodChain(
           chain,
@@ -673,12 +674,18 @@ export function printRustExprFitted(
           !renderedFits(flat, column) &&
           leftMethodChain.steps.filter((step) =>
             step.kind === "method" || step.kind === "field" || step.kind === "await").length > 1);
+      const leftSelectorCount = leftMethodChain?.steps.filter((step) =>
+        step.kind === "method" || step.kind === "field" || step.kind === "await").length ?? 0;
+      const binarySlotBreaksBeforeFirstSelector = leftMethodChain !== undefined &&
+        (rustMethodChainBreaksReceiverWhenExpanded(leftMethodChain) ||
+          leftSelectorCount > 1 && leftMethodChain.steps[0]?.kind === "method" &&
+            rustMethodChainContainsClosure(leftMethodChain));
       const renderedLeft = expandedLeftCall ?? (leftNeedsBinarySlotLayout
         ? printFittedMethodChain(
             leftMethodChain,
             depth,
             column,
-            true,
+            binarySlotBreaksBeforeFirstSelector,
             methodChainContinuationIndent ?? indentText(depth + 1),
           )
         : expression.left.kind === "try" &&

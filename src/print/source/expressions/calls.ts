@@ -324,7 +324,8 @@ export function printFittedCall(
   if (arguments_.length === 1 && arguments_[0]?.kind === "binary" &&
     (arguments_[0].operator === "+" || arguments_[0].operator === "-" ||
       arguments_[0].operator === "*" || arguments_[0].operator === "/" ||
-      arguments_[0].operator === "%")) {
+      arguments_[0].operator === "%") &&
+    !rustExpressionContainsStatementBlock(arguments_[0])) {
     const prefix = `${callable}(`;
     const rendered = printRustExprFitted(
       arguments_[0],
@@ -332,12 +333,10 @@ export function printFittedCall(
       column + prefix.length,
     );
     const attached = appendToLastLine(`${prefix}${rendered}`, ")");
-    const callableCanOwnMultilineArithmetic =
-      /^[A-Za-z_][A-Za-z0-9_]*$/u.test(callable) &&
-      callable.length <= rustInlineFieldReceiverWidth;
-    if ((!rustExpressionContainsStatementBlock(arguments_[0]) ||
-        callableCanOwnMultilineArithmetic) &&
-      (!rendered.includes("\n") || callableCanOwnMultilineArithmetic) &&
+    const attachedBinaryContinuation = /^[A-Za-z_][A-Za-z0-9_]*$/u.test(callable) &&
+      callable.length <= rustInlineFieldReceiverWidth &&
+      rendered.split("\n").length === 2;
+    if ((!rendered.includes("\n") || attachedBinaryContinuation) &&
       renderedFits(attached, column)) {
       return attached;
     }
