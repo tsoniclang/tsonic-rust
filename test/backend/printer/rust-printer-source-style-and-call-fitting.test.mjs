@@ -690,5 +690,5 @@ test("a long outer call expands before a jointly fitting method argument", () =>
     }],
   });
 
-  assert.match(source, /usize_to_i32\(\n        values\n            \.load\(\)\n            \.push\(nextValue\(alias\.clone\(\), calls\.clone\(\)\)\?\),\n    \)\?;/u);
+  assert.match(source, /usize_to_i32\(\n        values\.load\(\)\.push\(nextValue\(alias\.clone\(\), calls\.clone\(\)\)\?\),\n    \)\?;/u);
 });

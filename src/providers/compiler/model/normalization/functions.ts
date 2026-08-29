@@ -155,8 +155,7 @@ function rustResultTypeHasClosedCarrier(type: RustCompilerType): boolean {
     case "path":
       return type.genericArguments.every(genericArgumentHasClosedCarrier);
     case "associated-type":
-      return !type.maybeSized &&
-        type.genericArguments.every((argument) => argument.kind === "lifetime");
+      return !type.maybeSized;
     case "unit":
     case "primitive":
     case "generic":

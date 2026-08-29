@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import {
   acmeTestingPackage,
   artifactText,
-  assertRustTargetRejection,
   compileRust,
   nodejsCapability,
 } from "../../helpers/rust-session.mjs";
@@ -103,21 +102,24 @@ export async function size_of(path: string): Promise<boolean> {
   assert.match(text, /tsonic_rust_runtime::conversions::u64_to_f64\(info\.size\)/u);
 });
 
-test("stream scheduler target limits fail at the provider boundary", async () => {
+test("stream scheduler operations lower through exact provider rows", async () => {
   const cases = [
-    { module: "node:fs", name: "watch", call: "watch(\"x\")" },
-    { module: "node:fs", name: "createReadStream", call: "createReadStream(\"x\")" },
+    { name: "watch", target: "watch" },
+    { name: "createReadStream", target: "create_read_stream" },
   ];
   for (const item of cases) {
-    const options = {
+    const { result } = compileRust({
       surfaces: ["js"],
       capabilities: [await nodejsCapability()],
-      files: { "index.ts": `import { ${item.name} } from "${item.module}";\n\nexport function bad(): void {\n  ${item.call};\n}\n` },
-    };
-    assertRustTargetRejection(options, [{
-      code: "RUST_PROVIDER_OPERATION_NOT_MAPPED",
-      message: `No Rust operation row matches selected provider declaration 'tsonic.rust.provider-package.@tsonic/rust-nodejs.binding::tsonic.rust.node.fs::${item.module}::${item.name}::${item.module}::${item.name}(...)' as method.`,
-    }]);
+      files: {
+        "index.ts": `import { ${item.name} } from "node:fs";\n\nexport function selected(): void {\n  ${item.name}("x");\n}\n`,
+      },
+    });
+    assert.deepEqual(result.diagnostics, []);
+    assert.match(artifactText(result, "src/index.rs"), new RegExp(
+      `tsonic_rust_node::fs::${item.target}\\(&?"x"\\)\\?`,
+      "u",
+    ));
   }
 });
 

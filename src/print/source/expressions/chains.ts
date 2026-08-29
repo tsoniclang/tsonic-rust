@@ -262,7 +262,9 @@ export function rustMethodChainRequiresVerticalLayout(expression: RustExpr): boo
   const renderedLength = printRustExpr(expression).length;
   return chain !== undefined &&
     (expandedClosureOpening === undefined || expandedClosureOpening > rustMethodChainWidth) &&
-    renderedLength >= rustMethodChainWidth &&
+    (expression.kind === "try"
+      ? renderedLength >= rustMethodChainWidth
+      : renderedLength > rustMethodChainWidth) &&
     chain.steps.filter((step) =>
       step.kind === "method" || step.kind === "field" || step.kind === "await").length > 1;
 }

@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import {
   acmeTestingPackage,
   artifactText,
-  assertRustTargetRejection,
   compileRust,
   nodejsCapability,
 } from "../../helpers/rust-session.mjs";
@@ -281,7 +280,8 @@ export async function roundtrip(dir: string, file: string): Promise<int32> {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub async fn roundtrip\(dir: String, file: String\) -> Result<i32, rt::TsonicError> \{/u);
+  assert.match(text, /pub fn roundtrip\(dir: String, file: String\) -> js_abi::JsPromise<'static, i32> \{/u);
+  assert.match(text, /js_abi::JsPromise::from_fallible_factory\(move \|\| async move \{/u);
   assert.match(text, /tsonic_rust_node::fs_promises::mkdir_async\(&dir\)\.await\?/u);
   assert.match(text, /tsonic_rust_node::fs_promises::read_file_string_async\(&file, "utf8"\)\.await\?/u);
   validateGeneratedProject("r7-async-fs-lib", result.artifacts);
@@ -336,30 +336,28 @@ export function read(name: string): string {
   assert.match(text, /value\.is_none\(\)/u);
 });
 
-test("unsupported node APIs fail closed with deterministic diagnostics", async () => {
-  const cases = [
-    { module: "node:fs", name: "watch", call: "watch(\"x\")" },
+test("filesystem stream constructors and lifecycle methods lower together", async () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    capabilities: [await nodejsCapability()],
+    files: {
+      "index.ts": `
+import { createReadStream, createWriteStream } from "node:fs";
 
-    { module: "node:fs", name: "createWriteStream", call: "createWriteStream(\"x\")" },
-
-  ];
-  for (const item of cases) {
-    const options = {
-      surfaces: ["js"],
-      capabilities: [await nodejsCapability()],
-      files: {
-        "index.ts": `
-import { ${item.name} } from "${item.module}";
-
-export function bad(): void {
-  ${item.call};
+export function closeStreams(inputPath: string, outputPath: string): void {
+  const readable = createReadStream(inputPath);
+  const writable = createWriteStream(outputPath);
+  readable.close();
+  writable.close();
 }
 `,
-      },
-    };
-    assertRustTargetRejection(options, [{
-      code: "RUST_PROVIDER_OPERATION_NOT_MAPPED",
-      message: `No Rust operation row matches selected provider declaration 'tsonic.rust.provider-package.@tsonic/rust-nodejs.binding::tsonic.rust.node.fs::${item.module}::${item.name}::${item.module}::${item.name}(...)' as method.`,
-    }]);
-  }
+    },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /tsonic_rust_node::fs::create_read_stream\(&input_path\)\?/u);
+  assert.match(text, /tsonic_rust_node::fs::create_write_stream\(&output_path\)\?/u);
+  assert.match(text, /readable\.close\(\)/u);
+  assert.match(text, /writable\.close\(\)\?/u);
+  validateGeneratedProject("r9-node-stream-constructors", result.artifacts);
 });

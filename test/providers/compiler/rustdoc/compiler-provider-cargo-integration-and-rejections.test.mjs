@@ -231,7 +231,8 @@ export function main(): void {
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /let owned_borrowed_label: String = String::from\(widget_alias::borrowed_label\(\)\);/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::borrowed_label\(\) != "widget"/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::Widget::into_box_value\(boxed\)/u);
-  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::Widget::pinned_count\(widget_alias::pin_widget\(&mut pinned_widget\)\)/u);
+  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /let pinned: std::pin::Pin<&mut widget_alias::Widget<i32>> =\s*widget_alias::pin_widget\(&mut pinned_widget\);/u);
+  assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::Widget::pinned_count\(pinned\)/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::StructuredMode::Named \{ value: 23 \}/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::non_clone_static_value\(&?widget_alias::NON_CLONE_STATIC\)/u);
   assert.match(result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "", /widget_alias::scalar_code\(widget_alias::scalar_smile\(\)\)/u);

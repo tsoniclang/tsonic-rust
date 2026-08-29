@@ -844,11 +844,18 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
       moduleSpecifier: "@tsonic/rust/std/fmt.js",
     });
     assert.ok(fmtProjection.declarationModel.exports.some(({ name }) => name === "Formatter"));
+    const formatterFill = fmtProjection.declarationModel.exports
+      .find(({ name }) => name === "Formatter")?.members?.find(({ name }) => name === "fill");
     assert.equal(
-      fmtProjection.declarationModel.exports.find(({ name }) => name === "Formatter")
-        ?.members?.some(({ name }) => name === "fill"),
-      false,
-      "optional methods with no declared primitive carrier do not poison a representable type",
+      formatterFill?.signatures?.[0]?.returnType?.exportName,
+      "scalar",
+      "a reflected char result uses the exact declared scalar source carrier",
+    );
+    assert.deepEqual(
+      fmtProjection.operations.find(({ memberId }) => memberId === formatterFill?.id)
+        ?.resultCarrier,
+      { kind: "target-named", id: "rust.native.char" },
+      "a reflected char result retains the exact native Rust carrier",
     );
 
     const ioModule = worker.module({

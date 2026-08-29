@@ -12,6 +12,7 @@ import {
   KindDeleteExpression,
   KindElementAccessExpression,
   KindEqualsToken,
+  KindIdentifier,
   KindNewExpression,
   KindNonNullExpression,
   KindParenthesizedExpression,
@@ -570,7 +571,7 @@ function resolveCallArgumentOperationPrerequisite(
     resolveExpressionCarrier(walk, argument, sourceFile, undefined);
     return;
   }
-  if (kind === KindCallExpression || kind === KindNewExpression ||
+  if (kind === KindIdentifier || kind === KindCallExpression || kind === KindNewExpression ||
     kind === "KindRegularExpressionLiteral" ||
     kind === KindPropertyAccessExpression || kind === KindElementAccessExpression ||
     kind === KindBinaryExpression || kind === KindPrefixUnaryExpression ||
@@ -620,7 +621,7 @@ function resolveIndependentCallArgumentOperation(
 ): void {
   const { ast } = walk.context;
   const kind = ast.kindName(argument);
-  if (kind === KindCallExpression || kind === KindNewExpression ||
+  if (kind === KindIdentifier || kind === KindCallExpression || kind === KindNewExpression ||
     kind === "KindRegularExpressionLiteral" ||
     kind === KindPropertyAccessExpression || kind === KindElementAccessExpression ||
     kind === KindNonNullExpression || kind === "KindAsExpression" ||

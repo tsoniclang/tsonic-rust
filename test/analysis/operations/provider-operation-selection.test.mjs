@@ -1,10 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { selectRustProviderOperation } from "../../../dist/policy/operations/provider-selection.js";
+import { instantiateProviderOperationTemplate } from "../../../dist/analysis/operations/provider/calls/template-instantiation.js";
 import {
   mergeProviderDeclarationIdentities,
   resolveSelectedProviderDeclaration,
 } from "../../../dist/policy/evidence/selected-source.js";
+import { rustCallScopedElisionLifetime } from "../../../dist/target-model/lifetimes/index.js";
 
 const unit = { kind: "tuple", elements: [] };
 
@@ -229,4 +231,100 @@ test("declaration corroboration cannot override the checker-selected overload", 
     subject: callee,
     precision: "declaration",
   }]).kind, "conflict");
+});
+
+test("provider lifetime inference preserves an exact argument lifetime before applying call elision", () => {
+  const lifetimeIdentity = "parameter\0provider::lifetime::a";
+  const parameterLifetime = {
+    kind: "parameter",
+    identity: "provider::lifetime::a",
+    name: "a",
+  };
+  const innerLifetime = rustCallScopedElisionLifetime(
+    "source.ts:20:30",
+    lifetimeIdentity,
+  );
+  const outerElision = rustCallScopedElisionLifetime(
+    "source.ts:10:40",
+    lifetimeIdentity,
+  );
+  const int32 = { kind: "source-primitive", name: "int32" };
+  const pattern = {
+    kind: "reference",
+    referent: int32,
+    mutable: false,
+    lifetime: parameterLifetime,
+  };
+  const actual = {
+    ...pattern,
+    lifetime: innerLifetime,
+  };
+  const instantiated = instantiateProviderOperationTemplate({
+    kind: "provider-operation",
+    operationId: "acme.borrow",
+    operationKind: "method",
+    target: { form: "call", path: "acme::borrow" },
+    resultCarrier: pattern,
+    parameterCarriers: [pattern],
+    genericParameters: [{
+      kind: "lifetime",
+      sourceName: "A",
+      targetIdentity: lifetimeIdentity,
+    }],
+    isAsync: false,
+    isFallible: false,
+    errorBoundary: "target-runtime",
+  }, {
+    sourceParameterCarriers: [actual],
+    callScopedElisionBindings: new Map([[lifetimeIdentity, outerElision]]),
+  });
+
+  assert.ok(instantiated);
+  assert.deepEqual(instantiated.substitutions.lifetimes.get(lifetimeIdentity), innerLifetime);
+  assert.deepEqual(instantiated.template.resultCarrier, actual);
+});
+
+test("provider output-only lifetimes use call elision when source result semantics erase them", () => {
+  const lifetimeIdentity = "parameter\0provider::lifetime::a";
+  const parameterLifetime = {
+    kind: "parameter",
+    identity: "provider::lifetime::a",
+    name: "a",
+  };
+  const callElision = rustCallScopedElisionLifetime(
+    "source.ts:10:20",
+    lifetimeIdentity,
+  );
+  const resultCarrier = {
+    kind: "impl-trait",
+    id: "acme.opaque",
+    bounds: [],
+    outlives: [],
+    captures: [{ kind: "lifetime", lifetime: parameterLifetime }],
+  };
+  const instantiated = instantiateProviderOperationTemplate({
+    kind: "provider-operation",
+    operationId: "acme.opaque",
+    operationKind: "method",
+    target: { form: "call", path: "acme::opaque" },
+    resultCarrier,
+    genericParameters: [{
+      kind: "lifetime",
+      sourceName: "A",
+      targetIdentity: lifetimeIdentity,
+    }],
+    isAsync: false,
+    isFallible: false,
+    errorBoundary: "target-runtime",
+  }, {
+    sourceResultCarrier: { kind: "source-primitive", name: "int32" },
+    callScopedElisionBindings: new Map([[lifetimeIdentity, callElision]]),
+  });
+
+  assert.ok(instantiated);
+  assert.deepEqual(instantiated.substitutions.lifetimes.get(lifetimeIdentity), callElision);
+  assert.deepEqual(instantiated.template.resultCarrier, {
+    ...resultCarrier,
+    captures: [{ kind: "lifetime", lifetime: callElision }],
+  });
 });

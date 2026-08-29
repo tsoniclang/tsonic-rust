@@ -783,14 +783,19 @@ export function selectedCallReceiverValueCarrier(
   if (!request.source.optionalChain) {
     return selectedCarrier ?? storedCarrier;
   }
-  if (storedCarrier !== undefined && selectedCarrier !== undefined &&
-    rustTargetTypeRefEquals(storedCarrier, selectedCarrier)) {
-    return selectedCarrier;
-  }
   const optionElement = rustOptionElementCarrier(storedCarrier);
-  return optionElement !== undefined &&
-      (selectedCarrier === undefined || rustTargetTypeRefEquals(optionElement, selectedCarrier))
-    ? selectedCarrier ?? optionElement
+  if (optionElement !== undefined) {
+    if (selectedCarrier === undefined ||
+      storedCarrier !== undefined && rustTargetTypeRefEquals(storedCarrier, selectedCarrier)) {
+      return optionElement;
+    }
+    return rustTargetTypeRefEquals(optionElement, selectedCarrier)
+      ? selectedCarrier
+      : undefined;
+  }
+  return storedCarrier !== undefined && selectedCarrier !== undefined &&
+      rustTargetTypeRefEquals(storedCarrier, selectedCarrier)
+    ? selectedCarrier
     : undefined;
 }
 

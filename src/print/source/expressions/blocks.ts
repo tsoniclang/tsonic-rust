@@ -232,7 +232,12 @@ export function printRustLetInitializer(
   const directContinuationIndent = indentText(depth + 1);
   const initializerIsInvocation = initializer.kind === "call" || initializer.kind === "invoke" ||
     initializer.kind === "associated-call";
+  const initializerArgumentCount = initializer.kind === "call" ||
+      initializer.kind === "invoke" || initializer.kind === "associated-call"
+    ? initializer.args.length
+    : undefined;
   if (initializerIsInvocation && !flat.includes("\n") &&
+    initializerArgumentCount === 1 &&
     flat.length <= rustCompactInitializerWidth &&
     renderedFits(`${flat};`, directContinuationIndent.length)) {
     return `${prefix.trimEnd()}\n${directContinuationIndent}${flat};`;

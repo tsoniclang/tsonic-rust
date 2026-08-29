@@ -62,20 +62,6 @@ export function instantiateProviderOperationTemplate<
       return undefined;
     }
   }
-  for (const parameter of parameters) {
-    if (parameter.kind !== "lifetime" ||
-      bindings.lifetimes.has(parameter.targetIdentity)) {
-      continue;
-    }
-    const inferred = evidence.callScopedElisionBindings?.get(parameter.targetIdentity);
-    if (inferred === undefined || !mergeLifetimeBinding(
-      bindings.lifetimes,
-      parameter.targetIdentity,
-      inferred,
-    )) {
-      return undefined;
-    }
-  }
   if (!inferExactTemplateBindings(
     template.receiverCarrier,
     evidence.sourceReceiverCarrier,
@@ -102,11 +88,12 @@ export function instantiateProviderOperationTemplate<
     lifetimes: new Map(),
     consts: new Map(),
   };
-  if (!inferUnboundTemplateBindings(
+  const inferredResult = inferUnboundTemplateBindings(
     template.resultCarrier,
     evidence.sourceResultCarrier,
     resultBindings,
-  ) || !mergeGenericBindings(bindings, resultBindings)) {
+  );
+  if (inferredResult && !mergeGenericBindings(bindings, resultBindings)) {
     return undefined;
   }
   for (const parameter of parameters) {
