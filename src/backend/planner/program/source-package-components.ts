@@ -55,6 +55,32 @@ export function planRustSourcePackageComponents(
   }
 
   const plans: RustSourcePackageComponentPlan[] = [];
+  const componentIdByFileName = new Map(classifications.components.flatMap(
+    (component) => component.sourceFileNames.map((fileName) =>
+      [fileName, component.componentId] as const),
+  ));
+  const sourceModuleDependenciesByComponent = new Map<string, Set<string>>();
+  for (const construction of input.program.sourceModuleConstructions.entries()) {
+    const sourceComponentId = componentIdByFileName.get(
+      input.program.source.ast.getFileName(construction.sourceFile),
+    );
+    const targetComponentId = componentIdByFileName.get(
+      input.program.source.ast.getFileName(construction.targetSourceFile),
+    );
+    if (sourceComponentId === undefined || targetComponentId === undefined) {
+      diagnostics.push(componentDiagnostic(
+        "RUST_SOURCE_MODULE_COMPONENT_IDENTITY_MISSING",
+        "A selected source-module construction has no exact source-package component identity.",
+      ));
+      continue;
+    }
+    if (sourceComponentId !== targetComponentId) {
+      const dependencies = sourceModuleDependenciesByComponent.get(sourceComponentId) ??
+        new Set<string>();
+      dependencies.add(targetComponentId);
+      sourceModuleDependenciesByComponent.set(sourceComponentId, dependencies);
+    }
+  }
   for (const component of classifications.components) {
     const componentIdentities = [...identities.values()].filter((identity) =>
       identity.componentId === component.componentId);
@@ -100,7 +126,10 @@ export function planRustSourcePackageComponents(
     plans.push(Object.freeze({
       componentId: component.componentId,
       sourceFileNames: Object.freeze(new Set(component.sourceFileNames)),
-      dependencyComponentIds: component.dependencyComponentIds,
+      dependencyComponentIds: Object.freeze([...new Set([
+        ...component.dependencyComponentIds,
+        ...(sourceModuleDependenciesByComponent.get(component.componentId) ?? []),
+      ])].sort((left, right) => left.localeCompare(right, "en"))),
       ...(component.root ? {} : { crateName: [...crateNames][0]! }),
       programModuleName,
       structuralShapesModuleName,

@@ -877,8 +877,9 @@ test("method chains inside expanded call comparisons use argument indentation", 
               left: {
                 kind: "method-call",
                 receiver: {
-                  kind: "call",
-                  path: "pair.load",
+                  kind: "method-call",
+                  receiver: { kind: "path", path: "pair" },
+                  method: "load",
                   args: [],
                 },
                 method: "addLeft",
@@ -887,8 +888,9 @@ test("method chains inside expanded call comparisons use argument indentation", 
                   receiver: {
                     kind: "field",
                     receiver: {
-                      kind: "call",
-                      path: "pair.load",
+                      kind: "method-call",
+                      receiver: { kind: "path", path: "pair" },
+                      method: "load",
                       args: [],
                     },
                     name: "__tsonic_state",

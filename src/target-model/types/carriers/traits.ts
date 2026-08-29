@@ -1,6 +1,29 @@
 import { isRustBigIntCarrier, isRustJsStringCarrier, isRustNullCarrier, isRustStringCarrier, isRustUndefinedCarrier, isRustUnitCarrier } from "./js.js";
 import { isRustIntegerCarrier, rustFutureTargetId, rustPrimitiveTypeName } from "./primitives.js";
 import { rustBigIntTargetId, rustCallableTargetId, rustJsArrayTargetId, rustJsDateTargetId, rustJsErrorTargetId, rustJsMapTargetId, rustJsRegExpExecArrayTargetId, rustJsRegExpIndicesTargetId, rustJsRegExpMatchArrayTargetId, rustJsRegExpNamedGroupsTargetId, rustJsRegExpNamedIndicesTargetId, rustJsRegExpStringIteratorTargetId, rustJsRegExpTargetId, rustJsSetTargetId, rustJsStringTargetId, rustJsValueTargetId, rustLocationTargetId, rustNullTargetId, rustOptionTargetId, rustProgramErrorTargetId, rustRegExpExecArrayTargetId, rustRegExpIndicesTargetId, rustRegExpMatchArrayTargetId, rustRegExpNamedGroupsTargetId, rustRegExpNamedIndicesTargetId, rustRegExpStringIteratorTargetId, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustStringTargetId, rustStructuralObjectCarrierValue, rustUndefinedTargetId } from "./source-types.js";
+import {
+  rustJsArrayBufferTargetId,
+  rustJsDataViewTargetId,
+  rustJsFloat32ArrayTargetId,
+  rustJsFloat64ArrayTargetId,
+  rustJsInt16ArrayTargetId,
+  rustJsInt32ArrayTargetId,
+  rustJsInt8ArrayTargetId,
+  rustJsIntlCollatorTargetId,
+  rustJsIntlDateTimeFormatTargetId,
+  rustJsIntlNumberFormatTargetId,
+  rustJsPromiseFulfilledResultTargetId,
+  rustJsPromiseRejectedResultTargetId,
+  rustJsPromiseSettledResultTargetId,
+  rustJsPromiseTargetId,
+  rustJsSymbolTargetId,
+  rustJsUint16ArrayTargetId,
+  rustJsUint32ArrayTargetId,
+  rustJsUint8ArrayTargetId,
+  rustJsUint8ClampedArrayTargetId,
+  rustJsWeakMapTargetId,
+  rustJsWeakSetTargetId,
+} from "./source-types.js";
 import { rustFixedArrayCarrierValue, rustNamedTypeCarrierValue } from "./native.js";
 import type { RustNamedTypeCarrierValue } from "./native.js";
 import type { TargetTypeRef } from "../model.js";
@@ -8,6 +31,9 @@ import {
   rustOnlyTypeGenericArguments,
   rustTargetGenericTypeArguments,
 } from "../generic-arguments.js";
+
+export const rustJsClosedValueCarrierTraitPath =
+  "tsonic_rust_js::value::JsClosedValueCarrier";
 
 export function isRustCopyCarrier(carrier: TargetTypeRef | undefined): boolean {
   if (carrier === undefined) {
@@ -70,6 +96,15 @@ export function rustCarrierSupportsClone(carrier: TargetTypeRef | undefined): bo
   if (carrier.kind === "target-named") {
     if (carrier.id === rustOptionTargetId) {
       const [value] = rustOnlyTypeGenericArguments(carrier.genericArguments) ?? [];
+      return value !== undefined && rustCarrierSupportsClone(value);
+    }
+    if (carrier.id === rustJsPromiseTargetId ||
+      carrier.id === rustJsPromiseRejectedResultTargetId) {
+      return true;
+    }
+    if (carrier.id === rustJsPromiseFulfilledResultTargetId ||
+      carrier.id === rustJsPromiseSettledResultTargetId) {
+      const [value] = rustTargetGenericTypeArguments(carrier.genericArguments);
       return value !== undefined && rustCarrierSupportsClone(value);
     }
     return rustUnconditionallyCloneTargetIds.has(carrier.id);
@@ -241,6 +276,35 @@ export function rustCarrierSupportsJsEquality(carrier: TargetTypeRef | undefined
     isRustJsStrictEqualityCarrier(carrier);
 }
 
+export function rustCarrierSupportsObjectIdentity(carrier: TargetTypeRef | undefined): boolean {
+  return carrier?.kind === "target-named" && rustObjectIdentityTargetIds.has(carrier.id);
+}
+
+const rustObjectIdentityTargetIds: ReadonlySet<string> = new Set([
+  rustJsArrayTargetId,
+  rustJsMapTargetId,
+  rustJsSetTargetId,
+  rustJsWeakMapTargetId,
+  rustJsWeakSetTargetId,
+  rustJsDateTargetId,
+  rustJsPromiseTargetId,
+  rustJsArrayBufferTargetId,
+  rustJsDataViewTargetId,
+  rustJsInt8ArrayTargetId,
+  rustJsUint8ArrayTargetId,
+  rustJsUint8ClampedArrayTargetId,
+  rustJsInt16ArrayTargetId,
+  rustJsUint16ArrayTargetId,
+  rustJsInt32ArrayTargetId,
+  rustJsUint32ArrayTargetId,
+  rustJsFloat32ArrayTargetId,
+  rustJsFloat64ArrayTargetId,
+  rustJsIntlDateTimeFormatTargetId,
+  rustJsIntlNumberFormatTargetId,
+  rustJsIntlCollatorTargetId,
+  rustJsRegExpTargetId,
+]);
+
 const rustJsStrictEqualityTargetIds: ReadonlySet<string> = new Set([
   rustNullTargetId,
   rustUndefinedTargetId,
@@ -249,6 +313,24 @@ const rustJsStrictEqualityTargetIds: ReadonlySet<string> = new Set([
   rustJsMapTargetId,
   rustJsSetTargetId,
   rustJsDateTargetId,
+  rustJsPromiseTargetId,
+  rustJsSymbolTargetId,
+  rustJsWeakMapTargetId,
+  rustJsWeakSetTargetId,
+  rustJsArrayBufferTargetId,
+  rustJsDataViewTargetId,
+  rustJsInt8ArrayTargetId,
+  rustJsUint8ArrayTargetId,
+  rustJsUint8ClampedArrayTargetId,
+  rustJsInt16ArrayTargetId,
+  rustJsUint16ArrayTargetId,
+  rustJsInt32ArrayTargetId,
+  rustJsUint32ArrayTargetId,
+  rustJsFloat32ArrayTargetId,
+  rustJsFloat64ArrayTargetId,
+  rustJsIntlDateTimeFormatTargetId,
+  rustJsIntlNumberFormatTargetId,
+  rustJsIntlCollatorTargetId,
   rustJsRegExpTargetId,
 ]);
 
@@ -265,6 +347,25 @@ const rustUnconditionallyCloneTargetIds: ReadonlySet<string> = new Set([
   rustJsMapTargetId,
   rustJsSetTargetId,
   rustJsDateTargetId,
+  rustJsPromiseTargetId,
+  rustJsPromiseRejectedResultTargetId,
+  rustJsSymbolTargetId,
+  rustJsWeakMapTargetId,
+  rustJsWeakSetTargetId,
+  rustJsArrayBufferTargetId,
+  rustJsDataViewTargetId,
+  rustJsInt8ArrayTargetId,
+  rustJsUint8ArrayTargetId,
+  rustJsUint8ClampedArrayTargetId,
+  rustJsInt16ArrayTargetId,
+  rustJsUint16ArrayTargetId,
+  rustJsInt32ArrayTargetId,
+  rustJsUint32ArrayTargetId,
+  rustJsFloat32ArrayTargetId,
+  rustJsFloat64ArrayTargetId,
+  rustJsIntlDateTimeFormatTargetId,
+  rustJsIntlNumberFormatTargetId,
+  rustJsIntlCollatorTargetId,
   rustJsRegExpTargetId,
   rustRegExpExecArrayTargetId,
   rustRegExpMatchArrayTargetId,
@@ -290,6 +391,8 @@ const rustUnconditionallyDefaultTargetIds: ReadonlySet<string> = new Set([
   rustJsArrayTargetId,
   rustJsMapTargetId,
   rustJsSetTargetId,
+  rustJsWeakMapTargetId,
+  rustJsWeakSetTargetId,
 ]);
 
 export function isRustSourceStringConvertibleCarrier(carrier: TargetTypeRef | undefined): boolean {

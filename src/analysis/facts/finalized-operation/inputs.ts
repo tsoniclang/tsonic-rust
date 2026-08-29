@@ -80,6 +80,7 @@ export function finalizeTargetInputs(
   switch (form.form) {
     case "marker":
     case "path":
+    case "reference-path":
       return sourceArgumentCount === 0 ? { targetReceiver: none, targetArguments: [] } : undefined;
     case "static": {
       if (operationKind === "property" && sourceArgumentCount === 0) {
@@ -90,12 +91,26 @@ export function finalizeTargetInputs(
         : undefined;
       return value === undefined ? undefined : { targetReceiver: none, targetArguments: [value] };
     }
-    case "call": {
+    case "call":
+    case "source-module-construction": {
       const args = mappedArguments(form.argOrder, form.argModes, form.argConversions);
       return args === undefined ? undefined : {
         targetReceiver: none,
-        targetArguments: [...args, ...constants(form.trailingArguments)],
+        targetArguments: [
+          ...args,
+          ...(form.form === "call" ? constants(form.trailingArguments) : []),
+        ],
       };
+    }
+    case "struct-variant": {
+      const args = mappedArguments(undefined, undefined, undefined);
+      return args === undefined || form.fields.length !== args.length
+        ? undefined
+        : { targetReceiver: none, targetArguments: args };
+    }
+    case "expression-macro": {
+      const args = mappedArguments(undefined, undefined, undefined);
+      return args === undefined ? undefined : { targetReceiver: none, targetArguments: args };
     }
     case "call-c-variadic": {
       const fixed = form.fixedArgumentModes.map((mode, sourceIndex) =>
@@ -129,7 +144,7 @@ export function finalizeTargetInputs(
       const args = mappedArguments(form.argOrder, form.argModes, form.argConversions);
       return receiver === undefined || args === undefined ? undefined : {
         targetReceiver: { kind: "input", input: receiver },
-        targetArguments: args,
+        targetArguments: [...args, ...constants(form.trailingArguments)],
       };
     }
     case "method": {

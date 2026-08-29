@@ -24,6 +24,45 @@ export function printFittedNestedCallWrapper(
   depth: number,
   column: number,
 ): string | undefined {
+  const nestedCallable = nested.kind === "invoke"
+    ? undefined
+    : nested.kind === "call"
+      ? printRustDirectCallTarget(nested)
+      : printRustAssociatedCallTarget(
+          nested,
+          printRustAssociatedOwner(nested.owner),
+        );
+  const referencedArgument = nested.args.length === 1 &&
+      nested.args[0]?.kind === "reference" && nested.args[0].mutable !== true
+    ? nested.args[0].expr
+    : undefined;
+  const borrowedCollection = referencedArgument?.kind === "slice-literal" ||
+      referencedArgument?.kind === "vec-literal"
+    ? referencedArgument
+    : undefined;
+  if (nestedCallable !== undefined && borrowedCollection !== undefined) {
+    const collection = borrowedCollection;
+    const collectionOpening = collection.kind === "vec-literal" ? "vec![" : "[";
+    const opening = `${outerCallable}(${nestedCallable}(&${collectionOpening}`;
+    if (renderedFits(opening, column)) {
+      const elementIndent = indentText(depth + 1);
+      const expanded = [
+        opening,
+        ...collection.elements.map((element) => appendToLastLine(
+          `${elementIndent}${printRustExprFitted(
+            element,
+            depth + 1,
+            elementIndent.length,
+          )}`,
+          ",",
+        )),
+        `${indentText(depth)}]))`,
+      ].join("\n");
+      if (renderedFits(expanded, column)) {
+        return expanded;
+      }
+    }
+  }
   const soleNestedArgument = nested.args.length === 1
     ? nested.args[0]
     : undefined;
@@ -156,7 +195,7 @@ export function printFittedNestedCallWrapper(
       ].join("\n");
     }
   }
-  const nestedCallable = nested.kind === "call"
+  const selectedNestedCallable = nested.kind === "call"
     ? printRustDirectCallTarget(nested)
     : printRustAssociatedCallTarget(nested, printRustAssociatedOwner(nested.owner));
   const argumentIndent = indentText(depth + 1);
@@ -179,7 +218,7 @@ export function printFittedNestedCallWrapper(
   }
   if (nested.args.length === 1 &&
     (nested.args[0]?.kind === "closure" || nested.args[0]?.kind === "closure-block")) {
-    const opening = `${outerCallable}(${nestedCallable}(`;
+    const opening = `${outerCallable}(${selectedNestedCallable}(`;
     if (!renderedFits(opening, column) ||
       opening.length + column > rustNestedClosureOpeningWidth) {
       return undefined;
@@ -198,10 +237,10 @@ export function printFittedNestedCallWrapper(
   if (nested.args.length === 0 || nested.args.some(rustExpressionContainsStatementBlock)) {
     return undefined;
   }
-  const opening = `${outerCallable}(${nestedCallable}(`;
+  const opening = `${outerCallable}(${selectedNestedCallable}(`;
   if (renderedFits(opening, column)) {
     const nestedRendered = printFittedCall(
-      nestedCallable,
+      selectedNestedCallable,
       nested.args,
       depth,
       column + outerCallable.length + 1,
@@ -231,7 +270,7 @@ export function printFittedNestedCallWrapper(
     }
   }
   const nestedRendered = printFittedCall(
-    nestedCallable,
+    selectedNestedCallable,
     nested.args,
     depth + 1,
     argumentIndent.length,

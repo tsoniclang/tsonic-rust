@@ -42,6 +42,7 @@ export function reconstructRustSourceFiles(
   identitiesByFileName: ReadonlyMap<string, RustSourceFileOutputIdentity>,
   facadeExternalItemPathByIdentity: ReadonlyMap<string, string>,
   externalStructuralShapeModuleByFileName: ReadonlyMap<string, string>,
+  workerEntryIdentityByFileName: ReadonlyMap<string, string>,
   components: readonly RustSourcePackageComponentPlan[],
   sourcePackageErrors: RustSourcePackageErrorPlan,
   diagnostics: TargetDiagnostic[],
@@ -173,6 +174,7 @@ export function reconstructRustSourceFiles(
         externalCrateNameByFileName,
         externalItemPathByIdentity,
         externalStructuralShapeModuleByFileName,
+        workerEntryIdentityByFileName,
         component.programModuleName,
         component.structuralShapesModuleName,
         identity.childModuleNames,
@@ -356,10 +358,42 @@ function sourceFilePublicDependencies(
       });
     }
   }
+  for (const construction of input.program.sourceModuleConstructions.from(sourceFile)) {
+    const dependencyOwner = ownerBySourceFile.get(construction.targetSourceFile) ??
+      sourceFileArtifactOwner(input, construction.targetSourceFile);
+    if (dependencyOwner === undefined) {
+      return {
+        kind: "rejected",
+        code: "RUST_SOURCE_MODULE_DEPENDENCY_IDENTITY_MISSING",
+        reason: `A source module constructed by '${owner}' has no stable Rust artifact identity.`,
+      };
+    }
+    if (dependencyOwner !== owner) {
+      dependencies.push({
+        owner: dependencyOwner,
+        facet: "source-file-implementation",
+      });
+    }
+  }
   return {
     kind: "resolved",
-    dependencies: Object.freeze(dependencies),
+    dependencies: Object.freeze(uniqueDependencies(dependencies)),
   };
+}
+
+function uniqueDependencies(
+  dependencies: readonly TargetArtifactDependency<RustArtifactFacet>[],
+): readonly TargetArtifactDependency<RustArtifactFacet>[] {
+  const byIdentity = new Map<string, TargetArtifactDependency<RustArtifactFacet>>();
+  for (const dependency of dependencies) {
+    byIdentity.set(
+      `${dependency.owner.length}:${dependency.owner}:${dependency.facet}`,
+      dependency,
+    );
+  }
+  return [...byIdentity.values()].sort((left, right) =>
+    left.owner.localeCompare(right.owner, "en") ||
+    left.facet.localeCompare(right.facet, "en"));
 }
 
 function sourceFileArtifactOwner(

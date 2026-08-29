@@ -8,6 +8,7 @@ import {
   isRustFinalizedArrayInput,
   isRustFinalizedConstantInput,
   isRustFinalizedSliceInput,
+  isRustFinalizedSourceInput,
   isRustFinalizedTaggedArrayInput,
   validateRustFinalizedOperationAbi,
 } from "../../../analysis/facts/finalized-operation-abi.js";
@@ -107,6 +108,7 @@ export function planProviderOperationExpression(
     receiverNode,
     argumentNodes,
     planExpression,
+    planProviderOperationExpression,
     options.overrides?.inputs,
   );
   if (evaluationScope.kind === "failed") {
@@ -210,6 +212,73 @@ export function planProviderOperationExpression(
         ...(concreteTargetGenericArguments === undefined ? {} : { genericArguments: concreteTargetGenericArguments }),
       }, form.chain));
     }
+    case "source-module-construction": {
+      const construction = context.input.program.sourceModuleConstructions.construction(
+        operationNode,
+      );
+      if (construction === undefined ||
+        construction.sourceArgumentIndex !== form.sourceArgumentIndex ||
+        construction.targetArgumentIndex !== form.targetArgumentIndex) {
+        context.diagnostics.push(missingFactDiagnostic(
+          diagnosticInput(context, operationNode),
+          "rust.backend.source-module-construction",
+          "Selected source-module constructor has no matching sealed source-module construction.",
+        ));
+        return undefined;
+      }
+      const targetFileName = context.input.program.source.ast.getFileName(
+        construction.targetSourceFile,
+      );
+      const entryIdentity = context.workerEntryIdentityByFileName.get(targetFileName);
+      const moduleInput = fact.abi.targetArguments[form.targetArgumentIndex];
+      const moduleIdentity = moduleInput !== undefined && isRustFinalizedSourceInput(moduleInput) &&
+          moduleInput.source.kind === "argument" &&
+          moduleInput.source.sourceIndex === form.sourceArgumentIndex
+        ? moduleInput.mode === "ref"
+          ? { kind: "str-literal" as const, value: entryIdentity ?? "" }
+          : moduleInput.mode === "value"
+            ? { kind: "string-literal" as const, value: entryIdentity ?? "" }
+            : undefined
+        : undefined;
+      if (entryIdentity === undefined || args[form.targetArgumentIndex] === undefined ||
+        moduleIdentity === undefined) {
+        context.diagnostics.push(missingFactDiagnostic(
+          diagnosticInput(context, operationNode),
+          "rust.backend.source-module-entry-identity",
+          "Selected source-module constructor has no exact generated worker-entry identity and immutable target argument mode.",
+        ));
+        return undefined;
+      }
+      registerAliasFromPath(context, form.path);
+      return scoped({
+        kind: "call",
+        path: form.path,
+        args: args.map((argument, index) =>
+          index === form.targetArgumentIndex
+            ? moduleIdentity
+            : argument),
+        ...(concreteTargetGenericArguments === undefined
+          ? {}
+          : { genericArguments: concreteTargetGenericArguments }),
+      });
+    }
+    case "struct-variant":
+      registerAliasFromPath(context, form.path);
+      return scoped(form.fields.length === args.length
+        ? {
+            kind: "struct-literal",
+            path: form.path,
+            fields: form.fields.map((name, index) => ({ name, value: args[index]! })),
+          }
+        : undefined);
+    case "expression-macro":
+      registerAliasFromPath(context, form.path);
+      return scoped({
+        kind: "macro-invocation",
+        path: form.path,
+        delimiter: form.delimiter,
+        args,
+      });
     case "call-c-variadic":
       registerAliasFromPath(context, form.path);
       return scoped({
@@ -229,6 +298,16 @@ export function planProviderOperationExpression(
     case "path": {
       registerAliasFromPath(context, form.path);
       return scoped(args.length === 0 ? { kind: "path", path: form.path } : undefined);
+    }
+    case "reference-path": {
+      registerAliasFromPath(context, form.path);
+      return scoped(args.length === 0
+        ? {
+            kind: "reference",
+            expr: { kind: "path", path: form.path },
+            mutable: form.mutable,
+          }
+        : undefined);
     }
     case "static": {
       registerAliasFromPath(context, form.path);

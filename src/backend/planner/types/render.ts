@@ -27,83 +27,17 @@ import { rustSourceItemIdentity } from "../program/source-package-facades.js";
 import { rustExplicitNamedTypeArguments } from "./generic-defaults.js";
 import { rustLifetimeToAst } from "./lifetime-syntax.js";
 import {
-  rustBigIntTargetId,
-  rustJsArrayTargetId,
-  rustJsArrayConcatItemTargetId,
-  rustJsDateTargetId,
-  rustJsMapTargetId,
-  rustJsRegExpExecArrayTargetId,
-  rustJsRegExpIndicesTargetId,
-  rustJsRegExpMatchArrayTargetId,
-  rustJsRegExpNamedGroupsTargetId,
-  rustJsRegExpNamedIndicesTargetId,
-  rustJsRegExpStringIteratorTargetId,
-  rustJsRegExpTargetId,
-  rustJsSetTargetId,
-  rustJsStringTargetId,
-  rustJsValueTargetId,
-  rustLocationTargetId,
+  rustBuiltInCarrierRenderPaths,
   rustCallableTargetId,
-  rustGeneratorTargetId,
-  rustAsyncGeneratorTargetId,
-  rustBorrowedGeneratorTargetId,
-  rustBorrowedAsyncGeneratorTargetId,
-  rustIteratorResultTargetId,
-  rustNullTargetId,
-  rustUndefinedTargetId,
-  rustJsErrorTargetId,
-  rustProgramErrorTargetId,
   rustFixedArrayCarrierValue,
-  rustOptionTargetId,
   rustNamedTypeCarrierValue,
   rustPrimitiveTypeName,
   substituteRustTargetGenerics,
   rustStringTargetId,
-  rustRegExpExecArrayTargetId,
-  rustRegExpIndicesTargetId,
-  rustRegExpMatchArrayTargetId,
-  rustRegExpNamedGroupsTargetId,
-  rustRegExpNamedIndicesTargetId,
-  rustRegExpStringIteratorTargetId,
   isRustNeverCarrier,
   rustOnlyTypeGenericArguments,
   rustFutureTargetId,
 } from "../../../target-model/types/index.js";
-
-const namedCarrierPaths: Readonly<Record<string, string>> = {
-  [rustBigIntTargetId]: "rt::BigInt",
-  [rustOptionTargetId]: "Option",
-  [rustLocationTargetId]: "rt::Location",
-  [rustGeneratorTargetId]: "rt::Generator",
-  [rustAsyncGeneratorTargetId]: "rt::AsyncGenerator",
-  [rustBorrowedGeneratorTargetId]: "rt::BorrowedGenerator",
-  [rustBorrowedAsyncGeneratorTargetId]: "rt::BorrowedAsyncGenerator",
-  [rustIteratorResultTargetId]: "rt::IteratorResult",
-  [rustNullTargetId]: "rt::Null",
-  [rustUndefinedTargetId]: "rt::Undefined",
-  [rustJsErrorTargetId]: "rt::JsError",
-  [rustProgramErrorTargetId]: "rt::TsonicError",
-  [rustJsValueTargetId]: "js_abi::JsValue",
-  [rustJsArrayTargetId]: "js_abi::JsArray",
-  [rustJsArrayConcatItemTargetId]: "js_abi::JsArrayConcatItem",
-  [rustJsMapTargetId]: "js_abi::JsMap",
-  [rustJsSetTargetId]: "js_abi::JsSet",
-  [rustJsDateTargetId]: "js_abi::JsDate",
-  [rustJsStringTargetId]: "js_abi::JsString",
-  [rustJsRegExpTargetId]: "js_abi::JsRegExp",
-  [rustRegExpExecArrayTargetId]: "js_abi::RegExpExecArray",
-  [rustJsRegExpExecArrayTargetId]: "js_abi::JsRegExpExecArray",
-  [rustRegExpMatchArrayTargetId]: "js_abi::RegExpMatchArray",
-  [rustJsRegExpMatchArrayTargetId]: "js_abi::JsRegExpMatchArray",
-  [rustRegExpIndicesTargetId]: "js_abi::RegExpIndices",
-  [rustJsRegExpIndicesTargetId]: "js_abi::JsRegExpIndices",
-  [rustRegExpNamedGroupsTargetId]: "js_abi::RegExpNamedGroups",
-  [rustJsRegExpNamedGroupsTargetId]: "js_abi::JsRegExpNamedGroups",
-  [rustRegExpNamedIndicesTargetId]: "js_abi::RegExpNamedIndices",
-  [rustJsRegExpNamedIndicesTargetId]: "js_abi::JsRegExpNamedIndices",
-  [rustRegExpStringIteratorTargetId]: "js_abi::RegExpStringIterator",
-  [rustJsRegExpStringIteratorTargetId]: "js_abi::JsRegExpStringIterator",
-};
 
 export const rustStrRefType: RustType = {
   kind: "reference",
@@ -154,7 +88,7 @@ export function rustTypeFromCarrier(
         };
   }
   if (carrier.kind === "target-named") {
-    const path = namedCarrierPaths[carrier.id];
+    const path = rustBuiltInCarrierRenderPaths[carrier.id];
     if (path === undefined) {
       return undefined;
     }
@@ -344,7 +278,12 @@ export function rustTypeFromCarrier(
       resolveSourceTypePath,
       resolveStructuralShape,
     ));
-    return bounds.some((bound) => bound === undefined)
+    const captures = rustGenericArgumentsFromCarrier(
+      carrier.captures,
+      resolveSourceTypePath,
+      resolveStructuralShape,
+    );
+    return bounds.some((bound) => bound === undefined) || captures === undefined
       ? undefined
       : {
           kind: "impl-trait",
@@ -353,7 +292,7 @@ export function rustTypeFromCarrier(
             reference,
           })),
           outlives: carrier.outlives.map(rustLifetimeToAst),
-          captures: carrier.captures.map(rustLifetimeToAst),
+          captures,
         };
   }
   if (carrier.kind === "associated-type") {

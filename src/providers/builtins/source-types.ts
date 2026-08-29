@@ -8,6 +8,7 @@ import {
   rustConstPointerExport,
   rustMutPointerExport,
   rustSourceProviderVersion,
+  rustSourceTypeExportIds,
   rustSourceVirtualModulesProviderId,
   rustTypesModule,
 } from "../../source/semantics/identity.js";
@@ -15,6 +16,7 @@ import type {
   RustProviderSemantics,
   RustProviderTypeRow,
 } from "../packages/model.js";
+import { rustNativeScalarTargetId } from "../../target-model/types/index.js";
 
 const nativePointerType = pointerType(
   "tsonic-source-core",
@@ -44,16 +46,29 @@ const rustMutPointerType = pointerType(
 );
 
 export function rustBuiltInSourceTypeSemantics(): RustProviderSemantics {
+  const scalarType = Object.freeze({
+    exportId: rustSourceTypeExportIds.scalar,
+    targetCarrier: Object.freeze({
+      kind: "target-named" as const,
+      id: rustNativeScalarTargetId,
+    }),
+    providerPackageId: "tsonic-rust-source",
+    providerId: rustSourceVirtualModulesProviderId,
+    providerVersion: rustSourceProviderVersion,
+    providerModuleId: rustTypesModule,
+    moduleSpecifier: rustTypesModule,
+  });
   return Object.freeze({
     exports: Object.freeze([]),
     operations: Object.freeze([]),
-    carrierPaths: Object.freeze({}),
+    carrierPaths: Object.freeze({ [rustNativeScalarTargetId]: "char" }),
     carrierTraits: Object.freeze({}),
     binaryEpilogues: Object.freeze([]),
     types: Object.freeze([
       nativePointerType,
       rustConstPointerType,
       rustMutPointerType,
+      scalarType,
     ]),
   });
 }

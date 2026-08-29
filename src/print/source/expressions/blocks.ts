@@ -4,7 +4,7 @@ import { printRustAssociatedOwner, printRustSingleCollectionCallContinuation, ru
 import { printRustClosureParams } from "./closure-params.js";
 import { printRustExpr } from "./core.js";
 import { printRustExprFitted } from "./fitted.js";
-import { rustCompactTrailingClosureWidth, rustFormatWidth, rustMethodChainWidth, rustNestedCallWidth, rustSingleLineConditionalWidth } from "../formatting.js";
+import { rustCompactInitializerWidth, rustCompactTrailingClosureWidth, rustFormatWidth, rustMethodChainWidth, rustNestedCallWidth, rustSingleLineConditionalWidth } from "../formatting.js";
 import { rustExpressionContainsExpandedStructLiteral, rustFormatArgumentCanShareLine, rustFormatArgumentIsAtomic, rustInvocationHasNestedExpandedCollection } from "./inspection.js";
 import { rustExpressionContainsStatementBlock } from "../../../backend/target-ast/expressions.js";
 import type { RustExpr, RustType } from "../../../backend/target-ast/nodes.js";
@@ -216,13 +216,10 @@ export function printRustLetInitializer(
   depth: number,
 ): string {
   const flat = printRustExpr(initializer);
-  const exactWidthInvocation = prefix.length + flat.length + 1 === rustFormatWidth &&
-    rustLetInitializerUsesInvocationLayout(initializer);
   const complexStringConcat = initializer.kind === "string-concat" &&
     flat.length > rustNestedCallWidth &&
     !initializer.parts.every(rustFormatArgumentCanShareLine);
   if (!flat.includes("\n") && prefix.length + flat.length + 1 <= rustFormatWidth &&
-    !exactWidthInvocation &&
     (initializer.kind !== "conditional" || flat.length <= rustSingleLineConditionalWidth) &&
     !rustExpressionContainsStatementBlock(initializer) &&
     !rustExpressionContainsExpandedStructLiteral(initializer) &&
@@ -231,6 +228,19 @@ export function printRustLetInitializer(
     !(rustMethodChain(initializer) !== undefined &&
       prefix.length + flat.length + 1 >= rustFormatWidth)) {
     return `${prefix}${flat};`;
+  }
+  const directContinuationIndent = indentText(depth + 1);
+  const initializerIsInvocation = initializer.kind === "call" || initializer.kind === "invoke" ||
+    initializer.kind === "associated-call";
+  const initializerArgumentCount = initializer.kind === "call" ||
+      initializer.kind === "invoke" || initializer.kind === "associated-call"
+    ? initializer.args.length
+    : undefined;
+  if (initializerIsInvocation && !flat.includes("\n") &&
+    initializerArgumentCount === 1 &&
+    flat.length <= rustCompactInitializerWidth &&
+    renderedFits(`${flat};`, directContinuationIndent.length)) {
+    return `${prefix.trimEnd()}\n${directContinuationIndent}${flat};`;
   }
   const fittedAtPrefix = printRustExprFitted(initializer, depth, prefix.length + 1);
   const methodChain = rustMethodChain(initializer);
@@ -273,6 +283,9 @@ export function printRustLetInitializer(
           initializer,
           depth + 1,
           continuationIndent.length,
+          undefined,
+          "expression",
+          "initializer-continuation",
         );
     const compactClosureOwnsContinuation = initializerArguments?.length === 1 ||
       trailingClosure.kind === "closure" &&
@@ -307,6 +320,9 @@ export function printRustLetInitializer(
       initializer,
       depth + 1,
       continuationIndent.length,
+      undefined,
+      "expression",
+      "initializer-continuation",
     );
     if (continuation.includes("\n") &&
       continuation.split("\n").length < fittedAtPrefix.split("\n").length &&
@@ -324,12 +340,21 @@ export function printRustLetInitializer(
   if (directCallOpeningFits) {
     return appendToLastLine(`${prefix}${fittedAtPrefix}`, ";");
   }
+  const expandedCollectionInitializer = fittedAtPrefix.includes("\n") &&
+    (initializer.kind === "vec-literal" || initializer.kind === "slice-literal" ||
+      initializer.kind === "tuple-literal");
+  if (expandedCollectionInitializer) {
+    return appendToLastLine(`${prefix}${fittedAtPrefix}`, ";");
+  }
   if (fittedAtPrefix.includes("\n")) {
     const continuationIndent = indentText(depth + 1);
     const continuation = printRustExprFitted(
       initializer,
       depth + 1,
       continuationIndent.length,
+      undefined,
+      "expression",
+      "initializer-continuation",
     );
     const collectionCallContinuation = printRustSingleCollectionCallContinuation(
       initializer,
@@ -385,6 +410,9 @@ export function printRustLetInitializer(
         initializer,
         depth + 1,
         continuationIndent.length,
+        undefined,
+        "expression",
+        "initializer-continuation",
       );
       return `${prefix.trimEnd()}\n${continuationIndent}${continuation};`;
     }
@@ -400,13 +428,4 @@ export function printRustLetInitializer(
     return `${prefix.trimEnd()}\n${indentText(depth + 1)}${flat};`;
   }
   return `${prefix}${printRustExprFitted(initializer, depth, prefix.length + 1)};`;
-}
-
-function rustLetInitializerUsesInvocationLayout(expression: RustExpr): boolean {
-  if (expression.kind === "call" || expression.kind === "invoke" ||
-    expression.kind === "associated-call" || expression.kind === "method-call") {
-    return true;
-  }
-  return (expression.kind === "try" || expression.kind === "await") &&
-    rustLetInitializerUsesInvocationLayout(expression.expr);
 }

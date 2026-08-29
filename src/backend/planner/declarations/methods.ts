@@ -34,6 +34,8 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustProjectTypeDefinition } from "../../../analysis/project-types/type-policy.js";
 import type { RustImplFunction, RustStmt } from "../../target-ast/nodes.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { wrapRustJsPromiseBody } from "./async-promise.js";
+import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 
 export function planProjectMethod(
   member: Node,
@@ -88,9 +90,14 @@ export function planProjectMethod(
   context = genericPlan.context;
   const generatorFact = context.input.program.facts.getFact(member, rustGeneratorFactKey);
   const syntheticNames = context.syntheticNames ?? createRustSyntheticNameState(ast, member, []);
+  const asyncFact = context.input.program.facts.getFact(member, rustAsyncFunctionFactKey);
   const parameterPlan = planRustCallableParameters(member, context, syntheticNames, {
-    ...(generatorFact !== undefined && generatorFact.storage.kind !== "lifetime"
-      ? { requiredStaticParameters: generatorFact.capturedParameters }
+    ...((generatorFact !== undefined && generatorFact.storage.kind !== "lifetime") ||
+        asyncFact?.kind === "js-promise" && asyncFact.storage.kind === "static"
+      ? {
+          requiredStaticParameters: generatorFact?.capturedParameters ??
+            (asyncFact?.kind === "js-promise" ? asyncFact.capturedParameters : []),
+        }
       : {}),
   });
   if (parameterPlan === undefined) {
@@ -98,7 +105,7 @@ export function planProjectMethod(
   }
   const params = parameterPlan.params;
   const returnTypeNode = Node_Type(ast, member);
-  const asyncFact = context.input.program.facts.getFact(member, rustAsyncFunctionFactKey);
+  const returnsJsPromise = asyncFact?.kind === "js-promise";
   const sourceAsync = ast.hasModifierKind(member, "async");
   if (sourceAsync && generatorFact === undefined && asyncFact === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -144,6 +151,25 @@ export function planProjectMethod(
       "rust.backend.class",
       "Method return type has no supported Rust carrier fact.",
     ));
+    return undefined;
+  }
+  const emittedReturnType = returnsJsPromise
+    ? rustReturnTypeFromCarrierInContext(asyncFact.futureCarrier, context)
+    : returnType;
+  if (returnsJsPromise && emittedReturnType === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, returnTypeNode ?? member),
+      "rust.backend.js-promise-method-return",
+      "JavaScript-surface async methods require one renderable finalized Promise carrier.",
+    ));
+    return undefined;
+  }
+  if (returnsJsPromise && !requireRustCarrierRequirements(
+    asyncFact.outputCarrier,
+    asyncFact.storage.kind === "static" ? ["clone", "static"] : ["clone"],
+    member,
+    context,
+  )) {
     return undefined;
   }
   const isStatic = ast.hasModifierKind(member, "static");
@@ -309,17 +335,19 @@ export function planProjectMethod(
     ...(isUnsafe ? { isUnsafe: true } : {}),
     visibility: !ast.hasModifierKind(member, "private") && !ast.hasModifierKind(member, "protected") ? "public" : "private",
     ...(methodAttributes.length === 0 ? {} : { attrs: methodAttributes }),
-    ...(callableErrorBoundary === undefined
+    ...(callableErrorBoundary === undefined || returnsJsPromise
       ? {}
       : { errorType: rustErrorType(callableErrorBoundary) }),
-    ...(sourceAsync ? { isAsync: true } : {}),
+    ...(sourceAsync && !returnsJsPromise ? { isAsync: true } : {}),
     ...(isStatic ? {} : { selfParam: rustSelfParameter(selfMode!.mode) }),
     generics,
     params,
-    ...(returnType === undefined ? {} : { returnType }),
-    body: {
-      statements: [...overridePrelude, ...finalizedBody.statements],
-    },
+    ...(emittedReturnType === undefined ? {} : { returnType: emittedReturnType }),
+    body: returnsJsPromise
+      ? wrapRustJsPromiseBody({
+          statements: [...overridePrelude, ...finalizedBody.statements],
+        }, fallible)
+      : { statements: [...overridePrelude, ...finalizedBody.statements] },
   };
 }
 

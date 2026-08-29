@@ -52,6 +52,7 @@ export {
   rustClosureTargetType,
   rustJsArrayConcatItemTargetType,
   rustJsArrayTargetType,
+  rustJsPromiseTargetType,
   rustNeverTargetType,
   rustOptionTargetType,
   rustSourcePrimitiveTargetType,

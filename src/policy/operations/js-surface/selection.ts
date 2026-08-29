@@ -1,8 +1,11 @@
 import {
   getRustJsMapTargetTypes,
   getRustJsSetElementTargetType,
+  getRustJsWeakMapTargetTypes,
+  getRustJsWeakSetElementTargetType,
   rustCarrierSupportsClone,
   rustCarrierSupportsJsEquality,
+  rustCarrierSupportsObjectIdentity,
   isRustBoolCarrier,
   isRustIntegerCarrier,
   rustJsArrayLikeElementTargetType,
@@ -16,6 +19,26 @@ import {
   isRustNumericCarrier,
   isRustStringCarrier,
   rustJsDateTargetId,
+  rustJsArrayBufferTargetId,
+  rustJsArrayBufferTargetType,
+  rustJsDataViewTargetId,
+  rustJsIntlCollatorTargetId,
+  rustJsIntlDateTimeFormatPartTargetId,
+  rustJsIntlDateTimeFormatTargetId,
+  rustJsIntlNumberFormatPartTargetId,
+  rustJsIntlNumberFormatTargetId,
+  rustJsIntlResolvedCollatorOptionsTargetId,
+  rustJsIntlResolvedDateTimeFormatOptionsTargetId,
+  rustJsIntlResolvedNumberFormatOptionsTargetId,
+  rustJsSymbolTargetType,
+  rustJsTypedArrayName,
+  rustFutureOutputCarrier,
+  rustJsPromiseOutputTargetType,
+  rustJsPromiseSettledResultTargetType,
+  rustJsPromiseTargetType,
+  rustJsPromiseFulfilledResultTargetId,
+  rustJsPromiseRejectedResultTargetId,
+  rustJsPromiseSettledResultTargetId,
   rustJsRegExpExecArrayTargetType,
   rustJsRegExpIndicesTargetType,
   rustJsRegExpMatchArrayTargetType,
@@ -38,6 +61,7 @@ import {
   rustRegExpStringIteratorTargetType,
   rustJsArrayTargetType,
   isRustCallableCarrier,
+  rustCallableTargetType,
   rustClosureTargetType,
   rustNullTargetType,
   rustOptionTargetType,
@@ -47,20 +71,26 @@ import {
   rustUnitTargetType,
 } from "../../../target-model/types/index.js";
 import { jsOperationRows, rustInferCarrier } from "./rows.js";
+import { selectRustJsonValueConversion } from "../../conversions/selection.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import {
+  materializeJsonValueConversions,
+  materializeTarget,
+  materializeVariadicTarget,
+} from "./materialization.js";
 import type { JsCarrierRef, JsLane, JsOperationRequest, JsOperationRowData, JsOperationSelection } from "./model.js";
-import type { RustProviderOperationForm } from "../../../target-model/operations/model.js";
-import type {
-  RustTargetGenericArgument,
-  RustTargetTraitRef,
-  TargetTypeRef,
-} from "../../../target-model/types/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 interface JsLaneBindings {
   readonly element?: TargetTypeRef;
   readonly mapKey?: TargetTypeRef;
   readonly mapValue?: TargetTypeRef;
   readonly setValue?: TargetTypeRef;
+  readonly weakKey?: TargetTypeRef;
+  readonly weakValue?: TargetTypeRef;
+  readonly sourceResult?: TargetTypeRef;
+  readonly promiseOutput?: TargetTypeRef;
+  readonly promiseInputOutput?: TargetTypeRef;
   readonly receiver?: TargetTypeRef;
   readonly selectedMethodTypeArguments?: readonly (TargetTypeRef | undefined)[];
   readonly authoredMethodTypeArguments?: readonly (TargetTypeRef | undefined)[];
@@ -85,8 +115,66 @@ function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readon
     if (setValue !== undefined) {
       return { lane: "set", bindings: { setValue, receiver: carrier } };
     }
+    const weakMapTypes = getRustJsWeakMapTargetTypes(carrier);
+    if (weakMapTypes !== undefined) {
+      return {
+        lane: "weak-map",
+        bindings: {
+          weakKey: weakMapTypes.key,
+          weakValue: weakMapTypes.value,
+          receiver: carrier,
+        },
+      };
+    }
+    const weakSetValue = getRustJsWeakSetElementTargetType(carrier);
+    if (weakSetValue !== undefined) {
+      return { lane: "weak-set", bindings: { weakKey: weakSetValue, receiver: carrier } };
+    }
     if (carrier.id === rustJsDateTargetId) {
       return { lane: "date", bindings: { receiver: carrier } };
+    }
+    const promiseOutput = rustJsPromiseOutputTargetType(carrier);
+    if (promiseOutput !== undefined) {
+      return {
+        lane: "promise",
+        bindings: { promiseOutput, receiver: carrier },
+      };
+    }
+    if (carrier.id === rustJsPromiseFulfilledResultTargetId ||
+      carrier.id === rustJsPromiseRejectedResultTargetId ||
+      carrier.id === rustJsPromiseSettledResultTargetId) {
+      return { lane: "promise-record", bindings: { receiver: carrier } };
+    }
+    if (carrier.id === rustJsArrayBufferTargetId) {
+      return { lane: "array-buffer", bindings: { receiver: carrier } };
+    }
+    if (carrier.id === rustJsDataViewTargetId) {
+      return { lane: "data-view", bindings: { receiver: carrier } };
+    }
+    if (rustJsTypedArrayName(carrier) !== undefined) {
+      return {
+        lane: "typed-array",
+        bindings: {
+          element: rustSourcePrimitiveTargetType("float64"),
+          receiver: carrier,
+        },
+      };
+    }
+    if (carrier.id === rustJsIntlDateTimeFormatTargetId) {
+      return { lane: "intl-date-time", bindings: { receiver: carrier } };
+    }
+    if (carrier.id === rustJsIntlNumberFormatTargetId) {
+      return { lane: "intl-number", bindings: { receiver: carrier } };
+    }
+    if (carrier.id === rustJsIntlCollatorTargetId) {
+      return { lane: "intl-collator", bindings: { receiver: carrier } };
+    }
+    if (carrier.id === rustJsIntlDateTimeFormatPartTargetId ||
+      carrier.id === rustJsIntlNumberFormatPartTargetId ||
+      carrier.id === rustJsIntlResolvedDateTimeFormatOptionsTargetId ||
+      carrier.id === rustJsIntlResolvedNumberFormatOptionsTargetId ||
+      carrier.id === rustJsIntlResolvedCollatorOptionsTargetId) {
+      return { lane: "intl-record", bindings: { receiver: carrier } };
     }
     if (carrier.id === rustJsRegExpTargetId) {
       return { lane: "regexp", bindings: { receiver: carrier } };
@@ -147,6 +235,12 @@ function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readon
   if (carrier === undefined && ownerName === "RegExpConstructor") {
     return { lane: "regexp", bindings: {} };
   }
+  if (carrier === undefined && ownerName === "SymbolConstructor") {
+    return { lane: "symbol", bindings: {} };
+  }
+  if (carrier === undefined && ownerName === "PromiseConstructor") {
+    return { lane: "promise", bindings: {} };
+  }
   return undefined;
 }
 
@@ -203,6 +297,8 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
       return rustJsValueTargetType();
     case "string-array":
       return rustJsArrayTargetType(rustStringTargetType());
+    case "float64-array":
+      return rustJsArrayTargetType(rustSourcePrimitiveTargetType("float64"));
     case "js-string-array":
       return rustJsArrayTargetType(rustJsStringTargetType());
     case "regexp":
@@ -311,6 +407,13 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
       return bindings.mapKey === undefined || bindings.mapValue === undefined
         ? undefined
         : rustVecTargetType({ kind: "tuple", elements: [bindings.mapKey, bindings.mapValue] });
+    case "js-map-entry-array":
+      return bindings.mapKey === undefined || bindings.mapValue === undefined
+        ? undefined
+        : rustJsArrayTargetType({
+            kind: "tuple",
+            elements: [bindings.mapKey, bindings.mapValue],
+          });
     case "set-value":
       return bindings.setValue;
     case "set-value-array":
@@ -319,6 +422,58 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
       return bindings.setValue === undefined
         ? undefined
         : rustVecTargetType({ kind: "tuple", elements: [bindings.setValue, bindings.setValue] });
+    case "symbol":
+      return rustJsSymbolTargetType();
+    case "weak-key":
+      return bindings.weakKey;
+    case "weak-value":
+      return bindings.weakValue;
+    case "option-of-weak-value":
+      return bindings.weakValue === undefined
+        ? undefined
+        : rustOptionTargetType(bindings.weakValue);
+    case "weak-map-entry-array":
+      return bindings.weakKey === undefined || bindings.weakValue === undefined
+        ? undefined
+        : rustJsArrayTargetType({
+            kind: "tuple",
+            elements: [bindings.weakKey, bindings.weakValue],
+          });
+    case "weak-key-array":
+      return bindings.weakKey === undefined
+        ? undefined
+        : rustJsArrayTargetType(bindings.weakKey);
+    case "array-buffer":
+      return rustJsArrayBufferTargetType();
+    case "date":
+      return { kind: "target-named", id: rustJsDateTargetId };
+    case "future-output":
+      return rustFutureOutputCarrier(bindings.sourceResult);
+    case "promise-output":
+      return bindings.promiseOutput;
+    case "promise-input-output":
+      return bindings.promiseInputOutput;
+    case "promise-of-input-output":
+      return bindings.promiseInputOutput === undefined
+        ? undefined
+        : rustJsPromiseTargetType(bindings.promiseInputOutput);
+    case "promise-of-settled-input-output-array":
+      return bindings.promiseInputOutput === undefined
+        ? undefined
+        : rustJsPromiseTargetType(rustJsArrayTargetType(
+            rustJsPromiseSettledResultTargetType(bindings.promiseInputOutput),
+          ));
+    case "promise-finally-callback":
+      return rustCallableTargetType([], rustUnitTargetType());
+    case "json-replacer-callback":
+      return rustClosureTargetType(
+        [rustStringTargetType(), rustJsValueTargetType()],
+        rustJsValueTargetType(),
+      );
+    case "null":
+      return rustNullTargetType();
+    case "source-result":
+      return bindings.sourceResult;
     case "argument":
       return bindings.arguments?.[reference.index];
   }
@@ -361,168 +516,6 @@ function arrayReduceCallbackCarrier(
     : rustClosureTargetType(args as TargetTypeRef[], accumulator);
 }
 
-function copyStyleOf(carrier: TargetTypeRef | undefined): { readonly kind: "method"; readonly name: "copied" | "cloned" } {
-  return {
-    kind: "method",
-    name: carrier !== undefined && (carrier.kind === "source-primitive" || isRustNumericCarrier(carrier))
-      ? "copied"
-      : "cloned",
-  };
-}
-
-function materializeTarget(
-  target: RustProviderOperationForm,
-  copyCarrier: TargetTypeRef | undefined,
-): RustProviderOperationForm {
-  if (target.form !== "receiver-method" || target.chain === undefined) {
-    return target;
-  }
-  return {
-    ...target,
-    chain: target.chain.map((entry) => entry.kind === "copy-selected-carrier" ? copyStyleOf(copyCarrier) : entry),
-  };
-}
-
-function materializeVariadicTarget(
-  target: RustProviderOperationForm,
-  elementCarrier: TargetTypeRef | undefined,
-): RustProviderOperationForm | undefined {
-  if (target.form === "receiver-tagged-array") {
-    if (elementCarrier === undefined) {
-      return undefined;
-    }
-    return {
-      ...target,
-      elementCarrier: materializeInferredCarrier(target.elementCarrier, elementCarrier),
-      alternatives: target.alternatives.map((alternative) => ({
-        ...alternative,
-        inputCarrier: materializeInferredCarrier(alternative.inputCarrier, elementCarrier),
-      })),
-    };
-  }
-  if (target.form !== "receiver-value-array" && target.form !== "call-value-array") {
-    return target;
-  }
-  const resolvedElementCarrier = target.elementCarrier.kind === "opaque" &&
-    target.elementCarrier.id === "tsonic.rust.infer"
-    ? elementCarrier
-    : target.elementCarrier;
-  return resolvedElementCarrier === undefined
-    ? undefined
-    : { ...target, elementCarrier: resolvedElementCarrier };
-}
-
-function materializeInferredCarrier(carrier: TargetTypeRef, inferred: TargetTypeRef): TargetTypeRef {
-  if (carrier.kind === "opaque" && carrier.id === "tsonic.rust.infer") {
-    return inferred;
-  }
-  switch (carrier.kind) {
-    case "target-named":
-      return carrier.genericArguments === undefined
-        ? carrier
-        : {
-            ...carrier,
-            genericArguments: materializeInferredGenericArguments(
-              carrier.genericArguments,
-              inferred,
-            ),
-          };
-    case "array":
-      return { ...carrier, element: materializeInferredCarrier(carrier.element, inferred) };
-    case "tuple":
-      return { ...carrier, elements: carrier.elements.map((element) => materializeInferredCarrier(element, inferred)) };
-    case "reference":
-      return { ...carrier, referent: materializeInferredCarrier(carrier.referent, inferred) };
-    case "pointer":
-      return { ...carrier, pointee: materializeInferredCarrier(carrier.pointee, inferred) };
-    case "function-pointer":
-    case "closure":
-      return {
-        ...carrier,
-        args: carrier.args.map((argument) => materializeInferredCarrier(argument, inferred)),
-        result: materializeInferredCarrier(carrier.result, inferred),
-      };
-    case "trait-ref":
-      return materializeInferredTraitRef(carrier, inferred);
-    case "trait-object":
-      return {
-        ...carrier,
-        principal: materializeInferredTraitRef(carrier.principal, inferred),
-        autoTraits: carrier.autoTraits.map((trait) =>
-          materializeInferredTraitRef(trait, inferred)),
-      };
-    case "impl-trait":
-      return {
-        ...carrier,
-        bounds: carrier.bounds.map((trait) =>
-          materializeInferredTraitRef(trait, inferred)),
-      };
-    case "associated-type":
-      return {
-        ...carrier,
-        owner: materializeInferredCarrier(carrier.owner, inferred),
-        ...(carrier.trait === undefined
-          ? {}
-          : { trait: materializeInferredTraitRef(carrier.trait, inferred) }),
-        ...(carrier.genericArguments === undefined
-          ? {}
-          : {
-              genericArguments: materializeInferredGenericArguments(
-                carrier.genericArguments,
-                inferred,
-              ),
-            }),
-      };
-    default:
-      return carrier;
-  }
-}
-
-function materializeInferredTraitRef(
-  trait: RustTargetTraitRef,
-  inferred: TargetTypeRef,
-): RustTargetTraitRef {
-  return {
-    ...trait,
-    genericArguments: materializeInferredGenericArguments(
-      trait.genericArguments,
-      inferred,
-    ),
-    associatedConstraints: trait.associatedConstraints.map((constraint) =>
-      constraint.kind === "equality"
-        ? {
-            ...constraint,
-            genericArguments: materializeInferredGenericArguments(
-              constraint.genericArguments,
-              inferred,
-            ),
-            type: materializeInferredCarrier(constraint.type, inferred),
-          }
-        : {
-            ...constraint,
-            genericArguments: materializeInferredGenericArguments(
-              constraint.genericArguments,
-              inferred,
-            ),
-            traits: constraint.traits.map((bound) =>
-              materializeInferredTraitRef(bound, inferred)),
-          }),
-  };
-}
-
-function materializeInferredGenericArguments(
-  arguments_: readonly RustTargetGenericArgument[],
-  inferred: TargetTypeRef,
-): readonly RustTargetGenericArgument[] {
-  return arguments_.map((argument): RustTargetGenericArgument =>
-    argument.kind === "type"
-      ? {
-          kind: "type",
-          type: materializeInferredCarrier(argument.type, inferred),
-        }
-      : argument);
-}
-
 function firstArgumentId(request: JsOperationRequest): string | undefined {
   const carrier = request.argumentCarriers?.[0];
   return carrier?.kind === "target-named" ? carrier.id : undefined;
@@ -536,9 +529,13 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
   const { lane } = laneMatch;
   const bindings: JsLaneBindings = {
     ...laneMatch.bindings,
+    sourceResult: request.sourceResultCarrier,
     selectedMethodTypeArguments: request.selectedMethodTypeArgumentCarriers,
     authoredMethodTypeArguments: request.authoredMethodTypeArgumentCarriers,
     arguments: request.argumentCarriers,
+    promiseInputOutput: rustFutureOutputCarrier(
+      rustJsArrayLikeElementTargetType(request.argumentCarriers?.[0]),
+    ),
     ...(lane === "js-array" && laneMatch.bindings.element === undefined &&
         request.selectedMethodTypeArgumentCarriers?.length === 1 &&
         request.selectedMethodTypeArgumentCarriers[0] !== undefined
@@ -570,7 +567,8 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
       (candidate.selectedMethodTypeArgumentArity === undefined ||
         candidate.selectedMethodTypeArgumentArity ===
           (request.selectedMethodTypeArgumentCarriers?.length ?? 0)) &&
-      (candidate.callback === undefined || isRustCallableCarrier(callbackArgumentCarrier)) &&
+      (candidate.callback === undefined || callbackArgumentCarrier === undefined ||
+        isRustCallableCarrier(callbackArgumentCarrier)) &&
       carrierRequirementsMatch(candidate.requirements, candidateBindings, request) &&
       (candidate.firstArgCarrierId === undefined
         ? firstArgumentId(request) === undefined || !jsOperationRows.some((other) =>
@@ -586,13 +584,20 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
       (candidate.variadic === true && candidateArgumentCarriers.length < parameterCarriers.length)) {
       return [];
     }
-    const argumentScores = parameterCarriers.map((carrier, index) =>
-          jsArgumentCarrierMatchScore(
-            carrier,
-            candidateArgumentCarriers[index],
-            index,
-            request.argumentMatchScore,
-          ));
+    const argumentScores = parameterCarriers.map((carrier, index) => {
+      const actual = candidateArgumentCarriers[index];
+      if (candidate.jsonValueSourceArgumentIndexes?.includes(index) === true) {
+        return actual !== undefined && selectRustJsonValueConversion(actual) !== undefined
+          ? 1
+          : undefined;
+      }
+      return jsArgumentCarrierMatchScore(
+        carrier,
+        actual,
+        index,
+        request.argumentMatchScore,
+      );
+    });
     if (argumentScores.some((score) => score === undefined)) {
       return [];
     }
@@ -623,7 +628,7 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
       : row.shape.target,
     bindings.element,
   );
-  const target = row.authoredPropertyKey !== true
+  const authoredTarget = row.authoredPropertyKey !== true
     ? materializedTarget
     : request.authoredPropertyKey === undefined ||
         request.authoredPropertyKey.length === 0 ||
@@ -636,10 +641,28 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
             { kind: "string" as const, value: request.authoredPropertyKey },
           ],
         };
+  const target = authoredTarget === undefined
+    ? undefined
+    : materializeJsonValueConversions(
+        authoredTarget,
+        row.jsonValueSourceArgumentIndexes,
+        request.argumentCarriers ?? [],
+      );
   if (target === undefined) {
     return undefined;
   }
-  const selectedParameterCarriers = row.variadic === true ? undefined : parameterCarriers;
+  const selectedParameterCarriers = row.variadic === true
+    ? undefined
+    : parameterCarriers.map((carrier, index) =>
+        row.jsonValueSourceArgumentIndexes?.includes(index) === true
+          ? request.argumentCarriers?.[index]
+          : carrier);
+  const compileTimeSourceArgumentIndexes = new Set(
+    row.compileTimeSourceArgumentIndexes ?? [],
+  );
+  const declaredRuntimeParameterCarriers = selectedParameterCarriers?.filter(
+    (_carrier, index) => !compileTimeSourceArgumentIndexes.has(index),
+  );
   const operationId = `tsonic.rust.js.${row.owner}.${row.member}.${row.operationKind}${row.variant === undefined ? "" : `.${row.variant}`}${discardResult ? ".discarded" : ""}`;
   if (row.shape.op === "set") {
     if (parameterCarriers.some((carrier) => carrier === undefined)) {
@@ -670,7 +693,15 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
     ? undefined
     : {
         ...row.callback,
-        fallibleTarget: materializeTarget(row.callback.fallibleTarget, copyReference),
+        failure: row.callback.failure.kind === "returned-future"
+          ? row.callback.failure
+          : {
+              kind: "invocation" as const,
+              fallibleTarget: materializeTarget(
+                row.callback.failure.fallibleTarget,
+                copyReference,
+              ),
+            },
       };
   return {
     fact: {
@@ -687,9 +718,20 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
               ? rustUndefinedTargetType()
               : rustNullTargetType(),
           }),
-      ...(selectedParameterCarriers === undefined ? {} : { parameterCarriers: selectedParameterCarriers }),
-      isAsync: false,
+      ...(declaredRuntimeParameterCarriers === undefined
+        ? {}
+        : { parameterCarriers: declaredRuntimeParameterCarriers }),
+      ...(row.compileTimeSourceArgumentIndexes === undefined
+        ? {}
+        : {
+            compileTimeSourceArgumentIndexes:
+              row.compileTimeSourceArgumentIndexes,
+          }),
+      isAsync: row.asynchronous === true,
       isFallible: row.fallible === true,
+      ...(row.returnedFuture === undefined
+        ? {}
+        : { returnedFuture: row.returnedFuture }),
       ...(row.shape.evaluation === undefined ? {} : { evaluation: row.shape.evaluation }),
       errorBoundary: row.fallible === true ? "provider-native" : "none",
       ...(row.fallible === true ? { errorCarrier: rustJsErrorTargetType() } : {}),
@@ -723,6 +765,9 @@ function carrierRequirementsMatch(
         return rustCarrierSupportsJsEquality(carrier);
       case "project-identity-equality":
         return carrier !== undefined && request.carrierSupportsProjectIdentity?.(carrier) === true;
+      case "object-identity":
+        return rustCarrierSupportsObjectIdentity(carrier) ||
+          (carrier !== undefined && request.carrierSupportsProjectIdentity?.(carrier) === true);
     }
   }) ?? true;
 }

@@ -254,7 +254,12 @@ export function substituteRustTargetGenerics(
             constSubstitutions,
           )),
         outlives: type.outlives.map(substituteLifetime),
-        captures: type.captures.map(substituteLifetime),
+        captures: substituteGenericArguments(
+          type.captures,
+          substitutions,
+          lifetimeSubstitutions,
+          constSubstitutions,
+        ),
       };
     case "associated-type":
       return {

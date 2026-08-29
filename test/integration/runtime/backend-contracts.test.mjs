@@ -441,22 +441,47 @@ export function make(): Empty {
   validateGeneratedProject("backend-empty-class", result.artifacts);
 });
 
-test("duplicate TypeScript enum discriminants fail before Rust emission", () => {
+test("duplicate TypeScript enum discriminants retain every alias without allocation", () => {
   const { result } = compileRust({
+    target: {
+      id: "rust",
+      options: { outputType: "bin", crateName: "duplicate_enum_discriminants" },
+    },
     files: {
       "index.ts": `
 export enum Duplicate {
   First = 1,
   Second = 1,
+  Third = 2,
+}
+
+function same(left: Duplicate, right: Duplicate): boolean {
+  return left === right;
+}
+
+export function main(): void {
+  if (!same(Duplicate.First, Duplicate.Second) || same(Duplicate.First, Duplicate.Third)) {
+    throw new Error("duplicate enum discriminants were not preserved");
+  }
 }
 `,
     },
   });
 
-  assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.some((diagnostic) =>
-    diagnostic.code === "RUST_UNSUPPORTED_AST" &&
-    diagnostic.message.includes("same discriminant 1")));
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(
+    text,
+    /#\[repr\(transparent\)\]\n#\[derive\(Clone, Copy, Debug, PartialEq, Eq, Hash\)\]\npub struct Duplicate \{/u,
+  );
+  assert.equal(
+    text.match(/#\[allow\(non_upper_case_globals, reason = "preserves the authored source name"\)\]/gu)?.length,
+    3,
+  );
+  assert.match(text, /pub const First: Self = Self \{ value: 1 \};/u);
+  assert.match(text, /pub const Second: Self = Self \{ value: 1 \};/u);
+  assert.match(text, /pub const Third: Self = Self \{ value: 2 \};/u);
+  validateGeneratedProject("duplicate-enum-discriminants", result.artifacts, { run: true });
 });
 
 test("private class members remain private in generated Rust", () => {

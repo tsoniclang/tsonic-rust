@@ -1,6 +1,7 @@
 import {
   rustBigIntTargetType,
   rustJsArrayTargetType,
+  rustJsSymbolTargetType,
   rustNullTargetType,
   rustNullishSourceTargetType,
   rustNeverTargetType,
@@ -132,6 +133,9 @@ export function resolveRustTargetType(
     }
     if (semantics.types.isBigIntLike(type)) {
       return rustBigIntTargetType();
+    }
+    if (options.jsEnabled && semantics.types.isSymbolLike(type)) {
+      return rustJsSymbolTargetType();
     }
     if (semantics.types.isVoidLike(type)) {
       return rustUnitTargetType();

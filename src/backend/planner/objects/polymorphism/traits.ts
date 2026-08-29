@@ -23,6 +23,7 @@ import type { RustProjectTypeDefinition } from "../../../../analysis/project-typ
 import type { RustObjectRepresentation } from "../../../../analysis/project-types/object-representation.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { rustProjectImplementationVisibility } from "../project-storage-abi.js";
+import { rustProjectObjectIdentityImplementation } from "../project-identity.js";
 
 export function projectIdentityImplementations(
   definition: RustProjectTypeDefinition,
@@ -114,6 +115,14 @@ export function projectIdentityImplementations(
       target: wrapperType,
       functions: [],
     },
+    rustProjectObjectIdentityImplementation(wrapperType, generics, {
+      kind: "reference",
+      expr: {
+        kind: "field",
+        receiver: { kind: "path", path: "self" },
+        name: rustProjectObjectIdentityField,
+      },
+    }),
   ];
 }
 

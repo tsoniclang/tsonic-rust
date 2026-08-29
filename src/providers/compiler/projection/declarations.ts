@@ -1,8 +1,10 @@
 import {
   canonicalPathKey,
+  importedSourceType,
   withDefaultGenericBindings,
   withProjectionGenericParameters,
 } from "./utilities.js";
+import { rustSourceTypeExportIds, rustTypesModule } from "../../../source/semantics/identity.js";
 import {
   compilerExportId,
   compilerTargetTypeId,
@@ -204,6 +206,48 @@ function projectValueExport(
           isUnsafe: true,
         }),
       ]),
+    };
+  }
+  if (exported.kind === "static" && !exported.copy) {
+    const sourceReference = importedSourceType(
+      context,
+      rustTypesModule,
+      rustSourceTypeExportIds.sharedReference,
+      [
+        sourceType,
+        importedSourceType(
+          context,
+          rustTypesModule,
+          rustSourceTypeExportIds.staticLifetime,
+          [],
+        ),
+      ],
+    );
+    const resultCarrier: TargetTypeRef = Object.freeze({
+      kind: "reference",
+      referent: targetCarrier,
+      mutable: false,
+      lifetime: Object.freeze({ kind: "static" }),
+    });
+    return {
+      declaration: Object.freeze({
+        id: exportId,
+        name: exported.name,
+        exportName: exported.name,
+        kind: "value",
+        type: sourceReference,
+      }),
+      operations: Object.freeze([operationRow({
+        exportId,
+        operationKind: "property",
+        target: {
+          form: "reference-path",
+          path: exported.targetPath.join("::"),
+          mutable: false,
+        },
+        resultCarrier,
+        ...(exported.unsafe ? { isUnsafe: true } : {}),
+      })]),
     };
   }
   return {

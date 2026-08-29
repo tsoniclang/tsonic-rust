@@ -165,10 +165,27 @@ function materializeProviderOperationForm(
   const argConversions = "argConversions" in form && form.argConversions !== undefined
     ? [...form.argConversions]
     : undefined;
-  if (form.form === "call") {
+  if (form.form === "call" || form.form === "source-module-construction") {
     return {
       ...form,
       path: expandProviderPath(form.path, aliases),
+      ...(form.form !== "source-module-construction"
+        ? {}
+        : {
+            bootstrap: {
+              ...form.bootstrap,
+              path: expandProviderPath(form.bootstrap.path, aliases),
+              ...(form.bootstrap.errorCarrier === undefined
+                ? {}
+                : {
+                    errorCarrier: materializeProviderCarrier(
+                      form.bootstrap.errorCarrier,
+                      carrierPaths,
+                      carrierTraits,
+                    ),
+                  }),
+            },
+          }),
       ...(argConversions === undefined ? {} : { argConversions }),
     };
   }
@@ -216,7 +233,8 @@ function materializeProviderOperationForm(
     };
   }
   if (form.form === "call-str-slice" || form.form === "free-call-str-slice" || form.form === "path" ||
-    form.form === "static") {
+    form.form === "reference-path" || form.form === "struct-variant" ||
+    form.form === "expression-macro" || form.form === "static") {
     return { ...form, path: expandProviderPath(form.path, aliases) };
   }
   if (form.form === "binary-operator") {
@@ -475,6 +493,74 @@ function materializeProviderValueConversion(
         ...conversion,
         source: materializeProviderCarrier(conversion.source, carrierPaths, carrierTraits),
         target: materializeProviderCarrier(conversion.target, carrierPaths, carrierTraits),
+      };
+    case "js-value-from-option":
+    case "js-value-from-array":
+      return {
+        ...conversion,
+        source: materializeProviderCarrier(conversion.source, carrierPaths, carrierTraits),
+        element: materializeProviderCarrier(conversion.element, carrierPaths, carrierTraits),
+        elementConversion: materializeProviderValueConversion(
+          conversion.elementConversion,
+          carrierPaths,
+          carrierTraits,
+        ) as typeof conversion.elementConversion,
+      };
+    case "js-value-from-closed-carrier":
+      return {
+        ...conversion,
+        source: materializeProviderCarrier(conversion.source, carrierPaths, carrierTraits),
+      };
+    case "js-value-from-source-union":
+      return {
+        ...conversion,
+        source: materializeProviderCarrier(conversion.source, carrierPaths, carrierTraits),
+        variants: conversion.variants.map((variant) => ({
+          ...variant,
+          carrier: materializeProviderCarrier(
+            variant.carrier,
+            carrierPaths,
+            carrierTraits,
+          ),
+          conversion: materializeProviderValueConversion(
+            variant.conversion,
+            carrierPaths,
+            carrierTraits,
+          ) as typeof variant.conversion,
+        })),
+      };
+    case "js-value-from-structural-to-json":
+      return {
+        ...conversion,
+        source: materializeProviderCarrier(conversion.source, carrierPaths, carrierTraits),
+        resultCarrier: materializeProviderCarrier(
+          conversion.resultCarrier,
+          carrierPaths,
+          carrierTraits,
+        ),
+        resultConversion: materializeProviderValueConversion(
+          conversion.resultConversion,
+          carrierPaths,
+          carrierTraits,
+        ) as typeof conversion.resultConversion,
+      };
+    case "js-value-from-structural-object":
+      return {
+        ...conversion,
+        source: materializeProviderCarrier(conversion.source, carrierPaths, carrierTraits),
+        fields: conversion.fields.map((field) => ({
+          ...field,
+          sourceCarrier: materializeProviderCarrier(
+            field.sourceCarrier,
+            carrierPaths,
+            carrierTraits,
+          ),
+          conversion: materializeProviderValueConversion(
+            field.conversion,
+            carrierPaths,
+            carrierTraits,
+          ) as typeof field.conversion,
+        })),
       };
     case "option-some":
       return {

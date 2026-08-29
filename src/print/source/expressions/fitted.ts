@@ -13,7 +13,9 @@ import { printRustBlockStatements } from "../blocks.js";
 import { printRustExpr, rustExpressionContainsClosure } from "./core.js";
 import { rustExpressionContainsExpandedCollectionLiteral, rustExpressionContainsExpandedStructLiteral, rustFormatArgumentCanShareLine, rustFormatArgumentIsAtomic } from "./inspection.js";
 import { rustExpressionContainsStatementBlock } from "../../../backend/target-ast/expressions.js";
-import { rustFormatWidth, rustInlineFormatArgumentWidth, rustMethodChainWidth, rustNestedCallWidth, rustSingleLineConditionalWidth, rustStructLiteralWidth } from "../formatting.js";
+import { rustFormatWidth, rustInlineFormatArgumentWidth, rustMethodChainWidth, rustNestedCallWidth, rustSingleLineConditionalWidth } from "../formatting.js";
+import { initializerPrefersReferencedNestedBreak } from "./initializer-layout.js";
+import { printRustCollectionLiteralFitted, printRustStructLiteralFitted } from "./literals.js";
 import type { RustExpr } from "../../../backend/target-ast/nodes.js";
 import type { RustExpressionGrammarPosition } from "./precedence.js";
 
@@ -23,7 +25,7 @@ export function printRustExprFitted(
   column: number,
   methodChainContinuationIndent?: string,
   grammarPosition: RustExpressionGrammarPosition = "expression",
-  layoutRegion: "default" | "logical-chain-operand" = "default",
+  layoutRegion: "default" | "initializer-continuation" | "logical-chain-operand" = "default",
 ): string {
   const flat = printRustExpr(expression);
   switch (expression.kind) {
@@ -228,6 +230,8 @@ export function printRustExprFitted(
         expression.args,
         depth,
         column,
+        false,
+        initializerPrefersReferencedNestedBreak(expression, flat, layoutRegion),
       );
     case "invoke":
       return printFittedCall(
@@ -235,10 +239,23 @@ export function printRustExprFitted(
         expression.args,
         depth,
         column,
+        false,
+        initializerPrefersReferencedNestedBreak(expression, flat, layoutRegion),
       );
     case "associated-call":
       {
         const method = printRustCallMember(expression.method, expression.genericArguments);
+        const flatCallable = `${printRustAssociatedCallOwner(expression)}::${method}`;
+        if (renderedFits(`${flatCallable}(`, column)) {
+          return printFittedCall(
+            flatCallable,
+            expression.args,
+            depth,
+            column,
+            false,
+            initializerPrefersReferencedNestedBreak(expression, flat, layoutRegion),
+          );
+        }
         const owner = printRustAssociatedCallOwnerFitted(
           expression,
           depth,
@@ -260,6 +277,7 @@ export function printRustExprFitted(
           depth,
           column,
           owner.includes("\n"),
+          initializerPrefersReferencedNestedBreak(expression, flat, layoutRegion),
         );
     }
     case "method-call": {
@@ -272,6 +290,7 @@ export function printRustExprFitted(
         columnRequiresVerticalLayout;
       const receiver = printOperand(expression.receiver, RustPrecedence.Postfix, false);
       if (!flat.includes("\n") && renderedFits(flat, column) && !verticalLayout &&
+        !rustExpressionContainsStatementBlock(expression) &&
         !expression.args.some((argument) =>
           argument.kind === "tuple-literal" &&
           rustExpressionContainsTry(argument) &&
@@ -329,6 +348,8 @@ export function printRustExprFitted(
         const borrowedBlockArgument = expression.args.length === 1 &&
           expression.args[0]?.kind === "reference" &&
           expressionIsRightHandBlock(expression.args[0].expr);
+        const attachedStatementBlockArgument = expression.args.length === 1 &&
+          expressionIsRightHandBlock(expression.args[0]!);
         if (attached.includes("\n") &&
           column + firstLine(attached).length > rustMethodChainWidth &&
           !borrowedBlockArgument) {
@@ -346,7 +367,7 @@ export function printRustExprFitted(
           (chain === undefined || attachedArgumentsPreferExpansion ||
             !rustMethodChainBreaksReceiverWhenExpanded(chain)) &&
           (!columnRequiresVerticalLayout || attachedArgumentsPreferExpansion) &&
-          (!verticalLayout ||
+          (!verticalLayout || attachedStatementBlockArgument ||
           chain !== undefined && (!rustMethodChainContainsClosure(chain) ||
             expression.args.length === 1 && expression.args[0]?.kind === "tuple-literal"))) {
           return attached;
@@ -384,6 +405,8 @@ export function printRustExprFitted(
           column,
           firstStep?.kind === "field" && !attachFirstMethodAfterField ||
             containingExpressionRequiresReceiverBreak ||
+            methodChainContinuationIndent !== undefined &&
+              rustMethodChainRequiresVerticalLayout(expression) ||
             rustMethodChainBreaksReceiverWhenExpanded(chain) ||
             rustMethodChainBreaksReceiverForClosure(chain, flat, column) ||
             column > indentText(depth + 1).length,
@@ -412,6 +435,19 @@ export function printRustExprFitted(
     case "closure-block": {
       const params = printRustClosureParams(expression.params);
       const prefix = `${expression.move ? "move " : ""}|${params}| ${expression.async ? "async move " : ""}{`;
+      const onlyStatement = (expression.body.innerAttrs?.length ?? 0) === 0 &&
+          expression.body.statements.length === 1
+        ? expression.body.statements[0]
+        : undefined;
+      if (onlyStatement?.kind === "tail") {
+        const tail = printRustExpr(onlyStatement.expr);
+        const compact = `${prefix} ${tail} }`;
+        if (!tail.includes("\n") &&
+          !rustExpressionContainsStatementBlock(onlyStatement.expr) &&
+          renderedFits(compact, column)) {
+          return compact;
+        }
+      }
       const body = printRustBlockStatements(expression.body, depth + 1);
       return body.length === 0
         ? `${prefix}}`
@@ -431,14 +467,17 @@ export function printRustExprFitted(
       const rendered = printRustExprFitted(expression.expr, depth, column);
       const attached = appendToLastLine(rendered, ".await");
       return !rendered.includes("\n") && renderedFits(attached, column) &&
-          renderedFits(flat, column)
+          renderedFits(flat, column) && column + attached.length < rustFormatWidth
         ? attached
-        : `${rendered}\n${indentText(depth)}.await`;
+        : `${rendered}\n${rendered.includes("\n")
+          ? indentText(depth)
+          : methodChainContinuationIndent ?? indentText(depth + 1)}.await`;
     }
     case "try": {
       const chain = rustMethodChain(expression);
       if (chain !== undefined && expression.expr.kind === "method-call" &&
-        expression.expr.args.length === 0 && rustMethodChainRequiresVerticalLayout(expression)) {
+        expression.expr.args.every(rustFormatArgumentCanShareLine) &&
+        rustMethodChainRequiresVerticalLayout(expression)) {
         return printFittedMethodChain(
           chain,
           depth,
@@ -461,7 +500,7 @@ export function printRustExprFitted(
           column + 1,
         ), "?");
       }
-      const rendered = printRustExprFitted(expression.expr, depth, column);
+      const rendered = printRustExprFitted(expression.expr, depth, column + 1);
       const attempted = appendToLastLine(rendered, "?");
       return renderedFits(attempted, column)
         ? attempted
@@ -571,11 +610,16 @@ export function printRustExprFitted(
         : `${expression.operator}${operand}`;
     }
     case "binary": {
+      const leftMethodChain = rustMethodChain(expression.left);
+      const leftMethodRequiresExpansion = leftMethodChain !== undefined &&
+        methodChainContinuationIndent !== undefined &&
+        rustMethodChainFirstMethodRequiresExpansion(leftMethodChain, depth);
       if (!rustExpressionContainsStatementBlock(expression) &&
         !rustExpressionContainsExpandedStructLiteral(expression) &&
         !rustMethodChainPrefersVerticalLayout(expression.left) &&
         !rustMethodChainPrefersVerticalLayout(expression.right) &&
         !rustBinaryOperandPrefersExpandedCall(expression.left) &&
+        !leftMethodRequiresExpansion &&
         !flat.includes("\n") && renderedFits(flat, column)) {
         return flat;
       }
@@ -624,7 +668,27 @@ export function printRustExprFitted(
               rustBinaryOperandPrefersExpandedCall(expression.left),
             )
           : undefined;
-      const renderedLeft = expandedLeftCall ?? (expression.left.kind === "try" &&
+      const leftNeedsBinarySlotLayout = leftMethodChain !== undefined &&
+        (leftMethodRequiresExpansion ||
+          rustMethodChainPrefersVerticalLayout(expression.left) ||
+          !renderedFits(flat, column) &&
+          leftMethodChain.steps.filter((step) =>
+            step.kind === "method" || step.kind === "field" || step.kind === "await").length > 1);
+      const leftSelectorCount = leftMethodChain?.steps.filter((step) =>
+        step.kind === "method" || step.kind === "field" || step.kind === "await").length ?? 0;
+      const binarySlotBreaksBeforeFirstSelector = leftMethodChain !== undefined &&
+        (rustMethodChainBreaksReceiverWhenExpanded(leftMethodChain) ||
+          leftSelectorCount > 1 && leftMethodChain.steps[0]?.kind === "method" &&
+            rustMethodChainContainsClosure(leftMethodChain));
+      const renderedLeft = expandedLeftCall ?? (leftNeedsBinarySlotLayout
+        ? printFittedMethodChain(
+            leftMethodChain,
+            depth,
+            column,
+            binarySlotBreaksBeforeFirstSelector,
+            methodChainContinuationIndent ?? indentText(depth + 1),
+          )
+        : expression.left.kind === "try" &&
           (expression.left.expr.kind === "call" || expression.left.expr.kind === "associated-call") &&
           expression.left.expr.args.length > 1 &&
           (rustBinaryOperandPrefersExpandedCall(expression.left) ||
@@ -767,89 +831,10 @@ export function printRustExprFitted(
     }
     case "vec-literal":
     case "slice-literal":
-    case "tuple-literal": {
-      if (!flat.includes("\n") &&
-        !rustExpressionContainsExpandedStructLiteral(expression) &&
-        !(expression.kind === "tuple-literal" &&
-          rustExpressionContainsTry(expression) &&
-          flat.length > rustNestedCallWidth) &&
-        renderedFits(flat, column)) {
-        return flat;
-      }
-      const onlyElement = expression.elements[0];
-      if (expression.kind === "tuple-literal" && expression.elements.length === 1 &&
-        onlyElement !== undefined) {
-        const rendered = printRustExprFitted(onlyElement, depth, column + 1);
-        return appendToLastLine(`(${rendered}`, ",)");
-      }
-      if (expression.kind !== "tuple-literal" && expression.elements.length === 1 &&
-        onlyElement !== undefined && rustExpressionContainsStatementBlock(onlyElement)) {
-        const opening = expression.kind === "vec-literal" ? "vec![" : "[";
-        const rendered = printRustExprFitted(
-          onlyElement,
-          depth,
-          column + opening.length,
-        );
-        return appendToLastLine(`${opening}${rendered}`, "]");
-      }
-      const elementIndent = indentText(depth + 1);
-      const compactElements = expression.elements.map(printRustExpr).join(", ");
-      const elements = expression.kind !== "tuple-literal" &&
-          !rustExpressionContainsExpandedStructLiteral(expression) &&
-          expression.elements.every(rustFormatArgumentIsAtomic) &&
-          compactElements.length <= rustNestedCallWidth &&
-          renderedFits(`${compactElements},`, elementIndent.length)
-        ? [`${elementIndent}${compactElements},`]
-        : expression.elements.map((element) => {
-            const rendered = printRustExprFitted(element, depth + 1, elementIndent.length);
-            return appendToLastLine(`${elementIndent}${rendered}`, ",");
-          });
-      return [
-        expression.kind === "vec-literal" ? "vec![" : expression.kind === "slice-literal" ? "[" : "(",
-        ...elements,
-        `${indentText(depth)}${expression.kind === "tuple-literal" ? ")" : "]"}`,
-      ].join("\n");
-    }
-    case "struct-literal": {
-      const compactFields = expression.fields
-        .map((field) => {
-          const value = printRustExpr(field.value);
-          return value === field.name ? field.name : `${field.name}: ${value}`;
-        })
-        .join(", ");
-      if (expression.fields.length <= 2 && compactFields.length <= rustStructLiteralWidth &&
-        !flat.includes("\n") && renderedFits(flat, column)) {
-        return flat;
-      }
-      const fieldIndent = indentText(depth + 1);
-      const fields = expression.fields.map((field) => {
-        const flatValue = printRustExpr(field.value);
-        if (flatValue === field.name) {
-          return `${fieldIndent}${field.name},`;
-        }
-        const prefix = `${fieldIndent}${field.name}: `;
-        const value = printRustExprFitted(
-          field.value,
-          depth + 1,
-          prefix.length + 1,
-        );
-        return appendToLastLine(`${prefix}${value}`, ",");
-      });
-      if (expression.base !== undefined) {
-        const prefix = `${fieldIndent}..`;
-        const base = printRustExprFitted(
-          expression.base,
-          depth + 1,
-          prefix.length,
-        );
-        fields.push(`${prefix}${base}`);
-      }
-      return [
-        `${expression.path} {`,
-        ...fields,
-        `${indentText(depth)}}`,
-      ].join("\n");
-    }
+    case "tuple-literal":
+      return printRustCollectionLiteralFitted(expression, depth, column, printRustExprFitted);
+    case "struct-literal":
+      return printRustStructLiteralFitted(expression, depth, column, printRustExprFitted);
     default:
       return flat;
   }

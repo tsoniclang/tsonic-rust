@@ -292,12 +292,14 @@ export interface RustCompilerField {
   readonly type: RustCompilerType;
 }
 
-export interface RustCompilerEnumVariant {
+export type RustCompilerEnumVariant = {
   readonly id: string;
   readonly name: string;
-  readonly kind: "plain" | "tuple";
-  readonly fields: readonly RustCompilerType[];
-}
+} & (
+  | { readonly kind: "plain"; readonly fields: readonly RustCompilerType[] }
+  | { readonly kind: "tuple"; readonly fields: readonly RustCompilerType[] }
+  | { readonly kind: "struct"; readonly fields: readonly RustCompilerField[] }
+);
 
 export interface RustCompilerAssociatedConstant {
   readonly id: string;
@@ -343,6 +345,7 @@ export type RustCompilerExport = RustCompilerExportIdentity & (
       readonly type: RustCompilerType;
       readonly unsafe: boolean;
       readonly mutable: boolean;
+      readonly copy: boolean;
     }
   | {
       readonly kind: "function";

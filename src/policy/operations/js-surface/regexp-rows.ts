@@ -137,7 +137,7 @@ function callback(
     shape: "direct",
     sourceArgumentIndex: 1,
     argumentAdapter: { kind: "regexp-replacement", lane },
-    fallibleTarget: target,
+    failure: { kind: "invocation", fallibleTarget: target },
   };
 }
 

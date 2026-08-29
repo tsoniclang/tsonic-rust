@@ -6,6 +6,7 @@ import { printFittedMethodChain, printRustAssociatedOwner, printRustFlatLetIniti
 import { printRustAssociatedCallOwner, printRustLetInitializer, printRustTypeFitted } from "./expressions/blocks.js";
 import { printRustExpr } from "./expressions/core.js";
 import { printRustExprFitted } from "./expressions/fitted.js";
+import { expressionIsRightHandBlock } from "./expressions/precedence.js";
 import { rustFormatWidth, rustNestedCallWidth } from "./formatting.js";
 import type { RustBlock, RustExpr, RustStmt } from "../../backend/target-ast/nodes.js";
 
@@ -768,7 +769,10 @@ function printRustStatementExpr(
     const chain = rustMethodChain(expression.expr);
     const firstMethodRequiresExpansion = chain !== undefined &&
       rustMethodChainFirstMethodRequiresExpansion(chain, depth);
+    const attachedStatementBlockArgument = expression.expr.args.length === 1 &&
+      expressionIsRightHandBlock(expression.expr.args[0]!);
     if (chain !== undefined &&
+      !attachedStatementBlockArgument &&
       (firstMethodRequiresExpansion ||
         column + printRustExpr(expression).length >= rustFormatWidth - 1)) {
       const breakBeforeFirstSelector = rustMethodChainBreaksReceiverWhenExpanded(chain);

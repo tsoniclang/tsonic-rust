@@ -2,7 +2,7 @@ import {
   targetSourceProfileDeclaration,
   typescriptNoLibUtilityDeclarations,
 } from "@tsonic/target-api/provider";
-import { jsRegExpSourceProfileDeclarations } from "@tsonic/js-source-profile";
+import { jsStandardSourceProfileDeclarations } from "@tsonic/js-source-profile";
 import type { TargetSourceProfileContributions } from "@tsonic/target-api/provider";
 import { rustTargetId } from "../../target-model/identities/target.js";
 
@@ -58,6 +58,12 @@ interface PromiseConstructor {
   all<T extends readonly unknown[]>(values: T): Promise<{ [K in keyof T]: Awaited<T[K]> }>;
 }
 declare var Promise: PromiseConstructor;
+
+interface Symbol {
+  readonly description: string | undefined;
+  toString(): string;
+  valueOf(): symbol;
+}
 
 interface SymbolConstructor {
   readonly iterator: unique symbol;
@@ -295,11 +301,6 @@ interface ArrayConstructor {
 }
 declare var Array: ArrayConstructor;
 
-interface ArrayLike<T> {
-  readonly length: number;
-  readonly [index: number]: T;
-}
-
 interface ReadonlyMap<K, V> extends Iterable<[K, V]> {
   readonly size: number;
   get(key: K): V | undefined;
@@ -438,7 +439,7 @@ interface Console {
 }
 declare var console: Console;
 
-${jsRegExpSourceProfileDeclarations}
+${jsStandardSourceProfileDeclarations}
 `.trim();
 
 export function rustNativeSourceProfileContributions(): TargetSourceProfileContributions {

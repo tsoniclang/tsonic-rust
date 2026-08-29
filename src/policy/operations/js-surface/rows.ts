@@ -13,13 +13,15 @@ import {
 } from "../../../target-model/types/index.js";
 import { defineJsOperationRows } from "./model.js";
 import { exactJsStringOperationRows } from "./exact-string-rows.js";
+import { jsCapabilityOperationRows } from "./capability-rows.js";
 import { regexpOperationRows } from "./regexp-rows.js";
 import type { JsOperationRowData } from "./model.js";
 import type { RustCallbackOperationTemplate, RustProviderOperationForm, RustValueConversion } from "../../../target-model/operations/model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 const zeroArgument = { kind: "integer", value: 0 } as const;
-const oneArgument = { kind: "integer", value: 1 } as const;
+const dateZeroArgument = { kind: "float64", value: 0 } as const;
+const dateOneArgument = { kind: "float64", value: 1 } as const;
 const noneArgument = { kind: "none" } as const;
 export const rustInferCarrier: TargetTypeRef = { kind: "opaque", id: "tsonic.rust.infer" };
 const jsNumberArgumentRows = [
@@ -81,7 +83,13 @@ function dateReceiverNumberRows(
 }
 
 function dateUtcRows(): readonly JsOperationRowData[] {
-  const defaults = [oneArgument, zeroArgument, zeroArgument, zeroArgument, zeroArgument] as const;
+  const defaults = [
+    dateOneArgument,
+    dateZeroArgument,
+    dateZeroArgument,
+    dateZeroArgument,
+    dateZeroArgument,
+  ] as const;
   return [2, 3, 4, 5, 6, 7].flatMap((arity) =>
     jsNumberArgumentCombinations(arity).map(({ variant, carriers, conversions }) => ({
       owner: "DateConstructor",
@@ -155,10 +163,13 @@ function callbackOperation(
     shape,
     sourceArgumentIndex: 0,
     ...(shape === "reduce" ? { accumulatorArgumentIndex: 1 } : {}),
-    fallibleTarget: {
-      form: "receiver-method",
-      name: `try_${targetName}`,
-      ...targetOptions,
+    failure: {
+      kind: "invocation",
+      fallibleTarget: {
+        form: "receiver-method",
+        name: `try_${targetName}`,
+        ...targetOptions,
+      },
     },
   };
 }
@@ -170,10 +181,13 @@ function staticCallbackOperation(
   return {
     shape: "map",
     sourceArgumentIndex,
-    fallibleTarget: {
-      form: "call",
-      path: falliblePath,
-      argModes: ["ref", "value"],
+    failure: {
+      kind: "invocation",
+      fallibleTarget: {
+        form: "call",
+        path: falliblePath,
+        argModes: ["ref", "value"],
+      },
     },
   };
 }
@@ -279,6 +293,7 @@ const sharedArrayOperationRows = sharedArrayOwners.flatMap((owner): readonly JsO
 ]);
 
 export const jsOperationRows = defineJsOperationRows([
+  ...jsCapabilityOperationRows,
   { owner: "ObjectConstructor", member: "is", operationKind: "call", lane: "object", variadic: true, shape: { op: "operation", operationKind: "method", target: { form: "call-value-array", path: "js_abi::object_is", leadingArguments: [], elementCarrier: rustJsValueTargetType() }, result: { ref: "bool" } } },
   ...sharedArrayOperationRows,
   { owner: "ArrayConstructor", member: "isArray", operationKind: "call", lane: "js-array", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::array_is_array_value", argModes: ["ref"] }, result: { ref: "bool" }, params: [{ ref: "jsvalue" }] } },
@@ -529,7 +544,7 @@ export const jsOperationRows = defineJsOperationRows([
 
   // JSON lane (static owner; fallible rows require a fallible context).
   { owner: "JSON", member: "parse", operationKind: "call", lane: "json", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::json_parse", argModes: ["ref"] }, result: { ref: "jsvalue" }, params: [{ ref: "string" }] } },
-  { owner: "JSON", member: "stringify", operationKind: "call", lane: "json", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::json_stringify", argModes: ["ref"] }, result: { ref: "option-of-string" }, params: [{ ref: "jsvalue" }] } },
+  { owner: "JSON", member: "stringify", operationKind: "call", lane: "json", variant: "value-only", fallible: true, jsonValueSourceArgumentIndexes: [0], shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::json_stringify", argModes: ["ref"] }, result: { ref: "option-of-string" }, params: [{ ref: "jsvalue" }] } },
 
   ...consoleRows.map(({ member, path }) => ({
     owner: "Console",
@@ -661,7 +676,7 @@ export const jsOperationRows = defineJsOperationRows([
   // Date lane.
   { owner: "DateConstructor", member: "parse", operationKind: "call", lane: "date", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::JsDate::parse", argModes: ["ref"] }, result: { ref: "float64" }, params: [{ ref: "string" }] } },
   ...dateUtcRows(),
-  { owner: "Date", member: "toJSON", operationKind: "call", lane: "date", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "to_json" }, result: { ref: "string" } } },
+  { owner: "Date", member: "toJSON", operationKind: "call", lane: "date", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "to_json" }, result: { ref: "option-of-string" }, sourceResult: { ref: "string" }, sourceAbsence: "null" } },
   { owner: "Date", member: "valueOf", operationKind: "call", lane: "date", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "get_time" }, result: { ref: "float64" } } },
   { owner: "DateConstructor", member: "now", operationKind: "call", lane: "date", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::JsDate::now" }, result: { ref: "float64" } } },
   { owner: "Date", member: "toISOString", operationKind: "call", lane: "date", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "to_iso_string" }, result: { ref: "string" } } },

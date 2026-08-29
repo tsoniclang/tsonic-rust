@@ -42,7 +42,12 @@ export function selectStructuralSourceProperty(
   if (receiverCarrier === undefined) {
     return undefined;
   }
-  const selectedDeclarations = selectedPropertyDeclarations(request, context, options);
+  const selectedDeclarations = selectedPropertyDeclarations(
+    request,
+    receiverCarrier,
+    context,
+    options,
+  );
   const sourceUnion = options.sourceTypes.sourceUnionForCarrier(receiverCarrier);
   if (sourceUnion !== undefined) {
     if (selectedDeclarations === undefined || selectedDeclarations.length === 0) {
@@ -252,24 +257,38 @@ function structuralFieldOperationId(
 
 function selectedPropertyDeclarations(
   request: RustCheckedPropertySelectionInput,
+  receiverCarrier: TargetTypeRef,
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): readonly Node[] | undefined {
   const declarations: Node[] = [];
-  if (isProjectSourceDeclaration(context, request.sourceSelectedDeclaration)) {
+  if (request.sourceSelectedDeclaration !== undefined &&
+    (isProjectSourceDeclaration(context, request.sourceSelectedDeclaration) ||
+      options.sourceTypes.structuralFieldProjectionForDeclaration(
+        request.sourceSelectedDeclaration,
+        receiverCarrier,
+      ) !== undefined)) {
     declarations.push(request.sourceSelectedDeclaration!);
   }
   if (request.sourceSelectedSymbol !== undefined) {
-    const selected = options.sourceTypes.declarationsForSelectedSymbol(
+    const semanticDeclarations = context.currentSemantics.declarations
+      .symbolDeclarations(request.sourceSelectedSymbol);
+    for (const declaration of semanticDeclarations) {
+      if ((isProjectSourceDeclaration(context, declaration) ||
+          options.sourceTypes.structuralFieldProjectionForDeclaration(
+            declaration,
+            receiverCarrier,
+          ) !== undefined) &&
+        !declarations.includes(declaration)) {
+        declarations.push(declaration);
+      }
+    }
+    const registeredDeclarations = options.sourceTypes.declarationsForSelectedSymbol(
       request.sourceSelectedSymbol,
     );
-    if (selected === undefined) {
-      if (declarations.length === 0) {
-        return undefined;
-      }
-    } else {
-      for (const declaration of selected) {
-        if (isProjectSourceDeclaration(context, declaration) && !declarations.includes(declaration)) {
+    if (registeredDeclarations !== undefined) {
+      for (const declaration of registeredDeclarations) {
+        if (!declarations.includes(declaration)) {
           declarations.push(declaration);
         }
       }

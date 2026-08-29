@@ -1,6 +1,7 @@
 import {
   rustFixedArrayTargetType,
   rustNamedTargetType,
+  rustNativeScalarTargetId,
   rustNeverTargetType,
   rustOptionTargetId,
   rustSourcePrimitiveTargetType,
@@ -86,6 +87,14 @@ export function sourceTypeFor(
     case "primitive": {
       if (type.name === "str") return { kind: "string" };
       if (type.name === "never") return { kind: "never" };
+      if (type.name === "char") {
+        return importedSourceType(
+          context,
+          rustTypesModule,
+          rustSourceTypeExportIds.scalar,
+          [],
+        );
+      }
       const primitive = sourcePrimitiveByRustName.get(type.name);
       if (primitive === undefined) {
         throw new Error(`Rust primitive '${type.name}' has no source primitive contract.`);
@@ -186,18 +195,8 @@ export function sourceTypeFor(
       if (bounds.length === 0) {
         throw new Error("Rust opaque type has no exact principal source bound.");
       }
-      const captures = type.captures.map((capture) => {
-        if (capture.kind !== "lifetime") {
-          throw new Error(
-            "Rust opaque type captures outside the approved lifetime-only contract.",
-          );
-        }
-        const selected = sourceLifetimeFor(capture.lifetime, context);
-        if (selected === undefined) {
-          throw new Error("Rust opaque type cannot precisely capture an elided lifetime.");
-        }
-        return selected;
-      });
+      const captures = type.captures.map((capture) =>
+        sourceGenericArgumentFor(capture, context, position));
       return importedSourceType(
         context,
         rustTypesModule,
@@ -287,6 +286,10 @@ export function targetTypeFor(
     case "primitive": {
       if (type.name === "str") return rustStringTargetType();
       if (type.name === "never") return rustNeverTargetType();
+      if (type.name === "char") {
+        recordCarrierPath(context.carrierPaths, rustNativeScalarTargetId, "char");
+        return { kind: "target-named", id: rustNativeScalarTargetId };
+      }
       const primitive = sourcePrimitiveByRustName.get(type.name);
       if (primitive === undefined) {
         throw new Error(`Rust primitive '${type.name}' has no target carrier contract.`);
@@ -362,18 +365,8 @@ export function targetTypeFor(
     }
     case "opaque": {
       const outlives = requireTargetLifetimes(type.outlives, context, "opaque outlives");
-      const captures = type.captures.map((capture) => {
-        if (capture.kind !== "lifetime") {
-          throw new Error(
-            "Rust opaque type captures outside the approved lifetime-only contract.",
-          );
-        }
-        const selected = targetLifetimeFor(capture.lifetime, context);
-        if (selected === undefined) {
-          throw new Error("Rust opaque type cannot precisely capture an elided lifetime.");
-        }
-        return selected;
-      });
+      const captures = type.captures.map((capture) =>
+        targetGenericArgumentFor(capture, context, position, pathResolution));
       return {
         kind: "impl-trait",
         id: type.identity.itemId,

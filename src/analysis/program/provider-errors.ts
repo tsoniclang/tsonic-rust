@@ -28,6 +28,11 @@ export function analyzeRustProviderErrorCarriers(
       operation.abi.effects.errorBoundary === "provider-native") {
       add(operation.abi.effects.errorCarrier);
     }
+    if (operation?.kind === "provider-operation" &&
+      operation.abi.target.form === "source-module-construction" &&
+      operation.abi.target.bootstrap.errorBoundary === "provider-native") {
+      add(operation.abi.target.bootstrap.errorCarrier);
+    }
     const future = facts.getFact(node, rustFutureValueFactKey);
     if (future?.errorBoundary === "provider-native") {
       add(future.errorCarrier);

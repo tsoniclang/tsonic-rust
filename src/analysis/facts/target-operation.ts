@@ -13,7 +13,10 @@ import { rustValueConversionIsFallible } from "../../target-model/conversions/co
 export function rustTargetOperationText(fact: RustTargetOperationFact): string {
   if (fact.kind === "provider-operation") {
     const target = fact.abi.target;
-    if (target.form === "call" || target.form === "call-c-variadic" || target.form === "path" || target.form === "static" || target.form === "free-call" ||
+    if (target.form === "call" || target.form === "source-module-construction" ||
+      target.form === "call-c-variadic" || target.form === "path" ||
+      target.form === "reference-path" || target.form === "struct-variant" ||
+      target.form === "expression-macro" || target.form === "static" || target.form === "free-call" ||
       target.form === "call-str-slice" || target.form === "free-call-str-slice" ||
       target.form === "call-value-slice" || target.form === "call-value-array") {
       return target.path;

@@ -18,6 +18,22 @@ pub enum StructuredMode {
     Named { value: i32 },
 }
 
+pub fn structured_mode_value(mode: StructuredMode) -> i32 {
+    match mode {
+        StructuredMode::Named { value } => value,
+    }
+}
+
+pub struct NonCloneStatic {
+    pub value: i32,
+}
+
+pub static NON_CLONE_STATIC: NonCloneStatic = NonCloneStatic { value: 37 };
+
+pub fn non_clone_static_value(value: &NonCloneStatic) -> i32 {
+    value.value
+}
+
 pub static GLOBAL_COUNT: i32 = 1;
 pub static mut MUTABLE_COUNT: i32 = 1;
 
@@ -62,6 +78,10 @@ impl<T> Widget<T> {
     }
 }
 
+pub fn pin_widget(value: &mut Widget<i32>) -> Pin<&mut Widget<i32>> {
+    Pin::new(value)
+}
+
 pub trait Family {
     type Item<T>;
 }
@@ -74,6 +94,33 @@ pub trait LendingFamily {
     type Item<'a>
     where
         Self: 'a;
+}
+
+pub trait MixedFamily {
+    type Item<'a, T, const N: usize>
+    where
+        Self: 'a,
+        T: 'a;
+}
+
+pub struct MixedValue;
+
+impl MixedFamily for MixedValue {
+    type Item<'a, T, const N: usize> = &'a [T; N]
+    where
+        T: 'a;
+}
+
+pub fn mixed_item<'a, T, const N: usize>(
+    value: &'a [T; N],
+) -> <MixedValue as MixedFamily>::Item<'a, T, N> {
+    value
+}
+
+pub fn first_mixed_item<'a, T: Copy, const N: usize>(
+    value: <MixedValue as MixedFamily>::Item<'a, T, N>,
+) -> T {
+    value[0]
 }
 
 pub trait View {
@@ -183,6 +230,20 @@ pub fn inspect_view(value: &(dyn View + '_)) -> i32 {
 
 pub fn opaque_borrow<'a>(value: &'a i32) -> impl Copy + use<'a> {
     value
+}
+
+pub fn opaque_mixed<'a, T: Copy, const N: usize>(
+    value: &'a T,
+) -> impl Copy + use<'a, T, N> {
+    *value
+}
+
+pub fn scalar_smile() -> char {
+    '\u{1F600}'
+}
+
+pub fn scalar_code(value: char) -> u32 {
+    value as u32
 }
 
 pub trait Metric<T> {

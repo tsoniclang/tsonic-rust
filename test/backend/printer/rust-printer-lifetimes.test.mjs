@@ -58,7 +58,7 @@ test("Rust type printer preserves omitted, named, static, placeholder, and neste
   );
 });
 
-test("Rust type printer preserves higher-ranked, trait-object, opaque, and associated lifetime contracts", () => {
+test("Rust type printer preserves higher-ranked, trait-object, mixed opaque, and associated contracts", () => {
   const bound = lifetimeParameter("value");
   const borrowedI32 = {
     kind: "reference",
@@ -93,9 +93,13 @@ test("Rust type printer preserves higher-ranked, trait-object, opaque, and assoc
       kind: "impl-trait",
       bounds: [{ kind: "trait-type", reference: traitReference("crate::View") }],
       outlives: [namedLifetime("a")],
-      captures: [namedLifetime("a"), namedLifetime("b")],
+      captures: [
+        { kind: "lifetime", lifetime: namedLifetime("a") },
+        { kind: "type", type: { kind: "named", path: "T" } },
+        { kind: "const", value: { kind: "path", path: "N" } },
+      ],
     }),
-    "impl crate::View + 'a + use<'a, 'b>",
+    "impl crate::View + 'a + use<'a, T, N>",
   );
   assert.equal(
     printRustType({
@@ -103,9 +107,13 @@ test("Rust type printer preserves higher-ranked, trait-object, opaque, and assoc
       owner: { kind: "named", path: "T" },
       trait: { kind: "named", path: "crate::Family" },
       member: "Item",
-      genericArguments: [{ kind: "lifetime", lifetime: namedLifetime("a") }],
+      genericArguments: [
+        { kind: "lifetime", lifetime: namedLifetime("a") },
+        { kind: "type", type: { kind: "named", path: "U" } },
+        { kind: "const", value: { kind: "path", path: "N" } },
+      ],
     }),
-    "<T as crate::Family>::Item<'a>",
+    "<T as crate::Family>::Item<'a, U, N>",
   );
 });
 

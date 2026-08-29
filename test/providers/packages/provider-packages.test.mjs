@@ -298,6 +298,87 @@ test("provider paths and named carriers materialize before facts reach the backe
   });
 });
 
+test("every path-bearing provider operation materializes its declared crate alias", () => {
+  const functionExport = (name) => ({
+    id: `acme.materialized::${name}`,
+    name,
+    kind: "function",
+    signatures: [{
+      id: `acme.materialized::${name}()`,
+      name,
+      parameters: [],
+      returnType: { kind: "source-primitive", name: "int32" },
+    }],
+  });
+  const providerPackage = createRustProviderPackage({
+    id: "acme-materialized-path-forms",
+    displayName: "Acme materialized path forms",
+    version: "1.0.0",
+    modules: [{
+      moduleSpecifier: "@acme/materialized-path-forms",
+      providerModuleId: "acme.materialized.path.forms",
+      exports: [
+        {
+          id: "acme.materialized::reference",
+          name: "reference",
+          kind: "value",
+          type: { kind: "source-primitive", name: "int32" },
+        },
+        functionExport("variant"),
+        functionExport("parentheses"),
+        functionExport("brackets"),
+        functionExport("braces"),
+      ],
+    }],
+    operations: [
+      {
+        exportId: "acme.materialized::reference",
+        operationKind: "property",
+        target: { form: "reference-path", path: "api::REFERENCE", mutable: false },
+        resultCarrier: {
+          kind: "reference",
+          referent: { kind: "source-primitive", name: "int32" },
+          mutable: false,
+          lifetime: { kind: "static" },
+        },
+      },
+      {
+        exportId: "acme.materialized::variant",
+        operationKind: "method",
+        target: { form: "struct-variant", path: "api::Value::Variant", fields: [] },
+        resultCarrier: { kind: "source-primitive", name: "int32" },
+      },
+      ...["parentheses", "brackets", "braces"].map((delimiter) => ({
+        exportId: `acme.materialized::${delimiter}`,
+        operationKind: "method",
+        target: { form: "expression-macro", path: "api::value", delimiter },
+        resultCarrier: { kind: "source-primitive", name: "int32" },
+      })),
+    ],
+    aliasImports: [{ alias: "api", path: "acme_runtime::api" }],
+    crates: [],
+  });
+
+  const operations = new Map(
+    collectRustProviderSemantics(providerContext([providerPackage])).operations
+      .map((operation) => [operation.exportId, operation]),
+  );
+  assert.equal(
+    operations.get("acme.materialized::reference")?.target.path,
+    "acme_runtime::api::REFERENCE",
+  );
+  assert.equal(
+    operations.get("acme.materialized::variant")?.target.path,
+    "acme_runtime::api::Value::Variant",
+  );
+  for (const delimiter of ["parentheses", "brackets", "braces"]) {
+    assert.equal(
+      operations.get(`acme.materialized::${delimiter}`)?.target.path,
+      "acme_runtime::api::value",
+    );
+  }
+});
+
 test("conflicting provider carrier paths fail before operation facts are recorded", () => {
   const packageWithPath = (id, moduleSpecifier, path) => createRustProviderPackage({
     id,

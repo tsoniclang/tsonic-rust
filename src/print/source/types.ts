@@ -56,7 +56,7 @@ export function printRustType(type: RustType): string {
         ...type.outlives.map(printRustLifetime),
         ...(type.captures.length === 0
           ? []
-          : [`use<${type.captures.map(printRustLifetime).join(", ")}>`]),
+          : [`use<${type.captures.map(printRustGenericArgument).join(", ")}>`]),
       ];
       return `impl ${bounds.join(" + ")}`;
     }

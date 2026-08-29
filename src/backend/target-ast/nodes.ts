@@ -137,7 +137,7 @@ export type RustType =
       readonly kind: "impl-trait";
       readonly bounds: readonly RustTypeBound[];
       readonly outlives: readonly RustLifetime[];
-      readonly captures: readonly RustLifetime[];
+      readonly captures: readonly RustGenericArgument[];
     }
   | {
       readonly kind: "reference";
@@ -198,6 +198,12 @@ export type RustExpr =
   | { readonly kind: "assignment"; readonly operator: RustAssignmentOperator; readonly target: RustExpr; readonly value: RustExpr }
   | { readonly kind: "call"; readonly path: string; readonly genericArguments?: readonly RustCallGenericArgument[]; readonly args: readonly RustExpr[] }
   | { readonly kind: "invoke"; readonly callee: RustExpr; readonly args: readonly RustExpr[] }
+  | {
+      readonly kind: "macro-invocation";
+      readonly path: string;
+      readonly delimiter: "parentheses" | "brackets" | "braces";
+      readonly args: readonly RustExpr[];
+    }
   | { readonly kind: "associated-value"; readonly owner: RustType; readonly trait?: RustType; readonly name: string }
   | { readonly kind: "associated-call"; readonly owner: RustType; readonly trait?: RustType; readonly method: string; readonly genericArguments?: readonly RustCallGenericArgument[]; readonly args: readonly RustExpr[] }
   | {
@@ -382,6 +388,14 @@ export interface RustImplFunction {
   readonly body: RustBlock;
 }
 
+export interface RustImplConstant {
+  readonly name: string;
+  readonly visibility: RustVisibility;
+  readonly attrs?: readonly string[];
+  readonly type: RustType;
+  readonly value: RustExpr;
+}
+
 export interface RustTraitFunction {
   readonly name: string;
   readonly attrs?: readonly string[];
@@ -427,7 +441,7 @@ export type RustItem =
   | { readonly kind: "mod-decl"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly string[] }
   | { readonly kind: "struct"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly string[]; readonly derives: readonly string[]; readonly generics: RustGenerics; readonly fields: readonly RustStructField[] }
   | { readonly kind: "trait"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly string[]; readonly generics: RustGenerics; readonly superTraits?: readonly RustType[]; readonly functions: readonly RustTraitFunction[] }
-  | { readonly kind: "impl"; readonly generics: RustGenerics; readonly trait?: RustType; readonly target: RustType; readonly functions: readonly RustImplFunction[] }
+  | { readonly kind: "impl"; readonly generics: RustGenerics; readonly trait?: RustType; readonly target: RustType; readonly constants?: readonly RustImplConstant[]; readonly functions: readonly RustImplFunction[] }
   | { readonly kind: "enum"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly string[]; readonly derives: readonly string[]; readonly generics: RustGenerics; readonly variants: readonly { readonly name: string; readonly discriminant?: string; readonly fields?: readonly RustType[] }[] }
   | { readonly kind: "type-alias"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly string[]; readonly generics: RustGenerics; readonly target: RustType }
   | { readonly kind: "use"; readonly path: string; readonly alias?: string; readonly visibility?: RustVisibility };

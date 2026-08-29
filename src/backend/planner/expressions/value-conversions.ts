@@ -1,5 +1,7 @@
 import {
+  rustOptionTargetType,
   rustCallableProtocol,
+  rustStructuralObjectCarrierValue,
   rustSourceUnionCarrierValue,
 } from "../../../target-model/types/index.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
@@ -16,8 +18,12 @@ import { rustEffectiveValueCarrier } from "../../../analysis/facts/value-carrier
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import { applyRustArgumentMode } from "./input-shaping.js";
+import {
+  invokeRustStructuralObjectMethod,
+  readRustStoredObjectField,
+} from "../objects/project-storage.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustValueConversion } from "../../../analysis/facts/keys.js";
 import type { RustFinalizedValueConversion } from "../../../analysis/facts/finalized-operation-abi.js";
@@ -110,6 +116,121 @@ export function lowerRustValueConversion(
       return { kind: "owned-string-from-borrowed-str", expression: source };
     case "copy-from-reference":
       return { kind: "dereference", pointer: source };
+    case "js-value-from-option": {
+      registerAliasFromPath(context, "js_abi::JsValue");
+      const valueName = allocateConversionName(context, node, "js_value");
+      const converted = lowerNestedRustValueConversion(
+        contract.elementConversion,
+        { kind: "path", path: valueName },
+        context,
+        node,
+      );
+      return converted === undefined
+        ? undefined
+        : {
+            kind: "method-call",
+            receiver: {
+              kind: "method-call",
+              receiver: source,
+              method: "map",
+              args: [{
+                kind: "closure",
+                params: [{ name: valueName, byRefCopy: false }],
+                body: converted,
+              }],
+            },
+            method: "unwrap_or",
+            args: [{ kind: "path", path: "js_abi::JsValue::Undefined" }],
+          };
+    }
+    case "js-value-from-array": {
+      registerAliasFromPath(context, "js_abi::js_value_from_array");
+      const valueName = allocateConversionName(context, node, "array_value");
+      const converted = lowerNestedRustValueConversion(
+        contract.elementConversion,
+        { kind: "path", path: valueName },
+        context,
+        node,
+      );
+      return converted === undefined
+        ? undefined
+        : {
+            kind: "call",
+            path: "js_abi::js_value_from_array",
+            args: [source, {
+              kind: "closure",
+              params: [{ name: valueName, byRefCopy: false }],
+              body: converted,
+          }],
+        };
+    }
+    case "js-value-from-source-union": {
+      const union = rustSourceUnionCarrierValue(contract.source);
+      const typePath = union === undefined ? undefined : sourceTypePath(context, union);
+      if (union === undefined || typePath === undefined ||
+        union.variants.length !== contract.variants.length) {
+        context.diagnostics.push(missingFactDiagnostic(
+          diagnosticInput(context, node ?? context.sourceFile),
+          "rust.backend.js-value-source-union",
+          "Closed JavaScript-value projection has no exact emitted source-union contract.",
+        ));
+        return undefined;
+      }
+      const names = context.syntheticNames ?? createRustSyntheticNameState(
+        context.input.program.source.ast,
+        node ?? context.sourceFile,
+        [],
+      );
+      const arms: { readonly pattern: RustPattern; readonly expression: RustExpr }[] = [];
+      for (const [index, variant] of contract.variants.entries()) {
+        const sourceVariant = union.variants[index];
+        if (sourceVariant === undefined || sourceVariant.name !== variant.name ||
+          !rustTargetTypeRefEquals(sourceVariant.carrier, variant.carrier)) {
+          context.diagnostics.push(missingFactDiagnostic(
+            diagnosticInput(context, node ?? context.sourceFile),
+            "rust.backend.js-value-source-union",
+            "Closed JavaScript-value projection conflicts with its finalized source-union variant order.",
+          ));
+          return undefined;
+        }
+        const valueName = allocateRustSyntheticName(
+          names,
+          `json_${variant.name}_value`,
+        );
+        const converted = lowerNestedRustValueConversion(
+          variant.conversion,
+          { kind: "path", path: valueName },
+          context,
+          node,
+        );
+        if (converted === undefined) {
+          return undefined;
+        }
+        arms.push({
+          pattern: {
+            kind: "tuple-variant",
+            path: `${typePath}::${variant.name}`,
+            elements: [{ kind: "binding", name: valueName }],
+          },
+          expression: converted,
+        });
+      }
+      return { kind: "match", expression: source, arms };
+    }
+    case "js-value-from-structural-to-json":
+      return lowerStructuralToJsonValueConversion(
+        contract,
+        source,
+        context,
+        node,
+      );
+    case "js-value-from-structural-object":
+      return lowerStructuralObjectJsValueConversion(
+        contract,
+        source,
+        context,
+        node,
+      );
     case "js-argument-vector-callback": {
       const activeErrorType = contract.lane === "native"
         ? rustActiveErrorType(context)
@@ -254,6 +375,246 @@ export function lowerRustValueConversion(
         : mapped;
     }
   }
+}
+
+function lowerStructuralToJsonValueConversion(
+  contract: Extract<
+    import("../../../target-model/conversions/contracts.js").RustValueConversionContract,
+    { readonly lowering: "js-value-from-structural-to-json" }
+  >,
+  source: RustExpr,
+  context: RustPlanContext,
+  node: Node | undefined,
+): RustExpr | undefined {
+  const structural = rustStructuralObjectCarrierValue(contract.source);
+  const field = structural?.fields[contract.storageIndex];
+  const plannedField = context.input.program.structuralShapes.field(
+    contract.source,
+    contract.storageIndex,
+  );
+  if (field === undefined || field.method !== true || field.sourceName !== "toJSON" ||
+    field.presence !== "required" || plannedField === undefined ||
+    plannedField.method !== true || plannedField.sourceName !== "toJSON") {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node ?? context.sourceFile),
+      "rust.backend.js-value-to-json",
+      "Selected toJSON projection has no exact emitted structural method contract.",
+    ));
+    return undefined;
+  }
+  const sourceName = allocateConversionName(context, node, "json_source");
+  const keyName = allocateConversionName(
+    context,
+    node,
+    contract.passesPropertyKey ? "json_property_key" : "_json_property_key",
+  );
+  const receiver: RustExpr = {
+    kind: "method-call",
+    receiver: { kind: "path", path: sourceName },
+    method: "clone",
+    args: [],
+  };
+  const invocation = invokeRustStructuralObjectMethod(
+    contract.source,
+    receiver,
+    contract.storageIndex,
+    contract.passesPropertyKey ? [{ kind: "path", path: keyName }] : [],
+    contract.resultCarrier,
+    context,
+  );
+  if (invocation === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node ?? context.sourceFile),
+      "rust.backend.js-value-to-json-invocation",
+      "Selected toJSON projection cannot be invoked through its exact structural method storage.",
+    ));
+    return undefined;
+  }
+  const converted = lowerNestedRustValueConversion(
+    contract.resultConversion,
+    invocation,
+    context,
+    node,
+  );
+  if (converted === undefined) {
+    return undefined;
+  }
+  registerAliasFromPath(context, "js_abi::js_value_from_json_projection");
+  return {
+    kind: "call",
+    path: "js_abi::js_value_from_json_projection",
+    args: [source, {
+      kind: "closure",
+      move: true,
+      params: [
+        { name: sourceName, byRefCopy: false },
+        { name: keyName, byRefCopy: false },
+      ],
+      body: {
+        kind: "call",
+        path: "Ok",
+        args: [converted],
+      },
+    }],
+  };
+}
+
+function lowerNestedRustValueConversion(
+  contract: import("../../../target-model/conversions/contracts.js").RustValueConversionContract,
+  source: RustExpr,
+  context: RustPlanContext,
+  node: Node | undefined,
+): RustExpr | undefined {
+  return lowerRustValueConversion(
+    contract,
+    contract.sourceMode === "ref"
+      ? { kind: "reference", expr: source }
+      : source,
+    context,
+    node,
+  );
+}
+
+function lowerStructuralObjectJsValueConversion(
+  contract: Extract<
+    import("../../../target-model/conversions/contracts.js").RustValueConversionContract,
+    { readonly lowering: "js-value-from-structural-object" }
+  >,
+  source: RustExpr,
+  context: RustPlanContext,
+  node: Node | undefined,
+): RustExpr | undefined {
+  const structural = rustStructuralObjectCarrierValue(contract.source);
+  const definition = context.input.program.structuralShapes.definitionForCarrier(
+    contract.source,
+  );
+  if (structural === undefined || definition === undefined ||
+    structural.fields.length !== definition.fields.length ||
+    structural.fields.filter((field) => field.method !== true).length !==
+      contract.fields.length) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node ?? context.sourceFile),
+      "rust.backend.js-value-structural-shape",
+      "Closed JavaScript-value projection conflicts with the finalized structural object shape.",
+    ));
+    return undefined;
+  }
+  const sourceName = allocateConversionName(context, node, "js_object_source");
+  const sourcePath = { kind: "path" as const, path: sourceName };
+  const entries: RustExpr[] = [];
+  for (const field of contract.fields) {
+    const structuralField = structural.fields[field.storageIndex];
+    const plannedField = definition.fields[field.storageIndex];
+    if (structuralField === undefined || plannedField === undefined ||
+      structuralField.sourceName !== field.sourceName ||
+      plannedField.sourceName !== field.sourceName ||
+      plannedField.storage !== "stored" || plannedField.method === true ||
+      structuralField.accessor !== undefined || structuralField.method === true) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, node ?? context.sourceFile),
+        "rust.backend.js-value-structural-field",
+        `Closed JavaScript-value projection field '${field.sourceName}' has no exact stored-field plan.`,
+      ));
+      return undefined;
+    }
+    const storedCarrier = structuralField.type;
+    const stored = readRustStoredObjectField(
+      "object-handle",
+      contract.source,
+      sourcePath,
+      field.storageIndex,
+      storedCarrier,
+      context,
+    );
+    if (stored === undefined) {
+      return undefined;
+    }
+    if (field.presence === "optional") {
+      const expectedStorage = rustOptionTargetType(field.sourceCarrier);
+      if (!rustTargetTypeRefEquals(storedCarrier, expectedStorage)) {
+        context.diagnostics.push(missingFactDiagnostic(
+          diagnosticInput(context, node ?? context.sourceFile),
+          "rust.backend.js-value-optional-field",
+          `Optional JavaScript-value projection field '${field.sourceName}' has no exact optional storage carrier.`,
+        ));
+        return undefined;
+      }
+      const valueName = allocateConversionName(
+        context,
+        node,
+        `${field.sourceName}_value`,
+      );
+      const converted = lowerNestedRustValueConversion(
+        field.conversion,
+        { kind: "path", path: valueName },
+        context,
+        node,
+      );
+      if (converted === undefined) {
+        return undefined;
+      }
+      entries.push({
+        kind: "method-call",
+        receiver: stored,
+        method: "map",
+        args: [{
+          kind: "closure",
+          params: [{ name: valueName, byRefCopy: false }],
+          body: {
+            kind: "tuple-literal",
+            elements: [
+              { kind: "str-literal", value: field.sourceName },
+              converted,
+            ],
+          },
+        }],
+      });
+      continue;
+    }
+    const converted = lowerNestedRustValueConversion(
+      field.conversion,
+      stored,
+      context,
+      node,
+    );
+    if (converted === undefined) {
+      return undefined;
+    }
+    entries.push({
+      kind: "call",
+      path: "Some",
+      args: [{
+        kind: "tuple-literal",
+        elements: [
+          { kind: "str-literal", value: field.sourceName },
+          converted,
+        ],
+      }],
+    });
+  }
+  registerAliasFromPath(context, "js_abi::js_value_from_optional_pairs");
+  return {
+    kind: "block",
+    bindings: [{ name: sourceName, value: source }],
+    value: {
+      kind: "call",
+      path: "js_abi::js_value_from_optional_pairs",
+      args: [{ kind: "vec-literal", elements: entries }],
+    },
+  };
+}
+
+function allocateConversionName(
+  context: RustPlanContext,
+  node: Node | undefined,
+  preferred: string,
+): string {
+  const names = context.syntheticNames ?? createRustSyntheticNameState(
+    context.input.program.source.ast,
+    node ?? context.sourceFile,
+    [],
+  );
+  return allocateRustSyntheticName(names, preferred);
 }
 
 export function applyFinalizedValueConversion(

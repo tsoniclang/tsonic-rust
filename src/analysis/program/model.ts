@@ -37,6 +37,7 @@ import type {
   RustProviderSemantics,
 } from "../../providers/packages/model.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
+import type { RustSourceModuleConstructionIndex } from "../source-modules/index.js";
 
 export interface RustTargetAnalysisRequest {
   readonly input: TargetCompileInput;
@@ -79,6 +80,7 @@ export interface RustTargetProgram {
   readonly sourcePackageFacades: RustSourcePackageFacadeClassifications;
   readonly sourcePackageComponents: RustSourcePackageComponentClassifications;
   readonly countedLoops: RustCountedLoopRepresentationPlan;
+  readonly sourceModuleConstructions: RustSourceModuleConstructionIndex;
 }
 
 export type AnalyzeRustTargetProgramResult = TargetStageResult<RustTargetProgram>;

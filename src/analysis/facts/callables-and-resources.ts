@@ -36,13 +36,37 @@ export const rustTypeAliasDeclarationFactKey: RustPlanKey<RustTypeAliasDeclarati
       right.kind === "native-alias" && rustTargetTypeRefEquals(left.target, right.target)) &&
     (left.kind === "native-alias" || closedMetadataEquals(left, right)));
 
-export interface RustAsyncFunctionFact {
-  readonly isAsync: true;
-  readonly outputCarrier: TargetTypeRef;
-}
+export type RustSuspendedCallableStorage =
+  | { readonly kind: "static" }
+  | { readonly kind: "receiver" }
+  | { readonly kind: "lifetime"; readonly lifetime: RustLifetimeRef };
+
+export type RustAsyncFunctionFact =
+  | {
+      readonly kind: "native-future";
+      readonly isAsync: true;
+      readonly futureCarrier: TargetTypeRef;
+      readonly outputCarrier: TargetTypeRef;
+    }
+  | {
+      readonly kind: "js-promise";
+      readonly isAsync: true;
+      readonly futureCarrier: TargetTypeRef;
+      readonly outputCarrier: TargetTypeRef;
+      readonly capturedParameters: readonly Node[];
+      readonly storage: RustSuspendedCallableStorage;
+    };
 
 export const rustAsyncFunctionFactKey: RustPlanKey<RustAsyncFunctionFact> =
-  defineRustPlanKey("asyncFunction", closedMetadataEquals);
+  defineRustPlanKey("asyncFunction", (left, right) =>
+    left.kind === right.kind &&
+    rustTargetTypeRefEquals(left.futureCarrier, right.futureCarrier) &&
+    rustTargetTypeRefEquals(left.outputCarrier, right.outputCarrier) &&
+    (left.kind === "native-future" || right.kind === "native-future" ||
+      left.capturedParameters.length === right.capturedParameters.length &&
+      left.capturedParameters.every((parameter, index) =>
+        parameter === right.capturedParameters[index]) &&
+      suspendedCallableStorageEquals(left.storage, right.storage)));
 
 export interface RustGeneratorFact {
   readonly kind: "sync" | "async";
@@ -51,10 +75,7 @@ export interface RustGeneratorFact {
   readonly returnType: TargetTypeRef;
   readonly nextType: TargetTypeRef;
   readonly capturedParameters: readonly Node[];
-  readonly storage:
-    | { readonly kind: "static" }
-    | { readonly kind: "receiver" }
-    | { readonly kind: "lifetime"; readonly lifetime: RustLifetimeRef };
+  readonly storage: RustSuspendedCallableStorage;
 }
 
 export const rustGeneratorFactKey: RustPlanKey<RustGeneratorFact> =
@@ -68,9 +89,17 @@ export const rustGeneratorFactKey: RustPlanKey<RustGeneratorFact> =
     left.capturedParameters.every((parameter, index) =>
       parameter === right.capturedParameters[index]) &&
     left.storage.kind === right.storage.kind &&
-    (left.storage.kind !== "lifetime" ||
-      right.storage.kind === "lifetime" &&
-      rustLifetimesEqual(left.storage.lifetime, right.storage.lifetime)));
+    suspendedCallableStorageEquals(left.storage, right.storage));
+
+function suspendedCallableStorageEquals(
+  left: RustSuspendedCallableStorage,
+  right: RustSuspendedCallableStorage,
+): boolean {
+  return left.kind === right.kind &&
+    (left.kind !== "lifetime" ||
+      right.kind === "lifetime" &&
+      rustLifetimesEqual(left.lifetime, right.lifetime));
+}
 
 export interface RustYieldFact {
   readonly generatorDeclaration: Node;

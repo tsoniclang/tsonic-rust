@@ -160,7 +160,10 @@ export function projectVariants(
       }));
       continue;
     }
-    const parameters = variant.fields.map((field, index): ProviderParameterDeclaration =>
+    const fieldTypes = variant.kind === "struct"
+      ? variant.fields.map((field) => field.type)
+      : variant.fields;
+    const parameters = fieldTypes.map((field, index): ProviderParameterDeclaration =>
       Object.freeze({
         name: `value${index}`,
         type: sourceTypeFor(field, context, "parameter"),
@@ -185,11 +188,16 @@ export function projectVariants(
       signatureId,
       operationKind: "method",
       target: {
-        form: "call",
+        ...(variant.kind === "struct"
+          ? {
+              form: "struct-variant" as const,
+              fields: Object.freeze(variant.fields.map((field) => field.name)),
+            }
+          : { form: "call" as const }),
         path: [...selectedTargetPath, variant.name].join("::"),
       },
       resultCarrier: carrier,
-      parameterCarriers: Object.freeze(variant.fields.map((field) =>
+      parameterCarriers: Object.freeze(fieldTypes.map((field) =>
         targetTypeFor(field, context, "parameter"))),
       ...(generics.length === 0 ? {} : { genericParameters: generics }),
       ...typeRequirements(typeParametersOf(exported.genericParameters), typeNames, context),

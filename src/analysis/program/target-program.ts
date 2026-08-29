@@ -33,6 +33,18 @@ import {
 import {
   analyzeRustCountedLoopRepresentations,
 } from "../control-flow/counted-loop-representations.js";
+import type { RustProviderBinaryEpilogueRow } from "../../providers/packages/model.js";
+import { analyzeRustSourceModuleConstructions } from "../source-modules/index.js";
+
+const rustJsTimerEpilogue: RustProviderBinaryEpilogueRow = Object.freeze({
+  id: "tsonic.rust.js.timers",
+  path: "tsonic_rust_js::abi::run_timers",
+  requiredCrate: "tsonic_rust_js",
+  isFallible: true,
+  errorBoundary: "target-runtime",
+  providerPackageId: "tsonic.rust.js-surface",
+  providerVersion: "1",
+});
 
 export function analyzeRustTargetProgram(
   request: RustTargetAnalysisRequest,
@@ -51,7 +63,9 @@ export function analyzeRustTargetProgram(
     return rejectedTargetStage(runtimeReferences.diagnostics);
   }
   const binaryEpilogues = analyzeRustBinaryEpilogues(
-    providerSemantics.binaryEpilogues,
+    jsEnabled
+      ? [...providerSemantics.binaryEpilogues, rustJsTimerEpilogue]
+      : providerSemantics.binaryEpilogues,
     runtimeReferences.plan.activeCrates,
   );
   const context = createRustAnalysisContext(
@@ -88,6 +102,22 @@ export function analyzeRustTargetProgram(
   );
   if (callableGenericRequirements.kind === "rejected") {
     return rejectedTargetStage(callableGenericRequirements.diagnostics);
+  }
+  const sourceModuleConstructions = analyzeRustSourceModuleConstructions({
+    source: context.source,
+    sourceFiles: context.sourceFiles,
+    facts,
+    outputType: configuration.outputType,
+  });
+  if (sourceModuleConstructions.issues.length > 0) {
+    return rejectedTargetStage(sourceModuleConstructions.issues.map((issue) => ({
+      code: issue.code,
+      category: "error" as const,
+      source: "tsonic-rust",
+      message: issue.message,
+      sourceNode: issue.node,
+      evidence: ["target.capability=rust.backend.source-module-construction"],
+    })));
   }
   const program: RustTargetProgram = Object.freeze({
     host: Object.freeze({
@@ -137,6 +167,7 @@ export function analyzeRustTargetProgram(
       navigation: context.source.navigation,
       facts,
     }),
+    sourceModuleConstructions: sourceModuleConstructions.index,
   });
   return resolvedTargetStage(program);
 }

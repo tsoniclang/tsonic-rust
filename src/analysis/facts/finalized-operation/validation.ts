@@ -15,7 +15,7 @@ import {
   isRustTargetTypeRef,
   rustTargetTypeRefEquals,
 } from "../../../target-model/types/equality.js";
-import { rustFutureTargetType, rustSliceRefTargetType } from "../../../target-model/types/index.js";
+import { rustFutureOutputCarrier, rustFutureTargetType, rustSliceRefTargetType } from "../../../target-model/types/index.js";
 import { rustProviderOperationFormAcceptsTargetGenericArguments, rustProviderOperationFormContractViolation } from "../../../policy/operations/forms.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import type { RustFinalizedOperationAbi, RustFinalizedOperationResult, RustFinalizedSourceArgument, RustFinalizedSourceArgumentRole, RustFinalizedSourceInput, RustFinalizedTargetInput, RustFinalizedValueConversion } from "./model.js";
@@ -149,9 +149,14 @@ export function validateRustFinalizedOperationAbi(candidate: unknown): candidate
     return false;
   }
   if (abi.result.kind === "sync") {
-    return abi.effects.awaiting === "not-applicable" &&
-      ((abi.effects.invocation === "infallible" && abi.effects.errorBoundary === "none") ||
-        (abi.effects.invocation === "fallible" && abi.effects.errorBoundary !== "none")) &&
+    const returnedFutureOutput = rustFutureOutputCarrier(abi.result.carrier);
+    const effectsValid = abi.effects.awaiting === "not-applicable"
+      ? (abi.effects.invocation === "infallible" && abi.effects.errorBoundary === "none") ||
+        (abi.effects.invocation === "fallible" && abi.effects.errorBoundary !== "none")
+      : abi.effects.invocation === "infallible" && returnedFutureOutput !== undefined &&
+        ((abi.effects.awaiting === "infallible" && abi.effects.errorBoundary === "none") ||
+          (abi.effects.awaiting === "fallible" && abi.effects.errorBoundary !== "none"));
+    return effectsValid &&
       finalizedConversionIsValid(abi.result.conversion) &&
       rustTargetTypeRefEquals(abi.result.rawCarrier, abi.result.conversion.sourceCarrier) &&
       rustTargetTypeRefEquals(abi.result.carrier, abi.result.conversion.targetCarrier);
@@ -308,6 +313,7 @@ function isFinalizedConversion(value: unknown): value is RustFinalizedValueConve
         projection === "native-string" || projection === "exact-string" ||
         projection === "value" || projection === "rest-values") &&
       typeof value.conversion.sourceFallible === "boolean") ||
+    isJsValueProjectionConversion(value.conversion) ||
     (value.conversion.kind === "option-some" &&
       hasExactKeys(value.conversion, ["kind", "element"]) &&
       isRustTargetTypeRef(value.conversion.element)) ||
@@ -348,7 +354,53 @@ function isNonOptionValueConversion(value: unknown): boolean {
       value.projections.every((projection) =>
         projection === "native-string" || projection === "exact-string" ||
         projection === "value" || projection === "rest-values") &&
-      typeof value.sourceFallible === "boolean");
+      typeof value.sourceFallible === "boolean") ||
+    isJsValueProjectionConversion(value);
+}
+
+function isJsValueProjectionConversion(value: Record<string, unknown>): boolean {
+  if (value.kind === "js-value-from-closed-carrier") {
+    return hasExactKeys(value, ["kind", "source"]) &&
+      isRustTargetTypeRef(value.source);
+  }
+  if (value.kind === "js-value-from-option" || value.kind === "js-value-from-array") {
+    return hasExactKeys(value, [
+      "kind", "source", "element", "elementConversion",
+    ]) && isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.element) &&
+      isNonOptionValueConversion(value.elementConversion);
+  }
+  if (value.kind === "js-value-from-source-union") {
+    return hasExactKeys(value, ["kind", "source", "variants"]) &&
+      isRustTargetTypeRef(value.source) && Array.isArray(value.variants) &&
+      value.variants.length > 0 && value.variants.every((variant) =>
+        isRecord(variant) && hasExactKeys(variant, [
+          "name", "carrier", "conversion",
+        ]) && typeof variant.name === "string" && variant.name.length > 0 &&
+        isRustTargetTypeRef(variant.carrier) &&
+        isNonOptionValueConversion(variant.conversion));
+  }
+  if (value.kind === "js-value-from-structural-to-json") {
+    return hasExactKeys(value, [
+      "kind", "source", "storageIndex", "resultCarrier", "passesPropertyKey",
+      "resultConversion",
+    ]) && isRustTargetTypeRef(value.source) &&
+      Number.isSafeInteger(value.storageIndex) && (value.storageIndex as number) >= 0 &&
+      isRustTargetTypeRef(value.resultCarrier) &&
+      typeof value.passesPropertyKey === "boolean" &&
+      isNonOptionValueConversion(value.resultConversion);
+  }
+  if (value.kind !== "js-value-from-structural-object") {
+    return false;
+  }
+  return hasExactKeys(value, ["kind", "source", "fields"]) &&
+    isRustTargetTypeRef(value.source) && Array.isArray(value.fields) &&
+    value.fields.every((field) => isRecord(field) && hasExactKeys(field, [
+      "sourceName", "storageIndex", "sourceCarrier", "presence", "conversion",
+    ]) && typeof field.sourceName === "string" && field.sourceName.length > 0 &&
+      Number.isSafeInteger(field.storageIndex) && (field.storageIndex as number) >= 0 &&
+      isRustTargetTypeRef(field.sourceCarrier) &&
+      (field.presence === "required" || field.presence === "optional") &&
+      isNonOptionValueConversion(field.conversion));
 }
 
 function isProviderConstant(value: unknown): value is RustProviderConstantArgument {

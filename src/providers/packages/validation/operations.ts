@@ -304,6 +304,11 @@ function validateProviderCallback(
 }
 
 function operationFormCarriers(form: RustProviderOperationForm): readonly TargetTypeRef[] {
+  if (form.form === "source-module-construction") {
+    return form.bootstrap.errorCarrier === undefined
+      ? []
+      : [form.bootstrap.errorCarrier];
+  }
   if (form.form === "call-value-slice" || form.form === "call-value-array" ||
     form.form === "receiver-value-array") {
     return [...form.leadingArguments.map((argument) => argument.carrier), form.elementCarrier];
@@ -334,6 +339,42 @@ function valueConversionCarriers(
   if (conversion.kind === "source-union-variant" || conversion.kind === "bottom-coercion" ||
     conversion.kind === "js-argument-vector-callback") {
     return [conversion.source, conversion.target];
+  }
+  if (conversion.kind === "js-value-from-closed-carrier") {
+    return [conversion.source];
+  }
+  if (conversion.kind === "js-value-from-option" ||
+    conversion.kind === "js-value-from-array") {
+    return [
+      conversion.source,
+      conversion.element,
+      ...valueConversionCarriers(conversion.elementConversion),
+    ];
+  }
+  if (conversion.kind === "js-value-from-source-union") {
+    return [
+      conversion.source,
+      ...conversion.variants.flatMap((variant) => [
+        variant.carrier,
+        ...valueConversionCarriers(variant.conversion),
+      ]),
+    ];
+  }
+  if (conversion.kind === "js-value-from-structural-to-json") {
+    return [
+      conversion.source,
+      conversion.resultCarrier,
+      ...valueConversionCarriers(conversion.resultConversion),
+    ];
+  }
+  if (conversion.kind === "js-value-from-structural-object") {
+    return [
+      conversion.source,
+      ...conversion.fields.flatMap((field) => [
+        field.sourceCarrier,
+        ...valueConversionCarriers(field.conversion),
+      ]),
+    ];
   }
   if (conversion.kind === "option-some") return [conversion.element];
   return valueConversionCarriers(conversion.elementConversion);

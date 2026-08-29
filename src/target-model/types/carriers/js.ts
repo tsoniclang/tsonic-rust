@@ -1,7 +1,14 @@
-import { rustBigIntTargetId, rustJsArrayConcatItemTargetId, rustJsArrayTargetId, rustJsDateTargetId, rustJsErrorTargetId, rustJsMapTargetId, rustJsRegExpExecArrayTargetId, rustJsRegExpIndicesTargetId, rustJsRegExpMatchArrayTargetId, rustJsRegExpNamedGroupsTargetId, rustJsRegExpNamedIndicesTargetId, rustJsRegExpStringIteratorTargetId, rustJsRegExpTargetId, rustJsSetTargetId, rustJsStringTargetId, rustJsValueTargetId, rustNeverCarrierName, rustNullTargetId, rustProgramErrorTargetId, rustRegExpExecArrayTargetId, rustRegExpIndicesTargetId, rustRegExpMatchArrayTargetId, rustRegExpNamedGroupsTargetId, rustRegExpNamedIndicesTargetId, rustRegExpStringIteratorTargetId, rustStringTargetId, rustUndefinedTargetId } from "./source-types.js";
+import { rustBigIntTargetId, rustJsArrayBufferTargetId, rustJsArrayConcatItemTargetId, rustJsArrayTargetId, rustJsDataViewTargetId, rustJsDateTargetId, rustJsErrorTargetId, rustJsFloat32ArrayTargetId, rustJsFloat64ArrayTargetId, rustJsInt16ArrayTargetId, rustJsInt32ArrayTargetId, rustJsInt8ArrayTargetId, rustJsIntlCollatorTargetId, rustJsIntlDateTimeFormatPartTargetId, rustJsIntlDateTimeFormatTargetId, rustJsIntlNumberFormatPartTargetId, rustJsIntlNumberFormatTargetId, rustJsIntlResolvedCollatorOptionsTargetId, rustJsIntlResolvedDateTimeFormatOptionsTargetId, rustJsIntlResolvedNumberFormatOptionsTargetId, rustJsMapTargetId, rustJsPromiseFulfilledResultTargetId, rustJsPromiseRejectedResultTargetId, rustJsPromiseSettledResultTargetId, rustJsPromiseTargetId, rustJsRegExpExecArrayTargetId, rustJsRegExpIndicesTargetId, rustJsRegExpMatchArrayTargetId, rustJsRegExpNamedGroupsTargetId, rustJsRegExpNamedIndicesTargetId, rustJsRegExpStringIteratorTargetId, rustJsRegExpTargetId, rustJsSetTargetId, rustJsStringTargetId, rustJsSymbolTargetId, rustJsUint16ArrayTargetId, rustJsUint32ArrayTargetId, rustJsUint8ArrayTargetId, rustJsUint8ClampedArrayTargetId, rustJsValueTargetId, rustJsWeakMapTargetId, rustJsWeakSetTargetId, rustNeverCarrierName, rustNullTargetId, rustProgramErrorTargetId, rustRegExpExecArrayTargetId, rustRegExpIndicesTargetId, rustRegExpMatchArrayTargetId, rustRegExpNamedGroupsTargetId, rustRegExpNamedIndicesTargetId, rustRegExpStringIteratorTargetId, rustStringTargetId, rustUndefinedTargetId } from "./source-types.js";
 import { rustOptionTargetType } from "./optional.js";
 import type { TargetTypeRef } from "../model.js";
-import { rustOnlyTypeGenericArguments, rustTypeGenericArguments } from "../generic-arguments.js";
+import type { RustLifetimeRef } from "../../lifetimes/index.js";
+import {
+  rustLifetimeGenericArgument,
+  rustOnlyTypeGenericArguments,
+  rustTypeGenericArgument,
+  rustTypeGenericArguments,
+} from "../generic-arguments.js";
+import { rustPlaceholderLifetime } from "../../lifetimes/index.js";
 
 export function rustJsValueTargetType(): TargetTypeRef {
   return { kind: "target-named", id: rustJsValueTargetId };
@@ -61,6 +68,135 @@ export function getRustJsSetElementTargetType(
 
 export function rustJsDateTargetType(): TargetTypeRef {
   return { kind: "target-named", id: rustJsDateTargetId };
+}
+
+export function rustJsSymbolTargetType(): TargetTypeRef {
+  return { kind: "target-named", id: rustJsSymbolTargetId };
+}
+
+export function rustJsWeakMapTargetType(key: TargetTypeRef, value: TargetTypeRef): TargetTypeRef {
+  return { kind: "target-named", id: rustJsWeakMapTargetId, genericArguments: rustTypeGenericArguments([key, value]) };
+}
+
+export function rustJsWeakSetTargetType(value: TargetTypeRef): TargetTypeRef {
+  return { kind: "target-named", id: rustJsWeakSetTargetId, genericArguments: rustTypeGenericArguments([value]) };
+}
+
+export function rustJsPromiseTargetType(output: TargetTypeRef): TargetTypeRef {
+  return rustJsPromiseTargetTypeWithLifetime(output, rustPlaceholderLifetime);
+}
+
+export function rustJsPromiseTargetTypeWithLifetime(
+  output: TargetTypeRef,
+  lifetime: RustLifetimeRef,
+): TargetTypeRef {
+  return {
+    kind: "target-named",
+    id: rustJsPromiseTargetId,
+    genericArguments: [
+      rustLifetimeGenericArgument(lifetime),
+      rustTypeGenericArgument(output),
+    ],
+  };
+}
+
+export function rustJsPromiseOutputTargetType(carrier: TargetTypeRef | undefined): TargetTypeRef | undefined {
+  if (carrier?.kind !== "target-named" || carrier.id !== rustJsPromiseTargetId) return undefined;
+  const [lifetime, output] = carrier.genericArguments ?? [];
+  return carrier.genericArguments?.length === 2 && lifetime?.kind === "lifetime" && output?.kind === "type"
+    ? output.type
+    : undefined;
+}
+
+export function rustJsPromiseFulfilledResultTargetType(value: TargetTypeRef): TargetTypeRef {
+  return { kind: "target-named", id: rustJsPromiseFulfilledResultTargetId, genericArguments: rustTypeGenericArguments([value]) };
+}
+
+export function rustJsPromiseRejectedResultTargetType(): TargetTypeRef {
+  return { kind: "target-named", id: rustJsPromiseRejectedResultTargetId };
+}
+
+export function rustJsPromiseSettledResultTargetType(value: TargetTypeRef): TargetTypeRef {
+  return { kind: "target-named", id: rustJsPromiseSettledResultTargetId, genericArguments: rustTypeGenericArguments([value]) };
+}
+
+export function getRustJsWeakMapTargetTypes(
+  carrier: TargetTypeRef | undefined,
+): { readonly key: TargetTypeRef; readonly value: TargetTypeRef } | undefined {
+  if (carrier?.kind !== "target-named" || carrier.id !== rustJsWeakMapTargetId) return undefined;
+  const arguments_ = rustOnlyTypeGenericArguments(carrier.genericArguments);
+  const [key, value] = arguments_ ?? [];
+  return arguments_?.length === 2 && key !== undefined && value !== undefined ? { key, value } : undefined;
+}
+
+export function getRustJsWeakSetElementTargetType(carrier: TargetTypeRef | undefined): TargetTypeRef | undefined {
+  if (carrier?.kind !== "target-named" || carrier.id !== rustJsWeakSetTargetId) return undefined;
+  const arguments_ = rustOnlyTypeGenericArguments(carrier.genericArguments);
+  return arguments_?.length === 1 ? arguments_[0] : undefined;
+}
+
+export const rustJsTypedArrayTargetIds = Object.freeze({
+  Int8Array: rustJsInt8ArrayTargetId,
+  Uint8Array: rustJsUint8ArrayTargetId,
+  Uint8ClampedArray: rustJsUint8ClampedArrayTargetId,
+  Int16Array: rustJsInt16ArrayTargetId,
+  Uint16Array: rustJsUint16ArrayTargetId,
+  Int32Array: rustJsInt32ArrayTargetId,
+  Uint32Array: rustJsUint32ArrayTargetId,
+  Float32Array: rustJsFloat32ArrayTargetId,
+  Float64Array: rustJsFloat64ArrayTargetId,
+});
+
+export type RustJsTypedArrayName = keyof typeof rustJsTypedArrayTargetIds;
+
+export function rustJsArrayBufferTargetType(): TargetTypeRef {
+  return { kind: "target-named", id: rustJsArrayBufferTargetId };
+}
+
+export function rustJsDataViewTargetType(): TargetTypeRef {
+  return { kind: "target-named", id: rustJsDataViewTargetId };
+}
+
+export function rustJsTypedArrayTargetType(name: RustJsTypedArrayName): TargetTypeRef {
+  return { kind: "target-named", id: rustJsTypedArrayTargetIds[name] };
+}
+
+export function rustJsTypedArrayName(carrier: TargetTypeRef | undefined): RustJsTypedArrayName | undefined {
+  if (carrier?.kind !== "target-named") return undefined;
+  return (Object.entries(rustJsTypedArrayTargetIds) as readonly (readonly [RustJsTypedArrayName, string])[])
+    .find(([, id]) => id === carrier.id)?.[0];
+}
+
+export function rustJsIntlDateTimeFormatTargetType(): TargetTypeRef {
+  return { kind: "target-named", id: rustJsIntlDateTimeFormatTargetId };
+}
+
+export function rustJsIntlNumberFormatTargetType(): TargetTypeRef {
+  return { kind: "target-named", id: rustJsIntlNumberFormatTargetId };
+}
+
+export function rustJsIntlCollatorTargetType(): TargetTypeRef {
+  return { kind: "target-named", id: rustJsIntlCollatorTargetId };
+}
+
+export function rustJsIntlDateTimeFormatPartTargetType(): TargetTypeRef {
+  return { kind: "target-named", id: rustJsIntlDateTimeFormatPartTargetId };
+}
+
+export function rustJsIntlNumberFormatPartTargetType(): TargetTypeRef {
+  return { kind: "target-named", id: rustJsIntlNumberFormatPartTargetId };
+}
+
+export function rustJsIntlResolvedDateTimeFormatOptionsTargetType(): TargetTypeRef {
+  return { kind: "target-named", id: rustJsIntlResolvedDateTimeFormatOptionsTargetId };
+}
+
+export function rustJsIntlResolvedNumberFormatOptionsTargetType(): TargetTypeRef {
+  return { kind: "target-named", id: rustJsIntlResolvedNumberFormatOptionsTargetId };
+}
+
+export function rustJsIntlResolvedCollatorOptionsTargetType(): TargetTypeRef {
+  return { kind: "target-named", id: rustJsIntlResolvedCollatorOptionsTargetId };
 }
 
 export function rustJsRegExpTargetType(): TargetTypeRef {

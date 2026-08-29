@@ -55,6 +55,7 @@ export function rustExpressionUsesTryInCurrentRegion(expression: RustExpr): bool
       return rustExpressionUsesTryInCurrentRegion(expression.target) ||
         rustExpressionUsesTryInCurrentRegion(expression.value);
     case "call":
+    case "macro-invocation":
     case "associated-call":
       return expression.args.some(rustExpressionUsesTryInCurrentRegion);
     case "invoke":

@@ -97,13 +97,23 @@ export type RustTargetOperationFact =
   | {
       readonly kind: "object-shape-projection";
       readonly operationId: string;
-      readonly projection: "keys" | "values" | "entries" | "has-own";
+      readonly projection: "keys" | "values" | "entries" | "has-own" | "assign";
       readonly sourceValue: Node;
       readonly sourceValueOrigin:
         | { readonly kind: "receiver" }
         | { readonly kind: "argument"; readonly index: number };
       readonly sourceValueCarrier: TargetTypeRef;
       readonly keyExpression?: Node;
+      readonly assignmentSource?: Node;
+      readonly assignmentSourceCarrier?: TargetTypeRef;
+      readonly assignmentFields?: readonly {
+        readonly sourceName: string;
+        readonly sourceStorageIndex: number;
+        readonly targetStorageIndex: number;
+        readonly sourceCarrier: TargetTypeRef;
+        readonly targetCarrier: TargetTypeRef;
+        readonly conversion?: RustValueConversion;
+      }[];
       readonly fields: readonly {
         readonly sourceName: string;
         readonly storageIndex: number;

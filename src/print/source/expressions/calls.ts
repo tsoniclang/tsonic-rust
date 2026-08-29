@@ -234,18 +234,33 @@ export function printFittedCall(
       }
     }
   }
+  if (arguments_.length > 1 && trailingClosure?.kind === "reference" &&
+    expressionIsRightHandBlock(trailingClosure.expr)) {
+    const preceding = arguments_.slice(0, -1).map(printRustExpr);
+    if (preceding.every((argument) => !argument.includes("\n"))) {
+      const prefix = `${callable}(${preceding.join(", ")}, `;
+      const rendered = printRustExprFitted(
+        trailingClosure,
+        inlineArgumentDepth,
+        column + prefix.length,
+      );
+      const attached = appendToLastLine(`${prefix}${rendered}`, ")");
+      if (firstLine(rendered).trimStart().startsWith("&{") &&
+        column + prefix.length + firstLine(rendered).length <= rustFormatWidth &&
+        renderedFits(attached, column)) {
+        return attached;
+      }
+    }
+  }
   if (arguments_.length === 1 &&
     (arguments_[0]?.kind === "slice-literal" || arguments_[0]?.kind === "vec-literal" ||
       arguments_[0]?.kind === "tuple-literal")) {
     const prefix = `${callable}(`;
-    return appendToLastLine(
-      `${prefix}${printRustExprFitted(
-        arguments_[0],
-        depth,
-        column + prefix.length + 1,
-      )}`,
-      ")",
-    );
+    return appendToLastLine(`${prefix}${printRustExprFitted(
+      arguments_[0],
+      depth,
+      column + prefix.length + 1,
+    )}`, ")");
   }
   if (arguments_.length === 1 &&
     (arguments_[0]?.kind === "block" || arguments_[0]?.kind === "evaluate-then" ||
@@ -293,8 +308,8 @@ export function printFittedCall(
       return attached;
     }
   }
-  if (!forceExpanded && arguments_.length === 1 && arguments_[0]?.kind === "reference" &&
-    rustExpressionContainsStatementBlock(arguments_[0])) {
+  if (arguments_.length === 1 && arguments_[0]?.kind === "reference" &&
+    expressionIsRightHandBlock(arguments_[0].expr)) {
     const prefix = `${callable}(`;
     const rendered = printRustExprFitted(
       arguments_[0],
@@ -306,22 +321,33 @@ export function printFittedCall(
       return attached;
     }
   }
-  if (arguments_.length === 1 && arguments_[0]?.kind === "binary" &&
-    (arguments_[0].operator === "+" || arguments_[0].operator === "-" ||
-      arguments_[0].operator === "*" || arguments_[0].operator === "/" ||
-      arguments_[0].operator === "%") &&
-    !rustExpressionContainsStatementBlock(arguments_[0])) {
+  const soleArithmeticArgument = arguments_.length === 1 && arguments_[0]?.kind === "binary" &&
+      (arguments_[0].operator === "+" || arguments_[0].operator === "-" ||
+        arguments_[0].operator === "*" || arguments_[0].operator === "/" ||
+        arguments_[0].operator === "%")
+    ? arguments_[0]
+    : undefined;
+  let firstArithmeticOperand: RustExpr | undefined = soleArithmeticArgument;
+  while (firstArithmeticOperand?.kind === "binary" &&
+    (firstArithmeticOperand.operator === "+" || firstArithmeticOperand.operator === "-" ||
+      firstArithmeticOperand.operator === "*" || firstArithmeticOperand.operator === "/" ||
+      firstArithmeticOperand.operator === "%")) {
+    firstArithmeticOperand = firstArithmeticOperand.left;
+  }
+  if (soleArithmeticArgument !== undefined &&
+    (!rustExpressionContainsStatementBlock(soleArithmeticArgument) ||
+      firstArithmeticOperand?.kind === "conditional")) {
     const prefix = `${callable}(`;
     const rendered = printRustExprFitted(
-      arguments_[0],
+      soleArithmeticArgument,
       inlineArgumentDepth,
       column + prefix.length,
     );
     const attached = appendToLastLine(`${prefix}${rendered}`, ")");
-    const attachedBinaryContinuation = /^[A-Za-z_][A-Za-z0-9_]*$/u.test(callable) &&
-      callable.length <= rustInlineFieldReceiverWidth &&
-      rendered.split("\n").length === 2;
-    if ((!rendered.includes("\n") || attachedBinaryContinuation) &&
+    const callableCanOwnMultilineArithmetic =
+      /^[A-Za-z_][A-Za-z0-9_]*$/u.test(callable) &&
+      callable.length <= rustInlineFieldReceiverWidth;
+    if ((!rendered.includes("\n") || callableCanOwnMultilineArithmetic) &&
       renderedFits(attached, column)) {
       return attached;
     }
@@ -655,9 +681,45 @@ export function printFittedCall(
       if (renderedFits(compact, column)) {
         return compact;
       }
+      const collectionOpening = argument.expr.kind === "vec-literal" ? "vec![" : "[";
+      const referencePrefix = argument.mutable === true ? "&mut " : "&";
+      const opening = `${prefix}${referencePrefix}${collectionOpening}`;
+      if (renderedFits(opening, column)) {
+        const elementIndent = indentText(depth + 1);
+        const elements = argument.expr.elements.map((element) =>
+          appendToLastLine(
+            `${elementIndent}${printRustExprFitted(
+              element,
+              depth + 1,
+              elementIndent.length,
+            )}`,
+            ",",
+          ));
+        const expanded = [
+          opening,
+          ...elements,
+          `${indentText(depth)}])`,
+        ].join("\n");
+        if (renderedFits(expanded, column)) {
+          return expanded;
+        }
+      }
     } else if (argument.kind === "reference" &&
       (argument.expr.kind === "call" || argument.expr.kind === "associated-call" ||
         argument.expr.kind === "method-call" || argument.expr.kind === "try")) {
+      if (preferNestedBreak || !renderedFits(flat, column)) {
+        const nestedCollection = printPreferredReferencedNestedCollection(
+          argument.expr,
+          depth,
+          column + prefix.length,
+        );
+        const compact = nestedCollection === undefined
+          ? undefined
+          : appendToLastLine(`${prefix}&${nestedCollection}`, ")");
+        if (compact !== undefined && renderedFits(compact, column)) {
+          return compact;
+        }
+      }
       const nested = printNestedCallArgument(
         argument.expr,
         depth,
@@ -665,7 +727,15 @@ export function printFittedCall(
         false,
       );
       const compact = appendToLastLine(`${prefix}&${nested}`, ")");
-      if (renderedFits(compact, column)) {
+      const expandedArgumentIndent = indentText(depth + 1);
+      const expandedNested = printNestedCallArgument(
+        argument.expr,
+        depth + 1,
+        expandedArgumentIndent.length + 1,
+        false,
+      );
+      if (!(nested.includes("\n") && !expandedNested.includes("\n")) &&
+        renderedFits(compact, column)) {
         return compact;
       }
     } else if (!rustExpressionContainsStatementBlock(argument) &&
@@ -715,6 +785,70 @@ export function printFittedCall(
   return [
     `${callable}(`,
     ...renderedArguments,
+    `${indentText(depth)})`,
+  ].join("\n");
+}
+
+function printPreferredReferencedNestedCollection(
+  expression: RustExpr,
+  depth: number,
+  column: number,
+): string | undefined {
+  if (expression.kind !== "call" && expression.kind !== "associated-call") {
+    return undefined;
+  }
+  const collection = expression.args.length === 1 ? expression.args[0] : undefined;
+  if (collection?.kind !== "vec-literal" && collection?.kind !== "slice-literal" &&
+    collection?.kind !== "tuple-literal") {
+    return undefined;
+  }
+  const callable = expression.kind === "call"
+    ? printRustDirectCallTarget(expression)
+    : printRustAssociatedCallTarget(
+        expression,
+        printRustAssociatedOwner(expression.owner),
+      );
+  if (!renderedFits(`${callable}(`, column)) {
+    return undefined;
+  }
+  const argumentIndent = indentText(depth + 1);
+  if (collection.elements.length > 1) {
+    const opening = collection.kind === "vec-literal" ? "vec![" :
+      collection.kind === "slice-literal" ? "[" : "(";
+    const closing = collection.kind === "tuple-literal" ? ")" : "]";
+    const attachedOpening = `${callable}(${opening}`;
+    if (!renderedFits(attachedOpening, column)) {
+      return undefined;
+    }
+    const compactElements = collection.elements.map(printRustExpr).join(", ");
+    const renderedElements = collection.elements.every(rustFormatArgumentIsAtomic) &&
+        compactElements.length <= rustNestedCallWidth &&
+        renderedFits(`${compactElements},`, argumentIndent.length)
+      ? [`${argumentIndent}${compactElements},`]
+      : collection.elements.map((element) => appendToLastLine(
+          `${argumentIndent}${printRustExprFitted(
+            element,
+            depth + 1,
+            argumentIndent.length,
+          )}`,
+          ",",
+        ));
+    return [
+      attachedOpening,
+      ...renderedElements,
+      `${indentText(depth)}${closing})`,
+    ].join("\n");
+  }
+  return [
+    `${callable}(`,
+    appendToLastLine(
+      `${argumentIndent}${printRustExprFitted(
+        collection,
+        depth + 1,
+        argumentIndent.length,
+      )}`,
+      ",",
+    ),
     `${indentText(depth)})`,
   ].join("\n");
 }

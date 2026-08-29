@@ -81,6 +81,7 @@ export function rustLifetimeTypeDeclarations(): readonly ProviderExportDeclarati
       value,
     ),
     alias(rustSourceTypeExportIds.maybeSized, { kind: "unknown" }),
+    alias(rustSourceTypeExportIds.scalar, { kind: "unknown" }),
   ];
 }
 

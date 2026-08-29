@@ -180,6 +180,8 @@ export function rustExpressionContainsStatementBlock(expression: RustExpr): bool
     case "method-call":
       return rustExpressionContainsStatementBlock(expression.receiver) ||
         expression.args.some(rustExpressionContainsStatementBlock);
+    case "macro-invocation":
+      return expression.args.some(rustExpressionContainsStatementBlock);
     case "field":
       return rustExpressionContainsStatementBlock(expression.receiver);
     case "index":

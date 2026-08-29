@@ -721,7 +721,11 @@ function selectedCallArgumentMode(
     return targetIndex < 0 ? undefined : modes?.[targetIndex] ?? "value";
   };
   switch (form.form) {
+    case "struct-variant":
+    case "expression-macro":
+      return "value";
     case "call":
+    case "source-module-construction":
     case "free-call":
     case "receiver-method":
       return orderedMode(form.argModes, form.argOrder);
@@ -779,14 +783,19 @@ export function selectedCallReceiverValueCarrier(
   if (!request.source.optionalChain) {
     return selectedCarrier ?? storedCarrier;
   }
-  if (storedCarrier !== undefined && selectedCarrier !== undefined &&
-    rustTargetTypeRefEquals(storedCarrier, selectedCarrier)) {
-    return selectedCarrier;
-  }
   const optionElement = rustOptionElementCarrier(storedCarrier);
-  return optionElement !== undefined &&
-      (selectedCarrier === undefined || rustTargetTypeRefEquals(optionElement, selectedCarrier))
-    ? selectedCarrier ?? optionElement
+  if (optionElement !== undefined) {
+    if (selectedCarrier === undefined ||
+      storedCarrier !== undefined && rustTargetTypeRefEquals(storedCarrier, selectedCarrier)) {
+      return optionElement;
+    }
+    return rustTargetTypeRefEquals(optionElement, selectedCarrier)
+      ? selectedCarrier
+      : undefined;
+  }
+  return storedCarrier !== undefined && selectedCarrier !== undefined &&
+      rustTargetTypeRefEquals(storedCarrier, selectedCarrier)
+    ? selectedCarrier
     : undefined;
 }
 

@@ -23,9 +23,13 @@ import { finalizeRustProviderOperationAbi } from "../../facts/finalized-operatio
 import { providerFormRequiresSourceReceiver } from "./calls/instantiation.js";
 import { instantiateProviderOperationTemplate } from "./calls/template-instantiation.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
-import { rustEffectiveValueCarrier } from "../../facts/value-carrier-queries.js";
+import {
+  recordRustFlowReadProjection,
+  rustEffectiveValueCarrier,
+} from "../../facts/value-carrier-queries.js";
 import { rustSourcePrimitiveTargetType, rustUnitTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { selectRustFlowReadProjection } from "../../../policy/types/value-carrier-reconciliation.js";
 import { selectJsSurfaceOperation } from "../../../policy/operations/js-surface.js";
 import { selectRustProviderOperation } from "../../../policy/operations/provider-selection.js";
 import type {
@@ -572,22 +576,24 @@ export function selectedValueCarrier(
     rustTargetTypeRefEquals(stored, selected)) {
     return selected ?? stored;
   }
-  const optionalElement = rustOptionElementCarrier(stored);
-  if (optionalElement !== undefined &&
-    rustTargetTypeRefEquals(optionalElement, selected)) {
+  const flowRead = selectRustFlowReadProjection(
+    stored,
+    selected,
+    options.projectTypes,
+  );
+  if (flowRead.kind === "projection") {
+    recordRustFlowReadProjection(
+      context.facts,
+      expression,
+      flowRead.fact,
+    );
     return selected;
   }
   if (stored.kind === "reference" &&
     rustTargetTypeRefEquals(stored.referent, selected)) {
     return selected;
   }
-  const sourceDefinition = options.projectTypes.definitionForCarrier(
-    optionalElement ?? stored,
-  );
-  return sourceDefinition !== undefined &&
-      options.projectTypes.downcastRoute(sourceDefinition, selected) !== undefined
-    ? selected
-    : stored;
+  return stored;
 }
 
 export function selectedCallCalleeSymbol(

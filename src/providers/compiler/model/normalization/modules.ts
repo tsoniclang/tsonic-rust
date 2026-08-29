@@ -235,15 +235,13 @@ function normalizeExport(
     const static_ = requireInnerRecord(item, "static", `Rust static '${name}'`);
     const mutable = requireBoolean(static_.is_mutable, `${name}.static.is_mutable`);
     const type = normalizeType(document, static_.type, root);
-    if (!rustStaticValueCanBeCopied(type)) {
-      throw new Error(`Rust static '${name}' has a value type that is not structurally proven Copy.`);
-    }
     return Object.freeze({
       kind: "static",
       ...identity,
       type,
       unsafe: requireBoolean(static_.is_unsafe, `${name}.static.is_unsafe`),
       mutable,
+      copy: rustStaticValueCanBeCopied(type),
     });
   }
   if (hasInnerKind(item, "function")) {
@@ -501,7 +499,13 @@ function sameModuleExportDependencies(
       break;
     case "enum":
       visitGenericParameters(exported.genericParameters);
-      exported.variants.forEach((variant) => variant.fields.forEach(visitType));
+      exported.variants.forEach((variant) => {
+        if (variant.kind === "struct") {
+          variant.fields.forEach((field) => visitType(field.type));
+        } else {
+          variant.fields.forEach(visitType);
+        }
+      });
       exported.methods.forEach(visitFunction);
       exported.associatedConstants.forEach((constant) => {
         visitType(constant.type);

@@ -163,7 +163,14 @@ export function printRustItem(item: RustItem): string {
         : `${attrs}${header}\n${functions}\n}`;
     }
     case "impl": {
-      const rendered = item.functions.map((fn) => {
+      const constants = (item.constants ?? []).map((constant) => {
+        const attrs = (constant.attrs ?? []).map((attr) => `    ${attr}\n`).join("");
+        const visibility = item.trait === undefined
+          ? printRustVisibility(constant.visibility)
+          : "";
+        return `${attrs}    ${visibility}const ${constant.name}: ${printRustType(constant.type)} = ${printRustExpr(constant.value)};`;
+      });
+      const functions = item.functions.map((fn) => {
         const selfPrefix = printRustSelfParam(fn.selfParam);
         const params = fn.params.map(rustFunctionParameter);
         const allParams = selfPrefix === undefined ? params : [selfPrefix, ...params];
@@ -180,7 +187,8 @@ export function printRustItem(item: RustItem): string {
         )}`;
         const body = printRustBlockStatements(fn.body, 2);
         return body.length === 0 ? `${header}}` : `${header}\n${body}\n    }`;
-      }).join("\n\n");
+      });
+      const rendered = [...constants, ...functions].join("\n\n");
       const generics = printRustGenerics(item.generics);
       const target = printRustType(item.target);
       const declaration = item.trait === undefined

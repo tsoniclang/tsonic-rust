@@ -447,6 +447,9 @@ function finalizeRustExpressionStyle(expression: RustExpr): RustExpr {
     case "reference":
       result = { ...expression, expr: finalizeRustExpressionStyle(expression.expr) };
       break;
+    case "macro-invocation":
+      result = { ...expression, args: expression.args.map(finalizeRustExpressionStyle) };
+      break;
     case "vec-literal":
     case "slice-literal":
       result = { ...expression, elements: expression.elements.map(finalizeRustExpressionStyle) };
@@ -603,7 +606,10 @@ function rustTypeNames(type: RustType): readonly string[] {
         ...type.autoTraits.flatMap((trait) => rustTypeNames(trait.trait)),
       ];
     case "impl-trait":
-      return type.bounds.flatMap(rustTypeBoundNames);
+      return [
+        ...type.bounds.flatMap(rustTypeBoundNames),
+        ...rustGenericArgumentTypeNames(type.captures),
+      ];
     case "reference":
       return rustTypeNames(type.referent);
     case "raw-pointer":

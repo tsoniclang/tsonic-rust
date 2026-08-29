@@ -73,6 +73,7 @@ export interface RustPlanContext {
   readonly externalCrateNameByFileName: ReadonlyMap<string, string>;
   readonly externalItemPathByIdentity: ReadonlyMap<string, string>;
   readonly externalStructuralShapeModuleByFileName: ReadonlyMap<string, string>;
+  readonly workerEntryIdentityByFileName: ReadonlyMap<string, string>;
   readonly programModuleName: string;
   readonly structuralShapesModuleName: string;
   readonly publicImplementationItemIdentities: ReadonlySet<string>;

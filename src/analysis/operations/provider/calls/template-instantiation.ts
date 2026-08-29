@@ -62,20 +62,6 @@ export function instantiateProviderOperationTemplate<
       return undefined;
     }
   }
-  for (const parameter of parameters) {
-    if (parameter.kind !== "lifetime" ||
-      bindings.lifetimes.has(parameter.targetIdentity)) {
-      continue;
-    }
-    const inferred = evidence.callScopedElisionBindings?.get(parameter.targetIdentity);
-    if (inferred === undefined || !mergeLifetimeBinding(
-      bindings.lifetimes,
-      parameter.targetIdentity,
-      inferred,
-    )) {
-      return undefined;
-    }
-  }
   if (!inferExactTemplateBindings(
     template.receiverCarrier,
     evidence.sourceReceiverCarrier,
@@ -102,11 +88,12 @@ export function instantiateProviderOperationTemplate<
     lifetimes: new Map(),
     consts: new Map(),
   };
-  if (!inferUnboundTemplateBindings(
+  const inferredResult = inferUnboundTemplateBindings(
     template.resultCarrier,
     evidence.sourceResultCarrier,
     resultBindings,
-  ) || !mergeGenericBindings(bindings, resultBindings)) {
+  );
+  if (inferredResult && !mergeGenericBindings(bindings, resultBindings)) {
     return undefined;
   }
   for (const parameter of parameters) {
@@ -517,6 +504,34 @@ export function substituteProviderOperationForm(
                     substitutions.consts,
                   )),
           };
+    case "source-module-construction": {
+      const argConversions = form.argConversions === undefined
+        ? undefined
+        : form.argConversions.map((conversion) =>
+            conversion === undefined
+              ? undefined
+              : substituteRustValueConversion(
+                  conversion,
+                  substitutions.types,
+                  substitutions.lifetimes,
+                  substitutions.consts,
+                ));
+      return {
+        ...form,
+        bootstrap: {
+          ...form.bootstrap,
+          ...(form.bootstrap.errorCarrier === undefined
+            ? {}
+            : {
+                errorCarrier: substituteProviderCarrier(
+                  form.bootstrap.errorCarrier,
+                  substitutions,
+                ),
+              }),
+        },
+        ...(argConversions === undefined ? {} : { argConversions }),
+      };
+    }
     case "index":
       return form.indexConversion === undefined
         ? form
@@ -530,10 +545,13 @@ export function substituteProviderOperationForm(
             ),
           };
     case "marker":
+    case "struct-variant":
+    case "expression-macro":
     case "call-c-variadic":
     case "call-str-slice":
     case "free-call-str-slice":
     case "path":
+    case "reference-path":
     case "static":
     case "method":
     case "arg-method":
@@ -564,6 +582,9 @@ export function finalizeProviderOperationFact(
     ...(template.resultConversion === undefined ? {} : { resultConversion: template.resultConversion }),
     isAsync: template.isAsync,
     isFallible: template.isFallible,
+    ...(template.returnedFuture === undefined
+      ? {}
+      : { returnedFuture: template.returnedFuture }),
     ...(template.evaluation === undefined ? {} : { evaluation: template.evaluation }),
     ...(template.errorBoundary === "none" ? {} : { errorBoundary: template.errorBoundary }),
     ...(template.errorCarrier === undefined ? {} : { errorCarrier: template.errorCarrier }),

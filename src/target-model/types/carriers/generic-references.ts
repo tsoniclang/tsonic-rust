@@ -253,7 +253,7 @@ export function rustTargetGenericReferences(
       case "impl-trait":
         value.bounds.forEach((trait) => visitType(trait, bound));
         value.outlives.forEach((lifetime) => visitLifetime(lifetime, bound));
-        value.captures.forEach((lifetime) => visitLifetime(lifetime, bound));
+        visitArguments(value.captures, bound);
         return;
       case "associated-type":
         visitType(value.owner, bound);

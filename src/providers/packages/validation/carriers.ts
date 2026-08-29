@@ -1,13 +1,14 @@
 import {
   rustFixedArrayCarrierValue,
+  isRustBuiltInTargetCarrierId,
   rustNamedTypeCarrierValue,
   rustPrimitiveTypeName,
   isRustNeverCarrier,
   rustOptionElementCarrier,
   rustTargetGenericReferences,
 } from "../../../target-model/types/index.js";
-import { builtInTargetCarrierIds, rustIdentifierPattern, rustPathPattern } from "./model.js";
-import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustIdentifierPattern, rustPathPattern } from "./model.js";
+import { isRustTargetGenericArgument, isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import type { Fail } from "./model.js";
 import type { RustProviderPackageDefinition } from "../index.js";
@@ -68,6 +69,7 @@ export function validateCarrier(
     fail(`${where}.kind '${String(record.kind)}' is not a supported Rust target type kind`);
   }
   requireExactKeys(record, allowedFields, where, fail);
+  validateImmediateGenericArguments(record, where, fail);
   if (!isRustTargetTypeRef(carrier)) {
     fail(`${where} is not a closed Rust target type`);
   }
@@ -82,7 +84,7 @@ export function validateCarrier(
       return;
     case "target-named":
       requireNonEmpty(carrier.id, `${where}.id`, fail);
-      if (!builtInTargetCarrierIds.has(carrier.id) && definition.carrierPaths?.[carrier.id] === undefined) {
+      if (!isRustBuiltInTargetCarrierId(carrier.id) && definition.carrierPaths?.[carrier.id] === undefined) {
         fail(`${where} names target carrier '${carrier.id}' without a Rust carrier path`);
       }
       for (const [index, argument] of (carrier.genericArguments ?? []).entries()) {
@@ -219,9 +221,23 @@ export function validateCarrier(
           allowUnsized: true,
         });
       }
-      if ([...carrier.outlives, ...carrier.captures].some((lifetime) =>
-        !isRustLifetimeRef(lifetime))) {
-        fail(`${where} contains an invalid opaque lifetime`);
+      if (carrier.outlives.some((lifetime) => !isRustLifetimeRef(lifetime))) {
+        fail(`${where} contains an invalid opaque outlives lifetime`);
+      }
+      for (const [index, capture] of carrier.captures.entries()) {
+        if (!isRustTargetGenericArgument(capture)) {
+          fail(`${where}.captures[${index}] is not an exact generic argument`);
+          continue;
+        }
+        if (capture.kind === "type") {
+          validateCarrier(
+            capture.type,
+            definition,
+            `${where}.captures[${index}].type`,
+            fail,
+            { allowUnsized: true },
+          );
+        }
       }
       return;
     case "associated-type":
@@ -281,6 +297,27 @@ export function validateCarrier(
       }
       validateCarrier(fixedArray.element, definition, `${where}.value.element`, fail);
       return;
+    }
+  }
+}
+
+function validateImmediateGenericArguments(
+  carrier: Readonly<Record<string, unknown>>,
+  where: string,
+  fail: Fail,
+): void {
+  const field = carrier.kind === "impl-trait"
+    ? "captures"
+    : carrier.kind === "target-named" || carrier.kind === "trait-ref" ||
+        carrier.kind === "associated-type"
+      ? "genericArguments"
+      : undefined;
+  if (field === undefined || !Array.isArray(carrier[field])) {
+    return;
+  }
+  for (const [index, argument] of carrier[field].entries()) {
+    if (!isRustTargetGenericArgument(argument)) {
+      fail(`${where}.${field}[${index}] is not an exact generic argument`);
     }
   }
 }

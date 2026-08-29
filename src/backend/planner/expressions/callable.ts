@@ -11,6 +11,7 @@ import {
 } from "../program/plan-context.js";
 import {
   isRustUnitCarrier,
+  rustCarrierReferentMutationRequiresMutableBinding,
   rustCallableProtocol,
   rustClosureProtocol,
 } from "../../../target-model/types/index.js";
@@ -25,6 +26,7 @@ import {
   rustClosureCaptureFactKey,
   rustFallibleFactKey,
   rustMutatedBindingFactKey,
+  rustMutatedReferentFactKey,
   rustSourceBindingFactKey,
   rustSourceParameterAbiFactKey,
 } from "../../../analysis/facts/keys.js";
@@ -191,6 +193,13 @@ export function planCallableExpression(
       return undefined;
     }
     const byRefCopy = closureFact.byRefCopyParams[index] === true;
+    const ownedBinding = parameterCarrier.kind !== "pointer" && parameterCarrier.kind !== "reference";
+    const objectRepresentation = context.input.program.objectRepresentations.representationFor(
+      context.input.program.projectTypes.definitionForCarrier(parameterCarrier),
+    );
+    const referentMutationRequiresMutableBinding =
+      rustCarrierReferentMutationRequiresMutableBinding(parameterCarrier) &&
+      (objectRepresentation === undefined || objectRepresentation.kind === "value");
     sourceParameterPlans.push({
       parameter,
       name: parameterName,
@@ -200,7 +209,9 @@ export function planCallableExpression(
       form: parameterAbi.form,
       byRefCopy,
       mutable: bindingPattern === undefined &&
-        context.input.program.facts.getFact(parameter, rustMutatedBindingFactKey) !== undefined,
+        (context.input.program.facts.getFact(parameter, rustMutatedBindingFactKey) !== undefined ||
+          ownedBinding && referentMutationRequiresMutableBinding &&
+            context.input.program.facts.getFact(parameter, rustMutatedReferentFactKey) !== undefined),
     });
     if (bindingPattern !== undefined) {
       if (byRefCopy) {
@@ -438,12 +449,15 @@ export function planCallableExpression(
     if (body === undefined) {
       return undefined;
     }
-    const resultBody = resultIsFallible
-      ? applyRustFallibleResultExpression(body, {
-          errorType: rustActiveErrorType(callableClosureContext)!,
-        })
-      : body;
-    const closure: RustExpr = bindingStatements.length === 0 &&
+    const unitFallibleEffect = resultIsFallible &&
+      isRustUnitCarrier(resultCarrier) && body.kind !== "bottom";
+    const resultBody = !resultIsFallible || body.kind === "bottom"
+      ? body
+      : applyRustFallibleResultExpression(
+          unitFallibleEffect ? { kind: "path", path: "()" } : body,
+          { errorType: rustActiveErrorType(callableClosureContext)! },
+        );
+    const closure: RustExpr = !unitFallibleEffect && bindingStatements.length === 0 &&
         closureParams.every((parameter) => !parameter.mutable)
       ? {
           kind: "closure",
@@ -459,7 +473,13 @@ export function planCallableExpression(
           params: closureParams,
           move: closureMove,
           async: false,
-          body: { statements: [...bindingStatements, { kind: "tail", expr: resultBody }] },
+          body: {
+            statements: [
+              ...bindingStatements,
+              ...(unitFallibleEffect ? [{ kind: "expr" as const, expr: body }] : []),
+              { kind: "tail", expr: resultBody },
+            ],
+          },
         };
     if (callableProtocol === undefined) {
       const nativeCallable = collapseExactForwardingClosure(closure, captureBindings.length);

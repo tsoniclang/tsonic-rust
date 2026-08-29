@@ -568,8 +568,19 @@ function planningContext({
       configuration: { outputType },
       projectTypes,
       sourcePackageComponents,
+      sourceModuleConstructions: emptySourceModuleConstructions(),
     },
   };
+}
+
+function emptySourceModuleConstructions() {
+  return Object.freeze({
+    construction: () => undefined,
+    entries: () => Object.freeze([]),
+    from: () => Object.freeze([]),
+    targets: () => Object.freeze([]),
+    bootstraps: () => Object.freeze([]),
+  });
 }
 
 function sourcePackageClassifications(rootComponentId, components) {

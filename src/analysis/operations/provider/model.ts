@@ -9,6 +9,7 @@ import type { RustSourceCallableAbiResolver } from "../../../policy/ownership/so
 import type { RustSourceProfileRegistry } from "../../../policy/types/source-profile.js";
 import type { RustSourceTypeRegistry } from "../../project-types/source-type-registry.js";
 import type { RustTargetTypeResolutionOptions } from "../../../policy/types/resolution.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export const sourceCallMarkerByIdentity = new Map(
   [
@@ -34,6 +35,7 @@ export interface RustOperationsProviderOptions {
   readonly resolveProjectUnionCarrier: RustTargetTypeResolutionOptions["resolveProjectUnionCarrier"];
   readonly sourceCallableAbi: RustSourceCallableAbiResolver;
   readonly projectTypes: RustProjectTypePolicy;
+  readonly projectCarrierSupportsObjectIdentity: (carrier: TargetTypeRef) => boolean;
   readonly projectMethodDispatch: RustProjectMethodDispatchPlanRegistry;
   readonly projectMethodProperties: RustProjectMethodPropertyPlanRegistry;
 }

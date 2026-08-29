@@ -16,6 +16,7 @@ export {
 export type {
   RustAsyncFunctionFact,
   RustGeneratorFact,
+  RustSuspendedCallableStorage,
   RustResourceDisposalTarget,
   RustResourceManagementFact,
   RustSourceCallableReturnFact,

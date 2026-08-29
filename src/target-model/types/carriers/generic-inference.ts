@@ -275,9 +275,13 @@ export function inferRustTargetGenericBindings(
           left.outlives.length === right.outlives.length &&
           left.outlives.every((lifetime, index) =>
             matchLifetime(lifetime, right.outlives[index], lifetimeContext)) &&
-          left.captures.length === right.captures.length &&
-          left.captures.every((lifetime, index) =>
-            matchLifetime(lifetime, right.captures[index], lifetimeContext));
+          matchGenericArguments(
+            left.captures,
+            right.captures,
+            (pattern, actual) => match(pattern, actual, lifetimeContext),
+            (pattern, actual) => matchLifetime(pattern, actual, lifetimeContext),
+            matchConst,
+          );
       case "target-specific": {
         if (right.kind !== "target-specific") {
           return false;

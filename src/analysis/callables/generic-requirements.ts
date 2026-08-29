@@ -3,16 +3,18 @@ import {
   resolveTargetContractFixedPoint,
 } from "@tsonic/target-api/analysis";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import { sourceNodeIdentity } from "@tsonic/target-api/source";
+import { Node_Expression, sourceNodeIdentity } from "@tsonic/target-api/source";
 import type { TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import {
   getRustGeneratorProtocol,
+  isRustNeverCarrier,
   rustCarrierSupportsTrait,
   rustClosureProtocol,
   rustFixedArrayCarrierValue,
+  rustJsPromiseTargetId,
   rustLocationTargetId,
   rustNamedTypeCarrierValue,
   rustOptionTargetId,
@@ -23,8 +25,10 @@ import {
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import {
+  rustAsyncFunctionFactKey,
   rustClosureCaptureFactKey,
   rustGeneratorFactKey,
+  rustFutureValueFactKey,
   rustLocationStorageFactKey,
   rustSourceParameterAbiFactKey,
   rustTargetOperationFactKey,
@@ -293,6 +297,29 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       }
     }
   }
+  const asynchronous = facts.getFact(declaration, rustAsyncFunctionFactKey);
+  if (asynchronous?.kind === "js-promise") {
+    const error = addUse(
+      declaration,
+      asynchronous.outputCarrier,
+      asynchronous.storage.kind === "static" ? ["clone", "static"] : ["clone"],
+    );
+    if (error !== undefined) {
+      return { kind: "rejected", reason: error };
+    }
+    if (asynchronous.storage.kind === "static") {
+      for (const parameter of asynchronous.capturedParameters) {
+        const parameterError = addUse(
+          parameter,
+          facts.getFact(parameter, rustSourceParameterAbiFactKey)?.parameterCarrier,
+          ["static"],
+        );
+        if (parameterError !== undefined) {
+          return { kind: "rejected", reason: parameterError };
+        }
+      }
+    }
+  }
   const visit = (node: Node): string | undefined => {
     if (node !== declaration && isIndependentCallable(ast, node)) {
       return undefined;
@@ -308,6 +335,20 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       if (error !== undefined) return error;
     }
     const operation = facts.getFact(node, rustTargetOperationFactKey);
+    if (ast.kindName(node) === "KindAwaitExpression") {
+      const operand = Node_Expression(ast, node);
+      const operandCarrier = operand === undefined
+        ? undefined
+        : facts.getRuntimeCarrierFact(operand)?.carrier;
+      const future = operand === undefined
+        ? undefined
+        : facts.getFact(operand, rustFutureValueFactKey);
+      if (operandCarrier?.kind === "target-named" &&
+        operandCarrier.id === rustJsPromiseTargetId && future !== undefined) {
+        const error = addUse(node, future.outputCarrier, ["clone"]);
+        if (error !== undefined) return error;
+      }
+    }
     if (operation?.kind === "default-value") {
       const error = addUse(node, operation.resultCarrier, ["default"]);
       if (error !== undefined) return error;
@@ -425,6 +466,9 @@ function classifyCarrierRequirements(
   declared: ReadonlySet<string>,
   byParameter: Map<string, Set<RustGenericRequirement>>,
 ): boolean {
+  if (isRustNeverCarrier(carrier)) {
+    return true;
+  }
   for (const requirement of required) {
     if (requirement === "static") {
       if (!classifyStaticCarrier(carrier, declared, byParameter)) return false;
@@ -509,7 +553,11 @@ function classifyStaticCarrier(
         carrier.autoTraits.every((trait) =>
           classifyStaticCarrier(trait, declared, byParameter));
     case "impl-trait":
-      return carrier.captures.every((lifetime) => lifetime.kind === "static") &&
+      return carrier.captures.every((capture) => {
+        if (capture.kind === "const") return true;
+        if (capture.kind === "lifetime") return capture.lifetime.kind === "static";
+        return classifyStaticCarrier(capture.type, declared, byParameter);
+      }) &&
         carrier.bounds.every((bound) =>
           classifyStaticCarrier(bound, declared, byParameter));
     case "closure":
@@ -560,7 +608,9 @@ function containsDeclaredTypeParameter(
           containsDeclaredTypeParameter(trait, declared));
     case "impl-trait":
       return carrier.bounds.some((bound) =>
-        containsDeclaredTypeParameter(bound, declared));
+        containsDeclaredTypeParameter(bound, declared)) ||
+        carrier.captures.some((capture) => capture.kind === "type" &&
+          containsDeclaredTypeParameter(capture.type, declared));
     case "target-specific": {
       const fixedArray = rustFixedArrayCarrierValue(carrier);
       if (fixedArray !== undefined) {

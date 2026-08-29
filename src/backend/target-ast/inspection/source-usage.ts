@@ -149,6 +149,8 @@ export function rustExpressionChildren(expression: RustExpr): readonly RustExpr[
       return [expression.callee, ...expression.args];
     case "method-call":
       return [expression.receiver, ...expression.args];
+    case "macro-invocation":
+      return expression.args;
     case "field":
       return [expression.receiver];
     case "index":
