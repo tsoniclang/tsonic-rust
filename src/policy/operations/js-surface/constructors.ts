@@ -15,10 +15,8 @@ import {
   rustJsWeakSetTargetType,
   rustCarrierSupportsObjectIdentity,
 } from "../../../target-model/types/index.js";
-import {
-  materializeJsonValueConversions,
-  resolveCarrierRef,
-} from "./selection.js";
+import { resolveCarrierRef } from "./selection.js";
+import { materializeJsonValueConversions } from "./materialization.js";
 import { selectRustJsonValueConversion } from "../../conversions/selection.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { JsCarrierRef, JsOperationSelection } from "./model.js";

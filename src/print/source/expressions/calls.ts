@@ -325,8 +325,7 @@ export function printFittedCall(
     (arguments_[0].operator === "+" || arguments_[0].operator === "-" ||
       arguments_[0].operator === "*" || arguments_[0].operator === "/" ||
       arguments_[0].operator === "%") &&
-    (!rustExpressionContainsStatementBlock(arguments_[0]) ||
-      binaryStartsWithRightHandBlock(arguments_[0]))) {
+    !rustExpressionContainsStatementBlock(arguments_[0])) {
     const prefix = `${callable}(`;
     const rendered = printRustExprFitted(
       arguments_[0],
@@ -337,8 +336,7 @@ export function printFittedCall(
     const attachedBinaryContinuation = /^[A-Za-z_][A-Za-z0-9_]*$/u.test(callable) &&
       callable.length <= rustInlineFieldReceiverWidth &&
       rendered.split("\n").length === 2;
-    if ((!rendered.includes("\n") || attachedBinaryContinuation ||
-        binaryStartsWithRightHandBlock(arguments_[0])) &&
+    if ((!rendered.includes("\n") || attachedBinaryContinuation) &&
       renderedFits(attached, column)) {
       return attached;
     }
@@ -778,16 +776,6 @@ export function printFittedCall(
     ...renderedArguments,
     `${indentText(depth)})`,
   ].join("\n");
-}
-
-function binaryStartsWithRightHandBlock(
-  expression: Extract<RustExpr, { readonly kind: "binary" }>,
-): boolean {
-  let left = expression.left;
-  while (left.kind === "binary") {
-    left = left.left;
-  }
-  return expressionIsRightHandBlock(left);
 }
 
 function printPreferredReferencedNestedCollection(

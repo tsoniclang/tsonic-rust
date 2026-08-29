@@ -117,15 +117,15 @@ export function primitive(name: string): string {
       "index.ts": `
 import { inspect } from "node:util";
 
-export function f(name: string): string {
-  return inspect({ name });
+export function f(value: object): string {
+  return inspect(value);
 }
 `,
     },
   };
   assertRustTargetRejection(badOptions, [{
-    code: "RUST_CALL_ARGUMENT_CONVERSION_UNSUPPORTED",
-    message: "The TSTS-selected call argument cannot be represented by the selected Rust target parameter carrier.",
+    code: "RUST_PARAMETER_CARRIER_UNSUPPORTED",
+    message: "Parameter type has no closed Rust runtime carrier under the selected source-profile and surface policy.",
   }]);
 });
 

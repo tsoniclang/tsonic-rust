@@ -10,6 +10,7 @@ import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import {
   getRustGeneratorProtocol,
+  isRustNeverCarrier,
   rustCarrierSupportsTrait,
   rustClosureProtocol,
   rustFixedArrayCarrierValue,
@@ -465,6 +466,9 @@ function classifyCarrierRequirements(
   declared: ReadonlySet<string>,
   byParameter: Map<string, Set<RustGenericRequirement>>,
 ): boolean {
+  if (isRustNeverCarrier(carrier)) {
+    return true;
+  }
   for (const requirement of required) {
     if (requirement === "static") {
       if (!classifyStaticCarrier(carrier, declared, byParameter)) return false;

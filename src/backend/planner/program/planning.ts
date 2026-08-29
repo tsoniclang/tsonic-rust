@@ -624,7 +624,7 @@ function planRustWorkerDispatch(
       });
       continue;
     }
-    const entryName = `__tsonic_worker_entry_${bootstrapIndex + 1}`;
+    const entryName = `worker_entry_selection_${bootstrapIndex + 1}`;
     const bootstrapCall = applyRustErrorBoundary(
       { kind: "call", path: bootstrap.path, args: [] },
       bootstrap.errorBoundary,

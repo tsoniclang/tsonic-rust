@@ -73,13 +73,13 @@ import {
 import { jsOperationRows, rustInferCarrier } from "./rows.js";
 import { selectRustJsonValueConversion } from "../../conversions/selection.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import {
+  materializeJsonValueConversions,
+  materializeTarget,
+  materializeVariadicTarget,
+} from "./materialization.js";
 import type { JsCarrierRef, JsLane, JsOperationRequest, JsOperationRowData, JsOperationSelection } from "./model.js";
-import type { RustProviderOperationForm } from "../../../target-model/operations/model.js";
-import type {
-  RustTargetGenericArgument,
-  RustTargetTraitRef,
-  TargetTypeRef,
-} from "../../../target-model/types/model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 interface JsLaneBindings {
   readonly element?: TargetTypeRef;
@@ -516,202 +516,6 @@ function arrayReduceCallbackCarrier(
     : rustClosureTargetType(args as TargetTypeRef[], accumulator);
 }
 
-function copyStyleOf(carrier: TargetTypeRef | undefined): { readonly kind: "method"; readonly name: "copied" | "cloned" } {
-  return {
-    kind: "method",
-    name: carrier !== undefined && (carrier.kind === "source-primitive" || isRustNumericCarrier(carrier))
-      ? "copied"
-      : "cloned",
-  };
-}
-
-function materializeTarget(
-  target: RustProviderOperationForm,
-  copyCarrier: TargetTypeRef | undefined,
-): RustProviderOperationForm {
-  if (target.form !== "receiver-method" || target.chain === undefined) {
-    return target;
-  }
-  return {
-    ...target,
-    chain: target.chain.map((entry) => entry.kind === "copy-selected-carrier" ? copyStyleOf(copyCarrier) : entry),
-  };
-}
-
-function materializeVariadicTarget(
-  target: RustProviderOperationForm,
-  elementCarrier: TargetTypeRef | undefined,
-): RustProviderOperationForm | undefined {
-  if (target.form === "receiver-tagged-array") {
-    if (elementCarrier === undefined) {
-      return undefined;
-    }
-    return {
-      ...target,
-      elementCarrier: materializeInferredCarrier(target.elementCarrier, elementCarrier),
-      alternatives: target.alternatives.map((alternative) => ({
-        ...alternative,
-        inputCarrier: materializeInferredCarrier(alternative.inputCarrier, elementCarrier),
-      })),
-    };
-  }
-  if (target.form !== "receiver-value-array" && target.form !== "call-value-array") {
-    return target;
-  }
-  const resolvedElementCarrier = target.elementCarrier.kind === "opaque" &&
-    target.elementCarrier.id === "tsonic.rust.infer"
-    ? elementCarrier
-    : target.elementCarrier;
-  return resolvedElementCarrier === undefined
-    ? undefined
-    : { ...target, elementCarrier: resolvedElementCarrier };
-}
-
-export function materializeJsonValueConversions(
-  target: RustProviderOperationForm,
-  sourceIndexes: readonly number[] | undefined,
-  sourceCarriers: readonly (TargetTypeRef | undefined)[],
-): RustProviderOperationForm | undefined {
-  if (sourceIndexes === undefined) {
-    return target;
-  }
-  if (target.form !== "call") {
-    return undefined;
-  }
-  const order = target.argOrder ?? sourceCarriers.map((_carrier, index) => index);
-  const selected = new Set(sourceIndexes);
-  if (sourceIndexes.some((sourceIndex) => !order.includes(sourceIndex))) {
-    return undefined;
-  }
-  const conversions = order.map((sourceIndex, targetIndex) => {
-    const existing = target.argConversions?.[targetIndex];
-    if (!selected.has(sourceIndex)) {
-      return existing;
-    }
-    const source = sourceCarriers[sourceIndex];
-    return existing !== undefined || source === undefined
-      ? undefined
-      : selectRustJsonValueConversion(source);
-  });
-  if (conversions.some((conversion, targetIndex) =>
-    selected.has(order[targetIndex]!) && conversion === undefined)) {
-    return undefined;
-  }
-  return { ...target, argConversions: conversions };
-}
-
-function materializeInferredCarrier(carrier: TargetTypeRef, inferred: TargetTypeRef): TargetTypeRef {
-  if (carrier.kind === "opaque" && carrier.id === "tsonic.rust.infer") {
-    return inferred;
-  }
-  switch (carrier.kind) {
-    case "target-named":
-      return carrier.genericArguments === undefined
-        ? carrier
-        : {
-            ...carrier,
-            genericArguments: materializeInferredGenericArguments(
-              carrier.genericArguments,
-              inferred,
-            ),
-          };
-    case "array":
-      return { ...carrier, element: materializeInferredCarrier(carrier.element, inferred) };
-    case "tuple":
-      return { ...carrier, elements: carrier.elements.map((element) => materializeInferredCarrier(element, inferred)) };
-    case "reference":
-      return { ...carrier, referent: materializeInferredCarrier(carrier.referent, inferred) };
-    case "pointer":
-      return { ...carrier, pointee: materializeInferredCarrier(carrier.pointee, inferred) };
-    case "function-pointer":
-    case "closure":
-      return {
-        ...carrier,
-        args: carrier.args.map((argument) => materializeInferredCarrier(argument, inferred)),
-        result: materializeInferredCarrier(carrier.result, inferred),
-      };
-    case "trait-ref":
-      return materializeInferredTraitRef(carrier, inferred);
-    case "trait-object":
-      return {
-        ...carrier,
-        principal: materializeInferredTraitRef(carrier.principal, inferred),
-        autoTraits: carrier.autoTraits.map((trait) =>
-          materializeInferredTraitRef(trait, inferred)),
-      };
-    case "impl-trait":
-      return {
-        ...carrier,
-        bounds: carrier.bounds.map((trait) =>
-          materializeInferredTraitRef(trait, inferred)),
-        captures: materializeInferredGenericArguments(carrier.captures, inferred),
-      };
-    case "associated-type":
-      return {
-        ...carrier,
-        owner: materializeInferredCarrier(carrier.owner, inferred),
-        ...(carrier.trait === undefined
-          ? {}
-          : { trait: materializeInferredTraitRef(carrier.trait, inferred) }),
-        ...(carrier.genericArguments === undefined
-          ? {}
-          : {
-              genericArguments: materializeInferredGenericArguments(
-                carrier.genericArguments,
-                inferred,
-              ),
-            }),
-      };
-    default:
-      return carrier;
-  }
-}
-
-function materializeInferredTraitRef(
-  trait: RustTargetTraitRef,
-  inferred: TargetTypeRef,
-): RustTargetTraitRef {
-  return {
-    ...trait,
-    genericArguments: materializeInferredGenericArguments(
-      trait.genericArguments,
-      inferred,
-    ),
-    associatedConstraints: trait.associatedConstraints.map((constraint) =>
-      constraint.kind === "equality"
-        ? {
-            ...constraint,
-            genericArguments: materializeInferredGenericArguments(
-              constraint.genericArguments,
-              inferred,
-            ),
-            type: materializeInferredCarrier(constraint.type, inferred),
-          }
-        : {
-            ...constraint,
-            genericArguments: materializeInferredGenericArguments(
-              constraint.genericArguments,
-              inferred,
-            ),
-            traits: constraint.traits.map((bound) =>
-              materializeInferredTraitRef(bound, inferred)),
-          }),
-  };
-}
-
-function materializeInferredGenericArguments(
-  arguments_: readonly RustTargetGenericArgument[],
-  inferred: TargetTypeRef,
-): readonly RustTargetGenericArgument[] {
-  return arguments_.map((argument): RustTargetGenericArgument =>
-    argument.kind === "type"
-      ? {
-          kind: "type",
-          type: materializeInferredCarrier(argument.type, inferred),
-        }
-      : argument);
-}
-
 function firstArgumentId(request: JsOperationRequest): string | undefined {
   const carrier = request.argumentCarriers?.[0];
   return carrier?.kind === "target-named" ? carrier.id : undefined;
@@ -853,6 +657,12 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
         row.jsonValueSourceArgumentIndexes?.includes(index) === true
           ? request.argumentCarriers?.[index]
           : carrier);
+  const compileTimeSourceArgumentIndexes = new Set(
+    row.compileTimeSourceArgumentIndexes ?? [],
+  );
+  const declaredRuntimeParameterCarriers = selectedParameterCarriers?.filter(
+    (_carrier, index) => !compileTimeSourceArgumentIndexes.has(index),
+  );
   const operationId = `tsonic.rust.js.${row.owner}.${row.member}.${row.operationKind}${row.variant === undefined ? "" : `.${row.variant}`}${discardResult ? ".discarded" : ""}`;
   if (row.shape.op === "set") {
     if (parameterCarriers.some((carrier) => carrier === undefined)) {
@@ -908,7 +718,9 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
               ? rustUndefinedTargetType()
               : rustNullTargetType(),
           }),
-      ...(selectedParameterCarriers === undefined ? {} : { parameterCarriers: selectedParameterCarriers }),
+      ...(declaredRuntimeParameterCarriers === undefined
+        ? {}
+        : { parameterCarriers: declaredRuntimeParameterCarriers }),
       ...(row.compileTimeSourceArgumentIndexes === undefined
         ? {}
         : {
