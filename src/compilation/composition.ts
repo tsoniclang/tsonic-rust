@@ -20,6 +20,8 @@ export const rustTargetProvider: TargetProviderDescriptor = Object.freeze({
   id: "rust-provider",
   displayName: "Rust target provider",
   moduleOwnership: Object.freeze([
+    Object.freeze({ specifierPrefix: "@tsonic/rust/core/" }),
+    Object.freeze({ specifierPrefix: "@tsonic/rust/alloc/" }),
     Object.freeze({ specifierPrefix: "@tsonic/rust/std/" }),
     Object.freeze({ specifierPrefix: rustCompilerProviderSpecifierPrefix }),
   ]),
@@ -39,7 +41,12 @@ export const rustTargetSurfaces: readonly TargetSurfaceImplementation[] = Object
     runtimeContributions(context: TargetRuntimeContributionContext): TargetRuntimeContributions {
       return Object.freeze({
         references: Object.freeze([
-          rustRuntimeCrateReference(context, "@tsonic/rust-js", "tsonic_rust_js"),
+          rustRuntimeCrateReference(
+            context,
+            "@tsonic/rust-js",
+            "tsonic_rust_js",
+            { minimumFoundation: "std" },
+          ),
         ]),
       });
     },

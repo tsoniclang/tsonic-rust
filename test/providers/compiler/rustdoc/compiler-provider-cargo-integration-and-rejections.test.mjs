@@ -515,7 +515,13 @@ test("dependency-closure mutation after snapshot is rejected before rustdoc reus
   appendFileSync(resolve(copiedCrate, "src/lib.rs"), "\n// mutation after immutable snapshot\n");
 
   assert.throws(
-    () => worker.module({ snapshot, dependency, modulePath: [], requestedExports: ["Widget"] }),
+    () => worker.module({
+      snapshot,
+      dependency,
+      foundation: "std",
+      modulePath: [],
+      requestedExports: ["Widget"],
+    }),
     /changed after the compiler-provider snapshot was created/u,
   );
 });

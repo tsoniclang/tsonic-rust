@@ -72,33 +72,33 @@ export function isRustAssignmentOperator(
 export function rustBinaryOperatorTraitPath(operator: RustBinaryOperator): string | undefined {
   switch (operator) {
     case "+":
-      return "std::ops::Add";
+      return "core::ops::Add";
     case "-":
-      return "std::ops::Sub";
+      return "core::ops::Sub";
     case "*":
-      return "std::ops::Mul";
+      return "core::ops::Mul";
     case "/":
-      return "std::ops::Div";
+      return "core::ops::Div";
     case "%":
-      return "std::ops::Rem";
+      return "core::ops::Rem";
     case "&":
-      return "std::ops::BitAnd";
+      return "core::ops::BitAnd";
     case "|":
-      return "std::ops::BitOr";
+      return "core::ops::BitOr";
     case "^":
-      return "std::ops::BitXor";
+      return "core::ops::BitXor";
     case "<<":
-      return "std::ops::Shl";
+      return "core::ops::Shl";
     case ">>":
-      return "std::ops::Shr";
+      return "core::ops::Shr";
     case "<":
     case "<=":
     case ">":
     case ">=":
-      return "std::cmp::PartialOrd";
+      return "core::cmp::PartialOrd";
     case "==":
     case "!=":
-      return "std::cmp::PartialEq";
+      return "core::cmp::PartialEq";
     case "&&":
     case "||":
       return undefined;

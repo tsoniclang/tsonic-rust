@@ -4,6 +4,7 @@ import type {
   RustCompilerProjectSnapshot,
 } from "../model/model.js";
 import { rustCompilerProviderProtocolVersion } from "../model/model.js";
+import type { RustFoundation } from "../../../target-model/foundation/model.js";
 
 export type RustCompilerWorkerRequest =
   | {
@@ -26,6 +27,7 @@ export type RustCompilerWorkerRequest =
       readonly modulePath: readonly string[];
       readonly requestedExports?: readonly string[];
       readonly targetDirectory: string;
+      readonly foundation: RustFoundation;
     };
 
 export type RustCompilerWorkerResponse =

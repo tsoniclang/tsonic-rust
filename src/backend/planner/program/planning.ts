@@ -4,16 +4,13 @@ import {
   rejectedTargetStage,
   resolvedTargetStage,
 } from "@tsonic/target-api/artifacts";
-import type {
-  TargetDiagnostic,
-  TargetStageResult,
-} from "@tsonic/target-api/artifacts";
+import type { TargetDiagnostic, TargetStageResult } from "@tsonic/target-api/artifacts";
 import {
   KindFunctionDeclaration,
   Node_Name,
 } from "@tsonic/target-api/source";
 import { isRustUnitCarrier } from "../../../target-model/types/index.js";
-import { createRustSourceFile, emptyRustGenerics } from "../../target-ast/nodes.js";
+import { emptyRustGenerics } from "../../target-ast/nodes.js";
 import type { RustItem } from "../../target-ast/nodes.js";
 import { finalizeRustSourceStyle } from "../../target-ast/normalization/source-style.js";
 import { planRustCargoProject } from "../project/cargo.js";
@@ -56,6 +53,9 @@ import {
   rustWorkerEntryIdentity,
   type RustWorkerEntryPlan,
 } from "./worker-entries.js";
+import { createRustCrateRootSourceFile } from "../project/foundation.js";
+import { verifyRustFoundationPlan } from "../foundation/verify.js";
+import { applyRustFoundationImports } from "../foundation/imports.js";
 
 export function planRustOutput(input: RustPlanningContext): TargetStageResult<RustOutputPlan> {
   const diagnostics: TargetDiagnostic[] = [];
@@ -555,19 +555,36 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
           }
         : { body: { statements: [...workerDispatchStatements, ...initializationStatements, entryStatement, ...epilogueStatements] } }),
     };
-    artifacts.push(rustSourceArtifact("src/main.rs", createRustSourceFile([mainItem])));
+    artifacts.push(rustSourceArtifact(
+      "src/main.rs",
+      createRustCrateRootSourceFile(input.program.configuration.foundation, [mainItem]),
+    ));
   }
-  return resolvedTargetStage(Object.freeze({
-    artifacts: Object.freeze(artifacts.map(finalizeRustPlannedArtifact)),
-  }));
+  const finalizedArtifacts = Object.freeze(artifacts.map((artifact) =>
+    finalizeRustPlannedArtifact(
+      artifact,
+      input.program.configuration.foundation,
+    )));
+  const foundationDiagnostics = verifyRustFoundationPlan(
+    input.program,
+    finalizedArtifacts,
+  );
+  return foundationDiagnostics.length > 0
+    ? rejectedTargetStage(foundationDiagnostics)
+    : resolvedTargetStage(Object.freeze({ artifacts: finalizedArtifacts }));
 }
 
-function finalizeRustPlannedArtifact(artifact: RustPlannedArtifact): RustPlannedArtifact {
+function finalizeRustPlannedArtifact(
+  artifact: RustPlannedArtifact,
+  foundation: import("../../../target-model/foundation/model.js").RustFoundation,
+): RustPlannedArtifact {
   return artifact.kind === "project"
     ? Object.freeze(artifact)
     : Object.freeze({
         ...artifact,
-        model: finalizeRustSourceStyle(artifact.model),
+        model: finalizeRustSourceStyle(
+          applyRustFoundationImports(artifact.model, foundation),
+        ),
       });
 }
 
@@ -835,8 +852,8 @@ function resolveBinaryEntry(
   if (entrySourceFile === undefined) {
     return undefined;
   }
-  const entryFileName = entrySourceFile === undefined ? undefined : input.program.source.ast.getFileName(entrySourceFile);
-  const moduleName = entryFileName === undefined ? undefined : moduleNameByFileName.get(entryFileName);
+  const entryFileName = input.program.source.ast.getFileName(entrySourceFile);
+  const moduleName = moduleNameByFileName.get(entryFileName);
   if (moduleName === undefined) {
     diagnostics.push({
       code: "RUST_MISSING_ENTRYPOINT",

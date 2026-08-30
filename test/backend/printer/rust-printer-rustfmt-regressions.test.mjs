@@ -235,7 +235,7 @@ test("rustfmt-stable calls, closures, conditionals, and borrowed fallible chains
   );
   assert.match(
     source,
-    /rt::option_coalesce\(values\.clone\(\)\.1, std::convert::identity, \|\| String::from\(\n {12}"none"\n {8}\)\),/u,
+    /rt::option_coalesce\(values\.clone\(\)\.1, std::convert::identity, \|\| String::from\(\n {12}"none"\n {8}\),\),/u,
   );
   assert.match(source, /rt::source_string\(&callable\.call\(\(\n/u);
   assert.doesNotMatch(source, /rt::source_string\(&callable\n {8}\.call/u);

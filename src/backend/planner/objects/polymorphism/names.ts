@@ -149,7 +149,7 @@ export function rustProjectStateMarker(
     name: context.input.program.projectTypes.stateMarkerFieldName(definition),
     type: {
       kind: "named",
-      path: "std::marker::PhantomData",
+      path: "core::marker::PhantomData",
       genericArguments: [{
         kind: "type",
         type: {
@@ -166,7 +166,7 @@ export function rustProjectStateMarker(
         },
       }],
     },
-    value: { kind: "path", path: "std::marker::PhantomData" },
+    value: { kind: "path", path: "core::marker::PhantomData" },
   };
 }
 

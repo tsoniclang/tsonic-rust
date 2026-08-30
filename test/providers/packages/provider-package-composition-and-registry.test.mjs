@@ -334,7 +334,24 @@ test("provider crate registry replacement is explicit and schema-closed", () => 
   const [reference] = accepted.runtimeContributions({}).references;
   assert.deepEqual(reference.attributes, {
     crate: "acme_validation",
+    minimumFoundation: "std",
     registryPatch: "crates-io",
+  });
+
+  const allocProvider = createRustProviderPackage(definition({
+    crates: [{
+      crateName: "acme_validation",
+      cargoPath: "/packages/acme_validation",
+      minimumFoundation: "alloc",
+      defaultFeatures: false,
+      features: ["portable"],
+    }],
+  }));
+  assert.deepEqual(allocProvider.runtimeContributions({}).references[0].attributes, {
+    crate: "acme_validation",
+    minimumFoundation: "alloc",
+    defaultFeatures: "false",
+    features: '["portable"]',
   });
 
   assert.throws(
@@ -346,6 +363,16 @@ test("provider crate registry replacement is explicit and schema-closed", () => 
       }],
     })),
     /unsupported registry patch 'private-registry'/u,
+  );
+  assert.throws(
+    () => createRustProviderPackage(definition({
+      crates: [{
+        crateName: "acme_validation",
+        cargoPath: "/packages/acme_validation",
+        minimumFoundation: "hosted",
+      }],
+    })),
+    /invalid minimum foundation 'hosted'/u,
   );
   assert.throws(
     () => createRustProviderPackage(definition({

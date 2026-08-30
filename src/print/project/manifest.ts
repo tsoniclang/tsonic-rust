@@ -16,7 +16,14 @@ export function printCargoManifest(manifest: CargoManifestPlan): string {
   if (manifest.dependencies.length > 0) {
     lines.push("", "[dependencies]");
     for (const dependency of manifest.dependencies) {
-      lines.push(`${dependency.name} = { path = ${tomlString(dependency.path)} }`);
+      const attributes = [`path = ${tomlString(dependency.path)}`];
+      if (dependency.defaultFeatures !== undefined) {
+        attributes.push(`default-features = ${String(dependency.defaultFeatures)}`);
+      }
+      if (dependency.features !== undefined && dependency.features.length > 0) {
+        attributes.push(`features = [${dependency.features.map(tomlString).join(", ")}]`);
+      }
+      lines.push(`${dependency.name} = { ${attributes.join(", ")} }`);
     }
     const registryPatches = manifest.dependencies.filter((dependency) => dependency.registryPatch === "crates-io");
     if (registryPatches.length > 0) {

@@ -35,6 +35,8 @@ import {
 } from "../control-flow/counted-loop-representations.js";
 import type { RustProviderBinaryEpilogueRow } from "../../providers/packages/model.js";
 import { analyzeRustSourceModuleConstructions } from "../source-modules/index.js";
+import { analyzeRustFoundation } from "../foundation/plan.js";
+import { maximumRustFoundation } from "../../target-model/foundation/model.js";
 
 const rustJsTimerEpilogue: RustProviderBinaryEpilogueRow = Object.freeze({
   id: "tsonic.rust.js.timers",
@@ -58,6 +60,7 @@ export function analyzeRustTargetProgram(
   } = request;
   const runtimeReferences = analyzeRustRuntimeReferences(
     input.runtimeReferences,
+    configuration.foundation,
   );
   if (runtimeReferences.kind === "rejected") {
     return rejectedTargetStage(runtimeReferences.diagnostics);
@@ -92,6 +95,20 @@ export function analyzeRustTargetProgram(
   }
 
   const moduleInitialization = createRustModuleInitializationPlan(context);
+  const objectRepresentations = context.objectRepresentations.seal();
+  const foundation = analyzeRustFoundation({
+    selected: configuration.foundation,
+    factRequirement: context.facts.minimumFoundation(),
+    runtimeReferenceRequirement: [...runtimeReferences.plan.minimumFoundationByCrate.values()]
+      .reduce(maximumRustFoundation, "core"),
+    moduleInitializationRequirement: moduleInitialization.minimumFoundation(),
+    objectRepresentations,
+    jsEnabled,
+    binaryOutput: configuration.outputType === "bin",
+  });
+  if (foundation.plan === undefined) {
+    return rejectedTargetStage(foundation.diagnostics);
+  }
   const facts = context.facts.seal();
   const callableGenericRequirements = analyzeRustCallableGenericRequirements(
     context.source,
@@ -131,7 +148,7 @@ export function analyzeRustTargetProgram(
     sourceFiles: context.sourceFiles,
     facts,
     projectTypes: context.projectTypes.seal(),
-    objectRepresentations: context.objectRepresentations.seal(),
+    objectRepresentations,
     projectMethodDispatch: context.projectMethodDispatch.seal(),
     projectMethodProperties: context.projectMethodProperties.seal(),
     projectFieldDispatch: context.projectFieldDispatch.seal(),
@@ -145,6 +162,7 @@ export function analyzeRustTargetProgram(
     }),
     structuralShapes: context.structuralShapes.seal(),
     runtimeReferences: runtimeReferences.plan,
+    foundation: foundation.plan,
     binaryEpilogues,
     providerErrorCarriers: analyzeRustProviderErrorCarriers(
       context.ast,

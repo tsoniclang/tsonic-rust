@@ -619,6 +619,7 @@ export function printRustExprFitted(
         !rustMethodChainPrefersVerticalLayout(expression.left) &&
         !rustMethodChainPrefersVerticalLayout(expression.right) &&
         !rustBinaryOperandPrefersExpandedCall(expression.left) &&
+        !rustDirectBinaryCallExceedsCallWidth(expression.left) &&
         !leftMethodRequiresExpansion &&
         !flat.includes("\n") && renderedFits(flat, column)) {
         return flat;
@@ -642,10 +643,11 @@ export function printRustExprFitted(
           grammarPosition,
         );
       }
-      const expandedLeftCall = expression.left.kind === "call"
+      const directLeftCall = rustDirectBinaryCall(expression.left);
+      const expandedLeftCall = directLeftCall?.kind === "call"
         ? printExpandedBinaryLeftCall(
-            expression.left,
-            printRustDirectCallTarget(expression.left),
+            directLeftCall,
+            printRustDirectCallTarget(directLeftCall),
             expression.operator,
             expression.right,
             depth,
@@ -653,12 +655,12 @@ export function printRustExprFitted(
             layoutRegion !== "logical-chain-operand",
             rustBinaryOperandPrefersExpandedCall(expression.left),
           )
-        : expression.left.kind === "associated-call"
+        : directLeftCall?.kind === "associated-call"
           ? printExpandedBinaryLeftCall(
-              expression.left,
+              directLeftCall,
               printRustAssociatedCallTarget(
-                expression.left,
-                printRustAssociatedCallOwner(expression.left),
+                directLeftCall,
+                printRustAssociatedCallOwner(directLeftCall),
               ),
               expression.operator,
               expression.right,
@@ -838,4 +840,20 @@ export function printRustExprFitted(
     default:
       return flat;
   }
+}
+
+function rustDirectBinaryCallExceedsCallWidth(expression: RustExpr): boolean {
+  const call = rustDirectBinaryCall(expression);
+  return call !== undefined && call.args.length > 1 &&
+    call.args.map(printRustExpr).join(", ").length > rustNestedCallWidth;
+}
+
+function rustDirectBinaryCall(
+  expression: RustExpr,
+): Extract<RustExpr, { readonly kind: "call" | "associated-call" }> | undefined {
+  return expression.kind === "bottom"
+    ? rustDirectBinaryCall(expression.expression)
+    : expression.kind === "call" || expression.kind === "associated-call"
+      ? expression
+      : undefined;
 }

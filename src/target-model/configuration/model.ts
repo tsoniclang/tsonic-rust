@@ -1,4 +1,5 @@
 import type { RustEdition, RustOutputType } from "../project/model.js";
+import type { RustFoundation } from "../foundation/model.js";
 
 export type RustProjectConfiguration =
   | { readonly kind: "generated" }
@@ -7,6 +8,7 @@ export type RustProjectConfiguration =
 export interface RustTargetConfiguration {
   readonly crateName: string;
   readonly edition: RustEdition;
+  readonly foundation: RustFoundation;
   readonly outputType: RustOutputType;
   readonly project: RustProjectConfiguration;
 }

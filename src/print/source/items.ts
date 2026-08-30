@@ -39,6 +39,8 @@ export function printRustSourceFile(model: RustSourceFileModel): string {
 
 export function printRustItem(item: RustItem): string {
   switch (item.kind) {
+    case "extern-crate":
+      return `extern crate ${item.name};`;
     case "mod-decl": {
       const attrs = (item.attrs ?? []).map((attr) => `${attr}\n`).join("");
       return `${attrs}${printRustVisibility(item.visibility)}mod ${item.name};`;
@@ -253,7 +255,7 @@ function printRustSelfParam(
             prefix: "self: ",
             type: {
               kind: "named",
-              path: "std::rc::Rc",
+              path: "alloc::rc::Rc",
               genericArguments: [{
                 kind: "type",
                 type: { kind: "named", path: "Self" },

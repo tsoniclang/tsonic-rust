@@ -10,6 +10,7 @@ import {
 import { rustModuleBindingFactKey } from "../facts/keys.js";
 import { rustProjectStaticFieldStorage } from "../project-types/object-layout.js";
 import type { RustAnalysisContext } from "./context.js";
+import type { RustFoundation } from "../../target-model/foundation/model.js";
 
 export type RustModuleInitializationRequirement =
   | { readonly kind: "required" }
@@ -18,6 +19,7 @@ export type RustModuleInitializationRequirement =
 
 export interface RustModuleInitializationPlan {
   requirementFor(sourceFile: SourceFile): RustModuleInitializationRequirement;
+  minimumFoundation(): RustFoundation;
 }
 
 type RustModuleInitializationPlanInput = Pick<
@@ -29,8 +31,11 @@ export function createRustModuleInitializationPlan(
   input: RustModuleInitializationPlanInput,
 ): RustModuleInitializationPlan {
   const requirements = new Map<SourceFile, RustModuleInitializationRequirement>();
+  let minimumFoundation: RustFoundation = "core";
   for (const sourceFile of input.sourceFiles) {
-    requirements.set(sourceFile, classifyModuleInitialization(input, sourceFile));
+    const requirement = classifyModuleInitialization(input, sourceFile);
+    requirements.set(sourceFile, requirement);
+    if (requirement.kind === "required") minimumFoundation = "std";
   }
   return Object.freeze({
     requirementFor(sourceFile: SourceFile) {
@@ -38,6 +43,9 @@ export function createRustModuleInitializationPlan(
         sourceFile,
         "Source file has no finalized Rust module-initialization requirement.",
       );
+    },
+    minimumFoundation() {
+      return minimumFoundation;
     },
   });
 }

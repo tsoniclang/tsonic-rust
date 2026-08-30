@@ -282,7 +282,7 @@ export function inspectJson(): boolean {
   assert.match(text, /let value: js_abi::JsValue = js_abi::json_parse\("\{\\"tag\\":\\"tsonic\\"\}"\)\?;/u);
   assert.match(
     text,
-    /let rendered: String = rt::option_coalesce\(\s*js_abi::json_stringify\(&value\)\?,\s*std::convert::identity,\s*\|\| String::from\(""\),\s*\);/u,
+    /let rendered: String = rt::option_coalesce\(\s*js_abi::json_stringify\(&value\)\?,\s*core::convert::identity,\s*\|\| String::from\(""\),\s*\);/u,
   );
   assert.match(text, /ok = js_string::includes_from_start\(&rendered, "tsonic"\);/u);
 });

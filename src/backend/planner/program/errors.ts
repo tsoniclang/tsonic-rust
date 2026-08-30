@@ -188,7 +188,7 @@ export function planRustProgramErrorModule(
     {
       kind: "impl",
       generics: emptyRustGenerics,
-      trait: namedType("std::error::Error"),
+      trait: namedType("core::error::Error"),
       target: programErrorType,
       functions: [],
     },
@@ -211,7 +211,7 @@ function fromImplementation(
   return {
     kind: "impl",
     generics: emptyRustGenerics,
-    trait: namedType("std::convert::From", [source]),
+    trait: namedType("core::convert::From", [source]),
     target: programErrorType,
     functions: [{
       name: "from",
@@ -235,14 +235,14 @@ function displayImplementation(projectVariants: readonly string[]): RustItem {
     mutable: true,
     referent: {
       kind: "named",
-      path: "std::fmt::Formatter",
+      path: "core::fmt::Formatter",
       genericArguments: [{ kind: "lifetime", lifetime: { kind: "placeholder" } }],
     },
   };
   return {
     kind: "impl",
     generics: emptyRustGenerics,
-    trait: namedType("std::fmt::Display"),
+    trait: namedType("core::fmt::Display"),
     target: programErrorType,
     functions: [{
       name: "fmt",
@@ -250,7 +250,7 @@ function displayImplementation(projectVariants: readonly string[]): RustItem {
       generics: emptyRustGenerics,
       selfParam: { kind: "reference", mutable: false },
       params: [{ name: "formatter", type: formatterType }],
-      returnType: namedType("std::fmt::Result"),
+      returnType: namedType("core::fmt::Result"),
       body: {
         statements: [{
           kind: "tail",
@@ -288,7 +288,7 @@ function displayDelegateArm(variant: string): {
 } {
   return {
     pattern: tupleVariant(variant, binding("value")),
-    expression: call("std::fmt::Display::fmt", path("value"), path("formatter")),
+    expression: call("core::fmt::Display::fmt", path("value"), path("formatter")),
   };
 }
 
@@ -296,7 +296,7 @@ function debugImplementation(): RustItem {
   return {
     kind: "impl",
     generics: emptyRustGenerics,
-    trait: namedType("std::fmt::Debug"),
+    trait: namedType("core::fmt::Debug"),
     target: programErrorType,
     functions: [{
       name: "fmt",
@@ -310,16 +310,16 @@ function debugImplementation(): RustItem {
           mutable: true,
           referent: {
             kind: "named",
-            path: "std::fmt::Formatter",
+            path: "core::fmt::Formatter",
             genericArguments: [{ kind: "lifetime", lifetime: { kind: "placeholder" } }],
           },
         },
       }],
-      returnType: namedType("std::fmt::Result"),
+      returnType: namedType("core::fmt::Result"),
       body: {
         statements: [{
           kind: "tail",
-          expr: call("std::fmt::Display::fmt", path("self"), path("formatter")),
+          expr: call("core::fmt::Display::fmt", path("self"), path("formatter")),
         }],
       },
     }],

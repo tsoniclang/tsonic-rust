@@ -535,7 +535,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
       name: rootName,
       value: {
         kind: "call",
-        path: "std::rc::Rc::new",
+        path: "alloc::rc::Rc::new",
         args: [{
           kind: "struct-literal",
           path: objectLiteralImplementation.rootName,
@@ -738,7 +738,7 @@ function planProjectIndexRecordLiteral(
       bindings.push({ name: valueName, value });
       const contributionEntries: RustExpr = {
         kind: "call",
-        path: "std::iter::once",
+        path: "core::iter::once",
         args: [{
           kind: "tuple-literal",
           elements: [key, { kind: "path", path: valueName }],

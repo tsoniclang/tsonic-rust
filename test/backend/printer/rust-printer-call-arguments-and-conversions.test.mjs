@@ -507,7 +507,7 @@ test("logical-chain operands keep fitted closures before nested comparison conti
 
   assert.match(
     source,
-    /true\n {8}&& rt::option_coalesce\(parts\.get_number\(0\.0\), std::convert::identity, \|\| String::from\(""\)\)\n {12}== "a";/u,
+    /true && rt::option_coalesce\(parts\.get_number\(0\.0\), std::convert::identity, \|\| \{\n {8}String::from\(""\)\n {4}\}\) == "a";/u,
   );
 });
 

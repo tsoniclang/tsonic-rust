@@ -7,4 +7,6 @@ export interface RustCargoDependency {
   readonly name: string;
   readonly path: string;
   readonly registryPatch?: typeof cargoCratesIoRegistry;
+  readonly defaultFeatures?: boolean;
+  readonly features?: readonly string[];
 }

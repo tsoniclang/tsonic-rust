@@ -598,7 +598,7 @@ export function planProjectClassConstructor(
           mutable: false,
           init: {
             kind: "call",
-            path: "std::rc::Rc::new",
+            path: "alloc::rc::Rc::new",
             args: [{
               kind: "struct-literal",
               path: rootType.path,

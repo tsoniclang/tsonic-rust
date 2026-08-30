@@ -380,7 +380,7 @@ export function main(): void {
   const model = artifactText(result, "src/model.rs");
   const identity = artifactText(result, "src/identity.rs");
   const index = artifactText(result, "src/index.rs");
-  assert.match(model, /fn downcast_json_value_to_json_string\(\s*self: std::rc::Rc<Self>,?\s*\)/u);
+  assert.match(model, /fn downcast_json_value_to_json_string\(\s*self: alloc::rc::Rc<Self>,?\s*\)/u);
   assert.match(identity, /downcast_json_value_to_json_string\(\)\s*\.is_some\(\)/u);
   assert.match(index, /downcast_json_value_to_json_string\(\)\s*\.is_some\(\)/u);
   assert.match(index, /downcast_json_value_to_json_string\(\)\s*\.unwrap\(\)/u);

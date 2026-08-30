@@ -56,6 +56,7 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
     const widgetModule = worker.module({
       snapshot,
       dependency,
+      foundation: "std",
       modulePath: [],
       requestedExports: ["Widget"],
     });
@@ -110,6 +111,7 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
     const functionModule = worker.module({
       snapshot,
       dependency,
+      foundation: "std",
       modulePath: [],
       requestedExports: [
         "ANSWER",
@@ -207,6 +209,7 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
     const lifetimeModule = worker.module({
       snapshot,
       dependency,
+      foundation: "std",
       modulePath: [],
       requestedExports: [
         "LifetimeView",
@@ -372,6 +375,7 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
     const closedFunctionModule = worker.module({
       snapshot,
       dependency,
+      foundation: "std",
       modulePath: [],
       requestedExports: ["mode_code"],
     });
@@ -379,6 +383,7 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
     const explicitlyRequestedClosureModule = worker.module({
       snapshot,
       dependency,
+      foundation: "std",
       modulePath: [],
       requestedExports: ["Mode", "mode_code"],
     });
@@ -390,6 +395,7 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
     const structuredModule = worker.module({
       snapshot,
       dependency,
+      foundation: "std",
       modulePath: [],
       requestedExports: ["StructuredMode"],
     });
@@ -527,6 +533,7 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
     const genericFactoryModule = worker.module({
       snapshot,
       dependency,
+      foundation: "std",
       modulePath: [],
       requestedExports: ["GenericFactory"],
     });
@@ -555,6 +562,7 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
     const nestedModule = worker.module({
       snapshot,
       dependency,
+      foundation: "std",
       modulePath: ["math"],
       requestedExports: ["triple"],
     });
@@ -589,6 +597,7 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
     const openAssociatedType = worker.module({
       snapshot,
       dependency,
+      foundation: "std",
       modulePath: [],
       requestedExports: ["pass_family_item"],
     });
@@ -601,6 +610,7 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
     const advancedTypeModule = worker.module({
       snapshot,
       dependency,
+      foundation: "std",
       modulePath: [],
       requestedExports: [
         "MixedFamily",
@@ -683,6 +693,7 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
     const collectionsModule = worker.module({
       snapshot: standardSnapshot,
       dependency: standardDependency,
+      foundation: "std",
       modulePath: ["collections"],
       requestedExports: ["HashMap"],
     });
@@ -770,6 +781,7 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
     const opsModule = worker.module({
       snapshot: standardSnapshot,
       dependency: standardDependency,
+      foundation: "std",
       modulePath: ["ops"],
       requestedExports: ["ControlFlow"],
     });
@@ -791,6 +803,7 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
     const vecModule = worker.module({
       snapshot: standardSnapshot,
       dependency: standardDependency,
+      foundation: "std",
       modulePath: ["vec"],
       requestedExports: ["Vec"],
     });
@@ -836,6 +849,7 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
     const fmtModule = worker.module({
       snapshot: standardSnapshot,
       dependency: standardDependency,
+      foundation: "std",
       modulePath: ["fmt"],
       requestedExports: ["Formatter", "Debug"],
     });
@@ -861,6 +875,7 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
     const ioModule = worker.module({
       snapshot: standardSnapshot,
       dependency: standardDependency,
+      foundation: "std",
       modulePath: ["io"],
       requestedExports: ["ErrorKind"],
     });
@@ -903,6 +918,7 @@ test("compiler worker replaces a corrupt rustdoc cache artifact from its immutab
     const first = worker.module({
       snapshot,
       dependency,
+      foundation: "std",
       modulePath: [],
       requestedExports: ["Widget"],
     });
@@ -921,6 +937,7 @@ test("compiler worker replaces a corrupt rustdoc cache artifact from its immutab
     const recovered = worker.module({
       snapshot,
       dependency,
+      foundation: "std",
       modulePath: [],
       requestedExports: ["Widget"],
     });

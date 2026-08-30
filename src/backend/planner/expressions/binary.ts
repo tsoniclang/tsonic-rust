@@ -162,7 +162,7 @@ export function planBinaryExpression(node: Node, context: RustPlanContext): Rust
           }
         : {
             kind: "path",
-            path: fact.rightOperand === "option" ? "Some" : "std::convert::identity",
+            path: fact.rightOperand === "option" ? "Some" : "core::convert::identity",
           };
     const coalesced: RustExpr = {
       kind: "call",

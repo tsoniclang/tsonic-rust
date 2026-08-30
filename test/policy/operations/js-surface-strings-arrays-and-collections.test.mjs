@@ -509,7 +509,7 @@ export function probe(text: string, values: readonly int32[]): boolean {
   assert.match(text, /js_string::repeat\(text, 2\.0\)\?/u);
   assert.match(
     text,
-    /let point: f64 = rt::option_coalesce\(\n {8}js_string::code_point_at\(text, 0\.0\),\n {8}std::convert::identity,\n {8}\|\| 0\.0,\n {4}\);/u,
+    /let point: f64 = rt::option_coalesce\(\n {8}js_string::code_point_at\(text, 0\.0\),\n {8}core::convert::identity,\n {8}\|\| 0\.0,\n {4}\);/u,
   );
 });
 

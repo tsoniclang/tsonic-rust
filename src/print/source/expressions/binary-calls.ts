@@ -5,6 +5,7 @@ import { printFittedCall } from "./calls.js";
 import { printRustExpr } from "./core.js";
 import { rustFormatArgumentIsAtomic } from "./inspection.js";
 import { printBinaryOperand } from "./precedence.js";
+import { rustNestedCallWidth } from "../formatting.js";
 
 export function printExpandedBinaryLeftCall(
   expression: Extract<RustExpr, { readonly kind: "call" | "associated-call" }>,
@@ -21,8 +22,10 @@ export function printExpandedBinaryLeftCall(
     return undefined;
   }
   const flatLeft = printRustExpr(expression);
+  const flatArguments = expression.args.map(printRustExpr).join(", ");
   const leftRequiresExpansion = binaryCallAllowsArgumentExpansion(expression) &&
-    (prefersExpansion || !renderedFits(flatLeft, column));
+    (prefersExpansion || flatArguments.length > rustNestedCallWidth ||
+      !renderedFits(flatLeft, column));
   if (!leftRequiresExpansion && !preserveOperatorAttachment) {
     return undefined;
   }

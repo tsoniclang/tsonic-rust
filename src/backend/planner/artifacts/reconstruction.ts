@@ -319,6 +319,7 @@ function rustSourceFileItemNames(model: RustSourceFileModel): readonly string[] 
       case "mod-decl":
       case "impl":
       case "use":
+      case "extern-crate":
         return [];
     }
   }));

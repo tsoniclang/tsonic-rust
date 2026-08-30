@@ -110,7 +110,7 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /impl std::fmt::Debug for TemplateNode/u);
+  assert.match(source, /impl core::fmt::Debug for TemplateNode/u);
   assert.match(source, /formatter\.write_str\("TemplateNode"\)/u);
   const run = validateGeneratedProject("polymorphic-debug", result.artifacts, { run: true });
   assert.equal(run.status, 0, run.stderr || run.stdout);

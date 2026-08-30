@@ -155,11 +155,11 @@ export function acmeVectorsPackage() {
       },
       {
         // Source call Vector.add(a, b) lowers to the native `+` operator
-        // backed by the crate's std::ops::Add implementation.
+        // backed by the crate's canonical core::ops::Add implementation.
         exportId: "@acme/vectors::Vector",
         memberId: "@acme/vectors::Vector.add",
         operationKind: "method",
-        target: { form: "binary-operator", operator: "+", trait: "std::ops::Add" },
+        target: { form: "binary-operator", operator: "+", trait: "core::ops::Add" },
         resultCarrier: vectorCarrier,
         parameterCarriers: [vectorCarrier, vectorCarrier],
       },

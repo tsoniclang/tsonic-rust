@@ -12,6 +12,15 @@ import {
   rustSelectedCallKey,
   rustSelectedOperationKey,
 } from "../../target-model/facts/selections.js";
+import { rustTargetOperationFactKey } from "./operations/keys.js";
+import type { RustFoundation } from "../../target-model/foundation/model.js";
+import { maximumRustFoundation } from "../../target-model/foundation/model.js";
+import {
+  rustFoundationForCarrier,
+  rustFoundationForSelectedCall,
+  rustFoundationForSelectedOperation,
+} from "../foundation/requirements.js";
+import { rustFoundationForTargetOperationFact } from "../foundation/operation-requirements.js";
 import type {
   RustIterationSelection,
   RustPlanQueries,
@@ -20,6 +29,7 @@ import type {
 
 export interface RustPlanBuilder extends RustPlanWriter {
   seal(): RustPlanQueries;
+  minimumFoundation(): RustFoundation;
 }
 
 export function createRustPlanBuilder(
@@ -27,6 +37,7 @@ export function createRustPlanBuilder(
 ): RustPlanBuilder {
   const values = new Map<RustPlanKey<unknown>, WeakMap<object, unknown>>();
   let sealed = false;
+  let minimumFoundation: RustFoundation = "core";
 
   const get = <T>(
     subject: ExtensionFactSubject | undefined,
@@ -76,6 +87,40 @@ export function createRustPlanBuilder(
         );
       }
       if (existing === undefined) bySubject.set(subject, value);
+      if (key === rustRuntimeCarrierKey) {
+        minimumFoundation = maximumRustFoundation(
+          minimumFoundation,
+          rustFoundationForCarrier((value as { readonly carrier: import("../../target-model/types/model.js").RustTargetTypeRef }).carrier),
+        );
+      } else if (key === rustSelectedCallKey) {
+        minimumFoundation = maximumRustFoundation(
+          minimumFoundation,
+          rustFoundationForSelectedCall(value as import("../../target-model/types/model.js").RustSelectedTargetSignature),
+        );
+      } else if (key === rustSelectedOperationKey) {
+        minimumFoundation = maximumRustFoundation(
+          minimumFoundation,
+          rustFoundationForSelectedOperation(value as import("../../target-model/types/model.js").RustSelectedTargetOperation),
+        );
+      } else if (key === rustConversionKey) {
+        const convertedType = (value as { readonly convertedType?: import("../../target-model/types/model.js").RustTargetTypeRef }).convertedType;
+        if (convertedType !== undefined) {
+          minimumFoundation = maximumRustFoundation(
+            minimumFoundation,
+            rustFoundationForCarrier(convertedType),
+          );
+        }
+      } else if (key === rustTargetOperationFactKey) {
+        minimumFoundation = maximumRustFoundation(
+          minimumFoundation,
+          rustFoundationForTargetOperationFact(
+            value as import("./operations/facts.js").RustTargetOperationFact,
+          ),
+        );
+      }
+    },
+    minimumFoundation(): RustFoundation {
+      return minimumFoundation;
     },
     seal(): RustPlanQueries {
       if (sealed) {

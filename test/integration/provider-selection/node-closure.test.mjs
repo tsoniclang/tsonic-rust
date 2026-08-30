@@ -46,7 +46,7 @@ export function probe(): string {
   assert.match(text, /h\.update_str_owned\("abc"\)\?/u);
   assert.match(text, /h\.digest_string\("hex"\)\?/u);
   assert.match(text, /tsonic_rust_runtime::conversions::u32_to_i32\(tsonic_rust_node::process::pid\(\)\)\?/u);
-  assert.match(text, /rt::option_coalesce\(\s*tsonic_rust_node::process::env_get\("PATH"\),\s*std::convert::identity,/u);
+  assert.match(text, /rt::option_coalesce\(\s*tsonic_rust_node::process::env_get\("PATH"\),\s*core::convert::identity,/u);
 });
 
 test("portable Node boundaries lower through exact selected provider evidence", async () => {

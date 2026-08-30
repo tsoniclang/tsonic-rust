@@ -118,6 +118,7 @@ function processRequest(request: RustCompilerWorkerRequest): RustCompilerWorkerR
       modulePath: request.modulePath,
       ...(request.requestedExports === undefined ? {} : { requestedExports: request.requestedExports }),
       targetDirectory: request.targetDirectory,
+      foundation: request.foundation,
     }),
   };
 }
@@ -139,7 +140,8 @@ function parseRequest(text: string): RustCompilerWorkerRequest {
       throw new Error("Rust compiler-provider snapshot request has no manifest path.");
     }
   } else if (value.kind === "module" && (!isRecord(value.snapshot) || !isRecord(value.dependency) ||
-    !Array.isArray(value.modulePath) || typeof value.targetDirectory !== "string")) {
+    !Array.isArray(value.modulePath) || typeof value.targetDirectory !== "string" ||
+    (value.foundation !== "core" && value.foundation !== "alloc" && value.foundation !== "std"))) {
     throw new Error("Rust compiler-provider module request has an invalid payload.");
   }
   return value as unknown as RustCompilerWorkerRequest;
