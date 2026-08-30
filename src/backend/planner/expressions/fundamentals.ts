@@ -231,7 +231,7 @@ function rustPartialComparison(left: RustExpr, right: RustExpr): RustExpr {
 function rustOrderingVariant(name: "Less" | "Equal" | "Greater"): RustExpr {
   return {
     kind: "associated-value",
-    owner: { kind: "named", path: "std::cmp::Ordering" },
+    owner: { kind: "named", path: "core::cmp::Ordering" },
     name,
   };
 }

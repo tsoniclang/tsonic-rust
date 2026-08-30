@@ -1,4 +1,4 @@
-export const rustCompilerProviderProtocolVersion = 3;
+export const rustCompilerProviderProtocolVersion = 4;
 export const supportedRustdocFormatVersion = 57;
 
 export interface RustCompilerIdentity {

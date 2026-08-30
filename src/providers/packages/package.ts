@@ -1,4 +1,12 @@
-import { cargoCrateAttributeName, cargoPathReferenceKind, cargoRegistryPatchAttributeName } from "../../target-model/project/cargo-reference.js";
+import {
+  cargoCrateAttributeName,
+  cargoDefaultFeaturesAttributeName,
+  cargoFeaturesAttributeName,
+  cargoPathReferenceKind,
+  cargoRegistryPatchAttributeName,
+  encodeCargoFeatures,
+  rustMinimumFoundationAttributeName,
+} from "../../target-model/project/cargo-reference.js";
 import { collectRustProviderSemantics } from "./semantics.js";
 import { createRustProviderPackageSourceExtension, rustProviderBindingProviderId } from "./source-provider.js";
 import { rustProviderPolicyContributionKind } from "./model.js";
@@ -47,9 +55,16 @@ export function createRustProviderPackage(definition: RustProviderPackageDefinit
           include: crate.cargoPath,
           attributes: {
             [cargoCrateAttributeName]: crate.crateName,
+            [rustMinimumFoundationAttributeName]: crate.minimumFoundation ?? "std",
             ...(crate.registryPatch === undefined
               ? {}
               : { [cargoRegistryPatchAttributeName]: crate.registryPatch }),
+            ...(crate.defaultFeatures === undefined
+              ? {}
+              : { [cargoDefaultFeaturesAttributeName]: String(crate.defaultFeatures) }),
+            ...(crate.features === undefined
+              ? {}
+              : { [cargoFeaturesAttributeName]: encodeCargoFeatures(crate.features) }),
           },
         })),
       };

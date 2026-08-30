@@ -15,6 +15,7 @@ import {
   loadStandardLibraryCrateDocument,
   resolveStandardLibraryItem,
 } from "./projection/standard-library.js";
+import type { RustFoundation } from "../../target-model/foundation/model.js";
 
 export function loadRustCompilerModule(options: {
   readonly snapshot: RustCompilerProjectSnapshot;
@@ -24,6 +25,7 @@ export function loadRustCompilerModule(options: {
   readonly modulePath: readonly string[];
   readonly requestedExports?: readonly string[];
   readonly targetDirectory: string;
+  readonly foundation: RustFoundation;
 }): RustCompilerModuleModel {
   validateDependencyBelongsToSnapshot(options.snapshot, options.dependency);
   verifyRustCompilerDependencySource(options.snapshot, options.dependency);
@@ -44,6 +46,7 @@ export function loadRustCompilerModule(options: {
     standardTypeLocations: Object.freeze(collectModuleStandardTypeLocations(
       normalized,
       standardLibrary,
+      options.foundation,
     )),
   });
   verifyRustCompilerDependencySource(options.snapshot, options.dependency);

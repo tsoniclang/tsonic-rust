@@ -25,6 +25,7 @@ import type {
 import type { ExportRecord, Fail, MemberRecord, SignatureRecord } from "./model.js";
 import type { RustProviderPackageDefinition } from "../index.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { isRustFoundation } from "../../../target-model/foundation/model.js";
 
 export function validateProviderPackageDefinition(definition: RustProviderPackageDefinition): void {
   const fail: Fail = (message) => {
@@ -454,11 +455,37 @@ function validateParameterDeclaration(parameter: ProviderParameterDeclaration, f
 function validateCrates(definition: RustProviderPackageDefinition, fail: Fail): void {
   const crateNames = new Set<string>();
   for (const crate of definition.crates) {
-    requireExactKeys(asRecord(crate), ["crateName", "cargoPath", "registryPatch"], "crate", fail);
+    requireExactKeys(asRecord(crate), [
+      "crateName",
+      "cargoPath",
+      "registryPatch",
+      "minimumFoundation",
+      "defaultFeatures",
+      "features",
+    ], "crate", fail);
     requireRustIdentifier(crate.crateName, "crate name", fail);
     requireNonEmpty(crate.cargoPath, `cargo path for '${crate.crateName}'`, fail);
     if (crate.registryPatch !== undefined && crate.registryPatch !== "crates-io") {
       fail(`crate '${crate.crateName}' has unsupported registry patch '${String(crate.registryPatch)}'`);
+    }
+    if (crate.minimumFoundation !== undefined &&
+      !isRustFoundation(crate.minimumFoundation)) {
+      fail(`crate '${crate.crateName}' has invalid minimum foundation '${String(crate.minimumFoundation)}'`);
+    }
+    if (crate.defaultFeatures !== undefined && typeof crate.defaultFeatures !== "boolean") {
+      fail(`crate '${crate.crateName}' defaultFeatures must be boolean`);
+    }
+    if (crate.features !== undefined) {
+      if (!Array.isArray(crate.features) || crate.features.some((feature) =>
+        typeof feature !== "string" || feature.length === 0)) {
+        fail(`crate '${crate.crateName}' features must be non-empty strings`);
+      }
+      const canonicalFeatures = [...new Set(crate.features)].sort((left, right) =>
+        left.localeCompare(right, "en"));
+      if (canonicalFeatures.length !== crate.features.length ||
+        canonicalFeatures.some((feature, index) => feature !== crate.features?.[index])) {
+        fail(`crate '${crate.crateName}' features must be distinct and sorted`);
+      }
     }
     if (crateNames.has(crate.crateName)) {
       fail(`duplicate crate name '${crate.crateName}'`);

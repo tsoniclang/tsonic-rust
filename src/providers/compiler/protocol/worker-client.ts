@@ -18,6 +18,7 @@ import type {
   RustCompilerProjectSnapshot,
   RustCompilerStandardLibrarySnapshot,
 } from "../model/model.js";
+import type { RustFoundation } from "../../../target-model/foundation/model.js";
 import { rustCompilerProviderProtocolVersion } from "../model/model.js";
 import type {
   RustCompilerWorkerRequest,
@@ -46,6 +47,7 @@ export interface RustCompilerWorkerClient {
     readonly dependency: RustCompilerDependency;
     readonly modulePath: readonly string[];
     readonly requestedExports?: readonly string[];
+    readonly foundation: RustFoundation;
   }): RustCompilerModuleModel;
 }
 
@@ -83,6 +85,7 @@ export function createRustCompilerWorkerClient(root = defaultWorkerRoot()): Rust
       readonly dependency: RustCompilerDependency;
       readonly modulePath: readonly string[];
       readonly requestedExports?: readonly string[];
+      readonly foundation: RustFoundation;
     }): RustCompilerModuleModel {
       const targetDirectory = join(session.root, "cargo", options.snapshot.digest, options.dependency.sourceDigest);
       const response = request(session, {
@@ -94,6 +97,7 @@ export function createRustCompilerWorkerClient(root = defaultWorkerRoot()): Rust
         modulePath: options.modulePath,
         ...(options.requestedExports === undefined ? {} : { requestedExports: options.requestedExports }),
         targetDirectory,
+        foundation: options.foundation,
       });
       if (response.kind !== "module") {
         throw responseError(response);

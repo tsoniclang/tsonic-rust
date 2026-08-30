@@ -74,9 +74,10 @@ export function createRustCompilerProviderSession(
     displayName: "Rust standard-library compiler provider",
     virtualScope: "standard",
     snapshotLease: standardSnapshotLease,
-    configHash: standardSnapshot.digest,
+    configHash: `${standardSnapshot.digest}:${context.configuration.foundation}`,
     providerVersion: standardVersion,
     worker,
+    foundation: context.configuration.foundation,
     registry: standardRegistry,
     resolveModule(snapshot, specifier) {
       const request = standardModuleRequestFromSpecifier(specifier);
@@ -113,9 +114,10 @@ export function createRustCompilerProviderSession(
       displayName: "Rust Cargo compiler provider",
       virtualScope: "cargo",
       snapshotLease,
-      configHash: snapshot.digest,
+      configHash: `${snapshot.digest}:${context.configuration.foundation}`,
       providerVersion,
       worker,
+      foundation: context.configuration.foundation,
       registry,
       resolveModule(leasedSnapshot, specifier) {
         return resolveCompilerModule(leasedSnapshot, specifier);
@@ -205,6 +207,7 @@ function createCompilerProvider(
     readonly configHash: string;
     readonly providerVersion: string;
     readonly worker: RustCompilerWorkerClient;
+    readonly foundation: RustTargetConfiguration["foundation"];
     readonly registry: ProjectionRegistry;
     readonly resolveModule: (
       snapshot: RustCompilerProjectSnapshot,
@@ -273,6 +276,7 @@ function createCompilerProvider(
           dependency,
           modulePath,
           ...(requestedExports === undefined ? {} : { requestedExports }),
+          foundation: options.foundation,
         });
         const projection = projectRustCompilerModule(module, {
           providerModuleId: expectedModuleId,

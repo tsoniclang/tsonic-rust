@@ -35,7 +35,7 @@ export function projectIdentityImplementations(
     {
       kind: "impl",
       generics,
-      trait: { kind: "named", path: "std::fmt::Debug" },
+      trait: { kind: "named", path: "core::fmt::Debug" },
       target: wrapperType,
       functions: [{
         name: "fmt",
@@ -49,12 +49,12 @@ export function projectIdentityImplementations(
             mutable: true,
             referent: {
               kind: "named",
-              path: "std::fmt::Formatter",
+              path: "core::fmt::Formatter",
               genericArguments: [{ kind: "lifetime", lifetime: { kind: "placeholder" } }],
             },
           },
         }],
-        returnType: { kind: "named", path: "std::fmt::Result" },
+        returnType: { kind: "named", path: "core::fmt::Result" },
         body: {
           statements: [{
             kind: "tail",

@@ -104,8 +104,7 @@ export function printFittedLogicalChain(
   const continuationIndent = indentText(depth + 1);
   for (const operand of operands.slice(1)) {
     const attachedToClosingBlock = lastLine(rendered).trim() === "}";
-    if (operands.length === 2 && !rendered.includes("\n") &&
-      rustExpressionContainsStatementBlock(operand)) {
+    if (operands.length === 2 && !rendered.includes("\n")) {
       const separator = ` ${operator} `;
       const attachedRight = printFittedLogicalOperand(
         operand,
@@ -114,7 +113,10 @@ export function printFittedLogicalChain(
         column + rendered.length + separator.length,
         "expression",
       );
-      if (firstLine(attachedRight).trimStart().startsWith("{") &&
+      const attachedOpening = firstLine(attachedRight);
+      if ((attachedOpening.trimStart().startsWith("{") ||
+          !rustExpressionContainsStatementBlock(operand) &&
+            attachedRight.includes("\n") && attachedOpening.trimEnd().endsWith("{")) &&
         column + rendered.length + separator.length + firstLine(attachedRight).length <=
         rustFormatWidth) {
         rendered = `${rendered}${separator}${attachedRight}`;
@@ -475,11 +477,13 @@ export function rustMethodChainBreaksReceiverForClosure(
     step.kind === "method" && step.args.length === 1 && step.args.some((argument) =>
       argument.kind !== "closure" && argument.kind !== "closure-block" &&
       rustExpressionContainsClosure(argument)));
+  const firstMethod = chain.steps.find((step) => step.kind === "method");
   return (selectorCount > 1 || containsNestedClosureInSingleArgument) &&
     rustMethodChainContainsClosure(chain) &&
     (!renderedFits(flat, column) ||
       flat.length > rustMethodChainWidth &&
-        rustMethodChainLastSelectorWidth(chain) <= rustMethodChainWidth);
+        (rustMethodChainLastSelectorWidth(chain) <= rustMethodChainWidth ||
+          firstMethod?.kind === "method" && firstMethod.args.length > 0));
 }
 
 function collectRustMethodChain(expression: RustExpr, steps: RustMethodChainStep[]): RustExpr {

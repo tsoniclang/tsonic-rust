@@ -92,6 +92,7 @@ function publicItemSurface(item: RustItem): readonly string[] {
       return item.visibility === "public"
         ? [encodeRustContractParts(["module", item.name])]
         : [];
+    case "extern-crate":
     case "use":
       return [];
   }

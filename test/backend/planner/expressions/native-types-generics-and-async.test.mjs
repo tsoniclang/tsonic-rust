@@ -159,7 +159,7 @@ export function some_value(): int32 {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn value_or_zero\(value: Option<i32>\) -> i32 \{/u);
-  assert.match(text, /rt::option_coalesce\(value, std::convert::identity, \|\| 0\)/u);
+  assert.match(text, /rt::option_coalesce\(value, core::convert::identity, \|\| 0\)/u);
   assert.match(text, /value_or_zero\(Some\(5\)\)/u);
   assert.match(text, /value_or_zero\(Option::<i32>::None\)/u);
 });

@@ -19,6 +19,7 @@ import type {
 } from "./source-package-facades.js";
 import type { RustSourcePackageInitializerPlan } from "./source-package-initializers.js";
 import type { RustSourcePackageErrorPlan } from "./source-package-errors.js";
+import { createRustCrateRootSourceFile } from "../project/foundation.js";
 
 export interface RustSourcePackageCrateContentPlan {
   readonly component: RustSourcePackageComponentPlan;
@@ -209,7 +210,7 @@ export function materializeRustSourcePackageCrateArtifacts(
       }];
   artifacts.push(rustSourceArtifact(
     prefixedPath(options.prefix, "src/lib.rs"),
-    createRustSourceFile([
+    createRustCrateRootSourceFile(input.program.configuration.foundation, [
       ...plan.libraryItems,
       ...(options.additionalLibraryItems ?? []),
     ]),
@@ -330,6 +331,16 @@ export function planRustSourcePackageCargo(
     }),
     diagnostics,
   );
+  const componentRuntimeDependencies = rootManifest.dependencies.map(
+    (dependency): CargoDependency => Object.freeze({
+      name: dependency.name,
+      path: dependency.path,
+      ...(dependency.defaultFeatures === undefined
+        ? {}
+        : { defaultFeatures: dependency.defaultFeatures }),
+      ...(dependency.features === undefined ? {} : { features: dependency.features }),
+    }),
+  );
   const externalManifestsByComponentId = new Map<string, {
     readonly directory: `crates/${string}`;
     readonly manifest: CargoManifestPlan;
@@ -348,7 +359,7 @@ export function planRustSourcePackageCargo(
       return dependency === undefined ? [] : [dependency];
     });
     const dependencies = mergeCargoDependencies(
-      rootManifest.dependencies.map(({ name, path }) => ({ name, path })),
+      componentRuntimeDependencies,
       componentDependencies,
       diagnostics,
     );
@@ -554,7 +565,12 @@ function mergeCargoDependencies(
   for (const dependency of [...base, ...added]) {
     const existing = byName.get(dependency.name);
     if (existing !== undefined &&
-      (existing.path !== dependency.path || existing.registryPatch !== dependency.registryPatch)) {
+      (
+        existing.path !== dependency.path ||
+        existing.registryPatch !== dependency.registryPatch ||
+        existing.defaultFeatures !== dependency.defaultFeatures ||
+        !sameCargoFeatures(existing.features, dependency.features)
+      )) {
       diagnostics.push(crateDiagnostic(
         "RUST_SOURCE_PACKAGE_CRATE_DEPENDENCY_CONFLICT",
         `Cargo dependency '${dependency.name}' has contradictory source-package and runtime paths.`,
@@ -565,6 +581,16 @@ function mergeCargoDependencies(
   }
   return Object.freeze([...byName.values()].sort((left, right) =>
     compareNames(left.name, right.name)));
+}
+
+function sameCargoFeatures(
+  left: readonly string[] | undefined,
+  right: readonly string[] | undefined,
+): boolean {
+  const leftValues = left ?? [];
+  const rightValues = right ?? [];
+  return leftValues.length === rightValues.length &&
+    leftValues.every((value, index) => value === rightValues[index]);
 }
 
 function prefixedPath(prefix: RustCrateArtifactPrefix, path: string): string {

@@ -38,6 +38,7 @@ import type {
 } from "../../providers/packages/model.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import type { RustSourceModuleConstructionIndex } from "../source-modules/index.js";
+import type { RustFoundationPlan } from "../foundation/plan.js";
 
 export interface RustTargetAnalysisRequest {
   readonly input: TargetCompileInput;
@@ -71,6 +72,7 @@ export interface RustTargetProgram {
   readonly valueLifetimes: RustValueLifetimePlan;
   readonly structuralShapes: RustStructuralShapePlan;
   readonly runtimeReferences: RustRuntimeReferencePlan;
+  readonly foundation: RustFoundationPlan;
   readonly binaryEpilogues: readonly RustBinaryEpiloguePlan[];
   readonly providerErrorCarriers: readonly import("../../target-model/types/model.js").TargetTypeRef[];
   readonly safetyApplications: RustSafetyApplicationFactIndex;

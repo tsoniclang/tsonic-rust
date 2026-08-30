@@ -1,14 +1,17 @@
 import type { TargetSelection } from "@tsonic/target-api";
 import type { RustTargetConfiguration } from "../target-model/configuration/model.js";
 import type { RustEdition, RustOutputType } from "../target-model/project/model.js";
+import type { RustFoundation } from "../target-model/foundation/model.js";
 import { resolveRustProjectConfiguration } from "./rust-user-project.js";
 
 export type { RustTargetConfiguration } from "../target-model/configuration/model.js";
 export type { RustEdition, RustOutputType } from "../target-model/project/model.js";
+export type { RustFoundation } from "../target-model/foundation/model.js";
 
 const supportedRustTargetOptionKeys = Object.freeze([
   "crateName",
   "edition",
+  "foundation",
   "outputType",
   "projectFile",
 ]);
@@ -19,8 +22,10 @@ export function validateRustTargetOptions(target: TargetSelection): void {
   validateRustTargetOptionKeys(target);
   readRustCrateName(target);
   readRustEdition(target);
+  readRustFoundation(target);
   readRustOutputType(target);
   readRustUserProjectFile(target);
+  validateRustOutputFoundation(target);
 }
 
 function validateRustTargetOptionKeys(target: TargetSelection): void {
@@ -42,9 +47,11 @@ export function createRustTargetConfiguration(
   targetOutputRoot: string,
 ): RustTargetConfiguration {
   validateRustTargetOptionKeys(target);
+  validateRustOutputFoundation(target);
   return Object.freeze({
     crateName: readRustCrateName(target),
     edition: readRustEdition(target),
+    foundation: readRustFoundation(target),
     outputType: readRustOutputType(target),
     project: resolveRustProjectConfiguration(
       readRustUserProjectFile(target),
@@ -52,6 +59,15 @@ export function createRustTargetConfiguration(
       targetOutputRoot,
     ),
   });
+}
+
+function validateRustOutputFoundation(target: TargetSelection): void {
+  const foundation = readRustFoundation(target);
+  if (foundation !== "std" && readRustOutputType(target) === "bin") {
+    throw new Error(
+      "Rust 'core' and 'alloc' foundations require library output; executable startup remains owned by an explicit native Rust project.",
+    );
+  }
 }
 
 export function readRustCrateName(target: TargetSelection): string {
@@ -72,6 +88,17 @@ export function readRustEdition(target: TargetSelection): RustEdition {
   }
   if (value !== "2021" && value !== "2024") {
     throw new Error("Rust target option 'edition' must be either '2021' or '2024'.");
+  }
+  return value;
+}
+
+export function readRustFoundation(target: TargetSelection): RustFoundation {
+  const value = readOptionalStringOption(target, "foundation");
+  if (value === undefined) {
+    return "std";
+  }
+  if (value !== "core" && value !== "alloc" && value !== "std") {
+    throw new Error("Rust target option 'foundation' must be 'core', 'alloc', or 'std'.");
   }
   return value;
 }

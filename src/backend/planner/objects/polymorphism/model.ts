@@ -515,7 +515,7 @@ export function rustFunctionTypesMatch(
 export function rustRcType(inner: RustType): RustType {
   return {
     kind: "named",
-    path: "std::rc::Rc",
+    path: "alloc::rc::Rc",
     genericArguments: [{ kind: "type", type: inner }],
   };
 }

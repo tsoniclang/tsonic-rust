@@ -73,7 +73,7 @@ export function projectDowncastReturnType(
           kind: "type",
           type: {
             kind: "named",
-            path: "std::rc::Rc",
+            path: "alloc::rc::Rc",
             genericArguments: [{
               kind: "type",
               type: dispatchObject,

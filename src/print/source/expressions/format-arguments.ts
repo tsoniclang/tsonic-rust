@@ -83,8 +83,8 @@ function printNestedFormatArgumentClosureBody(
     return undefined;
   }
   const flat = printRustExpr(expression);
-  if (flat.includes("\n") || flat.length < rustInlineFormatArgumentWidth * 2 ||
-    !renderedFits(`${flat},`, column)) {
+  if (flat.includes("\n") ||
+    flat.length < rustInlineFormatArgumentWidth * 2 && renderedFits(`${flat},`, column)) {
     return undefined;
   }
   const bodyInvocation = rustInvocationParts(trailingClosure.body);
@@ -116,7 +116,7 @@ function printNestedFormatArgumentClosureBody(
   return [
     opening,
     `${argumentIndent}${renderedArgument}`,
-    `${indentText(depth)}))`,
+    `${indentText(depth)}),)`,
   ].join("\n");
 }
 

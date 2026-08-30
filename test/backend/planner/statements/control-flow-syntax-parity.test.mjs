@@ -141,7 +141,7 @@ export function advance(value: number, limit: number): number {
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /'loop_value(?:_\d+)?: loop \{/u);
   assert.match(source, /if current >= limit \{/u);
-  assert.match(source, /value\s*\.partial_cmp\(&limit\)\s*\.is_none_or\(\|ordering\| ordering != std::cmp::Ordering::Less\)/u);
+  assert.match(source, /value\s*\.partial_cmp\(&limit\)\s*\.is_none_or\(\|ordering\| ordering != core::cmp::Ordering::Less\)/u);
   assert.match(source, /continue 'loop_value(?:_\d+)?;/u);
   validateGeneratedProject("control-flow-do-while", result.artifacts);
 });

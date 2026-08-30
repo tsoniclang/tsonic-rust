@@ -4,8 +4,11 @@ import type {
 } from "@tsonic/target-api/artifacts";
 import {
   cargoCrateAttributeName,
+  cargoDefaultFeaturesAttributeName,
+  cargoFeaturesAttributeName,
   cargoPathReferenceKind,
   cargoRegistryPatchAttributeName,
+  rustMinimumFoundationAttributeName,
 } from "../../target-model/project/cargo-reference.js";
 import {
   cargoCratesIoRegistry,
@@ -15,10 +18,17 @@ import {
   isValidRustIdentifier,
 } from "../../target-model/names/identifiers.js";
 import { materializeCargoCrate } from "./cargo-package.js";
+import {
+  isRustFoundation,
+  rustFoundationIncludes,
+  type RustFoundation,
+} from "../../target-model/foundation/model.js";
 
 export interface RustRuntimeReferencePlan {
   readonly cargoDependencies: readonly RustCargoDependency[];
   readonly activeCrates: readonly string[];
+  readonly foundation: RustFoundation;
+  readonly minimumFoundationByCrate: ReadonlyMap<string, RustFoundation>;
 }
 
 export type RustRuntimeReferenceAnalysisResult =
@@ -33,9 +43,11 @@ export type RustRuntimeReferenceAnalysisResult =
 
 export function analyzeRustRuntimeReferences(
   runtimeReferences: readonly TargetRuntimeReference[],
+  foundation: RustFoundation,
 ): RustRuntimeReferenceAnalysisResult {
   const diagnostics: TargetDiagnostic[] = [];
   const dependenciesByName = new Map<string, RustCargoDependency>();
+  const minimumFoundationByCrate = new Map<string, RustFoundation>();
   for (let index = 0; index < runtimeReferences.length; index += 1) {
     if (!(index in runtimeReferences)) {
       diagnostics.push(invalidCargoRuntimeReferenceDiagnostic(
@@ -83,7 +95,10 @@ export function analyzeRustRuntimeReferences(
     }
     const unsupportedAttribute = Object.keys(attributes).find((key) =>
       key !== cargoCrateAttributeName &&
-      key !== cargoRegistryPatchAttributeName
+      key !== cargoRegistryPatchAttributeName &&
+      key !== cargoDefaultFeaturesAttributeName &&
+      key !== cargoFeaturesAttributeName &&
+      key !== rustMinimumFoundationAttributeName
     );
     if (unsupportedAttribute !== undefined) {
       diagnostics.push(invalidCargoRuntimeReferenceDiagnostic(
@@ -109,6 +124,49 @@ export function analyzeRustRuntimeReferences(
       ));
       continue;
     }
+    const minimumFoundationValue = attributes[rustMinimumFoundationAttributeName] ?? "std";
+    if (!isRustFoundation(minimumFoundationValue)) {
+      diagnostics.push(invalidCargoRuntimeReferenceDiagnostic(
+        reference.include,
+        `minimum foundation '${String(minimumFoundationValue)}' is not 'core', 'alloc', or 'std'.`,
+        [`runtime.reference.crate=${crateName}`],
+      ));
+      continue;
+    }
+    if (!rustFoundationIncludes(foundation, minimumFoundationValue)) {
+      diagnostics.push({
+        code: "RUST_FOUNDATION_REQUIREMENT_UNSATISFIED",
+        category: "error",
+        source: "tsonic-rust",
+        message: `Rust crate '${crateName}' requires '${minimumFoundationValue}', but the target selected '${foundation}'.`,
+        evidence: [
+          "target.capability=rust.foundation",
+          `rust.foundation.selected=${foundation}`,
+          `rust.foundation.required=${minimumFoundationValue}`,
+          `runtime.reference.crate=${crateName}`,
+        ],
+      });
+      continue;
+    }
+    const defaultFeaturesValue = attributes[cargoDefaultFeaturesAttributeName];
+    if (defaultFeaturesValue !== undefined &&
+      defaultFeaturesValue !== "true" && defaultFeaturesValue !== "false") {
+      diagnostics.push(invalidCargoRuntimeReferenceDiagnostic(
+        reference.include,
+        `defaultFeatures attribute '${String(defaultFeaturesValue)}' must be 'true' or 'false'.`,
+        [`runtime.reference.crate=${crateName}`],
+      ));
+      continue;
+    }
+    const features = parseCargoFeatures(attributes[cargoFeaturesAttributeName]);
+    if (features === undefined) {
+      diagnostics.push(invalidCargoRuntimeReferenceDiagnostic(
+        reference.include,
+        "features attribute must be a canonical JSON array of distinct non-empty strings.",
+        [`runtime.reference.crate=${crateName}`],
+      ));
+      continue;
+    }
     const materialized = materializeCargoCrate(reference.include, crateName);
     if ("reason" in materialized) {
       diagnostics.push(invalidCargoRuntimeReferenceDiagnostic(
@@ -122,13 +180,21 @@ export function analyzeRustRuntimeReferences(
       name: crateName,
       path: materialized.path,
       ...(registryPatch === cargoCratesIoRegistry ? { registryPatch } : {}),
+      ...(defaultFeaturesValue === undefined
+        ? {}
+        : { defaultFeatures: defaultFeaturesValue === "true" }),
+      ...(features.length === 0 ? {} : { features }),
     });
     const existing = dependenciesByName.get(crateName);
+    const existingMinimumFoundation = minimumFoundationByCrate.get(crateName);
     if (
       existing !== undefined &&
       (
         existing.path !== dependency.path ||
         existing.registryPatch !== dependency.registryPatch
+        || existing.defaultFeatures !== dependency.defaultFeatures
+        || !sameStrings(existing.features, dependency.features)
+        || existingMinimumFoundation !== minimumFoundationValue
       )
     ) {
       diagnostics.push(invalidCargoRuntimeReferenceDiagnostic(
@@ -143,6 +209,7 @@ export function analyzeRustRuntimeReferences(
       continue;
     }
     dependenciesByName.set(crateName, dependency);
+    minimumFoundationByCrate.set(crateName, minimumFoundationValue);
   }
   if (diagnostics.length > 0) {
     return {
@@ -160,8 +227,44 @@ export function analyzeRustRuntimeReferences(
     plan: Object.freeze({
       cargoDependencies,
       activeCrates: Object.freeze(cargoDependencies.map((entry) => entry.name)),
+      foundation,
+      minimumFoundationByCrate: new Map(minimumFoundationByCrate),
     }),
   };
+}
+
+function parseCargoFeatures(value: string | undefined): readonly string[] | undefined {
+  if (value === undefined) {
+    return Object.freeze([]);
+  }
+  let parsed: unknown = undefined;
+  let parsedSuccessfully = true;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    parsedSuccessfully = false;
+  }
+  if (!parsedSuccessfully || !Array.isArray(parsed) || parsed.some((entry) =>
+    typeof entry !== "string" || entry.length === 0)) {
+    return undefined;
+  }
+  const features = [...parsed] as string[];
+  const canonical = [...new Set(features)].sort((left, right) =>
+    left.localeCompare(right, "en"));
+  return canonical.length === features.length &&
+      canonical.every((feature, index) => feature === features[index])
+    ? Object.freeze(canonical)
+    : undefined;
+}
+
+function sameStrings(
+  left: readonly string[] | undefined,
+  right: readonly string[] | undefined,
+): boolean {
+  const leftValues = left ?? [];
+  const rightValues = right ?? [];
+  return leftValues.length === rightValues.length &&
+    leftValues.every((value, index) => value === rightValues[index]);
 }
 
 function unsupportedRuntimeReferenceDiagnostic(

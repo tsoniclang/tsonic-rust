@@ -564,6 +564,7 @@ function publicSignatureTypes(
     case "type-alias":
       return publicTypes.has(item.name) ? [item.target] : [];
     case "mod-decl":
+    case "extern-crate":
     case "use":
       return [];
   }

@@ -19,6 +19,26 @@ the C# package layout:
 
 This repository must not own JS/Node runtime surface implementations.
 
+## Rust foundation
+
+The `foundation` target option selects one exact Rust language/runtime layer:
+
+- `"core"` emits `#![no_std]` and permits only `core`-compatible semantics;
+- `"alloc"` emits `#![no_std]`, links `alloc`, and enables owned strings,
+  vectors, and other allocator-backed carriers;
+- `"std"` is the Rust-native default and permits hosted APIs.
+
+The layers form the strict lattice `core < alloc < std`. Tsonic never infers
+the selection from a target triple, import name, or output path. Binary startup
+for `core`/`alloc` remains owned by an explicit native Cargo project, so those
+foundations produce libraries rather than implicitly adding `no_main`, panic,
+linker, or platform policy.
+
+The compiler-backed sysroot provider exposes matching modules such as
+`@tsonic/rust/core/...`, `@tsonic/rust/alloc/...`, and
+`@tsonic/rust/std/...`. Provider crates may declare an exact
+`minimumFoundation`; an omitted declaration conservatively requires `std`.
+
 ## Supported lanes
 
 Static-native spine: source-core primitive carriers, functions, locals,

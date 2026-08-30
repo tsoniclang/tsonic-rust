@@ -77,7 +77,18 @@ export function createRustCompilationSession(
       state = "runtime-contributed";
       return Object.freeze({
         references: Object.freeze([
-          rustRuntimeCrateReference(context, "@tsonic/rust-runtime", "tsonic_rust_runtime"),
+          rustRuntimeCrateReference(
+            context,
+            "@tsonic/rust-runtime",
+            "tsonic_rust_runtime",
+            {
+              minimumFoundation: "core",
+              defaultFeatures: false,
+              features: configuration.foundation === "core"
+                ? Object.freeze([])
+                : Object.freeze([configuration.foundation]),
+            },
+          ),
         ]),
       });
     },

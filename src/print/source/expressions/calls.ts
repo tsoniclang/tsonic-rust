@@ -7,7 +7,7 @@ import { printFittedNestedCallWrapper, printNestedCallArgument } from "./nested-
 import { printRustClosureFitted } from "./blocks.js";
 import { printRustExpr, rustExpressionContainsPreferredVerticalMethodChain } from "./core.js";
 import { printRustExprFitted } from "./fitted.js";
-import { rustExpressionContainsExpandedCollectionLiteral, rustExpressionContainsExpandedStructLiteral, rustFormatArgumentCanShareLine, rustFormatArgumentIsAtomic } from "./inspection.js";
+import { rustExpressionContainsExpandedCollectionLiteral, rustExpressionContainsExpandedStructLiteral, rustFormatArgumentIsAtomic } from "./inspection.js";
 import { rustExpressionContainsStatementBlock } from "../../../backend/target-ast/expressions.js";
 import { rustFormatWidth, rustInlineFieldReceiverWidth, rustMethodChainWidth, rustNestedCallWidth, rustNestedClosureOpeningWidth, rustNestedMethodFirstSegmentWidth } from "../formatting.js";
 import type { RustExpr } from "../../../backend/target-ast/nodes.js";
@@ -176,7 +176,7 @@ export function printFittedCall(
             depth,
             column + prefix.length,
             arguments_.length > 1 && flatArguments.length > rustNestedCallWidth &&
-              !rustFormatArgumentCanShareLine(trailingClosure.body),
+              !rustFormatArgumentIsAtomic(trailingClosure.body),
           )
         : printRustExprFitted(
             trailingClosure,

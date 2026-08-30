@@ -682,7 +682,7 @@ test("trait signatures count their semicolon and break before long return types"
 
   assert.match(
     source,
-    /fn __tsonic_downcast\(self: std::rc::Rc<Self>\)\n        -> Option<std::rc::Rc<dyn __TsonicDispatch_Leaf>>;/u,
+    /fn __tsonic_downcast\(\n        self: alloc::rc::Rc<Self>,\n    \) -> Option<std::rc::Rc<dyn __TsonicDispatch_Leaf>>;/u,
   );
 });
 

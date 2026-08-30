@@ -46,6 +46,7 @@ import {
   rootNormalizationContext,
   standardTypePathKind,
 } from "../model/rustdoc-types.js";
+import type { RustFoundation } from "../../../target-model/foundation/model.js";
 
 export interface RustStandardLibraryContext {
   readonly snapshot: RustCompilerStandardLibrarySnapshot;
@@ -211,9 +212,11 @@ function lookupStandardLibraryCanonicalItem(
 function standardTypeLocation(
   context: RustStandardLibraryContext,
   canonicalPath: readonly string[],
+  foundation: RustFoundation,
 ): RustCompilerStandardTypeLocation | undefined {
   const canonicalKey = canonicalPathKey(canonicalPath);
-  const cached = context.typeLocationsByCanonicalPath.get(canonicalKey);
+  const cacheKey = `${foundation}\0${canonicalKey}`;
+  const cached = context.typeLocationsByCanonicalPath.get(cacheKey);
   if (cached !== undefined) {
     return cached;
   }
@@ -237,7 +240,11 @@ function standardTypeLocation(
     return undefined;
   }
   const item = itemById(document, candidateIds[0]!);
-  const publicPath = preferredStandardLibraryPublicTypeAlias(context, canonicalPath);
+  const publicPath = preferredStandardLibraryPublicTypeAlias(
+    context,
+    canonicalPath,
+    foundation,
+  );
   if (publicPath === undefined) {
     return undefined;
   }
@@ -277,28 +284,38 @@ function standardTypeLocation(
     targetId: `rust.std.${context.snapshot.digest.slice(0, 24)}.${digestText(canonicalPath.join("\0")).slice(0, 24)}`,
     genericParameters: parameters,
   });
-  context.typeLocationsByCanonicalPath.set(canonicalKey, location);
+  context.typeLocationsByCanonicalPath.set(cacheKey, location);
   return location;
 }
 
 function preferredStandardLibraryPublicTypeAlias(
   context: RustStandardLibraryContext,
   canonicalPath: readonly string[],
+  foundation: RustFoundation,
 ): readonly string[] | undefined {
   const canonicalCrateName = canonicalPath[0];
-  const dependencies = [...context.snapshot.dependencies].sort((left, right) => {
-    const leftRank = left.crateName === "std"
-      ? 0
-      : left.crateName === canonicalCrateName
-        ? 1
-        : 2;
-    const rightRank = right.crateName === "std"
-      ? 0
-      : right.crateName === canonicalCrateName
-        ? 1
-        : 2;
-    return leftRank - rightRank || compareText(left.crateName, right.crateName);
-  });
+  const allowedCrates = foundation === "core"
+    ? new Set(["core"])
+    : foundation === "alloc"
+      ? new Set(["alloc", "core"])
+      : new Set(["std", "alloc", "core"]);
+  const dependencies = [...context.snapshot.dependencies]
+    .filter((dependency) => allowedCrates.has(dependency.crateName))
+    .sort((left, right) => {
+      const rank = (crateName: string): number => foundation === "std"
+        ? crateName === "std"
+          ? 0
+          : crateName === canonicalCrateName
+            ? 1
+            : 2
+        : foundation === "alloc"
+          ? crateName === "alloc"
+            ? 0
+            : 1
+          : 0;
+      return rank(left.crateName) - rank(right.crateName) ||
+        compareText(left.crateName, right.crateName);
+    });
   for (const dependency of dependencies) {
     const document = loadStandardLibraryCrateDocument(context, dependency);
     const alias = standardLibraryPublicTypeAlias(
@@ -452,6 +469,7 @@ function comparePublicAliasPath(left: readonly string[], right: readonly string[
 export function collectModuleStandardTypeLocations(
   module: Omit<RustCompilerModuleModel, "standardTypeLocations">,
   context: RustStandardLibraryContext,
+  foundation: RustFoundation,
 ): readonly RustCompilerStandardTypeLocation[] {
   const selected = new Map<string, RustCompilerStandardTypeLocation>();
   const selectCanonicalPath = (canonicalPath: readonly string[]): void => {
@@ -459,7 +477,7 @@ export function collectModuleStandardTypeLocations(
       dependency.crateName === canonicalPath[0])) {
       return;
     }
-    const location = standardTypeLocation(context, canonicalPath);
+    const location = standardTypeLocation(context, canonicalPath, foundation);
     const key = location === undefined
       ? undefined
       : canonicalPathKey(location.canonicalPath);

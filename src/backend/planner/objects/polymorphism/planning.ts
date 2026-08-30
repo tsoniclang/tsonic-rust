@@ -291,7 +291,7 @@ function planProjectExternalErrorImplementations(
   return [{
     kind: "impl",
     generics: rustProjectRepresentationGenerics(representation),
-    trait: { kind: "named", path: "std::fmt::Display" },
+    trait: { kind: "named", path: "core::fmt::Display" },
     target: wrapperType,
     functions: [{
       name: "fmt",
@@ -305,12 +305,12 @@ function planProjectExternalErrorImplementations(
           mutable: true,
           referent: {
             kind: "named",
-            path: "std::fmt::Formatter",
+            path: "core::fmt::Formatter",
             genericArguments: [{ kind: "lifetime", lifetime: { kind: "placeholder" } }],
           },
         },
       }],
-      returnType: { kind: "named", path: "std::fmt::Result" },
+      returnType: { kind: "named", path: "core::fmt::Result" },
       body: {
         statements: [{
           kind: "tail",

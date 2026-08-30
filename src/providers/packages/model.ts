@@ -15,6 +15,7 @@ import type {
   RustTargetGenericArgument,
   TargetTypeRef,
 } from "../../target-model/types/model.js";
+import type { RustFoundation } from "../../target-model/foundation/model.js";
 
 export interface RustProviderModuleDefinition {
   readonly moduleSpecifier: string;
@@ -132,6 +133,9 @@ export interface RustProviderCrateDefinition {
   readonly crateName: string;
   readonly cargoPath: string;
   readonly registryPatch?: "crates-io";
+  readonly minimumFoundation?: RustFoundation;
+  readonly defaultFeatures?: boolean;
+  readonly features?: readonly string[];
 }
 
 export interface RustProviderSourceDependency {
