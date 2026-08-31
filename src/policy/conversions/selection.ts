@@ -6,6 +6,7 @@ import {
   isRustNullCarrier,
   isRustUndefinedCarrier,
   rustCarrierSupportsClone,
+  rustCarrierCanEnterTsValue,
   rustCarrierSupportsTrait,
   rustJsClosedValueCarrierTraitPath,
   rustJsArrayLikeElementTargetType,
@@ -18,6 +19,7 @@ import {
   rustStructuralObjectCarrierValue,
   rustCallableProtocol,
   rustTargetGenericReferences,
+  rustTsValueTargetType,
 } from "../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -29,6 +31,7 @@ import {
   rustInt32ToJsValueConversion,
   rustInt32ToUint8ValueConversion,
   rustJsValueCloneConversion,
+  rustTsValueCloneConversion,
   rustNullToJsValueConversion,
   rustStringToJsValueConversion,
   rustSymbolToJsValueConversion,
@@ -44,6 +47,7 @@ const float64Carrier = rustSourcePrimitiveTargetType("float64");
 const stringCarrier = rustStringTargetType();
 const symbolCarrier = rustJsSymbolTargetType();
 const jsValueCarrier = rustJsValueTargetType();
+const tsValueCarrier = rustTsValueTargetType();
 
 export function selectRustSourceValueConversion(
   source: TargetTypeRef,
@@ -83,6 +87,17 @@ export function selectRustSourceValueConversion(
       kind: "raw-pointer-mut-to-const",
       pointee: source.pointee,
     });
+  }
+  if (rustTargetTypeRefEquals(target, tsValueCarrier)) {
+    if (rustTargetTypeRefEquals(source, tsValueCarrier)) {
+      return rustTsValueCloneConversion;
+    }
+    return rustCarrierCanEnterTsValue(source)
+      ? Object.freeze({
+          kind: "ts-value-from-closed-carrier" as const,
+          source,
+        })
+      : undefined;
   }
   if (rustTargetTypeRefEquals(target, jsValueCarrier)) {
     if (rustTargetTypeRefEquals(source, jsValueCarrier)) {

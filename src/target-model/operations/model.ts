@@ -90,6 +90,7 @@ export type RustValueConversionId =
   | "js-value-from-symbol"
   | "js-value-from-undefined"
   | "js-value-clone"
+  | "ts-value-clone"
   | "owned-string-from-borrowed-str";
 
 export type RustNonOptionValueConversion =
@@ -148,6 +149,10 @@ export type RustNonOptionValueConversion =
     }
   | {
       readonly kind: "js-value-from-closed-carrier";
+      readonly source: TargetTypeRef;
+    }
+  | {
+      readonly kind: "ts-value-from-closed-carrier";
       readonly source: TargetTypeRef;
     }
   | {

@@ -58,6 +58,7 @@ import {
   rustRegExpNamedIndicesTargetId,
   rustRegExpStringIteratorTargetId,
   rustStringTargetId,
+  rustTsValueTargetId,
   rustUndefinedTargetId,
 } from "./source-types.js";
 
@@ -74,6 +75,7 @@ export const rustBuiltInCarrierRenderPaths: Readonly<Record<string, string>> = O
   [rustUndefinedTargetId]: "rt::Undefined",
   [rustJsErrorTargetId]: "rt::JsError",
   [rustProgramErrorTargetId]: "rt::TsonicError",
+  [rustTsValueTargetId]: "rt::TsValue",
   [rustJsValueTargetId]: "js_abi::JsValue",
   [rustJsArrayTargetId]: "js_abi::JsArray",
   [rustJsArrayConcatItemTargetId]: "js_abi::JsArrayConcatItem",

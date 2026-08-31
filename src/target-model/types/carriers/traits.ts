@@ -1,6 +1,6 @@
 import { isRustBigIntCarrier, isRustJsStringCarrier, isRustNullCarrier, isRustStringCarrier, isRustUndefinedCarrier, isRustUnitCarrier } from "./js.js";
 import { isRustIntegerCarrier, rustFutureTargetId, rustPrimitiveTypeName } from "./primitives.js";
-import { rustBigIntTargetId, rustCallableTargetId, rustJsArrayTargetId, rustJsDateTargetId, rustJsErrorTargetId, rustJsMapTargetId, rustJsRegExpExecArrayTargetId, rustJsRegExpIndicesTargetId, rustJsRegExpMatchArrayTargetId, rustJsRegExpNamedGroupsTargetId, rustJsRegExpNamedIndicesTargetId, rustJsRegExpStringIteratorTargetId, rustJsRegExpTargetId, rustJsSetTargetId, rustJsStringTargetId, rustJsValueTargetId, rustLocationTargetId, rustNullTargetId, rustOptionTargetId, rustProgramErrorTargetId, rustRegExpExecArrayTargetId, rustRegExpIndicesTargetId, rustRegExpMatchArrayTargetId, rustRegExpNamedGroupsTargetId, rustRegExpNamedIndicesTargetId, rustRegExpStringIteratorTargetId, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustStringTargetId, rustStructuralObjectCarrierValue, rustUndefinedTargetId } from "./source-types.js";
+import { rustBigIntTargetId, rustCallableTargetId, rustJsArrayTargetId, rustJsDateTargetId, rustJsErrorTargetId, rustJsMapTargetId, rustJsRegExpExecArrayTargetId, rustJsRegExpIndicesTargetId, rustJsRegExpMatchArrayTargetId, rustJsRegExpNamedGroupsTargetId, rustJsRegExpNamedIndicesTargetId, rustJsRegExpStringIteratorTargetId, rustJsRegExpTargetId, rustJsSetTargetId, rustJsStringTargetId, rustJsValueTargetId, rustLocationTargetId, rustNullTargetId, rustOptionTargetId, rustProgramErrorTargetId, rustRegExpExecArrayTargetId, rustRegExpIndicesTargetId, rustRegExpMatchArrayTargetId, rustRegExpNamedGroupsTargetId, rustRegExpNamedIndicesTargetId, rustRegExpStringIteratorTargetId, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustStringTargetId, rustStructuralObjectCarrierValue, rustTsValueTargetId, rustUndefinedTargetId } from "./source-types.js";
 import {
   rustJsArrayBufferTargetId,
   rustJsDataViewTargetId,
@@ -25,6 +25,7 @@ import {
   rustJsWeakSetTargetId,
 } from "./source-types.js";
 import { rustFixedArrayCarrierValue, rustNamedTypeCarrierValue } from "./native.js";
+import { rustTargetGenericReferences } from "./generic-references.js";
 import type { RustNamedTypeCarrierValue } from "./native.js";
 import type { TargetTypeRef } from "../model.js";
 import {
@@ -127,6 +128,15 @@ export function rustCarrierSupportsClone(carrier: TargetTypeRef | undefined): bo
   }
   return carrier.kind === "target-specific" &&
     carrier.target === "rust" && carrier.name === "source-type";
+}
+
+export function rustCarrierCanEnterTsValue(carrier: TargetTypeRef | undefined): boolean {
+  if (!rustCarrierSupportsClone(carrier) || carrier === undefined) {
+    return false;
+  }
+  const references = rustTargetGenericReferences(carrier);
+  return references.typeNames.length === 0 && references.lifetimeIdentities.length === 0 &&
+    references.callScopedElisions.length === 0 && !references.hasUnnameableLifetime;
 }
 
 export function rustCarrierReferentMutationRequiresMutableBinding(
@@ -342,6 +352,7 @@ const rustUnconditionallyCloneTargetIds: ReadonlySet<string> = new Set([
   rustLocationTargetId,
   rustNullTargetId,
   rustUndefinedTargetId,
+  rustTsValueTargetId,
   rustJsValueTargetId,
   rustJsArrayTargetId,
   rustJsMapTargetId,

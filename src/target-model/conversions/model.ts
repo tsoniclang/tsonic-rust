@@ -28,4 +28,5 @@ export const rustStringToJsValueConversion = semanticConversion("js-value-from-s
 export const rustSymbolToJsValueConversion = semanticConversion("js-value-from-symbol");
 export const rustUndefinedToJsValueConversion = semanticConversion("js-value-from-undefined");
 export const rustJsValueCloneConversion = semanticConversion("js-value-clone");
+export const rustTsValueCloneConversion = semanticConversion("ts-value-clone");
 export const rustBorrowedStrToStringValueConversion = semanticConversion("owned-string-from-borrowed-str");

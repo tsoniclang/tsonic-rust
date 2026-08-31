@@ -35,9 +35,11 @@ import {
   rustUndefinedTargetType,
   rustTargetGenericReferences,
   rustCarrierSupportsClone,
+  rustCarrierCanEnterTsValue,
   rustCarrierSupportsTrait,
   rustJsClosedValueCarrierTraitPath,
   substituteRustTargetGenerics,
+  rustTsValueTargetType,
 } from "../types/index.js";
 import type { RustPrimitiveTypeName } from "../syntax/tokens.js";
 import { rustNumericPromotionKind } from "./numeric-promotion.js";
@@ -54,6 +56,7 @@ const stringCarrier = rustStringTargetType();
 const exactStringCarrier = rustJsStringTargetType();
 const symbolCarrier = rustJsSymbolTargetType();
 const jsValueCarrier = rustJsValueTargetType();
+const tsValueCarrier = rustTsValueTargetType();
 const nullCarrier = rustNullTargetType();
 const undefinedCarrier = rustUndefinedTargetType();
 
@@ -145,6 +148,19 @@ export type RustValueConversionContract = RustValueConversionContractBase & (
 export function rustValueConversionContract(
   value: RustValueConversion,
 ): RustValueConversionContract | undefined {
+  if (value.kind === "ts-value-from-closed-carrier") {
+    return !rustCarrierCanEnterTsValue(value.source)
+      ? undefined
+      : {
+          category: "projection",
+          lowering: "call",
+          path: "tsonic_rust_runtime::TsValue::from_closed",
+          sourceMode: "ref",
+          source: value.source,
+          target: tsValueCarrier,
+          fallible: false,
+        };
+  }
   if (value.kind === "js-value-from-closed-carrier") {
     return !rustCarrierSupportsClone(value.source) ||
         !rustCarrierSupportsTrait(value.source, rustJsClosedValueCarrierTraitPath)
@@ -502,6 +518,8 @@ export function rustValueConversionContract(
       return contract(value.id, "exact", "tsonic_rust_js::abi::JsValue::from", "value", undefinedCarrier, jsValueCarrier, false);
     case "js-value-clone":
       return contract(value.id, "exact", "tsonic_rust_js::abi::clone_js_value", "ref", jsValueCarrier, jsValueCarrier, false);
+    case "ts-value-clone":
+      return contract(value.id, "exact", "tsonic_rust_runtime::clone_ts_value", "ref", tsValueCarrier, tsValueCarrier, false);
     case "owned-string-from-borrowed-str":
       return {
         category: "ownership",
@@ -551,6 +569,8 @@ export function rustValueConversionIdentity(value: RustValueConversion): string 
               ? `js-value-from-array.${JSON.stringify(value.source)}.${rustValueConversionIdentity(value.elementConversion)}`
             : value.kind === "js-value-from-closed-carrier"
               ? `js-value-from-closed-carrier.${JSON.stringify(value.source)}`
+            : value.kind === "ts-value-from-closed-carrier"
+              ? `ts-value-from-closed-carrier.${JSON.stringify(value.source)}`
             : value.kind === "js-value-from-source-union"
               ? `js-value-from-source-union.${JSON.stringify(value.source)}.${value.variants.map((variant) => `${variant.name}:${rustValueConversionIdentity(variant.conversion)}`).join("|")}`
             : value.kind === "js-value-from-structural-to-json"
@@ -631,6 +651,7 @@ export function substituteRustValueConversion(
         ) as typeof value.elementConversion,
       });
     case "js-value-from-closed-carrier":
+    case "ts-value-from-closed-carrier":
       return Object.freeze({
         ...value,
         source: substituteRustTargetGenerics(

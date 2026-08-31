@@ -313,7 +313,7 @@ function isFinalizedConversion(value: unknown): value is RustFinalizedValueConve
         projection === "native-string" || projection === "exact-string" ||
         projection === "value" || projection === "rest-values") &&
       typeof value.conversion.sourceFallible === "boolean") ||
-    isJsValueProjectionConversion(value.conversion) ||
+    isValueProjectionConversion(value.conversion) ||
     (value.conversion.kind === "option-some" &&
       hasExactKeys(value.conversion, ["kind", "element"]) &&
       isRustTargetTypeRef(value.conversion.element)) ||
@@ -355,11 +355,12 @@ function isNonOptionValueConversion(value: unknown): boolean {
         projection === "native-string" || projection === "exact-string" ||
         projection === "value" || projection === "rest-values") &&
       typeof value.sourceFallible === "boolean") ||
-    isJsValueProjectionConversion(value);
+    isValueProjectionConversion(value);
 }
 
-function isJsValueProjectionConversion(value: Record<string, unknown>): boolean {
-  if (value.kind === "js-value-from-closed-carrier") {
+function isValueProjectionConversion(value: Record<string, unknown>): boolean {
+  if (value.kind === "js-value-from-closed-carrier" ||
+    value.kind === "ts-value-from-closed-carrier") {
     return hasExactKeys(value, ["kind", "source"]) &&
       isRustTargetTypeRef(value.source);
   }
