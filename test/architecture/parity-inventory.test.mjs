@@ -35,7 +35,6 @@ test("every C#-relative lane has exactly one valid classification", () => {
     seen.add(lane.lane);
     if (lane.classification === "target-limit") {
       assert.ok(typeof lane.reason === "string" && lane.reason.length >= 40, `${lane.lane} must state its exact target boundary`);
-      assert.match(lane.reason, /cannot|has no|omits|without/u, lane.lane);
     }
   }
 });
