@@ -50,7 +50,7 @@ import {
   resolveRustSignatureParameterListTarget,
   resolveRustTypeComponentEvidence,
 } from "./source-evidence.js";
-import { rustBroadSourceValueTargetType } from "./broad-values.js";
+import { resolveRustAuthoredBroadSourceValueTargetType } from "./broad-values.js";
 
 export function resolveRustTargetTypeRef(
   subject: ExtensionFactSubject | undefined,
@@ -224,7 +224,11 @@ export function resolveRustTargetTypeSyntax(
     }
   }
   if (kind === "KindAnyKeyword" || kind === "KindUnknownKeyword") {
-    return rustBroadSourceValueTargetType(options.jsEnabled);
+    return resolveRustAuthoredBroadSourceValueTargetType(
+      node,
+      context,
+      options.jsEnabled,
+    );
   }
   if (kind === "KindStringKeyword") {
     return rustStringTargetType();

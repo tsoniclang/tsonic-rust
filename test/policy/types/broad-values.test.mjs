@@ -156,6 +156,7 @@ function retainAny(value: any): any {
 export function main(): void {
   const parsed = retainUnknown(JSON.parse("{\\"ready\\":true}"));
   const retained = retainAny(parsed);
+  check(Number.isNaN(Number.NaN));
   check(JSON.stringify(retained) === "{\\"ready\\":true}");
 }
 `,
