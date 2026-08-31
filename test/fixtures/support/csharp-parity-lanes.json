@@ -487,7 +487,7 @@
     "area": "surfaces",
     "source": "console.log(values.map(value => value + 1));",
     "classification": "implemented",
-    "rustProof": "docs/parity-lanes.json",
+    "rustProof": "test/fixtures/support/javascript-node-lanes.json",
     "action": "retain every implemented detailed lane and each exact hard rejection or Rust target limit in the dedicated JS and Node inventory"
   },
   {
