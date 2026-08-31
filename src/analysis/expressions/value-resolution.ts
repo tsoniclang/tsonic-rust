@@ -58,7 +58,7 @@ import {
   rustTargetOperationResultCarrier,
   rustYieldFactKey,
 } from "../facts/keys.js";
-import { appendRustDiagnostic, boolCarrier, checkedPropertySelectionInput, recordPolicySelection, rustOperationContext, rustResolutionContext } from "../program/walk.js";
+import { appendRustDiagnostic, boolCarrier, rustResolutionContext, selectExpressionOperation } from "../program/walk.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { parseSourceBigIntLiteral, sourceCharCodeUnit } from "../../target-model/syntax/literals.js";
 import { recordFinalizedOperatorSelection, resolvePostCheckBinaryCarrier, resolvePostCheckUnaryCarrier } from "../operations/operators.js";
@@ -71,7 +71,6 @@ import { resolveRecordLiteralCarrier } from "./records.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { selectedSourceLiteralIsRepresentable, selectedSourceLiteralOperandIsRepresentable } from "../../policy/types/selected-numeric-literal.js";
-import { selectRustCheckedPropertyAccess } from "../operations/provider/index.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustTargetOperationFact } from "../facts/keys.js";
@@ -513,11 +512,7 @@ export function resolveExpressionCarrierUncached(
       let operation = walk.context.facts.get(expression, rustTargetOperationFactKey) ??
         walk.context.facts.resolve(expression, rustTargetOperationFactKey);
       if (operation === undefined) {
-        recordPolicySelection(walk, expression, selectRustCheckedPropertyAccess(
-          checkedPropertySelectionInput(walk, expression, source),
-          rustOperationContext(walk, expression),
-          walk.operationOptions,
-        ));
+        selectExpressionOperation(walk, expression, sourceFile);
         operation = walk.context.facts.get(expression, rustTargetOperationFactKey) ??
           walk.context.facts.resolve(expression, rustTargetOperationFactKey);
       }

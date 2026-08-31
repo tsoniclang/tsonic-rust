@@ -340,7 +340,8 @@ function valueConversionCarriers(
     conversion.kind === "js-argument-vector-callback") {
     return [conversion.source, conversion.target];
   }
-  if (conversion.kind === "js-value-from-closed-carrier") {
+  if (conversion.kind === "js-value-from-closed-carrier" ||
+    conversion.kind === "ts-value-from-closed-carrier") {
     return [conversion.source];
   }
   if (conversion.kind === "js-value-from-option" ||

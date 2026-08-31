@@ -29,6 +29,7 @@ import type { Node, Symbol, Type } from "@tsonic/tsts";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { resolveRustAuthoredBroadSourceValueTargetType } from "./broad-values.js";
 
 export function resolveRustTargetType(
   type: Type | undefined,
@@ -67,7 +68,13 @@ export function resolveRustTargetType(
       return rustNeverTargetType();
     }
     if (semantics.types.isAny(type) || semantics.types.isUnknown(type)) {
-      return undefined;
+      return authoredTypeRoot === undefined
+        ? undefined
+        : resolveRustAuthoredBroadSourceValueTargetType(
+            authoredTypeRoot,
+            context,
+            options.jsEnabled,
+          );
     }
     const symbol = semantics.declarations.typeAliasSymbol(type) ??
       semantics.declarations.typeSymbol(type);
