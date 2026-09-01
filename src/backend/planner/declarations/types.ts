@@ -4,7 +4,6 @@ import {
   isUpperSnakeName,
   isValidRustIdentifier,
   rustProjectTypeHasPublicImplementationAbi,
-  rustSourceItemIsPubliclyReachable,
 } from "../program/plan-context.js";
 import {
   rustAuthoredDeadCodeDisposition,
@@ -438,8 +437,7 @@ export function planTypeAliasDeclaration(node: Node, context: RustPlanContext): 
       ));
       return undefined;
     }
-    const visibility = ast.hasModifierKind(node, "export") ||
-        rustSourceItemIsPubliclyReachable(context, aliasName)
+    const visibility = ast.hasModifierKind(node, "export")
       ? "public" as const
       : "crate" as const;
     const deadCode = rustAuthoredDeadCodeDisposition(context, node);
