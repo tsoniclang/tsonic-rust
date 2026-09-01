@@ -921,8 +921,8 @@ test("Rust dead-code obligations are planner-local and normalized before output 
 test("Rust build and test entrypoints honor one explicit Tsonic checkout root", () => {
   const buildScript = readFileSync(join(repositoryRoot, "scripts/build.sh"), "utf8");
   const testWorker = readFileSync(join(repositoryRoot, "scripts/test-worker.sh"), "utf8");
-  const rootLoader = readFileSync(
-    join(repositoryRoot, "scripts/tsonic-root-loader.mjs"),
+  const rootRegistration = readFileSync(
+    join(repositoryRoot, "scripts/register-tsonic-root-loader.mjs"),
     "utf8",
   );
 
@@ -937,10 +937,11 @@ test("Rust build and test entrypoints honor one explicit Tsonic checkout root", 
     testWorker.match(/--import "\$loader_registration"/gu)?.length,
     2,
   );
-  assert.match(rootLoader, /process\.env\.TSONIC_ROOT \?\? defaultRoot/u);
-  assert.match(rootLoader, /configuredEntrypoints\.get\(specifier\)/u);
-  assert.match(rootLoader, /result\.url\.startsWith\(defaultPrefix\)/u);
-  assert.match(rootLoader, /url: `\$\{configuredPrefix\}/u);
+  assert.match(rootRegistration, /registerHooks\(\{ resolve: resolveFromConfiguredTsonic \}\)/u);
+  assert.match(rootRegistration, /process\.env\.TSONIC_ROOT \?\? defaultRoot/u);
+  assert.match(rootRegistration, /configuredEntrypoints\.get\(specifier\)/u);
+  assert.match(rootRegistration, /result\.url\.startsWith\(defaultPrefix\)/u);
+  assert.match(rootRegistration, /url: `\$\{configuredPrefix\}/u);
 });
 
 test("sealed Rust project-type queries never re-enter source navigation", () => {
