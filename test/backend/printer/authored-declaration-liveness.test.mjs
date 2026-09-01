@@ -6,6 +6,9 @@ import {
   compileRust,
 } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
+import {
+  collectTargetSourcePackageGraph,
+} from "../../../../tsonic/packages/host/dist/source-package-inputs.js";
 
 const authoredDeadCode =
   '#[allow(dead_code, reason = "retains an unused authored declaration")]';
@@ -176,6 +179,46 @@ export function main(): void {
   assert.equal(itemHasAttribute(source, "fn public_entry("), false);
   assert.equal(itemHasAttribute(source, "fn unused_public_entry("), false);
   validateGeneratedProject("authored-root-liveness", result.artifacts, { run: true });
+});
+
+test("generated binary entry and public implementation ABI are exact liveness roots", {
+  timeout: 300_000,
+}, () => {
+  const binaryFiles = {
+    "index.ts": `
+export function main(): void {}
+`,
+  };
+  const { result: binaryResult } = compileRust({
+    target: { id: "rust", options: { outputType: "bin", crateName: "binary_entry_liveness" } },
+    files: binaryFiles,
+    sourcePackages: sourcePackageGraphWithoutFacades(binaryFiles),
+  });
+  assert.deepEqual(binaryResult.diagnostics, []);
+  const binarySource = artifactText(binaryResult, "src/index.rs");
+  assert.equal(itemHasAttribute(binarySource, "fn main("), false);
+  validateGeneratedProject("binary-entry-liveness", binaryResult.artifacts, { run: true });
+
+  const libraryFiles = {
+    "index.ts": `
+export function exportedButUnused(): void {}
+function implementationOnly(): void {}
+export enum PublicChoice { First, Second }
+`,
+  };
+  const { result: libraryResult } = compileRust({
+    target: { id: "rust", options: { outputType: "lib", crateName: "implementation_abi_liveness" } },
+    files: libraryFiles,
+    sourcePackages: sourcePackageGraphWithoutFacades(libraryFiles),
+  });
+  assert.deepEqual(libraryResult.diagnostics, []);
+  const librarySource = artifactText(libraryResult, "src/index.rs");
+  assert.equal(itemHasAttribute(librarySource, "fn exported_but_unused("), false);
+  assert.equal(itemHasAttribute(librarySource, "fn implementation_only("), false);
+  const publicChoice = rustBracedItem(librarySource, "enum PublicChoice");
+  assert.equal(itemHasAttribute(publicChoice, "First ="), false);
+  assert.equal(itemHasAttribute(publicChoice, "Second ="), false);
+  validateGeneratedProject("implementation-abi-liveness", libraryResult.artifacts);
 });
 
 test("authored nominal and runtime type declarations retain exact type-only liveness", {
@@ -427,4 +470,11 @@ function rustBracedItem(source, itemFragment) {
     if (depth === 0) return source.slice(start, index + 1);
   }
   assert.fail(`Generated Rust item '${itemFragment}' has an unterminated body.`);
+}
+
+function sourcePackageGraphWithoutFacades(files) {
+  const projectFiles = new Map(
+    Object.entries(files).map(([name, text]) => [`/src/${name}`, text]),
+  );
+  return collectTargetSourcePackageGraph("/src", "/src", projectFiles);
 }

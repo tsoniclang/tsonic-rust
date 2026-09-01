@@ -36,7 +36,8 @@ function resolveFromConfiguredTsonic(specifier, context, nextResolve) {
       url: pathToFileURL(resolvePath(configuredRoot, configuredEntry)).href,
     };
   }
-  const result = nextResolve(specifier, context);
+  const configuredSpecifier = configuredTsonicSpecifier(specifier, context.parentURL);
+  const result = nextResolve(configuredSpecifier ?? specifier, context);
   if (configuredPrefix === defaultPrefix || !result.url.startsWith(defaultPrefix)) {
     return result;
   }
@@ -44,6 +45,22 @@ function resolveFromConfiguredTsonic(specifier, context, nextResolve) {
     ...result,
     url: `${configuredPrefix}${result.url.slice(defaultPrefix.length)}`,
   };
+}
+
+function configuredTsonicSpecifier(specifier, parentURL) {
+  if (configuredPrefix === defaultPrefix) return undefined;
+  const requestedUrl = specifier.startsWith("file:")
+    ? specifier
+    : isAbsolute(specifier)
+    ? pathToFileURL(specifier).href
+    : parentURL !== undefined &&
+        (specifier.startsWith("./") || specifier.startsWith("../"))
+    ? new URL(specifier, parentURL).href
+    : undefined;
+  if (requestedUrl === undefined || !requestedUrl.startsWith(defaultPrefix)) {
+    return undefined;
+  }
+  return `${configuredPrefix}${requestedUrl.slice(defaultPrefix.length)}`;
 }
 
 function directoryUrl(path) {

@@ -880,6 +880,10 @@ test("Rust dead-code obligations are planner-local and normalized before output 
     join(sourceRoot, "backend/planner/program/planning.ts"),
     "utf8",
   );
+  const entryPoint = readFileSync(
+    join(sourceRoot, "backend/planner/program/entry-point.ts"),
+    "utf8",
+  );
   const lintPolicy = readFileSync(
     join(sourceRoot, "backend/target-ast/normalization/lint-policy.ts"),
     "utf8",
@@ -890,6 +894,8 @@ test("Rust dead-code obligations are planner-local and normalized before output 
   assert.match(livenessPlan, /transitivelyReachable\(roots, edges\)/u);
   assert.match(livenessPlan, /deadComponentRoots\(/u);
   assert.match(livenessPlan, /analyzeRustGeneratedItemUsage\(/u);
+  assert.match(livenessPlan, /publishesImplementationAbi/u);
+  assert.match(livenessPlan, /rustBinaryEntryDeclaration\(program\)/u);
   assert.match(generatedUsage, /rustTargetOperationFactKey/u);
   assert.match(generatedUsage, /isStructuralFieldRead/u);
   assert.match(generatedUsage, /isStructuralFieldWritten/u);
@@ -912,6 +918,9 @@ test("Rust dead-code obligations are planner-local and normalized before output 
   assert.match(normalization, /rustDeadCodeAttribute\(deadCode\)/u);
   assert.match(normalization, /const \{ deadCode, \.\.\.withoutDeadCode \} = owner/u);
   assert.match(outputPlanning, /finalizeRustDeadCode\(/u);
+  assert.match(outputPlanning, /rustBinaryEntryDeclaration\(input\.program\)/u);
+  assert.match(entryPoint, /rustProjectEntrySourceFile/u);
+  assert.match(entryPoint, /isRustUnitCarrier\(returnCarrier\)/u);
   assert.match(lintPolicy, /allow\(dead_code, reason = "retains an unused authored declaration"\)/u);
   assert.match(lintPolicy, /allow\(dead_code, reason = "retains an unread authored field"\)/u);
   assert.match(lintPolicy, /expect\(dead_code, reason = "retains unused generated storage"\)/u);
@@ -940,6 +949,9 @@ test("Rust build and test entrypoints honor one explicit Tsonic checkout root", 
   assert.match(rootRegistration, /registerHooks\(\{ resolve: resolveFromConfiguredTsonic \}\)/u);
   assert.match(rootRegistration, /process\.env\.TSONIC_ROOT \?\? defaultRoot/u);
   assert.match(rootRegistration, /configuredEntrypoints\.get\(specifier\)/u);
+  assert.match(rootRegistration, /configuredTsonicSpecifier\(specifier, context\.parentURL\)/u);
+  assert.match(rootRegistration, /nextResolve\(configuredSpecifier \?\? specifier, context\)/u);
+  assert.match(rootRegistration, /requestedUrl\.startsWith\(defaultPrefix\)/u);
   assert.match(rootRegistration, /result\.url\.startsWith\(defaultPrefix\)/u);
   assert.match(rootRegistration, /url: `\$\{configuredPrefix\}/u);
 });

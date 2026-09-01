@@ -6,6 +6,7 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import {
   analyzeRustGeneratedItemUsage,
 } from "./generated-item-usage.js";
+import { rustBinaryEntryDeclaration } from "../program/entry-point.js";
 import type {
   RustDispatchMemberRole,
   RustGeneratedItemUsage,
@@ -74,6 +75,11 @@ export function createRustPlannerLiveness(program: RustTargetProgram): RustPlann
     (componentId) => program.sourcePackageFacades.exportsForComponent(componentId)
       .map((entry) => entry.declaration),
   ));
+  const publishesImplementationAbi = (declaration: Node): boolean =>
+    declarationIsTopLevel(ast, declaration) &&
+    program.sourcePackageComponents.componentForFile(
+      ast.getFileName(ast.getSourceFile(declaration)),
+    )?.publishesImplementationAbi === true;
   const generatedUsage = analyzeRustGeneratedItemUsage({
     ast,
     sourceFiles: program.sourceFiles,
@@ -104,7 +110,8 @@ export function createRustPlannerLiveness(program: RustTargetProgram): RustPlann
     const selected = canonical(declaration);
     if (!graphUnits.has(selected)) continue;
     const summary = program.sourceNavigation.declarationUseSummary(declaration);
-    if (publicDeclarations.has(declaration) || publicDeclarations.has(selected)) {
+    if (publicDeclarations.has(declaration) || publicDeclarations.has(selected) ||
+      publishesImplementationAbi(declaration)) {
       externallyReachable.add(selected);
     }
     for (const use of summary.uses) {
@@ -136,6 +143,11 @@ export function createRustPlannerLiveness(program: RustTargetProgram): RustPlann
         }
       }
     }
+  }
+
+  if (program.configuration.outputType === "bin") {
+    const binaryEntry = rustBinaryEntryDeclaration(program);
+    if (binaryEntry !== undefined) roots.add(canonical(binaryEntry));
   }
 
   for (const definition of program.projectTypes.definitions) {
