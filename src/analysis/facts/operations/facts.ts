@@ -145,6 +145,7 @@ export type RustTargetOperationFact =
       readonly kind: "iteration";
       readonly operationId: string;
       readonly iterationKind: "for-in";
+      readonly iterableCarrier: TargetTypeRef;
       readonly elementCarrier: TargetTypeRef;
       readonly lowering:
         | { readonly kind: "dense-index-keys" }
@@ -248,6 +249,7 @@ export type RustTargetOperationFact =
       readonly kind: "source-method-property";
       readonly operationId: string;
       readonly declaration: Node;
+      readonly accessMode: "read" | "write" | "read-write";
       readonly receiverCarrier: TargetTypeRef;
       readonly callableCarrier: TargetTypeRef;
       readonly write?: {
@@ -289,6 +291,7 @@ export type RustTargetOperationFact =
   | {
       readonly kind: "source-union-field";
       readonly operationId: string;
+      readonly accessMode: "read" | "write" | "read-write";
       readonly unionCarrier: TargetTypeRef;
       readonly selectedVariantIndexes: readonly number[];
       readonly variants: readonly {

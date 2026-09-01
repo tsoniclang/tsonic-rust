@@ -64,6 +64,7 @@ export function main(): void {
   assert.match(source, /enumerable_own_keys\(\)/u);
   assert.match(source, /String::from\("first"\)/u);
   assert.match(source, /assigned_key = for_in_key;/u);
+  assert.doesNotMatch(source, /retains unused generated storage/u);
   assert.equal(validateGeneratedProject("for-in-policies", result.artifacts, { run: true }).status, 0);
 });
 

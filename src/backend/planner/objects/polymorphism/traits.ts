@@ -7,7 +7,6 @@ import {
 } from "./model.js";
 import { projectAccessorCallableShape, projectDowncastReturnType } from "./forwarders.js";
 import { rustCallableSpecialization } from "../../declarations/callable-generics.js";
-import { rustLintAttributes } from "../../../target-ast/normalization/lint-policy.js";
 import { rustProjectDispatchTraitName, rustProjectDispatchTraitType, rustProjectRepresentationGenerics } from "./names.js";
 import { rustProjectObjectIdentityField } from "../project-objects.js";
 import type { RustItem, RustTraitFunction, RustType } from "../../../target-ast/nodes.js";
@@ -19,6 +18,11 @@ import {
   rustErrorType,
   rustProjectTypeHasPublicImplementationAbi,
 } from "../../program/plan-context.js";
+import {
+  rustAuthoredDeadCodeDisposition,
+  rustGeneratedDispatchDeadCodeDisposition,
+  rustGeneratedDowncastDeadCodeDisposition,
+} from "../../liveness/directives.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
 import type { RustObjectRepresentation } from "../../../../analysis/project-types/object-representation.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
@@ -135,6 +139,8 @@ export function planProjectDispatchTrait(
   if (representation === undefined) {
     return undefined;
   }
+  const publiclyReachable = context.input.program.projectTypes.programErrorVariant(definition) !== undefined ||
+    rustProjectTypeHasPublicImplementationAbi(context, definition.targetName);
   const fields = projectOwnFields(definition, carrier, context);
   if (fields === undefined) {
     return undefined;
@@ -145,8 +151,15 @@ export function planProjectDispatchTrait(
     if (returnType === undefined) {
       return undefined;
     }
+    const deadCode = rustGeneratedDowncastDeadCodeDisposition(
+      context,
+      definition.declaration,
+      route.target.declaration,
+      publiclyReachable,
+    );
     functions.push({
       name: route.slot,
+      ...(deadCode === undefined ? {} : { deadCode }),
       generics: emptyRustGenerics,
       selfParam: rustSelfParameter("rc"),
       params: [],
@@ -170,8 +183,16 @@ export function planProjectDispatchTrait(
       fieldErrorBoundary === undefined) {
       return undefined;
     }
+    const readDeadCode = rustGeneratedDispatchDeadCodeDisposition(
+      context,
+      definition.declaration,
+      field.declaration,
+      "read",
+      publiclyReachable,
+    );
     functions.push({
       name: read,
+      ...(readDeadCode === undefined ? {} : { deadCode: readDeadCode }),
       generics: emptyRustGenerics,
       selfParam: rustSelfParameter(dispatch.read.selfMode),
       params: [],
@@ -181,8 +202,16 @@ export function planProjectDispatchTrait(
         : {}),
     });
     if (dispatch.write !== undefined) {
+      const writeDeadCode = rustGeneratedDispatchDeadCodeDisposition(
+        context,
+        definition.declaration,
+        field.declaration,
+        "write",
+        publiclyReachable,
+      );
       functions.push({
         name: write!,
+        ...(writeDeadCode === undefined ? {} : { deadCode: writeDeadCode }),
         generics: emptyRustGenerics,
         selfParam: rustSelfParameter(dispatch.write.selfMode),
         params: [{ name: "value", type: field.type }],
@@ -207,8 +236,16 @@ export function planProjectDispatchTrait(
     if (shape === undefined || slot === undefined) {
       return undefined;
     }
+    const deadCode = rustGeneratedDispatchDeadCodeDisposition(
+      context,
+      definition.declaration,
+      accessor.declaration,
+      accessor.role,
+      publiclyReachable,
+    );
     functions.push({
       name: slot,
+      ...(deadCode === undefined ? {} : { deadCode }),
       generics: emptyRustGenerics,
       selfParam: rustSelfParameter("rc"),
       params: shape.params.map((parameter) => ({ ...parameter, mutable: false })),
@@ -234,18 +271,31 @@ export function planProjectDispatchTrait(
       if (shape === undefined) {
         return undefined;
       }
-      const signature = (name: string): RustTraitFunction => ({
+      const signature = (
+        name: string,
+        role: "method-virtual" | "method-exact",
+      ): RustTraitFunction => {
+        const deadCode = rustGeneratedDispatchDeadCodeDisposition(
+          context,
+          definition.declaration,
+          member,
+          role,
+          publiclyReachable,
+        );
+        return {
         name,
+        ...(deadCode === undefined ? {} : { deadCode }),
         generics: emptyRustGenerics,
         selfParam: rustSelfParameter("rc"),
         params: shape.params.map((parameter) => ({ ...parameter, mutable: false })),
         ...(shape.returnType === undefined ? {} : { returnType: shape.returnType }),
         ...(shape.errorType === undefined ? {} : { errorType: shape.errorType }),
         ...(shape.isUnsafe ? { isUnsafe: true } : {}),
-      });
-      functions.push(signature(variant.virtualSlot));
+        };
+      };
+      functions.push(signature(variant.virtualSlot, "method-virtual"));
       if (definition.kind === "class") {
-        functions.push(signature(variant.exactSlot));
+        functions.push(signature(variant.exactSlot, "method-exact"));
       }
     }
   }
@@ -264,8 +314,16 @@ export function planProjectDispatchTrait(
       }
       continue;
     }
+    const deadCode = rustGeneratedDispatchDeadCodeDisposition(
+      context,
+      definition.declaration,
+      property.declaration,
+      "write",
+      publiclyReachable,
+    );
     functions.push({
       name: write,
+      ...(deadCode === undefined ? {} : { deadCode }),
       generics: emptyRustGenerics,
       selfParam: rustSelfParameter("ref"),
       params: [{ name: "value", type: property.callableType }],
@@ -277,16 +335,14 @@ export function planProjectDispatchTrait(
     return undefined;
   }
   const generics = rustProjectRepresentationGenerics(representation);
-  const publiclyReachable = context.input.program.projectTypes.programErrorVariant(definition) !== undefined ||
-    rustProjectTypeHasPublicImplementationAbi(context, definition.targetName);
+  const visibility = rustProjectImplementationVisibility(publiclyReachable);
+  const deadCode = rustAuthoredDeadCodeDisposition(context, definition.declaration);
   return {
     kind: "trait",
     name: rustProjectDispatchTraitName(definition),
-    visibility: rustProjectImplementationVisibility(publiclyReachable),
-    attrs: [
-      ...(publiclyReachable ? ["#[doc(hidden)]"] : []),
-      rustLintAttributes.deadCode,
-    ],
+    visibility,
+    ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
+    ...(deadCode === undefined ? {} : { deadCode }),
     generics,
     ...(superTraits.length === 0 ? {} : { superTraits: superTraits as readonly RustType[] }),
     functions,

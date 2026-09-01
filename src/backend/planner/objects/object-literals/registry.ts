@@ -10,7 +10,6 @@ import { allocateMemberFieldName, planContractImplementation } from "./contracts
 import { allocateRustSyntheticTypeName } from "../../names/synthetic.js";
 import { rustCallableProtocol, rustSourceTypeCarrierValue } from "../../../../target-model/types/index.js";
 import { rustFallibleFactKey, rustObjectLiteralMethodAdapterFactKey } from "../../../../analysis/facts/keys.js";
-import { rustLintAttributes } from "../../../target-ast/normalization/lint-policy.js";
 import { rustProjectInterfaceContracts } from "../../../../analysis/project-types/type-policy.js";
 import { rustProjectObjectIdentityField, rustProjectObjectStateField } from "../project-objects.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
@@ -28,6 +27,10 @@ import {
   rustErrorBoundaryForDeclaration,
   rustErrorType,
 } from "../../program/plan-context.js";
+import {
+  rustGeneratedExactStorageDeadCodeDisposition,
+} from "../../liveness/directives.js";
+import { rustPlannedImplementationsReferenceSelfField } from "../../liveness/planned-item-usage.js";
 import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js";
 import type { RustSyntheticNameState } from "../../names/synthetic.js";
 
@@ -473,12 +476,24 @@ export function createImplementationPlan(
   if (traitItems.some((item) => item === undefined)) {
     return undefined;
   }
+  const finalizedTraitItems = traitItems as RustItem[];
+  const identityDeadCode = rustGeneratedExactStorageDeadCodeDisposition(
+    rustPlannedImplementationsReferenceSelfField(
+      finalizedTraitItems,
+      rustProjectObjectIdentityField,
+    ),
+  );
+  const stateDeadCode = rustGeneratedExactStorageDeadCodeDisposition(
+    rustPlannedImplementationsReferenceSelfField(
+      finalizedTraitItems,
+      rustProjectObjectStateField,
+    ),
+  );
   context.usedAliases?.add("rt");
   const stateItem: RustItem = {
     kind: "struct",
     name: stateName,
     visibility: "private",
-    attrs: [rustLintAttributes.deadCode],
     derives: [],
     generics: emptyRustGenerics,
     fields: [
@@ -516,13 +531,13 @@ export function createImplementationPlan(
     kind: "struct",
     name: rootName,
     visibility: "private",
-    attrs: [rustLintAttributes.deadCode],
     derives: [],
     generics: emptyRustGenerics,
     fields: [{
       name: rustProjectObjectIdentityField,
       type: { kind: "named", path: "rt::ObjectIdentity" },
       visibility: "private",
+      ...(identityDeadCode === undefined ? {} : { deadCode: identityDeadCode }),
     }, {
       name: rustProjectObjectStateField,
       type: {
@@ -531,6 +546,7 @@ export function createImplementationPlan(
         genericArguments: [{ kind: "type", type: stateType }],
       },
       visibility: "private",
+      ...(stateDeadCode === undefined ? {} : { deadCode: stateDeadCode }),
     }, ...implementations.map((implementation): RustStructField => ({
       name: implementation.fieldName,
       type: implementation.callableType,
@@ -548,6 +564,6 @@ export function createImplementationPlan(
     implementations: Object.freeze(implementations),
     methodOverrides: Object.freeze(methodOverrides),
     methods: Object.freeze(methods),
-    items: Object.freeze([stateItem, rootItem, ...(traitItems as RustItem[])]),
+    items: Object.freeze([stateItem, rootItem, ...finalizedTraitItems]),
   });
 }

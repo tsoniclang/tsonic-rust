@@ -15,6 +15,7 @@ import {
   rustErrorBoundaryForProjectMember,
   rustErrorType,
 } from "../program/plan-context.js";
+import { rustAuthoredDeadCodeDisposition } from "../liveness/directives.js";
 import { isRustNeverCarrier, isRustUnitCarrier } from "../../../target-model/types/index.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { Node_Type } from "@tsonic/target-api/source";
@@ -173,12 +174,16 @@ export function planProjectMethod(
     return undefined;
   }
   const isStatic = ast.hasModifierKind(member, "static");
+  const visibility = !ast.hasModifierKind(member, "private") &&
+      !ast.hasModifierKind(member, "protected")
+    ? "public" as const
+    : "private" as const;
   const methodAttributes = [
     ...(isStatic && methodName === "new" ? [rustLintAttributes.newReturningOtherType] : []),
-    ...(ast.hasModifierKind(ast.parent(member) ?? member, "export") ? [] : [rustLintAttributes.deadCode]),
     ...(genericPlan.preservesExplicitLifetimes ? [rustLintAttributes.needlessLifetimes] : []),
     ...safetyAttributes,
   ];
+  const deadCode = rustAuthoredDeadCodeDisposition(context, member);
   if (generatorFact !== undefined && fallible) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, member),
@@ -273,8 +278,9 @@ export function planProjectMethod(
     const generics = genericPlan.finalizeGenerics();
     return {
       name: methodName,
+      ...(deadCode === undefined ? {} : { deadCode }),
       ...(isUnsafe ? { isUnsafe: true } : {}),
-      visibility: !ast.hasModifierKind(member, "private") && !ast.hasModifierKind(member, "protected") ? "public" : "private",
+      visibility,
       ...(methodAttributes.length === 0 ? {} : { attrs: methodAttributes }),
       ...(isStatic ? {} : { selfParam: rustSelfParameter(selfMode!.mode) }),
       generics,
@@ -332,8 +338,9 @@ export function planProjectMethod(
   }
   return {
     name: methodName,
+    ...(deadCode === undefined ? {} : { deadCode }),
     ...(isUnsafe ? { isUnsafe: true } : {}),
-    visibility: !ast.hasModifierKind(member, "private") && !ast.hasModifierKind(member, "protected") ? "public" : "private",
+    visibility,
     ...(methodAttributes.length === 0 ? {} : { attrs: methodAttributes }),
     ...(callableErrorBoundary === undefined || returnsJsPromise
       ? {}

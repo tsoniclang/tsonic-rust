@@ -5,16 +5,12 @@ import {
   resolvedTargetStage,
 } from "@tsonic/target-api/artifacts";
 import type { TargetDiagnostic, TargetStageResult } from "@tsonic/target-api/artifacts";
-import {
-  KindFunctionDeclaration,
-  Node_Name,
-} from "@tsonic/target-api/source";
-import { isRustUnitCarrier } from "../../../target-model/types/index.js";
 import { emptyRustGenerics } from "../../target-ast/nodes.js";
 import type { RustItem } from "../../target-ast/nodes.js";
 import { finalizeRustSourceStyle } from "../../target-ast/normalization/source-style.js";
+import { finalizeRustDeadCode } from "../../target-ast/normalization/dead-code.js";
 import { planRustCargoProject } from "../project/cargo.js";
-import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustSourceCallableReturnFactKey } from "../../../analysis/facts/keys.js";
+import { rustAsyncFunctionFactKey, rustFallibleFactKey } from "../../../analysis/facts/keys.js";
 import type { RustPlanningContext } from "../context.js";
 import { reconstructRustSourceFiles } from "../artifacts/reconstruction.js";
 import {
@@ -27,6 +23,10 @@ import {
 } from "../names/source-output-identities.js";
 import { applyRustErrorBoundary } from "../types/error-boundary.js";
 import { rustTypeFromCarrier } from "../types/render.js";
+import {
+  rustBinaryEntryDeclaration,
+  rustProjectEntrySourceFile,
+} from "./entry-point.js";
 import type {
   RustPlannedArtifact,
   RustOutputPlan,
@@ -582,8 +582,10 @@ function finalizeRustPlannedArtifact(
     ? Object.freeze(artifact)
     : Object.freeze({
         ...artifact,
-        model: finalizeRustSourceStyle(
-          applyRustFoundationImports(artifact.model, foundation),
+        model: finalizeRustDeadCode(
+          finalizeRustSourceStyle(
+            applyRustFoundationImports(artifact.model, foundation),
+          ),
         ),
       });
 }
@@ -821,10 +823,10 @@ function resolveProjectEntrySourceFile(
   input: RustPlanningContext,
   diagnostics: TargetDiagnostic[],
 ): SourceFile | undefined {
-  const entryPoint = normalizeSourcePath(resolve(input.host.paths.projectRoot, input.host.entryPoint));
-  const sourceFile = input.program.sourceFiles.find((candidate) =>
-    normalizeSourcePath(resolve(input.program.source.ast.getFileName(candidate))) === entryPoint
+  const entryPoint = normalizeSourcePath(
+    resolve(input.host.paths.projectRoot, input.host.entryPoint),
   );
+  const sourceFile = rustProjectEntrySourceFile(input.program);
   if (sourceFile === undefined) {
     diagnostics.push({
       code: "RUST_MISSING_ENTRYPOINT",
@@ -864,26 +866,15 @@ function resolveBinaryEntry(
     });
     return undefined;
   }
-  for (const statement of input.program.source.ast.statements(entrySourceFile)) {
-    if (statement === undefined || input.program.source.ast.kindName(statement) !== KindFunctionDeclaration) {
-      continue;
-    }
-    const nameNode = Node_Name(input.program.source.ast, statement);
-    if (nameNode === undefined || input.program.source.ast.text(nameNode) !== "main") {
-      continue;
-    }
-    const asyncFact = input.program.facts.getFact(statement, rustAsyncFunctionFactKey);
-    const returnCarrier = asyncFact?.outputCarrier ??
-      input.program.facts.getFact(statement, rustSourceCallableReturnFactKey)?.returnCarrier;
-    if (!input.program.source.ast.hasModifierKind(statement, "export") || !isRustUnitCarrier(returnCarrier)) {
-      break;
-    }
+  const declaration = rustBinaryEntryDeclaration(input.program);
+  if (declaration !== undefined) {
+    const asyncFact = input.program.facts.getFact(declaration, rustAsyncFunctionFactKey);
     return {
       sourceFile: entrySourceFile,
       moduleName,
       functionName: "main",
       async: asyncFact !== undefined,
-      fallible: input.program.facts.getFact(statement, rustFallibleFactKey) !== undefined,
+      fallible: input.program.facts.getFact(declaration, rustFallibleFactKey) !== undefined,
     };
   }
   diagnostics.push({
