@@ -918,6 +918,31 @@ test("Rust dead-code obligations are planner-local and normalized before output 
   assert.doesNotMatch(lintPolicy, /preserves the checked source contract/u);
 });
 
+test("Rust build and test entrypoints honor one explicit Tsonic checkout root", () => {
+  const buildScript = readFileSync(join(repositoryRoot, "scripts/build.sh"), "utf8");
+  const testWorker = readFileSync(join(repositoryRoot, "scripts/test-worker.sh"), "utf8");
+  const rootLoader = readFileSync(
+    join(repositoryRoot, "scripts/tsonic-root-loader.mjs"),
+    "utf8",
+  );
+
+  assert.match(buildScript, /configured_tsonic_root="\$\{TSONIC_ROOT:-/u);
+  assert.match(buildScript, /export TSONIC_ROOT/u);
+  assert.match(buildScript, /"typeRoots": \["\$TSONIC_ROOT\/node_modules\/@types"\]/u);
+  assert.doesNotMatch(
+    buildScript,
+    /TSONIC_ROOT="\$\(cd "\$REPO_ROOT\/\.\.\/tsonic"/u,
+  );
+  assert.equal(
+    testWorker.match(/--import "\$loader_registration"/gu)?.length,
+    2,
+  );
+  assert.match(rootLoader, /process\.env\.TSONIC_ROOT \?\? defaultRoot/u);
+  assert.match(rootLoader, /configuredEntrypoints\.get\(specifier\)/u);
+  assert.match(rootLoader, /result\.url\.startsWith\(defaultPrefix\)/u);
+  assert.match(rootLoader, /url: `\$\{configuredPrefix\}/u);
+});
+
 test("sealed Rust project-type queries never re-enter source navigation", () => {
   const text = readFileSync(
     join(sourceRoot, "analysis/project-types/policy/resolution.ts"),
