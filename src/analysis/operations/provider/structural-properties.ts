@@ -125,6 +125,7 @@ export function selectStructuralSourceProperty(
     return acceptRustMemberOperation(request, "property", {
       kind: "source-union-field",
       operationId,
+      accessMode: request.accessMode,
       unionCarrier: receiverCarrier,
       selectedVariantIndexes,
       variants: sourceUnion.variants.map((variant, index) => ({

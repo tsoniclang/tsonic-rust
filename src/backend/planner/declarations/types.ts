@@ -6,6 +6,14 @@ import {
   rustProjectTypeHasPublicImplementationAbi,
   rustSourceItemIsPubliclyReachable,
 } from "../program/plan-context.js";
+import {
+  rustAuthoredDeadCodeDisposition,
+  rustAuthoredFieldDeadCodeDisposition,
+  rustAuthoredVariantDeadCodeDisposition,
+  rustGeneratedEnumDiscriminantDeadCodeDisposition,
+  rustGeneratedProjectInterfaceFieldDeadCodeDisposition,
+  rustProjectInterfaceDeadCodeDisposition,
+} from "../liveness/directives.js";
 import { isRustIntegerCarrier, isRustStringCarrier, rustCarrierSupportsClone } from "../../../target-model/types/index.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { Node_Type } from "@tsonic/target-api/source";
@@ -34,7 +42,7 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
     ));
     return undefined;
   }
-  const variants: { name: string; discriminant?: string }[] = [];
+  const variants: { declaration: Node; name: string; discriminant?: string }[] = [];
   const discriminants = new Map<number, string>();
   let hasDuplicateDiscriminant = false;
   for (const member of ast.members(node)) {
@@ -71,49 +79,64 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
     } else {
       discriminants.set(value, memberName);
     }
-    variants.push({ name: memberName, discriminant: String(value) });
+    variants.push({ declaration: member, name: memberName, discriminant: String(value) });
   }
   const visibility = ast.hasModifierKind(node, "export") ||
       rustProjectTypeHasPublicImplementationAbi(context, enumName)
     ? "public" as const
     : "crate" as const;
-  const attrs = rustProjectTypeHasPublicImplementationAbi(context, enumName)
-    ? []
-    : [rustLintAttributes.deadCode];
+  const deadCode = rustAuthoredDeadCodeDisposition(context, node);
   if (hasDuplicateDiscriminant) {
     const enumType = { kind: "named" as const, path: enumName };
+    const discriminantDeadCode = rustGeneratedEnumDiscriminantDeadCodeDisposition(
+      context,
+      node,
+    );
     return [{
       kind: "struct",
       name: enumName,
       visibility,
-      attrs: ["#[repr(transparent)]", ...attrs],
+      attrs: ["#[repr(transparent)]"],
+      ...(deadCode === undefined ? {} : { deadCode }),
       derives: ["Clone", "Copy", "Debug", "PartialEq", "Eq", "Hash"],
       generics: emptyRustGenerics,
       fields: [{
         name: "value",
         type: { kind: "primitive", name: "i64" },
         visibility: "private",
+        ...(discriminantDeadCode === undefined
+          ? {}
+          : { deadCode: discriminantDeadCode }),
       }],
     }, {
       kind: "impl",
       generics: emptyRustGenerics,
       target: enumType,
-      constants: variants.map((variant) => ({
-        name: variant.name,
-        visibility: "public",
-        ...(isUpperSnakeName(variant.name)
-          ? {}
-          : { attrs: [rustLintAttributes.nonUpperCaseGlobal] }),
-        type: { kind: "named", path: "Self" },
-        value: {
-          kind: "struct-literal",
-          path: "Self",
-          fields: [{
-            name: "value",
-            value: { kind: "int-literal", text: variant.discriminant! },
-          }],
-        },
-      })),
+      constants: variants.map((variant) => {
+        const variantDeadCode = rustAuthoredVariantDeadCodeDisposition(
+          context,
+          node,
+          variant.name,
+        );
+        const constantAttrs = isUpperSnakeName(variant.name)
+            ? []
+            : [rustLintAttributes.nonUpperCaseGlobal];
+        return {
+          name: variant.name,
+          visibility: "public",
+          ...(constantAttrs.length === 0 ? {} : { attrs: constantAttrs }),
+          ...(variantDeadCode === undefined ? {} : { deadCode: variantDeadCode }),
+          type: { kind: "named" as const, path: "Self" },
+          value: {
+            kind: "struct-literal" as const,
+            path: "Self",
+            fields: [{
+              name: "value",
+              value: { kind: "int-literal" as const, text: variant.discriminant! },
+            }],
+          },
+        };
+      }),
       functions: [],
     }];
   }
@@ -122,9 +145,20 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
     generics: emptyRustGenerics,
     name: enumName,
     visibility,
-    ...(attrs.length === 0 ? {} : { attrs }),
+    ...(deadCode === undefined ? {} : { deadCode }),
     derives: ["Clone", "Copy", "Debug", "PartialEq"],
-    variants,
+    variants: variants.map((variant) => {
+      const variantDeadCode = rustAuthoredVariantDeadCodeDisposition(
+        context,
+        node,
+        variant.name,
+      );
+      return {
+        name: variant.name,
+        discriminant: variant.discriminant,
+        ...(variantDeadCode === undefined ? {} : { deadCode: variantDeadCode }),
+      };
+    }),
   }];
 }
 
@@ -143,6 +177,9 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
   const exported = ast.hasModifierKind(node, "export");
   const publiclyReachable = rustProjectTypeHasPublicImplementationAbi(context, interfaceName);
   const storageVisibility = rustProjectImplementationVisibility(publiclyReachable);
+  const interfaceVisibility = exported || publiclyReachable
+    ? "public" as const
+    : "crate" as const;
   if (ast.extendsHeritageElements(node).length > 0) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
@@ -292,29 +329,49 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
     return undefined;
   }
   context.usedAliases?.add("rt");
-  const interfaceAttributes = [
-    ...(structAttributes(interfaceName) ?? []),
-    ...(rustProjectTypeHasPublicImplementationAbi(context, interfaceName)
-      ? []
-      : [rustLintAttributes.deadCode]),
-  ];
+  const interfaceAttributes = structAttributes(interfaceName) ?? [];
+  const interfaceDeadCode = rustProjectInterfaceDeadCodeDisposition(
+    context,
+    node,
+    interfaceVisibility === "public",
+  );
   return [{
     kind: "struct",
     name: definition.stateName,
     visibility: storageVisibility,
-    attrs: [
-      ...(publiclyReachable ? ["#[doc(hidden)]"] : []),
-      rustLintAttributes.deadCode,
-    ],
+    ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
     derives: [],
     generics,
     fields: [
-      ...fields.map((field) => ({
-        name: field.targetName,
-        type: field.type,
-        visibility: field.visibility,
-      })),
-      ...(indexField === undefined ? [] : [indexField]),
+      ...fields.map((field): RustStructField => {
+        const deadCode = rustAuthoredFieldDeadCodeDisposition(
+          context,
+          node,
+          field.declaration,
+          field.visibility === "public",
+        );
+        return {
+          name: field.targetName,
+          type: field.type,
+          visibility: field.visibility,
+          ...(deadCode === undefined ? {} : { deadCode }),
+        };
+      }),
+      ...(indexField === undefined
+        ? []
+        : [{
+            ...indexField,
+            ...(() => {
+              const deadCode = rustGeneratedProjectInterfaceFieldDeadCodeDisposition(
+                context,
+                node,
+                "index-storage",
+                interfaceVisibility === "public",
+                indexField.visibility === "public",
+              );
+              return deadCode === undefined ? {} : { deadCode };
+            })(),
+          }]),
       ...(stateMarker === undefined
         ? []
         : [{
@@ -328,7 +385,8 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
     kind: "struct",
     name: interfaceName,
     ...(interfaceAttributes.length === 0 ? {} : { attrs: interfaceAttributes }),
-    visibility: exported || publiclyReachable ? "public" : "crate",
+    ...(interfaceDeadCode === undefined ? {} : { deadCode: interfaceDeadCode }),
+    visibility: interfaceVisibility,
     derives: ["Clone", "Debug", "PartialEq"],
     generics,
     fields: [{
@@ -336,6 +394,16 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
       type: stateCarrier,
       visibility: storageVisibility,
       ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
+      ...(() => {
+        const deadCode = rustGeneratedProjectInterfaceFieldDeadCodeDisposition(
+          context,
+          node,
+          "wrapper-state",
+          interfaceVisibility === "public",
+          storageVisibility === "public",
+        );
+        return deadCode === undefined ? {} : { deadCode };
+      })(),
     }],
   }];
 }
@@ -370,13 +438,16 @@ export function planTypeAliasDeclaration(node: Node, context: RustPlanContext): 
       ));
       return undefined;
     }
+    const visibility = ast.hasModifierKind(node, "export") ||
+        rustSourceItemIsPubliclyReachable(context, aliasName)
+      ? "public" as const
+      : "crate" as const;
+    const deadCode = rustAuthoredDeadCodeDisposition(context, node);
     return [{
       kind: "type-alias",
       name: aliasName,
-      ...(rustSourceItemIsPubliclyReachable(context, aliasName)
-        ? {}
-        : { attrs: [rustLintAttributes.deadCode] }),
-      visibility: ast.hasModifierKind(node, "export") ? "public" : "crate",
+      ...(deadCode === undefined ? {} : { deadCode }),
+      visibility,
       generics,
       target,
     }];
@@ -393,26 +464,34 @@ export function planTypeAliasDeclaration(node: Node, context: RustPlanContext): 
     ));
     return undefined;
   }
+  const visibility = ast.hasModifierKind(node, "export") ||
+      rustProjectTypeHasPublicImplementationAbi(context, aliasName)
+    ? "public" as const
+    : "crate" as const;
+  const deadCode = rustAuthoredDeadCodeDisposition(context, node);
   return [{
     kind: "enum",
     generics: emptyRustGenerics,
     name: aliasName,
-    visibility: ast.hasModifierKind(node, "export") ||
-        rustProjectTypeHasPublicImplementationAbi(context, aliasName)
-      ? "public"
-      : "crate",
-    ...(rustProjectTypeHasPublicImplementationAbi(context, aliasName)
-      ? {}
-      : { attrs: [rustLintAttributes.deadCode] }),
+    visibility,
+    ...(deadCode === undefined ? {} : { deadCode }),
     derives: fact.kind === "string-literal"
       ? ["Clone", "Copy", "Debug", "PartialEq"]
       : ["Clone", "Debug", "PartialEq"],
-    variants: fact.variants.map((variant, index) => ({
-      name: variant.name,
-      ...(fact.kind === "runtime"
-        ? { fields: [runtimeVariantTypes[index]!] }
-        : {}),
-    })),
+    variants: fact.variants.map((variant, index) => {
+      const variantDeadCode = rustAuthoredVariantDeadCodeDisposition(
+        context,
+        node,
+        variant.name,
+      );
+      return {
+        name: variant.name,
+        ...(variantDeadCode === undefined ? {} : { deadCode: variantDeadCode }),
+        ...(fact.kind === "runtime"
+          ? { fields: [runtimeVariantTypes[index]!] }
+          : {}),
+      };
+    }),
   }];
 }
 

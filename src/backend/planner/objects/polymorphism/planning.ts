@@ -1,7 +1,6 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustItem, RustType } from "../../../target-ast/nodes.js";
+import type { RustItem, RustStructField, RustType } from "../../../target-ast/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/nodes.js";
-import { rustLintAttributes } from "../../../target-ast/normalization/lint-policy.js";
 import { rustDefaultImplementation } from "../../declarations/default-implementation.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
@@ -9,6 +8,13 @@ import {
   diagnosticInput,
   rustProjectTypeHasPublicImplementationAbi,
 } from "../../program/plan-context.js";
+import {
+  rustGeneratedExactStorageDeadCodeDisposition,
+  rustGeneratedProjectInterfaceFieldDeadCodeDisposition,
+  rustGeneratedProjectInternalFieldDeadCodeDisposition,
+  rustProjectInterfaceDeadCodeDisposition,
+} from "../../liveness/directives.js";
+import { rustPlannedImplementationsReferenceSelfField } from "../../liveness/planned-item-usage.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import {
   rustProjectObjectDispatchField,
@@ -147,10 +153,23 @@ export function planPolymorphicClassDeclaration(
     return undefined;
   }
   const implementationVisibility = rustProjectImplementationVisibility(publiclyReachable);
+  const wrapperVisibility = exported || publiclyReachable ? "public" as const : "crate" as const;
   const defaultImplementation = rustDefaultImplementation(
     wrapperType,
     generics,
     constructor.construct,
+  );
+  const rootIdentityDeadCode = rustGeneratedExactStorageDeadCodeDisposition(
+    rustPlannedImplementationsReferenceSelfField(
+      rootImplementations,
+      rustProjectObjectIdentityField,
+    ),
+  );
+  const rootStateDeadCode = rustGeneratedExactStorageDeadCodeDisposition(
+    rustPlannedImplementationsReferenceSelfField(
+      rootImplementations,
+      rustProjectObjectStateField,
+    ),
   );
   return [
     trait,
@@ -158,10 +177,7 @@ export function planPolymorphicClassDeclaration(
       kind: "struct",
       name: definition.stateName,
       visibility: implementationVisibility,
-      attrs: [
-        ...(publiclyReachable ? ["#[doc(hidden)]"] : []),
-        rustLintAttributes.deadCode,
-      ],
+      ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
       derives: [],
       generics,
       fields: [
@@ -171,27 +187,42 @@ export function planPolymorphicClassDeclaration(
               name: context.input.program.projectTypes.baseStateFieldName(definition),
               type: baseStateType,
               visibility: implementationVisibility,
-              ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
+              ...(() => {
+                const attrs = publiclyReachable ? ["#[doc(hidden)]"] : [];
+                const deadCode = rustGeneratedProjectInternalFieldDeadCodeDisposition(
+                  context,
+                  declaration,
+                  "base-state",
+                  implementationVisibility === "public",
+                );
+                return {
+                  ...(attrs.length === 0 ? {} : { attrs }),
+                  ...(deadCode === undefined ? {} : { deadCode }),
+                };
+              })(),
             }]),
-        ...ownLayer.fields.map((field) => ({
-          name: field.targetName,
-          type: field.type,
-          visibility: rustProjectMemberStorageVisibility(
+        ...ownLayer.fields.map((field): RustStructField => {
+          const visibility = rustProjectMemberStorageVisibility(
             context.input.program.source.ast,
             field.declaration,
             publiclyReachable,
-          ),
-        })),
+          );
+          return {
+            name: field.targetName,
+            type: field.type,
+            visibility,
+          };
+        }),
         ...ownLayer.methodProperties.map((property) => ({
-          name: property.targetName,
-          type: {
-            kind: "named" as const,
-            path: "Option",
-            genericArguments: [{ kind: "type" as const, type: property.callableType }],
-          },
-          visibility: implementationVisibility,
-          ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
-        })),
+            name: property.targetName,
+            type: {
+              kind: "named" as const,
+              path: "Option",
+              genericArguments: [{ kind: "type" as const, type: property.callableType }],
+            },
+            visibility: implementationVisibility,
+            ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
+          })),
         ...(stateMarker === undefined
           ? []
           : [{
@@ -206,13 +237,8 @@ export function planPolymorphicClassDeclaration(
     {
       kind: "struct",
       name: definition.targetName,
-      visibility: exported || publiclyReachable ? "public" : "crate",
-      attrs: [
-        rustLintAttributes.deadCode,
-        ...(programErrorVariant === undefined
-          ? []
-          : ["#[doc(hidden)]"]),
-      ],
+      visibility: wrapperVisibility,
+      ...(programErrorVariant === undefined ? {} : { attrs: ["#[doc(hidden)]"] }),
       derives: ["Clone"],
       generics,
       fields: [
@@ -226,7 +252,19 @@ export function planPolymorphicClassDeclaration(
           name: rustProjectObjectDispatchField,
           type: rustRcType(dispatchObjectType),
           visibility: implementationVisibility,
-          ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
+          ...(() => {
+            const attrs = publiclyReachable ? ["#[doc(hidden)]"] : [];
+            const deadCode = rustGeneratedProjectInternalFieldDeadCodeDisposition(
+              context,
+              declaration,
+              "wrapper-dispatch",
+              implementationVisibility === "public",
+            );
+            return {
+              ...(attrs.length === 0 ? {} : { attrs }),
+              ...(deadCode === undefined ? {} : { deadCode }),
+            };
+          })(),
         },
       ],
     },
@@ -235,7 +273,6 @@ export function planPolymorphicClassDeclaration(
       kind: "struct",
       name: rustProjectRootName(definition),
       visibility: "crate",
-      attrs: [rustLintAttributes.deadCode],
       derives: [],
       generics,
       fields: [
@@ -243,6 +280,11 @@ export function planPolymorphicClassDeclaration(
           name: rustProjectObjectIdentityField,
           type: { kind: "named", path: "rt::ObjectIdentity" },
           visibility: "private",
+          ...(() => {
+            return rootIdentityDeadCode === undefined
+              ? {}
+              : { deadCode: rootIdentityDeadCode };
+          })(),
         },
         {
           name: rustProjectObjectStateField,
@@ -252,6 +294,11 @@ export function planPolymorphicClassDeclaration(
             genericArguments: [{ kind: "type" as const, type: stateType }],
           },
           visibility: "private",
+          ...(() => {
+            return rootStateDeadCode === undefined
+              ? {}
+              : { deadCode: rootStateDeadCode };
+          })(),
         },
       ],
     },
@@ -378,13 +425,19 @@ export function planPolymorphicInterfaceDeclaration(
     definition.targetName,
   );
   const implementationVisibility = rustProjectImplementationVisibility(publiclyReachable);
+  const wrapperVisibility = exported || publiclyReachable ? "public" as const : "crate" as const;
+  const wrapperDeadCode = rustProjectInterfaceDeadCodeDisposition(
+    context,
+    declaration,
+    wrapperVisibility === "public",
+  );
   return [
     trait,
     {
       kind: "struct",
       name: definition.targetName,
-      visibility: exported || publiclyReachable ? "public" : "crate",
-      attrs: [rustLintAttributes.deadCode],
+      visibility: wrapperVisibility,
+      ...(wrapperDeadCode === undefined ? {} : { deadCode: wrapperDeadCode }),
       derives: ["Clone"],
       generics,
       fields: [
@@ -398,7 +451,20 @@ export function planPolymorphicInterfaceDeclaration(
           name: rustProjectObjectDispatchField,
           type: rustRcType(dispatchObjectType),
           visibility: implementationVisibility,
-          ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
+          ...(() => {
+            const attrs = publiclyReachable ? ["#[doc(hidden)]"] : [];
+            const deadCode = rustGeneratedProjectInterfaceFieldDeadCodeDisposition(
+              context,
+              declaration,
+              "wrapper-dispatch",
+              wrapperVisibility === "public",
+              implementationVisibility === "public",
+            );
+            return {
+              ...(attrs.length === 0 ? {} : { attrs }),
+              ...(deadCode === undefined ? {} : { deadCode }),
+            };
+          })(),
         },
       ],
     },

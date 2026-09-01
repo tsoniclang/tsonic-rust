@@ -112,10 +112,10 @@ export function main(): void {
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /struct Marker<T: Clone> \{/u);
   assert.doesNotMatch(source, /T: Clone \+ 'static/u);
-  assert.match(source, /type_marker: core::marker::PhantomData<\(T,\)>/u);
+  assert.match(source, /_type_marker: core::marker::PhantomData<\(T,\)>/u);
   assert.match(source, /pub\(crate\) label: String,/u);
   assert.doesNotMatch(source, /ObjectHandle|ObjectRef/u);
-  assert.match(source, /type_marker: core::marker::PhantomData/u);
+  assert.match(source, /_type_marker: core::marker::PhantomData/u);
   assert.match(source, /Marker::<i32>::new\(String::from\("ready"\)\)/u);
   assert.doesNotMatch(source, /Marker::new::<i32>/u);
   validateGeneratedProject("clean-generic-state", result.artifacts);

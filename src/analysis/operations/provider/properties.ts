@@ -596,6 +596,7 @@ function selectProjectSourceMethodProperty(
     kind: "source-method-property",
     operationId: sourceOperationId(context, declaration, "method-property"),
     declaration,
+    accessMode: request.accessMode,
     receiverCarrier: selectedReceiverCarrier,
     callableCarrier,
     ...(needsWrite

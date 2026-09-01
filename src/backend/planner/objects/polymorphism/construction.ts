@@ -37,6 +37,9 @@ import {
   rustErrorType,
   rustProjectTypeHasPublicImplementationAbi,
 } from "../../program/plan-context.js";
+import {
+  rustProjectConstructorDeadCodeDisposition,
+} from "../../liveness/directives.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import {
   rustProjectObjectDispatchField,
@@ -551,14 +554,15 @@ export function planProjectClassConstructor(
           !context.input.program.source.ast.hasModifierKind(constructor, "protected"))
       ? "public"
       : "private",
+    ...(isUnsafe ? { attrs: [rustLintAttributes.missingSafetyDoc] } : {}),
     ...(() => {
-      const attrs = [
-        ...(isUnsafe ? [rustLintAttributes.missingSafetyDoc] : []),
-        ...(context.input.program.source.ast.hasModifierKind(definition.declaration, "export")
-          ? []
-          : [rustLintAttributes.deadCode]),
-      ];
-      return attrs.length === 0 ? {} : { attrs };
+      const deadCode = rustProjectConstructorDeadCodeDisposition(
+        context,
+        definition.declaration,
+        constructor ?? definition.declaration,
+        publishesImplementationAbi,
+      );
+      return deadCode === undefined ? {} : { deadCode };
     })(),
     params: parameterPlan.params,
     ...(constructorErrorType === undefined ? {} : { errorType: constructorErrorType }),

@@ -476,7 +476,7 @@ export function createRustProjectTypePolicy(
     baseStateFieldNamesByDefinition.set(definition, allocateGeneratedName(usedNames, "base"));
     stateMarkerFieldNamesByDefinition.set(
       definition,
-      allocateGeneratedName(usedNames, "type_marker"),
+      allocateGeneratedName(usedNames, "_type_marker"),
     );
   }
 

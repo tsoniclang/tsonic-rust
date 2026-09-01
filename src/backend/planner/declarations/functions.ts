@@ -12,6 +12,7 @@ import {
   rustErrorType,
   rustSourceItemIsPubliclyReachable,
 } from "../program/plan-context.js";
+import { rustAuthoredDeadCodeDisposition } from "../liveness/directives.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustReturnTypeFromCarrierInContext } from "../types/render.js";
 import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustGeneratorFactKey, rustSourceCallableReturnFactKey } from "../../../analysis/facts/keys.js";
@@ -130,12 +131,14 @@ function planRustFunctionItem(
   const isExported = source.exported;
   const name = source.name ??
     outerContext.input.program.names.nameForDeclaration(source.nameDeclaration) ?? "";
-  const declarationAttributes = [
-    ...(rustSourceItemIsPubliclyReachable(outerContext, name)
-      ? []
-      : [rustLintAttributes.deadCode]),
-    ...safetyAttributes,
-  ];
+  const visibility = isExported || rustSourceItemIsPubliclyReachable(outerContext, name)
+    ? "public" as const
+    : "crate" as const;
+  const deadCode = rustAuthoredDeadCodeDisposition(
+    outerContext,
+    source.nameDeclaration,
+  );
+  const declarationAttributes = [...safetyAttributes];
   let context: RustPlanContext = outerContext;
   if (!isValidRustIdentifier(name)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -336,9 +339,8 @@ function planRustFunctionItem(
     const item: Extract<RustItem, { readonly kind: "function" }> = {
       kind: "function",
       name,
-      visibility: isExported || rustSourceItemIsPubliclyReachable(outerContext, name)
-        ? "public"
-        : "crate",
+      visibility,
+      ...(deadCode === undefined ? {} : { deadCode }),
       ...(declarationAttributes.length === 0
         ? {}
         : { attrs: declarationAttributes }),
@@ -396,9 +398,8 @@ function planRustFunctionItem(
   const item: Extract<RustItem, { readonly kind: "function" }> = {
     kind: "function",
     name,
-    visibility: isExported || rustSourceItemIsPubliclyReachable(outerContext, name)
-      ? "public"
-      : "crate",
+    visibility,
+    ...(deadCode === undefined ? {} : { deadCode }),
     ...(declarationAttributes.length === 0
       ? {}
       : { attrs: declarationAttributes }),

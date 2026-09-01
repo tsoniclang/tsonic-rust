@@ -44,6 +44,7 @@ import {
   rustSourceItemIsPubliclyReachable,
   rustRuntimeAliasImports,
 } from "./plan-context.js";
+import { rustAuthoredDeadCodeDisposition } from "../liveness/directives.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planBlockLike, planStatement } from "../statements/index.js";
@@ -297,9 +298,7 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
               value,
               ast.hasModifierKind(statement, "export") ? "public" : "crate",
               syntheticNames,
-              rustSourceItemIsPubliclyReachable(context, binding.value.name)
-                ? []
-                : [rustLintAttributes.deadCode],
+              [],
             ));
           }
         }
@@ -615,9 +614,6 @@ function planTopLevelVariableStatement(
         context.syntheticNames!,
         [
           ...(isUpperSnakeName(binding.value.name) ? [] : [rustLintAttributes.nonUpperCaseGlobal]),
-          ...(rustSourceItemIsPubliclyReachable(context, binding.value.name)
-            ? []
-            : [rustLintAttributes.deadCode]),
         ],
       );
       items.push(...planned.items);
@@ -638,17 +634,16 @@ function planTopLevelVariableStatement(
       return undefined;
     }
     if (binding.storage === "native-const") {
+      const deadCode = rustAuthoredDeadCodeDisposition(context, declaration);
       const attrs = [
         ...(isUpperSnakeName(name) ? [] : [rustLintAttributes.nonUpperCaseGlobal]),
-        ...(rustSourceItemIsPubliclyReachable(context, name)
-          ? []
-          : [rustLintAttributes.deadCode]),
       ];
       items.push({
         kind: "const",
         name,
         visibility,
         ...(attrs.length === 0 ? {} : { attrs }),
+        ...(deadCode === undefined ? {} : { deadCode }),
         type: rustType,
         value,
       });
@@ -671,9 +666,6 @@ function planTopLevelVariableStatement(
       context.syntheticNames!,
       [
         ...(isUpperSnakeName(name) ? [] : [rustLintAttributes.nonUpperCaseGlobal]),
-        ...(rustSourceItemIsPubliclyReachable(context, name)
-          ? []
-          : [rustLintAttributes.deadCode]),
       ],
     );
     items.push(...planned.items);

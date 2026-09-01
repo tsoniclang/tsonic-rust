@@ -851,6 +851,73 @@ test("source-package semantics are sealed before physical Rust planning", () => 
   );
 });
 
+test("Rust dead-code obligations are planner-local and normalized before output sealing", () => {
+  const livenessPlan = readFileSync(
+    join(sourceRoot, "backend/planner/liveness/plan.ts"),
+    "utf8",
+  );
+  const generatedUsage = readFileSync(
+    join(sourceRoot, "backend/planner/liveness/generated-item-usage.ts"),
+    "utf8",
+  );
+  const targetProgram = readFileSync(
+    join(sourceRoot, "analysis/program/model.ts"),
+    "utf8",
+  );
+  const planningContext = readFileSync(
+    join(sourceRoot, "backend/planner/context.ts"),
+    "utf8",
+  );
+  const directives = readFileSync(
+    join(sourceRoot, "backend/planner/liveness/directives.ts"),
+    "utf8",
+  );
+  const normalization = readFileSync(
+    join(sourceRoot, "backend/target-ast/normalization/dead-code.ts"),
+    "utf8",
+  );
+  const outputPlanning = readFileSync(
+    join(sourceRoot, "backend/planner/program/planning.ts"),
+    "utf8",
+  );
+  const lintPolicy = readFileSync(
+    join(sourceRoot, "backend/target-ast/normalization/lint-policy.ts"),
+    "utf8",
+  );
+
+  assert.match(livenessPlan, /sourceNavigation\.declarationUseSummary\(declaration\)/u);
+  assert.match(livenessPlan, /runtimeInitializationRoots/u);
+  assert.match(livenessPlan, /transitivelyReachable\(roots, edges\)/u);
+  assert.match(livenessPlan, /deadComponentRoots\(/u);
+  assert.match(livenessPlan, /analyzeRustGeneratedItemUsage\(/u);
+  assert.match(generatedUsage, /rustTargetOperationFactKey/u);
+  assert.match(generatedUsage, /isStructuralFieldRead/u);
+  assert.match(generatedUsage, /isStructuralFieldWritten/u);
+  assert.match(generatedUsage, /isProjectTypeConstructed/u);
+  assert.match(generatedUsage, /isProjectGeneratedFieldUsed/u);
+  assert.match(generatedUsage, /isStructuralShapeConstructed/u);
+  assert.match(generatedUsage, /isVariantConstructed/u);
+  assert.doesNotMatch(targetProgram, /deadCode|liveness/u);
+  assert.match(planningContext, /liveness: createRustPlannerLiveness\(program\)/u);
+  assert.match(directives, /context\.input\.liveness\.requiresSuppression/u);
+  assert.match(directives, /isStructuralFieldRead/u);
+  assert.match(directives, /isStructuralFieldWritten/u);
+  assert.match(directives, /isProjectTypeConstructed/u);
+  assert.match(directives, /isProjectGeneratedFieldUsed/u);
+  assert.match(directives, /isStructuralShapeConstructed/u);
+  assert.doesNotMatch(
+    directives,
+    /sourceNavigation|declarationUseSummary|referencesToDeclaration/u,
+  );
+  assert.match(normalization, /rustDeadCodeAttribute\(deadCode\)/u);
+  assert.match(normalization, /const \{ deadCode, \.\.\.withoutDeadCode \} = owner/u);
+  assert.match(outputPlanning, /finalizeRustDeadCode\(/u);
+  assert.match(lintPolicy, /allow\(dead_code, reason = "retains an unused authored declaration"\)/u);
+  assert.match(lintPolicy, /allow\(dead_code, reason = "retains an unread authored field"\)/u);
+  assert.match(lintPolicy, /expect\(dead_code, reason = "retains unused generated storage"\)/u);
+  assert.doesNotMatch(lintPolicy, /preserves the checked source contract/u);
+});
+
 test("sealed Rust project-type queries never re-enter source navigation", () => {
   const text = readFileSync(
     join(sourceRoot, "analysis/project-types/policy/resolution.ts"),

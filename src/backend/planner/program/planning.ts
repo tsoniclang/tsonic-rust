@@ -5,14 +5,12 @@ import {
   resolvedTargetStage,
 } from "@tsonic/target-api/artifacts";
 import type { TargetDiagnostic, TargetStageResult } from "@tsonic/target-api/artifacts";
-import {
-  KindFunctionDeclaration,
-  Node_Name,
-} from "@tsonic/target-api/source";
+import { KindFunctionDeclaration, Node_Name } from "@tsonic/target-api/source";
 import { isRustUnitCarrier } from "../../../target-model/types/index.js";
 import { emptyRustGenerics } from "../../target-ast/nodes.js";
 import type { RustItem } from "../../target-ast/nodes.js";
 import { finalizeRustSourceStyle } from "../../target-ast/normalization/source-style.js";
+import { finalizeRustDeadCode } from "../../target-ast/normalization/dead-code.js";
 import { planRustCargoProject } from "../project/cargo.js";
 import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustSourceCallableReturnFactKey } from "../../../analysis/facts/keys.js";
 import type { RustPlanningContext } from "../context.js";
@@ -582,8 +580,10 @@ function finalizeRustPlannedArtifact(
     ? Object.freeze(artifact)
     : Object.freeze({
         ...artifact,
-        model: finalizeRustSourceStyle(
-          applyRustFoundationImports(artifact.model, foundation),
+        model: finalizeRustDeadCode(
+          finalizeRustSourceStyle(
+            applyRustFoundationImports(artifact.model, foundation),
+          ),
         ),
       });
 }
