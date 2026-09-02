@@ -733,12 +733,20 @@
   },
   {
     "area": "RegExp",
-    "lane": "dynamic patterns and out-of-subset constructs",
-    "classification": "hard-rejected"
+    "lane": "dynamic patterns and complete ECMAScript constructs",
+    "classification": "implemented",
+    "proof": "test/integration/generated-rust/regexp-complete.test.mjs"
   },
   {
     "area": "JSON",
-    "lane": "replacer functions and custom toJSON",
+    "lane": "replacer functions and selected toJSON",
+    "classification": "implemented",
+    "rowMember": "stringify",
+    "proof": "test/integration/generated-rust/js-api-capability-closure.test.mjs"
+  },
+  {
+    "area": "JSON",
+    "lane": "arbitrary unselected toJSON dispatch",
     "classification": "hard-rejected"
   },
   {
@@ -754,7 +762,13 @@
   },
   {
     "area": "Object",
-    "lane": "Object.assign",
+    "lane": "Object.assign over closed shapes",
+    "classification": "implemented",
+    "proof": "test/integration/generated-rust/js-api-capability-closure.test.mjs"
+  },
+  {
+    "area": "Object",
+    "lane": "Object.assign with shape-changing identity",
     "classification": "target-limit",
     "reason": "shape-changing assignment cannot preserve one JavaScript object identity across distinct static Rust record layouts without replacing the closed carrier with dynamic reflection"
   },

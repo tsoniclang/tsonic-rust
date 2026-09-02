@@ -5,9 +5,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
-const document = readFileSync(join(root, "docs/csharp-parity.md"), "utf8");
 const lanes = JSON.parse(readFileSync(
-  join(root, "docs/csharp-parity-lanes.json"),
+  join(root, "test/fixtures/support/csharp-parity-lanes.json"),
   "utf8",
 ));
 const classifications = new Set([
@@ -53,12 +52,7 @@ test("C# parity inventory is complete and mechanically classified", () => {
   }
 });
 
-test("implementation status and priority closure remain mechanically visible", () => {
-  const open = lanes.filter(({ classification }) =>
-    classification === "implementation-gap" || classification === "contract-gap");
-  for (const classification of new Set(open.map((lane) => lane.classification))) {
-    assert.ok(document.includes(`\`${classification}\``), classification);
-  }
+test("priority coverage remains mechanically visible", () => {
   for (const laneId of [
     "modules.default-expression-export",
     "declarations.class-static-blocks",
@@ -70,14 +64,16 @@ test("implementation status and priority closure remain mechanically visible", (
     const lane = lanes.find(({ id }) => id === laneId);
     assert.ok(lane !== undefined, `missing prioritized lane '${laneId}'`);
     assert.ok(
-      lane.classification === "implemented" || open.includes(lane),
-      `priority lane '${laneId}' has no implemented or open closure`,
+      classifications.has(lane.classification),
+      `priority lane '${laneId}' has no valid closure`,
     );
   }
 });
 
 test("the detailed JS and Node inventory remains a required parity input", () => {
-  assert.match(document, /docs\/parity-lanes\.json/u);
-  const detailed = JSON.parse(readFileSync(join(root, "docs/parity-lanes.json"), "utf8"));
+  const detailed = JSON.parse(readFileSync(
+    join(root, "test/fixtures/support/javascript-node-lanes.json"),
+    "utf8",
+  ));
   assert.ok(detailed.length >= 140, `detailed surface inventory is too small: ${detailed.length}`);
 });

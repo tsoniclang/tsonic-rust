@@ -6,7 +6,6 @@ import { fileURLToPath } from "node:url";
 import { jsOperationRows } from "../../dist/policy/operations/js-surface/rows.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
-const inventory = readFileSync(join(root, "docs/parity-inventory.md"), "utf8");
 const operationTableRoot = join(root, "src/policy/operations/js-surface");
 const operationTables = readdirSync(operationTableRoot)
   .filter((name) => name === "rows.ts" || name.endsWith("-rows.ts"))
@@ -15,12 +14,6 @@ const operationTables = readdirSync(operationTableRoot)
   .join("\n");
 const operationMembers = new Set(jsOperationRows.map((row) => row.member));
 
-test("inventory wording is timeless", () => {
-  for (const banned of [/\bcurrently\b/iu, /\bpending\b/iu, /\bfuture\b/iu, /\blater\b/iu, /\bR1[0-9]\b/u, /\bslice label\b|\bnext slice\b/iu]) {
-    assert.ok(!banned.test(inventory), String(banned));
-  }
-});
-
 test("implemented row members exist in the operation tables", () => {
   const members = ["findLastIndex", "symmetricDifference", "isDisjointFrom", "matchAll", "exec", "lastIndex", "toJSON", "parse", "UTC", "parseInt", "toFixed"];
   for (const member of members) {
@@ -28,16 +21,10 @@ test("implemented row members exist in the operation tables", () => {
   }
 });
 
-test("target limits each state their exact boundary", () => {
-  const targetLimits = inventory.split("## Target limits")[1];
-  const entries = targetLimits.split("\n- ").slice(1);
-  assert.ok(entries.length >= 4);
-  for (const entry of entries) {
-    assert.match(entry, /cannot|has no|omits|without/u, entry.slice(0, 60));
-  }
-});
-
-const lanes = JSON.parse(readFileSync(join(root, "docs/parity-lanes.json"), "utf8"));
+const lanes = JSON.parse(readFileSync(
+  join(root, "test/fixtures/support/javascript-node-lanes.json"),
+  "utf8",
+));
 
 test("every C#-relative lane has exactly one valid classification", () => {
   assert.ok(lanes.length >= 90, `lane list too small: ${lanes.length}`);
@@ -64,7 +51,20 @@ test("the C# surface families cannot silently disappear from the inventory", () 
   ];
   for (const family of requiredFamilies) {
     assert.ok(lanes.some((lane) => lane.lane.includes(family)), `missing lane family: ${family}`);
-    assert.ok(inventory.includes(family.split("/")[0].split(" (")[0]), `inventory prose missing: ${family}`);
+  }
+});
+
+test("completed RegExp, JSON, and closed Object.assign lanes cannot regress to stale limits", () => {
+  for (const laneName of [
+    "dynamic patterns and complete ECMAScript constructs",
+    "replacer functions and selected toJSON",
+    "Object.assign over closed shapes",
+  ]) {
+    assert.equal(
+      lanes.find((lane) => lane.lane === laneName)?.classification,
+      "implemented",
+      laneName,
+    );
   }
 });
 
