@@ -45,15 +45,19 @@ export function printRustCollectionLiteralFitted(
   if (expression.kind !== "tuple-literal" && expression.elements.length === 1 &&
     onlyElement !== undefined) {
     const opening = expression.kind === "vec-literal" ? "vec![" : "[";
-    const rendered = renderExpression(onlyElement, depth, column + opening.length);
+    const closingWidth = onlyElement.kind === "method-call" ? 0 : 1;
+    const rendered = renderExpression(
+      onlyElement,
+      depth,
+      column + opening.length + closingWidth,
+    );
     const attached = appendToLastLine(`${opening}${rendered}`, "]");
-    const invocationElement = onlyElement.kind === "call" ||
-      onlyElement.kind === "associated-call" || onlyElement.kind === "method-call" ||
-      onlyElement.kind === "invoke";
+    const overflowableElement = rustCollectionElementOwnsOverflow(onlyElement) &&
+      !(expression.kind === "vec-literal" && onlyElement.kind === "method-call");
     if (rendered.includes("\n") &&
       (onlyElement.kind === "block" || onlyElement.kind === "evaluate-then" ||
         !rustExpressionContainsStatementBlock(onlyElement) ||
-        invocationElement ||
+        overflowableElement ||
         rustExpressionIsSingleCollectionInvocation(onlyElement) ||
         rendered.split("\n").length <= 4) &&
       column + firstLine(attached).length + 1 <= rustFormatWidth &&
@@ -78,6 +82,34 @@ export function printRustCollectionLiteralFitted(
     ...elements,
     `${indentText(depth)}${expression.kind === "tuple-literal" ? ")" : "]"}`,
   ].join("\n");
+}
+
+function rustCollectionElementOwnsOverflow(expression: RustExpr): boolean {
+  switch (expression.kind) {
+    case "call":
+    case "associated-call":
+    case "method-call":
+    case "invoke":
+    case "macro-invocation":
+    case "string-concat":
+    case "format-write":
+      return true;
+    case "bottom":
+      return rustCollectionElementOwnsOverflow(expression.expression);
+    case "reference":
+      return rustCollectionElementOwnsOverflow(expression.expr);
+    case "try":
+      return rustCollectionElementOwnsOverflow(expression.expr);
+    case "unary":
+      return rustCollectionElementOwnsOverflow(expression.operand);
+    case "dereference":
+      return rustCollectionElementOwnsOverflow(expression.pointer);
+    case "numeric-cast":
+    case "owned-string-from-borrowed-str":
+      return rustCollectionElementOwnsOverflow(expression.expression);
+    default:
+      return false;
+  }
 }
 
 function rustExpressionIsSingleCollectionInvocation(expression: RustExpr): boolean {

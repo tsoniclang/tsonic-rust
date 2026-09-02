@@ -243,11 +243,16 @@ export function printFittedNestedCallWrapper(
           { forceArgumentListBreak: true },
         );
     const attached = appendToLastLine(`${outerCallable}(${nestedWithinCallWidth}`, ")");
+    const jointlyFittingArguments = nested.args.length <= 3 &&
+      nested.args.every(rustFormatArgumentCanShareLine) &&
+      nested.args.map(printRustExpr).join(", ").length <= rustNestedCallWidth;
+    const trailingClosureOwnsLayout = nested.args.length > 1 &&
+      nested.args.slice(0, -1).every(rustFormatArgumentCanShareLine) &&
+      (nested.args[nested.args.length - 1]?.kind === "closure" ||
+        nested.args[nested.args.length - 1]?.kind === "closure-block");
     if (nestedWithinCallWidth.includes("\n") && renderedFits(attached, column) &&
       (firstLine(attached).length <= rustNestedMethodFirstSegmentWidth ||
-        nested.args.length > 1 &&
-          nested.args.every(rustFormatArgumentCanShareLine) &&
-          nested.args.map(printRustExpr).join(", ").length <= rustNestedCallWidth)) {
+        jointlyFittingArguments || trailingClosureOwnsLayout)) {
       return attached;
     }
   }
@@ -288,6 +293,7 @@ export function printFittedNestedCallWrapper(
         (terminalStringInput.owned ? 2 : 1));
       if (stringOpening.length + terminalStringInput.flat.length +
           stringClosing.length > rustNestedCallWidth &&
+        column + stringOpening.length <= rustNestedMethodFirstSegmentWidth &&
         renderedFits(stringOpening, column)) {
         const argumentIndent = indentText(depth + 1);
         return [

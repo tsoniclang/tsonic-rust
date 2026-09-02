@@ -54,6 +54,19 @@ export function printFittedCall(
     return flat;
   }
   const soleArgument = arguments_[0];
+  const shortWrapperChain = callable.length < 4 && arguments_.length === 1 &&
+      soleArgument !== undefined
+    ? rustMethodChain(soleArgument)
+    : undefined;
+  const shortWrapperSelectorCount = shortWrapperChain?.steps.filter((step) =>
+    step.kind === "method" || step.kind === "field" || step.kind === "await").length ?? 0;
+  if (!forceExpanded && soleArgument !== undefined && shortWrapperChain !== undefined &&
+    shortWrapperSelectorCount <= 1 && !flat.includes("\n") &&
+    !rustExpressionContainsStatementBlock(soleArgument) &&
+    !rustExpressionContainsExpandedStructLiteral(soleArgument) &&
+    renderedFits(flat, column)) {
+    return flat;
+  }
   if (layout?.parentRegion === "vertical-call-argument" && callable.length >= 4 &&
     arguments_.length === 1 &&
     (soleArgument?.kind === "call" || soleArgument?.kind === "associated-call")) {
@@ -136,6 +149,14 @@ export function printFittedCall(
       : undefined;
     const oneLineOverflowCompactsWhenNested = rendered.split("\n").length === 2 &&
       nested?.includes("\n") === false;
+    if (oneLineOverflowCompactsWhenNested && nested !== undefined &&
+      renderedFits(nested, nestedIndent.length + 1)) {
+      return [
+        `${callable}(`,
+        `${nestedIndent}${nested}`,
+        `${indentText(depth)})`,
+      ].join("\n");
+    }
     if (rendered.includes("\n") &&
       !expressionIsRightHandBlock(soleArgument) &&
       !oneLineOverflowCompactsWhenNested &&
@@ -328,10 +349,14 @@ export function printFittedCall(
             rustCompactTrailingClosureWidth);
       const overflowingArgumentWidth = preceding.join(", ").length +
         (preceding.length === 0 ? 0 : 2) + firstLine(renderedClosure).length;
+      const initializerContinuationOwnsAttachedClosure =
+        layout?.parentRegion === "initializer-continuation" && arguments_.length > 1;
       if ((!forceExpanded || renderedClosure.includes("\n")) &&
-        (!expansionMakesClosureCompact || attachedBlockPreservesComplexBody) &&
+        (!expansionMakesClosureCompact || attachedBlockPreservesComplexBody ||
+          initializerContinuationOwnsAttachedClosure) &&
         overflowingArgumentWidth <= rustNestedCallWidth &&
-        firstLine(renderedClosure).length + column + prefix.length <= rustFormatWidth) {
+        firstLine(renderedClosure).length + column + prefix.length + 1 +
+          trailingContinuationWidth <= rustFormatWidth) {
         return appendToLastLine(`${prefix}${renderedClosure}`, ")");
       }
     }
@@ -938,7 +963,15 @@ export function printFittedCall(
         expandedArgumentIndent.length + 1,
         flat.length > rustNestedCallWidth,
       );
+      const referencedMethodChain = argument.expr.kind === "method-call"
+        ? rustMethodChain(argument.expr)
+        : undefined;
+      const referencedMethodSelectorCount = referencedMethodChain?.steps.filter((step) =>
+        step.kind === "method" || step.kind === "field" || step.kind === "await").length ?? 0;
+      const referencedChainNeedsArgumentIndent = callable.length >= 4 &&
+        referencedMethodSelectorCount > 1 && flat.length > rustNestedCallWidth;
       if (!rustPostfixStartsFromRightHandBlock(argument.expr) &&
+        !referencedChainNeedsArgumentIndent &&
         !(nested.includes("\n") && !expandedNested.includes("\n")) &&
         (firstLine(nested).length + 1 <= rustNestedCallWidth ||
           rustUnbreakableCallOpeningWidth(argument.expr) > rustNestedCallWidth) &&

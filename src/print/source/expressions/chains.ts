@@ -532,6 +532,7 @@ export function printFittedMethodChain(
   const selectedBreakBeforeFirstSelector = breakBeforeFirstSelector ||
     rustMethodChainBreaksReceiverForClosure(chain, flatChain, column);
   let rendered = !flatBase.includes("\n") && renderedFits(flatBase, column) &&
+      !rustExpressionContainsStatementBlock(chain.base) &&
       !rustExpressionContainsExpandedStructLiteral(chain.base)
     ? flatBase
     : printRustExprFitted(chain.base, depth, column);
@@ -559,6 +560,7 @@ export function printFittedMethodChain(
         !rendered.includes("\n") &&
         (forceAttachFirstSelector ||
           rustMethodChainContainsClosure(chain) &&
+            column <= indentText(depth).length + 1 &&
             lastLineLength(rendered) + step.name.length + 1 <=
               rustInlineClosureFieldReceiverWidth);
       rendered = !attachInitialField && (breakBeforeFirstField || emittedCall || rendered.includes("\n") ||

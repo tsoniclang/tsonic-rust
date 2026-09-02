@@ -242,7 +242,9 @@ export function printRustLetInitializer(
   const fittedAtPrefix = printRustExprFitted(
     initializer,
     depth,
-    initializer.kind === "conditional" ? prefix.length : prefix.length + 1,
+    initializer.kind === "conditional" || initializer.kind === "match"
+      ? prefix.length
+      : prefix.length + 1,
   );
   if (!flat.includes("\n") &&
     renderedFits(`${prefix}${flat};`, 0) &&

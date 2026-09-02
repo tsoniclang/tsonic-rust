@@ -339,6 +339,11 @@ export function printRustExprFitted(
       const attachedCallable = printRustMethodCallTarget(expression, receiver);
       const attachedArgumentsPreferExpansion = expression.args.some((argument) =>
         argument.kind === "binary" || argument.kind === "tuple-literal" ||
+        argument.kind === "string-concat" || argument.kind === "format-write" ||
+        (argument.kind === "slice-literal" || argument.kind === "vec-literal") &&
+          argument.elements.some((element) =>
+            element.kind === "string-concat" || element.kind === "format-write" ||
+            element.kind === "macro-invocation") ||
         rustExpressionContainsClosure(argument) ||
         rustExpressionContainsStatementBlock(argument));
       const firstStep = chain?.steps[0];
@@ -360,6 +365,7 @@ export function printRustExprFitted(
           column,
         );
       if (chain !== undefined && selectorCount === 1 && !hasClosure &&
+        !attachedArgumentsPreferExpansion &&
         !flat.includes("\n") && !renderedFits(flat, column)) {
         const brokenSelector = printFittedMethodChain(
           chain,
@@ -388,7 +394,7 @@ export function printRustExprFitted(
           expressionIsRightHandBlock(expression.args[0]!);
         if (attached.includes("\n") &&
           column + firstLine(attached).length > rustMethodChainWidth &&
-          !borrowedBlockArgument) {
+          !borrowedBlockArgument && !attachedArgumentsPreferExpansion) {
           attached = printFittedCall(
             attachedCallable,
             expression.args,
@@ -511,9 +517,13 @@ export function printRustExprFitted(
     }
     case "try": {
       const chain = rustMethodChain(expression);
+      const chainBaseIsInvocation = chain?.base.kind === "call" ||
+        chain?.base.kind === "associated-call" || chain?.base.kind === "invoke" ||
+        chain?.base.kind === "method-call";
       if (chain !== undefined && expression.expr.kind === "method-call" &&
         expression.expr.args.every(rustFormatArgumentCanShareLine) &&
-        rustMethodChainRequiresVerticalLayout(expression)) {
+        (rustMethodChainRequiresVerticalLayout(expression) ||
+          chainBaseIsInvocation && flat.length > rustMethodChainWidth)) {
         return printFittedMethodChain(
           chain,
           depth,

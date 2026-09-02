@@ -39,7 +39,7 @@ function printRustStmt(statement: RustStmt, depth: number): string {
           statement.type,
           depth,
           declarationPrefix.length,
-          " = x".length,
+          " =".length,
         );
         if (renderedType.includes("\n")) {
           const assignmentPrefix = appendToLastLine(
@@ -241,6 +241,12 @@ function printRustIfLetSomeBlock(
     depth,
     indent.length + prefix.length,
   );
+  const continuationIndent = indentText(depth + 1);
+  const continuation = printRustExprFitted(
+    statement.expression,
+    depth + 1,
+    continuationIndent.length,
+  );
   if (!expression.includes("\n") &&
     renderedFits(`${prefix}${expression} {`, indent.length)) {
     return printRustBlock(statement.body, depth, `${prefix}${expression}`);
@@ -257,6 +263,17 @@ function printRustIfLetSomeBlock(
   }
   if (expression.includes("\n") &&
     renderedFits(`${prefix}${expression}`, indent.length)) {
+    if (!continuation.includes("\n") &&
+      renderedFits(continuation, continuationIndent.length)) {
+      const body = printRustBlockStatements(statement.body, depth + 1);
+      return [
+        `${indent}${prefix.trimEnd()}`,
+        `${continuationIndent}${continuation}`,
+        `${indent}{`,
+        ...(body.length === 0 ? [] : [body]),
+        `${indent}}`,
+      ].join("\n");
+    }
     const body = printRustBlockStatements(statement.body, depth + 1);
     return [
       `${indent}${prefix}${expression}`,
@@ -265,12 +282,6 @@ function printRustIfLetSomeBlock(
       `${indent}}`,
     ].join("\n");
   }
-  const continuationIndent = indentText(depth + 1);
-  const continuation = printRustExprFitted(
-    statement.expression,
-    depth + 1,
-    continuationIndent.length,
-  );
   const body = printRustBlockStatements(statement.body, depth + 1);
   return [
     `${indent}${prefix.trimEnd()}`,
@@ -308,7 +319,23 @@ function printRustForBlock(
     attachedColumn,
     indentText(depth + 1),
   );
+  const iterableIndent = indentText(depth + 1);
+  const iterable = printRustExprFitted(
+    statement.iterable,
+    depth + 1,
+    iterableIndent.length,
+  );
   if (attachedIterable.includes("\n") && renderedFits(attachedIterable, attachedColumn)) {
+    if (!iterable.includes("\n") && renderedFits(iterable, iterableIndent.length)) {
+      const body = printRustBlockStatements(statement.body, depth + 1);
+      return [
+        `${indent}${prefix}`,
+        `${iterableIndent}${iterable}`,
+        `${indent}{`,
+        ...(body.length === 0 ? [] : [body]),
+        `${indent}}`,
+      ].join("\n");
+    }
     const body = printRustBlockStatements(statement.body, depth + 1);
     return [
       `${indent}${prefix} ${firstLine(attachedIterable)}`,
@@ -318,12 +345,6 @@ function printRustForBlock(
       `${indent}}`,
     ].join("\n");
   }
-  const iterableIndent = indentText(depth + 1);
-  const iterable = printRustExprFitted(
-    statement.iterable,
-    depth + 1,
-    iterableIndent.length,
-  );
   const body = printRustBlockStatements(statement.body, depth + 1);
   return [
     `${indent}${prefix}`,
@@ -357,10 +378,23 @@ function printRustTryScope(
   } else {
     const catchClause = statement.catchClause;
     const flowType = catchClause.fallible
-      ? `rt::TsonicResult<${completionTypeText}>`
-      : completionTypeText;
-    const flowAssignment = `${indent}let ${statement.flowName}: ${flowType} =`;
-    const inlineFlowMatchPrefix = `${flowAssignment} match ${statement.bodyName}`;
+      ? rustAppliedType("rt::TsonicResult", [completionType])
+      : completionType;
+    const flowDeclarationPrefix = `${indent}let ${statement.flowName}: `;
+    const renderedFlowType = printRustTypeFitted(
+      flowType,
+      depth,
+      flowDeclarationPrefix.length,
+      " =".length,
+    );
+    const flowAssignment = appendToLastLine(
+      `${flowDeclarationPrefix}${renderedFlowType}`,
+      " =",
+    );
+    const inlineFlowMatchPrefix = appendToLastLine(
+      flowAssignment,
+      ` match ${statement.bodyName}`,
+    );
     const catchUsesBlock = statement.asynchronous;
     const matchWithBraceFits = renderedFits(`${inlineFlowMatchPrefix} {`, 0);
     const matchHeaderFits = renderedFits(inlineFlowMatchPrefix, 0);
@@ -789,7 +823,8 @@ function printRustAssignment(
     !firstLine(inlineValue).trimEnd().endsWith("{") &&
     firstLine(continuationValue).trimEnd().endsWith("{");
   const multilineValueCanFollowAssignment = value.kind !== "binary" ||
-    value.operator === "&&" || value.operator === "||";
+    value.operator === "&&" || value.operator === "||" ||
+    expressionIsRightHandBlock(value.left);
   if (!renderedTarget.includes("\n") &&
     (!inlineValue.includes("\n") ||
       multilineValueCanFollowAssignment && !continuationAvoidsNestedExpansion &&
