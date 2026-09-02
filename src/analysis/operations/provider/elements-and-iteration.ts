@@ -286,7 +286,7 @@ export function selectRustCheckedIteration(
       );
     }
     const lowering = rustPropertyKeyIterationLowering(iterable, context.ast, options);
-    if (lowering === undefined) {
+    if (iterable === undefined || lowering === undefined) {
       return rejectSelectedOperation(
         request.statement,
         context,
@@ -298,6 +298,7 @@ export function selectRustCheckedIteration(
       kind: "iteration",
       operationId: `tsonic.rust.iteration.for-in.${lowering.kind}`,
       iterationKind: "for-in",
+      iterableCarrier: iterable,
       elementCarrier,
       lowering,
     };

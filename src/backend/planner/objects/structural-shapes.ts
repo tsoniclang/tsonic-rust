@@ -13,11 +13,14 @@ import type {
   RustType,
   RustVisibility,
 } from "../../target-ast/nodes.js";
-import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
 import { rustPascalCaseIdentifier } from "../../../target-model/names/identifiers.js";
 import {
   rustRuntimeAliasImports,
 } from "../program/plan-context.js";
+import {
+  rustStructuralFieldDeadCodeDisposition,
+  rustStructuralShapeDeadCodeDisposition,
+} from "../liveness/directives.js";
 import {
   rustTypeFromCarrierInContext,
 } from "../types/render.js";
@@ -65,6 +68,11 @@ export function planRustStructuralShapeModule(
     const visibility: RustVisibility = publicShapeNames.has(definition.targetName)
       ? "public"
       : "crate";
+    const shapeDeadCode = rustStructuralShapeDeadCodeDisposition(
+      context,
+      definition.carrier,
+      visibility === "public",
+    );
     const genericParameters: readonly RustGenericParameter[] = definition.genericParameters.map((parameter) =>
       parameter.kind === "lifetime"
         ? {
@@ -94,7 +102,7 @@ export function planRustStructuralShapeModule(
     };
     const callableAliases: RustItem[] = [];
     const fields: RustStructField[] = [];
-    for (const field of definition.fields) {
+    for (const [storageIndex, field] of definition.fields.entries()) {
       const methodStorageCarrier = field.method === true
         ? rustStructuralMethodStorageCarrier(
             definition.carrier,
@@ -135,10 +143,18 @@ export function planRustStructuralShapeModule(
               visibility,
             )
           : renderedStorageType;
+        const deadCode = rustStructuralFieldDeadCodeDisposition(
+          context,
+          definition.carrier,
+          storageIndex,
+          visibility === "public",
+          "value",
+        );
         fields.push({
           name: field.targetName,
           type,
           visibility: "public",
+          ...(deadCode === undefined ? {} : { deadCode }),
         });
         continue;
       }
@@ -188,10 +204,18 @@ export function planRustStructuralShapeModule(
         return undefined;
       }
       usedAliases.add("rt");
+      const storedDeadCode = rustStructuralFieldDeadCodeDisposition(
+        context,
+        definition.carrier,
+        storageIndex,
+        visibility === "public",
+        "value",
+      );
       fields.push({
         name: field.targetName,
         type: storedType,
         visibility: "public",
+        ...(storedDeadCode === undefined ? {} : { deadCode: storedDeadCode }),
       });
       const getterAlias = structuralCallableAlias(
         callableAliases,
@@ -201,10 +225,18 @@ export function planRustStructuralShapeModule(
         getterType,
         visibility,
       );
+      const getterDeadCode = rustStructuralFieldDeadCodeDisposition(
+        context,
+        definition.carrier,
+        storageIndex,
+        visibility === "public",
+        "getter",
+      );
       fields.push({
         name: field.property.getterTargetName,
         type: getterAlias,
         visibility: "public",
+        ...(getterDeadCode === undefined ? {} : { deadCode: getterDeadCode }),
       });
       if (field.property.setterTargetName !== undefined) {
         if (setterType === undefined) {
@@ -225,10 +257,18 @@ export function planRustStructuralShapeModule(
           setterType,
           visibility,
         );
+        const setterDeadCode = rustStructuralFieldDeadCodeDisposition(
+          context,
+          definition.carrier,
+          storageIndex,
+          visibility === "public",
+          "setter",
+        );
         fields.push({
           name: field.property.setterTargetName,
           type: setterAlias,
           visibility: "public",
+          ...(setterDeadCode === undefined ? {} : { deadCode: setterDeadCode }),
         });
       }
     }
@@ -237,7 +277,7 @@ export function planRustStructuralShapeModule(
       kind: "struct",
       name: definition.targetName,
       visibility,
-      attrs: [rustLintAttributes.deadCode],
+      ...(shapeDeadCode === undefined ? {} : { deadCode: shapeDeadCode }),
       derives: [],
       generics,
       fields,

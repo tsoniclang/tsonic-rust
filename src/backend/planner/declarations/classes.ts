@@ -10,6 +10,10 @@ import {
   rustProjectTypeHasPublicImplementationAbi,
 } from "../program/plan-context.js";
 import {
+  rustAuthoredFieldDeadCodeDisposition,
+  rustProjectConstructorDeadCodeDisposition,
+} from "../liveness/directives.js";
+import {
   KindClassStaticBlockDeclaration,
   Node_Initializer,
   Node_Type,
@@ -27,7 +31,6 @@ import type { ProjectMethodPropertyPlan } from "../objects/polymorphism/model.js
 import { rustDeclarationRequiresUnsafe, rustSafetyAttributesForDeclaration } from "../safety/explicit-safety.js";
 import { rustDefaultImplementation } from "./default-implementation.js";
 import { rustFallibleFactKey } from "../../../analysis/facts/keys.js";
-import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
 import { rustProjectObjectLayout } from "../../../analysis/project-types/object-layout.js";
 import { rustProjectGenerics, rustProjectStateType, rustProjectStateMarker } from "../objects/polymorphism/names.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
@@ -81,6 +84,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   const exported = ast.hasModifierKind(node, "export");
   const publiclyReachable = rustProjectTypeHasPublicImplementationAbi(context, className);
   const storageVisibility = rustProjectImplementationVisibility(publiclyReachable);
+  const structVisibility = exported || publiclyReachable ? "public" as const : "crate" as const;
   if (ast.extendsHeritageElements(node).length > 0 || ast.implementsHeritageElements(node).length > 0) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
@@ -278,6 +282,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     fields,
     methodProperties,
     representation,
+    publiclyReachable,
     context,
   );
   if (failed || constructorFn === undefined) {
@@ -320,31 +325,35 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   if (representation.kind !== "value") {
     context.usedAliases?.add("rt");
   }
-  const generatedStructAttributes = [
-    ...(structAttributes(className) ?? []),
-    ...(publiclyReachable
-      ? []
-      : [rustLintAttributes.deadCode]),
-  ];
+  const generatedStructAttributes = structAttributes(className) ?? [];
   const stateCarrier = stateType === undefined
     ? undefined
     : rustProjectObjectType(stateType, representation);
   const valueFields: readonly RustStructField[] = [
-    ...fields.map((field) => ({
-      name: field.targetName,
-      type: field.type,
-      visibility: field.visibility,
-    })),
+    ...fields.map((field): RustStructField => {
+      const deadCode = rustAuthoredFieldDeadCodeDisposition(
+        context,
+        node,
+        field.declaration,
+        field.visibility === "public",
+      );
+      return {
+        name: field.targetName,
+        type: field.type,
+        visibility: field.visibility,
+        ...(deadCode === undefined ? {} : { deadCode }),
+      };
+    }),
     ...methodProperties.map((property) => ({
-      name: property.targetName,
-      type: {
-        kind: "named" as const,
-        path: "Option",
-        genericArguments: [{ kind: "type" as const, type: property.callableType }],
-      },
-      visibility: storageVisibility,
-      ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
-    })),
+        name: property.targetName,
+        type: {
+          kind: "named" as const,
+          path: "Option",
+          genericArguments: [{ kind: "type" as const, type: property.callableType }],
+        },
+        visibility: storageVisibility,
+        ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
+      })),
     ...(stateMarker === undefined
       ? []
       : [{
@@ -369,10 +378,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     kind: "struct",
     name: definition.stateName,
     visibility: storageVisibility,
-    attrs: [
-      ...(publiclyReachable ? ["#[doc(hidden)]"] : []),
-      rustLintAttributes.deadCode,
-    ],
+    ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
     derives: [],
     generics,
     fields: valueFields,
@@ -389,18 +395,18 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     kind: "struct",
     name: className,
     ...(generatedStructAttributes.length === 0 ? {} : { attrs: generatedStructAttributes }),
-    visibility: exported || publiclyReachable ? "public" : "crate",
+    visibility: structVisibility,
     derives: ["Clone", "Debug", "PartialEq"],
     generics,
     fields: structFields,
   };
+  const defaultImplementation = rustDefaultImplementation(openType, generics, constructorFn);
   const implementation: RustItem = {
     kind: "impl",
     generics,
     target: openType,
     functions: implFunctions,
   };
-  const defaultImplementation = rustDefaultImplementation(openType, generics, constructorFn);
   return [
     ...(representation.kind === "value" ? [] : [stateItem]),
     structItem,
@@ -431,6 +437,7 @@ function planConstructor(
   fields: readonly PlannedProjectObjectField[],
   methodProperties: readonly ProjectMethodPropertyPlan[],
   representation: RustObjectRepresentation,
+  publiclyReachable: boolean,
   context: RustPlanContext,
 ): RustImplFunction | undefined {
   const { ast } = context.input.program.source;
@@ -600,14 +607,16 @@ function planConstructor(
       representation,
     ),
   });
-  const constructorAttributes = [
-    ...(rustProjectTypeHasPublicImplementationAbi(context, className)
-      ? []
-      : [rustLintAttributes.deadCode]),
-    ...safetyAttributes,
-  ];
+  const constructorDeadCode = rustProjectConstructorDeadCodeDisposition(
+    context,
+    classDeclaration,
+    member ?? classDeclaration,
+    publiclyReachable,
+  );
+  const constructorAttributes = safetyAttributes;
   return {
     name: "new",
+    ...(constructorDeadCode === undefined ? {} : { deadCode: constructorDeadCode }),
     generics: emptyRustGenerics,
     ...(isUnsafe ? { isUnsafe: true } : {}),
     visibility: member === undefined ||

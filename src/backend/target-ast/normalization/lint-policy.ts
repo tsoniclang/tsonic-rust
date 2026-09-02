@@ -3,8 +3,24 @@ export const rustLintAttributes = Object.freeze({
     '#[expect(clippy::blocks_in_conditions, reason = "checked evaluation region")]',
   collapsibleIf:
     '#[expect(clippy::collapsible_if, reason = "checked lexical regions")]',
-  deadCode:
-    '#[allow(dead_code, reason = "preserves the checked source contract")]',
+  authoredDeadCode:
+    '#[allow(dead_code, reason = "retains an unused authored declaration")]',
+  authoredUnreadField:
+    '#[allow(dead_code, reason = "retains an unread authored field")]',
+  authoredUnusedVariant:
+    '#[allow(dead_code, reason = "retains an unused authored variant")]',
+  generatedEnumDiscriminant:
+    '#[allow(dead_code, reason = "stores an authored enum discriminant")]',
+  generatedRetainedConstructor:
+    '#[allow(dead_code, reason = "retains an unused generated constructor")]',
+  generatedUnconstructedInstance:
+    '#[expect(dead_code, reason = "retains an unconstructed generated instance")]',
+  generatedUnconstructedShape:
+    '#[expect(dead_code, reason = "retains an unconstructed checked source shape")]',
+  generatedUnusedDispatch:
+    '#[expect(dead_code, reason = "retains an unused generated dispatch slot")]',
+  generatedUnusedStorage:
+    '#[expect(dead_code, reason = "retains unused generated storage")]',
   inherentToString:
     '#[expect(clippy::inherent_to_string, reason = "authored toString contract")]',
   missingSafetyDoc:

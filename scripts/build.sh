@@ -6,7 +6,16 @@ set -euo pipefail
 # type resolution at their existing dist declaration outputs.
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TSONIC_ROOT="$(cd "$REPO_ROOT/../tsonic" && pwd -P)"
+configured_tsonic_root="${TSONIC_ROOT:-$REPO_ROOT/../tsonic}"
+if [[ "$configured_tsonic_root" != /* ]]; then
+  configured_tsonic_root="$REPO_ROOT/$configured_tsonic_root"
+fi
+if [[ ! -d "$configured_tsonic_root" ]]; then
+  echo "FAIL: TSONIC_ROOT is not a directory: $configured_tsonic_root" >&2
+  exit 2
+fi
+TSONIC_ROOT="$(cd "$configured_tsonic_root" && pwd -P)"
+export TSONIC_ROOT
 
 required_dist_outputs=(
   "packages/source-core/dist/public/index.d.ts"
@@ -35,6 +44,7 @@ cat > "$CANONICAL_TSCONFIG" <<EOF
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
+    "typeRoots": ["$TSONIC_ROOT/node_modules/@types"],
     "paths": {
       "@tsonic/tsts": ["$TSONIC_ROOT/packages/tsts/dist/src/index.d.ts"],
       "@tsonic/js-source-profile": ["$TSONIC_ROOT/packages/js-source-profile/dist/index.d.ts"],

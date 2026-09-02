@@ -851,6 +851,111 @@ test("source-package semantics are sealed before physical Rust planning", () => 
   );
 });
 
+test("Rust dead-code obligations are planner-local and normalized before output sealing", () => {
+  const livenessPlan = readFileSync(
+    join(sourceRoot, "backend/planner/liveness/plan.ts"),
+    "utf8",
+  );
+  const generatedUsage = readFileSync(
+    join(sourceRoot, "backend/planner/liveness/generated-item-usage.ts"),
+    "utf8",
+  );
+  const targetProgram = readFileSync(
+    join(sourceRoot, "analysis/program/model.ts"),
+    "utf8",
+  );
+  const planningContext = readFileSync(
+    join(sourceRoot, "backend/planner/context.ts"),
+    "utf8",
+  );
+  const directives = readFileSync(
+    join(sourceRoot, "backend/planner/liveness/directives.ts"),
+    "utf8",
+  );
+  const normalization = readFileSync(
+    join(sourceRoot, "backend/target-ast/normalization/dead-code.ts"),
+    "utf8",
+  );
+  const outputPlanning = readFileSync(
+    join(sourceRoot, "backend/planner/program/planning.ts"),
+    "utf8",
+  );
+  const entryPoint = readFileSync(
+    join(sourceRoot, "backend/planner/program/entry-point.ts"),
+    "utf8",
+  );
+  const lintPolicy = readFileSync(
+    join(sourceRoot, "backend/target-ast/normalization/lint-policy.ts"),
+    "utf8",
+  );
+
+  assert.match(livenessPlan, /sourceNavigation\.declarationUseSummary\(declaration\)/u);
+  assert.match(livenessPlan, /runtimeInitializationRoots/u);
+  assert.match(livenessPlan, /transitivelyReachable\(roots, edges\)/u);
+  assert.match(livenessPlan, /deadComponentRoots\(/u);
+  assert.match(livenessPlan, /analyzeRustGeneratedItemUsage\(/u);
+  assert.match(livenessPlan, /publishesImplementationAbi/u);
+  assert.match(livenessPlan, /rustBinaryEntryDeclaration\(program\)/u);
+  assert.match(generatedUsage, /rustTargetOperationFactKey/u);
+  assert.match(generatedUsage, /isStructuralFieldRead/u);
+  assert.match(generatedUsage, /isStructuralFieldWritten/u);
+  assert.match(generatedUsage, /isProjectTypeConstructed/u);
+  assert.match(generatedUsage, /isProjectGeneratedFieldUsed/u);
+  assert.match(generatedUsage, /isStructuralShapeConstructed/u);
+  assert.match(generatedUsage, /isVariantConstructed/u);
+  assert.doesNotMatch(targetProgram, /deadCode|liveness/u);
+  assert.match(planningContext, /liveness: createRustPlannerLiveness\(program\)/u);
+  assert.match(directives, /context\.input\.liveness\.requiresSuppression/u);
+  assert.match(directives, /isStructuralFieldRead/u);
+  assert.match(directives, /isStructuralFieldWritten/u);
+  assert.match(directives, /isProjectTypeConstructed/u);
+  assert.match(directives, /isProjectGeneratedFieldUsed/u);
+  assert.match(directives, /isStructuralShapeConstructed/u);
+  assert.doesNotMatch(
+    directives,
+    /sourceNavigation|declarationUseSummary|referencesToDeclaration/u,
+  );
+  assert.match(normalization, /rustDeadCodeAttribute\(deadCode\)/u);
+  assert.match(normalization, /const \{ deadCode, \.\.\.withoutDeadCode \} = owner/u);
+  assert.match(outputPlanning, /finalizeRustDeadCode\(/u);
+  assert.match(outputPlanning, /rustBinaryEntryDeclaration\(input\.program\)/u);
+  assert.match(entryPoint, /rustProjectEntrySourceFile/u);
+  assert.match(entryPoint, /isRustUnitCarrier\(returnCarrier\)/u);
+  assert.match(lintPolicy, /allow\(dead_code, reason = "retains an unused authored declaration"\)/u);
+  assert.match(lintPolicy, /allow\(dead_code, reason = "retains an unread authored field"\)/u);
+  assert.match(lintPolicy, /expect\(dead_code, reason = "retains unused generated storage"\)/u);
+  assert.doesNotMatch(lintPolicy, /preserves the checked source contract/u);
+});
+
+test("Rust build and test entrypoints honor one explicit Tsonic checkout root", () => {
+  const buildScript = readFileSync(join(repositoryRoot, "scripts/build.sh"), "utf8");
+  const testWorker = readFileSync(join(repositoryRoot, "scripts/test-worker.sh"), "utf8");
+  const rootRegistration = readFileSync(
+    join(repositoryRoot, "scripts/register-tsonic-root-loader.mjs"),
+    "utf8",
+  );
+
+  assert.match(buildScript, /configured_tsonic_root="\$\{TSONIC_ROOT:-/u);
+  assert.match(buildScript, /export TSONIC_ROOT/u);
+  assert.match(buildScript, /"typeRoots": \["\$TSONIC_ROOT\/node_modules\/@types"\]/u);
+  assert.doesNotMatch(
+    buildScript,
+    /TSONIC_ROOT="\$\(cd "\$REPO_ROOT\/\.\.\/tsonic"/u,
+  );
+  assert.equal(
+    testWorker.match(/--import "\$loader_registration"/gu)?.length,
+    2,
+  );
+  assert.match(rootRegistration, /registerHooks\(\{ resolve: resolveFromConfiguredTsonic \}\)/u);
+  assert.match(rootRegistration, /process\.env\.TSONIC_ROOT \?\? defaultRoot/u);
+  assert.match(rootRegistration, /configuredEntrypoints\.get\(specifier\)/u);
+  assert.match(rootRegistration, /configuredTsonicSpecifier\(specifier, context\.parentURL\)/u);
+  assert.match(rootRegistration, /nextResolve\(configuredSpecifier \?\? specifier, context\)/u);
+  assert.match(rootRegistration, /requestedUrl\.startsWith\(defaultPrefix\)/u);
+  assert.match(rootRegistration, /result\.url\.startsWith\(defaultPrefix\)/u);
+  assert.match(rootRegistration, /url: `\$\{configuredPrefix\}/u);
+});
+
 test("sealed Rust project-type queries never re-enter source navigation", () => {
   const text = readFileSync(
     join(sourceRoot, "analysis/project-types/policy/resolution.ts"),

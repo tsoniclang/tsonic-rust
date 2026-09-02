@@ -105,13 +105,16 @@ export function printRustItem(item: RustItem): string {
       const derives = item.derives.length === 0 ? "" : `#[derive(${item.derives.join(", ")})]\n`;
       const variants = item.variants
         .map((variant) => {
+          const variantAttrs = (variant.attrs ?? [])
+            .map((attr) => `    ${attr}\n`)
+            .join("");
           const fields = variant.fields === undefined
             ? ""
             : `(${variant.fields.map(printRustType).join(", ")})`;
           const discriminant = variant.discriminant === undefined
             ? ""
             : ` = ${variant.discriminant}`;
-          return `    ${variant.name}${fields}${discriminant},`;
+          return `${variantAttrs}    ${variant.name}${fields}${discriminant},`;
         })
         .join("\n");
       const generics = printRustGenerics(item.generics);
