@@ -4,7 +4,8 @@ import type { RustExpr } from "../../../backend/target-ast/nodes.js";
 export function initializerPrefersReferencedNestedBreak(
   expression: Extract<RustExpr, { readonly kind: "call" | "associated-call" | "invoke" }>,
   flat: string,
-  layoutRegion: "default" | "initializer-continuation" | "logical-chain-operand",
+  layoutRegion: "default" | "initializer-continuation" | "logical-chain-operand" |
+    "vertical-call-argument" | "block-arm",
 ): boolean {
   if (layoutRegion !== "initializer-continuation" ||
     flat.length <= rustCompactInitializerWidth || expression.args.length !== 1) {

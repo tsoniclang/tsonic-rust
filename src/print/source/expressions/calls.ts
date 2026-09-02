@@ -7,9 +7,9 @@ import { printFittedNestedCallWrapper, printNestedCallArgument } from "./nested-
 import { printRustClosureFitted } from "./blocks.js";
 import { printRustExpr, rustExpressionContainsPreferredVerticalMethodChain } from "./core.js";
 import { printRustExprFitted } from "./fitted.js";
-import { rustExpressionContainsExpandedCollectionLiteral, rustExpressionContainsExpandedStructLiteral, rustFormatArgumentIsAtomic } from "./inspection.js";
+import { rustExpressionContainsExpandedCollectionLiteral, rustExpressionContainsExpandedStructLiteral, rustFormatArgumentCanShareLine, rustFormatArgumentIsAtomic } from "./inspection.js";
 import { rustExpressionContainsStatementBlock } from "../../../backend/target-ast/expressions.js";
-import { rustFormatWidth, rustInlineFieldReceiverWidth, rustMethodChainWidth, rustNestedCallWidth, rustNestedClosureOpeningWidth, rustNestedMethodFirstSegmentWidth } from "../formatting.js";
+import { rustCompactTrailingClosureWidth, rustFormatWidth, rustInlineClosureFieldReceiverWidth, rustInlineFieldReceiverWidth, rustMethodChainWidth, rustNestedCallWidth, rustNestedClosureOpeningWidth, rustNestedMethodFirstSegmentWidth, rustSingleLineConditionalWidth } from "../formatting.js";
 import type { RustExpr } from "../../../backend/target-ast/nodes.js";
 
 export function printFittedCall(
@@ -22,6 +22,10 @@ export function printFittedCall(
   inlineArgumentDepth = depth,
   layout?: {
     readonly trailingContinuationWidth?: number;
+    readonly forceArgumentListBreak?: boolean;
+    readonly maximumFirstLineWidth?: number;
+    readonly parentRegion?: "default" | "initializer-continuation" |
+      "logical-chain-operand" | "vertical-call-argument" | "block-arm";
   },
 ): string {
   const flatArguments = arguments_.map(printRustExpr).join(", ");
@@ -29,11 +33,20 @@ export function printFittedCall(
   if (arguments_.length === 0) {
     return flat;
   }
+  if (layout?.forceArgumentListBreak === true) {
+    return printVerticalCallArguments(callable, arguments_, depth, column, forceExpanded);
+  }
   const reservedTrailingWidth = forceExpanded
     ? Math.max(2, layout?.trailingContinuationWidth ?? 0)
     : layout?.trailingContinuationWidth ?? 0;
   if (!forceExpanded && !flat.includes("\n") &&
     flatArguments.length <= rustNestedCallWidth &&
+    !(arguments_.length === 1 &&
+      (arguments_[0]?.kind === "call" || arguments_[0]?.kind === "associated-call") &&
+      rustNestedCallChainEndsInString(arguments_[0]) &&
+      flat.length > rustNestedCallWidth) &&
+    !(arguments_.length === 1 && arguments_[0]?.kind === "conditional" &&
+      flatArguments.length > rustSingleLineConditionalWidth) &&
     !arguments_.some(rustExpressionContainsStatementBlock) &&
     !arguments_.some(rustExpressionContainsPreferredVerticalMethodChain) &&
     !arguments_.some(rustExpressionContainsExpandedStructLiteral) &&
@@ -41,20 +54,22 @@ export function printFittedCall(
     return flat;
   }
   const soleArgument = arguments_[0];
-  if (arguments_.length === 1 && soleArgument?.kind === "string-literal" &&
-    !renderedFits(flat, column)) {
-    const prefix = `${callable}(`;
-    const rendered = printRustExprFitted(
-      soleArgument,
-      depth,
-      column + prefix.length,
-    );
-    const attached = appendToLastLine(`${prefix}${rendered}`, ")");
-    if (rendered.includes("\n") && renderedFits(attached, column)) {
-      return attached;
+  if (layout?.parentRegion === "vertical-call-argument" && callable.length >= 4 &&
+    arguments_.length === 1 &&
+    (soleArgument?.kind === "call" || soleArgument?.kind === "associated-call")) {
+    const nestedCallable = soleArgument.kind === "call"
+      ? printRustDirectCallTarget(soleArgument)
+      : printRustAssociatedCallTarget(
+          soleArgument,
+          printRustAssociatedOwner(soleArgument.owner),
+        );
+    if (callable.length + nestedCallable.length + 2 > rustNestedCallWidth) {
+      return printVerticalCallArguments(callable, arguments_, depth, column, forceExpanded);
     }
   }
-  if (arguments_.length === 1 && soleArgument?.kind === "invoke" &&
+  if (arguments_.length === 1 &&
+    (soleArgument?.kind === "call" || soleArgument?.kind === "associated-call" ||
+      soleArgument?.kind === "invoke") &&
     (forceExpanded || flat.includes("\n") || !renderedFits(flat, column))) {
     const nestedWrapper = printFittedNestedCallWrapper(
       callable,
@@ -64,6 +79,81 @@ export function printFittedCall(
     );
     if (nestedWrapper !== undefined) {
       return nestedWrapper;
+    }
+  }
+  if (arguments_.length === 1 && soleArgument?.kind === "method-call" &&
+    !renderedFits(flat, column)) {
+    const methodChain = rustMethodChain(soleArgument);
+    const selectorCount = methodChain?.steps.filter((step) =>
+      step.kind === "method" || step.kind === "field" || step.kind === "await").length ?? 0;
+    const receiver = printOperand(soleArgument.receiver, RustPrecedence.Postfix, false);
+    if (selectorCount === 1 && !receiver.includes("\n")) {
+      const prefix = `${callable}(`;
+      const methodCallable = printRustMethodCallTarget(soleArgument, receiver);
+      const renderedMethod = printFittedCall(
+        methodCallable,
+        soleArgument.args,
+        depth,
+        column + prefix.length,
+        false,
+        false,
+        depth,
+        { trailingContinuationWidth: 1 },
+      );
+      const nestedIndent = indentText(depth + 1);
+      const nestedMethod = printRustExprFitted(
+        soleArgument,
+        depth + 1,
+        nestedIndent.length + 1,
+      );
+      const attached = appendToLastLine(`${prefix}${renderedMethod}`, ")");
+      const attachedOpeningFits = prefix.length + firstLine(renderedMethod).length <=
+        rustNestedCallWidth;
+      const overflowCompactsWhenNested = callable.length < 4 &&
+        renderedMethod.includes("\n") &&
+        !nestedMethod.includes("\n");
+      if (attachedOpeningFits && !overflowCompactsWhenNested &&
+        renderedFits(attached, column)) {
+        return attached;
+      }
+    }
+  }
+  if (callable.length < 4 && arguments_.length === 1 && soleArgument !== undefined) {
+    const prefix = `${callable}(`;
+    const rendered = printRustExprFitted(
+      soleArgument,
+      depth,
+      column + prefix.length + 1,
+    );
+    const attached = appendToLastLine(`${prefix}${rendered}`, ")");
+    const nestedIndent = indentText(depth + 1);
+    const nested = rendered.includes("\n")
+      ? printRustExprFitted(
+          soleArgument,
+          depth + 1,
+          nestedIndent.length + 1,
+        )
+      : undefined;
+    const oneLineOverflowCompactsWhenNested = rendered.split("\n").length === 2 &&
+      nested?.includes("\n") === false;
+    if (rendered.includes("\n") &&
+      !expressionIsRightHandBlock(soleArgument) &&
+      !oneLineOverflowCompactsWhenNested &&
+      renderedFits(attached, column)) {
+      return attached;
+    }
+  }
+  if (arguments_.length === 1 && soleArgument?.kind === "string-literal" &&
+    !renderedFits(flat, column)) {
+    const prefix = `${callable}(`;
+    const rendered = printRustExprFitted(
+      soleArgument,
+      depth,
+      column + prefix.length + 1,
+    );
+    const attached = appendToLastLine(`${prefix}${rendered}`, ")");
+    if (rendered.includes("\n") && renderedFits(attached, column)) {
+      return attached;
     }
   }
   const soleNestedClosureCall = arguments_.length !== 1
@@ -209,7 +299,6 @@ export function printFittedCall(
             column + prefix.length,
           );
       const trailingContinuationWidth = layout?.trailingContinuationWidth ?? 0;
-      const inlineArgumentsOpening = `${preceding.length === 0 ? "" : `${preceding.join(", ")}, `}${firstLine(renderedClosure)}`;
       if (trailingClosure.kind === "closure" &&
         firstLine(renderedClosure).length + column + prefix.length + 1 +
           trailingContinuationWidth > rustFormatWidth) {
@@ -233,10 +322,15 @@ export function printFittedCall(
         renderedClosure.includes("\n") &&
         !expandedClosure.includes("\n");
       const attachedBlockPreservesComplexBody = trailingClosure.kind === "closure" &&
-        !rustFormatArgumentIsAtomic(trailingClosure.body);
+        !rustFormatArgumentIsAtomic(trailingClosure.body) &&
+        (printRustExpr(trailingClosure.body).length <= rustInlineFieldReceiverWidth ||
+          column + prefix.length + firstLine(renderedClosure).length <=
+            rustCompactTrailingClosureWidth);
+      const overflowingArgumentWidth = preceding.join(", ").length +
+        (preceding.length === 0 ? 0 : 2) + firstLine(renderedClosure).length;
       if ((!forceExpanded || renderedClosure.includes("\n")) &&
         (!expansionMakesClosureCompact || attachedBlockPreservesComplexBody) &&
-        inlineArgumentsOpening.length <= rustNestedCallWidth &&
+        overflowingArgumentWidth <= rustNestedCallWidth &&
         firstLine(renderedClosure).length + column + prefix.length <= rustFormatWidth) {
         return appendToLastLine(`${prefix}${renderedClosure}`, ")");
       }
@@ -288,6 +382,21 @@ export function printFittedCall(
       column + prefix.length + 1,
     )}`, ")");
   }
+  if (arguments_.length === 1 && arguments_[0]?.kind === "reference" &&
+    (arguments_[0].expr.kind === "slice-literal" ||
+      arguments_[0].expr.kind === "vec-literal")) {
+    const prefix = `${callable}(`;
+    const rendered = printRustExprFitted(
+      arguments_[0],
+      depth,
+      column + prefix.length,
+    );
+    const attached = appendToLastLine(`${prefix}${rendered}`, ")");
+    if (firstLine(rendered).length <= rustNestedCallWidth &&
+      renderedFits(attached, column)) {
+      return attached;
+    }
+  }
   if (arguments_.length === 1 &&
     (arguments_[0]?.kind === "block" || arguments_[0]?.kind === "evaluate-then" ||
       arguments_[0]?.kind === "match" ||
@@ -304,8 +413,9 @@ export function printFittedCall(
     const conditionalCanRemainAttached = arguments_[0].kind !== "conditional" ||
       firstLine(renderedArgument).trimEnd().endsWith("{") &&
         firstLine(attached).length <= rustNestedCallWidth;
-    const matchCanRemainAttached = arguments_[0].kind !== "match" || !forceExpanded ||
-      firstLine(renderedArgument).trimEnd().endsWith("{");
+    const matchCanRemainAttached = arguments_[0].kind !== "match" ||
+      (!forceExpanded || firstLine(renderedArgument).trimEnd().endsWith("{")) &&
+        firstLine(attached).length <= rustNestedCallWidth;
     if (!nestedMatchScrutinee &&
       conditionalCanRemainAttached &&
       matchCanRemainAttached &&
@@ -347,6 +457,32 @@ export function printFittedCall(
     );
     const attached = appendToLastLine(`${prefix}${rendered}`, ")");
     if (renderedFits(attached, column)) {
+      return attached;
+    }
+  }
+  if (arguments_.length === 1 && arguments_[0]?.kind === "reference" &&
+    arguments_[0].expr.kind === "string-concat") {
+    const prefix = `${callable}(${arguments_[0].mutable === true ? "&mut " : "&"}`;
+    const rendered = printRustExprFitted(
+      arguments_[0].expr,
+      depth,
+      column + prefix.length,
+    );
+    const attached = appendToLastLine(`${prefix}${rendered}`, ")");
+    if (rendered.includes("\n") && renderedFits(attached, column)) {
+      return attached;
+    }
+  }
+  if (callable.length < 4 && arguments_.length === 1 && arguments_[0]?.kind === "binary" &&
+    !rustExpressionContainsStatementBlock(arguments_[0])) {
+    const prefix = `${callable}(`;
+    const rendered = printRustExprFitted(
+      arguments_[0],
+      inlineArgumentDepth,
+      column + prefix.length,
+    );
+    const attached = appendToLastLine(`${prefix}${rendered}`, ")");
+    if (rendered.includes("\n") && renderedFits(attached, column)) {
       return attached;
     }
   }
@@ -506,11 +642,18 @@ export function printFittedCall(
     (arguments_[0].expr.kind === "call" || arguments_[0].expr.kind === "associated-call" ||
       arguments_[0].expr.kind === "method-call" || arguments_[0].expr.kind === "try")) {
     const prefix = `${callable}(`;
-    const nested = printNestedCallArgument(
+    let nested = printNestedCallArgument(
       arguments_[0].expr,
       depth,
       column + prefix.length + 1,
       false,
+    );
+    nested = fitReferencedNestedCallToWidth(
+      arguments_[0].expr,
+      nested,
+      depth,
+      column + prefix.length + 1,
+      (layout?.maximumFirstLineWidth ?? rustFormatWidth - column) - prefix.length - 1,
     );
     const expandedArgumentIndent = indentText(depth + 1);
     const expandedNested = printNestedCallArgument(
@@ -520,8 +663,11 @@ export function printFittedCall(
       false,
     );
     const attached = appendToLastLine(`${prefix}&${nested}`, ")");
+    const oversizedNestedOpening = rustUnbreakableCallOpeningWidth(arguments_[0].expr) >
+      rustNestedCallWidth;
     if (!rustPostfixStartsFromRightHandBlock(arguments_[0].expr) &&
       nested.includes("\n") &&
+      (firstLine(nested).length + 1 <= rustNestedCallWidth || oversizedNestedOpening) &&
       (expandedNested.includes("\n") ||
         rustExpressionContainsExpandedCollectionLiteral(arguments_[0])) &&
       renderedFits(attached, column)) {
@@ -617,7 +763,9 @@ export function printFittedCall(
           ? argument.expr.args
           : undefined;
       if ((argument.kind === "call" || argument.kind === "associated-call") &&
-        (flat.includes("\n") || flatArguments.length > rustNestedCallWidth ||
+        (flat.includes("\n") ||
+          rustNestedCallChainEndsInString(argument) && flat.length > rustNestedCallWidth ||
+          flatArguments.length > rustNestedCallWidth ||
           !renderedFits(flat, column))) {
         const nestedWrapper = printFittedNestedCallWrapper(
           callable,
@@ -769,11 +917,18 @@ export function printFittedCall(
           return compact;
         }
       }
-      const nested = printNestedCallArgument(
+      let nested = printNestedCallArgument(
         argument.expr,
         depth,
         column + prefix.length + 1,
-        false,
+        flat.length > rustNestedCallWidth,
+      );
+      nested = fitReferencedNestedCallToWidth(
+        argument.expr,
+        nested,
+        depth,
+        column + prefix.length + 1,
+        (layout?.maximumFirstLineWidth ?? rustFormatWidth - column) - prefix.length - 1,
       );
       const compact = appendToLastLine(`${prefix}&${nested}`, ")");
       const expandedArgumentIndent = indentText(depth + 1);
@@ -781,10 +936,12 @@ export function printFittedCall(
         argument.expr,
         depth + 1,
         expandedArgumentIndent.length + 1,
-        false,
+        flat.length > rustNestedCallWidth,
       );
       if (!rustPostfixStartsFromRightHandBlock(argument.expr) &&
         !(nested.includes("\n") && !expandedNested.includes("\n")) &&
+        (firstLine(nested).length + 1 <= rustNestedCallWidth ||
+          rustUnbreakableCallOpeningWidth(argument.expr) > rustNestedCallWidth) &&
         renderedFits(compact, column)) {
         return compact;
       }
@@ -800,13 +957,48 @@ export function printFittedCall(
     flatArguments.length <= rustNestedCallWidth) {
     return flat;
   }
+  return printVerticalCallArguments(callable, arguments_, depth, column, forceExpanded);
+}
+
+function printVerticalCallArguments(
+  callable: string,
+  arguments_: readonly RustExpr[],
+  depth: number,
+  column: number,
+  forceExpanded: boolean,
+): string {
   const argumentIndent = indentText(depth + 1);
+  const flat = `${callable}(${arguments_.map(printRustExpr).join(", ")})`;
   const compactArguments = arguments_.map(printRustExpr).join(", ");
+  const openingWidth = column + callable.length + 1;
+  const shareableArguments = arguments_.every(rustFormatArgumentCanShareLine);
+  const compactSourceArguments = shareableArguments && arguments_.every((argument) =>
+    printRustExpr(argument).length <= rustInlineClosureFieldReceiverWidth);
+  const compactOverflowArguments = forceExpanded
+    ? compactSourceArguments ||
+      (flat.length <= rustNestedCallWidth &&
+        compactArguments.length <= rustInlineFieldReceiverWidth && shareableArguments)
+    : (callable.length > rustNestedCallWidth &&
+        compactArguments.length <= rustNestedCallWidth && compactSourceArguments) ||
+      (openingWidth <= rustNestedCallWidth && compactSourceArguments);
+  const soleArgument = arguments_.length === 1 ? arguments_[0] : undefined;
+  if (callable.length < 4 && soleArgument !== undefined) {
+    const rendered = printRustExprFitted(
+      soleArgument,
+      depth + 1,
+      argumentIndent.length + 1,
+    );
+    if (!rendered.includes("\n") && renderedFits(rendered, argumentIndent.length + 1)) {
+      return [
+        `${callable}(`,
+        `${argumentIndent}${rendered}`,
+        `${indentText(depth)})`,
+      ].join("\n");
+    }
+  }
   if (arguments_.length > 1 &&
-    forceExpanded &&
-    arguments_.every(rustFormatArgumentIsAtomic) &&
+    compactOverflowArguments &&
     !compactArguments.includes("\n") &&
-    compactArguments.length <= rustNestedCallWidth &&
     renderedFits(`${compactArguments},`, argumentIndent.length)) {
     return [
       `${callable}(`,
@@ -830,6 +1022,8 @@ export function printFittedCall(
           depth + 1,
           argumentColumn,
           indentText(depth + 2),
+          "expression",
+          "vertical-call-argument",
         );
     return appendToLastLine(`${argumentIndent}${rendered}`, ",");
   });
@@ -840,9 +1034,86 @@ export function printFittedCall(
   ].join("\n");
 }
 
+function rustNestedCallChainEndsInString(
+  expression: Extract<RustExpr, { readonly kind: "call" | "associated-call" }>,
+): boolean {
+  let current = expression;
+  let callCount = 0;
+  for (;;) {
+    callCount += 1;
+    if (current.args.length !== 1) {
+      return false;
+    }
+    const argument = current.args[0];
+    if (argument?.kind === "string-literal" || argument?.kind === "str-literal" ||
+      argument?.kind === "owned-string-from-borrowed-str") {
+      return callCount > 1 || argument.kind !== "str-literal" ||
+        argument.value.length > rustInlineClosureFieldReceiverWidth;
+    }
+    if (argument?.kind !== "call" && argument?.kind !== "associated-call") {
+      return false;
+    }
+    current = argument;
+  }
+}
+
 function rustPostfixStartsFromRightHandBlock(expression: RustExpr): boolean {
   const chain = rustMethodChain(expression);
   return chain !== undefined && expressionIsRightHandBlock(chain.base);
+}
+
+function rustUnbreakableCallOpeningWidth(expression: RustExpr): number {
+  const selected = expression.kind === "try" ? expression.expr : expression;
+  if (selected.kind === "call") {
+    return printRustDirectCallTarget(selected).length + 1;
+  }
+  if (selected.kind === "associated-call") {
+    return printRustAssociatedCallTarget(
+      selected,
+      printRustAssociatedOwner(selected.owner),
+    ).length + 1;
+  }
+  return 0;
+}
+
+function fitReferencedNestedCallToWidth(
+  expression: RustExpr,
+  rendered: string,
+  depth: number,
+  column: number,
+  width: number,
+): string {
+  const openingWidth = rustUnbreakableCallOpeningWidth(expression);
+  if (firstLine(rendered).length <= width || openingWidth === 0 || openingWidth > width) {
+    return rendered;
+  }
+  const selected = expression.kind === "try" ? expression.expr : expression;
+  const suffix = expression.kind === "try" ? "?" : "";
+  if (selected.kind === "call") {
+    return appendToLastLine(printFittedCall(
+      printRustDirectCallTarget(selected),
+      selected.args,
+      depth,
+      column,
+      true,
+      false,
+      depth,
+      { forceArgumentListBreak: true, maximumFirstLineWidth: width },
+    ), suffix);
+  }
+  if (selected.kind === "associated-call") {
+    return appendToLastLine(printFittedCall(
+      printRustAssociatedCallTarget(selected, printRustAssociatedOwner(selected.owner)),
+      selected.args,
+      depth,
+      column,
+      true,
+      false,
+      depth,
+      { forceArgumentListBreak: true, maximumFirstLineWidth: width },
+    ), suffix);
+  }
+  return rendered;
 }
 
 function printPreferredReferencedNestedCollection(

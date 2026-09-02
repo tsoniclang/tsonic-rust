@@ -144,6 +144,20 @@ test("multi-argument calls follow rustfmt argument width independently of callab
               { kind: "field", receiver: longArguments, name: "1" },
             ],
           },
+        }, {
+          kind: "expr",
+          expr: {
+            kind: "call",
+            path: "BuildEnvironmentRoot::exact_layout_environment_render_text_template_source",
+            args: [
+              { kind: "path", path: "self" },
+              { kind: "path", path: "source" },
+              { kind: "path", path: "context" },
+              { kind: "path", path: "site" },
+              { kind: "path", path: "overrides" },
+              { kind: "path", path: "state" },
+            ],
+          },
         }],
       },
     }],
@@ -156,6 +170,56 @@ test("multi-argument calls follow rustfmt argument width independently of callab
   assert.match(
     source,
     /handle\(\n {8}__tsonic_callable_arguments_1\.0,\n {8}__tsonic_callable_arguments_1\.1,\n {4}\);/u,
+  );
+  assert.match(
+    source,
+    /BuildEnvironmentRoot::exact_layout_environment_render_text_template_source\(\n {8}self, source, context, site, overrides, state,\n {4}\);/u,
+  );
+});
+
+test("nested conversion wrappers break at the fallible call selected by rustfmt", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      generics: emptyRustGenerics,
+      name: "inspect",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "tail",
+          expr: {
+            kind: "call",
+            path: "Ok",
+            args: [{
+              kind: "call",
+              path: "rt::conversions::i32_to_f64",
+              args: [{
+                kind: "try",
+                expr: {
+                  kind: "call",
+                  path: "rt::conversions::usize_to_i32",
+                  args: [{
+                    kind: "call",
+                    path: "js_string::js_len",
+                    args: [{
+                      kind: "reference",
+                      expr: { kind: "path", path: "value" },
+                    }],
+                  }],
+                },
+              }],
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /Ok\(rt::conversions::i32_to_f64\(rt::conversions::usize_to_i32\(\n {8}js_string::js_len\(&value\),\n {4}\)\?\)\)/u,
   );
 });
 

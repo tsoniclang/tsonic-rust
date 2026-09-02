@@ -30,12 +30,18 @@ export function printRustSourceFile(model: RustSourceFileModel): string {
   if (model.innerAttrs !== undefined) {
     parts.push(...model.innerAttrs);
   }
-  for (const [index, item] of model.items.entries()) {
-    const previous = model.items[index - 1];
-    if (item.kind !== "use" || previous?.kind !== "use") {
-      parts.push("");
+  for (let index = 0; index < model.items.length;) {
+    const item = model.items[index]!;
+    parts.push("");
+    if (item.kind !== "use") {
+      parts.push(printRustItem(item));
+      index += 1;
+      continue;
     }
-    parts.push(printRustItem(item));
+    while (model.items[index]?.kind === "use") {
+      parts.push(printRustItem(model.items[index]!));
+      index += 1;
+    }
   }
   return `${parts.join("\n")}\n`;
 }
@@ -167,8 +173,12 @@ export function printRustItem(item: RustItem): string {
       }).join("\n");
       const declaration = `${printRustVisibility(item.visibility)}trait ${item.name}${generics.parameters}`;
       const flatHeader = `${declaration}${superTraits}`;
+      const traitHeader = `${flatHeader} {`;
       const expanded = renderedSuperTraits.length > 0 &&
-        `${flatHeader} {`.length > rustFormatWidth;
+        (traitHeader.length > rustFormatWidth ||
+          functions.length > 0 &&
+            traitHeader.length + printRustVisibility(item.visibility).length >
+              rustFormatWidth - indentText(1).length);
       const headerBase = expanded
         ? `${declaration}:\n    ${renderedSuperTraits.join(" + ")}`
         : flatHeader;
@@ -212,14 +222,19 @@ export function printRustItem(item: RustItem): string {
       const rendered = [...constants, ...functions].join("\n\n");
       const generics = printRustGenerics(item.generics);
       const target = printRustType(item.target);
-      const declaration = item.trait === undefined
+      const trait = item.trait === undefined ? undefined : printRustType(item.trait);
+      const flatDeclaration = trait === undefined
         ? `impl${generics.parameters} ${target}`
-        : `impl${generics.parameters} ${printRustType(item.trait)} for ${target}`;
+        : `impl${generics.parameters} ${trait} for ${target}`;
+      const declaration = trait !== undefined && `${flatDeclaration} {`.length > rustFormatWidth
+        ? `impl${generics.parameters} ${trait}\n    for ${target}`
+        : flatDeclaration;
       const header = appendRustWhereTerminator(
         declaration,
         generics,
         0,
         rendered.length === 0 ? "{}" : "{",
+        declaration.includes("\n"),
       );
       return rendered.length === 0 ? header : `${header}\n${rendered}\n}`;
     }
@@ -249,6 +264,10 @@ function printRustStructField(field: RustStructField): string {
   if (!flatType.includes("\n") && renderedFits(flat, 0)) {
     return `${attrs}${flat}`;
   }
+  const typeIndent = indentText(2);
+  if (!flatType.includes("\n") && renderedFits(`${flatType},`, typeIndent.length)) {
+    return `${attrs}${prefix}\n${typeIndent}${flatType},`;
+  }
   const fittedAtField = printRustTypeFitted(
     field.type,
     1,
@@ -257,7 +276,6 @@ function printRustStructField(field: RustStructField): string {
   if (firstLine(fittedAtField).length + prefix.length + 1 <= rustFormatWidth) {
     return `${attrs}${appendToLastLine(`${prefix} ${fittedAtField}`, ",")}`;
   }
-  const typeIndent = indentText(2);
   return `${attrs}${[
     prefix,
     appendToLastLine(

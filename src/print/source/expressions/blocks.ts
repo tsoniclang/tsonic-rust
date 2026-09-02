@@ -5,7 +5,7 @@ import { printRustClosureParams } from "./closure-params.js";
 import { printRustExpr } from "./core.js";
 import { printRustExprFitted } from "./fitted.js";
 import { rustCompactInitializerWidth, rustCompactTrailingClosureWidth, rustFormatWidth, rustMethodChainWidth, rustNestedCallWidth, rustSingleLineConditionalWidth } from "../formatting.js";
-import { rustExpressionContainsExpandedStructLiteral, rustFormatArgumentCanShareLine, rustFormatArgumentIsAtomic, rustInvocationHasNestedExpandedCollection } from "./inspection.js";
+import { rustExpressionContainsExpandedCollectionLiteral, rustExpressionContainsExpandedStructLiteral, rustFormatArgumentCanShareLine, rustFormatArgumentIsAtomic, rustInvocationHasNestedExpandedCollection } from "./inspection.js";
 import { rustExpressionContainsStatementBlock } from "../../../backend/target-ast/expressions.js";
 import type { RustExpr, RustType } from "../../../backend/target-ast/nodes.js";
 
@@ -31,13 +31,17 @@ export function printRustClosureFitted(
   const params = printRustClosureParams(expression.params);
   const prefix = `${expression.move === true ? "move " : ""}|${params}|`;
   const indent = indentText(depth + 1);
-  if (expression.body.kind === "match" || expression.body.kind === "conditional") {
+  if (expression.params.length === 0 &&
+    (expression.body.kind === "match" || expression.body.kind === "conditional")) {
     const body = printRustExprFitted(
       expression.body,
       depth,
       column + prefix.length + 1,
     );
-    return `${prefix} ${body}`;
+    const direct = `${prefix} ${body}`;
+    if (renderedFits(direct, column)) {
+      return direct;
+    }
   }
   if (expression.body.kind === "block") {
     const bindings = expression.body.bindings.flatMap((binding) => {
@@ -98,12 +102,18 @@ export function printRustConditionalArmLines(
     return printRustBlockExpressionLines(expression, depth);
   }
   const indent = indentText(depth);
+  const flat = printRustExpr(expression);
+  if (expression.kind === "conditional" &&
+    flat.length <= rustSingleLineConditionalWidth && renderedFits(flat, indent.length)) {
+    return [`${indent}${flat}`];
+  }
   return [`${indent}${printRustExprFitted(
     expression,
     depth,
     indent.length,
     undefined,
     "statement",
+    "block-arm",
   )}`];
 }
 
@@ -183,10 +193,12 @@ export function printRustTypeFitted(
   type: RustType,
   depth: number,
   column: number,
+  trailingWidth = 1,
 ): string {
   const flat = printRustType(type);
   const longTuple = type.kind === "tuple" && flat.length > rustMethodChainWidth;
-  if (!longTuple && renderedFits(flat, column) && column + flat.length + 1 < rustFormatWidth) {
+  if (!longTuple && renderedFits(flat, column) &&
+    column + flat.length + trailingWidth <= rustFormatWidth) {
     return flat;
   }
   if (type.kind === "tuple") {
@@ -227,17 +239,87 @@ export function printRustLetInitializer(
   const complexStringConcat = initializer.kind === "string-concat" &&
     flat.length > rustNestedCallWidth &&
     !initializer.parts.every(rustFormatArgumentCanShareLine);
-  const fittedAtPrefix = printRustExprFitted(initializer, depth, prefix.length + 1);
-  if (!fittedAtPrefix.includes("\n") &&
-    renderedFits(`${prefix}${fittedAtPrefix};`, 0) &&
+  const fittedAtPrefix = printRustExprFitted(
+    initializer,
+    depth,
+    initializer.kind === "conditional" ? prefix.length : prefix.length + 1,
+  );
+  if (!flat.includes("\n") &&
+    renderedFits(`${prefix}${flat};`, 0) &&
     (initializer.kind !== "conditional" || flat.length <= rustSingleLineConditionalWidth) &&
     !rustExpressionContainsStatementBlock(initializer) &&
     !rustExpressionContainsExpandedStructLiteral(initializer) &&
-    !rustMethodChainPrefersVerticalLayout(initializer) &&
+    (!rustMethodChainPrefersVerticalLayout(initializer) ||
+      flat.length <= rustCompactInitializerWidth) &&
     !complexStringConcat &&
+    !(rustMethodChain(initializer) !== undefined && flat.length > rustMethodChainWidth) &&
     !(rustMethodChain(initializer) !== undefined &&
-      prefix.length + flat.length + 1 >= rustFormatWidth)) {
-    return `${prefix}${fittedAtPrefix};`;
+      prefix.length + flat.length + 1 > rustFormatWidth)) {
+    return `${prefix}${flat};`;
+  }
+  const rhsContinuationIndent = indentText(depth + 1);
+  const fittedAtContinuation = printRustExprFitted(
+    initializer,
+    depth + 1,
+    rhsContinuationIndent.length,
+    undefined,
+    "expression",
+    "initializer-continuation",
+  );
+  const inlineStatement = appendToLastLine(`${prefix}${fittedAtPrefix}`, ";");
+  const continuationStatement = appendToLastLine(
+    `${prefix.trimEnd()}\n${rhsContinuationIndent}${fittedAtContinuation}`,
+    ";",
+  );
+  const inlineFits = renderedFits(inlineStatement, 0);
+  const continuationFits = renderedFits(continuationStatement, 0);
+  const rhsMethodChain = rustMethodChain(initializer);
+  const rhsMethodSelectorCount = rhsMethodChain?.steps.filter((step) =>
+    step.kind === "method" || step.kind === "field" || step.kind === "await").length ?? 0;
+  if (rhsMethodChain !== undefined && rhsMethodSelectorCount <= 1 &&
+    !flat.includes("\n") && flat.length <= rustCompactInitializerWidth &&
+    !rustExpressionContainsExpandedCollectionLiteral(initializer) &&
+    !rustExpressionContainsExpandedStructLiteral(initializer) &&
+    renderedFits(`${prefix}${flat};`, 0)) {
+    return `${prefix}${flat};`;
+  }
+  const rhsInvocation = initializer.kind === "try" &&
+      (initializer.expr.kind === "call" || initializer.expr.kind === "invoke" ||
+        initializer.expr.kind === "associated-call" || initializer.expr.kind === "method-call")
+    ? initializer.expr
+    : initializer;
+  const rhsArguments = rhsInvocation.kind === "call" || rhsInvocation.kind === "invoke" ||
+      rhsInvocation.kind === "associated-call" || rhsInvocation.kind === "method-call"
+    ? rhsInvocation.args
+    : undefined;
+  const rhsTrailingArgument = rhsArguments?.[rhsArguments.length - 1];
+  const rhsCollectionContinuation = printRustSingleCollectionCallContinuation(
+    initializer,
+    depth + 1,
+    rhsContinuationIndent.length,
+  );
+  const specializedInitializerLayout = rhsMethodChain !== undefined ||
+    rustInvocationHasNestedExpandedCollection(initializer) ||
+    rhsCollectionContinuation !== undefined ||
+    rhsTrailingArgument?.kind === "closure" ||
+    rhsTrailingArgument?.kind === "closure-block" ||
+    rhsTrailingArgument?.kind === "block" ||
+    rhsTrailingArgument?.kind === "evaluate-then";
+  if (initializer.kind === "match" && inlineFits && prefix.length <= rustNestedCallWidth) {
+    return inlineStatement;
+  }
+  if (!specializedInitializerLayout) {
+    if (inlineFits && continuationFits) {
+      return rustfmtPrefersNextLine(fittedAtPrefix, fittedAtContinuation)
+        ? continuationStatement
+        : inlineStatement;
+    }
+    if (continuationFits) {
+      return continuationStatement;
+    }
+    if (inlineFits) {
+      return inlineStatement;
+    }
   }
   const directContinuationIndent = indentText(depth + 1);
   const initializerIsInvocation = initializer.kind === "call" || initializer.kind === "invoke" ||
@@ -282,6 +364,15 @@ export function printRustLetInitializer(
     ? initializerInvocation.args
     : undefined;
   const trailingClosure = initializerArguments?.[initializerArguments.length - 1];
+  const directCallOpeningFits = (initializer.kind === "call" ||
+      initializer.kind === "invoke" || initializer.kind === "associated-call") &&
+    trailingClosure?.kind === "closure-block" &&
+    trailingClosure.body.statements.length > 1 &&
+    fittedAtPrefix.includes("\n") &&
+    prefix.length + firstLine(fittedAtPrefix).length + 1 <= rustFormatWidth;
+  if (directCallOpeningFits) {
+    return appendToLastLine(`${prefix}${fittedAtPrefix}`, ";");
+  }
   if (trailingClosure?.kind === "closure" || trailingClosure?.kind === "closure-block") {
     const continuationIndent = indentText(depth + 1);
     const continuation = trailingClosure.kind === "closure" &&
@@ -339,14 +430,14 @@ export function printRustLetInitializer(
       return `${prefix.trimEnd()}\n${continuationIndent}${continuation};`;
     }
   }
-  const directCallOpeningFits = (initializer.kind === "call" ||
+  const directClosureCallOpeningFits = (initializer.kind === "call" ||
       initializer.kind === "invoke" || initializer.kind === "associated-call") &&
     trailingClosure?.kind === "closure" &&
     fittedAtPrefix.includes("\n") &&
     !(initializer.kind === "associated-call" && flat.includes("\n") === false &&
       renderedFits(flat, indentText(depth + 1).length)) &&
     prefix.length + firstLine(fittedAtPrefix).length + 1 <= rustFormatWidth;
-  if (directCallOpeningFits) {
+  if (directClosureCallOpeningFits) {
     return appendToLastLine(`${prefix}${fittedAtPrefix}`, ";");
   }
   const expandedCollectionInitializer = fittedAtPrefix.includes("\n") &&
@@ -372,6 +463,16 @@ export function printRustLetInitializer(
       "expression",
       "initializer-continuation",
     );
+    const rustfmtPrefersContinuation = rustfmtPrefersNextLine(
+      fittedAtPrefix,
+      continuation,
+    );
+    if (!rustfmtPrefersContinuation &&
+      !(longBindingPrefix && chainBaseIsInvocation &&
+        chainBaseHasNestedCollectionInvocation) &&
+      renderedFits(inlineStatement, 0)) {
+      return inlineStatement;
+    }
     const continuationCompactsBlockHeader =
       (initializer.kind === "match" || initializer.kind === "conditional") &&
       !firstLine(fittedAtPrefix).trimEnd().endsWith("{") &&
@@ -440,13 +541,26 @@ export function printRustLetInitializer(
   }
   if (!flat.includes("\n") &&
     (!renderedFits(flat, prefix.length + 1) ||
-      prefix.length + flat.length + 1 >= rustFormatWidth ||
+      prefix.length + flat.length + 1 > rustFormatWidth ||
       rustMethodChain(initializer) !== undefined &&
-        prefix.length + flat.length + 1 >= rustFormatWidth) &&
+        prefix.length + flat.length + 1 > rustFormatWidth) &&
     renderedFits(flat, indentText(depth + 1).length + 1) &&
     initializer.kind !== "struct-literal" &&
     !rustMethodChainPrefersVerticalLayout(initializer)) {
     return `${prefix.trimEnd()}\n${indentText(depth + 1)}${flat};`;
   }
   return `${prefix}${printRustExprFitted(initializer, depth, prefix.length + 1)};`;
+}
+
+function rustfmtPrefersNextLine(original: string, nextLine: string): boolean {
+  if (!nextLine.includes("\n")) {
+    return true;
+  }
+  if (original.split("\n").length > nextLine.split("\n").length + 1) {
+    return true;
+  }
+  const originalOpening = firstLine(original).trimEnd().slice(-1);
+  const nextLineOpening = firstLine(nextLine).trimEnd().slice(-1);
+  return (originalOpening === "(" || originalOpening === "{" || originalOpening === "[") &&
+    nextLineOpening !== originalOpening;
 }

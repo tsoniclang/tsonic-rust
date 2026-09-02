@@ -13,7 +13,7 @@ import { printRustBlockStatements } from "../blocks.js";
 import { printRustExpr, rustExpressionContainsClosure } from "./core.js";
 import { rustExpressionContainsExpandedCollectionLiteral, rustExpressionContainsExpandedStructLiteral, rustFormatArgumentCanShareLine, rustFormatArgumentIsAtomic } from "./inspection.js";
 import { rustExpressionContainsStatementBlock } from "../../../backend/target-ast/expressions.js";
-import { rustFormatWidth, rustMethodChainWidth, rustNestedCallWidth, rustSingleLineConditionalWidth } from "../formatting.js";
+import { rustFormatWidth, rustInlineFormatArgumentWidth, rustMethodChainWidth, rustNestedCallWidth, rustSingleLineConditionalWidth } from "../formatting.js";
 import { initializerPrefersReferencedNestedBreak } from "./initializer-layout.js";
 import { printRustCollectionLiteralFitted, printRustStructLiteralFitted } from "./literals.js";
 import type { RustExpr } from "../../../backend/target-ast/nodes.js";
@@ -25,7 +25,8 @@ export function printRustExprFitted(
   column: number,
   methodChainContinuationIndent?: string,
   grammarPosition: RustExpressionGrammarPosition = "expression",
-  layoutRegion: "default" | "initializer-continuation" | "logical-chain-operand" = "default",
+  layoutRegion: "default" | "initializer-continuation" | "logical-chain-operand" |
+    "vertical-call-argument" | "block-arm" = "default",
 ): string {
   const flat = printRustExpr(expression);
   switch (expression.kind) {
@@ -99,10 +100,13 @@ export function printRustExprFitted(
         column + "if ".length,
       );
       const conditionEnding = lastLine(condition).trim();
-      const conditionCanOwnBrace = !condition.includes("\n") ||
-        (conditionEnding === ")" || conditionEnding === "}" ||
-          conditionEnding.endsWith("})") || conditionEnding.endsWith(")?")) &&
-        lastLineLength(condition) + " {".length <= rustFormatWidth;
+      const conditionEndColumn = condition.includes("\n")
+        ? lastLineLength(condition)
+        : column + "if ".length + lastLineLength(condition);
+      const conditionCanOwnBrace = (!condition.includes("\n") ||
+        conditionEnding === ")" || conditionEnding === "}" ||
+        conditionEnding.endsWith("})") || conditionEnding.endsWith(")?")) &&
+        conditionEndColumn + " {".length <= rustFormatWidth;
       const header = conditionCanOwnBrace
         ? `if ${condition} {`
         : `if ${condition}\n${indentText(depth)}{`;
@@ -186,28 +190,31 @@ export function printRustExprFitted(
       ].join("\n");
     }
     case "string-concat": {
-      if (!flat.includes("\n") &&
+      const allPartsCanShareLine = expression.parts.every(rustFormatArgumentCanShareLine);
+      if (expression.parts.length <= 4 &&
         (flat.length <= rustNestedCallWidth ||
-          expression.parts.every(rustFormatArgumentCanShareLine)) &&
+          layoutRegion !== "vertical-call-argument" && layoutRegion !== "block-arm" &&
+            allPartsCanShareLine && flat.length < rustInlineFormatArgumentWidth * 2) &&
+        !flat.includes("\n") &&
         renderedFits(flat, column)) {
         return flat;
       }
       const argumentIndent = indentText(depth + 1);
       const placeholders = expression.parts.map(() => "{}").join("");
       const trailingPart = expression.parts[expression.parts.length - 1];
-      if (trailingPart !== undefined && expressionIsRightHandBlock(trailingPart)) {
+      if (trailingPart !== undefined &&
+        (trailingPart.kind === "block" || trailingPart.kind === "evaluate-then")) {
         const preceding = expression.parts.slice(0, -1).map(printRustExpr);
         if (preceding.every((part) => !part.includes("\n"))) {
-          const opening = `format!("${placeholders}", ${preceding.length === 0 ? "" : `${preceding.join(", ")}, `}`;
+          const opening = `format!("${placeholders}", ${
+            preceding.length === 0 ? "" : `${preceding.join(", ")}, `
+          }`;
           const renderedTrailing = printRustFormatArgument(
             trailingPart,
             depth,
             column + opening.length,
           );
-          const attached = appendToLastLine(
-            `${opening}${renderedTrailing}`,
-            ",)",
-          );
+          const attached = appendToLastLine(`${opening}${renderedTrailing}`, ",)");
           if (renderedFits(attached, column)) {
             return attached;
           }
@@ -253,6 +260,8 @@ export function printRustExprFitted(
         column,
         false,
         initializerPrefersReferencedNestedBreak(expression, flat, layoutRegion),
+        depth,
+        { parentRegion: layoutRegion },
       );
     case "invoke":
       return printFittedCall(
@@ -262,6 +271,8 @@ export function printRustExprFitted(
         column,
         false,
         initializerPrefersReferencedNestedBreak(expression, flat, layoutRegion),
+        depth,
+        { parentRegion: layoutRegion },
       );
     case "associated-call":
       {
@@ -275,6 +286,8 @@ export function printRustExprFitted(
             column,
             false,
             initializerPrefersReferencedNestedBreak(expression, flat, layoutRegion),
+            depth,
+            { parentRegion: layoutRegion },
           );
         }
         const owner = printRustAssociatedCallOwnerFitted(
@@ -299,6 +312,8 @@ export function printRustExprFitted(
           column,
           owner.includes("\n"),
           initializerPrefersReferencedNestedBreak(expression, flat, layoutRegion),
+          depth,
+          { parentRegion: layoutRegion },
         );
     }
     case "method-call": {
@@ -869,7 +884,19 @@ export function printRustExprFitted(
     case "vec-literal":
     case "slice-literal":
     case "tuple-literal":
-      return printRustCollectionLiteralFitted(expression, depth, column, printRustExprFitted);
+      return printRustCollectionLiteralFitted(
+        expression,
+        depth,
+        column,
+        (element, elementDepth, elementColumn) => printRustExprFitted(
+          element,
+          elementDepth,
+          elementColumn,
+          undefined,
+          "expression",
+          "vertical-call-argument",
+        ),
+      );
     case "struct-literal":
       return printRustStructLiteralFitted(expression, depth, column, printRustExprFitted);
     default:

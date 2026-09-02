@@ -103,7 +103,7 @@ export function printFittedLogicalChain(
       );
   const continuationIndent = indentText(depth + 1);
   for (const operand of operands.slice(1)) {
-    const attachedToClosingBlock = lastLine(rendered).trim() === "}";
+    const blockClosingLine = /^\}[)?]*$/u.test(lastLine(rendered).trim());
     if (operands.length === 2 && !rendered.includes("\n")) {
       const separator = ` ${operator} `;
       const attachedRight = printFittedLogicalOperand(
@@ -123,7 +123,7 @@ export function printFittedLogicalChain(
         continue;
       }
     }
-    const operandDepth = rustExpressionContainsStatementBlock(operand) && attachedToClosingBlock
+    const operandDepth = rustExpressionContainsStatementBlock(operand) && blockClosingLine
       ? depth
       : depth + 1;
     const right = printFittedLogicalOperand(
@@ -134,6 +134,8 @@ export function printFittedLogicalChain(
       "expression",
     );
     const continuation = `${operator} ${firstLine(right)}`;
+    const attachedToClosingBlock = blockClosingLine &&
+      renderedFits(appendToLastLine(rendered, ` ${continuation}`), column);
     rendered = attachedToClosingBlock
       ? appendToLastLine(rendered, ` ${continuation}`)
       : `${rendered}\n${continuationIndent}${continuation}`;

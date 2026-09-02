@@ -8,7 +8,7 @@ import { printRustExpr } from "./expressions/core.js";
 import { printRustExprFitted } from "./expressions/fitted.js";
 import { expressionIsRightHandBlock } from "./expressions/precedence.js";
 import { rustFormatWidth, rustNestedCallWidth } from "./formatting.js";
-import type { RustBlock, RustExpr, RustStmt } from "../../backend/target-ast/nodes.js";
+import type { RustBlock, RustExpr, RustStmt, RustType } from "../../backend/target-ast/nodes.js";
 
 export function printRustBlockStatements(block: RustBlock, depth: number): string {
   return [
@@ -39,6 +39,7 @@ function printRustStmt(statement: RustStmt, depth: number): string {
           statement.type,
           depth,
           declarationPrefix.length,
+          " = x".length,
         );
         if (renderedType.includes("\n")) {
           const assignmentPrefix = appendToLastLine(
@@ -339,7 +340,8 @@ function printRustTryScope(
 ): string {
   const indent = indentText(depth);
   const nested = indentText(depth + 1);
-  const completionType = `rt::Completion<${printRustType(statement.returnType)}>`;
+  const completionType: RustType = rustAppliedType("rt::Completion", [statement.returnType]);
+  const completionTypeText = printRustType(completionType);
   const lines = printRustCompletionCapture(
     statement.bodyName,
     completionType,
@@ -355,8 +357,8 @@ function printRustTryScope(
   } else {
     const catchClause = statement.catchClause;
     const flowType = catchClause.fallible
-      ? `rt::TsonicResult<${completionType}>`
-      : completionType;
+      ? `rt::TsonicResult<${completionTypeText}>`
+      : completionTypeText;
     const flowAssignment = `${indent}let ${statement.flowName}: ${flowType} =`;
     const inlineFlowMatchPrefix = `${flowAssignment} match ${statement.bodyName}`;
     const catchUsesBlock = statement.asynchronous;
@@ -366,7 +368,6 @@ function printRustTryScope(
     const matchIndent = indentText(matchDepth);
     const armIndent = indentText(matchDepth + 1);
     const catchExpression = printRustCompletionCaptureExpression(
-      completionType,
       catchClause.body,
       catchClause.fallible,
       catchClause.terminates,
@@ -416,7 +417,7 @@ function printRustTryScope(
         ? statement.finallyName
         : `Ok(${statement.finallyName})`;
       lines.push(
-        `${indent}let ${statement.flowName}: rt::TsonicResult<${completionType}> =`,
+        `${indent}let ${statement.flowName}: rt::TsonicResult<${completionTypeText}> =`,
         `${nested}rt::finish_finally(${bodyResult}, ${finallyResult});`,
       );
       flowFallible = true;
@@ -438,7 +439,7 @@ function printRustTryScope(
 
 function printRustCompletionCapture(
   name: string,
-  completionType: string,
+  completionType: RustType,
   body: RustBlock,
   fallible: boolean,
   terminates: boolean,
@@ -447,17 +448,23 @@ function printRustCompletionCapture(
 ): string[] {
   const indent = indentText(depth);
   const captureType = fallible
-    ? `rt::TsonicResult<${completionType}>`
+    ? rustAppliedType("rt::TsonicResult", [completionType])
     : completionType;
   const inlineExpression = printRustCompletionCaptureExpression(
-    completionType,
     body,
     fallible,
     terminates,
     asynchronous,
     depth,
   );
-  const prefix = `${indent}let ${name}: ${captureType} = `;
+  const declarationPrefix = `${indent}let ${name}: `;
+  const renderedCaptureType = printRustTypeFitted(
+    captureType,
+    depth,
+    declarationPrefix.length,
+    " = x".length,
+  );
+  const prefix = appendToLastLine(`${declarationPrefix}${renderedCaptureType}`, " = ");
   if (inlineExpression.length === 1) {
     const assignment = `${prefix}${inlineExpression[0]};`;
     return renderedFits(assignment, 0)
@@ -465,7 +472,7 @@ function printRustCompletionCapture(
       : [`${prefix.trimEnd()}`, `${indentText(depth + 1)}${inlineExpression[0]};`];
   }
   if (renderedFits(`${prefix}${inlineExpression[0]}`, 0) &&
-    prefix.length + inlineExpression[0]!.length <= rustFormatWidth - 4) {
+    lastLineLength(prefix) + inlineExpression[0]!.length <= rustFormatWidth - 4) {
     return [
       `${prefix}${inlineExpression[0]}`,
       ...inlineExpression.slice(1, -1),
@@ -473,7 +480,6 @@ function printRustCompletionCapture(
     ];
   }
   const continuationExpression = printRustCompletionCaptureExpression(
-    completionType,
     body,
     fallible,
     terminates,
@@ -488,8 +494,15 @@ function printRustCompletionCapture(
   ];
 }
 
+function rustAppliedType(path: string, arguments_: readonly RustType[]): RustType {
+  return {
+    kind: "named",
+    path,
+    genericArguments: arguments_.map((type) => ({ kind: "type" as const, type })),
+  };
+}
+
 function printRustCompletionCaptureExpression(
-  _completionType: string,
   body: RustBlock,
   fallible: boolean,
   terminates: boolean,

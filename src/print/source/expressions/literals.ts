@@ -1,6 +1,6 @@
-import { appendToLastLine, renderedFits, rustExpressionContainsTry } from "../patterns.js";
+import { appendToLastLine, firstLine, renderedFits, rustExpressionContainsTry } from "../patterns.js";
 import { indentText } from "../types.js";
-import { rustNestedCallWidth, rustStructLiteralWidth } from "../formatting.js";
+import { rustFormatWidth, rustNestedCallWidth, rustStructLiteralWidth } from "../formatting.js";
 import { printRustExpr } from "./core.js";
 import {
   rustExpressionContainsExpandedStructLiteral,
@@ -47,10 +47,16 @@ export function printRustCollectionLiteralFitted(
     const opening = expression.kind === "vec-literal" ? "vec![" : "[";
     const rendered = renderExpression(onlyElement, depth, column + opening.length);
     const attached = appendToLastLine(`${opening}${rendered}`, "]");
+    const invocationElement = onlyElement.kind === "call" ||
+      onlyElement.kind === "associated-call" || onlyElement.kind === "method-call" ||
+      onlyElement.kind === "invoke";
     if (rendered.includes("\n") &&
       (onlyElement.kind === "block" || onlyElement.kind === "evaluate-then" ||
         !rustExpressionContainsStatementBlock(onlyElement) ||
+        invocationElement ||
+        rustExpressionIsSingleCollectionInvocation(onlyElement) ||
         rendered.split("\n").length <= 4) &&
+      column + firstLine(attached).length + 1 <= rustFormatWidth &&
       renderedFits(attached, column)) {
       return attached;
     }
@@ -72,6 +78,16 @@ export function printRustCollectionLiteralFitted(
     ...elements,
     `${indentText(depth)}${expression.kind === "tuple-literal" ? ")" : "]"}`,
   ].join("\n");
+}
+
+function rustExpressionIsSingleCollectionInvocation(expression: RustExpr): boolean {
+  if (expression.kind !== "call" && expression.kind !== "associated-call" &&
+    expression.kind !== "method-call" && expression.kind !== "invoke") {
+    return false;
+  }
+  const argument = expression.args.length === 1 ? expression.args[0] : undefined;
+  const selected = argument?.kind === "reference" ? argument.expr : argument;
+  return selected?.kind === "slice-literal" || selected?.kind === "vec-literal";
 }
 
 export function printRustStructLiteralFitted(
