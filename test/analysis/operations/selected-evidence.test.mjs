@@ -380,9 +380,20 @@ export function main(): void {
   const model = artifactText(result, "src/model.rs");
   const identity = artifactText(result, "src/identity.rs");
   const index = artifactText(result, "src/index.rs");
-  assert.match(model, /fn downcast_json_value_to_json_string\(\s*self: alloc::rc::Rc<Self>,?\s*\)/u);
+  assert.match(
+    model,
+    /fn downcast_json_value_to_json_string\(\s*self: alloc::rc::Rc<Self>,?\s*\)[\s\S]*?\{\s*None\s*\}/u,
+  );
+  const jsonValueRoot = model.slice(
+    model.indexOf("impl JsonValueDispatch for JsonValueRoot"),
+    model.indexOf("trait JsonTaggedDispatch"),
+  );
+  assert.doesNotMatch(jsonValueRoot, /downcast_json_value_to_json_string/u);
   assert.match(identity, /downcast_json_value_to_json_string\(\)\s*\.is_some\(\)/u);
-  assert.match(index, /downcast_json_value_to_json_string\(\)\s*\.is_some\(\)/u);
+  const readFunction = index.slice(index.indexOf("fn read("), index.indexOf("fn asserted("));
+  assert.match(readFunction, /if let Some\(selected_dispatch(?:_\d+)?\) = value[\s\S]*downcast_json_value_to_json_string\(\)/u);
+  assert.equal(readFunction.match(/downcast_json_value_to_json_string\(\)/gu)?.length, 1);
+  assert.match(readFunction, /let selected_value(?:_\d+)? = crate::model::JsonString/u);
   assert.match(index, /downcast_json_value_to_json_string\(\)\s*\.unwrap\(\)/u);
   assert.doesNotMatch(`${model}\n${identity}\n${index}`, /into_any|std::any::Any|TypeId/u);
   const run = validateGeneratedProject("selected-project-downcast", result.artifacts, { run: true });
@@ -414,8 +425,18 @@ function readTwice(value: Value): string {
   return "";
 }
 
+function readAfterAssignment(value: Value): string {
+  if (value instanceof TextValue) {
+    const before = value.text;
+    value = new TextValue("b");
+    return before + (value instanceof TextValue ? value.text : "");
+  }
+  return "";
+}
+
 export function main(): void {
   check(readTwice(new TextValue("a")) === "aa");
+  check(readAfterAssignment(new TextValue("a")) === "ab");
 }
 `,
     },
@@ -423,7 +444,17 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /let downcast_value = &value;/u);
+  const repeatedRead = source.slice(
+    source.indexOf("fn read_twice("),
+    source.indexOf("fn read_after_assignment("),
+  );
+  const assignedRead = source.slice(
+    source.indexOf("fn read_after_assignment("),
+    source.indexOf("pub fn main("),
+  );
+  assert.equal(repeatedRead.match(/downcast_value_to_text_value\(\)/gu)?.length, 1);
+  assert.match(repeatedRead, /if let Some\(selected_dispatch(?:_\d+)?\)/u);
+  assert.doesNotMatch(assignedRead, /if let Some\(selected_dispatch(?:_\d+)?\)/u);
   assert.equal(validateGeneratedProject("repeated-project-downcast", result.artifacts, { run: true }).status, 0);
 });
 

@@ -17,12 +17,34 @@ import { rustBlockReferencesPath } from "../inspection/source-usage.js";
 export function finalizeRustSourceStyle(
   model: RustSourceFileModel,
 ): RustSourceFileModel {
-  const items = closePublicRustTypeVisibility(model.items);
+  const items = sortRustUseRuns(closePublicRustTypeVisibility(model.items));
   const publicTypes = publicDeclaredRustTypeNames(items);
   return {
     ...model,
     items: items.map((item) => finalizeRustItemStyle(item, publicTypes)),
   };
+}
+
+function sortRustUseRuns(items: readonly RustItem[]): readonly RustItem[] {
+  const sorted: RustItem[] = [];
+  for (let index = 0; index < items.length;) {
+    const item = items[index]!;
+    if (item.kind !== "use") {
+      sorted.push(item);
+      index += 1;
+      continue;
+    }
+    const run: Extract<RustItem, { readonly kind: "use" }>[] = [];
+    while (index < items.length && items[index]?.kind === "use") {
+      run.push(items[index] as Extract<RustItem, { readonly kind: "use" }>);
+      index += 1;
+    }
+    run.sort((left, right) =>
+      left.path.localeCompare(right.path, "en") ||
+      (left.alias ?? "").localeCompare(right.alias ?? "", "en"));
+    sorted.push(...run);
+  }
+  return Object.freeze(sorted);
 }
 
 export function rustPublicSignatureTypeNames(model: RustSourceFileModel): readonly string[] {
@@ -73,9 +95,14 @@ function finalizeRustItemStyle(
 
 function finalizeRustTraitFunctionStyle(fn: RustTraitFunction): RustTraitFunction {
   const argumentCount = fn.params.length + (fn.selfParam === undefined ? 0 : 1);
-  return argumentCount <= 7
-    ? fn
-    : { ...fn, attrs: appendRustAttribute(fn.attrs, rustLintAttributes.tooManyArguments) };
+  const attrs = argumentCount <= 7
+    ? fn.attrs
+    : appendRustAttribute(fn.attrs, rustLintAttributes.tooManyArguments);
+  return {
+    ...fn,
+    ...(attrs === undefined ? {} : { attrs }),
+    ...(fn.body === undefined ? {} : { body: finalizeRustFunctionBodyStyle(fn.body) }),
+  };
 }
 
 function finalizeRustImplFunctionStyle(
@@ -191,6 +218,9 @@ function finalizeRustStatementStyle(statement: RustStmt): RustStmt {
         ...statement,
         expression: finalizeRustExpressionStyle(statement.expression),
         body: finalizeRustBlockStyle(statement.body),
+        ...(statement.else === undefined
+          ? {}
+          : { else: finalizeRustBlockStyle(statement.else) }),
       };
     case "break":
     case "continue":
@@ -283,6 +313,8 @@ function rustStatementMayContinueLoop(statement: RustStmt, label: string | undef
       return rustBlockMayContinueLoop(statement.then, label) ||
         (statement.else !== undefined && rustBlockMayContinueLoop(statement.else, label));
     case "if-let-some":
+      return rustBlockMayContinueLoop(statement.body, label) ||
+        (statement.else !== undefined && rustBlockMayContinueLoop(statement.else, label));
     case "scope":
     case "unsafe-scope":
       return rustBlockMayContinueLoop(statement.body, label);

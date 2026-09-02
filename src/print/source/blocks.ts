@@ -2,7 +2,7 @@ import { appendToLastLine, firstLine, lastLine, lastLineLength, remainingLines, 
 import { indentText, printRustType } from "./types.js";
 import { printFittedCall } from "./expressions/calls.js";
 import { printRustAssociatedCallTarget, printRustDirectCallTarget } from "./expressions/callable.js";
-import { printFittedMethodChain, printRustAssociatedOwner, printRustFlatLetInitializer, rustMethodChain, rustMethodChainBreaksReceiverWhenExpanded, rustMethodChainFirstMethodRequiresExpansion } from "./expressions/chains.js";
+import { printFittedMethodChain, printRustFlatLetInitializer, rustMethodChain, rustMethodChainBreaksReceiverWhenExpanded, rustMethodChainFirstMethodRequiresExpansion, rustMethodChainPrefersVerticalLayout } from "./expressions/chains.js";
 import { printRustAssociatedCallOwner, printRustLetInitializer, printRustTypeFitted } from "./expressions/blocks.js";
 import { printRustExpr } from "./expressions/core.js";
 import { printRustExprFitted } from "./expressions/fitted.js";
@@ -95,9 +95,14 @@ function printRustStmt(statement: RustStmt, depth: number): string {
       if (statement.else === undefined) {
         return `${attributes}${rendered}`;
       }
-      const elseBody = printRustBlockStatements(statement.else, depth + 1);
       const indentStr = indentText(depth);
       const withoutTrailing = rendered.endsWith("{}") ? `${rendered.slice(0, -2)}{\n${indentStr}}` : rendered;
+      const nestedElseIf = nestedMarkedElseIf(statement.elseIf, statement.else);
+      if (nestedElseIf !== undefined) {
+        const nested = printRustStmt(nestedElseIf, depth);
+        return `${attributes}${withoutTrailing} else ${nested.slice(indentStr.length)}`;
+      }
+      const elseBody = printRustBlockStatements(statement.else, depth + 1);
       const complete = elseBody.length === 0
         ? `${withoutTrailing} else {}`
         : `${withoutTrailing} else {\n${elseBody}\n${indentStr}}`;
@@ -111,11 +116,14 @@ function printRustStmt(statement: RustStmt, depth: number): string {
       );
     }
     case "while": {
-      const rendered = printRustConditionalBlock("while", statement.condition, statement.body, depth);
-      const complete = statement.label === undefined
-        ? rendered
-        : `${indent}'${statement.label}: ${rendered.slice(indent.length)}`;
-      return `${printRustStatementAttributes(statement.attrs, depth)}${complete}`;
+      const rendered = printRustConditionalBlock(
+        "while",
+        statement.condition,
+        statement.body,
+        depth,
+        statement.label,
+      );
+      return `${printRustStatementAttributes(statement.attrs, depth)}${rendered}`;
     }
     case "while-let-some": {
       return printRustBlock(
@@ -128,11 +136,19 @@ function printRustStmt(statement: RustStmt, depth: number): string {
       return `${printRustStatementAttributes(statement.attrs, depth)}${printRustForBlock(statement, depth)}`;
     }
     case "if-let-some": {
-      return printRustBlock(
-        statement.body,
-        depth,
-        `if let Some(${statement.binding}) = ${printRustExpr(statement.expression)}`,
-      );
+      const rendered = printRustIfLetSomeBlock(statement, depth);
+      if (statement.else === undefined) {
+        return rendered;
+      }
+      const nestedElseIf = nestedMarkedElseIf(statement.elseIf, statement.else);
+      if (nestedElseIf !== undefined) {
+        const nested = printRustStmt(nestedElseIf, depth);
+        return `${rendered} else ${nested.slice(indent.length)}`;
+      }
+      const elseBody = printRustBlockStatements(statement.else, depth + 1);
+      return elseBody.length === 0
+        ? `${rendered} else {}`
+        : `${rendered} else {\n${elseBody}\n${indent}}`;
     }
     case "break": {
       return `${indent}break${statement.label === undefined ? "" : ` '${statement.label}`};`;
@@ -182,26 +198,6 @@ function printRustStmt(statement: RustStmt, depth: number): string {
     }
     case "throw": {
       const prefix = `${statement.tail === true ? "" : "return "}Err(`;
-      const callChain = statement.error.kind === "call" || statement.error.kind === "associated-call"
-        ? collectNestedCallExpressionChain(statement.error)
-        : undefined;
-      if (callChain !== undefined && callChain.callables.length > 1 &&
-        (printRustExpr(statement.error).length > rustNestedCallWidth ||
-          indent.length + prefix.length + printRustExpr(statement.error).length >= rustFormatWidth - 10)) {
-        const argumentIndent = indentText(depth + 1);
-        return [
-          `${indent}${prefix}${callChain.callables.map((callable) => `${callable}(`).join("")}`,
-          ...callChain.arguments.map((argument) => appendToLastLine(
-            `${argumentIndent}${printRustExprFitted(
-              argument,
-              depth + 1,
-              argumentIndent.length,
-            )}`,
-            ",",
-          )),
-          `${indent}${")".repeat(callChain.callables.length + 1)}${statement.tail === true ? "" : ";"}`,
-        ].join("\n");
-      }
       const renderedError = printRustExprFitted(
         statement.error,
         depth,
@@ -212,7 +208,7 @@ function printRustStmt(statement: RustStmt, depth: number): string {
         `)${statement.tail === true ? "" : ";"}`,
       );
       if (renderedFits(rendered, indent.length) &&
-        rendered.length + indent.length < rustFormatWidth) {
+        (rendered.includes("\n") || rendered.length + indent.length < rustFormatWidth)) {
         return `${indent}${rendered}`;
       }
       const errorIndent = indentText(depth + 1);
@@ -233,32 +229,63 @@ function printRustStmt(statement: RustStmt, depth: number): string {
   }
 }
 
+function printRustIfLetSomeBlock(
+  statement: Extract<RustStmt, { readonly kind: "if-let-some" }>,
+  depth: number,
+): string {
+  const indent = indentText(depth);
+  const prefix = `if let Some(${statement.binding}) = `;
+  const expression = printRustExprFitted(
+    statement.expression,
+    depth,
+    indent.length + prefix.length,
+  );
+  if (!expression.includes("\n") &&
+    renderedFits(`${prefix}${expression} {`, indent.length)) {
+    return printRustBlock(statement.body, depth, `${prefix}${expression}`);
+  }
+  if (!expression.includes("\n") &&
+    renderedFits(`${prefix}${expression}`, indent.length)) {
+    const body = printRustBlockStatements(statement.body, depth + 1);
+    return [
+      `${indent}${prefix}${expression}`,
+      `${indent}{`,
+      ...(body.length === 0 ? [] : [body]),
+      `${indent}}`,
+    ].join("\n");
+  }
+  if (expression.includes("\n") &&
+    renderedFits(`${prefix}${expression}`, indent.length)) {
+    const body = printRustBlockStatements(statement.body, depth + 1);
+    return [
+      `${indent}${prefix}${expression}`,
+      `${indent}{`,
+      ...(body.length === 0 ? [] : [body]),
+      `${indent}}`,
+    ].join("\n");
+  }
+  const continuationIndent = indentText(depth + 1);
+  const continuation = printRustExprFitted(
+    statement.expression,
+    depth + 1,
+    continuationIndent.length,
+  );
+  const body = printRustBlockStatements(statement.body, depth + 1);
+  return [
+    `${indent}${prefix.trimEnd()}`,
+    `${continuationIndent}${continuation}`,
+    `${indent}{`,
+    ...(body.length === 0 ? [] : [body]),
+    `${indent}}`,
+  ].join("\n");
+}
+
 function printRustStatementAttributes(
   attrs: readonly string[] | undefined,
   depth: number,
 ): string {
   const indent = indentText(depth);
   return attrs?.map((attribute) => `${indent}${attribute}\n`).join("") ?? "";
-}
-
-export function collectNestedCallExpressionChain(
-  expression: Extract<RustExpr, { readonly kind: "call" | "associated-call" }>,
-): {
-  readonly callables: readonly string[];
-  readonly arguments: readonly RustExpr[];
-} | undefined {
-  const callables: string[] = [];
-  let current = expression;
-  for (;;) {
-    callables.push(current.kind === "call"
-      ? printRustDirectCallTarget(current)
-      : printRustAssociatedCallTarget(current, printRustAssociatedOwner(current.owner)));
-    if (current.args.length !== 1 ||
-      (current.args[0]?.kind !== "call" && current.args[0]?.kind !== "associated-call")) {
-      return current.args.length === 0 ? undefined : { callables, arguments: current.args };
-    }
-    current = current.args[0];
-  }
 }
 
 function printRustForBlock(
@@ -269,7 +296,8 @@ function printRustForBlock(
   const prefix = `${statement.label === undefined ? "" : `'${statement.label}: `}for ${statement.bindingMutable === true ? "mut " : ""}${statement.binding} in`;
   const flatIterable = printRustExpr(statement.iterable);
   const flatHeader = `${prefix} ${flatIterable}`;
-  if (!flatIterable.includes("\n") && renderedFits(flatHeader, indent.length)) {
+  if (!flatIterable.includes("\n") && renderedFits(flatHeader, indent.length) &&
+    !rustMethodChainPrefersVerticalLayout(statement.iterable)) {
     return printRustBlock(statement.body, depth, flatHeader);
   }
   const attachedColumn = indent.length + prefix.length + 1;
@@ -595,8 +623,12 @@ function rustBlockHasCompletionExit(block: RustBlock): boolean {
       return rustBlockHasCompletionExit(statement.then) ||
         (statement.else !== undefined && rustBlockHasCompletionExit(statement.else));
     }
+    if (statement.kind === "if-let-some") {
+      return rustBlockHasCompletionExit(statement.body) ||
+        (statement.else !== undefined && rustBlockHasCompletionExit(statement.else));
+    }
     if (statement.kind === "loop" || statement.kind === "while" || statement.kind === "while-let-some" ||
-      statement.kind === "for" || statement.kind === "if-let-some" ||
+      statement.kind === "for" ||
       statement.kind === "scope" || statement.kind === "unsafe-scope") {
       return rustBlockHasCompletionExit(statement.body);
     }
@@ -605,6 +637,23 @@ function rustBlockHasCompletionExit(block: RustBlock): boolean {
     }
     return false;
   });
+}
+
+function nestedMarkedElseIf(
+  marked: true | undefined,
+  block: RustBlock,
+): Extract<RustStmt, { readonly kind: "if" | "if-let-some" }> | undefined {
+  if (marked !== true || block.statements.length !== 1 ||
+    (block.innerAttrs?.length ?? 0) !== 0) {
+    return undefined;
+  }
+  const nested = block.statements[0];
+  if (nested?.kind !== "if" && nested?.kind !== "if-let-some") {
+    return undefined;
+  }
+  return nested.kind === "if" && (nested.attrs?.length ?? 0) !== 0
+    ? undefined
+    : nested;
 }
 
 function printDirectResourceBody(body: RustBlock, depth: number): string | undefined {
@@ -712,22 +761,26 @@ function printRustAssignment(
   depth: number,
 ): string {
   const indent = indentText(depth);
-  const flat = `${printRustExpr(target)} ${operator} ${printRustExpr(value)}`;
-  if (renderedFits(flat, indent.length + 1)) {
-    return `${indent}${flat};`;
-  }
   const renderedTarget = printRustExprFitted(target, depth, indent.length);
   const inlinePrefix = `${indent}${renderedTarget} ${operator} `;
   const inlineValue = printRustExprFitted(value, depth, lastLineLength(inlinePrefix));
+  if (!renderedTarget.includes("\n") && !inlineValue.includes("\n") &&
+    renderedFits(`${inlinePrefix}${inlineValue};`, 0)) {
+    return `${inlinePrefix}${inlineValue};`;
+  }
   const continuationIndent = indentText(depth + 1);
   const continuationValue = printRustExprFitted(value, depth + 1, continuationIndent.length);
   const continuationAvoidsNestedExpansion = inlineValue.includes("\n") &&
     !continuationValue.includes("\n");
+  const continuationCompactsMatchHeader = value.kind === "match" &&
+    !firstLine(inlineValue).trimEnd().endsWith("{") &&
+    firstLine(continuationValue).trimEnd().endsWith("{");
   const multilineValueCanFollowAssignment = value.kind !== "binary" ||
     value.operator === "&&" || value.operator === "||";
   if (!renderedTarget.includes("\n") &&
     (!inlineValue.includes("\n") ||
-      multilineValueCanFollowAssignment && !continuationAvoidsNestedExpansion) &&
+      multilineValueCanFollowAssignment && !continuationAvoidsNestedExpansion &&
+        !continuationCompactsMatchHeader) &&
     inlinePrefix.length + firstLine(inlineValue).length <= rustFormatWidth) {
     return `${inlinePrefix}${inlineValue};`;
   }
@@ -748,8 +801,9 @@ function printRustStatementExpr(
           printRustAssociatedCallOwner(expression.expr),
         );
     const flat = printRustExpr(expression.expr);
+    const flatArguments = expression.expr.args.map(printRustExpr).join(", ");
     const forceExpanded = !renderedFits(`${flat}?`, column) ||
-      expression.expr.args.length > 1 && flat.length > rustNestedCallWidth &&
+      expression.expr.args.length > 1 && flatArguments.length > rustNestedCallWidth &&
         expression.expr.args.filter((argument) =>
           argument.kind === "call" || argument.kind === "associated-call" ||
           argument.kind === "method-call" || argument.kind === "try").length > 1;
@@ -797,9 +851,10 @@ function printRustConditionalBlock(
   condition: RustExpr,
   block: RustBlock,
   depth: number,
+  label?: string,
 ): string {
   const indent = indentText(depth);
-  const prefix = `${keyword} `;
+  const prefix = `${label === undefined ? "" : `'${label}: `}${keyword} `;
   const renderedCondition = printRustExprFitted(
     condition,
     depth,
@@ -822,7 +877,9 @@ function printRustConditionalBlock(
   const conditionEnding = lastLine(renderedCondition).trim();
   const conditionEndingLine = lastLine(conditionHeader);
   const conditionEndingIndent = conditionEndingLine.length - conditionEndingLine.trimStart().length;
-  const header = (conditionEnding === "}" || conditionEnding.endsWith("})")) &&
+  const header = (conditionEnding === ")" || conditionEnding === "}" ||
+      conditionEnding.endsWith("})") ||
+      conditionEnding.endsWith(")?")) &&
       conditionEndingIndent === indent.length &&
       conditionEndingLine.length + 2 <= rustFormatWidth
     ? appendToLastLine(conditionHeader, " {")

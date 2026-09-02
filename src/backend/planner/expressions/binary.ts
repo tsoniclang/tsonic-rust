@@ -22,7 +22,10 @@ import { negateRustBooleanExpression, rustBorrowedStringView, rustStringConcat }
 import { planExpression, planExpressionBeforeValueProjections } from "./entry.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
 import { planRustProgramErrorTypeTest } from "./error-operations.js";
-import { planRustProjectTypeTest } from "../objects/project-downcasts.js";
+import {
+  planRustProjectTypeTest,
+  planRustProjectTypeTestSelection,
+} from "../objects/project-downcasts.js";
 import { rustOptionProjectionFactKey } from "../../../analysis/facts/keys.js";
 import { rustTargetOperationText } from "../../../analysis/facts/target-operation.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -31,6 +34,61 @@ import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
+
+export interface RustPlannedProjectTypeTest {
+  readonly fact: Extract<RustTargetOperationFact, { readonly kind: "project-type-test" }>;
+  readonly leftNode: Node;
+  readonly left: RustExpr;
+  readonly test: RustExpr;
+  readonly selection?: import("../objects/project-downcasts.js").RustProjectTypeTestSelectionPlan;
+}
+
+export function planSelectedRustProjectTypeTest(
+  node: Node,
+  context: RustPlanContext,
+): RustPlannedProjectTypeTest | undefined {
+  const fact = rustOperationFact(node, context);
+  if (fact?.kind !== "project-type-test") {
+    return undefined;
+  }
+  const leftNode = BinaryExpression_Left(context.input.program.source.ast, node);
+  const plannedLeft = leftNode === undefined ? undefined : planExpression(leftNode, context);
+  const left = leftNode === undefined || plannedLeft === undefined
+    ? undefined
+    : planRustNonConsumingValue(leftNode, plannedLeft, context);
+  if (leftNode === undefined || left === undefined ||
+    !rustTargetTypeRefEquals(effectivePlannedExpressionCarrier(leftNode, context), fact.sourceCarrier) ||
+    !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.project-type-test-carrier") ||
+    !selectedOperationMatches(
+      context.input.program.facts.getSelectedTargetOperator(node),
+      fact.operationId,
+      "operator",
+      fact.resultCarrier,
+      "project-type-test",
+    )) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.project-type-test-selected-evidence",
+      "Project type test conflicts with its exact finalized source operation evidence.",
+    ));
+    return undefined;
+  }
+  const selection = fact.lowering.kind === "dispatch" &&
+      rustTargetTypeRefEquals(fact.sourceCarrier, fact.dispatchCarrier)
+    ? planRustProjectTypeTestSelection(node, left, fact, context)
+    : undefined;
+  const test = selection === undefined
+    ? planRustProjectTypeTest(node, left, fact, context)
+    : {
+        kind: "method-call" as const,
+        receiver: selection.expression,
+        method: "is_some",
+        args: [],
+      };
+  return test === undefined
+    ? undefined
+    : { fact, leftNode, left, test, ...(selection === undefined ? {} : { selection }) };
+}
 
 export function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
@@ -57,29 +115,7 @@ export function planBinaryExpression(node: Node, context: RustPlanContext): Rust
     return planRustProgramErrorTypeTest(node, left, fact, context);
   }
   if (fact?.kind === "project-type-test") {
-    const leftNode = BinaryExpression_Left(context.input.program.source.ast, node);
-    const plannedLeft = leftNode === undefined ? undefined : planExpression(leftNode, context);
-    const left = leftNode === undefined || plannedLeft === undefined
-      ? undefined
-      : planRustNonConsumingValue(leftNode, plannedLeft, context);
-    if (leftNode === undefined || left === undefined ||
-      !rustTargetTypeRefEquals(effectivePlannedExpressionCarrier(leftNode, context), fact.sourceCarrier) ||
-      !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.project-type-test-carrier") ||
-      !selectedOperationMatches(
-        context.input.program.facts.getSelectedTargetOperator(node),
-        fact.operationId,
-        "operator",
-        fact.resultCarrier,
-        "project-type-test",
-      )) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, node),
-        "rust.backend.project-type-test-selected-evidence",
-        "Project type test conflicts with its exact finalized source operation evidence.",
-      ));
-      return undefined;
-    }
-    return planRustProjectTypeTest(node, left, fact, context);
+    return planSelectedRustProjectTypeTest(node, context)?.test;
   }
   if ((fact?.kind === "operator-token" || fact?.kind === "operator-call" || fact?.kind === "string-concat") &&
     !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.operator-carrier")) {

@@ -164,6 +164,9 @@ export function planProjectDispatchTrait(
       selfParam: rustSelfParameter("rc"),
       params: [],
       returnType,
+      body: {
+        statements: [{ kind: "tail", expr: { kind: "none" } }],
+      },
     });
   }
   for (const field of fields) {

@@ -30,8 +30,11 @@ export function printRustSourceFile(model: RustSourceFileModel): string {
   if (model.innerAttrs !== undefined) {
     parts.push(...model.innerAttrs);
   }
-  for (const item of model.items) {
-    parts.push("");
+  for (const [index, item] of model.items.entries()) {
+    const previous = model.items[index - 1];
+    if (item.kind !== "use" || previous?.kind !== "use") {
+      parts.push("");
+    }
     parts.push(printRustItem(item));
   }
   return `${parts.join("\n")}\n`;
@@ -138,21 +141,34 @@ export function printRustItem(item: RustItem): string {
         const params = fn.params.map(rustFunctionParameter);
         const allParams = selfParam === undefined ? params : [selfParam, ...params];
         const fnAttrs = (fn.attrs ?? []).map((attr) => `    ${attr}\n`).join("");
-        return `${fnAttrs}${printRustFunctionSignature(
-          `    ${fn.isUnsafe === true ? "unsafe " : ""}fn `,
+        const prefix = `    ${fn.isUnsafe === true ? "unsafe " : ""}fn `;
+        const generics = printRustGenerics(fn.generics);
+        const returnType = rustFunctionReturnType(fn.returnType, fn.errorType);
+        if (fn.body === undefined) {
+          return `${fnAttrs}${printRustFunctionSignature(
+            prefix,
+            fn.name,
+            generics,
+            allParams,
+            returnType,
+            1,
+          )}`;
+        }
+        const header = `${fnAttrs}${printRustFunctionHeader(
+          prefix,
           fn.name,
-          printRustGenerics(fn.generics),
+          generics,
           allParams,
-          rustFunctionReturnType(fn.returnType, fn.errorType),
+          returnType,
           1,
         )}`;
+        const body = printRustBlockStatements(fn.body, 2);
+        return body.length === 0 ? `${header}}` : `${header}\n${body}\n    }`;
       }).join("\n");
       const declaration = `${printRustVisibility(item.visibility)}trait ${item.name}${generics.parameters}`;
       const flatHeader = `${declaration}${superTraits}`;
       const expanded = renderedSuperTraits.length > 0 &&
-          (`${flatHeader} {`.length >= rustFormatWidth ||
-            (renderedSuperTraits.length > 1 && flatHeader.length > 80) ||
-            (functions.length > 0 && `${flatHeader} {`.length >= 86));
+        `${flatHeader} {`.length > rustFormatWidth;
       const headerBase = expanded
         ? `${declaration}:\n    ${renderedSuperTraits.join(" + ")}`
         : flatHeader;
@@ -232,6 +248,14 @@ function printRustStructField(field: RustStructField): string {
   const flat = `${prefix} ${flatType},`;
   if (!flatType.includes("\n") && renderedFits(flat, 0)) {
     return `${attrs}${flat}`;
+  }
+  const fittedAtField = printRustTypeFitted(
+    field.type,
+    1,
+    prefix.length + 1,
+  );
+  if (firstLine(fittedAtField).length + prefix.length + 1 <= rustFormatWidth) {
+    return `${attrs}${appendToLastLine(`${prefix} ${fittedAtField}`, ",")}`;
   }
   const typeIndent = indentText(2);
   return `${attrs}${[
@@ -387,9 +411,9 @@ function printRustFunctionHeader(
   returnType: RustType | undefined,
   depth: number,
 ): string {
-  const returnSuffix = printRustReturnSuffix(returnType);
+  const flatReturnSuffix = printRustReturnSuffix(returnType);
   const flatParameters = parameters.map(printRustFunctionParameterFlat);
-  const flat = `${prefix}${name}${generics.parameters}(${flatParameters.join(", ")})${returnSuffix}`;
+  const flat = `${prefix}${name}${generics.parameters}(${flatParameters.join(", ")})${flatReturnSuffix}`;
   const flatTerminatorWidth = generics.wherePredicates.length === 0 ? " {".length : 0;
   if (flat.length + flatTerminatorWidth <= rustFormatWidth) {
     return appendRustWhereTerminator(flat, generics, depth, "{");
@@ -398,11 +422,19 @@ function printRustFunctionHeader(
   const closingPrefix = parameters.length === 0
     ? `${prefix}${name}${generics.parameters}()`
     : `${closingIndent})`;
-  const fittedReturnSuffix = printRustFittedReturnSuffix(
-    returnType,
-    depth,
-    closingPrefix.length + 1,
-  );
+  const flatClosingLine = `${closingPrefix}${flatReturnSuffix}`;
+  const flatReturnType = returnType === undefined ? "" : printRustType(returnType);
+  const rustfmtReturnOverflowAllowance = 2;
+  const flatReturnTypeLimit = rustFormatWidth - indentText(1).length -
+    ") -> ".length + rustfmtReturnOverflowAllowance;
+  const selectedReturnSuffix = lastLineLength(flatClosingLine) <= rustFormatWidth ||
+      flatReturnType.length <= flatReturnTypeLimit
+    ? flatReturnSuffix
+    : printRustFittedReturnSuffix(
+        returnType,
+        depth,
+        closingPrefix.length + 1,
+      );
   const declaration = [
     ...(parameters.length === 0
       ? []
@@ -410,9 +442,20 @@ function printRustFunctionHeader(
           `${prefix}${name}${generics.parameters}(`,
           ...parameters.map((parameter) => printRustFunctionParameterFitted(parameter, depth + 1)),
         ]),
-    `${closingPrefix}${fittedReturnSuffix}`,
+    `${closingPrefix}${selectedReturnSuffix}`,
   ].join("\n");
-  return appendRustWhereTerminator(declaration, generics, depth, "{");
+  const returnHasOverwideLine = selectedReturnSuffix
+    .split("\n")
+    .some((line) => line.length > rustFormatWidth);
+  return appendRustWhereTerminator(
+    declaration,
+    generics,
+    depth,
+    "{",
+    returnHasOverwideLine ||
+      !selectedReturnSuffix.includes("\n") &&
+        lastLineLength(declaration) + " {".length >= rustFormatWidth - 3,
+  );
 }
 
 function printRustFunctionSignature(

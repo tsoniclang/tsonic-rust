@@ -170,7 +170,7 @@ function planVariableDeclaration(
       init = { kind: "call", path: "rt::Location::allocate", args: [planned] };
     }
   } else if (rustOptionElementCarrier(declarationCarrier) !== undefined && rustType !== undefined) {
-    init = { kind: "associated-value", owner: rustType, name: "None" };
+    init = { kind: "none" };
   }
   if (initializer !== undefined && init === undefined) {
     return undefined;

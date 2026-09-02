@@ -237,8 +237,10 @@ test("rustfmt-stable calls, closures, conditionals, and borrowed fallible chains
     source,
     /rt::option_coalesce\(values\.clone\(\)\.1, std::convert::identity, \|\| String::from\(\n {12}"none"\n {8}\),\),/u,
   );
-  assert.match(source, /rt::source_string\(&callable\.call\(\(\n/u);
-  assert.doesNotMatch(source, /rt::source_string\(&callable\n {8}\.call/u);
+  assert.match(
+    source,
+    /rt::source_string\(&callable\.call\(\(\n/u,
+  );
   assert.match(
     source,
     /rt::option_coalesce\(value\.with\(\|state\| state\.id\), Ok, \|\| \{\n {8}tsonic_rust_runtime::conversions::f64_to_i32\(0\.0\)\n {4}\}\);/u,
@@ -248,4 +250,107 @@ test("rustfmt-stable calls, closures, conditionals, and borrowed fallible chains
     /rt::Callable::<\(i32, Option<String>\), rt::TsonicResult<String>>::new\(/u,
   );
   assert.doesNotMatch(source, /rt::Callable::<\n/u);
+});
+
+test("assignment matches retain their enclosing block indentation", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      generics: emptyRustGenerics,
+      name: "select",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "if",
+          condition: { kind: "path", path: "enabled" },
+          then: {
+            statements: [{
+              kind: "assign",
+              target: { kind: "path", path: "selected" },
+              operator: "=",
+              value: {
+                kind: "match",
+                expression: {
+                  kind: "method-call",
+                  receiver: {
+                    kind: "method-call",
+                    receiver: { kind: "path", path: "values" },
+                    method: "get_number",
+                    args: [{ kind: "path", path: "index" }],
+                  },
+                  method: "as_ref",
+                  args: [],
+                },
+                arms: [{
+                  pattern: {
+                    kind: "tuple-variant",
+                    path: "Some",
+                    elements: [{ kind: "binding", name: "value" }],
+                  },
+                  expression: {
+                    kind: "method-call",
+                    receiver: { kind: "path", path: "value" },
+                    method: "clone",
+                    args: [],
+                  },
+                }, {
+                  pattern: { kind: "path", path: "None" },
+                  expression: {
+                    kind: "unreachable",
+                    message: "checked flow selected a missing optional value",
+                  },
+                }],
+              },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(
+    source,
+    /        selected = match values\.get_number\(index\)\.as_ref\(\) \{\n            Some\(value\) => value\.clone\(\),\n            None => unreachable!/u,
+  );
+  assert.doesNotMatch(source, /\n\.get_number|\nmatch values/u);
+});
+
+test("nested wrappers retain every argument when the first argument is a long string", () => {
+  const source = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "function",
+      generics: emptyRustGenerics,
+      name: "fail",
+      visibility: "public",
+      params: [],
+      errorType: { kind: "named", path: "Failure" },
+      body: {
+        statements: [{
+          kind: "throw",
+          error: {
+            kind: "call",
+            path: "Failure::from_diagnostic",
+            args: [{
+              kind: "call",
+              path: "create_diagnostic",
+              args: [
+                { kind: "string-literal", value: "A_DIAGNOSTIC_CODE_THAT_REQUIRES_FITTING" },
+                { kind: "path", path: "message" },
+                { kind: "path", path: "source_path" },
+                { kind: "path", path: "line" },
+              ],
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(source, /create_diagnostic\(/u);
+  assert.match(source, /message,/u);
+  assert.match(source, /source_path,/u);
+  assert.match(source, /line,/u);
 });

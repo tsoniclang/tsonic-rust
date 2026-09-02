@@ -25,6 +25,12 @@ export interface RustEffectiveExpressionOverride {
   readonly valueForm: "value" | "shared-reference" | "storage";
 }
 
+export interface RustFlowReadOverride {
+  readonly expression: RustExpr;
+  readonly sourceCarrier: TargetTypeRef;
+  readonly selectedCarrier: TargetTypeRef;
+}
+
 export interface RustCapturedBinding {
   readonly declaration: Node;
   readonly path: string;
@@ -105,6 +111,7 @@ export interface RustPlanContext {
     readonly protocol: RustGeneratorFact;
   };
   readonly expressionOverrides?: ReadonlyMap<Node, RustEffectiveExpressionOverride>;
+  readonly flowReadOverrides?: ReadonlyMap<Node, RustFlowReadOverride>;
   readonly capturedBindings?: readonly RustCapturedBinding[];
   readonly projectDispatchRoot?: RustExpr;
   readonly objectLiteralImplementations?: RustObjectLiteralImplementationRegistry;

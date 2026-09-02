@@ -166,11 +166,13 @@ function planRootContractFunctions(
     const relation = context.input.program.projectTypes.relationship(concreteCarrier, route.target);
     const matches = relation.kind === "related" &&
       rustTargetTypeRefEquals(relation.targetType, route.targetCarrier);
-    const implementation = planProjectDowncastRouteImplementation(route, matches, context);
-    if (implementation === undefined) {
-      return undefined;
+    if (matches) {
+      const implementation = planProjectDowncastRouteImplementation(route, true, context);
+      if (implementation === undefined) {
+        return undefined;
+      }
+      functions.push(implementation);
     }
-    functions.push(implementation);
   }
   const fields = projectOwnFields(contract, contractCarrier, context);
   if (fields === undefined) {

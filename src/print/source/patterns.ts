@@ -23,6 +23,36 @@ export function printRustPattern(pattern: RustPattern): string {
   }
 }
 
+export function printRustPatternFitted(
+  pattern: RustPattern,
+  depth: number,
+  column: number,
+): string {
+  const flat = printRustPattern(pattern);
+  if (renderedFits(flat, column) ||
+    (pattern.kind !== "tuple" && pattern.kind !== "tuple-variant")) {
+    return flat;
+  }
+  const elementIndent = indentText(depth + 1);
+  const elements = pattern.elements.flatMap((element, index) => {
+    const rendered = printRustPatternFitted(
+      element,
+      depth + 1,
+      elementIndent.length,
+    );
+    const separator = index + 1 < pattern.elements.length ||
+        pattern.kind === "tuple" && pattern.elements.length === 1
+      ? ","
+      : "";
+    return [`${elementIndent}${appendToLastLine(rendered, separator)}`];
+  });
+  return [
+    pattern.kind === "tuple" ? "(" : `${pattern.path}(`,
+    ...elements,
+    `${indentText(depth)})`,
+  ].join("\n");
+}
+
 export function printRustMatchExpression(
   expression: Extract<RustExpr, { readonly kind: "match" }>,
   depth: number,
@@ -39,7 +69,32 @@ export function printRustMatchExpression(
     : inlineHeader;
   const armIndent = indentText(depth + 1);
   const arms = expression.arms.flatMap((arm) => {
-    const pattern = printRustPattern(arm.pattern);
+    const flatPattern = printRustPattern(arm.pattern);
+    const pattern = printRustPatternFitted(arm.pattern, depth + 1, armIndent.length);
+    if (pattern.includes("\n") && arm.expression.kind !== "return-expression") {
+      const directPrefix = appendToLastLine(`${armIndent}${pattern}`, " => ");
+      const directValue = printRustExprFitted(
+        arm.expression,
+        depth + 1,
+        lastLineLength(directPrefix),
+      );
+      const direct = appendToLastLine(`${directPrefix}${directValue}`, ",");
+      if (!directValue.includes("\n") && renderedFits(direct, 0)) {
+        return [direct];
+      }
+      const blockPrefix = appendToLastLine(`${armIndent}${pattern}`, " => {");
+      const valueIndent = indentText(depth + 2);
+      const value = printRustExprFitted(
+        arm.expression,
+        depth + 2,
+        valueIndent.length,
+      );
+      return [
+        blockPrefix,
+        `${valueIndent}${value}`,
+        `${armIndent}}`,
+      ];
+    }
     if (arm.expression.kind === "return-expression") {
       const valueIndent = indentText(depth + 2);
       const value = printRustExprFitted(arm.expression, depth + 2, valueIndent.length);
@@ -47,7 +102,7 @@ export function printRustMatchExpression(
         ? appendToLastLine(value, ";")
         : value;
       return [
-        `${armIndent}${pattern} => {`,
+        `${armIndent}${flatPattern} => {`,
         `${valueIndent}${statement}`,
         `${armIndent}}`,
       ];
@@ -56,14 +111,14 @@ export function printRustMatchExpression(
       const valueIndent = indentText(depth + 2);
       const value = printRustExprFitted(arm.expression, depth + 2, valueIndent.length);
       return [
-        `${armIndent}${pattern} => {`,
+        `${armIndent}${flatPattern} => {`,
         `${valueIndent}${value}`,
         `${armIndent}}`,
       ];
     }
-    const prefix = `${armIndent}${pattern} => `;
+    const prefix = `${armIndent}${flatPattern} => `;
     const flatValue = printRustExpr(arm.expression);
-    const flatArm = `${pattern} => ${flatValue},`;
+    const flatArm = `${flatPattern} => ${flatValue},`;
     if (flatValue.includes("\n") ||
       arm.expression.kind === "try" && flatArm.length > rustMatchArmWidth ||
       !renderedFits(`${prefix}${flatValue},`, 0)) {
@@ -82,7 +137,7 @@ export function printRustMatchExpression(
       const valueIndent = indentText(depth + 2);
       const value = printRustExprFitted(arm.expression, depth + 2, valueIndent.length);
       return [
-        `${armIndent}${pattern} => {`,
+        `${armIndent}${flatPattern} => {`,
         `${valueIndent}${value}`,
         `${armIndent}}`,
       ];
@@ -100,7 +155,13 @@ export function rustExpressionContainsTry(expression: RustExpr): boolean {
 
 export function renderedFits(rendered: string, firstColumn: number): boolean {
   const lines = rendered.split("\n");
-  return lines.every((line, index) => (index === 0 ? firstColumn : 0) + line.length <= rustFormatWidth);
+  return lines.every((line, index) =>
+    (index === 0 ? firstColumn : 0) + line.length <= rustFormatWidth ||
+      rustLineIsUnbreakableLiteral(line));
+}
+
+function rustLineIsUnbreakableLiteral(line: string): boolean {
+  return /^"(?:\\.|[^"\\])*"[,;)}\]]*$/u.test(line.trim());
 }
 
 export function appendToLastLine(rendered: string, suffix: string): string {

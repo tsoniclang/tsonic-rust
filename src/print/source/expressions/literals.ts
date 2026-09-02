@@ -1,12 +1,12 @@
 import { appendToLastLine, renderedFits, rustExpressionContainsTry } from "../patterns.js";
 import { indentText } from "../types.js";
 import { rustNestedCallWidth, rustStructLiteralWidth } from "../formatting.js";
-import { rustExpressionContainsStatementBlock } from "../../../backend/target-ast/expressions.js";
 import { printRustExpr } from "./core.js";
 import {
   rustExpressionContainsExpandedStructLiteral,
   rustFormatArgumentIsAtomic,
 } from "./inspection.js";
+import { rustExpressionContainsStatementBlock } from "../../../backend/target-ast/expressions.js";
 import type { RustExpr } from "../../../backend/target-ast/nodes.js";
 
 type RustCollectionLiteral = Extract<
@@ -47,8 +47,11 @@ export function printRustCollectionLiteralFitted(
     const opening = expression.kind === "vec-literal" ? "vec![" : "[";
     const rendered = renderExpression(onlyElement, depth, column + opening.length);
     const attached = appendToLastLine(`${opening}${rendered}`, "]");
-    if (rendered.includes("\n") && renderedFits(attached, column) ||
-      rustExpressionContainsStatementBlock(onlyElement)) {
+    if (rendered.includes("\n") &&
+      (onlyElement.kind === "block" || onlyElement.kind === "evaluate-then" ||
+        !rustExpressionContainsStatementBlock(onlyElement) ||
+        rendered.split("\n").length <= 4) &&
+      renderedFits(attached, column)) {
       return attached;
     }
   }

@@ -151,6 +151,88 @@ test("source style keeps intentional control-flow policy statement-local", () =>
   assert.doesNotMatch(text, /#!\[allow/u);
 });
 
+test("source files group adjacent imports and preserve authored else-if chains", () => {
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "use",
+      path: "tsonic_rust_js::abi",
+      alias: "js_abi",
+    }, {
+      kind: "use",
+      path: "tsonic_rust_runtime",
+      alias: "rt",
+    }, {
+      kind: "function",
+      generics: emptyRustGenerics,
+      name: "select",
+      visibility: "public",
+      params: [],
+      body: {
+        statements: [{
+          kind: "if",
+          condition: { kind: "path", path: "first" },
+          then: { statements: [] },
+          elseIf: true,
+          else: {
+            statements: [{
+              kind: "if",
+              condition: { kind: "path", path: "second" },
+              then: { statements: [] },
+            }],
+          },
+        }],
+      },
+    }],
+  });
+
+  assert.match(text, /use tsonic_rust_js::abi as js_abi;\nuse tsonic_rust_runtime as rt;\n\npub fn select/u);
+  assert.match(text, /if first \{\n    \} else if second \{\}/u);
+  assert.doesNotMatch(text, /else \{\n\s+if second/u);
+});
+
+test("trait functions print exact object-safe default bodies", () => {
+  const text = printRustSourceFile({
+    headerComment,
+    items: [{
+      kind: "trait",
+      name: "ValueDispatch",
+      visibility: "public",
+      generics: emptyRustGenerics,
+      functions: [{
+        name: "downcast_value_to_text",
+        generics: emptyRustGenerics,
+        selfParam: { kind: "rc" },
+        params: [],
+        returnType: {
+          kind: "named",
+          path: "Option",
+          genericArguments: [{
+            kind: "type",
+            type: {
+              kind: "named",
+              path: "alloc::rc::Rc",
+              genericArguments: [{
+                kind: "type",
+                type: {
+                  kind: "trait-object",
+                  principal: {
+                    trait: { kind: "named", path: "TextDispatch" },
+                  },
+                  autoTraits: [],
+                },
+              }],
+            },
+          }],
+        },
+        body: { statements: [{ kind: "tail", expr: { kind: "none" } }] },
+      }],
+    }],
+  });
+
+  assert.match(text, /fn downcast_value_to_text\([\s\S]*\) -> Option<[\s\S]*> \{\n        None\n    \}/u);
+});
+
 test("source liveness policy is attached only to proven dead local values", () => {
   const text = printRustSourceFile({
     headerComment,

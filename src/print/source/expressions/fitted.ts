@@ -1,4 +1,4 @@
-import { appendToLastLine, escapeRustString, firstLine, lastLine, lastLineLength, printRustMatchExpression, printRustPattern, remainingLines, renderedFits, rustExpressionContainsTry } from "../patterns.js";
+import { appendToLastLine, escapeRustString, firstLine, lastLine, lastLineLength, printRustMatchExpression, printRustPatternFitted, remainingLines, renderedFits, rustExpressionContainsTry } from "../patterns.js";
 import { expressionIsRightHandBlock, expressionIsStatementBlockOperand, expressionNeedsParentheses, expressionPrecedence, printBinaryOperand, printFittedBinaryOperand, printOperand, RustPrecedence } from "./precedence.js";
 import { indentText } from "../types.js";
 import { printExpandedBinaryLeftCall } from "./binary-calls.js";
@@ -13,7 +13,7 @@ import { printRustBlockStatements } from "../blocks.js";
 import { printRustExpr, rustExpressionContainsClosure } from "./core.js";
 import { rustExpressionContainsExpandedCollectionLiteral, rustExpressionContainsExpandedStructLiteral, rustFormatArgumentCanShareLine, rustFormatArgumentIsAtomic } from "./inspection.js";
 import { rustExpressionContainsStatementBlock } from "../../../backend/target-ast/expressions.js";
-import { rustFormatWidth, rustInlineFormatArgumentWidth, rustMethodChainWidth, rustNestedCallWidth, rustSingleLineConditionalWidth } from "../formatting.js";
+import { rustFormatWidth, rustMethodChainWidth, rustNestedCallWidth, rustSingleLineConditionalWidth } from "../formatting.js";
 import { initializerPrefersReferencedNestedBreak } from "./initializer-layout.js";
 import { printRustCollectionLiteralFitted, printRustStructLiteralFitted } from "./literals.js";
 import type { RustExpr } from "../../../backend/target-ast/nodes.js";
@@ -29,6 +29,17 @@ export function printRustExprFitted(
 ): string {
   const flat = printRustExpr(expression);
   switch (expression.kind) {
+    case "string-literal": {
+      if (renderedFits(flat, column)) {
+        return flat;
+      }
+      const argumentIndent = indentText(depth + 1);
+      return [
+        "String::from(",
+        `${argumentIndent}\"${escapeRustString(expression.value)}\",`,
+        `${indentText(depth)})`,
+      ].join("\n");
+    }
     case "bottom":
       return printRustExprFitted(
         expression.expression,
@@ -55,7 +66,14 @@ export function printRustExprFitted(
       return [
         "matches!(",
         appendToLastLine(`${argumentIndent}${matched}`, ","),
-        `${argumentIndent}${printRustPattern(expression.pattern)},`,
+        appendToLastLine(
+          `${argumentIndent}${printRustPatternFitted(
+            expression.pattern,
+            depth + 1,
+            argumentIndent.length,
+          )}`,
+          ",",
+        ),
         `${indentText(depth)})`,
       ].join("\n");
     }
@@ -80,9 +98,14 @@ export function printRustExprFitted(
         depth,
         column + "if ".length,
       );
-      const header = condition.includes("\n") && lastLine(condition).trim() !== "}"
-        ? `if ${condition}\n${indentText(depth)}{`
-        : `if ${condition} {`;
+      const conditionEnding = lastLine(condition).trim();
+      const conditionCanOwnBrace = !condition.includes("\n") ||
+        (conditionEnding === ")" || conditionEnding === "}" ||
+          conditionEnding.endsWith("})") || conditionEnding.endsWith(")?")) &&
+        lastLineLength(condition) + " {".length <= rustFormatWidth;
+      const header = conditionCanOwnBrace
+        ? `if ${condition} {`
+        : `if ${condition}\n${indentText(depth)}{`;
       return [
         header,
         ...printRustConditionalArmLines(expression.whenTrue, depth + 1),
@@ -163,35 +186,33 @@ export function printRustExprFitted(
       ].join("\n");
     }
     case "string-concat": {
-      const allPartsCanShareLine = expression.parts.every(rustFormatArgumentCanShareLine);
-      if (expression.parts.length <= 4 &&
+      if (!flat.includes("\n") &&
         (flat.length <= rustNestedCallWidth ||
-          allPartsCanShareLine && flat.length < rustInlineFormatArgumentWidth * 2) &&
-        !flat.includes("\n") &&
+          expression.parts.every(rustFormatArgumentCanShareLine)) &&
         renderedFits(flat, column)) {
         return flat;
       }
-      const trailingPart = expression.parts[expression.parts.length - 1];
-      const leadingParts = expression.parts.slice(0, -1).map(printRustExpr);
-      if (trailingPart !== undefined &&
-        (trailingPart.kind === "block" ||
-          printRustExpr(trailingPart).length <= rustInlineFormatArgumentWidth) &&
-        leadingParts.every((part) => !part.includes("\n"))) {
-        const prefix = `format!("${expression.parts.map(() => "{}").join("")}", ${
-          leadingParts.length === 0 ? "" : `${leadingParts.join(", ")}, `
-        }`;
-        const trailing = printRustExprFitted(
-          trailingPart,
-          depth,
-          column + prefix.length,
-        );
-        if (trailing.includes("\n") &&
-          column + prefix.length + firstLine(trailing).length <= rustFormatWidth) {
-          return appendToLastLine(`${prefix}${trailing}`, ",)");
-        }
-      }
       const argumentIndent = indentText(depth + 1);
       const placeholders = expression.parts.map(() => "{}").join("");
+      const trailingPart = expression.parts[expression.parts.length - 1];
+      if (trailingPart !== undefined && expressionIsRightHandBlock(trailingPart)) {
+        const preceding = expression.parts.slice(0, -1).map(printRustExpr);
+        if (preceding.every((part) => !part.includes("\n"))) {
+          const opening = `format!("${placeholders}", ${preceding.length === 0 ? "" : `${preceding.join(", ")}, `}`;
+          const renderedTrailing = printRustFormatArgument(
+            trailingPart,
+            depth,
+            column + opening.length,
+          );
+          const attached = appendToLastLine(
+            `${opening}${renderedTrailing}`,
+            ",)",
+          );
+          if (renderedFits(attached, column)) {
+            return attached;
+          }
+        }
+      }
       const flatParts = expression.parts.map(printRustExpr).join(", ");
       const renderedParts = expression.parts.every(rustFormatArgumentIsAtomic) &&
           renderedFits(`${flatParts},`, argumentIndent.length)
@@ -364,9 +385,9 @@ export function printRustExprFitted(
         if (attached.includes("\n") &&
           !fieldLedCallPrefersSelectorBreak &&
           !attachFirstMethodAfterField &&
+          !columnRequiresVerticalLayout &&
           (chain === undefined || attachedArgumentsPreferExpansion ||
             !rustMethodChainBreaksReceiverWhenExpanded(chain)) &&
-          (!columnRequiresVerticalLayout || attachedArgumentsPreferExpansion) &&
           (!verticalLayout || attachedStatementBlockArgument ||
           chain !== undefined && (!rustMethodChainContainsClosure(chain) ||
             expression.args.length === 1 && expression.args[0]?.kind === "tuple-literal"))) {
@@ -566,6 +587,20 @@ export function printRustExprFitted(
         }
       }
       return `${prefix}${parenthesized ? `(${rendered})` : rendered}`;
+    }
+    case "numeric-cast": {
+      const parenthesized = expressionNeedsParentheses(
+        expression.expression,
+        RustPrecedence.Cast,
+        false,
+      );
+      const rendered = printRustExprFitted(
+        expression.expression,
+        depth,
+        column + (parenthesized ? 1 : 0),
+        methodChainContinuationIndent,
+      );
+      return `${parenthesized ? `(${rendered})` : rendered} as ${expression.target}`;
     }
     case "index": {
       if (!flat.includes("\n") && renderedFits(flat, column)) {

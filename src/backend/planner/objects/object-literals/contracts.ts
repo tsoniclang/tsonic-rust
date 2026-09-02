@@ -8,7 +8,6 @@ import {
 } from "../project-objects.js";
 import { applyRustObjectLiteralValueAdapter, planRustObjectLiteralMethodArguments } from "../method-adapters.js";
 import { projectOwnFields, projectOwnMethods } from "../polymorphism/model.js";
-import { planProjectDowncastRouteImplementation } from "../polymorphism/forwarders.js";
 import { rustProjectDispatchTraitType } from "../polymorphism/names.js";
 import type {
   RustExpr,
@@ -46,13 +45,6 @@ export function planContractImplementation(
     return undefined;
   }
   const functions: RustImplFunction[] = [];
-  for (const route of context.input.program.projectTypes.downcastRoutesFor(contract.definition)) {
-    const implementation = planProjectDowncastRouteImplementation(route, false, context);
-    if (implementation === undefined) {
-      return undefined;
-    }
-    functions.push(implementation);
-  }
   for (const field of fields) {
     const dispatch = context.input.program.projectFieldDispatch.planFor(field.declaration);
     const stateField = stateFields.find((candidate) =>

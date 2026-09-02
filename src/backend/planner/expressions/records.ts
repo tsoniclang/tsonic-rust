@@ -465,7 +465,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
       }
       structuralInitializers.push({
         kind: field.method === true ? "method" : "stored",
-        value: { kind: "associated-value", owner: optionType, name: "None" },
+        value: { kind: "none" },
       });
       continue;
     }

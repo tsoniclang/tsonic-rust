@@ -419,7 +419,7 @@ export function rustMethodChainFirstMethodRequiresExpansion(
     `.${printRustCallMember(firstMethod.name, firstMethod.genericArguments)}`,
     firstMethod.args,
     depth + 1,
-    continuationIndent.length + 1,
+    continuationIndent.length,
   ).includes("\n");
 }
 
@@ -536,6 +536,7 @@ export function printFittedMethodChain(
   const selectedContinuationIndent = rendered.includes("\n")
     ? indentText(depth)
     : continuationIndent;
+  const selectedContinuationDepth = rendered.includes("\n") ? depth : depth + 1;
   const breakBeforeFirstField = selectedBreakBeforeFirstSelector;
   let emittedCall = false;
   let emittedField = false;
@@ -570,7 +571,7 @@ export function printFittedMethodChain(
       `.${printRustCallMember(step.name, step.genericArguments)}`,
       step.args,
       depth,
-      selectedContinuationIndent.length + 1,
+      selectedContinuationIndent.length,
       false,
       false,
       depth,
@@ -586,11 +587,11 @@ export function printFittedMethodChain(
       : printFittedCall(
           `.${printRustCallMember(step.name, step.genericArguments)}`,
           step.args,
-          depth + 1,
-          selectedContinuationIndent.length + 1,
+          selectedContinuationDepth,
+          selectedContinuationIndent.length,
           false,
           false,
-          depth + 1,
+          selectedContinuationDepth,
         );
     rendered = inlineFirstMethod
       ? appendToLastLine(rendered, method)
