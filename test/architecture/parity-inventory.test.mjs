@@ -54,6 +54,20 @@ test("the C# surface families cannot silently disappear from the inventory", () 
   }
 });
 
+test("completed RegExp, JSON, and closed Object.assign lanes cannot regress to stale limits", () => {
+  for (const laneName of [
+    "dynamic patterns and complete ECMAScript constructs",
+    "replacer functions and selected toJSON",
+    "Object.assign over closed shapes",
+  ]) {
+    assert.equal(
+      lanes.find((lane) => lane.lane === laneName)?.classification,
+      "implemented",
+      laneName,
+    );
+  }
+});
+
 test("implemented lanes with row members exist in the operation tables", () => {
   for (const lane of lanes) {
     if (lane.classification !== "implemented") {
