@@ -54,6 +54,21 @@ export function printFittedCall(
     return flat;
   }
   const soleArgument = arguments_[0];
+  if (!forceExpanded && callable.length >= 4 && arguments_.length === 1 &&
+    soleArgument?.kind === "method-call" && !flat.includes("\n") &&
+    !renderedFits(flat, column)) {
+    const nestedFlat = printRustExpr(soleArgument);
+    const argumentIndent = indentText(depth + 1);
+    if (nestedFlat.length > rustNestedCallWidth &&
+      nestedFlat.length <= rustNestedCallWidth + 8 &&
+      renderedFits(`${nestedFlat},`, argumentIndent.length + 4)) {
+      return [
+        `${callable}(`,
+        `${argumentIndent}${nestedFlat},`,
+        `${indentText(depth)})`,
+      ].join("\n");
+    }
+  }
   const shortWrapperChain = callable.length < 4 && arguments_.length === 1 &&
       soleArgument !== undefined
     ? rustMethodChain(soleArgument)
@@ -439,12 +454,12 @@ export function printFittedCall(
       firstLine(renderedArgument).trimEnd().endsWith("{") &&
         firstLine(attached).length <= rustNestedCallWidth;
     const matchCanRemainAttached = arguments_[0].kind !== "match" ||
-      (!forceExpanded || firstLine(renderedArgument).trimEnd().endsWith("{")) &&
-        firstLine(attached).length <= rustNestedCallWidth;
+      firstLine(renderedArgument).trimEnd().endsWith("{") &&
+        column + firstLine(attached).length + 1 <= rustFormatWidth;
     if (!nestedMatchScrutinee &&
       conditionalCanRemainAttached &&
       matchCanRemainAttached &&
-      column + firstLine(attached).length <= rustFormatWidth) {
+      column + firstLine(attached).length + 1 <= rustFormatWidth) {
       return attached;
     }
     const argumentIndent = indentText(depth + 1);
@@ -481,7 +496,8 @@ export function printFittedCall(
       column + prefix.length,
     );
     const attached = appendToLastLine(`${prefix}${rendered}`, ")");
-    if (renderedFits(attached, column)) {
+    if (column + firstLine(attached).length + 1 <= rustFormatWidth &&
+      renderedFits(attached, column)) {
       return attached;
     }
   }

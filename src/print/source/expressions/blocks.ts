@@ -263,7 +263,7 @@ export function printRustLetInitializer(
   const fittedAtContinuation = printRustExprFitted(
     initializer,
     depth + 1,
-    rhsContinuationIndent.length,
+    rhsContinuationIndent.length + 1,
     undefined,
     "expression",
     "initializer-continuation",
