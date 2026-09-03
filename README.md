@@ -14,13 +14,12 @@ Canonical product documentation lives in the Tsonic repository:
 ## Use in a project
 
 Install Node.js 22.18 or newer. Install Rust through rustup with Cargo,
-rustc, rustdoc, and rustfmt, then install the CLI and target in the project
-that contains `tsonic.json`:
+rustc, rustdoc, and rustfmt, then create, install, and run a complete project:
 
 ```sh
-npm install --save-dev @tsonic/cli@^0.1.0 @tsonic/target-rust@^0.1.0
-npx --no-install tsonic targets --project tsonic.json
-npx --no-install tsonic build --project tsonic.json
+npm create tsonic@latest hello-rust -- --target rust
+cd hello-rust
+npm start
 ```
 
 The [first Rust project guide](https://github.com/tsoniclang/tsonic/blob/main/docs/manual/get-started.md#build-a-rust-application)
