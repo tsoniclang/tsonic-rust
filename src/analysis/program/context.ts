@@ -63,6 +63,10 @@ import {
   emptyRustLifetimeIndex,
   type RustLifetimeIndex,
 } from "../../target-model/lifetimes/index.js";
+import {
+  createRustGeneratedDeclarationUseRegistry,
+  type RustGeneratedDeclarationUseRegistry,
+} from "./generated-declaration-uses.js";
 
 export interface RustAnalysisContext extends RustSourcePolicyContext {
   readonly target: TargetSelection;
@@ -83,6 +87,7 @@ export interface RustAnalysisContext extends RustSourcePolicyContext {
   readonly providerSemantics: RustProviderSemantics;
   readonly safetyApplications: RustSafetyApplicationFactIndex;
   readonly runtimeValueUses: RustRuntimeValueUsePlan;
+  readonly generatedDeclarationUses: RustGeneratedDeclarationUseRegistry;
   readonly names: RustNamePlan;
   readonly diagnostics: TargetDiagnostic[];
   semantics(sourceFile: SourceFile): SourceFileSemantics;
@@ -152,6 +157,7 @@ export function createRustAnalysisContext(
     providerSemantics,
     safetyApplications,
     runtimeValueUses,
+    generatedDeclarationUses: createRustGeneratedDeclarationUseRegistry(),
     names,
     diagnostics: [...lifetimes.diagnostics],
     semantics: input.source.semantics.forFile,

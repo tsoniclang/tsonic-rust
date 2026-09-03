@@ -37,6 +37,7 @@ export function copy(
   assert.match(source, /pub fn copy\(source: \*mut i32, destination: \*mut i32, element_offset: isize\) -> \*mut i32/u);
   assert.match(source, /unsafe \{\s*\*destination = \*source;\s*source\.offset\(element_offset\)\s*\}/u);
   assert.doesNotMatch(source, /loadNativePointer|offsetNativePointer|storeNativePointer|unsafeContext/u);
+  assert.doesNotMatch(source, /allow\(unused_unsafe/u);
   validateGeneratedProject("explicit-safety-native-pointer-block", result.artifacts);
 });
 
@@ -65,6 +66,7 @@ safety(declaredUnsafe).requiresUnsafe();
   assert.match(source, /pub fn read\(pointer: \*mut i32\) -> i32 \{\s*unsafe \{ \*pointer \}\s*\}/u);
   assert.match(source, /pub unsafe fn declared_unsafe\(value: i32\) -> i32/u);
   assert.doesNotMatch(source, /pub unsafe fn read/u);
+  assert.doesNotMatch(source, /allow\(unused_unsafe/u);
   validateGeneratedProject("explicit-safety-independent-contracts", result.artifacts);
 });
 
@@ -216,6 +218,104 @@ export function local(value: int32): int32 {
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /pub fn exact\(value: i32\) -> i32 \{\s*unsafe \{ value \}\s*\}/u);
   assert.match(source, /pub fn local\(value: i32\) -> i32 \{\s*unsafe_context\(value\)\s*\}/u);
+  assert.match(source, /allow\(unused_unsafe, reason = "explicit source unsafe region"\)/u);
+});
+
+test("unused explicit unsafe regions retain only their exact warning policy", {
+  timeout: 300_000,
+}, () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import { unsafeContext } from "@tsonic/core/lang.js";
+import type { int32 } from "@tsonic/core/types.js";
+
+export function increment(value: int32): int32 {
+  unsafeContext();
+  return value + 1;
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /allow\(unused_unsafe, reason = "explicit source unsafe region"\)/u);
+  assert.match(source, /unsafe \{ value \+ 1 \}/u);
+  validateGeneratedProject("explicit-safety-unused-region", result.artifacts);
+});
+
+test("an outer unsafe region does not claim requirements owned by a nested region", {
+  timeout: 300_000,
+}, () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import { loadNativePointer, unsafeContext } from "@tsonic/core/lang.js";
+import type { int32, NativePointer } from "@tsonic/core/types.js";
+
+export function read(pointer: NativePointer<int32>): int32 {
+  unsafeContext();
+  return unsafeContext(loadNativePointer(pointer));
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /allow\(unused_unsafe, reason = "explicit source unsafe region"\)/u);
+  assert.match(source, /unsafe \{ unsafe \{ \*pointer \} \}/u);
+  validateGeneratedProject("explicit-safety-nested-regions", result.artifacts);
+});
+
+test("lexical unsafe regions include exact operations inside Rust closures", {
+  timeout: 300_000,
+}, () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import { loadNativePointer, unsafeContext } from "@tsonic/core/lang.js";
+import type { int32, NativePointer } from "@tsonic/core/types.js";
+
+export function read(pointer: NativePointer<int32>): int32 {
+  unsafeContext();
+  const load = (): int32 => loadNativePointer(pointer);
+  return load();
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.doesNotMatch(source, /allow\(unused_unsafe/u);
+  assert.match(source, /unsafe \{[\s\S]*Ok::<_, rt::TsonicError>\(\*capture_pointer\)/u);
+  validateGeneratedProject("explicit-safety-closure-requirement", result.artifacts);
+});
+
+test("safe-only explicit regions inside closures retain their warning policy", {
+  timeout: 300_000,
+}, () => {
+  const { result } = compileRust({
+    files: {
+      "index.ts": `
+import { unsafeContext } from "@tsonic/core/lang.js";
+import type { int32 } from "@tsonic/core/types.js";
+
+export function read(value: int32): int32 {
+  const load = (): int32 => unsafeContext(value);
+  return load();
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /allow\(unused_unsafe, reason = "explicit source unsafe region"\)/u);
+  assert.match(source, /Ok::<_, rt::TsonicError>\(unsafe \{ capture_value \}\)/u);
+  validateGeneratedProject("explicit-safety-closure-unused", result.artifacts);
 });
 
 test("unsupported safe declaration contracts fail at the Rust declaration boundary", () => {
@@ -285,6 +385,7 @@ export function accepted(value: int32): int32 {
   const source = artifactText(accepted, "src/index.rs");
   assert.match(source, /pub unsafe fn selected\(value: i32\) -> i32/u);
   assert.match(source, /pub fn accepted\(value: i32\) -> i32 \{\s*unsafe \{ selected\(value\) \}\s*\}/u);
+  assert.doesNotMatch(source, /allow\(unused_unsafe/u);
   validateGeneratedProject("explicit-safety-call-contract", accepted.artifacts);
 });
 

@@ -145,6 +145,23 @@ export function createRustPlannerLiveness(program: RustTargetProgram): RustPlann
     }
   }
 
+  for (const use of program.generatedDeclarationUses) {
+    const owner: DeclarationOwner = runtimeInitializationNodes.has(use.reference)
+      ? { kind: "root" }
+      : enclosingDeclarationOwner(
+          ast,
+          use.reference,
+          "direct-call",
+          declarationSet,
+          graphUnits,
+          itemUnits,
+          canonical,
+        );
+    if (owner.kind !== "erased") {
+      addEdge(owner.kind === "root" ? undefined : owner.declaration, use.declaration);
+    }
+  }
+
   if (program.configuration.outputType === "bin") {
     const binaryEntry = rustBinaryEntryDeclaration(program);
     if (binaryEntry !== undefined) roots.add(canonical(binaryEntry));
