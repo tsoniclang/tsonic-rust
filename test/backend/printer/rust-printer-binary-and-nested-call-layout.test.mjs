@@ -183,7 +183,7 @@ test("binary expressions place multiline match operands on a continuation line",
     }],
   });
 
-  assert.match(text, /base \+ value\n        \+ \(match delta \{/u);
+  assert.match(text, /base \+ value\n        \+ match delta \{/u);
 });
 
 test("binary expressions join adjacent multiline match operands at the closing delimiter", () => {
@@ -225,7 +225,7 @@ test("binary expressions join adjacent multiline match operands at the closing d
     }],
   });
 
-  assert.match(text, /    \}\) \* \(match right \{/u);
+  assert.match(text, /    \}\) \* match right \{/u);
 });
 
 test("multiline mixed logical groups preserve source precedence", () => {
