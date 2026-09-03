@@ -564,7 +564,6 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     finalizeRustPlannedArtifact(
       artifact,
       input.program.configuration.foundation,
-      input.program.configuration.edition,
     )));
   const foundationDiagnostics = verifyRustFoundationPlan(
     input.program,
@@ -572,13 +571,15 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
   );
   return foundationDiagnostics.length > 0
     ? rejectedTargetStage(foundationDiagnostics)
-    : resolvedTargetStage(Object.freeze({ artifacts: finalizedArtifacts }));
+    : resolvedTargetStage(Object.freeze({
+        edition: input.program.configuration.edition,
+        artifacts: finalizedArtifacts,
+      }));
 }
 
 function finalizeRustPlannedArtifact(
   artifact: RustPlannedArtifact,
   foundation: import("../../../target-model/foundation/model.js").RustFoundation,
-  edition: import("../../../target-model/project/model.js").RustEdition,
 ): RustPlannedArtifact {
   return artifact.kind === "project"
     ? Object.freeze(artifact)
@@ -587,7 +588,6 @@ function finalizeRustPlannedArtifact(
         model: finalizeRustDeadCode(
           finalizeRustSourceStyle(
             applyRustFoundationImports(artifact.model, foundation),
-            edition,
           ),
         ),
       });

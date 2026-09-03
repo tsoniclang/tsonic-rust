@@ -13,81 +13,16 @@ import type {
 import { finalizeRustBlockLiveness } from "../inspection/source-liveness.js";
 import { rustLintAttributes } from "./lint-policy.js";
 import { rustBlockReferencesPath } from "../inspection/source-usage.js";
-import type { RustEdition } from "../../../target-model/project/model.js";
 
 export function finalizeRustSourceStyle(
   model: RustSourceFileModel,
-  edition: RustEdition = "2021",
 ): RustSourceFileModel {
-  const items = sortRustUseRuns(closePublicRustTypeVisibility(model.items), edition);
+  const items = closePublicRustTypeVisibility(model.items);
   const publicTypes = publicDeclaredRustTypeNames(items);
   return {
     ...model,
     items: items.map((item) => finalizeRustItemStyle(item, publicTypes)),
   };
-}
-
-function sortRustUseRuns(
-  items: readonly RustItem[],
-  edition: RustEdition,
-): readonly RustItem[] {
-  const sorted: RustItem[] = [];
-  for (let index = 0; index < items.length;) {
-    const item = items[index]!;
-    if (item.kind !== "use") {
-      sorted.push(item);
-      index += 1;
-      continue;
-    }
-    const run: Extract<RustItem, { readonly kind: "use" }>[] = [];
-    while (index < items.length && items[index]?.kind === "use") {
-      run.push(items[index] as Extract<RustItem, { readonly kind: "use" }>);
-      index += 1;
-    }
-    run.sort((left, right) => compareRustUseItems(left, right, edition));
-    sorted.push(...run);
-  }
-  return Object.freeze(sorted);
-}
-
-function compareRustUseItems(
-  left: Extract<RustItem, { readonly kind: "use" }>,
-  right: Extract<RustItem, { readonly kind: "use" }>,
-  edition: RustEdition,
-): number {
-  const pathOrder = compareRustUsePaths(left.path, right.path, edition);
-  if (pathOrder !== 0) {
-    return pathOrder;
-  }
-  const leftAlias = left.alias ?? "";
-  const rightAlias = right.alias ?? "";
-  return leftAlias === rightAlias ? 0 : leftAlias < rightAlias ? -1 : 1;
-}
-
-function compareRustUsePaths(
-  left: string,
-  right: string,
-  edition: RustEdition,
-): number {
-  const leftSegments = left.split("::");
-  const rightSegments = right.split("::");
-  const count = Math.min(leftSegments.length, rightSegments.length);
-  for (let index = 0; index < count; index += 1) {
-    const leftSegment = leftSegments[index]!;
-    const rightSegment = rightSegments[index]!;
-    const leftTypeLike = /^[A-Z]/u.test(leftSegment);
-    const rightTypeLike = /^[A-Z]/u.test(rightSegment);
-    if (leftTypeLike !== rightTypeLike) {
-      return edition === "2024"
-        ? leftTypeLike ? -1 : 1
-        : leftTypeLike ? 1 : -1;
-    }
-    const segmentOrder = leftSegment.localeCompare(rightSegment, "en");
-    if (segmentOrder !== 0) {
-      return segmentOrder;
-    }
-  }
-  return leftSegments.length - rightSegments.length;
 }
 
 export function rustPublicSignatureTypeNames(model: RustSourceFileModel): readonly string[] {

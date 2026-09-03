@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 
@@ -113,13 +113,16 @@ test("Rust compiler reflection remains isolated from semantic and backend layers
 });
 
 test("no source-name target guessing in the backend", () => {
-  const bannedTokens = ['"node:', '"@acme', "readText", "readFileSync", '"homeDir"', '"Math"', '"console"', '"push"', '"readFile"'];
+  const bannedTokens = ['"node:', '"@acme', "readText", '"homeDir"', '"Math"', '"console"', '"push"', '"readFile"'];
   for (const { path, text } of sourceFiles) {
     if (!path.includes("/backend/")) {
       continue;
     }
-    const productText = text.replace(/from "node:[a-z/]+"/gu, "");
-    for (const token of bannedTokens) {
+    const productText = text.replace(/from "node:[a-z_/-]+"/gu, "");
+    const tokens = path.endsWith("/backend/emission/rustfmt.ts")
+      ? bannedTokens
+      : [...bannedTokens, "readFileSync"];
+    for (const token of tokens) {
       assert.ok(!productText.includes(token), `${path} contains banned source-name token ${token}`);
     }
   }
@@ -234,6 +237,43 @@ test("target diagnostics remain outside the complete Rust output plan", () => {
   assert.doesNotMatch(materializer, /TargetCompileInput/u);
   assert.match(compiler, /runTargetCompilationStages/u);
   assert.match(compiler, /materialize:\s*materializeRustOutputPlan/u);
+});
+
+test("Rust emission delegates canonical layout exclusively to bounded rustfmt", () => {
+  const materializer = readFileSync(join(sourceRoot, "backend/emission/materialize.ts"), "utf8");
+  const formatter = readFileSync(join(sourceRoot, "backend/emission/rustfmt.ts"), "utf8");
+  const compiler = readFileSync(join(sourceRoot, "backend/compile.ts"), "utf8");
+  assert.match(materializer, /formatRustCompileOutput\(output, plan\.edition\)/u);
+  assert.match(formatter, /spawnSync/u);
+  assert.match(formatter, /rustfmtBatchSize/u);
+  assert.match(formatter, /"--edition"/u);
+  assert.match(formatter, /"--style-edition"/u);
+  assert.match(formatter, /skip_children=true/u);
+  assert.match(formatter, /rustfmtTimeoutMilliseconds/u);
+  assert.match(formatter, /"--",\n\s+\.\.\.sourcePaths/u);
+  assert.match(compiler, /RUST_SOURCE_FORMATTING_FAILED/u);
+  assert.doesNotMatch(formatter, /fallback|best.?effort/iu);
+
+  const layoutOnlyFiles = [
+    "formatting.ts",
+    "expressions/binary-calls.ts",
+    "expressions/blocks.ts",
+    "expressions/calls.ts",
+    "expressions/chains.ts",
+    "expressions/fitted.ts",
+    "expressions/format-arguments.ts",
+    "expressions/initializer-layout.ts",
+    "expressions/inspection.ts",
+    "expressions/literals.ts",
+    "expressions/nested-calls.ts",
+  ];
+  for (const relativePath of layoutOnlyFiles) {
+    assert.equal(existsSync(join(sourceRoot, "print/source", relativePath)), false, relativePath);
+  }
+  for (const { path, text } of sourceFiles.filter(({ path }) => path.includes("/print/"))) {
+    assert.doesNotMatch(text, /node:(?:child_process|fs|os|path)/u, path);
+    assert.doesNotMatch(text, /rustFormatWidth|renderedFits|printRustExprFitted/u, path);
+  }
 });
 
 test("JS operation rows are unique per owner/member/kind/lane/variant", async () => {
