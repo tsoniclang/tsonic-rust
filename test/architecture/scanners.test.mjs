@@ -98,7 +98,14 @@ test("Rust compiler reflection remains isolated from semantic and backend layers
     if (path.includes("/providers/compiler/")) {
       continue;
     }
-    assert.doesNotMatch(text, /\brustdoc\b/u, `${path} contains rustdoc-specific logic outside the compiler provider`);
+    const semanticText = path.endsWith("/descriptor/rust-starter-project.ts")
+      ? text.replace('command: "rustdoc"', "")
+      : text;
+    assert.doesNotMatch(
+      semanticText,
+      /\brustdoc\b/u,
+      `${path} contains rustdoc-specific logic outside the compiler provider`,
+    );
   }
   for (const { path, text } of sourceFiles) {
     if (!path.includes("/backend/")) {

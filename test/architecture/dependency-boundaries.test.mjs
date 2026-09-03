@@ -91,7 +91,12 @@ test("Rust package exposes only approved audience entrypoints", async () => {
   const root = await import(new URL("../../dist/index.js", import.meta.url));
   assert.deepEqual(
     Object.keys(root).sort(),
-    ["createRustTargetPack", "createTsonicPlugin", "rustTargetId"],
+    [
+      "createRustStarterProject",
+      "createRustTargetPack",
+      "createTsonicPlugin",
+      "rustTargetId",
+    ],
   );
   const findings = evaluatePublicExportInventory({
     manifest,

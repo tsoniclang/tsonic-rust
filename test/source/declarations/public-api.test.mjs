@@ -14,6 +14,7 @@ test("Rust target entrypoints expose one API per audience", async () => {
 
   const root = await import("../../../dist/index.js");
   assert.deepEqual(Object.keys(root).sort(), [
+    "createRustStarterProject",
     "createRustTargetPack",
     "createTsonicPlugin",
     "rustTargetId",
