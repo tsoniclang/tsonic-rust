@@ -74,7 +74,7 @@ export function formatRustCompileOutput(
   } catch (error) {
     failure = error instanceof RustFormattingError
       ? error
-      : formattingError("Unable to stage or read generated Rust source", error);
+      : formattingError("Unable to stage or read generated Rust source", error, stageRoot);
   }
 
   try {
@@ -83,6 +83,7 @@ export function formatRustCompileOutput(
     const cleanupFailure = formattingError(
       "Unable to remove the Rust formatter staging directory",
       error,
+      stageRoot,
     );
     failure = failure === undefined
       ? cleanupFailure
@@ -227,8 +228,15 @@ function runRustfmt(
   }
 }
 
-function formattingError(message: string, error: unknown): RustFormattingError {
-  const detail = error instanceof Error ? error.message : String(error);
+function formattingError(
+  message: string,
+  error: unknown,
+  stageRoot?: string,
+): RustFormattingError {
+  const rawDetail = error instanceof Error ? error.message : String(error);
+  const detail = stageRoot === undefined
+    ? rawDetail
+    : rawDetail.split(stageRoot).join("<rustfmt-stage>");
   return new RustFormattingError(`${message}: ${detail}`);
 }
 
