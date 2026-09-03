@@ -34,6 +34,58 @@ export function run(): void {
   validateGeneratedProject("resource-management-normal", result.artifacts);
 });
 
+test("generated disposal use participates in exact authored-method liveness", {
+  timeout: 300_000,
+}, () => {
+  const { result } = compileRust({
+    target: {
+      id: "rust",
+      options: {
+        outputType: "bin",
+        crateName: "resource_management_generated_use_liveness",
+      },
+    },
+    files: {
+      "index.ts": `
+class Resource {
+  constructor() {}
+  [Symbol.dispose](): void {}
+  unused(): void {}
+}
+
+class UnselectedResource {
+  constructor() {}
+  [Symbol.dispose](): void {}
+}
+
+export function main(): void {
+  using resource = new Resource();
+  const unselected = new UnselectedResource();
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.doesNotMatch(
+    methodAttributesInImpl(source, "Resource", "dispose"),
+    /dead_code/u,
+  );
+  assert.match(
+    itemAttributes(source, "unused"),
+    /dead_code/u,
+  );
+  assert.match(
+    methodAttributesInImpl(source, "UnselectedResource", "dispose"),
+    /dead_code/u,
+  );
+  validateGeneratedProject(
+    "resource-management-generated-use-liveness",
+    result.artifacts,
+  );
+});
+
 test("using preserves return break and continue through cleanup", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     files: {
@@ -128,8 +180,29 @@ export async function run(): Promise<void> {
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /async fn dispose_async\(&self\)/u);
   assert.match(source, /resource\.dispose_async\(\)\.await/u);
+  assert.doesNotMatch(itemAttributes(source, "dispose_async"), /dead_code/u);
   validateGeneratedProject("resource-management-async", result.artifacts);
 });
+
+function itemAttributes(source, functionName) {
+  const match = new RegExp(
+    "((?:\\s*#\\[[^\\n]+\\]\\n)*)\\s*(?:pub(?:\\(crate\\))?\\s+)?(?:async\\s+)?fn\\s+" +
+      functionName +
+      "\\(",
+    "u",
+  ).exec(source);
+  assert.notEqual(match, null);
+  return match[1];
+}
+
+function methodAttributesInImpl(source, typeName, functionName) {
+  const implementation = new RegExp(
+    "impl\\s+" + typeName + "\\s*\\{([\\s\\S]*?)\\n\\}",
+    "u",
+  ).exec(source);
+  assert.notEqual(implementation, null);
+  return itemAttributes(implementation[1], functionName);
+}
 
 test("resource bindings follow authored lexical block scope", { timeout: 300_000 }, () => {
   const { result } = compileRust({

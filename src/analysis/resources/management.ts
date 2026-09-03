@@ -36,6 +36,7 @@ export type RustResourceManagementSelection =
       readonly kind: "selected";
       readonly source: ResolvedSourceResourceManagementInfo;
       readonly fact: RustResourceManagementFact;
+      readonly projectDisposerDeclarations: readonly Node[];
     }
   | { readonly kind: "rejected"; readonly reason: string };
 
@@ -88,6 +89,12 @@ export function selectRustResourceManagement(
   return {
     kind: "selected",
     source,
+    projectDisposerDeclarations: Object.freeze([
+      ...new Set(alternatives.flatMap((alternative) =>
+        alternative.projectDisposerDeclaration === undefined
+          ? []
+          : [alternative.projectDisposerDeclaration])),
+    ]),
     fact: {
       declarationKind: source.declarationKind,
       storageCarrier,
@@ -102,6 +109,7 @@ interface SelectedDisposalAlternative {
   readonly kind: "selected";
   readonly resourceCarrier: TargetTypeRef;
   readonly disposal: RustResourceManagementFact["disposal"];
+  readonly projectDisposerDeclaration?: Node;
 }
 
 type ResolvedSourceDisposalAlternative = Extract<
@@ -168,6 +176,7 @@ function selectDisposalAlternative(
     return {
       kind: "selected",
       resourceCarrier,
+      projectDisposerDeclaration: declaration,
       disposal: effects.fallible ? {
         kind: alternative.kind,
         fallible: true,

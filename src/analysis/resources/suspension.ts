@@ -71,6 +71,10 @@ export function recordResourceManagementFacts(
         selected.fact,
         [{ message: "rust finalized exact resource-management operation" }],
       );
+      walk.context.generatedDeclarationUses.record(
+        declaration,
+        selected.projectDisposerDeclarations,
+      );
     }
   }
 }

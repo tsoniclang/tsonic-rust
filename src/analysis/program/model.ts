@@ -40,6 +40,7 @@ import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import type { RustSourceModuleConstructionIndex } from "../source-modules/index.js";
 import type { RustFoundationPlan } from "../foundation/plan.js";
 import type { RustProjectFlowReadSelectionIndex } from "../control-flow/project-flow-read-selections.js";
+import type { RustGeneratedDeclarationUse } from "./generated-declaration-uses.js";
 
 export interface RustTargetAnalysisRequest {
   readonly input: TargetCompileInput;
@@ -85,6 +86,7 @@ export interface RustTargetProgram {
   readonly countedLoops: RustCountedLoopRepresentationPlan;
   readonly projectFlowReadSelections: RustProjectFlowReadSelectionIndex;
   readonly sourceModuleConstructions: RustSourceModuleConstructionIndex;
+  readonly generatedDeclarationUses: readonly RustGeneratedDeclarationUse[];
 }
 
 export type AnalyzeRustTargetProgramResult = TargetStageResult<RustTargetProgram>;

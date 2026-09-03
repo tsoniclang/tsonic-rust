@@ -192,6 +192,7 @@ export function analyzeRustTargetProgram(
       facts,
     }),
     sourceModuleConstructions: sourceModuleConstructions.index,
+    generatedDeclarationUses: context.generatedDeclarationUses.seal(),
   });
   return resolvedTargetStage(program);
 }

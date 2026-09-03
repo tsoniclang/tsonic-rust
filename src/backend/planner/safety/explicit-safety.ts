@@ -159,11 +159,14 @@ export function rustSafetyAttributesForDeclaration(
   isUnsafe: boolean,
   input: RustPlanningContext,
 ): readonly string[] {
-  let hasExplicitUnsafeContext = false;
   let hasNativePointerOperation = false;
-  walkSubtree(declaration, input, (node) => {
-    const operation = input.program.safetyApplications.operationForSubject(node);
-    hasExplicitUnsafeContext ||= operation?.kind === "unsafe-context";
+  let hasUnusedExplicitUnsafeContext = false;
+  walkDeclarationSubtree(declaration, input, (node) => {
+    const safetyOperation = input.program.safetyApplications.operationForSubject(node);
+    if (safetyOperation?.kind === "unsafe-context" &&
+      !unsafeRegionRequiresUnsafe(node, safetyOperation, input)) {
+      hasUnusedExplicitUnsafeContext = true;
+    }
     hasNativePointerOperation ||=
       input.program.facts.getFact(node, rustTargetOperationFactKey)?.kind ===
         "native-pointer";
@@ -173,8 +176,137 @@ export function rustSafetyAttributesForDeclaration(
     ...(!isUnsafe && hasNativePointerOperation
       ? [rustLintAttributes.pointerDerefOutsideUnsafeFunction]
       : []),
-    ...(hasExplicitUnsafeContext ? [rustLintAttributes.unusedUnsafe] : []),
+    ...(hasUnusedExplicitUnsafeContext ? [rustLintAttributes.unusedUnsafe] : []),
   ];
+}
+
+function unsafeRegionRequiresUnsafe(
+  subject: Node,
+  operation: Extract<RustSafetyOperation, { readonly kind: "unsafe-context" }>,
+  input: RustPlanningContext,
+): boolean {
+  const roots = operation.fact.kind === "expression"
+    ? [operation.fact.expression]
+    : remainingUnsafeRegionRoots(subject, input);
+  return regionContainsDirectUnsafeRequirement(roots, input);
+}
+
+function remainingUnsafeRegionRoots(
+  subject: Node,
+  input: RustPlanningContext,
+): readonly Node[] {
+  const ast = input.program.source.ast;
+  let statement = subject;
+  let parent = ast.parent(statement);
+  while (parent !== undefined && ast.kindName(parent) !== "KindBlock" &&
+    !ast.is.IsSourceFile(parent)) {
+    statement = parent;
+    parent = ast.parent(statement);
+  }
+  if (parent === undefined) return [];
+  const statements = ast.statements(parent);
+  const index = statements.indexOf(statement);
+  return index < 0
+    ? []
+    : statements.slice(index + 1).filter((node): node is Node => node !== undefined);
+}
+
+function regionContainsDirectUnsafeRequirement(
+  roots: readonly Node[],
+  input: RustPlanningContext,
+): boolean {
+  const pending: Node[] = [];
+  pushNodesOutsideNestedRemainingRegion(pending, roots, input);
+  while (pending.length > 0) {
+    const node = pending.pop();
+    if (node === undefined) continue;
+    if (isIndependentSafetyBoundary(node, input)) continue;
+    if (input.program.safetyApplications.operationForSubject(node)?.kind === "unsafe-context") {
+      continue;
+    }
+    if (nodeRequiresUnsafe(node, input)) return true;
+    if (input.program.source.ast.kindName(node) === "KindBlock") {
+      pushNodesOutsideNestedRemainingRegion(
+        pending,
+        input.program.source.ast.statements(node)
+          .filter((statement): statement is Node => statement !== undefined),
+        input,
+      );
+      continue;
+    }
+    const children = input.program.source.ast.children(node);
+    for (let index = children.length - 1; index >= 0; index -= 1) {
+      const child = children[index];
+      if (child !== undefined) pending.push(child);
+    }
+  }
+  return false;
+}
+
+function pushNodesOutsideNestedRemainingRegion(
+  pending: Node[],
+  nodes: readonly Node[],
+  input: RustPlanningContext,
+): void {
+  const markerIndex = nodes.findIndex((node) =>
+    isRustExplicitUnsafeBlockMarker(node, input));
+  const visible = markerIndex < 0 ? nodes : nodes.slice(0, markerIndex);
+  for (let index = visible.length - 1; index >= 0; index -= 1) {
+    const node = visible[index];
+    if (node !== undefined) pending.push(node);
+  }
+}
+
+function nodeRequiresUnsafe(
+  node: Node,
+  input: RustPlanningContext,
+): boolean {
+  const operation = input.program.facts.getFact(node, rustTargetOperationFactKey);
+  return operation?.kind === "native-pointer" ||
+    (operation?.kind === "provider-operation" &&
+      operation.abi.effects.safety === "requires-unsafe") ||
+    (operation?.kind === "runtime-set" &&
+      operation.abi.effects.safety === "requires-unsafe") ||
+    rustSelectedCallRequiresUnsafe(node, input) ||
+    rustSelectedAccessorRequiresUnsafe(node, "getter", input) ||
+    rustSelectedAccessorRequiresUnsafe(node, "setter", input);
+}
+
+function walkDeclarationSubtree(
+  root: Node,
+  input: RustPlanningContext,
+  visit: (node: Node) => void,
+): void {
+  const pending: Node[] = [root];
+  while (pending.length > 0) {
+    const node = pending.pop();
+    if (node === undefined) continue;
+    if (node !== root && isIndependentSafetyBoundary(node, input)) continue;
+    visit(node);
+    const children = input.program.source.ast.children(node);
+    for (let index = children.length - 1; index >= 0; index -= 1) {
+      const child = children[index];
+      if (child !== undefined) pending.push(child);
+    }
+  }
+}
+
+function isIndependentSafetyBoundary(
+  node: Node,
+  input: RustPlanningContext,
+): boolean {
+  switch (input.program.source.ast.kindName(node)) {
+    case "KindFunctionDeclaration":
+    case "KindMethodDeclaration":
+    case "KindMethodSignature":
+    case "KindConstructor":
+    case "KindConstructorDeclaration":
+    case "KindGetAccessor":
+    case "KindSetAccessor":
+      return true;
+    default:
+      return false;
+  }
 }
 
 export function diagnoseRustSafetyApplications(
@@ -314,26 +446,4 @@ function targetDiagnostic(
     message,
     sourceNode,
   };
-}
-
-function walkSubtree(
-  root: Node,
-  input: RustPlanningContext,
-  visit: (node: Node) => void,
-): void {
-  const pending: Node[] = [root];
-  while (pending.length > 0) {
-    const node = pending.pop();
-    if (node === undefined) {
-      continue;
-    }
-    visit(node);
-    const children = input.program.source.ast.children(node);
-    for (let index = children.length - 1; index >= 0; index -= 1) {
-      const child = children[index];
-      if (child !== undefined) {
-        pending.push(child);
-      }
-    }
-  }
 }
