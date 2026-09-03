@@ -10,7 +10,7 @@ import {
 } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { createRustProviderPackage } from "../../../dist/public/provider.js";
-import { dirname, relative, resolve } from "node:path";
+import { dirname, matchesGlob, relative, resolve } from "node:path";
 import { fixtureCratesRoot, packageRoot } from "./paths.mjs";
 import { int32Carrier, stringCarrier } from "./provider-core.mjs";
 
@@ -36,7 +36,7 @@ export function buildInstalledLayout() {
     [jsPackageRoot, "rust-js"],
     [nodePackageRoot, "rust-nodejs"],
   ].map(([root, name]) => [root, name, declaredPackageArtifacts(root)]);
-  const fingerprint = installedArtifactFingerprint(packages.map(([root, , entries]) => [root, entries]));
+  const fingerprint = installedArtifactFingerprint(packages.map(([root, , artifacts]) => [root, artifacts]));
   const installedRoot = resolve(packageRoot, `.temp/installed/${fingerprint}`);
   const layoutRoot = resolve(installedRoot, "node_modules/@tsonic");
   if (packages.every(([, name]) => existsSync(resolve(layoutRoot, name, "package.json")))) {
@@ -46,11 +46,11 @@ export function buildInstalledLayout() {
   const stagingPackages = resolve(stagingRoot, "node_modules/@tsonic");
   mkdirSync(stagingPackages, { recursive: true });
   try {
-    for (const [sourceRoot, name, entries] of packages) {
-      for (const entry of entries) {
+    for (const [sourceRoot, name, artifacts] of packages) {
+      for (const entry of artifacts.entries) {
         cpSync(resolve(sourceRoot, entry), resolve(stagingPackages, name, entry), {
           recursive: true,
-          filter: packageArtifactFilter,
+          filter: (path) => packageArtifactFilter(sourceRoot, artifacts.exclusions, path),
         });
       }
     }
@@ -70,8 +70,11 @@ export function buildInstalledLayout() {
 
 function declaredPackageArtifacts(root) {
   const manifest = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
-  assertPackageFiles(manifest.files, root);
-  return ["package.json", ...manifest.files];
+  const files = assertPackageFiles(manifest.files, root);
+  return {
+    entries: ["package.json", ...files.filter((entry) => !entry.startsWith("!"))],
+    exclusions: files.filter((entry) => entry.startsWith("!")).map((entry) => entry.slice(1)),
+  };
 }
 
 function assertPackageFiles(files, root) {
@@ -79,22 +82,27 @@ function assertPackageFiles(files, root) {
     throw new Error(`Package '${root}' must declare a non-empty files array.`);
   }
   for (const entry of files) {
-    if (!existsSync(resolve(root, entry))) {
+    if (!entry.startsWith("!") && !existsSync(resolve(root, entry))) {
       throw new Error(`Package '${root}' declares missing artifact '${entry}'.`);
     }
   }
+  return files;
 }
 
-function packageArtifactFilter(path) {
+function packageArtifactFilter(root, exclusions, path) {
   const name = path.slice(path.lastIndexOf("/") + 1);
-  return name !== "target" && name !== ".temp" && name !== "node_modules";
+  if (name === "target" || name === ".temp" || name === "node_modules") {
+    return false;
+  }
+  const packagePath = relative(root, path);
+  return packagePath.length === 0 || !exclusions.some((pattern) => matchesGlob(packagePath, pattern));
 }
 
 function installedArtifactFingerprint(roots) {
   const hash = createHash("sha256");
-  for (const [root, entries] of roots) {
-    for (const entry of entries) {
-      for (const filePath of artifactFiles(resolve(root, entry))) {
+  for (const [root, artifacts] of roots) {
+    for (const entry of artifacts.entries) {
+      for (const filePath of artifactFiles(root, artifacts.exclusions, resolve(root, entry))) {
         hash.update(relative(root, filePath));
         hash.update("\0");
         hash.update(readFileSync(filePath));
@@ -105,8 +113,8 @@ function installedArtifactFingerprint(roots) {
   return hash.digest("hex");
 }
 
-function artifactFiles(path) {
-  if (!packageArtifactFilter(path)) {
+function artifactFiles(root, exclusions, path) {
+  if (!packageArtifactFilter(root, exclusions, path)) {
     return [];
   }
   if (!statSync(path).isDirectory()) {
@@ -114,7 +122,7 @@ function artifactFiles(path) {
   }
   return readdirSync(path, { withFileTypes: true })
     .sort((left, right) => left.name.localeCompare(right.name, "en"))
-    .flatMap((entry) => artifactFiles(resolve(path, entry.name)));
+    .flatMap((entry) => artifactFiles(root, exclusions, resolve(path, entry.name)));
 }
 
 // Non-Node capability fixture: proves the installed-capability mechanism
