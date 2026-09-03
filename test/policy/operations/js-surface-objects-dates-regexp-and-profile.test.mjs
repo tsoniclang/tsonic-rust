@@ -332,7 +332,7 @@ export function caller(): int32 {
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn sum\(xs: js_abi::JsArray<i32>\) -> Result<i32, rt::TsonicError> \{/u);
   assert.match(text, /for x in xs\.iter_values\(\) \{/u);
-  assert.match(text, /total \+ tsonic_rust_runtime::conversions::usize_to_i32\(xs\.len\(\)\)\?/u);
+  assert.match(text, /total \+ rt::conversions::usize_to_i32\(xs\.len\(\)\)\?/u);
   assert.match(text, /sum\(values\)/u);
 });
 

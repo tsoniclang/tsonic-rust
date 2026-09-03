@@ -29,7 +29,7 @@ export function probe(): int32 {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /bytes\.to_string_enc\("hex"\)\?/u);
-  assert.match(text, /tsonic_rust_runtime::conversions::usize_to_i32\(bytes\.len\(\)\)\?/u);
+  assert.match(text, /rt::conversions::usize_to_i32\(bytes\.len\(\)\)\?/u);
 });
 
 test("generated cargo binary proves hmac, base64, and cross-module members at runtime", { timeout: 300_000 }, async () => {
@@ -99,7 +99,7 @@ export async function size_of(path: string): Promise<boolean> {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /info\.is_file\(\)/u);
-  assert.match(text, /tsonic_rust_runtime::conversions::u64_to_f64\(info\.size\)/u);
+  assert.match(text, /rt::conversions::u64_to_f64\(info\.size\)/u);
 });
 
 test("stream scheduler operations lower through exact provider rows", async () => {

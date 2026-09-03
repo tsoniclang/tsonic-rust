@@ -70,7 +70,7 @@ export function truncate(value: float64): int32 {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn truncate\(value: f64\) -> Result<i32, rt::TsonicError>/u);
-  assert.match(text, /\n    tsonic_rust_runtime::conversions::f64_to_i32\(value\)\n/u);
+  assert.match(text, /\n    rt::conversions::f64_to_i32\(value\)\n/u);
   assert.doesNotMatch(text, /Ok\([^\n]*\?\)/u);
   assert.doesNotMatch(text, /\sas\si32/u);
   validateGeneratedProject("selected-assertion-conversion", result.artifacts);

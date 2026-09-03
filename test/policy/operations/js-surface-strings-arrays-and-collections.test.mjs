@@ -172,7 +172,7 @@ export function same(): boolean {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /js_abi::object_is\(\[[\s\S]*?JsValue::from\(js_abi::NUMBER_NAN\),[\s\S]*?JsValue::from\(js_abi::NUMBER_NAN\),[\s\S]*?\]\)/u);
-  assert.match(text, /!js_abi::object_is\(\[[\s\S]*?JsValue::from\(0\.0\),[\s\S]*?JsValue::from\(-0\.0\),[\s\S]*?\]\)/u);
+  assert.match(text, /!js_abi::object_is\(\[[\s\S]*?JsValue::from\(0\.0\),[\s\S]*?JsValue::from\(-0\.0\),?[\s\S]*?\]\)/u);
   assert.match(text, /js_abi::object_is\(\[[\s\S]*?js_value_from_string\("same"\),[\s\S]*?js_value_from_string\("same"\),[\s\S]*?\]\)/u);
 });
 
@@ -193,7 +193,7 @@ export function write(label: string, count: int32, ok: boolean): void {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /js_abi::console_log\(&\[\n        tsonic_rust_js::abi::js_value_from_string\(&label\),\n        tsonic_rust_js::abi::JsValue::from\(count\),\n        tsonic_rust_js::abi::JsValue::from\(ok\),\n    \]\);/u);
+  assert.match(text, /js_abi::console_log\(&\[\n        js_abi::js_value_from_string\(&label\),\n        js_abi::JsValue::from\(count\),\n        js_abi::JsValue::from\(ok\),\n    \]\);/u);
   assert.match(text, /js_abi::console_info\(&\[\]\);/u);
 
   const object = compileRust({
@@ -233,7 +233,7 @@ test("JS arrays lower to one identity-preserving carrier with fact-backed iterat
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /let xs: js_abi::JsArray<i32> = js_abi::JsArray::from_dense\(vec!\[1, 2, 3\]\);/u);
   assert.match(text, /for value in xs\.iter_values\(\) \{/u);
-  assert.match(text, /total \+ tsonic_rust_runtime::conversions::usize_to_i32\(xs\.len\(\)\)\?/u);
+  assert.match(text, /total \+ rt::conversions::usize_to_i32\(xs\.len\(\)\)\?/u);
 });
 
 test("variadic and mutating array calls lower through exact identity-backed runtime rows", () => {
@@ -405,7 +405,7 @@ test("sparse arrays lower to JsArray with holes, length writes, and at()", () =>
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /let values: js_abi::JsArray<f64> = js_abi::JsArray::from_sparse\(3, vec!\[\(0, 1\.0\), \(2, 3\.0\)\]\);/u);
-  assert.match(text, /values\.set_len\(tsonic_rust_runtime::conversions::i32_to_usize\(5\)\?\);/u);
+  assert.match(text, /values\.set_len\(rt::conversions::i32_to_usize\(5\)\?\);/u);
   assert.match(text, /values\.set_number\(3\.0, 4\.0\);/u);
   assert.match(text, /values\.at\(-1\.0\)\.is_none\(\)/u);
   assert.match(text, /use tsonic_rust_js::abi as js_abi;/u);
@@ -453,7 +453,7 @@ export function probe(name: string): boolean {
   assert.match(text, /js_string::to_upper_case\(name\)/u);
   assert.match(text, /js_string::starts_with_from_start\(&upper, "A"\)/u);
   assert.match(text, /js_string::includes_from_start\(&upper, "B"\)/u);
-  assert.match(text, /tsonic_rust_runtime::conversions::usize_to_i32\(\s*js_string::js_len\(name\),?\s*\)\? > 0/su);
+  assert.match(text, /rt::conversions::usize_to_i32\(\s*js_string::js_len\(name\),?\s*\)\? > 0/su);
 });
 
 test("string index signatures and zero-argument Date construction use exact JS rows", () => {
@@ -476,7 +476,7 @@ export function probe(text: string, index: int32): boolean {
   assert.match(text, /js_string::char_at\(&text, 0\.0\)\?/u);
   assert.match(
     text,
-    /js_string::char_at\(\s*&text,\s*tsonic_rust_runtime::conversions::i32_to_f64\(index\),?\s*\)\?/u,
+    /js_string::char_at\(\s*&text,\s*rt::conversions::i32_to_f64\(index\),?\s*\)\?/u,
   );
   assert.match(text, /js_abi::JsDate::new\(\)/u);
 });
@@ -540,7 +540,7 @@ export function probe(text: string, index: int32): string {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /js_string::split\(text, ",", 2\.0\)\?/u);
-  assert.match(text, /js_string::char_code_at\(text, tsonic_rust_runtime::conversions::i32_to_f64\(index\)\)/u);
+  assert.match(text, /js_string::char_code_at\(text, rt::conversions::i32_to_f64\(index\)\)/u);
   assert.match(text, /js_string::last_index_of\([\s\S]*text,[\s\S]*"a",[\s\S]*i32_to_f64\(index\),[\s\S]*\)/u);
   assert.match(text, /js_string::substring\(text, 1\.0, 3\.0\)\?/u);
   assert.match(text, /js_string::substr\(\s*text,\s*-2\.0,\s*1\.0,?\s*\)\?/u);
@@ -600,7 +600,7 @@ export function probe(value: number, integer: int32): boolean {
   assert.match(text, /js_abi::number_is_integer\(value\)/u);
   assert.match(text, /js_abi::number_is_safe_integer\(value\)/u);
   assert.match(text, /js_abi::number_is_nan\(value\)/u);
-  assert.match(text, /js_abi::number_is_finite\(tsonic_rust_runtime::conversions::i32_to_f64\(integer\)\)/u);
+  assert.match(text, /js_abi::number_is_finite\(rt::conversions::i32_to_f64\(integer\)\)/u);
 
   assertRustTargetRejection({
     surfaces: ["js"],
@@ -638,7 +638,7 @@ export function collections(): boolean {
   assert.match(text, /m\.has\(&1\)/u);
   assert.match(text, /m\.get\(&2\)\.is_none\(\)/u);
   assert.match(text, /s\.add_discard\(4\);/u);
-  assert.match(text, /tsonic_rust_runtime::conversions::usize_to_i32\(m\.len\(\)\)\? == 1/u);
+  assert.match(text, /rt::conversions::usize_to_i32\(m\.len\(\)\)\? == 1/u);
 });
 
 test("Date lowers to the UTC runtime carrier", () => {

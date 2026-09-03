@@ -612,7 +612,7 @@ export function main(): void {
   const source = artifactText(result, "src/index.rs");
   assert.match(
     source,
-    /values\.delete_number\(tsonic_rust_runtime::conversions::i32_to_f64\(1\)\)/u,
+    /values\.delete_number\(rt::conversions::i32_to_f64\(1\)\)/u,
   );
   validateGeneratedProject("expression-delete-js-array", result.artifacts, { run: true });
 });

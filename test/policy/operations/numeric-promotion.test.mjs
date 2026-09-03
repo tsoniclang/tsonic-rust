@@ -182,7 +182,7 @@ test("optional value conversions lift one exact element conversion", () => {
     element: {
       category: "exact",
       lowering: "call",
-      path: "tsonic_rust_runtime::conversions::i32_to_f64",
+      path: "rt::conversions::i32_to_f64",
       sourceMode: "value",
       source: { kind: "source-primitive", name: "int32" },
       target: { kind: "source-primitive", name: "float64" },

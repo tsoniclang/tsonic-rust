@@ -53,8 +53,6 @@ export function expressionPrecedence(expression: RustExpr): RustPrecedence {
       return expressionPrecedence(expression.expression);
     case "assignment":
     case "return-expression":
-    case "conditional":
-    case "match":
     case "closure":
     case "closure-block":
       return RustPrecedence.Assignment;
@@ -85,7 +83,7 @@ export function expressionNeedsParentheses(
   parent: RustPrecedence,
   isRightSide: boolean,
 ): boolean {
-  if (isRightSide && expression.kind !== "match" && expressionIsRightHandBlock(expression)) {
+  if (isRightSide && expressionIsRightHandBlock(expression)) {
     return false;
   }
   if (expressionIsStatementBlock(expression)) {
@@ -103,7 +101,9 @@ function expressionIsStatementBlock(expression: RustExpr): boolean {
   }
   return expression.kind === "block" ||
     expression.kind === "unsafe" ||
-    expression.kind === "evaluate-then";
+    expression.kind === "evaluate-then" ||
+    expression.kind === "conditional" ||
+    expression.kind === "match";
 }
 
 function expressionIsRightHandBlock(expression: RustExpr): boolean {

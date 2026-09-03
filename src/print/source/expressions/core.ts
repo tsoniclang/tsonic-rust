@@ -87,8 +87,11 @@ export function printRustExpr(expression: RustExpr): string {
       return `{ ${printRustBlockExpressionContents(expression)} }`;
     case "unsafe":
       return `unsafe { ${printRustExpr(expression.expression)} }`;
-    case "evaluate-then":
-      return `{ let _ = ${printRustExpr(expression.effect)}; ${printRustExpr(expression.value)} }`;
+    case "evaluate-then": {
+      const effect = printRustExpr(expression.effect);
+      const statement = expression.discard === "unit" ? `${effect};` : `let _ = ${effect};`;
+      return `{ ${statement} ${printRustExpr(expression.value)} }`;
+    }
     case "string-concat": {
       const placeholders = expression.parts.map(() => "{}").join("");
       const values = expression.parts.map(printRustExpr);

@@ -415,7 +415,10 @@ export function main(): void {
   assert.match(source, /fn increment_borrowed<'l>\(value: &'l mut i32\)/u);
   assert.match(source, /widget_alias::increment_borrowed\(value\)/u);
   assert.match(source, /ModuleCell<for<'l> fn\(&'l i32\) -> &'l i32> = rt::ModuleCell::initialized\(borrowed_identity\)/u);
-  assert.match(source, /widget_alias::apply_borrowed\([^,]+, &short\)/u);
+  assert.match(
+    source,
+    /widget_alias::apply_borrowed\(\s*BORROWED_IDENTITY_CALLABLE\.with\(\|module_binding\| module_binding\.load\(\)\),\s*&short,?\s*\)/su,
+  );
   assert.doesNotMatch(source, /for<'l> fn\([^;]+::new/u);
   assert.match(source, /widget_alias::inspect_view\(&view\)/u);
   assert.match(source, /fn read_view<'l>\(view: &'l widget_alias::LifetimeView\) -> i32/u);
