@@ -579,6 +579,9 @@ export function printFittedCall(
       arguments_[0],
       depth,
       column + prefix.length,
+      undefined,
+      "expression",
+      "vertical-call-argument",
     );
     if (rendered.includes("\n")) {
       return appendToLastLine(`${prefix}${rendered}`, ")");

@@ -193,8 +193,8 @@ export function printRustExprFitted(
       const allPartsCanShareLine = expression.parts.every(rustFormatArgumentCanShareLine);
       if (expression.parts.length <= 4 &&
         (flat.length <= rustNestedCallWidth ||
-          layoutRegion !== "vertical-call-argument" && layoutRegion !== "block-arm" &&
-            allPartsCanShareLine && flat.length < rustInlineFormatArgumentWidth * 2) &&
+          allPartsCanShareLine &&
+            flat.length <= rustNestedCallWidth + "format!()".length) &&
         !flat.includes("\n") &&
         renderedFits(flat, column)) {
         return flat;
@@ -325,7 +325,10 @@ export function printRustExprFitted(
       const verticalLayout = rustMethodChainPrefersVerticalLayout(expression) ||
         columnRequiresVerticalLayout;
       const receiver = printOperand(expression.receiver, RustPrecedence.Postfix, false);
+      const verticalFormatReceiver = chain?.base.kind === "string-concat" &&
+        column + printRustExpr(chain.base).length > rustInlineFormatArgumentWidth * 2;
       if (!flat.includes("\n") && renderedFits(flat, column) && !verticalLayout &&
+        !verticalFormatReceiver &&
         !rustExpressionContainsStatementBlock(expression) &&
         !expression.args.some((argument) =>
           argument.kind === "tuple-literal" &&
@@ -568,6 +571,9 @@ export function printRustExprFitted(
         step.kind === "method" || step.kind === "field" || step.kind === "await").length ?? 0;
       if (!parenthesized && referencedSelectorCount <= 1 && !flat.includes("\n") &&
         renderedFits(flat, column) &&
+        !(expression.expr.kind === "string-concat" &&
+          column + 1 + printRustExpr(expression.expr).length >
+            rustInlineFormatArgumentWidth * 2) &&
         !rustExpressionContainsExpandedCollectionLiteral(expression)) {
         return flat;
       }
@@ -575,6 +581,9 @@ export function printRustExprFitted(
         expression.expr,
         depth,
         column + prefix.length + (parenthesized ? 1 : 0),
+        undefined,
+        "expression",
+        layoutRegion,
       );
       if (!parenthesized && rendered.includes("\n") &&
         expression.expr.kind === "try" && expression.expr.expr.kind === "method-call") {

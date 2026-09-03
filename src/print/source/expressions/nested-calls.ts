@@ -8,7 +8,7 @@ import { printRustAssociatedCallOwnerFitted } from "./blocks.js";
 import { printRustExpr } from "./core.js";
 import { printRustExprFitted } from "./fitted.js";
 import { rustExpressionContainsExpandedCollectionLiteral, rustExpressionContainsExpandedStructLiteral, rustFormatArgumentCanShareLine } from "./inspection.js";
-import { rustFormatWidth, rustMethodChainWidth, rustNestedCallWidth, rustNestedClosureOpeningWidth, rustNestedMethodFirstSegmentWidth } from "../formatting.js";
+import { rustFormatWidth, rustInlineFieldReceiverWidth, rustMethodChainWidth, rustNestedCallWidth, rustNestedClosureOpeningWidth, rustNestedMethodFirstSegmentWidth } from "../formatting.js";
 import type { RustExpr } from "../../../backend/target-ast/nodes.js";
 
 type RustNestedInvocation = Extract<
@@ -74,6 +74,24 @@ export function printFittedNestedCallWrapper(
         ? "["
         : "(";
     const collectionClosing = nestedCollection.kind === "tuple-literal" ? ")" : "]";
+    const nestedOpening = `${outerCallable}(${nestedCallable}(`;
+    const fittedCollection = printRustExprFitted(
+      nestedCollection,
+      depth,
+      column + nestedOpening.length,
+    );
+    const fittedAttachedCollection = appendToLastLine(
+      `${nestedOpening}${fittedCollection}`,
+      "))",
+    );
+    const soleCollectionElement = nestedCollection.elements.length === 1
+      ? nestedCollection.elements[0]
+      : undefined;
+    if ((soleCollectionElement?.kind === "block" ||
+        soleCollectionElement?.kind === "evaluate-then") &&
+      fittedCollection.includes("\n") && renderedFits(fittedAttachedCollection, column)) {
+      return fittedAttachedCollection;
+    }
     const attachedOpening = `${outerCallable}(${nestedCallable}(${collectionOpening}`;
     const argumentIndent = indentText(depth + 1);
     const attachedCollection = [
@@ -250,9 +268,12 @@ export function printFittedNestedCallWrapper(
       nested.args.slice(0, -1).every(rustFormatArgumentCanShareLine) &&
       (nested.args[nested.args.length - 1]?.kind === "closure" ||
         nested.args[nested.args.length - 1]?.kind === "closure-block");
+    const blockContinuationOwnsOpening = outerCallable.length > rustInlineFieldReceiverWidth &&
+      column <= indentText(depth).length + 1;
     if (nestedWithinCallWidth.includes("\n") && renderedFits(attached, column) &&
       (firstLine(attached).length <= rustNestedMethodFirstSegmentWidth ||
-        jointlyFittingArguments || trailingClosureOwnsLayout)) {
+        jointlyFittingArguments || trailingClosureOwnsLayout ||
+        blockContinuationOwnsOpening)) {
       return attached;
     }
   }
