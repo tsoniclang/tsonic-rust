@@ -862,6 +862,7 @@ export function printFittedCall(
       );
       const compact = appendToLastLine(`${prefix}${nested}`, ")");
       if ((flatArguments.length <= rustNestedCallWidth || nested.includes("\n")) &&
+        !nestedStringChainOwnsLayout &&
         !(argument.kind !== "call" && argument.kind !== "associated-call" &&
           nested.includes("\n") &&
           !nestedAtExpandedColumn.includes("\n")) &&

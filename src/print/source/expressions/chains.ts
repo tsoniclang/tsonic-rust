@@ -382,9 +382,7 @@ export function rustMethodChainBreaksReceiverWhenExpanded(chain: RustMethodChain
   const laterFallibleArgument = chain.steps.some((step, index) =>
     index > 0 && step.kind === "method" && step.args.some(rustExpressionContainsTry));
   return selectorCount > 1 && laterFallibleArgument ||
-    printRustExpr(chain.base).length + firstSelectorWidth > rustMethodChainWidth ||
-    chain.steps.some((step, index) =>
-      step.kind === "try" && chain.steps[index + 1]?.kind === "method");
+    printRustExpr(chain.base).length + firstSelectorWidth > rustMethodChainWidth;
 }
 
 export function rustMethodChainFirstSegmentWidth(chain: RustMethodChain): number {
@@ -612,7 +610,20 @@ export function printRustVerticalMethodChainSlot(
   continuationIndent = indentText(depth + 1),
 ): string | undefined {
   const chain = rustMethodChain(expression);
+  const firstStep = chain?.steps[0];
+  const attachShortInitialField = chain?.base.kind === "path" &&
+    printRustExpr(chain.base).length === 1 &&
+    firstStep?.kind === "field" &&
+    printRustExpr(chain.base).length + firstStep.name.length + 1 <=
+      rustInlineClosureFieldReceiverWidth;
   return chain !== undefined && rustMethodChainPrefersVerticalLayout(expression)
-    ? printFittedMethodChain(chain, depth, column, true, continuationIndent)
+    ? printFittedMethodChain(
+        chain,
+        depth,
+        column,
+        true,
+        continuationIndent,
+        attachShortInitialField,
+      )
     : undefined;
 }

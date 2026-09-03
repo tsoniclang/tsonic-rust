@@ -311,8 +311,21 @@ export function printRustLetInitializer(
     fittedAtContinuation.split("\n").length < fittedAtPrefix.split("\n").length &&
     !firstLine(fittedAtPrefix).trimEnd().endsWith("{") &&
     firstLine(fittedAtContinuation).trimEnd().endsWith("{");
+  const invocationInitializer = initializer.kind === "call" || initializer.kind === "invoke" ||
+    initializer.kind === "associated-call" || initializer.kind === "method-call" ||
+    initializer.kind === "try";
+  const continuationCompactsNestedBlockHeader = invocationInitializer &&
+    fittedAtContinuation.split("\n").length < fittedAtPrefix.split("\n").length &&
+    !firstLine(fittedAtPrefix).trimEnd().endsWith("{") &&
+    firstLine(fittedAtContinuation).trimEnd().endsWith("{");
   if (initializer.kind === "try" && inlineFits && continuationFits &&
     rustfmtPrefersNextLine(fittedAtPrefix, fittedAtContinuation)) {
+    return continuationStatement;
+  }
+  if (inlineFits && continuationFits && continuationCompactsNestedBlockHeader) {
+    return continuationStatement;
+  }
+  if (!inlineFits && continuationFits) {
     return continuationStatement;
   }
   if (!specializedInitializerLayout) {
