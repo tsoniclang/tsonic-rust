@@ -116,9 +116,14 @@ function maxWritesInStatement(statement: RustStmt, path: string): number {
     case "if-let-some":
       return cappedWriteCount(
         maxWritesInExpression(statement.expression, path) +
-          (statement.binding === path
-            ? 0
-            : maxWritesInStatements(statement.body.statements, path)),
+          Math.max(
+            statement.binding === path
+              ? 0
+              : maxWritesInStatements(statement.body.statements, path),
+            statement.else === undefined
+              ? 0
+              : maxWritesInStatements(statement.else.statements, path),
+          ),
       );
     case "break":
     case "continue":
@@ -319,8 +324,7 @@ function firstAccessesInStatement(
         ),
       );
     case "while-let-some":
-    case "for":
-    case "if-let-some": {
+    case "for": {
       const input = statement.kind === "for" ? statement.iterable : statement.expression;
       return replaceNone(
         firstAccessesInExpression(input, path),
@@ -332,6 +336,18 @@ function firstAccessesInStatement(
         ),
       );
     }
+    case "if-let-some":
+      return replaceNone(
+        firstAccessesInExpression(statement.expression, path),
+        unionFirstAccesses(
+          statement.binding === path
+            ? new Set<FirstAccess>(["none"])
+            : firstAccessesInStatements(statement.body.statements, path),
+          statement.else === undefined
+            ? new Set<FirstAccess>(["none"])
+            : firstAccessesInStatements(statement.else.statements, path),
+        ),
+      );
     case "break":
     case "continue":
       return new Set(["exit"]);

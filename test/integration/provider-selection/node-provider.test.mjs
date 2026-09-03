@@ -271,7 +271,7 @@ export function render(label: string, count: number, ok: boolean): string {
   const text = artifactText(result, "src/index.rs");
   assert.match(
     text,
-    /tsonic_rust_node::util::format\(\s*"%s:%d:%s",\s*&\[\s*tsonic_rust_js::abi::js_value_from_string\(&label\),\s*tsonic_rust_js::abi::JsValue::from\(count\),\s*tsonic_rust_js::abi::JsValue::from\(ok\),\s*\]\s*,?\s*\)/su,
+    /tsonic_rust_node::util::format\(\s*"%s:%d:%s",\s*&\[\s*js_abi::js_value_from_string\(&label\),\s*js_abi::JsValue::from\(count\),\s*js_abi::JsValue::from\(ok\),\s*\]\s*,?\s*\)/su,
   );
   assert.match(text, /tsonic_rust_node::util::format\("%s", &\[\]\)/u);
   assert.match(

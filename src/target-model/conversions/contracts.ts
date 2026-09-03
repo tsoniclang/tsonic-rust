@@ -154,7 +154,7 @@ export function rustValueConversionContract(
       : {
           category: "projection",
           lowering: "call",
-          path: "tsonic_rust_runtime::TsValue::from_closed",
+          path: "rt::TsValue::from_closed",
           sourceMode: "ref",
           source: value.source,
           target: tsValueCarrier,
@@ -168,7 +168,7 @@ export function rustValueConversionContract(
       : {
           category: "projection",
           lowering: "call",
-          path: "tsonic_rust_js::abi::js_value_from_closed",
+          path: "js_abi::js_value_from_closed",
           sourceMode: "ref",
           source: value.source,
           target: jsValueCarrier,
@@ -481,45 +481,45 @@ export function rustValueConversionContract(
   }
   switch (value.id) {
     case "checked-i32-to-usize":
-      return contract(value.id, "checked-range", "tsonic_rust_runtime::conversions::i32_to_usize", "value", int32Carrier, usizeCarrier, true);
+      return contract(value.id, "checked-range", "rt::conversions::i32_to_usize", "value", int32Carrier, usizeCarrier, true);
     case "checked-i32-to-u8":
-      return contract(value.id, "checked-range", "tsonic_rust_runtime::conversions::i32_to_u8", "value", int32Carrier, uint8Carrier, true);
+      return contract(value.id, "checked-range", "rt::conversions::i32_to_u8", "value", int32Carrier, uint8Carrier, true);
     case "checked-usize-to-i32":
-      return contract(value.id, "checked-range", "tsonic_rust_runtime::conversions::usize_to_i32", "value", usizeCarrier, int32Carrier, true);
+      return contract(value.id, "checked-range", "rt::conversions::usize_to_i32", "value", usizeCarrier, int32Carrier, true);
     case "checked-isize-to-i32":
-      return contract(value.id, "checked-range", "tsonic_rust_runtime::conversions::isize_to_i32", "value", isizeCarrier, int32Carrier, true);
+      return contract(value.id, "checked-range", "rt::conversions::isize_to_i32", "value", isizeCarrier, int32Carrier, true);
     case "checked-u32-to-i32":
-      return contract(value.id, "checked-range", "tsonic_rust_runtime::conversions::u32_to_i32", "value", uint32Carrier, int32Carrier, true);
+      return contract(value.id, "checked-range", "rt::conversions::u32_to_i32", "value", uint32Carrier, int32Carrier, true);
     case "exact-u8-to-i32":
-      return contract(value.id, "exact", "tsonic_rust_runtime::conversions::u8_to_i32", "value", uint8Carrier, int32Carrier, false);
+      return contract(value.id, "exact", "rt::conversions::u8_to_i32", "value", uint8Carrier, int32Carrier, false);
     case "exact-i32-to-f64":
-      return contract(value.id, "exact", "tsonic_rust_runtime::conversions::i32_to_f64", "value", int32Carrier, float64Carrier, false);
+      return contract(value.id, "exact", "rt::conversions::i32_to_f64", "value", int32Carrier, float64Carrier, false);
     case "checked-f64-to-i32-trunc":
-      return contract(value.id, "checked-range", "tsonic_rust_runtime::conversions::f64_to_i32", "value", float64Carrier, int32Carrier, true);
+      return contract(value.id, "checked-range", "rt::conversions::f64_to_i32", "value", float64Carrier, int32Carrier, true);
     case "js-number-from-isize":
-      return contract(value.id, "js-number", "tsonic_rust_runtime::conversions::isize_to_f64", "value", isizeCarrier, float64Carrier, false);
+      return contract(value.id, "js-number", "rt::conversions::isize_to_f64", "value", isizeCarrier, float64Carrier, false);
     case "js-number-from-usize":
-      return contract(value.id, "js-number", "tsonic_rust_runtime::conversions::usize_to_f64", "value", usizeCarrier, float64Carrier, false);
+      return contract(value.id, "js-number", "rt::conversions::usize_to_f64", "value", usizeCarrier, float64Carrier, false);
     case "js-number-from-u64":
-      return contract(value.id, "js-number", "tsonic_rust_runtime::conversions::u64_to_f64", "value", uint64Carrier, float64Carrier, false);
+      return contract(value.id, "js-number", "rt::conversions::u64_to_f64", "value", uint64Carrier, float64Carrier, false);
     case "js-value-from-bool":
-      return contract(value.id, "exact", "tsonic_rust_js::abi::JsValue::from", "value", boolCarrier, jsValueCarrier, false);
+      return contract(value.id, "exact", "js_abi::JsValue::from", "value", boolCarrier, jsValueCarrier, false);
     case "js-value-from-f64":
-      return contract(value.id, "exact", "tsonic_rust_js::abi::JsValue::from", "value", float64Carrier, jsValueCarrier, false);
+      return contract(value.id, "exact", "js_abi::JsValue::from", "value", float64Carrier, jsValueCarrier, false);
     case "js-value-from-i32":
-      return contract(value.id, "exact", "tsonic_rust_js::abi::JsValue::from", "value", int32Carrier, jsValueCarrier, false);
+      return contract(value.id, "exact", "js_abi::JsValue::from", "value", int32Carrier, jsValueCarrier, false);
     case "js-value-from-null":
-      return contract(value.id, "exact", "tsonic_rust_js::abi::JsValue::from", "value", nullCarrier, jsValueCarrier, false);
+      return contract(value.id, "exact", "js_abi::JsValue::from", "value", nullCarrier, jsValueCarrier, false);
     case "js-value-from-string":
-      return contract(value.id, "exact", "tsonic_rust_js::abi::js_value_from_string", "ref", stringCarrier, jsValueCarrier, false);
+      return contract(value.id, "exact", "js_abi::js_value_from_string", "ref", stringCarrier, jsValueCarrier, false);
     case "js-value-from-symbol":
-      return contract(value.id, "exact", "tsonic_rust_js::abi::JsValue::from", "value", symbolCarrier, jsValueCarrier, false);
+      return contract(value.id, "exact", "js_abi::JsValue::from", "value", symbolCarrier, jsValueCarrier, false);
     case "js-value-from-undefined":
-      return contract(value.id, "exact", "tsonic_rust_js::abi::JsValue::from", "value", undefinedCarrier, jsValueCarrier, false);
+      return contract(value.id, "exact", "js_abi::JsValue::from", "value", undefinedCarrier, jsValueCarrier, false);
     case "js-value-clone":
-      return contract(value.id, "exact", "tsonic_rust_js::abi::clone_js_value", "ref", jsValueCarrier, jsValueCarrier, false);
+      return contract(value.id, "exact", "js_abi::clone_js_value", "ref", jsValueCarrier, jsValueCarrier, false);
     case "ts-value-clone":
-      return contract(value.id, "exact", "tsonic_rust_runtime::clone_ts_value", "ref", tsValueCarrier, tsValueCarrier, false);
+      return contract(value.id, "exact", "rt::clone_ts_value", "ref", tsValueCarrier, tsValueCarrier, false);
     case "owned-string-from-borrowed-str":
       return {
         category: "ownership",

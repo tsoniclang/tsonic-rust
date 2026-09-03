@@ -157,12 +157,14 @@ export function planRustSourceFile(
       rustItemsReferenceModuleAlias(plannedModule.items, alias)),
   ));
   const useItems: RustItem[] = [...aliases]
-    .sort((left, right) => left.localeCompare(right, "en"))
     .map((alias) => alias === "rt" && errorDomain === "project"
       ? { path: `crate::${programModuleName}`, alias: "rt" }
       : rustRuntimeAliasImports.get(alias))
     .filter((entry): entry is { path: string; alias: string } =>
       entry !== undefined)
+    .sort((left, right) =>
+      left.path.localeCompare(right.path, "en") ||
+      left.alias.localeCompare(right.alias, "en"))
     .map((entry) => ({ kind: "use", path: entry.path, alias: entry.alias }));
   const model = createRustSourceFile([
     ...useItems,

@@ -1,4 +1,3 @@
-import { printRustExpr } from "./core.js";
 import type { RustExpr } from "../../../backend/target-ast/nodes.js";
 
 export const enum RustPrecedence {
@@ -54,8 +53,6 @@ export function expressionPrecedence(expression: RustExpr): RustPrecedence {
       return expressionPrecedence(expression.expression);
     case "assignment":
     case "return-expression":
-    case "conditional":
-    case "match":
     case "closure":
     case "closure-block":
       return RustPrecedence.Assignment;
@@ -74,17 +71,11 @@ export function expressionPrecedence(expression: RustExpr): RustPrecedence {
     case "field":
     case "index":
     case "await":
+    case "try":
       return RustPrecedence.Postfix;
     default:
       return RustPrecedence.Atom;
   }
-}
-
-export function printOperand(operand: RustExpr, parent: RustPrecedence, isRightSide: boolean): string {
-  const text = printRustExpr(operand);
-  return expressionNeedsParentheses(operand, parent, isRightSide)
-    ? `(${text})`
-    : text;
 }
 
 export function expressionNeedsParentheses(
@@ -92,15 +83,30 @@ export function expressionNeedsParentheses(
   parent: RustPrecedence,
   isRightSide: boolean,
 ): boolean {
-  if (isRightSide && expression.kind !== "match" && expressionIsRightHandBlock(expression)) {
+  if (isRightSide && expressionIsRightHandBlock(expression)) {
     return false;
+  }
+  if (expressionIsStatementBlock(expression)) {
+    return !isRightSide &&
+      (parent <= RustPrecedence.Multiplicative || parent === RustPrecedence.Cast);
   }
   const own = expressionPrecedence(expression);
   return own < parent ||
     (own === parent && (isRightSide || parent === RustPrecedence.Comparison));
 }
 
-export function expressionIsRightHandBlock(expression: RustExpr): boolean {
+function expressionIsStatementBlock(expression: RustExpr): boolean {
+  if (expression.kind === "bottom") {
+    return expressionIsStatementBlock(expression.expression);
+  }
+  return expression.kind === "block" ||
+    expression.kind === "unsafe" ||
+    expression.kind === "evaluate-then" ||
+    expression.kind === "conditional" ||
+    expression.kind === "match";
+}
+
+function expressionIsRightHandBlock(expression: RustExpr): boolean {
   if (expression.kind === "bottom") {
     return expressionIsRightHandBlock(expression.expression);
   }
@@ -109,47 +115,4 @@ export function expressionIsRightHandBlock(expression: RustExpr): boolean {
     expression.kind === "block" ||
     expression.kind === "unsafe" ||
     expression.kind === "evaluate-then";
-}
-
-export function expressionIsStatementBlockOperand(expression: RustExpr): boolean {
-  if (expression.kind === "bottom") {
-    return expressionIsStatementBlockOperand(expression.expression);
-  }
-  return expression.kind === "block" ||
-    expression.kind === "unsafe" ||
-    expression.kind === "evaluate-then";
-}
-
-export type RustExpressionGrammarPosition = "condition" | "expression" | "statement";
-
-export function printBinaryOperand(
-  operand: RustExpr,
-  operator: string,
-  isRightSide: boolean,
-): string {
-  const rendered = printOperand(operand, operatorPrecedence(operator), isRightSide);
-  return operand.kind === "numeric-cast" &&
-      (operator === "<" || operator === "<=" || operator === ">" || operator === ">=")
-    ? `(${rendered})`
-    : rendered;
-}
-
-export function printFittedBinaryOperand(
-  operand: RustExpr,
-  rendered: string,
-  operator: string,
-  isRightSide: boolean,
-  forceParentheses = false,
-): string {
-  const grouped = forceParentheses || expressionNeedsParentheses(
-    operand,
-    operatorPrecedence(operator),
-    isRightSide,
-  )
-    ? `(${rendered})`
-    : rendered;
-  return operand.kind === "numeric-cast" &&
-      (operator === "<" || operator === "<=" || operator === ">" || operator === ">=")
-    ? `(${grouped})`
-    : grouped;
 }

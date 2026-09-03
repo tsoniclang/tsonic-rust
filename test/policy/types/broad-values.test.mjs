@@ -31,7 +31,7 @@ test("native broad values select one closed passive carrier contract", () => {
   assert.deepEqual(rustValueConversionContract(conversion), {
     category: "projection",
     lowering: "call",
-    path: "tsonic_rust_runtime::TsValue::from_closed",
+    path: "rt::TsValue::from_closed",
     sourceMode: "ref",
     source,
     target,

@@ -73,9 +73,14 @@ function finalizeRustItemStyle(
 
 function finalizeRustTraitFunctionStyle(fn: RustTraitFunction): RustTraitFunction {
   const argumentCount = fn.params.length + (fn.selfParam === undefined ? 0 : 1);
-  return argumentCount <= 7
-    ? fn
-    : { ...fn, attrs: appendRustAttribute(fn.attrs, rustLintAttributes.tooManyArguments) };
+  const attrs = argumentCount <= 7
+    ? fn.attrs
+    : appendRustAttribute(fn.attrs, rustLintAttributes.tooManyArguments);
+  return {
+    ...fn,
+    ...(attrs === undefined ? {} : { attrs }),
+    ...(fn.body === undefined ? {} : { body: finalizeRustFunctionBodyStyle(fn.body) }),
+  };
 }
 
 function finalizeRustImplFunctionStyle(
@@ -191,6 +196,9 @@ function finalizeRustStatementStyle(statement: RustStmt): RustStmt {
         ...statement,
         expression: finalizeRustExpressionStyle(statement.expression),
         body: finalizeRustBlockStyle(statement.body),
+        ...(statement.else === undefined
+          ? {}
+          : { else: finalizeRustBlockStyle(statement.else) }),
       };
     case "break":
     case "continue":
@@ -283,6 +291,8 @@ function rustStatementMayContinueLoop(statement: RustStmt, label: string | undef
       return rustBlockMayContinueLoop(statement.then, label) ||
         (statement.else !== undefined && rustBlockMayContinueLoop(statement.else, label));
     case "if-let-some":
+      return rustBlockMayContinueLoop(statement.body, label) ||
+        (statement.else !== undefined && rustBlockMayContinueLoop(statement.else, label));
     case "scope":
     case "unsafe-scope":
       return rustBlockMayContinueLoop(statement.body, label);

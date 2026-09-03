@@ -41,9 +41,12 @@ export function rustStatementReferencesPath(statement: RustStmt, path: string): 
       return rustExpressionReferencesPath(statement.condition, path) ||
         rustBlockReferencesPath(statement.body, path);
     case "while-let-some":
-    case "if-let-some":
       return rustExpressionReferencesPath(statement.expression, path) ||
         (statement.binding !== path && rustBlockReferencesPath(statement.body, path));
+    case "if-let-some":
+      return rustExpressionReferencesPath(statement.expression, path) ||
+        (statement.binding !== path && rustBlockReferencesPath(statement.body, path)) ||
+        (statement.else !== undefined && rustBlockReferencesPath(statement.else, path));
     case "for":
       return rustExpressionReferencesPath(statement.iterable, path) ||
         (statement.binding !== path && rustBlockReferencesPath(statement.body, path));

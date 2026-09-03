@@ -37,6 +37,7 @@ import type { RustProviderBinaryEpilogueRow } from "../../providers/packages/mod
 import { analyzeRustSourceModuleConstructions } from "../source-modules/index.js";
 import { analyzeRustFoundation } from "../foundation/plan.js";
 import { maximumRustFoundation } from "../../target-model/foundation/model.js";
+import { analyzeRustProjectFlowReadSelections } from "../control-flow/project-flow-read-selections.js";
 
 const rustJsTimerEpilogue: RustProviderBinaryEpilogueRow = Object.freeze({
   id: "tsonic.rust.js.timers",
@@ -183,6 +184,11 @@ export function analyzeRustTargetProgram(
       ast: context.ast,
       sourceFiles: context.sourceFiles,
       navigation: context.source.navigation,
+      facts,
+    }),
+    projectFlowReadSelections: analyzeRustProjectFlowReadSelections({
+      ast: context.ast,
+      sourceFiles: context.sourceFiles,
       facts,
     }),
     sourceModuleConstructions: sourceModuleConstructions.index,

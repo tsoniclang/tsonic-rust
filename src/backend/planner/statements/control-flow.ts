@@ -11,12 +11,14 @@ import {
   ForStatement_Condition,
   ForStatement_Incrementor,
   ForStatement_Initializer,
+  BinaryExpression_Left,
   IfStatement_ElseStatement,
   IfStatement_ThenStatement,
   KindCaseClause,
   KindDoStatement,
   KindForStatement,
   KindForInStatement,
+  KindIdentifier,
   KindNumericLiteral,
   KindStringLiteral,
   KindWhileStatement,
@@ -39,8 +41,13 @@ import { planBlockLike, planStatementSequence } from "./core.js";
 import { planExpressionAsStatement } from "./expression-statements.js";
 import { planVariableStatement } from "./variable-declarations.js";
 import { planForInStatement, planForOfStatement } from "./iteration.js";
-import { rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";
+import {
+  rustMutatedBindingFactKey,
+  rustSourceBindingFactKey,
+  rustTargetOperationFactKey,
+} from "../../../analysis/facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { planSelectedRustProjectTypeTest } from "../expressions/binary.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustCountedLoopRepresentation } from "../../../analysis/control-flow/counted-loop-representations.js";
 import type { RustBlock, RustExpr, RustStmt } from "../../target-ast/nodes.js";
@@ -77,12 +84,22 @@ export function planIfStatement(node: Node, context: RustPlanContext): readonly 
   if (condition === undefined) {
     return undefined;
   }
+  const thenStatement = IfStatement_ThenStatement(context.input.program.source.ast, node);
+  const elseStatement = IfStatement_ElseStatement(context.input.program.source.ast, node);
+  const selected = tryPlanSelectedProjectTypeTestIf(
+    condition,
+    thenStatement,
+    elseStatement,
+    context,
+  );
+  if (selected.handled) {
+    return selected.statements;
+  }
   const planned = planCondition(condition, context, "if");
   if (planned === undefined) {
     return undefined;
   }
-  const thenBlock = planEmbeddedBlock(IfStatement_ThenStatement(context.input.program.source.ast, node), context);
-  const elseStatement = IfStatement_ElseStatement(context.input.program.source.ast, node);
+  const thenBlock = planEmbeddedBlock(thenStatement, context);
   const elseBlock = elseStatement === undefined ? undefined : planEmbeddedBlock(elseStatement, context);
   if (thenBlock === undefined || (elseStatement !== undefined && elseBlock === undefined)) {
     return undefined;
@@ -98,6 +115,93 @@ export function planIfStatement(node: Node, context: RustPlanContext): readonly 
           ...(context.input.program.source.ast.is.IsIfStatement(elseStatement) ? { elseIf: true as const } : {}),
         }),
   }];
+}
+
+function tryPlanSelectedProjectTypeTestIf(
+  condition: Node,
+  thenStatement: Node | undefined,
+  elseStatement: Node | undefined,
+  context: RustPlanContext,
+): { readonly handled: boolean; readonly statements?: readonly RustStmt[] } {
+  const { ast } = context.input.program.source;
+  const fact = context.input.program.facts.getFact(condition, rustTargetOperationFactKey);
+  const leftNode = fact?.kind === "project-type-test" && fact.lowering.kind === "dispatch"
+    ? BinaryExpression_Left(ast, condition)
+    : undefined;
+  const binding = leftNode === undefined || ast.kindName(leftNode) !== KindIdentifier ||
+      context.expressionOverrides?.has(leftNode) === true
+    ? undefined
+    : context.input.program.facts.getFact(leftNode, rustSourceBindingFactKey);
+  if (fact?.kind !== "project-type-test" || fact.lowering.kind !== "dispatch" ||
+    leftNode === undefined || binding === undefined || thenStatement === undefined ||
+    context.syntheticNames === undefined ||
+    context.input.program.facts.getFact(
+      binding.sourceDeclaration,
+      rustMutatedBindingFactKey,
+    ) !== undefined ||
+    !rustTargetTypeRefEquals(fact.sourceCarrier, fact.dispatchCarrier)) {
+    return { handled: false };
+  }
+  const narrowedReads = context.input.program.projectFlowReadSelections.readsWithin({
+    root: thenStatement,
+    declaration: binding.sourceDeclaration,
+    sourceCarrier: fact.sourceCarrier,
+    dispatchCarrier: fact.dispatchCarrier,
+    selectedCarrier: fact.targetCarrier,
+  });
+  if (narrowedReads.length === 0) {
+    return { handled: false };
+  }
+  const planned = planSelectedRustProjectTypeTest(condition, context);
+  if (planned?.selection === undefined) {
+    return { handled: true };
+  }
+  const dispatchName = allocateRustSyntheticName(context.syntheticNames, "selected_dispatch");
+  const selectedName = allocateRustSyntheticName(context.syntheticNames, "selected_value");
+  const flowReadOverrides = new Map(context.flowReadOverrides ?? []);
+  for (const read of narrowedReads) {
+    flowReadOverrides.set(read, {
+      sourceCarrier: planned.fact.sourceCarrier,
+      selectedCarrier: planned.selection.selectedCarrier,
+      expression: {
+        kind: "method-call",
+        receiver: { kind: "path", path: selectedName },
+        method: "clone",
+        args: [],
+      },
+    });
+  }
+  const thenBlock = planEmbeddedBlock(thenStatement, {
+    ...context,
+    flowReadOverrides,
+  });
+  const elseBlock = elseStatement === undefined
+    ? undefined
+    : planEmbeddedBlock(elseStatement, context);
+  if (thenBlock === undefined || (elseStatement !== undefined && elseBlock === undefined)) {
+    return { handled: true };
+  }
+  return {
+    handled: true,
+    statements: [{
+      kind: "if-let-some",
+      binding: dispatchName,
+      expression: planned.selection.expression,
+      body: {
+        ...thenBlock,
+        statements: [{
+          kind: "let",
+          name: selectedName,
+          mutable: false,
+          init: planned.selection.selectedValue({ kind: "path", path: dispatchName }),
+        }, ...thenBlock.statements],
+      },
+      ...(elseBlock === undefined ? {} : {
+        else: elseBlock,
+        ...(ast.is.IsIfStatement(elseStatement) ? { elseIf: true as const } : {}),
+      }),
+    }],
+  };
 }
 
 export function planLabeledStatement(

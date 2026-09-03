@@ -68,7 +68,8 @@ function rustTraitFunctionReferencesModuleAlias(
   return rustGenericsReferenceModuleAlias(fn.generics, alias) ||
     rustFunctionParametersReferenceModuleAlias(fn.params, alias) ||
     rustOptionalTypeReferencesModuleAlias(fn.returnType, alias) ||
-    rustOptionalTypeReferencesModuleAlias(fn.errorType, alias);
+    rustOptionalTypeReferencesModuleAlias(fn.errorType, alias) ||
+    (fn.body !== undefined && rustBlockReferencesModuleAlias(fn.body, alias));
 }
 
 function rustImplFunctionReferencesModuleAlias(
@@ -231,9 +232,13 @@ function rustStatementReferencesModuleAlias(statement: RustStmt, alias: string):
       return rustExpressionReferencesModuleAlias(statement.condition, alias) ||
         rustBlockReferencesModuleAlias(statement.body, alias);
     case "while-let-some":
-    case "if-let-some":
       return rustExpressionReferencesModuleAlias(statement.expression, alias) ||
         rustBlockReferencesModuleAlias(statement.body, alias);
+    case "if-let-some":
+      return rustExpressionReferencesModuleAlias(statement.expression, alias) ||
+        rustBlockReferencesModuleAlias(statement.body, alias) ||
+        (statement.else !== undefined &&
+          rustBlockReferencesModuleAlias(statement.else, alias));
     case "for":
       return rustExpressionReferencesModuleAlias(statement.iterable, alias) ||
         rustBlockReferencesModuleAlias(statement.body, alias);

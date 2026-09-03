@@ -29,6 +29,12 @@ type RustProjectTypeTestFact = Extract<
   { readonly kind: "project-type-test" }
 >;
 
+export interface RustProjectTypeTestSelectionPlan {
+  readonly expression: RustExpr;
+  readonly selectedCarrier: TargetTypeRef;
+  readonly selectedValue: (dispatch: RustExpr) => RustExpr;
+}
+
 export function planRustProjectDowncast(
   node: Node,
   expression: RustExpr,
@@ -146,20 +152,22 @@ export function planRustProjectTypeTest(
   if (fact.lowering.kind === "option-presence") {
     return { kind: "method-call", receiver: expression, method: "is_some", args: [] };
   }
-  const sourceDefinition = context.input.program.projectTypes.definitionForCarrier(fact.dispatchCarrier);
-  const route = sourceDefinition === undefined
-    ? undefined
-    : context.input.program.projectTypes.downcastRoute(sourceDefinition, fact.targetCarrier);
-  if (route === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.project-type-test",
-      "Project type test has no exact generated dispatch route for its finalized carriers.",
-    ));
-    return undefined;
-  }
   const optionalElement = rustOptionElementCarrier(fact.sourceCarrier);
   if (optionalElement !== undefined) {
+    const sourceDefinition = context.input.program.projectTypes.definitionForCarrier(
+      fact.dispatchCarrier,
+    );
+    const route = sourceDefinition === undefined
+      ? undefined
+      : context.input.program.projectTypes.downcastRoute(sourceDefinition, fact.targetCarrier);
+    if (route === undefined) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, node),
+        "rust.backend.project-type-test",
+        "Project type test has no exact generated dispatch route for its finalized carriers.",
+      ));
+      return undefined;
+    }
     return {
       kind: "method-call",
       receiver: { kind: "method-call", receiver: expression, method: "as_ref", args: [] },
@@ -176,11 +184,58 @@ export function planRustProjectTypeTest(
       }],
     };
   }
+  const selection = planRustProjectTypeTestSelection(node, expression, fact, context);
+  return selection === undefined
+    ? undefined
+    : {
+        kind: "method-call",
+        receiver: selection.expression,
+        method: "is_some",
+        args: [],
+      };
+}
+
+export function planRustProjectTypeTestSelection(
+  node: Node,
+  expression: RustExpr,
+  fact: RustProjectTypeTestFact,
+  context: RustPlanContext,
+): RustProjectTypeTestSelectionPlan | undefined {
+  if (fact.lowering.kind !== "dispatch") {
+    return undefined;
+  }
+  const sourceDefinition = context.input.program.projectTypes.definitionForCarrier(fact.dispatchCarrier);
+  const targetDefinition = context.input.program.projectTypes.definitionForCarrier(fact.targetCarrier);
+  const route = sourceDefinition === undefined
+    ? undefined
+    : context.input.program.projectTypes.downcastRoute(sourceDefinition, fact.targetCarrier);
+  const targetValue = rustSourceTypeCarrierValue(fact.targetCarrier);
+  const targetPath = targetValue === undefined ? undefined : sourceTypePath(context, targetValue);
+  if (sourceDefinition === undefined || targetDefinition === undefined || route === undefined ||
+    route.target !== targetDefinition || targetPath === undefined ||
+    !rustTargetTypeRefEquals(fact.sourceCarrier, fact.dispatchCarrier)) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.project-type-test",
+      "Project type test conflicts with its exact source carrier, target carrier, or generated dispatch route.",
+    ));
+    return undefined;
+  }
+  const sourceExpression = planRustNonConsumingProjectValue(node, expression, context);
   return {
-    kind: "method-call",
-    receiver: projectDowncastDispatch(expression, route.slot),
-    method: "is_some",
-    args: [],
+    expression: projectDowncastDispatch(sourceExpression, route.slot),
+    selectedCarrier: fact.targetCarrier,
+    selectedValue: (dispatch): RustExpr => ({
+      kind: "struct-literal",
+      path: targetPath,
+      fields: [
+        {
+          name: rustProjectObjectIdentityField,
+          value: cloneProjectField(sourceExpression, rustProjectObjectIdentityField),
+        },
+        { name: rustProjectObjectDispatchField, value: dispatch },
+      ],
+    }),
   };
 }
 

@@ -364,9 +364,9 @@ export function main(): void {
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /value\.unwrap_or\(3\.5\)/u);
   assert.doesNotMatch(source, /manual_unwrap_or|let_and_return/u);
-  assert.match(source, /optional\(Some\(tsonic_rust_runtime::conversions::i32_to_f64\(value\)\)\)/u);
-  assert.match(source, /defaulted\(Some\(tsonic_rust_runtime::conversions::i32_to_f64\(value\)\)\)/u);
-  assert.match(source, /value\.map\(tsonic_rust_runtime::conversions::i32_to_f64\)/u);
+  assert.match(source, /optional\(Some\(rt::conversions::i32_to_f64\(value\)\)\)/u);
+  assert.match(source, /defaulted\(Some\(rt::conversions::i32_to_f64\(value\)\)\)/u);
+  assert.match(source, /value\.map\(rt::conversions::i32_to_f64\)/u);
   validateGeneratedProject("source-call-optional-conversion", result.artifacts, { run: true });
 });
 

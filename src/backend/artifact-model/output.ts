@@ -1,5 +1,6 @@
 import type { RustSourceFileModel } from "../target-ast/nodes.js";
 import type { CargoManifestPlan } from "./project/cargo.js";
+import type { RustEdition } from "../../target-model/project/model.js";
 
 export type RustPlannedArtifact =
   | {
@@ -14,5 +15,6 @@ export type RustPlannedArtifact =
     };
 
 export interface RustOutputPlan {
+  readonly edition: RustEdition;
   readonly artifacts: readonly RustPlannedArtifact[];
 }

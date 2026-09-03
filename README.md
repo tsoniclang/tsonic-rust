@@ -2,7 +2,8 @@
 
 Rust target pack for Tsonic. This package owns Rust target analysis, ownership
 and lifetime contracts, compiler-backed rustdoc providers, Rust AST planning
-and printing, generated Cargo artifacts, and Cargo toolchain handoff.
+and syntax printing, canonical `rustfmt` formatting, generated Cargo artifacts,
+and Cargo toolchain handoff.
 
 Canonical product documentation lives in the Tsonic repository:
 
@@ -24,7 +25,8 @@ Runtime crates remain owned by `@tsonic/rust-runtime`,
 ## Development
 
 The sibling Tsonic packages and Rust runtime repositories must be available
-through the workspace dependencies.
+through the workspace dependencies. The selected Rust toolchain must include
+`rustfmt`; generated Rust is formatted before Tsonic publishes it.
 
 ```sh
 npm install

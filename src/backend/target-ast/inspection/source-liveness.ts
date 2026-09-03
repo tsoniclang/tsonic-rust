@@ -66,7 +66,13 @@ function finalizeRustNestedStatementLiveness(
           : { else: finalizeRustBlockLiveness(statement.else, following) }),
       };
     case "if-let-some":
-      return { ...statement, body: finalizeRustBlockLiveness(statement.body, following) };
+      return {
+        ...statement,
+        body: finalizeRustBlockLiveness(statement.body, following),
+        ...(statement.else === undefined
+          ? {}
+          : { else: finalizeRustBlockLiveness(statement.else, following) }),
+      };
     case "scope":
     case "unsafe-scope":
       return { ...statement, body: finalizeRustBlockLiveness(statement.body, following) };

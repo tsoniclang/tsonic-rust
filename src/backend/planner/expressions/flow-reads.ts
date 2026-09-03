@@ -32,6 +32,19 @@ export function planRustFlowReadProjection(
     ));
     return undefined;
   }
+  const override = context.flowReadOverrides?.get(node);
+  if (override !== undefined) {
+    if (!rustTargetTypeRefEquals(override.sourceCarrier, fact.sourceCarrier) ||
+      !rustTargetTypeRefEquals(override.selectedCarrier, fact.selectedCarrier)) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, node),
+        "rust.backend.flow-read-override",
+        "The exact branch-local flow-read selection conflicts with finalized source evidence.",
+      ));
+      return undefined;
+    }
+    return override.expression;
+  }
   if (fact.kind === "option-value") {
     if (!rustCarrierSupportsClone(fact.selectedCarrier)) {
       context.diagnostics.push(missingFactDiagnostic(

@@ -1,5 +1,9 @@
-import { printRustGenericArgument } from "../types.js";
-import type { RustCallGenericArgument, RustExpr } from "../../../backend/target-ast/nodes.js";
+import { printRustGenericArgument, printRustType } from "../types.js";
+import type {
+  RustCallGenericArgument,
+  RustExpr,
+  RustType,
+} from "../../../backend/target-ast/nodes.js";
 
 type RustDirectCall = Extract<RustExpr, { readonly kind: "call" }>;
 type RustAssociatedCall = Extract<RustExpr, { readonly kind: "associated-call" }>;
@@ -36,4 +40,20 @@ export function printRustMethodCallTarget(
   receiver: string,
 ): string {
   return `${receiver}.${printRustCallMember(expression.method, expression.genericArguments)}`;
+}
+
+export function printRustAssociatedOwner(owner: RustType): string {
+  if (owner.kind !== "named" || owner.genericArguments === undefined ||
+    owner.genericArguments.length === 0) {
+    return printRustType(owner);
+  }
+  return `${owner.path}::<${owner.genericArguments.map(printRustGenericArgument).join(", ")}>`;
+}
+
+export function printRustAssociatedCallOwner(
+  expression: RustAssociatedCall,
+): string {
+  return expression.trait === undefined
+    ? printRustAssociatedOwner(expression.owner)
+    : `<${printRustType(expression.owner)} as ${printRustType(expression.trait)}>`;
 }

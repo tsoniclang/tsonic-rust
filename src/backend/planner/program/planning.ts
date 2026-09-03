@@ -571,7 +571,10 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
   );
   return foundationDiagnostics.length > 0
     ? rejectedTargetStage(foundationDiagnostics)
-    : resolvedTargetStage(Object.freeze({ artifacts: finalizedArtifacts }));
+    : resolvedTargetStage(Object.freeze({
+        edition: input.program.configuration.edition,
+        artifacts: finalizedArtifacts,
+      }));
 }
 
 function finalizeRustPlannedArtifact(

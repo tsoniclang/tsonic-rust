@@ -412,7 +412,7 @@ export function main(): void {
     },
   });
   assert.deepEqual(result.diagnostics, []);
-  assert.match(artifactText(result, "src/index.rs"), /entry\[tsonic_rust_runtime::conversions::i32_to_usize\(i\)\?\]/u);
+  assert.match(artifactText(result, "src/index.rs"), /entry\[rt::conversions::i32_to_usize\(i\)\?\]/u);
   assert.equal(validateGeneratedProject("dynamic-tuple-index", result.artifacts, { run: true }).status, 0);
 });
 
@@ -556,7 +556,7 @@ export function drive(): int32 {
   assert.match(text, /pub fn drive\(\) -> Result<i32, rt::TsonicError>/u);
   assert.match(
     text,
-    /tsonic_rust_runtime::conversions::f64_to_i32\(pass_through::<f64>\(41\.0\) \+ 1\.0\)/u,
+    /rt::conversions::f64_to_i32\(pass_through::<f64>\(41\.0\) \+ 1\.0\)/u,
   );
 });
 
