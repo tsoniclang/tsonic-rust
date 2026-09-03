@@ -307,12 +307,18 @@ export function printRustLetInitializer(
     rhsTrailingArgument?.kind === "closure-block" ||
     rhsTrailingArgument?.kind === "block" ||
     rhsTrailingArgument?.kind === "evaluate-then";
-  if (initializer.kind === "match" && inlineFits && prefix.length <= rustNestedCallWidth) {
-    return inlineStatement;
+  const continuationCompactsConditionalHeader = initializer.kind === "conditional" &&
+    fittedAtContinuation.split("\n").length < fittedAtPrefix.split("\n").length &&
+    !firstLine(fittedAtPrefix).trimEnd().endsWith("{") &&
+    firstLine(fittedAtContinuation).trimEnd().endsWith("{");
+  if (initializer.kind === "try" && inlineFits && continuationFits &&
+    rustfmtPrefersNextLine(fittedAtPrefix, fittedAtContinuation)) {
+    return continuationStatement;
   }
   if (!specializedInitializerLayout) {
     if (inlineFits && continuationFits) {
-      return rustfmtPrefersNextLine(fittedAtPrefix, fittedAtContinuation)
+      return rustfmtPrefersNextLine(fittedAtPrefix, fittedAtContinuation) ||
+          continuationCompactsConditionalHeader
         ? continuationStatement
         : inlineStatement;
     }

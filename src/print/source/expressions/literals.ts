@@ -40,7 +40,20 @@ export function printRustCollectionLiteralFitted(
   const onlyElement = expression.elements[0];
   if (expression.kind === "tuple-literal" && expression.elements.length === 1 &&
     onlyElement !== undefined) {
-    return appendToLastLine(`(${renderExpression(onlyElement, depth, column + 1)}`, ",)");
+    const attachedElement = renderExpression(onlyElement, depth, column + 1);
+    const elementIndent = indentText(depth + 1);
+    const expandedElement = attachedElement.includes("\n")
+      ? renderExpression(onlyElement, depth + 1, elementIndent.length)
+      : undefined;
+    if (expandedElement !== undefined && !expandedElement.includes("\n") &&
+      renderedFits(`${expandedElement},`, elementIndent.length)) {
+      return [
+        "(",
+        `${elementIndent}${expandedElement},`,
+        `${indentText(depth)})`,
+      ].join("\n");
+    }
+    return appendToLastLine(`(${attachedElement}`, ",)");
   }
   if (expression.kind !== "tuple-literal" && expression.elements.length === 1 &&
     onlyElement !== undefined) {

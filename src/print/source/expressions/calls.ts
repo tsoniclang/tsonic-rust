@@ -39,12 +39,15 @@ export function printFittedCall(
   const reservedTrailingWidth = forceExpanded
     ? Math.max(2, layout?.trailingContinuationWidth ?? 0)
     : layout?.trailingContinuationWidth ?? 0;
+  const soleArgument = arguments_[0];
+  const nestedStringChainOwnsLayout = arguments_.length === 1 &&
+    (soleArgument?.kind === "call" || soleArgument?.kind === "associated-call" ||
+      soleArgument?.kind === "method-call") &&
+    rustNestedCallChainEndsInString(soleArgument) &&
+    flat.length > rustNestedCallWidth;
   if (!forceExpanded && !flat.includes("\n") &&
     flatArguments.length <= rustNestedCallWidth &&
-    !(arguments_.length === 1 &&
-      (arguments_[0]?.kind === "call" || arguments_[0]?.kind === "associated-call") &&
-      rustNestedCallChainEndsInString(arguments_[0]) &&
-      flat.length > rustNestedCallWidth) &&
+    !nestedStringChainOwnsLayout &&
     !(arguments_.length === 1 && arguments_[0]?.kind === "conditional" &&
       flatArguments.length > rustSingleLineConditionalWidth) &&
     !arguments_.some(rustExpressionContainsStatementBlock) &&
@@ -53,7 +56,6 @@ export function printFittedCall(
     renderedFits(`${flat}${" ".repeat(reservedTrailingWidth)}`, column)) {
     return flat;
   }
-  const soleArgument = arguments_[0];
   if (!forceExpanded && callable.length >= 4 && arguments_.length === 1 &&
     soleArgument?.kind === "method-call" && !flat.includes("\n") &&
     !renderedFits(flat, column)) {
@@ -137,9 +139,9 @@ export function printFittedCall(
       const attached = appendToLastLine(`${prefix}${renderedMethod}`, ")");
       const attachedOpeningFits = prefix.length + firstLine(renderedMethod).length <=
         rustNestedCallWidth;
-      const overflowCompactsWhenNested = callable.length < 4 &&
-        renderedMethod.includes("\n") &&
-        !nestedMethod.includes("\n");
+      const overflowCompactsWhenNested = renderedMethod.includes("\n") &&
+        !nestedMethod.includes("\n") &&
+        !rustNestedCallChainOwnsStringBreak(soleArgument);
       if (attachedOpeningFits && !overflowCompactsWhenNested &&
         renderedFits(attached, column)) {
         return attached;
@@ -274,7 +276,9 @@ export function printFittedCall(
     const attached = appendToLastLine(`${prefix}${rendered}`, ")");
     const multilineCallback = soleFallibleMethod!.args.some((argument) =>
       argument.kind === "closure" || argument.kind === "closure-block");
-    if ((!rendered.includes("\n") || multilineCallback) &&
+    const nestedCallOwnsBreak = printRustExpr(soleArgument).length > rustNestedCallWidth;
+    if ((!rendered.includes("\n") || multilineCallback || nestedCallOwnsBreak) &&
+      renderedFits(attached, column) &&
       firstLine(attached).length + column <= rustFormatWidth) {
       return attached;
     }
@@ -622,7 +626,7 @@ export function printFittedCall(
     }
   }
   if (!forceExpanded && arguments_.length === 1 && arguments_[0]?.kind === "method-call") {
-    if (!flat.includes("\n") && renderedFits(flat, column) &&
+    if (!flat.includes("\n") && !nestedStringChainOwnsLayout && renderedFits(flat, column) &&
       !rustMethodChainPrefersVerticalLayout(arguments_[0]) &&
       !rustExpressionContainsStatementBlock(arguments_[0]) &&
       !rustExpressionContainsExpandedStructLiteral(arguments_[0])) {
@@ -1084,7 +1088,10 @@ function printVerticalCallArguments(
 }
 
 function rustNestedCallChainEndsInString(
-  expression: Extract<RustExpr, { readonly kind: "call" | "associated-call" }>,
+  expression: Extract<
+    RustExpr,
+    { readonly kind: "call" | "associated-call" | "method-call" }
+  >,
 ): boolean {
   let current = expression;
   let callCount = 0;
@@ -1099,7 +1106,31 @@ function rustNestedCallChainEndsInString(
       return callCount > 1 || argument.kind !== "str-literal" ||
         argument.value.length > rustInlineClosureFieldReceiverWidth;
     }
-    if (argument?.kind !== "call" && argument?.kind !== "associated-call") {
+    if (argument?.kind !== "call" && argument?.kind !== "associated-call" &&
+      argument?.kind !== "method-call") {
+      return false;
+    }
+    current = argument;
+  }
+}
+
+function rustNestedCallChainOwnsStringBreak(expression: RustExpr): boolean {
+  let current = expression;
+  for (;;) {
+    if (current.kind !== "call" && current.kind !== "associated-call" &&
+      current.kind !== "method-call") {
+      return false;
+    }
+    if (current.args.length !== 1) {
+      return false;
+    }
+    const argument = current.args[0];
+    if (argument?.kind === "string-literal" || argument?.kind === "str-literal" ||
+      argument?.kind === "owned-string-from-borrowed-str") {
+      return printRustExpr(argument).length > rustNestedCallWidth;
+    }
+    if (argument?.kind !== "call" && argument?.kind !== "associated-call" &&
+      argument?.kind !== "method-call") {
       return false;
     }
     current = argument;

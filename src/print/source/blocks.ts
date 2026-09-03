@@ -824,7 +824,8 @@ function printRustAssignment(
     firstLine(continuationValue).trimEnd().endsWith("{");
   const multilineValueCanFollowAssignment = value.kind !== "binary" ||
     value.operator === "&&" || value.operator === "||" ||
-    expressionIsRightHandBlock(value.left);
+    expressionIsRightHandBlock(value.left) ||
+    firstLine(inlineValue).trimStart().startsWith("{");
   if (!renderedTarget.includes("\n") &&
     (!inlineValue.includes("\n") ||
       multilineValueCanFollowAssignment && !continuationAvoidsNestedExpansion &&
