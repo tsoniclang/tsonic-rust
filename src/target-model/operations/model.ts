@@ -2,9 +2,11 @@ import type { Node, SourcePrimitiveKind } from "@tsonic/tsts";
 import type { RustBinaryOperator } from "../syntax/tokens.js";
 import type { RustErrorBoundary, RustFallibleErrorBoundary } from "./error-boundary.js";
 import type {
+  RustTargetAssociatedConstraint,
   RustTargetGenericArgument,
   TargetTypeRef,
 } from "../types/model.js";
+import type { RustLifetimeBinder } from "../lifetimes/index.js";
 
 export const rustExtensionId = "tsonic.rust";
 
@@ -34,7 +36,13 @@ export type RustOperationEvaluationEffect = "observable" | "pure";
 export type RustProviderTypeRequirement =
   | "clone"
   | "copy"
-  | { readonly kind: "trait"; readonly path: string };
+  | {
+      readonly kind: "trait";
+      readonly path: string;
+      readonly genericArguments: readonly RustTargetGenericArgument[];
+      readonly associatedConstraints: readonly RustTargetAssociatedConstraint[];
+      readonly lifetimeBinder?: RustLifetimeBinder;
+    };
 
 export interface RustProviderTypeParameterRequirement {
   readonly name: string;
@@ -45,6 +53,7 @@ export type RustProviderGenericParameter =
   | {
       readonly kind: "type";
       readonly sourceName: string;
+      readonly maybeSized?: true;
       readonly defaultArgument?: RustTargetGenericArgument;
     }
   | {

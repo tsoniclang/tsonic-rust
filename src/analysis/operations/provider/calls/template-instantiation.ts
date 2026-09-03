@@ -1,5 +1,7 @@
 import {
   inferRustTargetGenericBindings,
+  rustStrTargetId,
+  rustStringTargetType,
   rustTargetGenericReferences,
   substituteRustTargetGenerics,
 } from "../../../../target-model/types/index.js";
@@ -29,6 +31,10 @@ import type {
   RustTargetGenericBindings,
   RustTargetGenericParameterSet,
 } from "../../../../target-model/types/index.js";
+import {
+  rustBorrowedStringTypeParameterNames,
+  rustProviderSourceArgumentMode,
+} from "./provider-argument-shape.js";
 
 export interface InstantiatedProviderOperationTemplate<
   OperationKind extends RustProviderFactOperationKind | RustRuntimeSetOperationKind = RustProviderFactOperationKind,
@@ -50,6 +56,7 @@ export function instantiateProviderOperationTemplate<
   },
 ): InstantiatedProviderOperationTemplate<OperationKind> | undefined {
   const parameters = template.genericParameters ?? [];
+  const borrowedStringTypeParameters = rustBorrowedStringTypeParameterNames(template);
   const parameterSet = providerGenericParameterSet(parameters);
   const bindings: MutableRustTargetGenericBindings = {
     types: new Map(),
@@ -122,7 +129,7 @@ export function instantiateProviderOperationTemplate<
   }
   if (!rustProviderOperationGenericRequirementsAreSelectable(
     template.typeRequirements,
-    bindings.types,
+    bindings,
   )) {
     return undefined;
   }
@@ -153,8 +160,16 @@ export function instantiateProviderOperationTemplate<
           }),
       ...(template.parameterCarriers === undefined
         ? {}
-        : { parameterCarriers: template.parameterCarriers.map((carrier) =>
-            carrier === undefined ? undefined : substituteProviderCarrier(carrier, substitutions)) }),
+        : { parameterCarriers: template.parameterCarriers.map((carrier, index) => {
+            if (carrier === undefined) return undefined;
+            const substituted = substituteProviderCarrier(carrier, substitutions);
+            return carrier.kind === "type-parameter" &&
+                borrowedStringTypeParameters.has(carrier.name) &&
+                rustProviderSourceArgumentMode(template.target, index) === "ref" &&
+                substituted.kind === "target-named" && substituted.id === rustStrTargetId
+              ? rustStringTargetType()
+              : substituted;
+          }) }),
       ...(template.receiverCarrier === undefined
         ? {}
         : { receiverCarrier: substituteProviderCarrier(template.receiverCarrier, substitutions) }),

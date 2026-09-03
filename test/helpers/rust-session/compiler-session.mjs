@@ -46,6 +46,7 @@ export function createRustSession({
     projectRoot: "/src",
     outputRoot: "/src/out",
     targetOutputRoot: "/src/out/rust",
+    cacheRoot: `${process.cwd()}/.temp/rust-session-cache`,
   });
   const candidates = [...packages, ...capabilities];
   const activation = collectCapabilityActivation(files, candidates, target);

@@ -1,4 +1,5 @@
-import { asRecord, requireExactKeys, requireRustIdentifier, requireRustPath, validateCarrier, validateValueConversion } from "./carriers.js";
+import { asRecord, requireExactKeys, requireRustIdentifier, validateCarrier, validateValueConversion } from "./carriers.js";
+import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { isRustFallibleErrorBoundary } from "../../../target-model/operations/error-boundary.js";
 import {
   rustProviderOperationFormAcceptsTargetGenericArguments,
@@ -137,6 +138,7 @@ export function validateOperationRows(
     validateTypeParameterRequirements(
       row.typeRequirements,
       declaredGenerics.typeNames,
+      definition,
       `${label}.typeRequirements`,
       fail,
     );
@@ -177,7 +179,7 @@ export function validateOperationRows(
       ...valueConversionCarriers(row.resultConversion),
     ];
     validateGenericReferences(
-      genericCarriers,
+      [...genericCarriers, ...typeRequirementCarriers(row.typeRequirements)],
       declaredGenerics,
       `${label} operation contract`,
       fail,
@@ -219,6 +221,7 @@ export function validateOperationRows(
 export function validateTypeParameterRequirements(
   requirements: readonly RustProviderTypeParameterRequirement[] | undefined,
   typeParameterNames: ReadonlySet<string>,
+  definition: RustProviderPackageDefinition,
   where: string,
   fail: Fail,
 ): void {
@@ -239,18 +242,50 @@ export function validateTypeParameterRequirements(
       if (entry === "clone" || entry === "copy") {
         return entry;
       }
-      requireExactKeys(asRecord(entry), ["kind", "path"], `${where}.${requirement.name}.requirements[${index}]`, fail);
+      const entryWhere = `${where}.${requirement.name}.requirements[${index}]`;
+      requireExactKeys(asRecord(entry), [
+        "kind",
+        "path",
+        "genericArguments",
+        "associatedConstraints",
+        "lifetimeBinder",
+      ], entryWhere, fail);
       if (entry.kind !== "trait") {
-        fail(`${where}.${requirement.name}.requirements[${index}].kind must be 'trait'`);
+        fail(`${entryWhere}.kind must be 'trait'`);
       }
-      requireRustPath(entry.path, `${where}.${requirement.name}.requirements[${index}].path`, fail);
-      return `trait:${entry.path}`;
+      validateCarrier(typeRequirementTraitRef(entry), definition, entryWhere, fail, {
+        allowUnsized: true,
+      });
+      return `trait:${closedMetadataKey(entry)}`;
     });
     if (keys.length === 0 || new Set(keys).size !== keys.length ||
       keys.some((entry, index) => index > 0 && entry < keys[index - 1]!)) {
       fail(`${where}.${requirement.name} must contain a non-empty canonical target requirement set`);
     }
   }
+}
+
+export function typeRequirementCarriers(
+  requirements: readonly RustProviderTypeParameterRequirement[] | undefined,
+): readonly TargetTypeRef[] {
+  return (requirements ?? []).flatMap((parameter) =>
+    parameter.requirements.flatMap((requirement) =>
+      typeof requirement === "object" ? [typeRequirementTraitRef(requirement)] : []));
+}
+
+function typeRequirementTraitRef(
+  requirement: Extract<RustProviderTypeParameterRequirement["requirements"][number], object>,
+): import("../../../target-model/types/model.js").RustTargetTraitRef {
+  return {
+    kind: "trait-ref",
+    id: `provider-requirement:${requirement.path}`,
+    path: requirement.path,
+    genericArguments: requirement.genericArguments,
+    associatedConstraints: requirement.associatedConstraints,
+    ...(requirement.lifetimeBinder === undefined
+      ? {}
+      : { lifetimeBinder: requirement.lifetimeBinder }),
+  };
 }
 
 function validateProviderCallback(

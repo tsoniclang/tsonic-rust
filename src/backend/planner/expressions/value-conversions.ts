@@ -334,6 +334,14 @@ export function lowerRustValueConversion(
     case "option-some":
       return { kind: "call", path: "Some", args: [source] };
     case "option-map": {
+      if (contract.element.lowering === "copy-from-reference") {
+        return {
+          kind: "method-call",
+          receiver: source,
+          method: "copied",
+          args: [],
+        };
+      }
       const valueName = allocateRustSyntheticName(
         context.syntheticNames ?? createRustSyntheticNameState(
           context.input.program.source.ast,

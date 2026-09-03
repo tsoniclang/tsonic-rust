@@ -11,6 +11,7 @@ import {
   sourceTypeFor,
   targetGenericArgumentFor,
   targetGenericParameterArguments,
+  targetTraitFor,
   targetTypeFor,
 } from "./types.js";
 import {
@@ -108,9 +109,7 @@ export function projectFunction(
     : sourceTypeFor(exposedResultType, functionContext, "result");
   const resultConversion = fn.borrowedResult === undefined
     ? undefined
-    : fn.borrowedResult.conversion === "owned-string"
-      ? rustBorrowedStrToStringValueConversion
-      : Object.freeze({ kind: "copy-from-reference" as const, target: resultCarrier });
+    : borrowedResultConversion(fn.borrowedResult, functionContext);
 
   const selectedOwnerGenerics = context.currentType !== undefined &&
       !instanceMethod
@@ -179,7 +178,17 @@ export function projectFunction(
     ...(operationGenericBindings.length === 0
       ? {}
       : { genericParameters: operationGenericBindings }),
-    ...typeRequirements(fn.typeRequirements, operationTypeNames, context),
+    ...typeRequirements(
+      fn.typeRequirements,
+      operationTypeNames,
+      functionContext,
+      (trait) => targetTraitFor(
+        trait,
+        functionContext,
+        "parameter",
+        "target-default",
+      ),
+    ),
     ...(targetGenericArguments.length === 0
       ? {}
       : { targetGenericArguments }),
@@ -210,6 +219,37 @@ export function projectFunction(
         })
       : operationRow(operation),
   };
+}
+
+function borrowedResultConversion(
+  projection: NonNullable<RustCompilerFunction["borrowedResult"]>,
+  context: ProjectionContext,
+): import("../../../target-model/operations/model.js").RustValueConversion {
+  if (projection.conversion === "owned-string") {
+    return rustBorrowedStrToStringValueConversion;
+  }
+  if (projection.conversion === "copy") {
+    return Object.freeze({
+      kind: "copy-from-reference",
+      target: targetTypeFor(projection.sourceType, context, "result"),
+    });
+  }
+  if (projection.sourceType.kind !== "path") {
+    throw new Error("An optional borrowed Rust result requires one exact Option projection.");
+  }
+  const argument = projection.sourceType.genericArguments[0];
+  if (argument?.kind !== "type") {
+    throw new Error("An optional borrowed Rust result requires one exact element type.");
+  }
+  return Object.freeze({
+    kind: "option-map",
+    elementConversion: projection.conversion === "optional-owned-string"
+      ? rustBorrowedStrToStringValueConversion
+      : Object.freeze({
+          kind: "copy-from-reference",
+          target: targetTypeFor(argument.type, context, "result"),
+        }),
+  });
 }
 
 function projectParameter(

@@ -150,6 +150,7 @@ function sessionContext(target) {
       projectRoot: process.cwd(),
       outputRoot: `${process.cwd()}/out`,
       targetOutputRoot: `${process.cwd()}/out/rust`,
+      cacheRoot: `${process.cwd()}/.temp/target-pack-cache`,
     },
     selectedSurfaceIds: [],
     capabilities: [],

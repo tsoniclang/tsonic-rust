@@ -605,6 +605,7 @@ export function providerGenericBindingsFor(
     return Object.freeze({
       kind: "type",
       sourceName,
+      ...(parameter.maybeSized ? { maybeSized: true as const } : {}),
       ...(parameter.defaultType === undefined
         ? {}
         : {

@@ -74,7 +74,12 @@ export function projectFields(
       target: { form: "field" as const, name: field.name },
       receiverCarrier: carrier,
       ...(generics.length === 0 ? {} : { genericParameters: generics }),
-      ...typeRequirements(typeParametersOf(exported.genericParameters), typeNames, context),
+      ...typeRequirements(
+        typeParametersOf(exported.genericParameters),
+        typeNames,
+        context,
+        (trait) => targetTraitFor(trait, context, "parameter", "target-default"),
+      ),
     };
     operations.push(operationRow({
       ...common,
@@ -136,7 +141,12 @@ export function projectVariants(
           },
           resultCarrier: carrier,
           genericParameters: generics,
-          ...typeRequirements(typeParametersOf(exported.genericParameters), typeNames, context),
+          ...typeRequirements(
+            typeParametersOf(exported.genericParameters),
+            typeNames,
+            context,
+            (trait) => targetTraitFor(trait, context, "parameter", "target-default"),
+          ),
         }));
         continue;
       }
@@ -156,7 +166,12 @@ export function projectVariants(
         },
         resultCarrier: carrier,
         ...(generics.length === 0 ? {} : { genericParameters: generics }),
-        ...typeRequirements(typeParametersOf(exported.genericParameters), typeNames, context),
+        ...typeRequirements(
+          typeParametersOf(exported.genericParameters),
+          typeNames,
+          context,
+          (trait) => targetTraitFor(trait, context, "parameter", "target-default"),
+        ),
       }));
       continue;
     }
@@ -200,7 +215,12 @@ export function projectVariants(
       parameterCarriers: Object.freeze(fieldTypes.map((field) =>
         targetTypeFor(field, context, "parameter"))),
       ...(generics.length === 0 ? {} : { genericParameters: generics }),
-      ...typeRequirements(typeParametersOf(exported.genericParameters), typeNames, context),
+      ...typeRequirements(
+        typeParametersOf(exported.genericParameters),
+        typeNames,
+        context,
+        (trait) => targetTraitFor(trait, context, "parameter", "target-default"),
+      ),
     }));
   }
 }
@@ -312,6 +332,7 @@ export function projectAssociatedConstants(
       [...typeParametersOf(ownerGenerics), ...constant.typeRequirements],
       typeNames,
       context,
+      (trait) => targetTraitFor(trait, context, "parameter", "target-default"),
     );
     if (genericBindings.length === 0) {
       members.push(Object.freeze({
@@ -437,7 +458,17 @@ export function projectAssociatedTypes(
       exportId,
       genericParameters: providerGenericBindingsFor(parameters, associatedContext),
       targetCarrier: carrier,
-      ...typeRequirements(typeParametersOf(parameters), typeNames, associatedContext),
+      ...typeRequirements(
+        typeParametersOf(parameters),
+        typeNames,
+        associatedContext,
+        (selectedTrait) => targetTraitFor(
+          selectedTrait,
+          associatedContext,
+          "parameter",
+          "target-default",
+        ),
+      ),
     }));
   }
   return Object.freeze({

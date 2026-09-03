@@ -1,5 +1,6 @@
-import { compareText, digestText, typeRequirementKey } from "./utilities.js";
+import { compareText, digestText } from "./utilities.js";
 import { compilerTypeRequirementCanonicalPath } from "../model/rustdoc-types.js";
+import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import type {
   RustCompilerDependency,
   RustCompilerFunction,
@@ -7,7 +8,10 @@ import type {
   RustCompilerTypeTraits,
 } from "../model/model.js";
 import type { ProjectionContext } from "./model.js";
-import type { RustNamedTypeTraitContract } from "../../../target-model/types/model.js";
+import type {
+  RustNamedTypeTraitContract,
+  RustTargetTraitRef,
+} from "../../../target-model/types/model.js";
 import type { RustProviderModuleDefinition, RustProviderOperationDefinition } from "../../packages/model.js";
 import type { RustProviderTypeParameterRequirement } from "../../../target-model/operations/model.js";
 
@@ -88,25 +92,51 @@ export function typeRequirements(
   parameters: readonly RustCompilerTypeParameter[],
   allowedTypeParameters: readonly string[],
   context: ProjectionContext,
+  projectTrait: (trait: import("../model/model.js").RustCompilerTraitDispatch) => RustTargetTraitRef,
 ): { readonly typeRequirements?: readonly RustProviderTypeParameterRequirement[] } {
   const allowed = new Set(allowedTypeParameters);
   const requirements = parameters
     .filter((parameter) => allowed.has(parameter.name) && parameter.requirements.length > 0)
     .map((parameter) => Object.freeze({
       name: parameter.name,
-      requirements: Object.freeze([...parameter.requirements]
-        .sort((left, right) => compareText(typeRequirementKey(left), typeRequirementKey(right)))
-        .map((requirement) => requirement === "clone" || requirement === "copy"
-          ? requirement
-          : Object.freeze({
-              kind: "trait" as const,
-              path: targetTraitPath(requirement.trait.path, context),
-            }))),
+      requirements: projectTypeRequirements(parameter, context, projectTrait),
     }))
     .sort((left, right) => compareText(left.name, right.name));
   return requirements.length === 0
     ? {}
     : { typeRequirements: Object.freeze(requirements) };
+}
+
+function projectTypeRequirements(
+  parameter: RustCompilerTypeParameter,
+  context: ProjectionContext,
+  projectTrait: (trait: import("../model/model.js").RustCompilerTraitDispatch) => RustTargetTraitRef,
+): RustProviderTypeParameterRequirement["requirements"] {
+  const projected = new Map<string, RustProviderTypeParameterRequirement["requirements"][number]>();
+  for (const requirement of parameter.requirements) {
+    if (requirement === "clone" || requirement === "copy") {
+      projected.set(requirement, requirement);
+      continue;
+    }
+    const projectedTrait = projectTrait(requirement.trait);
+    const trait: RustProviderTypeParameterRequirement["requirements"][number] =
+      Object.freeze({
+        kind: "trait",
+        path: targetTraitPath(requirement.trait.path, context),
+        genericArguments: projectedTrait.genericArguments,
+        associatedConstraints: projectedTrait.associatedConstraints,
+        ...(projectedTrait.lifetimeBinder === undefined
+          ? {}
+          : { lifetimeBinder: projectedTrait.lifetimeBinder }),
+      });
+    projected.set(
+      `trait:${closedMetadataKey(trait)}`,
+      trait,
+    );
+  }
+  return Object.freeze([...projected.entries()]
+    .sort(([left], [right]) => compareText(left, right))
+    .map(([, requirement]) => requirement));
 }
 
 export function compilerModuleSpecifier(alias: string, modulePath: readonly string[]): string {

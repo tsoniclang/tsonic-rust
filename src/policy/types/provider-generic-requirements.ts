@@ -1,23 +1,27 @@
-import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type {
   RustProviderTypeParameterRequirement,
   RustProviderTypeRequirement,
 } from "../../target-model/operations/model.js";
 import {
   isRustCopyCarrier,
-  rustCarrierSupportsTrait,
   rustCarrierSupportsClone,
+  rustCarrierSatisfiesTraitRef,
   rustFutureTargetId,
+  substituteRustTargetGenerics,
 } from "../../target-model/types/index.js";
+import type {
+  RustTargetGenericBindings,
+} from "../../target-model/types/index.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export function rustProviderGenericRequirementsAreSatisfied(
   requirements: readonly RustProviderTypeParameterRequirement[] | undefined,
-  bindings: ReadonlyMap<string, TargetTypeRef>,
+  bindings: RustTargetGenericBindings,
 ): boolean {
   for (const parameter of requirements ?? []) {
-    const carrier = bindings.get(parameter.name);
+    const carrier = bindings.types.get(parameter.name);
     if (carrier === undefined || parameter.requirements.some((requirement) =>
-      !rustProviderTypeRequirementIsSatisfied(requirement, carrier))) {
+      !rustProviderTypeRequirementIsSatisfied(requirement, carrier, bindings))) {
       return false;
     }
   }
@@ -26,12 +30,12 @@ export function rustProviderGenericRequirementsAreSatisfied(
 
 export function rustProviderOperationGenericRequirementsAreSelectable(
   requirements: readonly RustProviderTypeParameterRequirement[] | undefined,
-  bindings: ReadonlyMap<string, TargetTypeRef>,
+  bindings: RustTargetGenericBindings,
 ): boolean {
   for (const parameter of requirements ?? []) {
-    const carrier = bindings.get(parameter.name);
+    const carrier = bindings.types.get(parameter.name);
     if (carrier === undefined || parameter.requirements.some((requirement) =>
-      !rustProviderTypeRequirementIsSatisfied(requirement, carrier) &&
+      !rustProviderTypeRequirementIsSatisfied(requirement, carrier, bindings) &&
       !rustAnonymousFutureRequirementIsRustcDecidable(requirement, carrier))) {
       return false;
     }
@@ -42,10 +46,26 @@ export function rustProviderOperationGenericRequirementsAreSelectable(
 function rustProviderTypeRequirementIsSatisfied(
   requirement: RustProviderTypeRequirement,
   carrier: TargetTypeRef,
+  bindings: RustTargetGenericBindings,
 ): boolean {
   if (requirement === "copy") return isRustCopyCarrier(carrier);
   if (requirement === "clone") return rustCarrierSupportsClone(carrier);
-  return rustCarrierSupportsTrait(carrier, requirement.path);
+  const trait = substituteRustTargetGenerics(
+    {
+      kind: "trait-ref",
+      id: `provider-requirement:${requirement.path}`,
+      path: requirement.path,
+      genericArguments: requirement.genericArguments,
+      associatedConstraints: requirement.associatedConstraints,
+      ...(requirement.lifetimeBinder === undefined
+        ? {}
+        : { lifetimeBinder: requirement.lifetimeBinder }),
+    },
+    bindings.types,
+    bindings.lifetimes,
+    bindings.consts,
+  );
+  return trait.kind === "trait-ref" && rustCarrierSatisfiesTraitRef(carrier, trait);
 }
 
 const rustcDecidableFutureAutoTraits: ReadonlySet<string> = new Set([
@@ -60,5 +80,8 @@ function rustAnonymousFutureRequirementIsRustcDecidable(
 ): boolean {
   return carrier.kind === "target-named" && carrier.id === rustFutureTargetId &&
     typeof requirement === "object" &&
+    requirement.genericArguments.length === 0 &&
+    requirement.associatedConstraints.length === 0 &&
+    requirement.lifetimeBinder === undefined &&
     rustcDecidableFutureAutoTraits.has(requirement.path);
 }

@@ -140,6 +140,7 @@ test("simulated installed layout resolves target runtime crates end to end", { t
       projectRoot: consumerRoot,
       outputRoot: resolve(consumerRoot, "out"),
       targetOutputRoot: resolve(consumerRoot, "out/rust"),
+      cacheRoot: resolve(consumerRoot, ".tsonic/cache"),
     },
   };
   const capturedCapabilities = captureTargetCapabilityContributions({

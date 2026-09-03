@@ -309,7 +309,12 @@ function projectTypeAlias(
             ),
           }),
       targetCarrier: targetTypeFor(exported.type, typeContext, "result"),
-      ...typeRequirements(typeParametersOf(exported.genericParameters), typeNames, typeContext),
+      ...typeRequirements(
+        typeParametersOf(exported.genericParameters),
+        typeNames,
+        typeContext,
+        (trait) => targetTraitFor(trait, typeContext, "parameter", "target-default"),
+      ),
     }),
   };
 }
@@ -473,7 +478,12 @@ function projectNominalExport(
             genericParameters: providerGenericBindings,
           }),
       targetCarrier: declaredCarrier,
-      ...typeRequirements(typeParametersOf(sourceGenerics), typeNames, genericContext),
+      ...typeRequirements(
+        typeParametersOf(sourceGenerics),
+        typeNames,
+        genericContext,
+        (trait) => targetTraitFor(trait, genericContext, "parameter", "target-default"),
+      ),
     }),
   };
 }

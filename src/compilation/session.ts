@@ -51,6 +51,7 @@ export function createRustCompilationSession(
   const capturedProviderSemantics = composeRustProviderSemantics(context.capabilities);
   const compilerProviderSession = createRustCompilerProviderSession({
     configuration,
+    cacheRoot: context.paths.cacheRoot,
   });
   const jsEnabled = context.selectedSurfaceIds.includes(rustJsSourceProfileOwnerId);
   let state: RustCompilationSessionState = "created";

@@ -77,6 +77,13 @@ test("Rust product imports conform to the declared architecture", () => {
 
 test("Rust package exposes only approved audience entrypoints", async () => {
   const manifest = JSON.parse(readFileSync(resolve(repositoryRoot, "package.json"), "utf8"));
+  assert.deepEqual(manifest.files, [
+    "LICENSE",
+    "README.md",
+    "dist",
+    "!dist/**/*.tsbuildinfo",
+    "!dist/**/.temp/**",
+  ]);
   assert.deepEqual(
     Object.keys(manifest.exports).sort(),
     [".", "./package.json", "./provider"],

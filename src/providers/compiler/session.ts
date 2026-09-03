@@ -1,6 +1,7 @@
 import {
   TstsSourceProviderContractVersion,
 } from "@tsonic/tsts";
+import { resolve } from "node:path";
 import type {
   ExtensionDiagnostic,
   ProviderDeclarationModel,
@@ -58,8 +59,11 @@ export interface RustCompilerProviderSession {
 export function createRustCompilerProviderSession(
   context: {
     readonly configuration: RustTargetConfiguration;
+    readonly cacheRoot: string;
   },
-  worker: RustCompilerWorkerClient = createRustCompilerWorkerClient(),
+  worker: RustCompilerWorkerClient = createRustCompilerWorkerClient(
+    resolve(context.cacheRoot, "rust/compiler-provider"),
+  ),
 ): RustCompilerProviderSession {
   const standardSnapshot = worker.standardSnapshot();
   const standardSnapshotLease = createCompilerSnapshotLease(standardSnapshot);

@@ -253,7 +253,7 @@ export type RustCompilerBorrowOrigin =
 export interface RustCompilerBorrowedResultProjection {
   readonly sourceType: RustCompilerType;
   readonly origin: RustCompilerBorrowOrigin;
-  readonly conversion: "copy" | "owned-string";
+  readonly conversion: "copy" | "owned-string" | "optional-copy" | "optional-owned-string";
 }
 
 export type RustCompilerReceiver =

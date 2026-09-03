@@ -8,7 +8,11 @@ import {
   rustTargetGenericReferences,
 } from "../../../target-model/types/index.js";
 import { isRustTargetTypeRef } from "../../../target-model/types/equality.js";
-import { validateOperationRows, validateTypeParameterRequirements } from "./operations.js";
+import {
+  typeRequirementCarriers,
+  validateOperationRows,
+  validateTypeParameterRequirements,
+} from "./operations.js";
 import {
   genericArgumentCarriers,
   validateGenericReferences,
@@ -616,12 +620,14 @@ function validateTypeRelations(
     validateTypeParameterRequirements(
       relation.typeRequirements,
       declared.typeNames,
+      definition,
       `export '${relation.exportId}' type requirements`,
       fail,
     );
     validateGenericReferences(
       [
         relation.targetCarrier,
+        ...typeRequirementCarriers(relation.typeRequirements),
         ...(relation.genericParameters ?? []).flatMap((parameter) =>
           parameter.kind === "lifetime"
             ? []
