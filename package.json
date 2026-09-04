@@ -1,6 +1,6 @@
 {
   "name": "@tsonic/target-rust",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Rust target pack for Tsonic",
   "license": "MIT",
   "repository": {
@@ -28,14 +28,14 @@
     "prepack": "npm run build"
   },
   "dependencies": {
-    "@tsonic/js-source-profile": "0.1.0",
-    "@tsonic/rust-runtime": "0.1.0",
-    "@tsonic/rust-js": "0.1.0"
+    "@tsonic/js-source-profile": "0.1.1",
+    "@tsonic/rust-runtime": "0.1.1",
+    "@tsonic/rust-js": "0.1.1"
   },
   "peerDependencies": {
-    "@tsonic/source-core": "0.1.0",
-    "@tsonic/target-api": "0.1.0",
-    "@tsonic/tsts": "0.1.0"
+    "@tsonic/source-core": "0.1.1",
+    "@tsonic/target-api": "0.1.1",
+    "@tsonic/tsts": "0.1.1"
   },
   "devDependencies": {
     "@tsonic/js-source-profile": "file:../tsonic/packages/js-source-profile",
