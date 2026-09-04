@@ -353,10 +353,27 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
     const constrainedLending = lifetimeProjection.operations.find(
       ({ exportId }) => exportId.endsWith("::constrained_lending"),
     );
-    assert.deepEqual(constrainedLending?.typeRequirements, [{
-      name: "F",
-      requirements: [{ kind: "trait", path: "widget_alias::LendingFamily" }],
-    }]);
+    assert.deepEqual(
+      constrainedLending?.typeRequirements?.map(({ name, requirements }) => ({
+        name,
+        requirements: requirements.map((requirement) =>
+          typeof requirement === "string"
+            ? requirement
+            : {
+                kind: requirement.kind,
+                path: requirement.path,
+                genericArguments: requirement.genericArguments,
+              }),
+      })),
+      [{
+        name: "F",
+        requirements: [{
+          kind: "trait",
+          path: "widget_alias::LendingFamily",
+          genericArguments: [],
+        }],
+      }],
+    );
     const lendingOperation = lifetimeProjection.operations.find(
       ({ exportId }) => exportId.endsWith("::pass_lending_item"),
     );
@@ -712,6 +729,16 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
       { name: "A", hasDefault: true },
     ]);
     assert.ok(hashMap.methods.some(({ name }) => name === "new"));
+    const hashMapGet = hashMap.methods.find(({ name }) => name === "get");
+    assert.ok(hashMapGet);
+    assert.ok(hashMapGet.typeRequirements.some(({ name, requirements }) =>
+      name === "K" && requirements.some((requirement) =>
+        typeof requirement === "object" &&
+        requirement.kind === "trait" &&
+        requirement.trait.path === "core::borrow::Borrow")));
+    assert.ok(hashMapGet.typeRequirements.some(({ name, requirements }) =>
+      name === "V" && requirements.includes("copy")));
+    assert.equal(hashMapGet.borrowedResult?.conversion, "optional-copy");
     const hashMapProjection = projectRustCompilerModule(collectionsModule, {
       providerModuleId: compilerProviderModuleId(standardDependency, ["collections"]),
       moduleSpecifier: "@tsonic/rust/std/collections.js",
@@ -733,6 +760,36 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
       ],
       "flattened static-call generics cannot retain owner defaults before callable parameters",
     );
+    const projectedGet = hashMapProjection.declarationModel.exports
+      .find(({ name }) => name === "HashMap")?.members
+      ?.find(({ name }) => name === "get")?.signatures?.[0];
+    assert.deepEqual(projectedGet?.returnType, {
+      kind: "union",
+      types: [
+        { kind: "type-parameter", name: "V" },
+        { kind: "undefined" },
+      ],
+    });
+    const projectedGetOperation = hashMapProjection.operations.find(
+      ({ memberId }) => memberId?.endsWith("::method:get"),
+    );
+    assert.equal(
+      projectedGetOperation?.genericParameters
+        ?.find(({ kind, sourceName }) => kind === "type" && sourceName === "Q")
+        ?.maybeSized,
+      true,
+    );
+    const projectedBorrowRequirement = projectedGetOperation?.typeRequirements
+      ?.find(({ name }) => name === "K")?.requirements
+      .find((requirement) =>
+        typeof requirement === "object" &&
+        requirement.path === "core::borrow::Borrow");
+    assert.equal(projectedBorrowRequirement?.kind, "trait");
+    assert.equal(projectedBorrowRequirement?.path, "core::borrow::Borrow");
+    assert.deepEqual(projectedBorrowRequirement?.genericArguments, [{
+      kind: "type",
+      type: { kind: "type-parameter", name: "Q" },
+    }]);
     const hashMapKeyParameter = hashMapTypeParameters.find(({ name }) => name === "K");
     const insertKeyRequirement = hashMap.methods
       .find(({ name }) => name === "insert")?.typeRequirements

@@ -9,7 +9,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { performance } from "node:perf_hooks";
 import type {
@@ -51,7 +51,7 @@ export interface RustCompilerWorkerClient {
   }): RustCompilerModuleModel;
 }
 
-export function createRustCompilerWorkerClient(root = defaultWorkerRoot()): RustCompilerWorkerClient {
+export function createRustCompilerWorkerClient(root: string): RustCompilerWorkerClient {
   const session = getWorkerSession(resolve(root));
   return Object.freeze({
     snapshot(manifestPath: string): RustCompilerProjectSnapshot {
@@ -223,10 +223,6 @@ function isProcessAlive(processId: number): boolean {
   } catch {
     return false;
   }
-}
-
-function defaultWorkerRoot(): string {
-  return resolve(dirname(fileURLToPath(import.meta.url)), "../../../.temp/rust-compiler-provider");
 }
 
 function requestId(): string {

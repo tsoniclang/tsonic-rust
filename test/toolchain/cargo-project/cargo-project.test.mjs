@@ -399,6 +399,7 @@ test("user-owned Cargo mode emits sources without creating or mutating the manif
     projectRoot: repositoryRoot,
     outputRoot: resolve(repositoryRoot, "out"),
     targetOutputRoot: resolve(repositoryRoot, "out/rust"),
+    cacheRoot: resolve(repositoryRoot, ".temp/cargo-project-cache"),
   };
 
   const configuration = createRustTargetConfiguration(
@@ -420,6 +421,7 @@ test("user-owned Cargo mode rejects missing, non-Cargo, and generated-output man
     projectRoot: repositoryRoot,
     outputRoot: resolve(fixtureRoot, "user-owned-output"),
     targetOutputRoot: resolve(fixtureRoot, "user-owned-output/rust"),
+    cacheRoot: resolve(fixtureRoot, "user-owned-cache"),
   };
   mkdirSync(paths.targetOutputRoot, { recursive: true });
   const insideOutput = resolve(paths.targetOutputRoot, "Cargo.toml");

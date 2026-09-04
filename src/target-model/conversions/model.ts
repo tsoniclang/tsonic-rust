@@ -1,11 +1,11 @@
 import type {
-  RustValueConversion,
+  RustNonOptionValueConversion,
   RustValueConversionId,
 } from "../operations/model.js";
 
 function semanticConversion(
   id: RustValueConversionId,
-): RustValueConversion {
+): RustNonOptionValueConversion {
   return Object.freeze({ kind: "semantic-conversion", id });
 }
 

@@ -8,19 +8,21 @@ import type {
   RustCompilerType,
 } from "../model/model.js";
 import type { ProjectionContext } from "./model.js";
+import { withProjectionGenericParameters } from "./utilities.js";
 
 export function rustCompilerFunctionHasCarrierContracts(
   fn: RustCompilerFunction,
   context: ProjectionContext,
 ): boolean {
+  const functionContext = withProjectionGenericParameters(context, fn.genericParameters);
   return fn.genericParameters.every((parameter) =>
-    genericParameterHasCarrierContracts(parameter, context)) &&
+    genericParameterHasCarrierContracts(parameter, functionContext)) &&
     fn.typeRequirements.every((parameter) =>
-      genericParameterHasCarrierContracts(parameter, context)) &&
-    (fn.receiver?.kind !== "custom" || typeHasCarrierContracts(fn.receiver.type, context)) &&
-    fn.parameters.every(({ type }) => typeHasCarrierContracts(type, context)) &&
-    typeHasCarrierContracts(compilerFunctionResult(fn.result).type, context) &&
-    (fn.traitDispatch === undefined || traitHasCarrierContracts(fn.traitDispatch, context));
+      genericParameterHasCarrierContracts(parameter, functionContext)) &&
+    (fn.receiver?.kind !== "custom" || typeHasCarrierContracts(fn.receiver.type, functionContext)) &&
+    fn.parameters.every(({ type }) => typeHasCarrierContracts(type, functionContext)) &&
+    typeHasCarrierContracts(compilerFunctionResult(fn.result).type, functionContext) &&
+    (fn.traitDispatch === undefined || traitHasCarrierContracts(fn.traitDispatch, functionContext));
 }
 
 export function compilerFunctionResult(type: RustCompilerType): {
@@ -60,9 +62,10 @@ function genericParameterHasCarrierContracts(
 function typeHasCarrierContracts(type: RustCompilerType, context: ProjectionContext): boolean {
   switch (type.kind) {
     case "unit":
-    case "generic":
     case "self":
       return true;
+    case "generic":
+      return context.genericNames?.has(type.identity.itemId) === true;
     case "primitive":
       return type.name === "str" || type.name === "never" || type.name === "char" ||
         sourcePrimitiveByRustName.has(type.name);

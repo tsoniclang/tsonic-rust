@@ -1,6 +1,8 @@
 import {
   rustCallableProtocol,
   rustLifetimeGenericArgument,
+  rustStrTargetType,
+  rustStringTargetId,
   rustStringTargetType,
   rustTargetGenericBindingsForArguments,
   substituteRustTargetGenerics,
@@ -57,6 +59,10 @@ import {
   rustLifetimeKey,
 } from "../../../../target-model/lifetimes/index.js";
 import type { RustLifetimeRef } from "../../../../target-model/lifetimes/index.js";
+import {
+  rustBorrowedStringTypeParameterNames,
+  rustProviderSourceArgumentMode,
+} from "./provider-argument-shape.js";
 
 export function instantiateExactSelectedConstructionCarrier(
   definition: import("../../../project-types/type-policy.js").RustProjectTypeDefinition,
@@ -199,9 +205,11 @@ export function instantiateSelectedCallTemplate(
   );
   const selectedParameterCarriers = selectedCallParameterInferenceCarriers(
     request,
+    template,
     context,
     resolutionOptions,
   );
+  const borrowedStringTypeParameters = rustBorrowedStringTypeParameterNames(template);
   const selectedResultCarrier = request.source.sourceResultType === undefined
     ? undefined
     : resolveRustTargetTypeRef(request.source.sourceResultType, context, resolutionOptions);
@@ -232,7 +240,13 @@ export function instantiateSelectedCallTemplate(
           );
           return type === undefined
             ? undefined
-            : Object.freeze({ kind: "type" as const, type });
+            : Object.freeze({
+                kind: "type" as const,
+                type: borrowedStringTypeParameters.has(parameter.sourceName) &&
+                    isOwnedRustString(type)
+                  ? rustStrTargetType()
+                  : type,
+              });
         })()
       : parameter.kind === "lifetime"
         ? (() => {
@@ -268,9 +282,11 @@ export function instantiateSelectedCallTemplate(
 
 function selectedCallParameterInferenceCarriers(
   request: RustCheckedCallSelectionInput,
+  template: RustProviderOperationTemplate,
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): readonly (TargetTypeRef | undefined)[] {
+  const borrowedStringTypeParameters = rustBorrowedStringTypeParameterNames(template);
   return request.source.sourceSelectedSignatureParameters.map((_parameter, parameterIndex) => {
     const bindings = request.source.sourceArgumentBindings.filter((binding) =>
       binding.sourceParameterIndex === parameterIndex);
@@ -282,10 +298,16 @@ function selectedCallParameterInferenceCarriers(
       const sourceBindings = request.source.sourceArgumentBindings.filter((binding) =>
         binding.sourceArgumentIndex === sourceIndex);
       const argument = request.source.sourceArguments[sourceIndex];
-      return argument === undefined || sourceBindings.some((binding) =>
+      const selected = argument === undefined || sourceBindings.some((binding) =>
         binding.sourceParameterIndex !== parameterIndex || binding.sourceForm !== "value")
         ? undefined
         : selectedSourceValueCarrier(argument, context, options);
+      const pattern = template.parameterCarriers?.[parameterIndex];
+      return selected !== undefined && isOwnedRustString(selected) &&
+          pattern?.kind === "type-parameter" &&
+          borrowedStringTypeParameters.has(pattern.name)
+        ? rustStrTargetType()
+        : selected;
     });
     const first = carriers[0];
     return first === undefined || carriers.some((carrier) =>
@@ -293,6 +315,10 @@ function selectedCallParameterInferenceCarriers(
       ? undefined
       : first;
   });
+}
+
+function isOwnedRustString(carrier: TargetTypeRef): boolean {
+  return carrier.kind === "target-named" && carrier.id === rustStringTargetId;
 }
 
 export function acceptSelectedCall(
@@ -545,7 +571,7 @@ function selectedCallSourceCarriers(
       const reborrow = selectReferenceReborrow(
         effective,
         expected,
-        selectedCallArgumentMode(fact.target, index),
+        rustProviderSourceArgumentMode(fact.target, index),
       );
       if (reborrow !== undefined) {
         reconciliations.push({
@@ -707,35 +733,6 @@ function selectReceiverReferenceReborrow(
           conversion,
         },
       };
-}
-
-function selectedCallArgumentMode(
-  form: RustProviderOperationForm,
-  sourceIndex: number,
-): import("../../../../target-model/operations/model.js").RustArgumentMode | undefined {
-  const orderedMode = (
-    modes: readonly import("../../../../target-model/operations/model.js").RustArgumentMode[] | undefined,
-    order: readonly number[] | undefined,
-  ) => {
-    const targetIndex = order === undefined ? sourceIndex : order.indexOf(sourceIndex);
-    return targetIndex < 0 ? undefined : modes?.[targetIndex] ?? "value";
-  };
-  switch (form.form) {
-    case "struct-variant":
-    case "expression-macro":
-      return "value";
-    case "call":
-    case "source-module-construction":
-    case "free-call":
-    case "receiver-method":
-      return orderedMode(form.argModes, form.argOrder);
-    case "trait-call":
-      return form.argModes?.[sourceIndex] ?? "value";
-    case "call-c-variadic":
-      return form.fixedArgumentModes[sourceIndex] ?? "value";
-    default:
-      return undefined;
-  }
 }
 
 function selectedCallArgumentTargetCarrier(

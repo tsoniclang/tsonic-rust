@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { selectRustProviderOperation } from "../../../dist/policy/operations/provider-selection.js";
 import { instantiateProviderOperationTemplate } from "../../../dist/analysis/operations/provider/calls/template-instantiation.js";
+import { rustBorrowedStringTypeParameterNames } from "../../../dist/analysis/operations/provider/calls/provider-argument-shape.js";
 import {
   mergeProviderDeclarationIdentities,
   resolveSelectedProviderDeclaration,
@@ -39,6 +40,28 @@ function identity(overrides = {}) {
     ...overrides,
   };
 }
+
+test("borrowed native string inference requires an exact ?Sized generic parameter", () => {
+  const template = (maybeSized) => ({
+    kind: "provider-operation",
+    operationId: "acme.borrowed",
+    operationKind: "method",
+    target: { form: "call", path: "acme::borrowed", argModes: ["ref"] },
+    resultCarrier: unit,
+    parameterCarriers: [{ kind: "type-parameter", name: "Q" }],
+    genericParameters: [{
+      kind: "type",
+      sourceName: "Q",
+      ...(maybeSized ? { maybeSized: true } : {}),
+    }],
+    isAsync: false,
+    isFallible: false,
+    errorBoundary: "target-runtime",
+  });
+
+  assert.deepEqual([...rustBorrowedStringTypeParameterNames(template(false))], []);
+  assert.deepEqual([...rustBorrowedStringTypeParameterNames(template(true))], ["Q"]);
+});
 
 test("exact provider signature identity wins over its explicit overload-group row", () => {
   const group = row();

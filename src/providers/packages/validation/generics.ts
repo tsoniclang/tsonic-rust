@@ -67,10 +67,13 @@ export function validateProviderGenericParameters(
     if (parameter.kind === "type") {
       requireExactKeys(
         asRecord(parameter),
-        ["kind", "sourceName", "defaultArgument"],
+        ["kind", "sourceName", "maybeSized", "defaultArgument"],
         label,
         fail,
       );
+      if (parameter.maybeSized !== undefined && parameter.maybeSized !== true) {
+        fail(`${label}.maybeSized must be true when present`);
+      }
       typeNames.add(parameter.sourceName);
       if (parameter.defaultArgument !== undefined) {
         if (parameter.defaultArgument.kind !== "type") {

@@ -58,6 +58,7 @@ import {
   rustRegExpNamedIndicesTargetId,
   rustRegExpStringIteratorTargetId,
   rustStringTargetId,
+  rustStrTargetId,
   rustTsValueTargetId,
   rustUndefinedTargetId,
 } from "./source-types.js";
@@ -126,6 +127,7 @@ export const rustBuiltInCarrierRenderPaths: Readonly<Record<string, string>> = O
 
 const rustBuiltInTargetCarrierIds: ReadonlySet<string> = new Set([
   rustStringTargetId,
+  rustStrTargetId,
   rustCallableTargetId,
   ...Object.keys(rustBuiltInCarrierRenderPaths),
 ]);

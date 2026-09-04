@@ -86,6 +86,7 @@ test("source path collisions receive local readable suffixes without hash names"
       projectRoot: "/project",
       outputRoot: "/project/out",
       targetOutputRoot: "/project/out/rust",
+      cacheRoot: "/project/.tsonic/cache",
     },
   });
 
@@ -116,6 +117,7 @@ test("source path allocation reserves sibling bases before assigning collision s
       projectRoot: "/project",
       outputRoot: "/project/out",
       targetOutputRoot: "/project/out/rust",
+      cacheRoot: "/project/.tsonic/cache",
     },
   });
 
@@ -171,6 +173,7 @@ test("identical source paths in distinct package components remain distinct", ()
       projectRoot: "/project/src",
       outputRoot: "/project/out",
       targetOutputRoot: "/project/out/rust",
+      cacheRoot: "/project/.tsonic/cache",
     },
   });
 
@@ -303,6 +306,7 @@ test("source output identity rejects files outside the checked project root", ()
       projectRoot: "/project",
       outputRoot: "/project/out",
       targetOutputRoot: "/project/out/rust",
+      cacheRoot: "/project/.tsonic/cache",
     },
   });
 

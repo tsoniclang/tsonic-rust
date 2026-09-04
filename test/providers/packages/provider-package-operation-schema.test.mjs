@@ -956,9 +956,21 @@ test("operation type parameters are declared exactly when their carriers use the
       operationKind: "method",
       target: { form: "call", path: "acme_validation::run" },
       resultCarrier: { kind: "type-parameter", name: "T" },
-      genericParameters: [{ kind: "type", sourceName: "T" }],
+      genericParameters: [{ kind: "type", sourceName: "T", maybeSized: true }],
     }],
   })));
+  assert.throws(
+    () => createRustProviderPackage(definition({
+      operations: [{
+        exportId: "@acme/validation::run",
+        operationKind: "method",
+        target: { form: "call", path: "acme_validation::run" },
+        resultCarrier: { kind: "type-parameter", name: "T" },
+        genericParameters: [{ kind: "type", sourceName: "T", maybeSized: false }],
+      }],
+    })),
+    /maybeSized must be true when present/u,
+  );
   assert.doesNotThrow(() => createRustProviderPackage(definition({
     operations: [{
       exportId: "@acme/validation::run",

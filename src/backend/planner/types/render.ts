@@ -34,6 +34,7 @@ import {
   rustPrimitiveTypeName,
   substituteRustTargetGenerics,
   rustStringTargetId,
+  rustStrTargetId,
   isRustNeverCarrier,
   rustOnlyTypeGenericArguments,
   rustFutureTargetId,
@@ -62,6 +63,9 @@ export function rustTypeFromCarrier(
   }
   if (carrier.kind === "target-named" && carrier.id === rustStringTargetId) {
     return { kind: "string" };
+  }
+  if (carrier.kind === "target-named" && carrier.id === rustStrTargetId) {
+    return { kind: "str" };
   }
   if (carrier.kind === "target-named" && carrier.id === rustCallableTargetId) {
     const callableTypeArguments = rustOnlyTypeGenericArguments(carrier.genericArguments);

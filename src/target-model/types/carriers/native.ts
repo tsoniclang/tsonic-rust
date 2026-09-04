@@ -3,7 +3,7 @@ import {
   isDenseDataArray,
 } from "../../metadata/closed-data.js";
 import { isRustTargetTypeRef } from "../equality.js";
-import { rustBigIntTargetId, rustNamedTypeCarrierName, rustNeverCarrierName, rustNullTargetId, rustStringTargetId, rustTsValueTargetId, rustUndefinedTargetId } from "./source-types.js";
+import { rustBigIntTargetId, rustNamedTypeCarrierName, rustNeverCarrierName, rustNullTargetId, rustStringTargetId, rustStrTargetId, rustTsValueTargetId, rustUndefinedTargetId } from "./source-types.js";
 import type { SourcePrimitiveKind } from "@tsonic/tsts";
 import type {
   RustNamedTypeTraitContract,
@@ -22,6 +22,10 @@ export function rustSourcePrimitiveTargetType(kind: SourcePrimitiveKind): Target
 
 export function rustStringTargetType(): TargetTypeRef {
   return { kind: "target-named", id: rustStringTargetId };
+}
+
+export function rustStrTargetType(): TargetTypeRef {
+  return { kind: "target-named", id: rustStrTargetId };
 }
 
 export function rustBorrowedStrTargetType(): TargetTypeRef {

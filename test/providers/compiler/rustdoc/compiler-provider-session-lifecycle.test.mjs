@@ -20,6 +20,7 @@ test("closing a compiler-provider session revokes its per-build snapshot lease",
       outputType: "lib",
       project: { kind: "generated" },
     },
+    cacheRoot: `${process.cwd()}/.temp/compiler-provider-session-cache`,
   }, worker);
   const [provider] = session.sourceProviders;
 

@@ -162,6 +162,7 @@ export function fakeCompileInput({
       projectRoot: "src",
       outputRoot: "out",
       targetOutputRoot: "out/rust",
+      cacheRoot: ".tsonic/cache",
     },
   };
 }

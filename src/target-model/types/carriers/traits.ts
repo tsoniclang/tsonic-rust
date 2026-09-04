@@ -1,6 +1,6 @@
 import { isRustBigIntCarrier, isRustJsStringCarrier, isRustNullCarrier, isRustStringCarrier, isRustUndefinedCarrier, isRustUnitCarrier } from "./js.js";
 import { isRustIntegerCarrier, rustFutureTargetId, rustPrimitiveTypeName } from "./primitives.js";
-import { rustBigIntTargetId, rustCallableTargetId, rustJsArrayTargetId, rustJsDateTargetId, rustJsErrorTargetId, rustJsMapTargetId, rustJsRegExpExecArrayTargetId, rustJsRegExpIndicesTargetId, rustJsRegExpMatchArrayTargetId, rustJsRegExpNamedGroupsTargetId, rustJsRegExpNamedIndicesTargetId, rustJsRegExpStringIteratorTargetId, rustJsRegExpTargetId, rustJsSetTargetId, rustJsStringTargetId, rustJsValueTargetId, rustLocationTargetId, rustNullTargetId, rustOptionTargetId, rustProgramErrorTargetId, rustRegExpExecArrayTargetId, rustRegExpIndicesTargetId, rustRegExpMatchArrayTargetId, rustRegExpNamedGroupsTargetId, rustRegExpNamedIndicesTargetId, rustRegExpStringIteratorTargetId, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustStringTargetId, rustStructuralObjectCarrierValue, rustTsValueTargetId, rustUndefinedTargetId } from "./source-types.js";
+import { rustBigIntTargetId, rustCallableTargetId, rustJsArrayTargetId, rustJsDateTargetId, rustJsErrorTargetId, rustJsMapTargetId, rustJsRegExpExecArrayTargetId, rustJsRegExpIndicesTargetId, rustJsRegExpMatchArrayTargetId, rustJsRegExpNamedGroupsTargetId, rustJsRegExpNamedIndicesTargetId, rustJsRegExpStringIteratorTargetId, rustJsRegExpTargetId, rustJsSetTargetId, rustJsStringTargetId, rustJsValueTargetId, rustLocationTargetId, rustNullTargetId, rustOptionTargetId, rustProgramErrorTargetId, rustRegExpExecArrayTargetId, rustRegExpIndicesTargetId, rustRegExpMatchArrayTargetId, rustRegExpNamedGroupsTargetId, rustRegExpNamedIndicesTargetId, rustRegExpStringIteratorTargetId, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustStringTargetId, rustStrTargetId, rustStructuralObjectCarrierValue, rustTsValueTargetId, rustUndefinedTargetId } from "./source-types.js";
 import {
   rustJsArrayBufferTargetId,
   rustJsDataViewTargetId,
@@ -28,6 +28,8 @@ import { rustFixedArrayCarrierValue, rustNamedTypeCarrierValue } from "./native.
 import { rustTargetGenericReferences } from "./generic-references.js";
 import type { RustNamedTypeCarrierValue } from "./native.js";
 import type { TargetTypeRef } from "../model.js";
+import type { RustTargetTraitRef } from "../model.js";
+import { rustTargetTypeRefEquals } from "../equality.js";
 import {
   rustOnlyTypeGenericArguments,
   rustTargetGenericTypeArguments,
@@ -158,6 +160,7 @@ const rustStringTraitPaths: ReadonlySet<string> = new Set([
 
 const rustUnconditionallyEqHashTargetIds: ReadonlySet<string> = new Set([
   rustStringTargetId,
+  rustStrTargetId,
   rustBigIntTargetId,
   rustNullTargetId,
   rustUndefinedTargetId,
@@ -218,6 +221,27 @@ export function rustCarrierSupportsTrait(
     return rustNamedTypeSupportsTrait(namedType, traitPath, typeParameterSupports);
   }
   return false;
+}
+
+export function rustCarrierSatisfiesTraitRef(
+  carrier: TargetTypeRef | undefined,
+  trait: RustTargetTraitRef,
+  typeParameterSupports: (name: string, traitPath: string) => boolean = () => false,
+): boolean {
+  if (trait.lifetimeBinder !== undefined || trait.associatedConstraints.length > 0) {
+    return false;
+  }
+  if (trait.genericArguments.length === 0) {
+    return rustCarrierSupportsTrait(carrier, trait.path, typeParameterSupports);
+  }
+  const [argument] = trait.genericArguments;
+  return carrier !== undefined &&
+    trait.path === "core::borrow::Borrow" &&
+    trait.genericArguments.length === 1 &&
+    argument?.kind === "type" &&
+    (rustTargetTypeRefEquals(carrier, argument.type) ||
+      carrier.kind === "target-named" && carrier.id === rustStringTargetId &&
+      argument.type.kind === "target-named" && argument.type.id === rustStrTargetId);
 }
 
 function rustCarrierSupportsDefault(

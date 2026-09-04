@@ -14,6 +14,7 @@ import {
   rustSourceTypeCarrierValue,
   rustSourceUnionCarrierValue,
   rustStringTargetId,
+  rustStrTargetId,
   rustStructuralObjectCarrierValue,
 } from "../../target-model/types/index.js";
 import {
@@ -129,6 +130,9 @@ function rustFoundationForTargetNamedCarrier(id: string): RustFoundation {
   }
   if (id === rustStringTargetId || id === rustCallableTargetId) {
     return "alloc";
+  }
+  if (id === rustStrTargetId) {
+    return "core";
   }
   if (id === rustFutureTargetId || id === rustNativeScalarTargetId) {
     return "core";

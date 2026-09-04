@@ -234,7 +234,11 @@ export function instantiateProviderTargetType(
   }
   if (!rustProviderGenericRequirementsAreSatisfied(
     relation.typeRequirements,
-    typeSubstitutions,
+    {
+      types: typeSubstitutions,
+      lifetimes: lifetimeSubstitutions,
+      consts: constSubstitutions,
+    },
   )) {
     return undefined;
   }

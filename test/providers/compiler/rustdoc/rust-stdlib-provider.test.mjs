@@ -23,8 +23,12 @@ function retainPublicAlias(value: AllocVec<int32>): Vec<int32> {
 export function main(): void {
   const map = new HashMap<string, int32>();
   map.insert("answer", 42);
-  if (map.is_empty()) {
-    throw new Error("HashMap insertion mismatch");
+  if (map.get("answer") !== 42) {
+    throw new Error("HashMap lookup mismatch");
+  }
+  const ownedKey = "answer";
+  if (map.get(ownedKey) !== 42 || map.get<string>("answer") !== 42) {
+    throw new Error("HashMap borrowed lookup mismatch");
   }
   map.clear();
   if (!map.is_empty()) {
@@ -60,6 +64,9 @@ export function main(): void {
   assert.doesNotMatch(source, /alloc::vec::Vec/u);
   assert.doesNotMatch(source, /std::alloc::Global/u);
   assert.doesNotMatch(source, /RandomState/u);
+  assert.doesNotMatch(source, /\.get::<String>/u);
+  assert.match(source, /\.get::<str>\("answer"\)/u);
+  assert.match(source, /\.get::<str>\(&owned_key\)/u);
   const run = validateGeneratedProject("rust-stdlib-provider", result.artifacts, { run: true });
   assert.equal(run.status, 0);
 });

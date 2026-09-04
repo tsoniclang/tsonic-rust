@@ -68,6 +68,7 @@ export function normalizeFunction(
     document,
     requireRecord(fn.generics, `${name}.generics`),
     declarationContext,
+    { retainContextualTypeRequirements: true },
   );
   const implementationBindings = options.implementationBindings ?? emptyRustCompilerSubstitutions;
   const associatedTypeBindings = options.associatedTypeBindings ?? new Map<string, RustCompilerType>();
@@ -115,6 +116,7 @@ export function normalizeFunction(
     parameter.kind === "type");
   const typeRequirements = mergeTypeParameterRequirements(
     options.inheritedRequirements ?? Object.freeze([]),
+    generics.contextualTypeRequirements,
     ownTypeParameters,
     ...(borrowed?.typeRequirements === undefined ? [] : [borrowed.typeRequirements]),
   );
@@ -250,22 +252,24 @@ function borrowedResultProjection(
   readonly projection: NonNullable<RustCompilerFunction["borrowedResult"]>;
   readonly typeRequirements?: readonly RustCompilerTypeParameter[];
 } | undefined {
-  if (result.kind !== "reference" || result.mutable) return undefined;
-  const origin = borrowedResultOrigin(result, receiver, parameters);
+  const selected = borrowedResultReference(result);
+  if (selected === undefined || selected.reference.mutable) return undefined;
+  const origin = borrowedResultOrigin(selected.reference, receiver, parameters);
   if (origin === undefined) return undefined;
-  if (result.target.kind === "primitive" && result.target.name === "str") {
+  if (selected.reference.target.kind === "primitive" &&
+      selected.reference.target.name === "str") {
     return {
       projection: Object.freeze({
-        sourceType: result.target,
+        sourceType: selected.sourceType,
         origin,
-        conversion: "owned-string",
+        conversion: selected.optional ? "optional-owned-string" : "owned-string",
       }),
     };
   }
   const typeRequirements = compilerTypeRequirementConditions(
     document,
     dependency,
-    result.target,
+    selected.reference.target,
     "copy",
     new Set(),
     resolveItem,
@@ -273,12 +277,57 @@ function borrowedResultProjection(
   if (typeRequirements === undefined) return undefined;
   return {
     projection: Object.freeze({
-      sourceType: result.target,
+      sourceType: selected.sourceType,
       origin,
-      conversion: "copy",
+      conversion: selected.optional ? "optional-copy" : "copy",
     }),
     ...(typeRequirements.length === 0 ? {} : { typeRequirements }),
   };
+}
+
+function borrowedResultReference(
+  result: RustCompilerType,
+): {
+  readonly reference: Extract<RustCompilerType, { readonly kind: "reference" }>;
+  readonly sourceType: RustCompilerType;
+  readonly optional: boolean;
+} | undefined {
+  if (result.kind === "reference") {
+    return Object.freeze({
+      reference: result,
+      sourceType: result.target,
+      optional: false,
+    });
+  }
+  if (!isCoreOption(result)) return undefined;
+  const argument = result.genericArguments[0];
+  if (argument?.kind !== "type" || argument.type.kind !== "reference") {
+    return undefined;
+  }
+  return Object.freeze({
+    reference: argument.type,
+    sourceType: Object.freeze({
+      ...result,
+      genericArguments: Object.freeze([
+        Object.freeze({
+          kind: "type" as const,
+          type: argument.type.target,
+        }),
+      ]),
+    }),
+    optional: true,
+  });
+}
+
+function isCoreOption(
+  type: RustCompilerType,
+): type is Extract<RustCompilerType, { readonly kind: "path" }> {
+  return type.kind === "path" &&
+    type.identity.canonicalPath.length === 3 &&
+    type.identity.canonicalPath[0] === "core" &&
+    type.identity.canonicalPath[1] === "option" &&
+    type.identity.canonicalPath[2] === "Option" &&
+    type.genericArguments.length === 1;
 }
 
 function borrowedResultOrigin(

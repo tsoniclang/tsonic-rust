@@ -81,6 +81,7 @@ export function normalizeTraitDispatch(
 export interface NormalizedRustCompilerGenerics {
   readonly parameters: readonly RustCompilerGenericParameter[];
   readonly context: RustCompilerNormalizationContext;
+  readonly contextualTypeRequirements: readonly RustCompilerTypeParameter[];
   readonly selfRequirements: readonly RustCompilerTypeRequirement[];
   readonly selfOutlives: readonly RustCompilerLifetime[];
   readonly selfMaybeSized: boolean;
@@ -201,6 +202,7 @@ export function normalizeDeclaredGenericParameters(
   return Object.freeze({
     parameters: Object.freeze(parameters),
     context: completeContext,
+    contextualTypeRequirements: Object.freeze([]),
     selfRequirements: Object.freeze([]),
     selfOutlives: Object.freeze([]),
     selfMaybeSized: false,
@@ -211,6 +213,9 @@ export function normalizeGenericParameters(
   document: RustdocDocument,
   generics: Readonly<Record<string, unknown>>,
   context: RustCompilerNormalizationContext,
+  options: {
+    readonly retainContextualTypeRequirements?: boolean;
+  } = {},
 ): NormalizedRustCompilerGenerics {
   const declared = normalizeDeclaredGenericParameters(document, generics, context);
   const augmented = applyWherePredicates(
@@ -218,10 +223,12 @@ export function normalizeGenericParameters(
     declared.parameters,
     requireArray(generics.where_predicates, "Rust generic where predicates"),
     declared.context,
+    options.retainContextualTypeRequirements === true,
   );
   return Object.freeze({
     parameters: augmented.parameters,
     context: contextWithParameters(context, augmented.parameters),
+    contextualTypeRequirements: augmented.contextualTypeRequirements,
     selfRequirements: augmented.selfRequirements,
     selfOutlives: augmented.selfOutlives,
     selfMaybeSized: augmented.selfMaybeSized,
@@ -343,13 +350,21 @@ function applyWherePredicates(
   parameters: readonly RustCompilerGenericParameter[],
   predicates: readonly unknown[],
   context: RustCompilerNormalizationContext,
+  retainContextualTypeRequirements: boolean,
 ): {
   readonly parameters: readonly RustCompilerGenericParameter[];
+  readonly contextualTypeRequirements: readonly RustCompilerTypeParameter[];
   readonly selfRequirements: readonly RustCompilerTypeRequirement[];
   readonly selfOutlives: readonly RustCompilerLifetime[];
   readonly selfMaybeSized: boolean;
 } {
   const selected = new Map(parameters.map((parameter) => [parameterIdentity(parameter), parameter] as const));
+  const contextualTypes = new Map(
+    [...context.parameters.values()]
+      .filter((parameter): parameter is RustCompilerTypeParameter => parameter.kind === "type")
+      .map((parameter) => [parameter.identity.itemId, parameter] as const),
+  );
+  const contextualTypeRequirements = new Map<string, RustCompilerTypeParameter>();
   let selfRequirements: readonly RustCompilerTypeRequirement[] = Object.freeze([]);
   let selfOutlives: readonly RustCompilerLifetime[] = Object.freeze([]);
   let selfMaybeSized = true;
@@ -414,21 +429,41 @@ function applyWherePredicates(
       throw new Error("Rust where predicates must constrain one declared type parameter directly.");
     }
     const parameter = selected.get(type.identity.itemId);
-    if (parameter?.kind !== "type") {
+    if (parameter?.kind === "type") {
+      selected.set(type.identity.itemId, mergeTypeParameterBounds(parameter, bounds));
+      continue;
+    }
+    const contextual = contextualTypes.get(type.identity.itemId);
+    if (contextual === undefined || !retainContextualTypeRequirements) {
       throw new Error("Rust type where predicate has no matching declaration.");
     }
-    selected.set(type.identity.itemId, Object.freeze({
-      ...parameter,
-      requirements: mergeRequirements(parameter.requirements, bounds.requirements),
-      outlives: mergeLifetimes(parameter.outlives, bounds.outlives),
-      maybeSized: parameter.maybeSized || bounds.maybeSized,
-    }));
+    const existing = contextualTypeRequirements.get(type.identity.itemId) ?? contextual;
+    contextualTypeRequirements.set(
+      type.identity.itemId,
+      mergeTypeParameterBounds(existing, bounds),
+    );
   }
   return Object.freeze({
     parameters: Object.freeze(parameters.map((parameter) => selected.get(parameterIdentity(parameter))!)),
+    contextualTypeRequirements: Object.freeze(
+      [...contextualTypeRequirements.values()].sort((left, right) =>
+        compareText(left.identity.itemId, right.identity.itemId)),
+    ),
     selfRequirements,
     selfOutlives,
     selfMaybeSized,
+  });
+}
+
+function mergeTypeParameterBounds(
+  parameter: RustCompilerTypeParameter,
+  bounds: ReturnType<typeof normalizeTypeBounds>,
+): RustCompilerTypeParameter {
+  return Object.freeze({
+    ...parameter,
+    requirements: mergeRequirements(parameter.requirements, bounds.requirements),
+    outlives: mergeLifetimes(parameter.outlives, bounds.outlives),
+    maybeSized: parameter.maybeSized || bounds.maybeSized,
   });
 }
 

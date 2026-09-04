@@ -13,6 +13,7 @@ import {
 } from "../../lifetimes/index.js";
 
 export const rustStringTargetId = "rust.std.String";
+export const rustStrTargetId = "rust.primitive.str";
 export const rustNativeScalarTargetId = "rust.native.char";
 export const rustJsStringTargetId = "rust.js.JsString";
 export const rustBigIntTargetId = "rust.runtime.BigInt";
