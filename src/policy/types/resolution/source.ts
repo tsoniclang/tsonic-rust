@@ -160,7 +160,13 @@ export function resolveRustTargetTypeSyntax(
   options: RustTargetTypeResolutionOptions,
   resolving: Set<object>,
 ): TargetTypeRef | undefined {
-  const rustLifetimeContract = rustSourceLifetimeTypeContract(node, context);
+  const sourceFile = context.ast.getSourceFile(node);
+  const semantics = sourceFile !== undefined && context.source.semantics.includes(sourceFile)
+    ? context.semanticsFor(node)
+    : undefined;
+  const rustLifetimeContract = semantics === undefined
+    ? undefined
+    : rustSourceLifetimeTypeContract(node, context);
   if (rustLifetimeContract !== undefined) {
     return resolveRustLifetimeSourceType(
       node,
@@ -250,7 +256,7 @@ export function resolveRustTargetTypeSyntax(
   }
   if (kind === "KindFunctionType") {
     return resolveRustTargetType(
-      context.semanticsFor(node).types.expressionType(node),
+      semantics?.types.expressionType(node),
       context,
       options,
       resolving,
@@ -328,19 +334,19 @@ export function resolveRustTargetTypeSyntax(
       }
     }
     return resolveRustTargetType(
-      context.semanticsFor(node).types.expressionType(node),
+      semantics?.types.expressionType(node),
       context,
       options,
       resolving,
     );
   }
-  if (kind !== "KindTypeReference") {
+  if (kind !== "KindTypeReference" || semantics === undefined) {
     return undefined;
   }
-  const selectedType = context.semanticsFor(node).types.expressionType(node);
+  const selectedType = semantics.types.expressionType(node);
   const standardTransformation = selectedType === undefined
     ? undefined
-    : context.semanticsFor(node).types.standardTransformation(
+    : semantics.types.standardTransformation(
         node,
         selectedType,
       );
@@ -385,7 +391,7 @@ export function resolveRustTargetTypeSyntax(
     return undefined;
   }
   const provider = resolveProviderTypeIdentity(
-    context.semanticsFor(node).facts.authoredTypeSubjects(node),
+    semantics.facts.authoredTypeSubjects(node),
     context,
   );
   if (provider !== undefined) {

@@ -96,8 +96,12 @@ export function resolveRustAuthoredTargetType(
   options: RustTargetTypeResolutionOptions,
   resolving: Set<object>,
 ): TargetTypeRef | undefined {
-  return resolveRustTargetTypeSyntax(node, context, options, resolving) ??
-    resolveRustTargetType(
+  const syntax = resolveRustTargetTypeSyntax(node, context, options, resolving);
+  if (syntax !== undefined) return syntax;
+  const sourceFile = context.ast.getSourceFile(node);
+  return sourceFile === undefined || !context.source.semantics.includes(sourceFile)
+    ? undefined
+    : resolveRustTargetType(
       context.semanticsFor(node).types.expressionType(node),
       context,
       options,
