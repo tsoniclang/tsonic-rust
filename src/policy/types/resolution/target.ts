@@ -228,6 +228,13 @@ export function resolveStructuralObjectType(
     const projectDeclarations = declarations?.filter((declaration) =>
       context.source.navigation.isProjectDeclaration(declaration) &&
       isRustStructuralObjectFieldDeclaration(declaration, context.ast));
+    const hasExactTransformedIdentity = authoredTypeRoot !== undefined &&
+      projectDeclarations !== undefined && projectDeclarations.length === 0;
+    if (projectDeclarations === undefined ||
+      (!hasExactTransformedIdentity && projectDeclarations.length === 0) ||
+      (!hasExactTransformedIdentity && projectDeclarations.length !== declarations?.length)) {
+      return undefined;
+    }
     const getters = projectDeclarations?.filter((declaration) =>
       context.ast.kindName(declaration) === "KindGetAccessor") ?? [];
     const setters = projectDeclarations?.filter((declaration) =>
@@ -275,12 +282,7 @@ export function resolveStructuralObjectType(
         setters.length === 0 && ordinaryDeclarations.length === 0
       ? true as const
       : undefined;
-    const hasExactTransformedIdentity = authoredTypeRoot !== undefined &&
-      projectDeclarations !== undefined && projectDeclarations.length === 0;
-    return projectDeclarations === undefined ||
-        (!hasExactTransformedIdentity && projectDeclarations.length === 0) ||
-        (!hasExactTransformedIdentity && projectDeclarations.length !== declarations?.length) ||
-        fieldCarrier === undefined
+    return fieldCarrier === undefined
         || getters.length > 1 || setters.length > 1 ||
         getters.length === 0 && setters.length > 0 ||
         getters.length > 0 && (ordinaryDeclarations.length > 0 || methods.length > 0) ||
