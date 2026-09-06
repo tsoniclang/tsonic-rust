@@ -35,9 +35,11 @@ import { addressIntegerToRawPointer as fromAddress, rawPointerToAddressInteger a
   sizeOf, alignOf, strideOf, fieldOffsetOf } from "@tsonic/core/lang.js";
 import type { RawPointer, uint8, uint32, uint64, int64, uint128, nativeInt, nativeUint } from "@tsonic/core/types.js";
 interface Header { tag: uint8; count: uint32 }
-const tagField = memoryField((value: Header) => value.tag, 0, 1);
+const byteLayout = memoryLayout<uint8>(abi, 1, 1, 1);
+const wordLayout = memoryLayout<uint32>(abi, 4, 4, 4);
+const tagField = memoryField((value: Header) => value.tag, 0, 1, byteLayout);
 const headerLayout = memoryLayout<Header>(abi, 8, 4, 8, tagField,
-  memoryField((value: Header) => value.count, 4, 4));
+  memoryField((value: Header) => value.count, 4, 4, wordLayout));
 const headerAlias = headerLayout;
 function observeLayout(expectedSize: nativeUint, expectedAlignment: nativeUint,
   expectedStride: nativeUint, expectedOffset: nativeUint, expectedScalar: nativeUint): boolean {
