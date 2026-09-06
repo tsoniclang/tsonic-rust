@@ -4,7 +4,7 @@ import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js"
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { readRustRawLocation, selectRustNativeMemoryLayout } from "../../policy/operations/native-memory.js";
 import { rustNativeBackingKey, rustNativeMemoryLayoutsEqual, rustRawLocationPlanKey } from "../../target-model/operations/native-memory.js";
-import { rustTargetOperationFactKey } from "../facts/keys.js";
+import { rustSourceParameterAbiFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
 import { rustLocationTargetType, rustOptionTargetType, rustRawPointerTargetType } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
@@ -70,16 +70,29 @@ export function recordRustNativeBacking(walk: RustFactWalk): void {
     if (origin.operation === "address-of") {
       const declaration = context.source.navigation.sourceReferenceFor(origin.storageExpression)?.declaration;
       if (!context.ast.is.IsIdentifier(origin.storageExpression) || declaration === undefined ||
-        !context.ast.is.IsVariableDeclaration(declaration) || context.ast.as.AsVariableDeclaration(declaration)?.Initializer === undefined) {
+        (!context.ast.is.IsVariableDeclaration(declaration) && !context.ast.is.IsParameterDeclaration(declaration))) {
         reject(origin.call, "This addressable storage requires a native field, element, parameter or provider backing contract.");
         continue;
       }
-      const statement = context.ast.parent(context.ast.parent(declaration)!);
-      const container = statement === undefined ? undefined : context.ast.parent(statement);
-      if (statement === undefined || !context.ast.is.IsVariableStatement(statement) ||
-        container === undefined || !context.ast.is.IsBlock(container)) {
-        reject(origin.call, "Native local backing requires an initialized block-local binding.");
-        continue;
+      if (context.ast.is.IsParameterDeclaration(declaration)) {
+        const owner = context.ast.parent(declaration);
+        const abi = context.facts.get(declaration, rustSourceParameterAbiFactKey);
+        if (owner === undefined || (!context.ast.is.IsFunctionDeclaration(owner) && !context.ast.is.IsMethodDeclaration(owner)) ||
+          context.ast.body(owner) === undefined || abi?.mode !== "value" ||
+          !rustTargetTypeRefEquals(abi.valueCarrier, layout.pointeeCarrier)) {
+          reject(origin.call, "Native parameter backing requires an exact by-value source function or method parameter.");
+          continue;
+        }
+      } else {
+        const list = context.ast.parent(declaration);
+        const statement = list === undefined ? undefined : context.ast.parent(list);
+        const container = statement === undefined ? undefined : context.ast.parent(statement);
+        if (statement === undefined || !context.ast.is.IsVariableStatement(statement) ||
+          container === undefined || !context.ast.is.IsBlock(container) ||
+          context.ast.as.AsVariableDeclaration(declaration)?.Initializer === undefined) {
+          reject(origin.call, "Native local backing requires an initialized block-local binding.");
+          continue;
+        }
       }
       subject = declaration;
     }

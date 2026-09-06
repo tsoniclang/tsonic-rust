@@ -12,7 +12,7 @@ import {
   rustMutatedReferentFactKey,
   rustSourceParameterAbiFactKey,
 } from "../../../analysis/facts/keys.js";
-import type { RustFunctionParam, RustStmt } from "../../target-ast/nodes.js";
+import type { RustExpr, RustFunctionParam, RustStmt } from "../../target-ast/nodes.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import {
   requireRustCarrierRequirements,
@@ -30,6 +30,8 @@ import {
 } from "../names/synthetic.js";
 import type { RustSyntheticNameState } from "../names/synthetic.js";
 import { rustLocationStorageForDeclaration } from "../expressions/typed-locations.js";
+import { planRustNativeAllocation } from "../expressions/native-memory.js";
+import { rustNativeBackingKey } from "../../../target-model/operations/native-memory.js";
 import type { RustBindingExpressionPlanner } from "../bindings/patterns.js";
 import { rustOptionDefaultValue } from "../option-default.js";
 import { rustCarrierReferentMutationRequiresMutableBinding } from "../../../target-model/types/index.js";
@@ -174,17 +176,18 @@ export function planRustCallableParameters(
       return undefined;
     }
     context.usedAliases?.add("rt");
+    const initial: RustExpr = { kind: "path", path: parameterName };
+    const allocation: RustExpr | undefined = context.input.program.facts.getFact(parameter, rustNativeBackingKey) === undefined
+      ? { kind: "call", path: "rt::Location::allocate", args: [initial] }
+      : planRustNativeAllocation(parameter, initial, context);
+    if (allocation === undefined) return undefined;
     prelude.push({
       kind: "statement",
       statement: {
         kind: "let",
         name: parameterName,
         mutable: false,
-        init: {
-          kind: "call",
-          path: "rt::Location::allocate",
-          args: [{ kind: "path", path: parameterName }],
-        },
+        init: allocation,
       },
     });
   }

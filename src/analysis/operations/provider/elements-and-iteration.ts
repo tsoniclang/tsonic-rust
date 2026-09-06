@@ -197,7 +197,7 @@ export function selectRustCheckedElementAccess(
   if (sourceProfileIdentity?.profile === "native" &&
     (sourceProfileIdentity.ownerName === "Array" || sourceProfileIdentity.ownerName === "ReadonlyArray") &&
     sourceProfileIdentity.memberName === "index" &&
-    nativeArrayReceiver !== undefined && isRustCopyCarrier(nativeArrayReceiver.element)) {
+    nativeArrayReceiver !== undefined && (isRustCopyCarrier(nativeArrayReceiver.element) || rustCarrierSupportsClone(nativeArrayReceiver.element))) {
     const template: RustProviderOperationTemplate = {
       kind: "provider-operation",
       operationId: `tsonic.rust.native.${sourceProfileIdentity.ownerName}.index`,

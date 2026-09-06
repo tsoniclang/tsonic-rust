@@ -20,6 +20,27 @@ export function main(): void { if (!run()) throw new Error("native location alia
   validateGeneratedProject("native-location-aliases", result.artifacts, { run: true });
 });
 
+test("native array value reads clone proven owned handles while storage writes remain places", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    target: { id: "rust", options: { outputType: "bin" } },
+    files: { "index.ts": `
+      export function main(): void {
+        const values: string[] = ["original", "second"];
+        const saved = values[0];
+        values[0] = "changed";
+        if (saved !== "original" || values[0] !== "changed" || values[1] !== "second") {
+          throw new Error("native index value/storage ownership");
+        }
+      }
+    ` },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  const output = artifactText(result, "src/index.rs");
+  assert.match(output, /\]\.clone\(\)/u);
+  assert.doesNotMatch(output, /\]\.clone\(\)\s*=/u);
+  validateGeneratedProject("native-index-owned-reads", result.artifacts, { run: true });
+});
+
 for (const [name, source, diagnostic] of [
   ["open caller", `export function expose(pointer: Pointer<uint32>) { return toRawPointer(pointer, word); }`, "RUST_NATIVE_BACKING_NOT_PROVEN"],
   ["logical projection", `export function expose() { const pointer = allocatePointer<uint32>(1); return toRawPointer(projectPointer<uint32, uint32>(pointer, value => value, value => value), word); }`, "RUST_NATIVE_BACKING_NOT_PROVEN"],

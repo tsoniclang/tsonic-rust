@@ -354,35 +354,30 @@ export function planProviderOperationExpression(
             },
             form.chain,
           ));
-    case "field": {
-      if (receiver === undefined || args.length !== 0) {
+    case "field":
+    case "index": {
+      if (receiver === undefined || args.length !== (form.form === "field" ? 0 : 1)) {
         return undefined;
       }
-      const field: RustExpr = { kind: "field", receiver, name: form.name };
+      const place: RustExpr | undefined = form.form === "field"
+        ? { kind: "field", receiver, name: form.name }
+        : args[0] === undefined ? undefined : { kind: "index", receiver, index: args[0] };
+      if (place === undefined) return undefined;
       if (options.resultUse === "storage") {
-        return scoped(field);
+        return scoped(place);
       }
       if (isRustCopyCarrier(fact.resultCarrier)) {
-        return scoped(field);
+        return scoped(place);
       }
       if (!rustCarrierSupportsClone(fact.resultCarrier)) {
         context.diagnostics.push(unsupportedConstructDiagnostic(
           diagnosticInput(context, operationNode),
-          "rust.backend.provider-field-read-ownership",
-          "A provider field read requires an exact Copy or Clone result-carrier contract.",
+          `rust.backend.provider-${form.form}-read-ownership`,
+          `A provider ${form.form} read requires an exact Copy or Clone result-carrier contract.`,
         ));
         return undefined;
       }
-      return scoped({ kind: "method-call", receiver: field, method: "clone", args: [] });
-    }
-    case "index": {
-      if (receiver === undefined || args.length !== 1) {
-        return undefined;
-      }
-      const index = args[0];
-      return scoped(index === undefined
-        ? undefined
-        : { kind: "index", receiver, index });
+      return scoped({ kind: "method-call", receiver: place, method: "clone", args: [] });
     }
     case "binary-operator": {
       const [left, right] = args;
