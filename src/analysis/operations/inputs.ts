@@ -51,6 +51,8 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustTargetOperationFact } from "../facts/keys.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { rustRawAddressPlanKey } from "../../target-model/operations/raw-addresses.js";
+import { rustMemoryLayoutObservationKey } from "../../target-model/operations/memory-layout.js";
 
 export function recordSelectedOperationInputs(
   walk: RustFactWalk,
@@ -58,6 +60,12 @@ export function recordSelectedOperationInputs(
   sourceFile: SourceFile,
   fact: RustTargetOperationFact | undefined,
 ): void {
+  if (walk.context.facts.get(expression, rustMemoryLayoutObservationKey) !== undefined) return;
+  const rawAddress = walk.context.facts.get(expression, rustRawAddressPlanKey);
+  if (rawAddress !== undefined) {
+    for (const input of rawAddress.arguments) resolveExpressionCarrier(walk, input.expression, sourceFile, input.carrier);
+    return;
+  }
   const { ast } = walk.context;
   const kind = ast.kindName(expression);
   if (kind === KindBinaryExpression) {

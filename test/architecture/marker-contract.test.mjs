@@ -81,12 +81,21 @@ test("Rust converts typed-location facts into one target-owned selection", () =>
 
 test("Rust backend consumes only target-owned marker facts", () => {
   const forbiddenNeutralFacts =
-    /argumentPassingFactKey|defaultValueFactKey|fieldFactKey|flowStateFactKey|functionPointerFactKey|pointerFactKey|pointerOperationFactKey|structFactKey|tsonicAttributeBuilderFactKey|tsonicKeepAliveFactKey/u;
+    /argumentPassingFactKey|defaultValueFactKey|fieldFactKey|flowStateFactKey|functionPointerFactKey|pointerFactKey|pointerOperationFactKey|rawPointerFactKey|rawPointerOperationFactKey|structFactKey|tsonicAttributeBuilderFactKey|tsonicKeepAliveFactKey/u;
   const failures = sourceFiles(join(repositoryRoot, "src/backend"))
     .filter((path) => forbiddenNeutralFacts.test(readFileSync(path, "utf8")))
     .map((path) => path.slice(repositoryRoot.length + 1));
 
   assert.deepEqual(failures, []);
+});
+
+test("raw pointer source facts have one policy adapter", () => {
+  for (const key of ["rawPointerFactKey", "rawPointerOperationFactKey"]) {
+    const consumers = sourceFiles(join(repositoryRoot, "src"))
+      .filter(path => readFileSync(path, "utf8").includes(key))
+      .map(path => path.slice(repositoryRoot.length + 1));
+    assert.deepEqual(consumers, ["src/policy/operations/raw-pointer-source.ts"]);
+  }
 });
 
 test("provider argument-flow markers remain neutral while Rust references are explicit", () => {

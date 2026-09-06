@@ -1,3 +1,4 @@
+import { createTsonicMemoryMetadataIndex, type TsonicMemoryMetadataIndex } from "@tsonic/source-core/facts";
 import type {
   AstReader,
   Node,
@@ -69,6 +70,7 @@ import {
 } from "./generated-declaration-uses.js";
 
 export interface RustAnalysisContext extends RustSourcePolicyContext {
+  readonly memoryMetadata: TsonicMemoryMetadataIndex;
   readonly target: TargetSelection;
   readonly jsEnabled: boolean;
   readonly ast: AstReader;
@@ -138,6 +140,7 @@ export function createRustAnalysisContext(
     semanticsFor: input.source.semantics.forNode,
   });
   return Object.freeze({
+    memoryMetadata: createTsonicMemoryMetadataIndex(input.source),
     source: input.source,
     target: input.target,
     jsEnabled,

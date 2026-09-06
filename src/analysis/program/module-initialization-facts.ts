@@ -8,6 +8,7 @@ import {
   Node_Expression,
 } from "@tsonic/target-api/source";
 import { rustModuleBindingFactKey } from "../facts/keys.js";
+import { rustMemoryMetadataKey } from "../../target-model/operations/memory-layout.js";
 import { rustProjectStaticFieldStorage } from "../project-types/object-layout.js";
 import type { RustAnalysisContext } from "./context.js";
 import type { RustFoundation } from "../../target-model/foundation/model.js";
@@ -71,6 +72,7 @@ function classifyModuleInitialization(
         return unresolved(statement, "Top-level variable statement has no exact variable declarations.");
       }
       for (const declaration of variables) {
+        if (input.facts.getFact(declaration, rustMemoryMetadataKey)) continue;
         const binding = input.facts.getFact(declaration, rustModuleBindingFactKey);
         if (binding === undefined) {
           return unresolved(
@@ -113,6 +115,7 @@ function classifyModuleInitialization(
         );
       }
       const operation = input.safetyApplications.operationForExpression(expression);
+      if (input.facts.getFact(expression, rustMemoryMetadataKey)) continue;
       if (operation?.kind === "safety-builder" ||
         (operation?.kind === "unsafe-context" && operation.fact.kind === "remaining-block")) {
         continue;

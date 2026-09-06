@@ -1,5 +1,6 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
+import { rustMemoryMetadataKey } from "../../../target-model/operations/memory-layout.js";
 import {
   KindFunctionDeclaration,
   KindImportDeclaration,
@@ -557,6 +558,7 @@ function planTopLevelVariableStatement(
   const items: RustItem[] = [];
   const initialization: import("../../target-ast/nodes.js").RustStmt[] = [];
   for (const declaration of declarations) {
+    if (context.input.program.facts.getFact(declaration, rustMemoryMetadataKey)) continue;
     const name = context.input.program.names.nameForDeclaration(declaration) ?? "";
     const initializer = Node_Initializer(ast, declaration);
     const binding = context.input.program.facts.getFact(declaration, rustModuleBindingFactKey);

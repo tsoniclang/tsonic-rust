@@ -10,6 +10,7 @@ import {
   rustJsArrayTargetType,
   rustJsStringTargetType,
   rustLocationTargetType,
+  rustRawPointerTargetType,
   rustNullTargetType,
   rustNeverTargetType,
   rustOptionTargetType,
@@ -30,6 +31,7 @@ import { resolveReferencedDeclarationType, resolveRustAuthoredTargetType, resolv
 import { resolveRustTargetType, resolveStructuralObjectType } from "./target.js";
 import { sourceTransformedTypeFactEvidenceNodes } from "@tsonic/target-api/source";
 import { tsonicFixedArrayFactKey } from "@tsonic/source-core/facts";
+import { isRustSourceRawPointer } from "../../operations/raw-pointer-source.js";
 import type { ExtensionFactSubject, Node, Type } from "@tsonic/tsts";
 import type { SourceStandardTypeTransformation } from "@tsonic/target-api/source";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
@@ -60,6 +62,7 @@ export function resolveRustTargetTypeRef(
   if (subject === undefined) {
     return undefined;
   }
+  if (isRustSourceRawPointer(subject, context)) return rustRawPointerTargetType();
   if (resolveRustSourceMarker(subject, context) === "js-string") {
     return rustJsStringTargetType();
   }
@@ -205,6 +208,7 @@ export function resolveRustTargetTypeSyntax(
           ...(functionPointer.abi.length === 0 ? {} : { abi: functionPointer.abi }),
         };
   }
+  if (isRustSourceRawPointer(node, context)) return rustRawPointerTargetType();
   const pointer = context.facts.resolve(node, pointerFactKey) ??
     context.facts.get(node, pointerFactKey);
   if (pointer !== undefined) {

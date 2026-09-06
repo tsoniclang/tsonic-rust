@@ -48,6 +48,11 @@ import type { RustFactWalk } from "../program/walk.js";
 import type { RustSelectedTargetSignature, TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustSourceBindingFact, RustTargetOperationFact } from "../facts/keys.js";
 import { rustHigherRankedNativeFunctionCarrier } from "../callables/higher-ranked-function.js";
+import { readRustSourceRawAddress } from "../../policy/operations/raw-address-source.js";
+import { resolveRustRawAddressCarrier, resolveRustRawPointerIdentityCarrier } from "../operations/raw-addresses.js";
+import { readRustSourceRawPointerIdentity } from "../../policy/operations/raw-pointer-source.js";
+import { selectRustMemoryLayoutObservation } from "../../policy/operations/memory-layout.js";
+import { rustMemoryLayoutObservationKey } from "../../target-model/operations/memory-layout.js";
 
 export function resolveIdentifierCarrier(
   walk: RustFactWalk,
@@ -283,6 +288,9 @@ export function isSharedSourceMarkerOperation(
 ): boolean {
   const sourceFacts = walk.context.source.sourceFacts;
   return readRustReferenceOperation(walk, expression) !== undefined ||
+    selectRustMemoryLayoutObservation(sourceFacts, expression) !== undefined ||
+    readRustSourceRawPointerIdentity(expression, sourceFacts) !== undefined ||
+    readRustSourceRawAddress(sourceFacts, expression) !== undefined ||
     readRustSourceNativePointerOperation(sourceFacts, expression) !== undefined ||
     readRustSourceUnsafeContext(sourceFacts, expression) !== undefined ||
     readRustSourceSafetyBuilder(sourceFacts, expression) !== undefined;
@@ -299,6 +307,23 @@ function resolveSharedSourceMarkerCarrier(
   expected: TargetTypeRef | undefined,
 ): RustSharedSourceMarkerCarrierResolution {
   const sourceFacts = walk.context.source.sourceFacts;
+  const layout = selectRustMemoryLayoutObservation(sourceFacts, expression);
+  if (layout !== undefined) {
+    if (layout.kind === "rejected") {
+      appendRustDiagnostic(walk, "RUST_MEMORY_LAYOUT_OBSERVATION_NOT_PROVEN", layout.reason, expression, []);
+      return { handled: true };
+    }
+    walk.context.facts.set(expression, rustMemoryLayoutObservationKey, Object.freeze({ value: layout.value }));
+    return { handled: true, carrier: setCarrierFact(walk, expression, rustSourcePrimitiveTargetType("native-uint")) };
+  }
+  const rawIdentity = readRustSourceRawPointerIdentity(expression, sourceFacts);
+  if (rawIdentity !== undefined) {
+    return { handled: true, ...resolveRustRawPointerIdentityCarrier(walk, expression, sourceFile, rawIdentity) };
+  }
+  const rawAddress = readRustSourceRawAddress(sourceFacts, expression);
+  if (rawAddress !== undefined) {
+    return { handled: true, ...resolveRustRawAddressCarrier(walk, expression, sourceFile, rawAddress) };
+  }
   const referenceOperation = readRustReferenceOperation(walk, expression);
   if (referenceOperation !== undefined) {
     return {

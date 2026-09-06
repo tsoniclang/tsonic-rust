@@ -9,6 +9,29 @@ import {
 } from "../../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
 
+test("raw pointer identity preserves optional address carriers through parameters and returns", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    target: { id: "rust", options: { outputType: "bin" } },
+    files: { "index.ts": `
+import { equalRawPointer as same, hashRawPointer } from "@tsonic/core/lang.js";
+import type { RawPointer } from "@tsonic/core/types.js";
+type Address = RawPointer;
+function pass(value: Address | undefined): Address | undefined { return value; }
+export function check(left: Address | undefined, right: Address | undefined): boolean {
+  return same(pass(left), pass(right)) && hashRawPointer(left) === hashRawPointer(right);
+}
+export function main(): void { if (!check(undefined, undefined)) throw new Error("raw identity"); }
+` },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  const output = artifactText(result, "src/index.rs");
+  assert.match(output, /Option<rt::RawPointer>/u);
+  assert.match(output, /RawPointer::same\(/u);
+  assert.match(output, /RawPointer::hash\(/u);
+  assert.doesNotMatch(output, /\bunsafe\b/u);
+  validateGeneratedProject("raw-pointer-identity", result.artifacts, { run: true });
+});
+
 test("pointer hash and projection preserve exact optional and generic contracts", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     files: { "index.ts": `

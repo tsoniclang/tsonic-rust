@@ -71,12 +71,15 @@ function recordCallableParameterSignatureFacts(walk: RustFactWalk, declaration: 
   }
 }
 
+import { rustMemoryMetadataKey } from "../../target-model/operations/memory-layout.js";
+
 export function recordNestedCallableTypeSignatureFacts(walk: RustFactWalk, sourceFile: SourceFile): void {
   const { ast } = walk.context;
   const visit = (node: Node | undefined): void => {
     if (node === undefined) {
       return;
     }
+    if (walk.context.facts.get(node, rustMemoryMetadataKey)) return;
     const kind = ast.kindName(node);
     if (kind === "KindFunctionType" || kind === "KindCallSignature") {
       recordCallableTypeSignatureFacts(walk, node);

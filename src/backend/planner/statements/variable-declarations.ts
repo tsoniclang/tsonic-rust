@@ -28,6 +28,7 @@ import { rustTypeFromCarrierInContext } from "../types/render.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
+import { rustMemoryMetadataKey } from "../../../target-model/operations/memory-layout.js";
 
 export function planVariableStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const declarations = collectVariableDeclarations(node, context);
@@ -53,6 +54,7 @@ function planVariableDeclaration(
   declaration: Node,
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
+  if (context.input.program.facts.getFact(declaration, rustMemoryMetadataKey)) return [];
   const { ast } = context.input.program.source;
   const nameNode = Node_Name(context.input.program.source.ast, declaration);
   const nameKind = nameNode === undefined ? "" : ast.kindName(nameNode);
