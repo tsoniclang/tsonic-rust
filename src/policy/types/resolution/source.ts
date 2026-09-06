@@ -45,6 +45,7 @@ import {
   rustSourceLifetimeTypeContract,
 } from "./lifetimes.js";
 import { parseSourceIntegerLiteral } from "../../../target-model/syntax/literals.js";
+import { readRustRawLocation } from "../../operations/native-memory.js";
 import {
   resolveRustCallableEvidence,
   resolveRustEvidenceNodesToCommonCarrier,
@@ -61,6 +62,13 @@ export function resolveRustTargetTypeRef(
 ): TargetTypeRef | undefined {
   if (subject === undefined) {
     return undefined;
+  }
+  const rawLocation = readRustRawLocation(context.ast, context.source.sourceFacts, subject);
+  if (rawLocation?.kind === "resolved") {
+    if (rawLocation.operation.operation === "to-raw") return rustOptionTargetType(rustRawPointerTargetType());
+    const pointee = resolveRustTargetTypeRef(rawLocation.operation.explicitPointeeTypeNode ??
+      rawLocation.layout.explicitTypeNode ?? rawLocation.operation.pointeeType, context, options);
+    return pointee === undefined ? undefined : rustOptionTargetType(rustLocationTargetType(pointee));
   }
   if (isRustSourceRawPointer(subject, context)) return rustRawPointerTargetType();
   if (resolveRustSourceMarker(subject, context) === "js-string") {

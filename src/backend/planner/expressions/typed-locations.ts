@@ -49,6 +49,8 @@ import {
   writeRustStoredObjectField,
 } from "../objects/project-storage.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
+import { planRustNativeAllocation } from "./native-memory.js";
+import { rustNativeBackingKey } from "../../../target-model/operations/native-memory.js";
 
 export type RustExpressionPlanner = (
   node: Node,
@@ -110,6 +112,9 @@ export function planRustTypedLocationCall(
       );
     case "allocate": {
       const initial = planExpression(plan.initialExpression, context);
+      if (context.input.program.facts.getFact(node, rustNativeBackingKey) !== undefined) {
+        return initial === undefined ? undefined : planRustNativeAllocation(node, initial, context);
+      }
       return initial === undefined || !requireRustLocationValueCarrier(
         fact.pointeeCarrier,
         node,

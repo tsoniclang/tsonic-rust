@@ -49,6 +49,8 @@ import type { RustSelectedTargetSignature, TargetTypeRef } from "../../target-mo
 import type { RustSourceBindingFact, RustTargetOperationFact } from "../facts/keys.js";
 import { rustHigherRankedNativeFunctionCarrier } from "../callables/higher-ranked-function.js";
 import { readRustSourceRawAddress } from "../../policy/operations/raw-address-source.js";
+import { readRustRawLocation } from "../../policy/operations/native-memory.js";
+import { resolveRustRawLocationCarrier } from "../operations/native-memory.js";
 import { resolveRustRawAddressCarrier, resolveRustRawPointerIdentityCarrier } from "../operations/raw-addresses.js";
 import { readRustSourceRawPointerIdentity } from "../../policy/operations/raw-pointer-source.js";
 import { selectRustMemoryLayoutObservation } from "../../policy/operations/memory-layout.js";
@@ -288,6 +290,7 @@ export function isSharedSourceMarkerOperation(
 ): boolean {
   const sourceFacts = walk.context.source.sourceFacts;
   return readRustReferenceOperation(walk, expression) !== undefined ||
+    readRustRawLocation(walk.context.ast, sourceFacts, expression) !== undefined ||
     selectRustMemoryLayoutObservation(sourceFacts, expression) !== undefined ||
     readRustSourceRawPointerIdentity(expression, sourceFacts) !== undefined ||
     readRustSourceRawAddress(sourceFacts, expression) !== undefined ||
@@ -307,6 +310,8 @@ function resolveSharedSourceMarkerCarrier(
   expected: TargetTypeRef | undefined,
 ): RustSharedSourceMarkerCarrierResolution {
   const sourceFacts = walk.context.source.sourceFacts;
+  const rawLocation = resolveRustRawLocationCarrier(walk, expression, sourceFile);
+  if (rawLocation !== undefined) return rawLocation;
   const layout = selectRustMemoryLayoutObservation(sourceFacts, expression);
   if (layout !== undefined) {
     if (layout.kind === "rejected") {

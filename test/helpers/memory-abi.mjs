@@ -72,3 +72,44 @@ export function run(): boolean {
     equalRawPointer(nil, undefined) && address<uint64>(nil, abi) === zero;
 }
 `;
+export const nativeLocationProofSource = `
+import { abi } from "test:abi";
+import { memoryLayout, allocatePointer, addressOf, loadPointer, storePointer,
+  toRawPointer, reinterpretRawPointer, equalPointer, equalRawPointer, hashPointer,
+  offsetRawPointer, unsafeContext, keepAlive } from "@tsonic/core/lang.js";
+import type { Pointer, RawPointer, uint32, uint8 } from "@tsonic/core/types.js";
+const word = memoryLayout<uint32>(abi, 4, 4, 4);
+const byte = memoryLayout<uint8>(abi, 1, 1, 1);
+function pass(pointer: Pointer<uint32>): Pointer<uint32> { return pointer; }
+function rawPass(pointer: RawPointer | undefined): RawPointer | undefined { return pointer; }
+function create(): Pointer<uint32> { return allocatePointer<uint32>(41); }
+export function run(): boolean {
+  unsafeContext();
+  let value: uint32 = 7;
+  const original = addressOf(value);
+  const raw = rawPass(toRawPointer(pass(original), word));
+  const restored = reinterpretRawPointer(raw, word);
+  if (restored === undefined) return false;
+  if (!equalPointer(original, restored) || hashPointer(original) !== hashPointer(restored)) return false;
+  storePointer(restored, 9);
+  if (value !== 9) return false;
+  value = 17;
+  if (loadPointer(restored) !== 17) return false;
+  const again = addressOf(value);
+  if (!equalPointer(original, again)) return false;
+  const firstByte = reinterpretRawPointer(raw, byte);
+  if (firstByte === undefined) return false;
+  storePointer(firstByte, 33);
+  if (value !== 33) return false;
+  const retained = create();
+  const retainedRaw = toRawPointer(retained, word);
+  const retainedAlias = reinterpretRawPointer(offsetRawPointer(retainedRaw, 0, abi), word);
+  if (retainedAlias === undefined) return false;
+  storePointer(retainedAlias, 42);
+  if (loadPointer(retained) !== 42) return false;
+  const nil = toRawPointer<uint32>(undefined, word);
+  if (!equalRawPointer(nil, undefined) || reinterpretRawPointer(nil, word) !== undefined) return false;
+  keepAlive(raw);
+  return equalRawPointer(toRawPointer(restored, word), raw);
+}
+`;

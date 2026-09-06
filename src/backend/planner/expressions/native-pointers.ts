@@ -24,6 +24,7 @@ import type {
 } from "../program/plan-context.js";
 import { tryPlanRustRawAddress } from "./raw-addresses.js";
 import { rustMemoryLayoutObservationKey } from "../../../target-model/operations/memory-layout.js";
+import { tryPlanRustRawLocation } from "./native-memory.js";
 
 export type RustNativePointerOperationPlan =
   | { readonly handled: false }
@@ -34,6 +35,8 @@ export function tryPlanRustNativePointerOperation(
   context: RustPlanContext,
   planExpression: (node: Node, context: RustPlanContext) => RustExpr | undefined,
 ): RustNativePointerOperationPlan {
+  const rawLocation = tryPlanRustRawLocation(node, context, planExpression);
+  if (rawLocation.handled) return { handled: true, expression: rawLocation.expression };
   const layout = context.input.program.facts.getFact(node, rustMemoryLayoutObservationKey);
   if (layout !== undefined) return { handled: true, expression: { kind: "int-literal", text: `${layout.value}usize` } };
   const rawAddress = tryPlanRustRawAddress(node, context, planExpression);

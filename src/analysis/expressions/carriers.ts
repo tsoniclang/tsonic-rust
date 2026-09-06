@@ -69,6 +69,7 @@ import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 import { readRustSourceRawAddress } from "../../policy/operations/raw-address-source.js";
+import { readRustRawLocation } from "../../policy/operations/native-memory.js";
 import { selectRustMemoryLayoutObservation } from "../../policy/operations/memory-layout.js";
 
 export function resolveExpressionCarrier(
@@ -603,7 +604,8 @@ function resolveCallSelectionPrerequisites(
   expression: Node,
   sourceFile: SourceFile,
 ): void {
-  if (readRustSourceRawAddress(walk.context.source.sourceFacts, expression) !== undefined ||
+  if (readRustRawLocation(walk.context.ast, walk.context.source.sourceFacts, expression) !== undefined ||
+    readRustSourceRawAddress(walk.context.source.sourceFacts, expression) !== undefined ||
     selectRustMemoryLayoutObservation(walk.context.source.sourceFacts, expression) !== undefined) return;
   const source = walk.context.semantics(sourceFile).operations.call(expression);
   const receiver = source?.sourceReceiver?.expression;

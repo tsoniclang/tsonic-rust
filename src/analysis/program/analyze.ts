@@ -30,6 +30,7 @@ import { selectRustAddressOfSourceOperation } from "../../policy/operations/type
 import { rustProjectCallableTargetName } from "../facts/source-member-name.js";
 import { collectRustMutableProjectStorageRequirements } from "../project-types/mutable-storage-requirements.js";
 import { rustMemoryMetadataKey } from "../../target-model/operations/memory-layout.js";
+import { recordRustNativeBacking } from "../operations/native-memory.js";
 
 export function analyzeRustProgram(context: RustAnalysisContext): void {
   const { ast } = context;
@@ -149,6 +150,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   }
   const promotedStorageDeclarations = new Set<Node>();
   const collectPromotedStorage = (node: Node): void => {
+    context.pointerBacking.record(node);
     const metadata = context.memoryMetadata.declaration(node);
     if (metadata !== undefined || context.memoryMetadata.isCompileTimeExpression(node)) {
       context.facts.set(node, rustMemoryMetadataKey, true);
@@ -261,6 +263,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
       }
     }
   }
+  recordRustNativeBacking(walk);
   const callableSpecializations = context.sourceCallableSpecializations.initialize({
     ast,
     names: context.names,

@@ -6,6 +6,8 @@ import {
   Node_Type,
 } from "@tsonic/target-api/source";
 import { rustLocationStorageForDeclaration } from "../expressions/typed-locations.js";
+import { planRustNativeAllocation } from "../expressions/native-memory.js";
+import { rustNativeBackingKey } from "../../../target-model/operations/native-memory.js";
 import {
   rustMutatedBindingFactKey,
   rustMutatedReferentFactKey,
@@ -169,7 +171,9 @@ function planVariableDeclaration(
         return undefined;
       }
       context.usedAliases?.add("rt");
-      init = { kind: "call", path: "rt::Location::allocate", args: [planned] };
+      init = context.input.program.facts.getFact(declaration, rustNativeBackingKey) === undefined
+        ? { kind: "call", path: "rt::Location::allocate", args: [planned] }
+        : planRustNativeAllocation(declaration, planned, context);
     }
   } else if (rustOptionElementCarrier(declarationCarrier) !== undefined && rustType !== undefined) {
     init = { kind: "none" };
