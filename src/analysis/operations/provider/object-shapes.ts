@@ -36,6 +36,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { RustTargetMember, TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustTargetOperationFact } from "../../facts/keys.js";
+import { selectRustPointerReturnCarrier } from "../../../policy/operations/pointer-return.js";
 
 export function mapSelectedJsSpecialCall(
   request: RustCheckedCallSelectionInput,
@@ -606,9 +607,9 @@ export function acceptProjectSourceCall(
     returnType = ownerCarrier;
   } else {
     const sourceReturn = Node_Type(ast, callableDeclaration) ?? request.source.sourceResultType;
-    const declaredReturnType = sourceReturn === undefined
+    const declaredReturnType = (sourceReturn === undefined
       ? undefined
-      : resolveRustTargetTypeRef(sourceReturn, context, options);
+      : resolveRustTargetTypeRef(sourceReturn, context, options)) ?? selectRustPointerReturnCarrier(callableDeclaration, context, options);
     returnType = declaredReturnType === undefined || ownerCarrier === undefined
       ? declaredReturnType
       : options.projectTypes.instantiateMemberCarrier(

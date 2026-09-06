@@ -28,10 +28,12 @@ import {
   rustMutatedBindingFactKey,
   rustMutatedReferentFactKey,
   rustSourceBindingFactKey,
+  rustSourceCallableReturnFactKey,
   rustSourceParameterAbiFactKey,
 } from "../../../analysis/facts/keys.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { applyRustTailShape, rustBlockTerminates } from "../statements/block-flow.js";
+import { planRustReturnExit } from "../statements/completion-exits.js";
 import {
   finishRuntimeCallableExpression,
   requireExpressionCarrier,
@@ -365,6 +367,7 @@ export function planCallableExpression(
   }
   const callableClosureContext: RustPlanContext = {
     ...closureContext,
+    functionUndefinedReturn: false,
     capturedBindings,
   };
   const bindingStatements: RustStmt[] = [];
@@ -515,13 +518,20 @@ export function planCallableExpression(
     ));
     return undefined;
   }
-  const block = context.planBlock(bodyNode, {
+  const sourceReturn = context.input.program.facts.getFact(node, rustSourceCallableReturnFactKey);
+  const bodyContext: RustPlanContext = {
     ...callableClosureContext,
     functionReturnType: resultType,
-  });
-  if (block === undefined) {
+    functionUndefinedReturn: sourceReturn?.undefinedReturn === true,
+  };
+  const plannedBody = context.planBlock(bodyNode, bodyContext);
+  if (plannedBody === undefined) {
     return undefined;
   }
+  const block = {
+    statements: [...plannedBody.statements, ...(sourceReturn?.fallthroughUndefined
+      ? [planRustReturnExit({ kind: "path", path: "None" }, bodyContext)] : [])],
+  };
   if (!isRustUnitCarrier(resultCarrier) && !rustBlockTerminates(block)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, bodyNode),

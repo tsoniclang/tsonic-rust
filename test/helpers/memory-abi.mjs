@@ -86,6 +86,37 @@ function create(): Pointer<uint32> { return allocatePointer<uint32>(41); }
 interface PointerHolder { pointer: Pointer<uint32> }
 interface RawHolder { pointer: RawPointer | undefined }
 function createRaw(): RawPointer | undefined { return toRawPointer(allocatePointer<uint32>(51), word); }
+export function inferredForward(raw: RawPointer | undefined) { return inferredRead(raw); }
+export function inferredRead(raw: RawPointer | undefined) {
+  unsafeContext();
+  const pointer = reinterpretRawPointer(raw, word);
+  return pointer;
+}
+export function inferredOptional(flag: boolean) {
+  if (flag) return allocatePointer<uint32>(81);
+}
+export function inferredChoice(flag: boolean) {
+  return flag ? allocatePointer<uint32>(82) : allocatePointer<uint32>(83);
+}
+export function annotatedOptional(flag: boolean): Pointer<uint32> | undefined {
+  if (flag) return allocatePointer<uint32>(85);
+}
+export function inferredBare(flag: boolean) {
+  if (!flag) return;
+  return allocatePointer<uint32>(86);
+}
+export function inferredLoop(remaining: uint32) {
+  while (remaining > 0) {
+    remaining--;
+    if (remaining === 0) return allocatePointer<uint32>(87);
+  }
+}
+export function inferredNested(flag: boolean) {
+  const skip = () => { return; };
+  skip();
+  if (flag) return allocatePointer<uint32>(88);
+}
+function sameWord(actual: uint32, expected: uint32): boolean { return actual === expected; }
 export function parameterRoundTrip(value: uint32 = 71): Pointer<uint32> {
   unsafeContext();
   const original = addressOf(value);
@@ -141,6 +172,21 @@ export function run(): boolean {
   const parameter = parameterRoundTrip(incoming);
   if (incoming !== 71 || loadPointer(parameter) !== 73) return false;
   if (loadPointer(parameterRoundTrip()) !== 73) return false;
+  const inferred = inferredForward(raw);
+  if (inferred === undefined || !equalPointer(inferred, original)) return false;
+  storePointer(inferred, 84);
+  if (!sameWord(value, 84)) return false;
+  const optional = inferredOptional(true);
+  if (optional === undefined || loadPointer(optional) !== 81 || inferredOptional(false) !== undefined) return false;
+  if (loadPointer(inferredChoice(true)) !== 82 || loadPointer(inferredChoice(false)) !== 83) return false;
+  const annotated = annotatedOptional(true);
+  if (annotated === undefined || loadPointer(annotated) !== 85 || annotatedOptional(false) !== undefined) return false;
+  const bare = inferredBare(true);
+  if (bare === undefined || loadPointer(bare) !== 86 || inferredBare(false) !== undefined) return false;
+  const loop = inferredLoop(2);
+  if (loop === undefined || loadPointer(loop) !== 87 || inferredLoop(0) !== undefined) return false;
+  const nested = inferredNested(true);
+  if (nested === undefined || loadPointer(nested) !== 88 || inferredNested(false) !== undefined) return false;
   const nil = toRawPointer<uint32>(undefined, word);
   if (!equalRawPointer(nil, undefined) || reinterpretRawPointer(nil, word) !== undefined) return false;
   keepAlive(raw);

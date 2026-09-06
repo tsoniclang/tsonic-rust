@@ -59,7 +59,9 @@ function planStatementInner(node: Node, context: RustPlanContext): readonly Rust
     }
     case KindReturnStatement: {
       const expression = Node_Expression(context.input.program.source.ast, node);
-      const planned = expression === undefined ? undefined : planExpression(expression, context);
+      const planned = expression === undefined
+        ? context.functionUndefinedReturn ? { kind: "path" as const, path: "None" } : undefined
+        : planExpression(expression, context);
       if (expression !== undefined && planned === undefined) {
         return undefined;
       }

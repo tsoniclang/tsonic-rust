@@ -1,5 +1,6 @@
 import { createTsonicMemoryMetadataIndex, type TsonicMemoryMetadataIndex,
-  createTsonicPointerBackingDemands, type TsonicPointerBackingDemands } from "@tsonic/source-core/facts";
+  createTsonicPointerBackingDemands, type TsonicPointerBackingDemands,
+  createTsonicPointerReturnQueries } from "@tsonic/source-core/facts";
 import type {
   AstReader,
   Node,
@@ -143,6 +144,7 @@ export function createRustAnalysisContext(
   });
   return Object.freeze({
     pointerBacking: createTsonicPointerBackingDemands(input.source),
+    pointerReturns: createTsonicPointerReturnQueries(input.source),
     memoryMetadata: createTsonicMemoryMetadataIndex(input.source),
     source: input.source,
     target: input.target,

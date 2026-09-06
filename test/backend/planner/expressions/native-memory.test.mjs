@@ -43,6 +43,7 @@ test("native array value reads clone proven owned handles while storage writes r
 
 for (const [name, source, diagnostic] of [
   ["open caller", `export function expose(pointer: Pointer<uint32>) { return toRawPointer(pointer, word); }`, "RUST_NATIVE_BACKING_NOT_PROVEN"],
+  ["conflicting inferred pointees", `import type { int32 } from "@tsonic/core/types.js"; export function expose(flag: boolean) { return flag ? allocatePointer<uint32>(1) : allocatePointer<int32>(2); }`, "RUST_MISSING_TARGET_FACT"],
   ["logical projection", `export function expose() { const pointer = allocatePointer<uint32>(1); return toRawPointer(projectPointer<uint32, uint32>(pointer, value => value, value => value), word); }`, "RUST_NATIVE_BACKING_NOT_PROVEN"],
   ["incompatible scalar size", `const wrong = memoryLayout<uint32>(abi, 8, 4, 8); export function expose(raw: RawPointer | undefined) { unsafeContext(); return reinterpretRawPointer(raw, wrong); }`, "RUST_RAW_LOCATION_NOT_PROVEN"],
   ["unsafe context", `export function expose(raw: RawPointer | undefined): Pointer<uint32> | undefined { return reinterpretRawPointer(raw, word); }`, "RUST_NATIVE_POINTER_UNSAFE_CONTEXT_REQUIRED"],

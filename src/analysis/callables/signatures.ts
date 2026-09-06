@@ -49,6 +49,7 @@ import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { resolveRustSuspendedCallableStorage } from "./suspension-storage.js";
 import { rustHigherRankedNativeFunctionCarrier } from "./higher-ranked-function.js";
+import { selectRustPointerReturnContract } from "../../policy/operations/pointer-return.js";
 
 export function recordFunctionSignatureFacts(walk: RustFactWalk, declaration: Node): void {
   recordCallableParameterSignatureFacts(walk, declaration);
@@ -562,15 +563,19 @@ export function recordCallableReturnFact(walk: RustFactWalk, declaration: Node):
   const generator = walk.context.facts.get(declaration, rustGeneratorFactKey);
   const asynchronous = walk.context.facts.get(declaration, rustAsyncFunctionFactKey);
   const sourceReturn = selectedSourceCallableReturn(walk, declaration);
-  const carrier = generator?.resultCarrier ?? asynchronous?.outputCarrier ??
+  const selected = generator?.resultCarrier ?? asynchronous?.outputCarrier ??
     resolveRustTargetTypeRef(
       Node_Type(walk.context.ast, declaration) ?? sourceReturn,
       rustResolutionContext(walk, declaration),
       walk.operationOptions,
     );
+  const pointer = selectRustPointerReturnContract(declaration, rustResolutionContext(walk, declaration), walk.operationOptions);
+  const carrier = pointer?.returnCarrier ?? selected;
   if (carrier !== undefined) {
     walk.context.facts.set(declaration, rustSourceCallableReturnFactKey, {
       returnCarrier: carrier,
+      ...(pointer?.undefinedReturn ? { undefinedReturn: true } : {}),
+      ...(pointer?.fallthroughUndefined ? { fallthroughUndefined: true } : {}),
     }, [{ message: "rust finalized source callable return carrier" }]);
   }
 }
