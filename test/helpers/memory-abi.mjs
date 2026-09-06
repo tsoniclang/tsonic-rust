@@ -81,6 +81,8 @@ import type { Pointer, RawPointer, uint32, uint8 } from "@tsonic/core/types.js";
 const word = memoryLayout<uint32>(abi, 4, 4, 4);
 const byte = memoryLayout<uint8>(abi, 1, 1, 1);
 function pass(pointer: Pointer<uint32>): Pointer<uint32> { return pointer; }
+function genericPass<T>(pointer: Pointer<T>): Pointer<T> { return pointer; }
+function closedGeneric() { return genericPass(allocatePointer<uint32>(93)); }
 function rawPass(pointer: RawPointer | undefined): RawPointer | undefined { return pointer; }
 function create(): Pointer<uint32> { return allocatePointer<uint32>(41); }
 interface PointerHolder { pointer: Pointer<uint32> }
@@ -115,6 +117,33 @@ export function inferredNested(flag: boolean) {
   const skip = () => { return; };
   skip();
   if (flag) return allocatePointer<uint32>(88);
+}
+class PointerFactory {
+  make(flag: boolean) {
+    if (flag) return allocatePointer<uint32>(89);
+  }
+}
+function callableResults(): boolean {
+  const callback = (flag: boolean) => {
+    if (flag) return allocatePointer<uint32>(90);
+  };
+  const annotated = (flag: boolean): Pointer<uint32> | undefined => {
+    if (flag) return allocatePointer<uint32>(91);
+  };
+  const expression = function (flag: boolean) {
+    if (!flag) return;
+    return allocatePointer<uint32>(92);
+  };
+  const factory = new PointerFactory();
+  const methodResult = factory.make(true);
+  const callbackResult = callback(true);
+  const annotatedResult = annotated(true);
+  const expressionResult = expression(true);
+  return methodResult !== undefined && loadPointer(methodResult) === 89 && factory.make(false) === undefined &&
+    callbackResult !== undefined && loadPointer(callbackResult) === 90 && callback(false) === undefined &&
+    annotatedResult !== undefined && loadPointer(annotatedResult) === 91 && annotated(false) === undefined &&
+    expressionResult !== undefined && loadPointer(expressionResult) === 92 && expression(false) === undefined &&
+    loadPointer(closedGeneric()) === 93;
 }
 function sameWord(actual: uint32, expected: uint32): boolean { return actual === expected; }
 export function parameterRoundTrip(value: uint32 = 71): Pointer<uint32> {
@@ -156,11 +185,23 @@ export function run(): boolean {
   if (arrayView === undefined) return false;
   storePointer(arrayView, 63);
   if (loadPointer(pointers[1]) !== 63) return false;
+  const previousElement = pointers[1];
+  pointers[1] = allocatePointer<uint32>(64);
+  const changedElement = reinterpretRawPointer(toRawPointer(pointers[1], word), word);
+  if (changedElement === undefined) return false;
+  storePointer(changedElement, 65);
+  if (loadPointer(pointers[1]) !== 65 || loadPointer(previousElement) !== 63) return false;
   const holder: PointerHolder = { pointer: retained };
   const holderView = reinterpretRawPointer(toRawPointer(holder.pointer, word), word);
   if (holderView === undefined) return false;
   storePointer(holderView, 44);
   if (loadPointer(retained) !== 44) return false;
+  const holderAlias = holder;
+  holderAlias.pointer = allocatePointer<uint32>(45);
+  const changedField = reinterpretRawPointer(toRawPointer(holder.pointer, word), word);
+  if (changedField === undefined) return false;
+  storePointer(changedField, 46);
+  if (loadPointer(holderAlias.pointer) !== 46 || loadPointer(retained) !== 44) return false;
   const rawValues: (RawPointer | undefined)[] = [createRaw()];
   const rawHolder: RawHolder = { pointer: rawValues[0] };
   const ownerView = reinterpretRawPointer(rawHolder.pointer, word);
@@ -187,6 +228,7 @@ export function run(): boolean {
   if (loop === undefined || loadPointer(loop) !== 87 || inferredLoop(0) !== undefined) return false;
   const nested = inferredNested(true);
   if (nested === undefined || loadPointer(nested) !== 88 || inferredNested(false) !== undefined) return false;
+  if (!callableResults()) return false;
   const nil = toRawPointer<uint32>(undefined, word);
   if (!equalRawPointer(nil, undefined) || reinterpretRawPointer(nil, word) !== undefined) return false;
   keepAlive(raw);
