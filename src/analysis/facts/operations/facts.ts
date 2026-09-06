@@ -588,6 +588,9 @@ export type RustTargetOperationFact =
 export type RustTypedLocationOperationKind =
   | "address-of"
   | "allocate"
+  | "bind-pointer"
+  | "hash-pointer"
+  | "project-pointer"
   | "load"
   | "store"
   | "equal-pointer";
@@ -626,6 +629,24 @@ export type RustTypedLocationPlan = RustTypedLocationPlanBase & (
       readonly operation: "equal-pointer";
       readonly leftExpression: Node;
       readonly rightExpression: Node;
+    }
+  | {
+      readonly operation: "hash-pointer";
+      readonly pointerExpression: Node;
+    }
+  | {
+      readonly operation: "bind-pointer";
+      readonly identityExpression: Node;
+      readonly readExpression: Node;
+      readonly writeExpression: Node;
+    }
+  | {
+      readonly operation: "project-pointer";
+      readonly pointerExpression: Node;
+      readonly sourcePointeeCarrier: TargetTypeRef;
+      readonly optional: boolean;
+      readonly fromSourceExpression: Node;
+      readonly toSourceExpression: Node;
     }
 );
 

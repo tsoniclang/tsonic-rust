@@ -9,6 +9,53 @@ import {
 } from "../../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
 
+test("pointer hash and projection preserve exact optional and generic contracts", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    files: { "index.ts": `
+import { hashPointer, projectPointer } from "@tsonic/core/lang.js";
+import type { int32, Pointer } from "@tsonic/core/types.js";
+export function hash<T>(pointer: Pointer<T> | undefined): number { return hashPointer(pointer); }
+export function shifted(pointer: Pointer<int32>): Pointer<int32> {
+  return projectPointer<int32, int32>(pointer, value => value + 1, value => value - 1);
+}
+export function optional(pointer: Pointer<int32> | undefined): Pointer<int32> | undefined {
+  return projectPointer<int32, int32>(pointer, value => value + 1, value => value - 1);
+}
+` },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  const output = artifactText(result, "src/index.rs");
+  assert.match(output, /Location::<T>::hash\(pointer\.as_ref\(\)\)/u);
+  assert.match(output, /pointer\.map\(/u);
+  assert.match(output, /Location::map_optional\(/u);
+  validateGeneratedProject("typed-location-projections", result.artifacts);
+});
+
+test("pointer binding retains the source reference identity and captured storage", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    files: { "index.ts": `
+import { bindPointer, loadPointer, storePointer } from "@tsonic/core/lang.js";
+import type { int32, Pointer } from "@tsonic/core/types.js";
+class Identity { value: int32 = 0; }
+export function bind(value: int32): Pointer<int32> {
+  const identity = new Identity();
+  let storage = value;
+  return bindPointer<int32>(identity, () => storage, next => { storage = next; });
+}
+export function run(): int32 {
+  const pointer = bind(3);
+  storePointer(pointer, 8);
+  return loadPointer(pointer);
+}
+` },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  const output = artifactText(result, "src/index.rs");
+  assert.match(output, /Location::bind\(/u);
+  assert.match(output, /Location::bind\(\s*identity,/u);
+  validateGeneratedProject("typed-location-binding", result.artifacts);
+});
+
 test("typed locations retain generic pointees and optional identity", () => {
   const { result } = compileRust({
     files: {
@@ -603,47 +650,40 @@ export function reject(): void {
   }]);
 });
 
-test("unsupported typed-location contracts reject at the Rust target boundary", () => {
-  const cases = [
-    {
-      operation: "hash-pointer",
-      source: `
-import { hashPointer } from "@tsonic/core/lang.js";
-import type { int32, Pointer } from "@tsonic/core/types.js";
-export function reject(pointer: Pointer<int32>): int32 {
-  return hashPointer(pointer);
-}
-`,
-    },
-    {
-      operation: "bind-pointer",
-      source: `
+test("pointer binding rejects identities without a reference identity contract", () => {
+  assertRustTargetRejection({ files: { "index.ts": `
 import { bindPointer } from "@tsonic/core/lang.js";
 import type { int32, Pointer } from "@tsonic/core/types.js";
-export function reject(value: int32): Pointer<int32> {
-  let storage = value;
-  return bindPointer<int32>({}, () => storage, next => { storage = next; });
+export function reject(): Pointer<int32> {
+  return bindPointer<int32>({}, () => 1, value => {});
 }
-`,
-    },
-    {
-      operation: "project-pointer",
-      source: `
-import { projectPointer } from "@tsonic/core/lang.js";
-import type { int32, Pointer } from "@tsonic/core/types.js";
-export function reject(pointer: Pointer<int32>): Pointer<int32> | undefined {
-  return projectPointer<int32, int32>(pointer, value => value, value => value);
-}
-`,
-    },
-  ];
+` } }, [{
+    code: "RUST_POINTER_IDENTITY_NOT_PROVEN",
+    message: "Pointer binding requires a closed reference identity carrier.",
+  }]);
+});
 
-  for (const { operation, source } of cases) {
-    assertRustTargetRejection({ files: { "index.ts": source } }, [{
-      code: "RUST_TYPED_LOCATION_UNSUPPORTED",
-      message: `Selected typed-location operation '${operation}' has no accepted safe Rust target contract.`,
-    }]);
-  }
+test("reachability uses exact marker identity and retains later source uses", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ files: { "index.ts": `
+import { keepAlive as retain } from "@tsonic/core/lang.js";
+import * as core from "@tsonic/core/lang.js";
+import type { int32 } from "@tsonic/core/types.js";
+function keepAlive(value: int32): int32 { return value + 1; }
+export function run(value: string): string {
+  retain(value);
+  core.keepAlive(value);
+  return value;
+}
+export function ordinary(value: int32): int32 { return keepAlive(value); }
+export function retainGeneric<T>(value: T): T { retain(value); return value; }
+` } });
+  assert.deepEqual(result.diagnostics, []);
+  const output = artifactText(result, "src/index.rs");
+  assert.equal(output.match(/rt::keep_alive\(&value\)/gu)?.length, 3);
+  assert.match(output, /fn retain_generic<T>\(value: T\) -> T/u);
+  assert.doesNotMatch(output, /\.clone\(\)/u);
+  assert.match(output, /keep_alive\(value\)/u);
+  validateGeneratedProject("typed-location-reachability", result.artifacts);
 });
 
 test("typed-location storage outside the safe owned-root model fails closed", () => {

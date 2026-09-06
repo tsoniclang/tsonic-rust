@@ -176,5 +176,19 @@ function rustTypedLocationPlanEquals(
       return right.operation === "equal-pointer" &&
         left.leftExpression === right.leftExpression &&
         left.rightExpression === right.rightExpression;
+    case "hash-pointer":
+      return right.operation === left.operation && left.pointerExpression === right.pointerExpression;
+    case "bind-pointer":
+      return right.operation === left.operation &&
+        left.identityExpression === right.identityExpression &&
+        left.readExpression === right.readExpression &&
+        left.writeExpression === right.writeExpression;
+    case "project-pointer":
+      return right.operation === left.operation &&
+        left.pointerExpression === right.pointerExpression &&
+        left.optional === right.optional &&
+        left.fromSourceExpression === right.fromSourceExpression &&
+        left.toSourceExpression === right.toSourceExpression &&
+        rustTargetTypeRefEquals(left.sourcePointeeCarrier, right.sourcePointeeCarrier);
   }
 }

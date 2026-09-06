@@ -81,7 +81,7 @@ test("Rust converts typed-location facts into one target-owned selection", () =>
 
 test("Rust backend consumes only target-owned marker facts", () => {
   const forbiddenNeutralFacts =
-    /argumentPassingFactKey|defaultValueFactKey|fieldFactKey|flowStateFactKey|functionPointerFactKey|pointerFactKey|pointerOperationFactKey|structFactKey|tsonicAttributeBuilderFactKey/u;
+    /argumentPassingFactKey|defaultValueFactKey|fieldFactKey|flowStateFactKey|functionPointerFactKey|pointerFactKey|pointerOperationFactKey|structFactKey|tsonicAttributeBuilderFactKey|tsonicKeepAliveFactKey/u;
   const failures = sourceFiles(join(repositoryRoot, "src/backend"))
     .filter((path) => forbiddenNeutralFacts.test(readFileSync(path, "utf8")))
     .map((path) => path.slice(repositoryRoot.length + 1));

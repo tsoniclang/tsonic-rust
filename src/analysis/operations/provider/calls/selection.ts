@@ -11,7 +11,9 @@ import {
   rustStructuralMethodStorageCarrier,
   rustStructuralObjectCarrierValue,
   rustStringTargetType,
+  rustUnitTargetType,
 } from "../../../../target-model/types/index.js";
+import { readRustSourceKeepAlive } from "../../../../policy/operations/reachability-source.js";
 import { acceptProjectSourceCall, mapSelectedJsSpecialCall } from "../object-shapes.js";
 import { acceptRustPolicy } from "../../../../policy/operations/contracts.js";
 import { acceptSelectedCall, checkedCallIsConstruction, instantiateSelectedCallTemplate, selectedCallReceiverValueCarrier, selectRustOptionalCallResult } from "./instantiation.js";
@@ -45,6 +47,21 @@ export function selectRustCheckedCall(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedCallSelectionResult> {
+  const keepAlive = readRustSourceKeepAlive(request.source.call, context);
+  if (keepAlive !== undefined) {
+    const value = resolveRustTargetTypeRef(keepAlive.valueExpression, context, options);
+    if (keepAlive.call !== request.source.call || request.source.sourceArguments.length !== 1 ||
+      request.source.sourceArguments[0]?.expression !== keepAlive.valueExpression || value === undefined) {
+      return rejectSelectedOperation(request.source.call, context,
+        "RUST_KEEP_ALIVE_EVIDENCE_CONFLICT", "Reachability requires the exact selected source value and its closed carrier.");
+    }
+    return acceptSelectedCall(request, {
+      kind: "provider-operation", operationId: "tsonic.rust.keep-alive", operationKind: "method",
+      target: { form: "call", path: "rt::keep_alive", argModes: ["ref"] },
+      parameterCarriers: [value], resultCarrier: rustUnitTargetType(),
+      isAsync: false, isFallible: false, errorBoundary: "none",
+    }, [value], context, options, { sourceName: "keepAlive" });
+  }
   const providerEvidence = resolveSelectedProviderDeclaration(
     context,
     request.sourceSelectedDeclaration,

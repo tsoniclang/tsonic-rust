@@ -334,6 +334,30 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       const error = addUse(node, typedLocation.pointeeCarrier, ["clone", "static"]);
       if (error !== undefined) return error;
     }
+    if (typedLocation?.operation === "bind-pointer" || typedLocation?.operation === "project-pointer") {
+      const error = addUse(node, typedLocation.pointeeCarrier, ["static"]);
+      if (error !== undefined) return error;
+      if (typedLocation.operation === "project-pointer") {
+        const sourceError = addUse(node, typedLocation.sourcePointeeCarrier, ["static"]);
+        if (sourceError !== undefined) return sourceError;
+      } else {
+        const identity = facts.getRuntimeCarrierFact(typedLocation.identityExpression)?.carrier;
+        if (identity !== undefined) {
+          const identityError = addUse(node, identity, ["static"]);
+          if (identityError !== undefined) return identityError;
+        }
+      }
+      const callbacks = typedLocation.operation === "bind-pointer"
+        ? [typedLocation.readExpression, typedLocation.writeExpression]
+        : [typedLocation.fromSourceExpression, typedLocation.toSourceExpression];
+      for (const callback of callbacks) {
+        const captures = facts.getFact(callback, rustClosureCaptureFactKey);
+        for (const capture of captures?.captures ?? []) {
+          const captureError = addUse(capture.reference, capture.carrier, ["static"]);
+          if (captureError !== undefined) return captureError;
+        }
+      }
+    }
     const operation = facts.getFact(node, rustTargetOperationFactKey);
     if (ast.kindName(node) === "KindAwaitExpression") {
       const operand = Node_Expression(ast, node);

@@ -38,7 +38,7 @@ import {
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustProjectObjectRepresentation } from "../objects/project-storage.js";
 import { rustModuleCellAccess } from "../project/module-storage.js";
-import { requireRustLocationValueCarrier } from "../types/generic-requirements.js";
+import { requireRustCarrierRequirements, requireRustLocationValueCarrier } from "../types/generic-requirements.js";
 import {
   readRustProjectDispatchedField,
   writeRustProjectDispatchedField,
@@ -72,6 +72,34 @@ export function planRustTypedLocationCall(
   }
   context.usedAliases?.add("rt");
   switch (plan.operation) {
+    case "hash-pointer": {
+      const pointer = planExpression(plan.pointerExpression, context);
+      const owner = rustTypeFromCarrierInContext(fact.locationCarrier, context);
+      return pointer === undefined || owner === undefined ? undefined : {
+        kind: "associated-call", owner, method: "hash",
+        args: [optionReference(planRustNonConsumingValue(plan.pointerExpression, pointer, context))],
+      };
+    }
+    case "bind-pointer": {
+      const identity = planExpression(plan.identityExpression, context);
+      const read = planExpression(plan.readExpression, context);
+      const write = planExpression(plan.writeExpression, context);
+      if (identity === undefined || read === undefined || write === undefined ||
+        !requireRustCarrierRequirements(fact.pointeeCarrier, ["static"], node, context)) return undefined;
+      return { kind: "call", path: "rt::Location::bind", args: [identity, read, write] };
+    }
+    case "project-pointer": {
+      const pointer = planExpression(plan.pointerExpression, context);
+      const read = planExpression(plan.fromSourceExpression, context);
+      const write = planExpression(plan.toSourceExpression, context);
+      if (pointer === undefined || read === undefined || write === undefined ||
+        !requireRustCarrierRequirements(plan.pointeeCarrier, ["static"], node, context) ||
+        !requireRustCarrierRequirements(plan.sourcePointeeCarrier, ["static"], node, context)) return undefined;
+      const source = planRustNonConsumingValue(plan.pointerExpression, pointer, context);
+      return plan.optional
+        ? { kind: "call", path: "rt::Location::map_optional", args: [optionReference(source), read, write] }
+        : { kind: "method-call", receiver: source, method: "map", args: [read, write] };
+    }
     case "address-of":
       return planRustLocationStorage(
         plan.storageExpression,
