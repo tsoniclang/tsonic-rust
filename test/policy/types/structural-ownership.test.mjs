@@ -3,9 +3,9 @@ import test from "node:test";
 import { acmePlatformPackage, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 
 for (const [name, declarations, type] of [
-  ["direct", "", "RawPointer"],
-  ["alias", "type Address = RawPointer;", "Address"],
-  ["nested", "interface Holder { address: RawPointer; }", "Holder"],
+  ["direct", "", "MemoryLayout<uint32>"],
+  ["alias", "type Layout = MemoryLayout<uint32>;", "Layout"],
+  ["nested", "interface Holder { layout: MemoryLayout<uint32>; }", "Holder"],
   ["readonly", "", "Readonly<RawPointer>"],
   ["picked", "", "Pick<RawPointer, keyof RawPointer>"],
 ]) {
@@ -13,7 +13,7 @@ for (const [name, declarations, type] of [
     const { source, result } = compileRust({
       files: {
         "index.ts": `
-import type { RawPointer } from "@tsonic/core/types.js";
+import type { MemoryLayout, RawPointer, uint32 } from "@tsonic/core/types.js";
 ${declarations}
 export function pass(value: ${type}): ${type} { return value; }
 `,
@@ -24,7 +24,7 @@ export function pass(value: ${type}): ${type} { return value; }
       name === "nested"
         ? {
             code: "RUST_MISSING_TARGET_FACT",
-            message: "Record field 'address' has no supported Rust carrier fact. Node kind: KindPropertySignature.",
+            message: "Record field 'layout' has no supported Rust carrier fact. Node kind: KindPropertySignature.",
           }
         : {
             code: "RUST_PARAMETER_CARRIER_UNSUPPORTED",
@@ -34,6 +34,29 @@ export function pass(value: ${type}): ${type} { return value; }
     assert.deepEqual(result.artifacts, []);
   });
 }
+
+test("represented raw pointers retain their opaque carrier through aliases and record fields", () => {
+  const { source, result } = compileRust({
+    files: {
+      "index.ts": `
+import type { RawPointer } from "@tsonic/core/types.js";
+type Address = RawPointer;
+interface Holder { address: Address; }
+export function pass(value: RawPointer): RawPointer { return value; }
+export function alias(value: Address): Address { return value; }
+export function nested(value: Holder): RawPointer { return value.address; }
+`,
+    },
+  });
+  assert.deepEqual(source.extensionDiagnostics, []);
+  assert.deepEqual(result.diagnostics, []);
+  const output = artifactText(result, "src/index.rs");
+  assert.match(output, /use tsonic_rust_runtime as rt;/u);
+  assert.match(output, /pub fn pass\(value: rt::RawPointer\) -> rt::RawPointer/u);
+  assert.match(output, /pub fn alias\(value: rt::RawPointer\) -> rt::RawPointer/u);
+  assert.match(output, /pub fn nested\(value: Holder\) -> rt::RawPointer/u);
+  assert.doesNotMatch(output, /__tsonicRawPointer|__tsonic_raw_pointer/u);
+});
 
 test("project structural fields and exact utility transformations retain their carriers", () => {
   const { result } = compileRust({
