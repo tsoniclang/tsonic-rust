@@ -29,6 +29,8 @@ import { rustTypedLocationStorageRootReference } from "../operations/typed-locat
 import { selectRustAddressOfSourceOperation } from "../../policy/operations/typed-location-source.js";
 import { rustProjectCallableTargetName } from "../facts/source-member-name.js";
 import { collectRustMutableProjectStorageRequirements } from "../project-types/mutable-storage-requirements.js";
+import { rustMemoryMetadataKey } from "../../target-model/operations/memory-layout.js";
+import { recordRustNativeBacking } from "../operations/native-memory.js";
 
 export function analyzeRustProgram(context: RustAnalysisContext): void {
   const { ast } = context;
@@ -148,6 +150,14 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   }
   const promotedStorageDeclarations = new Set<Node>();
   const collectPromotedStorage = (node: Node): void => {
+    context.pointerBacking.record(node);
+    const metadata = context.memoryMetadata.declaration(node);
+    if (metadata !== undefined || context.memoryMetadata.isCompileTimeExpression(node)) {
+      context.facts.set(node, rustMemoryMetadataKey, true);
+      for (const issue of metadata?.issues ?? []) appendRustDiagnostic(walk,
+        "RUST_MEMORY_METADATA_RUNTIME_ESCAPE", issue.reason, issue.node, []);
+      return;
+    }
     const operation = selectRustAddressOfSourceOperation(
       node,
       (subject, key) => context.facts.resolve(subject, key),
@@ -253,6 +263,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
       }
     }
   }
+  const nativeFields = recordRustNativeBacking(walk);
   const callableSpecializations = context.sourceCallableSpecializations.initialize({
     ast,
     names: context.names,
@@ -332,6 +343,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     structuralObjects,
     sourceTypes.structuralFieldImplementations(),
     (fileName) => sourcePackageComponentByFile.get(fileName)!,
+    nativeFields,
   );
   context.projectFieldDispatch.initialize({
     ast,

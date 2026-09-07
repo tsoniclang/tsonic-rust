@@ -49,6 +49,8 @@ import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { resolveRustSuspendedCallableStorage } from "./suspension-storage.js";
 import { rustHigherRankedNativeFunctionCarrier } from "./higher-ranked-function.js";
+import { selectRustPointerReturnContract } from "../../policy/operations/pointer-return.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 export function recordFunctionSignatureFacts(walk: RustFactWalk, declaration: Node): void {
   recordCallableParameterSignatureFacts(walk, declaration);
@@ -71,12 +73,15 @@ function recordCallableParameterSignatureFacts(walk: RustFactWalk, declaration: 
   }
 }
 
+import { rustMemoryMetadataKey } from "../../target-model/operations/memory-layout.js";
+
 export function recordNestedCallableTypeSignatureFacts(walk: RustFactWalk, sourceFile: SourceFile): void {
   const { ast } = walk.context;
   const visit = (node: Node | undefined): void => {
     if (node === undefined) {
       return;
     }
+    if (walk.context.facts.get(node, rustMemoryMetadataKey)) return;
     const kind = ast.kindName(node);
     if (kind === "KindFunctionType" || kind === "KindCallSignature") {
       recordCallableTypeSignatureFacts(walk, node);
@@ -363,9 +368,9 @@ function recordCallableValueSignatureFacts(
     }
     parameterAbis.push(parameterAbi);
   }
-  walk.context.facts.set(expression, rustSourceCallableReturnFactKey, {
-    returnCarrier,
-  }, [{ message: "rust finalized callable-value return carrier" }]);
+  if (!recordCallableReturnFact(walk, expression, returnCarrier)) {
+    return;
+  }
   const runtimeParameterCarriers = parameterAbis.map((abi) => abi.parameterCarrier);
   const runtimeCarrier = selectedCarrier.kind === "function-pointer" || selectedCarrier.kind === "closure"
     ? { ...selectedCarrier, args: runtimeParameterCarriers, result: returnCarrier }
@@ -397,7 +402,11 @@ function resolveAuthoredCallableValueSignature(
   const parameterAbis = (parameters as readonly Node[]).map((parameter) =>
     resolveParameterAbi(walk, parameter));
   const sourceReturn = selectedSourceCallableReturn(walk, expression);
-  const returnCarrier = resolveRustTargetTypeRef(
+  const returnCarrier = selectRustPointerReturnContract(
+    expression,
+    rustResolutionContext(walk, expression),
+    walk.operationOptions,
+  )?.returnCarrier ?? resolveRustTargetTypeRef(
     Node_Type(ast, expression) ?? sourceReturn,
     rustResolutionContext(walk, expression),
     walk.operationOptions,
@@ -426,9 +435,7 @@ function recordCallableValueSignaturePlan(
       return;
     }
   }
-  walk.context.facts.set(expression, rustSourceCallableReturnFactKey, {
-    returnCarrier: signature.returnCarrier,
-  }, [{ message: "rust finalized authored callable-value return carrier" }]);
+  recordCallableReturnFact(walk, expression, signature.returnCarrier);
 }
 
 export function recordCallableSuspensionFacts(walk: RustFactWalk, declaration: Node): void {
@@ -555,19 +562,33 @@ function selectedSourceCallableReturn(walk: RustFactWalk, declaration: Node) {
     : undefined;
 }
 
-export function recordCallableReturnFact(walk: RustFactWalk, declaration: Node): void {
+export function recordCallableReturnFact(
+  walk: RustFactWalk,
+  declaration: Node,
+  selectedCarrier?: TargetTypeRef,
+): boolean {
   const generator = walk.context.facts.get(declaration, rustGeneratorFactKey);
   const asynchronous = walk.context.facts.get(declaration, rustAsyncFunctionFactKey);
   const sourceReturn = selectedSourceCallableReturn(walk, declaration);
-  const carrier = generator?.resultCarrier ?? asynchronous?.outputCarrier ??
+  const selected = selectedCarrier ?? generator?.resultCarrier ?? asynchronous?.outputCarrier ??
     resolveRustTargetTypeRef(
       Node_Type(walk.context.ast, declaration) ?? sourceReturn,
       rustResolutionContext(walk, declaration),
       walk.operationOptions,
     );
+  const pointer = selectRustPointerReturnContract(declaration, rustResolutionContext(walk, declaration), walk.operationOptions);
+  if (selectedCarrier !== undefined && pointer !== undefined &&
+    !rustTargetTypeRefEquals(selectedCarrier, pointer.returnCarrier)) {
+    return false;
+  }
+  const carrier = pointer?.returnCarrier ?? selected;
   if (carrier !== undefined) {
     walk.context.facts.set(declaration, rustSourceCallableReturnFactKey, {
       returnCarrier: carrier,
+      ...(pointer?.undefinedReturn ? { undefinedReturn: true } : {}),
+      ...(pointer?.fallthroughUndefined ? { fallthroughUndefined: true } : {}),
     }, [{ message: "rust finalized source callable return carrier" }]);
+    return true;
   }
+  return false;
 }

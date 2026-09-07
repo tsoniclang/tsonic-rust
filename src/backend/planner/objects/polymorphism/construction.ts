@@ -182,6 +182,7 @@ export function planProjectClassConstructor(
     syntheticNames,
     controlFlow: { nextLoopId: 0 },
     functionReturnType: stateType,
+    functionUndefinedReturn: false,
     ...(constructorErrorBoundary === undefined
       ? {}
       : { fallibleBoundary: constructorErrorBoundary }),

@@ -41,6 +41,7 @@ import { rustSafetyAttributesForDeclaration } from "../safety/explicit-safety.js
 import { applyFallibleShape } from "../types/fallible-shape.js";
 import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
 import { wrapRustJsPromiseBody } from "./async-promise.js";
+import { planRustReturnExit } from "../statements/completion-exits.js";
 
 export { applyRustTailShape, rustBlockTerminates } from "../statements/block-flow.js";
 
@@ -185,8 +186,9 @@ function planRustFunctionItem(
   }
   const params = parameterPlan.params;
   const returnTypeNode = Node_Type(ast, node);
+  const sourceReturn = context.input.program.facts.getFact(node, rustSourceCallableReturnFactKey);
   const returnCarrier = generatorFact?.resultCarrier ?? asyncFact?.outputCarrier ??
-    context.input.program.facts.getFact(node, rustSourceCallableReturnFactKey)?.returnCarrier;
+    sourceReturn?.returnCarrier;
   const fallible = context.input.program.facts.getFact(node, rustFallibleFactKey) !== undefined;
   const callableErrorBoundary = fallible
     ? rustErrorBoundaryForDeclaration(node, context)
@@ -283,6 +285,7 @@ function planRustFunctionItem(
     syntheticNames,
     controlFlow: { nextLoopId: 0 },
     functionReturnType: bodyReturnType,
+    functionUndefinedReturn: sourceReturn?.undefinedReturn === true,
     ...(isAsync ? { asyncContext: true } : {}),
     ...(generatorFact === undefined
       ? {}
@@ -315,7 +318,8 @@ function planRustFunctionItem(
     return undefined;
   }
   const body: RustBlock = {
-    statements: plannedBody.statements,
+    statements: [...plannedBody.statements, ...(sourceReturn?.fallthroughUndefined
+      ? [planRustReturnExit({ kind: "path", path: "None" }, bodyContext)] : [])],
   };
   if (generatorFact !== undefined) {
     if (!isRustUnitCarrier(generatorFact.returnType) && !rustBlockTerminates(body)) {

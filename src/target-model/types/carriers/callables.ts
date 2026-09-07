@@ -6,6 +6,7 @@ import {
   rustGeneratorTargetId,
   rustIteratorResultTargetId,
   rustLocationTargetId,
+  rustRawPointerTargetId,
 } from "./source-types.js";
 import { rustOptionElementCarrier, rustOptionTargetType } from "./optional.js";
 import { rustTupleTargetType, rustUnitTargetType } from "./native.js";
@@ -23,6 +24,10 @@ export function rustLocationTargetType(pointee: TargetTypeRef): TargetTypeRef {
     id: rustLocationTargetId,
     genericArguments: rustTypeGenericArguments([pointee]),
   };
+}
+
+export function rustRawPointerTargetType(): TargetTypeRef {
+  return { kind: "target-named", id: rustRawPointerTargetId };
 }
 
 export function rustCallableTargetType(

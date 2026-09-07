@@ -24,6 +24,7 @@ import type {
   RustTargetTypeResolutionOptions,
 } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { selectRustPointerReturnCarrier } from "../../operations/pointer-return.js";
 
 export function resolveRustSignatureParameterListTarget(
   parameters: SourceCallableTypeEvidence["parameters"],
@@ -143,12 +144,14 @@ export function resolveRustTypeComponentEvidence(
   resolving: Set<object>,
 ): TargetTypeRef | undefined {
   if (component.authoredTypeNode === undefined) {
-    return resolveRustTargetType(
+    const selected = resolveRustTargetType(
       component.selectedType,
       context,
       options,
       resolving,
     );
+    return selected ?? (component.declaration === undefined ? undefined
+      : selectRustPointerReturnCarrier(component.declaration, context, options));
   }
   const authoredSourceFile = context.ast.getSourceFile(component.authoredTypeNode);
   const semantics = authoredSourceFile !== undefined &&

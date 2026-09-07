@@ -48,6 +48,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustAssignmentOperationFact } from "./core.js";
 import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
+import { rustMemoryMetadataKey } from "../../../target-model/operations/memory-layout.js";
 
 export function planExpressionStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const expression = Node_Expression(context.input.program.source.ast, node);
@@ -60,6 +61,7 @@ export function planExpressionAsStatement(
   expression: Node,
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
+  if (context.input.program.facts.getFact(expression, rustMemoryMetadataKey)) return [];
   const { ast } = context.input.program.source;
   const expressionKind = ast.kindName(expression);
   if (expressionKind === KindBinaryExpression) {

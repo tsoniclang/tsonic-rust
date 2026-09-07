@@ -11,7 +11,9 @@ import {
   rustStructuralMethodStorageCarrier,
   rustStructuralObjectCarrierValue,
   rustStringTargetType,
+  rustUnitTargetType,
 } from "../../../../target-model/types/index.js";
+import { readRustSourceKeepAlive } from "../../../../policy/operations/reachability-source.js";
 import { acceptProjectSourceCall, mapSelectedJsSpecialCall } from "../object-shapes.js";
 import { acceptRustPolicy } from "../../../../policy/operations/contracts.js";
 import { acceptSelectedCall, checkedCallIsConstruction, instantiateSelectedCallTemplate, selectedCallReceiverValueCarrier, selectRustOptionalCallResult } from "./instantiation.js";
@@ -27,6 +29,8 @@ import { selectedCallArgumentCarriers, selectedCallArgumentNodes, selectedCallCa
 import { selectJsSurfaceConstructorBySourceOwner, selectJsSurfaceOperation } from "../../../../policy/operations/js-surface.js";
 import { selectRustGeneratorSourceCall } from "../../../../policy/types/generator-source-profile.js";
 import { selectRustProviderOperation } from "../../../../policy/operations/provider-selection.js";
+import { selectRustProviderPointerResult } from "../../../../policy/operations/provider-pointer-result.js";
+import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { sourceCallMarkerByIdentity } from "../model.js";
 import { mapSelectedStringRegExpProtocolCall } from "../regexp-protocols.js";
 import { selectedRustRegExpReplacementCallbackEvidence } from "../regexp-replacement-callback.js";
@@ -45,6 +49,21 @@ export function selectRustCheckedCall(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedCallSelectionResult> {
+  const keepAlive = readRustSourceKeepAlive(request.source.call, context);
+  if (keepAlive !== undefined) {
+    const value = resolveRustTargetTypeRef(keepAlive.valueExpression, context, options);
+    if (keepAlive.call !== request.source.call || request.source.sourceArguments.length !== 1 ||
+      request.source.sourceArguments[0]?.expression !== keepAlive.valueExpression || value === undefined) {
+      return rejectSelectedOperation(request.source.call, context,
+        "RUST_KEEP_ALIVE_EVIDENCE_CONFLICT", "Reachability requires the exact selected source value and its closed carrier.");
+    }
+    return acceptSelectedCall(request, {
+      kind: "provider-operation", operationId: "tsonic.rust.keep-alive", operationKind: "method",
+      target: { form: "call", path: "rt::keep_alive", argModes: ["ref"] },
+      parameterCarriers: [value], resultCarrier: rustUnitTargetType(),
+      isAsync: false, isFallible: false, errorBoundary: "none",
+    }, [value], context, options, { sourceName: "keepAlive" });
+  }
   const providerEvidence = resolveSelectedProviderDeclaration(
     context,
     request.sourceSelectedDeclaration,
@@ -98,6 +117,17 @@ export function selectRustCheckedCall(
     );
     if (instantiation === undefined) {
       return rejectSelectedOperation(request.source.call, context, "RUST_PROVIDER_TYPE_INSTANTIATION_NOT_PROVEN", `Selected call '${provider.memberName ?? provider.exportName ?? provider.exportId ?? provider.moduleSpecifier}' does not prove one closed instantiation of its Rust provider type parameters.`);
+    }
+    const sourceResult = selectRustProviderPointerResult(request.source, context, options, instantiation.substitutions.types);
+    if (sourceResult?.kind === "invalid") {
+      return rejectSelectedOperation(request.source.call, context,
+        "RUST_PROVIDER_POINTER_RESULT_NOT_PROVEN", sourceResult.reason);
+    }
+    if (sourceResult !== undefined && !rustTargetTypeRefEquals(sourceResult.carrier, instantiation.template.resultCarrier)) {
+      return rejectSelectedOperation(request.source.call, context,
+        "RUST_PROVIDER_POINTER_RESULT_CONFLICT",
+        "The selected provider result conflicts with the canonical source pointer carrier.",
+        [{ message: `source=${JSON.stringify(sourceResult.carrier)}; provider=${JSON.stringify(instantiation.template.resultCarrier)}` }]);
     }
     if (selection.row.immediateCallback !== undefined) {
       return acceptRustPolicy({

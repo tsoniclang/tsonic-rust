@@ -588,7 +588,7 @@ function validateTypeRelations(
   for (const relation of definition.types ?? []) {
     requireExactKeys(asRecord(relation), [
       "exportId", "genericParameters", "targetCarrier", "typeRequirements",
-      "objectLiteralConstruction",
+      "objectLiteralConstruction", "nativeMemoryFieldIds",
     ], "type relation", fail);
     requireNonEmpty(relation.exportId, "type relation export id", fail);
     const exported = exportsById.get(relation.exportId)?.declaration;
@@ -601,6 +601,14 @@ function validateTypeRelations(
     relatedExports.add(relation.exportId);
     if (!isRustTargetTypeRef(relation.targetCarrier)) {
       fail(`export '${relation.exportId}' has an invalid closed Rust target carrier`);
+    }
+    if (relation.nativeMemoryFieldIds !== undefined) {
+      const fields = relation.nativeMemoryFieldIds;
+      if (!Array.isArray(fields) || new Set(fields).size !== fields.length ||
+        fields.some(id => typeof id !== "string" || id.length === 0 ||
+          !(exported.members ?? []).some(member => member.id === id && member.kind === "property" && !member.static && !member.readonly))) {
+        fail(`export '${relation.exportId}' has an invalid complete native value field contract`);
+      }
     }
     if (relation.objectLiteralConstruction !== undefined && (
       !isClosedMetadata(relation.objectLiteralConstruction) ||

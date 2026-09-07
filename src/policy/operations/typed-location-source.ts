@@ -36,18 +36,6 @@ export type RustTypedLocationSourceFact = Extract<
   { readonly operation: RustTypedLocationOperationKind }
 >;
 
-export type RustSafeTypedLocationSourceFact = Extract<
-  RustTypedLocationSourceFact,
-  {
-    readonly operation:
-      | "address-of"
-      | "allocate"
-      | "equal-pointer"
-      | "load"
-      | "store";
-  }
->;
-
 export type RustAddressOfSourceFact = Extract<
   RustTypedLocationSourceFact,
   { readonly operation: "address-of" }

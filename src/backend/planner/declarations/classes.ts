@@ -496,6 +496,7 @@ function planConstructor(
     syntheticNames,
     controlFlow: { nextLoopId: 0 },
     functionReturnType: classType,
+    functionUndefinedReturn: false,
     ...(errorBoundary === undefined ? {} : { fallibleBoundary: errorBoundary }),
   };
   const parameterStatements = planRustCallableParameterPrelude(

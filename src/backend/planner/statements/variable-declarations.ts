@@ -6,6 +6,9 @@ import {
   Node_Type,
 } from "@tsonic/target-api/source";
 import { rustLocationStorageForDeclaration } from "../expressions/typed-locations.js";
+import { planRustNativeAllocation } from "../expressions/native-memory.js";
+import { rustNativeBackingKey, rustNativeArrayStorageKey } from "../../../target-model/operations/native-memory.js";
+import { nativeRustArrayType } from "../expressions/native-arrays.js";
 import {
   rustMutatedBindingFactKey,
   rustMutatedReferentFactKey,
@@ -28,6 +31,7 @@ import { rustTypeFromCarrierInContext } from "../types/render.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
+import { rustMemoryMetadataKey } from "../../../target-model/operations/memory-layout.js";
 
 export function planVariableStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const declarations = collectVariableDeclarations(node, context);
@@ -53,6 +57,7 @@ function planVariableDeclaration(
   declaration: Node,
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
+  if (context.input.program.facts.getFact(declaration, rustMemoryMetadataKey)) return [];
   const { ast } = context.input.program.source;
   const nameNode = Node_Name(context.input.program.source.ast, declaration);
   const nameKind = nameNode === undefined ? "" : ast.kindName(nameNode);
@@ -69,7 +74,8 @@ function planVariableDeclaration(
     return undefined;
   }
   const initializer = Node_Initializer(context.input.program.source.ast, declaration);
-  const locationStorage = rustLocationStorageForDeclaration(declaration, context);
+  const nativeArray = context.input.program.facts.getFact(declaration, rustNativeArrayStorageKey);
+  const locationStorage = nativeArray === undefined ? rustLocationStorageForDeclaration(declaration, context) : undefined;
   if (initializer === undefined && locationStorage !== undefined) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, declaration),
@@ -136,6 +142,10 @@ function planVariableDeclaration(
     return undefined;
   }
   const ownedBinding = declarationCarrier.kind !== "pointer" && declarationCarrier.kind !== "reference";
+  if (nativeArray !== undefined) {
+    rustType = nativeRustArrayType(declaration, context);
+    if (rustType === undefined) return undefined;
+  }
   const resourceFact = context.input.program.facts.getFact(declaration, rustResourceManagementFactKey);
   const sourceUseSummary = context.input.program.sourceNavigation.declarationUseSummary(declaration);
   const objectRepresentation = context.input.program.objectRepresentations.representationFor(
@@ -144,7 +154,7 @@ function planVariableDeclaration(
   const referentMutationRequiresMutableBinding =
     rustCarrierReferentMutationRequiresMutableBinding(declarationCarrier) &&
     (objectRepresentation === undefined || objectRepresentation.kind === "value");
-  const mutable = locationStorage === undefined &&
+  const mutable = nativeArray !== undefined ? sourceUseSummary.bindingWritten : locationStorage === undefined &&
     (sourceUseSummary.bindingWritten ||
       context.input.program.facts.getFact(declaration, rustMutatedBindingFactKey) !== undefined ||
       (objectRepresentation?.kind === "value" && sourceUseSummary.memberWritten) ||
@@ -167,7 +177,9 @@ function planVariableDeclaration(
         return undefined;
       }
       context.usedAliases?.add("rt");
-      init = { kind: "call", path: "rt::Location::allocate", args: [planned] };
+      init = context.input.program.facts.getFact(declaration, rustNativeBackingKey) === undefined
+        ? { kind: "call", path: "rt::Location::allocate", args: [planned] }
+        : planRustNativeAllocation(declaration, planned, context);
     }
   } else if (rustOptionElementCarrier(declarationCarrier) !== undefined && rustType !== undefined) {
     init = { kind: "none" };

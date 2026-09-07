@@ -22,6 +22,7 @@ import {
 } from "../../../analysis/facts/keys.js";
 import {
   isRustCopyCarrier,
+  rustLocationTargetType,
   rustCarrierSupportsClone,
 } from "../../../target-model/types/index.js";
 import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
@@ -38,10 +39,11 @@ import {
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustProjectObjectRepresentation } from "../objects/project-storage.js";
 import { rustModuleCellAccess } from "../project/module-storage.js";
-import { requireRustLocationValueCarrier } from "../types/generic-requirements.js";
+import { requireRustCarrierRequirements, requireRustLocationValueCarrier } from "../types/generic-requirements.js";
 import {
   readRustProjectDispatchedField,
   writeRustProjectDispatchedField,
+  readRustStructuralObjectField,
 } from "../objects/project-objects.js";
 import { planRustProjectFieldDispatchRoles } from "../objects/project-field-dispatch.js";
 import {
@@ -49,6 +51,9 @@ import {
   writeRustStoredObjectField,
 } from "../objects/project-storage.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
+import { planRustNativeAllocation } from "./native-memory.js";
+import { rustNativeBackingKey, rustNativeArrayStorageKey } from "../../../target-model/operations/native-memory.js";
+import { planNativeRustArrayAccess } from "./native-arrays.js";
 
 export type RustExpressionPlanner = (
   node: Node,
@@ -72,6 +77,34 @@ export function planRustTypedLocationCall(
   }
   context.usedAliases?.add("rt");
   switch (plan.operation) {
+    case "hash-pointer": {
+      const pointer = planExpression(plan.pointerExpression, context);
+      const owner = rustTypeFromCarrierInContext(fact.locationCarrier, context);
+      return pointer === undefined || owner === undefined ? undefined : {
+        kind: "associated-call", owner, method: "hash",
+        args: [optionReference(planRustNonConsumingValue(plan.pointerExpression, pointer, context))],
+      };
+    }
+    case "bind-pointer": {
+      const identity = planExpression(plan.identityExpression, context);
+      const read = planExpression(plan.readExpression, context);
+      const write = planExpression(plan.writeExpression, context);
+      if (identity === undefined || read === undefined || write === undefined ||
+        !requireRustCarrierRequirements(fact.pointeeCarrier, ["static"], node, context)) return undefined;
+      return { kind: "call", path: "rt::Location::bind", args: [identity, read, write] };
+    }
+    case "project-pointer": {
+      const pointer = planExpression(plan.pointerExpression, context);
+      const read = planExpression(plan.fromSourceExpression, context);
+      const write = planExpression(plan.toSourceExpression, context);
+      if (pointer === undefined || read === undefined || write === undefined ||
+        !requireRustCarrierRequirements(plan.pointeeCarrier, ["static"], node, context) ||
+        !requireRustCarrierRequirements(plan.sourcePointeeCarrier, ["static"], node, context)) return undefined;
+      const source = planRustNonConsumingValue(plan.pointerExpression, pointer, context);
+      return plan.optional
+        ? { kind: "call", path: "rt::Location::map_optional", args: [optionReference(source), read, write] }
+        : { kind: "method-call", receiver: source, method: "map", args: [read, write] };
+    }
     case "address-of":
       return planRustLocationStorage(
         plan.storageExpression,
@@ -82,6 +115,9 @@ export function planRustTypedLocationCall(
       );
     case "allocate": {
       const initial = planExpression(plan.initialExpression, context);
+      if (context.input.program.facts.getFact(node, rustNativeBackingKey) !== undefined) {
+        return initial === undefined ? undefined : planRustNativeAllocation(node, initial, context);
+      }
       return initial === undefined || !requireRustLocationValueCarrier(
         fact.pointeeCarrier,
         node,
@@ -132,6 +168,9 @@ export function planRustIdentifierValue(
   path: string,
   context: RustPlanContext,
 ): RustExpr {
+  if (context.input.program.facts.getFact(node, rustNativeArrayStorageKey)?.kind === "reference") {
+    return { kind: "method-call", receiver: { kind: "path", path }, method: "clone", args: [] };
+  }
   const captured = rustCapturedBinding(node, context);
   const storage = rustLocationStorageForReference(node, context);
   const value: RustExpr = {
@@ -488,6 +527,19 @@ function planRustLocationStorage(
   context: RustPlanContext,
   planExpression: RustExpressionPlanner,
 ): RustExpr | undefined {
+  if (context.input.program.facts.getFact(expression, rustNativeArrayStorageKey)?.kind === "element") {
+    return planNativeRustArrayAccess(expression, context, planExpression, "location_at");
+  }
+  const fieldOperation = context.input.program.facts.getFact(expression, rustTargetOperationFactKey);
+  if (fieldOperation?.kind === "source-field" && fieldOperation.storage === "object-handle") {
+    const field = context.input.program.structuralShapes.field(fieldOperation.receiverCarrier, fieldOperation.storageIndex);
+    if (field?.nativeLayout !== undefined) {
+      const receiver = Node_Expression(context.input.program.source.ast, expression);
+      const value = receiver === undefined ? undefined : planExpression(receiver, context);
+      return value === undefined ? undefined
+        : readRustStructuralObjectField(value, field.targetName, rustLocationTargetType(field.carrier));
+    }
+  }
   if (expression === rootExpression) {
     const root = rustRawLocationRoot(expression, context);
     return root === undefined
@@ -670,6 +722,9 @@ function findRustLocationStorageRoot(
 ): { readonly expression: Node; readonly declaration: Node } | undefined {
   let root = expression;
   while (true) {
+    const native = context.input.program.facts.getFact(root, rustNativeArrayStorageKey);
+    if (native?.kind === "element") return { expression: root, declaration: native.declaration };
+    if (native !== undefined) return undefined;
     const kind = context.input.program.source.ast.kindName(root);
     if (kind !== "KindPropertyAccessExpression" &&
       kind !== "KindElementAccessExpression" &&

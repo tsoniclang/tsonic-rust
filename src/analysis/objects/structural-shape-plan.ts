@@ -1,4 +1,5 @@
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustNativeMemoryLayout, RustNativeObjectField } from "../../target-model/operations/native-memory.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import {
@@ -16,6 +17,7 @@ import type {
 } from "../project-types/source-type-registry.js";
 
 export interface RustStructuralShapeField {
+  readonly nativeLayout?: RustNativeMemoryLayout;
   readonly sourceName: string;
   readonly targetName: string;
   readonly carrier: TargetTypeRef;
@@ -57,6 +59,7 @@ export interface RustStructuralShapePlanRegistry extends RustStructuralShapePlan
     shapes: readonly RustSourceObjectShape[],
     implementations: readonly RustStructuralFieldImplementation[],
     componentForFile: (fileName: string) => string,
+    nativeFields: readonly RustNativeObjectField[],
   ): RustStructuralShapePlan;
   isInitialized(): boolean;
   seal(): RustStructuralShapePlan;
@@ -75,11 +78,12 @@ export function createRustStructuralShapePlanRegistry(): RustStructuralShapePlan
       shapes: readonly RustSourceObjectShape[],
       implementations: readonly RustStructuralFieldImplementation[],
       componentForFile: (fileName: string) => string,
+      nativeFields: readonly RustNativeObjectField[],
     ) {
       if (current !== undefined) {
         throw new Error("Rust structural shape plan can be initialized only once.");
       }
-      current = createRustStructuralShapePlan(shapes, implementations, componentForFile);
+      current = createRustStructuralShapePlan(shapes, implementations, componentForFile, nativeFields);
       return current;
     },
     isInitialized() {
@@ -107,6 +111,7 @@ export function createRustStructuralShapePlan(
   shapes: readonly RustSourceObjectShape[],
   implementations: readonly RustStructuralFieldImplementation[],
   componentForFile: (fileName: string) => string,
+  nativeFields: readonly RustNativeObjectField[],
 ): RustStructuralShapePlan {
   const uniqueByKey = new Map<string, TargetTypeRef>();
   for (const shape of shapes) {
@@ -135,6 +140,8 @@ export function createRustStructuralShapePlan(
       usedTypeNamesByComponent.set(componentId, usedTypeNames);
       const usedFieldNames = new Set<string>();
       const fields = structural.fields.map((field, storageIndex): RustStructuralShapeField => {
+        const nativeLayout = nativeFields.find(candidate => candidate.storageIndex === storageIndex &&
+          rustTargetTypeRefEquals(candidate.owner, carrier))?.layout;
         const targetName = allocateSnakeName(
           usedFieldNames,
           rustSnakeCaseIdentifier(field.sourceName),
@@ -145,6 +152,7 @@ export function createRustStructuralShapePlan(
         const propertyStorage = field.accessor !== undefined ||
           fieldImplementations.some((implementation) => implementation.kind === "accessor");
         return Object.freeze({
+          ...(nativeLayout === undefined ? {} : { nativeLayout }),
           sourceName: field.sourceName,
           targetName,
           carrier: field.type,

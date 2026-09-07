@@ -12,9 +12,11 @@ import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
+import type { TsonicPointerReturnQueries } from "@tsonic/source-core/facts";
 
 export interface RustSourcePolicyContext {
   readonly source: TargetSourceProgram;
+  readonly pointerReturns: TsonicPointerReturnQueries;
   readonly ast: AstReader;
   readonly sourceFiles: readonly SourceFile[];
   readonly facts: RustPlanQueries;

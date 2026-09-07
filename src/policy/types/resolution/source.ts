@@ -10,6 +10,7 @@ import {
   rustJsArrayTargetType,
   rustJsStringTargetType,
   rustLocationTargetType,
+  rustRawPointerTargetType,
   rustNullTargetType,
   rustNeverTargetType,
   rustOptionTargetType,
@@ -30,6 +31,7 @@ import { resolveReferencedDeclarationType, resolveRustAuthoredTargetType, resolv
 import { resolveRustTargetType, resolveStructuralObjectType } from "./target.js";
 import { sourceTransformedTypeFactEvidenceNodes } from "@tsonic/target-api/source";
 import { tsonicFixedArrayFactKey } from "@tsonic/source-core/facts";
+import { isRustSourceRawPointer } from "../../operations/raw-pointer-source.js";
 import type { ExtensionFactSubject, Node, Type } from "@tsonic/tsts";
 import type { SourceStandardTypeTransformation } from "@tsonic/target-api/source";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
@@ -43,6 +45,7 @@ import {
   rustSourceLifetimeTypeContract,
 } from "./lifetimes.js";
 import { parseSourceIntegerLiteral } from "../../../target-model/syntax/literals.js";
+import { readRustRawLocation } from "../../operations/native-memory.js";
 import {
   resolveRustCallableEvidence,
   resolveRustEvidenceNodesToCommonCarrier,
@@ -60,6 +63,14 @@ export function resolveRustTargetTypeRef(
   if (subject === undefined) {
     return undefined;
   }
+  const rawLocation = readRustRawLocation(context.ast, context.source.sourceFacts, subject);
+  if (rawLocation?.kind === "resolved") {
+    if (rawLocation.operation.operation === "to-raw") return rustOptionTargetType(rustRawPointerTargetType());
+    const pointee = resolveRustTargetTypeRef(rawLocation.operation.explicitPointeeTypeNode ??
+      rawLocation.layout.explicitTypeNode ?? rawLocation.operation.pointeeType, context, options);
+    return pointee === undefined ? undefined : rustOptionTargetType(rustLocationTargetType(pointee));
+  }
+  if (isRustSourceRawPointer(subject, context)) return rustRawPointerTargetType();
   if (resolveRustSourceMarker(subject, context) === "js-string") {
     return rustJsStringTargetType();
   }
@@ -205,10 +216,11 @@ export function resolveRustTargetTypeSyntax(
           ...(functionPointer.abi.length === 0 ? {} : { abi: functionPointer.abi }),
         };
   }
+  if (isRustSourceRawPointer(node, context)) return rustRawPointerTargetType();
   const pointer = context.facts.resolve(node, pointerFactKey) ??
     context.facts.get(node, pointerFactKey);
   if (pointer !== undefined) {
-    const pointee = resolveRustTargetTypeRef(pointer.pointee, context, options);
+    const pointee = resolveRustAuthoredTargetType(pointer.pointee, context, options, resolving);
     return pointee === undefined ? undefined : rustLocationTargetType(pointee);
   }
   const primitive = resolveSourcePrimitive(node, context);

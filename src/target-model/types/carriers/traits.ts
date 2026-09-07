@@ -1,5 +1,6 @@
 import { isRustBigIntCarrier, isRustJsStringCarrier, isRustNullCarrier, isRustStringCarrier, isRustUndefinedCarrier, isRustUnitCarrier } from "./js.js";
 import { isRustIntegerCarrier, rustFutureTargetId, rustPrimitiveTypeName } from "./primitives.js";
+import { rustRawPointerTargetId } from "./source-types.js";
 import { rustBigIntTargetId, rustCallableTargetId, rustJsArrayTargetId, rustJsDateTargetId, rustJsErrorTargetId, rustJsMapTargetId, rustJsRegExpExecArrayTargetId, rustJsRegExpIndicesTargetId, rustJsRegExpMatchArrayTargetId, rustJsRegExpNamedGroupsTargetId, rustJsRegExpNamedIndicesTargetId, rustJsRegExpStringIteratorTargetId, rustJsRegExpTargetId, rustJsSetTargetId, rustJsStringTargetId, rustJsValueTargetId, rustLocationTargetId, rustNullTargetId, rustOptionTargetId, rustProgramErrorTargetId, rustRegExpExecArrayTargetId, rustRegExpIndicesTargetId, rustRegExpMatchArrayTargetId, rustRegExpNamedGroupsTargetId, rustRegExpNamedIndicesTargetId, rustRegExpStringIteratorTargetId, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustStringTargetId, rustStrTargetId, rustStructuralObjectCarrierValue, rustTsValueTargetId, rustUndefinedTargetId } from "./source-types.js";
 import {
   rustJsArrayBufferTargetId,
@@ -159,6 +160,7 @@ const rustStringTraitPaths: ReadonlySet<string> = new Set([
 ]);
 
 const rustUnconditionallyEqHashTargetIds: ReadonlySet<string> = new Set([
+  rustRawPointerTargetId,
   rustStringTargetId,
   rustStrTargetId,
   rustBigIntTargetId,
@@ -369,6 +371,7 @@ const rustJsStrictEqualityTargetIds: ReadonlySet<string> = new Set([
 ]);
 
 const rustUnconditionallyCloneTargetIds: ReadonlySet<string> = new Set([
+  rustRawPointerTargetId,
   rustStringTargetId,
   rustJsStringTargetId,
   rustBigIntTargetId,

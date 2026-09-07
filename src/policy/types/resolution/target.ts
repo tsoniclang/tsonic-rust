@@ -29,6 +29,8 @@ import type { Node, Symbol, Type } from "@tsonic/tsts";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { rustRawPointerTargetType } from "../../../target-model/types/carriers/callables.js";
+import { isRustSourceRawPointer } from "../../operations/raw-pointer-source.js";
 import { resolveRustAuthoredBroadSourceValueTargetType } from "./broad-values.js";
 
 export function resolveRustTargetType(
@@ -40,6 +42,9 @@ export function resolveRustTargetType(
 ): TargetTypeRef | undefined {
   if (type === undefined || resolving.has(type)) {
     return undefined;
+  }
+  if (context.currentSemantics.facts.typeSubjects(type).some(subject => isRustSourceRawPointer(subject, context))) {
+    return rustRawPointerTargetType();
   }
   const existingStructuralObject = authoredTypeRoot === undefined
     ? options.sourceTypes.structuralObjectForType(type)

@@ -36,6 +36,7 @@ import type { RustProjectTypeDefinition } from "../../../analysis/project-types/
 import type { RustImplFunction, RustStmt } from "../../target-ast/nodes.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { wrapRustJsPromiseBody } from "./async-promise.js";
+import { planRustReturnExit } from "../statements/completion-exits.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 
 export function planProjectMethod(
@@ -116,8 +117,8 @@ export function planProjectMethod(
     ));
     return undefined;
   }
-  const returnCarrier = generatorFact?.resultCarrier ?? asyncFact?.outputCarrier ??
-    context.input.program.facts.getFact(member, rustSourceCallableReturnFactKey)?.returnCarrier;
+  const sourceReturn = context.input.program.facts.getFact(member, rustSourceCallableReturnFactKey);
+  const returnCarrier = generatorFact?.resultCarrier ?? asyncFact?.outputCarrier ?? sourceReturn?.returnCarrier;
   if (returnCarrier === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, returnTypeNode ?? member),
@@ -216,6 +217,7 @@ export function planProjectMethod(
     syntheticNames,
     controlFlow: { nextLoopId: 0 },
     functionReturnType: bodyReturnType,
+    functionUndefinedReturn: sourceReturn?.undefinedReturn === true,
     ...(sourceAsync && generatorFact === undefined ? { asyncContext: true } : {}),
     ...(generatorFact === undefined
       ? {}
@@ -236,10 +238,12 @@ export function planProjectMethod(
   if (parameterStatements === undefined) {
     return undefined;
   }
-  const body = planBlockLike(bodyNode, bodyContext);
-  if (body === undefined) {
+  const plannedBody = planBlockLike(bodyNode, bodyContext);
+  if (plannedBody === undefined) {
     return undefined;
   }
+  const body = { statements: [...plannedBody.statements, ...(sourceReturn?.fallthroughUndefined
+    ? [planRustReturnExit({ kind: "path", path: "None" }, bodyContext)] : [])] };
   if (generatorFact === undefined && !isUnit && !rustBlockTerminates(body)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, bodyNode),
