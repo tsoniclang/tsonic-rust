@@ -26,6 +26,7 @@ import {
 } from "../types/render.js";
 import {
   rustOptionTargetType,
+  rustLocationTargetType,
   rustStructuralPropertyGetterStorageCarrier,
   rustStructuralPropertySetterStorageCarrier,
   rustStructuralPropertyValueCarrier,
@@ -110,7 +111,8 @@ export function planRustStructuralShapeModule(
             field.presence,
           )
         : undefined;
-      const storageCarrier = field.method === true ? methodStorageCarrier : field.carrier;
+      const storageCarrier = field.method === true ? methodStorageCarrier
+        : field.nativeLayout === undefined ? field.carrier : rustLocationTargetType(field.carrier);
       if (storageCarrier === undefined) {
         diagnostics.push({
           code: "RUST_STRUCTURAL_SHAPE_METHOD_TYPE_MISSING",

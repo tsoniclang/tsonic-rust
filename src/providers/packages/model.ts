@@ -83,6 +83,7 @@ export type RustProviderOperationDefinition<
 );
 
 export interface RustProviderTypeDefinition {
+  readonly nativeMemoryFieldIds?: readonly string[];
   readonly exportId: string;
   readonly genericParameters?: readonly RustProviderGenericParameter[];
   readonly targetCarrier: TargetTypeRef;

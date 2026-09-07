@@ -6,6 +6,7 @@ import { spawnSync } from "node:child_process";
 import { compileRust, artifactText, repositoryRoot, rustRuntimeCratePath } from "../../helpers/rust-session.mjs";
 import { memoryAbiCapability } from "../../helpers/memory-abi.mjs";
 import { nativeMemoryProvider, nativeProviderProofSource, nativeProviderInferredProofSource } from "../../helpers/native-memory-provider.mjs";
+import { nativeRecordProvider, nativeRecordProofSource } from "../../helpers/native-record-proof.mjs";
 
 function prepare() {
   const scratch = join(repositoryRoot, ".temp");
@@ -24,19 +25,19 @@ tsonic_rust_runtime = { path = ${JSON.stringify(rustRuntimeCratePath)} }
   return { root, providerRoot };
 }
 
-function compile(providerRoot, options = {}, source = nativeProviderProofSource) {
+function compile(providerRoot, options = {}, source = nativeProviderProofSource, records = false) {
   return compileRust({
-    capabilities: [memoryAbiCapability("rust")], packages: [nativeMemoryProvider(providerRoot, options)],
+    capabilities: [memoryAbiCapability("rust")], packages: [records ? nativeRecordProvider(providerRoot, options) : nativeMemoryProvider(providerRoot, options)],
     target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": source },
   }).result;
 }
 
-function verifyProviderSource(sourceText) {
+function verifyProviderSource(sourceText, records = false) {
   const { root, providerRoot } = prepare();
-  const result = compile(providerRoot, {}, sourceText);
+  const result = compile(providerRoot, {}, sourceText, records);
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /native_memory_proof::acquire/u);
+  assert.match(source, records ? /NativeLayout::<native_memory_proof::Envelope>::new/u : /native_memory_proof::acquire/u);
   assert.match(source, /reinterpret_raw_location::<u32>/u);
   const output = join(root, "output");
   mkdirSync(output, { recursive: true });
@@ -55,6 +56,18 @@ function verifyProviderSource(sourceText) {
       maxBuffer: 4_194_304, env: { ...process.env, CARGO_BUILD_JOBS: "2" } });
     assert.equal(native.status, 0, `${args.join(" ")}\n${native.error ?? ""}\n${native.stdout}\n${native.stderr}`);
   }
+}
+
+test("native record codecs preserve nested packed values and exact provider fields", { timeout: 300_000 },
+  () => verifyProviderSource(nativeRecordProofSource, true));
+
+for (const options of [{ missingField: true }, { wrongField: true }, { missingContract: true }]) {
+  test(`native records reject ${Object.keys(options)[0]} before publishing artifacts`, () => {
+    const { providerRoot } = prepare();
+    const result = compile(providerRoot, options, nativeRecordProofSource, true);
+    assert.ok(result.diagnostics.some(diagnostic => diagnostic.code === "RUST_RAW_LOCATION_NOT_PROVEN" || diagnostic.code === "RUST_NATIVE_BACKING_NOT_PROVEN"), JSON.stringify(result.diagnostics));
+    assert.equal(result.artifacts.length, 0);
+  });
 }
 
 for (const [name, sourceText] of [["helpers and containers", nativeProviderProofSource],

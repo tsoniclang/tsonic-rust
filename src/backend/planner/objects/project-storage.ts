@@ -1,4 +1,5 @@
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { planRustNativeMemoryCall } from "../expressions/native-memory.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { RustAssignmentOperator } from "../../../target-model/syntax/tokens.js";
 import { rustProjectObjectLayout } from "../../../analysis/project-types/object-layout.js";
@@ -21,6 +22,7 @@ import {
 } from "../names/synthetic.js";
 import {
   rustCallableProtocol,
+  rustLocationTargetType,
   rustOptionElementCarrier,
   rustOptionTargetType,
   rustStructuralPropertyGetterStorageCarrier,
@@ -60,7 +62,9 @@ export function createRustStructuralObjectFromCarrier(
       if (initializer.kind === "accessor") {
         return [undefined];
       }
-      return [{ name: field.targetName, value: initializer.value }];
+      const value = field.nativeLayout === undefined ? initializer.value
+        : planRustNativeMemoryCall("allocate_native_location", initializer.value, field.nativeLayout, context);
+      return value === undefined ? [undefined] : [{ name: field.targetName, value }];
     }
     if (field.property === undefined || initializer.kind === "method") {
       return [undefined];
@@ -136,6 +140,9 @@ export function readRustStoredObjectField(
     if (field.method === true) {
       return undefined;
     }
+    if (field.nativeLayout !== undefined) return { kind: "method-call",
+      receiver: readRustStructuralObjectField(receiver, field.targetName, rustLocationTargetType(field.carrier)),
+      method: "load", args: [] };
     return field.storage === "property"
       ? readRustStructuralObjectProperty(
           receiverCarrier,
@@ -262,6 +269,15 @@ export function writeRustStoredObjectField(
     if (field.method === true || field.readonly) {
       return undefined;
     }
+    if (field.nativeLayout !== undefined) {
+      const location = readRustStructuralObjectField(receiver, field.targetName, rustLocationTargetType(field.carrier));
+      if (operator === "=") return { kind: "method-call", receiver: location, method: "store", args: [value] };
+      if (context.syntheticNames === undefined) return undefined;
+      const valueName = allocateRustSyntheticName(context.syntheticNames, "field_value");
+      return { kind: "method-call", receiver: location, method: "with_mut", args: [{ kind: "closure",
+        params: [{ name: valueName, byRefCopy: false }], body: { kind: "assignment", operator,
+          target: { kind: "dereference", pointer: { kind: "path", path: valueName } }, value } }] };
+    }
     return field.storage === "property"
       ? writeRustStructuralObjectProperty(
           receiverCarrier,
@@ -292,6 +308,14 @@ export function mutateRustStoredObjectField(
     const field = context.input.program.structuralShapes.field(receiverCarrier, storageIndex);
     if (field === undefined) {
       return undefined;
+    }
+    if (field.nativeLayout !== undefined) {
+      if (context.syntheticNames === undefined) return undefined;
+      const valueName = allocateRustSyntheticName(context.syntheticNames, "field_value");
+      const body = mutation({ kind: "dereference", pointer: { kind: "path", path: valueName } });
+      return body === undefined ? undefined : { kind: "method-call",
+        receiver: readRustStructuralObjectField(receiver, field.targetName, rustLocationTargetType(field.carrier)),
+        method: "with_mut", args: [{ kind: "closure", params: [{ name: valueName, byRefCopy: false }], body }] };
     }
     if (field.method === true || field.readonly) {
       return undefined;

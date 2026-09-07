@@ -4,8 +4,9 @@ import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js"
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { readRustRawLocation, selectRustNativeMemoryLayout } from "../../policy/operations/native-memory.js";
 import { rustNativeBackingKey, rustNativeMemoryLayoutsEqual, rustRawLocationPlanKey } from "../../target-model/operations/native-memory.js";
+import type { RustNativeObjectField } from "../../target-model/operations/native-memory.js";
 import { rustSourceParameterAbiFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
-import { rustLocationTargetType, rustOptionTargetType, rustRawPointerTargetType } from "../../target-model/types/index.js";
+import { rustLocationTargetType, rustOptionTargetType, rustRawPointerTargetType, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { setCarrierFact } from "./project-calls.js";
@@ -20,9 +21,7 @@ export function resolveRustRawLocationCarrier(walk: RustFactWalk, expression: No
   };
   if (selected.kind === "rejected") return reject(selected.reason);
   const resolution = rustResolutionContext(walk, expression);
-  const pointee = resolveRustTargetTypeRef(selected.layout.explicitTypeNode ?? selected.layout.sourceType,
-    resolution, walk.operationOptions);
-  const layout = selectRustNativeMemoryLayout(pointee, selected.layout);
+  const layout = selectRustNativeMemoryLayout(selected.layout, resolution, walk.operationOptions);
   if (layout === undefined) return reject("The selected layout has no closed all-bit-pattern Rust native value representation.");
   if (selected.operation.operation === "reinterpret" && selected.operation.explicitPointeeTypeNode !== undefined) {
     const explicit = resolveRustTargetTypeRef(selected.operation.explicitPointeeTypeNode, resolution, walk.operationOptions);
@@ -40,16 +39,15 @@ export function resolveRustRawLocationCarrier(walk: RustFactWalk, expression: No
     selected.operation.operation === "to-raw" ? raw : location) };
 }
 
-export function recordRustNativeBacking(walk: RustFactWalk): void {
+export function recordRustNativeBacking(walk: RustFactWalk): readonly RustNativeObjectField[] {
   const { context } = walk;
+  const fields: RustNativeObjectField[] = [];
   const reject = (node: Node, message: string): void => {
     appendRustDiagnostic(walk, "RUST_NATIVE_BACKING_NOT_PROVEN", message, node, []);
   };
   for (const issue of context.pointerBacking.issues()) reject(issue.node, issue.reason);
   for (const { origin, layout: descriptor } of context.pointerBacking.entries()) {
-    const pointee = resolveRustTargetTypeRef(descriptor.explicitTypeNode ?? descriptor.sourceType,
-      rustResolutionContext(walk, origin.call), walk.operationOptions);
-    const layout = selectRustNativeMemoryLayout(pointee, descriptor);
+    const layout = selectRustNativeMemoryLayout(descriptor, rustResolutionContext(walk, origin.call), walk.operationOptions);
     if (layout === undefined) {
       reject(origin.call, "Physical backing requires an exact closed all-bit-pattern native layout.");
       continue;
@@ -68,6 +66,26 @@ export function recordRustNativeBacking(walk: RustFactWalk): void {
     }
     let subject = origin.call;
     if (origin.operation === "address-of") {
+      const field = context.facts.get(origin.storageExpression, rustTargetOperationFactKey);
+      if (field?.kind === "source-field" && field.storage === "object-handle") {
+        const shape = rustStructuralObjectCarrierValue(field.receiverCarrier);
+        const member = shape?.fields[field.storageIndex];
+        const implementations = walk.sourceTypes.structuralFieldImplementations().filter(implementation =>
+          implementation.storageIndex === field.storageIndex && rustTargetTypeRefEquals(implementation.carrier, field.receiverCarrier));
+        if (member === undefined || member.readonly || member.presence !== "required" || member.accessor !== undefined ||
+          field.valueSemantics.kind !== "stored" || field.dispatch !== undefined ||
+          implementations.some(implementation => implementation.kind === "accessor") ||
+          !rustTargetTypeRefEquals(member.type, layout.pointeeCarrier)) {
+          reject(origin.call, "Native field backing requires one complete compiler-owned mutable data field.");
+          continue;
+        }
+        const previous = fields.find(candidate => candidate.storageIndex === field.storageIndex &&
+          rustTargetTypeRefEquals(candidate.owner, field.receiverCarrier));
+        if (previous !== undefined && !rustNativeMemoryLayoutsEqual(previous.layout, layout)) {
+          reject(origin.call, "One exact object field has incompatible native layout requirements.");
+        } else if (previous === undefined) fields.push(Object.freeze({ owner: field.receiverCarrier, storageIndex: field.storageIndex, layout }));
+        continue;
+      }
       const declaration = context.source.navigation.sourceReferenceFor(origin.storageExpression)?.declaration;
       if (!context.ast.is.IsIdentifier(origin.storageExpression) || declaration === undefined ||
         (!context.ast.is.IsVariableDeclaration(declaration) && !context.ast.is.IsParameterDeclaration(declaration))) {
@@ -101,4 +119,5 @@ export function recordRustNativeBacking(walk: RustFactWalk): void {
       reject(origin.call, "One exact storage declaration has incompatible native layout requirements.");
     } else context.facts.set(subject, rustNativeBackingKey, layout);
   }
+  return Object.freeze(fields);
 }

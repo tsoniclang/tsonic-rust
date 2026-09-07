@@ -3,6 +3,15 @@ import test from "node:test";
 import { compileRust, artifactText } from "../../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
 import { memoryAbiCapability, nativeLocationProofSource } from "../../../helpers/memory-abi.mjs";
+import { nativeFieldProofSource } from "../../../helpers/native-record-proof.mjs";
+
+test("native field storage retains aliases, ordinary writes and object replacement", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ capabilities: [memoryAbiCapability("rust")],
+    target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": nativeFieldProofSource } });
+  assert.deepEqual(result.diagnostics, []);
+  assert.match(artifactText(result, "src/index.rs"), /allocate_native_location/u);
+  validateGeneratedProject("native-field-aliases", result.artifacts, { run: true });
+});
 
 test("native locations retain original local storage, allocation aliases and lifetime owners", { timeout: 300_000 }, () => {
   const { result } = compileRust({
@@ -42,6 +51,14 @@ test("native array value reads clone proven owned handles while storage writes r
 });
 
 for (const [name, source, diagnostic] of [
+  ["conflicting object field layouts", `import { addressOf } from "@tsonic/core/lang.js";
+    const packed = memoryLayout<uint32>(abi, 4, 1, 4);
+    export function expose(): void {
+      const cell: { value: uint32 } = { value: 1 };
+      const alias = cell;
+      toRawPointer(addressOf(cell.value), word);
+      toRawPointer(addressOf(alias.value), packed);
+    }`, "RUST_NATIVE_BACKING_NOT_PROVEN"],
   ["open caller", `export function expose(pointer: Pointer<uint32>) { return toRawPointer(pointer, word); }`, "RUST_NATIVE_BACKING_NOT_PROVEN"],
   ["conflicting inferred pointees", `import type { int32 } from "@tsonic/core/types.js"; export function expose(flag: boolean) { return flag ? allocatePointer<uint32>(1) : allocatePointer<int32>(2); }`, "RUST_MISSING_TARGET_FACT"],
   ["logical projection", `export function expose() { const pointer = allocatePointer<uint32>(1); return toRawPointer(projectPointer<uint32, uint32>(pointer, value => value, value => value), word); }`, "RUST_NATIVE_BACKING_NOT_PROVEN"],

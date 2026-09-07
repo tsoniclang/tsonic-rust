@@ -3,6 +3,28 @@ use std::rc::{Rc, Weak};
 use tsonic_rust_runtime::raw_memory::RawPointer;
 use tsonic_rust_runtime::{raw_memory, Location};
 
+#[derive(Clone, Copy)]
+pub struct Header {
+    pub tag_byte: u8,
+    pub units: u32,
+}
+
+#[derive(Clone, Copy)]
+pub struct Envelope {
+    pub lead: u8,
+    pub record: Header,
+}
+
+pub fn create_envelope(prefix: u8, tag: u8, count: u32) -> Envelope {
+    Envelope {
+        lead: prefix,
+        record: Header {
+            tag_byte: tag,
+            units: count,
+        },
+    }
+}
+
 struct Region {
     values: UnsafeCell<[u32; 2]>,
 }
@@ -59,6 +81,11 @@ pub fn identity<Value>(value: Value) -> Value {
 
 pub fn location(value: u32) -> Location<u32> {
     let raw = acquire(value);
-    unsafe { raw_memory::reinterpret_raw_location(Some(&raw), 4, 4, 64, true) }
-        .expect("non-null native region")
+    unsafe {
+        raw_memory::reinterpret_raw_location(
+            Some(&raw),
+            tsonic_rust_runtime::raw_memory::NativeLayout::scalar(4, 4, 64, true),
+        )
+    }
+    .expect("non-null native region")
 }

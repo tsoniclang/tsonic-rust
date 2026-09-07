@@ -263,7 +263,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
       }
     }
   }
-  recordRustNativeBacking(walk);
+  const nativeFields = recordRustNativeBacking(walk);
   const callableSpecializations = context.sourceCallableSpecializations.initialize({
     ast,
     names: context.names,
@@ -343,6 +343,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     structuralObjects,
     sourceTypes.structuralFieldImplementations(),
     (fileName) => sourcePackageComponentByFile.get(fileName)!,
+    nativeFields,
   );
   context.projectFieldDispatch.initialize({
     ast,

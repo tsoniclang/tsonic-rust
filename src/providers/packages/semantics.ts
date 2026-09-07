@@ -72,6 +72,7 @@ export function providerTypeRowIdentity(row: RustProviderTypeRow): string {
     targetCarrier: row.targetCarrier,
     typeRequirements: row.typeRequirements,
     objectLiteralConstruction: row.objectLiteralConstruction,
+    nativeMemoryFieldIds: row.nativeMemoryFieldIds,
   })}`;
 }
 

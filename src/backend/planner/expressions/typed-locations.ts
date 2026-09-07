@@ -22,6 +22,7 @@ import {
 } from "../../../analysis/facts/keys.js";
 import {
   isRustCopyCarrier,
+  rustLocationTargetType,
   rustCarrierSupportsClone,
 } from "../../../target-model/types/index.js";
 import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
@@ -42,6 +43,7 @@ import { requireRustCarrierRequirements, requireRustLocationValueCarrier } from 
 import {
   readRustProjectDispatchedField,
   writeRustProjectDispatchedField,
+  readRustStructuralObjectField,
 } from "../objects/project-objects.js";
 import { planRustProjectFieldDispatchRoles } from "../objects/project-field-dispatch.js";
 import {
@@ -521,6 +523,16 @@ function planRustLocationStorage(
   context: RustPlanContext,
   planExpression: RustExpressionPlanner,
 ): RustExpr | undefined {
+  const fieldOperation = context.input.program.facts.getFact(expression, rustTargetOperationFactKey);
+  if (fieldOperation?.kind === "source-field" && fieldOperation.storage === "object-handle") {
+    const field = context.input.program.structuralShapes.field(fieldOperation.receiverCarrier, fieldOperation.storageIndex);
+    if (field?.nativeLayout !== undefined) {
+      const receiver = Node_Expression(context.input.program.source.ast, expression);
+      const value = receiver === undefined ? undefined : planExpression(receiver, context);
+      return value === undefined ? undefined
+        : readRustStructuralObjectField(value, field.targetName, rustLocationTargetType(field.carrier));
+    }
+  }
   if (expression === rootExpression) {
     const root = rustRawLocationRoot(expression, context);
     return root === undefined
