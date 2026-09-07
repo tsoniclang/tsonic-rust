@@ -1,4 +1,6 @@
 import { allocateRustSyntheticName } from "../names/synthetic.js";
+import { planNativeRustArray, planNativeRustArrayAccess } from "./native-arrays.js";
+import { rustNativeArrayStorageKey } from "../../../target-model/operations/native-memory.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import { effectiveMemberResultCarrier, planOptionalChainExpression } from "./special.js";
 import { expressionCarrier, requireExpressionCarrier, rustOperationFact, selectedOperationMatches } from "./fundamentals.js";
@@ -30,6 +32,9 @@ export function planElementAccess(node: Node, context: RustPlanContext): RustExp
 }
 
 function planElementAccessInner(node: Node, context: RustPlanContext): RustExpr | undefined {
+  if (context.input.program.facts.getFact(node, rustNativeArrayStorageKey)?.kind === "element") {
+    return planNativeRustArrayAccess(node, context, planExpression, "load");
+  }
   const fact = rustOperationFact(node, context);
   if (fact !== undefined && fact.kind === "source-index-signature") {
     const resultCarrier = effectiveMemberResultCarrier(node, fact.resultCarrier, context);
@@ -312,7 +317,9 @@ export function planArrayLiteral(node: Node, context: RustPlanContext): RustExpr
       : planned);
   }
   if (fact.lane === "native") {
-    return { kind: "vec-literal", elements };
+    const array: RustExpr = { kind: "vec-literal", elements };
+    return context.input.program.facts.getFact(node, rustNativeArrayStorageKey) === undefined
+      ? array : planNativeRustArray(node, array, context);
   }
   context.usedAliases?.add("js_abi");
   return {

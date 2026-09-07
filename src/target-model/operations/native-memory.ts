@@ -26,6 +26,16 @@ export interface RustNativeObjectField {
   readonly layout: RustNativeMemoryLayout;
 }
 
+export type RustNativeArrayStorage = {
+  readonly layout: RustNativeMemoryLayout;
+  readonly stride: number;
+} & ({ readonly kind: "element"; readonly declaration: Node } |
+  { readonly kind: "binding" | "reference" | "literal" });
+
+export const rustNativeArrayStorageKey = defineRustPlanKey<RustNativeArrayStorage>("nativeArrayStorage", (left, right) =>
+  left.kind === right.kind && (left.kind !== "element" || right.kind === "element" && left.declaration === right.declaration) && left.stride === right.stride &&
+  rustNativeMemoryLayoutsEqual(left.layout, right.layout));
+
 export function rustNativeMemoryLayoutsEqual(left: RustNativeMemoryLayout, right: RustNativeMemoryLayout): boolean {
   const pending = [[left, right] as const];
   const visited = new Map<RustNativeMemoryLayout, Set<RustNativeMemoryLayout>>();

@@ -52,7 +52,8 @@ import {
 } from "../objects/project-storage.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustNativeAllocation } from "./native-memory.js";
-import { rustNativeBackingKey } from "../../../target-model/operations/native-memory.js";
+import { rustNativeBackingKey, rustNativeArrayStorageKey } from "../../../target-model/operations/native-memory.js";
+import { planNativeRustArrayAccess } from "./native-arrays.js";
 
 export type RustExpressionPlanner = (
   node: Node,
@@ -167,6 +168,9 @@ export function planRustIdentifierValue(
   path: string,
   context: RustPlanContext,
 ): RustExpr {
+  if (context.input.program.facts.getFact(node, rustNativeArrayStorageKey)?.kind === "reference") {
+    return { kind: "method-call", receiver: { kind: "path", path }, method: "clone", args: [] };
+  }
   const captured = rustCapturedBinding(node, context);
   const storage = rustLocationStorageForReference(node, context);
   const value: RustExpr = {
@@ -523,6 +527,9 @@ function planRustLocationStorage(
   context: RustPlanContext,
   planExpression: RustExpressionPlanner,
 ): RustExpr | undefined {
+  if (context.input.program.facts.getFact(expression, rustNativeArrayStorageKey)?.kind === "element") {
+    return planNativeRustArrayAccess(expression, context, planExpression, "location_at");
+  }
   const fieldOperation = context.input.program.facts.getFact(expression, rustTargetOperationFactKey);
   if (fieldOperation?.kind === "source-field" && fieldOperation.storage === "object-handle") {
     const field = context.input.program.structuralShapes.field(fieldOperation.receiverCarrier, fieldOperation.storageIndex);
@@ -715,6 +722,9 @@ function findRustLocationStorageRoot(
 ): { readonly expression: Node; readonly declaration: Node } | undefined {
   let root = expression;
   while (true) {
+    const native = context.input.program.facts.getFact(root, rustNativeArrayStorageKey);
+    if (native?.kind === "element") return { expression: root, declaration: native.declaration };
+    if (native !== undefined) return undefined;
     const kind = context.input.program.source.ast.kindName(root);
     if (kind !== "KindPropertyAccessExpression" &&
       kind !== "KindElementAccessExpression" &&

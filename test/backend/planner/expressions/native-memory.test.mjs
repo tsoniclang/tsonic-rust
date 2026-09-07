@@ -3,7 +3,15 @@ import test from "node:test";
 import { compileRust, artifactText } from "../../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
 import { memoryAbiCapability, nativeLocationProofSource } from "../../../helpers/memory-abi.mjs";
-import { nativeFieldProofSource } from "../../../helpers/native-record-proof.mjs";
+import { nativeFieldProofSource, nativeArrayProofSource } from "../../../helpers/native-record-proof.mjs";
+
+test("native array storage preserves strided element aliases and variable replacement", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ capabilities: [memoryAbiCapability("rust")],
+    target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": nativeArrayProofSource } });
+  assert.deepEqual(result.diagnostics, []);
+  assert.match(artifactText(result, "src/index.rs"), /NativeArray/u);
+  validateGeneratedProject("native-array-aliases", result.artifacts, { run: true });
+});
 
 test("native field storage retains aliases, ordinary writes and object replacement", { timeout: 300_000 }, () => {
   const { result } = compileRust({ capabilities: [memoryAbiCapability("rust")],
@@ -51,6 +59,28 @@ test("native array value reads clone proven owned handles while storage writes r
 });
 
 for (const [name, source, diagnostic] of [
+  ["conflicting array layouts", `import { addressOf } from "@tsonic/core/lang.js";
+    const packed = memoryLayout<uint32>(abi, 4, 1, 4);
+    export function expose(): void {
+      const values: uint32[] = [1, 2];
+      const alias = values;
+      toRawPointer(addressOf(values[0]), word);
+      toRawPointer(addressOf(alias[0]), packed);
+    }`, "RUST_NATIVE_BACKING_NOT_PROVEN"],
+  ["escaping array storage", `import { addressOf } from "@tsonic/core/lang.js";
+    declare function escape(values: uint32[]): void;
+    export function expose(): void {
+      const values: uint32[] = [1];
+      toRawPointer(addressOf(values[0]), word);
+      escape(values);
+    }`, "RUST_NATIVE_BACKING_NOT_PROVEN"],
+  ["captured array storage", `import { addressOf } from "@tsonic/core/lang.js";
+    export function expose(): void {
+      const values: uint32[] = [1];
+      toRawPointer(addressOf(values[0]), word);
+      const read = () => values[0];
+      read();
+    }`, "RUST_NATIVE_BACKING_NOT_PROVEN"],
   ["conflicting object field layouts", `import { addressOf } from "@tsonic/core/lang.js";
     const packed = memoryLayout<uint32>(abi, 4, 1, 4);
     export function expose(): void {

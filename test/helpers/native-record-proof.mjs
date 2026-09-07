@@ -1,5 +1,49 @@
 import { createRustProviderPackage } from "../../dist/public/provider.js";
 
+export const nativeArrayProofSource = `
+import { abi } from "test:abi";
+import { addressOf, memoryLayout, toRawPointer, reinterpretRawPointer, offsetRawPointer,
+  loadPointer, storePointer, equalPointer, unsafeContext } from "@tsonic/core/lang.js";
+import type { Pointer, uint32, int32 } from "@tsonic/core/types.js";
+const word = memoryLayout<uint32>(abi, 4, 4, 8);
+function replace(pointer: Pointer<uint32>): uint32 { storePointer(pointer, 20); return 2; }
+function retained(index: int32): Pointer<uint32> {
+  unsafeContext();
+  let values: uint32[] = [7, 8];
+  const alias = values;
+  const pointer = addressOf(values[index]);
+  const raw = toRawPointer(pointer, word);
+  let position: int32 = index;
+  const same = addressOf(alias[position++]);
+  if (position !== index + 1) throw new Error("index evaluated more than once");
+  if (!equalPointer(pointer, same)) throw new Error("element identity");
+  storePointer(pointer, 9);
+  if (alias[index] !== 9) throw new Error("element was copied");
+  alias[index] = 11;
+  (alias[index]) += 2;
+  const previous = alias[index]++;
+  if (previous !== 13) throw new Error("postfix value");
+  if (loadPointer(pointer) !== 14) throw new Error("element writes were lost");
+  alias[index] += replace(pointer);
+  if (alias[index] !== 16) throw new Error("compound read occurred after rhs");
+  alias[index] = 14;
+  const neighbor = reinterpretRawPointer(offsetRawPointer(raw, 8, abi), word);
+  if (neighbor === undefined || loadPointer(neighbor) !== 8) throw new Error("element stride");
+  values = [99];
+  if (loadPointer(pointer) !== 14 || values[0] !== 99) throw new Error("element retargeted");
+  return same;
+}
+export function run(): boolean {
+  unsafeContext();
+  const pointer = retained(0);
+  const restored = reinterpretRawPointer(toRawPointer(pointer, word), word);
+  if (restored === undefined || !equalPointer(restored, pointer)) return false;
+  storePointer(restored, 21);
+  return loadPointer(pointer) === 21;
+}
+export function main(): void { if (!run()) throw new Error("native array retention"); }
+`;
+
 export function nativeRecordProvider(cratePath, { missingField = false, wrongField = false, missingContract = false } = {}) {
   const moduleSpecifier = "test:records";
   const byte = { kind: "source-primitive", name: "uint8" };

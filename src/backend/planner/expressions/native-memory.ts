@@ -44,7 +44,7 @@ export function planRustNativeMemoryCall(method: "allocate_native_location" | "l
     args: [value, codec] };
 }
 
-function planRustNativeLayout(layout: RustNativeMemoryLayout, context: RustPlanContext): RustExpr | undefined {
+export function planRustNativeLayout(layout: RustNativeMemoryLayout, context: RustPlanContext): RustExpr | undefined {
   const pointee = rustTypeFromCarrierInContext(layout.pointeeCarrier, context);
   if (pointee === undefined) return undefined;
   const dimensions: RustExpr[] = [{ kind: "int-literal", text: `${layout.size}usize` },

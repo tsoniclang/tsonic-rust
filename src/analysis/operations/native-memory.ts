@@ -1,9 +1,11 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
+import { createTsonicClosedArrayStorageQueries } from "@tsonic/source-core/facts";
 import type { RustFactWalk } from "../program/walk.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { readRustRawLocation, selectRustNativeMemoryLayout } from "../../policy/operations/native-memory.js";
-import { rustNativeBackingKey, rustNativeMemoryLayoutsEqual, rustRawLocationPlanKey } from "../../target-model/operations/native-memory.js";
+import { rustNativeBackingKey, rustNativeMemoryLayoutsEqual, rustRawLocationPlanKey, rustNativeArrayStorageKey } from "../../target-model/operations/native-memory.js";
+import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
 import type { RustNativeObjectField } from "../../target-model/operations/native-memory.js";
 import { rustSourceParameterAbiFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
 import { rustLocationTargetType, rustOptionTargetType, rustRawPointerTargetType, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
@@ -41,6 +43,7 @@ export function resolveRustRawLocationCarrier(walk: RustFactWalk, expression: No
 
 export function recordRustNativeBacking(walk: RustFactWalk): readonly RustNativeObjectField[] {
   const { context } = walk;
+  const arrayStorage = createTsonicClosedArrayStorageQueries(context.source, 131_072);
   const fields: RustNativeObjectField[] = [];
   const reject = (node: Node, message: string): void => {
     appendRustDiagnostic(walk, "RUST_NATIVE_BACKING_NOT_PROVEN", message, node, []);
@@ -66,6 +69,37 @@ export function recordRustNativeBacking(walk: RustFactWalk): readonly RustNative
     }
     let subject = origin.call;
     if (origin.operation === "address-of") {
+      if (context.ast.is.IsElementAccessExpression(origin.storageExpression)) {
+        const component = arrayStorage.resolve(origin.storageExpression);
+        if (component.kind !== "closed") { reject(origin.call, component.reason); continue; }
+        const subjects: [Node, "binding" | "reference" | "literal" | "element"][] = [
+          ...component.declarations.map(node => [node, "binding"] as [Node, "binding"]),
+          ...component.references.map(node => [node, "reference"] as [Node, "reference"]),
+          ...component.literals.map(node => [node, "literal"] as [Node, "literal"]),
+          ...component.elements.map(element => [element.expression, "element"] as [Node, "element"]),
+        ];
+        const valid = component.declarations.every(node => {
+          const carrier = context.facts.get(node, rustRuntimeCarrierKey)?.carrier;
+          return carrier?.kind === "array" && rustTargetTypeRefEquals(carrier.element, layout.pointeeCarrier);
+        }) && component.literals.every(node => {
+          const value = context.facts.get(node, rustTargetOperationFactKey);
+          return value?.kind === "array-literal" && value.lane === "native";
+        }) && component.elements.every(element => {
+          const value = context.facts.get(element.expression, rustTargetOperationFactKey);
+          const receiver = context.facts.get(element.receiver.expression, rustRuntimeCarrierKey)?.carrier;
+          return receiver?.kind === "array" && rustTargetTypeRefEquals(receiver.element, layout.pointeeCarrier) &&
+            value?.kind === "provider-operation" && value.abi.target.form === "index" && value.abi.targetArguments.length === 1;
+        }) && subjects.every(([node]) => {
+          const previous = context.facts.get(node, rustNativeArrayStorageKey);
+          return previous === undefined || previous.stride === descriptor.stride && rustNativeMemoryLayoutsEqual(previous.layout, layout);
+        });
+        if (!valid) { reject(origin.call, "Native array aliases require one exact element carrier, stride and layout."); continue; }
+        for (const [node, kind] of subjects) context.facts.set(node, rustNativeArrayStorageKey,
+          Object.freeze(kind === "element"
+            ? { kind, declaration: component.declarations[0]!, layout, stride: descriptor.stride }
+            : { kind, layout, stride: descriptor.stride }));
+        continue;
+      }
       const field = context.facts.get(origin.storageExpression, rustTargetOperationFactKey);
       if (field?.kind === "source-field" && field.storage === "object-handle") {
         const shape = rustStructuralObjectCarrierValue(field.receiverCarrier);
