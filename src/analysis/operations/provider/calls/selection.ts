@@ -29,6 +29,8 @@ import { selectedCallArgumentCarriers, selectedCallArgumentNodes, selectedCallCa
 import { selectJsSurfaceConstructorBySourceOwner, selectJsSurfaceOperation } from "../../../../policy/operations/js-surface.js";
 import { selectRustGeneratorSourceCall } from "../../../../policy/types/generator-source-profile.js";
 import { selectRustProviderOperation } from "../../../../policy/operations/provider-selection.js";
+import { selectRustProviderPointerResult } from "../../../../policy/operations/provider-pointer-result.js";
+import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { sourceCallMarkerByIdentity } from "../model.js";
 import { mapSelectedStringRegExpProtocolCall } from "../regexp-protocols.js";
 import { selectedRustRegExpReplacementCallbackEvidence } from "../regexp-replacement-callback.js";
@@ -115,6 +117,17 @@ export function selectRustCheckedCall(
     );
     if (instantiation === undefined) {
       return rejectSelectedOperation(request.source.call, context, "RUST_PROVIDER_TYPE_INSTANTIATION_NOT_PROVEN", `Selected call '${provider.memberName ?? provider.exportName ?? provider.exportId ?? provider.moduleSpecifier}' does not prove one closed instantiation of its Rust provider type parameters.`);
+    }
+    const sourceResult = selectRustProviderPointerResult(request.source, context, options, instantiation.substitutions.types);
+    if (sourceResult?.kind === "invalid") {
+      return rejectSelectedOperation(request.source.call, context,
+        "RUST_PROVIDER_POINTER_RESULT_NOT_PROVEN", sourceResult.reason);
+    }
+    if (sourceResult !== undefined && !rustTargetTypeRefEquals(sourceResult.carrier, instantiation.template.resultCarrier)) {
+      return rejectSelectedOperation(request.source.call, context,
+        "RUST_PROVIDER_POINTER_RESULT_CONFLICT",
+        "The selected provider result conflicts with the canonical source pointer carrier.",
+        [{ message: `source=${JSON.stringify(sourceResult.carrier)}; provider=${JSON.stringify(instantiation.template.resultCarrier)}` }]);
     }
     if (selection.row.immediateCallback !== undefined) {
       return acceptRustPolicy({
