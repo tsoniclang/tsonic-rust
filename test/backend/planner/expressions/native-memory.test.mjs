@@ -1,9 +1,57 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { spawnSync } from "node:child_process";
 import { compileRust, artifactText } from "../../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
 import { memoryAbiCapability, nativeLocationProofSource } from "../../../helpers/memory-abi.mjs";
 import { nativeFieldProofSource, nativeArrayProofSource } from "../../../helpers/native-record-proof.mjs";
+
+for (const [name, body] of [
+  ["self", `export function make(): Pointer<typeof make> { return allocatePointer<typeof make>(make); }`],
+  ["mutual", `function first(): Pointer<typeof second> { return allocatePointer<typeof second>(second); }
+    export function second(): Pointer<typeof first> { return allocatePointer<typeof first>(first); }`],
+]) {
+  test(`recursive pointer return carrier rejects ${name} without unbounded classification`, { timeout: 30_000 }, () => {
+    const source = `import { allocatePointer } from "@tsonic/core/lang.js";
+      import type { Pointer } from "@tsonic/core/types.js";
+      ${body}`;
+    const helper = new URL("../../../helpers/rust-session.mjs", import.meta.url).href;
+    const loader = new URL("../../../../scripts/register-tsonic-root-loader.mjs", import.meta.url).pathname;
+    const script = `import assert from "node:assert/strict";
+      import { compileRust } from ${JSON.stringify(helper)};
+      const { result } = compileRust({ files: { "index.ts": ${JSON.stringify(source)} } });
+      assert.ok(result.diagnostics.some(diagnostic => diagnostic.code === "RUST_POINTER_POINTEE_CARRIER_NOT_PROVEN"));
+      assert.equal(result.artifacts.length, 0);`;
+    const result = spawnSync(process.execPath, ["--import", loader, "--input-type=module", "--eval", script], {
+      encoding: "utf8", timeout: 20_000, maxBuffer: 1_048_576,
+      env: { ...process.env, NODE_OPTIONS: "--max-old-space-size=512" },
+    });
+    assert.equal(result.status, 0, `${result.error ?? ""}\n${result.stdout}\n${result.stderr}`);
+  });
+}
+
+test("pointer recursion guards preserve nominal recursion and independent finite callable carriers", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    target: { id: "rust", options: { outputType: "bin" } },
+    files: { "index.ts": `
+      import { allocatePointer, loadPointer } from "@tsonic/core/lang.js";
+      import type { Pointer, uint32 } from "@tsonic/core/types.js";
+      class Link { next: Link | undefined = undefined; }
+      function link(): Pointer<Link> { return allocatePointer(new Link()); }
+      function value(): uint32 { return 7; }
+      function first(): Pointer<typeof value> { return allocatePointer(value); }
+      function second(): Pointer<typeof value> { return allocatePointer(value); }
+      export function main(): void {
+        const item = loadPointer(link());
+        const left = loadPointer(first());
+        const right = loadPointer(second());
+        if (item.next !== undefined || left() !== 7 || right() !== 7) throw new Error("pointer carrier recursion");
+      }
+    ` },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  validateGeneratedProject("native-pointer-recursion-controls", result.artifacts, { run: true });
+});
 
 test("native array storage preserves strided element aliases and variable replacement", { timeout: 300_000 }, () => {
   const { result } = compileRust({ capabilities: [memoryAbiCapability("rust")],

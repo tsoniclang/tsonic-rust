@@ -220,7 +220,7 @@ export function resolveRustTargetTypeSyntax(
   const pointer = context.facts.resolve(node, pointerFactKey) ??
     context.facts.get(node, pointerFactKey);
   if (pointer !== undefined) {
-    const pointee = resolveRustTargetTypeRef(pointer.pointee, context, options);
+    const pointee = resolveRustAuthoredTargetType(pointer.pointee, context, options, resolving);
     return pointee === undefined ? undefined : rustLocationTargetType(pointee);
   }
   const primitive = resolveSourcePrimitive(node, context);
