@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import {
   appendFileSync,
+  existsSync,
   mkdirSync,
   readFileSync,
   renameSync,
@@ -172,6 +173,35 @@ test("an unmarked oversized Cargo input still fails the unchanged finite budget"
   writeFileSync(artifact, "");
   truncateSync(artifact, 1_073_741_825);
   assert.throws(() => createRustCompilerProjectSnapshot(project.manifestPath), /finite byte budget/);
+});
+
+test("standard-library imports work with an empty offline Cargo cache and bundled sources", { timeout: 300_000 }, () => {
+  const original = { CARGO_HOME: process.env.CARGO_HOME, CARGO_NET_OFFLINE: process.env.CARGO_NET_OFFLINE };
+  const cargoHome = uniquePath();
+  process.env.CARGO_HOME = cargoHome;
+  process.env.CARGO_NET_OFFLINE = "true";
+  try {
+    const worker = createRustCompilerWorkerClient(uniquePath());
+    const snapshot = worker.standardSnapshot();
+    const dependency = snapshot.dependencies.find(({ alias }) => alias === "core");
+    assert.ok(dependency);
+    const module = worker.module({
+      snapshot,
+      dependency,
+      foundation: "core",
+      modulePath: ["cmp"],
+      requestedExports: ["Ordering"],
+    });
+    assert.deepEqual(module.exports.map(({ name }) => name), ["Ordering"]);
+    for (const directory of ["index", "cache", "src"]) {
+      assert.equal(existsSync(join(cargoHome, "registry", directory)), false);
+    }
+  } finally {
+    for (const [key, value] of Object.entries(original)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
 });
 
 function createArtifact() {
