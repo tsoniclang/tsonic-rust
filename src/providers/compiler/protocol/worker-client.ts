@@ -20,6 +20,7 @@ import type {
 } from "../model/model.js";
 import type { RustFoundation } from "../../../target-model/foundation/model.js";
 import { rustCompilerProviderProtocolVersion } from "../model/model.js";
+import { createRustCompilerCacheDirectory } from "../snapshot/cache-directory.js";
 import type {
   RustCompilerWorkerRequest,
   RustCompilerWorkerResponse,
@@ -112,6 +113,7 @@ function getWorkerSession(root: string): RustCompilerWorkerSession {
   if (existing !== undefined && isProcessAlive(existing.processId)) {
     return existing;
   }
+  createRustCompilerCacheDirectory(root);
   const sessionRoot = join(root, "worker", `${process.pid}-${randomUUID()}`);
   const requestsDirectory = join(sessionRoot, "requests");
   const responsesDirectory = join(sessionRoot, "responses");

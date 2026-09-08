@@ -2,10 +2,8 @@ import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
-import {
-  rustCompilerProviderProtocolVersion,
-  supportedRustdocFormatVersion,
-} from "../model/model.js";
+import { rustCompilerProviderProtocolVersion } from "../model/model.js";
+import { isDeclaredCacheDirectory } from "./cache-directory.js";
 import type {
   RustCompilerCargoProjectSnapshot,
   RustCompilerDependency,
@@ -115,7 +113,6 @@ export function createRustCompilerProjectSnapshot(manifestPath: string): RustCom
   const rustcVerboseVersion = runCommand("rustc", ["-vV"], dirname(canonicalManifestPath));
   const compiler = Object.freeze({
     rustcVerboseVersion,
-    rustdocFormatVersion: supportedRustdocFormatVersion,
   });
   const digest = createHash("sha256").update(JSON.stringify({
     manifestPath: canonicalManifestPath,
@@ -195,7 +192,6 @@ export function createRustCompilerStandardLibrarySnapshot(): RustCompilerStandar
   }).sort((left, right) => compareText(left.alias, right.alias));
   const compiler = Object.freeze({
     rustcVerboseVersion,
-    rustdocFormatVersion: supportedRustdocFormatVersion,
   });
   const digest = createHash("sha256").update(JSON.stringify({
     kind: "standard-library",
@@ -407,6 +403,9 @@ function digestSourceTree(root: string, budget: SourceSnapshotBudget): string {
 
   function visit(relativeDirectory: string): void {
     const directory = relativeDirectory.length === 0 ? root : join(root, relativeDirectory);
+    if (relativeDirectory.length !== 0 && isDeclaredCacheDirectory(directory)) {
+      return;
+    }
     const entries = readdirSync(directory, { withFileTypes: true }).sort((left, right) => compareText(left.name, right.name));
     for (const entry of entries) {
       if (entry.isSymbolicLink()) {

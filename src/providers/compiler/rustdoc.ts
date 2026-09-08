@@ -5,8 +5,8 @@ import type {
 } from "./model/model.js";
 import { verifyRustCompilerDependencySource } from "./snapshot/cargo-snapshot.js";
 import {
-  loadRustdocDocument,
   validateDependencyBelongsToSnapshot,
+  type RustdocDocumentLoader,
 } from "./snapshot/rustdoc-artifact.js";
 import { normalizeModule } from "./model/rustdoc-model.js";
 import {
@@ -26,17 +26,19 @@ export function loadRustCompilerModule(options: {
   readonly requestedExports?: readonly string[];
   readonly targetDirectory: string;
   readonly foundation: RustFoundation;
+  readonly loadDocument: RustdocDocumentLoader;
 }): RustCompilerModuleModel {
   validateDependencyBelongsToSnapshot(options.snapshot, options.dependency);
   verifyRustCompilerDependencySource(options.snapshot, options.dependency);
   const standardLibrary = loadStandardLibraryContext(
     options.standardLibrarySnapshot,
     options.standardLibraryTargetDirectory,
+    options.loadDocument,
   );
   const standardModule = options.snapshot.digest === options.standardLibrarySnapshot.digest;
   const document = standardModule
     ? loadStandardLibraryCrateDocument(standardLibrary, options.dependency)
-    : loadRustdocDocument(options);
+    : options.loadDocument(options);
   const normalized = normalizeModule(document, options, standardModule
     ? (itemDocument, dependency, id) =>
         resolveStandardLibraryItem(standardLibrary, itemDocument, dependency, id)
