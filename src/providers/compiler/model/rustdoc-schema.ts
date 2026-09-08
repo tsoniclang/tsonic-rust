@@ -1,5 +1,6 @@
 import type { RustCompilerDependency } from "./model.js";
-import { supportedRustdocFormatVersion } from "./model.js";
+
+const supportedRustdocFormats = Object.freeze([57, 58, 59, 60]);
 
 export interface RustdocDocument {
   readonly root: number | string;
@@ -15,8 +16,9 @@ export function parseRustdocDocument(
 ): RustdocDocument {
   const parsed = JSON.parse(text) as unknown;
   if (!isRecord(parsed) || (typeof parsed.root !== "number" && typeof parsed.root !== "string") ||
-    !isRecord(parsed.index) || !isRecord(parsed.paths) || parsed.format_version !== supportedRustdocFormatVersion) {
-    throw new Error(`rustdoc emitted an unsupported JSON contract for '${dependency.alias}'; expected format ${supportedRustdocFormatVersion}.`);
+    !isRecord(parsed.index) || !isRecord(parsed.paths) || typeof parsed.format_version !== "number" ||
+    !supportedRustdocFormats.includes(parsed.format_version)) {
+    throw new Error(`rustdoc emitted an unsupported JSON contract for '${dependency.alias}'; supported signature formats: ${supportedRustdocFormats.join(", ")}.`);
   }
   if (parsed.crate_version !== dependency.packageVersion) {
     throw new Error(`rustdoc crate version '${String(parsed.crate_version)}' does not match Cargo package version '${dependency.packageVersion}'.`);

@@ -14,10 +14,7 @@ import type {
   RustCompilerProjectSnapshot,
   RustCompilerStandardLibrarySnapshot,
 } from "../model/model.js";
-import {
-  rustCompilerProviderProtocolVersion,
-  supportedRustdocFormatVersion,
-} from "../model/model.js";
+import { rustCompilerProviderProtocolVersion } from "../model/model.js";
 import { verifyRustCompilerStandardLibraryMetadata } from "./cargo-snapshot.js";
 import {
   isRecord,
@@ -29,6 +26,83 @@ const commandBufferLimit = 64 * 1024 * 1024;
 const rustdocJsonByteLimit = 128 * 1024 * 1024;
 const rustdocTimeoutMilliseconds = 540_000;
 
+interface RustdocLoadOptions {
+  readonly snapshot: RustCompilerProjectSnapshot;
+  readonly dependency: RustCompilerDependency;
+  readonly targetDirectory: string;
+}
+
+export type RustdocDocumentLoader = (options: RustdocLoadOptions) => RustdocDocument;
+
+interface RetainedRustdocDocument {
+  readonly identity: string;
+  readonly state: string;
+  readonly byteLength: number;
+  readonly document: RustdocDocument;
+}
+
+export function createRustdocDocumentLoader(options: {
+  readonly maxBytes?: number;
+  readonly maxEntries?: number;
+} = {}): RustdocDocumentLoader {
+  const maxBytes = options.maxBytes ?? 64 * 1024 * 1024;
+  const maxEntries = options.maxEntries ?? 8;
+  if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0 ||
+    !Number.isSafeInteger(maxEntries) || maxEntries <= 0) {
+    throw new Error("Rustdoc document cache requires positive finite byte and entry limits.");
+  }
+  const documents = new Map<string, RetainedRustdocDocument>();
+  let retainedBytes = 0;
+  return (request) => {
+    validateDependencyBelongsToSnapshot(request.snapshot, request.dependency);
+    const path = rustdocOutputPath(request);
+    const identity = JSON.stringify([
+      request.snapshot.digest,
+      request.snapshot.compiler,
+      request.dependency,
+    ]);
+    const before = rustdocArtifactState(path);
+    const retained = documents.get(path);
+    if (retained !== undefined) {
+      documents.delete(path);
+      retainedBytes -= retained.byteLength;
+      if (retained.identity === identity && retained.state === before?.state) {
+        documents.set(path, retained);
+        retainedBytes += retained.byteLength;
+        return retained.document;
+      }
+    }
+    const document = loadRustdocDocument(request);
+    const after = rustdocArtifactState(path);
+    if (before !== undefined && after?.state === before.state && after.byteLength <= maxBytes) {
+      documents.set(path, { identity, ...after, document });
+      retainedBytes += after.byteLength;
+      while (documents.size > maxEntries || retainedBytes > maxBytes) {
+        const oldest = documents.entries().next().value;
+        if (oldest === undefined) {
+          break;
+        }
+        documents.delete(oldest[0]);
+        retainedBytes -= oldest[1].byteLength;
+      }
+    }
+    return document;
+  };
+}
+
+function rustdocArtifactState(path: string): { readonly state: string; readonly byteLength: number } | undefined {
+  const files = [path, `${path}.tsonic-provider.json`].map((file) =>
+    statSync(file, { bigint: true, throwIfNoEntry: false }));
+  const output = files[0];
+  if (output === undefined || files.some((file) => file === undefined || !file.isFile())) {
+    return undefined;
+  }
+  return {
+    state: files.map((file) => [file!.dev, file!.ino, file!.size, file!.mtimeNs, file!.ctimeNs].join(":")).join("/"),
+    byteLength: Number(output.size),
+  };
+}
+
 interface RustdocArtifactMarker {
   readonly protocolVersion: typeof rustCompilerProviderProtocolVersion;
   readonly projectDigest: string;
@@ -38,11 +112,7 @@ interface RustdocArtifactMarker {
   readonly outputDigest: string;
 }
 
-export function loadRustdocDocument(options: {
-  readonly snapshot: RustCompilerProjectSnapshot;
-  readonly dependency: RustCompilerDependency;
-  readonly targetDirectory: string;
-}): RustdocDocument {
+function loadRustdocDocument(options: RustdocLoadOptions): RustdocDocument {
   const outputPath = rustdocOutputPath(options);
   const markerPath = `${outputPath}.tsonic-provider.json`;
   const cached = readCachedRustdocDocument(options, outputPath, markerPath);
@@ -242,8 +312,7 @@ export function validateDependencyBelongsToSnapshot(
   snapshot: RustCompilerProjectSnapshot,
   dependency: RustCompilerDependency,
 ): void {
-  if (snapshot.protocolVersion !== rustCompilerProviderProtocolVersion ||
-    snapshot.compiler.rustdocFormatVersion !== supportedRustdocFormatVersion) {
+  if (snapshot.protocolVersion !== rustCompilerProviderProtocolVersion) {
     throw new Error(`Rust compiler-provider snapshot uses an unsupported contract.`);
   }
   const exact = snapshot.dependencies.find((candidate) => candidate.alias === dependency.alias);

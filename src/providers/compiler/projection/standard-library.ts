@@ -16,8 +16,8 @@ import {
 import { standardModuleSpecifier } from "./module-specifier.js";
 import {
   digestText,
-  loadRustdocDocument,
   validateDependencyBelongsToSnapshot,
+  type RustdocDocumentLoader,
 } from "../snapshot/rustdoc-artifact.js";
 import {
   authoredPublicCanonicalPath,
@@ -49,6 +49,7 @@ import {
 import type { RustFoundation } from "../../../target-model/foundation/model.js";
 
 export interface RustStandardLibraryContext {
+  readonly loadDocument: RustdocDocumentLoader;
   readonly snapshot: RustCompilerStandardLibrarySnapshot;
   readonly targetDirectory: string;
   readonly publicDocument: RustdocDocument;
@@ -63,6 +64,7 @@ const standardLibraryContexts = new Map<string, RustStandardLibraryContext>();
 export function loadStandardLibraryContext(
   snapshot: RustCompilerProjectSnapshot,
   targetDirectory: string,
+  loadDocument: RustdocDocumentLoader,
 ): RustStandardLibraryContext {
   if (snapshot.kind !== "standard-library") {
     throw new Error("Rust standard-library context requires an exact standard-library compiler snapshot.");
@@ -70,7 +72,7 @@ export function loadStandardLibraryContext(
   const existing = standardLibraryContexts.get(snapshot.digest);
   if (existing !== undefined) {
     if (existing.targetDirectory !== targetDirectory ||
-      JSON.stringify(existing.snapshot) !== JSON.stringify(snapshot)) {
+      JSON.stringify(existing.snapshot) !== JSON.stringify(snapshot) || existing.loadDocument !== loadDocument) {
       throw new Error("Rust standard-library compiler context conflicts with its immutable snapshot or artifact directory.");
     }
     return existing;
@@ -82,9 +84,10 @@ export function loadStandardLibraryContext(
   validateDependencyBelongsToSnapshot(snapshot, dependency);
   verifyRustCompilerStandardLibraryMetadata(snapshot);
   verifyRustCompilerDependencySource(snapshot, dependency);
-  const publicDocument = loadRustdocDocument({ snapshot, dependency, targetDirectory });
+  const publicDocument = loadDocument({ snapshot, dependency, targetDirectory });
   verifyRustCompilerDependencySource(snapshot, dependency);
   const baseContext: RustStandardLibraryContext = {
+    loadDocument,
     snapshot,
     targetDirectory,
     publicDocument,
@@ -341,7 +344,7 @@ export function loadStandardLibraryCrateDocument(
   }
   validateDependencyBelongsToSnapshot(context.snapshot, dependency);
   verifyRustCompilerDependencySource(context.snapshot, dependency);
-  const document = loadRustdocDocument({
+  const document = context.loadDocument({
     snapshot: context.snapshot,
     dependency,
     targetDirectory: context.targetDirectory,

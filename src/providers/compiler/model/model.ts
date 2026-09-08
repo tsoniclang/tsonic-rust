@@ -1,9 +1,7 @@
-export const rustCompilerProviderProtocolVersion = 4;
-export const supportedRustdocFormatVersion = 57;
+export const rustCompilerProviderProtocolVersion = 5;
 
 export interface RustCompilerIdentity {
   readonly rustcVerboseVersion: string;
-  readonly rustdocFormatVersion: typeof supportedRustdocFormatVersion;
 }
 
 export interface RustCompilerDependency {

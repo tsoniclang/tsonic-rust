@@ -18,10 +18,12 @@ import type {
   RustCompilerWorkerResponse,
 } from "./protocol.js";
 import { loadRustCompilerModule } from "../rustdoc.js";
+import { createRustdocDocumentLoader } from "../snapshot/rustdoc-artifact.js";
 
 const pollMilliseconds = 20;
 const ownerPollMilliseconds = 1_000;
 let standardLibrarySnapshot: ReturnType<typeof createRustCompilerStandardLibrarySnapshot> | undefined;
+const loadDocument = createRustdocDocumentLoader();
 
 const options = readServerOptions(process.argv.slice(2));
 mkdirSync(options.requestsDirectory, { recursive: true });
@@ -119,6 +121,7 @@ function processRequest(request: RustCompilerWorkerRequest): RustCompilerWorkerR
       ...(request.requestedExports === undefined ? {} : { requestedExports: request.requestedExports }),
       targetDirectory: request.targetDirectory,
       foundation: request.foundation,
+      loadDocument,
     }),
   };
 }

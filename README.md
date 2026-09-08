@@ -14,7 +14,8 @@ Canonical product documentation lives in the Tsonic repository:
 ## Use in a project
 
 Install Node.js 22.18 or newer. Install Rust through rustup with Cargo,
-rustc, rustdoc, and rustfmt, then create, install, and run a complete project:
+rustc, rustdoc, rustfmt, and the `rust-src` component, then create, install,
+and run a complete project:
 
 ```sh
 npm create tsonic@latest hello-rust -- --target rust
@@ -40,7 +41,8 @@ Runtime crates remain owned by `@tsonic/rust-runtime`,
 
 The sibling Tsonic packages and Rust runtime repositories must be available
 through the workspace dependencies. The selected Rust toolchain must include
-`rustfmt`; generated Rust is formatted before Tsonic publishes it.
+`rustfmt` and `rust-src`; generated Rust is formatted before Tsonic publishes
+it, and native imports use the selected standard library's source declarations.
 
 ```sh
 npm install
