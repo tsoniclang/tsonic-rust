@@ -25,6 +25,7 @@ import {
   authoredPublicName,
   canonicalItemId,
   isGlobUse,
+  resolveLocalRustdocItem,
   rustdocPathIdentity,
   type ResolvedRustdocItem,
 } from "../model/rustdoc-items.js";
@@ -106,28 +107,8 @@ export function resolveStandardLibraryItem(
   dependency: RustCompilerDependency,
   id: unknown,
 ): ResolvedRustdocItem {
-  const local = document.index[String(id)];
-  if (!isRecord(local)) {
-    return resolveStandardLibraryCanonicalItem(context, document, id);
-  }
-  if (!hasInnerKind(local, "use")) {
-    return {
-      document,
-      item: local,
-      dependency,
-      ...(typeof local.name === "string" ? { publicName: local.name } : {}),
-    };
-  }
-  const use = requireInnerRecord(local, "use", "Rust standard-library public re-export");
-  const publicName = requireString(use.name, "Rust standard-library public re-export name");
-  if (use.is_glob === true) {
-    throw new Error(`Rust standard-library glob re-export '${publicName}' has no singular selected export identity.`);
-  }
-  const selected = document.index[String(use.id)];
-  const resolved = isRecord(selected)
-    ? resolveStandardLibraryItem(context, document, dependency, use.id)
-    : resolveStandardLibraryCanonicalItem(context, document, use.id);
-  return { ...resolved, publicName };
+  return resolveLocalRustdocItem(document, dependency, id, (sourceDocument, _dependency, selectedId) =>
+    resolveStandardLibraryCanonicalItem(context, sourceDocument, selectedId));
 }
 
 function resolveStandardLibraryCanonicalItem(

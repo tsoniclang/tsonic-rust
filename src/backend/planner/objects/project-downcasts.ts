@@ -150,7 +150,7 @@ export function planRustProjectTypeTest(
     };
   }
   if (fact.lowering.kind === "option-presence") {
-    return { kind: "method-call", receiver: expression, method: "is_some", args: [] };
+    return { kind: "option-presence", receiver: expression, present: true };
   }
   const optionalElement = rustOptionElementCarrier(fact.sourceCarrier);
   if (optionalElement !== undefined) {
@@ -176,10 +176,9 @@ export function planRustProjectTypeTest(
         kind: "closure",
         params: [{ name: "value", byRefCopy: false }],
         body: {
-          kind: "method-call",
+          kind: "option-presence",
           receiver: projectDowncastDispatch({ kind: "path", path: "value" }, route.slot),
-          method: "is_some",
-          args: [],
+          present: true,
         },
       }],
     };
@@ -188,10 +187,9 @@ export function planRustProjectTypeTest(
   return selection === undefined
     ? undefined
     : {
-        kind: "method-call",
+        kind: "option-presence",
         receiver: selection.expression,
-        method: "is_some",
-        args: [],
+        present: true,
       };
 }
 

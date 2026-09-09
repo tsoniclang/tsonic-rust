@@ -67,6 +67,7 @@ export function expressionPrecedence(expression: RustExpr): RustPrecedence {
     case "numeric-cast":
       return RustPrecedence.Cast;
     case "method-call":
+    case "option-presence":
     case "invoke":
     case "field":
     case "index":

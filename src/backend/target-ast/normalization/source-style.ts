@@ -414,6 +414,7 @@ function finalizeRustExpressionStyle(expression: RustExpr): RustExpr {
         args: expression.args.map(finalizeRustExpressionStyle),
       };
       break;
+    case "option-presence":
     case "field":
       result = { ...expression, receiver: finalizeRustExpressionStyle(expression.receiver) };
       break;

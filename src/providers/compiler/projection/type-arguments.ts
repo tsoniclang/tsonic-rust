@@ -204,6 +204,9 @@ export function compilerModuleSpecifierForIdentity(
       `External Rust item '${canonicalPath.join("::")}' has no imported provider contract.`,
     );
   }
+  if (context.localTypeLocations.has(canonicalPath.join("\0"))) {
+    return context.owner.moduleSpecifier;
+  }
   return compilerModuleSpecifier(
     context.dependency.alias,
     canonicalPath.slice(1, -1),
@@ -219,7 +222,7 @@ export function targetPathForIdentity(
       `External Rust trait '${canonicalPath.join("::")}' has no target path contract.`,
     );
   }
-  return [
+  return context.localTypeLocations.get(canonicalPath.join("\0"))?.targetPath.join("::") ?? [
     context.dependency.targetCrateName,
     ...canonicalPath.slice(1),
   ].join("::");

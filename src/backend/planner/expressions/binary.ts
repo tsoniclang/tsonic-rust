@@ -80,10 +80,9 @@ export function planSelectedRustProjectTypeTest(
   const test = selection === undefined
     ? planRustProjectTypeTest(node, left, fact, context)
     : {
-        kind: "method-call" as const,
+        kind: "option-presence" as const,
         receiver: selection.expression,
-        method: "is_some",
-        args: [],
+        present: true,
       };
   return test === undefined
     ? undefined
@@ -251,10 +250,9 @@ export function planBinaryExpression(node: Node, context: RustPlanContext): Rust
       return undefined;
     }
     const check = (receiver: RustExpr): RustExpr => ({
-      kind: "method-call",
+      kind: "option-presence",
       receiver,
-      method: fact.negated ? "is_some" : "is_none",
-      args: [],
+      present: fact.negated,
     });
     if (isExplicitRustNullishValue(nullish)) {
       return check(planRustNonConsumingValue(optionNode, option, context));

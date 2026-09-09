@@ -192,7 +192,7 @@ test("standard-library imports work with an empty offline Cargo cache and bundle
       modulePath: ["cmp"],
       requestedExports: ["Ordering"],
     });
-    assert.deepEqual(module.exports.map(({ name }) => name), ["Ordering"]);
+    assert.deepEqual(module.exports.map(({ name }) => name), ["Eq", "Ord", "Ordering", "PartialEq", "PartialOrd"]);
     for (const directory of ["index", "cache", "src"]) {
       assert.equal(existsSync(join(cargoHome, "registry", directory)), false);
     }

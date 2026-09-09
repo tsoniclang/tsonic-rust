@@ -9,6 +9,7 @@ import {
   compilerAssociatedSourceExportName,
   isCompilerAssociatedSourceExportName,
   isGlobUse,
+  resolveLocalRustdocItem,
 } from "../rustdoc-items.js";
 import {
   canonicalPathKey,
@@ -73,24 +74,40 @@ export function normalizeModule(
   const publicItemsByName = new Map<string, ResolvedRustdocItem>();
   const publicItemIdentitiesByName = new Map<string, string>();
   const publicNameByCanonicalPath = new Map<string, string>();
+  const publicResolutionErrors = new Map<string, string>();
   const ambiguousNames = new Set<string>();
-  for (const selected of items) {
-    const item = selected.item;
-    if (item.visibility !== "public" || isGlobUse(item) ||
-      !providerExportKind(authoredPublicKind(selected.document, item))) continue;
-    const name = authoredPublicName(item);
+  for (const authored of items) {
+    if (authored.item.visibility !== "public" || isGlobUse(authored.item)) continue;
+    const name = authoredPublicName(authored.item);
     if (name === undefined) continue;
-    const identity = authoredPublicIdentity(selected.document, selected.dependency, item);
+    let selected = authored;
+    let resolutionError: string | undefined;
+    if (resolveItem === undefined) {
+      try {
+        selected = resolveLocalRustdocItem(authored.document, authored.dependency, authored.item.id);
+      } catch (error) {
+        resolutionError = error instanceof Error ? error.message : String(error);
+      }
+    }
+    if (resolutionError === undefined &&
+      !providerExportKind(authoredPublicKind(selected.document, selected.item))) continue;
+    const identity = resolutionError === undefined
+      ? authoredPublicIdentity(selected.document, selected.dependency, selected.item)
+      : canonicalItemId(authored.dependency, authored.item);
     const previous = publicItemIdentitiesByName.get(name);
     if (previous === identity) continue;
     if (previous !== undefined) {
       publicItemsByName.delete(name);
       publicItemIdentitiesByName.delete(name);
+      publicResolutionErrors.delete(name);
       ambiguousNames.add(name);
     } else if (!ambiguousNames.has(name)) {
       publicItemsByName.set(name, selected);
       publicItemIdentitiesByName.set(name, identity);
-      const canonicalPath = authoredPublicCanonicalPath(selected.document, item);
+      if (resolutionError !== undefined) publicResolutionErrors.set(name, resolutionError);
+      const canonicalPath = resolutionError === undefined
+        ? authoredPublicCanonicalPath(selected.document, selected.item)
+        : undefined;
       if (canonicalPath !== undefined) {
         publicNameByCanonicalPath.set(canonicalPathKey(canonicalPath), name);
       }
@@ -109,12 +126,18 @@ export function normalizeModule(
       unsupported.push({ name, reason: `Rust module exports more than one public item named '${name}'.` });
       continue;
     }
+    const resolutionError = publicResolutionErrors.get(name);
+    if (resolutionError !== undefined) {
+      unsupported.push({ name, reason: resolutionError });
+      continue;
+    }
     const authored = publicItemsByName.get(name);
     if (authored === undefined) {
       const associatedOwner = isCompilerAssociatedSourceExportName(name)
         ? associatedTypeOwnerName(
             name,
             publicItemsByName,
+            publicResolutionErrors,
             resolveItem,
           )
         : undefined;
@@ -131,7 +154,7 @@ export function normalizeModule(
         authored.document,
         authored.dependency,
         authored.item.id,
-      ) ?? { ...authored, publicName: name };
+      ) ?? authored;
       const normalized = normalizeExport(
         resolved.document,
         resolved.item,
@@ -168,10 +191,12 @@ export function normalizeModule(
 function associatedTypeOwnerName(
   requestedName: string,
   publicItemsByName: ReadonlyMap<string, ResolvedRustdocItem>,
+  publicResolutionErrors: ReadonlyMap<string, string>,
   resolveItem?: RustdocItemResolver,
 ): string | undefined {
   let selectedOwner: string | undefined;
   for (const [publicName, authored] of publicItemsByName) {
+    if (publicResolutionErrors.has(publicName)) continue;
     const resolved = resolveItem?.(
       authored.document,
       authored.dependency,
@@ -473,7 +498,7 @@ function sameModuleExportDependencies(
     if (fn.receiver?.kind === "custom") visitType(fn.receiver.type);
     fn.parameters.forEach((parameter) => visitType(parameter.type));
     visitType(fn.result);
-    if (fn.traitDispatch !== undefined) visitTraitArguments(fn.traitDispatch);
+    if (fn.traitDispatch !== undefined) visitTrait(fn.traitDispatch);
   };
   switch (exported.kind) {
     case "constant":
@@ -494,7 +519,7 @@ function sameModuleExportDependencies(
       exported.methods.forEach(visitFunction);
       exported.associatedConstants.forEach((constant) => {
         visitType(constant.type);
-        visitTraitArguments(constant.traitDispatch);
+        visitTrait(constant.traitDispatch);
       });
       break;
     case "enum":
@@ -509,7 +534,7 @@ function sameModuleExportDependencies(
       exported.methods.forEach(visitFunction);
       exported.associatedConstants.forEach((constant) => {
         visitType(constant.type);
-        visitTraitArguments(constant.traitDispatch);
+        visitTrait(constant.traitDispatch);
       });
       break;
     case "trait":
@@ -518,7 +543,7 @@ function sameModuleExportDependencies(
       exported.methods.forEach(visitFunction);
       exported.associatedConstants.forEach((constant) => {
         visitType(constant.type);
-        visitTraitArguments(constant.traitDispatch);
+        visitTrait(constant.traitDispatch);
       });
       exported.associatedTypes.forEach((associated) => {
         visitGenericParameters(associated.genericParameters);
@@ -551,8 +576,13 @@ function findModule(
       resolveItem,
     )
       .filter((child) => child.item.visibility === "public" && !isGlobUse(child.item) &&
-        authoredPublicName(child.item) === segment &&
-        authoredPublicKind(child.document, child.item) === "module")
+        authoredPublicName(child.item) === segment)
+      .map((child) => (resolveItem ?? resolveLocalRustdocItem)(
+        child.document,
+        child.dependency,
+        child.item.id,
+      ))
+      .filter((child) => hasInnerKind(child.item, "module"))
       .map((child) => [
         authoredPublicIdentity(child.document, child.dependency, child.item),
         child,
@@ -561,8 +591,7 @@ function findModule(
     if (children.length !== 1) {
       throw new Error(`Rust module path '${modulePath.join("::")}' does not resolve uniquely at '${segment}'.`);
     }
-    const authored = children[0]!;
-    module = resolveItem?.(authored.document, authored.dependency, authored.item.id) ?? authored;
+    module = children[0]!;
     if (!hasInnerKind(module.item, "module")) {
       throw new Error(`Rust item '${segment}' in module path '${modulePath.join("::")}' is not a module.`);
     }

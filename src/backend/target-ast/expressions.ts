@@ -7,12 +7,8 @@ export function negateRustBooleanExpression(expression: RustExpr): RustExpr {
   if (expression.kind === "unary" && expression.operator === "!") {
     return expression.operand;
   }
-  if (expression.kind === "method-call" && expression.args.length === 0 &&
-    (expression.method === "is_some" || expression.method === "is_none")) {
-    return {
-      ...expression,
-      method: expression.method === "is_some" ? "is_none" : "is_some",
-    };
+  if (expression.kind === "option-presence") {
+    return { ...expression, present: !expression.present };
   }
   if (expression.kind === "binary") {
     const inverse = expression.operator === "==" ? "!="
@@ -182,6 +178,7 @@ export function rustExpressionContainsStatementBlock(expression: RustExpr): bool
         expression.args.some(rustExpressionContainsStatementBlock);
     case "macro-invocation":
       return expression.args.some(rustExpressionContainsStatementBlock);
+    case "option-presence":
     case "field":
       return rustExpressionContainsStatementBlock(expression.receiver);
     case "index":

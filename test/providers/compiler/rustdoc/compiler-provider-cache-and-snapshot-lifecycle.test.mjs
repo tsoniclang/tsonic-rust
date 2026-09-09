@@ -979,7 +979,7 @@ test("compiler worker replaces a corrupt rustdoc cache artifact from its immutab
       modulePath: [],
       requestedExports: ["Widget"],
     });
-    assert.deepEqual(first.exports.map(({ name }) => name), ["Widget"]);
+    assert.deepEqual(first.exports.map(({ name }) => name), ["ConstantSlot", "MethodSlot", "Metric", "Widget"]);
 
     const artifactPath = resolve(
       workerRoot,
@@ -998,7 +998,7 @@ test("compiler worker replaces a corrupt rustdoc cache artifact from its immutab
       modulePath: [],
       requestedExports: ["Widget"],
     });
-    assert.deepEqual(recovered.exports.map(({ name }) => name), ["Widget"]);
+    assert.deepEqual(recovered.exports.map(({ name }) => name), ["ConstantSlot", "MethodSlot", "Metric", "Widget"]);
     assert.doesNotThrow(() => JSON.parse(readFileSync(artifactPath, "utf8")));
     const cargoCommands = readFileSync(shim.counterPath, "utf8").trim().split("\n");
     assert.equal(

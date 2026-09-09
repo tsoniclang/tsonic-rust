@@ -7,6 +7,7 @@ import {
   requireArray,
   requireInnerRecord,
   requireRecord,
+  requireString,
   type RustdocDocument,
 } from "./rustdoc-schema.js";
 import { canonicalPathKey } from "./rustdoc-types.js";
@@ -23,6 +24,52 @@ export type RustdocItemResolver = (
   dependency: RustCompilerDependency,
   id: unknown,
 ) => ResolvedRustdocItem;
+
+export function resolveLocalRustdocItem(
+  document: RustdocDocument,
+  dependency: RustCompilerDependency,
+  id: unknown,
+  resolveExternal?: RustdocItemResolver,
+): ResolvedRustdocItem {
+  const activeItems = new Set<string>();
+  let selectedId = id;
+  let publicName: string | undefined;
+  while (true) {
+    if (typeof selectedId !== "number" && typeof selectedId !== "string") {
+      throw new Error("Rust public re-export has no exact selected rustdoc item identifier.");
+    }
+    const key = String(selectedId);
+    if (activeItems.has(key)) {
+      throw new Error(`Rust public re-export contains a cycle at rustdoc item '${key}'.`);
+    }
+    activeItems.add(key);
+    const local = document.index[key];
+    if (!isRecord(local)) {
+      if (resolveExternal === undefined) {
+        throw new Error(`Rust rustdoc item '${key}' is missing from the selected local document.`);
+      }
+      const resolved = resolveExternal(document, dependency, selectedId);
+      return { ...resolved, ...(publicName === undefined ? {} : { publicName }) };
+    }
+    const item = itemById(document, selectedId);
+    if (!hasInnerKind(item, "use")) {
+      const selectedName = publicName ?? (typeof item.name === "string" ? item.name : undefined);
+      return {
+        document,
+        dependency,
+        item,
+        ...(selectedName === undefined ? {} : { publicName: selectedName }),
+      };
+    }
+    const use = requireInnerRecord(item, "use", "Rust public re-export");
+    const name = requireString(use.name, "Rust public re-export name");
+    if (use.is_glob === true) {
+      throw new Error(`Rust glob re-export '${name}' has no singular selected export identity.`);
+    }
+    publicName ??= name;
+    selectedId = use.id;
+  }
+}
 
 export function isGlobUse(item: Readonly<Record<string, unknown>>): boolean {
   if (!hasInnerKind(item, "use")) {
@@ -78,7 +125,7 @@ export function expandedPublicModuleItems(
       selectedId,
     ) ?? (isRecord(local) ? {
       document: moduleItem.document,
-      item: local,
+      item: itemById(moduleItem.document, selectedId),
       dependency: moduleItem.dependency,
     } : undefined);
     if (selected === undefined || !hasInnerKind(selected.item, "module")) {
