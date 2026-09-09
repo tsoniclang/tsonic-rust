@@ -32,7 +32,7 @@ import {
   rustJsArrayTargetType,
   rustFixedArrayCarrierValue,
   rustSourcePrimitiveTargetType,
-  rustTargetConstSafeInteger,
+  rustTargetConstInteger,
   rustVecTargetType,
 } from "../../target-model/types/index.js";
 import { appendMalformedSourceAst } from "../declarations/project-types.js";
@@ -295,8 +295,13 @@ export function resolveArrayLiteralCarrier(
   }
   const fixedArray = rustFixedArrayCarrierValue(expected);
   if (expected !== undefined && fixedArray !== undefined) {
-    const length = rustTargetConstSafeInteger(fixedArray.length);
-    if (length === undefined || presentElements.length !== length) {
+    const length = rustTargetConstInteger(fixedArray.length);
+    if (length === undefined || BigInt(presentElements.length) !== length) {
+      appendRustDiagnostic(walk, "RUST_FIXED_ARRAY_LITERAL_LENGTH_MISMATCH",
+        length === undefined
+          ? "Fixed-array literal initialization requires one closed integer extent."
+          : `Fixed-array literal has ${presentElements.length} elements, but its exact extent is ${length}.`,
+        expression, []);
       return undefined;
     }
     for (const element of presentElements) {

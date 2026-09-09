@@ -26,7 +26,7 @@ import {
   isRustVecCarrier,
   rustFixedArrayCarrierValue,
   rustFixedArrayTargetType,
-  rustTargetConstSafeInteger,
+  rustTargetConstInteger,
   rustOptionElementCarrier,
   rustOptionTargetType,
   rustSourceTypeCarrierValue,
@@ -166,8 +166,8 @@ function selectArrayProjection(
     const fixed = rustFixedArrayCarrierValue(sourceCarrier);
     const fixedLength = fixed === undefined
       ? undefined
-      : rustTargetConstSafeInteger(fixed.length);
-    if (fixed !== undefined && fixedLength !== undefined && index < fixedLength) {
+      : rustTargetConstInteger(fixed.length);
+    if (fixed !== undefined && fixedLength !== undefined && BigInt(index) < fixedLength) {
       projectedCarrier = fixed.element;
       projection = { kind: "fixed-array-element", index };
     } else if (isRustVecCarrier(sourceCarrier)) {
@@ -487,9 +487,12 @@ function bindingCarrierForArrayRest(
   const fixed = rustFixedArrayCarrierValue(sourceCarrier);
   const fixedLength = fixed === undefined
     ? undefined
-    : rustTargetConstSafeInteger(fixed.length);
-  if (fixed !== undefined && fixedLength !== undefined && start <= fixedLength) {
-    return rustFixedArrayTargetType(fixed.element, fixedLength - start);
+    : rustTargetConstInteger(fixed.length);
+  if (fixed !== undefined && fixedLength !== undefined && BigInt(start) <= fixedLength) {
+    return rustFixedArrayTargetType(fixed.element, {
+      kind: "integer",
+      value: (fixedLength - BigInt(start)).toString(),
+    });
   }
   return isRustVecCarrier(sourceCarrier) || isRustJsArrayCarrier(sourceCarrier)
     ? sourceCarrier

@@ -200,3 +200,87 @@ ${source}
     assert.equal(result.artifacts.length, 0);
   });
 }
+
+test("huge fixed-array metadata observations erase before native value admission", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    capabilities: [memoryAbiCapability("rust")],
+    target: { id: "rust", options: { outputType: "bin" } },
+    files: {
+      "layouts.ts": `
+        import { abi } from "test:abi";
+        import { memoryLayout, memoryArrayLayout } from "@tsonic/core/lang.js";
+        export const empty = memoryLayout<{}>(abi, 0, 1, 0);
+        export const remote = memoryArrayLayout(abi, 0, 1, 0, empty, 9007199254740993n);
+      `,
+      "index.ts": `
+        import { abi } from "test:abi";
+        import { empty, remote } from "./layouts.js";
+        import { memoryArrayLayout, sizeOf, alignOf, strideOf } from "@tsonic/core/lang.js";
+        import type { nativeUint } from "@tsonic/core/types.js";
+        export function direct(): nativeUint {
+          return sizeOf(memoryArrayLayout(abi, 0, 1, 0, empty, 9007199254740993n));
+        }
+        export function remoteSize(): nativeUint { return sizeOf(remote); }
+        export function remoteAlignment(): nativeUint { return alignOf(remote); }
+        export function remoteStride(): nativeUint { return strideOf(remote); }
+        export function main(): void {
+          if (direct() !== 0 || remoteSize() !== 0 || remoteAlignment() !== 1 || remoteStride() !== 0) {
+            throw new Error("fixed-array metadata observation");
+          }
+        }
+      `,
+    },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  const output = artifactText(result, "src/index.rs");
+  assert.match(output, /pub fn direct\(\) -> usize \{\s*0usize\s*\}/u);
+  for (const artifact of result.artifacts.filter(artifact => artifact.path.endsWith(".rs"))) {
+    assert.doesNotMatch(artifact.text, /9007199254740993|memoryArrayLayout|NativeLayout|NativeArray/u);
+  }
+  assert.equal(validateGeneratedProject("huge-fixed-array-metadata", result.artifacts, { run: true }).status, 0);
+});
+
+for (const [name, declarations, selectedLayout, body, diagnostic, extent] of [
+  ["direct fixed array", "", "array", "return reinterpretRawPointer(raw, array);",
+    "RUST_RAW_LOCATION_NOT_PROVEN", "2"],
+  ["nested fixed array", `
+    const nested = memoryArrayLayout<FixedArray<uint32, 2>, 3>(abi, 24, 4, 24, array, 3);
+  `, "nested", "return reinterpretRawPointer(raw, nested);", "RUST_RAW_LOCATION_NOT_PROVEN", "3"],
+  ["record containing a fixed array", `
+    interface Container { values: FixedArray<uint32, 2> }
+    const record = memoryLayout<Container>(abi, 8, 4, 8,
+      memoryField((value: Container) => value.values, 0, 4, array));
+  `, "record", "return reinterpretRawPointer(raw, record);", "RUST_RAW_LOCATION_NOT_PROVEN", "2"],
+  ["fixed-array physical backing", "", "array", `
+    let values: FixedArray<uint32, 2> = [1, 2];
+    return toRawPointer(addressOf(values), array);
+  `, "RUST_NATIVE_BACKING_NOT_PROVEN", "2"],
+  ["huge zero-sized fixed array", `
+    const zero = memoryLayout<{}>(abi, 0, 1, 0);
+    const huge = memoryArrayLayout<{}, 9007199254740993n>(abi, 0, 1, 0, zero, 9007199254740993n);
+  `, "huge", "return reinterpretRawPointer(raw, huge);", "RUST_RAW_LOCATION_NOT_PROVEN", "9007199254740993"],
+]) {
+  test(`native physical layouts reject ${name} explicitly`, () => {
+    const { result } = compileRust({
+      capabilities: [memoryAbiCapability("rust")],
+      files: { "index.ts": `
+        import { abi } from "test:abi";
+        import type { FixedArray, RawPointer, uint32 } from "@tsonic/core/types.js";
+        import { memoryLayout, memoryArrayLayout, memoryField, addressOf, toRawPointer,
+          reinterpretRawPointer, unsafeContext, sizeOf } from "@tsonic/core/lang.js";
+        const word = memoryLayout<uint32>(abi, 4, 4, 4);
+        const array = memoryArrayLayout<uint32, 2>(abi, 8, 4, 8, word, 2);
+        ${declarations}
+        export function size() { return sizeOf(${selectedLayout}); }
+        export function expose(raw: RawPointer | undefined) {
+          unsafeContext();
+          ${body}
+        }
+      ` },
+    });
+    const message = `Rust native raw/backing storage does not support an inline fixed-array layout with exact extent ${extent}; no native array layout adapter is implemented.`;
+    assert.ok(result.diagnostics.some(item => item.code === diagnostic && item.message === message),
+      JSON.stringify(result.diagnostics));
+    assert.deepEqual(result.artifacts, []);
+  });
+}

@@ -20,7 +20,6 @@ import {
   rustUnitTargetType,
   rustUndefinedTargetType,
   rustVecTargetType,
-  rustFixedArrayTargetType,
 } from "../../../target-model/types/index.js";
 import { asNode } from "../../evidence/selected-source.js";
 import { denseDefined, resolveProjectSourceCarrier } from "./project.js";
@@ -28,7 +27,7 @@ import { functionPointerFactKey, pointerFactKey, sourceMarkerFactKey } from "@ts
 import { instantiateProviderTargetType, providerCarrierFromRelations, resolveOwnedSourceProfileTypeName, resolveProviderTypeIdentity, resolveSourceProfileCarrierFromArguments } from "./providers.js";
 import { resolveCallableType, resolveSourcePrimitive, resolveSourceTypeParameter } from "./callables.js";
 import { resolveReferencedDeclarationType, resolveRustAuthoredTargetType, resolveRustTupleElementTargetTypeWithState, rustParameterLaneTargetType } from "./tuples.js";
-import { resolveRustTargetType, resolveStructuralObjectType } from "./target.js";
+import { resolveRustFixedArrayTargetType, resolveRustTargetType, resolveStructuralObjectType } from "./target.js";
 import { sourceTransformedTypeFactEvidenceNodes } from "@tsonic/target-api/source";
 import { tsonicFixedArrayFactKey } from "@tsonic/source-core/facts";
 import { isRustSourceRawPointer } from "../../operations/raw-pointer-source.js";
@@ -77,10 +76,7 @@ export function resolveRustTargetTypeRef(
   const fixedArray = context.facts.resolve(subject, tsonicFixedArrayFactKey) ??
     context.facts.get(subject, tsonicFixedArrayFactKey);
   if (fixedArray !== undefined) {
-    const element = resolveRustTargetTypeRef(fixedArray.elementType, context, options);
-    return element === undefined
-      ? undefined
-      : rustFixedArrayTargetType(element, fixedArray.length);
+    return resolveRustFixedArrayTargetType(fixedArray, context, options, new Set<object>());
   }
   const functionPointer = context.facts.resolve(subject, functionPointerFactKey) ??
     context.facts.get(subject, functionPointerFactKey);
@@ -191,15 +187,7 @@ export function resolveRustTargetTypeSyntax(
   const fixedArray = context.facts.resolve(node, tsonicFixedArrayFactKey) ??
     context.facts.get(node, tsonicFixedArrayFactKey);
   if (fixedArray !== undefined) {
-    const element = resolveRustAuthoredTargetType(
-      fixedArray.elementType,
-      context,
-      options,
-      resolving,
-    );
-    return element === undefined
-      ? undefined
-      : rustFixedArrayTargetType(element, fixedArray.length);
+    return resolveRustFixedArrayTargetType(fixedArray, context, options, resolving);
   }
   const functionPointer = context.facts.resolve(node, functionPointerFactKey) ??
     context.facts.get(node, functionPointerFactKey);

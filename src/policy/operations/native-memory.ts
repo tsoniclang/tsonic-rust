@@ -10,17 +10,37 @@ import { selectRustProviderOperation, rustProviderOperationOwnerMatches } from "
 import { isRustCopyCarrier, rustNamedTypeCarrierValue, rustTargetGenericBindingsForArguments, substituteRustTargetGenerics } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
+type RustNativeMemorySelection = RustNativeMemoryLayout | {
+  readonly kind: "unsupported-array";
+  readonly reason: string;
+};
+
 export function readRustRawLocation(ast: AstReader, facts: ReadonlySourceFactResolver, subject: ExtensionFactSubject): TsonicRawLocationSelection | undefined {
   return selectTsonicRawLocationOperation(ast, facts, subject);
 }
 
 export function selectRustNativeMemoryLayout(
   layout: TsonicMemoryLayoutFact, context: RustTargetTypeResolutionContext, options: RustTargetTypeResolutionOptions,
-  selected = new Map<TsonicMemoryLayoutFact, RustNativeMemoryLayout | undefined>(),
-): RustNativeMemoryLayout | undefined {
+  selected = new Map<TsonicMemoryLayoutFact, RustNativeMemorySelection | undefined>(),
+): RustNativeMemorySelection | undefined {
   if (selected.size === 0 && countTsonicMemoryLayoutValues(layout, 131_072) === undefined) return undefined;
   if (selected.has(layout)) return selected.get(layout);
   selected.set(layout, undefined);
+  if (layout.kind === "array") {
+    const result = Object.freeze({
+      kind: "unsupported-array" as const,
+      reason: `Rust native raw/backing storage does not support an inline fixed-array layout with exact extent ${layout.fixedArray.length}; no native array layout adapter is implemented.`,
+    });
+    selected.set(layout, result);
+    return result;
+  }
+  for (const field of layout.fields) {
+    const child = selectRustNativeMemoryLayout(field.fieldLayout, context, options, selected);
+    if (child?.kind === "unsupported-array") {
+      selected.set(layout, child);
+      return child;
+    }
+  }
   const pointeeCarrier = resolveRustTargetTypeRef(layout.explicitTypeNode ?? layout.sourceType, context, options);
   if (pointeeCarrier === undefined) return undefined;
   const sizes: Readonly<Partial<Record<string, number>>> = {
@@ -56,6 +76,10 @@ export function selectRustNativeMemoryLayout(
       const instantiate = (carrier: TargetTypeRef | undefined): TargetTypeRef | undefined => carrier === undefined ? undefined :
         substituteRustTargetGenerics(carrier, substitutions.types, substitutions.lifetimes, substitutions.consts);
       const child = selectRustNativeMemoryLayout(field.fieldLayout, context, options, selected);
+      if (child?.kind === "unsupported-array") {
+        selected.set(layout, child);
+        return child;
+      }
       if (child === undefined || !rustTargetTypeRefEquals(instantiate(property.row.receiverCarrier), pointeeCarrier) ||
         !rustTargetTypeRefEquals(instantiate(setter.row.receiverCarrier), pointeeCarrier) ||
         !rustTargetTypeRefEquals(instantiate(property.row.resultCarrier), child.pointeeCarrier) ||
