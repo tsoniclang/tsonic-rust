@@ -85,6 +85,50 @@ export function main(): void { if (!run()) throw new Error("native location alia
   validateGeneratedProject("native-location-aliases", result.artifacts, { run: true });
 });
 
+test("cross-file equivalent layouts preserve one native backing location", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    capabilities: [memoryAbiCapability("rust")],
+    target: { id: "rust", options: { outputType: "bin" } },
+    files: {
+      "layout.ts": `
+        import { abi } from "test:abi";
+        import type { uint32 } from "@tsonic/core/types.js";
+        import { memoryLayout } from "@tsonic/core/lang.js";
+        export const remote = memoryLayout<uint32>(abi, 4, 4, 4);
+      `,
+      "index.ts": `
+        import { abi } from "test:abi";
+        import { remote } from "./layout.js";
+        import type { uint32 } from "@tsonic/core/types.js";
+        import { memoryLayout, addressOf, toRawPointer, reinterpretRawPointer, loadPointer,
+          storePointer, equalPointer, equalRawPointer, unsafeContext } from "@tsonic/core/lang.js";
+        const local = memoryLayout<uint32>(abi, 4, 4, 4);
+        function run(): boolean {
+          unsafeContext();
+          let value: uint32 = 7;
+          const pointer = addressOf(value);
+          const first = toRawPointer(pointer, local);
+          const second = toRawPointer(pointer, remote);
+          const left = reinterpretRawPointer(first, local);
+          const right = reinterpretRawPointer(second, remote);
+          if (left === undefined || right === undefined) return false;
+          storePointer(left, 9);
+          if (value !== 9 || loadPointer(right) !== 9) return false;
+          value = 17;
+          return loadPointer(right) === 17 && equalPointer(pointer, left) && equalRawPointer(first, second);
+        }
+        export function main(): void { if (!run()) throw new Error("cross-file native aliasing"); }
+      `,
+    },
+  });
+  assert.equal(result.diagnostics.length, 0, result.diagnostics.map(item => `${item.code}: ${item.message}`).join("\n"));
+  const output = artifactText(result, "src/index.rs");
+  assert.match(output, /allocate_native_location/u);
+  assert.match(output, /reinterpret_raw_location::<u32>/u);
+  assert.doesNotMatch(output, /as \*mut|as \*const/u);
+  validateGeneratedProject("native-cross-file-aliases", result.artifacts, { run: true });
+});
+
 test("native array value reads clone proven owned handles while storage writes remain places", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     target: { id: "rust", options: { outputType: "bin" } },
