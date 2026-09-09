@@ -214,6 +214,7 @@ export type RustExpr =
       readonly args: readonly RustExpr[];
       readonly receiverMode?: "value" | "ref" | "mut-ref";
     }
+  | { readonly kind: "option-presence"; readonly receiver: RustExpr; readonly present: boolean }
   | { readonly kind: "field"; readonly receiver: RustExpr; readonly name: string }
   | { readonly kind: "index"; readonly receiver: RustExpr; readonly index: RustExpr }
   | {

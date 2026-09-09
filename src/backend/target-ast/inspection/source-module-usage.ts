@@ -350,6 +350,7 @@ function rustExpressionReferencesModuleAlias(expression: RustExpr, alias: string
       return rustPathReferencesModuleAlias(expression.path, alias) ||
         expression.args.some((argument) =>
           rustExpressionReferencesModuleAlias(argument, alias));
+    case "option-presence":
     case "field":
       return rustExpressionReferencesModuleAlias(expression.receiver, alias);
     case "index":

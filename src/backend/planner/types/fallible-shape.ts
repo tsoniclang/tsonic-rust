@@ -64,6 +64,7 @@ export function rustExpressionUsesTryInCurrentRegion(expression: RustExpr): bool
     case "method-call":
       return rustExpressionUsesTryInCurrentRegion(expression.receiver) ||
         expression.args.some(rustExpressionUsesTryInCurrentRegion);
+    case "option-presence":
     case "field":
       return rustExpressionUsesTryInCurrentRegion(expression.receiver);
     case "index":

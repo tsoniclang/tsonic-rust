@@ -185,6 +185,10 @@ export function rustPath(crateName: string, modulePath: readonly string[], ...ta
 export function targetTraitPath(path: string, context: ProjectionContext): string {
   const segments = path.split("::");
   if (segments[0] === context.dependency.crateName) {
+    const local = context.localTypeLocations.get(segments.join("\0"));
+    if (local !== undefined && !context.standardTypes.has(segments.join("\0"))) {
+      return local.targetPath.join("::");
+    }
     segments[0] = context.dependency.targetCrateName;
   }
   return segments.join("::");

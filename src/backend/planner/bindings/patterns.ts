@@ -20,7 +20,7 @@ import {
   isRustVecCarrier,
   rustCarrierSupportsClone,
   rustFixedArrayCarrierValue,
-  rustTargetConstSafeInteger,
+  rustTargetConstInteger,
   rustStructuralObjectCarrierValue,
   rustTupleTargetType,
 } from "../../../target-model/types/index.js";
@@ -323,12 +323,12 @@ function planArrayRest(
   const fixedBinding = rustFixedArrayCarrierValue(fact.bindingCarrier);
   const sourceLength = fixedSource === undefined
     ? undefined
-    : rustTargetConstSafeInteger(fixedSource.length);
+    : rustTargetConstInteger(fixedSource.length);
   const bindingLength = fixedBinding === undefined
     ? undefined
-    : rustTargetConstSafeInteger(fixedBinding.length);
+    : rustTargetConstInteger(fixedBinding.length);
   const start = fact.projection.kind === "fixed-array-rest" ? fact.projection.start : 0;
-  if (fixedSource === undefined || sourceLength === undefined || start > sourceLength ||
+  if (fixedSource === undefined || sourceLength === undefined || BigInt(start) > sourceLength ||
     (fixedBinding === undefined && !isRustVecCarrier(fact.bindingCarrier)) ||
     (fixedBinding !== undefined && bindingLength === undefined)) {
     return rejectProjection(node, context, "Fixed-array rest projection has incompatible finalized carriers.");
@@ -336,12 +336,12 @@ function planArrayRest(
   const slice: RustExpr = {
     kind: "index",
     receiver: source,
-    index: { kind: "range", start: integer(start), end: integer(sourceLength) },
+    index: { kind: "range", start: integer(start), end: { kind: "int-literal", text: sourceLength.toString() } },
   };
   if (fixedBinding === undefined) {
     return { kind: "method-call", receiver: slice, method: "to_vec", args: [] };
   }
-  if (bindingLength !== sourceLength - start ||
+  if (bindingLength !== sourceLength - BigInt(start) ||
     !rustTargetTypeRefEquals(fixedBinding.element, fixedSource.element)) {
     return rejectProjection(node, context, "Fixed-array rest length or element carrier is inconsistent.");
   }

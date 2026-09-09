@@ -234,6 +234,7 @@ export function sourceTypeFor(
       const standard = context.standardTypes.get(
         canonicalCompilerTypePathKey(type),
       );
+      const local = context.localTypeLocations.get(canonicalCompilerTypePathKey(type));
       if (standard !== undefined) {
         const arguments_ = standardSourceGenericArguments(
           type,
@@ -241,15 +242,12 @@ export function sourceTypeFor(
           context,
           position,
         );
-        const localName = context.localStandardTypeNames.get(
-          canonicalCompilerTypePathKey(type),
-        );
         return importedSourceType(
           context,
-          localName === undefined
+          local === undefined
             ? standard.sourceModuleSpecifier
             : context.owner.moduleSpecifier,
-          localName ?? standard.sourceExportName,
+          local?.sourceExportName ?? standard.sourceExportName,
           arguments_,
         );
       }
@@ -258,14 +256,13 @@ export function sourceTypeFor(
           `External Rust type '${rustCompilerTypeText(type)}' has no imported provider contract.`,
         );
       }
-      const moduleSpecifier = compilerModuleSpecifier(
-        context.dependency.alias,
-        type.modulePath,
-      );
+      const moduleSpecifier = local === undefined
+        ? compilerModuleSpecifier(context.dependency.alias, type.modulePath)
+        : context.owner.moduleSpecifier;
       return importedSourceType(
         context,
         moduleSpecifier,
-        type.name,
+        local?.sourceExportName ?? type.name,
         type.genericArguments.map((argument) =>
           sourceGenericArgumentFor(argument, context, position)),
       );
@@ -439,9 +436,11 @@ export function targetTypeFor(
         context.dependency,
         type.identity.canonicalPath,
       );
-      const path = type.crateName === context.dependency.crateName
-        ? rustPath(context.dependency.targetCrateName, type.modulePath, type.name)
-        : type.identity.canonicalPath.join("::");
+      const local = context.localTypeLocations.get(canonicalCompilerTypePathKey(type));
+      const path = local?.targetPath.join("::") ??
+        (type.crateName === context.dependency.crateName
+          ? rustPath(context.dependency.targetCrateName, type.modulePath, type.name)
+          : type.identity.canonicalPath.join("::"));
       recordCarrierPath(context.carrierPaths, id, path);
       const genericArguments = type.genericArguments.map((argument) =>
         targetGenericArgumentFor(argument, context, position, pathResolution));
@@ -718,9 +717,12 @@ export function sourceTraitFor(
   const standard = binderContext.standardTypes.get(
     trait.identity.canonicalPath.join("\0"),
   );
+  const local = binderContext.localTypeLocations.get(trait.identity.canonicalPath.join("\0"));
   const moduleSpecifier = standard?.sourceModuleSpecifier ??
-    compilerModuleSpecifierForIdentity(trait.identity.canonicalPath, binderContext);
-  const exportName = standard?.sourceExportName ??
+    (local === undefined
+      ? compilerModuleSpecifierForIdentity(trait.identity.canonicalPath, binderContext)
+      : binderContext.owner.moduleSpecifier);
+  const exportName = standard?.sourceExportName ?? local?.sourceExportName ??
     trait.identity.canonicalPath[trait.identity.canonicalPath.length - 1];
   if (exportName === undefined) {
     throw new Error(`Rust trait '${trait.path}' has no source export name.`);

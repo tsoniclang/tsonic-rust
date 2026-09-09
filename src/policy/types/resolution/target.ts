@@ -1,5 +1,6 @@
 import {
   rustBigIntTargetType,
+  rustFixedArrayTargetType,
   rustJsArrayTargetType,
   rustJsSymbolTargetType,
   rustNullTargetType,
@@ -32,6 +33,28 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustRawPointerTargetType } from "../../../target-model/types/carriers/callables.js";
 import { isRustSourceRawPointer } from "../../operations/raw-pointer-source.js";
 import { resolveRustAuthoredBroadSourceValueTargetType } from "./broad-values.js";
+import { selectTsonicFixedArrayFromSource } from "@tsonic/source-core/facts";
+import type { TsonicFixedArrayFact } from "@tsonic/source-core/facts";
+
+export function resolveRustFixedArrayTargetType(
+  fixedArray: TsonicFixedArrayFact,
+  context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions,
+  resolving: Set<object>,
+): TargetTypeRef | undefined {
+  if (resolving.has(fixedArray.sourceType)) return undefined;
+  resolving.add(fixedArray.sourceType);
+  try {
+    const element = fixedArray.elementType === undefined
+      ? resolveRustTargetType(fixedArray.elementSourceType, context, options, resolving)
+      : resolveRustAuthoredTargetType(fixedArray.elementType, context, options, resolving);
+    return element === undefined
+      ? undefined
+      : rustFixedArrayTargetType(element, { kind: "integer", value: fixedArray.length.toString() });
+  } finally {
+    resolving.delete(fixedArray.sourceType);
+  }
+}
 
 export function resolveRustTargetType(
   type: Type | undefined,
@@ -42,6 +65,16 @@ export function resolveRustTargetType(
 ): TargetTypeRef | undefined {
   if (type === undefined || resolving.has(type)) {
     return undefined;
+  }
+  const fixedArray = selectTsonicFixedArrayFromSource(
+    type,
+    context.currentSemantics,
+    context.source.sourceFacts,
+  );
+  if (fixedArray !== undefined) {
+    return fixedArray.kind === "invalid"
+      ? undefined
+      : resolveRustFixedArrayTargetType(fixedArray.fact, context, options, resolving);
   }
   if (context.currentSemantics.facts.typeSubjects(type).some(subject => isRustSourceRawPointer(subject, context))) {
     return rustRawPointerTargetType();

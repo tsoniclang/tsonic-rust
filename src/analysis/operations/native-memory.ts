@@ -24,6 +24,7 @@ export function resolveRustRawLocationCarrier(walk: RustFactWalk, expression: No
   if (selected.kind === "rejected") return reject(selected.reason);
   const resolution = rustResolutionContext(walk, expression);
   const layout = selectRustNativeMemoryLayout(selected.layout, resolution, walk.operationOptions);
+  if (layout?.kind === "unsupported-array") return reject(layout.reason);
   if (layout === undefined) return reject("The selected layout has no closed all-bit-pattern Rust native value representation.");
   if (selected.operation.operation === "reinterpret" && selected.operation.explicitPointeeTypeNode !== undefined) {
     const explicit = resolveRustTargetTypeRef(selected.operation.explicitPointeeTypeNode, resolution, walk.operationOptions);
@@ -51,6 +52,10 @@ export function recordRustNativeBacking(walk: RustFactWalk): readonly RustNative
   for (const issue of context.pointerBacking.issues()) reject(issue.node, issue.reason);
   for (const { origin, layout: descriptor } of context.pointerBacking.entries()) {
     const layout = selectRustNativeMemoryLayout(descriptor, rustResolutionContext(walk, origin.call), walk.operationOptions);
+    if (layout?.kind === "unsupported-array") {
+      reject(origin.call, layout.reason);
+      continue;
+    }
     if (layout === undefined) {
       reject(origin.call, "Physical backing requires an exact closed all-bit-pattern native layout.");
       continue;

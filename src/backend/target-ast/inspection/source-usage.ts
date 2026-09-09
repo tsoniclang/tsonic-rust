@@ -154,6 +154,7 @@ export function rustExpressionChildren(expression: RustExpr): readonly RustExpr[
       return [expression.receiver, ...expression.args];
     case "macro-invocation":
       return expression.args;
+    case "option-presence":
     case "field":
       return [expression.receiver];
     case "index":

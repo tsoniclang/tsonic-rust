@@ -89,9 +89,13 @@ export function projectRustCompilerModule(
     canonicalPathKey(location.canonicalPath),
     location,
   ]));
-  const localStandardTypeNames = new Map(module.exports
+  const localTypeLocations = new Map(module.exports
     .filter(isNominalExport)
-    .map((exported) => [canonicalPathKey(exported.canonicalPath), exported.name]));
+    .map((exported) => [canonicalPathKey(exported.canonicalPath), {
+      sourceExportName: exported.name,
+      targetPath: standardTypes.get(canonicalPathKey(exported.canonicalPath))?.targetPath ??
+        exported.targetPath,
+    }]));
   const context: ProjectionContext = {
     dependency: module.dependency,
     modulePath: module.modulePath,
@@ -100,7 +104,7 @@ export function projectRustCompilerModule(
     carrierPaths,
     carrierTraits,
     standardTypes,
-    localStandardTypeNames,
+    localTypeLocations,
   };
   for (const exported of module.exports) {
     const projected = projectExport(exported, context);

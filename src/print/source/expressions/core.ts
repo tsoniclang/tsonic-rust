@@ -75,6 +75,8 @@ export function printRustExpr(expression: RustExpr): string {
       const receiver = printOperand(expression.receiver, RustPrecedence.Postfix, false);
       return `${printRustMethodCallTarget(expression, receiver)}(${expression.args.map(printRustExpr).join(", ")})`;
     }
+    case "option-presence":
+      return `${printOperand(expression.receiver, RustPrecedence.Postfix, false)}.${expression.present ? "is_some" : "is_none"}()`;
     case "field": {
       const receiver = printOperand(expression.receiver, RustPrecedence.Postfix, false);
       const nestedTupleField = /^[0-9]+$/u.test(expression.name) &&

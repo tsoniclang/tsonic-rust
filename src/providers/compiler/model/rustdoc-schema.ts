@@ -28,8 +28,13 @@ export function parseRustdocDocument(
 
 
 export function itemById(document: RustdocDocument, id: unknown): Readonly<Record<string, unknown>> {
-  const item = document.index[String(id)];
-  return requireRecord(item, `rustdoc item '${String(id)}'`);
+  const key = String(id);
+  const item = requireRecord(document.index[key], `rustdoc item '${key}'`);
+  if ((typeof id !== "number" && typeof id !== "string") ||
+    (typeof item.id !== "number" && typeof item.id !== "string") || String(item.id) !== key) {
+    throw new Error(`Rust rustdoc index entry '${key}' has a different item identifier.`);
+  }
+  return item;
 }
 
 

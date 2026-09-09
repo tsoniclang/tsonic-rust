@@ -1,5 +1,5 @@
 import { rustFixedArrayCarrierValue } from "../types/carriers/native.js";
-import { rustTargetConstSafeInteger } from "../types/generic-arguments.js";
+import { rustTargetConstInteger } from "../types/generic-arguments.js";
 import type { TargetTypeRef } from "../types/model.js";
 
 export const rustVecRestAssembly = Object.freeze({
@@ -20,8 +20,8 @@ export function rustSpreadElementCarrier(
   const fixedArray = rustFixedArrayCarrierValue(sourceCarrier);
   const fixedLength = fixedArray === undefined
     ? undefined
-    : rustTargetConstSafeInteger(fixedArray.length);
-  return fixedArray !== undefined && fixedLength !== undefined && index < fixedLength
+    : rustTargetConstInteger(fixedArray.length);
+  return fixedArray !== undefined && fixedLength !== undefined && BigInt(index) < fixedLength
     ? fixedArray.element
     : undefined;
 }

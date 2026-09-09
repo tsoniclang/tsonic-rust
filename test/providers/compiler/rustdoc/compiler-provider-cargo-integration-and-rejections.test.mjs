@@ -245,6 +245,65 @@ export function main(): void {
   assert.equal(run.status, 0, run.stderr);
 });
 
+test("Cargo predicates with Option-like names retain their selected identity and effects", { timeout: 300_000 }, () => {
+  const project = createUserCargoProject();
+  const { result } = compileRustThroughTargetPack({
+    target: {
+      id: "rust",
+      options: {
+        outputType: "bin",
+        crateName: "compiler_provider_proof",
+        projectFile: project.manifestPath,
+      },
+    },
+    files: {
+      "index.ts": `
+import { Probe as ImportedProbe, OnlySome } from "@tsonic/rust/crates/widget_alias/predicates.js";
+
+export function isMissing(value: string | undefined): boolean {
+  return (value !== undefined) === false;
+}
+
+export function isPresent(value: string | undefined): boolean {
+  return !(value === undefined);
+}
+
+export function main(): void {
+  const probe = new ImportedProbe(0);
+  const equalFalse = probe.is_some() === false;
+  const notTrue = probe.is_some() !== true;
+  const negated = !probe.is_some();
+  const reversed = false === probe.is_some();
+  const otherMethod = probe.is_none() === false;
+  if (equalFalse || notTrue || negated || reversed || otherMethod) {
+    throw new Error("selected predicate was replaced with another method");
+  }
+  if (probe.calls !== 104) throw new Error("predicate effects changed");
+  const single = new OnlySome(0);
+  if (single.is_some() === false || !single.is_some()) {
+    throw new Error("a missing complementary predicate was invented");
+  }
+  if (single.calls !== 2) throw new Error("predicate evaluated more than once");
+  if (!isMissing(undefined) || isMissing("present") || isPresent(undefined) || !isPresent("present")) {
+    throw new Error("native Option predicate changed");
+  }
+}
+`,
+    },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  const source = result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "";
+  assert.match(source, /let equal_false[^\n]*!probe\.is_some\(\)/u);
+  assert.match(source, /let not_true[^\n]*!probe\.is_some\(\)/u);
+  assert.match(source, /let other_method[^\n]*!probe\.is_none\(\)/u);
+  assert.doesNotMatch(source, /single\.is_none\(/u);
+  assert.match(source, /value\.is_none\(\)/u);
+  assert.match(source, /value\.is_some\(\)/u);
+  writeGeneratedArtifacts(project.root, result.artifacts);
+  const run = runCargo(project.manifestPath, ["run", "--quiet", "--locked"]);
+  assert.equal(run.status, 0, run.stderr || run.stdout);
+});
+
 test("missing Cargo exports fail closed at the selected source import", { timeout: 300_000 }, () => {
   const project = createUserCargoProject();
   for (const [importName, expected] of [["missing_export", /does not export public item/u]]) {
@@ -605,3 +664,56 @@ function tomlPath(path) {
 function shellText(text) {
   return text.replaceAll("'", "'\\''");
 }
+
+test("Cargo private named reexports compile and run with public returned nominal carriers", { timeout: 300_000 }, () => {
+  const project = createUserCargoProject();
+  const manifestBefore = readFileSync(project.manifestPath, "utf8");
+  const { result } = compileRustThroughTargetPack({
+    target: {
+      id: "rust",
+      options: {
+        outputType: "bin",
+        crateName: "compiler_provider_proof",
+        projectFile: project.manifestPath,
+      },
+    },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import type { NamedRecord } from "@tsonic/rust/crates/widget_alias/named_reexports.js";
+import { PublicRecord, create_record, named } from "@tsonic/rust/crates/widget_alias/named_reexports.js";
+
+export function publicRecord(value: int32): PublicRecord {
+  return create_record(value);
+}
+
+export function namedRecord(value: int32): NamedRecord {
+  return named(value);
+}
+
+export function main(): void {
+  const record = publicRecord(17);
+  if (record.value !== 17) throw new Error("renamed function result failed");
+  const next = record.next();
+  if (next.value !== 18) throw new Error("public sibling method result failed");
+  const direct = namedRecord(23);
+  if (direct.value !== 23) throw new Error("named function result failed");
+  const constructed = new PublicRecord(29);
+  if (constructed.value !== 29) throw new Error("renamed nominal constructor failed");
+}
+`,
+    },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  assert.equal(result.artifacts.some(({ path }) => path === "Cargo.toml"), false);
+  const generated = result.artifacts.find(({ path }) => path === "src/index.rs")?.text ?? "";
+  assert.match(generated, /widget_alias::named_reexports::create_record\(value\)\n\}/u);
+  assert.match(generated, /widget_alias::named_reexports::named\(value\)/u);
+  assert.match(generated, /widget_alias::named_reexports::PublicRecord::new\(29\)/u);
+  assert.match(generated, /widget_alias::named_reexports::NamedRecord/u);
+  assert.doesNotMatch(generated, /implementation::|NativeRecord/u);
+  writeGeneratedArtifacts(project.root, result.artifacts);
+  assert.equal(readFileSync(project.manifestPath, "utf8"), manifestBefore);
+  const run = runCargo(project.manifestPath, ["run", "--quiet", "--locked"]);
+  assert.equal(run.status, 0, run.stderr);
+});

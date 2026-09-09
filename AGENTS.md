@@ -1,4 +1,4 @@
 # Agent Notes (Tsonic Rust)
 
-The canonical workspace policy in `../AGENTS.md` applies. This repository has
-no additional policy.
+Read and follow `../tsonic/docs/architecture/workspace-agent-policy.md` before
+any work. This repository has no additional policy.

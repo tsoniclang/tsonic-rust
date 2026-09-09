@@ -4,6 +4,8 @@ use std::future::Future;
 use std::pin::Pin;
 use tsonic_rust_runtime::{TsonicError, TsonicResult};
 
+pub mod predicates;
+
 pub const ANSWER: i32 = 42;
 
 pub type Pair<T> = (T, T);
@@ -472,3 +474,5 @@ pub mod factory {
         crate::Widget::new(value)
     }
 }
+
+pub mod named_reexports;
