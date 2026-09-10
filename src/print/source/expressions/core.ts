@@ -51,8 +51,12 @@ export function printRustExpr(expression: RustExpr): string {
     }
     case "range":
       return `${printOperand(expression.start, RustPrecedence.Or, false)}..${expression.inclusive === true ? "=" : ""}${printOperand(expression.end, RustPrecedence.Or, true)}`;
-    case "conditional":
-      return `if ${printRustExpr(expression.condition)} { ${printConditionalArm(expression.whenTrue)} } else { ${printConditionalArm(expression.whenFalse)} }`;
+    case "conditional": {
+      const alternative = expression.whenFalse.kind === "conditional"
+        ? printRustExpr(expression.whenFalse)
+        : `{ ${printConditionalArm(expression.whenFalse)} }`;
+      return `if ${printRustExpr(expression.condition)} { ${printConditionalArm(expression.whenTrue)} } else ${alternative}`;
+    }
     case "match":
       return printRustMatchExpression(expression);
     case "matches":
@@ -185,14 +189,22 @@ function printRustMatchExpression(
   return `match ${printRustExpr(expression.expression)} { ${arms.join(" ")} }`;
 }
 
-function printConditionalArm(expression: RustExpr): string {
-  return expression.kind === "block"
-    ? printRustBlockExpressionContents(expression)
-    : printRustExpr(expression);
+function printConditionalArm(expression: RustExpr, allowInnerAttributes = true): string {
+  if (expression.kind === "block" &&
+    (allowInnerAttributes || (expression.innerAttrs?.length ?? 0) === 0)) {
+    return printRustBlockExpressionContents(expression, (value) => printConditionalArm(value, false));
+  }
+  if (expression.kind === "evaluate-then") {
+    const effect = printRustExpr(expression.effect);
+    const statement = expression.discard === "unit" ? `${effect};` : `let _ = ${effect};`;
+    return `${statement} ${printConditionalArm(expression.value, false)}`;
+  }
+  return printRustExpr(expression);
 }
 
 function printRustBlockExpressionContents(
   expression: Extract<RustExpr, { readonly kind: "block" }>,
+  printValue: (value: RustExpr) => string = printRustExpr,
 ): string {
   const bindings = expression.bindings.map((binding) => {
     const attributes = binding.attrs?.join(" ") ?? "";
@@ -202,7 +214,7 @@ function printRustBlockExpressionContents(
   return [
     ...(expression.innerAttrs ?? []),
     ...bindings,
-    printRustExpr(expression.value),
+    printValue(expression.value),
   ].join(" ");
 }
 

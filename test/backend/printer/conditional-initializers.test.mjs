@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { finalizeRustBlockLiveness } from "../../../dist/backend/target-ast/inspection/source-liveness.js";
+import { printRustExpr } from "../../../dist/print/source/expressions/core.js";
 
 const path = (name) => ({ kind: "path", path: name });
-const literal = (value) => ({ kind: "int-literal", value });
+const literal = (value) => ({ kind: "int-literal", text: String(value) });
 const assign = (name, value) => ({ kind: "assign", target: path(name), operator: "=", value });
 const block = (...statements) => ({ statements });
 const branch = (then, otherwise) => ({ kind: "if", condition: path("flag"), then, else: otherwise });
-const declaration = { kind: "let", name: "result", mutable: true };
+const declaration = { kind: "let", name: "result", type: { kind: "primitive", name: "i32" }, mutable: true };
 
 function normalize(conditional, following = []) {
   return finalizeRustBlockLiveness(block(declaration, conditional, ...following, {
@@ -57,4 +58,25 @@ test("conditional initialization leaves unsafe-to-move bindings unchanged", () =
     assert.equal(result.statements[0].init, undefined, JSON.stringify(conditional));
     assert.equal(result.statements[1].kind, "if");
   }
+});
+
+test("conditional printing preserves scoped attributes and discarded-value effects", () => {
+  const scoped = {
+    kind: "block",
+    innerAttrs: ["#![allow(unused_variables)]"],
+    bindings: [{ name: "local", value: literal(2) }],
+    value: literal(3),
+  };
+  const source = printRustExpr({
+    kind: "conditional",
+    condition: path("flag"),
+    whenTrue: {
+      kind: "evaluate-then",
+      effect: { kind: "call", path: "step", args: [] },
+      discard: "value",
+      value: scoped,
+    },
+    whenFalse: literal(0),
+  });
+  assert.equal(source, "if flag { let _ = step(); { #![allow(unused_variables)] let local = 2; 3 } } else { 0 }");
 });

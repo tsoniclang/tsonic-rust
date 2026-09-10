@@ -168,5 +168,8 @@ export function main(): void {
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /let mut result: i32 = if /u);
   assert.doesNotMatch(source, /let(?: mut)? result: i32;|needless_late_init/u);
+  assert.match(source, /\} else if mode == 1 \{/u);
+  const initializer = source.slice(source.indexOf("let mut result: i32 = if"), source.indexOf("result += 10;"));
+  assert.doesNotMatch(initializer, /\{\s*\{/u);
   validateGeneratedProject("effectful-else-if-initializers", result.artifacts, { run: true });
 });
