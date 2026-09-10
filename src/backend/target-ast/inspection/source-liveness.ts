@@ -261,29 +261,57 @@ function branchAssignmentValue(
     return undefined;
   }
   const statement = block.statements[block.statements.length - 1];
-  if (statement?.kind !== "assign" ||
-    statement.operator !== "=" ||
-    statement.target.kind !== "path" ||
-    statement.target.path !== path ||
-    rustExpressionReferencesPath(statement.value, path)) {
+  let value = statement?.kind === "assign" &&
+      statement.operator === "=" &&
+      statement.target.kind === "path" &&
+      statement.target.path === path &&
+      !rustExpressionReferencesPath(statement.value, path)
+    ? statement.value
+    : statement === undefined ? undefined : conditionalLateInitializer(statement, path);
+  if (value === undefined) {
     return undefined;
   }
-  const declarations = block.statements.slice(0, -1);
-  if (!declarations.every((candidate) => isBranchBindingDeclaration(candidate, path))) {
-    return undefined;
+  for (let index = block.statements.length - 2; index >= 0; index -= 1) {
+    const setup = block.statements[index];
+    if (setup === undefined || rustStatementReferencesPath(setup, path)) {
+      return undefined;
+    }
+    if (isBranchBindingDeclaration(setup, path)) {
+      const bindings = [setup];
+      while (index > 0) {
+        const previous = block.statements[index - 1];
+        if (previous === undefined || !isBranchBindingDeclaration(previous, path)) {
+          break;
+        }
+        bindings.unshift(previous);
+        index -= 1;
+      }
+      value = {
+        kind: "block",
+        bindings: bindings.map((declaration) => ({
+          name: declaration.name,
+          value: declaration.init,
+          ...(declaration.type === undefined ? {} : { type: declaration.type }),
+        })),
+        value,
+      };
+    } else if (setup.kind === "assign" || setup.kind === "expr") {
+      value = {
+        kind: "evaluate-then",
+        effect: setup.kind === "expr" ? setup.expr : {
+          kind: "assignment",
+          target: setup.target,
+          operator: setup.operator,
+          value: setup.value,
+        },
+        discard: "unit",
+        value,
+      };
+    } else {
+      return undefined;
+    }
   }
-  if (declarations.length === 0) {
-    return statement.value;
-  }
-  return {
-    kind: "block",
-    bindings: declarations.map((declaration) => ({
-      name: declaration.name,
-      value: declaration.init,
-      ...(declaration.type === undefined ? {} : { type: declaration.type }),
-    })),
-    value: statement.value,
-  };
+  return value;
 }
 
 function isBranchBindingDeclaration(

@@ -106,3 +106,70 @@ export function choose(flag: boolean): int32 {
   assert.doesNotMatch(source, /needless_late_init/u);
   validateGeneratedProject("local-branch-setup-initializer", result.artifacts);
 });
+
+test("effectful else-if initializers preserve branch order, errors and later writes", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    target: { id: "rust", options: { outputType: "bin", crateName: "effectful_initializers" } },
+    files: {
+      "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+
+class Trace { value: int32 = 0; }
+
+function record(trace: Trace, digit: int32): void {
+  trace.value = trace.value * 10 + digit;
+}
+
+function selected(trace: Trace, value: int32, fail: boolean): int32 {
+  record(trace, 8);
+  if (fail) throw new Error("selected branch failed");
+  return value;
+}
+
+function choose(mode: int32, trace: Trace, fail: boolean): int32 {
+  let offset: int32 = 1;
+  let result: int32;
+  if (mode === 0) {
+    record(trace, 1);
+    offset += 4;
+    const base: int32 = offset;
+    record(trace, 2);
+    result = selected(trace, base, fail);
+  } else if (mode === 1) {
+    record(trace, 3);
+    offset += 2;
+    result = selected(trace, offset, fail);
+  } else {
+    record(trace, 4);
+    result = selected(trace, offset, fail);
+  }
+  result += 10;
+  record(trace, 9);
+  return result + offset;
+}
+
+export function main(): void {
+  const first = new Trace();
+  const second = new Trace();
+  const third = new Trace();
+  if (choose(0, first, false) !== 20 || first.value !== 1289) throw new Error("first branch");
+  if (choose(1, second, false) !== 16 || second.value !== 389) throw new Error("second branch");
+  if (choose(2, third, false) !== 12 || third.value !== 489) throw new Error("last branch");
+  const failed = new Trace();
+  let caught = false;
+  try { choose(1, failed, true); } catch { caught = true; }
+  if (!caught || failed.value !== 38) throw new Error("error propagation");
+}
+`,
+    },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /let mut result: i32 = if /u);
+  assert.doesNotMatch(source, /let(?: mut)? result: i32;|needless_late_init/u);
+  assert.match(source, /\} else if mode == 1 \{/u);
+  const initializer = source.slice(source.indexOf("let mut result: i32 = if"), source.indexOf("result += 10;"));
+  assert.doesNotMatch(initializer, /\{\s*\{/u);
+  validateGeneratedProject("effectful-else-if-initializers", result.artifacts, { run: true });
+});
