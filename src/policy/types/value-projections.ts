@@ -17,6 +17,12 @@ export type RustOptionProjectionFact =
 
 export type RustFlowReadProjectionFact =
   | {
+      readonly kind: "runtime-union";
+      readonly sourceCarrier: TargetTypeRef;
+      readonly selectedCarrier: TargetTypeRef;
+      readonly method: string;
+    }
+  | {
       readonly kind: "option-value";
       readonly sourceCarrier: TargetTypeRef;
       readonly selectedCarrier: TargetTypeRef;

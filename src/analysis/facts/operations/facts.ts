@@ -53,7 +53,8 @@ export type RustTargetOperationFact =
       readonly kind: "typeof";
       readonly operationId: string;
       readonly resultCarrier: TargetTypeRef;
-      readonly result: "boolean" | "number" | "bigint" | "string" | "function" | "object" | "undefined";
+      readonly result: "boolean" | "number" | "bigint" | "string" | "function" | "object" | "undefined" |
+        { readonly method: string; readonly sourceCarrier: TargetTypeRef };
     }
   | {
       readonly kind: "void-expression";

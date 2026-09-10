@@ -1,3 +1,4 @@
+import { rustRuntimeUnionContract } from "../../../target-model/types/carriers/runtime-unions.js";
 import {
   rustBottomAfterEffect,
   rustBottomExpression,
@@ -339,6 +340,19 @@ export function planExpressionInner(
         return undefined;
       }
       const operand = planExpression(operandNode, context);
+      if (typeof fact.result !== "string") {
+        const carrier = expressionCarrier(operandNode, context);
+        if (carrier === undefined || !rustTargetTypeRefEquals(carrier, fact.result.sourceCarrier) ||
+          rustRuntimeUnionContract(carrier)?.typeofMethod !== fact.result.method) {
+          context.diagnostics.push(missingFactDiagnostic(
+            diagnosticInput(context, node), "rust.backend.runtime-union-typeof",
+            "The finalized typeof operation conflicts with its exact native union carrier.",
+          ));
+          return undefined;
+        }
+        return operand === undefined ? undefined
+          : { kind: "method-call", receiver: planRustNonConsumingValue(operandNode, operand, context), method: fact.result.method, args: [] };
+      }
       const discard = isRustUnitCarrier(expressionCarrier(operandNode, context)) ? "unit" : "value";
       return operand === undefined
         ? undefined

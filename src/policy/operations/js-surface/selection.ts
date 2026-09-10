@@ -1,4 +1,6 @@
 import {
+  isRustBigIntCarrier,
+  rustBigIntTargetType,
   getRustJsMapTargetTypes,
   getRustJsSetElementTargetType,
   getRustJsWeakMapTargetTypes,
@@ -73,6 +75,7 @@ import {
 import { jsOperationRows, rustInferCarrier } from "./rows.js";
 import { selectRustJsonValueConversion } from "../../conversions/selection.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustJsIntlGroupingTargetId } from "../../../target-model/types/carriers/source-types.js";
 import {
   materializeJsonValueConversions,
   materializeTarget,
@@ -200,6 +203,9 @@ function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readon
   }
   if (isRustNumericCarrier(carrier)) {
     return { lane: "number", bindings: { receiver: carrier } };
+  }
+  if (isRustBigIntCarrier(carrier)) {
+    return { lane: "bigint", bindings: { receiver: carrier } };
   }
   if (isRustBoolCarrier(carrier)) {
     return { lane: "boolean", bindings: { receiver: carrier } };
@@ -379,6 +385,10 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
     }
     case "bool":
       return rustSourcePrimitiveTargetType("bool");
+    case "intl-grouping":
+      return { kind: "target-named", id: rustJsIntlGroupingTargetId };
+    case "bigint":
+      return rustBigIntTargetType();
     case "unit":
       return rustUnitTargetType();
     case "string":

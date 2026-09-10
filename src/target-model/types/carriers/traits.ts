@@ -13,6 +13,8 @@ import {
   rustJsIntlCollatorTargetId,
   rustJsIntlDateTimeFormatTargetId,
   rustJsIntlNumberFormatTargetId,
+  rustJsIntlNumberFormatPartTargetId,
+  rustJsIntlGroupingTargetId,
   rustJsPromiseFulfilledResultTargetId,
   rustJsPromiseRejectedResultTargetId,
   rustJsPromiseSettledResultTargetId,
@@ -371,6 +373,8 @@ const rustJsStrictEqualityTargetIds: ReadonlySet<string> = new Set([
 ]);
 
 const rustUnconditionallyCloneTargetIds: ReadonlySet<string> = new Set([
+  rustJsIntlGroupingTargetId,
+  rustJsIntlNumberFormatPartTargetId,
   rustRawPointerTargetId,
   rustStringTargetId,
   rustJsStringTargetId,

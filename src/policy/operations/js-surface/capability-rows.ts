@@ -85,6 +85,7 @@ const typedArrayRows: readonly JsOperationRowData[] = [
 ];
 
 const intlRows: readonly JsOperationRowData[] = [
+  { owner: "IntlResolvedNumberFormatOptions", member: "useGrouping", operationKind: "property", lane: "intl-record", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "use_grouping" }, result: { ref: "intl-grouping" }, sourceResult: { ref: "intl-grouping" }, evaluation: "pure" } },
   { owner: "IntlDateTimeFormat", member: "format", operationKind: "call", lane: "intl-date-time", variant: "default", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "format_default" }, result: { ref: "string" } } },
   { owner: "IntlDateTimeFormat", member: "format", operationKind: "call", lane: "intl-date-time", variant: "date", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "format_date", argModes: ["ref"] }, result: { ref: "string" }, params: [{ ref: "date" }] } },
   { owner: "IntlDateTimeFormat", member: "format", operationKind: "call", lane: "intl-date-time", variant: "number", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "format_number" }, result: { ref: "string" }, params: [{ ref: "float64" }] } },
@@ -92,8 +93,9 @@ const intlRows: readonly JsOperationRowData[] = [
   { owner: "IntlDateTimeFormat", member: "formatToParts", operationKind: "call", lane: "intl-date-time", variant: "date", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "format_to_parts_date", argModes: ["ref"] }, result: { ref: "source-result" }, params: [{ ref: "date" }] } },
   { owner: "IntlDateTimeFormat", member: "formatToParts", operationKind: "call", lane: "intl-date-time", variant: "number", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "format_to_parts_number" }, result: { ref: "source-result" }, params: [{ ref: "float64" }] } },
   { owner: "IntlDateTimeFormat", member: "resolvedOptions", operationKind: "call", lane: "intl-date-time", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "resolved_options" }, result: { ref: "source-result" } } },
-  { owner: "IntlNumberFormat", member: "format", operationKind: "call", lane: "intl-number", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "format" }, result: { ref: "string" }, params: [{ ref: "float64" }] } },
-  { owner: "IntlNumberFormat", member: "formatToParts", operationKind: "call", lane: "intl-number", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "format_to_parts" }, result: { ref: "source-result" }, params: [{ ref: "float64" }] } },
+  { owner: "IntlNumberFormat", member: "format", operationKind: "call", lane: "intl-number", variant: "number", requirements: [{ carrier: { ref: "argument", index: 0 }, capability: "numeric" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "format" }, result: { ref: "string" }, params: [{ ref: "argument", index: 0 }] } },
+  { owner: "IntlNumberFormat", member: "formatToParts", operationKind: "call", lane: "intl-number", variant: "number", requirements: [{ carrier: { ref: "argument", index: 0 }, capability: "numeric" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "format_to_parts" }, result: { ref: "source-result" }, params: [{ ref: "argument", index: 0 }] } },
+  ...["format", "formatToParts"].map((member): JsOperationRowData => ({ owner: "IntlNumberFormat", member, operationKind: "call", lane: "intl-number", variant: "bigint", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: member === "format" ? "format" : "format_to_parts", argModes: ["ref"] }, result: { ref: member === "format" ? "string" : "source-result" }, params: [{ ref: "bigint" }] } })),
   { owner: "IntlNumberFormat", member: "resolvedOptions", operationKind: "call", lane: "intl-number", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "resolved_options" }, result: { ref: "source-result" } } },
   { owner: "IntlCollator", member: "compare", operationKind: "call", lane: "intl-collator", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "compare", argModes: ["ref", "ref"] }, result: { ref: "float64" }, params: [{ ref: "string" }, { ref: "string" }] } },
   { owner: "IntlCollator", member: "resolvedOptions", operationKind: "call", lane: "intl-collator", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "resolved_options" }, result: { ref: "source-result" } } },
@@ -110,9 +112,8 @@ const intlRows: readonly JsOperationRowData[] = [
     ["IntlResolvedNumberFormatOptions", "numberingSystem", "numbering_system", "string"],
     ["IntlResolvedNumberFormatOptions", "style", "style", "string"],
     ["IntlResolvedNumberFormatOptions", "minimumIntegerDigits", "minimum_integer_digits", "float64"],
-    ["IntlResolvedNumberFormatOptions", "minimumFractionDigits", "minimum_fraction_digits", "float64"],
-    ["IntlResolvedNumberFormatOptions", "maximumFractionDigits", "maximum_fraction_digits", "float64"],
-    ["IntlResolvedNumberFormatOptions", "useGrouping", "use_grouping", "bool"],
+    ["IntlResolvedNumberFormatOptions", "roundingIncrement", "rounding_increment", "float64"],
+    ...[["notation", "notation"], ["signDisplay", "sign_display"], ["roundingPriority", "rounding_priority"], ["roundingMode", "rounding_mode"], ["trailingZeroDisplay", "trailing_zero_display"]].map(([member, name]) => ["IntlResolvedNumberFormatOptions", member, name, "string"]),
     ["IntlResolvedCollatorOptions", "locale", "locale", "string"],
     ["IntlResolvedCollatorOptions", "usage", "usage", "string"],
     ["IntlResolvedCollatorOptions", "sensitivity", "sensitivity", "string"],
@@ -121,6 +122,23 @@ const intlRows: readonly JsOperationRowData[] = [
     ["IntlResolvedCollatorOptions", "numeric", "numeric", "bool"],
     ["IntlResolvedCollatorOptions", "caseFirst", "case_first", "string"],
   ].map(([owner, member, name, result]): JsOperationRowData => ({ owner: owner!, member: member!, operationKind: "property", lane: "intl-record", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: name! }, result: { ref: result as "string" | "float64" | "bool" }, evaluation: "pure" } })),
+  ...[
+    ["minimumFractionDigits", "minimum_fraction_digits"], ["maximumFractionDigits", "maximum_fraction_digits"],
+    ["minimumSignificantDigits", "minimum_significant_digits"], ["maximumSignificantDigits", "maximum_significant_digits"],
+  ].map(([member, name]): JsOperationRowData => ({ owner: "IntlResolvedNumberFormatOptions", member: member!, operationKind: "property", lane: "intl-record", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: name! }, result: { ref: "option-of-float64" }, sourceAbsence: "undefined", evaluation: "pure" } })),
+  ...[
+    ["currency", "currency"], ["currencyDisplay", "currency_display"], ["currencySign", "currency_sign"],
+    ["unit", "unit"], ["unitDisplay", "unit_display"], ["compactDisplay", "compact_display"],
+  ].map(([member, name]): JsOperationRowData => ({ owner: "IntlResolvedNumberFormatOptions", member: member!, operationKind: "property", lane: "intl-record", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: name! }, result: { ref: "option-of-string" }, sourceAbsence: "undefined", evaluation: "pure" } })),
+  ...[
+    { variant: "default", path: "integer_to_locale_string", params: [], modes: [] },
+    { variant: "undefined", path: "integer_to_locale_string_with_undefined", params: [{ ref: "undefined" }], modes: ["value"] },
+    { variant: "undefined-options", path: "integer_to_locale_string_with_undefined_options", params: [{ ref: "undefined" }, { ref: "jsvalue" }], modes: ["value", "ref"] },
+    { variant: "locale", path: "integer_to_locale_string_with_locale", params: [{ ref: "string" }], modes: ["ref"] },
+    { variant: "options", path: "integer_to_locale_string_with_options", params: [{ ref: "string" }, { ref: "jsvalue" }], modes: ["ref", "ref"] },
+    { variant: "locales", path: "integer_to_locale_string_with_locales", params: [{ ref: "string-array" }], modes: ["ref"] },
+    { variant: "locales-options", path: "integer_to_locale_string_with_locales_options", params: [{ ref: "string-array" }, { ref: "jsvalue" }], modes: ["ref", "ref"] },
+  ].flatMap((entry) => (["number", "bigint"] as const).map((lane): JsOperationRowData => ({ owner: "BigInt", member: "toLocaleString", operationKind: "call", lane, variant: `${lane}-${entry.variant}`, fallible: entry.variant !== "default" && entry.variant !== "undefined", requirements: lane === "number" ? [{ carrier: { ref: "receiver" }, capability: "integer" }] : [], shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: `js_abi::${entry.path}`, receiverMode: lane === "number" ? "value" : "ref", argModes: entry.modes as ("value" | "ref")[] }, result: { ref: "string" }, params: entry.params as import("./model.js").JsCarrierRef[] } }))),
 ];
 
 const consoleVariadicRows = [

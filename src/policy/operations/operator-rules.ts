@@ -6,6 +6,7 @@ import type {
   RustOperationSymbol,
   RustOperatorToken,
 } from "../../target-model/syntax/tokens.js";
+import { rustRuntimeUnionContract, rustRuntimeUnionProjection } from "../../target-model/types/carriers/runtime-unions.js";
 import {
   KindAmpersandToken,
   KindAmpersandAmpersandToken,
@@ -428,6 +429,9 @@ export function selectRustBinaryOperator(
       rustTargetTypeRefEquals(left, right);
     const numericPromotion = selectRustNumericBinaryPromotion(left, right);
     const comparable =
+      (rustRuntimeUnionContract(left) !== undefined && rustTargetTypeRefEquals(left, right)) ||
+      rustRuntimeUnionProjection(left, right) !== undefined ||
+      rustRuntimeUnionProjection(right, left) !== undefined ||
       numericPromotion !== undefined ||
       (isRustBigIntCarrier(left) && isRustBigIntCarrier(right)) ||
       (isRustBoolCarrier(left) && isRustBoolCarrier(right)) ||
