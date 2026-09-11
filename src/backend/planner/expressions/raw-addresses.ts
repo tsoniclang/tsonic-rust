@@ -20,11 +20,17 @@ export function tryPlanRustRawAddress(
       : argument.input === "raw-owner-ref"
         ? { kind: "reference", expr: planRustNonConsumingValue(argument.expression, value, context) }
       : argument.carrier.kind === "source-primitive" && rustPrimitiveTypeName(argument.carrier.name) === argument.input ||
-          value.kind === "int-literal" || value.kind === "unary" && value.operator === "-" && value.operand.kind === "int-literal"
+          isUnsuffixedIntegerLiteral(value)
         ? value : { kind: "numeric-cast", expression: value, target: argument.input });
   }
   if ("width" in plan) args.push({ kind: "int-literal", text: `${plan.width}u32` });
   const call: RustExpr = { kind: "call", path: `rt::RawPointer::${plan.method}`, args };
   return { handled: true, expression: plan.method === "address" && plan.width === 32
     ? { kind: "numeric-cast", expression: call, target: "u32" } : call };
+}
+
+function isUnsuffixedIntegerLiteral(expression: RustExpr): boolean {
+  const literal = expression.kind === "unary" && expression.operator === "-" ? expression.operand : expression;
+  return literal.kind === "int-literal" &&
+    /^-?(?:[0-9][0-9_]*|0[xX][0-9a-fA-F_]+|0[oO][0-7_]+|0[bB][01_]+)$/u.test(literal.text);
 }
