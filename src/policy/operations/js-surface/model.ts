@@ -60,6 +60,7 @@ export type JsLane =
   | "json"
   | "math"
   | "number"
+  | "bigint"
   | "boolean"
   | "global"
   | "console"
@@ -87,6 +88,8 @@ export type JsCarrierRef =
   | { readonly ref: "selected-method-input-array"; readonly index: number }
   | { readonly ref: "selected-method-output-array"; readonly index: number }
   | { readonly ref: "bool" }
+  | { readonly ref: "intl-grouping" }
+  | { readonly ref: "bigint" }
   | { readonly ref: "unit" }
   | { readonly ref: "string-array" }
   | { readonly ref: "float64-array" }

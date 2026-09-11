@@ -792,7 +792,7 @@ function planBooleanLiteralComparison(
       ? { value: right.value, other: left, otherNode: leftNode }
       : undefined;
   if (literal === undefined || literal.otherNode === undefined ||
-    !isRustBoolCarrier(expressionCarrier(literal.otherNode, context))) {
+    !isRustBoolCarrier(effectivePlannedExpressionCarrier(literal.otherNode, context))) {
     return undefined;
   }
   const negated = operator === "==" ? !literal.value : literal.value;

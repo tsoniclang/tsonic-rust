@@ -1,5 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustRuntimeUnionProjection } from "../../../target-model/types/carriers/runtime-unions.js";
 import {
   isRustCopyCarrier,
   rustCarrierSupportsClone,
@@ -11,6 +12,7 @@ import { diagnosticInput } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { planRustProjectDowncastValue } from "../objects/project-downcasts.js";
 import { planRustProgramErrorFlowRead } from "./error-operations.js";
+import { planRustNonConsumingValue } from "./typed-locations.js";
 import {
   allocateRustSyntheticName,
   createRustSyntheticNameState,
@@ -44,6 +46,16 @@ export function planRustFlowReadProjection(
       return undefined;
     }
     return override.expression;
+  }
+  if (fact.kind === "runtime-union") {
+    if (rustRuntimeUnionProjection(fact.sourceCarrier, fact.selectedCarrier) !== fact.method) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, node), "rust.backend.runtime-union-projection",
+        "The finalized native union projection conflicts with its exact carrier contract.",
+      ));
+      return undefined;
+    }
+    return { kind: "method-call", receiver: planRustNonConsumingValue(node, expression, context), method: fact.method, args: [] };
   }
   if (fact.kind === "option-value") {
     if (!rustCarrierSupportsClone(fact.selectedCarrier)) {

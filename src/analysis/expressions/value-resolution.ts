@@ -30,6 +30,7 @@ import {
   KindVoidExpression,
   Node_Expression,
 } from "@tsonic/target-api/source";
+import { rustRuntimeUnionContract } from "../../target-model/types/carriers/runtime-unions.js";
 import {
   rustFutureOutputCarrier,
   getRustGeneratorProtocol,
@@ -445,7 +446,7 @@ export function resolveExpressionCarrierUncached(
       const resultCarrier = rustStringTargetType();
       setRustOperationFact(walk, expression, {
         kind: "typeof",
-        operationId: `tsonic.rust.syntax.typeof.${result}`,
+        operationId: `tsonic.rust.syntax.typeof.${typeof result === "string" ? result : "runtime-union"}`,
         resultCarrier,
         result,
       });
@@ -583,6 +584,10 @@ function resolveTemplateExpressionCarrier(
 function rustTypeofResult(
   carrier: TargetTypeRef,
 ): Extract<RustTargetOperationFact, { readonly kind: "typeof" }>["result"] | undefined {
+  const runtimeUnion = rustRuntimeUnionContract(carrier);
+  if (runtimeUnion !== undefined) {
+    return { method: runtimeUnion.typeofMethod, sourceCarrier: carrier };
+  }
   if (isRustNullCarrier(carrier)) {
     return "object";
   }

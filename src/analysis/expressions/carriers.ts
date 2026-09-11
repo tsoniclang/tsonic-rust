@@ -33,6 +33,7 @@ import {
   rustNullishSourceTargetType,
   rustSourcePrimitiveTargetType,
 } from "../../target-model/types/index.js";
+import { rustRuntimeUnionContract, rustRuntimeUnionProjection } from "../../target-model/types/carriers/runtime-unions.js";
 import {
   selectRustFlowReadProjection,
   selectRustValueCarrierReconciliation,
@@ -362,6 +363,21 @@ function resolveSelectedFlowReadCarrier(
   selectedType: Type,
   sourceCarrier: TargetTypeRef,
 ): TargetTypeRef | undefined {
+  if (rustRuntimeUnionContract(sourceCarrier) !== undefined) {
+    const semantics = walk.context.semanticsFor(expression);
+    const members = semantics.types.isUnion(selectedType)
+      ? semantics.types.unionOrIntersectionTypes(selectedType)
+      : [selectedType];
+    const carriers = members.map(member => resolveRustTargetTypeRef(
+      member, rustResolutionContext(walk, expression), walk.operationOptions,
+    ));
+    if (carriers.length === 0 || carriers.some(carrier =>
+      carrier === undefined || rustRuntimeUnionProjection(sourceCarrier, carrier) === undefined)) {
+      return undefined;
+    }
+    const first = carriers[0]!;
+    return carriers.every(carrier => rustTargetTypeRefEquals(carrier, first)) ? first : sourceCarrier;
+  }
   if (rustOptionElementCarrier(sourceCarrier) !== undefined &&
     walk.context.semanticsFor(expression).types.isNullish(selectedType)) {
     return sourceCarrier;

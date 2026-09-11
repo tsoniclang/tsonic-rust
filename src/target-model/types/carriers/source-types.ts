@@ -60,6 +60,7 @@ export const rustJsIntlNumberFormatTargetId = "rust.js.IntlNumberFormat";
 export const rustJsIntlCollatorTargetId = "rust.js.IntlCollator";
 export const rustJsIntlDateTimeFormatPartTargetId = "rust.js.IntlDateTimeFormatPart";
 export const rustJsIntlNumberFormatPartTargetId = "rust.js.IntlNumberFormatPart";
+export const rustJsIntlGroupingTargetId = "rust.js.IntlGrouping";
 export const rustJsIntlResolvedDateTimeFormatOptionsTargetId = "rust.js.IntlResolvedDateTimeFormatOptions";
 export const rustJsIntlResolvedNumberFormatOptionsTargetId = "rust.js.IntlResolvedNumberFormatOptions";
 export const rustJsIntlResolvedCollatorOptionsTargetId = "rust.js.IntlResolvedCollatorOptions";
