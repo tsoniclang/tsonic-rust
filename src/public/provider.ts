@@ -53,6 +53,7 @@ export {
   rustJsArrayConcatItemTargetType,
   rustJsArrayTargetType,
   rustJsPromiseTargetType,
+  rustJsTypedArrayTargetType,
   rustNeverTargetType,
   rustOptionTargetType,
   rustSourcePrimitiveTargetType,
