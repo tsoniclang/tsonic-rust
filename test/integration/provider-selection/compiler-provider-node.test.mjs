@@ -11,13 +11,14 @@ test("compiler provider uses the selected Node process global and native byte or
     target: { id: "rust", options: { outputType: "bin", crateName: "compiler_provider_node" } },
     files: { "index.ts": `
 import importedProcess from "node:process";
-import { endianness } from "node:os";
+import { endianness, homedir } from "node:os";
 import { webcrypto } from "node:crypto";
 import { check } from "@acme/testing";
 export function exitWithStatus(): never { process.exit(23); }
 function localCrypto(crypto: number): number { return crypto + 1; }
 export function main(): void {
   check(localCrypto(6) === 7);
+  check(homedir().length > 0);
   check(process.pid === importedProcess.pid);
   check(process.platform === importedProcess.platform);
   check(process.cwd() === importedProcess.cwd());
