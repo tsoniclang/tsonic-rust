@@ -527,7 +527,7 @@ function applyProviderOperationChain(
 
 export function finishProviderOperationExpression(
   context: RustPlanContext,
-  fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }>,
+  fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" | "runtime-set" }>,
   expression: RustExpr,
   node: Node,
 ): RustExpr | undefined {
@@ -567,7 +567,7 @@ export function finishProviderOperationExpression(
     node,
     "operation-result",
   );
-  return converted === undefined || !isRustNeverCarrier(fact.resultCarrier)
+  return converted === undefined || !isRustNeverCarrier(fact.abi.result.carrier)
     ? converted
     : rustBottomExpression(converted);
 }

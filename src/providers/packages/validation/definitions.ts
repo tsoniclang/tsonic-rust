@@ -650,7 +650,7 @@ function validateTypeRelations(
     if (relation.objectLiteralConstruction !== undefined && (
       !isClosedMetadata(relation.objectLiteralConstruction) ||
       Object.keys(relation.objectLiteralConstruction).length !== 1 ||
-      relation.objectLiteralConstruction.kind !== "struct-default" ||
+      !["struct-default", "default"].includes(relation.objectLiteralConstruction.kind) ||
       relation.targetCarrier.kind !== "target-named"
     )) {
       fail(`export '${relation.exportId}' has an invalid Rust object-literal construction contract`);

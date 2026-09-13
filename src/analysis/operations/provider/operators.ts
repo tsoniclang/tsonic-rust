@@ -3,6 +3,7 @@ import {
   isRustBoolCarrier,
   isRustProgramErrorCarrier,
   isRustNumericCarrier,
+  isRustNullishSourceCarrier,
   rustOptionElementCarrier,
   isRustSignedNumericCarrier,
 } from "../../../target-model/types/index.js";
@@ -23,6 +24,7 @@ import { finalizeRustProviderOperationAbi } from "../../facts/finalized-operatio
 import { providerFormRequiresSourceReceiver } from "./calls/instantiation.js";
 import { instantiateProviderOperationTemplate } from "./calls/template-instantiation.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
+import { resolveRustExactNullishValueCarrier } from "../../../policy/types/resolution/target.js";
 import {
   recordRustFlowReadProjection,
   rustEffectiveValueCarrier,
@@ -503,7 +505,13 @@ function mapSelectedProviderAssignment(
     );
   }
   const selectedRight = finalizedSourceArgumentCarriers[finalizedSourceArgumentCarriers.length - 1];
-  const sourceResultCarrier = context.facts.getRuntimeCarrierFact(request.right)?.carrier ?? right;
+  let sourceResultCarrier = context.facts.getRuntimeCarrierFact(request.right)?.carrier ?? right;
+  if (isRustNullishSourceCarrier(sourceResultCarrier)) {
+    const sourceNode = asNode(request.right, context);
+    const sourceType = sourceNode === undefined ? undefined : context.currentSemantics.types.expressionType(sourceNode);
+    sourceResultCarrier = sourceType === undefined ? undefined
+      : resolveRustExactNullishValueCarrier(sourceType, context.currentSemantics);
+  }
   return acceptRustOperation(request.expression, {
     kind: "runtime-set",
     operationId: template.operationId,

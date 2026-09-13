@@ -152,7 +152,7 @@ export function selectRustProviderObjectLiteralConstruction(
     return { kind: "not-applicable" };
   }
   const typeRow = providerCarrierFromRelations(identity, options);
-  if (typeRow?.objectLiteralConstruction?.kind !== "struct-default") {
+  if (typeRow?.objectLiteralConstruction === undefined) {
     return { kind: "not-applicable" };
   }
   const carrier = instantiateTargetType(

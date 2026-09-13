@@ -676,6 +676,10 @@ function planProviderRecordLiteral(
     ));
     return undefined;
   }
+  if (fields.length === 0 && fact.completion === "default") {
+    return { kind: "associated-call", owner: type,
+      trait: { kind: "named", path: "core::default::Default" }, method: "default", args: [] };
+  }
   return {
     kind: "struct-literal",
     path: type.path,

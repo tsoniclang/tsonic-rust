@@ -15,6 +15,7 @@ import {
   KindQuestionQuestionToken,
   KindStringLiteral,
   Node_Expression,
+  Node_Type,
 } from "@tsonic/target-api/source";
 import {
   isRustAssignmentOperator,
@@ -627,7 +628,18 @@ function selectedOptionNullishRelationship(
   }
   const optionSemantics = walk.context.semanticsFor(optionNode);
   const nullishSemantics = walk.context.semanticsFor(nullishNode);
-  const optionType = optionSemantics.types.expressionType(optionNode);
+  let optionType = optionSemantics.types.expressionType(optionNode);
+  if (optionFact?.kind === "provider-operation") {
+    const access = walk.context.ast.kindName(optionNode) === "KindElementAccessExpression"
+      ? optionSemantics.operations.elementAccess(optionNode)
+      : walk.context.ast.kindName(optionNode) === "KindPropertyAccessExpression"
+        ? optionSemantics.operations.propertyAccess(optionNode)
+        : undefined;
+    const annotation = Node_Type(walk.context.ast, access?.selectedDeclaration);
+    if (annotation !== undefined) {
+      optionType = optionSemantics.types.authoredType(annotation);
+    }
+  }
   const nullishType = nullishSemantics.types.expressionType(nullishNode);
   if (optionType === undefined || nullishType === undefined ||
     !nullishSemantics.types.isNullish(nullishType)) {

@@ -17,6 +17,7 @@ import {
   Node_Name,
 } from "@tsonic/target-api/source";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
+import { finishProviderOperationExpression } from "../expressions/conversions.js";
 import { collectVariableDeclarations, planResourceManagedBody, resourceDisposalReceiverMode, resourceFactForPlanning } from "./resources.js";
 import { createRustLoopTarget, withRustControlTarget } from "./control-flow.js";
 import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustActiveErrorType } from "../program/plan-context.js";
@@ -65,7 +66,7 @@ export function planRuntimeSetStatement(
     (expectedOperationKind === "index-set" && indexNode === undefined) ||
     sourceArgumentNodes.length !== fact.abi.sourceArguments.length ||
     fact.abi.sourceArguments.some((argument) => argument.disposition !== "runtime") ||
-    fact.abi.effects.invocation !== "infallible" || fact.abi.effects.awaiting !== "not-applicable" ||
+    fact.abi.effects.awaiting !== "not-applicable" ||
     fact.abi.result.kind !== "sync" || !isRustUnitCarrier(fact.abi.result.carrier)) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, expression),
@@ -204,7 +205,8 @@ export function planRuntimeSetStatement(
         call = { kind: "method-call", receiver: call, method: step.name, args: [] };
       }
     }
-    return [{ kind: "expr", expr: call }];
+    const completed = finishProviderOperationExpression(context, fact, call, expression);
+    return completed === undefined ? undefined : [{ kind: "expr", expr: completed }];
   }
   if (fact.abi.target.form === "receiver-method" || fact.abi.target.form === "method" ||
     fact.abi.target.form === "arg-method" ||
@@ -241,10 +243,8 @@ export function planRuntimeSetStatement(
         call = { kind: "method-call", receiver: call, method: step.name, args: [] };
       }
     }
-    return [{
-      kind: "expr",
-      expr: call,
-    }];
+    const completed = finishProviderOperationExpression(context, fact, call, expression);
+    return completed === undefined ? undefined : [{ kind: "expr", expr: completed }];
   }
   context.diagnostics.push(unsupportedConstructDiagnostic(
     diagnosticInput(context, expression),

@@ -497,7 +497,7 @@ test("provider operation carriers are closed and renderable", () => {
   }
 });
 
-test("provider type metadata admits only the closed native struct construction contract", () => {
+test("provider type metadata admits only explicit field or opaque default construction", () => {
   const moduleSpecifier = "@acme/validation";
   const exported = interfaceExport(moduleSpecifier);
   const base = {
@@ -516,9 +516,15 @@ test("provider type metadata admits only the closed native struct construction c
   };
   assert.doesNotThrow(() => createRustProviderPackage(definition(base)));
 
+  assert.doesNotThrow(() => createRustProviderPackage(definition({
+    ...base, types: [{ ...base.types[0], objectLiteralConstruction: { kind: "default" } }],
+  })));
+
   for (const objectLiteralConstruction of [
     { kind: "guess" },
     { kind: "struct-default", fallback: true },
+    { kind: "default", fallback: true },
+    { kind: "default", path: "guessed_factory" },
   ]) {
     assert.throws(
       () => createRustProviderPackage(definition({

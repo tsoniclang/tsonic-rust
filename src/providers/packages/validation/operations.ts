@@ -100,8 +100,10 @@ export function validateOperationRows(
     if (row.isFallible !== true && row.errorBoundary !== undefined) {
       fail(`infallible row '${label}' cannot declare an errorBoundary.`);
     }
-    if (row.isFallible === true && row.operationKind !== "method" && row.operationKind !== "constructor" && row.operationKind !== "property") {
-      fail(`isFallible is supported only on method, constructor, and property operations (row '${label}').`);
+    if (row.isFallible === true &&
+      (row.operationKind === "property-set" || row.operationKind === "index-set") &&
+      row.target.form !== "call" && row.target.form !== "receiver-method") {
+      fail(`fallible setters require a native call or receiver-method (row '${label}').`);
     }
     if (row.isAsync === true && row.operationKind !== "method") {
       fail(`isAsync is supported only on method operations (row '${label}').`);
