@@ -18,7 +18,7 @@ import { analyzeRustProviderErrorCarriers } from "./provider-errors.js";
 import { analyzeRustCallableGenericRequirements } from "../callables/generic-requirements.js";
 import { analyzeRustValueLifetimes } from "./value-lifetimes.js";
 import {
-  analyzeRustBinaryEpilogues,
+  analyzeRustBinaryHooks,
   analyzeRustRuntimeReferences,
 } from "../runtime/index.js";
 import {
@@ -33,14 +33,15 @@ import {
 import {
   analyzeRustCountedLoopRepresentations,
 } from "../control-flow/counted-loop-representations.js";
-import type { RustProviderBinaryEpilogueRow } from "../../providers/packages/model.js";
+import type { RustProviderBinaryHookRow } from "../../providers/packages/model.js";
 import { analyzeRustSourceModuleConstructions } from "../source-modules/index.js";
 import { analyzeRustFoundation } from "../foundation/plan.js";
 import { maximumRustFoundation } from "../../target-model/foundation/model.js";
 import { analyzeRustProjectFlowReadSelections } from "../control-flow/project-flow-read-selections.js";
 
-const rustJsTimerEpilogue: RustProviderBinaryEpilogueRow = Object.freeze({
+const rustJsTimerEpilogue: RustProviderBinaryHookRow = Object.freeze({
   id: "tsonic.rust.js.timers",
+  phase: "after-entry",
   path: "tsonic_rust_js::abi::run_timers",
   requiredCrate: "tsonic_rust_js",
   isFallible: true,
@@ -66,10 +67,10 @@ export function analyzeRustTargetProgram(
   if (runtimeReferences.kind === "rejected") {
     return rejectedTargetStage(runtimeReferences.diagnostics);
   }
-  const binaryEpilogues = analyzeRustBinaryEpilogues(
+  const binaryHooks = analyzeRustBinaryHooks(
     jsEnabled
-      ? [...providerSemantics.binaryEpilogues, rustJsTimerEpilogue]
-      : providerSemantics.binaryEpilogues,
+      ? [...providerSemantics.binaryHooks, rustJsTimerEpilogue]
+      : providerSemantics.binaryHooks,
     runtimeReferences.plan.activeCrates,
   );
   const context = createRustAnalysisContext(
@@ -164,12 +165,12 @@ export function analyzeRustTargetProgram(
     structuralShapes: context.structuralShapes.seal(),
     runtimeReferences: runtimeReferences.plan,
     foundation: foundation.plan,
-    binaryEpilogues,
+    binaryHooks,
     providerErrorCarriers: analyzeRustProviderErrorCarriers(
       context.ast,
       context.sourceFiles,
       facts,
-      binaryEpilogues,
+      binaryHooks,
     ),
     safetyApplications: context.safetyApplications,
     moduleInitialization,

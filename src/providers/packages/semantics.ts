@@ -1,6 +1,6 @@
 import {
   canonicalizeProviderOperationRow,
-  materializeProviderBinaryEpilogueRow,
+  materializeProviderBinaryHookRow,
   materializeProviderCarrier,
   materializeProviderGenericParameter,
   materializeProviderOperationRow,
@@ -11,7 +11,7 @@ import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.
 import { rustBuiltInSourceTypeSemantics } from "../builtins/source-types.js";
 import type { RustNamedTypeTraitContract } from "../../target-model/types/model.js";
 import { rustProviderPolicyContributionKind } from "./model.js";
-import type { RustProviderBinaryEpilogueRow, RustProviderExportRow, RustProviderOperationRow, RustProviderPackageDefinition, RustProviderPolicyContribution, RustProviderSemantics, RustProviderTypeRow } from "./model.js";
+import type { RustProviderBinaryHookRow, RustProviderExportRow, RustProviderOperationRow, RustProviderPackageDefinition, RustProviderPolicyContribution, RustProviderSemantics, RustProviderTypeRow } from "./model.js";
 import type { SelectedTargetCapabilityContributions } from "@tsonic/target-api/provider";
 
 export function rustProviderPolicyContributionsOf(
@@ -76,7 +76,7 @@ export function providerTypeRowIdentity(row: RustProviderTypeRow): string {
   })}`;
 }
 
-export function providerBinaryEpilogueIdentity(row: RustProviderBinaryEpilogueRow): string {
+export function providerBinaryHookIdentity(row: RustProviderBinaryHookRow): string {
   return `${row.providerPackageId}\0${row.id}`;
 }
 
@@ -107,7 +107,7 @@ export function collectRustProviderSemanticsFromDefinitions(
   const carrierPaths = new Map<string, string>();
   const carrierTraits = new Map<string, RustNamedTypeTraitContract>();
   const types: RustProviderTypeRow[] = [];
-  const binaryEpilogues: RustProviderBinaryEpilogueRow[] = [];
+  const binaryHooks: RustProviderBinaryHookRow[] = [];
   for (const definition of definitions) {
     validateProviderPackageDefinition(definition);
     const providerId = rustProviderBindingProviderId(definition.id);
@@ -172,8 +172,8 @@ export function collectRustProviderSemanticsFromDefinitions(
       }));
     }
     const aliases = new Map((definition.aliasImports ?? []).map((entry) => [entry.alias, entry.path]));
-    binaryEpilogues.push(...(definition.binaryEpilogues ?? []).map((epilogue) =>
-      snapshotClosedMetadata(materializeProviderBinaryEpilogueRow(
+    binaryHooks.push(...(definition.binaryHooks ?? []).map((epilogue) =>
+      snapshotClosedMetadata(materializeProviderBinaryHookRow(
         epilogue,
         aliases,
         carrierPathRows,
@@ -219,7 +219,7 @@ export function collectRustProviderSemanticsFromDefinitions(
           }),
       targetCarrier: materializeProviderCarrier(row.targetCarrier, canonicalCarrierPaths, canonicalCarrierTraits),
     }))),
-    binaryEpilogues: Object.freeze(binaryEpilogues),
+    binaryHooks: Object.freeze(binaryHooks),
   });
 }
 
@@ -280,16 +280,16 @@ export function mergeRustProviderSemantics(
     providerTypeRowIdentity,
     "type",
   );
-  const binaryEpilogues = mergeExactRows(
-    inputs.flatMap((input) => input.binaryEpilogues),
-    providerBinaryEpilogueIdentity,
-    "binary epilogue",
+  const binaryHooks = mergeExactRows(
+    inputs.flatMap((input) => input.binaryHooks),
+    providerBinaryHookIdentity,
+    "binary hook",
   );
   return Object.freeze({
     exports,
     operations,
     types,
-    binaryEpilogues,
+    binaryHooks,
     carrierPaths: canonicalCarrierPaths,
     carrierTraits: canonicalCarrierTraits,
   });

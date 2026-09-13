@@ -7,13 +7,13 @@ import {
   rustResourceManagementFactKey,
   rustTargetOperationFactKey,
 } from "../facts/keys.js";
-import type { RustBinaryEpiloguePlan } from "../runtime/index.js";
+import type { RustBinaryHookPlan } from "../runtime/index.js";
 
 export function analyzeRustProviderErrorCarriers(
   ast: AstReader,
   sourceFiles: readonly SourceFile[],
   facts: RustPlanQueries,
-  binaryEpilogues: readonly RustBinaryEpiloguePlan[],
+  binaryHooks: readonly RustBinaryHookPlan[],
 ): readonly TargetTypeRef[] {
   const carriers: TargetTypeRef[] = [];
   const add = (carrier: TargetTypeRef | undefined): void => {
@@ -50,7 +50,7 @@ export function analyzeRustProviderErrorCarriers(
   for (const sourceFile of sourceFiles) {
     visit(sourceFile);
   }
-  for (const epilogue of binaryEpilogues) {
+  for (const epilogue of binaryHooks) {
     if (epilogue.errorBoundary === "provider-native") {
       add(epilogue.errorCarrier);
     }

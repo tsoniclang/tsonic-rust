@@ -2,12 +2,12 @@ export {
   analyzeRustRuntimeReferences,
 } from "./references.js";
 export {
-  analyzeRustBinaryEpilogues,
-} from "./epilogues.js";
+  analyzeRustBinaryHooks,
+} from "./hooks.js";
 export type {
   RustRuntimeReferenceAnalysisResult,
   RustRuntimeReferencePlan,
 } from "./references.js";
 export type {
-  RustBinaryEpiloguePlan,
-} from "./epilogues.js";
+  RustBinaryHookPlan,
+} from "./hooks.js";

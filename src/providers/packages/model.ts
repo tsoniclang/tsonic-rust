@@ -128,7 +128,7 @@ export interface RustProviderSemantics {
   readonly carrierPaths: Readonly<Record<string, string>>;
   readonly carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>>;
   readonly types: readonly RustProviderTypeRow[];
-  readonly binaryEpilogues: readonly RustProviderBinaryEpilogueRow[];
+  readonly binaryHooks: readonly RustProviderBinaryHookRow[];
 }
 
 export interface RustProviderCrateDefinition {
@@ -150,14 +150,15 @@ export interface RustProviderModuleAliasDefinition {
   readonly canonicalModuleSpecifier: string;
 }
 
-interface RustProviderBinaryEpilogueDefinitionBase {
+interface RustProviderBinaryHookDefinitionBase {
   readonly id: string;
+  readonly phase: "before-initialization" | "after-entry";
   readonly path: string;
   readonly requiredCrate: string;
 }
 
-export type RustProviderBinaryEpilogueDefinition =
-  & RustProviderBinaryEpilogueDefinitionBase
+export type RustProviderBinaryHookDefinition =
+  & RustProviderBinaryHookDefinitionBase
   & (
     | {
         readonly isFallible: true;
@@ -176,7 +177,7 @@ export type RustProviderBinaryEpilogueDefinition =
       }
   );
 
-export type RustProviderBinaryEpilogueRow = RustProviderBinaryEpilogueDefinition & {
+export type RustProviderBinaryHookRow = RustProviderBinaryHookDefinition & {
   readonly providerPackageId: string;
   readonly providerVersion: string;
 };
@@ -202,7 +203,7 @@ export interface RustProviderPackageDefinition {
   // Exact native trait guarantees for rendered named carriers. Missing rows
   // materialize as move-only; consumers never infer traits from Rust names.
   readonly carrierTraits?: Readonly<Record<string, RustNamedTypeTraitContract>>;
-  readonly binaryEpilogues?: readonly RustProviderBinaryEpilogueDefinition[];
+  readonly binaryHooks?: readonly RustProviderBinaryHookDefinition[];
 }
 
 export const rustProviderPolicyContributionKind = "rust-provider-policy";

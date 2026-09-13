@@ -49,7 +49,7 @@ export function validateOperationRows(
     }
     const signature = row.signatureId === undefined ? undefined : signaturesById.get(row.signatureId);
     if (row.signatureId !== undefined && (signature === undefined || signature.exportId !== row.exportId ||
-      (row.memberId !== undefined && signature.memberId !== row.memberId))) {
+      signature.memberId !== row.memberId)) {
       fail(`row '${label}' targets signatureId '${row.signatureId}' outside its selected declaration`);
     }
     if (row.memberId === undefined && row.operationKind === "property" &&
@@ -57,7 +57,8 @@ export function validateOperationRows(
       fail(`row '${label}' declares a provider value operation for non-value export kind '${String(exported?.declaration.kind)}'`);
     }
     if (row.memberId === undefined && exported?.declaration.kind === "value" &&
-      row.operationKind !== "property" && row.operationKind !== "property-set") {
+      row.operationKind !== "property" && row.operationKind !== "property-set" &&
+      !(row.operationKind === "method" && signature !== undefined)) {
       fail(`row '${label}' must represent provider value export '${row.exportId}' as a property read or property-set operation`);
     }
     if (row.operationKind === "property-set" || row.operationKind === "index-set") {

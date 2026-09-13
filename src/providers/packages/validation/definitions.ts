@@ -43,7 +43,7 @@ export function validateProviderPackageDefinition(definition: RustProviderPackag
   requireNonEmpty(definition.version, "version", fail);
   requireExactKeys(asRecord(definition), [
     "id", "displayName", "version", "requiredSurfaces", "sourceDependencies", "moduleAliases", "modules", "types", "operations", "crates",
-    "aliasImports", "carrierPaths", "carrierTraits", "binaryEpilogues", "sourceGlobals",
+    "aliasImports", "carrierPaths", "carrierTraits", "binaryHooks", "sourceGlobals",
   ], "package", fail);
 
   const modulesBySpecifier = new Map<string, RustProviderPackageDefinition["modules"][number]>();
@@ -103,6 +103,7 @@ export function validateProviderPackageDefinition(definition: RustProviderPackag
       exportsById.set(exported.id, { moduleSpecifier: module.moduleSpecifier, declaration: exported });
       exportNames.add(exported.name);
       recordSignatures(exported.signatures, exported.id, undefined, signaturesById, fail);
+      recordCallableTypeSignatures(exported.type, exported.id, undefined, signaturesById, fail);
       for (const member of exported.members ?? []) {
         requireNonEmpty(member.id, `member id on '${exported.id}'`, fail);
         if (membersById.has(member.id)) {
@@ -110,6 +111,7 @@ export function validateProviderPackageDefinition(definition: RustProviderPackag
         }
         membersById.set(member.id, { exportId: exported.id, declaration: member });
         recordSignatures(member.signatures, exported.id, member.id, signaturesById, fail);
+        recordCallableTypeSignatures(member.type, exported.id, member.id, signaturesById, fail);
       }
     }
   }
@@ -142,7 +144,7 @@ export function validateProviderPackageDefinition(definition: RustProviderPackag
   validateAliases(definition, fail);
   validateCarrierPaths(definition, fail);
   validateCarrierTraits(definition, fail);
-  validateBinaryEpilogues(definition, fail);
+  validateBinaryHooks(definition, fail);
   validateTypeRelations(definition, exportsById, fail);
   validateOperationRows(definition, exportsById, membersById, signaturesById, fail);
 }
@@ -168,6 +170,23 @@ function validateModuleAliases(
       fail(`duplicate module alias '${alias.moduleSpecifier}'`);
     }
     aliases.add(alias.moduleSpecifier);
+  }
+}
+
+function recordCallableTypeSignatures(
+  type: ProviderTypeExpression | undefined,
+  exportId: string,
+  memberId: string | undefined,
+  records: Map<string, SignatureRecord>,
+  fail: Fail,
+): void {
+  if (type?.kind === "function") {
+    const { kind: _kind, ...signature } = type;
+    recordSignatures([signature], exportId, memberId, records, fail);
+  } else if (type?.kind === "intersection" || type?.kind === "union") {
+    for (const constituent of type.types) {
+      recordCallableTypeSignatures(constituent, exportId, memberId, records, fail);
+    }
   }
 }
 
@@ -545,50 +564,53 @@ function validateCarrierTraits(definition: RustProviderPackageDefinition, fail: 
   }
 }
 
-function validateBinaryEpilogues(definition: RustProviderPackageDefinition, fail: Fail): void {
+function validateBinaryHooks(definition: RustProviderPackageDefinition, fail: Fail): void {
   const ids = new Set<string>();
   const crates = new Set(definition.crates.map((crate) => crate.crateName));
-  for (const epilogue of definition.binaryEpilogues ?? []) {
+  for (const epilogue of definition.binaryHooks ?? []) {
     const record = asRecord(epilogue);
     const epilogueId = epilogue.id;
     requireExactKeys(
       record,
-      ["id", "path", "requiredCrate", "isFallible", "errorBoundary", "errorCarrier"],
-      "binary epilogue",
+      ["id", "phase", "path", "requiredCrate", "isFallible", "errorBoundary", "errorCarrier"],
+      "binary hook",
       fail,
     );
-    requireNonEmpty(epilogue.id, "binary epilogue id", fail);
-    requireRustPath(epilogue.path, `path for binary epilogue '${epilogue.id}'`, fail);
-    requireRustIdentifier(epilogue.requiredCrate, `required crate for binary epilogue '${epilogue.id}'`, fail);
+    requireNonEmpty(epilogue.id, "binary hook id", fail);
+    if (epilogue.phase !== "before-initialization" && epilogue.phase !== "after-entry") {
+      fail(`binary hook '${epilogue.id}' requires an exact lifecycle phase`);
+    }
+    requireRustPath(epilogue.path, `path for binary hook '${epilogue.id}'`, fail);
+    requireRustIdentifier(epilogue.requiredCrate, `required crate for binary hook '${epilogue.id}'`, fail);
     if (!crates.has(epilogue.requiredCrate)) {
-      fail(`binary epilogue '${epilogue.id}' requires undeclared crate '${epilogue.requiredCrate}'`);
+      fail(`binary hook '${epilogue.id}' requires undeclared crate '${epilogue.requiredCrate}'`);
     }
     if (epilogue.isFallible !== undefined && epilogue.isFallible !== true) {
-      fail(`binary epilogue '${epilogue.id}' has invalid isFallible value`);
+      fail(`binary hook '${epilogue.id}' has invalid isFallible value`);
     }
     if (epilogue.isFallible === true && !isRustFallibleErrorBoundary(epilogue.errorBoundary)) {
-      fail(`fallible binary epilogue '${epilogue.id}' requires an exact errorBoundary`);
+      fail(`fallible binary hook '${epilogue.id}' requires an exact errorBoundary`);
     }
     if (epilogue.isFallible !== true && record.errorBoundary !== undefined) {
-      fail(`infallible binary epilogue '${epilogue.id}' cannot declare an errorBoundary`);
+      fail(`infallible binary hook '${epilogue.id}' cannot declare an errorBoundary`);
     }
     if (record.errorBoundary === "provider-native") {
       if (!isRustTargetTypeRef(record.errorCarrier)) {
-        fail(`provider-native binary epilogue '${epilogueId}' requires an exact errorCarrier`);
+        fail(`provider-native binary hook '${epilogueId}' requires an exact errorCarrier`);
       } else {
         validateCarrier(
           record.errorCarrier,
           definition,
-          `binary epilogue '${epilogueId}'.errorCarrier`,
+          `binary hook '${epilogueId}'.errorCarrier`,
           fail,
           { position: "return" },
         );
       }
     } else if (record.errorCarrier !== undefined) {
-      fail(`binary epilogue '${epilogueId}' cannot declare an errorCarrier outside a provider-native boundary`);
+      fail(`binary hook '${epilogueId}' cannot declare an errorCarrier outside a provider-native boundary`);
     }
     if (ids.has(epilogue.id)) {
-      fail(`duplicate binary epilogue id '${epilogue.id}'`);
+      fail(`duplicate binary hook id '${epilogue.id}'`);
     }
     ids.add(epilogue.id);
   }

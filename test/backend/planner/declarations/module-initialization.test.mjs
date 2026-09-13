@@ -243,13 +243,13 @@ export function main(): void {}
   validateGeneratedProject("fallible-module-proof", result.artifacts, { run: true });
 });
 
-test("an active provider crate runs its declared binary epilogue after authored main", () => {
+test("an active provider crate runs its declared binary hook after authored main", () => {
   const { result } = compileRust({
     packages: [acmeFilesPackage({
-      binaryEpilogues: [{
+      binaryHooks: [{
         id: "drain-runtime",
         path: "acme_files::drain_runtime",
-        requiredCrate: "acme_files",
+        phase: "after-entry", requiredCrate: "acme_files",
       }],
     })],
     target: {
@@ -274,13 +274,13 @@ export function main(): void {
   validateGeneratedProject("provider-epilogue-proof", result.artifacts);
 });
 
-test("a type-only provider selection does not activate its binary epilogue", () => {
+test("a type-only provider selection does not activate its binary hook", () => {
   const { result } = compileRust({
     packages: [acmePlatformPackage({
-      binaryEpilogues: [{
+      binaryHooks: [{
         id: "drain-runtime",
         path: "acme_platform::drain_runtime",
-        requiredCrate: "acme_platform",
+        phase: "after-entry", requiredCrate: "acme_platform",
       }],
     })],
     target: {
@@ -305,10 +305,10 @@ export function main(): void {}
 test("a fallible provider epilogue makes binary completion explicitly fallible", () => {
   const { result } = compileRust({
     packages: [acmeFilesPackage({
-      binaryEpilogues: [{
+      binaryHooks: [{
         id: "drain-runtime",
         path: "acme_files::drain_runtime_fallible",
-        requiredCrate: "acme_files",
+        phase: "after-entry", requiredCrate: "acme_files",
         isFallible: true,
         errorBoundary: "provider-native",
         errorCarrier: { kind: "target-named", id: "rust.runtime.JsError" },

@@ -20,7 +20,7 @@ import type { RustModuleInitializationPlan } from "./module-initialization-facts
 import type { RustTargetConfiguration } from "../../target-model/configuration/model.js";
 import type { RustValueLifetimePlan } from "./value-lifetimes.js";
 import type { RustRuntimeReferencePlan } from "../runtime/index.js";
-import type { RustBinaryEpiloguePlan } from "../runtime/index.js";
+import type { RustBinaryHookPlan } from "../runtime/index.js";
 import type {
   RustEnumMemberConstantIndex,
 } from "../declarations/enum-member-constants.js";
@@ -75,7 +75,7 @@ export interface RustTargetProgram {
   readonly structuralShapes: RustStructuralShapePlan;
   readonly runtimeReferences: RustRuntimeReferencePlan;
   readonly foundation: RustFoundationPlan;
-  readonly binaryEpilogues: readonly RustBinaryEpiloguePlan[];
+  readonly binaryHooks: readonly RustBinaryHookPlan[];
   readonly providerErrorCarriers: readonly import("../../target-model/types/model.js").TargetTypeRef[];
   readonly safetyApplications: RustSafetyApplicationFactIndex;
   readonly moduleInitialization: RustModuleInitializationPlan;

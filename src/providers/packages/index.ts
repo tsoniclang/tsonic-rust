@@ -1,8 +1,8 @@
 export { materializeProviderCarrier } from "./materialization.js";
 export { rustProviderPolicyContributionKind } from "./model.js";
 export type {
-  RustProviderBinaryEpilogueDefinition,
-  RustProviderBinaryEpilogueRow,
+  RustProviderBinaryHookDefinition,
+  RustProviderBinaryHookRow,
   RustProviderCrateDefinition,
   RustProviderExportRow,
   RustProviderImmediateCallbackDefinition,

@@ -11,8 +11,8 @@ import type {
   RustTargetTraitRef,
 } from "../../target-model/types/model.js";
 import type {
-  RustProviderBinaryEpilogueDefinition,
-  RustProviderBinaryEpilogueRow,
+  RustProviderBinaryHookDefinition,
+  RustProviderBinaryHookRow,
   RustProviderOperationDefinition,
   RustProviderOperationRow,
 } from "./model.js";
@@ -121,15 +121,16 @@ export function materializeProviderOperationRow(
   };
 }
 
-export function materializeProviderBinaryEpilogueRow(
-  epilogue: RustProviderBinaryEpilogueDefinition,
+export function materializeProviderBinaryHookRow(
+  epilogue: RustProviderBinaryHookDefinition,
   aliases: ReadonlyMap<string, string>,
   carrierPaths: Readonly<Record<string, string>>,
   carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>>,
-  owner: Pick<RustProviderBinaryEpilogueRow, "providerPackageId" | "providerVersion">,
-): RustProviderBinaryEpilogueRow {
+  owner: Pick<RustProviderBinaryHookRow, "providerPackageId" | "providerVersion">,
+): RustProviderBinaryHookRow {
   const base = {
     id: epilogue.id,
+    phase: epilogue.phase,
     path: expandProviderPath(epilogue.path, aliases),
     requiredCrate: epilogue.requiredCrate,
     ...owner,

@@ -177,12 +177,12 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     "initialize",
     [structuralShapesModuleName, programModuleName, initializerFacadeModuleName],
   );
-  const activeEpilogues = input.program.binaryEpilogues;
-  const epilogueErrorTypes = new Map<
-    (typeof activeEpilogues)[number],
+  const activeHooks = input.program.binaryHooks;
+  const hookErrorTypes = new Map<
+    (typeof activeHooks)[number],
     import("../../target-ast/nodes.js").RustType
   >();
-  for (const epilogue of activeEpilogues) {
+  for (const epilogue of activeHooks) {
     if (epilogue.errorBoundary === "provider-native") {
       const errorType = rustTypeFromCarrier(epilogue.errorCarrier);
       if (errorType === undefined) {
@@ -194,7 +194,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
           evidence: ["target.capability=rust.error.provider-conversion"],
         });
       } else {
-        epilogueErrorTypes.set(epilogue, errorType);
+        hookErrorTypes.set(epilogue, errorType);
       }
     }
   }
@@ -489,7 +489,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
                   args: [],
                 },
         }];
-    const epilogueStatements = activeEpilogues.map((epilogue) => {
+    const planHook = (epilogue: (typeof activeHooks)[number]) => {
       const call = { kind: "call" as const, path: epilogue.path, args: [] };
       if (epilogue.isFallible !== true) {
         return { kind: "expr" as const, expr: call };
@@ -501,11 +501,13 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
           epilogue.errorBoundary,
           mainErrorType,
           epilogue.errorBoundary === "provider-native"
-            ? epilogueErrorTypes.get(epilogue)
+            ? hookErrorTypes.get(epilogue)
             : undefined,
         ),
       };
-    });
+    };
+    const startupStatements = activeHooks.filter(hook => hook.phase === "before-initialization").map(planHook);
+    const epilogueStatements = activeHooks.filter(hook => hook.phase === "after-entry").map(planHook);
     const workerDispatchStatements = planRustWorkerDispatch(
       input,
       workerEntries.entries,
@@ -519,7 +521,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     const mainFallible = entryFunction.fallible ||
       crateInitializer?.errorType !== undefined ||
       workerEntries.entries.length > 0 ||
-      activeEpilogues.some((epilogue) => epilogue.isFallible === true);
+      activeHooks.some((epilogue) => epilogue.isFallible === true);
     const entryStatement = {
       kind: "expr" as const,
       expr: entryFunction.fallible
@@ -554,9 +556,9 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
       ...(mainFallible
         ? {
             errorType: mainErrorType,
-            body: { statements: [...workerDispatchStatements, ...initializationStatements, entryStatement, ...epilogueStatements, ...completionStatements] },
+            body: { statements: [...startupStatements, ...workerDispatchStatements, ...initializationStatements, entryStatement, ...epilogueStatements, ...completionStatements] },
           }
-        : { body: { statements: [...workerDispatchStatements, ...initializationStatements, entryStatement, ...epilogueStatements] } }),
+        : { body: { statements: [...startupStatements, ...workerDispatchStatements, ...initializationStatements, entryStatement, ...epilogueStatements] } }),
     };
     artifacts.push(rustSourceArtifact(
       "src/main.rs",

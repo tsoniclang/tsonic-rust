@@ -1,7 +1,7 @@
 export { createRustProviderPackage } from "../providers/packages/package.js";
 export type {
-  RustProviderBinaryEpilogueDefinition,
-  RustProviderBinaryEpilogueRow,
+  RustProviderBinaryHookDefinition,
+  RustProviderBinaryHookRow,
   RustProviderCrateDefinition,
   RustProviderExportRow,
   RustProviderImmediateCallbackDefinition,
