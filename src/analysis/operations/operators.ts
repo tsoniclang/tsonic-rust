@@ -35,6 +35,7 @@ import {
   isRustStringCarrier,
   rustOptionElementCarrier,
   rustSourcePrimitiveTargetType,
+  rustUndefinedTargetType,
 } from "../../target-model/types/index.js";
 import {
   rustModuleBindingFactKey,
@@ -629,6 +630,7 @@ function selectedOptionNullishRelationship(
   const optionSemantics = walk.context.semanticsFor(optionNode);
   const nullishSemantics = walk.context.semanticsFor(nullishNode);
   let optionType = optionSemantics.types.expressionType(optionNode);
+  let optionalDeclaration = false;
   if (optionFact?.kind === "provider-operation") {
     const access = walk.context.ast.kindName(optionNode) === "KindElementAccessExpression"
       ? optionSemantics.operations.elementAccess(optionNode)
@@ -636,6 +638,8 @@ function selectedOptionNullishRelationship(
         ? optionSemantics.operations.propertyAccess(optionNode)
         : undefined;
     const annotation = Node_Type(walk.context.ast, access?.selectedDeclaration);
+    optionalDeclaration = access?.selectedDeclaration !== undefined &&
+      walk.context.ast.questionToken(access.selectedDeclaration) !== undefined;
     if (annotation !== undefined) {
       optionType = optionSemantics.types.authoredType(annotation);
     }
@@ -649,6 +653,10 @@ function selectedOptionNullishRelationship(
     ? optionSemantics.types.unionOrIntersectionTypes(optionType)
     : [optionType];
   const nullishMembers = members.filter((member) => optionSemantics.types.isNullish(member));
+  if (optionalDeclaration && nullishMembers.length === 0) {
+    const comparedCarrier = optionNode === leftNode ? rightCarrier : leftCarrier;
+    return rustTargetTypeRefEquals(comparedCarrier, rustUndefinedTargetType()) ? "member" : "disjoint";
+  }
   if (nullishMembers.length !== 1) {
     return undefined;
   }
