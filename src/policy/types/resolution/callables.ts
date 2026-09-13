@@ -58,8 +58,22 @@ export function resolveSourceTypeParameter(
   if (declaration === undefined || context.ast.kindName(declaration) !== "KindTypeParameter") {
     return undefined;
   }
+  const substitution = context.sourceTypeParameterSubstitutions?.get(declaration);
+  if (substitution !== undefined) return substitution;
   const name = context.ast.text(context.ast.name(declaration));
   return name.length === 0 ? undefined : { kind: "type-parameter", name };
+}
+
+export function resolveBoundSourceTypeParameter(
+  node: Node,
+  context: RustTargetTypeResolutionContext,
+): TargetTypeRef | undefined {
+  if ((context.sourceTypeParameterSubstitutions?.size ?? 0) === 0) return undefined;
+  const semantics = context.semanticsFor(node);
+  const type = semantics.types.authoredType(node);
+  const symbol = type === undefined ? undefined : semantics.declarations.typeSymbol(type);
+  const declaration = symbol === undefined ? undefined : semantics.declarations.primarySymbolDeclaration(symbol);
+  return declaration === undefined ? undefined : context.sourceTypeParameterSubstitutions?.get(declaration);
 }
 
 export function resolveSourcePrimitive(

@@ -194,7 +194,7 @@ export function planRustValueRead(
   context: RustPlanContext,
 ): RustExpr {
   const carrier = context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
-  return rustReadRequiresClone(carrier) &&
+  return rustReadRequiresClone(carrier, context) &&
       !context.input.program.valueLifetimes.canMove(node)
     ? { kind: "method-call", receiver: value, method: "clone", args: [] }
     : value;
@@ -217,7 +217,7 @@ export function planRustCaptureValue(
   }
   const value = planRustIdentifierValue(node, path, context);
   const carrier = context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
-  return !isRustCopyCarrier(carrier) && rustCarrierSupportsClone(carrier) &&
+  return rustReadRequiresClone(carrier, context) &&
       !(value.kind === "method-call" && value.method === "clone" && value.args.length === 0)
     ? { kind: "method-call", receiver: value, method: "clone", args: [] }
     : value;
@@ -229,7 +229,7 @@ export function planRustNonConsumingValue(
   context: RustPlanContext,
 ): RustExpr {
   const carrier = context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
-  return rustReadRequiresClone(carrier) &&
+  return rustReadRequiresClone(carrier, context) &&
       expression.kind === "method-call" && expression.method === "clone" &&
       expression.args.length === 0
     ? expression.receiver
@@ -271,8 +271,10 @@ export function planRustMutableProjectReceiver(
   return { kind: "reference", expr: target, mutable: true };
 }
 
-function rustReadRequiresClone(carrier: TargetTypeRef | undefined): boolean {
-  return !isRustCopyCarrier(carrier) && rustCarrierSupportsClone(carrier);
+function rustReadRequiresClone(carrier: TargetTypeRef | undefined, context: RustPlanContext): boolean {
+  return carrier !== undefined && !isRustCopyCarrier(carrier) &&
+    (rustCarrierSupportsClone(carrier) || context.callableDeclaration !== undefined &&
+      context.input.program.callableGenericRequirements.supportsClone(context.callableDeclaration, carrier));
 }
 
 export function rustLocationStorageForReference(
@@ -370,12 +372,18 @@ function rustCapturedBindingForDeclaration(
   declaration: Node,
   context: RustPlanContext,
 ): import("../program/plan-context.js").RustCapturedBinding | undefined {
-  return context.capturedBindings?.find((binding) =>
-    binding.declaration === declaration ||
-    (context.input.program.source.ast.getSourceFile(binding.declaration) === context.input.program.source.ast.getSourceFile(declaration) &&
-      context.input.program.source.ast.kind(binding.declaration) === context.input.program.source.ast.kind(declaration) &&
-      context.input.program.source.ast.pos(binding.declaration) === context.input.program.source.ast.pos(declaration) &&
-      context.input.program.source.ast.end(binding.declaration) === context.input.program.source.ast.end(declaration)));
+  const bindings = context.capturedBindings ?? [];
+  for (let index = bindings.length - 1; index >= 0; index -= 1) {
+    const binding = bindings[index]!;
+    if (binding.declaration === declaration ||
+      (context.input.program.source.ast.getSourceFile(binding.declaration) === context.input.program.source.ast.getSourceFile(declaration) &&
+        context.input.program.source.ast.kind(binding.declaration) === context.input.program.source.ast.kind(declaration) &&
+        context.input.program.source.ast.pos(binding.declaration) === context.input.program.source.ast.pos(declaration) &&
+        context.input.program.source.ast.end(binding.declaration) === context.input.program.source.ast.end(declaration))) {
+      return binding;
+    }
+  }
+  return undefined;
 }
 
 export type RustPromotedStorageWritePlan =

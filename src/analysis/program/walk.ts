@@ -29,7 +29,8 @@ import { rustConversionKey, rustSelectedOperationKey } from "../../target-model/
 import { rustPolicyTargetDiagnostic } from "../../policy/operations/contracts.js";
 import { rustPostCheckOperationKind } from "../facts/keys.js";
 import { rustSourcePrimitiveTargetType } from "../../target-model/types/index.js";
-import type { Node, ResolvedSourcePropertyAccessInfo, SourceFile } from "@tsonic/tsts";
+import type { Node, SourceFile } from "@tsonic/tsts";
+import { checkedPropertySelectionInput } from "../operations/provider/properties.js";
 import type { RustAnalysisContext } from "./context.js";
 import type { RustModuleBindingPolicy } from "./module-bindings.js";
 import type { RustOperationPolicyContext } from "../../policy/operations/contracts.js";
@@ -209,11 +210,11 @@ export function selectExpressionOperation(
   }
   if (kind === KindPropertyAccessExpression) {
     const source = semantics.operations.propertyAccess(expression);
-    if (source === undefined || source.callCallee) {
+    if (source === undefined || source.callCallee && !hasSelectedRuntimeCallableUse(walk, expression)) {
       return;
     }
     recordPolicySelection(walk, expression, selectRustCheckedPropertyAccess(
-      checkedPropertySelectionInput(walk, expression, source),
+      checkedPropertySelectionInput(context, expression, source),
       context,
       walk.operationOptions,
     ));
@@ -221,7 +222,7 @@ export function selectExpressionOperation(
   }
   if (kind === KindElementAccessExpression) {
     const source = semantics.operations.elementAccess(expression);
-    if (source === undefined || source.callCallee) {
+    if (source === undefined || source.callCallee && !hasSelectedRuntimeCallableUse(walk, expression)) {
       return;
     }
     const receiverReference = walk.context.source.navigation.sourceReferenceFor(
@@ -335,39 +336,20 @@ export function selectExpressionOperation(
   }, context, walk.operationOptions));
 }
 
-export function checkedPropertySelectionInput(
-  walk: RustFactWalk,
-  expression: Node,
-  source: ResolvedSourcePropertyAccessInfo,
-): import("../../policy/operations/contracts.js").RustCheckedPropertySelectionInput {
-  const receiverReference = walk.context.source.navigation.sourceReferenceFor(
-    source.receiver.expression,
-  );
-  return {
-    target: "rust",
-    expression,
-    receiver: source.receiver.expression,
-    sourceReceiverType: source.receiver.type,
-    ...(source.receiver.declaration === undefined
-      ? {}
-      : { sourceReceiverDeclaration: source.receiver.declaration }),
-    ...(receiverReference?.declaration === undefined
-      ? {}
-      : { sourceReceiverValueDeclaration: receiverReference.declaration }),
-    accessMode: source.accessMode,
-    ...(source.selectedSymbol === undefined ? {} : { sourceSelectedSymbol: source.selectedSymbol }),
-    ...(source.selectedDeclaration === undefined ? {} : { sourceSelectedDeclaration: source.selectedDeclaration }),
-    ...(source.selectedReadDeclaration === undefined
-      ? {}
-      : { sourceSelectedReadDeclaration: source.selectedReadDeclaration }),
-    ...(source.selectedWriteDeclaration === undefined
-      ? {}
-      : { sourceSelectedWriteDeclaration: source.selectedWriteDeclaration }),
-    ...(source.sourceReadType === undefined ? {} : { sourceReadType: source.sourceReadType }),
-    ...(source.sourceWriteType === undefined ? {} : { sourceWriteType: source.sourceWriteType }),
-    sourceResultType: source.sourceReadType ?? source.sourceWriteType,
-    optionalChain: source.optionalChain,
-  };
+export function hasSelectedRuntimeCallableUse(walk: RustFactWalk, node: Node): boolean {
+  const { ast } = walk.context;
+  let callee = node;
+  let parent = ast.parent(callee);
+  while (parent !== undefined && ast.kindName(parent) === "KindParenthesizedExpression" &&
+    Node_Expression(ast, parent) === callee) {
+    callee = parent;
+    parent = ast.parent(callee);
+  }
+  if (parent === undefined || ast.kindName(parent) !== KindCallExpression ||
+    Node_Expression(ast, parent) !== callee) return false;
+  const selected = walk.context.facts.getSelectedTargetCall(parent);
+  return selected?.sourceCallableCarrier !== undefined &&
+    selected.sourceStructuralMethod === undefined;
 }
 
 function rustOperatorText(kind: string | undefined): string | undefined {

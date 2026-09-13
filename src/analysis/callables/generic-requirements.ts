@@ -29,6 +29,7 @@ import {
   rustClosureCaptureFactKey,
   rustGeneratorFactKey,
   rustFutureValueFactKey,
+  rustFlowReadProjectionFactKey,
   rustLocationStorageFactKey,
   rustSourceParameterAbiFactKey,
   rustTargetOperationFactKey,
@@ -50,6 +51,7 @@ export interface RustCallableGenericRequirementContract {
 
 export interface RustCallableGenericRequirementIndex {
   contractFor(declaration: Node): RustCallableGenericRequirementContract | undefined;
+  supportsClone(declaration: Node, carrier: TargetTypeRef): boolean;
   hasUse(
     declaration: Node,
     node: Node,
@@ -76,6 +78,7 @@ interface RequirementUse {
 
 interface RequirementContractState extends RustCallableGenericRequirementContract {
   readonly uses: readonly RequirementUse[];
+  readonly capturedTypeParameters: readonly RustCallableTypeParameterRequirements[];
 }
 
 const requirementOrder: readonly RustGenericRequirement[] = [
@@ -198,6 +201,14 @@ export function analyzeRustCallableGenericRequirements(
     contractFor(declaration: Node) {
       return contractByDeclaration.get(declaration);
     },
+    supportsClone(declaration: Node, carrier: TargetTypeRef) {
+      const contract = contractByDeclaration.get(declaration);
+      if (contract === undefined) return false;
+      const parameters = [...contract.typeParameters, ...contract.capturedTypeParameters];
+      return rustCarrierSupportsTrait(carrier, "core::clone::Clone", (name, trait) =>
+        trait === "core::clone::Clone" && parameters.some(parameter =>
+          parameter.name === name && parameter.requirements.includes("clone")));
+    },
     hasUse(
       declaration: Node,
       node: Node,
@@ -246,8 +257,18 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
     };
   }
   const exactNames = typeParameterNames as string[];
-  const declared = new Set(exactNames);
-  const byParameter = new Map(exactNames.map((name) =>
+  const capturedNames: string[] = [];
+  for (let ancestor = ast.parent(declaration); ancestor !== undefined; ancestor = ast.parent(ancestor)) {
+    if (!isIndependentCallable(ast, ancestor)) continue;
+    for (const parameter of ast.typeParameters(ancestor)) {
+      if (parameter === undefined || input.sourceLifetimes.parameterFor(parameter)?.kind === "lifetime") continue;
+      const name = names.nameForDeclaration(parameter);
+      if (name === undefined) return { kind: "rejected", reason: "A captured Rust type parameter has no exact target identity." };
+      if (!exactNames.includes(name) && !capturedNames.includes(name)) capturedNames.push(name);
+    }
+  }
+  const declared = new Set([...exactNames, ...capturedNames]);
+  const byParameter = new Map([...declared].map((name) =>
     [name, new Set<RustGenericRequirement>()] as const));
   const uses: RequirementUse[] = [];
   const dependencies = new Set<string>();
@@ -322,6 +343,15 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
   }
   const visit = (node: Node): string | undefined => {
     if (node !== declaration && isIndependentCallable(ast, node)) {
+      const nestedId = input.idByDeclaration.get(node);
+      if (nestedId !== undefined) {
+        dependencies.add(nestedId);
+        for (const parameter of input.contractFor(node)?.capturedTypeParameters ?? []) {
+          if (parameter.requirements.length === 0) continue;
+          const error = addUse(node, { kind: "type-parameter", name: parameter.name }, parameter.requirements);
+          if (error !== undefined) return error;
+        }
+      }
       return undefined;
     }
     const location = facts.getFact(node, rustLocationStorageFactKey);
@@ -359,6 +389,11 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       }
     }
     const operation = facts.getFact(node, rustTargetOperationFactKey);
+    const projection = facts.getFact(node, rustFlowReadProjectionFactKey);
+    if (projection?.kind === "option-value") {
+      const error = addUse(node, projection.selectedCarrier, ["clone"]);
+      if (error !== undefined) return error;
+    }
     if (operation?.kind === "provider-operation") {
       for (const carrier of operation.cloneCarriers ?? []) {
         const error = addUse(node, carrier, ["clone"]);
@@ -454,6 +489,10 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
     contract: Object.freeze({
       declaration,
       typeParameters: Object.freeze(exactNames.map((name) => Object.freeze({
+        name,
+        requirements: normalizeRequirements([...(byParameter.get(name) ?? [])]),
+      }))),
+      capturedTypeParameters: Object.freeze(capturedNames.map((name) => Object.freeze({
         name,
         requirements: normalizeRequirements([...(byParameter.get(name) ?? [])]),
       }))),
@@ -687,6 +726,12 @@ function requirementContractsEqual(
   right: RequirementContractState,
 ): boolean {
   return left.declaration === right.declaration &&
+    left.capturedTypeParameters.length === right.capturedTypeParameters.length &&
+    left.capturedTypeParameters.every((parameter, index) => {
+      const other = right.capturedTypeParameters[index];
+      return other !== undefined && parameter.name === other.name &&
+        stringListsEqual(parameter.requirements, other.requirements);
+    }) &&
     left.typeParameters.length === right.typeParameters.length &&
     left.typeParameters.every((parameter, index) => {
       const other = right.typeParameters[index];

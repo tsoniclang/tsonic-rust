@@ -467,9 +467,18 @@ export function planTypeAliasDeclaration(node: Node, context: RustPlanContext): 
     ? "public" as const
     : "crate" as const;
   const deadCode = rustAuthoredDeadCodeDisposition(context, node);
+  const sourceContract = context.input.program.sourceLifetimes.contractFor(node);
+  const unionGenerics = sourceContract === undefined
+    ? emptyRustGenerics
+    : rustSourceDeclarationGenerics(sourceContract);
+  if (unionGenerics === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+      "rust.backend.union-generics", "Runtime union has no exact renderable generic contract."));
+    return undefined;
+  }
   return [{
     kind: "enum",
-    generics: emptyRustGenerics,
+    generics: unionGenerics,
     name: aliasName,
     visibility,
     ...(deadCode === undefined ? {} : { deadCode }),

@@ -4,6 +4,7 @@ import {
   rustFixedArrayTargetType,
   rustJsArrayTargetType,
   rustJsSymbolTargetType,
+  rustLocationTargetType,
   rustNullTargetType,
   rustNullishSourceTargetType,
   rustNeverTargetType,
@@ -20,7 +21,7 @@ import {
 import { denseDefined, resolveProjectSourceCarrier } from "./project.js";
 import { instantiateTargetType, providerCarrierFromRelations, resolveOwnedSourceProfileTypeName, resolveProviderTypeIdentity, resolveSourceProfileCarrier } from "./providers.js";
 import { isRustStructuralObjectFieldDeclaration } from "../source-shapes.js";
-import { resolveCallableType, resolveSourcePrimitive, resolveSourceTypeParameter, resolveUnion } from "./callables.js";
+import { resolveBoundSourceTypeParameter, resolveCallableType, resolveSourcePrimitive, resolveSourceTypeParameter, resolveUnion } from "./callables.js";
 import { resolveRustAuthoredTargetType, resolveRustTupleElementTargetTypeWithState } from "./tuples.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import {
@@ -36,6 +37,8 @@ import { isRustSourceRawPointer } from "../../operations/raw-pointer-source.js";
 import { resolveRustAuthoredBroadSourceValueTargetType } from "./broad-values.js";
 import { selectTsonicFixedArrayFromSource } from "@tsonic/source-core/facts";
 import type { TsonicFixedArrayFact } from "@tsonic/source-core/facts";
+import { resolveRustTypeComponentEvidence } from "./source-evidence.js";
+import { resolveRustSourceMarker } from "./markers.js";
 
 export function resolveRustFixedArrayTargetType(
   fixedArray: TsonicFixedArrayFact,
@@ -80,7 +83,8 @@ export function resolveRustTargetType(
   if (context.currentSemantics.facts.typeSubjects(type).some(subject => isRustSourceRawPointer(subject, context))) {
     return rustRawPointerTargetType();
   }
-  const existingStructuralObject = authoredTypeRoot === undefined
+  const existingStructuralObject = authoredTypeRoot === undefined &&
+      (context.sourceTypeParameterSubstitutions?.size ?? 0) === 0
     ? options.sourceTypes.structuralObjectForType(type)
     : undefined;
   if (existingStructuralObject !== undefined) {
@@ -103,6 +107,13 @@ export function resolveRustTargetType(
   resolving.add(type);
   try {
     const semantics = context.currentSemantics;
+    if (resolveRustSourceMarker(type, context) === "pointer") {
+      const arguments_ = semantics.types.effectiveTypeArguments(type);
+      const pointee = arguments_?.length === 1
+        ? resolveRustTargetType(arguments_[0], context, options, resolving)
+        : undefined;
+      return pointee === undefined ? undefined : rustLocationTargetType(pointee);
+    }
     if (semantics.types.isNever(type)) {
       return rustNeverTargetType();
     }
@@ -150,6 +161,9 @@ export function resolveRustTargetType(
           },
           context,
           options,
+          undefined,
+          type,
+          resolving,
         );
     if (sourceType !== undefined) {
       return sourceType;
@@ -273,7 +287,11 @@ export function resolveStructuralObjectType(
       context.source.navigation.isProjectDeclaration(declaration) &&
       isRustStructuralObjectFieldDeclaration(declaration, context.ast));
     const hasExactTransformedIdentity = authoredTypeRoot !== undefined &&
-      projectDeclarations !== undefined && projectDeclarations.length === 0;
+      declarations !== undefined && projectDeclarations?.length === 0 &&
+      declarations.every(declaration => {
+        const identity = resolveProviderTypeIdentity([declaration], context);
+        return identity !== undefined && providerCarrierFromRelations(identity, options) !== undefined;
+      });
     if (projectDeclarations === undefined ||
       (!hasExactTransformedIdentity && projectDeclarations.length === 0) ||
       (!hasExactTransformedIdentity && projectDeclarations.length !== declarations?.length)) {
@@ -292,8 +310,12 @@ export function resolveStructuralObjectType(
       return kind !== "KindGetAccessor" && kind !== "KindSetAccessor" &&
         kind !== "KindMethodDeclaration" && kind !== "KindMethodSignature";
     }) ?? [];
-    const authoredTypeNodes = [
+    const authoredTypeNodes = [...new Set([
       ...sourcePropertyTypeEvidenceNodes(context.ast, semantics, property),
+      ...projectDeclarations.flatMap(declaration => {
+        const node = context.ast.typeNode(declaration);
+        return node !== undefined && resolveBoundSourceTypeParameter(node, context) !== undefined ? [node] : [];
+      }),
       ...(authoredTypeRoot === undefined
         ? []
         : sourceTransformedTypeFactEvidenceNodes(
@@ -302,9 +324,12 @@ export function resolveStructuralObjectType(
             authoredTypeRoot,
             property.type,
           )),
-    ];
+    ])];
     const authoredCarriers = authoredTypeNodes.map((node) =>
-      resolveRustAuthoredTargetType(node, context, options, resolving));
+      resolveRustTypeComponentEvidence({
+        authoredTypeNode: node,
+        selectedType: property.type,
+      }, context, options, resolving));
     const authoredCarrier = authoredCarriers.length > 0 &&
         authoredCarriers.every((carrier) =>
           carrier !== undefined && rustTargetTypeRefEquals(carrier, authoredCarriers[0]))

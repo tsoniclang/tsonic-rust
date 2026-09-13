@@ -251,7 +251,13 @@ export function rustTypeFromCarrier(
     const union = rustSourceUnionCarrierValue(carrier);
     if (union !== undefined) {
       const path = resolveSourceTypePath(union);
-      return path === undefined ? undefined : { kind: "named", path };
+      const genericArguments = rustGenericArgumentsFromCarrier(
+        union.genericArguments, resolveSourceTypePath, resolveStructuralShape,
+      );
+      return path === undefined || genericArguments === undefined ? undefined : {
+        kind: "named", path,
+        ...(genericArguments.length === 0 ? {} : { genericArguments }),
+      };
     }
   }
   if (carrier.kind === "trait-object") {
@@ -481,16 +487,8 @@ export function rustTypeFromCarrierInContext(
     if (definition === undefined) {
       return undefined;
     }
-    const genericArguments = definition.genericParameters.map((parameter) =>
-      parameter.kind === "lifetime"
-        ? rustTargetGenericArgumentToAstInContext({
-            kind: "lifetime",
-            lifetime: parameter.lifetime,
-          }, context)
-        : rustTargetGenericArgumentToAstInContext({
-            kind: "type",
-            type: { kind: "type-parameter", name: parameter.name },
-          }, context));
+    const genericArguments = definition.genericArguments.map(argument =>
+      rustTargetGenericArgumentToAstInContext(argument, context));
     if (genericArguments.some((argument) => argument === undefined)) {
       return undefined;
     }

@@ -59,7 +59,7 @@ import {
   rustTargetOperationResultCarrier,
   rustYieldFactKey,
 } from "../facts/keys.js";
-import { appendRustDiagnostic, boolCarrier, rustResolutionContext, selectExpressionOperation } from "../program/walk.js";
+import { appendRustDiagnostic, boolCarrier, hasSelectedRuntimeCallableUse, rustResolutionContext, selectExpressionOperation } from "../program/walk.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { parseSourceBigIntLiteral, sourceCharCodeUnit } from "../../target-model/syntax/literals.js";
 import { recordFinalizedOperatorSelection, resolvePostCheckBinaryCarrier, resolvePostCheckUnaryCarrier } from "../operations/operators.js";
@@ -505,7 +505,7 @@ export function resolveExpressionCarrierUncached(
     case KindPropertyAccessExpression: {
       const semantics = walk.context.semanticsFor(expression);
       const source = semantics.operations.propertyAccess(expression);
-      if (source === undefined || source.callCallee) {
+      if (source === undefined || source.callCallee && !hasSelectedRuntimeCallableUse(walk, expression)) {
         return undefined;
       }
       const receiverCarrier = resolveExpressionCarrier(

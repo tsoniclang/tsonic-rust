@@ -11,13 +11,16 @@ export function selectJsArrayConstruction(
   typeArguments: readonly (TargetTypeRef | undefined)[],
   arguments_: readonly (TargetTypeRef | undefined)[],
   operationKind: "constructor" | "method" = "constructor",
+  soleArgumentNumberKind?: "number" | "non-number",
 ): JsOperationSelection | undefined {
   const element = typeArguments[0];
   if (typeArguments.length !== 1 || element === undefined ||
     arguments_.some(argument => argument === undefined)) {
     return undefined;
   }
-  const lengthConstruction = arguments_.length === 1 && isRustNumericCarrier(arguments_[0]);
+  if (arguments_.length === 1 && soleArgumentNumberKind === undefined) return undefined;
+  const lengthConstruction = arguments_.length === 1 && soleArgumentNumberKind === "number";
+  if (lengthConstruction && !isRustNumericCarrier(arguments_[0])) return undefined;
   if (!lengthConstruction && arguments_.some(argument => !rustTargetTypeRefEquals(argument, element))) {
     return undefined;
   }

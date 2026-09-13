@@ -15,6 +15,7 @@ import {
 } from "../../../../target-model/types/index.js";
 import { readRustSourceKeepAlive } from "../../../../policy/operations/reachability-source.js";
 import { acceptProjectSourceCall, mapSelectedJsSpecialCall } from "../object-shapes.js";
+import { checkedPropertySelectionInput, selectRustCheckedPropertyAccess } from "../properties.js";
 import { acceptRustPolicy } from "../../../../policy/operations/contracts.js";
 import { acceptSelectedCall, checkedCallIsConstruction, instantiateSelectedCallTemplate, selectedCallReceiverValueCarrier, selectRustOptionalCallResult } from "./instantiation.js";
 import { substituteProviderOperationForm } from "./template-instantiation.js";
@@ -224,6 +225,7 @@ export function selectRustCheckedCall(
         sourceOwnerName: selectedSourceMember.ownerName,
         typeArgumentCarriers,
         argumentCarriers,
+        soleArgumentNumberKind: selectedSoleArgumentNumberKind(request, context),
         carrierSupportsProjectIdentity: options.projectCarrierSupportsObjectIdentity,
       });
       if (selection === undefined || selection.fact.kind !== "provider-operation" || selection.resultCarrier === undefined) {
@@ -286,6 +288,7 @@ export function selectRustCheckedCall(
       ownerName: selectedSourceMember.ownerName,
       memberName: selectedSourceMember.memberName,
       operationKind: "call",
+      soleArgumentNumberKind: selectedSoleArgumentNumberKind(request, context),
       ...(receiverCarrier === undefined ? {} : { receiverCarrier }),
       ...(sourceResultCarrier === undefined ? {} : { sourceResultCarrier }),
       ...(argumentCarriers.length === 0 ? {} : { argumentCarriers }),
@@ -363,6 +366,11 @@ export function selectRustCheckedCall(
     return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_PROJECT_DECLARATION_MISSING", "Checked project-source call has callee evidence but no exact selected callable declaration evidence.");
   }
   if (sourceDeclaration !== undefined) {
+    const declarationKind = context.ast.kindName(sourceDeclaration);
+    if (declarationKind === "KindFunctionType" || declarationKind === "KindCallSignature") {
+      const runtimeCallable = acceptRuntimeCallableCall(request, context, options);
+      if (runtimeCallable !== undefined) return runtimeCallable;
+    }
     const structuralMethod = acceptStructuralRuntimeMethodCall(
       request,
       sourceDeclaration,
@@ -383,6 +391,23 @@ export function selectRustCheckedCall(
   );
 }
 
+function selectedSoleArgumentNumberKind(
+  request: RustCheckedCallSelectionInput,
+  context: RustOperationPolicyContext,
+): "number" | "non-number" | undefined {
+  const argument = request.source.sourceArguments[0];
+  if (request.source.sourceArguments.length !== 1 || argument === undefined) return undefined;
+  const types = context.currentSemantics.types;
+  const members = types.isUnion(argument.type)
+    ? types.unionOrIntersectionTypes(argument.type)
+    : [argument.type];
+  if (members.length === 0 || members.some(member => member === undefined || types.isAny(member) || types.isUnknown(member))) {
+    return undefined;
+  }
+  const numeric = members.map(member => types.isNumberLike(member!));
+  return numeric.every(Boolean) ? "number" : numeric.every(value => !value) ? "non-number" : undefined;
+}
+
 function acceptRuntimeCallableCall(
   request: RustCheckedCallSelectionInput,
   context: RustOperationPolicyContext,
@@ -390,6 +415,19 @@ function acceptRuntimeCallableCall(
 ): RustPolicySelection<RustCheckedCallSelectionResult> | undefined {
   if (checkedCallIsConstruction(request, context)) {
     return undefined;
+  }
+  const callee = request.source.sourceCallee.expression;
+  if (context.ast.kindName(callee) === "KindPropertyAccessExpression") {
+    const selected = resolveRustTargetTypeRef(request.source.sourceCallee.type, context, options);
+    if (runtimeCallableProtocol(selected) === undefined) return undefined;
+    const property = context.currentSemantics.operations.propertyAccess(callee);
+    if (property === undefined) return undefined;
+    const selection = selectRustCheckedPropertyAccess(
+      checkedPropertySelectionInput(context, callee, property),
+      context,
+      options,
+    );
+    if (selection.kind === "reject") return selection;
   }
   const calleeCarrier = selectedValueCarrier(
     request.source.sourceCallee.expression,

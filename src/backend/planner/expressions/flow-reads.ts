@@ -13,6 +13,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { planRustProjectDowncastValue } from "../objects/project-downcasts.js";
 import { planRustProgramErrorFlowRead } from "./error-operations.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
+import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import {
   allocateRustSyntheticName,
   createRustSyntheticNameState,
@@ -58,7 +59,9 @@ export function planRustFlowReadProjection(
     return { kind: "method-call", receiver: planRustNonConsumingValue(node, expression, context), method: fact.method, args: [] };
   }
   if (fact.kind === "option-value") {
-    if (!rustCarrierSupportsClone(fact.selectedCarrier)) {
+    if (!rustCarrierSupportsClone(fact.selectedCarrier) &&
+      (context.callableDeclaration === undefined ||
+        !requireRustCarrierRequirements(fact.selectedCarrier, ["clone"], node, context))) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, node),
         "rust.backend.flow-read-projection-clone",

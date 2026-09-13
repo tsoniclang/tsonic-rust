@@ -13,9 +13,13 @@ test("builtin construction selection retains exact numeric and identity carriers
     assert.deepEqual(selected.resultCarrier, rustBigIntTargetType());
     assert.deepEqual(selected.parameterCarriers, [carrier]);
   }
-  const length = selectJsSurfaceConstructor({ className: "Array", typeArgumentCarriers: [rustEmptyObjectTargetType()], argumentCarriers: [rustSourcePrimitiveTargetType("int32")] });
+  const length = selectJsSurfaceConstructor({ className: "Array", typeArgumentCarriers: [rustEmptyObjectTargetType()], argumentCarriers: [rustSourcePrimitiveTargetType("int32")], soleArgumentNumberKind: "number" });
   assert.equal(length?.fact.operationId, "tsonic.rust.js.Array.constructor.length");
   assert.equal(length.fact.isFallible, true);
+  assert.equal(selectJsSurfaceConstructor({ className: "Array", typeArgumentCarriers: [rustEmptyObjectTargetType()], argumentCarriers: [rustSourcePrimitiveTargetType("int32")] }), undefined);
+  const integer = rustSourcePrimitiveTargetType("int64");
+  const items = selectJsSurfaceConstructor({ className: "Array", typeArgumentCarriers: [integer], argumentCarriers: [integer], soleArgumentNumberKind: "non-number" });
+  assert.equal(items?.fact.operationId, "tsonic.rust.js.Array.constructor.items");
   assert.equal(selectJsSurfaceOperation({ ownerName: "OtherConstructor", memberName: "call", operationKind: "call", argumentCarriers: [rustBigIntTargetType()] }), undefined);
 });
 
@@ -88,6 +92,8 @@ export function main(): void {
   const items = new Array<number>(3, 4);
   const single = Array.of<number>(3);
   const called = Array<number>(2);
+  const bigintItems = new Array<bigint>(3n);
+  check(bigintItems.length === 1 && bigintItems[0] === 3n);
   check(empty.length === 0 && items.length === 2 && single.length === 1 && called.length === 2);
   let rejected = false;
   try { new Array<object>(-1); } catch { rejected = true; }

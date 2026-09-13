@@ -25,6 +25,10 @@ import type {
 } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { selectRustPointerReturnCarrier } from "../../operations/pointer-return.js";
+import { rustTargetGenericReferences } from "../../../target-model/types/carriers/generic-references.js";
+import { inferRustTargetTypeParameterBindings } from "../../../target-model/types/carriers/generic-inference.js";
+import { substituteRustTargetTypeParameters } from "../../../target-model/types/carriers/substitution.js";
+import { resolveBoundSourceTypeParameter } from "./callables.js";
 
 export function resolveRustSignatureParameterListTarget(
   parameters: SourceCallableTypeEvidence["parameters"],
@@ -144,14 +148,16 @@ export function resolveRustTypeComponentEvidence(
   resolving: Set<object>,
 ): TargetTypeRef | undefined {
   if (component.authoredTypeNode === undefined) {
+    const pointerReturn = component.declaration === undefined ? undefined
+      : selectRustPointerReturnCarrier(component.declaration, context, options);
+    if (pointerReturn !== undefined) return pointerReturn;
     const selected = resolveRustTargetType(
       component.selectedType,
       context,
       options,
       resolving,
     );
-    return selected ?? (component.declaration === undefined ? undefined
-      : selectRustPointerReturnCarrier(component.declaration, context, options));
+    return selected;
   }
   const authoredSourceFile = context.ast.getSourceFile(component.authoredTypeNode);
   const semantics = authoredSourceFile !== undefined &&
@@ -179,6 +185,23 @@ export function resolveRustTypeComponentEvidence(
   );
   if (selection.kind === "ambiguous") {
     return undefined;
+  }
+  const selectedParameter = resolveBoundSourceTypeParameter(component.authoredTypeNode, context);
+  if (selectedParameter !== undefined) {
+    return rustTargetTypeRefEquals(authored, selectedParameter) ? selectedParameter : undefined;
+  }
+  if (authored !== undefined && selected !== undefined) {
+    const references = rustTargetGenericReferences(authored);
+    if (references.typeNames.length > 0) {
+      const substitutions = inferRustTargetTypeParameterBindings(
+        authored,
+        selected,
+        new Set(references.typeNames),
+      );
+      return substitutions === undefined
+        ? undefined
+        : substituteRustTargetTypeParameters(authored, substitutions);
+    }
   }
   if (selection.kind === "authored-members") {
     const targets = [

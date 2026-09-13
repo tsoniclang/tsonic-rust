@@ -332,6 +332,7 @@ export function substituteRustTargetGenerics(
               constSubstitutions,
             ),
           })),
+          substituteGenericArguments(sourceUnion.genericArguments, substitutions, lifetimeSubstitutions, constSubstitutions),
         );
       }
       const namedType = rustNamedTypeCarrierValue(type);

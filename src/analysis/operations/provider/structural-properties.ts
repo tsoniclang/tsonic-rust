@@ -308,6 +308,13 @@ function selectedSourceUnionVariantIndexes(
   const all = Object.freeze(union.variants.map((_, index) => index));
   const selectedReceiverType = request.sourceReceiverType;
   if (selectedReceiverType !== undefined) {
+    const retained = options.sourceTypes.sourceUnionVariantIndexesForTypes(
+      union.carrier,
+      context.currentSemantics.types.isUnion(selectedReceiverType)
+        ? context.currentSemantics.types.unionOrIntersectionTypes(selectedReceiverType)
+        : [selectedReceiverType],
+    );
+    if (retained !== undefined) return retained;
     const selectedRefinement = context.currentSemantics.types.refinement(
       union.sourceType,
       selectedReceiverType,

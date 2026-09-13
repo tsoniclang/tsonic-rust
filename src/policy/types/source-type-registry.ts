@@ -64,6 +64,11 @@ export interface RustStructuralFieldImplementation {
   readonly kind: "stored" | "accessor";
 }
 
+export interface RustStructuralInstantiation {
+  readonly template: TargetTypeRef;
+  readonly instance: TargetTypeRef;
+}
+
 export interface RustSourceTypeRegistry {
   registerSourceFile(sourceFile: SourceFile, ast: AstReader): void;
   registerDeclarationCarrier(declaration: Node, carrier: TargetTypeRef): boolean;
@@ -80,6 +85,7 @@ export interface RustSourceTypeRegistry {
   structuralObjects(): readonly RustSourceObjectShape[];
   structuralObjectForCarrier(carrier: TargetTypeRef): RustSourceObjectShape | undefined;
   structuralFieldImplementations(): readonly RustStructuralFieldImplementation[];
+  structuralInstantiations(): readonly RustStructuralInstantiation[];
   structuralObjectForType(
     type: Type,
     carrier?: TargetTypeRef,

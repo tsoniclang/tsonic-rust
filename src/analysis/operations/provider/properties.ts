@@ -24,9 +24,34 @@ import type {
   RustOperationPolicyContext,
   RustPolicySelection,
 } from "../../../policy/operations/contracts.js";
-import type { Node } from "@tsonic/tsts";
+import type { Node, ResolvedSourcePropertyAccessInfo } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+
+export function checkedPropertySelectionInput(
+  context: RustOperationPolicyContext,
+  expression: Node,
+  source: ResolvedSourcePropertyAccessInfo,
+): RustCheckedPropertySelectionInput {
+  const receiverReference = context.source.navigation.sourceReferenceFor(source.receiver.expression);
+  return {
+    target: "rust",
+    expression,
+    receiver: source.receiver.expression,
+    sourceReceiverType: source.receiver.type,
+    ...(source.receiver.declaration === undefined ? {} : { sourceReceiverDeclaration: source.receiver.declaration }),
+    ...(receiverReference?.declaration === undefined ? {} : { sourceReceiverValueDeclaration: receiverReference.declaration }),
+    accessMode: source.accessMode,
+    ...(source.selectedSymbol === undefined ? {} : { sourceSelectedSymbol: source.selectedSymbol }),
+    ...(source.selectedDeclaration === undefined ? {} : { sourceSelectedDeclaration: source.selectedDeclaration }),
+    ...(source.selectedReadDeclaration === undefined ? {} : { sourceSelectedReadDeclaration: source.selectedReadDeclaration }),
+    ...(source.selectedWriteDeclaration === undefined ? {} : { sourceSelectedWriteDeclaration: source.selectedWriteDeclaration }),
+    ...(source.sourceReadType === undefined ? {} : { sourceReadType: source.sourceReadType }),
+    ...(source.sourceWriteType === undefined ? {} : { sourceWriteType: source.sourceWriteType }),
+    sourceResultType: source.sourceReadType ?? source.sourceWriteType,
+    optionalChain: source.optionalChain,
+  };
+}
 
 export function selectRustCheckedDelete(
   request: RustCheckedDeleteSelectionInput,

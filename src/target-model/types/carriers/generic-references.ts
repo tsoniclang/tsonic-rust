@@ -31,7 +31,7 @@ export function rustTargetTypeParameterNames(type: TargetTypeRef): readonly stri
   return Object.freeze([...names].sort());
 }
 
-function visitRustTargetTypeParameters(
+export function visitRustTargetTypeParameters(
   type: TargetTypeRef,
   visit: (name: string) => boolean,
 ): boolean {
@@ -80,7 +80,7 @@ function visitRustTargetTypeParameters(
       }
       const sourceUnion = rustSourceUnionCarrierValue(type);
       if (sourceUnion !== undefined) {
-        return sourceUnion.variants.some((variant) =>
+        return visitGenericArgumentTypes(sourceUnion.genericArguments, visit) || sourceUnion.variants.some((variant) =>
           visitRustTargetTypeParameters(variant.carrier, visit));
       }
       const namedType = rustNamedTypeCarrierValue(type);
@@ -273,6 +273,7 @@ export function rustTargetGenericReferences(
         }
         const union = rustSourceUnionCarrierValue(value);
         if (union !== undefined) {
+          visitArguments(union.genericArguments, bound);
           union.variants.forEach((variant) => visitType(variant.carrier, bound));
           return;
         }

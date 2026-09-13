@@ -544,7 +544,7 @@ function firstArgumentId(request: JsOperationRequest): string | undefined {
 
 export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperationSelection | undefined {
   if (request.ownerName === "ArrayConstructor" && request.memberName === "call" && request.operationKind === "call") {
-    return selectJsArrayConstruction(request.selectedMethodTypeArgumentCarriers ?? [], request.argumentCarriers ?? [], "method");
+    return selectJsArrayConstruction(request.selectedMethodTypeArgumentCarriers ?? [], request.argumentCarriers ?? [], "method", request.soleArgumentNumberKind);
   }
   const laneMatch = laneOf(request.receiverCarrier, request.ownerName);
   if (laneMatch === undefined) {

@@ -323,6 +323,12 @@ export function inferRustTargetGenericBindings(
           return leftUnion !== undefined && rightUnion !== undefined &&
             leftUnion.fileName === rightUnion.fileName &&
             leftUnion.typeName === rightUnion.typeName &&
+            matchGenericArguments(
+              leftUnion.genericArguments, rightUnion.genericArguments,
+              (pattern, actual) => match(pattern, actual, lifetimeContext),
+              (pattern, actual) => matchLifetime(pattern, actual, lifetimeContext),
+              matchConst,
+            ) &&
             leftUnion.variants.length === rightUnion.variants.length &&
             leftUnion.variants.every((variant, index) => {
               const other = rightUnion.variants[index];

@@ -2,6 +2,7 @@ import {
   inferRustTargetGenericBindings,
   inferRustTargetTypeParameterBindings,
   isRustNumericCarrier,
+  rustOptionElementCarrier,
   rustTargetGenericBindingsForArguments,
   rustTargetGenericReferences,
   substituteRustTargetGenerics,
@@ -14,6 +15,7 @@ import {
   KindNewExpression,
   KindNonNullExpression,
   KindNumericLiteral,
+  KindObjectLiteralExpression,
   KindParenthesizedExpression,
   KindPostfixUnaryExpression,
   KindPrefixUnaryExpression,
@@ -21,6 +23,7 @@ import {
   KindSatisfiesExpression,
   KindSpreadElement,
   Node_Expression,
+  ObjectLiteralProperty_Value,
 } from "@tsonic/target-api/source";
 import { rustOperationContext } from "../program/walk.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
@@ -151,7 +154,7 @@ function reconcileProjectSourceArgumentTypeParameters(
       binding.sourceArgumentIndex === argumentIndex);
     const actual = walk.context.facts.getRuntimeCarrierFact(argument)?.carrier ??
       resolveProjectSourceInferenceCarrier(walk, argument);
-    if (matches.length === 0 || actual === undefined) continue;
+    if (matches.length === 0) continue;
     for (const binding of matches) {
       const parameter = selected.member.parameters[binding.sourceParameterIndex];
       const parameterCarrier = parameter === undefined
@@ -167,44 +170,85 @@ function reconcileProjectSourceArgumentTypeParameters(
             initialSubstitutions.lifetimes,
             initialSubstitutions.consts,
           );
-      const actualCarrier = binding.sourceForm === "spread-element"
+      const actualCarrier = actual === undefined ? undefined : binding.sourceForm === "spread-element"
         ? binding.spreadElementIndex === undefined
           ? undefined
           : rustSpreadElementCarrier(actual, binding.spreadElementIndex)
         : actual;
-      if (instantiatedParameterCarrier === undefined || actualCarrier === undefined) {
+      if (instantiatedParameterCarrier === undefined) {
         continue;
       }
-      const references = rustTargetGenericReferences(instantiatedParameterCarrier);
-      const callScopedElisions = new Map(references.callScopedElisions.map((lifetime) => [
-        rustLifetimeKey(lifetime),
-        lifetime,
-      ]));
-      const candidate = inferRustTargetGenericBindings(
-        instantiatedParameterCarrier,
-        actualCarrier,
-        {
-          typeNames: parameterNames,
-          lifetimeIdentities: new Set(callScopedElisions.keys()),
-          constIdentities: new Set(),
-        },
-        { callScopedElisionBindings: callScopedElisions },
-      );
-      if (candidate === undefined || candidate.lifetimes.size !== callScopedElisions.size ||
-        [...callScopedElisions].some(([identity, lifetime]) =>
-          !rustLifetimesEqual(candidate.lifetimes.get(identity), lifetime))) {
-        continue;
-      }
-      for (const [name, carrier] of candidate.types) {
-        const existing = reconciled.get(name);
-        if (existing !== undefined && !rustTargetTypeRefEquals(existing, carrier)) {
-          return undefined;
+      const pairs = walk.context.ast.kindName(argument) === KindObjectLiteralExpression
+        ? projectSourceObjectInferencePairs(walk, argument, instantiatedParameterCarrier)
+        : actualCarrier === undefined ? undefined : [{ pattern: instantiatedParameterCarrier, actual: actualCarrier }];
+      if (pairs === undefined) continue;
+      for (const pair of pairs) {
+        const references = rustTargetGenericReferences(pair.pattern);
+        const callScopedElisions = new Map(references.callScopedElisions.map((lifetime) => [
+          rustLifetimeKey(lifetime),
+          lifetime,
+        ]));
+        const candidate = inferRustTargetGenericBindings(
+          pair.pattern,
+          pair.actual,
+          {
+            typeNames: parameterNames,
+            lifetimeIdentities: new Set(callScopedElisions.keys()),
+            constIdentities: new Set(),
+          },
+          { callScopedElisionBindings: callScopedElisions },
+        );
+        if (candidate === undefined || candidate.lifetimes.size !== callScopedElisions.size ||
+          [...callScopedElisions].some(([identity, lifetime]) =>
+            !rustLifetimesEqual(candidate.lifetimes.get(identity), lifetime))) {
+          continue;
         }
-        reconciled.set(name, carrier);
+        for (const [name, carrier] of candidate.types) {
+          const existing = reconciled.get(name);
+          if (existing !== undefined && !rustTargetTypeRefEquals(existing, carrier)) {
+            return undefined;
+          }
+          reconciled.set(name, carrier);
+        }
       }
     }
   }
   return reconciled;
+}
+
+function projectSourceObjectInferencePairs(
+  walk: RustFactWalk,
+  argument: Node,
+  pattern: TargetTypeRef,
+): readonly { readonly pattern: TargetTypeRef; readonly actual: TargetTypeRef }[] | undefined {
+  const { ast } = walk.context;
+  const sourceTypes = walk.operationOptions.sourceTypes;
+  const carrier = rustOptionElementCarrier(pattern) ?? pattern;
+  const union = sourceTypes.sourceUnionForCarrier(carrier);
+  const shapes = union === undefined
+    ? [sourceTypes.structuralObjectForCarrier(carrier)]
+    : union.variants.map(variant => variant.shape);
+  const elements = ast.properties(argument).map(element => {
+    if (element === undefined) return undefined;
+    const initializer = ObjectLiteralProperty_Value(ast, element);
+    const selected = walk.context.semanticsFor(element).operations.objectLiteralElement(element);
+    return initializer === undefined || selected === undefined ? undefined : { initializer, selected };
+  });
+  if (elements.some(element => element === undefined)) return undefined;
+  const matches = shapes.flatMap(shape => {
+    if (shape === undefined) return [];
+    const fields = elements.map(element => shape.fields.filter(field =>
+      field.declarations.some(declaration => element!.selected.sourceSelectedDeclarations.includes(declaration))));
+    if (fields.some(field => field.length !== 1) || new Set(fields.map(field => field[0])).size !== fields.length) return [];
+    return [fields.map((field, index) => ({ field: field[0]!, initializer: elements[index]!.initializer }))];
+  });
+  if (matches.length !== 1) return undefined;
+  const pairs = matches[0]!.flatMap(({ field, initializer }) => {
+    if (ast.kindName(initializer) === KindNumericLiteral) return [];
+    const actual = resolveRustTargetTypeRef(initializer, rustOperationContext(walk, initializer), walk.operationOptions);
+    return actual === undefined ? [undefined] : [{ pattern: field.resultCarrier, actual }];
+  });
+  return pairs.some(pair => pair === undefined) ? undefined : pairs as readonly { pattern: TargetTypeRef; actual: TargetTypeRef }[];
 }
 
 function resolveProjectSourceInferenceCarrier(

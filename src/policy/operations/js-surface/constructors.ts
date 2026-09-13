@@ -167,6 +167,7 @@ export interface JsConstructorRequest {
   readonly className: string;
   readonly typeArgumentCarriers: readonly (TargetTypeRef | undefined)[];
   readonly argumentCarriers: readonly (TargetTypeRef | undefined)[];
+  readonly soleArgumentNumberKind?: "number" | "non-number";
   readonly carrierSupportsProjectIdentity?: (carrier: TargetTypeRef) => boolean;
 }
 
@@ -204,7 +205,7 @@ function resolveConstructorResult(
 
 export function selectJsSurfaceConstructor(request: JsConstructorRequest): JsOperationSelection | undefined {
   if (request.className === "Array") {
-    return selectJsArrayConstruction(request.typeArgumentCarriers, request.argumentCarriers);
+    return selectJsArrayConstruction(request.typeArgumentCarriers, request.argumentCarriers, "constructor", request.soleArgumentNumberKind);
   }
   const rows = jsConstructorRows.filter((candidate) =>
     candidate.className === request.className &&
@@ -305,10 +306,11 @@ export function selectJsSurfaceConstructorBySourceOwner(request: {
   readonly sourceOwnerName: string;
   readonly typeArgumentCarriers: readonly (TargetTypeRef | undefined)[];
   readonly argumentCarriers: readonly (TargetTypeRef | undefined)[];
+  readonly soleArgumentNumberKind?: "number" | "non-number";
   readonly carrierSupportsProjectIdentity?: (carrier: TargetTypeRef) => boolean;
 }): JsOperationSelection | undefined {
   if (request.sourceOwnerName === "ArrayConstructor") {
-    return selectJsArrayConstruction(request.typeArgumentCarriers, request.argumentCarriers);
+    return selectJsArrayConstruction(request.typeArgumentCarriers, request.argumentCarriers, "constructor", request.soleArgumentNumberKind);
   }
   const row = jsConstructorRows.find((candidate) => candidate.sourceOwnerName === request.sourceOwnerName);
   return row === undefined

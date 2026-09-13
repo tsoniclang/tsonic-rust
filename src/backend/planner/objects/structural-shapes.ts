@@ -71,7 +71,7 @@ export function planRustStructuralShapeModule(
       : "crate";
     const shapeDeadCode = rustStructuralShapeDeadCodeDisposition(
       context,
-      definition.carrier,
+      definition.sourceCarriers,
       visibility === "public",
     );
     const genericParameters: readonly RustGenericParameter[] = definition.genericParameters.map((parameter) =>
@@ -147,7 +147,7 @@ export function planRustStructuralShapeModule(
           : renderedStorageType;
         const deadCode = rustStructuralFieldDeadCodeDisposition(
           context,
-          definition.carrier,
+          definition.sourceCarriers,
           storageIndex,
           visibility === "public",
           "value",
@@ -208,7 +208,7 @@ export function planRustStructuralShapeModule(
       usedAliases.add("rt");
       const storedDeadCode = rustStructuralFieldDeadCodeDisposition(
         context,
-        definition.carrier,
+        definition.sourceCarriers,
         storageIndex,
         visibility === "public",
         "value",
@@ -229,7 +229,7 @@ export function planRustStructuralShapeModule(
       );
       const getterDeadCode = rustStructuralFieldDeadCodeDisposition(
         context,
-        definition.carrier,
+        definition.sourceCarriers,
         storageIndex,
         visibility === "public",
         "getter",
@@ -261,7 +261,7 @@ export function planRustStructuralShapeModule(
         );
         const setterDeadCode = rustStructuralFieldDeadCodeDisposition(
           context,
-          definition.carrier,
+          definition.sourceCarriers,
           storageIndex,
           visibility === "public",
           "setter",

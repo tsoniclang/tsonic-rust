@@ -23,7 +23,8 @@ import {
 } from "../../../target-model/types/index.js";
 import { asNode } from "../../evidence/selected-source.js";
 import { denseDefined, resolveProjectSourceCarrier } from "./project.js";
-import { functionPointerFactKey, pointerFactKey, sourceMarkerFactKey } from "@tsonic/tsts";
+import { functionPointerFactKey, pointerFactKey } from "@tsonic/tsts";
+import { resolveRustSourceMarker } from "./markers.js";
 import { instantiateProviderTargetType, providerCarrierFromRelations, resolveOwnedSourceProfileTypeName, resolveProviderTypeIdentity, resolveSourceProfileCarrierFromArguments } from "./providers.js";
 import { resolveCallableType, resolveSourcePrimitive, resolveSourceTypeParameter } from "./callables.js";
 import { resolveReferencedDeclarationType, resolveRustAuthoredTargetType, resolveRustTupleElementTargetTypeWithState, rustParameterLaneTargetType } from "./tuples.js";
@@ -140,25 +141,6 @@ export function resolveRustTargetTypeRef(
     ? subject as Type
     : context.semanticsFor(node).types.expressionType(node);
   return resolveRustTargetType(type, context, options, new Set<object>());
-}
-
-function resolveRustSourceMarker(
-  subject: ExtensionFactSubject,
-  context: RustTargetTypeResolutionContext,
-): string | undefined {
-  const node = asNode(subject, context);
-  const subjects = node === undefined
-    ? [subject, ...context.currentSemantics.facts.typeSubjects(subject as Type)]
-    : [subject];
-  const markers = new Set<string>();
-  for (const candidate of subjects) {
-    const marker = context.facts.resolve(candidate, sourceMarkerFactKey) ??
-      context.facts.get(candidate, sourceMarkerFactKey);
-    if (marker !== undefined) {
-      markers.add(marker.marker);
-    }
-  }
-  return markers.size === 1 ? markers.values().next().value : undefined;
 }
 
 export function resolveRustTargetTypeSyntax(
@@ -425,6 +407,8 @@ export function resolveRustTargetTypeSyntax(
     context,
     options,
     referencedDeclaration,
+    selectedType,
+    resolving,
   );
   if (sourceType !== undefined) {
     return sourceType;

@@ -15,6 +15,7 @@ export interface JsOperationRequest {
   readonly receiverCarrier?: TargetTypeRef;
   readonly sourceResultCarrier?: TargetTypeRef;
   readonly argumentCarriers?: readonly (TargetTypeRef | undefined)[];
+  readonly soleArgumentNumberKind?: "number" | "non-number";
   readonly selectedMethodTypeArgumentCarriers?: readonly (TargetTypeRef | undefined)[];
   readonly authoredMethodTypeArgumentCarriers?: readonly (TargetTypeRef | undefined)[];
   readonly argumentMatchScore?: (

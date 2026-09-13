@@ -20,6 +20,7 @@ import {
 import { selectRustFlowReadProjection } from "../../../policy/types/value-carrier-reconciliation.js";
 import { recordRustFlowReadProjection } from "../../facts/value-carrier-queries.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
+import { retainRustSourceUnionInstantiation } from "../../../policy/types/resolution/source-unions.js";
 import { selectRustProviderObjectLiteralConstruction } from "../../../policy/types/resolution/providers.js";
 import { rustCallableProtocol, rustStructuralObjectCarrierValue } from "../../../target-model/types/index.js";
 import { rustRuntimeCarrierKey, rustSelectedOperationKey } from "../../../target-model/facts/selections.js";
@@ -96,6 +97,29 @@ export function selectedMemberReceiverCarrier(
     : options.projectTypes.openCarrier(containingThisDefinition);
   if (request.sourceReceiverType === undefined) {
     return undefined;
+  }
+  const sourceUnionCarrier = rustOptionElementCarrier(sourceCarrier) ?? sourceCarrier;
+  const sourceUnion = sourceUnionCarrier === undefined
+    ? undefined
+    : options.sourceTypes.sourceUnionForCarrier(sourceUnionCarrier);
+  if (sourceUnion !== undefined && sourceUnionCarrier !== undefined &&
+    options.sourceTypes.sourceUnionVariantIndexesForTypes(sourceUnionCarrier, [request.sourceReceiverType]) === undefined) {
+    const refinement = context.source.semantics.selectValueTypeRefinement(receiver);
+    const declaredType = refinement.kind === "resolved"
+      ? context.currentSemantics.types.withoutMissingOrUndefined(refinement.declaredType)
+      : undefined;
+    if (declaredType !== undefined) {
+      retainRustSourceUnionInstantiation(
+        declaredType, sourceUnion, sourceUnionCarrier, context, options, new Set(),
+      );
+    }
+  }
+  if (sourceUnionCarrier !== undefined &&
+    options.sourceTypes.sourceUnionVariantIndexesForTypes(
+      sourceUnionCarrier,
+      [request.sourceReceiverType],
+    ) !== undefined) {
+    return sourceUnionCarrier;
   }
   const selectedCarrier = resolveRustTargetTypeRef(
     request.sourceReceiverType,

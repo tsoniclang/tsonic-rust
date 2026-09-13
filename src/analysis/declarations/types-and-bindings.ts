@@ -59,7 +59,6 @@ export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
   }
   const lifetimeBearingAlias = genericContract?.parameters.some((parameter) =>
     parameter.kind === "lifetime") === true;
-  if (sourceParameters.length > 0 && !lifetimeBearingAlias) return;
   const nameNode = ast.name(declaration);
   const typeName = nameNode === undefined ? "" : ast.text(nameNode);
   const fileName = ast.getFileName(ast.getSourceFile(declaration));
@@ -68,6 +67,7 @@ export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
   if (sourceType === undefined || typeName.length === 0 || fileName.length === 0) {
     return;
   }
+  if (sourceParameters.length > 0 && !lifetimeBearingAlias && !semantics.types.isUnion(sourceType)) return;
   if (!semantics.types.isUnion(sourceType)) {
     const typeNode = Node_Type(ast, declaration);
     const carrier = resolveRustTargetTypeRef(
@@ -160,6 +160,9 @@ export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
       name: variant.name,
       carrier: variant.carrier,
     })),
+    genericContract?.parameters.map(parameter => parameter.kind === "type"
+      ? { kind: "type" as const, type: { kind: "type-parameter" as const, name: parameter.targetName } }
+      : { kind: "lifetime" as const, lifetime: parameter.lifetime }) ?? [],
   );
   const variantFieldDeclarations = new Set(finalizedVariants.flatMap((variant) =>
     variant.shape?.fields.flatMap((field) => field.declarations) ?? []));
