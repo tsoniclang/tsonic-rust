@@ -367,6 +367,11 @@ function isNonOptionValueConversion(value: unknown): boolean {
 }
 
 function isValueProjectionConversion(value: Record<string, unknown>): boolean {
+  if (value.kind === "native-upcast") {
+    return hasExactKeys(value, ["kind", "source", "target", "path"]) &&
+      isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) &&
+      typeof value.path === "string";
+  }
   if (value.kind === "rest-sequence") {
     return hasExactKeys(value, ["kind", "source", "elementTarget", "holePolicy", "elementConversions"]) &&
       isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.elementTarget) &&

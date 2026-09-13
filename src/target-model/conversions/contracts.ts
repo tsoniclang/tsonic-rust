@@ -47,6 +47,7 @@ import type { RustPrimitiveTypeName } from "../syntax/tokens.js";
 import { rustNumericPromotionKind } from "./numeric-promotion.js";
 import { rustRestSequenceElements } from "../operations/rest-assembly.js";
 import { isDenseDataArray } from "../metadata/closed-data.js";
+import { rustNamedTypeCarrierValue } from "../types/carriers/native.js";
 
 const boolCarrier = rustSourcePrimitiveTargetType("bool");
 const int32Carrier = rustSourcePrimitiveTargetType("int32");
@@ -158,6 +159,14 @@ export type RustValueConversionContract = RustValueConversionContractBase & (
 export function rustValueConversionContract(
   value: RustValueConversion,
 ): RustValueConversionContract | undefined {
+  if (value.kind === "native-upcast") {
+    const upcasts = rustNamedTypeCarrierValue(value.source)?.upcasts.filter((upcast) =>
+      rustTargetTypeRefEquals(upcast.target, value.target)) ?? [];
+    return upcasts.length !== 1 || upcasts[0]!.path !== value.path ? undefined : {
+      category: "projection", lowering: "call", path: value.path,
+      sourceMode: "ref", source: value.source, target: value.target, fallible: false,
+    };
+  }
   if (value.kind === "rest-sequence") {
     const sequence = rustRestSequenceElements(value.source);
     if (sequence === undefined || !isDenseDataArray(value.elementConversions) ||
@@ -594,6 +603,9 @@ export function rustValueConversionIsFallible(value: RustValueConversion | undef
 }
 
 export function rustValueConversionIdentity(value: RustValueConversion): string {
+  if (value.kind === "native-upcast") {
+    return `native-upcast.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}.${value.path}`;
+  }
   if (value.kind === "rest-sequence") {
     return `rest-sequence.${JSON.stringify(value.source)}.${JSON.stringify(value.elementTarget)}.${value.holePolicy}.${value.elementConversions.map(conversion => conversion === null ? "identity" : rustValueConversionIdentity(conversion)).join("|")}`;
   }
@@ -666,6 +678,7 @@ export function substituteRustValueConversion(
         ),
       });
     case "source-union-variant":
+    case "native-upcast":
     case "bottom-coercion":
     case "js-argument-vector-callback":
       return Object.freeze({

@@ -78,6 +78,7 @@ import { selectJsArrayConstruction } from "./array-construction.js";
 import { jsOperationRows, rustInferCarrier } from "./rows.js";
 import { selectRustJsonValueConversion } from "../../conversions/selection.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustNamedTypeCarrierValue } from "../../../target-model/types/carriers/native.js";
 import { rustJsIntlGroupingTargetId } from "../../../target-model/types/carriers/source-types.js";
 import {
   materializeJsonValueConversions,
@@ -545,6 +546,20 @@ function firstArgumentId(request: JsOperationRequest): string | undefined {
 }
 
 export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperationSelection | undefined {
+  const upcasts = rustNamedTypeCarrierValue(request.receiverCarrier)?.upcasts ?? [];
+  if (upcasts.length > 0) {
+    const selected = upcasts.filter((upcast) => laneOf(upcast.target, request.ownerName) !== undefined);
+    if (selected.length !== 1) return undefined;
+    const receiverCarrier = selected[0]!.target;
+    const result = selectJsSurfaceOperation({ ...request, receiverCarrier });
+    if (result?.fact.target.form !== "receiver-method" || result.fact.target.receiverConversion !== undefined) return undefined;
+    return {
+      ...result, fact: { ...result.fact, target: {
+        ...result.fact.target,
+        receiverConversion: { kind: "native-upcast", source: request.receiverCarrier!, target: receiverCarrier, path: selected[0]!.path },
+      } },
+    };
+  }
   if (request.ownerName === "ArrayConstructor" && request.memberName === "call" && request.operationKind === "call") {
     return selectJsArrayConstruction(request.selectedMethodTypeArgumentCarriers ?? [], request.argumentCarriers ?? [], "method", request.soleArgumentNumberKind);
   }

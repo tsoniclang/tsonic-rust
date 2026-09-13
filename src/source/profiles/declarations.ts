@@ -372,6 +372,15 @@ declare var Set: SetConstructor;
 interface Date {
   getTime(): number;
   valueOf(): number;
+  getFullYear(): number;
+  getMonth(): number;
+  getDate(): number;
+  getDay(): number;
+  getHours(): number;
+  getMinutes(): number;
+  getSeconds(): number;
+  getMilliseconds(): number;
+  getTimezoneOffset(): number;
   getUTCFullYear(): number;
   getUTCMonth(): number;
   getUTCDate(): number;

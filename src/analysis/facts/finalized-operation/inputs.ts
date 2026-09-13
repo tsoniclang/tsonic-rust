@@ -19,10 +19,10 @@ export function createInputFactory(
   argumentCarriers: readonly TargetTypeRef[],
   spreadIndexes: ReadonlySet<number> = new Set(),
 ) {
-  const receiver = (mode: RustArgumentMode): RustFinalizedSourceInput | undefined =>
+  const receiver = (mode: RustArgumentMode, conversion?: RustValueConversion): RustFinalizedSourceInput | undefined =>
     receiverCarrier === undefined
       ? undefined
-      : sourceInput({ kind: "receiver" }, receiverCarrier, mode, undefined);
+      : sourceInput({ kind: "receiver" }, receiverCarrier, mode, conversion);
   const argument = (
     sourceIndex: number,
     mode: RustArgumentMode,
@@ -149,7 +149,7 @@ export function finalizeTargetInputs(
       };
     }
     case "receiver-method": {
-      const receiver = input.receiver(form.mutatesReceiver === true ? "mut-ref" : "ref");
+      const receiver = input.receiver(form.mutatesReceiver === true ? "mut-ref" : "ref", form.receiverConversion);
       const args = mappedArguments(form.argOrder, form.argModes, form.argConversions);
       return receiver === undefined || args === undefined ? undefined : {
         targetReceiver: { kind: "input", input: receiver },

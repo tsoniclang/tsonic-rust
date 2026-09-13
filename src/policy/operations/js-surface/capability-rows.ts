@@ -53,9 +53,11 @@ const dataViewRows: readonly JsOperationRowData[] = [
       },
     },
   ]),
-  { owner: "DataView", member: "buffer", operationKind: "property", lane: "data-view", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "buffer" }, result: { ref: "array-buffer" }, evaluation: "pure" } },
-  { owner: "DataView", member: "byteLength", operationKind: "property", lane: "data-view", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "byte_length" }, result: { ref: "float64" }, evaluation: "pure" } },
-  { owner: "DataView", member: "byteOffset", operationKind: "property", lane: "data-view", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "byte_offset" }, result: { ref: "float64" }, evaluation: "pure" } },
+  ...(["data-view", "typed-array"] as const).flatMap((lane) => [
+    ["buffer", "buffer", { ref: "array-buffer" }],
+    ["byteLength", "byte_length", { ref: "float64" }],
+    ["byteOffset", "byte_offset", { ref: "float64" }],
+  ].map(([member, name, result]): JsOperationRowData => ({ owner: "ArrayBufferView", member: member as string, operationKind: "property", lane, shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: name as string }, result: result as { readonly ref: "array-buffer" | "float64" }, evaluation: "pure" } }))),
   ...["Int8", "Uint8"].map((suffix): JsOperationRowData => ({ owner: "DataView", member: `get${suffix}`, operationKind: "call", lane: "data-view", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: `get_${suffix.toLowerCase()}` }, result: { ref: "float64" }, params: [{ ref: "float64" }] } })),
   ...["Int16", "Uint16", "Int32", "Uint32", "Float32", "Float64"].flatMap((suffix): readonly JsOperationRowData[] => {
     const name = suffix.replace(/([a-z])([A-Z])/gu, "$1_$2").toLowerCase();
@@ -84,9 +86,6 @@ const typedArrayRows: readonly JsOperationRowData[] = [
     },
   },
   ...[
-    ["buffer", "buffer", { ref: "array-buffer" }],
-    ["byteLength", "byte_length", { ref: "float64" }],
-    ["byteOffset", "byte_offset", { ref: "float64" }],
     ["length", "length", { ref: "float64" }],
     ["BYTES_PER_ELEMENT", "bytes_per_element", { ref: "float64" }],
   ].map(([member, name, result]): JsOperationRowData => ({ owner: "TypedArray", member: member as string, operationKind: "property", lane: "typed-array", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: name as string }, result: result as { readonly ref: "array-buffer" | "float64" }, evaluation: "pure" } })),

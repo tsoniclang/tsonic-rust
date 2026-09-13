@@ -265,6 +265,7 @@ function rustFoundationForProviderOperationForm(
       requireCarrier(form.owner);
       break;
     case "receiver-method":
+      requireConversion(form.receiverConversion);
       form.argConversions?.forEach(requireConversion);
       break;
   }

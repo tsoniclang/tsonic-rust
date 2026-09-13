@@ -108,6 +108,12 @@ export type RustValueConversionId =
 
 export type RustNonOptionValueConversion =
   | {
+      readonly kind: "native-upcast";
+      readonly source: TargetTypeRef;
+      readonly target: TargetTypeRef;
+      readonly path: string;
+    }
+  | {
       readonly kind: "rest-sequence";
       readonly source: TargetTypeRef;
       readonly elementTarget: TargetTypeRef;
@@ -383,6 +389,7 @@ export type RustProviderOperationForm =
       // it is row metadata, never derived from method names.
       readonly form: "receiver-method";
       readonly name: string;
+      readonly receiverConversion?: RustValueConversion;
       readonly argModes?: readonly RustArgumentMode[];
       readonly argConversions?: readonly (RustValueConversion | undefined)[];
       readonly argOrder?: readonly number[];

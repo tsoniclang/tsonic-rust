@@ -25,6 +25,7 @@ import {
 } from "../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustNamedTypeCarrierValue } from "../../target-model/types/carriers/native.js";
 import {
   rustBoolToJsValueConversion,
   rustFloat64ToInt32ValueConversion,
@@ -56,6 +57,11 @@ export function selectRustSourceValueConversion(
   source: TargetTypeRef,
   target: TargetTypeRef,
 ): RustValueConversion | undefined {
+  const upcasts = rustNamedTypeCarrierValue(source)?.upcasts.filter((upcast) =>
+    rustTargetTypeRefEquals(upcast.target, target)) ?? [];
+  if (upcasts.length === 1) {
+    return { kind: "native-upcast", source, target, path: upcasts[0]!.path };
+  }
   if (rustTargetTypeRefEquals(target, rustJsNumericTargetType())) {
     if (isRustBigIntCarrier(source)) return { kind: "semantic-conversion", id: "js-numeric-from-bigint" };
     if (rustTargetTypeRefEquals(source, float64Carrier)) return { kind: "semantic-conversion", id: "js-numeric-from-number" };

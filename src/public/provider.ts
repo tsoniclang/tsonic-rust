@@ -55,6 +55,7 @@ export {
   rustJsPromiseTargetType,
   rustJsTypedArrayTargetType,
   rustNeverTargetType,
+  rustNamedTargetType,
   rustOptionTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,

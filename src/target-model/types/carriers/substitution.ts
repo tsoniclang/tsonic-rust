@@ -354,6 +354,10 @@ export function substituteRustTargetGenerics(
             constSubstitutions,
           ),
           namedType.traits,
+          namedType.upcasts.map((upcast) => ({
+            ...upcast,
+            target: substituteRustTargetGenerics(upcast.target, substitutions, lifetimeSubstitutions, constSubstitutions),
+          })),
         );
       }
       const fixedArray = rustFixedArrayCarrierValue(type);

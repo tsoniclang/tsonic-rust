@@ -505,20 +505,28 @@ export function substituteProviderOperationForm(
     case "call":
     case "free-call":
     case "receiver-method":
-      return form.argConversions === undefined
-        ? form
-        : {
-            ...form,
-            argConversions: form.argConversions.map((conversion) =>
-              conversion === undefined
-                ? undefined
-                : substituteRustValueConversion(
-                    conversion,
-                    substitutions.types,
-                    substitutions.lifetimes,
-                    substitutions.consts,
-                  )),
-          };
+      return {
+        ...form,
+        ...(form.form !== "receiver-method" || form.receiverConversion === undefined ? {} : {
+          receiverConversion: substituteRustValueConversion(
+            form.receiverConversion,
+            substitutions.types,
+            substitutions.lifetimes,
+            substitutions.consts,
+          ),
+        }),
+        ...(form.argConversions === undefined ? {} : {
+          argConversions: form.argConversions.map((conversion) =>
+            conversion === undefined
+              ? undefined
+              : substituteRustValueConversion(
+                  conversion,
+                  substitutions.types,
+                  substitutions.lifetimes,
+                  substitutions.consts,
+                )),
+        }),
+      };
     case "source-module-construction": {
       const argConversions = form.argConversions === undefined
         ? undefined

@@ -2,7 +2,7 @@ import {
   hasExactObjectKeys,
   isDenseDataArray,
 } from "../../metadata/closed-data.js";
-import { isRustTargetTypeRef } from "../equality.js";
+import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../equality.js";
 import { rustBigIntTargetId, rustNamedTypeCarrierName, rustNeverCarrierName, rustNullTargetId, rustStringTargetId, rustStrTargetId, rustTsValueTargetId, rustUndefinedTargetId } from "./source-types.js";
 import { rustEmptyObjectTargetId, rustJsNumericTargetId } from "./source-types.js";
 import type { SourcePrimitiveKind } from "@tsonic/tsts";
@@ -93,6 +93,12 @@ export interface RustNamedTypeCarrierValue {
   readonly traits: RustNamedTypeTraitContract;
   readonly genericArguments: readonly RustTargetGenericArgument[];
   readonly genericDefaults: readonly RustTargetGenericArgument[];
+  readonly upcasts: readonly RustNamedTypeUpcast[];
+}
+
+export interface RustNamedTypeUpcast {
+  readonly target: TargetTypeRef;
+  readonly path: string;
 }
 
 export const rustMoveOnlyNamedTypeTraits: RustNamedTypeTraitContract = Object.freeze({
@@ -105,12 +111,13 @@ export function rustNamedTargetType(
   genericArguments: readonly RustTargetGenericArgument[] = [],
   genericDefaults: readonly RustTargetGenericArgument[] = [],
   traits: RustNamedTypeTraitContract = rustMoveOnlyNamedTypeTraits,
+  upcasts: readonly RustNamedTypeUpcast[] = [],
 ): TargetTypeRef {
   return {
     kind: "target-specific",
     target: "rust",
     name: rustNamedTypeCarrierName,
-    value: { id, path, traits, genericArguments, genericDefaults },
+    value: { id, path, traits, genericArguments, genericDefaults, upcasts },
   };
 }
 
@@ -123,8 +130,8 @@ export function rustNamedTypeCarrierValue(carrier: TargetTypeRef | undefined): R
     return undefined;
   }
   const keys = Object.keys(value).sort();
-  if (keys.length !== 5 || keys[0] !== "genericArguments" || keys[1] !== "genericDefaults" ||
-    keys[2] !== "id" || keys[3] !== "path" || keys[4] !== "traits") {
+  if (keys.length !== 6 || keys[0] !== "genericArguments" || keys[1] !== "genericDefaults" ||
+    keys[2] !== "id" || keys[3] !== "path" || keys[4] !== "traits" || keys[5] !== "upcasts") {
     return undefined;
   }
   const candidate = value as {
@@ -133,6 +140,7 @@ export function rustNamedTypeCarrierValue(carrier: TargetTypeRef | undefined): R
     readonly traits?: unknown;
     readonly genericArguments?: unknown;
     readonly genericDefaults?: unknown;
+    readonly upcasts?: unknown;
   };
   if (typeof candidate.id !== "string" || candidate.id.length === 0 ||
     typeof candidate.path !== "string" || candidate.path.length === 0 ||
@@ -140,9 +148,14 @@ export function rustNamedTypeCarrierValue(carrier: TargetTypeRef | undefined): R
     !isDenseDataArray(candidate.genericArguments) ||
     candidate.genericArguments.some((argument) => !isRustNamedGenericArgument(argument)) ||
     !isDenseDataArray(candidate.genericDefaults) ||
-    candidate.genericDefaults.some((argument) => !isRustNamedGenericArgument(argument))) {
+    candidate.genericDefaults.some((argument) => !isRustNamedGenericArgument(argument)) ||
+    !isDenseDataArray(candidate.upcasts) ||
+    candidate.upcasts.some((upcast) => !isRustNamedTypeUpcast(upcast))) {
     return undefined;
   }
+  const upcasts = candidate.upcasts as readonly RustNamedTypeUpcast[];
+  if (upcasts.some((upcast, index) => upcasts.slice(0, index).some((previous) =>
+    rustTargetTypeRefEquals(previous.target, upcast.target)))) return undefined;
   const genericArguments = candidate.genericArguments as readonly RustTargetGenericArgument[];
   const genericDefaults = candidate.genericDefaults as readonly RustTargetGenericArgument[];
   const defaultOffset = genericArguments.length - genericDefaults.length;
@@ -161,7 +174,17 @@ export function rustNamedTypeCarrierValue(carrier: TargetTypeRef | undefined): R
     traits: candidate.traits,
     genericArguments,
     genericDefaults,
+    upcasts,
   };
+}
+
+function isRustNamedTypeUpcast(value: unknown): value is RustNamedTypeUpcast {
+  if (typeof value !== "object" || value === null ||
+    !hasExactObjectKeys(value, ["path", "target"])) return false;
+  const candidate = value as Partial<RustNamedTypeUpcast>;
+  return typeof candidate.path === "string" &&
+    /^(?:r#)?[A-Za-z_][A-Za-z0-9_]*(?:::(?:r#)?[A-Za-z_][A-Za-z0-9_]*)*$/.test(candidate.path) &&
+    isRustTargetTypeRef(candidate.target);
 }
 
 function isRustNamedGenericArgument(value: unknown): value is RustTargetGenericArgument {

@@ -182,6 +182,7 @@ test("operation fact equality is structural and independent of metadata key orde
       traits: { implementations: [] },
       genericArguments: [],
       genericDefaults: [],
+      upcasts: [],
     },
   };
   const abi = finalizeRustProviderOperationAbi({

@@ -86,7 +86,8 @@ export function visitRustTargetTypeParameters(
       const namedType = rustNamedTypeCarrierValue(type);
       if (namedType !== undefined) {
         return visitGenericArgumentTypes(namedType.genericArguments, visit) ||
-          visitGenericArgumentTypes(namedType.genericDefaults, visit);
+          visitGenericArgumentTypes(namedType.genericDefaults, visit) ||
+          namedType.upcasts.some((upcast) => visitRustTargetTypeParameters(upcast.target, visit));
       }
       const fixedArray = rustFixedArrayCarrierValue(type);
       return fixedArray !== undefined &&
@@ -281,6 +282,7 @@ export function rustTargetGenericReferences(
         if (named !== undefined) {
           visitArguments(named.genericArguments, bound);
           visitArguments(named.genericDefaults, bound);
+          named.upcasts.forEach((upcast) => visitType(upcast.target, bound));
           return;
         }
         const fixedArray = rustFixedArrayCarrierValue(value);

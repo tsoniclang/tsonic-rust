@@ -351,6 +351,7 @@ test("provider receivers distinguish runtime values from compile-time owner iden
       path: "acme::Environment",
       genericArguments: [],
       genericDefaults: [],
+      upcasts: [],
       traits: { implementations: [] },
     },
   };
