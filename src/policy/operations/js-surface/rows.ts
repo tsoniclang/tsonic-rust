@@ -16,6 +16,7 @@ import { exactJsStringOperationRows } from "./exact-string-rows.js";
 import { jsCapabilityOperationRows } from "./capability-rows.js";
 import { regexpOperationRows } from "./regexp-rows.js";
 import { bigintOperationRows } from "./bigint-rows.js";
+import { stringConstructionRows } from "./string-construction-rows.js";
 import type { JsOperationRowData } from "./model.js";
 import type { RustCallbackOperationTemplate, RustProviderOperationForm, RustValueConversion } from "../../../target-model/operations/model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
@@ -295,6 +296,7 @@ const sharedArrayOperationRows = sharedArrayOwners.flatMap((owner): readonly JsO
 
 export const jsOperationRows = defineJsOperationRows([
   ...jsCapabilityOperationRows,
+  ...stringConstructionRows,
   { owner: "ObjectConstructor", member: "is", operationKind: "call", lane: "object", variadic: true, shape: { op: "operation", operationKind: "method", target: { form: "call-value-array", path: "js_abi::object_is", leadingArguments: [], elementCarrier: rustJsValueTargetType() }, result: { ref: "bool" } } },
   { owner: "ObjectConstructor", member: "freeze", operationKind: "call", lane: "object", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::EmptyObject::freeze", argModes: ["ref"] }, result: { ref: "empty-object" }, params: [{ ref: "empty-object" }] } },
   { owner: "ObjectConstructor", member: "isFrozen", operationKind: "call", lane: "object", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::EmptyObject::is_frozen", argModes: ["ref"] }, result: { ref: "bool" }, params: [{ ref: "empty-object" }] } },
