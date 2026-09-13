@@ -3,7 +3,15 @@ import {
   resolveTargetContractFixedPoint,
 } from "@tsonic/target-api/analysis";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import { Node_Expression, sourceNodeIdentity } from "@tsonic/target-api/source";
+import {
+  BinaryExpression_OperatorToken,
+  KindBinaryExpression,
+  KindEqualsToken,
+  KindExpressionStatement,
+  Node_Expression,
+  sourceNodeIdentity,
+} from "@tsonic/target-api/source";
+import { rustValueCarrierBeforeOptionProjection } from "../facts/value-carrier-queries.js";
 import type { TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
@@ -389,6 +397,18 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       }
     }
     const operation = facts.getFact(node, rustTargetOperationFactKey);
+    if (ast.kindName(node) === KindBinaryExpression) {
+      const token = BinaryExpression_OperatorToken(ast, node);
+      const parent = ast.parent(node);
+      if (token !== undefined && ast.kindName(token) === KindEqualsToken &&
+          (parent === undefined || ast.kindName(parent) !== KindExpressionStatement)) {
+        const carrier = rustValueCarrierBeforeOptionProjection(facts, node);
+        if (carrier !== undefined) {
+          const error = addUse(node, carrier, ["clone"]);
+          if (error !== undefined) return error;
+        }
+      }
+    }
     const projection = facts.getFact(node, rustFlowReadProjectionFactKey);
     if (projection?.kind === "option-value") {
       const error = addUse(node, projection.selectedCarrier, ["clone"]);

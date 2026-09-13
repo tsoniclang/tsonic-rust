@@ -72,7 +72,7 @@ export function rustExpressionUsesTryInCurrentRegion(expression: RustExpr): bool
         rustExpressionUsesTryInCurrentRegion(expression.index);
     case "block":
       return expression.bindings.some((binding) =>
-        rustExpressionUsesTryInCurrentRegion(binding.value)) ||
+        binding.value !== undefined && rustExpressionUsesTryInCurrentRegion(binding.value)) ||
         rustExpressionUsesTryInCurrentRegion(expression.value);
     case "unsafe":
       return rustExpressionUsesTryInCurrentRegion(expression.expression);

@@ -222,7 +222,7 @@ export type RustExpr =
       readonly innerAttrs?: readonly string[];
       readonly bindings: readonly {
         readonly name: string;
-        readonly value: RustExpr;
+        readonly value?: RustExpr;
         readonly type?: RustType;
         readonly mutable?: boolean;
         readonly attrs?: readonly string[];

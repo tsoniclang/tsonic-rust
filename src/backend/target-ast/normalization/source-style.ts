@@ -430,7 +430,7 @@ function finalizeRustExpressionStyle(expression: RustExpr): RustExpr {
         ...expression,
         bindings: expression.bindings.map((binding) => ({
           ...binding,
-          value: finalizeRustExpressionStyle(binding.value),
+          ...(binding.value === undefined ? {} : { value: finalizeRustExpressionStyle(binding.value) }),
         })),
         value: finalizeRustExpressionStyle(expression.value),
       };

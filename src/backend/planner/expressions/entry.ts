@@ -51,6 +51,22 @@ export function planExpression(
   context: RustPlanContext,
   resultUse: RustExpressionResultUse = "value",
 ): RustExpr | undefined {
+  return planProjectedExpression(node, context, resultUse, true);
+}
+
+export function planExpressionBeforeOptionProjection(
+  node: Node,
+  context: RustPlanContext,
+): RustExpr | undefined {
+  return planProjectedExpression(node, context, "value", false);
+}
+
+function planProjectedExpression(
+  node: Node,
+  context: RustPlanContext,
+  resultUse: RustExpressionResultUse,
+  includeOptionProjection: boolean,
+): RustExpr | undefined {
   const override = context.expressionOverrides?.get(node);
   const planned = planExpressionBeforeValueProjections(node, context, resultUse);
   if (planned === undefined || resultUse === "discarded") {
@@ -170,6 +186,9 @@ export function planExpression(
   }
   if (contextuallyConverted === undefined) {
     return undefined;
+  }
+  if (!includeOptionProjection) {
+    return contextuallyConverted;
   }
   if (projection !== undefined &&
     !rustTargetTypeRefEquals(currentCarrier, projection.sourceCarrier) &&

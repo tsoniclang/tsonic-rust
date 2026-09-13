@@ -281,7 +281,8 @@ function mapSelectedAssignment(
     : selectedLeft?.provenance?.providerDeclaration;
   const jsIdentity = resolveSelectedJsSourceMember(context, selectedDeclaration, options.sourceProfiles);
   const receiver = selectedLeft?.provenance?.sourceReceiver;
-  const receiverCarrier = resolveRustTargetTypeRef(receiver, context, options);
+  const receiverCarrier = rustEffectiveValueCarrier(context.facts, receiver) ??
+    resolveRustTargetTypeRef(receiver, context, options);
   const operationKind = selectedLeft?.operationKind === "property"
     ? "property-set"
     : selectedLeft?.operationKind === "indexer"

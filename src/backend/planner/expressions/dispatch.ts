@@ -22,6 +22,8 @@ import {
 } from "../../../target-model/types/index.js";
 import {
   KindBinaryExpression,
+  KindEqualsToken,
+  BinaryExpression_OperatorToken,
   KindBigIntLiteral,
   KindCallExpression,
   KindConditionalExpression,
@@ -69,6 +71,7 @@ import { expressionCarrier, planBigIntLiteral, planDeleteExpression, planGenerat
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planArrayLiteral, planElementAccess } from "./elements.js";
 import { planBinaryExpression } from "./binary.js";
+import { planAssignmentExpression } from "./assignment.js";
 import { planCallExpression } from "./calls/basic.js";
 import { planCallableExpression } from "./callable.js";
 import { planExpression } from "./entry.js";
@@ -598,6 +601,10 @@ export function planExpressionInner(
       return planUnaryExpression(node, context, resultUse);
     }
     case KindBinaryExpression: {
+      const token = BinaryExpression_OperatorToken(ast, node);
+      if (token !== undefined && ast.kindName(token) === KindEqualsToken) {
+        return planAssignmentExpression(node, context);
+      }
       return planBinaryExpression(node, context);
     }
     case KindCallExpression: {

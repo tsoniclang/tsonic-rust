@@ -41,7 +41,7 @@ import { planRustCompoundAssignmentValue, planRustDirectOperatorCallAssignment, 
 import { planRustSourceUnionFieldProjection } from "../expressions/unions.js";
 import { readRustProjectDispatchedField, writeRustProjectDispatchedField } from "../objects/project-objects.js";
 import { planRustProjectFieldDispatchRoles } from "../objects/project-field-dispatch.js";
-import { readRustStoredObjectField, writeRustStoredObjectField } from "../objects/project-storage.js";
+import { readRustStoredObjectField, rustProjectObjectRepresentation, writeRustStoredObjectField } from "../objects/project-storage.js";
 import { rustStringConcat } from "../../target-ast/expressions.js";
 import { planRustDirectStorage } from "../expressions/updates/target.js";
 import type { Node } from "@tsonic/tsts";
@@ -534,14 +534,17 @@ export function planExpressionAsStatement(
         if (written === undefined) {
           return undefined;
         }
+        const receiverKind = receiverNode === undefined ? undefined : ast.kindName(receiverNode);
+        const deferReceiverBorrow = operator === "=" &&
+          (receiverKind === "KindThisKeyword" || receiverKind === "KindThisExpression") &&
+          rustProjectObjectRepresentation(sourceField.receiverCarrier, context)?.kind === "value";
         return [{
           kind: "expr",
           expr: {
             kind: "block",
-            bindings: [
-              { name: receiverName, value: receiver },
-              { name: valueName, value },
-            ],
+            bindings: deferReceiverBorrow
+              ? [{ name: valueName, value }, { name: receiverName, value: receiver }]
+              : [{ name: receiverName, value: receiver }, { name: valueName, value }],
             value: written,
           },
         }];

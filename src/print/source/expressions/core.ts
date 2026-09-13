@@ -208,7 +208,8 @@ function printRustBlockExpressionContents(
 ): string {
   const bindings = expression.bindings.map((binding) => {
     const attributes = binding.attrs?.join(" ") ?? "";
-    const declaration = `let ${binding.mutable === true ? "mut " : ""}${binding.name}${binding.type === undefined ? "" : `: ${printRustType(binding.type)}`} = ${printRustExpr(binding.value)};`;
+    const initializer = binding.value === undefined ? "" : ` = ${printRustExpr(binding.value)}`;
+    const declaration = `let ${binding.mutable === true ? "mut " : ""}${binding.name}${binding.type === undefined ? "" : `: ${printRustType(binding.type)}`}${initializer};`;
     return attributes.length === 0 ? declaration : `${attributes} ${declaration}`;
   });
   return [

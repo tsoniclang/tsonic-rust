@@ -359,7 +359,7 @@ function rustExpressionReferencesModuleAlias(expression: RustExpr, alias: string
     case "block":
       return expression.bindings.some((binding) =>
         rustOptionalTypeReferencesModuleAlias(binding.type, alias) ||
-        rustExpressionReferencesModuleAlias(binding.value, alias)) ||
+        (binding.value !== undefined && rustExpressionReferencesModuleAlias(binding.value, alias))) ||
         rustExpressionReferencesModuleAlias(expression.value, alias);
     case "evaluate-then":
       return rustExpressionReferencesModuleAlias(expression.effect, alias) ||

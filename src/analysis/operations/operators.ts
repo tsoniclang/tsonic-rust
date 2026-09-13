@@ -6,6 +6,7 @@ import {
   KindBinaryExpression,
   KindEqualsEqualsEqualsToken,
   KindEqualsToken,
+  KindExpressionStatement,
   KindExclamationEqualsEqualsToken,
   KindIdentifier,
   KindBigIntLiteral,
@@ -57,6 +58,7 @@ import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { rustSelectedOperationKey } from "../../target-model/facts/selections.js";
 import { rustTargetOperationSupportsAssignment, rustTargetOperationText } from "../facts/target-operation.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustValueCarrierBeforeOptionProjection } from "../facts/value-carrier-queries.js";
 import { rustRuntimeUnionContract, rustRuntimeUnionProjection } from "../../target-model/types/carriers/runtime-unions.js";
 import { selectedSourceLiteralIsRepresentable } from "../../policy/types/selected-numeric-literal.js";
 import { setCarrierFact, setRustOperationFact } from "./project-calls.js";
@@ -439,19 +441,18 @@ export function resolvePostCheckBinaryCarrier(
     (selectedLeftOperation === undefined || rustTargetOperationSupportsAssignment(selectedLeftFact)) &&
     left !== undefined && right !== undefined &&
     rustTargetTypeRefEquals(left, right)) {
-    const equivalentOperator = selectEquivalentBindingAssignment(
-      walk,
-      leftNode,
-      operands.rightNode,
-      left,
-    );
+    const parent = walk.context.ast.parent(expression);
+    const equivalentOperator = parent !== undefined &&
+        walk.context.ast.kindName(parent) === KindExpressionStatement
+      ? selectEquivalentBindingAssignment(walk, leftNode, operands.rightNode, left)
+      : undefined;
     fact = {
       kind: "operator-token",
       operationId: equivalentOperator === undefined
         ? `tsonic.rust.operator.=.${rustOperatorCarrierKey(right)}`
         : `tsonic.rust.operator.${equivalentOperator}.equivalent.${rustOperatorCarrierKey(right)}`,
       operator: equivalentOperator ?? "=",
-      resultCarrier: right,
+      resultCarrier: rustValueCarrierBeforeOptionProjection(walk.context.facts, operands.rightNode) ?? right,
     };
   } else {
     const compound = selectRustCompoundAssignment(operatorKind, left, right);

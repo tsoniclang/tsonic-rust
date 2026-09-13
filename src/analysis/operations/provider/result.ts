@@ -10,6 +10,7 @@ import {
   rustTargetOperationResultCarrier,
   rustTargetOperationFactKey,
   rustPreparedOperationResultFactKey,
+  rustFlowReadProjectionFactKey,
   rustOptionalChainFactKey,
   rustPostCheckUnaryMinusOperationId,
   rustPostCheckUnaryPlusOperationId,
@@ -100,6 +101,13 @@ export function selectedMemberReceiverCarrier(
     : options.projectTypes.openCarrier(containingThisDefinition);
   if (request.sourceReceiverType === undefined) {
     return undefined;
+  }
+  const flowRead = context.facts.get(receiver, rustFlowReadProjectionFactKey) ??
+    context.facts.resolve(receiver, rustFlowReadProjectionFactKey);
+  if (flowRead !== undefined) {
+    return rustTargetTypeRefEquals(sourceCarrier, flowRead.sourceCarrier)
+      ? flowRead.selectedCarrier
+      : undefined;
   }
   const sourceUnionCarrier = rustOptionElementCarrier(sourceCarrier) ?? sourceCarrier;
   const sourceUnion = sourceUnionCarrier === undefined

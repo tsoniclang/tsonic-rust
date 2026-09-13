@@ -94,7 +94,8 @@ export function resolveExpressionCarrier(
       facts.resolve(expression, rustOptionalChainFactKey);
     const selectedOperationOwnsResult = selectedOperation !== undefined || targetOperation !== undefined;
     const flowCarrier = selectedOperationOwnsResult &&
-        (optionalChain !== undefined || rustOptionElementCarrier(carrier) === undefined)
+        (optionalChain !== undefined || rustOptionElementCarrier(carrier) === undefined &&
+          (carrier === undefined || rustRuntimeUnionContract(carrier) === undefined))
       ? carrier
       : applyFlowReadLane(walk, expression, carrier);
     return applyOptionLane(walk, expression, flowCarrier, expected);
