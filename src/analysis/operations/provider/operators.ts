@@ -556,6 +556,13 @@ export function selectedSourceValueCarrier(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): TargetTypeRef | undefined {
+  if (context.ast.is.IsSpreadElement(value.expression)) {
+    const operand = context.ast.as.AsSpreadElement(value.expression)?.Expression;
+    return operand === undefined
+      ? undefined
+      : rustEffectiveValueCarrier(context.facts, operand) ??
+        resolveRustTargetTypeRef(operand, context, options);
+  }
   return selectedValueCarrier(value.expression, value.type, context, options);
 }
 
