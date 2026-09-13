@@ -492,6 +492,8 @@ export function rustValueConversionContract(
       return contract(value.id, "checked-range", "rt::conversions::i32_to_usize", "value", int32Carrier, usizeCarrier, true);
     case "checked-i32-to-u8":
       return contract(value.id, "checked-range", "rt::conversions::i32_to_u8", "value", int32Carrier, uint8Carrier, true);
+    case "checked-f64-to-u8-trunc":
+      return contract(value.id, "checked-range", "rt::conversions::f64_to_u8", "value", float64Carrier, uint8Carrier, true);
     case "checked-usize-to-i32":
       return contract(value.id, "checked-range", "rt::conversions::usize_to_i32", "value", usizeCarrier, int32Carrier, true);
     case "checked-isize-to-i32":

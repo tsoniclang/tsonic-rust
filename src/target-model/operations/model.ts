@@ -85,6 +85,7 @@ export type RustValueConversionId =
   | "js-numeric-from-bigint"
   | "checked-i32-to-usize"
   | "checked-i32-to-u8"
+  | "checked-f64-to-u8-trunc"
   | "checked-usize-to-i32"
   | "checked-isize-to-i32"
   | "checked-u32-to-i32"

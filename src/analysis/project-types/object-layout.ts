@@ -63,7 +63,17 @@ export function rustProjectObjectLayout(
       continue;
     }
     const nameNode = ast.name(member);
-    const sourceName = nameNode === undefined ? "" : ast.text(nameNode);
+    if (nameNode === undefined) return undefined;
+    switch (ast.kindName(nameNode)) {
+      case "KindIdentifier":
+      case "KindPrivateIdentifier":
+      case "KindStringLiteral":
+      case "KindNumericLiteral":
+        break;
+      default:
+        return undefined;
+    }
+    const sourceName = ast.text(nameNode);
     if (sourceName.length === 0 || seen.has(sourceName)) {
       return undefined;
     }

@@ -11,6 +11,7 @@ function semanticConversion(
 
 export const rustInt32ToUsizeValueConversion = semanticConversion("checked-i32-to-usize");
 export const rustInt32ToUint8ValueConversion = semanticConversion("checked-i32-to-u8");
+export const rustFloat64ToUint8ValueConversion = semanticConversion("checked-f64-to-u8-trunc");
 export const rustUsizeToInt32ValueConversion = semanticConversion("checked-usize-to-i32");
 export const rustIsizeToInt32ValueConversion = semanticConversion("checked-isize-to-i32");
 export const rustUint32ToInt32ValueConversion = semanticConversion("checked-u32-to-i32");

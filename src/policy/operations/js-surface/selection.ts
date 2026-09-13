@@ -261,9 +261,9 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
   switch (reference.ref) {
     case "cb-array-from-map": {
       const source = bindings.selectedMethodTypeArguments?.[0];
-      const result = bindings.selectedMethodTypeArguments?.[1];
+      const result = bindings.authoredMethodTypeArguments?.[1] ?? rustInferCarrier;
       const args = [source, rustSourcePrimitiveTargetType("float64")].slice(0, reference.arity);
-      return result === undefined || args.some((argument) => argument === undefined)
+      return args.some((argument) => argument === undefined)
         ? undefined
         : rustClosureTargetType(args as TargetTypeRef[], result);
     }

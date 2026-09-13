@@ -28,6 +28,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import {
   rustBoolToJsValueConversion,
   rustFloat64ToInt32ValueConversion,
+  rustFloat64ToUint8ValueConversion,
   rustFloat64ToJsValueConversion,
   rustInt32ToFloat64ValueConversion,
   rustInt32ToJsValueConversion,
@@ -223,6 +224,9 @@ export function selectRustSourceValueConversion(
   }
   if (source.name === "float64" && target.name === "int32") {
     return rustFloat64ToInt32ValueConversion;
+  }
+  if (source.name === "float64" && target.name === "uint8") {
+    return rustFloat64ToUint8ValueConversion;
   }
   if (source.name === "int32" && target.name === "uint8") {
     return rustInt32ToUint8ValueConversion;
