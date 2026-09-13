@@ -43,7 +43,7 @@ export function validateProviderPackageDefinition(definition: RustProviderPackag
   requireNonEmpty(definition.version, "version", fail);
   requireExactKeys(asRecord(definition), [
     "id", "displayName", "version", "requiredSurfaces", "sourceDependencies", "moduleAliases", "modules", "types", "operations", "crates",
-    "aliasImports", "carrierPaths", "carrierTraits", "binaryEpilogues",
+    "aliasImports", "carrierPaths", "carrierTraits", "binaryEpilogues", "sourceGlobals",
   ], "package", fail);
 
   const modulesBySpecifier = new Map<string, RustProviderPackageDefinition["modules"][number]>();
@@ -115,6 +115,21 @@ export function validateProviderPackageDefinition(definition: RustProviderPackag
   }
 
   validateModuleAliases(definition, modulesBySpecifier, exportNamesByModule, fail);
+
+  if (definition.sourceGlobals !== undefined) {
+    if (definition.sourceGlobals === null || typeof definition.sourceGlobals !== "object" || Array.isArray(definition.sourceGlobals)) {
+      fail("source globals must map declaration names to exact value export IDs");
+    }
+    for (const [name, exportId] of Object.entries(definition.sourceGlobals)) {
+      if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(name)) {
+        fail(`source global '${name}' is not a declaration identifier`);
+      }
+      const exported = exportsById.get(exportId);
+      if (exported?.declaration.kind !== "value") {
+        fail(`source global '${name}' must select an exact value export`);
+      }
+    }
+  }
 
   for (const module of definition.modules) {
     const importedExports = validateImports(module, exportNamesByModule, fail);

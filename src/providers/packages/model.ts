@@ -113,6 +113,7 @@ export type RustProviderOperationRow<
 
 export interface RustProviderExportRow {
   readonly exportId: string;
+  readonly globalNames?: readonly string[];
   readonly declarationKind: ProviderDeclarationKind;
   readonly providerPackageId: string;
   readonly providerId: string;
@@ -186,6 +187,7 @@ export interface RustProviderPackageDefinition {
   readonly version: string;
   readonly requiredSurfaces?: readonly string[];
   readonly sourceDependencies?: readonly RustProviderSourceDependency[];
+  readonly sourceGlobals?: Readonly<Record<string, string>>;
   readonly moduleAliases?: readonly RustProviderModuleAliasDefinition[];
   readonly modules: readonly RustProviderModuleDefinition[];
   readonly types?: readonly RustProviderTypeDefinition[];

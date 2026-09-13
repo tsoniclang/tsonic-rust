@@ -12,9 +12,12 @@ test("compiler provider uses the selected Node process global and native byte or
     files: { "index.ts": `
 import importedProcess from "node:process";
 import { endianness } from "node:os";
+import { webcrypto } from "node:crypto";
 import { check } from "@acme/testing";
 export function exitWithStatus(): never { process.exit(23); }
+function localCrypto(crypto: number): number { return crypto + 1; }
 export function main(): void {
+  check(localCrypto(6) === 7);
   check(process.pid === importedProcess.pid);
   check(process.platform === importedProcess.platform);
   check(process.cwd() === importedProcess.cwd());
@@ -30,6 +33,17 @@ export function main(): void {
   bytes[1] = 65;
   check(decoder.decode(view) === "A�😀");
   check(encoder.encode("").length === 0);
+  const randomWords = new Uint32Array(4);
+  randomWords[0] = 17;
+  randomWords[3] = 19;
+  const selectedWords = randomWords.subarray(1, 3);
+  const filled = globalThis.crypto.getRandomValues(selectedWords);
+  check(filled === selectedWords);
+  check(randomWords[0] === 17 && randomWords[3] === 19);
+  filled[0] = 23;
+  check(randomWords[1] === 23);
+  check(crypto.getRandomValues(selectedWords) === selectedWords);
+  check(webcrypto.getRandomValues(selectedWords) === selectedWords);
 }
 ` },
   });

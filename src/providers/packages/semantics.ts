@@ -115,8 +115,12 @@ export function collectRustProviderSemanticsFromDefinitions(
       module.exports.map((exported) => [exported.id, { module, exported }] as const)));
     for (const module of definition.modules) {
       for (const exported of module.exports) {
+        const globalNames = Object.entries(definition.sourceGlobals ?? {})
+          .filter(([, exportId]) => exportId === exported.id)
+          .map(([name]) => name).sort();
         exports.push(Object.freeze({
           exportId: exported.id,
+          ...(globalNames.length === 0 ? {} : { globalNames: Object.freeze(globalNames) }),
           declarationKind: exported.kind,
           providerPackageId: definition.id,
           providerId,
@@ -243,6 +247,15 @@ export function mergeRustProviderSemantics(
   const canonicalCarrierPaths = freezeSortedRecord(carrierPaths);
   const canonicalCarrierTraits = freezeSortedRecord(carrierTraits);
   const exports = mergeExactRows(inputs.flatMap((input) => input.exports), providerExportRowIdentity, "export");
+  const globalOwners = new Map<string, RustProviderExportRow>();
+  for (const exported of exports) {
+    for (const name of exported.globalNames ?? []) {
+      if (globalOwners.has(name)) {
+        throw new Error(`Rust provider global '${name}' has conflicting export owners.`);
+      }
+      globalOwners.set(name, exported);
+    }
+  }
   const operations = mergeExactRows(
     inputs.flatMap((input) => input.operations).map((row) =>
       canonicalizeProviderOperationRow(row, canonicalCarrierPaths, canonicalCarrierTraits)),

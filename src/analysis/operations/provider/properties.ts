@@ -17,6 +17,7 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import { selectJsSurfaceOperation } from "../../../policy/operations/js-surface.js";
 import { selectRustGeneratorSourceProperty } from "../../../policy/types/generator-source-profile.js";
 import { isIntrinsicSourceQualifier } from "./source-qualifiers.js";
+import { selectedRustProviderGlobal } from "../../../policy/evidence/provider-globals.js";
 import { tsonicFixedArrayProviderMember } from "@tsonic/source-core/facts";
 import type {
   RustCheckedDeleteSelectionInput,
@@ -206,6 +207,13 @@ export function selectRustCheckedPropertyAccess(
   }
   if (isIntrinsicSourceQualifier(request, context, options)) {
     return acceptDeclarationOperation("property");
+  }
+  const global = request.sourceReceiverIntrinsic === "global-object" &&
+    request.accessMode === "read" && request.optionalChain !== true
+    ? selectedRustProviderGlobal(request.sourceSelectedDeclaration, context, options.providerExports)
+    : undefined;
+  if (global !== undefined) {
+    return mapProviderCheckedOperation(request.expression, global, "property", context, options, undefined, []);
   }
   const structuralProperty = selectStructuralSourceProperty(
     request,
