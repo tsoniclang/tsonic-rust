@@ -1,3 +1,4 @@
+import { rustSourceErrorConstructors } from "../../../target-model/identities/source-errors.js";
 import {
   rustFutureTargetType,
   rustGeneratorTargetType,
@@ -440,7 +441,8 @@ export function resolveSourceProfileCarrierFromArguments(
   if (name === "String") {
     return rustStringTargetType();
   }
-  if (name === "Error" && arguments_.length === 0) {
+  if (arguments_.length === 0 && rustSourceErrorConstructors.some((entry) =>
+    entry.sourceName === name && (name === "Error" || options.jsEnabled))) {
     return rustJsErrorTargetType();
   }
   if (name === "Promise" || name === "PromiseLike") {

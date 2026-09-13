@@ -1,6 +1,5 @@
 import {
   KindIdentifier,
-  KindNewExpression,
   KindParenthesizedExpression,
   KindVariableDeclaration,
   Node_Expression,
@@ -24,6 +23,7 @@ import { rustFutureValueForOperation, rustFutureValueMatchesCarrier } from "../f
 import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
 import { selectRustResourceManagement } from "./management.js";
 import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
+import { rustSourceErrorConstructors } from "../../target-model/identities/source-errors.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustFutureValueFact } from "../facts/keys.js";
@@ -167,9 +167,9 @@ export function recordThrowFacts(walk: RustFactWalk, statement: Node, sourceFile
   const carrier = resolveExpressionCarrier(walk, expression, sourceFile, undefined);
   const constructor = walk.context.facts.get(expression, rustTargetOperationFactKey) ??
     walk.context.facts.resolve(expression, rustTargetOperationFactKey);
-  if (ast.kindName(expression) === KindNewExpression &&
-    constructor?.kind === "provider-operation" &&
-    constructor.operationId === "tsonic.rust.error.constructor") {
+  if (constructor?.kind === "provider-operation" &&
+    constructor.abi.operationKind === "constructor" &&
+    rustSourceErrorConstructors.some((entry) => entry.operationId === constructor.operationId)) {
     const [message] = ast.arguments(expression);
     if (message !== undefined) {
       resolveExpressionCarrier(walk, message, sourceFile, rustStringTargetType());

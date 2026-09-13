@@ -5,6 +5,7 @@ import {
 import { jsStandardSourceProfileDeclarations } from "@tsonic/js-source-profile";
 import type { TargetSourceProfileContributions } from "@tsonic/target-api/provider";
 import { rustTargetId } from "../../target-model/identities/target.js";
+import { rustSourceErrorConstructors } from "../../target-model/identities/source-errors.js";
 
 export const rustSourceProfileOwnerId = rustTargetId;
 export const rustJsSourceProfileOwnerId = "js";
@@ -135,6 +136,15 @@ interface ReadonlyArray<T> extends Iterable<T> {
 
 const rustJsSurfaceProfileDeclarations = `
 ${sharedNoLibDeclarations}
+
+${rustSourceErrorConstructors.filter((entry) => entry.sourceName !== "Error").map((entry) => `
+interface ${entry.sourceName} extends Error {}
+interface ${entry.ownerName} {
+  new (message?: string): ${entry.sourceName};
+  (message?: string): ${entry.sourceName};
+}
+declare var ${entry.sourceName}: ${entry.ownerName};
+`).join("\n")}
 
 interface Object {
   hasOwnProperty(key: PropertyKey): boolean;

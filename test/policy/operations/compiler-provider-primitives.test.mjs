@@ -7,10 +7,25 @@ test("compiler provider integer formatting and string iteration run natively", {
   const { result } = compileRust({
     surfaces: ["js"], packages: [acmeTestingPackage()],
     target: { id: "rust", options: { outputType: "bin", crateName: "provider_primitives" } },
-    files: { "index.ts": `
+    files: { "shadow.ts": `
+class RangeError { value: number = 17; }
+export function localErrorValue(): number { return new RangeError().value; }
+`, "index.ts": `
 import { check } from "@acme/testing";
+import { localErrorValue } from "./shadow.js";
 function format(value: bigint, radix: number): string { return value.toString(radix); }
+function rejectRange(): void { throw new RangeError("invalid integer"); }
+function rejectType(): void { throw new TypeError("invalid function"); }
+function rejectUri(): void { throw new URIError("invalid escape"); }
+function rejectEmpty(): void { throw new Error(); }
 export function main(): void {
+  let caught = 0;
+  try { rejectRange(); } catch { caught += 1; }
+  try { rejectType(); } catch { caught += 1; }
+  try { rejectUri(); } catch { caught += 1; }
+  try { rejectEmpty(); } catch { caught += 1; }
+  check(caught === 4);
+  check(localErrorValue() === 17);
   check(format(-9007199254740993n, 16) === "-20000000000001");
   check(format(35n, 36) === "z");
   check((9007199254740993n).toString() === "9007199254740993");
@@ -47,5 +62,9 @@ export function main(): void {
 ` },
   });
   assert.deepEqual(result.diagnostics, []);
+  const emitted = result.artifacts.map((artifact) => artifact.text).join("\n");
+  for (const name of ["range_error", "type_error", "uri_error"]) {
+    assert.ok(emitted.includes(`js_abi::${name}(`));
+  }
   validateGeneratedProject("compiler-provider-primitives", result.artifacts, { run: true });
 });

@@ -29,6 +29,7 @@ import { rustRuntimeCarrierKey, rustSelectedCallKey } from "../../../../target-m
 import { selectedCallArgumentCarriers, selectedCallArgumentNodes, selectedCallCalleeDeclaration, selectedCallCalleeSymbol, selectedValueCarrier } from "../operators.js";
 import { selectJsSurfaceConstructorBySourceOwner, selectJsSurfaceOperation } from "../../../../policy/operations/js-surface.js";
 import { selectRustGeneratorSourceCall } from "../../../../policy/types/generator-source-profile.js";
+import { rustSourceErrorConstructors } from "../../../../target-model/identities/source-errors.js";
 import { selectRustProviderOperation } from "../../../../policy/operations/provider-selection.js";
 import { selectRustProviderPointerResult } from "../../../../policy/operations/provider-pointer-result.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
@@ -157,29 +158,39 @@ export function selectRustCheckedCall(
     });
   }
 
-  if (selectedSourceMember?.ownerName === "ErrorConstructor" &&
-    selectedSourceMember.memberName === "constructor" && checkedCallIsConstruction(request, context)) {
-    if (selectedCallArgumentNodes(request).length !== 1) {
+  const errorConstructor = selectedSourceMember === undefined ? undefined :
+    rustSourceErrorConstructors.find((entry) => entry.ownerName === selectedSourceMember.ownerName &&
+      (entry.sourceName === "Error" || selectedSourceMember.profile === "js"));
+  if (errorConstructor !== undefined &&
+    (selectedSourceMember?.memberName === "call" ||
+      selectedSourceMember?.memberName === "constructor" && checkedCallIsConstruction(request, context))) {
+    const argumentCount = selectedCallArgumentNodes(request).length;
+    if (argumentCount > 1) {
       return rejectSelectedOperation(
         request.source.call,
         context,
         "RUST_ERROR_MESSAGE_REQUIRED",
-        "Rust Error construction currently requires one checked string message argument.",
+        "Rust error construction requires an empty argument list or one checked string message.",
       );
     }
     const resultCarrier = rustJsErrorTargetType();
+    const parameterCarriers = argumentCount === 0 ? [] : [rustStringTargetType()];
     return acceptSelectedCall(request, {
       kind: "provider-operation",
-      operationId: "tsonic.rust.error.constructor",
+      operationId: errorConstructor.operationId,
       operationKind: "constructor",
-      target: { form: "call", path: "rt::JsError::error", argModes: ["ref"] },
-      parameterCarriers: [rustStringTargetType()],
+      target: {
+        form: "call", path: errorConstructor.path,
+        argModes: argumentCount === 0 ? [] : ["ref"],
+        ...(argumentCount === 0 ? { trailingArguments: [{ kind: "string", value: "" } as const] } : {}),
+      },
+      parameterCarriers,
       resultCarrier,
       isAsync: false,
       isFallible: false,
       errorBoundary: "none",
-    }, [rustStringTargetType()], context, options, {
-      sourceName: "Error",
+    }, parameterCarriers, context, options, {
+      sourceName: errorConstructor.sourceName,
     });
   }
   if (selectedSourceMember !== undefined) {
