@@ -33,7 +33,8 @@ import {
   rustTargetTypeRefEquals,
 } from "../../../../target-model/types/equality.js";
 import { rustValueCarrierTransitionTarget } from "../../../../analysis/facts/value-carrier-queries.js";
-import { rustSpreadElementCarrier, rustVecRestAssembly } from "../../../../target-model/operations/rest-assembly.js";
+import { rustSpreadElementCarrier } from "../../../../target-model/operations/rest-assembly.js";
+import { planRustRestAssembly } from "./rest-assembly.js";
 import { validateRustFinalizedOperationAbi } from "../../../../analysis/facts/finalized-operation-abi.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../../target-ast/nodes.js";
@@ -131,15 +132,7 @@ function shapeRustRestSequenceInputs(
       context,
     );
   }
-  if (context.syntheticNames === undefined) {
-    return undefined;
-  }
-  const collectionName = allocateRustSyntheticName(
-    context.syntheticNames,
-    "spread_rest",
-  );
-  const collection: RustExpr = { kind: "path", path: collectionName };
-  const effects: RustExpr[] = [];
+  const segments: { readonly value: RustExpr; readonly sequence: boolean }[] = [];
   for (const input of parameter.inputs) {
     const value = shapeRustSourceCallInput(
       parameterIndex,
@@ -152,33 +145,9 @@ function shapeRustRestSequenceInputs(
     if (value === undefined) {
       return undefined;
     }
-    effects.push({
-      kind: "method-call",
-      receiver: collection,
-      method: input.sourceForm === "spread-sequence"
-        ? rustVecRestAssembly.appendSequenceMethod
-        : rustVecRestAssembly.appendElementMethod,
-      args: [value],
-    });
+    segments.push({ value, sequence: input.sourceForm === "spread-sequence" });
   }
-  let value: RustExpr = collection;
-  for (let index = effects.length - 1; index >= 0; index -= 1) {
-    value = {
-      kind: "evaluate-then",
-      effect: effects[index]!,
-      discard: "unit",
-      value,
-    };
-  }
-  return {
-    kind: "block",
-    bindings: [{
-      name: collectionName,
-      mutable: true,
-      value: { kind: "vec-literal", elements: [] },
-    }],
-    value,
-  };
+  return planRustRestAssembly(segments, context);
 }
 
 export function planRustSourceCallArgumentEvaluation(

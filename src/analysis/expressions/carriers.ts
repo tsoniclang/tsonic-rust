@@ -656,6 +656,11 @@ function resolveIndependentCallArgumentOperation(
     kind === KindSpreadElement) {
     const inner = Node_Expression(ast, argument);
     if (inner !== undefined) {
+      if (kind === KindSpreadElement && ast.is.IsArrayLiteralExpression(inner) &&
+        ast.as.AsArrayLiteralExpression(inner)?.Elements?.Nodes.length === 0) {
+        resolveExpressionCarrier(walk, inner, sourceFile, { kind: "tuple", elements: [] });
+        return;
+      }
       resolveIndependentCallArgumentOperation(walk, inner, sourceFile);
     }
   }

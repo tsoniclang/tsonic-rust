@@ -45,6 +45,8 @@ import {
 } from "../types/index.js";
 import type { RustPrimitiveTypeName } from "../syntax/tokens.js";
 import { rustNumericPromotionKind } from "./numeric-promotion.js";
+import { rustRestSequenceElements } from "../operations/rest-assembly.js";
+import { isDenseDataArray } from "../metadata/closed-data.js";
 
 const boolCarrier = rustSourcePrimitiveTargetType("bool");
 const int32Carrier = rustSourcePrimitiveTargetType("int32");
@@ -71,6 +73,12 @@ interface RustValueConversionContractBase {
 }
 
 export type RustValueConversionContract = RustValueConversionContractBase & (
+  | {
+      readonly lowering: "rest-sequence";
+      readonly collection: "vec" | "js-array" | "fixed-array" | "tuple";
+      readonly holePolicy: "reject" | "number-nan";
+      readonly elementConversions: readonly (RustValueConversionContract | null)[];
+    }
   | {
       readonly lowering: "call";
       readonly path: string;
@@ -150,6 +158,33 @@ export type RustValueConversionContract = RustValueConversionContractBase & (
 export function rustValueConversionContract(
   value: RustValueConversion,
 ): RustValueConversionContract | undefined {
+  if (value.kind === "rest-sequence") {
+    const sequence = rustRestSequenceElements(value.source);
+    if (sequence === undefined || !isDenseDataArray(value.elementConversions) ||
+      value.elementConversions.length !== sequence.elements.length) return undefined;
+    const conversions = value.elementConversions.map(conversion => conversion === null ? null : rustValueConversionContract(conversion));
+    if (!isRustTargetTypeRef(value.elementTarget) || sequence.elements.some(element => !rustCarrierSupportsClone(element)) ||
+      (value.holePolicy !== "reject" && value.holePolicy !== "number-nan") ||
+      (sequence.collection === "js-array" && value.holePolicy !== "number-nan") ||
+      (value.holePolicy === "number-nan" && !rustTargetTypeRefEquals(value.elementTarget, float64Carrier)) ||
+      sequence.elements.some((element, index) => {
+        const conversion = conversions[index];
+        return conversion === null ? !rustTargetTypeRefEquals(element, value.elementTarget)
+        : conversion === undefined || conversion.fallible ||
+          (conversion.category !== "exact" && conversion.category !== "numeric-promotion" &&
+            conversion.category !== "js-number") ||
+          !rustTargetTypeRefEquals(conversion.source, element) ||
+          !rustTargetTypeRefEquals(conversion.target, value.elementTarget);
+      })) {
+      return undefined;
+    }
+    return {
+      category: "projection", lowering: "rest-sequence", collection: sequence.collection,
+      holePolicy: value.holePolicy, sourceMode: "ref", source: value.source,
+      target: { kind: "array", element: value.elementTarget }, fallible: false,
+      elementConversions: conversions as readonly (RustValueConversionContract | null)[],
+    };
+  }
   if (value.kind === "ts-value-from-closed-carrier") {
     return !rustCarrierCanEnterTsValue(value.source)
       ? undefined
@@ -559,6 +594,9 @@ export function rustValueConversionIsFallible(value: RustValueConversion | undef
 }
 
 export function rustValueConversionIdentity(value: RustValueConversion): string {
+  if (value.kind === "rest-sequence") {
+    return `rest-sequence.${JSON.stringify(value.source)}.${JSON.stringify(value.elementTarget)}.${value.holePolicy}.${value.elementConversions.map(conversion => conversion === null ? "identity" : rustValueConversionIdentity(conversion)).join("|")}`;
+  }
   return value.kind === "semantic-conversion"
     ? value.id
     : value.kind === "numeric-promotion"
@@ -599,6 +637,14 @@ export function substituteRustValueConversion(
   constSubstitutions: ReadonlyMap<string, RustTargetConstArgument> = new Map(),
 ): RustValueConversion {
   switch (value.kind) {
+    case "rest-sequence":
+      return Object.freeze({
+        ...value,
+        source: substituteRustTargetGenerics(value.source, substitutions, lifetimeSubstitutions, constSubstitutions),
+        elementTarget: substituteRustTargetGenerics(value.elementTarget, substitutions, lifetimeSubstitutions, constSubstitutions),
+        elementConversions: value.elementConversions.map(conversion => conversion === null ? null :
+          substituteRustValueConversion(conversion, substitutions, lifetimeSubstitutions, constSubstitutions)) as typeof value.elementConversions,
+      });
     case "copy-from-reference":
       return Object.freeze({
         ...value,

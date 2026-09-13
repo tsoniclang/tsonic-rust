@@ -87,6 +87,11 @@ function rustFoundationForConversionContract(
     foundation = maximumRustFoundation(foundation, candidate);
   };
   switch (contract.lowering) {
+    case "rest-sequence":
+      for (const conversion of contract.elementConversions) {
+        if (conversion !== null) require(rustFoundationForConversionContract(conversion));
+      }
+      break;
     case "call":
       require(rustFoundationForPath(contract.path));
       break;

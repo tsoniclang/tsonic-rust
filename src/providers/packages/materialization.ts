@@ -476,6 +476,14 @@ function materializeProviderValueConversion(
   carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>>,
 ): RustValueConversion {
   switch (conversion.kind) {
+    case "rest-sequence":
+      return {
+        ...conversion,
+        source: materializeProviderCarrier(conversion.source, carrierPaths, carrierTraits),
+        elementTarget: materializeProviderCarrier(conversion.elementTarget, carrierPaths, carrierTraits),
+        elementConversions: conversion.elementConversions.map(element => element === null ? null :
+          materializeProviderValueConversion(element, carrierPaths, carrierTraits)) as typeof conversion.elementConversions,
+      };
     case "copy-from-reference":
       return {
         ...conversion,

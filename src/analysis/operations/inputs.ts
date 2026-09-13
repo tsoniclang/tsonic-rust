@@ -265,7 +265,7 @@ export function resolveArrayLiteralCarrier(
   const hasHoles = elements.some((element) => ast.kindName(element) === KindOmittedExpression);
   const presentElements = elements.filter((element) => ast.kindName(element) !== KindOmittedExpression);
 
-  if (expected?.kind === "tuple" && expected.elements.length > 0 && !hasHoles) {
+  if (expected?.kind === "tuple" && !hasHoles) {
     const omittedOptionalElementIndexes = contextualTupleOmissions(
       walk,
       expression,

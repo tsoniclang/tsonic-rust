@@ -412,6 +412,10 @@ function valueConversionCarriers(
       ]),
     ];
   }
+  if (conversion.kind === "rest-sequence") {
+    return [conversion.source, conversion.elementTarget,
+      ...conversion.elementConversions.flatMap(element => element === null ? [] : valueConversionCarriers(element))];
+  }
   if (conversion.kind === "option-some") return [conversion.element];
   return valueConversionCarriers(conversion.elementConversion);
 }

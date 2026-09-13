@@ -77,6 +77,11 @@ export function visitConversionContract(
   markVariantConstructed: (carrier: TargetTypeRef, variantName: string) => void,
 ): void {
   switch (contract.lowering) {
+    case "rest-sequence":
+      for (const conversion of contract.elementConversions) {
+        if (conversion !== null) visitConversionContract(conversion, markStructuralFieldRead, markVariantConstructed);
+      }
+      return;
     case "source-union-variant":
       markVariantConstructed(contract.target, contract.variantName);
       return;

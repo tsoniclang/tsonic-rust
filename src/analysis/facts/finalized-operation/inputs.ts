@@ -3,6 +3,7 @@ import { isRustFinalizedArrayInput, isRustFinalizedSliceInput, isRustFinalizedSo
 import { rustSliceRefTargetType, rustStringTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectRustSourceValueConversion } from "../../../policy/conversions/selection.js";
+import { selectRustRestSequenceConversion } from "../../../policy/conversions/rest-sequence.js";
 import type {
   RustArgumentMode,
   RustProviderConstantArgument,
@@ -16,6 +17,7 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 export function createInputFactory(
   receiverCarrier: TargetTypeRef | undefined,
   argumentCarriers: readonly TargetTypeRef[],
+  spreadIndexes: ReadonlySet<number> = new Set(),
 ) {
   const receiver = (mode: RustArgumentMode): RustFinalizedSourceInput | undefined =>
     receiverCarrier === undefined
@@ -46,9 +48,16 @@ export function createInputFactory(
       ? undefined
       : sourceInput({ kind: "argument", sourceIndex }, sourceCarrier, mode, conversion);
   };
+  const sequenceTo = (sourceIndex: number, target: TargetTypeRef, holePolicy: "reject" | "number-nan") => {
+    if (!spreadIndexes.has(sourceIndex)) return argumentTo(sourceIndex, "value", target);
+    const carrier = argumentCarriers[sourceIndex];
+    const conversion = carrier === undefined ? undefined
+      : selectRustRestSequenceConversion(carrier, target, holePolicy);
+    return conversion === undefined ? undefined : argument(sourceIndex, "value", conversion);
+  };
   const sourceArgumentCarrier = (sourceIndex: number): TargetTypeRef | undefined =>
     argumentCarriers[sourceIndex];
-  return { receiver, argument, argumentTo, sourceArgumentCarrier };
+  return { receiver, argument, argumentTo, sequenceTo, sourceArgumentCarrier };
 }
 
 export function finalizeTargetInputs(
@@ -318,7 +327,7 @@ export function finalizeTargetInputs(
         input.argumentTo(sourceIndex, argument.mode, argument.carrier));
       const sliceIndexes = indexes.slice(form.leadingArguments.length);
       const elements = sliceIndexes.map((sourceIndex) =>
-        input.argumentTo(sourceIndex, "value", form.elementCarrier));
+        input.sequenceTo(sourceIndex, form.elementCarrier, form.sequenceHolePolicy ?? "reject"));
       if (leading.some((entry) => entry === undefined) || elements.some((entry) => entry === undefined)) {
         return undefined;
       }
@@ -437,6 +446,7 @@ export function finalizeSourceArguments(
     readonly targetArguments: readonly RustFinalizedTargetInput[];
   },
   compileTimeSourceArgumentIndexes: readonly number[] | undefined,
+  spreadSourceArgumentIndexes: ReadonlySet<number> = new Set(),
 ): readonly RustFinalizedSourceArgument[] | undefined {
   const compileTime = new Set(compileTimeSourceArgumentIndexes ?? []);
   if (compileTime.size !== (compileTimeSourceArgumentIndexes?.length ?? 0) ||
@@ -480,6 +490,7 @@ export function finalizeSourceArguments(
   }
   return carriers.map((carrier, sourceIndex) => ({
     sourceIndex,
+    form: spreadSourceArgumentIndexes.has(sourceIndex) ? "spread-sequence" : "value",
     carrier,
     mode: modes.get(sourceIndex) ?? "value",
     role: compileTime.has(sourceIndex)

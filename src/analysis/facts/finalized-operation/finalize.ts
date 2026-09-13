@@ -62,6 +62,15 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
     return undefined;
   }
   const compileTimeIndexes = new Set(options.compileTimeSourceArgumentIndexes ?? []);
+  if (options.spreadSourceArgumentIndexes !== undefined &&
+    !isDenseDataArray(options.spreadSourceArgumentIndexes)) return undefined;
+  const spreadIndexes = new Set(options.spreadSourceArgumentIndexes ?? []);
+  if (options.spreadSourceArgumentIndexes !== undefined &&
+    (spreadIndexes.size !== options.spreadSourceArgumentIndexes.length ||
+      options.form.form !== "call-value-slice" ||
+      options.spreadSourceArgumentIndexes.some(index => !Number.isSafeInteger(index) ||
+        index < (options.form.form === "call-value-slice" ? options.form.leadingArguments.length : 0) ||
+        index >= options.sourceArgumentCarriers.length || compileTimeIndexes.has(index)))) return undefined;
   const runtimeSourceIndexes = options.sourceArgumentCarriers
     .map((_carrier, index) => index)
     .filter((index) => !compileTimeIndexes.has(index));
@@ -81,7 +90,7 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
   )) {
     return undefined;
   }
-  const input = createInputFactory(options.sourceReceiverCarrier, options.sourceArgumentCarriers);
+  const input = createInputFactory(options.sourceReceiverCarrier, options.sourceArgumentCarriers, spreadIndexes);
   const mapping = finalizeTargetInputs(
     options.operationKind,
     options.form,
@@ -106,6 +115,7 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
     options.sourceArgumentCarriers,
     mapping,
     options.compileTimeSourceArgumentIndexes,
+    spreadIndexes,
   );
   if (sourceArguments === undefined) {
     return undefined;

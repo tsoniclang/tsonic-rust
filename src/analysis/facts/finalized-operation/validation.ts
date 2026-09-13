@@ -60,6 +60,9 @@ export function validateRustFinalizedOperationAbi(candidate: unknown): candidate
     return argument.sourceIndex !== index ||
       (argument.mode !== "value" && argument.mode !== "ref" && argument.mode !== "mut-ref") ||
       (argument.disposition !== "runtime" && argument.disposition !== "compile-time") ||
+      (argument.form === "spread-sequence" &&
+        (argument.disposition !== "runtime" || abi.target.form !== "call-value-slice" ||
+          index < abi.target.leadingArguments.length)) ||
       argument.role !== expectedRole;
   })) {
     return false;
@@ -106,7 +109,10 @@ export function validateRustFinalizedOperationAbi(candidate: unknown): candidate
         return false;
       }
       if (input.elements.some((element) =>
-        !rustTargetTypeRefEquals(element.parameterCarrier, input.elementCarrier)) ||
+        !rustTargetTypeRefEquals(element.parameterCarrier,
+          element.source.kind === "argument" &&
+            abi.sourceArguments[element.source.sourceIndex]?.form === "spread-sequence"
+            ? { kind: "array", element: input.elementCarrier } : input.elementCarrier)) ||
         (isRustFinalizedSliceInput(input) &&
           !rustTargetTypeRefEquals(input.parameterCarrier, rustSliceRefTargetType(input.elementCarrier)))) {
         return false;
@@ -140,7 +146,8 @@ export function validateRustFinalizedOperationAbi(candidate: unknown): candidate
   const expectedMapping = finalizeTargetInputs(
     abi.operationKind,
     abi.target,
-    createInputFactory(sourceReceiverCarrier, abi.sourceArguments.map((argument) => argument.carrier)),
+    createInputFactory(sourceReceiverCarrier, abi.sourceArguments.map((argument) => argument.carrier),
+      new Set(abi.sourceArguments.filter(argument => argument.form === "spread-sequence").map(argument => argument.sourceIndex))),
     abi.sourceArguments.length,
   );
   if (expectedMapping === undefined ||
@@ -212,7 +219,8 @@ function isSourceReceiver(value: unknown): value is RustFinalizedOperationAbi["s
 }
 
 function isSourceArgument(value: unknown): value is RustFinalizedSourceArgument {
-  return isRecord(value) && hasExactKeys(value, ["sourceIndex", "carrier", "mode", "role", "disposition"]) &&
+  return isRecord(value) && hasExactKeys(value, ["sourceIndex", "form", "carrier", "mode", "role", "disposition"]) &&
+    (value.form === "value" || value.form === "spread-sequence") &&
     Number.isSafeInteger(value.sourceIndex) && (value.sourceIndex as number) >= 0 &&
     isRustTargetTypeRef(value.carrier) && argumentModes.has(value.mode) && argumentRoles.has(value.role) &&
     dispositions.has(value.disposition);
@@ -359,6 +367,13 @@ function isNonOptionValueConversion(value: unknown): boolean {
 }
 
 function isValueProjectionConversion(value: Record<string, unknown>): boolean {
+  if (value.kind === "rest-sequence") {
+    return hasExactKeys(value, ["kind", "source", "elementTarget", "holePolicy", "elementConversions"]) &&
+      isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.elementTarget) &&
+      (value.holePolicy === "reject" || value.holePolicy === "number-nan") &&
+      Array.isArray(value.elementConversions) && value.elementConversions.every(conversion =>
+        conversion === null || isNonOptionValueConversion(conversion));
+  }
   if (value.kind === "js-value-from-closed-carrier" ||
     value.kind === "ts-value-from-closed-carrier") {
     return hasExactKeys(value, ["kind", "source"]) &&

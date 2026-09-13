@@ -580,12 +580,14 @@ export function finalizeProviderOperationFact(
   template: RustProviderOperationTemplate,
   sourceArgumentCarriers: readonly TargetTypeRef[],
   sourceReceiverCarrier: TargetTypeRef | undefined,
+  spreadSourceArgumentIndexes?: readonly number[],
 ): Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }> | undefined {
   const abi = finalizeRustProviderOperationAbi({
     operationKind: template.operationKind,
     form: template.target,
     ...(sourceReceiverCarrier === undefined ? {} : { sourceReceiverCarrier }),
     sourceArgumentCarriers,
+    ...(spreadSourceArgumentIndexes === undefined ? {} : { spreadSourceArgumentIndexes }),
     declaredSourceArgumentCarriers: template.parameterCarriers,
     ...(template.compileTimeSourceArgumentIndexes === undefined
       ? {}

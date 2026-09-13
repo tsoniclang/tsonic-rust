@@ -48,6 +48,7 @@ import {
 } from "./input-shaping.js";
 import { invokeRustStructuralObjectMethod } from "../objects/project-storage.js";
 import { applyFinalizedValueConversion } from "./value-conversions.js";
+import { planRustRestAssembly } from "./calls/rest-assembly.js";
 
 function providerConstantExpression(argument: RustProviderConstantArgument): RustExpr {
   switch (argument.kind) {
@@ -110,6 +111,8 @@ export function planProviderOperationExpression(
     planExpression,
     planProviderOperationExpression,
     options.overrides?.inputs,
+    input => planFinalizedSourceInput(context, input, receiverNode, argumentNodes, operationNode,
+      "target-argument", options.overrides),
   );
   if (evaluationScope.kind === "failed") {
     return undefined;
@@ -626,6 +629,13 @@ export function planFinalizedTargetInput(
         : planned;
       elements.push(asTargetElement);
     }
+    const sequenceFlags = input.elements.map(element => element.conversion.kind === "semantic" &&
+      element.conversion.conversion.kind === "rest-sequence");
+    if (sequenceFlags.some(Boolean)) {
+      if (!isRustFinalizedSliceInput(input)) return undefined;
+      const value = planRustRestAssembly(elements.map((value, index) => ({ value, sequence: sequenceFlags[index]! })), context);
+      return value === undefined ? undefined : { kind: "reference", expr: value };
+    }
     return isRustFinalizedSliceInput(input)
       ? { kind: "reference", expr: { kind: "slice-literal", elements } }
       : { kind: "slice-literal", elements };
@@ -650,9 +660,14 @@ export function planFinalizedSourceInput(
   position: "target-argument" | "target-receiver" = "target-argument",
   overrides?: RustFinalizedInputPlanOverrides,
 ): RustExpr | undefined {
-  const sourceNode = input.source.kind === "receiver"
+  const occurrence = input.source.kind === "receiver"
     ? receiverNode
     : argumentNodes[input.source.sourceIndex];
+  const sequence = input.conversion.kind === "semantic" && input.conversion.conversion.kind === "rest-sequence";
+  const sourceNode = sequence
+    ? occurrence !== undefined && context.input.program.source.ast.is.IsSpreadElement(occurrence)
+      ? context.input.program.source.ast.as.AsSpreadElement(occurrence)?.Expression : undefined
+    : occurrence;
   if (sourceNode === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, operationNode),

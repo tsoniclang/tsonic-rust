@@ -281,9 +281,12 @@ export function rustProviderOperationFormContractViolation(
     case "call-value-array":
       return hasExactKeys(
         form,
-        ["form", "path", "leadingArguments", "elementCarrier"],
+        ["form", "path", "leadingArguments", "elementCarrier", ...(form.form === "call-value-slice" ? ["sequenceHolePolicy"] : [])],
         ["form", "path", "leadingArguments", "elementCarrier"],
       ) && typeof form.path === "string" && rustPathPattern.test(form.path) &&
+        (form.form !== "call-value-slice" || form.sequenceHolePolicy === undefined ||
+          form.sequenceHolePolicy === "number-nan" && isRustTargetTypeRef(form.elementCarrier) && form.elementCarrier.kind === "source-primitive" &&
+          form.elementCarrier.name === "float64") &&
         isDenseDataArray(form.leadingArguments) &&
         form.leadingArguments.every((argument) =>
           hasExactKeys(argument, ["carrier", "mode"], ["carrier", "mode"]) &&
