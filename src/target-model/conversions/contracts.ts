@@ -14,6 +14,7 @@ import type {
 import {
   isRustNeverCarrier,
   rustJsNumericTargetType,
+  rustJsStringNumberTargetType,
   rustBigIntTargetType,
   isRustNumericCarrier,
   rustCallableProtocol,
@@ -528,6 +529,16 @@ export function rustValueConversionContract(
   switch (value.id) {
     case "js-numeric-from-number":
       return contract(value.id, "exact", "js_abi::JsNumeric::from_number", "value", float64Carrier, rustJsNumericTargetType(), false);
+    case "js-string-number-from-string":
+      return contract(value.id, "exact", "js_abi::JsStringNumber::from_string", "value", stringCarrier, rustJsStringNumberTargetType(), false);
+    case "js-string-number-from-number":
+      return contract(value.id, "exact", "js_abi::JsStringNumber::from_number", "value", float64Carrier, rustJsStringNumberTargetType(), false);
+    case "js-string-number-from-int32":
+      return contract(value.id, "exact", "js_abi::JsStringNumber::from_int32", "value", int32Carrier, rustJsStringNumberTargetType(), false);
+    case "js-string-number-from-null":
+      return contract(value.id, "exact", "js_abi::JsStringNumber::from_null", "value", nullCarrier, rustJsStringNumberTargetType(), false);
+    case "js-string-number-from-undefined":
+      return contract(value.id, "exact", "js_abi::JsStringNumber::from_undefined", "value", undefinedCarrier, rustJsStringNumberTargetType(), false);
     case "js-numeric-from-int32":
       return contract(value.id, "exact", "js_abi::JsNumeric::from_int32", "value", int32Carrier, rustJsNumericTargetType(), false);
     case "js-numeric-from-bigint":

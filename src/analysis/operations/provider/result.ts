@@ -20,6 +20,7 @@ import {
   resolveSelectedSourceProfilePropertyMembers,
 } from "../../../policy/evidence/selected-source.js";
 import { selectRustFlowReadProjection } from "../../../policy/types/value-carrier-reconciliation.js";
+import { rustRuntimeUnionProjection } from "../../../target-model/types/carriers/runtime-unions.js";
 import { recordRustFlowReadProjection } from "../../facts/value-carrier-queries.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
 import { retainRustSourceUnionInstantiation } from "../../../policy/types/resolution/source-unions.js";
@@ -187,6 +188,9 @@ export function selectedMemberReceiverCarrier(
   }
   if (rustTargetTypeRefEquals(sourceCarrier, selectedCarrier)) {
     return sourceCarrier;
+  }
+  if (rustRuntimeUnionProjection(sourceCarrier, selectedCarrier) !== undefined) {
+    return selectedCarrier;
   }
   if (isRustProgramErrorCarrier(sourceCarrier)) {
     const selectedDefinition = options.projectTypes.definitionForCarrier(selectedCarrier);
@@ -578,6 +582,10 @@ export function normalizeSelectedOperationInputCarrier(
   const optionElement = rustOptionElementCarrier(expected);
   if (optionElement === undefined || direct === undefined ||
     rustTargetTypeRefEquals(direct, expected)) {
+    if (direct !== undefined && expected !== undefined &&
+      selectRustValueCarrierReconciliation(direct, expected, options.projectTypes).kind === "conversion") {
+      return expected;
+    }
     return direct;
   }
   if (isRustDefinitelyNullishCarrier(direct)) {

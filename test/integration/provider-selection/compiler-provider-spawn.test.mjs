@@ -19,7 +19,9 @@ export function main(): void {
   options.cwd = "/";
   options.env = environment;
   options.input = new Uint8Array([0, 255, 42]);
-  options.stdio = ["pipe", "pipe", "pipe"];
+  const stdio: Array<"pipe" | "ignore" | number> = ["pipe", "ignore", "pipe"];
+  options.stdio = stdio;
+  stdio[1] = "pipe";
   const result = spawnSync("/bin/cat", [], options);
   check(result.status === 0);
   check(result.pid !== undefined);

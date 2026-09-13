@@ -4,6 +4,7 @@ import {
   isRustJsArrayCarrier,
   isRustBigIntCarrier,
   rustJsNumericTargetType,
+  rustJsStringNumberTargetType,
   isRustNeverCarrier,
   isRustNullCarrier,
   isRustUndefinedCarrier,
@@ -66,6 +67,13 @@ export function selectRustSourceValueConversion(
     if (isRustBigIntCarrier(source)) return { kind: "semantic-conversion", id: "js-numeric-from-bigint" };
     if (rustTargetTypeRefEquals(source, float64Carrier)) return { kind: "semantic-conversion", id: "js-numeric-from-number" };
     if (rustTargetTypeRefEquals(source, int32Carrier)) return { kind: "semantic-conversion", id: "js-numeric-from-int32" };
+  }
+  if (rustTargetTypeRefEquals(target, rustJsStringNumberTargetType())) {
+    if (rustTargetTypeRefEquals(source, stringCarrier)) return { kind: "semantic-conversion", id: "js-string-number-from-string" };
+    if (rustTargetTypeRefEquals(source, float64Carrier)) return { kind: "semantic-conversion", id: "js-string-number-from-number" };
+    if (rustTargetTypeRefEquals(source, int32Carrier)) return { kind: "semantic-conversion", id: "js-string-number-from-int32" };
+    if (isRustNullCarrier(source)) return { kind: "semantic-conversion", id: "js-string-number-from-null" };
+    if (isRustUndefinedCarrier(source)) return { kind: "semantic-conversion", id: "js-string-number-from-undefined" };
   }
   const sourceOptionElement = rustOptionElementCarrier(source);
   const targetOptionElement = rustOptionElementCarrier(target);

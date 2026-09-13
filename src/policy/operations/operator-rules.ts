@@ -302,6 +302,10 @@ export function selectRustBinaryOperator(
   if (left === undefined || right === undefined) {
     return undefined;
   }
+  if ((operatorKindName === "KindEqualsEqualsToken" || operatorKindName === "KindExclamationEqualsToken") &&
+    (rustRuntimeUnionContract(left)?.strictEqualityOnly === true || rustRuntimeUnionContract(right)?.strictEqualityOnly === true)) {
+    return undefined;
+  }
   const numericUnion = selectRustNumericUnionComparison(operatorKindName, left, right);
   if (numericUnion !== undefined) return numericUnion;
   const arithmetic = arithmeticTokens[operatorKindName];

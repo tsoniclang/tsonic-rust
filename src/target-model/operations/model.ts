@@ -80,6 +80,11 @@ export type RustProviderChainStep =
   | { readonly kind: "copy-selected-carrier" };
 
 export type RustValueConversionId =
+  | "js-string-number-from-string"
+  | "js-string-number-from-number"
+  | "js-string-number-from-int32"
+  | "js-string-number-from-null"
+  | "js-string-number-from-undefined"
   | "js-numeric-from-number"
   | "js-numeric-from-int32"
   | "js-numeric-from-bigint"

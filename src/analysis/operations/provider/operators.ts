@@ -347,7 +347,7 @@ function mapSelectedAssignment(
   }
   const valueIndex = operationKind === "index-set" ? 1 : 0;
   const valueCarrier = selection.parameterCarriers?.[valueIndex];
-  const selectedRight = normalizeSelectedLiteralCarrier(request.right, right, valueCarrier, context, options);
+  const selectedRight = normalizeSelectedOperationInputCarrier(request.right, right, valueCarrier, context, options);
   if (valueCarrier === undefined || selectedRight === undefined ||
     !rustTargetTypeRefEquals(valueCarrier, selectedRight)) {
     return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_ASSIGNMENT_VALUE_MISMATCH", "The selected JavaScript setter value does not match its finalized Rust carrier.");
@@ -393,7 +393,7 @@ function mapSelectedAssignment(
     sourceReceiver: receiver,
     sourceSelectedDeclaration: selectedDeclaration,
     sourceResultType: request.right,
-  }, selectedRight ?? left);
+  }, right ?? left);
 }
 
 function mapSelectedProviderAssignment(

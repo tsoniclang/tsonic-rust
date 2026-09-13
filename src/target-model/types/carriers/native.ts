@@ -4,7 +4,7 @@ import {
 } from "../../metadata/closed-data.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../equality.js";
 import { rustBigIntTargetId, rustNamedTypeCarrierName, rustNeverCarrierName, rustNullTargetId, rustStringTargetId, rustStrTargetId, rustTsValueTargetId, rustUndefinedTargetId } from "./source-types.js";
-import { rustEmptyObjectTargetId, rustJsNumericTargetId } from "./source-types.js";
+import { rustEmptyObjectTargetId, rustJsNumericTargetId, rustJsStringNumberTargetId } from "./source-types.js";
 import type { SourcePrimitiveKind } from "@tsonic/tsts";
 import type {
   RustNamedTypeTraitContract,
@@ -47,6 +47,10 @@ export function rustEmptyObjectTargetType(): TargetTypeRef {
 
 export function rustJsNumericTargetType(): TargetTypeRef {
   return { kind: "target-named", id: rustJsNumericTargetId };
+}
+
+export function rustJsStringNumberTargetType(): TargetTypeRef {
+  return { kind: "target-named", id: rustJsStringNumberTargetId };
 }
 
 export function rustTsValueTargetType(): TargetTypeRef {

@@ -57,6 +57,7 @@ import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { rustSelectedOperationKey } from "../../target-model/facts/selections.js";
 import { rustTargetOperationSupportsAssignment, rustTargetOperationText } from "../facts/target-operation.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustRuntimeUnionContract, rustRuntimeUnionProjection } from "../../target-model/types/carriers/runtime-unions.js";
 import { selectedSourceLiteralIsRepresentable } from "../../policy/types/selected-numeric-literal.js";
 import { setCarrierFact, setRustOperationFact } from "./project-calls.js";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
@@ -341,7 +342,9 @@ export function resolvePostCheckBinaryCarrier(
       };
     } else if (left !== undefined && right !== undefined &&
       rustTargetTypeRefEquals(left, right) &&
-      !isRustOptionCarrier(left) && !isRustNullishSourceCarrier(left)) {
+      !isRustOptionCarrier(left) && !isRustNullishSourceCarrier(left) &&
+      rustRuntimeUnionContract(left)?.alternatives.some(alternative =>
+        isRustDefinitelyNullishCarrier(alternative.carrier)) !== true) {
       fact = {
         kind: "nullish-identity",
         operationId: "tsonic.rust.nullish.identity",
@@ -389,9 +392,11 @@ export function resolvePostCheckBinaryCarrier(
   } else if ((operatorKind === KindEqualsEqualsEqualsToken ||
       operatorKind === KindExclamationEqualsEqualsToken) &&
     ((isRustDefinitelyNullishCarrier(left) && right !== undefined &&
-        !isRustDefinitelyNullishCarrier(right) && !isRustOptionCarrier(right)) ||
+        !isRustDefinitelyNullishCarrier(right) && !isRustOptionCarrier(right) &&
+        left !== undefined && rustRuntimeUnionProjection(right, left) === undefined) ||
       (isRustDefinitelyNullishCarrier(right) && left !== undefined &&
-        !isRustDefinitelyNullishCarrier(left) && !isRustOptionCarrier(left)))) {
+        !isRustDefinitelyNullishCarrier(left) && !isRustOptionCarrier(left) &&
+        right !== undefined && rustRuntimeUnionProjection(left, right) === undefined))) {
     fact = {
       kind: "disjoint-equality",
       operationId: operatorKind === KindExclamationEqualsEqualsToken

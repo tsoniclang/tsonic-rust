@@ -4,7 +4,7 @@ import { resolveRustCallableEvidence } from "./source-evidence.js";
 import { resolveRustTargetType } from "./target.js";
 import { resolveRustInferredClassUnion } from "./inferred-unions.js";
 import { rustOptionTargetType, rustSourcePrimitiveTargetType, rustStringTargetType } from "../../../target-model/types/index.js";
-import { isRustBigIntCarrier, rustJsNumericTargetType } from "../../../target-model/types/index.js";
+import { isRustBigIntCarrier, rustJsNumericTargetType, rustJsStringNumberTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { sourceNodesEqual } from "@tsonic/target-api/source";
 import { sourcePrimitiveFactKey } from "@tsonic/tsts";
@@ -141,6 +141,11 @@ export function resolveUnion(
     return nullishMembers.length === 1
       ? rustOptionTargetType(distinctValueCarriers[0]!)
       : undefined;
+  }
+  if (options.jsEnabled && distinctValueCarriers.length === 2 &&
+    distinctValueCarriers.some(carrier => rustTargetTypeRefEquals(carrier, rustStringTargetType())) &&
+    distinctValueCarriers.some(carrier => rustTargetTypeRefEquals(carrier, rustSourcePrimitiveTargetType("float64")))) {
+    return rustJsStringNumberTargetType();
   }
   if (options.jsEnabled && distinctValueCarriers.length === 2 &&
     distinctValueCarriers.some(isRustBigIntCarrier) &&
