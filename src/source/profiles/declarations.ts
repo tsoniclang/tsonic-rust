@@ -262,6 +262,7 @@ interface Array<T> extends Iterable<T> {
   length: number;
   [index: number]: T;
   push(...items: T[]): number;
+  entries(): ArrayEntriesIterator<T>;
   pop(): T | undefined;
   shift(): T | undefined;
   unshift(...items: T[]): number;
@@ -295,6 +296,7 @@ interface ReadonlyArray<T> extends Iterable<T> {
   readonly length: number;
   readonly [index: number]: T;
   at(index: number): T | undefined;
+  entries(): ArrayEntriesIterator<T>;
   slice(start?: number, end?: number): T[];
   concat(...items: (T | readonly T[])[]): T[];
   join(separator?: string): string;
@@ -310,6 +312,11 @@ interface ReadonlyArray<T> extends Iterable<T> {
   some(callbackfn: (value: T, index: number, array: readonly T[]) => unknown): boolean;
   every(callbackfn: (value: T, index: number, array: readonly T[]) => unknown): boolean;
   map<U>(callbackfn: (value: T, index: number, array: readonly T[]) => U): U[];
+}
+
+interface ArrayEntriesIterator<T> extends IterableIterator<[number, T], undefined, unknown> {
+  next(): IteratorResult<[number, T], undefined>;
+  [Symbol.iterator](): ArrayEntriesIterator<T>;
 }
 
 interface ArrayConstructor {
@@ -476,6 +483,7 @@ interface DataView {
 interface Uint8ArrayConstructor {
   new (): Uint8Array;
   from(values: readonly number[]): Uint8Array;
+  from(values: Uint8Array): Uint8Array;
 }
 
 interface JSON {

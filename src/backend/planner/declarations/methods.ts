@@ -8,6 +8,7 @@ import {
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { applyFallibleShape } from "../types/fallible-shape.js";
 import { applyRustTailShape, rustBlockTerminates } from "./functions.js";
+import { retainRustCheckedCompletion } from "../statements/block-flow.js";
 import {
   diagnosticInput,
   isValidRustIdentifier,
@@ -242,8 +243,9 @@ export function planProjectMethod(
   if (plannedBody === undefined) {
     return undefined;
   }
-  const body = { statements: [...plannedBody.statements, ...(sourceReturn?.fallthroughUndefined
-    ? [planRustReturnExit({ kind: "path", path: "None" }, bodyContext)] : [])] };
+  const body = retainRustCheckedCompletion({ statements: [...plannedBody.statements, ...(sourceReturn?.fallthroughUndefined
+    ? [planRustReturnExit({ kind: "path", path: "None" }, bodyContext)] : [])] },
+    !isUnit && generatorFact === undefined ? sourceReturn?.canFallThrough : undefined);
   if (generatorFact === undefined && !isUnit && !rustBlockTerminates(body)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, bodyNode),

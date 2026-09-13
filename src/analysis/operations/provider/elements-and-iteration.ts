@@ -1,3 +1,4 @@
+import { rustJsArrayEntriesElementTargetType, rustJsArrayEntryTargetType } from "../../../target-model/types/carriers/array-entries.js";
 import {
   asNode,
   isProjectSourceDeclaration,
@@ -396,6 +397,10 @@ type RustIterableTargetPolicy =
     };
 
 function rustIterableTargetPolicy(iterable: TargetTypeRef | undefined): RustIterableTargetPolicy | undefined {
+  const entryElement = rustJsArrayEntriesElementTargetType(iterable);
+  if (entryElement !== undefined) {
+    return { kind: "receiver-method", elementCarrier: rustJsArrayEntryTargetType(entryElement), method: "clone" };
+  }
   if (isRustStringCarrier(iterable)) {
     return {
       kind: "owned-call",

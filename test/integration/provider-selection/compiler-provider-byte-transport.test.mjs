@@ -32,10 +32,13 @@ export function main(): void {
   check(alias[0] === 6);
   selected[0] = 7;
   const copied = Buffer.from(alias);
+  const typedCopy = Uint8Array.from(selected);
   alias[0] = 4;
+  check(typedCopy[0] === 7);
   check(copied.readUInt8(0) === 7 && selected.readUInt8(0) === 4);
   const compressed: Uint8Array = gzipSync(alias);
   const restored: Uint8Array = gunzipSync(compressed);
+  check(read(Uint8Array.from(gunzipSync(compressed))) === 21);
   check(read(restored) === 21);
   const raw: Uint8Array = deflateRawSync(alias);
   check(read(inflateRawSync(raw)) === 21);

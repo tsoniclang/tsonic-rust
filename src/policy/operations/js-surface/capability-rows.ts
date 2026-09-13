@@ -78,7 +78,15 @@ const dataViewRows: readonly JsOperationRowData[] = [
 
 const typedArrayRows: readonly JsOperationRowData[] = [
   {
-    owner: "Uint8ArrayConstructor", member: "from", operationKind: "call", lane: "typed-array", fallible: true,
+    owner: "Uint8ArrayConstructor", member: "from", operationKind: "call", lane: "typed-array", variant: "typed-array", fallible: true,
+    shape: {
+      op: "operation", operationKind: "method",
+      target: { form: "call", path: "js_abi::Uint8Array::from_typed_array", argModes: ["ref"] },
+      result: { ref: "uint8-array" }, params: [{ ref: "uint8-array" }],
+    },
+  },
+  {
+    owner: "Uint8ArrayConstructor", member: "from", operationKind: "call", lane: "typed-array", variant: "array", fallible: true,
     shape: {
       op: "operation", operationKind: "method",
       target: { form: "call", path: "js_abi::Uint8Array::from_array", argModes: ["ref"] },

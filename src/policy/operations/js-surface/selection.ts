@@ -1,3 +1,5 @@
+import { rustJsArrayEntriesElementTargetType, rustJsArrayEntriesTargetType, rustJsArrayEntryTargetType } from "../../../target-model/types/carriers/array-entries.js";
+import { rustIteratorResultTargetType } from "../../../target-model/types/index.js";
 import {
   isRustBigIntCarrier,
   rustBigIntTargetType,
@@ -36,6 +38,7 @@ import {
   rustJsIntlResolvedNumberFormatOptionsTargetId,
   rustJsSymbolTargetType,
   rustJsTypedArrayName,
+  rustJsTypedArrayTargetType,
   rustFutureOutputCarrier,
   rustJsPromiseOutputTargetType,
   rustJsPromiseSettledResultTargetType,
@@ -136,6 +139,10 @@ function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readon
     const weakSetValue = getRustJsWeakSetElementTargetType(carrier);
     if (weakSetValue !== undefined) {
       return { lane: "weak-set", bindings: { weakKey: weakSetValue, receiver: carrier } };
+    }
+    const entryElement = rustJsArrayEntriesElementTargetType(carrier);
+    if (entryElement !== undefined) {
+      return { lane: "array-entries", bindings: { element: entryElement, receiver: carrier } };
     }
     if (carrier.id === rustJsDateTargetId) {
       return { lane: "date", bindings: { receiver: carrier } };
@@ -415,6 +422,15 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
       return bindings.element;
     case "option-of-element":
       return bindings.element === undefined ? undefined : rustOptionTargetType(bindings.element);
+    case "array-entries":
+      return bindings.element === undefined ? undefined : rustJsArrayEntriesTargetType(bindings.element);
+    case "uint8-array":
+      return rustJsTypedArrayTargetType("Uint8Array");
+    case "array-entry-result":
+      return bindings.element === undefined ? undefined : rustIteratorResultTargetType({
+        yieldType: rustJsArrayEntryTargetType(bindings.element),
+        returnType: rustUndefinedTargetType(),
+      });
     case "receiver":
       return bindings.receiver;
     case "map-key":

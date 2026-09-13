@@ -41,6 +41,7 @@ export interface JsOperationSelection {
 
 export type JsLane =
   | "js-array"
+  | "array-entries"
   | "string"
   | "js-string"
   | "map"
@@ -128,6 +129,8 @@ export type JsCarrierRef =
   | { readonly ref: "option-of-string-array" }
   | { readonly ref: "option-of-js-string-array" }
   | { readonly ref: "element-array" }
+  | { readonly ref: "array-entries" }
+  | { readonly ref: "array-entry-result" }
   | { readonly ref: "option-of-float64" }
   | { readonly ref: "string" }
   | { readonly ref: "js-string" }
@@ -152,6 +155,7 @@ export type JsCarrierRef =
   | { readonly ref: "weak-map-entry-array" }
   | { readonly ref: "weak-key-array" }
   | { readonly ref: "array-buffer" }
+  | { readonly ref: "uint8-array" }
   | { readonly ref: "date" }
   | { readonly ref: "future-output" }
   | { readonly ref: "promise-output" }

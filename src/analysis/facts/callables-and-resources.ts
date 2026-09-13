@@ -177,6 +177,7 @@ export const rustSourceParameterAbiFactKey: RustPlanKey<RustSourceParameterAbiFa
 
 export interface RustSourceCallableReturnFact {
   readonly returnCarrier: TargetTypeRef;
+  readonly canFallThrough?: boolean;
   readonly undefinedReturn?: boolean;
   readonly fallthroughUndefined?: boolean;
 }
@@ -184,4 +185,5 @@ export interface RustSourceCallableReturnFact {
 export const rustSourceCallableReturnFactKey: RustPlanKey<RustSourceCallableReturnFact> =
   defineRustPlanKey("sourceCallableReturn", (left, right) =>
     rustTargetTypeRefEquals(left.returnCarrier, right.returnCarrier) &&
-    left.undefinedReturn === right.undefinedReturn && left.fallthroughUndefined === right.fallthroughUndefined);
+    left.undefinedReturn === right.undefinedReturn && left.fallthroughUndefined === right.fallthroughUndefined &&
+    left.canFallThrough === right.canFallThrough);

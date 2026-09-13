@@ -32,7 +32,7 @@ import {
   rustSourceParameterAbiFactKey,
 } from "../../../analysis/facts/keys.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { applyRustTailShape, rustBlockTerminates } from "../statements/block-flow.js";
+import { applyRustTailShape, rustBlockTerminates, retainRustCheckedCompletion } from "../statements/block-flow.js";
 import { planRustReturnExit } from "../statements/completion-exits.js";
 import {
   finishRuntimeCallableExpression,
@@ -528,10 +528,10 @@ export function planCallableExpression(
   if (plannedBody === undefined) {
     return undefined;
   }
-  const block = {
+  const block = retainRustCheckedCompletion({
     statements: [...plannedBody.statements, ...(sourceReturn?.fallthroughUndefined
       ? [planRustReturnExit({ kind: "path", path: "None" }, bodyContext)] : [])],
-  };
+  }, !isRustUnitCarrier(resultCarrier) ? sourceReturn?.canFallThrough : undefined);
   if (!isRustUnitCarrier(resultCarrier) && !rustBlockTerminates(block)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, bodyNode),

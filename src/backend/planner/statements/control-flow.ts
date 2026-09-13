@@ -351,7 +351,7 @@ export function planSwitchStatement(
         kind: "if",
         condition: switchGuardCondition(discriminantName, section.expression),
         then: fallthroughBody(index),
-        else: selection,
+        ...(selection.statements.length === 0 ? {} : { else: selection }),
       }],
     };
   }

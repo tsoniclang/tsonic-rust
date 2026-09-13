@@ -1,4 +1,5 @@
 import { rustSourceErrorConstructors } from "../../../target-model/identities/source-errors.js";
+import { rustJsArrayEntriesTargetType } from "../../../target-model/types/carriers/array-entries.js";
 import {
   rustFutureTargetType,
   rustGeneratorTargetType,
@@ -438,6 +439,9 @@ export function resolveSourceProfileCarrierFromArguments(
   arguments_: readonly TargetTypeRef[],
   options: RustTargetTypeResolutionOptions,
 ): TargetTypeRef | undefined {
+  if (options.jsEnabled && name === "ArrayEntriesIterator" && arguments_.length === 1) {
+    return rustJsArrayEntriesTargetType(arguments_[0]!);
+  }
   if (name === "String") {
     return rustStringTargetType();
   }

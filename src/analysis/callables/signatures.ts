@@ -583,8 +583,10 @@ export function recordCallableReturnFact(
   }
   const carrier = pointer?.returnCarrier ?? selected;
   if (carrier !== undefined) {
+    const completion = walk.context.semanticsFor(declaration).operations.callableCompletion(declaration);
     walk.context.facts.set(declaration, rustSourceCallableReturnFactKey, {
       returnCarrier: carrier,
+      ...(completion === undefined ? {} : { canFallThrough: completion.canFallThrough }),
       ...(pointer?.undefinedReturn ? { undefinedReturn: true } : {}),
       ...(pointer?.fallthroughUndefined ? { fallthroughUndefined: true } : {}),
     }, [{ message: "rust finalized source callable return carrier" }]);

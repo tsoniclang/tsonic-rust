@@ -2,6 +2,7 @@ import { isRustBigIntCarrier, isRustJsStringCarrier, isRustNullCarrier, isRustSt
 import { isRustIntegerCarrier, rustFutureTargetId, rustPrimitiveTypeName } from "./primitives.js";
 import { rustRawPointerTargetId } from "./source-types.js";
 import { rustBigIntTargetId, rustCallableTargetId, rustJsArrayTargetId, rustJsDateTargetId, rustJsErrorTargetId, rustJsMapTargetId, rustJsRegExpExecArrayTargetId, rustJsRegExpIndicesTargetId, rustJsRegExpMatchArrayTargetId, rustJsRegExpNamedGroupsTargetId, rustJsRegExpNamedIndicesTargetId, rustJsRegExpStringIteratorTargetId, rustJsRegExpTargetId, rustJsSetTargetId, rustJsStringTargetId, rustJsValueTargetId, rustLocationTargetId, rustNullTargetId, rustOptionTargetId, rustProgramErrorTargetId, rustRegExpExecArrayTargetId, rustRegExpIndicesTargetId, rustRegExpMatchArrayTargetId, rustRegExpNamedGroupsTargetId, rustRegExpNamedIndicesTargetId, rustRegExpStringIteratorTargetId, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustStringTargetId, rustStrTargetId, rustStructuralObjectCarrierValue, rustTsValueTargetId, rustUndefinedTargetId } from "./source-types.js";
+import { rustJsArrayEntriesTargetId } from "./array-entries.js";
 import {
   rustJsArrayBufferTargetId,
   rustJsDataViewTargetId,
@@ -327,6 +328,7 @@ const rustObjectIdentityTargetIds: ReadonlySet<string> = new Set([
   rustJsWeakMapTargetId,
   rustJsWeakSetTargetId,
   rustJsDateTargetId,
+  rustJsArrayEntriesTargetId,
   rustJsPromiseTargetId,
   rustJsArrayBufferTargetId,
   rustJsDataViewTargetId,
@@ -358,6 +360,7 @@ const rustJsStrictEqualityTargetIds: ReadonlySet<string> = new Set([
   rustJsSymbolTargetId,
   rustJsWeakMapTargetId,
   rustJsWeakSetTargetId,
+  rustJsArrayEntriesTargetId,
   rustJsArrayBufferTargetId,
   rustJsDataViewTargetId,
   rustJsInt8ArrayTargetId,

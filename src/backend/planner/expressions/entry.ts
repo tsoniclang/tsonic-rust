@@ -23,6 +23,7 @@ import {
 } from "../../../analysis/facts/keys.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { applyRustValueConversion } from "./value-conversions.js";
+import { planProviderRecordCopy } from "./provider-record-copy.js";
 import { diagnosticInput, sourceTypePath } from "../program/plan-context.js";
 import { findRustUpdateSourceAccessor } from "./updates/source.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
@@ -328,6 +329,9 @@ function applyRustContextualValueConversion(
       return undefined;
     }
     return expression;
+  }
+  if (fact.conversion.kind === "provider-record-copy") {
+    return planProviderRecordCopy(fact.conversion, expression, node, context);
   }
   const contract = rustValueConversionContract(fact.conversion);
   if (contract === undefined ||

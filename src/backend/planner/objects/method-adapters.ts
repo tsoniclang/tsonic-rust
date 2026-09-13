@@ -274,6 +274,7 @@ function applyRustObjectLiteralValueAdapterRaw(
         ? { expression, fallible: false }
         : undefined;
     case "conversion": {
+      if (adapter.conversion.kind === "provider-record-copy") return undefined;
       if (adapter.conversion.kind === "native-trait-object-upcast" ||
         adapter.conversion.kind === "reference-reborrow") {
         return rustCompilerOwnedContextualConversionMatches(

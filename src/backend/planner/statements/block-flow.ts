@@ -1,5 +1,13 @@
 import type { RustBlock, RustStmt } from "../../target-ast/nodes.js";
 
+export function retainRustCheckedCompletion(body: RustBlock, canFallThrough: boolean | undefined): RustBlock {
+  return canFallThrough !== false || rustBlockTerminates(body) ? body : {
+    statements: [...body.statements, { kind: "expr", expr: { kind: "bottom", expression: {
+      kind: "unreachable", message: "checked source cannot complete normally",
+    } } }],
+  };
+}
+
 export function rustBlockTerminates(block: RustBlock): boolean {
   const last = block.statements[block.statements.length - 1];
   if (last === undefined) {

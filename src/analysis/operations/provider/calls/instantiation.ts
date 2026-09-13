@@ -11,6 +11,7 @@ import {
 } from "../../../../target-model/types/index.js";
 import { acceptRustPolicy } from "../../../../policy/operations/contracts.js";
 import { asNode } from "../../../../policy/evidence/selected-source.js";
+import { selectProviderRecordArgument } from "./record-arguments.js";
 import { isRustCVariadicArgumentCarrier } from "../../../facts/c-variadic.js";
 import {
   KindCallExpression,
@@ -591,11 +592,24 @@ function selectedCallSourceCarriers(
     }
     if (effective !== undefined && expected !== undefined &&
       !rustTargetTypeRefEquals(effective, expected)) {
-      const reconciliation = selectRustValueCarrierReconciliation(
+      let reconciliation = selectRustValueCarrierReconciliation(
         effective,
         expected,
         options.projectTypes,
       );
+      if (reconciliation.kind === "incompatible" &&
+        (rustProviderSourceArgumentMode(fact.target, index) ?? "value") === "value") {
+        const bindings = request.source.sourceArgumentBindings.filter(binding =>
+          binding.sourceArgumentIndex === index && binding.sourceForm === "value");
+        const selected = bindings.length === 1 ? bindings[0] : undefined;
+        const conversion = selected === undefined ? undefined : selectProviderRecordArgument(
+          selected.selectedArgumentType, selected.selectedParameterType,
+          effective, expected, context, options,
+        );
+        if (conversion !== undefined) reconciliation = { kind: "conversion", fact: {
+          sourceCarrier: effective, targetCarrier: expected, conversion,
+        } };
+      }
       if (reconciliation.kind === "call-scoped-lifetime" ||
         reconciliation.kind === "conversion" || reconciliation.kind === "project-upcast") {
         if (reconciliation.kind === "call-scoped-lifetime" ||
