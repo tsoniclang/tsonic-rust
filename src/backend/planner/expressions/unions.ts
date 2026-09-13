@@ -4,7 +4,8 @@ import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
 import { rustSourceUnionCarrierValue } from "../../../target-model/types/index.js";
 import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
-import { diagnosticInput, rustLocalBindingName, sourceTypePath } from "../program/plan-context.js";
+import { diagnosticInput, rustLocalBindingName } from "../program/plan-context.js";
+import { rustUnionTypePathInContext } from "../types/render.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 
@@ -29,7 +30,7 @@ export function planRustSourceUnionFieldProjection(
   ) => RustExpr | undefined,
 ): RustExpr | undefined {
   const union = rustSourceUnionCarrierValue(fact.unionCarrier);
-  const typePath = union === undefined ? undefined : sourceTypePath(context, union);
+  const typePath = rustUnionTypePathInContext(fact.unionCarrier, context);
   if (union === undefined || typePath === undefined || context.syntheticNames === undefined ||
     union.variants.length !== fact.variants.length) {
     context.diagnostics.push(missingFactDiagnostic(

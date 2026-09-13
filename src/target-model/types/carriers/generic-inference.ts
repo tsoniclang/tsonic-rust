@@ -321,6 +321,7 @@ export function inferRustTargetGenericBindings(
         const rightUnion = rustSourceUnionCarrierValue(right);
         if (leftUnion !== undefined || rightUnion !== undefined) {
           return leftUnion !== undefined && rightUnion !== undefined &&
+            leftUnion.origin === rightUnion.origin &&
             leftUnion.fileName === rightUnion.fileName &&
             leftUnion.typeName === rightUnion.typeName &&
             matchGenericArguments(

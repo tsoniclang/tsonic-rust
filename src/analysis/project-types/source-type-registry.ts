@@ -57,7 +57,7 @@ export function createRustSourceTypeRegistry(): RustSourceTypeRegistry {
   const sourceUnionKey = (carrier: TargetTypeRef): string | undefined => {
     const value = rustSourceUnionCarrierValue(carrier);
     return value === undefined ? undefined :
-      `${value.fileName}::${value.typeName}::${closedMetadataKey(value.genericArguments)}`;
+      `${value.origin}::${value.fileName}::${value.typeName}::${closedMetadataKey(value.genericArguments)}`;
   };
 
   const keyForCarrier = (carrier: TargetTypeRef): string | undefined => {
@@ -325,6 +325,7 @@ export function createRustSourceTypeRegistry(): RustSourceTypeRegistry {
       const value = rustSourceUnionCarrierValue(union.carrier);
       const key = sourceUnionKey(union.carrier);
       if (value === undefined || key === undefined || value.variants.length !== union.variants.length ||
+        (value.origin === "authored") !== (union.declaration !== undefined) ||
         value.variants.some((variant, index) => {
           const selected = union.variants[index];
           return selected === undefined || variant.name !== selected.name ||
@@ -332,7 +333,7 @@ export function createRustSourceTypeRegistry(): RustSourceTypeRegistry {
         })) {
         return false;
       }
-      const byDeclaration = sourceUnionsByDeclaration.get(union.declaration);
+      const byDeclaration = union.declaration === undefined ? undefined : sourceUnionsByDeclaration.get(union.declaration);
       const byKey = sourceUnionsByKey.get(key);
       if (byKey !== undefined) {
         if (!sourceUnionTargetContractEquals(byKey, union)) return false;
@@ -373,28 +374,31 @@ export function createRustSourceTypeRegistry(): RustSourceTypeRegistry {
         }
         pendingDeclarationsBySymbol.set(property.symbol, property.declarations);
       }
-      const existingCarrier = carriersByDeclaration.get(union.declaration);
+      const existingCarrier = union.declaration === undefined ? undefined : carriersByDeclaration.get(union.declaration);
       if (byDeclaration === undefined && existingCarrier !== undefined &&
         !rustTargetTypeRefEquals(existingCarrier, normalized.carrier)) {
         return false;
       }
       const declarationKey = `${value.fileName}::${value.typeName}`;
       const existingDeclaration = declarations.get(declarationKey);
-      if (existingDeclaration !== undefined && existingDeclaration !== union.declaration) {
+      if (union.declaration !== undefined && existingDeclaration !== undefined && existingDeclaration !== union.declaration) {
         return false;
       }
-      if (byDeclaration === undefined) {
+      if (byDeclaration === undefined && union.declaration !== undefined) {
         sourceUnionsByDeclaration.set(union.declaration, normalized);
         carriersByDeclaration.set(union.declaration, normalized.carrier);
       }
       if (byKey === undefined) sourceUnionsByKey.set(key, normalized);
       for (const [sourceType, selected] of pendingIndexes) indexes.set(sourceType, selected);
       sourceUnionIndexesByType.set(key, indexes);
-      declarations.set(declarationKey, union.declaration);
+      if (union.declaration !== undefined) declarations.set(declarationKey, union.declaration);
       for (const [symbol, declarationsForSymbol] of pendingDeclarationsBySymbol) {
         selectedDeclarationsBySymbol.set(symbol, declarationsForSymbol);
       }
       return true;
+    },
+    generatedSourceUnions() {
+      return Object.freeze([...sourceUnionsByKey.values()].filter(union => union.declaration === undefined));
     },
     sourceUnionForCarrier(carrier) {
       const key = sourceUnionKey(carrier);
@@ -406,6 +410,7 @@ export function createRustSourceTypeRegistry(): RustSourceTypeRegistry {
     structuralInstantiations() {
       const result: RustStructuralInstantiation[] = [];
       for (const union of sourceUnionsByKey.values()) {
+        if (union.declaration === undefined) continue;
         const template = sourceUnionsByDeclaration.get(union.declaration);
         if (template === undefined || template === union) continue;
         for (const [index, variant] of union.variants.entries()) {

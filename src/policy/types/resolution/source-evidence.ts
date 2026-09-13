@@ -5,6 +5,7 @@ import {
   rustJsArrayTargetType,
   rustOptionElementCarrier,
   rustOptionTargetType,
+  rustSourceUnionCarrierValue,
   rustTupleTargetType,
   rustVecTargetType,
 } from "../../../target-model/types/index.js";
@@ -217,6 +218,7 @@ export function resolveRustTypeComponentEvidence(
       targets as readonly TargetTypeRef[],
       selection.selectedNullishTypes.length,
       options,
+      selected,
     );
   }
   return selected ?? authored;
@@ -226,6 +228,7 @@ function combineRustSelectedTargets(
   targets: readonly TargetTypeRef[],
   nullishCount: number,
   options: RustTargetTypeResolutionOptions,
+  selected?: TargetTypeRef,
 ): TargetTypeRef | undefined {
   if (targets.length === 0) {
     return undefined;
@@ -240,7 +243,10 @@ function combineRustSelectedTargets(
   if (targets.every((target) => rustTargetTypeRefEquals(first, target))) {
     return first;
   }
-  return options.resolveProjectUnionCarrier(targets);
+  const union = rustSourceUnionCarrierValue(selected);
+  return union?.origin === "generated" && union.variants.length === targets.length &&
+    targets.every(target => union.variants.filter(variant => rustTargetTypeRefEquals(variant.carrier, target)).length === 1)
+    ? selected : options.resolveProjectUnionCarrier(targets);
 }
 
 export function resolveRustEvidenceNodesToCommonCarrier(

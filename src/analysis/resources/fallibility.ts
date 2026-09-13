@@ -343,6 +343,8 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
       walk.context.structuralShapes,
       walk.context.projectFieldDispatch,
     ) ||
+      (operation?.kind === "source-call" && operation.target.form === "union-method" &&
+        operation.target.variants.some(variant => fallible.has(variant.declaration))) ||
       bindingProjectionIsFallible ||
       rustContextualValueConversionIsFallible(contextualConversion?.conversion);
   };
@@ -685,8 +687,13 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
               rustCallableProtocol(operation.target.callableCarrier) !== undefined;
           if (runtimeCallable || declaration !== undefined) {
             const isAsync = rustFutureOutputCarrier(operation.resultCarrier) !== undefined;
-            const isFallible = declaration !== undefined && fallible.has(declaration);
+            const unionBranches = operation.target.form === "union-method"
+              ? operation.target.variants.map(variant => fallible.has(variant.declaration) ? "fallible" as const : "infallible" as const)
+              : undefined;
+            const isFallible = unionBranches === undefined ? declaration !== undefined && fallible.has(declaration)
+              : unionBranches.some(branch => branch === "fallible");
             walk.context.facts.set(node, rustSourceCallEffectsFactKey, {
+              ...(unionBranches === undefined ? {} : { unionBranches }),
               invocation: runtimeCallable || isFallible && !isAsync
                 ? "fallible"
                 : "infallible",

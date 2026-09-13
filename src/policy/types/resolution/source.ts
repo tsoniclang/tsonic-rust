@@ -54,6 +54,7 @@ import {
   resolveRustTypeComponentEvidence,
 } from "./source-evidence.js";
 import { resolveRustAuthoredBroadSourceValueTargetType } from "./broad-values.js";
+import { resolveRustInferredClassUnion } from "./inferred-unions.js";
 
 export function resolveRustTargetTypeRef(
   subject: ExtensionFactSubject | undefined,
@@ -295,6 +296,18 @@ export function resolveRustTargetTypeSyntax(
       }
     }
     const semanticMembers = members.filter((child) => ast.kindName(child) !== "KindBarToken");
+    const sourceType = semantics?.types.expressionType(node);
+    if (semantics !== undefined && sourceType !== undefined) {
+      const selectedTypes = semanticMembers.map(member => semantics.types.expressionType(member));
+      const selectedCarriers = semanticMembers.map(member => resolveRustAuthoredTargetType(member, context, options, resolving));
+      if (selectedTypes.every(type => type !== undefined) && selectedCarriers.every(carrier => carrier !== undefined)) {
+        const common = options.resolveProjectUnionCarrier(selectedCarriers as TargetTypeRef[]);
+        if (common !== undefined) return common;
+        const union = resolveRustInferredClassUnion(sourceType, selectedTypes as Type[], selectedCarriers as TargetTypeRef[],
+          { ...context, currentSemantics: semantics, currentSourceFile: sourceFile! }, options);
+        if (union !== undefined) return union;
+      }
+    }
     if (semanticMembers.length === 2) {
       const nullish = semanticMembers.find((member) => {
         const memberKind = ast.kindName(member);

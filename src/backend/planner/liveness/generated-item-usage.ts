@@ -32,7 +32,7 @@ import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js
 import type { RustValueConversion } from "../../../target-model/operations/model.js";
 import type { RustPlanQueries } from "../../../target-model/facts/selections.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { rustOptionElementCarrier } from "../../../target-model/types/index.js";
+import { rustOptionElementCarrier, rustSourceUnionCarrierValue } from "../../../target-model/types/index.js";
 import {
   isRustPreconstructionThisOperation,
   markBinaryProjectIdentityUsed,
@@ -188,6 +188,9 @@ export function analyzeRustGeneratedItemUsage(input: {
     }
   };
   const markVariantConstructed = (carrier: TargetTypeRef, variantName: string): void => {
+    if (rustSourceUnionCarrierValue(carrier)?.origin === "generated") {
+      constructedStructuralShapes.add(closedMetadataKey(carrier));
+    }
     for (const declaration of declarationsByCarrier.get(closedMetadataKey(carrier)) ?? []) {
       const variants = variantsByDeclaration.get(declaration) ?? new Set<string>();
       variants.add(variantName);
@@ -441,6 +444,10 @@ export function analyzeRustGeneratedItemUsage(input: {
         if (isRustPreconstructionThisOperation(input.ast, node)) return;
         if (fact.target.form === "constructor") {
           markProjectConstructorInvoked(fact.target.typeCarrier);
+        } else if (fact.target.form === "union-method") {
+          for (const method of fact.target.variants) {
+            markProjectMemberUsed(method.carrier, method.declaration, "method-exact");
+          }
         } else if (fact.target.form === "method" && fact.target.dispatch !== undefined) {
           const selected = input.facts.getSelectedTargetCall(node);
           const receiverCarrier = selected?.sourceSelectedReceiverCarrier ??

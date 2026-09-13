@@ -37,6 +37,8 @@ import type { RustOperationsProviderOptions } from "./model.js";
 import type { RustTargetMember, TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustTargetOperationFact } from "../../facts/keys.js";
 import { selectRustPointerReturnCarrier } from "../../../policy/operations/pointer-return.js";
+import { resolveRustUnionMethodContracts, rustUnionMethodOwner, selectRustUnionMethods } from "./calls/union-methods.js";
+import { rustSourceUnionCarrierValue } from "../../../target-model/types/carriers/source-types.js";
 
 export function mapSelectedJsSpecialCall(
   request: RustCheckedCallSelectionInput,
@@ -559,9 +561,16 @@ export function acceptProjectSourceCall(
       "The checker-selected construction result does not identify the selected project class.",
     );
   }
-  const ownerCarrier = construction
+  const receiverCarrier = construction
     ? selectedOwnerCarrier
     : selectedCallReceiverValueCarrier(request, context, options);
+  const unionMethods = construction ? undefined : selectRustUnionMethods(request, receiverCarrier, context, options);
+  const ownerCarrier = unionMethods === undefined ? receiverCarrier : rustUnionMethodOwner(unionMethods, callableDeclaration);
+  if (rustSourceUnionCarrierValue(receiverCarrier)?.origin === "generated" &&
+    (unionMethods === undefined || ownerCarrier === undefined)) {
+    return rejectSelectedOperation(request.source.call, context, "RUST_UNION_METHOD_IDENTITY_MISSING",
+      "A closed class union call requires one exact selected method implementation per arm.");
+  }
   const sourceParameters = ast.kindName(callableDeclaration) === "KindClassDeclaration"
     ? request.source.sourceSelectedSignatureParameters.map((parameter) =>
         parameter.parameterDeclaration)
@@ -621,6 +630,14 @@ export function acceptProjectSourceCall(
   if (returnType === undefined) {
     return rejectSelectedOperation(request.source.call, context, "RUST_SOURCE_CALL_RETURN_CARRIER_MISSING", "The exact TSTS-selected project-source declaration has no closed Rust return carrier.");
   }
+  const unionContract = unionMethods === undefined ? undefined : resolveRustUnionMethodContracts(
+    unionMethods, parameters as RustTargetMember["parameters"], returnType, context, options,
+  );
+  if (unionMethods !== undefined && unionContract === undefined) {
+    return rejectSelectedOperation(request.source.call, context, "RUST_UNION_METHOD_ABI_UNSUPPORTED",
+      "The selected union methods require exact synchronous parameter contracts and a lossless closed common result.");
+  }
+  returnType = unionContract?.result ?? returnType;
   const optionalResult = selectRustOptionalCallResult(
     request,
     returnType,
@@ -668,9 +685,10 @@ export function acceptProjectSourceCall(
   };
   const selectedSignature = {
     member,
+    ...(unionContract === undefined ? {} : { sourceUnionMethods: { receiverCarrier: receiverCarrier!, variants: unionContract.methods } }),
     ...(construction || ownerCarrier === undefined
       ? {}
-      : { sourceSelectedReceiverCarrier: ownerCarrier }),
+      : { sourceSelectedReceiverCarrier: receiverCarrier }),
     sourceDeclaration: callableDeclaration,
     ...(request.source.selectedSignature === undefined ? {} : { sourceSignature: request.source.selectedSignature }),
     ...(selectedCallCalleeSymbol(request) === undefined ? {} : { sourceCalleeSymbol: selectedCallCalleeSymbol(request) }),
@@ -691,20 +709,6 @@ export function acceptProjectSourceCall(
   }
   context.facts.set(request.source.call, rustSelectedCallKey, selectedSignature);
   return acceptRustPolicy({
-    selectedSignature: {
-      member,
-      ...(construction || ownerCarrier === undefined
-        ? {}
-        : { sourceSelectedReceiverCarrier: ownerCarrier }),
-      sourceDeclaration: callableDeclaration,
-      ...(request.source.selectedSignature === undefined ? {} : { sourceSignature: request.source.selectedSignature }),
-      ...(selectedCallCalleeSymbol(request) === undefined ? {} : { sourceCalleeSymbol: selectedCallCalleeSymbol(request) }),
-      ...(selectedCallCalleeDeclaration(request) === undefined ? {} : { sourceCalleeDeclaration: selectedCallCalleeDeclaration(request) }),
-      ...(request.source.sourceResultType === undefined ? {} : { sourceReturnType: request.source.sourceResultType }),
-      sourceArgumentBindings: request.source.sourceArgumentBindings,
-      sourceSelectedSignatureParameters: request.source.sourceSelectedSignatureParameters,
-      ...(request.source.sourceSelectedMethodTypeArguments === undefined ? {} : { sourceSelectedMethodTypeArguments: request.source.sourceSelectedMethodTypeArguments }),
-      ...(targetGenericArguments.length === 0 ? {} : { targetGenericArguments }),
-    },
+    selectedSignature,
   }, [{ message: `rust selected project-source call ${member.id}` }]);
 }

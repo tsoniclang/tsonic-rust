@@ -2,7 +2,7 @@ import {
   hasExactObjectKeys,
   isDenseDataArray,
 } from "../../metadata/closed-data.js";
-import { isRustTargetTypeRef } from "../equality.js";
+import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../equality.js";
 import type {
   RustTargetConstArgument,
   RustTargetGenericArgument,
@@ -116,6 +116,7 @@ export interface RustSourceUnionVariantCarrierValue {
 }
 
 export interface RustSourceUnionCarrierValue {
+  readonly origin: "authored" | "generated";
   readonly fileName: string;
   readonly typeName: string;
   readonly genericArguments: readonly RustTargetGenericArgument[];
@@ -294,12 +295,13 @@ export function rustSourceUnionTargetType(
   typeName: string,
   variants: readonly RustSourceUnionVariantCarrierValue[],
   genericArguments: readonly RustTargetGenericArgument[] = noRustSourceTypeGenericArguments,
+  origin: RustSourceUnionCarrierValue["origin"] = "authored",
 ): TargetTypeRef {
   return {
     kind: "target-specific",
     target: "rust",
     name: rustSourceUnionCarrierName,
-    value: { fileName, typeName, variants, genericArguments },
+    value: { fileName, typeName, variants, genericArguments, origin },
   };
 }
 
@@ -312,11 +314,12 @@ export function rustSourceUnionCarrierValue(
   }
   const value = carrier.value;
   if (typeof value !== "object" || value === null || Array.isArray(value) ||
-    !hasExactObjectKeys(value, ["fileName", "typeName", "variants", "genericArguments"])) {
+    !hasExactObjectKeys(value, ["fileName", "typeName", "variants", "genericArguments", "origin"])) {
     return undefined;
   }
   const candidate = value as Partial<RustSourceUnionCarrierValue>;
-  if (typeof candidate.fileName !== "string" || candidate.fileName.length === 0 ||
+  if ((candidate.origin !== "authored" && candidate.origin !== "generated") ||
+    typeof candidate.fileName !== "string" || candidate.fileName.length === 0 ||
     typeof candidate.typeName !== "string" || candidate.typeName.length === 0 ||
     !isDenseDataArray(candidate.genericArguments) ||
     !candidate.genericArguments.every(isRustSourceTypeGenericArgument) ||
@@ -338,7 +341,15 @@ export function rustSourceUnionCarrierValue(
     seenNames.add(selected.name);
     variants.push(selected as RustSourceUnionVariantCarrierValue);
   }
+  if (candidate.origin === "generated" &&
+    (candidate.typeName !== `Union${variants.length}` || candidate.genericArguments.length !== variants.length ||
+      variants.some((variant, index) => {
+        const argument = candidate.genericArguments![index];
+        return variant.name !== `Variant${index}` || argument?.kind !== "type" ||
+          !rustTargetTypeRefEquals(argument.type, variant.carrier);
+      }))) return undefined;
   return {
+    origin: candidate.origin,
     fileName: candidate.fileName,
     typeName: candidate.typeName,
     genericArguments: candidate.genericArguments,

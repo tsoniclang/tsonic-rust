@@ -45,6 +45,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustCallGenericArgument, RustExpr } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
+import { planRustUnionMethodCall } from "./union-methods.js";
 
 export function sourceCallEffectsMatch(
   fact: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>,
@@ -56,6 +57,11 @@ export function sourceCallEffectsMatch(
     return false;
   }
   const isAsync = rustFutureOutputCarrier(fact.resultCarrier) !== undefined;
+  if (fact.target.form === "union-method") {
+    return !isAsync && effects.awaiting === "not-applicable" && effects.unionBranches?.length === fact.target.variants.length &&
+      effects.unionBranches.every(branch => branch === "infallible" || branch === "fallible") &&
+      effects.invocation === (effects.unionBranches.some(branch => branch === "fallible") ? "fallible" : "infallible");
+  }
   const callableCarrier = fact.target.form === "callable"
     ? fact.target.carrier
     : fact.target.form === "structural-method"
@@ -172,6 +178,10 @@ export function planSelectedSourceCall(
 
   let planned: RustExpr | undefined;
   switch (fact.target.form) {
+    case "union-method": {
+      planned = planRustUnionMethodCall(node, callee, shaped, fact.target, context);
+      break;
+    }
     case "function": {
       const targetName = callableSpecialization?.targetName ?? fact.target.name;
       const path = sourceModuleItemPath(context, fact.target.fileName, targetName);
@@ -377,6 +387,7 @@ export function planSelectedSourceCall(
     ));
     return undefined;
   }
+  if (fact.target.form === "union-method") return planned;
   if (effects.invocation === "infallible") {
     return isRustNeverCarrier(fact.resultCarrier) ? rustBottomExpression(planned) : planned;
   }

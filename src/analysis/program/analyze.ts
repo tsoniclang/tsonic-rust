@@ -345,6 +345,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     (fileName) => sourcePackageComponentByFile.get(fileName)!,
     nativeFields,
     sourceTypes.structuralInstantiations(),
+    sourceTypes.generatedSourceUnions(),
   );
   context.projectFieldDispatch.initialize({
     ast,

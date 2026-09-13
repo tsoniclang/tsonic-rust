@@ -232,6 +232,27 @@ export function applySelectedProjectSourceCall(
       name,
       selectedTargetName: selectedMember.targetName,
     };
+  } else if (selectedSignature.sourceUnionMethods !== undefined) {
+    const union = selectedSignature.sourceUnionMethods;
+    const receiver = ast.kindName(callee) === KindPropertyAccessExpression ? Node_Expression(ast, callee) : undefined;
+    if (receiver === undefined) return undefined;
+    const receiverCarrier = resolveExpressionCarrier(walk, receiver, sourceFile, undefined);
+    if (!rustTargetTypeRefEquals(receiverCarrier, union.receiverCarrier)) return undefined;
+    const variants = union.variants.map(variant => {
+      const selfMode = walk.context.facts.get(variant.declaration, rustSelfModeFactKey) ??
+        walk.context.facts.resolve(variant.declaration, rustSelfModeFactKey);
+      return selfMode === undefined ? undefined : {
+        name: variant.name,
+        carrier: variant.carrier,
+        declaration: variant.declaration,
+        targetName: variant.targetName,
+        mutatesSelf: selfMode.mode === "mut-ref",
+      };
+    });
+    if (variants.some(variant => variant === undefined)) return undefined;
+    if (variants.some(variant => variant!.mutatesSelf)) recordBindingWrite(walk, receiver, "referent");
+    walk.context.generatedDeclarationUses.record(expression, union.variants.map(variant => variant.declaration));
+    target = { form: "union-method", receiverCarrier: union.receiverCarrier, variants: variants as NonNullable<typeof variants[number]>[] };
   } else if (indirectCallable) {
     target = { form: "callable", carrier: selectedCallableCarrier };
   } else if (selectedMember.kind === "constructor") {

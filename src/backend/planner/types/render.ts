@@ -250,6 +250,7 @@ export function rustTypeFromCarrier(
     }
     const union = rustSourceUnionCarrierValue(carrier);
     if (union !== undefined) {
+      if (union.origin === "generated") return resolveStructuralShape?.(carrier);
       const path = resolveSourceTypePath(union);
       const genericArguments = rustGenericArgumentsFromCarrier(
         union.genericArguments, resolveSourceTypePath, resolveStructuralShape,
@@ -483,11 +484,16 @@ export function rustTypeFromCarrierInContext(
       : moduleName === context.moduleName ? typeName : `crate::${moduleName}::${typeName}`;
   };
   const resolveStructuralShape = (shapeCarrier: TargetTypeRef): RustType | undefined => {
-    const definition = context.input.program.structuralShapes.definitionForCarrier(shapeCarrier);
+    const union = rustSourceUnionCarrierValue(shapeCarrier);
+    const definition = union?.origin === "generated"
+      ? context.input.program.structuralShapes.unionForCarrier(shapeCarrier)
+      : context.input.program.structuralShapes.definitionForCarrier(shapeCarrier);
     if (definition === undefined) {
       return undefined;
     }
-    const genericArguments = definition.genericArguments.map(argument =>
+    const arguments_ = union?.origin === "generated" ? union.genericArguments :
+      context.input.program.structuralShapes.definitionForCarrier(shapeCarrier)!.genericArguments;
+    const genericArguments = arguments_.map(argument =>
       rustTargetGenericArgumentToAstInContext(argument, context));
     if (genericArguments.some((argument) => argument === undefined)) {
       return undefined;
@@ -509,7 +515,7 @@ export function rustTypeFromCarrierInContext(
         ? {}
         : { genericArguments: genericArguments as readonly RustGenericArgument[] }),
     };
-    return {
+    return union?.origin === "generated" ? stateType : {
       kind: "named",
       path: "rt::ObjectHandle",
       genericArguments: typeGenericArguments([stateType]),
@@ -534,6 +540,12 @@ export function rustParameterTypeFromCarrierInContext(
   context: RustTypeRenderingContext,
 ): RustType | undefined {
   return rustTypeFromCarrierInContext(carrier, context, "parameter");
+}
+
+export function rustUnionTypePathInContext(carrier: TargetTypeRef, context: RustTypeRenderingContext): string | undefined {
+  if (rustSourceUnionCarrierValue(carrier) === undefined) return undefined;
+  const type = rustTypeFromCarrierInContext(carrier, context);
+  return type?.kind === "named" ? type.path : undefined;
 }
 
 export function rustReturnTypeFromCarrierInContext(

@@ -93,7 +93,7 @@ export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
     return;
   }
   const compositeCarrier = resolveRustTargetTypeRef(
-    sourceType,
+    Node_Type(ast, declaration) ?? sourceType,
     rustResolutionContext(walk, declaration),
     walk.operationOptions,
   );

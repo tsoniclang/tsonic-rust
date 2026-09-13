@@ -18,7 +18,7 @@ export function retainRustSourceUnionInstantiation(
   if (existing !== undefined && options.sourceTypes.sourceUnionVariantIndexesForTypes(carrier, [sourceType]) !== undefined) return carrier;
   const value = rustSourceUnionCarrierValue(carrier);
   const semantics = context.currentSemantics;
-  if (value === undefined || !semantics.types.isUnion(sourceType)) return undefined;
+  if (value === undefined || template.declaration === undefined || !semantics.types.isUnion(sourceType)) return undefined;
   const members = semantics.types.unionOrIntersectionTypes(sourceType);
   if (members.length !== template.variants.length || members.some(member => member === undefined)) return undefined;
   const parameters = context.sourceLifetimes.contractFor(template.declaration)?.parameters ?? [];

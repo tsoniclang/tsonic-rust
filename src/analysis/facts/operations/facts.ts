@@ -4,6 +4,7 @@ import type { RustFinalizedOperationAbiFor } from "../finalized-operation-abi.js
 import type { RustAssignmentOperator, RustOperationSymbol, RustOperatorToken } from "../../../target-model/syntax/tokens.js";
 import type {
   RustTargetGenericArgument,
+  RustSelectedUnionMethodIdentity,
   TargetTypeRef,
 } from "../../../target-model/types/model.js";
 
@@ -316,6 +317,11 @@ export type RustTargetOperationFact =
       readonly kind: "source-call";
       readonly operationId: string;
       readonly target:
+        | {
+            readonly form: "union-method";
+            readonly receiverCarrier: TargetTypeRef;
+            readonly variants: readonly (RustSelectedUnionMethodIdentity & { readonly mutatesSelf: boolean })[];
+          }
         | {
             readonly form: "function";
             readonly fileName: string;

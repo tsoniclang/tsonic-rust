@@ -10,7 +10,6 @@ import {
   diagnosticInput,
   registerAliasFromPath,
   rustActiveErrorType,
-  sourceTypePath,
 } from "../program/plan-context.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
@@ -27,6 +26,7 @@ import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustValueConversion } from "../../../analysis/facts/keys.js";
 import type { RustFinalizedValueConversion } from "../../../analysis/facts/finalized-operation-abi.js";
+import { rustUnionTypePathInContext } from "../types/render.js";
 
 export function applyRustValueConversion(
   context: RustPlanContext,
@@ -166,7 +166,7 @@ export function lowerRustValueConversion(
     }
     case "js-value-from-source-union": {
       const union = rustSourceUnionCarrierValue(contract.source);
-      const typePath = union === undefined ? undefined : sourceTypePath(context, union);
+      const typePath = rustUnionTypePathInContext(contract.source, context);
       if (union === undefined || typePath === undefined ||
         union.variants.length !== contract.variants.length) {
         context.diagnostics.push(missingFactDiagnostic(
@@ -313,7 +313,7 @@ export function lowerRustValueConversion(
     }
     case "source-union-variant": {
       const union = rustSourceUnionCarrierValue(contract.target);
-      const typePath = union === undefined ? undefined : sourceTypePath(context, union);
+      const typePath = rustUnionTypePathInContext(contract.target, context);
       if (union === undefined || typePath === undefined ||
         union.variants.filter((variant) =>
           variant.name === contract.variantName &&

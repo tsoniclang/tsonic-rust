@@ -43,7 +43,7 @@ export interface RustSourceUnionVariant {
 }
 
 export interface RustSourceUnion {
-  readonly declaration: Node;
+  readonly declaration?: Node;
   readonly sourceType: Type;
   readonly carrier: TargetTypeRef;
   readonly variants: readonly RustSourceUnionVariant[];
@@ -100,6 +100,7 @@ export interface RustSourceTypeRegistry {
   ): RustStructuralFieldRegistration | undefined;
   declarationsForSelectedSymbol(symbol: Symbol): readonly Node[] | undefined;
   registerSourceUnion(union: RustSourceUnion): boolean;
+  generatedSourceUnions(): readonly RustSourceUnion[];
   sourceUnionForCarrier(carrier: TargetTypeRef): RustSourceUnion | undefined;
   sourceUnionVariantIndexesForTypes(
     carrier: TargetTypeRef,

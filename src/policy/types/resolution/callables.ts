@@ -2,6 +2,7 @@ import { asNode } from "../../evidence/selected-source.js";
 import { denseDefined } from "./project.js";
 import { resolveRustCallableEvidence } from "./source-evidence.js";
 import { resolveRustTargetType } from "./target.js";
+import { resolveRustInferredClassUnion } from "./inferred-unions.js";
 import { rustOptionTargetType, rustSourcePrimitiveTargetType, rustStringTargetType } from "../../../target-model/types/index.js";
 import { isRustBigIntCarrier, rustJsNumericTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -157,12 +158,11 @@ export function resolveUnion(
   if (members.length > 0 && members.every((member) => context.currentSemantics.types.isBooleanLike(member))) {
     return rustSourcePrimitiveTargetType("bool");
   }
-  const memberCarriers = members.map((member) =>
-    resolveRustTargetType(member, context, options, resolving));
-  if (memberCarriers.length > 1 && memberCarriers.every((carrier) => carrier !== undefined)) {
-    return options.resolveProjectUnionCarrier(
-      memberCarriers as readonly TargetTypeRef[],
-    );
+  if (nullishMembers.length <= 1 && valueCarriers.length > 1 &&
+    valueCarriers.every((carrier) => carrier !== undefined)) {
+    const selected = options.resolveProjectUnionCarrier(valueCarriers as readonly TargetTypeRef[]) ??
+      resolveRustInferredClassUnion(type, valueMembers, valueCarriers as readonly TargetTypeRef[], context, options);
+    return selected === undefined || nullishMembers.length === 0 ? selected : rustOptionTargetType(selected);
   }
   return undefined;
 }

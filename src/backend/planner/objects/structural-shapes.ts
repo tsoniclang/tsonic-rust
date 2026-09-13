@@ -49,7 +49,8 @@ export function planRustStructuralShapeModule(
 ): RustSourceFileModel | undefined {
   const definitions = input.program.structuralShapes.definitions.filter((definition) =>
     definition.componentId === rootComponentId);
-  if (definitions.length === 0) {
+  const unions = input.program.structuralShapes.unionDefinitions.filter(definition => definition.componentId === rootComponentId);
+  if (definitions.length === 0 && unions.length === 0) {
     return undefined;
   }
   const usedAliases = new Set<string>();
@@ -65,6 +66,22 @@ export function planRustStructuralShapeModule(
     usedAliases,
   };
   const structs: RustItem[] = [];
+  for (const union of unions) {
+    const visibility: RustVisibility = publicShapeNames.has(union.targetName) ? "public" : "crate";
+    const deadCode = rustStructuralShapeDeadCodeDisposition(context, union.sourceCarriers, visibility === "public");
+    structs.push({
+      kind: "enum",
+      name: union.targetName,
+      visibility,
+      derives: ["Clone"],
+      ...(deadCode === undefined ? {} : { deadCode }),
+      generics: {
+        parameters: union.variantNames.map((_, index) => ({ kind: "type", name: `Payload${index}`, bounds: [] })),
+        wherePredicates: [],
+      },
+      variants: union.variantNames.map((name, index) => ({ name, fields: [{ kind: "named", path: `Payload${index}` }] })),
+    });
+  }
   for (const definition of definitions) {
     const visibility: RustVisibility = publicShapeNames.has(definition.targetName)
       ? "public"

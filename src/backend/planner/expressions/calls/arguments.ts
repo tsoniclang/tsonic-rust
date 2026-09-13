@@ -468,7 +468,9 @@ export function sourceCallSelectedMemberMatches(
       ? member.targetName
       : fact.target.form === "function"
         ? fact.target.selectedTargetName
-        : fact.target.name;
+        : fact.target.form === "union-method"
+          ? fact.target.variants.find(variant => variant.declaration === selected.sourceDeclaration)?.targetName
+          : fact.target.name;
   const selectedReturn = declaredResultCarrier === undefined
     ? undefined
     : substituteRustTargetGenerics(
