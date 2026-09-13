@@ -10,6 +10,7 @@ import {
   getRustGeneratorProtocol,
   isRustJsArrayLikeCarrier,
   isRustStringCarrier,
+  rustStringTargetType,
   rustJsArrayLikeIterationElementTargetType,
   rustJsRegExpExecArrayTargetType,
   rustJsRegExpStringIteratorTargetId,
@@ -387,9 +388,21 @@ type RustIterableTargetPolicy =
       readonly kind: "receiver-method";
       readonly elementCarrier: TargetTypeRef;
       readonly method: string;
+    }
+  | {
+      readonly kind: "owned-call";
+      readonly elementCarrier: TargetTypeRef;
+      readonly path: string;
     };
 
 function rustIterableTargetPolicy(iterable: TargetTypeRef | undefined): RustIterableTargetPolicy | undefined {
+  if (isRustStringCarrier(iterable)) {
+    return {
+      kind: "owned-call",
+      elementCarrier: rustStringTargetType(),
+      path: "js_abi::NativeStringIterator::new",
+    };
+  }
   if (iterable?.kind === "array") {
     return { kind: "borrowed", elementCarrier: iterable.element, input: "reference" };
   }
@@ -450,6 +463,11 @@ function selectRustIterationLowering(
 >["lowering"] | undefined {
   if (source.mechanism.kind === "union" || source.mechanism.kind === "untyped-dynamic-iteration") {
     return undefined;
+  }
+  if (target.kind === "owned-call") {
+    return source.mechanism.kind === "asynchronous-iterator-protocol"
+      ? undefined
+      : { kind: "owned-call", path: target.path };
   }
   if (source.iterationKind === "for-of") {
     if (target.kind === "async-generator") {

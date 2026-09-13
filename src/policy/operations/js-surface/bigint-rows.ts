@@ -1,6 +1,24 @@
 import type { JsOperationRowData } from "./model.js";
 
 export const bigintOperationRows: readonly JsOperationRowData[] = [
+  {
+    owner: "BigInt", member: "toString", operationKind: "call", lane: "bigint",
+    variant: "default",
+    shape: {
+      op: "operation", operationKind: "method",
+      target: { form: "free-call", path: "ToString::to_string", receiverMode: "ref" },
+      result: { ref: "string" },
+    },
+  },
+  {
+    owner: "BigInt", member: "toString", operationKind: "call", lane: "bigint",
+    variant: "radix", fallible: true,
+    shape: {
+      op: "operation", operationKind: "method",
+      target: { form: "free-call", path: "js_abi::bigint_to_string_radix", receiverMode: "ref", argModes: ["value"] },
+      params: [{ ref: "float64" }], result: { ref: "string" },
+    },
+  },
   ...([
     ["asIntN", "js_abi::bigint_as_int_n"],
     ["asUintN", "js_abi::bigint_as_uint_n"],

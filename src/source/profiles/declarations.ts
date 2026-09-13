@@ -190,6 +190,9 @@ interface NumberConstructor {
 }
 declare var Number: NumberConstructor;
 
+interface BigInt {
+  toString(radix?: number): string;
+}
 interface BigIntConstructor {
   (value: bigint | boolean | number | string): bigint;
   asIntN(bits: number, value: bigint): bigint;
@@ -204,7 +207,7 @@ declare function isFinite(value: number): boolean;
 declare function encodeURIComponent(value: string): string;
 declare function decodeURIComponent(value: string): string;
 
-interface String {
+interface String extends Iterable<string> {
   readonly length: number;
   readonly [index: number]: string;
   startsWith(value: string, position?: number): boolean;
@@ -445,6 +448,11 @@ interface Console {
 declare var console: Console;
 
 ${jsStandardSourceProfileDeclarations}
+
+interface DataView {
+  getBigUint64(byteOffset: number, littleEndian?: boolean): bigint;
+  setBigUint64(byteOffset: number, value: bigint, littleEndian?: boolean): void;
+}
 
 interface JSON {
   parse(text: string): unknown;

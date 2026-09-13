@@ -33,6 +33,26 @@ const arrayBufferRows: readonly JsOperationRowData[] = [
 ];
 
 const dataViewRows: readonly JsOperationRowData[] = [
+  ...([false, true] as const).flatMap((explicitEndian): readonly JsOperationRowData[] => [
+    {
+      owner: "DataView", member: "getBigUint64", operationKind: "call", lane: "data-view",
+      variant: explicitEndian ? "endian" : "default-endian", fallible: true,
+      shape: {
+        op: "operation", operationKind: "method",
+        target: { form: "receiver-method", name: "get_big_uint64", ...(explicitEndian ? {} : { trailingArguments: [falseArgument] }) },
+        result: { ref: "bigint" }, params: [{ ref: "float64" }, ...(explicitEndian ? [{ ref: "bool" } as const] : [])],
+      },
+    },
+    {
+      owner: "DataView", member: "setBigUint64", operationKind: "call", lane: "data-view",
+      variant: explicitEndian ? "endian" : "default-endian", fallible: true,
+      shape: {
+        op: "operation", operationKind: "method",
+        target: { form: "receiver-method", name: "set_big_uint64", argModes: explicitEndian ? ["value", "ref", "value"] : ["value", "ref"], ...(explicitEndian ? {} : { trailingArguments: [falseArgument] }) },
+        result: { ref: "unit" }, params: [{ ref: "float64" }, { ref: "bigint" }, ...(explicitEndian ? [{ ref: "bool" } as const] : [])],
+      },
+    },
+  ]),
   { owner: "DataView", member: "buffer", operationKind: "property", lane: "data-view", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "buffer" }, result: { ref: "array-buffer" }, evaluation: "pure" } },
   { owner: "DataView", member: "byteLength", operationKind: "property", lane: "data-view", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "byte_length" }, result: { ref: "float64" }, evaluation: "pure" } },
   { owner: "DataView", member: "byteOffset", operationKind: "property", lane: "data-view", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "byte_offset" }, result: { ref: "float64" }, evaluation: "pure" } },

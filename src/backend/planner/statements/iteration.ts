@@ -444,6 +444,9 @@ export function planForOfStatement(
   if (fact.lowering.kind === "borrowed") {
     context.usedAliases?.add("rt");
   }
+  if (fact.lowering.kind === "owned-call") {
+    registerAliasFromPath(context, fact.lowering.path);
+  }
   const targetIterable: RustExpr = fact.lowering.kind === "borrowed"
     ? {
         kind: "call",
@@ -456,6 +459,8 @@ export function planForOfStatement(
       ? { kind: "method-call", receiver: nonConsumingIterable, method: "iter_values", args: [] }
       : fact.lowering.kind === "receiver-method"
         ? { kind: "method-call", receiver: nonConsumingIterable, method: fact.lowering.name, args: [] }
+      : fact.lowering.kind === "owned-call"
+        ? { kind: "call", path: fact.lowering.path, args: [iterable] }
       : fact.lowering.kind === "fallible-owned"
         ? { kind: "method-call", receiver: nonConsumingIterable, method: "iterator", args: [] }
       : iterable;
