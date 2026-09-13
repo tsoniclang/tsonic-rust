@@ -1,8 +1,10 @@
 import type { JsOperationRowData } from "./model.js";
+import { atomicOperationRows } from "./atomic-rows.js";
 import {
   rustJsValueTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
+  rustJsTypedArrayTargetIds,
 } from "../../../target-model/types/index.js";
 
 const falseArgument = { kind: "boolean", value: false } as const;
@@ -77,6 +79,10 @@ const dataViewRows: readonly JsOperationRowData[] = [
 ];
 
 const typedArrayRows: readonly JsOperationRowData[] = [
+  ...Object.keys(rustJsTypedArrayTargetIds).map((name): JsOperationRowData => ({
+    owner: `${name}Constructor`, member: "BYTES_PER_ELEMENT", operationKind: "property", lane: "typed-array",
+    shape: { op: "operation", operationKind: "property", target: { form: "path", path: `js_abi::${name}::BYTES_PER_ELEMENT` }, result: { ref: "float64" }, evaluation: "pure" },
+  })),
   {
     owner: "Uint8ArrayConstructor", member: "from", operationKind: "call", lane: "typed-array", variant: "typed-array", fallible: true,
     shape: {
@@ -523,9 +529,11 @@ const jsonRows: readonly JsOperationRowData[] = ([
 }));
 
 export const jsCapabilityOperationRows: readonly JsOperationRowData[] = [
+  ...atomicOperationRows,
   ...symbolRows,
   ...weakCollectionRows,
   ...arrayBufferRows,
+  ...arrayBufferRows.map(row => ({ ...row, owner: "SharedArrayBuffer" })),
   ...dataViewRows,
   ...typedArrayRows,
   ...intlRows,

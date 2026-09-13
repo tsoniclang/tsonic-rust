@@ -156,6 +156,7 @@ export type JsCarrierRef =
   | { readonly ref: "weak-key-array" }
   | { readonly ref: "array-buffer" }
   | { readonly ref: "uint8-array" }
+  | { readonly ref: "int32-array" }
   | { readonly ref: "date" }
   | { readonly ref: "future-output" }
   | { readonly ref: "promise-output" }

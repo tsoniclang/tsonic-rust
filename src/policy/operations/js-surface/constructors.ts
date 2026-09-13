@@ -126,6 +126,7 @@ function intlConstructorRows(
 }
 
 const jsConstructorRows = defineJsConstructorRows([
+  { className: "SharedArrayBuffer", sourceOwnerName: "SharedArrayBufferConstructor", typeArgumentCount: 0, argumentCount: 1, path: "js_abi::ArrayBuffer::new_shared", result: { kind: "array-buffer" }, fallible: true, params: [{ ref: "float64" }] },
   { className: "Uint8Array", sourceOwnerName: "Uint8ArrayConstructor", typeArgumentCount: 0, argumentCount: 0, path: "js_abi::Uint8Array::new", result: { kind: "typed-array", name: "Uint8Array" }, fallible: true, trailingArguments: [{ kind: "float64", value: 0 }], variant: "empty" },
   { className: "Map", sourceOwnerName: "MapConstructor", typeArgumentCount: 2, argumentCount: 0, path: "js_abi::JsMap::new", result: { kind: "map" } },
   { className: "Map", sourceOwnerName: "MapConstructor", typeArgumentCount: 2, argumentCount: 1, path: "js_abi::JsMap::from_array", result: { kind: "map" }, params: [{ ref: "js-map-entry-array" }], argModes: ["ref"], variant: "js-array" },

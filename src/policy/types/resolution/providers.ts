@@ -543,7 +543,8 @@ export function resolveSourceProfileCarrierFromArguments(
 
 function rustDirectJsSourceProfileCarrier(name: string): TargetTypeRef | undefined {
   switch (name) {
-    case "ArrayBuffer": return rustJsArrayBufferTargetType();
+    case "ArrayBuffer":
+    case "SharedArrayBuffer": return rustJsArrayBufferTargetType();
     case "DataView": return rustJsDataViewTargetType();
     case "Int8Array": return rustJsTypedArrayTargetType("Int8Array");
     case "Uint8Array": return rustJsTypedArrayTargetType("Uint8Array");

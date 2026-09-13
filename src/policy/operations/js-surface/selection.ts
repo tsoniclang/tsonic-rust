@@ -39,6 +39,7 @@ import {
   rustJsSymbolTargetType,
   rustJsTypedArrayName,
   rustJsTypedArrayTargetType,
+  rustJsTypedArrayTargetIds,
   rustFutureOutputCarrier,
   rustJsPromiseOutputTargetType,
   rustJsPromiseSettledResultTargetType,
@@ -243,10 +244,13 @@ function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readon
   if (carrier === undefined && ownerName === "BigIntConstructor") {
     return { lane: "bigint", bindings: {} };
   }
-  if (carrier === undefined && ownerName === "Uint8ArrayConstructor") {
+  if (carrier === undefined && Object.keys(rustJsTypedArrayTargetIds).some((name) => ownerName === `${name}Constructor`)) {
     return { lane: "typed-array", bindings: {} };
   }
   if (carrier === undefined && ownerName === "Global") {
+    return { lane: "global", bindings: {} };
+  }
+  if (carrier === undefined && ownerName === "Atomics") {
     return { lane: "global", bindings: {} };
   }
   if (carrier === undefined && ownerName === "Console") {
@@ -485,6 +489,8 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
         : rustJsArrayTargetType(bindings.weakKey);
     case "array-buffer":
       return rustJsArrayBufferTargetType();
+    case "int32-array":
+      return rustJsTypedArrayTargetType("Int32Array");
     case "date":
       return { kind: "target-named", id: rustJsDateTargetId };
     case "future-output":

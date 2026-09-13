@@ -491,6 +491,24 @@ interface JSON {
   stringify(value: string): string;
 }
 declare var JSON: JSON;
+
+interface SharedArrayBuffer {
+  readonly byteLength: number;
+  slice(begin?: number, end?: number): SharedArrayBuffer;
+}
+interface SharedArrayBufferConstructor {
+  new (byteLength: number): SharedArrayBuffer;
+  readonly prototype: SharedArrayBuffer;
+}
+declare var SharedArrayBuffer: SharedArrayBufferConstructor;
+
+interface Atomics {
+  wait(array: Int32Array, index: number, value: number, timeout?: number): "ok" | "not-equal" | "timed-out";
+  notify(array: Int32Array, index: number, count?: number): number;
+  load(array: Int32Array, index: number): number;
+  store(array: Int32Array, index: number, value: number): number;
+}
+declare var Atomics: Atomics;
 `.trim();
 
 export function rustNativeSourceProfileContributions(): TargetSourceProfileContributions {
