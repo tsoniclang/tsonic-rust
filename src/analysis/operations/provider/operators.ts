@@ -506,6 +506,10 @@ function mapSelectedProviderAssignment(
   }
   const selectedRight = finalizedSourceArgumentCarriers[finalizedSourceArgumentCarriers.length - 1];
   let sourceResultCarrier = context.facts.getRuntimeCarrierFact(request.right)?.carrier ?? right;
+  const rightNode = asNode(request.right, context);
+  if (rightNode !== undefined && context.ast.kindName(rightNode) === "KindArrayLiteralExpression") {
+    sourceResultCarrier = rustOptionElementCarrier(selectedRight) ?? selectedRight;
+  }
   if (isRustNullishSourceCarrier(sourceResultCarrier)) {
     const sourceNode = asNode(request.right, context);
     const sourceType = sourceNode === undefined ? undefined : context.currentSemantics.types.expressionType(sourceNode);

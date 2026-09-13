@@ -3,6 +3,8 @@ import {
   isRustProgramErrorCarrier,
   isRustNumericCarrier,
   rustOptionElementCarrier,
+  isRustJsArrayCarrier,
+  isRustVecCarrier,
 } from "../../../target-model/types/index.js";
 import {
   rustTargetOperationResultCarrier,
@@ -560,6 +562,12 @@ export function normalizeSelectedOperationInputCarrier(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): TargetTypeRef | undefined {
+  const node = asNode(subject, context);
+  const valueExpected = rustOptionElementCarrier(expected) ?? expected;
+  if (node !== undefined && context.ast.kindName(node) === "KindArrayLiteralExpression" &&
+    (isRustJsArrayCarrier(valueExpected) || isRustVecCarrier(valueExpected))) {
+    return expected;
+  }
   const direct = normalizeSelectedLiteralCarrier(
     subject,
     actual,
