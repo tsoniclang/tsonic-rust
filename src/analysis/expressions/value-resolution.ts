@@ -30,7 +30,7 @@ import {
   KindVoidExpression,
   Node_Expression,
 } from "@tsonic/target-api/source";
-import { rustRuntimeUnionContract } from "../../target-model/types/carriers/runtime-unions.js";
+import { rustRuntimeUnionContract, rustRuntimeUnionProjection } from "../../target-model/types/carriers/runtime-unions.js";
 import {
   rustFutureOutputCarrier,
   getRustGeneratorProtocol,
@@ -89,8 +89,11 @@ export function resolveExpressionCarrierUncached(
       const contextualExpected = expected !== undefined && isRustOptionCarrier(expected)
         ? rustOptionElementCarrier(expected)
         : expected;
-      const effectiveExpected = contextualExpected ??
-        rustSourcePrimitiveTargetType("float64");
+      const defaultCarrier = rustSourcePrimitiveTargetType("float64");
+      const effectiveExpected = contextualExpected === undefined ||
+          rustRuntimeUnionProjection(contextualExpected, defaultCarrier) !== undefined
+        ? defaultCarrier
+        : contextualExpected;
       if (effectiveExpected !== undefined && isRustNumericCarrier(effectiveExpected) &&
         (!isRustIntegerCarrier(effectiveExpected) ||
           (selectedSourceLiteralIsRepresentable(
@@ -151,7 +154,11 @@ export function resolveExpressionCarrierUncached(
         );
         return undefined;
       }
-      const carrier = effectiveExpected ?? rustBigIntTargetType();
+      const defaultCarrier = rustBigIntTargetType();
+      const carrier = effectiveExpected === undefined ||
+          rustRuntimeUnionProjection(effectiveExpected, defaultCarrier) !== undefined
+        ? defaultCarrier
+        : effectiveExpected;
       if (!isRustBigIntCarrier(carrier)) {
         appendRustDiagnostic(
           walk,

@@ -3,6 +3,7 @@ import {
   rustBigIntTargetType,
   rustCarrierSupportsTrait,
   rustEmptyObjectTargetType,
+  rustJsNumericTargetType,
   getRustJsMapTargetTypes,
   getRustJsSetElementTargetType,
   getRustJsWeakMapTargetTypes,
@@ -397,6 +398,8 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
       return rustBigIntTargetType();
     case "empty-object":
       return rustEmptyObjectTargetType();
+    case "js-numeric":
+      return rustJsNumericTargetType();
     case "unit":
       return rustUnitTargetType();
     case "string":

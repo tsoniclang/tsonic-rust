@@ -390,6 +390,8 @@ function rustOperatorText(kind: string | undefined): string | undefined {
     KindGreaterThanEqualsToken: ">=",
     KindEqualsEqualsEqualsToken: "===",
     KindExclamationEqualsEqualsToken: "!==",
+    KindEqualsEqualsToken: "==",
+    KindExclamationEqualsToken: "!=",
     KindAmpersandAmpersandToken: "&&",
     KindBarBarToken: "||",
     KindQuestionQuestionToken: "??",

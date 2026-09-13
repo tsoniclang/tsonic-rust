@@ -1,4 +1,5 @@
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { selectRustNumericUnionComparison } from "./numeric-union.js";
 import type { RustArgumentMode, RustValueConversion } from "../../target-model/operations/model.js";
 import type {
   RustAssignmentOperator,
@@ -267,6 +268,8 @@ const operatorKindByText: Readonly<Record<string, string>> = {
   ">=": KindGreaterThanEqualsToken,
   "===": KindEqualsEqualsEqualsToken,
   "!==": KindExclamationEqualsEqualsToken,
+  "==": "KindEqualsEqualsToken",
+  "!=": "KindExclamationEqualsToken",
   "&&": KindAmpersandAmpersandToken,
   "||": KindBarBarToken,
   "+=": KindPlusEqualsToken,
@@ -299,6 +302,8 @@ export function selectRustBinaryOperator(
   if (left === undefined || right === undefined) {
     return undefined;
   }
+  const numericUnion = selectRustNumericUnionComparison(operatorKindName, left, right);
+  if (numericUnion !== undefined) return numericUnion;
   const arithmetic = arithmeticTokens[operatorKindName];
   if (arithmetic !== undefined) {
     if (operatorKindName === KindPlusToken && isRustStringCarrier(left) && isRustStringCarrier(right)) {

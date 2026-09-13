@@ -91,6 +91,7 @@ export type JsCarrierRef =
   | { readonly ref: "intl-grouping" }
   | { readonly ref: "bigint" }
   | { readonly ref: "empty-object" }
+  | { readonly ref: "js-numeric" }
   | { readonly ref: "unit" }
   | { readonly ref: "string-array" }
   | { readonly ref: "float64-array" }

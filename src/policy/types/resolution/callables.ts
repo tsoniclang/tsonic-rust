@@ -3,6 +3,7 @@ import { denseDefined } from "./project.js";
 import { resolveRustCallableEvidence } from "./source-evidence.js";
 import { resolveRustTargetType } from "./target.js";
 import { rustOptionTargetType, rustSourcePrimitiveTargetType, rustStringTargetType } from "../../../target-model/types/index.js";
+import { isRustBigIntCarrier, rustJsNumericTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { sourceNodesEqual } from "@tsonic/target-api/source";
 import { sourcePrimitiveFactKey } from "@tsonic/tsts";
@@ -124,6 +125,13 @@ export function resolveUnion(
     }
     return nullishMembers.length === 1
       ? rustOptionTargetType(distinctValueCarriers[0]!)
+      : undefined;
+  }
+  if (options.jsEnabled && distinctValueCarriers.length === 2 &&
+    distinctValueCarriers.some(isRustBigIntCarrier) &&
+    distinctValueCarriers.some(carrier => rustTargetTypeRefEquals(carrier, rustSourcePrimitiveTargetType("float64")))) {
+    return nullishMembers.length === 0 ? rustJsNumericTargetType()
+      : nullishMembers.length === 1 ? rustOptionTargetType(rustJsNumericTargetType())
       : undefined;
   }
   if (members.length > 0 && members.every((member) => context.currentSemantics.types.isStringLike(member))) {

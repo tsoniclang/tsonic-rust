@@ -80,6 +80,9 @@ export type RustProviderChainStep =
   | { readonly kind: "copy-selected-carrier" };
 
 export type RustValueConversionId =
+  | "js-numeric-from-number"
+  | "js-numeric-from-int32"
+  | "js-numeric-from-bigint"
   | "checked-i32-to-usize"
   | "checked-i32-to-u8"
   | "checked-usize-to-i32"

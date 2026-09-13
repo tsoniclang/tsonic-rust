@@ -28,7 +28,7 @@ import {
   rustJsWeakSetTargetId,
 } from "./source-types.js";
 import { rustFixedArrayCarrierValue, rustNamedTypeCarrierValue } from "./native.js";
-import { rustEmptyObjectTargetId } from "./source-types.js";
+import { rustEmptyObjectTargetId, rustJsNumericTargetId } from "./source-types.js";
 import { rustTargetGenericReferences } from "./generic-references.js";
 import type { RustNamedTypeCarrierValue } from "./native.js";
 import type { TargetTypeRef } from "../model.js";
@@ -376,6 +376,7 @@ const rustJsStrictEqualityTargetIds: ReadonlySet<string> = new Set([
 ]);
 
 const rustUnconditionallyCloneTargetIds: ReadonlySet<string> = new Set([
+  rustJsNumericTargetId,
   rustEmptyObjectTargetId,
   rustJsIntlGroupingTargetId,
   rustJsIntlNumberFormatPartTargetId,

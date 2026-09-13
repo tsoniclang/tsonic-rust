@@ -2,6 +2,8 @@ import type { RustValueConversion } from "../../target-model/operations/model.js
 import { rustNumericPromotionKind } from "../../target-model/conversions/numeric-promotion.js";
 import {
   isRustJsArrayCarrier,
+  isRustBigIntCarrier,
+  rustJsNumericTargetType,
   isRustNeverCarrier,
   isRustNullCarrier,
   isRustUndefinedCarrier,
@@ -53,6 +55,11 @@ export function selectRustSourceValueConversion(
   source: TargetTypeRef,
   target: TargetTypeRef,
 ): RustValueConversion | undefined {
+  if (rustTargetTypeRefEquals(target, rustJsNumericTargetType())) {
+    if (isRustBigIntCarrier(source)) return { kind: "semantic-conversion", id: "js-numeric-from-bigint" };
+    if (rustTargetTypeRefEquals(source, float64Carrier)) return { kind: "semantic-conversion", id: "js-numeric-from-number" };
+    if (rustTargetTypeRefEquals(source, int32Carrier)) return { kind: "semantic-conversion", id: "js-numeric-from-int32" };
+  }
   const sourceOptionElement = rustOptionElementCarrier(source);
   const targetOptionElement = rustOptionElementCarrier(target);
   if (sourceOptionElement !== undefined && targetOptionElement !== undefined) {

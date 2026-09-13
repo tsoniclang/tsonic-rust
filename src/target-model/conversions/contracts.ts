@@ -13,6 +13,8 @@ import type {
 } from "../operations/model.js";
 import {
   isRustNeverCarrier,
+  rustJsNumericTargetType,
+  rustBigIntTargetType,
   isRustNumericCarrier,
   rustCallableProtocol,
   rustClosureProtocol,
@@ -480,6 +482,12 @@ export function rustValueConversionContract(
       : undefined;
   }
   switch (value.id) {
+    case "js-numeric-from-number":
+      return contract(value.id, "exact", "js_abi::JsNumeric::from_number", "value", float64Carrier, rustJsNumericTargetType(), false);
+    case "js-numeric-from-int32":
+      return contract(value.id, "exact", "js_abi::JsNumeric::from_int32", "value", int32Carrier, rustJsNumericTargetType(), false);
+    case "js-numeric-from-bigint":
+      return contract(value.id, "exact", "js_abi::JsNumeric::from_bigint", "ref", rustBigIntTargetType(), rustJsNumericTargetType(), false);
     case "checked-i32-to-usize":
       return contract(value.id, "checked-range", "rt::conversions::i32_to_usize", "value", int32Carrier, usizeCarrier, true);
     case "checked-i32-to-u8":

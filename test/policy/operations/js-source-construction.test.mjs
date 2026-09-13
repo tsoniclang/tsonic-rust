@@ -129,3 +129,38 @@ export function example(): number {
   assert(result.diagnostics.some(diagnostic => diagnostic.code === "RUST_SELECTED_OPERATION_UNSUPPORTED"));
   assert.equal(result.artifacts.length, 0);
 });
+
+test("numeric unions retain both exact alternatives and selected narrowing", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"], packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "numeric_union_construction" } },
+    files: {
+      "values.ts": `
+export function exact(value: number | bigint): bigint { return BigInt(value); }
+export function numberValue(value: number | bigint): number { return Number(value); }
+export function narrowed(value: number | bigint): bigint {
+  if (typeof value === "number") return BigInt(value + 1);
+  return value + 1n;
+}
+export function smaller(left: number | bigint, right: number | bigint): boolean { return left < right; }
+export function same(left: number | bigint, right: number | bigint): boolean { return left === right; }
+export function equal(left: number | bigint, right: number | bigint): boolean { return left == right; }
+`,
+      "index.ts": `
+import { check } from "@acme/testing";
+import { exact, numberValue, narrowed, smaller, same, equal } from "./values.js";
+export function main(): void {
+  check(exact(9007199254740993n) === 9007199254740993n);
+  check(exact(2) === 2n && narrowed(2) === 3n && narrowed(2n) === 3n);
+  check(numberValue(9007199254740993n) === 9007199254740992);
+  check(smaller(9007199254740992, 9007199254740993n));
+  check(!smaller(9007199254740993n, 9007199254740992));
+  check(equal(2n, 2) && !same(2n, 2) && same(2n, 2n));
+}
+`,
+    },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  const run = validateGeneratedProject("numeric-union-construction", result.artifacts, { run: true });
+  assert.equal(run.status, 0, JSON.stringify(run));
+});

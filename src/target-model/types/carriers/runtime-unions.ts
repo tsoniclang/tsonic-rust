@@ -1,7 +1,7 @@
 import type { TargetTypeRef } from "../model.js";
 import { rustTargetTypeRefEquals } from "../equality.js";
-import { rustJsIntlGroupingTargetId } from "./source-types.js";
-import { rustSourcePrimitiveTargetType, rustStringTargetType } from "./native.js";
+import { rustJsIntlGroupingTargetId, rustJsNumericTargetId } from "./source-types.js";
+import { rustBigIntTargetType, rustSourcePrimitiveTargetType, rustStringTargetType } from "./native.js";
 
 export interface RustRuntimeUnionContract {
   readonly typeofMethod: string;
@@ -11,7 +11,14 @@ export interface RustRuntimeUnionContract {
   }[];
 }
 
-const contracts: ReadonlyMap<string, RustRuntimeUnionContract> = new Map([
+const contracts: ReadonlyMap<string, RustRuntimeUnionContract> = new Map<string, RustRuntimeUnionContract>([
+  [rustJsNumericTargetId, Object.freeze({
+    typeofMethod: "type_of",
+    alternatives: Object.freeze([
+      Object.freeze({ carrier: rustSourcePrimitiveTargetType("float64"), projectionMethod: "as_number" }),
+      Object.freeze({ carrier: rustBigIntTargetType(), projectionMethod: "as_bigint" }),
+    ]),
+  })],
   [rustJsIntlGroupingTargetId, Object.freeze({
     typeofMethod: "type_of",
     alternatives: Object.freeze([

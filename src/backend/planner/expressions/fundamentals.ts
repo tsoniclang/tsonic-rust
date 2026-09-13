@@ -34,7 +34,7 @@ import { planRustFallibleReturnExpression } from "../statements/completion-exits
 import { planRustNonConsumingValue } from "./typed-locations.js";
 import { requireProviderArgumentPassingFacts } from "./calls/arguments.js";
 import { rustArgumentPassingMode } from "../../../analysis/facts/parameter-passing.js";
-import { rustEffectiveValueCarrier, rustValueCarrierBeforeOptionProjection } from "../../../analysis/facts/value-carrier-queries.js";
+import { rustEffectiveValueCarrier, rustValueCarrierBeforeContextualConversion } from "../../../analysis/facts/value-carrier-queries.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { validateRustFinalizedOperationAbi } from "../../../analysis/facts/finalized-operation-abi.js";
 import type { Node } from "@tsonic/tsts";
@@ -428,7 +428,7 @@ export function planSourceConversion(node: Node, context: RustPlanContext): Rust
 }
 
 export function planNumericLiteral(node: Node, context: RustPlanContext): RustExpr | undefined {
-  const carrier = rustValueCarrierBeforeOptionProjection(context.input.program.facts, node);
+  const carrier = rustValueCarrierBeforeContextualConversion(context.input.program.facts, node);
   if (carrier === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),

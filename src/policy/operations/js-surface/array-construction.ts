@@ -33,6 +33,7 @@ export function selectJsArrayConstruction(
         ? { form: "call", path: "js_abi::array_construct_length" }
         : { form: "call-value-array", path: "js_abi::array_of", leadingArguments: [], elementCarrier: element },
       parameterCarriers: arguments_,
+      ...(lengthConstruction ? { targetGenericArguments: [{ kind: "type" as const, type: element }] } : {}),
       resultCarrier,
       isAsync: false,
       isFallible: lengthConstruction,
