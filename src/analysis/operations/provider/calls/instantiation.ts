@@ -1,5 +1,6 @@
 import {
   rustCallableProtocol,
+  isRustDefinitelyNullishCarrier,
   rustLifetimeGenericArgument,
   rustStrTargetType,
   rustStringTargetId,
@@ -561,6 +562,11 @@ function selectedCallSourceCarriers(
     }
     const normalized = normalizeSelectedArgumentCarrier(argument, resolved, expected, context, options);
     let effective = rustEffectiveValueCarrier(context.facts, argument) ?? normalized;
+    const optionElement = rustOptionElementCarrier(expected);
+    if (optionElement !== undefined && effective !== undefined &&
+      (isRustDefinitelyNullishCarrier(effective) || rustTargetTypeRefEquals(effective, optionElement))) {
+      effective = expected;
+    }
     if (effective !== undefined && expected !== undefined &&
       !rustTargetTypeRefEquals(effective, expected)) {
       const reborrow = selectReferenceReborrow(
