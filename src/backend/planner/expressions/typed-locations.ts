@@ -8,6 +8,8 @@ import {
   Node_Expression,
 } from "@tsonic/target-api/source";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustIndexedLocationContract } from "../../../analysis/facts/indexed-location.js";
+import { planFinalizedTargetInput } from "./conversions.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type {
   RustTargetOperationFact,
@@ -584,6 +586,21 @@ function planRustLocationStorage(
       "The finalized projected storage has no exact receiver expression.",
     );
   }
+  const kind = context.input.program.source.ast.kindName(expression);
+  const operation = context.input.program.facts.getFact(expression, rustTargetOperationFactKey);
+  if (kind === "KindElementAccessExpression" && operation?.kind === "provider-operation" &&
+      operation.indexedLocationMethod !== undefined) {
+    const contract = rustIndexedLocationContract(operation);
+    const indexNode = ElementAccessExpression_ArgumentExpression(context.input.program.source.ast, expression);
+    if (contract === undefined || indexNode === undefined) {
+      return rejectLocationStorage(expression, context, "The selected index location has no exact finalized receiver, value and index input contract.");
+    }
+    const receiver = planExpression(receiverNode, context);
+    const index = planFinalizedTargetInput(context, contract.index, receiverNode, [indexNode], expression);
+    return receiver === undefined || index === undefined ? undefined : {
+      kind: "method-call", receiver, method: contract.method, args: [index],
+    };
+  }
   const receiverLocation = planRustLocationStorage(
     receiverNode,
     rootExpression,
@@ -594,11 +611,6 @@ function planRustLocationStorage(
   if (receiverLocation === undefined) {
     return undefined;
   }
-  const kind = context.input.program.source.ast.kindName(expression);
-  const operation = context.input.program.facts.getFact(
-    expression,
-    rustTargetOperationFactKey,
-  );
   if (kind === "KindPropertyAccessExpression" &&
     operation?.kind === "source-field" &&
     operation.valueSemantics.kind === "stored") {

@@ -200,6 +200,7 @@ export interface JsOperationRowData {
         readonly operationKind: "method" | "constructor" | "property" | "indexer";
         readonly target: RustProviderOperationForm;
         readonly discardedTarget?: RustProviderOperationForm;
+        readonly indexedLocationMethod?: string;
         readonly resultConversion?: RustValueConversion;
         readonly evaluation?: "pure";
         readonly result: JsCarrierRef;

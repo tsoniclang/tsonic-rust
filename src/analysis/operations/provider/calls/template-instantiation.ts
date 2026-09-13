@@ -6,6 +6,7 @@ import {
   substituteRustTargetGenerics,
 } from "../../../../target-model/types/index.js";
 import { finalizeRustProviderOperationAbi } from "../../../facts/finalized-operation-abi.js";
+import { rustIndexedLocationContract } from "../../../facts/indexed-location.js";
 import { rustProviderOperationGenericRequirementsAreSelectable } from "../../../../policy/types/provider-generic-requirements.js";
 import {
   rustTargetGenericArgumentEquals,
@@ -618,9 +619,10 @@ export function finalizeProviderOperationFact(
   if (abi === undefined) {
     return undefined;
   }
-  return {
+  const fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }> = {
     kind: "provider-operation",
     operationId: template.operationId,
+    ...(template.indexedLocationMethod === undefined ? {} : { indexedLocationMethod: template.indexedLocationMethod }),
     ...(template.cloneCarriers === undefined ? {} : { cloneCarriers: template.cloneCarriers }),
     resultCarrier: abi.result.kind === "async" ? abi.result.futureCarrier : abi.result.carrier,
     ...(template.sourceResultCarrier === undefined
@@ -631,4 +633,7 @@ export function finalizeProviderOperationFact(
       : { sourceAbsenceCarrier: template.sourceAbsenceCarrier }),
     abi,
   };
+  return fact.indexedLocationMethod !== undefined && rustIndexedLocationContract(fact) === undefined
+    ? undefined
+    : fact;
 }

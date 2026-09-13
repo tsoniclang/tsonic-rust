@@ -23,9 +23,7 @@ import {
   rustClosureProtocol,
   rustFixedArrayCarrierValue,
   rustJsPromiseTargetId,
-  rustLocationTargetId,
   rustNamedTypeCarrierValue,
-  rustOptionTargetId,
   rustSourceTypeCarrierValue,
   rustTargetGenericTypeArguments,
   rustTargetLifetimeArguments,
@@ -368,7 +366,7 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       if (error !== undefined) return error;
     }
     const typedLocation = facts.getFact(node, rustTypedLocationPlanKey);
-    if (typedLocation?.operation === "allocate") {
+    if (typedLocation?.operation === "allocate" || typedLocation?.operation === "address-of") {
       const error = addUse(node, typedLocation.pointeeCarrier, ["clone", "static"]);
       if (error !== undefined) return error;
     }
@@ -601,12 +599,8 @@ function classifyStaticCarrier(
         return false;
       }
       const arguments_ = rustTargetGenericTypeArguments(carrier.genericArguments);
-      if (carrier.id === rustOptionTargetId || carrier.id === rustLocationTargetId) {
-        return arguments_.every((argument) =>
-          classifyStaticCarrier(argument, declared, byParameter));
-      }
-      return !arguments_.some((argument) =>
-        containsDeclaredTypeParameter(argument, declared));
+      return arguments_.every((argument) =>
+        classifyStaticCarrier(argument, declared, byParameter));
     }
     case "target-specific": {
       const fixedArray = rustFixedArrayCarrierValue(carrier);
@@ -617,15 +611,15 @@ function classifyStaticCarrier(
       if (named !== undefined) {
         if (rustTargetLifetimeArguments(named.genericArguments).some((lifetime) =>
           lifetime.kind !== "static")) return false;
-        return !rustTargetGenericTypeArguments(named.genericArguments).some((argument) =>
-          containsDeclaredTypeParameter(argument, declared));
+        return rustTargetGenericTypeArguments(named.genericArguments).every((argument) =>
+          classifyStaticCarrier(argument, declared, byParameter));
       }
       const sourceType = rustSourceTypeCarrierValue(carrier);
       return sourceType === undefined ||
         rustTargetLifetimeArguments(sourceType.genericArguments).every((lifetime) =>
           lifetime.kind === "static") &&
-        !rustTargetGenericTypeArguments(sourceType.genericArguments).some((argument) =>
-          containsDeclaredTypeParameter(argument, declared));
+        rustTargetGenericTypeArguments(sourceType.genericArguments).every((argument) =>
+          classifyStaticCarrier(argument, declared, byParameter));
     }
     case "reference":
       return carrier.lifetime?.kind === "static" &&

@@ -90,6 +90,7 @@ export type RustTargetOperationFact =
       readonly resultCarrier: TargetTypeRef;
       readonly sourceResultCarrier?: TargetTypeRef;
       readonly sourceAbsenceCarrier?: TargetTypeRef;
+      readonly indexedLocationMethod?: string;
       readonly abi: RustFinalizedOperationAbiFor<RustProviderFactOperationKind>;
     }
   | {
