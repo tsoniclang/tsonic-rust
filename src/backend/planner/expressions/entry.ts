@@ -193,7 +193,11 @@ export function planExpression(
       ));
       return undefined;
     }
-    return { kind: "associated-value", owner: optionType, name: "None" };
+    const value: RustExpr = { kind: "associated-value", owner: optionType, name: "None" };
+    if (contextuallyConverted.kind === "bottom") return contextuallyConverted;
+    return contextuallyConverted.kind === "none" || contextuallyConverted.kind === "path" || contextuallyConverted.kind === "associated-value"
+      ? value
+      : { kind: "evaluate-then", effect: contextuallyConverted, discard: "value", value };
   }
   return projection?.kind === "some"
     ? { kind: "call", path: "Some", args: [contextuallyConverted] }

@@ -5,6 +5,49 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { selectJsSurfaceOperation } from "../../../dist/policy/operations/js-surface.js";
 import { rustJsValueTargetType } from "../../../dist/target-model/types/index.js";
 
+test("canonical compiler BigInt width operations preserve native results", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"], packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "bigint_width" } },
+    files: { "index.ts": `
+import { check } from "@acme/testing";
+let visits = 0;
+function width(): number { visits = visits * 10 + 1; return 64; }
+function value(): bigint { visits = visits * 10 + 2; return 18446744073709551615n; }
+export function main(): void {
+  check(globalThis.BigInt.asIntN(width(), value()) === -1n);
+  check(visits === 12);
+  check(BigInt.asUintN(64, -1n) === 18446744073709551615n);
+  check(BigInt.asIntN(64, 9007199254740993n) === 9007199254740993n);
+  check(BigInt.asIntN(9, 256n) === -256n);
+  check(BigInt.asUintN(9, -1n) === 511n);
+  check(BigInt.asIntN(Number.NaN, 4n) === 0n);
+  check(BigInt.asIntN(-0.5, 4n) === 0n);
+}
+` },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  validateGeneratedProject("bigint-width", result.artifacts, { run: true });
+});
+
+test("canonical compiler string quoting retains its nonoptional result", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"], packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "json_string_result" } },
+    files: { "index.ts": String.raw`
+import { check } from "@acme/testing";
+function quote(value: string): string { return JSON.stringify(value); }
+export function main(): void {
+  check(quote("héllo 😀") === '"héllo 😀"');
+  check(JSON.stringify("line\n").slice(1, -1) === "line\\n");
+  check(JSON.stringify(undefined) === undefined);
+}
+` },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  validateGeneratedProject("json-string-result", result.artifacts, { run: true });
+});
+
 test("String construction retains exact native primitive and numeric-union values", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     surfaces: ["js"], packages: [acmeTestingPackage()],
@@ -46,4 +89,56 @@ test("String construction does not invent dynamic object conversion or call iden
   assert.equal(selectJsSurfaceOperation({
     ownerName: "LocalConstructor", memberName: "call", operationKind: "call", argumentCarriers: [],
   }), undefined);
+});
+
+test("void values retain unit calls, optional conversion and equality effects", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: ["js"],
+    target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": `
+let visits = 0;
+function value(): number { visits += 1; return visits; }
+function unit(): void { visits += 1; }
+function optional(value: number | undefined): boolean { return value === undefined; }
+function compare(value: number | undefined): boolean { return value === void unit(); }
+export function main(): void {
+  if (String(void value()) !== "undefined" || String(void unit()) !== "undefined" ||
+    !optional(void value()) || !optional(void unit()) || !compare(undefined) || visits !== 5) {
+    throw new Error("void evaluation");
+  }
+}
+` } });
+  assert.deepEqual(result.diagnostics, []);
+  validateGeneratedProject("void-source-values", result.artifacts, { run: true });
+});
+
+test("void awaited unit and value operands preserve completion order", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: ["js"],
+    target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": `
+let visits = 0;
+async function value(): Promise<number> { visits += 1; return visits; }
+async function unit(): Promise<void> { visits += 1; }
+function optional(value: number | undefined): boolean { return value === undefined; }
+export async function main(): Promise<void> {
+  if (!optional(void await value()) || !optional(void (await unit())) || visits !== 2) {
+    throw new Error("awaited void evaluation");
+  }
+}
+` } });
+  assert.deepEqual(result.diagnostics, []);
+  validateGeneratedProject("void-awaited-values", result.artifacts, { run: true });
+});
+
+test("an infallible JS async entry awaits its selected promise representation", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: ["js"],
+    target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": `
+let visits = 0;
+async function unit(): Promise<void> { visits += 1; }
+export async function main(): Promise<void> {
+  void await unit();
+  console.log(visits);
+}
+` } });
+  assert.deepEqual(result.diagnostics, []);
+  assert.match(artifactText(result, "src/main.rs"), /await_value/u);
+  const native = validateGeneratedProject("infallible-js-async-entry", result.artifacts, { run: true });
+  assert.equal(native.stdout.trim(), "1");
 });

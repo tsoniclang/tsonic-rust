@@ -192,6 +192,8 @@ declare var Number: NumberConstructor;
 
 interface BigIntConstructor {
   (value: bigint | boolean | number | string): bigint;
+  asIntN(bits: number, value: bigint): bigint;
+  asUintN(bits: number, value: bigint): bigint;
 }
 declare var BigInt: BigIntConstructor;
 
@@ -386,12 +388,6 @@ interface DateConstructor {
 }
 declare var Date: DateConstructor;
 
-interface JSON {
-  parse(text: string): unknown;
-  stringify(value: unknown, replacer?: null, space?: string | number): string | undefined;
-}
-declare var JSON: JSON;
-
 interface Math {
   readonly E: number;
   readonly LN2: number;
@@ -449,6 +445,12 @@ interface Console {
 declare var console: Console;
 
 ${jsStandardSourceProfileDeclarations}
+
+interface JSON {
+  parse(text: string): unknown;
+  stringify(value: string): string;
+}
+declare var JSON: JSON;
 `.trim();
 
 export function rustNativeSourceProfileContributions(): TargetSourceProfileContributions {

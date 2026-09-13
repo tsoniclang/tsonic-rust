@@ -442,7 +442,10 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
       ? {
           kind: "call" as const,
           path: "tsonic_rust_runtime::block_on",
-          args: [entryCall],
+          args: [entryFunction.async === "js-promise"
+            ? { kind: "method-call" as const, receiver: entryCall,
+                method: entryFunction.fallible ? "await_result" : "await_value", args: [] }
+            : entryCall],
         }
       : entryCall;
     const initializationStatements = crateInitializer === undefined
@@ -780,7 +783,7 @@ interface RustBinaryEntry {
   readonly sourceFile: SourceFile;
   readonly moduleName: string;
   readonly functionName: string;
-  readonly async: boolean;
+  readonly async?: "native-future" | "js-promise";
   readonly fallible: boolean;
 }
 
@@ -876,7 +879,7 @@ function resolveBinaryEntry(
       sourceFile: entrySourceFile,
       moduleName,
       functionName: "main",
-      async: asyncFact !== undefined,
+      async: asyncFact?.kind,
       fallible: input.program.facts.getFact(declaration, rustFallibleFactKey) !== undefined,
     };
   }

@@ -26,6 +26,7 @@ export function tryPlanRustRawLocation(
   }
   const value = planExpression(plan.expression, context);
   if (value === undefined) return { handled: true };
+  if (value.kind === "bottom") return { handled: true, expression: value };
   const borrowed = planRustNonConsumingValue(plan.expression, value, context);
   const argument: RustExpr = rustOptionElementCarrier(plan.inputCarrier) === undefined
     ? { kind: "call", path: "Some", args: [{ kind: "reference", expr: borrowed }] }

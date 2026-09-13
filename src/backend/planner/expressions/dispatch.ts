@@ -385,6 +385,9 @@ export function planExpressionInner(
         return undefined;
       }
       const operand = planExpression(operandNode, context);
+      if (operand !== undefined && isRustNeverCarrier(expressionCarrier(operandNode, context))) {
+        return { kind: "bottom", expression: operand };
+      }
       context.usedAliases?.add("rt");
       return operand === undefined
         ? undefined

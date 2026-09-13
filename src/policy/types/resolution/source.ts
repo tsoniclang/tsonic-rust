@@ -206,6 +206,9 @@ export function resolveRustTargetTypeSyntax(
   if (kind === "KindUndefinedKeyword") {
     return rustUndefinedTargetType();
   }
+  if (kind === "KindVoidExpression") {
+    return ast.as.AsVoidExpression(node)?.Expression === undefined ? undefined : rustUndefinedTargetType();
+  }
   if (kind === "KindLiteralType") {
     const literal = ast.as.AsLiteralTypeNode(node)?.Literal;
     if (literal !== undefined && ast.kindName(literal) === "KindNullKeyword") {
