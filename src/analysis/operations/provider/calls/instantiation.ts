@@ -7,8 +7,6 @@ import {
   rustTargetGenericBindingsForArguments,
   substituteRustTargetGenerics,
   rustTypeGenericArgument,
-  rustFixedArrayCarrierValue,
-  rustTargetConstInteger,
 } from "../../../../target-model/types/index.js";
 import { acceptRustPolicy } from "../../../../policy/operations/contracts.js";
 import { asNode } from "../../../../policy/evidence/selected-source.js";
@@ -31,7 +29,7 @@ import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality
 import { selectedCallArgumentNodes, selectedCallCalleeDeclaration, selectedCallCalleeSymbol, selectedSourceValueCarrier } from "../operators.js";
 import { selectRustOptionalChain } from "../../../../policy/operations/optional-chains.js";
 import { selectRustSourceValueConversion } from "../../../../policy/conversions/selection.js";
-import { selectRustRestSequenceConversion } from "../../../../policy/conversions/rest-sequence.js";
+import { selectedCallSourceParameterCarriers, selectedRestSequenceIsClosed } from "./source-sequences.js";
 import { resolveRustProviderGenericArgument } from "../../../../policy/types/resolution/source.js";
 import {
   finalizeProviderOperationFact,
@@ -543,37 +541,8 @@ function selectedCallSourceCarriers(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): SelectedCallSourceCarriers {
-  const compileTimeIndexes = new Set(fact.compileTimeSourceArgumentIndexes ?? []);
-  const runtimeIndexes = selectedCallArgumentNodes(request)
-    .map((_argument, index) => index)
-    .filter((index) => !compileTimeIndexes.has(index));
-  const declaredBySourceIndex = new Map<number, TargetTypeRef | undefined>();
-  for (const sourceIndex of runtimeIndexes) {
-    const bindings = request.source.sourceArgumentBindings.filter((binding) =>
-      binding.sourceArgumentIndex === sourceIndex);
-    const first = bindings[0];
-    if (first === undefined && fact.target.form === "call-value-slice" &&
-      sourceIndex >= fact.target.leadingArguments.length &&
-      request.source.sourceArguments[sourceIndex] !== undefined &&
-      context.ast.is.IsSpreadElement(request.source.sourceArguments[sourceIndex]!.expression)) {
-      const carrier = selectedSourceValueCarrier(request.source.sourceArguments[sourceIndex]!, context, options);
-      const fixed = carrier === undefined ? undefined : rustFixedArrayCarrierValue(carrier);
-      const empty = carrier?.kind === "tuple" && carrier.elements.length === 0 ||
-        fixed !== undefined && rustTargetConstInteger(fixed.length) === 0n;
-      const rest = request.source.sourceSelectedSignatureParameters.filter(parameter => parameter.rest);
-      if (empty && rest.length === 1) {
-        declaredBySourceIndex.set(sourceIndex, declared?.[rest[0]!.parameterIndex]);
-        continue;
-      }
-    }
-    if (first === undefined || bindings.some((binding) =>
-      binding.sourceParameterIndex !== first.sourceParameterIndex ||
-      binding.sourceForm !== first.sourceForm) ||
-      request.source.sourceSelectedSignatureParameters[first.sourceParameterIndex] === undefined) {
-      return { kind: "missing" };
-    }
-    declaredBySourceIndex.set(sourceIndex, declared?.[first.sourceParameterIndex]);
-  }
+  const declaredBySourceIndex = selectedCallSourceParameterCarriers(request, fact, declared, context, options);
+  if (declaredBySourceIndex === undefined) return { kind: "missing" };
   let incompatibility: Extract<SelectedCallSourceCarriers, { readonly kind: "incompatible" }> | undefined;
   const reconciliations: {
     readonly sourceIndex: number;
@@ -585,17 +554,7 @@ function selectedCallSourceCarriers(
     const expected = targetExpected ?? declaredBySourceIndex.get(index);
     const resolved = selectedSourceValueCarrier(sourceArgument, context, options);
     if (context.ast.is.IsSpreadElement(argument)) {
-      const bindings = request.source.sourceArgumentBindings.filter(binding => binding.sourceArgumentIndex === index);
-      const fixed = resolved === undefined ? undefined : rustFixedArrayCarrierValue(resolved);
-      const tupleLength = resolved?.kind === "tuple" ? BigInt(resolved.elements.length)
-        : fixed === undefined ? undefined : rustTargetConstInteger(fixed.length);
-      const exactBindings = bindings.length === 1 && bindings[0]?.sourceForm === "spread-sequence" ||
-        tupleLength !== undefined && BigInt(bindings.length) === tupleLength && bindings.every((binding, elementIndex) =>
-          binding.sourceForm === "spread-element" && binding.spreadElementIndex === elementIndex);
-      if (!exactBindings ||
-        fact.target.form !== "call-value-slice" || index < fact.target.leadingArguments.length ||
-        resolved === undefined || selectRustRestSequenceConversion(resolved,
-          fact.target.elementCarrier, fact.target.sequenceHolePolicy ?? "reject") === undefined) {
+      if (!selectedRestSequenceIsClosed(request, index, resolved, fact.target)) {
         incompatibility ??= { kind: "incompatible", sourceIndex: index, actual: resolved, expected };
       }
       return resolved;

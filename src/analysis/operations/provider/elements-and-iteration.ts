@@ -45,6 +45,7 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import { selectedValueCarrier } from "./operators.js";
 import { selectJsSurfaceOperation } from "../../../policy/operations/js-surface.js";
 import { selectRustFixedArrayElementAccess } from "./structural-properties.js";
+import { isIntrinsicSourceQualifier } from "./source-qualifiers.js";
 import { tsonicFixedArrayProviderMember } from "@tsonic/source-core/facts";
 import type {
   RustCheckedElementSelectionInput,
@@ -68,6 +69,9 @@ export function selectRustCheckedElementAccess(
     return rejectSelectedOperation(request.expression, context, "RUST_OPTIONAL_CHAIN_EVIDENCE_MISSING", "Optional-chain element access has no exact TSTS-selected non-null receiver type.");
   }
   if (isDeclarationFileSubject(request.expression, context)) {
+    return acceptDeclarationOperation("indexer");
+  }
+  if (isIntrinsicSourceQualifier(request, context, options)) {
     return acceptDeclarationOperation("indexer");
   }
   const sourceProfileIdentity = resolveSelectedSourceProfileMember(

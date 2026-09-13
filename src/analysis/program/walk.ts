@@ -233,6 +233,7 @@ export function selectExpressionOperation(
       expression,
       receiver: source.receiver.expression,
       sourceReceiverType: source.receiver.type,
+      ...(source.receiver.intrinsic === undefined ? {} : { sourceReceiverIntrinsic: source.receiver.intrinsic }),
       ...(receiverReference?.declaration === undefined
         ? {}
         : { sourceReceiverValueDeclaration: receiverReference.declaration }),

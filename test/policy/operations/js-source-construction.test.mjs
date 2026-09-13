@@ -136,6 +136,17 @@ export function example(): number {
   assert.equal(result.artifacts.length, 0);
 });
 
+test("empty identity storage rejects nonempty payloads and unresolved generic storage", () => {
+  for (const declaration of [
+    "export function token(): object { const value: object = { count: 1 }; return Object.freeze(value); }",
+    "export function token<Value extends object>(value: Value) { return Object.freeze(value); }",
+  ]) {
+    const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": declaration } });
+    assert(result.diagnostics.some(diagnostic => diagnostic.category === "error"));
+    assert.equal(result.artifacts.length, 0);
+  }
+});
+
 test("numeric unions retain both exact alternatives and selected narrowing", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     surfaces: ["js"], packages: [acmeTestingPackage()],

@@ -616,9 +616,9 @@ export function acceptProjectSourceCall(
     returnType = ownerCarrier;
   } else {
     const sourceReturn = Node_Type(ast, callableDeclaration) ?? request.source.sourceResultType;
-    const declaredReturnType = (sourceReturn === undefined
+    const declaredReturnType = selectRustPointerReturnCarrier(callableDeclaration, context, options) ?? (sourceReturn === undefined
       ? undefined
-      : resolveRustTargetTypeRef(sourceReturn, context, options)) ?? selectRustPointerReturnCarrier(callableDeclaration, context, options);
+      : resolveRustTargetTypeRef(sourceReturn, context, options));
     returnType = declaredReturnType === undefined || ownerCarrier === undefined
       ? declaredReturnType
       : options.projectTypes.instantiateMemberCarrier(

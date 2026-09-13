@@ -56,6 +56,22 @@ test("collection rows require exact carrier capabilities", () => {
   }), undefined);
 });
 
+test("generic collection clone obligations require an explicit source declaration context", () => {
+  const parameter = { kind: "type-parameter", name: "Element" };
+  const request = {
+    ownerName: "ReadonlyMap",
+    memberName: "keys",
+    operationKind: "call",
+    receiverCarrier: rustJsMapTargetType(parameter, rustSourcePrimitiveTargetType("int32")),
+    argumentCarriers: [],
+  };
+  assert.equal(selectJsSurfaceOperation(request), undefined);
+  assert.equal(selectJsSurfaceOperation({ ...request, canRequireClone: () => false }), undefined);
+  const selected = selectJsSurfaceOperation({ ...request, canRequireClone: carrier => carrier === parameter });
+  assert.deepEqual(selected.fact.cloneCarriers, [parameter]);
+  assert.deepEqual(selected.resultCarrier, { kind: "array", element: parameter });
+});
+
 test("generated Rust proves complete Map and Set collection operations", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     surfaces: ["js"],

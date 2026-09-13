@@ -16,6 +16,7 @@ import { rustSourceCallableReturnFactKey } from "../../facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectJsSurfaceOperation } from "../../../policy/operations/js-surface.js";
 import { selectRustGeneratorSourceProperty } from "../../../policy/types/generator-source-profile.js";
+import { isIntrinsicSourceQualifier } from "./source-qualifiers.js";
 import { tsonicFixedArrayProviderMember } from "@tsonic/source-core/facts";
 import type {
   RustCheckedDeleteSelectionInput,
@@ -41,6 +42,7 @@ export function checkedPropertySelectionInput(
     sourceReceiverType: source.receiver.type,
     ...(source.receiver.declaration === undefined ? {} : { sourceReceiverDeclaration: source.receiver.declaration }),
     ...(receiverReference?.declaration === undefined ? {} : { sourceReceiverValueDeclaration: receiverReference.declaration }),
+    ...(source.receiver.intrinsic === undefined ? {} : { sourceReceiverIntrinsic: source.receiver.intrinsic }),
     accessMode: source.accessMode,
     ...(source.selectedSymbol === undefined ? {} : { sourceSelectedSymbol: source.selectedSymbol }),
     ...(source.selectedDeclaration === undefined ? {} : { sourceSelectedDeclaration: source.selectedDeclaration }),
@@ -200,6 +202,9 @@ export function selectRustCheckedPropertyAccess(
     return rejectSelectedOperation(request.expression, context, "RUST_OPTIONAL_CHAIN_EVIDENCE_MISSING", "Optional-chain property access has no exact TSTS-selected non-null receiver type.");
   }
   if (isDeclarationFileSubject(request.expression, context)) {
+    return acceptDeclarationOperation("property");
+  }
+  if (isIntrinsicSourceQualifier(request, context, options)) {
     return acceptDeclarationOperation("property");
   }
   const structuralProperty = selectStructuralSourceProperty(

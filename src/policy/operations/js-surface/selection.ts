@@ -1,7 +1,6 @@
 import {
   isRustBigIntCarrier,
   rustBigIntTargetType,
-  rustCarrierSupportsTrait,
   rustEmptyObjectTargetType,
   rustJsNumericTargetType,
   getRustJsMapTargetTypes,
@@ -788,7 +787,8 @@ function carrierRequirementsMatch(
       case "integer":
         return isRustIntegerCarrier(carrier);
       case "clone":
-        return carrier !== undefined && rustCarrierSupportsTrait(carrier, "core::clone::Clone", () => true);
+        return rustCarrierSupportsClone(carrier) ||
+          (carrier !== undefined && request.canRequireClone?.(carrier) === true);
       case "stringifiable":
         return isRustSourceStringConvertibleCarrier(carrier);
       case "js-equality":

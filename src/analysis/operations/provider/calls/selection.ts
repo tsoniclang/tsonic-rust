@@ -35,6 +35,7 @@ import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality
 import { sourceCallMarkerByIdentity } from "../model.js";
 import { mapSelectedStringRegExpProtocolCall } from "../regexp-protocols.js";
 import { selectedRustRegExpReplacementCallbackEvidence } from "../regexp-replacement-callback.js";
+import { canRequireSourceClone } from "./clone-requirements.js";
 import type {
   RustCheckedCallSelectionInput,
   RustCheckedCallSelectionResult,
@@ -308,6 +309,7 @@ export function selectRustCheckedCall(
           : undefined;
       },
       carrierSupportsProjectIdentity: options.projectCarrierSupportsObjectIdentity,
+      canRequireClone: carrier => canRequireSourceClone(carrier, request.source.call, context),
       resultUse: context.source.navigation.expressionResultUse(request.source.call),
     });
     if (selection === undefined || selection.fact.kind !== "provider-operation" || selection.resultCarrier === undefined) {

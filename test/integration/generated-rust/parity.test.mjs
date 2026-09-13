@@ -124,8 +124,8 @@ export function f(value: object): string {
     },
   };
   assertRustTargetRejection(badOptions, [{
-    code: "RUST_PARAMETER_CARRIER_UNSUPPORTED",
-    message: "Parameter type has no closed Rust runtime carrier under the selected source-profile and surface policy.",
+    code: "RUST_CALL_ARGUMENT_CONVERSION_UNSUPPORTED",
+    message: "The TSTS-selected call argument cannot be represented by the selected Rust target parameter carrier.",
   }]);
 });
 
