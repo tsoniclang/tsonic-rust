@@ -7,6 +7,7 @@ import {
 } from "@tsonic/target-api/source";
 import {
   rustOptionElementCarrier,
+  rustEmptyObjectTargetId,
   rustCallableProtocol,
   rustStructuralMethodCallableCarrier,
   rustClosureProtocol,
@@ -168,6 +169,15 @@ export function resolveRecordLiteralCarrier(
   );
   if (selectedExpected === undefined) {
     return undefined;
+  }
+  if (selectedExpected.kind === "target-named" && selectedExpected.id === rustEmptyObjectTargetId) {
+    if (properties.length !== 0) return undefined;
+    setRustOperationFact(walk, expression, {
+      kind: "empty-object-literal",
+      operationId: "tsonic.rust.object.empty-literal",
+      resultCarrier: selectedExpected,
+    });
+    return setCarrierFact(walk, expression, selectedExpected);
   }
   let contextualReconciliation: import("../../policy/types/value-carrier-reconciliation.js").RustAppliedValueCarrierReconciliation | undefined;
   if (expected !== undefined && rustSourceTypeCarrierValue(selectedExpected)?.shape !== "object" &&

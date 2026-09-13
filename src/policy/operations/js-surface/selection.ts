@@ -1,6 +1,8 @@
 import {
   isRustBigIntCarrier,
   rustBigIntTargetType,
+  rustCarrierSupportsTrait,
+  rustEmptyObjectTargetType,
   getRustJsMapTargetTypes,
   getRustJsSetElementTargetType,
   getRustJsWeakMapTargetTypes,
@@ -72,6 +74,7 @@ import {
   rustStringTargetType,
   rustUnitTargetType,
 } from "../../../target-model/types/index.js";
+import { selectJsArrayConstruction } from "./array-construction.js";
 import { jsOperationRows, rustInferCarrier } from "./rows.js";
 import { selectRustJsonValueConversion } from "../../conversions/selection.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -228,6 +231,9 @@ function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readon
   }
   if (carrier === undefined && ownerName === "NumberConstructor") {
     return { lane: "number", bindings: {} };
+  }
+  if (carrier === undefined && ownerName === "BigIntConstructor") {
+    return { lane: "bigint", bindings: {} };
   }
   if (carrier === undefined && ownerName === "Global") {
     return { lane: "global", bindings: {} };
@@ -389,6 +395,8 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
       return { kind: "target-named", id: rustJsIntlGroupingTargetId };
     case "bigint":
       return rustBigIntTargetType();
+    case "empty-object":
+      return rustEmptyObjectTargetType();
     case "unit":
       return rustUnitTargetType();
     case "string":
@@ -532,6 +540,9 @@ function firstArgumentId(request: JsOperationRequest): string | undefined {
 }
 
 export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperationSelection | undefined {
+  if (request.ownerName === "ArrayConstructor" && request.memberName === "call" && request.operationKind === "call") {
+    return selectJsArrayConstruction(request.selectedMethodTypeArgumentCarriers ?? [], request.argumentCarriers ?? [], "method");
+  }
   const laneMatch = laneOf(request.receiverCarrier, request.ownerName);
   if (laneMatch === undefined) {
     return undefined;
@@ -717,6 +728,12 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
     fact: {
       kind: "provider-operation",
       operationId,
+      ...((row.requirements ?? []).some(requirement => requirement.capability === "clone" &&
+        !rustCarrierSupportsClone(resolveCarrierRef(requirement.carrier, bindings)))
+        ? { cloneCarriers: Object.freeze((row.requirements ?? [])
+            .filter(requirement => requirement.capability === "clone")
+            .map(requirement => resolveCarrierRef(requirement.carrier, bindings)!)) }
+        : {}),
       operationKind: row.shape.operationKind,
       target: materializeTarget(target, copyReference),
       resultCarrier,
@@ -768,7 +785,7 @@ function carrierRequirementsMatch(
       case "integer":
         return isRustIntegerCarrier(carrier);
       case "clone":
-        return rustCarrierSupportsClone(carrier);
+        return carrier !== undefined && rustCarrierSupportsTrait(carrier, "core::clone::Clone", () => true);
       case "stringifiable":
         return isRustSourceStringConvertibleCarrier(carrier);
       case "js-equality":

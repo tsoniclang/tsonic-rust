@@ -393,6 +393,7 @@ export interface RustProviderOperationTemplate<
   readonly receiverCarrier?: TargetTypeRef;
   readonly genericParameters?: readonly RustProviderGenericParameter[];
   readonly typeRequirements?: readonly RustProviderTypeParameterRequirement[];
+  readonly cloneCarriers?: readonly TargetTypeRef[];
   readonly targetGenericArguments?: readonly RustTargetGenericArgument[];
   readonly resultConversion?: RustValueConversion;
   readonly compileTimeSourceArgumentIndexes?: readonly number[];

@@ -1,5 +1,6 @@
 import {
   rustBigIntTargetType,
+  rustEmptyObjectTargetType,
   rustFixedArrayTargetType,
   rustJsArrayTargetType,
   rustJsSymbolTargetType,
@@ -253,8 +254,13 @@ export function resolveStructuralObjectType(
     return undefined;
   }
   const properties = denseDefined(semantics.types.propertyInfos(type));
-  if (properties === undefined || properties.length === 0) {
+  if (properties === undefined) {
     return undefined;
+  }
+  if (properties.length === 0) {
+    return options.jsEnabled && !semantics.types.couldContainTypeVariables(type)
+      ? rustEmptyObjectTargetType()
+      : undefined;
   }
   const selected = properties.map((property) => {
     const declarations = denseDefined([...new Set([

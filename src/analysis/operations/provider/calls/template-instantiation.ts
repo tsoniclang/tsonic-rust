@@ -611,6 +611,7 @@ export function finalizeProviderOperationFact(
   return {
     kind: "provider-operation",
     operationId: template.operationId,
+    ...(template.cloneCarriers === undefined ? {} : { cloneCarriers: template.cloneCarriers }),
     resultCarrier: abi.result.kind === "async" ? abi.result.futureCarrier : abi.result.carrier,
     ...(template.sourceResultCarrier === undefined
       ? {}

@@ -16,6 +16,7 @@ import {
   rustCarrierSupportsObjectIdentity,
 } from "../../../target-model/types/index.js";
 import { resolveCarrierRef } from "./selection.js";
+import { selectJsArrayConstruction } from "./array-construction.js";
 import { materializeJsonValueConversions } from "./materialization.js";
 import { selectRustJsonValueConversion } from "../../conversions/selection.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -202,6 +203,9 @@ function resolveConstructorResult(
 }
 
 export function selectJsSurfaceConstructor(request: JsConstructorRequest): JsOperationSelection | undefined {
+  if (request.className === "Array") {
+    return selectJsArrayConstruction(request.typeArgumentCarriers, request.argumentCarriers);
+  }
   const rows = jsConstructorRows.filter((candidate) =>
     candidate.className === request.className &&
     candidate.typeArgumentCount === request.typeArgumentCarriers.length &&
@@ -303,6 +307,9 @@ export function selectJsSurfaceConstructorBySourceOwner(request: {
   readonly argumentCarriers: readonly (TargetTypeRef | undefined)[];
   readonly carrierSupportsProjectIdentity?: (carrier: TargetTypeRef) => boolean;
 }): JsOperationSelection | undefined {
+  if (request.sourceOwnerName === "ArrayConstructor") {
+    return selectJsArrayConstruction(request.typeArgumentCarriers, request.argumentCarriers);
+  }
   const row = jsConstructorRows.find((candidate) => candidate.sourceOwnerName === request.sourceOwnerName);
   return row === undefined
     ? undefined

@@ -359,6 +359,12 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       }
     }
     const operation = facts.getFact(node, rustTargetOperationFactKey);
+    if (operation?.kind === "provider-operation") {
+      for (const carrier of operation.cloneCarriers ?? []) {
+        const error = addUse(node, carrier, ["clone"]);
+        if (error !== undefined) return error;
+      }
+    }
     if (ast.kindName(node) === "KindAwaitExpression") {
       const operand = Node_Expression(ast, node);
       const operandCarrier = operand === undefined

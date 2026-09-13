@@ -119,6 +119,7 @@ export {
 export {
   isRustNamedTypeTraitContract,
   rustBigIntTargetType,
+  rustEmptyObjectTargetType,
   rustBorrowedStrTargetType,
   rustFixedArrayCarrierValue,
   rustFixedArrayTargetType,
@@ -168,6 +169,7 @@ export {
   rustBorrowedAsyncGeneratorTargetId,
   rustBorrowedGeneratorTargetId,
   rustBigIntTargetId,
+  rustEmptyObjectTargetId,
   rustCallableTargetId,
   rustGeneratorTargetId,
   rustIteratorResultTargetId,

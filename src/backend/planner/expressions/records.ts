@@ -14,6 +14,7 @@ import {
 } from "../objects/project-storage.js";
 import {
   isRustIntegerCarrier,
+  rustEmptyObjectTargetId,
   isRustStringCarrier,
   rustOptionElementCarrier,
   rustSourceTypeCarrierValue,
@@ -45,6 +46,16 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
+  if (fact?.kind === "empty-object-literal") {
+    if (fact.resultCarrier.kind !== "target-named" || fact.resultCarrier.id !== rustEmptyObjectTargetId ||
+      context.input.program.source.ast.properties(node).length !== 0 ||
+      !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.empty-object")) {
+      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+        "rust.backend.empty-object", "Empty object construction requires exact finalized empty syntax and identity storage."));
+      return undefined;
+    }
+    return { kind: "call", path: "js_abi::EmptyObject::new", args: [] };
+  }
   if (fact?.kind === "provider-record-literal") {
     return planProviderRecordLiteral(node, fact, context);
   }

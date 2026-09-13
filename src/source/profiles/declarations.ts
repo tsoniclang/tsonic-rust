@@ -142,6 +142,8 @@ interface Object {
 }
 
 interface ObjectConstructor {
+  freeze<T extends object>(value: T): Readonly<T>;
+  isFrozen(value: object): boolean;
   keys(value: object): string[];
   values<T>(value: { [key: string]: T } | ArrayLike<T>): T[];
   entries<T>(value: { [key: string]: T } | ArrayLike<T>): [string, T][];
@@ -187,6 +189,11 @@ interface NumberConstructor {
   parseInt(value: string, radix?: number): number;
 }
 declare var Number: NumberConstructor;
+
+interface BigIntConstructor {
+  (value: bigint | boolean | number | string): bigint;
+}
+declare var BigInt: BigIntConstructor;
 
 declare function parseInt(value: string, radix?: number): number;
 declare function parseFloat(value: string): number;
@@ -291,7 +298,9 @@ interface ReadonlyArray<T> extends Iterable<T> {
 }
 
 interface ArrayConstructor {
+  new <T>(arrayLength: number): T[];
   new <T>(...items: T[]): T[];
+  <T>(arrayLength: number): T[];
   <T>(...items: T[]): T[];
   isArray(value: unknown): value is unknown[];
   from(arrayLike: string): string[];

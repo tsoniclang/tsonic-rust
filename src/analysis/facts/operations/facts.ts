@@ -85,6 +85,7 @@ export type RustTargetOperationFact =
   | {
       readonly kind: "provider-operation";
       readonly operationId: string;
+      readonly cloneCarriers?: readonly TargetTypeRef[];
       readonly resultCarrier: TargetTypeRef;
       readonly sourceResultCarrier?: TargetTypeRef;
       readonly sourceAbsenceCarrier?: TargetTypeRef;
@@ -370,6 +371,11 @@ export type RustTargetOperationFact =
   | {
       // Object literal lowering to a generated record struct: field order and
       // carriers come from the finalized shape declaration.
+      readonly kind: "empty-object-literal";
+      readonly operationId: string;
+      readonly resultCarrier: TargetTypeRef;
+    }
+  | {
       readonly kind: "record-literal";
       readonly operationId: string;
       readonly storage: "project-object" | "object-handle";

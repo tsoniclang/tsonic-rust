@@ -176,6 +176,9 @@ export function rustFoundationForTargetOperationFact(
       fact.fields.forEach((field) => requireCarrier(field.storageCarrier));
       requireCarrier(fact.resultCarrier);
       break;
+    case "empty-object-literal":
+      requireCarrier(fact.resultCarrier);
+      break;
     case "record-literal":
       fact.fields.forEach((field) => requireCarrier(field.carrier));
       fact.contributions.forEach((contribution) => {

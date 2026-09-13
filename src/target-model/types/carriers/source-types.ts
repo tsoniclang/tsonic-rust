@@ -32,6 +32,7 @@ export const rustJsErrorTargetId = "rust.runtime.JsError";
 export const rustProgramErrorTargetId = "rust.program.TsonicError";
 export const rustTsValueTargetId = "rust.runtime.TsValue";
 export const rustJsValueTargetId = "rust.js.JsValue";
+export const rustEmptyObjectTargetId = "rust.js.EmptyObject";
 export const rustJsArrayTargetId = "rust.js.JsArray";
 export const rustJsArrayConcatItemTargetId = "rust.js.JsArrayConcatItem";
 export const rustJsMapTargetId = "rust.js.JsMap";
