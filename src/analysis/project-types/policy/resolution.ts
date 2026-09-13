@@ -11,6 +11,7 @@ import {
 import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { Node, Signature, SourceFile } from "@tsonic/tsts";
+import { sourceObjectMemberDeclarations, sourceParameterIsProperty } from "@tsonic/target-api/source";
 import type {
   SourceProjectMemberImplementationResult,
 } from "@tsonic/target-api/source";
@@ -434,7 +435,7 @@ export function createRustProjectTypePolicy(
         allocateGeneratedName(usedNames, rustSnakeCaseIdentifier(field.sourceName)),
       );
     }
-    for (const member of denseNodes(host.ast.members(definition.declaration)) ?? []) {
+    for (const member of denseNodes(sourceObjectMemberDeclarations(host.ast, definition.declaration)) ?? []) {
       const kind = host.ast.kindName(member);
       if (definition.kind === "interface" && kind === "KindIndexSignature") {
         names.set(
@@ -462,7 +463,8 @@ export function createRustProjectTypePolicy(
         continue;
       }
       const isField = definition.kind === "class"
-        ? kind === "KindPropertyDeclaration" && !host.ast.hasModifierKind(member, "static")
+        ? (kind === "KindPropertyDeclaration" || sourceParameterIsProperty(host.ast, member)) &&
+          !host.ast.hasModifierKind(member, "static")
         : kind === "KindPropertySignature";
       if (!isField) {
         continue;
@@ -517,7 +519,7 @@ export function createRustProjectTypePolicy(
         roles: ["read", "write"] as readonly RustProjectMemberSlotRole[],
       })),
     ];
-    for (const member of denseNodes(host.ast.members(definition.declaration)) ?? []) {
+    for (const member of denseNodes(sourceObjectMemberDeclarations(host.ast, definition.declaration)) ?? []) {
       const kind = host.ast.kindName(member);
       const targetName = kind === "KindMethodDeclaration" || kind === "KindMethodSignature"
         ? host.targetNameForCallable(member)
@@ -538,7 +540,8 @@ export function createRustProjectTypePolicy(
         setMemberSlotName(member, "static", staticName);
         continue;
       }
-      if (kind === "KindPropertyDeclaration" || kind === "KindPropertySignature") {
+      if (kind === "KindPropertyDeclaration" || kind === "KindPropertySignature" ||
+        sourceParameterIsProperty(host.ast, member)) {
         candidates.push({ declaration: member, targetName, roles: ["read", "write"] });
       } else if (kind === "KindGetAccessor") {
         candidates.push({ declaration: member, targetName, roles: ["read"] });
@@ -622,7 +625,7 @@ export function createRustProjectTypePolicy(
     for (const related of relatedDefinitions) {
       for (
         const member of
-          denseNodes(host.ast.members(related.declaration)) ?? []
+          denseNodes(sourceObjectMemberDeclarations(host.ast, related.declaration)) ?? []
       ) {
         contractMembers.add(member);
       }

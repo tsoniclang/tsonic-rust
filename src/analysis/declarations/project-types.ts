@@ -3,12 +3,16 @@ import {
   KindClassStaticBlockDeclaration,
   Node_Initializer,
   Node_Type,
+  sourceObjectMemberDeclarations,
+  sourceParameterIsProperty,
 } from "@tsonic/target-api/source";
 import {
   rustAsyncFunctionFactKey,
   rustGeneratorFactKey,
   rustSelfModeFactKey,
+  rustSourceBindingFactKey,
   rustSourceCallableReturnFactKey,
+  rustSourceParameterAbiFactKey,
 } from "../facts/keys.js";
 import { appendRustDiagnostic } from "../program/walk.js";
 import { recordCallableReturnFact, recordCallableSuspensionFacts } from "../callables/signatures.js";
@@ -58,7 +62,7 @@ export function recordClassSignatureFacts(walk: RustFactWalk, declaration: Node)
     return;
   }
   setCarrierFact(walk, declaration, classCarrier);
-  const members = requireDenseSourceNodes(walk, ast.members(declaration), "Class declaration contains an undefined or non-data member slot.");
+  const members = requireDenseSourceNodes(walk, sourceObjectMemberDeclarations(ast, declaration), "Class declaration contains an undefined or non-data member slot.");
   if (members === undefined) {
     return;
   }
@@ -67,8 +71,10 @@ export function recordClassSignatureFacts(walk: RustFactWalk, declaration: Node)
     if (memberKind === KindClassStaticBlockDeclaration) {
       continue;
     }
-    if (memberKind === "KindPropertyDeclaration") {
-      const fieldCarrier = resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, member));
+    if (memberKind === "KindPropertyDeclaration" || sourceParameterIsProperty(ast, member)) {
+      const fieldCarrier = sourceParameterIsProperty(ast, member)
+        ? walk.context.facts.get(member, rustRuntimeCarrierKey)?.carrier
+        : resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, member));
       if (fieldCarrier !== undefined) {
         setCarrierFact(walk, member, fieldCarrier);
       }
@@ -82,6 +88,24 @@ export function recordClassSignatureFacts(walk: RustFactWalk, declaration: Node)
       }
       for (const parameter of parameters) {
         recordParameterAbiFacts(walk, parameter);
+        if (sourceParameterIsProperty(ast, parameter)) {
+          const name = ast.name(parameter);
+          const carrier = walk.context.facts.get(parameter, rustRuntimeCarrierKey)?.carrier;
+          if (name !== undefined && carrier !== undefined) {
+            setCarrierFact(walk, name, carrier);
+            walk.context.facts.set(name, rustSourceBindingFactKey, {
+              scope: "lexical",
+              sourceName: ast.text(name),
+              sourceDeclaration: parameter,
+            }, [{ message: "rust implicit parameter-property initializer binding" }]);
+            const abi = walk.context.facts.get(parameter, rustSourceParameterAbiFactKey);
+            if (abi !== undefined) {
+              walk.context.facts.set(name, rustSourceParameterAbiFactKey, abi, [
+                { message: "rust implicit parameter-property initializer ABI" },
+              ]);
+            }
+          }
+        }
       }
       if (memberKind !== "KindConstructor") {
         recordCallableSuspensionFacts(walk, member);

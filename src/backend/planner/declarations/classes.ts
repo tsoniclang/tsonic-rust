@@ -17,6 +17,8 @@ import {
   KindClassStaticBlockDeclaration,
   Node_Initializer,
   Node_Type,
+  sourceObjectMemberDeclarations,
+  sourceParameterIsProperty,
 } from "@tsonic/target-api/source";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planExpression } from "../expressions/index.js";
@@ -154,7 +156,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   const methods: Node[] = [];
   const accessors: { readonly declaration: Node; readonly role: "read" | "write" }[] = [];
   let failed = false;
-  for (const member of ast.members(node)) {
+  for (const member of sourceObjectMemberDeclarations(ast, node)) {
     if (member === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, node),
@@ -168,7 +170,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     if (memberKind === KindClassStaticBlockDeclaration) {
       continue;
     }
-    if (memberKind === "KindPropertyDeclaration") {
+    if (memberKind === "KindPropertyDeclaration" || sourceParameterIsProperty(ast, member)) {
       if (ast.hasModifierKind(member, "static")) {
         continue;
       }
@@ -196,7 +198,9 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
         failed = true;
         continue;
       }
-      const initializer = Node_Initializer(ast, member);
+      const initializer = sourceParameterIsProperty(ast, member)
+        ? ast.name(member)
+        : Node_Initializer(ast, member);
       fields.push({
         declaration: member,
         sourceName: layoutField.sourceName,

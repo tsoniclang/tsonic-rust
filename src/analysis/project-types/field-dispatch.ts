@@ -3,6 +3,7 @@ import type {
   Node,
 } from "@tsonic/tsts";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
+import { sourceParameterIsProperty } from "@tsonic/target-api/source";
 import type {
   RustProjectTypeDefinition,
   RustProjectTypePolicy,
@@ -206,7 +207,8 @@ function resolveFieldImplementation(
   }
   const declaration = selected.implementation.declaration;
   const kind = input.ast.kindName(declaration);
-  if (kind === "KindPropertyDeclaration" || kind === "KindPropertySignature") {
+  if (kind === "KindPropertyDeclaration" || kind === "KindPropertySignature" ||
+    sourceParameterIsProperty(input.ast, declaration)) {
     return Object.freeze({ kind: "stored", declaration });
   }
   if (kind !== "KindGetAccessor" && kind !== "KindSetAccessor") {

@@ -1,6 +1,7 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import {
   sourceNodesEqual,
+  sourceObjectMemberDeclarations,
   type SourceDeclarationUse,
   type SourceExpressionValueFlowSummary,
   type SourceProgramNavigation,
@@ -252,7 +253,7 @@ function projectDefinitionIsMutable(
     readonly hasMutableStorageUse: (declaration: Node) => boolean;
   },
 ): boolean {
-  return input.ast.members(definition.declaration).some((member) =>
+  return sourceObjectMemberDeclarations(input.ast, definition.declaration).some((member) =>
     member !== undefined && !input.ast.hasModifierKind(member, "static") &&
     (mutatingMethods.has(member) ||
       input.hasMutableStorageUse(member) ||

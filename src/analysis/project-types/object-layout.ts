@@ -1,4 +1,5 @@
 import type { AstReader, Node } from "@tsonic/tsts";
+import { sourceMemberOwner, sourceObjectMemberDeclarations, sourceParameterIsProperty } from "@tsonic/target-api/source";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 
 export interface RustProjectObjectField {
@@ -38,7 +39,7 @@ export function rustProjectObjectLayout(
   if (objectKind === undefined) {
     return undefined;
   }
-  const members = ast.members(declaration);
+  const members = sourceObjectMemberDeclarations(ast, declaration);
   if (!isDenseDataArray(members) || members.some((member) => member === undefined)) {
     return undefined;
   }
@@ -48,7 +49,8 @@ export function rustProjectObjectLayout(
   for (const member of members as readonly Node[]) {
     const memberKind = ast.kindName(member);
     const isField = objectKind === "class"
-      ? memberKind === "KindPropertyDeclaration" && !ast.hasModifierKind(member, "static")
+      ? (memberKind === "KindPropertyDeclaration" || sourceParameterIsProperty(ast, member)) &&
+        !ast.hasModifierKind(member, "static")
       : memberKind === "KindPropertySignature";
     if (objectKind === "interface" && memberKind === "KindIndexSignature") {
       const parameters = ast.parameters(member);
@@ -92,7 +94,7 @@ export function rustProjectObjectField(
   declaration: Node,
   ast: AstReader,
 ): RustProjectObjectField | undefined {
-  const owner = ast.parent(declaration);
+  const owner = sourceMemberOwner(ast, declaration);
   return owner === undefined
     ? undefined
     : rustProjectObjectLayout(owner, ast)?.fields.find((field) => field.declaration === declaration);

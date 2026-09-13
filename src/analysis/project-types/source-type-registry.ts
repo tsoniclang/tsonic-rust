@@ -12,6 +12,8 @@ import { rustTargetGenericReferences } from "../../target-model/types/carriers/g
 import {
   KindStringLiteral,
   Node_Type,
+  sourceObjectMemberDeclarations,
+  sourceParameterIsProperty,
 } from "@tsonic/target-api/source";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import {
@@ -163,7 +165,7 @@ export function createRustSourceTypeRegistry(): RustSourceTypeRegistry {
         return undefined;
       }
       const declarationKind = ast.kindName(declaration);
-      const members = denseNodes(ast.members(declaration));
+      const members = denseNodes(sourceObjectMemberDeclarations(ast, declaration));
       if (members === undefined) {
         return undefined;
       }
@@ -172,7 +174,8 @@ export function createRustSourceTypeRegistry(): RustSourceTypeRegistry {
       for (const member of members) {
         const kind = ast.kindName(member);
         if ((declarationKind === "KindInterfaceDeclaration" && kind === "KindPropertySignature") ||
-          (declarationKind === "KindClassDeclaration" && kind === "KindPropertyDeclaration")) {
+          (declarationKind === "KindClassDeclaration" &&
+            (kind === "KindPropertyDeclaration" || sourceParameterIsProperty(ast, member)))) {
           if (ast.hasModifierKind(member, "static")) {
             continue;
           }

@@ -6,7 +6,7 @@ import {
   rustScreamingSnakeIdentifier,
   rustSnakeCaseIdentifier,
 } from "../../target-model/names/identifiers.js";
-import { Node_Initializer } from "@tsonic/target-api/source";
+import { Node_Initializer, sourceParameterIsProperty } from "@tsonic/target-api/source";
 import type { RustRuntimeValueUsePlan } from "../program/runtime-value-uses.js";
 
 type RustNameRole =
@@ -221,6 +221,9 @@ function parameterIsUnused(
   ast: AstReader,
   navigation: SourceProgramNavigation,
 ): boolean {
+  if (sourceParameterIsProperty(ast, parameter)) {
+    return false;
+  }
   const body = callable === undefined ? undefined : ast.body(callable);
   const name = ast.name(parameter);
   const reference = navigation.sourceReferenceFor(name);
