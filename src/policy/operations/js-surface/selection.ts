@@ -235,6 +235,9 @@ function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readon
   if (carrier === undefined && ownerName === "BigIntConstructor") {
     return { lane: "bigint", bindings: {} };
   }
+  if (carrier === undefined && ownerName === "Uint8ArrayConstructor") {
+    return { lane: "typed-array", bindings: {} };
+  }
   if (carrier === undefined && ownerName === "Global") {
     return { lane: "global", bindings: {} };
   }

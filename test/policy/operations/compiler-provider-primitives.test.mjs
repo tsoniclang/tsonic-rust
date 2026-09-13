@@ -21,6 +21,15 @@ export function main(): void {
   check(view.getBigUint64(1, true) === 9007199254740993n);
   view.setBigUint64(0, -1n);
   check(view.getBigUint64(0) === 18446744073709551615n);
+  check(new Uint8Array().length === 0);
+  const numbers = [0, 255, 256, -1, 3.9];
+  const bytes = Uint8Array.from(numbers);
+  check(bytes.length === 5 && bytes[0] === 0 && bytes[1] === 255);
+  check(bytes[2] === 0 && bytes[3] === 255 && bytes[4] === 3);
+  numbers[0] = 9;
+  check(bytes[0] === 0);
+  bytes[1] = 7;
+  check(numbers[1] === 255);
   let source = "aé😀z";
   let visited = "";
   let count = 0;

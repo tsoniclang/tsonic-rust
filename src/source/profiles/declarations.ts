@@ -454,6 +454,11 @@ interface DataView {
   setBigUint64(byteOffset: number, value: bigint, littleEndian?: boolean): void;
 }
 
+interface Uint8ArrayConstructor {
+  new (): Uint8Array;
+  from(values: readonly number[]): Uint8Array;
+}
+
 interface JSON {
   parse(text: string): unknown;
   stringify(value: string): string;

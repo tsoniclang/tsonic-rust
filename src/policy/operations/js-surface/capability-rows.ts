@@ -75,6 +75,14 @@ const dataViewRows: readonly JsOperationRowData[] = [
 ];
 
 const typedArrayRows: readonly JsOperationRowData[] = [
+  {
+    owner: "Uint8ArrayConstructor", member: "from", operationKind: "call", lane: "typed-array", fallible: true,
+    shape: {
+      op: "operation", operationKind: "method",
+      target: { form: "call", path: "js_abi::Uint8Array::from_array", argModes: ["ref"] },
+      result: { ref: "source-result" }, params: [{ ref: "float64-array" }],
+    },
+  },
   ...[
     ["buffer", "buffer", { ref: "array-buffer" }],
     ["byteLength", "byte_length", { ref: "float64" }],
