@@ -9,6 +9,7 @@ import {
   KindExpressionStatement,
   KindExclamationEqualsEqualsToken,
   KindIdentifier,
+  KindInKeyword,
   KindBigIntLiteral,
   KindNumericLiteral,
   KindParenthesizedExpression,
@@ -35,6 +36,7 @@ import {
   isRustOptionCarrier,
   isRustStringCarrier,
   rustOptionElementCarrier,
+  rustBigIntTargetType,
   rustSourcePrimitiveTargetType,
   rustUndefinedTargetType,
 } from "../../target-model/types/index.js";
@@ -88,6 +90,15 @@ export function resolveBinaryOperandCarriers(
     return undefined;
   }
   const operatorKind = walk.context.ast.kindName(operatorToken);
+  if (operatorKind === KindInKeyword) {
+    return {
+      left: resolveExpressionCarrier(walk, leftNode, sourceFile, undefined),
+      right: resolveExpressionCarrier(walk, rightNode, sourceFile, undefined),
+      leftNode,
+      rightNode,
+      operatorKind,
+    };
+  }
   const selectedAssignmentValueCarrier = operatorKind === KindEqualsToken
     ? rustSelectedAssignmentValueCarrier(
         walk.context.facts.get(expression, rustTargetOperationFactKey) ??
@@ -722,6 +733,9 @@ export function resolvePostCheckUnaryCarrier(
 ): TargetTypeRef | undefined {
   const pendingKind = walk.postCheckOperations.get(expression);
   const operand = Node_Operand(walk.context.ast, expression);
+  expected ??= operand !== undefined && walk.context.ast.kindName(operand) === KindBigIntLiteral
+    ? rustBigIntTargetType()
+    : rustSourcePrimitiveTargetType("float64");
   const fixedWidthLiteral = expected?.kind === "source-primitive" &&
     isRustNumericCarrier(expected) &&
     selectedSourceLiteralIsRepresentable(expression, expected.name, walk.context.ast);

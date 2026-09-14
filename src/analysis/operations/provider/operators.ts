@@ -69,6 +69,15 @@ export function selectRustCheckedOperator(
     }
     let left = resolveRustTargetTypeRef(request.left, context, options);
     let right = resolveRustTargetTypeRef(request.right, context, options);
+    if (isRustNullishSourceCarrier(right)) {
+      const rightNode = asNode(request.right, context);
+      const rightType = rightNode === undefined
+        ? undefined
+        : context.currentSemantics.types.expressionType(rightNode);
+      if (rightType !== undefined && !context.currentSemantics.types.isUnion(rightType)) {
+        right = resolveRustExactNullishValueCarrier(rightType, context.currentSemantics);
+      }
+    }
     left = normalizeSelectedLiteralCarrier(request.left, left, right, context, options);
     right = normalizeSelectedLiteralCarrier(request.right, right, left, context, options);
     const selectedSet = mapSelectedAssignment(request, left, right, context, options);

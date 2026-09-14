@@ -17,6 +17,7 @@ import {
   KindClassStaticBlockDeclaration,
   Node_Initializer,
   Node_Type,
+  sourceClassFieldIsTypeOnly,
   sourceObjectMemberDeclarations,
   sourceParameterIsProperty,
 } from "@tsonic/target-api/source";
@@ -167,6 +168,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
       continue;
     }
     const memberKind = ast.kindName(member);
+    if (sourceClassFieldIsTypeOnly(ast, member)) continue;
     if (memberKind === KindClassStaticBlockDeclaration) {
       continue;
     }

@@ -32,6 +32,7 @@ import { rustArgumentPassingMode } from "../facts/parameter-passing.js";
 import { rustProjectCallableTargetName } from "../facts/source-member-name.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { finalizeProjectSourceGenericArguments } from "./project-call-generics.js";
+import { instantiateRustSourceParameterValueCarrier } from "../../policy/ownership/source-callable-abi.js";
 import { sourceTypeCarrierForDeclaration } from "./inputs.js";
 import { rustSpreadElementCarrier } from "../../target-model/operations/rest-assembly.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
@@ -124,12 +125,17 @@ export function applySelectedProjectSourceCall(
       substitutions.lifetimes,
       substitutions.consts,
     );
-    const valueCarrier = substituteRustTargetGenerics(
-      parameterAbi.valueCarrier,
-      substitutions.types,
-      substitutions.lifetimes,
-      substitutions.consts,
-    );
+    const valueCarrier = instantiateRustSourceParameterValueCarrier(parameterAbi, parameterCarrier);
+    if (valueCarrier === undefined) {
+      appendRustDiagnostic(
+        walk,
+        "RUST_SOURCE_CALL_PARAMETER_INSTANTIATION_CONFLICT",
+        `Project-source parameter ${index} does not match its exact selected ABI.`,
+        expression,
+        ["target.capability=rust.source-call.parameter-instantiation"],
+      );
+      return undefined;
+    }
     const mode = targetParameter.passingMode === "borrow-mut"
       ? "mut-ref" as const
       : targetParameter.passingMode === "borrow-shared"

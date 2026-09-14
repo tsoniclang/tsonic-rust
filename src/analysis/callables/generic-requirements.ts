@@ -265,7 +265,7 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
   const exactNames = typeParameterNames as string[];
   const capturedNames: string[] = [];
   for (let ancestor = ast.parent(declaration); ancestor !== undefined; ancestor = ast.parent(ancestor)) {
-    if (!isIndependentCallable(ast, ancestor)) continue;
+    if (!isIndependentCallable(ast, ancestor) && ast.kindName(ancestor) !== "KindClassDeclaration") continue;
     for (const parameter of ast.typeParameters(ancestor)) {
       if (parameter === undefined || input.sourceLifetimes.parameterFor(parameter)?.kind === "lifetime") continue;
       const name = names.nameForDeclaration(parameter);

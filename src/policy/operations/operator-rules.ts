@@ -27,6 +27,7 @@ import {
   KindGreaterThanGreaterThanGreaterThanToken,
   KindGreaterThanGreaterThanToken,
   KindGreaterThanToken,
+  KindInKeyword,
   KindLessThanLessThanToken,
   KindLessThanEqualsToken,
   KindLessThanToken,
@@ -39,6 +40,7 @@ import {
   isRustBigIntCarrier,
   isRustBoolCarrier,
   isRustIntegerCarrier,
+  isRustJsArrayCarrier,
   isRustJsStrictEqualityCarrier,
   isRustNumericCarrier,
   isRustStringCarrier,
@@ -48,6 +50,7 @@ import {
 } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustSourceTypeCarrierValue } from "../../target-model/types/index.js";
+import { rustIntegerKindIsExactlyRepresentableAsFloat64 } from "../../target-model/conversions/numeric-promotion.js";
 import {
   type RustNumericBinaryPromotion,
   rustNumericPromotionConversion,
@@ -251,6 +254,7 @@ function compoundBinaryOperator(
 }
 
 const operatorKindByText: Readonly<Record<string, string>> = {
+  "in": KindInKeyword,
   "+": KindPlusToken,
   "-": KindMinusToken,
   "*": KindAsteriskToken,
@@ -301,6 +305,22 @@ export function selectRustBinaryOperator(
   operatorKindName = operatorKindByText[operatorKindName] ?? operatorKindName;
   if (left === undefined || right === undefined) {
     return undefined;
+  }
+  if (operatorKindName === KindInKeyword) {
+    if (!isRustJsArrayCarrier(right) || !isRustNumericCarrier(left) ||
+      (left.name !== "float64" && left.name !== "float32" &&
+        !rustIntegerKindIsExactlyRepresentableAsFloat64(left.name))) {
+      return undefined;
+    }
+    return {
+      kind: "operator-call",
+      rustOperator: "in",
+      resultCarrier: boolCarrier,
+      path: "js_abi::JsArray::contains_number_property",
+      fallible: false,
+      operandModes: ["value", "ref"],
+      leftConversion: rustNumericPromotionConversion(left.name, "float64"),
+    };
   }
   if ((operatorKindName === "KindEqualsEqualsToken" || operatorKindName === "KindExclamationEqualsToken") &&
     (rustRuntimeUnionContract(left)?.strictEqualityOnly === true || rustRuntimeUnionContract(right)?.strictEqualityOnly === true)) {

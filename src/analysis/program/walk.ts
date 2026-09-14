@@ -387,6 +387,7 @@ function rustOperatorText(kind: string | undefined): string | undefined {
     KindPlusPlusToken: "++",
     KindMinusMinusToken: "--",
     KindInstanceOfKeyword: "instanceof",
+    KindInKeyword: "in",
   };
   return kind === undefined ? undefined : operators[kind];
 }

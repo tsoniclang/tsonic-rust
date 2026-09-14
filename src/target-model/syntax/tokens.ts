@@ -48,7 +48,7 @@ export type RustAssignmentOperator =
   | "<<="
   | ">>=";
 export type RustOperatorToken = RustBinaryOperator | RustAssignmentOperator | "!";
-export type RustOperationSymbol = RustOperatorToken | ">>>" | ">>>=";
+export type RustOperationSymbol = RustOperatorToken | ">>>" | ">>>=" | "in";
 
 export const rustStringPushMethod = "push";
 export const rustStringPushStrMethod = "push_str";

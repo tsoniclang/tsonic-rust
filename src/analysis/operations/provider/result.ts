@@ -666,6 +666,14 @@ export function selectedArgumentMatchScore(
     if (actual === undefined) {
       return 10;
     }
+    const optionElement = rustOptionElementCarrier(expected);
+    if (optionElement !== undefined &&
+      (isRustDefinitelyNullishCarrier(actual) ||
+        rustTargetTypeRefEquals(actual, optionElement) ||
+        (optionElement.kind === "source-primitive" && isRustNumericCarrier(optionElement) &&
+          sourceLiteralIsRepresentableAsPrimitive(node, optionElement.name, context)))) {
+      return 1;
+    }
     const reconciliation = selectRustValueCarrierReconciliation(
       actual,
       expected,

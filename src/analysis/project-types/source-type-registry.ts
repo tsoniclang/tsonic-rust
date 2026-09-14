@@ -12,6 +12,7 @@ import { rustTargetGenericReferences } from "../../target-model/types/carriers/g
 import {
   KindStringLiteral,
   Node_Type,
+  sourceClassFieldIsTypeOnly,
   sourceObjectMemberDeclarations,
   sourceParameterIsProperty,
 } from "@tsonic/target-api/source";
@@ -172,6 +173,7 @@ export function createRustSourceTypeRegistry(): RustSourceTypeRegistry {
       const keys: string[] = [];
       const seen = new Set<string>();
       for (const member of members) {
+        if (sourceClassFieldIsTypeOnly(ast, member)) continue;
         const kind = ast.kindName(member);
         if ((declarationKind === "KindInterfaceDeclaration" && kind === "KindPropertySignature") ||
           (declarationKind === "KindClassDeclaration" &&

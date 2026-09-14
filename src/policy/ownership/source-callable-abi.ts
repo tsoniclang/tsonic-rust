@@ -1,6 +1,9 @@
 import { flowStateFactKey } from "@tsonic/tsts";
 import type { Node } from "@tsonic/tsts";
 import {
+  inferRustTargetGenericBindings,
+  rustTargetGenericReferences,
+  substituteRustTargetGenerics,
   isRustVecCarrier,
   isRustStringCarrier,
   rustOptionElementCarrier,
@@ -48,6 +51,21 @@ export function rustSourceParameterContractCarrier(
   return abi.parameterCarrier.kind === "reference"
     ? abi.parameterCarrier.referent
     : abi.parameterCarrier;
+}
+
+export function instantiateRustSourceParameterValueCarrier(
+  abi: RustSourceParameterAbi,
+  selectedParameterCarrier: TargetTypeRef,
+): TargetTypeRef | undefined {
+  const references = rustTargetGenericReferences(abi.parameterCarrier);
+  const bindings = inferRustTargetGenericBindings(abi.parameterCarrier, selectedParameterCarrier, {
+    typeNames: new Set(references.typeNames),
+    lifetimeIdentities: new Set(references.lifetimeIdentities),
+    constIdentities: new Set(references.constIdentities),
+  });
+  return bindings === undefined
+    ? undefined
+    : substituteRustTargetGenerics(abi.valueCarrier, bindings.types, bindings.lifetimes, bindings.consts);
 }
 
 export function createRustSourceCallableAbiResolver(): RustSourceCallableAbiResolver {

@@ -1,5 +1,5 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import { sourceMemberOwner, sourceObjectMemberDeclarations, sourceParameterIsProperty } from "@tsonic/target-api/source";
+import { sourceClassFieldIsTypeOnly, sourceMemberOwner, sourceObjectMemberDeclarations, sourceParameterIsProperty } from "@tsonic/target-api/source";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 
 export interface RustProjectObjectField {
@@ -47,6 +47,7 @@ export function rustProjectObjectLayout(
   const indexSignatures: RustProjectObjectIndexSignature[] = [];
   const seen = new Set<string>();
   for (const member of members as readonly Node[]) {
+    if (sourceClassFieldIsTypeOnly(ast, member)) continue;
     const memberKind = ast.kindName(member);
     const isField = objectKind === "class"
       ? (memberKind === "KindPropertyDeclaration" || sourceParameterIsProperty(ast, member)) &&
@@ -117,6 +118,7 @@ export function rustProjectStaticFieldStorage(
   targetName: string | undefined,
 ): RustProjectStaticFieldStorage | undefined {
   if (ast.kindName(declaration) !== "KindPropertyDeclaration" ||
+    sourceClassFieldIsTypeOnly(ast, declaration) ||
     !ast.hasModifierKind(declaration, "static")) {
     return undefined;
   }

@@ -11,7 +11,7 @@ import {
 import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { Node, Signature, SourceFile } from "@tsonic/tsts";
-import { sourceObjectMemberDeclarations, sourceParameterIsProperty } from "@tsonic/target-api/source";
+import { sourceClassFieldIsTypeOnly, sourceObjectMemberDeclarations, sourceParameterIsProperty } from "@tsonic/target-api/source";
 import type {
   SourceProjectMemberImplementationResult,
 } from "@tsonic/target-api/source";
@@ -464,6 +464,7 @@ export function createRustProjectTypePolicy(
       }
       const isField = definition.kind === "class"
         ? (kind === "KindPropertyDeclaration" || sourceParameterIsProperty(host.ast, member)) &&
+          !sourceClassFieldIsTypeOnly(host.ast, member) &&
           !host.ast.hasModifierKind(member, "static")
         : kind === "KindPropertySignature";
       if (!isField) {
