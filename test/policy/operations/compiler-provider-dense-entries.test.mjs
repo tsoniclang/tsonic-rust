@@ -9,6 +9,11 @@ test("dense compiler-provider entries retain generic and stored-undefined payloa
     target: { id: "rust", options: { outputType: "bin", crateName: "dense_provider_entries" } },
     files: { "index.ts": `
 import { check } from "@acme/testing";
+export function materialize<E>(values: readonly E[]): E[] {
+  const result: E[] = [];
+  for (const value of values) result.push(value);
+  return result;
+}
 function visit<E>(values: readonly E[], write: (value: E) => void): void {
   const copied = values.map((value): E => value);
   check(copied.length === values.length);
@@ -28,6 +33,9 @@ export function main(): void {
   let sum = 0;
   visit(values, (value: number): void => { sum += value; });
   check(sum === 8);
+  const copiedValues = materialize(values);
+  visit(copiedValues, (value: number): void => { sum += value; });
+  check(sum === 16);
   const optional: (number | undefined)[] = [undefined, 7];
   let absent = 0;
   let present = 0;
@@ -83,3 +91,20 @@ export function main(): void {
     assert.ok(result.diagnostics.some(diagnostic => diagnostic.category === "error"));
   });
 }
+
+test("a returned cached array is not a fresh dense factory result", () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    files: { "index.ts": `
+const cached = [1, 2];
+function values(): number[] { return cached; }
+export function main(): void {
+  const array = values();
+  cached.length = 4;
+  let total = 0;
+  for (const [index, value] of array.entries()) total += index + value;
+}
+` },
+  });
+  assert.ok(result.diagnostics.some(diagnostic => diagnostic.category === "error"));
+});

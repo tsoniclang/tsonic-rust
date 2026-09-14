@@ -27,7 +27,16 @@ export function createRustArrayDensityQuery(
   const denseDeclarations = new WeakMap<Node, boolean>();
   const activeDeclarations = new Set<Node>();
   const trackedCallables = new WeakMap<Node, boolean>();
+  const freshCallables = new WeakMap<Node, boolean>();
+  const activeFreshCalls = new Set<Node>();
   const maximumProofNodes = 16_384;
+
+  const enclosingCallable = (node: Node): Node | undefined => {
+    for (let parent = ast.parent(node); parent !== undefined; parent = ast.parent(parent)) {
+      if (["KindFunctionDeclaration", "KindArrowFunction", "KindFunctionExpression", "KindMethodDeclaration"].includes(ast.kindName(parent))) return parent;
+    }
+    return undefined;
+  };
 
   const trackedCallable = (declaration: Node): boolean => {
     const previous = trackedCallables.get(declaration);
@@ -102,7 +111,7 @@ export function createRustArrayDensityQuery(
     const index = ast.arguments(call).indexOf(argument);
     return selected === undefined || index < 0 ? undefined : ast.parameters(selected)[index];
   };
-  const safe = (declaration: Node): boolean => {
+  const safe = (declaration: Node, returnOwner?: Node): boolean => {
     if (safeDeclarations.has(declaration)) return true;
     const pending = [declaration];
     const visited = new Set<Node>();
@@ -119,6 +128,8 @@ export function createRustArrayDensityQuery(
         const reference = outer(use.reference);
         const parent = ast.parent(reference);
         if (parent === undefined) return false;
+        if (returnOwner !== undefined && ast.kindName(parent) === "KindReturnStatement" &&
+          Node_Expression(ast, parent) === reference && enclosingCallable(parent) === returnOwner) continue;
         if (ast.kindName(parent) === "KindVariableDeclaration" && Node_Initializer(ast, parent) === reference &&
           ast.kindName(ast.name(parent)) === "KindIdentifier") {
           pending.push(parent);
@@ -157,11 +168,54 @@ export function createRustArrayDensityQuery(
         return false;
       }
     }
-    for (const subject of visited) safeDeclarations.add(subject);
+    if (returnOwner === undefined) for (const subject of visited) safeDeclarations.add(subject);
     return true;
+  };
+  const freshCall = (expression: Node): boolean => {
+    const declaration = implementation(expression);
+    if (declaration === undefined || activeFreshCalls.has(declaration) || activeFreshCalls.size >= 256) return false;
+    const previous = freshCallables.get(declaration);
+    if (previous !== undefined) return previous;
+    activeFreshCalls.add(declaration);
+    const active = new Set<Node>();
+    const fresh = (expression: Node): boolean => {
+      const node = unwrap(expression);
+      if (ast.kindName(node) === "KindArrayLiteralExpression") return ast.elements(node).every(element =>
+        element !== undefined && ast.kindName(element) !== "KindOmittedExpression" && ast.kindName(element) !== "KindSpreadElement");
+      if (ast.kindName(node) === "KindCallExpression") return freshCall(node);
+      if (ast.kindName(node) !== "KindIdentifier") return false;
+      const binding = navigation.sourceReferenceFor(node)?.declaration;
+      if (binding === undefined || ast.kindName(binding) !== "KindVariableDeclaration" ||
+        enclosingCallable(binding) !== declaration || active.has(binding) || active.size >= 256 || !safe(binding, declaration)) return false;
+      const initializer = Node_Initializer(ast, binding);
+      if (initializer === undefined) return false;
+      active.add(binding);
+      try { return fresh(initializer); }
+      finally { active.delete(binding); }
+    };
+    let accepted = true;
+    let returns = 0;
+    try {
+      const pending = [declaration];
+      for (let index = 0; accepted && index < pending.length; index++) {
+        if (pending.length >= maximumProofNodes) { accepted = false; break; }
+        const node = pending[index]!;
+        if (node !== declaration && ["KindFunctionDeclaration", "KindFunctionExpression", "KindArrowFunction", "KindClassDeclaration"].includes(ast.kindName(node))) continue;
+        if (ast.kindName(node) === "KindReturnStatement") {
+          const result = Node_Expression(ast, node);
+          returns++;
+          if (result === undefined || !fresh(result)) accepted = false;
+        }
+        ast.forEachChild(node, child => { if (child !== undefined) pending.push(child); });
+      }
+    } finally { activeFreshCalls.delete(declaration); }
+    accepted &&= returns > 0;
+    freshCallables.set(declaration, accepted);
+    return accepted;
   };
   const dense = (expression: Node): boolean => {
     const node = unwrap(expression);
+    if (ast.kindName(node) === "KindCallExpression") return freshCall(node);
     if (ast.kindName(node) === "KindArrayLiteralExpression") {
       return ast.elements(node).every(element => element !== undefined && ast.kindName(element) !== "KindOmittedExpression" &&
         (ast.kindName(element) !== "KindSpreadElement" ||
