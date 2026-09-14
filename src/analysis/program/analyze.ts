@@ -35,6 +35,7 @@ import { recordRustNativeBacking } from "../operations/native-memory.js";
 import { collectRustThrownClassDeclarations } from "../resources/thrown-values.js";
 import { rustSourceTypeDeclarations } from "../../policy/types/source-declarations.js";
 import { realizeRustSourceTypeFamilyDemands } from "../project-types/type-family-demands.js";
+import { rustTypeFamilyNormalizer } from "../../policy/types/type-family-normalization.js";
 
 export function analyzeRustProgram(context: RustAnalysisContext): void {
   const { ast } = context;
@@ -118,6 +119,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     navigation: context.source.navigation,
     sourceFiles: projectSourceFiles,
     sourceLifetimes: context.sourceLifetimes,
+    normalizeCarrier: rustTypeFamilyNormalizer(context.typeFamilies),
     genericParametersFor: declaration => rustProjectGenericParameters(declaration, context),
     thrownClassDeclarations: collectRustThrownClassDeclarations(context, projectSourceFiles),
     externallyExtensible(declaration) {

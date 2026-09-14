@@ -29,6 +29,7 @@ export class Value {
 export class Holder<T> {
   storage: Storage<T>;
   constructor(storage: Storage<T>) { this.storage = storage; }
+  get current(): Storage<T> { return this.storage; }
 }
 export function roundTrip<T>(
   from: (stored: Storage<T>) => T,
@@ -38,13 +39,17 @@ export function roundTrip<T>(
   return to(from(to(value)));
 }
 export function read<T>(holder: Holder<T>): Storage<T> { return holder.storage; }
+export function destructure<T>(holder: Holder<T>): Storage<T> {
+  const { storage } = holder;
+  return storage;
+}
 export function fromData(data: Data): Value { return new Value(data); }
 export function toData(value: Value): Data { return value.data; }
 `,
       "index.ts": `
 import { check } from "@acme/testing";
 import type { int32, uint32 } from "@tsonic/core/types.js";
-import { Holder, Value, fromData, read, roundTrip, toData } from "./value.js";
+import { Holder, Value, destructure, fromData, read, roundTrip, toData } from "./value.js";
 function signed(value: int32): int32 { return value; }
 function unsigned(value: uint32): uint32 { return value; }
 export function main(): void {
@@ -62,7 +67,10 @@ export function main(): void {
   alias.count = 11;
   check(holder.storage.count === 11 && value.data.count === 11);
   const scalar = new Holder<uint32>(maximum);
-  check(read<uint32>(scalar) === maximum);
+  check(read<uint32>(scalar) === maximum && scalar.current === maximum);
+  check(destructure<uint32>(scalar) === maximum);
+  destructure<Value>(holder).count = 13;
+  check(data.count === 13 && holder.current.count === 13);
 }
 `,
     },

@@ -23,14 +23,13 @@ export function instantiateRustSelectedMemberCarrier(
   const visit = (template: TargetTypeRef): boolean => {
     if (template.kind === "associated-type" && template.trait?.sourceItem !== undefined) {
       const selected = options.projectTypes.instantiateMemberCarrier(declaration, receiver, template);
-      if (selected?.kind !== "associated-type") return false;
+      if (selected?.kind !== "associated-type") return selected !== undefined;
       const family = familyRegistry.get(template.trait.id);
       if (family === undefined) return false;
       if (familyRegistry.implementation(family.trait.id, selected.owner) === undefined) {
         const parameterName = template.owner.kind === "type-parameter" ? template.owner.name : undefined;
         const parameter = parameterName === undefined ? undefined
-          : definition?.genericParameters.find(candidate => candidate.kind === "type" && candidate.targetName === parameterName)
-          ;
+          : definition?.genericParameters.find(candidate => candidate.kind === "type" && candidate.targetName === parameterName);
         const sourceBindings = parameter === undefined ? [] : bindings.filter(binding => binding.declaration === parameter.declaration);
         const ownerDeclaration = options.sourceTypes.declarationForCarrier(selected.owner);
         const sourceArgument = sourceBindings.length === 1 ? sourceBindings[0]!.argumentType

@@ -777,6 +777,8 @@ export function createRustProjectTypePolicy(
         declaredCarrier,
         substitutions.types,
         substitutions.lifetimes,
+        new Map(),
+        host.normalizeCarrier,
       );
     },
     isPolymorphic(definition) {

@@ -62,7 +62,9 @@ export function realizeRustSourceTypeFamilyDemands(walk: RustFactWalk, files: re
     const contract = walk.context.sourceLifetimes.contractFor(declaration);
     if (contract === undefined) return;
     const arguments_ = selected.sourceSelectedMethodTypeArguments ?? [];
-    const targetArguments = facts.getFact(node, rustTargetOperationFactKey)?.targetGenericArguments ?? selected.targetGenericArguments ?? [];
+    const operation = facts.getFact(node, rustTargetOperationFactKey);
+    const targetArguments = (operation?.kind === "source-call" ? operation.targetGenericArguments : undefined) ??
+      selected.targetGenericArguments ?? [];
     if (arguments_.length !== contract.parameters.length || targetArguments.length !== arguments_.length) return;
     const types = new Map<Type, Type>();
     const carriers = new Map<string, TargetTypeRef>();
@@ -87,7 +89,8 @@ export function realizeRustSourceTypeFamilyDemands(walk: RustFactWalk, files: re
         const declaration = enclosingParameter(node, carrier.owner.name, walk);
         const parameterType = declaration === undefined ? undefined
           : walk.context.semanticsFor(declaration).declarations.declaredType(declaration);
-        type = parameterType === undefined ? undefined : demand.types.get(parameterType) ?? parameterType;
+        type = parameterType === undefined ? undefined : demand.types.get(parameterType);
+        if (type === undefined && owner.kind === "type-parameter") type = parameterType;
       } else {
         const declaration = walk.sourceTypes.declarationForCarrier(owner);
         type = declaration === undefined ? undefined : walk.context.semanticsFor(declaration).declarations.declaredType(declaration);
