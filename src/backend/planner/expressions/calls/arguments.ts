@@ -276,6 +276,7 @@ function shapeRustSourceCallInput(
     sourceCarrier,
     convertedCarrier,
     argument,
+    context,
   );
   if (selectedInput === undefined) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -315,6 +316,7 @@ function resolveFinalizedRustSpreadInput(
   sourceCarrier: TargetTypeRef | undefined,
   convertedCarrier: TargetTypeRef | undefined,
   sourceExpression: RustExpr,
+  context: RustPlanContext,
 ): RustExpr | undefined {
   if (sourceCarrier === undefined) {
     return undefined;
@@ -324,7 +326,8 @@ function resolveFinalizedRustSpreadInput(
       sourceCarrier,
       convertedCarrier,
       input.carrier,
-    )
+    ) || convertedCarrier === undefined &&
+      context.input.program.structuralShapes.sharesStorage(sourceCarrier, input.carrier)
       ? sourceExpression
       : undefined;
   }

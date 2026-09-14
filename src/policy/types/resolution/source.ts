@@ -46,6 +46,7 @@ import {
 } from "./lifetimes.js";
 import { parseSourceIntegerLiteral } from "../../../target-model/syntax/literals.js";
 import { readRustRawLocation } from "../../operations/native-memory.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import {
   resolveRustCallableEvidence,
   resolveRustEvidenceNodesToCommonCarrier,
@@ -305,10 +306,11 @@ export function resolveRustTargetTypeSyntax(
       const selectedCarriers = semanticMembers.map(member => resolveRustAuthoredTargetType(member, context, options, resolving));
       if (selectedTypes.every(type => type !== undefined) && selectedCarriers.every(carrier => carrier !== undefined)) {
         const common = options.resolveProjectUnionCarrier(selectedCarriers as TargetTypeRef[]);
-        if (common !== undefined) return common;
+        if (common !== undefined && selectedCarriers.some(carrier => rustTargetTypeRefEquals(carrier, common))) return common;
         const union = resolveRustInferredClassUnion(sourceType, selectedTypes as Type[], selectedCarriers as TargetTypeRef[],
           { ...context, currentSemantics: semantics, currentSourceFile: sourceFile! }, options);
         if (union !== undefined) return union;
+        if (common !== undefined) return common;
       }
     }
     if (semanticMembers.length === 2) {

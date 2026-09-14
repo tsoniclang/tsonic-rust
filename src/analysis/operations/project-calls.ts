@@ -260,12 +260,17 @@ export function applySelectedProjectSourceCall(
     const variants = union.variants.map(variant => {
       const selfMode = walk.context.facts.get(variant.declaration, rustSelfModeFactKey) ??
         walk.context.facts.resolve(variant.declaration, rustSelfModeFactKey);
+      const owner = walk.context.projectTypes.definitionContainingDeclaration(variant.declaration);
+      const polymorphic = owner !== undefined && walk.context.projectTypes.isPolymorphic(owner);
+      const relationship = owner === undefined ? undefined : walk.context.projectTypes.relationship(variant.carrier, owner);
+      if (polymorphic && relationship?.kind !== "related") return undefined;
       return selfMode === undefined ? undefined : {
         name: variant.name,
         carrier: variant.carrier,
         declaration: variant.declaration,
         targetName: variant.targetName,
         mutatesSelf: selfMode.mode === "mut-ref",
+        ...(polymorphic && relationship?.kind === "related" ? { dispatchOwner: relationship.targetType } : {}),
       };
     });
     if (variants.some(variant => variant === undefined)) return undefined;

@@ -2,6 +2,7 @@ import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { TargetPlanningSourceNavigation } from "@tsonic/target-api/analysis";
 import {
   rustFlowReadProjectionFactKey,
+  rustContextualValueConversionFactKey,
   rustBindingProjectionFactKey,
   rustProjectDowncastFactKey,
   rustProjectUpcastFactKey,
@@ -446,7 +447,11 @@ export function analyzeRustGeneratedItemUsage(input: {
           markProjectConstructorInvoked(fact.target.typeCarrier);
         } else if (fact.target.form === "union-method") {
           for (const method of fact.target.variants) {
-            markProjectMemberUsed(method.carrier, method.declaration, "method-exact");
+            if (method.dispatchOwner !== undefined) {
+              markProjectCarrierFieldUsed(method.carrier, "wrapper-dispatch");
+            }
+            markProjectMemberUsed(method.carrier, method.declaration,
+              method.dispatchOwner === undefined ? "method-exact" : "method-virtual");
           }
         } else if (fact.target.form === "method" && fact.target.dispatch !== undefined) {
           const selected = input.facts.getSelectedTargetCall(node);
@@ -581,6 +586,11 @@ export function analyzeRustGeneratedItemUsage(input: {
       }
       const fact = input.facts.getFact(node, rustTargetOperationFactKey);
       visitProjectProjectionFacts(node);
+      const conversion = input.facts.getFact(node, rustContextualValueConversionFactKey)?.conversion;
+      if (conversion !== undefined && conversion.kind !== "native-trait-object-upcast" &&
+        conversion.kind !== "reference-reborrow" && conversion.kind !== "provider-record-copy") {
+        visitConversion(conversion);
+      }
       if (fact !== undefined) visitFact(node, fact);
       input.ast.forEachChild(node, (child) => {
         if (child !== undefined) pending.push({ node: child, insideTypeAlias });

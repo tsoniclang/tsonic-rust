@@ -44,6 +44,7 @@ export function planRustStructuralShapeModule(
   crateName: string | undefined,
   structuralShapesModuleName: string,
   rootComponentId: string,
+  programModuleName: string | undefined,
   publicShapeNames: ReadonlySet<string>,
   diagnostics: TargetDiagnostic[],
 ): RustSourceFileModel | undefined {
@@ -305,7 +306,9 @@ export function planRustStructuralShapeModule(
   const uses: RustItem[] = [...usedAliases]
     .sort((left, right) => left.localeCompare(right, "en"))
     .flatMap((alias) => {
-      const entry = rustRuntimeAliasImports.get(alias);
+      const entry = alias === "rt" && programModuleName !== undefined
+        ? { path: `crate::${programModuleName}`, alias }
+        : rustRuntimeAliasImports.get(alias);
       return entry === undefined
         ? []
         : [{ kind: "use" as const, path: entry.path, alias: entry.alias }];

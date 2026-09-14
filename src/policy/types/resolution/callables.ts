@@ -165,8 +165,10 @@ export function resolveUnion(
   }
   if (nullishMembers.length <= 1 && valueCarriers.length > 1 &&
     valueCarriers.every((carrier) => carrier !== undefined)) {
-    const selected = options.resolveProjectUnionCarrier(valueCarriers as readonly TargetTypeRef[]) ??
-      resolveRustInferredClassUnion(type, valueMembers, valueCarriers as readonly TargetTypeRef[], context, options);
+    const common = options.resolveProjectUnionCarrier(valueCarriers as readonly TargetTypeRef[]);
+    const selected = common !== undefined && valueCarriers.some(carrier => rustTargetTypeRefEquals(carrier, common))
+      ? common
+      : resolveRustInferredClassUnion(type, valueMembers, valueCarriers as readonly TargetTypeRef[], context, options) ?? common;
     return selected === undefined || nullishMembers.length === 0 ? selected : rustOptionTargetType(selected);
   }
   return undefined;

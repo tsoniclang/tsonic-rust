@@ -445,6 +445,20 @@ export function selectRustBinaryOperator(
   }
   const equality = equalityTokens[operatorKindName];
   if (equality !== undefined) {
+    if (rustStructuralObjectCarrierValue(left) !== undefined &&
+      rustStructuralObjectCarrierValue(right) !== undefined &&
+      !rustTargetTypeRefEquals(left, right)) {
+      return {
+        kind: "operator-call",
+        rustOperator: equality,
+        resultCarrier: boolCarrier,
+        path: equality === "=="
+          ? "rt::object_identity::source_objects_equal"
+          : "rt::object_identity::source_objects_not_equal",
+        fallible: false,
+        operandModes: ["ref", "ref"],
+      };
+    }
     const leftEnum = rustSourceTypeCarrierValue(left);
     const rightEnum = rustSourceTypeCarrierValue(right);
     const sameEnum = leftEnum !== undefined && rightEnum !== undefined &&

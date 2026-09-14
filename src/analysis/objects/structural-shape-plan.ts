@@ -3,7 +3,7 @@ import type { RustSourceUnion, RustStructuralInstantiation } from "../../policy/
 import { createRustGeneratedUnionPlan, type RustGeneratedUnionPlan } from "./generated-union-plan.js";
 import type { RustNativeMemoryLayout, RustNativeObjectField } from "../../target-model/operations/native-memory.js";
 import { rustNativeMemoryLayoutsEqual } from "../../target-model/operations/native-memory.js";
-import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustTargetGenericArgumentEquals, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import {
   rustPascalCaseIdentifier,
@@ -11,6 +11,7 @@ import {
 } from "../../target-model/names/identifiers.js";
 import {
   rustStructuralObjectCarrierValue,
+  rustStructuralObjectTargetType,
   rustTargetGenericReferences,
 } from "../../target-model/types/index.js";
 import type { RustLifetimeRef } from "../../target-model/lifetimes/index.js";
@@ -58,6 +59,7 @@ export type RustStructuralShapeGenericParameter =
 export interface RustStructuralShapePlan extends RustGeneratedUnionPlan {
   readonly definitions: readonly RustStructuralShapeDefinition[];
   definitionForCarrier(carrier: TargetTypeRef | undefined): RustStructuralShapeDefinition | undefined;
+  sharesStorage(left: TargetTypeRef, right: TargetTypeRef): boolean;
   fieldName(carrier: TargetTypeRef, storageIndex: number): string | undefined;
   field(carrier: TargetTypeRef, storageIndex: number): RustStructuralShapeField | undefined;
 }
@@ -116,6 +118,9 @@ export function createRustStructuralShapePlanRegistry(): RustStructuralShapePlan
     definitionForCarrier(carrier: TargetTypeRef | undefined) {
       return requireCurrent().definitionForCarrier(carrier);
     },
+    sharesStorage(left: TargetTypeRef, right: TargetTypeRef) {
+      return requireCurrent().sharesStorage(left, right);
+    },
     fieldName(carrier: TargetTypeRef, storageIndex: number) {
       return requireCurrent().fieldName(carrier, storageIndex);
     },
@@ -139,7 +144,7 @@ export function createRustStructuralShapePlan(
     if (structural === undefined) {
       continue;
     }
-    const key = structuralStorageKey(shape.carrier);
+    const key = structuralStorageKey(shape.carrier, componentForFile);
     const instances = uniqueByKey.get(key) ?? new Map<string, TargetTypeRef>();
     uniqueByKey.set(key, instances);
     const instanceKey = closedMetadataKey(shape.carrier);
@@ -152,8 +157,8 @@ export function createRustStructuralShapePlan(
   }
   const roots = new Map<string, string>();
   for (const { template, instance } of instantiations) {
-    const templateKey = structuralStorageKey(template);
-    const instanceKey = structuralStorageKey(instance);
+    const templateKey = structuralStorageKey(template, componentForFile);
+    const instanceKey = structuralStorageKey(instance, componentForFile);
     if (templateKey === instanceKey) continue;
     const prior = roots.get(instanceKey);
     if (prior !== undefined && prior !== templateKey) {
@@ -274,6 +279,18 @@ export function createRustStructuralShapePlan(
   return Object.freeze({
     ...createRustGeneratedUnionPlan(unions, componentForFile, usedTypeNamesByComponent),
     definitions: Object.freeze(definitions),
+    sharesStorage(left: TargetTypeRef, right: TargetTypeRef) {
+      const leftDefinition = byKey.get(closedMetadataKey(left));
+      const rightDefinition = byKey.get(closedMetadataKey(right));
+      return leftDefinition !== undefined && rightDefinition !== undefined &&
+        rustTargetTypeRefEquals(leftDefinition.carrier, left) &&
+        rustTargetTypeRefEquals(rightDefinition.carrier, right) &&
+        leftDefinition.componentId === rightDefinition.componentId &&
+        leftDefinition.targetName === rightDefinition.targetName &&
+        leftDefinition.genericArguments.length === rightDefinition.genericArguments.length &&
+        leftDefinition.genericArguments.every((argument, index) =>
+          rustTargetGenericArgumentEquals(argument, rightDefinition.genericArguments[index]!));
+    },
     definitionForCarrier(carrier: TargetTypeRef | undefined) {
       if (carrier === undefined || rustStructuralObjectCarrierValue(carrier) === undefined) {
         return undefined;
@@ -300,7 +317,7 @@ export function createRustStructuralShapePlan(
   });
 }
 
-function structuralStorageKey(carrier: TargetTypeRef): string {
+function structuralStorageKey(carrier: TargetTypeRef, componentForFile: (fileName: string) => string): string {
   const substitutions = new Map<string, TargetTypeRef>();
   visitRustTargetTypeParameters(carrier, (name) => {
     if (!substitutions.has(name)) {
@@ -308,7 +325,10 @@ function structuralStorageKey(carrier: TargetTypeRef): string {
     }
     return false;
   });
-  return closedMetadataKey(substituteRustTargetTypeParameters(carrier, substitutions));
+  const normalized = substituteRustTargetTypeParameters(carrier, substitutions);
+  const shape = rustStructuralObjectCarrierValue(normalized);
+  return closedMetadataKey(shape === undefined ? normalized :
+    rustStructuralObjectTargetType(componentForFile(shape.ownerFileName), shape.fields));
 }
 
 function instantiateStructuralDefinition(
@@ -320,9 +340,11 @@ function instantiateStructuralDefinition(
   }
   const parameters = new Set(definition.genericParameters.flatMap(parameter =>
     parameter.kind === "type" ? [parameter.name] : []));
-  const bindings = inferRustTargetTypeParameterBindings(definition.carrier, carrier, parameters);
+  const shape = rustStructuralObjectCarrierValue(carrier);
+  const aligned = shape === undefined ? carrier : rustStructuralObjectTargetType(definition.ownerFileName, shape.fields);
+  const bindings = inferRustTargetTypeParameterBindings(definition.carrier, aligned, parameters);
   if (bindings === undefined || bindings.size !== parameters.size ||
-    !rustTargetTypeRefEquals(substituteRustTargetTypeParameters(definition.carrier, bindings), carrier)) {
+    !rustTargetTypeRefEquals(substituteRustTargetTypeParameters(definition.carrier, bindings), aligned)) {
     throw new Error("Rust structural storage requires an exact generic-parameter correspondence.");
   }
   return Object.freeze({

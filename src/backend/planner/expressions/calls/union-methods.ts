@@ -13,6 +13,7 @@ import { planExpression } from "../entry.js";
 import { planRustNonConsumingValue } from "../typed-locations.js";
 import { applyRustValueConversion } from "../value-conversions.js";
 import { rustValueConversionContract } from "../../../../target-model/conversions/contracts.js";
+import { planRustVirtualProjectMethodCall } from "../../objects/project-method-dispatch.js";
 
 export function planRustUnionMethodCall(
   node: Node,
@@ -49,6 +50,15 @@ export function planRustUnionMethodCall(
       receiverMode: method.mutatesSelf ? "mut-ref" : "ref",
       args: bindings.slice(1).map(binding => ({ kind: "path", path: binding.name })),
     };
+    if (method.dispatchOwner !== undefined) {
+      const dispatch = context.input.program.projectMethodDispatch.variantForMember(method.declaration, []);
+      if (dispatch === undefined) return undefined;
+      const planned = planRustVirtualProjectMethodCall(node, { kind: "path", path: payload },
+        method.dispatchOwner, dispatch.virtualSlot,
+        bindings.slice(1).map(binding => ({ kind: "path", path: binding.name })), context);
+      if (planned === undefined) return undefined;
+      expression = planned;
+    }
     if (effects.unionBranches[index] === "fallible") {
       const resultErrorType = rustActiveErrorType(context);
       const operandBoundary = rustErrorBoundaryForProjectMember(method.declaration, context);

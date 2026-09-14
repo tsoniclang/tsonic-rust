@@ -75,6 +75,14 @@ export function planRustSourcePackageCrateContent(
     rustPublicSignatureTypeNames(source.model)
       .filter((name) => name.startsWith(structuralShapePathPrefix))
       .map((name) => name.slice(structuralShapePathPrefix.length))));
+  const errorDomain = sourcePackageErrors.domainsByComponentId.get(component.componentId);
+  if (errorDomain === undefined) {
+    diagnostics.push(crateDiagnostic(
+      "RUST_SOURCE_PACKAGE_ERROR_DOMAIN_MISSING",
+      `Source-package component '${component.componentId}' has no exact error-domain plan.`,
+    ));
+    return undefined;
+  }
   const structuralShapeModel = planRustStructuralShapeModule(
     input,
     moduleNameByFileName,
@@ -84,17 +92,10 @@ export function planRustSourcePackageCrateContent(
     component.crateName,
     component.structuralShapesModuleName,
     component.componentId,
+    errorDomain.errorDomain === "project" ? component.programModuleName : undefined,
     structuralShapeNames,
     diagnostics,
   );
-  const errorDomain = sourcePackageErrors.domainsByComponentId.get(component.componentId);
-  if (errorDomain === undefined) {
-    diagnostics.push(crateDiagnostic(
-      "RUST_SOURCE_PACKAGE_ERROR_DOMAIN_MISSING",
-      `Source-package component '${component.componentId}' has no exact error-domain plan.`,
-    ));
-    return undefined;
-  }
   const programErrorModel = planRustProgramErrorModule(
     input,
     moduleNameByFileName,
