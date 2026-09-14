@@ -557,6 +557,8 @@ function publicSignatureTypes(
       return publicTypes.has(item.name)
         ? [
             ...(item.superTraits ?? []),
+            ...(item.associatedTypes ?? []).flatMap((type) =>
+              type.bounds.flatMap(rustTypeBoundTypes)),
             ...item.functions.flatMap((fn) => [
               ...fn.params.map((parameter) => parameter.type),
               ...optionalType(fn.returnType),
@@ -564,13 +566,17 @@ function publicSignatureTypes(
           ]
         : [];
     case "impl":
-      return rustTypeNames(item.target).some((name) => publicTypes.has(name))
-        ? item.functions.flatMap((fn) => fn.visibility === "public"
+      return [...rustTypeNames(item.target), ...optionalType(item.trait).flatMap(rustTypeNames)]
+        .some((name) => publicTypes.has(name))
+        ? [
+          ...(item.associatedTypes ?? []).map((type) => type.type),
+          ...item.functions.flatMap((fn) => fn.visibility === "public"
           ? [
               ...fn.params.map((parameter) => parameter.type),
               ...optionalType(fn.returnType),
             ]
-          : [])
+          : []),
+        ]
         : [];
     case "type-alias":
       return publicTypes.has(item.name) ? [item.target] : [];
@@ -583,6 +589,20 @@ function publicSignatureTypes(
 
 function optionalType(type: RustType | undefined): readonly RustType[] {
   return type === undefined ? [] : [type];
+}
+
+function rustTypeBoundTypes(bound: RustTypeBound): readonly RustType[] {
+  switch (bound.kind) {
+    case "trait":
+      return [{ kind: "named", path: bound.path }];
+    case "trait-type":
+      return [bound.reference.trait];
+    case "callable":
+      return [...bound.parameters, bound.result];
+    case "lifetime":
+    case "maybe-sized":
+      return [];
+  }
 }
 
 function collectLocalRustTypeNames(

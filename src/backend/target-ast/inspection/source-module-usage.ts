@@ -42,11 +42,15 @@ function rustItemReferencesModuleAlias(item: RustItem, alias: string): boolean {
       return rustGenericsReferenceModuleAlias(item.generics, alias) ||
         item.superTraits?.some((type) =>
           rustTypeReferencesModuleAlias(type, alias)) === true ||
+        item.associatedTypes?.some((type) => type.bounds.some((bound) =>
+          rustTypeBoundReferencesModuleAlias(bound, alias))) === true ||
         item.functions.some((fn) => rustTraitFunctionReferencesModuleAlias(fn, alias));
     case "impl":
       return rustGenericsReferenceModuleAlias(item.generics, alias) ||
         rustOptionalTypeReferencesModuleAlias(item.trait, alias) ||
         rustTypeReferencesModuleAlias(item.target, alias) ||
+        item.associatedTypes?.some((type) =>
+          rustTypeReferencesModuleAlias(type.type, alias)) === true ||
         item.functions.some((fn) => rustImplFunctionReferencesModuleAlias(fn, alias));
     case "enum":
       return rustGenericsReferenceModuleAlias(item.generics, alias) ||

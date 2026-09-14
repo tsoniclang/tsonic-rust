@@ -424,6 +424,16 @@ export interface RustTraitFunction {
   readonly body?: RustBlock;
 }
 
+export interface RustTraitAssociatedType {
+  readonly name: string;
+  readonly bounds: readonly RustTypeBound[];
+}
+
+export interface RustImplAssociatedType {
+  readonly name: string;
+  readonly type: RustType;
+}
+
 export type RustItem =
   | {
       readonly kind: "function";
@@ -461,8 +471,8 @@ export type RustItem =
   | { readonly kind: "mod-decl"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly string[] }
   | { readonly kind: "extern-crate"; readonly name: string }
   | { readonly kind: "struct"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly string[]; readonly deadCode?: RustDeadCodeDisposition; readonly derives: readonly string[]; readonly generics: RustGenerics; readonly fields: readonly RustStructField[] }
-  | { readonly kind: "trait"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly string[]; readonly deadCode?: RustDeadCodeDisposition; readonly generics: RustGenerics; readonly superTraits?: readonly RustType[]; readonly functions: readonly RustTraitFunction[] }
-  | { readonly kind: "impl"; readonly generics: RustGenerics; readonly trait?: RustType; readonly target: RustType; readonly constants?: readonly RustImplConstant[]; readonly functions: readonly RustImplFunction[] }
+  | { readonly kind: "trait"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly string[]; readonly deadCode?: RustDeadCodeDisposition; readonly generics: RustGenerics; readonly superTraits?: readonly RustType[]; readonly associatedTypes?: readonly RustTraitAssociatedType[]; readonly functions: readonly RustTraitFunction[] }
+  | { readonly kind: "impl"; readonly generics: RustGenerics; readonly trait?: RustType; readonly target: RustType; readonly constants?: readonly RustImplConstant[]; readonly associatedTypes?: readonly RustImplAssociatedType[]; readonly functions: readonly RustImplFunction[] }
   | { readonly kind: "enum"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly string[]; readonly deadCode?: RustDeadCodeDisposition; readonly derives: readonly string[]; readonly generics: RustGenerics; readonly variants: readonly { readonly name: string; readonly attrs?: readonly string[]; readonly deadCode?: RustDeadCodeDisposition; readonly discriminant?: string; readonly fields?: readonly RustType[] }[] }
   | { readonly kind: "type-alias"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly string[]; readonly deadCode?: RustDeadCodeDisposition; readonly generics: RustGenerics; readonly target: RustType }
   | { readonly kind: "use"; readonly path: string; readonly alias?: string; readonly visibility?: RustVisibility };
