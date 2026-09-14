@@ -54,6 +54,9 @@ function planStatementInner(node: Node, context: RustPlanContext): readonly Rust
   const { ast } = context.input.program.source;
   const kind = ast.kindName(node);
   switch (kind) {
+    case "KindClassDeclaration": {
+      return context.input.program.projectTypes.definitionForDeclaration(node) === undefined ? undefined : [];
+    }
     case KindVariableStatement: {
       return planVariableStatement(node, context);
     }

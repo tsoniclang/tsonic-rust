@@ -8,6 +8,8 @@ import {
 } from "../../target-model/names/identifiers.js";
 import { Node_Initializer, sourceParameterIsProperty } from "@tsonic/target-api/source";
 import type { RustRuntimeValueUsePlan } from "../program/runtime-value-uses.js";
+import { rustSourceDeclarationTypeName } from "../../policy/types/source-declarations.js";
+import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 
 type RustNameRole =
   | "module-value"
@@ -51,16 +53,52 @@ export function createRustNamePlan(input: {
     for (const [base, sourceGroups] of bases) {
       const orderedGroups = [...sourceGroups.entries()].sort(([left], [right]) =>
         compareSourceNames(left, right, base));
-      orderedGroups.forEach(([sourceName, group], index) => {
+      orderedGroups.forEach(([, group], index) => {
         const name = index === 0 ? base : `${base}_${index + 1}`;
         for (const candidate of group) {
           names.set(candidate.declaration, name);
           if (candidate.role === "type") {
             const fileName = input.ast.getFileName(input.ast.getSourceFile(candidate.declaration));
-            sourceTypeNames.set(sourceTypeIdentity(fileName, sourceName), name);
+            sourceTypeNames.set(sourceTypeIdentity(fileName, rustSourceDeclarationTypeName(candidate.declaration, input.ast)), name);
           }
         }
       });
+    }
+  }
+  const localClassesByFile = new Map<SourceFile, RustNameCandidate[]>();
+  const moduleNamesByFile = new Map<SourceFile, Set<string>>();
+  for (const candidate of candidates) {
+    const sourceFile = input.ast.getSourceFile(candidate.declaration);
+    if (sourceFile === undefined) continue;
+    if (candidate.scope === sourceFile) {
+      const used = moduleNamesByFile.get(sourceFile) ?? new Set<string>();
+      const name = names.get(candidate.declaration);
+      if (name !== undefined) used.add(name);
+      moduleNamesByFile.set(sourceFile, used);
+    }
+    if (input.ast.kindName(candidate.declaration) === "KindClassDeclaration" &&
+      input.ast.parent(candidate.declaration) !== sourceFile) {
+      const localClasses = localClassesByFile.get(sourceFile) ?? [];
+      localClasses.push(candidate);
+      localClassesByFile.set(sourceFile, localClasses);
+    }
+  }
+  for (const [sourceFile, localClasses] of localClassesByFile) {
+    const usedNames = moduleNamesByFile.get(sourceFile) ?? new Set<string>();
+    for (const candidate of localClasses) {
+      const parts = [candidate.sourceName];
+      let owner = input.ast.parent(candidate.declaration);
+      while (owner !== undefined && owner !== sourceFile) {
+        if (isCallableScope(input.ast.kindName(owner)) || isMemberScope(input.ast.kindName(owner))) {
+          const name = input.ast.name(owner);
+          if (name !== undefined && input.ast.kindName(name) === "KindIdentifier") parts.unshift(input.ast.text(name));
+        }
+        owner = input.ast.parent(owner);
+      }
+      const name = allocateRustGeneratedName(usedNames, rustPascalCaseIdentifier(parts.join("_")));
+      names.set(candidate.declaration, name);
+      sourceTypeNames.set(sourceTypeIdentity(input.ast.getFileName(sourceFile),
+        rustSourceDeclarationTypeName(candidate.declaration, input.ast)), name);
     }
   }
   const reservedFunctionNames = new Map<Node, Set<string>>();

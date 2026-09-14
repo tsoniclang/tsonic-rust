@@ -4,6 +4,7 @@ import type {
   Symbol,
   Type,
 } from "@tsonic/tsts";
+import { rustSourceDeclarationTypeName, rustSourceTypeDeclarations } from "../../policy/types/source-declarations.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
@@ -96,7 +97,7 @@ export function createRustSourceTypeRegistry(): RustSourceTypeRegistry {
     if (shape === undefined) {
       return undefined;
     }
-    const typeName = ast.text(ast.name(declaration));
+    const typeName = rustSourceDeclarationTypeName(declaration, ast);
     return typeName.length === 0
       ? undefined
       : rustSourceTypeCarrier(fileName, typeName, shape);
@@ -112,7 +113,7 @@ export function createRustSourceTypeRegistry(): RustSourceTypeRegistry {
       if (!isDenseDataArray(statements) || statements.some((declaration) => declaration === undefined)) {
         return;
       }
-      for (const declaration of statements as readonly Node[]) {
+      for (const declaration of rustSourceTypeDeclarations(sourceFile, ast)) {
         if (ast.kindName(declaration) === "KindTypeAliasDeclaration") {
           const variants = closedStringUnionVariants(declaration, ast);
           if (variants !== undefined) {

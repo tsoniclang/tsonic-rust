@@ -18,6 +18,8 @@ import type {
 import type { RustExternalProjectBase } from "../../../policy/types/external-project-types.js";
 import type { RustProjectConstructorSignature, RustProjectDowncastRoute, RustProjectHeritageEdge, RustProjectMemberSlotCandidate, RustProjectMemberSlotRole, RustProjectTypeDefinition, RustProjectTypeIssue, RustProjectTypePolicy, RustProjectTypePolicyHost, RustProjectTypeRelationship } from "../../../policy/types/project-types.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { rustSourceTypeDeclarations } from "../../../policy/types/source-declarations.js";
+import { rustLocalClassIssue } from "../local-classes.js";
 
 export function createRustProjectTypePolicy(
   host: RustProjectTypePolicyHost,
@@ -31,7 +33,14 @@ export function createRustProjectTypePolicy(
   for (const sourceFile of host.sourceFiles) {
     const usedNames = sourceFileIdentifierNames(sourceFile, host.ast, host.names);
     usedModuleNamesBySourceFile.set(sourceFile, usedNames);
-    for (const statement of denseNodes(host.ast.statements(sourceFile)) ?? []) {
+    for (const statement of rustSourceTypeDeclarations(sourceFile, host.ast)) {
+      if (host.ast.kindName(statement) === "KindClassDeclaration") {
+        const issue = rustLocalClassIssue(statement, host.ast, host.navigation);
+        if (issue !== undefined) {
+          issues.push({ ...issue, code: "RUST_LOCAL_CLASS_NOT_CLOSED" });
+          continue;
+        }
+      }
       const definition = projectDefinition(
         statement,
         sourceFile,

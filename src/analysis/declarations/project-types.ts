@@ -29,11 +29,12 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustAnalysisContext } from "../program/context.js";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { rustSourceTypeDeclarations } from "../../policy/types/source-declarations.js";
 
 export function recordMethodSelfModeFacts(walk: RustFactWalk, sourceFiles: readonly SourceFile[]): void {
   const { ast } = walk.context;
   for (const sourceFile of sourceFiles) {
-    for (const statement of ast.statements(sourceFile) as readonly Node[]) {
+    for (const statement of rustSourceTypeDeclarations(sourceFile, ast)) {
       if (ast.kindName(statement) !== "KindClassDeclaration") {
         continue;
       }

@@ -32,6 +32,7 @@ import { collectRustMutableProjectStorageRequirements } from "../project-types/m
 import { rustMemoryMetadataKey } from "../../target-model/operations/memory-layout.js";
 import { recordRustNativeBacking } from "../operations/native-memory.js";
 import { collectRustThrownClassDeclarations } from "../resources/thrown-values.js";
+import { rustSourceTypeDeclarations } from "../../policy/types/source-declarations.js";
 
 export function analyzeRustProgram(context: RustAnalysisContext): void {
   const { ast } = context;
@@ -218,7 +219,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   // Cross-file and forward calls therefore observe the same parameter facts.
   const signatureDiagnosticCount = context.diagnostics.length;
   for (const sourceFile of projectSourceFiles) {
-    for (const statement of ast.statements(sourceFile) as readonly Node[]) {
+    for (const statement of rustSourceTypeDeclarations(sourceFile, ast)) {
       const kind = ast.kindName(statement);
       if (kind === KindFunctionDeclaration) {
         recordFunctionSignatureFacts(walk, statement);
@@ -262,6 +263,12 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
         kind !== "KindEnumDeclaration" &&
         kind !== "KindEndOfFile") {
         recordStatementFacts(walk, statement, sourceFile, undefined);
+      }
+    }
+    for (const definition of context.projectTypes.definitions) {
+      if (definition.sourceFile === sourceFile && definition.kind === "class" &&
+        ast.parent(definition.declaration) !== sourceFile) {
+        recordClassBodyFacts(walk, definition.declaration, sourceFile);
       }
     }
   }

@@ -248,6 +248,7 @@ export function recordStatementFacts(
 ): void {
   const { ast } = walk.context;
   const kind = ast.kindName(statement);
+  if (kind === "KindClassDeclaration" && walk.context.projectTypes.definitionForDeclaration(statement) !== undefined) return;
   if (kind === KindBlock) {
     const statements = requireDenseSourceNodes(walk, ast.statements(statement), "Block contains an undefined or non-data statement slot.");
     if (statements === undefined) {

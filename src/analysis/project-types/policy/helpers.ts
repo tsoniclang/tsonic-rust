@@ -4,6 +4,7 @@ import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { RustNamePlan } from "../../../target-model/names/model.js";
 import type { RustProjectTypeDefinition } from "../../../policy/types/project-types.js";
 import type { RustLifetimeIndex } from "../../../target-model/lifetimes/index.js";
+import { rustSourceDeclarationTypeName } from "../../../policy/types/source-declarations.js";
 
 export function projectDefinition(
   declaration: Node,
@@ -22,8 +23,7 @@ export function projectDefinition(
   if (kind === undefined) {
     return undefined;
   }
-  const nameNode = ast.name(declaration);
-  const sourceName = nameNode === undefined ? "" : ast.text(nameNode);
+  const sourceName = rustSourceDeclarationTypeName(declaration, ast);
   const targetName = namePlan.nameForDeclaration(declaration);
   const fileName = ast.getFileName(sourceFile);
   const rawParameters = ast.typeParameters(declaration);

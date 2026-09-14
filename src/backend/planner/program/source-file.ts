@@ -431,6 +431,17 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
       initializationStatements.push(...planned);
     }
   }
+  for (const definition of context.input.program.projectTypes.definitions) {
+    if (definition.sourceFile !== context.sourceFile || definition.kind !== "class" ||
+      ast.parent(definition.declaration) === context.sourceFile) continue;
+    const diagnosticCount = context.diagnostics.length;
+    const planned = planClassDeclaration(definition.declaration, context);
+    if (planned === undefined) {
+      ensureTopLevelPlanningDiagnostic(context, definition.declaration, diagnosticCount, "local-class");
+    } else {
+      items.push(...planned);
+    }
+  }
   if (initializationStatements.length === 0) {
     return { items };
   }
