@@ -45,6 +45,7 @@ export function createRustStructuralObjectFromCarrier(
   carrier: TargetTypeRef,
   initializers: readonly RustStructuralObjectFieldInitializer[],
   context: RustPlanContext,
+  identity?: RustExpr,
 ): RustExpr | undefined {
   const definition = context.input.program.structuralShapes.definitionForCarrier(carrier);
   if (definition === undefined || definition.fields.length !== initializers.length) {
@@ -100,6 +101,7 @@ export function createRustStructuralObjectFromCarrier(
   return createRustStructuralObject(
     `crate::${context.structuralShapesModuleName}::${definition.targetName}`,
     fields as readonly { readonly name: string; readonly value: RustExpr }[],
+    identity,
   );
 }
 

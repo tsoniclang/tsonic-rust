@@ -1,4 +1,6 @@
 import { rustRuntimeUnionContract } from "../../../target-model/types/carriers/runtime-unions.js";
+import { rustClassValueFactKey } from "../../../analysis/facts/class-values.js";
+import { planRustClassValueRead } from "../objects/class-values.js";
 import {
   rustBottomAfterEffect,
   rustBottomExpression,
@@ -161,6 +163,9 @@ export function planExpressionInner(
       return { kind: "path", path: "rt::Null" };
     }
     case KindIdentifier: {
+      if (context.input.program.facts.getFact(node, rustClassValueFactKey) !== undefined) {
+        return planRustClassValueRead(node, context);
+      }
       const identifierFact = rustOperationFact(node, context);
       const binding = context.input.program.facts.getFact(node, rustSourceBindingFactKey);
       if (identifierFact !== undefined && identifierFact.kind === "option-none") {
@@ -206,6 +211,13 @@ export function planExpressionInner(
           diagnosticInput(context, node),
           "rust.backend.value-reference",
           "Identifier expression has no finalized project-source binding or selected target value operation.",
+        ));
+        return undefined;
+      }
+      if (ast.kindName(binding.sourceDeclaration) === "KindClassDeclaration") {
+        context.diagnostics.push(unsupportedConstructDiagnostic(
+          diagnosticInput(context, node), "rust.backend.class-value",
+          "Class constructor used as a value has no exact finalized constructor-object view.",
         ));
         return undefined;
       }

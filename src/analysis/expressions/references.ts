@@ -55,6 +55,7 @@ import { resolveRustRawAddressCarrier, resolveRustRawPointerIdentityCarrier } fr
 import { readRustSourceRawPointerIdentity } from "../../policy/operations/raw-pointer-source.js";
 import { selectRustMemoryLayoutObservation } from "../../policy/operations/memory-layout.js";
 import { rustMemoryLayoutObservationKey } from "../../target-model/operations/memory-layout.js";
+import { resolveRustClassValue } from "../objects/class-values.js";
 
 export function resolveIdentifierCarrier(
   walk: RustFactWalk,
@@ -68,6 +69,10 @@ export function resolveIdentifierCarrier(
   if (reference !== undefined && declaration !== undefined && reference.project) {
     const declarationKind = ast.kindName(declaration);
     recordProjectSourceBinding(walk, identifier);
+    if (declarationKind === "KindClassDeclaration") {
+      const value = resolveRustClassValue(walk, identifier, expected);
+      if (value !== undefined) return value;
+    }
     if (declarationKind === KindExportAssignment) {
       const exportCarrier = recordExportAssignmentFacts(walk, declaration);
       if (exportCarrier !== undefined) {

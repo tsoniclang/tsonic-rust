@@ -19,6 +19,7 @@ import {
   createRustNamePlan,
 } from "../names/plan.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
+import { createRustClassValueRegistry, type RustClassValueRegistry } from "../objects/class-values.js";
 import {
   createRustPlanBuilder,
 } from "../facts/plan-store.js";
@@ -89,6 +90,7 @@ export interface RustAnalysisContext extends RustSourcePolicyContext {
   readonly sourceCallableSpecializations: RustSourceCallableSpecializationPlanRegistry;
   readonly sourceLifetimes: RustLifetimeIndex;
   readonly structuralShapes: RustStructuralShapePlanRegistry;
+  readonly classValues: RustClassValueRegistry;
   readonly providerSemantics: RustProviderSemantics;
   readonly safetyApplications: RustSafetyApplicationFactIndex;
   readonly runtimeValueUses: RustRuntimeValueUsePlan;
@@ -162,6 +164,7 @@ export function createRustAnalysisContext(
     sourceCallableSpecializations: createRustSourceCallableSpecializationPlanRegistry(),
     sourceLifetimes: lifetimes.index ?? emptyRustLifetimeIndex,
     structuralShapes: createRustStructuralShapePlanRegistry(),
+    classValues: createRustClassValueRegistry(),
     providerSemantics,
     safetyApplications,
     runtimeValueUses,

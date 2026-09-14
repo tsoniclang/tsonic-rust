@@ -16,6 +16,7 @@ import { planRustModuleCell } from "../project/module-storage.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
+import { planRustClassValues } from "../objects/class-values.js";
 
 export interface PlannedRustClassInitialization {
   readonly items: readonly RustItem[];
@@ -27,8 +28,10 @@ export function planRustClassInitialization(
   context: RustPlanContext,
 ): PlannedRustClassInitialization | undefined {
   const { ast } = context.input.program.source;
-  const items: RustItem[] = [];
-  const initialization: RustStmt[] = [];
+  const values = planRustClassValues(declaration, context);
+  if (values === undefined) return undefined;
+  const items: RustItem[] = [...values.items];
+  const initialization: RustStmt[] = [...values.initialization];
   for (const member of ast.members(declaration)) {
     if (member === undefined) {
       context.diagnostics.push(missingFactDiagnostic(

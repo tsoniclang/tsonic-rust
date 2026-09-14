@@ -163,6 +163,7 @@ export function analyzeRustTargetProgram(
       navigation: context.source.navigation,
     }),
     structuralShapes: context.structuralShapes.seal(),
+    classValues: context.classValues.seal(context),
     runtimeReferences: runtimeReferences.plan,
     foundation: foundation.plan,
     binaryHooks,

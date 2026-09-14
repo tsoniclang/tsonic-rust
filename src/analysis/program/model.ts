@@ -73,6 +73,7 @@ export interface RustTargetProgram {
   readonly callableGenericRequirements: RustCallableGenericRequirementIndex;
   readonly valueLifetimes: RustValueLifetimePlan;
   readonly structuralShapes: RustStructuralShapePlan;
+  readonly classValues: import("../objects/class-values.js").RustClassValuePlan;
   readonly runtimeReferences: RustRuntimeReferencePlan;
   readonly foundation: RustFoundationPlan;
   readonly binaryHooks: readonly RustBinaryHookPlan[];

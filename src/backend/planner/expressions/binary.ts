@@ -34,6 +34,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
+import { rustTypeFromCarrierInContext } from "../types/render.js";
 
 export interface RustPlannedProjectTypeTest {
   readonly fact: Extract<RustTargetOperationFact, { readonly kind: "project-type-test" }>;
@@ -199,9 +200,18 @@ export function planBinaryExpression(node: Node, context: RustPlanContext): Rust
             kind: "path",
             path: fact.rightOperand === "option" ? "Some" : "core::convert::identity",
           };
+    const coalescedValueType = fallbackIsFallible ? rustTypeFromCarrierInContext(fact.resultCarrier, context) : undefined;
+    if (fallbackIsFallible && coalescedValueType === undefined) return undefined;
     const coalesced: RustExpr = {
       kind: "call",
       path: "rt::option_coalesce",
+      ...(fallbackIsFallible ? { genericArguments: [
+        { kind: "type" as const, type: { kind: "infer" as const } },
+        { kind: "type" as const, type: { kind: "named" as const, path: "core::result::Result", genericArguments: [
+          { kind: "type" as const, type: coalescedValueType! },
+          { kind: "type" as const, type: activeErrorType! },
+        ] } },
+      ] } : {}),
       args: [
         left,
         present,

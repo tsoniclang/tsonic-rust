@@ -33,6 +33,7 @@ import {
   rustOptionTargetType,
   rustNullishSourceTargetType,
   rustSourcePrimitiveTargetType,
+  rustStructuralObjectCarrierValue,
 } from "../../target-model/types/index.js";
 import { rustRuntimeUnionContract, rustRuntimeUnionProjection } from "../../target-model/types/carriers/runtime-unions.js";
 import {
@@ -73,6 +74,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { readRustSourceRawAddress } from "../../policy/operations/raw-address-source.js";
 import { readRustRawLocation } from "../../policy/operations/native-memory.js";
 import { selectRustMemoryLayoutObservation } from "../../policy/operations/memory-layout.js";
+import { resolveRustClassValue } from "../objects/class-values.js";
 
 export function resolveExpressionCarrier(
   walk: RustFactWalk,
@@ -114,6 +116,10 @@ export function resolveExpressionCarrier(
       let operation = facts.get(expression, rustTargetOperationFactKey) ??
         walk.context.facts.resolve(expression, rustTargetOperationFactKey);
       const expressionKind = walk.context.ast.kindName(expression);
+      if (expressionKind === KindIdentifier && rustStructuralObjectCarrierValue(existing.carrier) !== undefined) {
+        const classValue = resolveRustClassValue(walk, expression, contextualExpected ?? existing.carrier);
+        if (classValue !== undefined) return finalize(classValue);
+      }
       if ((expressionKind === "KindArrowFunction" || expressionKind === "KindFunctionExpression") &&
         operation?.kind !== "closure") {
         const callableCarrier = resolveExpressionCarrierUncached(
