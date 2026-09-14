@@ -19,6 +19,7 @@ import {
   Node_Expression,
   Node_Type,
 } from "@tsonic/target-api/source";
+import { selectRustGenericNumericOperation } from "./generic-numeric.js";
 import {
   isRustAssignmentOperator,
   rustBinaryResultCarrierIsIndependentOfOperands,
@@ -116,6 +117,7 @@ export function resolveBinaryOperandCarriers(
       undefined,
     );
     if (strictEquality && left !== undefined && right !== undefined &&
+      left.kind !== "type-parameter" && right.kind !== "type-parameter" &&
       selectRustBinaryOperator(operatorKind, left, right) === undefined) {
       const rightAsLeft = resolveExpressionCarrier(walk, rightNode, sourceFile, left);
       if (rightAsLeft !== undefined &&
@@ -223,7 +225,7 @@ function resolveContextualBinaryOperandCarriers(
         walk,
         leftNode,
         sourceFile,
-        isRustNullishSourceCarrier(right) ? undefined : right,
+        isRustNullishSourceCarrier(right) || right?.kind === "type-parameter" ? undefined : right,
       ),
       right,
     };
@@ -236,7 +238,7 @@ function resolveContextualBinaryOperandCarriers(
         walk,
         rightNode,
         sourceFile,
-        isRustNullishSourceCarrier(left) ? undefined : left,
+        isRustNullishSourceCarrier(left) || left?.kind === "type-parameter" ? undefined : left,
       ),
     };
   }
@@ -284,7 +286,7 @@ export function resolvePostCheckBinaryCarrier(
   if (operands === undefined) {
     return undefined;
   }
-  const { left, right, leftNode, operatorKind } = operands;
+  const { left, right, leftNode, rightNode, operatorKind } = operands;
   const selectedLeftOperation = walk.context.facts.get(leftNode, rustSelectedOperationKey) ??
     walk.context.facts.resolve(leftNode, rustSelectedOperationKey);
   const selectedLeftFact = walk.context.facts.get(leftNode, rustTargetOperationFactKey) ??
@@ -485,7 +487,8 @@ export function resolvePostCheckBinaryCarrier(
             resultCarrier: compound.resultCarrier,
           };
     } else {
-      const binary = selectRustBinaryOperator(operatorKind, left, right);
+      const binary = selectRustBinaryOperator(operatorKind, left, right) ??
+        selectRustGenericNumericOperation(walk, expression, operatorKind, leftNode, rightNode, left, right);
       if (binary !== undefined) {
         fact = binary.kind === "string-concat"
           ? {

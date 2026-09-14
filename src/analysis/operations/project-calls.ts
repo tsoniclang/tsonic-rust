@@ -293,6 +293,7 @@ export function applySelectedProjectSourceCall(
       return undefined;
     }
     if (ast.hasModifierKind(selectedDeclaration, "static")) {
+      const moduleFunction = walk.context.projectTypes.memberSlotName(selectedDeclaration, "static");
       const classDeclaration = ast.parent(selectedDeclaration);
       const typeCarrier = classDeclaration === undefined
         ? undefined
@@ -300,7 +301,10 @@ export function applySelectedProjectSourceCall(
       if (typeCarrier === undefined) {
         return undefined;
       }
-      target = { form: "static-method", name: methodName, typeCarrier };
+      target = moduleFunction === undefined
+        ? { form: "static-method", name: methodName, typeCarrier }
+        : { form: "function", name: moduleFunction,
+            fileName: ast.getFileName(ast.getSourceFile(selectedDeclaration)), selectedTargetName: selectedMember.targetName };
     } else {
       const receiver = ast.kindName(callee) === KindPropertyAccessExpression
         ? Node_Expression(walk.context.ast, callee)

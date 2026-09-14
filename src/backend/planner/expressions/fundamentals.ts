@@ -441,7 +441,7 @@ export function planNumericLiteral(node: Node, context: RustPlanContext): RustEx
 }
 
 export function planBigIntLiteral(node: Node, context: RustPlanContext): RustExpr | undefined {
-  const carrier = expressionCarrier(node, context);
+  const carrier = rustValueCarrierBeforeContextualConversion(context.input.program.facts, node);
   const value = parseSourceBigIntLiteral(context.input.program.source.ast.text(node));
   if (value !== undefined && isRustIntegerCarrier(carrier)) {
     return { kind: "int-literal", text: value.toString(10) };

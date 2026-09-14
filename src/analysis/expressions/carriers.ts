@@ -376,6 +376,17 @@ function resolveSelectedFlowReadCarrier(
   selectedType: Type,
   sourceCarrier: TargetTypeRef,
 ): TargetTypeRef | undefined {
+  const semantics = walk.context.semanticsFor(expression);
+  const access = walk.context.ast.kindName(expression) === KindPropertyAccessExpression
+    ? semantics.operations.propertyAccess(expression)
+    : walk.context.ast.kindName(expression) === KindElementAccessExpression
+      ? semantics.operations.elementAccess(expression)
+      : undefined;
+  const declaredReadType = access?.selectedSymbol === undefined ? undefined :
+    semantics.types.typeOfSymbol(access.selectedSymbol);
+  if (declaredReadType !== undefined && semantics.types.isIdentical(declaredReadType, selectedType)) {
+    return sourceCarrier;
+  }
   if (isRustProgramErrorCarrier(sourceCarrier)) {
     const carrier = resolveRustTargetTypeRef(
       selectedType, rustResolutionContext(walk, expression), walk.operationOptions,

@@ -72,6 +72,7 @@ import {
   type PlannedRustModuleCell,
 } from "../project/module-storage.js";
 import { planRustClassInitialization } from "../declarations/class-static-fields.js";
+import { planProjectStaticFunctionItems } from "../declarations/methods.js";
 import { createRustObjectLiteralImplementationRegistry } from "../objects/object-literal-implementations.js";
 import { planRustSourceCallableValue } from "../expressions/source-callable-value.js";
 import { rustModuleInitializerFunctionName } from "./source-package-initializers.js";
@@ -432,6 +433,13 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
     }
   }
   for (const definition of context.input.program.projectTypes.definitions) {
+    if (definition.sourceFile === context.sourceFile && definition.kind === "class") {
+      const diagnosticCount = context.diagnostics.length;
+      const staticFunctions = planProjectStaticFunctionItems(definition, context);
+      if (staticFunctions === undefined) {
+        ensureTopLevelPlanningDiagnostic(context, definition.declaration, diagnosticCount, "static-function");
+      } else items.push(...staticFunctions);
+    }
     if (definition.sourceFile !== context.sourceFile || definition.kind !== "class" ||
       ast.parent(definition.declaration) === context.sourceFile) continue;
     const diagnosticCount = context.diagnostics.length;

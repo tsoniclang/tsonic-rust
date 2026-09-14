@@ -298,6 +298,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   }
   const implFunctions: RustImplFunction[] = [constructorFn];
   for (const method of methods) {
+    if (context.input.program.projectTypes.memberSlotName(method, "static") !== undefined) continue;
     const planned = planProjectMethodVariants(method, context);
     if (planned === undefined) {
       return undefined;

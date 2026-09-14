@@ -16,6 +16,14 @@ const comparisonMethods: Readonly<Record<string, readonly [string, RustBinaryOpe
   KindExclamationEqualsEqualsToken: ["strict_not_equal", "!="],
 };
 
+export function selectRustNumericConstraintComparison(operator: string): RustBinaryOperatorSelection | undefined {
+  const method = comparisonMethods[operator];
+  return method === undefined ? undefined : {
+    kind: "operator-call", rustOperator: method[1], path: `js_abi::SourceNumeric::${method[0]}`,
+    resultCarrier: rustSourcePrimitiveTargetType("bool"), fallible: false, operandModes: ["ref", "ref"],
+  };
+}
+
 export function selectRustNumericUnionComparison(
   operator: string,
   left: TargetTypeRef,

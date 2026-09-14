@@ -1,4 +1,6 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
+import { rustGenericNumericOperandsKey } from "../facts/generic-numeric.js";
+import { rustCarrierSupportsSourceNumeric } from "../../target-model/types/carriers/source-numeric.js";
 import {
   resolveTargetContractFixedPoint,
 } from "@tsonic/target-api/analysis";
@@ -43,7 +45,7 @@ import {
   rustYieldFactKey,
 } from "../facts/keys.js";
 
-export type RustGenericRequirement = "clone" | "default" | "static";
+export type RustGenericRequirement = "clone" | "default" | "static" | "source-numeric";
 
 export interface RustCallableTypeParameterRequirements {
   readonly name: string;
@@ -91,6 +93,7 @@ const requirementOrder: readonly RustGenericRequirement[] = [
   "clone",
   "default",
   "static",
+  "source-numeric",
 ];
 
 export function analyzeRustCallableGenericRequirements(
@@ -395,6 +398,10 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       }
     }
     const operation = facts.getFact(node, rustTargetOperationFactKey);
+    for (const operand of facts.getFact(node, rustGenericNumericOperandsKey) ?? []) {
+      const error = addUse(node, operand, ["source-numeric"]);
+      if (error !== undefined) return error;
+    }
     if (ast.kindName(node) === KindBinaryExpression) {
       const token = BinaryExpression_OperatorToken(ast, node);
       const parent = ast.parent(node);
@@ -557,6 +564,13 @@ function classifyCarrierRequirements(
     return true;
   }
   for (const requirement of required) {
+    if (requirement === "source-numeric") {
+      if (carrier.kind === "type-parameter") {
+        if (!declared.has(carrier.name)) return false;
+        byParameter.get(carrier.name)!.add(requirement);
+      } else if (!rustCarrierSupportsSourceNumeric(carrier)) return false;
+      continue;
+    }
     if (requirement === "static") {
       if (!classifyStaticCarrier(carrier, declared, byParameter)) return false;
       continue;
@@ -730,6 +744,7 @@ function rustRequirementDescription(
       ? "an exact Rust Clone implementation"
       : requirement === "default"
         ? "an exact Rust Default implementation"
+        : requirement === "source-numeric" ? "an exact source numeric comparison contract"
         : "an exact Rust 'static lifetime");
   if (descriptions.length <= 1) return descriptions[0] ?? "an exact Rust carrier contract";
   return `${descriptions.slice(0, -1).join(", ")} and ${descriptions[descriptions.length - 1]}`;

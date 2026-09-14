@@ -541,6 +541,16 @@ export function createRustProjectTypePolicy(
       }
       if (kind === "KindMethodDeclaration" || kind === "KindMethodSignature") {
         callableTargetNames.set(member, targetName);
+        if (definition.genericParameters.length > 0 && host.ast.hasModifierKind(member, "static")) {
+          const canonical = canonicalCallable(member);
+          const slots = canonicalSlotNames.get(canonical) ?? new Map<RustProjectMemberSlotRole, string>();
+          const name = slots.get("static") ?? allocateGeneratedName(moduleUsedNames,
+            rustSnakeCaseIdentifier(`${definition.targetName}_${host.targetNameForCallable(canonical) ?? targetName}`));
+          slots.set("static", name);
+          canonicalSlotNames.set(canonical, slots);
+          setMemberSlotName(member, "static", name);
+          setMemberSlotName(canonical, "static", name);
+        }
       }
       if (kind === "KindPropertyDeclaration" && host.ast.hasModifierKind(member, "static")) {
         const staticName = allocateGeneratedName(

@@ -220,7 +220,7 @@ function mergeTypeBounds(
       ? { kind: "lifetime", lifetime: { kind: "static" } }
       : {
           kind: "trait",
-          path: requirement === "clone" ? "Clone" : "Default",
+          path: requirement === "clone" ? "Clone" : requirement === "default" ? "Default" : "js_abi::SourceNumeric",
         };
     if (!bounds.some((bound) => typeBoundsEqual(bound, candidate))) bounds.push(candidate);
   }
