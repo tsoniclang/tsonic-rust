@@ -111,7 +111,8 @@ export function realizeRustSourceTypeFamilyDemands(walk: RustFactWalk, files: re
       const candidates = selectedType === undefined ? [] : semantics.types.isUnion(selectedType)
         ? semantics.types.unionOrIntersectionTypes(selectedType) : [selectedType];
       const bindings = candidates.flatMap(type => {
-        const declaration = semantics.declarations.primarySymbolDeclaration(semantics.declarations.typeSymbol(type));
+        const symbol = semantics.declarations.typeSymbol(type);
+        const declaration = symbol === undefined ? undefined : semantics.declarations.primarySymbolDeclaration(symbol);
         return declaration === definition.declaration ? semantics.types.typeArgumentBindings(type) ?? [] : [];
       });
       const types = new Map<Type, Type>();

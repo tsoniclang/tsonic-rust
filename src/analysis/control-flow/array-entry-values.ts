@@ -63,7 +63,8 @@ export function rustArrayEntryPayloadExcludesNullish(walk: RustFactWalk, express
       if (semantics.types.isUnion(type)) return semantics.types.unionOrIntersectionTypes(type).every(member => excludes(member, subject));
       if (semantics.types.isNumberLike(type) || semantics.types.isStringLike(type) ||
         semantics.types.isBooleanLike(type) || semantics.types.isBigIntLike(type) || semantics.types.isSymbolLike(type)) return true;
-      const declaration = semantics.declarations.primarySymbolDeclaration(semantics.declarations.typeSymbol(type));
+      const symbol = semantics.declarations.typeSymbol(type);
+      const declaration = symbol === undefined ? undefined : semantics.declarations.primarySymbolDeclaration(symbol);
       if (declaration === undefined) return false;
       if (ast.kindName(declaration) !== "KindTypeParameter") {
         return ["KindClassDeclaration", "KindInterfaceDeclaration", "KindTypeLiteral"].includes(ast.kindName(declaration));

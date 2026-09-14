@@ -268,7 +268,7 @@ export function planPolymorphicClassDeclaration(
         },
       ],
     },
-    ...projectIdentityImplementations(definition, wrapperType, representation),
+    ...projectIdentityImplementations(definition, wrapperType, representation, context),
     ...(constructor.construct === undefined ? [] : [{
       kind: "struct" as const,
       name: rustProjectRootName(definition),
@@ -468,6 +468,6 @@ export function planPolymorphicInterfaceDeclaration(
         },
       ],
     },
-    ...projectIdentityImplementations(definition, wrapperType, representation),
+    ...projectIdentityImplementations(definition, wrapperType, representation, context),
   ];
 }

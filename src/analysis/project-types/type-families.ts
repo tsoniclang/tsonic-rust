@@ -69,7 +69,7 @@ export function createRustSourceTypeFamilyRegistry(): RustSourceTypeFamilyRegist
           rustTargetTypeRefEquals(existing.output, implementation.output);
       }
       const constructor = bucketKey(family.trait.id, implementation.owner);
-      const bucket = buckets.get(constructor) ?? { closed: new Map() };
+      const bucket: ImplementationBucket = buckets.get(constructor) ?? { closed: new Map() };
       if (bucket.template !== undefined) {
         const selected = instantiate(bucket.template, implementation.owner);
         return selected !== undefined && selected.sourceFileName === implementation.sourceFileName &&

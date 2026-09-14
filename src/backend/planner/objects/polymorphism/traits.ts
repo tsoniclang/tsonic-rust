@@ -33,6 +33,7 @@ export function projectIdentityImplementations(
   definition: RustProjectTypeDefinition,
   wrapperType: RustType,
   representation: RustObjectRepresentation,
+  context: RustPlanContext,
 ): readonly RustItem[] {
   const generics = rustProjectRepresentationGenerics(representation, context);
   return [

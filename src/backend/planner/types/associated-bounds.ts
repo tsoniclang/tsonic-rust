@@ -4,6 +4,7 @@ import type { RustAssociatedTypeRequirement } from "../../../analysis/declaratio
 import { rustGenericRequirementBounds } from "./generic-bounds.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render.js";
+import type { RustTypeRenderingContext } from "./render.js";
 
 export function rustDeclarationAssociatedPredicates(
   declaration: Node,
@@ -16,7 +17,7 @@ export function rustDeclarationAssociatedPredicates(
 
 export function rustAssociatedPredicates(
   requirements: readonly RustAssociatedTypeRequirement[],
-  context: RustPlanContext,
+  context: RustTypeRenderingContext,
 ): readonly RustWherePredicate[] {
   const predicates: RustWherePredicate[] = [];
   for (const selected of requirements) {
