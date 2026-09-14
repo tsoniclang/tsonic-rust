@@ -11,6 +11,8 @@ import { retainRustSourceUnionInstantiation } from "./source-unions.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustTargetGenericArgument } from "../../../target-model/types/model.js";
+import { rustProjectGenericParameters } from "../project-generic-contract.js";
+import { resolveRustTargetType } from "./target.js";
 
 export interface RustResolvedProjectGenericArguments {
   readonly values: readonly RustTargetGenericArgument[];
@@ -62,19 +64,31 @@ export function resolveProjectSourceCarrier(
     }
     const sourceType = rustSourceTypeCarrierValue(carrier);
     if (sourceType !== undefined) {
-      const contract = context.sourceLifetimes.contractFor(declaration);
-      if (contract === undefined
-        ? genericArguments.values.length !== 0
-        : genericArguments.values.length !== contract.parameters.length ||
-          contract.parameters.some((parameter, index) =>
-            genericArguments.values[index]?.kind !== parameter.kind)) {
+      const parameters = rustProjectGenericParameters(declaration, context);
+      const own = context.sourceLifetimes.contractFor(declaration)?.parameters ?? [];
+      if (parameters === undefined || genericArguments.values.length !== own.length ||
+        own.some((parameter, index) => genericArguments.values[index]?.kind !== parameter.kind)) {
         continue;
       }
+      const semantics = context.semanticsFor(declaration);
+      const instance = selectedType ?? semantics.declarations.declaredType(declaration);
+      const bindings = parameters.length === own.length || instance === undefined
+        ? undefined : context.currentSemantics.types.typeArgumentBindings(instance);
+      const arguments_ = parameters.map(parameter => {
+        const localIndex = own.findIndex(candidate => candidate.declaration === parameter.declaration);
+        if (localIndex >= 0) return genericArguments.values[localIndex];
+        const binding = bindings?.find(candidate => candidate.declaration === parameter.declaration && candidate.scope === "outer");
+        if (binding === undefined || parameter.kind !== "type") return undefined;
+        const type = context.sourceTypeParameterSubstitutions?.get(parameter.declaration) ??
+          resolveRustTargetType(binding.argumentType, context, options, resolving);
+        return type === undefined ? undefined : { kind: "type" as const, type };
+      });
+      if (arguments_.some(argument => argument === undefined)) continue;
       return rustSourceTypeCarrier(
         sourceType.fileName,
         sourceType.typeName,
         sourceType.shape,
-        genericArguments.values,
+        Object.freeze(arguments_ as readonly RustTargetGenericArgument[]),
       );
     }
     if (carrier !== undefined && genericArguments.values.length === 0) {

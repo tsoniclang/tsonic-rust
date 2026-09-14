@@ -4,6 +4,7 @@ import { createRustModuleBindingPolicy } from "./module-bindings.js";
 import { createRustSourceCallableAbiResolver } from "../../policy/ownership/source-callable-abi.js";
 import { createRustSourceProfileRegistry } from "../facts/source-profile-registry.js";
 import { createRustSourceTypeRegistry } from "../project-types/source-type-registry.js";
+import { rustProjectGenericParameters } from "../../policy/types/project-generic-contract.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import {
   KindExportAssignment,
@@ -116,6 +117,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     navigation: context.source.navigation,
     sourceFiles: projectSourceFiles,
     sourceLifetimes: context.sourceLifetimes,
+    genericParametersFor: declaration => rustProjectGenericParameters(declaration, context),
     thrownClassDeclarations: collectRustThrownClassDeclarations(context, projectSourceFiles),
     externallyExtensible(declaration) {
       return externallyExtensibleDeclarations.has(declaration);

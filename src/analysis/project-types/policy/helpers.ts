@@ -3,7 +3,7 @@ import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js"
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { RustNamePlan } from "../../../target-model/names/model.js";
 import type { RustProjectTypeDefinition } from "../../../policy/types/project-types.js";
-import type { RustLifetimeIndex } from "../../../target-model/lifetimes/index.js";
+import type { RustSourceGenericParameterContract } from "../../../target-model/lifetimes/index.js";
 import { rustSourceDeclarationTypeName } from "../../../policy/types/source-declarations.js";
 
 export function projectDefinition(
@@ -11,7 +11,7 @@ export function projectDefinition(
   sourceFile: SourceFile,
   ast: AstReader,
   namePlan: RustNamePlan,
-  sourceLifetimes: RustLifetimeIndex,
+  genericContract: readonly RustSourceGenericParameterContract[] | undefined,
   usedNames: Set<string>,
 ): RustProjectTypeDefinition | undefined {
   const kindName = ast.kindName(declaration);
@@ -28,12 +28,10 @@ export function projectDefinition(
   const fileName = ast.getFileName(sourceFile);
   const rawParameters = ast.typeParameters(declaration);
   const parameters = denseNodes(rawParameters);
-  const genericContract = parameters === undefined || parameters.length === 0
-    ? Object.freeze([])
-    : sourceLifetimes.contractFor(declaration)?.parameters;
+  const ownContract = genericContract?.filter(parameter => ast.parent(parameter.declaration) === declaration);
   const contractMatches = parameters !== undefined && genericContract !== undefined &&
-    parameters.length === genericContract.length &&
-    genericContract.every((parameter, index) => parameter.declaration === parameters[index]);
+    ownContract !== undefined && parameters.length === ownContract.length &&
+    ownContract.every((parameter, index) => parameter.declaration === parameters[index]);
   const ordinaryParameters = contractMatches
     ? genericContract.filter((parameter) => parameter.kind === "type")
     : undefined;

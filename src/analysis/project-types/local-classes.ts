@@ -1,13 +1,18 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceProgramNavigation } from "@tsonic/target-api/source";
 import { Node_Expression, sourceClassFieldIsTypeOnly } from "@tsonic/target-api/source";
+import type { RustSourceGenericParameterContract } from "../../target-model/lifetimes/index.js";
 
 export function rustLocalClassIssue(
   declaration: Node,
   ast: AstReader,
   navigation: SourceProgramNavigation,
+  genericParameters: readonly RustSourceGenericParameterContract[] | undefined,
 ): { readonly node: Node; readonly message: string } | undefined {
   if (ast.parent(declaration) === ast.getSourceFile(declaration)) return undefined;
+  if (genericParameters === undefined) {
+    return { node: declaration, message: "Local class has no exact non-conflicting enclosing generic parameter contract." };
+  }
   if (ast.extendsHeritageElements(declaration).length !== 0 ||
     ast.implementsHeritageElements(declaration).length !== 0) {
     return { node: declaration, message: "Local class heritage requires a per-evaluation constructor contract." };
@@ -40,6 +45,7 @@ export function rustLocalClassIssue(
     if (issue !== undefined) return;
     if (ast.kindName(node) === "KindIdentifier") {
       const selected = navigation.sourceReferenceFor(node)?.declaration;
+      if (selected !== undefined && genericParameters.some(parameter => parameter.declaration === selected)) return;
       if (selected !== undefined && !inside(selected, declaration, ast)) {
         let owner = ast.parent(selected);
         while (owner !== undefined && ast.kindName(owner) !== "KindSourceFile") {
