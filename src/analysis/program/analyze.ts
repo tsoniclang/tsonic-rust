@@ -31,6 +31,7 @@ import { rustProjectCallableTargetName } from "../facts/source-member-name.js";
 import { collectRustMutableProjectStorageRequirements } from "../project-types/mutable-storage-requirements.js";
 import { rustMemoryMetadataKey } from "../../target-model/operations/memory-layout.js";
 import { recordRustNativeBacking } from "../operations/native-memory.js";
+import { collectRustThrownClassDeclarations } from "../resources/thrown-values.js";
 
 export function analyzeRustProgram(context: RustAnalysisContext): void {
   const { ast } = context;
@@ -114,6 +115,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     navigation: context.source.navigation,
     sourceFiles: projectSourceFiles,
     sourceLifetimes: context.sourceLifetimes,
+    thrownClassDeclarations: collectRustThrownClassDeclarations(context, projectSourceFiles),
     externallyExtensible(declaration) {
       return externallyExtensibleDeclarations.has(declaration);
     },

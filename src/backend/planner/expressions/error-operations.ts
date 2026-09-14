@@ -83,11 +83,16 @@ export function planRustProgramErrorFlowRead(
   );
   return {
     kind: "match",
-    expression,
+    expression: { kind: "reference", expr: expression },
     arms: [
       {
         pattern: programErrorPattern(route, { kind: "binding", name: valueName }),
-        expression: { kind: "path", path: valueName },
+        expression: {
+          kind: "method-call",
+          receiver: { kind: "path", path: valueName },
+          method: "clone",
+          args: [],
+        },
       },
       {
         pattern: { kind: "wildcard" },

@@ -9,6 +9,10 @@ import {
   rustOptionElementCarrier,
   rustOptionTargetType,
   rustSliceElementCarrier,
+  isRustJsValueCarrier,
+  rustProgramErrorTargetType,
+  rustTsValueTargetType,
+  rustEmptyObjectTargetType,
 } from "../../target-model/types/index.js";
 import {
   rustTargetTypeRefEquals,
@@ -27,6 +31,7 @@ import type {
 } from "../types/resolution.js";
 import {
   Node_Initializer,
+  Node_Expression,
   Node_Type,
 } from "@tsonic/target-api/source";
 
@@ -78,7 +83,7 @@ export function createRustSourceCallableAbiResolver(): RustSourceCallableAbiReso
         return cached ?? undefined;
       }
       const typeNode = Node_Type(context.ast, parameter);
-      const base = typeNode === undefined
+      let base = typeNode === undefined
         ? resolveRustTargetTypeRef(parameter, context, options)
         : resolveRustTargetTypeRef(typeNode, context, options);
       if (base === undefined) {
@@ -97,6 +102,12 @@ export function createRustSourceCallableAbiResolver(): RustSourceCallableAbiReso
           : context.ast.questionToken(parameter) !== undefined
             ? "optional" as const
             : "required" as const;
+      if (form === "required" &&
+        (isRustJsValueCarrier(base) || rustTargetTypeRefEquals(base, rustTsValueTargetType()) ||
+          rustTargetTypeRefEquals(base, rustEmptyObjectTargetType())) &&
+        parameterOnlyForwardsThrownValue(parameter, context)) {
+        base = rustProgramErrorTargetType();
+      }
       const requiresOwnedValue = parameterUsesFlowState(
         parameter,
         "moved",
@@ -308,6 +319,27 @@ function parameterCanUseSharedBorrow(
       context.facts.get(reference, flowStateFactKey);
     return flow?.state === "borrowed-shared" ||
       role === "receiver";
+  });
+}
+
+function parameterOnlyForwardsThrownValue(
+  parameter: Node,
+  context: RustTargetTypeResolutionContext,
+): boolean {
+  const summary = context.source.navigation.parameterUseSummary(parameter);
+  if (summary === undefined || summary.uses.length === 0 || summary.bindingWritten ||
+    summary.memberWritten || summary.captured || summary.returned || summary.yielded ||
+    summary.aliasedOrStored || summary.exported) return false;
+  return summary.uses.every(({ reference }) => {
+    let operand = reference;
+    let parent = context.ast.parent(operand);
+    while (parent !== undefined && context.ast.kindName(parent) === "KindParenthesizedExpression" &&
+      Node_Expression(context.ast, parent) === operand) {
+      operand = parent;
+      parent = context.ast.parent(parent);
+    }
+    return parent !== undefined && context.ast.kindName(parent) === "KindThrowStatement" &&
+      Node_Expression(context.ast, parent) === operand;
   });
 }
 

@@ -287,7 +287,9 @@ export function createRustProjectTypePolicy(
   }
 
   const programErrorDefinitions = Object.freeze(definitions
-    .filter((definition) => externalBaseByDeclaration.get(definition.declaration)?.programError === true)
+    .filter((definition) => externalBaseByDeclaration.get(definition.declaration)?.programError === true ||
+      definition.kind === "class" && definition.genericParameters.length === 0 &&
+      host.thrownClassDeclarations.has(definition.declaration))
     .sort((left, right) => {
       const fileOrder = left.fileName.localeCompare(right.fileName, "en");
       return fileOrder === 0 ? left.sourceName.localeCompare(right.sourceName, "en") : fileOrder;

@@ -158,6 +158,7 @@ export interface RustProjectTypePolicyHost {
   readonly navigation: SourceProgramNavigation;
   readonly sourceFiles: readonly SourceFile[];
   readonly sourceLifetimes: RustLifetimeIndex;
+  readonly thrownClassDeclarations: ReadonlySet<Node>;
   externallyExtensible(declaration: Node): boolean;
   targetNameForCallable(declaration: Node): string | undefined;
   sourcePackageComponentForFile(fileName: string): string | undefined;

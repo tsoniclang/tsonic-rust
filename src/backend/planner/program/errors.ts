@@ -181,8 +181,11 @@ export function planRustProgramErrorModule(
     ...externalVariants.map(({ variant, type }) =>
       fromImplementation(type, variant, false)),
     displayImplementation([
-      ...exactProjectVariants.map(({ variant }) => variant),
-      ...externalVariants.map(({ variant }) => variant),
+      ...exactProjectVariants.map(({ variant, definition }) => ({
+        variant,
+        delegate: input.program.projectTypes.externalBaseForDefinition(definition)?.programError === true,
+      })),
+      ...externalVariants.map(({ variant }) => ({ variant, delegate: true })),
     ]),
     debugImplementation(),
     {
@@ -229,7 +232,10 @@ function fromImplementation(
   };
 }
 
-function displayImplementation(projectVariants: readonly string[]): RustItem {
+function displayImplementation(projectVariants: readonly {
+  readonly variant: string;
+  readonly delegate: boolean;
+}[]): RustItem {
   const formatterType: RustType = {
     kind: "reference",
     mutable: true,
@@ -259,8 +265,17 @@ function displayImplementation(projectVariants: readonly string[]): RustItem {
             expression: path("self"),
             arms: [
               displayDelegateArm("Self::Runtime"),
-              ...projectVariants.map((variant) =>
-                displayDelegateArm(`Self::${variant}`)),
+              ...projectVariants.map(({ variant, delegate }) => delegate
+                ? displayDelegateArm(`Self::${variant}`)
+                : {
+                    pattern: tupleVariant(`Self::${variant}`, { kind: "wildcard" }),
+                    expression: {
+                      kind: "method-call" as const,
+                      receiver: path("formatter"),
+                      method: "write_str",
+                      args: [{ kind: "str-literal" as const, value: "[object Object]" }],
+                    },
+                  }),
               {
                 pattern: tupleVariant(
                   "Self::Suppressed",

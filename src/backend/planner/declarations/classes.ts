@@ -85,7 +85,9 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     return undefined;
   }
   const exported = ast.hasModifierKind(node, "export");
-  const publiclyReachable = rustProjectTypeHasPublicImplementationAbi(context, className);
+  const publiclyReachable = definition !== undefined &&
+    context.input.program.projectTypes.programErrorVariant(definition) !== undefined ||
+    rustProjectTypeHasPublicImplementationAbi(context, className);
   const storageVisibility = rustProjectImplementationVisibility(publiclyReachable);
   const structVisibility = exported || publiclyReachable ? "public" as const : "crate" as const;
   if (ast.extendsHeritageElements(node).length > 0 || ast.implementsHeritageElements(node).length > 0) {

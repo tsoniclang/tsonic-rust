@@ -3,6 +3,7 @@ import {
   rustNativeCallableProtocol,
   rustTargetGenericTypeArguments,
   substituteRustTargetGenerics,
+  isRustProgramErrorCarrier,
 } from "../../target-model/types/index.js";
 import {
   KindFunctionDeclaration,
@@ -125,6 +126,18 @@ export function applySelectedProjectSourceCall(
       substitutions.lifetimes,
       substitutions.consts,
     );
+    if (isRustProgramErrorCarrier(parameterCarrier)) {
+      const ownerFile = ast.getSourceFile(selectedDeclaration);
+      const componentFor = (file: SourceFile | undefined) => file === undefined ? undefined :
+        walk.context.sourcePackages.packages.find(entry => entry.sourceFiles.includes(ast.getFileName(file)))?.componentId;
+      const owner = componentFor(ownerFile);
+      if (owner === undefined || owner !== componentFor(sourceFile)) {
+        appendRustDiagnostic(walk, "RUST_SOURCE_ERROR_PARAMETER_DOMAIN_CONFLICT",
+          "Exception forwarding requires the exact owning source-package error domain; reverse conversion from an unrelated error domain is not proven.",
+          expression, ["target.capability=rust.source-call.error-parameter-domain"]);
+        return undefined;
+      }
+    }
     const valueCarrier = instantiateRustSourceParameterValueCarrier(parameterAbi, parameterCarrier);
     if (valueCarrier === undefined) {
       appendRustDiagnostic(

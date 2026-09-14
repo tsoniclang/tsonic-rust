@@ -12,6 +12,8 @@ import { rustMemoryMetadataKey } from "../../target-model/operations/memory-layo
 import { rustProjectStaticFieldStorage } from "../project-types/object-layout.js";
 import type { RustAnalysisContext } from "./context.js";
 import type { RustFoundation } from "../../target-model/foundation/model.js";
+import { stronglyConnectedSourceFiles } from "./module-graph.js";
+import { rustModuleInitializationIsStateIndependent } from "./independent-module-initialization.js";
 
 export type RustModuleInitializationRequirement =
   | { readonly kind: "required" }
@@ -21,11 +23,12 @@ export type RustModuleInitializationRequirement =
 export interface RustModuleInitializationPlan {
   requirementFor(sourceFile: SourceFile): RustModuleInitializationRequirement;
   minimumFoundation(): RustFoundation;
+  hasStateIndependentCycle(sourceFile: SourceFile): boolean;
 }
 
 type RustModuleInitializationPlanInput = Pick<
   RustAnalysisContext,
-  "ast" | "sourceFiles" | "facts" | "projectTypes" | "safetyApplications"
+  "ast" | "source" | "sourceFiles" | "facts" | "projectTypes" | "safetyApplications"
 >;
 
 export function createRustModuleInitializationPlan(
@@ -38,6 +41,16 @@ export function createRustModuleInitializationPlan(
     requirements.set(sourceFile, requirement);
     if (requirement.kind === "required") minimumFoundation = "std";
   }
+  const stateIndependentCycles = new Set<SourceFile>();
+  for (const component of stronglyConnectedSourceFiles(input.source.navigation, new Set(input.sourceFiles))) {
+    const first = component[0];
+    if (first === undefined || component.length === 1 && !input.source.navigation.moduleDependencies(first)
+      .some(dependency => dependency.sourceFile === first)) continue;
+    const members = new Set(component);
+    if (component.every(sourceFile => rustModuleInitializationIsStateIndependent(input, sourceFile, members))) {
+      for (const sourceFile of component) stateIndependentCycles.add(sourceFile);
+    }
+  }
   return Object.freeze({
     requirementFor(sourceFile: SourceFile) {
       return requirements.get(sourceFile) ?? unresolved(
@@ -47,6 +60,9 @@ export function createRustModuleInitializationPlan(
     },
     minimumFoundation() {
       return minimumFoundation;
+    },
+    hasStateIndependentCycle(sourceFile: SourceFile) {
+      return stateIndependentCycles.has(sourceFile);
     },
   });
 }

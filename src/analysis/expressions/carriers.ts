@@ -28,6 +28,7 @@ import {
 import {
   isRustDefinitelyNullishCarrier,
   isRustOptionCarrier,
+  isRustProgramErrorCarrier,
   rustOptionElementCarrier,
   rustOptionTargetType,
   rustNullishSourceTargetType,
@@ -268,7 +269,7 @@ function applyFlowReadLane(
     }
     return existing.selectedCarrier;
   }
-  const selectedSource = selectedFlowReadSource(walk, expression);
+  const selectedSource = selectedFlowReadSource(walk, expression, sourceCarrier);
   if (selectedSource === undefined) {
     return sourceCarrier;
   }
@@ -322,12 +323,17 @@ function applyFlowReadLane(
 function selectedFlowReadSource(
   walk: RustFactWalk,
   expression: Node,
+  sourceCarrier: TargetTypeRef,
 ): { readonly declaration?: Node; readonly type: Type } | undefined {
   const sourceFile = walk.context.ast.getSourceFile(expression);
   if (sourceFile === undefined || !walk.context.source.semantics.includes(sourceFile)) {
     return undefined;
   }
   const semantics = walk.context.source.semantics.forNode(expression);
+  if (isRustProgramErrorCarrier(sourceCarrier)) {
+    const type = semantics.types.expressionType(expression);
+    return type === undefined ? undefined : { type };
+  }
   const kind = walk.context.ast.kindName(expression);
   if (kind === KindPropertyAccessExpression) {
     const selected = semantics.operations.propertyAccess(expression);
@@ -364,6 +370,16 @@ function resolveSelectedFlowReadCarrier(
   selectedType: Type,
   sourceCarrier: TargetTypeRef,
 ): TargetTypeRef | undefined {
+  if (isRustProgramErrorCarrier(sourceCarrier)) {
+    const carrier = resolveRustTargetTypeRef(
+      selectedType, rustResolutionContext(walk, expression), walk.operationOptions,
+    );
+    const definition = walk.context.projectTypes.definitionForCarrier(carrier);
+    return definition !== undefined &&
+      walk.context.projectTypes.programErrorVariant(definition) !== undefined
+      ? carrier
+      : sourceCarrier;
+  }
   if (rustRuntimeUnionContract(sourceCarrier) !== undefined) {
     const semantics = walk.context.semanticsFor(expression);
     const members = semantics.types.isUnion(selectedType)

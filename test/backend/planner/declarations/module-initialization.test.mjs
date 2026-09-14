@@ -108,7 +108,7 @@ export function main(): void {
   validateGeneratedProject("module-cycle-functions", result.artifacts, { run: true });
 });
 
-test("a cyclic component with one initializer fails without cyclic call evidence", () => {
+test("a cyclic component with independent initialization preserves later calls", () => {
   const { result } = compileRust({
     target: {
       id: "rust",
@@ -141,9 +141,65 @@ export function main(): void {
     },
   });
 
-  assert.equal(result.artifacts.length, 0);
-  assert.equal(result.diagnostics.filter((diagnostic) =>
-    diagnostic.code === "RUST_UNSUPPORTED_RUNTIME_MODULE_CYCLE").length, 1);
+  assert.deepEqual(result.diagnostics, []);
+  validateGeneratedProject("module-cycle-single-init", result.artifacts, { run: true });
+});
+
+test("cyclic modules retain fresh local static construction and class identity", () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    target: { id: "rust", options: { outputType: "bin", crateName: "module_cycle_construction" } },
+    files: {
+      "a.ts": `
+import { State, cycle } from "./b.js";
+class Text {
+  readonly value: string;
+  constructor(value: string) { this.value = value; }
+}
+export class Box {
+  static readonly empty: Box = new Box(new Text(""));
+  readonly text: Text;
+  constructor(text: Text) { this.text = text; }
+}
+export function ready(): boolean { return State.ready && cycle() === Box.empty; }
+`,
+      "b.ts": `
+import { Box } from "./a.js";
+export class State { static readonly ready: boolean = true; }
+export function cycle(): Box { return Box.empty; }
+`,
+      "index.ts": `
+import { Box, ready } from "./a.js";
+export function main(): void {
+  if (!ready() || Box.empty.text.value !== "") throw new Error("cyclic construction mismatch");
+}
+`,
+    },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  validateGeneratedProject("module-cycle-construction", result.artifacts, { run: true });
+});
+
+test("cyclic initialization proof rejects eager effects and unavailable class bindings", () => {
+  for (const source of [
+    "export let value: number = fromB();",
+    "class Value { constructor() { fromB(); } } export const value = new Value();",
+    "export function create(): Value { return new Value(); } export const value = create(); class Value {}",
+    "export class Value { static { fromB(); } }",
+    "export class Value extends Base { static readonly value: number = 1; }",
+  ]) {
+    const { result } = compileRust({
+      surfaces: ["js"],
+      files: {
+        "a.ts": `import { fromB, Base } from "./b.js";\n${source}\nexport function fromA(): number { return 1; }`,
+        "b.ts": `import { fromA } from "./a.js"; export function fromB(): number { return fromA(); } export class Base {}`,
+        "index.ts": `import { fromA } from "./a.js"; export function main(): void { fromA(); }`,
+      },
+    });
+    assert.equal(result.artifacts.length, 0, source);
+    assert.ok(result.diagnostics.some(diagnostic => diagnostic.code === "RUST_UNSUPPORTED_RUNTIME_MODULE_CYCLE"),
+      `${source}\n${JSON.stringify(result.diagnostics)}`);
+  }
 });
 
 test("cycles with competing runtime initializers fail before publication", () => {
