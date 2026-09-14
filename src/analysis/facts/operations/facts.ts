@@ -223,6 +223,21 @@ export type RustTargetOperationFact =
       readonly resultCarrier: TargetTypeRef;
     }
   | {
+      readonly kind: "builtin-error-type-test";
+      readonly operationId: string;
+      readonly sourceCarrier: TargetTypeRef;
+      readonly resultCarrier: TargetTypeRef;
+      readonly errorKind: "any" | "RangeError" | "TypeError" | "URIError";
+      readonly lowering: "native-error" | "closed-value";
+    }
+  | {
+      readonly kind: "builtin-error-property";
+      readonly operationId: string;
+      readonly receiverCarrier: TargetTypeRef;
+      readonly resultCarrier: TargetTypeRef;
+      readonly property: "message" | "name";
+    }
+  | {
       readonly kind: "source-field";
       readonly operationId: string;
       readonly declaration?: Node;
@@ -705,6 +720,8 @@ export function rustTargetOperationResultCarrier(fact: RustTargetOperationFact):
     case "native-pointer":
     case "project-type-test":
     case "program-error-type-test":
+    case "builtin-error-type-test":
+    case "builtin-error-property":
       return fact.resultCarrier;
     case "iteration":
       return fact.elementCarrier;

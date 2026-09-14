@@ -34,6 +34,7 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import { selectRustFlowReadProjection } from "../../../policy/types/value-carrier-reconciliation.js";
 import { selectJsSurfaceOperation } from "../../../policy/operations/js-surface.js";
 import { selectRustProviderOperation } from "../../../policy/operations/provider-selection.js";
+import { selectRustBuiltinErrorTypeTest } from "./builtin-errors.js";
 import type {
   RustCheckedCallSelectionInput,
   RustCheckedOperationSelectionResult,
@@ -61,7 +62,8 @@ export function selectRustCheckedOperator(
     return acceptDeclarationOperation("operator");
   }
   if (request.operator === "instanceof") {
-    return selectRustProjectTypeTest(request, context, options);
+    return selectRustBuiltinErrorTypeTest(request, context, options) ??
+      selectRustProjectTypeTest(request, context, options);
   }
   if (request.right !== undefined) {
     if (request.operator !== "=") {

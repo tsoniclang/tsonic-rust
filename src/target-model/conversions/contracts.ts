@@ -25,6 +25,7 @@ import {
   rustNeverTargetType,
   rustOptionTargetType,
   rustJsValueTargetType,
+  rustJsErrorTargetType,
   rustOptionElementCarrier,
   rustPrimitiveTypeName,
   rustSourceUnionCarrierValue,
@@ -579,6 +580,8 @@ export function rustValueConversionContract(
       return contract(value.id, "exact", "js_abi::js_value_from_string", "ref", stringCarrier, jsValueCarrier, false);
     case "js-value-from-symbol":
       return contract(value.id, "exact", "js_abi::JsValue::from", "value", symbolCarrier, jsValueCarrier, false);
+    case "js-value-from-error":
+      return contract(value.id, "exact", "js_abi::JsValue::from_error", "ref", rustJsErrorTargetType(), jsValueCarrier, false);
     case "js-value-from-undefined":
       return contract(value.id, "exact", "js_abi::JsValue::from", "value", undefinedCarrier, jsValueCarrier, false);
     case "js-value-clone":

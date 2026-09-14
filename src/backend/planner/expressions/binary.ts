@@ -22,6 +22,7 @@ import { negateRustBooleanExpression, rustBorrowedStringView, rustStringConcat }
 import { planExpression, planExpressionBeforeValueProjections } from "./entry.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
 import { planRustProgramErrorTypeTest } from "./error-operations.js";
+import { planRustBuiltinErrorTypeTest } from "./builtin-errors.js";
 import {
   planRustProjectTypeTest,
   planRustProjectTypeTestSelection,
@@ -92,6 +93,9 @@ export function planSelectedRustProjectTypeTest(
 
 export function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
+  if (fact?.kind === "builtin-error-type-test") {
+    return planRustBuiltinErrorTypeTest(node, fact, context);
+  }
   if (fact?.kind === "program-error-type-test") {
     const leftNode = BinaryExpression_Left(context.input.program.source.ast, node);
     const left = leftNode === undefined ? undefined : planExpression(leftNode, context);

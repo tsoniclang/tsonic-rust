@@ -44,6 +44,7 @@ import {
   isRustJsStrictEqualityCarrier,
   isRustNumericCarrier,
   isRustStringCarrier,
+  rustJsErrorTargetType,
   rustSourcePrimitiveTargetType,
   rustStructuralObjectCarrierValue,
   sameRustPrimitiveCarrier,
@@ -445,6 +446,16 @@ export function selectRustBinaryOperator(
   }
   const equality = equalityTokens[operatorKindName];
   if (equality !== undefined) {
+    if (rustTargetTypeRefEquals(left, rustJsErrorTargetType()) && rustTargetTypeRefEquals(left, right)) {
+      return {
+        kind: "operator-call",
+        rustOperator: equality,
+        resultCarrier: boolCarrier,
+        path: equality === "==" ? "rt::JsError::has_same_identity" : "rt::JsError::has_distinct_identity",
+        fallible: false,
+        operandModes: ["ref", "ref"],
+      };
+    }
     if (rustStructuralObjectCarrierValue(left) !== undefined &&
       rustStructuralObjectCarrierValue(right) !== undefined &&
       !rustTargetTypeRefEquals(left, right)) {

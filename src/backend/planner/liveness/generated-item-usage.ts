@@ -549,6 +549,8 @@ export function analyzeRustGeneratedItemUsage(input: {
       case "option-value-equality":
       case "disjoint-equality":
       case "program-error-type-test":
+      case "builtin-error-type-test":
+      case "builtin-error-property":
       case "source-static-field":
       case "provider-record-literal":
       case "fixed-array-literal":

@@ -15,6 +15,7 @@ import {
   rustJsArrayLikeElementTargetType,
   rustJsSymbolTargetType,
   rustJsValueTargetType,
+  rustJsErrorTargetType,
   rustOptionElementCarrier,
   rustSourcePrimitiveTargetType,
   rustSourceUnionCarrierValue,
@@ -122,6 +123,9 @@ export function selectRustSourceValueConversion(
       : undefined;
   }
   if (rustTargetTypeRefEquals(target, jsValueCarrier)) {
+    if (rustTargetTypeRefEquals(source, rustJsErrorTargetType())) {
+      return { kind: "semantic-conversion", id: "js-value-from-error" };
+    }
     if (rustTargetTypeRefEquals(source, jsValueCarrier)) {
       return rustJsValueCloneConversion;
     }

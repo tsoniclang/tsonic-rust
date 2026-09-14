@@ -29,6 +29,8 @@ import {
   isRustDefinitelyNullishCarrier,
   isRustOptionCarrier,
   isRustProgramErrorCarrier,
+  isRustJsValueCarrier,
+  rustJsErrorTargetType,
   rustOptionElementCarrier,
   rustOptionTargetType,
   rustNullishSourceTargetType,
@@ -336,7 +338,7 @@ function selectedFlowReadSource(
     return undefined;
   }
   const semantics = walk.context.source.semantics.forNode(expression);
-  if (isRustProgramErrorCarrier(sourceCarrier)) {
+  if (isRustProgramErrorCarrier(sourceCarrier) || isRustJsValueCarrier(sourceCarrier)) {
     const type = semantics.types.expressionType(expression);
     return type === undefined ? undefined : { type };
   }
@@ -386,6 +388,12 @@ function resolveSelectedFlowReadCarrier(
     semantics.types.typeOfSymbol(access.selectedSymbol);
   if (declaredReadType !== undefined && semantics.types.isIdentical(declaredReadType, selectedType)) {
     return sourceCarrier;
+  }
+  if (isRustJsValueCarrier(sourceCarrier)) {
+    const carrier = resolveRustTargetTypeRef(
+      selectedType, rustResolutionContext(walk, expression), walk.operationOptions,
+    );
+    return rustTargetTypeRefEquals(carrier, rustJsErrorTargetType()) ? carrier : sourceCarrier;
   }
   if (isRustProgramErrorCarrier(sourceCarrier)) {
     const carrier = resolveRustTargetTypeRef(

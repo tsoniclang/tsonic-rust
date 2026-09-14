@@ -120,6 +120,14 @@ export function rustFoundationForTargetOperationFact(
       requireCarrier(fact.targetCarrier);
       requireCarrier(fact.resultCarrier);
       break;
+    case "builtin-error-type-test":
+      requireCarrier(fact.sourceCarrier);
+      requireCarrier(fact.resultCarrier);
+      break;
+    case "builtin-error-property":
+      requireCarrier(fact.receiverCarrier);
+      requireCarrier(fact.resultCarrier);
+      break;
     case "source-field":
       requireCarrier(fact.receiverCarrier);
       requireCarrier(fact.resultCarrier);

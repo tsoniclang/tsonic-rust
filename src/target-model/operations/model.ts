@@ -106,6 +106,7 @@ export type RustValueConversionId =
   | "js-value-from-null"
   | "js-value-from-string"
   | "js-value-from-symbol"
+  | "js-value-from-error"
   | "js-value-from-undefined"
   | "js-value-clone"
   | "ts-value-clone"

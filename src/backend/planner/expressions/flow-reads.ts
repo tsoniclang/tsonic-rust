@@ -3,6 +3,8 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import { rustRuntimeUnionProjection } from "../../../target-model/types/carriers/runtime-unions.js";
 import {
   isRustCopyCarrier,
+  isRustJsValueCarrier,
+  rustJsErrorTargetType,
   rustCarrierSupportsClone,
 } from "../../../target-model/types/index.js";
 import type { RustFlowReadProjectionFact } from "../../../analysis/facts/keys.js";
@@ -47,6 +49,14 @@ export function planRustFlowReadProjection(
       return undefined;
     }
     return override.expression;
+  }
+  if (fact.kind === "builtin-error") {
+    if (!isRustJsValueCarrier(fact.sourceCarrier) || !rustTargetTypeRefEquals(fact.selectedCarrier, rustJsErrorTargetType())) {
+      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node), "rust.backend.builtin-error-projection",
+        "The selected builtin Error projection has contradictory native carriers."));
+      return undefined;
+    }
+    return { kind: "method-call", receiver: planRustNonConsumingValue(node, expression, context), method: "error_value", args: [] };
   }
   if (fact.kind === "runtime-union") {
     if (rustRuntimeUnionProjection(fact.sourceCarrier, fact.selectedCarrier) !== fact.method) {

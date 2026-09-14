@@ -15,6 +15,7 @@ import { Node_Expression } from "@tsonic/target-api/source";
 import { planExpression } from "./entry.js";
 import { planRustNonConsumingValue, planRustSharedReceiver } from "./typed-locations.js";
 import { planRustSourceUnionFieldProjection } from "./unions.js";
+import { planRustBuiltinErrorProperty } from "./builtin-errors.js";
 import { readRustProjectDispatchedField, rustProjectObjectDispatchField } from "../objects/project-objects.js";
 import { planRustProjectFieldDispatchRoles } from "../objects/project-field-dispatch.js";
 import { readRustSourceStaticField } from "../declarations/static-field-storage.js";
@@ -39,6 +40,9 @@ export function planPropertyAccess(node: Node, context: RustPlanContext): RustEx
 }
 function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
+  if (fact?.kind === "builtin-error-property") {
+    return planRustBuiltinErrorProperty(node, fact, context);
+  }
   if (fact !== undefined && fact.kind === "source-method-property") {
     return planRustSourceMethodPropertyRead(node, fact, context);
   }

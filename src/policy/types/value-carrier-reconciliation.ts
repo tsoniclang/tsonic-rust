@@ -9,6 +9,8 @@ import type {
 } from "./value-projections.js";
 import {
   isRustProgramErrorCarrier,
+  isRustJsValueCarrier,
+  rustJsErrorTargetType,
   rustCarrierSupportsClone,
   rustCarrierSupportsTrait,
   rustOptionElementCarrier,
@@ -47,6 +49,9 @@ export function selectRustFlowReadProjection(
 ): RustFlowReadProjectionSelection {
   if (rustTargetTypeRefEquals(sourceCarrier, selectedCarrier)) {
     return { kind: "identity" };
+  }
+  if (isRustJsValueCarrier(sourceCarrier) && rustTargetTypeRefEquals(selectedCarrier, rustJsErrorTargetType())) {
+    return { kind: "projection", fact: { kind: "builtin-error", sourceCarrier, selectedCarrier } };
   }
   const method = rustRuntimeUnionProjection(sourceCarrier, selectedCarrier);
   if (method !== undefined) {

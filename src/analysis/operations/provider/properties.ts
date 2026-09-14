@@ -17,6 +17,7 @@ import { rustSourceCallableReturnFactKey } from "../../facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectJsSurfaceOperation } from "../../../policy/operations/js-surface.js";
 import { selectRustGeneratorSourceProperty } from "../../../policy/types/generator-source-profile.js";
+import { selectRustBuiltinErrorProperty } from "./builtin-errors.js";
 import { isIntrinsicSourceQualifier } from "./source-qualifiers.js";
 import { selectedRustProviderGlobal } from "../../../policy/evidence/provider-globals.js";
 import { tsonicFixedArrayProviderMember } from "@tsonic/source-core/facts";
@@ -244,6 +245,10 @@ export function selectRustCheckedPropertyAccess(
     request.sourceSelectedDeclaration,
     options.sourceProfiles,
   );
+  const builtinError = selectRustBuiltinErrorProperty(
+    request, selectedReceiverCarrier, sourceProfileMembers, context, options,
+  );
+  if (builtinError !== undefined) return builtinError;
   const providerEvidence = resolveSelectedProviderDeclaration(
     context,
     request.sourceSelectedDeclaration,

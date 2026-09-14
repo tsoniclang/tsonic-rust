@@ -197,6 +197,10 @@ export function selectedMemberReceiverCarrier(
   if (rustTargetTypeRefEquals(sourceCarrier, selectedCarrier)) {
     return sourceCarrier;
   }
+  const flowProjection = selectRustFlowReadProjection(sourceCarrier, selectedCarrier, options.projectTypes);
+  if (flowProjection.kind === "projection" && flowProjection.fact.kind === "builtin-error") {
+    return selectedCarrier;
+  }
   if (rustRuntimeUnionProjection(sourceCarrier, selectedCarrier) !== undefined) {
     return selectedCarrier;
   }
@@ -464,6 +468,7 @@ function genericOperationKind(fact: RustTargetOperationFact): RustTargetOperatio
     case "source-index-signature":
       return "indexer";
     case "source-field":
+    case "builtin-error-property":
     case "source-method-property":
     case "source-static-field":
     case "source-accessor":
