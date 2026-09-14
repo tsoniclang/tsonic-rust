@@ -101,7 +101,7 @@ export function planPolymorphicClassDeclaration(
     return undefined;
   }
   const diagnosticCountBeforeRootImplementations = context.diagnostics.length;
-  const rootImplementations = planProjectRootImplementations(
+  const rootImplementations = constructor.construct === undefined ? [] : planProjectRootImplementations(
     definition,
     openCarrier,
     rootType,
@@ -154,7 +154,7 @@ export function planPolymorphicClassDeclaration(
   }
   const implementationVisibility = rustProjectImplementationVisibility(publiclyReachable);
   const wrapperVisibility = exported || publiclyReachable ? "public" as const : "crate" as const;
-  const defaultImplementation = rustDefaultImplementation(
+  const defaultImplementation = constructor.construct === undefined ? undefined : rustDefaultImplementation(
     wrapperType,
     generics,
     constructor.construct,
@@ -269,8 +269,8 @@ export function planPolymorphicClassDeclaration(
       ],
     },
     ...projectIdentityImplementations(definition, wrapperType, representation),
-    {
-      kind: "struct",
+    ...(constructor.construct === undefined ? [] : [{
+      kind: "struct" as const,
       name: rustProjectRootName(definition),
       visibility: "crate",
       derives: [],
@@ -301,12 +301,12 @@ export function planPolymorphicClassDeclaration(
           })(),
         },
       ],
-    },
+    } satisfies RustItem]),
     {
       kind: "impl",
       generics,
       target: wrapperType,
-      functions: [constructor.initialize, constructor.construct, ...staticMethods],
+      functions: [constructor.initialize, ...(constructor.construct === undefined ? [] : [constructor.construct]), ...staticMethods],
     },
     ...(defaultImplementation === undefined ? [] : [defaultImplementation]),
     ...rootImplementations,

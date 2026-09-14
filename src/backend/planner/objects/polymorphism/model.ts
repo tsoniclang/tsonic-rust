@@ -107,7 +107,7 @@ export function projectClassStateLayers(
     layers.push({
       definition: owner,
       carrier: relation.targetType,
-      fields,
+      fields: fields.filter((field) => !context.input.program.source.ast.hasModifierKind(field.declaration, "abstract")),
       methodProperties,
     });
   }

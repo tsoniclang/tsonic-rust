@@ -424,7 +424,7 @@ function planRootContractFunctions(
         return undefined;
       }
       functions.push(virtualMethod);
-      if (contract.kind === "class") {
+      if (contract.kind === "class" && !context.input.program.source.ast.hasModifierKind(member, "abstract")) {
         const exactImplementationMethod = implementationFor(
           member,
           variant.targetTypeArguments,

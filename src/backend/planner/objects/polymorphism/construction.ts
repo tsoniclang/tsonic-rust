@@ -85,7 +85,7 @@ export function planProjectClassConstructor(
   rootType: RustType,
   layers: readonly ProjectClassStateLayer[],
   context: RustPlanContext,
-): { readonly initialize: RustImplFunction; readonly construct: RustImplFunction } | undefined {
+): { readonly initialize: RustImplFunction; readonly construct?: RustImplFunction } | undefined {
   if (wrapperType.kind !== "named" || rootType.kind !== "named") {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, definition.declaration),
@@ -542,6 +542,9 @@ export function planProjectClassConstructor(
       ),
     },
   };
+  if (context.input.program.source.ast.hasModifierKind(definition.declaration, "abstract")) {
+    return { initialize };
+  }
   const forwardArgs = parameterPlan.params.map((parameter) => ({
     kind: "path" as const,
     path: parameter.name,

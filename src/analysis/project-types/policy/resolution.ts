@@ -759,13 +759,13 @@ export function createRustProjectTypePolicy(
       );
     },
     isPolymorphic(definition) {
-      return polymorphic.has(definition);
+      return polymorphic.has(definition) || host.ast.hasModifierKind(definition.declaration, "abstract");
     },
     classLineage,
     interfacesForClass,
     concreteClassesFor(definition) {
       return Object.freeze(definitions.filter((candidate) => {
-        if (candidate.kind !== "class") {
+        if (candidate.kind !== "class" || host.ast.hasModifierKind(candidate.declaration, "abstract")) {
           return false;
         }
         const relation = relationship(policy.openCarrier(candidate), definition);

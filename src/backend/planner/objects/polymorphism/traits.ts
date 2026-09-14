@@ -297,7 +297,7 @@ export function planProjectDispatchTrait(
         };
       };
       functions.push(signature(variant.virtualSlot, "method-virtual"));
-      if (definition.kind === "class") {
+      if (definition.kind === "class" && !context.input.program.source.ast.hasModifierKind(member, "abstract")) {
         functions.push(signature(variant.exactSlot, "method-exact"));
       }
     }

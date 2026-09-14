@@ -173,7 +173,7 @@ export function createRustSourceTypeRegistry(): RustSourceTypeRegistry {
       const keys: string[] = [];
       const seen = new Set<string>();
       for (const member of members) {
-        if (sourceClassFieldIsTypeOnly(ast, member)) continue;
+        if (sourceClassFieldIsTypeOnly(ast, member) || ast.hasModifierKind(member, "abstract")) continue;
         const kind = ast.kindName(member);
         if ((declarationKind === "KindInterfaceDeclaration" && kind === "KindPropertySignature") ||
           (declarationKind === "KindClassDeclaration" &&
