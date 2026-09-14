@@ -11,6 +11,12 @@ const densityPreservingMethods = new Set([
   "at", "toReversed", "toSorted", "toSpliced", "with",
 ]);
 
+const callbackReceiverIndexes: Readonly<Record<string, number>> = {
+  map: 2, filter: 2, forEach: 2, every: 2, some: 2,
+  find: 2, findIndex: 2, findLast: 2, findLastIndex: 2,
+  reduce: 3, reduceRight: 3, flatMap: 2,
+};
+
 export function createRustArrayDensityQuery(
   context: RustSourcePolicyContext,
   profiles: RustSourceProfileRegistry,
@@ -20,7 +26,31 @@ export function createRustArrayDensityQuery(
   const safeDeclarations = new WeakSet<Node>();
   const denseDeclarations = new WeakMap<Node, boolean>();
   const activeDeclarations = new Set<Node>();
+  const trackedCallables = new WeakMap<Node, boolean>();
   const maximumProofNodes = 16_384;
+
+  const trackedCallable = (declaration: Node): boolean => {
+    const previous = trackedCallables.get(declaration);
+    if (previous !== undefined) return previous;
+    const pending = [declaration];
+    let accepted = true;
+    for (let index = 0; accepted && index < pending.length; index++) {
+      if (pending.length >= maximumProofNodes) { accepted = false; break; }
+      const node = pending[index]!;
+      if (ast.kindName(node) === "KindIdentifier" && navigation.sourceReferenceFor(node) === undefined) {
+        const types = context.semanticsFor(node).types;
+        const type = types.expressionType(node);
+        if (type === undefined || !(types.isNullish(type) || types.isNumberLike(type) ||
+          types.isBooleanLike(type) || types.isStringLike(type) || types.isBigIntLike(type) || types.isSymbolLike(type))) {
+          accepted = false;
+          break;
+        }
+      }
+      ast.forEachChild(node, child => { if (child !== undefined) pending.push(child); });
+    }
+    trackedCallables.set(declaration, accepted);
+    return accepted;
+  };
 
   const unwrap = (node: Node): Node => {
     let current = node;
@@ -59,6 +89,7 @@ export function createRustArrayDensityQuery(
     const target = navigation.callableImplementation(signature);
     if (target?.kind !== "resolved" || ast.kindName(target.implementation.declaration) !== "KindFunctionDeclaration") return undefined;
     const declaration = target.implementation.declaration;
+    if (!trackedCallable(declaration)) return undefined;
     return ast.parameters(declaration).some(parameter => parameter === undefined ||
       ast.as.AsParameterDeclaration(parameter)?.DotDotDotToken !== undefined)
       ? undefined : declaration;
@@ -103,8 +134,21 @@ export function createRustArrayDensityQuery(
           const member = arrayMember(parent);
           if (member === "length" && use.role !== "write") continue;
           const call = ast.parent(parent);
-          if (member === undefined || !densityPreservingMethods.has(member) || call === undefined ||
+          if (member === undefined || call === undefined ||
             ast.kindName(call) !== "KindCallExpression" || Node_Expression(ast, call) !== parent) return false;
+          const receiverIndex = callbackReceiverIndexes[member];
+          if (receiverIndex !== undefined) {
+            const callback = ast.arguments(call)[0];
+            if (callback === undefined || ast.kindName(callback) !== "KindArrowFunction") return false;
+            const parameters = ast.parameters(callback);
+            if (parameters.some(parameter => parameter === undefined ||
+              ast.as.AsParameterDeclaration(parameter)?.DotDotDotToken !== undefined)) return false;
+            const receiver = parameters[receiverIndex];
+            if (receiver !== undefined) {
+              if (ast.kindName(ast.name(receiver)) !== "KindIdentifier") return false;
+              pending.push(receiver);
+            }
+          } else if (!densityPreservingMethods.has(member)) return false;
           continue;
         }
         if (ast.kindName(parent) === "KindElementAccessExpression" && Node_Expression(ast, parent) === reference &&

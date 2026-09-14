@@ -10,6 +10,8 @@ test("dense compiler-provider entries retain generic and stored-undefined payloa
     files: { "index.ts": `
 import { check } from "@acme/testing";
 function visit<E>(values: readonly E[], write: (value: E) => void): void {
+  const copied = values.map((value): E => value);
+  check(copied.length === values.length);
   const entries = values.entries();
   const alias = entries;
   for (const [index, value] of alias) {
@@ -17,6 +19,7 @@ function visit<E>(values: readonly E[], write: (value: E) => void): void {
     write(value);
   }
 }
+
 export function main(): void {
   const values: number[] = [];
   const alias = values;
@@ -38,6 +41,23 @@ export function main(): void {
   });
   assert.deepEqual(result.diagnostics, []);
   validateGeneratedProject("compiler-provider-dense-entries", result.artifacts, { run: true });
+});
+
+test("an implicit arguments object cannot justify a dense parameter", () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    files: { "index.ts": `
+function visit(values: number[]): number {
+  const escaped = arguments[0] as number[];
+  escaped.length = 4;
+  let total = 0;
+  for (const [index, value] of values.entries()) total += value + index;
+  return total;
+}
+export function main(): void { visit([1, 2]); }
+` },
+  });
+  assert.ok(result.diagnostics.some(diagnostic => diagnostic.category === "error"));
 });
 
 for (const mutation of [
