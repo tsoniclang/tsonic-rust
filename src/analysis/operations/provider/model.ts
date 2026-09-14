@@ -26,6 +26,7 @@ export const sourceCallMarkerByIdentity = new Map(
 );
 
 export interface RustOperationsProviderOptions {
+  readonly arrayEntriesAreDense: (expression: import("@tsonic/tsts").Node) => boolean;
   readonly providerExports: readonly import("../../../providers/packages/model.js").RustProviderExportRow[];
   readonly providerRows: readonly RustProviderOperationRow[];
   readonly providerTypes: readonly import("../../../providers/packages/model.js").RustProviderTypeRow[];

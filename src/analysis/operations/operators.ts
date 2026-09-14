@@ -1,3 +1,4 @@
+import { rustArrayEntryBinding, rustArrayEntryPayloadExcludesNullish } from "../control-flow/array-entry-values.js";
 import {
   BinaryExpression_Left,
   BinaryExpression_OperatorToken,
@@ -634,6 +635,11 @@ function selectedOptionNullishRelationship(
       : undefined;
   if (optionNode === undefined || nullishNode === undefined) {
     return undefined;
+  }
+  if (rustArrayEntryBinding(walk, optionNode) !== undefined) {
+    if (!rustArrayEntryPayloadExcludesNullish(walk, optionNode)) return undefined;
+    return rustTargetTypeRefEquals(optionNode === leftNode ? rightCarrier : leftCarrier, rustUndefinedTargetType())
+      ? "member" : "disjoint";
   }
   const optionFact = walk.context.facts.get(optionNode, rustTargetOperationFactKey) ??
     walk.context.facts.resolve(optionNode, rustTargetOperationFactKey);

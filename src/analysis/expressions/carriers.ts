@@ -77,6 +77,7 @@ import { readRustSourceRawAddress } from "../../policy/operations/raw-address-so
 import { readRustRawLocation } from "../../policy/operations/native-memory.js";
 import { selectRustMemoryLayoutObservation } from "../../policy/operations/memory-layout.js";
 import { resolveRustClassValue } from "../objects/class-values.js";
+import { rustGuardedArrayEntryCarrier } from "../control-flow/array-entry-values.js";
 
 export function resolveExpressionCarrier(
   walk: RustFactWalk,
@@ -276,6 +277,13 @@ function applyFlowReadLane(
       return undefined;
     }
     return existing.selectedCarrier;
+  }
+  const entryCarrier = rustGuardedArrayEntryCarrier(walk, expression, sourceCarrier);
+  if (entryCarrier !== undefined) {
+    recordRustFlowReadProjection(walk.context.facts, expression, {
+      kind: "option-value", sourceCarrier, selectedCarrier: entryCarrier,
+    });
+    return entryCarrier;
   }
   const selectedSource = selectedFlowReadSource(walk, expression, sourceCarrier);
   if (selectedSource === undefined) {

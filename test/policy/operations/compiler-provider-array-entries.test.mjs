@@ -36,11 +36,16 @@ export function main(): void {
   sparse[1] = 7;
   let holes = 0;
   let seen = 0;
+  let payload = 0;
+  let nulls = 0;
   for (const [index, value] of sparse.entries()) {
+    const alias = value;
     seen += index + 1;
-    if (value === undefined) holes++;
+    if (alias === undefined) holes++;
+    else payload += value;
+    if (value === null) nulls++;
   }
-  check(holes === 2 && seen === 6 && countPresent(sparse) === 2);
+  check(holes === 2 && seen === 6 && countPresent(sparse) === 2 && payload === 7 && nulls === 0);
 }
 ` },
   });

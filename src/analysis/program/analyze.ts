@@ -36,6 +36,7 @@ import { collectRustThrownClassDeclarations } from "../resources/thrown-values.j
 import { rustSourceTypeDeclarations } from "../../policy/types/source-declarations.js";
 import { realizeRustSourceTypeFamilyDemands } from "../project-types/type-family-demands.js";
 import { rustTypeFamilyNormalizer } from "../../policy/types/type-family-normalization.js";
+import { createRustArrayDensityQuery } from "../control-flow/array-density.js";
 
 export function analyzeRustProgram(context: RustAnalysisContext): void {
   const { ast } = context;
@@ -71,6 +72,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   const moduleBindings = createRustModuleBindingPolicy(context);
   let finalizedProjectTypes: RustProjectTypePolicy | undefined;
   const operationOptions: RustOperationsProviderOptions = {
+    arrayEntriesAreDense: createRustArrayDensityQuery(context, sourceProfiles),
     providerExports: providerSemantics.exports,
     providerRows,
     providerTypes: providerSemantics.types,
