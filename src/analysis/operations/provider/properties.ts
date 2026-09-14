@@ -10,6 +10,7 @@ import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js"
 import { isProjectAccessorDeclaration, selectRustFixedArrayLengthProperty, selectStructuralSourceProperty } from "./structural-properties.js";
 import { Node_Type } from "@tsonic/target-api/source";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
+import { instantiateRustSelectedMemberCarrier } from "./member-carriers.js";
 import { rustCallableProtocol, rustSourceTypeCarrier, rustSourcePrimitiveTargetType } from "../../../target-model/types/index.js";
 import { rustProjectObjectField, rustProjectStaticFieldStorage } from "../../project-types/object-layout.js";
 import { rustSourceCallableReturnFactKey } from "../../facts/keys.js";
@@ -448,10 +449,13 @@ export function selectRustCheckedPropertyAccess(
     const declaredCarrier = resolveRustTargetTypeRef(sourceFieldType, context, options);
     const resultCarrier = declaredCarrier === undefined || selectedReceiverCarrier === undefined
       ? undefined
-      : options.projectTypes.instantiateMemberCarrier(
+      : instantiateRustSelectedMemberCarrier(
           declaration,
           selectedReceiverCarrier,
+          request.sourceReceiverType,
           declaredCarrier,
+          context,
+          options,
         );
     if (field !== undefined && resultCarrier !== undefined && selectedReceiverCarrier !== undefined) {
       if (request.accessMode === "delete") {

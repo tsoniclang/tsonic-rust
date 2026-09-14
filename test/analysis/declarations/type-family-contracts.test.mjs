@@ -58,6 +58,32 @@ test("generic family implementations preserve native argument widths on every us
   assert.equal(registry.registerImplementation({ family, owner: signed, output: parameter, sourceFileName: "/storage.ts" }), false);
 });
 
+test("type family templates replace equivalent concrete demands without overlapping impls", () => {
+  for (const genericFirst of [false, true]) {
+    const registry = createRustSourceTypeFamilyRegistry();
+    registry.register(family);
+    const owner = type => rustSourceTypeCarrier("/value.ts", "Value", "object", [{ kind: "type", type }]);
+    const make = type => ({ family, owner: owner(type), output: type, sourceFileName: "/value.ts" });
+    const requests = [make(signed), make(parameter)];
+    if (genericFirst) requests.reverse();
+    for (const request of requests) assert.equal(registry.registerImplementation(request), true);
+    assert.equal(registry.implementations().length, 1);
+    assert.deepEqual(registry.implementation(family.trait.id, owner(unsigned)).output, unsigned);
+    assert.equal(registry.registerImplementation({ ...make(unsigned), output: signed }), false);
+    assert.equal(registry.registerImplementation({ ...make(unsigned), sourceFileName: "/different.ts" }), false);
+  }
+});
+
+test("a family rejects blanket and conflicting partially specialized implementations", () => {
+  const registry = createRustSourceTypeFamilyRegistry();
+  registry.register(family);
+  assert.equal(registry.registerImplementation({ family, owner: parameter, output: parameter, sourceFileName: "/storage.ts" }), false);
+  const owner = (left, right) => rustSourceTypeCarrier("/pair.ts", "Pair", "object",
+    [{ kind: "type", type: left }, { kind: "type", type: right }]);
+  assert.equal(registry.registerImplementation({ family, owner: owner(parameter, signed), output: signed, sourceFileName: "/pair.ts" }), true);
+  assert.equal(registry.registerImplementation({ family, owner: owner(unsigned, parameter), output: unsigned, sourceFileName: "/pair.ts" }), false);
+});
+
 test("source trait references require source-owned paths rather than native-path guessing", () => {
   assert.equal(isRustTargetTypeRef(family.trait), true);
   assert.equal(isRustTargetTypeRef({ ...family.trait, path: "other" }), false);
