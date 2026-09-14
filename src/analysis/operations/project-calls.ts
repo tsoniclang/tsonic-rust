@@ -32,6 +32,8 @@ import { rustArgumentPassingKey, rustRuntimeCarrierKey, rustSelectedOperationKey
 import { rustArgumentPassingMode } from "../facts/parameter-passing.js";
 import { rustProjectCallableTargetName } from "../facts/source-member-name.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustTypeFamilyNormalizer } from "../../policy/types/type-family-normalization.js";
+import { realizeRustSelectedTypeFamilies } from "./type-family-applications.js";
 import { finalizeProjectSourceGenericArguments } from "./project-call-generics.js";
 import { instantiateRustSourceParameterValueCarrier } from "../../policy/ownership/source-callable-abi.js";
 import { sourceTypeCarrierForDeclaration } from "./inputs.js";
@@ -68,6 +70,8 @@ export function applySelectedProjectSourceCall(
     return undefined;
   }
   const { substitutions, targetGenericArguments } = genericInstantiation;
+  if (!realizeRustSelectedTypeFamilies(walk, expression, selectedSignature, targetGenericArguments)) return undefined;
+  const normalizeTypeFamily = rustTypeFamilyNormalizer(walk.context.typeFamilies);
   const targetTypeArguments = rustTargetGenericTypeArguments(targetGenericArguments);
   const bindings = selectedSignature.sourceArgumentBindings;
   const selectedParameters = selectedSignature.sourceSelectedSignatureParameters;
@@ -125,6 +129,7 @@ export function applySelectedProjectSourceCall(
       substitutions.types,
       substitutions.lifetimes,
       substitutions.consts,
+      normalizeTypeFamily,
     );
     if (isRustProgramErrorCarrier(parameterCarrier)) {
       const ownerFile = ast.getSourceFile(selectedDeclaration);
@@ -204,6 +209,7 @@ export function applySelectedProjectSourceCall(
         substitutions.types,
         substitutions.lifetimes,
         substitutions.consts,
+        normalizeTypeFamily,
       );
   if (resultCarrier === undefined) {
     return undefined;
@@ -479,6 +485,7 @@ export function applySelectedProjectSourceCall(
         substitutions.types,
         substitutions.lifetimes,
         substitutions.consts,
+        normalizeTypeFamily,
       );
       if (!rustTargetTypeRefEquals(callableResult, resultCarrier)) {
         appendRustDiagnostic(
@@ -499,6 +506,7 @@ export function applySelectedProjectSourceCall(
               substitutions.types,
               substitutions.lifetimes,
               substitutions.consts,
+              normalizeTypeFamily,
             );
         const contractCarrier = parameter.mode === "value"
           ? parameter.parameterCarrier

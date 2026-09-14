@@ -13,6 +13,7 @@ import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagno
 import { diagnosticInput, isValidRustIdentifier } from "../program/plan-context.js";
 import { rustLifetimeToAst } from "../types/lifetime-syntax.js";
 import type { RustPlanContext } from "../program/plan-context.js";
+import { rustDeclarationAssociatedPredicates } from "../types/associated-bounds.js";
 
 export interface RustCallableGenericPlan {
   readonly context: RustPlanContext;
@@ -115,7 +116,7 @@ export function planRustCallableGenerics(
   const sourceTypeParameterNames = Object.freeze(
     ordinaryParameters.map((parameter) => parameter.sourceName),
   );
-  const requirementContract = context.input.program.callableGenericRequirements.contractFor(
+  const requirementContract = context.input.program.declarationGenericRequirements.contractFor(
     declaration,
   );
   if (requirementContract === undefined ||
@@ -177,7 +178,9 @@ export function planRustCallableGenerics(
   });
   const generics: RustGenerics = Object.freeze({
     parameters: Object.freeze(parameters),
-    wherePredicates: Object.freeze([]),
+    wherePredicates: rustDeclarationAssociatedPredicates(declaration, {
+      ...context, typeParameterSubstitutions: substitutions,
+    }),
   });
   return {
     context: {
@@ -206,7 +209,7 @@ export function rustCallableSpecialization(
 
 function mergeTypeBounds(
   parameter: Extract<RustSourceGenericParameterContract, { readonly kind: "type" }>,
-  requirements: readonly import("../../../analysis/callables/generic-requirements.js").RustGenericRequirement[],
+  requirements: readonly import("../../../analysis/declarations/generic-requirements.js").RustGenericRequirement[],
 ): readonly RustTypeBound[] {
   const bounds: RustTypeBound[] = [
     ...parameter.outlives.map((lifetime): RustTypeBound => ({

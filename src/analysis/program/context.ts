@@ -19,6 +19,8 @@ import {
   createRustNamePlan,
 } from "../names/plan.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
+import type { RustSourceTypeFamilyRegistry } from "../../policy/types/type-families.js";
+import { createRustSourceTypeFamilyRegistry } from "../project-types/type-families.js";
 import { createRustClassValueRegistry, type RustClassValueRegistry } from "../objects/class-values.js";
 import {
   createRustPlanBuilder,
@@ -73,6 +75,7 @@ import {
 } from "./generated-declaration-uses.js";
 
 export interface RustAnalysisContext extends RustSourcePolicyContext {
+  readonly typeFamilies: RustSourceTypeFamilyRegistry;
   readonly pointerBacking: TsonicPointerBackingDemands;
   readonly memoryMetadata: TsonicMemoryMetadataIndex;
   readonly target: TargetSelection;
@@ -145,6 +148,7 @@ export function createRustAnalysisContext(
     semanticsFor: input.source.semantics.forNode,
   });
   return Object.freeze({
+    typeFamilies: createRustSourceTypeFamilyRegistry(),
     pointerBacking: createTsonicPointerBackingDemands(input.source),
     pointerReturns: createTsonicPointerReturnQueries(input.source),
     memoryMetadata: createTsonicMemoryMetadataIndex(input.source),

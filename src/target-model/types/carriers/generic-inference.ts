@@ -205,7 +205,8 @@ export function inferRustTargetGenericBindings(
       }
       case "trait-ref": {
         if (right.kind !== "trait-ref" || left.id !== right.id ||
-          left.path !== right.path) return false;
+          left.path !== right.path || left.sourceItem?.fileName !== right.sourceItem?.fileName ||
+          left.sourceItem?.typeName !== right.sourceItem?.typeName) return false;
         const nested = matchBinder(left.lifetimeBinder, right.lifetimeBinder, lifetimeContext);
         return nested !== undefined &&
           matchGenericArguments(

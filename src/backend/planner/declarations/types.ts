@@ -1,4 +1,5 @@
 import { carrierOf } from "./classes.js";
+import { planRustTypeFamilyDeclaration } from "./type-families.js";
 import {
   diagnosticInput,
   isUpperSnakeName,
@@ -195,7 +196,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
     ));
     return undefined;
   }
-  const generics = rustProjectGenerics(definition);
+  const generics = rustProjectGenerics(definition, context);
   const stateType = rustProjectStateType(
     context.input.program.projectTypes.openCarrier(definition),
     context,
@@ -408,6 +409,8 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
 }
 
 export function planTypeAliasDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
+  const family = planRustTypeFamilyDeclaration(node, context);
+  if (family !== undefined) return family;
   const { ast } = context.input.program.source;
   const carrier = context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
   const fact = context.input.program.facts.getFact(node, rustTypeAliasDeclarationFactKey);

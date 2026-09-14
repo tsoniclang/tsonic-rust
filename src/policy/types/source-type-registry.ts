@@ -6,6 +6,7 @@ import type {
   Type,
 } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustSourceTypeFamilyRegistry } from "./type-families.js";
 
 export interface RustSourceEnumVariant {
   readonly name: string;
@@ -70,6 +71,7 @@ export interface RustStructuralInstantiation {
 }
 
 export interface RustSourceTypeRegistry {
+  readonly typeFamilies: RustSourceTypeFamilyRegistry;
   registerSourceFile(sourceFile: SourceFile, ast: AstReader): void;
   registerDeclarationCarrier(declaration: Node, carrier: TargetTypeRef): boolean;
   registerRepresentationAlias(declaration: Node, carrier: TargetTypeRef): boolean;

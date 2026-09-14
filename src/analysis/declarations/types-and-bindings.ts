@@ -30,6 +30,7 @@ import { sourceTypeCarrierForDeclaration } from "../operations/inputs.js";
 import type { Node, SourceFile, Type } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { resolveRustTypeFamilyApplication } from "../../policy/types/resolution/type-families.js";
 
 export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
   const variants = walk.sourceTypes.enumVariantsForDeclaration(declaration);
@@ -67,7 +68,24 @@ export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
   if (sourceType === undefined || typeName.length === 0 || fileName.length === 0) {
     return;
   }
-  if (sourceParameters.length > 0 && !lifetimeBearingAlias && !semantics.types.isUnion(sourceType)) return;
+  if (sourceParameters.length > 0 && !lifetimeBearingAlias) {
+    const arguments_ = sourceParameters.map(parameter => semantics.declarations.declaredType(parameter!));
+    const carriers = genericContract!.parameters.map(parameter => parameter.kind === "type"
+      ? { kind: "type-parameter" as const, name: parameter.targetName } : undefined);
+    const application = arguments_.some(argument => argument === undefined) ? undefined
+      : semantics.types.instantiateAlias(declaration, arguments_ as readonly Type[]);
+    if (application?.kind === "conditional") {
+      const carrier = carriers.some(value => value === undefined) ? undefined
+        : resolveRustTypeFamilyApplication(application, carriers as readonly TargetTypeRef[],
+          rustResolutionContext(walk, declaration), walk.operationOptions, new Set());
+      if (carrier !== undefined) {
+        setCarrierFact(walk, declaration, carrier);
+        walk.context.facts.set(declaration, rustTypeAliasDeclarationFactKey,
+          { kind: "erased" }, [{ message: "Rust checked conditional type family declaration" }]);
+      }
+      return;
+    }
+  }
   if (!semantics.types.isUnion(sourceType)) {
     const typeNode = Node_Type(ast, declaration);
     const carrier = resolveRustTargetTypeRef(

@@ -15,7 +15,7 @@ import type {
 } from "./model.js";
 import { createRustModuleInitializationPlan } from "./module-initialization-facts.js";
 import { analyzeRustProviderErrorCarriers } from "./provider-errors.js";
-import { analyzeRustCallableGenericRequirements } from "../callables/generic-requirements.js";
+import { analyzeRustDeclarationGenericRequirements } from "../declarations/generic-requirements.js";
 import { analyzeRustValueLifetimes } from "./value-lifetimes.js";
 import {
   analyzeRustBinaryHooks,
@@ -112,15 +112,17 @@ export function analyzeRustTargetProgram(
     return rejectedTargetStage(foundation.diagnostics);
   }
   const facts = context.facts.seal();
-  const callableGenericRequirements = analyzeRustCallableGenericRequirements(
+  const declarationGenericRequirements = analyzeRustDeclarationGenericRequirements(
     context.source,
     context.sourceFiles,
     facts,
     context.names,
     context.sourceLifetimes,
+    context.typeFamilies,
+    context.projectTypes,
   );
-  if (callableGenericRequirements.kind === "rejected") {
-    return rejectedTargetStage(callableGenericRequirements.diagnostics);
+  if (declarationGenericRequirements.kind === "rejected") {
+    return rejectedTargetStage(declarationGenericRequirements.diagnostics);
   }
   const sourceModuleConstructions = analyzeRustSourceModuleConstructions({
     source: context.source,
@@ -149,6 +151,7 @@ export function analyzeRustTargetProgram(
     sourceNavigation: snapshotTargetPlanningSourceNavigation(context.source),
     sourceFiles: context.sourceFiles,
     facts,
+    typeFamilies: context.typeFamilies.seal(),
     projectTypes: context.projectTypes.seal(),
     objectRepresentations,
     projectMethodDispatch: context.projectMethodDispatch.seal(),
@@ -156,7 +159,7 @@ export function analyzeRustTargetProgram(
     projectFieldDispatch: context.projectFieldDispatch.seal(),
     sourceCallableSpecializations: context.sourceCallableSpecializations.seal(),
     sourceLifetimes: context.sourceLifetimes,
-    callableGenericRequirements: callableGenericRequirements.index,
+    declarationGenericRequirements: declarationGenericRequirements.index,
     valueLifetimes: analyzeRustValueLifetimes({
       ast: context.ast,
       sourceFiles: context.sourceFiles,

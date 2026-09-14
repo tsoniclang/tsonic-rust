@@ -119,7 +119,7 @@ export function planPolymorphicClassDeclaration(
     return undefined;
   }
   context.usedAliases?.add("rt");
-  const generics = rustProjectRepresentationGenerics(representation);
+  const generics = rustProjectRepresentationGenerics(representation, context);
   const stateMarker = rustProjectStateMarker(definition, context);
   const programErrorVariant = context.input.program.projectTypes.programErrorVariant(definition);
   const publiclyReachable = programErrorVariant !== undefined ||
@@ -337,7 +337,7 @@ function planProjectExternalErrorImplementations(
   const self = { kind: "path" as const, path: "self" };
   return [{
     kind: "impl",
-    generics: rustProjectRepresentationGenerics(representation),
+    generics: rustProjectRepresentationGenerics(representation, context),
     trait: { kind: "named", path: "core::fmt::Display" },
     target: wrapperType,
     functions: [{
@@ -375,7 +375,7 @@ function planProjectExternalErrorImplementations(
     }],
   }, {
     kind: "impl",
-    generics: rustProjectRepresentationGenerics(representation),
+    generics: rustProjectRepresentationGenerics(representation, context),
     trait: { kind: "named", path: "rt::ToSourceString" },
     target: wrapperType,
     functions: [{
@@ -418,7 +418,7 @@ export function planPolymorphicInterfaceDeclaration(
     return undefined;
   }
   context.usedAliases?.add("rt");
-  const generics = rustProjectRepresentationGenerics(representation);
+  const generics = rustProjectRepresentationGenerics(representation, context);
   const exported = context.input.program.source.ast.hasModifierKind(declaration, "export");
   const publiclyReachable = rustProjectTypeHasPublicImplementationAbi(
     context,

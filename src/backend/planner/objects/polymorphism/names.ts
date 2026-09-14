@@ -18,6 +18,7 @@ import { sourceModuleItemPath } from "../../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { rustLifetimesEqual } from "../../../../target-model/lifetimes/index.js";
 import type { RustLifetimeRef } from "../../../../target-model/lifetimes/index.js";
+import { rustDeclarationAssociatedPredicates } from "../../types/associated-bounds.js";
 
 export function rustProjectDispatchTraitName(
   definition: RustProjectTypeDefinition,
@@ -36,24 +37,28 @@ export function rustProjectRootName(
 
 export function rustProjectGenerics(
   definition: RustProjectTypeDefinition,
+  context: RustPlanContext,
 ): RustGenerics {
-  return rustProjectGenericsWithTypeOutlives(definition, []);
+  return rustProjectGenericsWithTypeOutlives(definition, [], context);
 }
 
 export function rustProjectRepresentationGenerics(
   representation: RustObjectRepresentation,
+  context: RustPlanContext,
 ): RustGenerics {
   return rustProjectGenericsWithTypeOutlives(
     representation.definition,
     representation.dispatchObjectLifetime === undefined
       ? []
       : [representation.dispatchObjectLifetime],
+    context,
   );
 }
 
 function rustProjectGenericsWithTypeOutlives(
   definition: RustProjectTypeDefinition,
   requiredTypeOutlives: readonly RustLifetimeRef[],
+  context: RustPlanContext,
 ): RustGenerics {
   const parameters = definition.genericParameters.map((parameter): RustGenericParameter =>
     parameter.kind === "lifetime"
@@ -69,7 +74,7 @@ function rustProjectGenericsWithTypeOutlives(
         });
   return Object.freeze({
     parameters: Object.freeze(parameters),
-    wherePredicates: Object.freeze([]),
+    wherePredicates: rustDeclarationAssociatedPredicates(definition.declaration, context),
   });
 }
 

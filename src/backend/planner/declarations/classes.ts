@@ -142,7 +142,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     ));
     return undefined;
   }
-  const generics = rustProjectGenerics(definition);
+  const generics = rustProjectGenerics(definition, context);
   const stateMarker = rustProjectStateMarker(definition, context);
 
   const layout = rustProjectObjectLayout(node, ast);

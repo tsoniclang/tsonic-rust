@@ -8,7 +8,7 @@ import type { TargetStageResult } from "@tsonic/target-api/artifacts";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 import type { RustSourceCallableSpecializationPlan } from "../callables/specializations.js";
-import type { RustCallableGenericRequirementIndex } from "../callables/generic-requirements.js";
+import type { RustDeclarationGenericRequirementIndex } from "../declarations/generic-requirements.js";
 import type { RustProjectFieldDispatchQueries } from "../project-types/field-dispatch.js";
 import type { RustProjectMethodDispatchPlan } from "../project-types/method-dispatch.js";
 import type { RustProjectMethodPropertyPlan } from "../project-types/method-properties.js";
@@ -41,6 +41,7 @@ import type { RustSourceModuleConstructionIndex } from "../source-modules/index.
 import type { RustFoundationPlan } from "../foundation/plan.js";
 import type { RustProjectFlowReadSelectionIndex } from "../control-flow/project-flow-read-selections.js";
 import type { RustGeneratedDeclarationUse } from "./generated-declaration-uses.js";
+import type { RustSourceTypeFamilyPlan } from "../../policy/types/type-families.js";
 
 export interface RustTargetAnalysisRequest {
   readonly input: TargetCompileInput;
@@ -57,6 +58,7 @@ export interface RustPlanningHost {
 }
 
 export interface RustTargetProgram {
+  readonly typeFamilies: RustSourceTypeFamilyPlan;
   readonly host: RustPlanningHost;
   readonly configuration: RustTargetConfiguration;
   readonly source: TargetSourceSyntaxProgram;
@@ -70,7 +72,7 @@ export interface RustTargetProgram {
   readonly projectFieldDispatch: RustProjectFieldDispatchQueries;
   readonly sourceCallableSpecializations: RustSourceCallableSpecializationPlan;
   readonly sourceLifetimes: RustLifetimeIndex;
-  readonly callableGenericRequirements: RustCallableGenericRequirementIndex;
+  readonly declarationGenericRequirements: RustDeclarationGenericRequirementIndex;
   readonly valueLifetimes: RustValueLifetimePlan;
   readonly structuralShapes: RustStructuralShapePlan;
   readonly classValues: import("../objects/class-values.js").RustClassValuePlan;

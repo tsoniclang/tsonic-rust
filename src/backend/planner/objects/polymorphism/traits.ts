@@ -34,7 +34,7 @@ export function projectIdentityImplementations(
   wrapperType: RustType,
   representation: RustObjectRepresentation,
 ): readonly RustItem[] {
-  const generics = rustProjectRepresentationGenerics(representation);
+  const generics = rustProjectRepresentationGenerics(representation, context);
   return [
     {
       kind: "impl",
@@ -337,7 +337,7 @@ export function planProjectDispatchTrait(
   if (superTraits.some((type) => type === undefined)) {
     return undefined;
   }
-  const generics = rustProjectRepresentationGenerics(representation);
+  const generics = rustProjectRepresentationGenerics(representation, context);
   const visibility = rustProjectImplementationVisibility(publiclyReachable);
   const deadCode = rustAuthoredDeadCodeDisposition(context, definition.declaration);
   return {

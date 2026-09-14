@@ -276,7 +276,7 @@ export function planRustMutableProjectReceiver(
 function rustReadRequiresClone(carrier: TargetTypeRef | undefined, context: RustPlanContext): boolean {
   return carrier !== undefined && !isRustCopyCarrier(carrier) &&
     (rustCarrierSupportsClone(carrier) || context.callableDeclaration !== undefined &&
-      context.input.program.callableGenericRequirements.supportsClone(context.callableDeclaration, carrier));
+      context.input.program.declarationGenericRequirements.supportsClone(context.callableDeclaration, carrier));
 }
 
 export function rustLocationStorageForReference(

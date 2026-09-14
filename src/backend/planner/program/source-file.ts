@@ -73,6 +73,7 @@ import {
 } from "../project/module-storage.js";
 import { planRustClassInitialization } from "../declarations/class-static-fields.js";
 import { planProjectStaticFunctionItems } from "../declarations/methods.js";
+import { planRustTypeFamilyImplementations } from "../declarations/type-families.js";
 import { createRustObjectLiteralImplementationRegistry } from "../objects/object-literal-implementations.js";
 import { planRustSourceCallableValue } from "../expressions/source-callable-value.js";
 import { rustModuleInitializerFunctionName } from "./source-package-initializers.js";
@@ -135,7 +136,9 @@ export function planRustSourceFile(
     usedAliases,
     planBlock: planBlockLike,
   };
-  const plannedModule = planModuleItems(context);
+  const baseModule = planModuleItems(context);
+  const plannedModule = { ...baseModule,
+    items: [...baseModule.items, ...planRustTypeFamilyImplementations(context)] };
   const initializationRequirement = input.program.moduleInitialization.requirementFor(sourceFile);
   if (initializationRequirement.kind === "unresolved") {
     diagnostics.push(unsupportedConstructDiagnostic(

@@ -7,6 +7,7 @@ import {
 import { resolveOwnedSourceProfileTypeNameForDeclaration } from "./providers.js";
 import { resolveRustTargetType } from "./target.js";
 import { resolveRustTargetTypeSyntax } from "./source.js";
+import { resolveRustConditionalAlias } from "./type-families.js";
 import { resolveRustTypeComponentEvidence } from "./source-evidence.js";
 import { rustSliceMutRefTargetType, rustSliceRefTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -96,6 +97,8 @@ export function resolveRustAuthoredTargetType(
   options: RustTargetTypeResolutionOptions,
   resolving: Set<object>,
 ): TargetTypeRef | undefined {
+  const conditional = resolveRustConditionalAlias(node, context, options, resolving);
+  if (conditional !== undefined) return conditional.carrier;
   const syntax = resolveRustTargetTypeSyntax(node, context, options, resolving);
   if (syntax !== undefined) return syntax;
   const sourceFile = context.ast.getSourceFile(node);

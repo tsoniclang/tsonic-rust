@@ -56,6 +56,7 @@ import {
 } from "./source-evidence.js";
 import { resolveRustAuthoredBroadSourceValueTargetType } from "./broad-values.js";
 import { resolveRustInferredClassUnion } from "./inferred-unions.js";
+import { resolveRustConditionalAlias } from "./type-families.js";
 
 export function resolveRustTargetTypeRef(
   subject: ExtensionFactSubject | undefined,
@@ -127,6 +128,9 @@ export function resolveRustTargetTypeRef(
     const carrier = resolveRustAuthoredTargetType(parameterType, context, options, new Set<object>());
     return rustParameterLaneTargetType(carrier, parameterType, context, options);
   }
+  const conditional = node === undefined ? undefined
+    : resolveRustConditionalAlias(node, context, options, new Set<object>());
+  if (conditional !== undefined) return conditional.carrier;
   const syntax = node === undefined
     ? undefined
     : resolveRustTargetTypeSyntax(node, context, options, new Set<object>());

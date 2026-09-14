@@ -31,6 +31,10 @@ export interface RustTargetTraitRef {
   readonly kind: "trait-ref";
   readonly id: string;
   readonly path: string;
+  readonly sourceItem?: {
+    readonly fileName: string;
+    readonly typeName: string;
+  };
   readonly genericArguments: readonly RustTargetGenericArgument[];
   readonly associatedConstraints: readonly RustTargetAssociatedConstraint[];
   readonly lifetimeBinder?: RustLifetimeBinder;

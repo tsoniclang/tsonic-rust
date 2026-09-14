@@ -54,6 +54,10 @@ export function rustTypeFromCarrier(
   if (carrier === undefined) {
     return undefined;
   }
+  if (carrier.kind === "trait-ref") {
+    const reference = rustTraitReferenceFromCarrier(carrier, resolveSourceTypePath, resolveStructuralShape);
+    return (reference?.binder?.length ?? 0) === 0 ? reference?.trait : undefined;
+  }
   if (isRustNeverCarrier(carrier)) {
     return undefined;
   }
@@ -346,6 +350,8 @@ function rustTraitReferenceFromCarrier(
   resolveStructuralShape?: (carrier: TargetTypeRef) => RustType | undefined,
 ): RustTraitReference | undefined {
   if (carrier.kind !== "trait-ref") return undefined;
+  const path = carrier.sourceItem === undefined ? carrier.path : resolveSourceTypePath?.(carrier.sourceItem);
+  if (path === undefined) return undefined;
   const genericArguments = rustGenericArgumentsFromCarrier(
     carrier.genericArguments,
     resolveSourceTypePath,
@@ -402,7 +408,7 @@ function rustTraitReferenceFromCarrier(
     : {
         trait: {
           kind: "named",
-          path: carrier.path,
+          path,
           ...(
             genericArguments.length === 0 && associatedConstraints.length === 0
               ? {}

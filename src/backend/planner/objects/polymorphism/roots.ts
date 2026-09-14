@@ -48,7 +48,7 @@ export function planProjectRootImplementations(
     return undefined;
   }
   const items: RustItem[] = [];
-  const generics = rustProjectRepresentationGenerics(representation);
+  const generics = rustProjectRepresentationGenerics(representation, context);
   const methodImplementations = new Map<Node, RustImplFunction[]>();
   const accessorImplementations = new Map<Node, RustImplFunction>();
   const implementationFor = (

@@ -34,6 +34,7 @@ import { rustMemoryMetadataKey } from "../../target-model/operations/memory-layo
 import { recordRustNativeBacking } from "../operations/native-memory.js";
 import { collectRustThrownClassDeclarations } from "../resources/thrown-values.js";
 import { rustSourceTypeDeclarations } from "../../policy/types/source-declarations.js";
+import { realizeRustSourceTypeFamilyDemands } from "../project-types/type-family-demands.js";
 
 export function analyzeRustProgram(context: RustAnalysisContext): void {
   const { ast } = context;
@@ -51,7 +52,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     ast,
     jsEnabled,
   );
-  const sourceTypes = createRustSourceTypeRegistry();
+  const sourceTypes = createRustSourceTypeRegistry(context.typeFamilies);
   const sourceCallableAbi = createRustSourceCallableAbiResolver();
   const projectSourceFiles = [...context.sourceFiles]
     .sort((left, right) => ast.getFileName(left).localeCompare(ast.getFileName(right)));
@@ -334,6 +335,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
       ["target.capability=rust.object-literal-method.exact-adapter"],
     );
   }
+  realizeRustSourceTypeFamilyDemands(walk, projectSourceFiles);
   const structuralObjects = sourceTypes.structuralObjects();
   const sourcePackageComponentByFile = new Map(context.sourcePackages.packages.flatMap((entry) =>
     entry.sourceFiles.map((fileName) => [fileName, entry.componentId] as const)));

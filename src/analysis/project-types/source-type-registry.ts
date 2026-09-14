@@ -7,6 +7,8 @@ import type {
 import { rustSourceDeclarationTypeName, rustSourceTypeDeclarations } from "../../policy/types/source-declarations.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { createRustSourceTypeFamilyRegistry } from "./type-families.js";
+import type { RustSourceTypeFamilyRegistry } from "../../policy/types/type-families.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { inferRustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
@@ -45,7 +47,9 @@ export type {
   RustStructuralFieldRegistration,
 } from "../../policy/types/source-type-registry.js";
 
-export function createRustSourceTypeRegistry(): RustSourceTypeRegistry {
+export function createRustSourceTypeRegistry(
+  typeFamilies: RustSourceTypeFamilyRegistry = createRustSourceTypeFamilyRegistry(),
+): RustSourceTypeRegistry {
   const declarations = new Map<string, Node>();
   const carriersByDeclaration = new WeakMap<Node, TargetTypeRef>();
   const variantsByDeclaration = new Map<Node, readonly RustSourceEnumVariant[]>();
@@ -104,6 +108,7 @@ export function createRustSourceTypeRegistry(): RustSourceTypeRegistry {
   };
 
   return {
+    typeFamilies,
     registerSourceFile(sourceFile, ast) {
       const fileName = ast.getFileName(sourceFile);
       if (fileName.length === 0 || ast.isDeclarationFile(sourceFile)) {
