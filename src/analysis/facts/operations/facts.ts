@@ -235,7 +235,7 @@ export type RustTargetOperationFact =
       readonly operationId: string;
       readonly receiverCarrier: TargetTypeRef;
       readonly resultCarrier: TargetTypeRef;
-      readonly property: "message" | "name";
+      readonly property: "message" | "name" | "stack";
     }
   | {
       readonly kind: "source-field";

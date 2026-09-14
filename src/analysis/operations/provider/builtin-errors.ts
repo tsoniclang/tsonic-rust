@@ -7,6 +7,7 @@ import { rustSourceErrorConstructors } from "../../../target-model/identities/so
 import {
   isRustJsValueCarrier,
   rustJsErrorTargetType,
+  rustOptionTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
 } from "../../../target-model/types/index.js";
@@ -84,7 +85,7 @@ export function selectRustBuiltinErrorProperty(
       "Builtin Error mutation requires shared writable Error storage; native diagnostic fields cannot preserve that aliasing contract.",
     );
   }
-  if (member.memberName !== "message" && member.memberName !== "name") {
+  if (member.memberName !== "message" && member.memberName !== "name" && member.memberName !== "stack") {
     return rejectSelectedOperation(
       request.expression, context, "RUST_BUILTIN_ERROR_PROPERTY_UNSUPPORTED",
       "The selected builtin Error member has no exact native runtime property contract.",
@@ -94,7 +95,9 @@ export function selectRustBuiltinErrorProperty(
     kind: "builtin-error-property",
     operationId: `tsonic.rust.error.property.${member.memberName}`,
     receiverCarrier: rustJsErrorTargetType(),
-    resultCarrier: rustStringTargetType(),
+    resultCarrier: member.memberName === "stack"
+      ? rustOptionTargetType(rustStringTargetType())
+      : rustStringTargetType(),
     property: member.memberName,
   }, context, options, {
     sourceExpression: request.expression,

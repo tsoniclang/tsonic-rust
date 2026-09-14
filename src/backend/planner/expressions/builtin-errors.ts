@@ -5,6 +5,7 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import {
   isRustJsValueCarrier,
   rustJsErrorTargetType,
+  rustOptionTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
 } from "../../../target-model/types/index.js";
@@ -64,9 +65,12 @@ export function planRustBuiltinErrorProperty(
 ): RustExpr | undefined {
   const receiverNode = Node_Expression(context.input.program.source.ast, node);
   const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
+  const resultCarrier = fact.property === "stack"
+    ? rustOptionTargetType(rustStringTargetType())
+    : rustStringTargetType();
   if (receiverNode === undefined || receiver === undefined ||
     !rustTargetTypeRefEquals(fact.receiverCarrier, rustJsErrorTargetType()) ||
-    !rustTargetTypeRefEquals(fact.resultCarrier, rustStringTargetType()) ||
+    !rustTargetTypeRefEquals(fact.resultCarrier, resultCarrier) ||
     !rustTargetTypeRefEquals(effectivePlannedExpressionCarrier(receiverNode, context), fact.receiverCarrier) ||
     !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.builtin-error-property-carrier") ||
     !selectedOperationMatches(
@@ -78,6 +82,14 @@ export function planRustBuiltinErrorProperty(
       "Builtin Error property reading conflicts with its finalized member or exact native carriers.",
     ));
     return undefined;
+  }
+  if (fact.property === "stack") {
+    return {
+      kind: "method-call",
+      receiver: planRustNonConsumingValue(receiverNode, receiver, context),
+      method: "stack",
+      args: [],
+    };
   }
   return {
     kind: "method-call",

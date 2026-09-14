@@ -106,20 +106,43 @@ export function main(): void {
   assert.equal(validateGeneratedProject("project-error-identity", result.artifacts, { run: true }).status, 0);
 });
 
-test("builtin Error stack is not fabricated from a native diagnostic", () => {
-  const { result } = compileRust({
-    surfaces: ["js"],
-    files: { "index.ts": `export function stack(error: Error): string | undefined { return error.stack; }` },
+for (const surfaces of [[], ["js"]]) {
+  test(`builtin Error exposes its optional creation stack in the ${surfaces.length === 0 ? "native" : "JS"} profile`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({
+      surfaces,
+      packages: [acmeTestingPackage()],
+      target: { id: "rust", options: { outputType: "bin", crateName: "error_creation_stack" } },
+      files: { "index.ts": `
+import { check } from "@acme/testing";
+function create(): Error { return new Error("failure 😀"); }
+function read(error: Error): string | undefined { return error.stack; }
+export function main(): void {
+  const error = create();
+  const alias = error;
+  const first = read(alias);
+  check(first !== undefined);
+  if (first !== undefined) {
+    check(first.startsWith("Error: failure 😀\\n"));
+    check(first.length > "Error: failure 😀\\n".length);
+  }
+  check(read(error) === first);
+  check(error === alias);
+}
+` },
+    });
+    assert.deepEqual(result.diagnostics, []);
+    const source = artifactText(result, "src/index.rs");
+    assert.match(source, /Option<String>/u);
+    assert.match(source, /\.stack\(\)/u);
+    assert.equal(validateGeneratedProject(`error-creation-stack-${surfaces.length}`, result.artifacts, { run: true }).status, 0);
   });
-  assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.some(({ code }) => code === "RUST_BUILTIN_ERROR_PROPERTY_UNSUPPORTED"),
-    JSON.stringify(result.diagnostics));
-});
+}
 
 for (const [name, source] of [
   ["direct", `export function change(error: Error): void { error.message = "changed"; }`],
   ["alias", `export function change(error: Error): void { const alias = error; alias.name = "changed"; }`],
   ["narrowed", `export function change(error: unknown): void { if (error instanceof Error) error.message = "changed"; }`],
+  ["stack", `export function change(error: Error): void { error.stack = "changed"; }`],
 ]) {
   test(`builtin Error ${name} mutation rejects rather than mutating a detached diagnostic clone`, () => {
     const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": source } });
