@@ -1,16 +1,13 @@
-// Writes generated artifacts into .temp/generated/<name> and validates them
-// with the real cargo toolchain.
 import { spawnSync } from "node:child_process";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { repositoryRoot } from "./rust-session.mjs";
 
 const generatedRoot = resolve(repositoryRoot, ".temp/generated");
 
 export function writeGeneratedProject(name, artifacts) {
-  const projectRoot = join(generatedRoot, name);
-  rmSync(projectRoot, { recursive: true, force: true });
-  mkdirSync(projectRoot, { recursive: true });
+  mkdirSync(generatedRoot, { recursive: true });
+  const projectRoot = mkdtempSync(join(generatedRoot, `${name}-`));
   for (const artifact of artifacts) {
     const filePath = join(projectRoot, artifact.path);
     mkdirSync(dirname(filePath), { recursive: true });
