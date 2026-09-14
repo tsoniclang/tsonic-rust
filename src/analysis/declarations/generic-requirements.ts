@@ -7,6 +7,9 @@ import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
 import { substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustTargetTypeParameterNames } from "../../target-model/types/carriers/generic-references.js";
+import { analyzeRustShapeGenericRequirements, type RustShapeGenericRequirementContract } from "./generic-shape-requirements.js";
+import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";
+import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import {
   resolveTargetContractFixedPoint,
 } from "@tsonic/target-api/analysis";
@@ -62,6 +65,7 @@ export interface RustDeclarationGenericRequirementContract {
 
 export interface RustDeclarationGenericRequirementIndex {
   contractFor(declaration: Node): RustDeclarationGenericRequirementContract | undefined;
+  contractForCarrier(carrier: TargetTypeRef): RustShapeGenericRequirementContract | undefined;
   supportsClone(declaration: Node, carrier: TargetTypeRef): boolean;
   hasUse(
     declaration: Node,
@@ -107,6 +111,7 @@ export function analyzeRustDeclarationGenericRequirements(
   sourceLifetimes: RustLifetimeIndex,
   typeFamilies: RustSourceTypeFamilyRegistry,
   projectTypes: RustProjectTypePolicy,
+  shapes: RustStructuralShapePlan,
 ): AnalyzeRustDeclarationGenericRequirementsResult {
   const ast = source.ast;
   const diagnostics: TargetDiagnostic[] = [];
@@ -217,6 +222,7 @@ export function analyzeRustDeclarationGenericRequirements(
     contractFor(declaration: Node) {
       return contractByDeclaration.get(declaration);
     },
+    contractForCarrier(carrier: TargetTypeRef) { return shapeContracts.get(closedMetadataKey(carrier)); },
     supportsClone(declaration: Node, carrier: TargetTypeRef) {
       const contract = contractByDeclaration.get(declaration);
       if (contract === undefined) return false;
@@ -240,6 +246,15 @@ export function analyzeRustDeclarationGenericRequirements(
           stringListsEqual(use.requirements, normalized));
     },
   });
+  const shapeContracts = new Map<string, RustShapeGenericRequirementContract>();
+  for (const carrier of [...shapes.definitions.map(definition => definition.carrier),
+    ...shapes.unionDefinitions.flatMap(definition => definition.sourceCarriers)]) {
+    const contract = analyzeRustShapeGenericRequirements(carrier, projectTypes, typeFamilies, index.contractFor);
+    if (contract === undefined) return { kind: "rejected", diagnostics: Object.freeze([diagnostic(
+      "RUST_SHAPE_GENERIC_CONTRACT_NOT_PROVEN", "A structural source carrier has no exact generic or associated-output requirements.",
+    )]) };
+    shapeContracts.set(closedMetadataKey(carrier), contract);
+  }
   return { kind: "resolved", index };
 }
 
@@ -264,7 +279,9 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
     }
   | { readonly kind: "rejected"; readonly reason: string } {
   const { ast, declaration, facts, names } = input;
-  const typeParameterNodes = ast.typeParameters(declaration).filter(
+  const definition = input.projectTypes.definitionForDeclaration(declaration);
+  const typeParameterNodes = (definition === undefined ? ast.typeParameters(declaration)
+    : definition.genericParameters.map(parameter => parameter.declaration)).filter(
     (candidate): candidate is Node => candidate !== undefined &&
       input.sourceLifetimes.parameterFor(candidate)?.kind !== "lifetime",
   );
@@ -290,6 +307,7 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
   const declared = new Set([...exactNames, ...capturedNames]);
   const byParameter = new Map([...declared].map((name) =>
     [name, new Set<RustGenericRequirement>()] as const));
+  if (definition !== undefined) for (const name of exactNames) byParameter.get(name)!.add("clone");
   const uses: RequirementUse[] = [];
   const dependencies = new Set<string>();
   const associated = createRustAssociatedRequirementCollector(declared, input.typeFamilies,

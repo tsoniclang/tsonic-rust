@@ -14,6 +14,7 @@ import { diagnosticInput, isValidRustIdentifier } from "../program/plan-context.
 import { rustLifetimeToAst } from "../types/lifetime-syntax.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustDeclarationAssociatedPredicates } from "../types/associated-bounds.js";
+import { rustTypeParameterBounds } from "../types/generic-bounds.js";
 
 export interface RustCallableGenericPlan {
   readonly context: RustPlanContext;
@@ -173,7 +174,7 @@ export function planRustCallableGenerics(
     return Object.freeze([{
       kind: "type" as const,
       name: parameter.targetName,
-      bounds: mergeTypeBounds(parameter, requirements),
+      bounds: rustTypeParameterBounds(parameter, requirements),
     }]);
   });
   const generics: RustGenerics = Object.freeze({
@@ -205,38 +206,4 @@ export function rustCallableSpecialization(
   }
   return new Map(sourceTypeParameterNames.map((name, index) =>
     [name, targetTypeArguments[index]!] as const));
-}
-
-function mergeTypeBounds(
-  parameter: Extract<RustSourceGenericParameterContract, { readonly kind: "type" }>,
-  requirements: readonly import("../../../analysis/declarations/generic-requirements.js").RustGenericRequirement[],
-): readonly RustTypeBound[] {
-  const bounds: RustTypeBound[] = [
-    ...parameter.outlives.map((lifetime): RustTypeBound => ({
-      kind: "lifetime",
-      lifetime: rustLifetimeToAst(lifetime),
-    })),
-    ...(parameter.maybeSized ? [{ kind: "maybe-sized" as const }] : []),
-  ];
-  for (const requirement of requirements) {
-    const candidate: RustTypeBound = requirement === "static"
-      ? { kind: "lifetime", lifetime: { kind: "static" } }
-      : {
-          kind: "trait",
-          path: requirement === "clone" ? "Clone" : requirement === "default" ? "Default" : "js_abi::SourceNumeric",
-        };
-    if (!bounds.some((bound) => typeBoundsEqual(bound, candidate))) bounds.push(candidate);
-  }
-  return Object.freeze(bounds);
-}
-
-function typeBoundsEqual(left: RustTypeBound, right: RustTypeBound): boolean {
-  if (left.kind !== right.kind) return false;
-  if (left.kind === "trait" && right.kind === "trait") return left.path === right.path;
-  if (left.kind === "lifetime" && right.kind === "lifetime") {
-    return left.lifetime.kind === right.lifetime.kind &&
-      (left.lifetime.kind !== "named" ||
-        right.lifetime.kind === "named" && left.lifetime.name === right.lifetime.name);
-  }
-  return left.kind === "maybe-sized" && right.kind === "maybe-sized";
 }

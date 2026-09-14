@@ -34,6 +34,8 @@ import {
 } from "../../../target-model/types/index.js";
 import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
 import { rustLifetimeToAst } from "../types/lifetime-syntax.js";
+import { rustAssociatedPredicates } from "../types/associated-bounds.js";
+import { rustGenericRequirementBounds } from "../types/generic-bounds.js";
 
 export function planRustStructuralShapeModule(
   input: RustPlanningContext,
@@ -92,6 +94,8 @@ export function planRustStructuralShapeModule(
       definition.sourceCarriers,
       visibility === "public",
     );
+    const requirements = input.program.declarationGenericRequirements.contractForCarrier(definition.carrier);
+    if (requirements === undefined) throw new Error("A structural shape has no sealed generic requirements.");
     const genericParameters: readonly RustGenericParameter[] = definition.genericParameters.map((parameter) =>
       parameter.kind === "lifetime"
         ? {
@@ -102,11 +106,11 @@ export function planRustStructuralShapeModule(
         : {
             kind: "type",
             name: parameter.name,
-            bounds: [],
+            bounds: rustGenericRequirementBounds(requirements.typeParameters.find(candidate => candidate.name === parameter.name)!.requirements),
           });
     const generics: RustGenerics = {
       parameters: genericParameters,
-      wherePredicates: [],
+      wherePredicates: rustAssociatedPredicates(requirements.associatedTypes, context),
     };
     const aliasGenericArguments: readonly RustGenericArgument[] = definition.genericParameters.map((parameter) =>
       parameter.kind === "lifetime"

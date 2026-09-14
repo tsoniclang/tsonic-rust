@@ -16,9 +16,9 @@ import { rustLifetimeToAst } from "../../types/lifetime-syntax.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { sourceModuleItemPath } from "../../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
-import { rustLifetimesEqual } from "../../../../target-model/lifetimes/index.js";
 import type { RustLifetimeRef } from "../../../../target-model/lifetimes/index.js";
 import { rustDeclarationAssociatedPredicates } from "../../types/associated-bounds.js";
+import { rustTypeParameterBounds } from "../../types/generic-bounds.js";
 
 export function rustProjectDispatchTraitName(
   definition: RustProjectTypeDefinition,
@@ -60,6 +60,13 @@ function rustProjectGenericsWithTypeOutlives(
   requiredTypeOutlives: readonly RustLifetimeRef[],
   context: RustPlanContext,
 ): RustGenerics {
+  const contract = context.input.program.declarationGenericRequirements.contractFor(definition.declaration);
+  if (contract === undefined) throw new Error("A source class has no sealed generic requirement contract.");
+  const boundsFor = (parameter: Extract<RustProjectTypeDefinition["genericParameters"][number], { readonly kind: "type" }>): readonly RustTypeBound[] => {
+    const selected = contract.typeParameters.find(candidate => candidate.name === parameter.targetName);
+    if (selected === undefined) throw new Error("A source class generic parameter lost its selected requirements.");
+    return rustTypeParameterBounds(parameter, selected.requirements, requiredTypeOutlives);
+  };
   const parameters = definition.genericParameters.map((parameter): RustGenericParameter =>
     parameter.kind === "lifetime"
       ? {
@@ -70,7 +77,7 @@ function rustProjectGenericsWithTypeOutlives(
       : {
           kind: "type",
           name: parameter.targetName,
-          bounds: projectTypeBounds(parameter, requiredTypeOutlives),
+          bounds: boundsFor(parameter),
         });
   return Object.freeze({
     parameters: Object.freeze(parameters),
@@ -78,27 +85,6 @@ function rustProjectGenericsWithTypeOutlives(
   });
 }
 
-function projectTypeBounds(
-  parameter: Extract<
-    RustProjectTypeDefinition["genericParameters"][number],
-    { readonly kind: "type" }
-  >,
-  requiredOutlives: readonly RustLifetimeRef[],
-): readonly RustTypeBound[] {
-  const outlives = [
-    ...parameter.outlives,
-    ...requiredOutlives.filter((required) =>
-      !parameter.outlives.some((existing) => rustLifetimesEqual(existing, required))),
-  ];
-  return Object.freeze([
-    { kind: "trait", path: "Clone" },
-    ...outlives.map((lifetime): RustTypeBound => ({
-      kind: "lifetime",
-      lifetime: rustLifetimeToAst(lifetime),
-    })),
-    ...(parameter.maybeSized ? [{ kind: "maybe-sized" as const }] : []),
-  ]);
-}
 
 export function rustProjectDispatchObjectType(
   carrier: TargetTypeRef,

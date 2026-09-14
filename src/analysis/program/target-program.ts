@@ -120,6 +120,7 @@ export function analyzeRustTargetProgram(
     context.sourceLifetimes,
     context.typeFamilies,
     context.projectTypes,
+    context.structuralShapes,
   );
   if (declarationGenericRequirements.kind === "rejected") {
     return rejectedTargetStage(declarationGenericRequirements.diagnostics);

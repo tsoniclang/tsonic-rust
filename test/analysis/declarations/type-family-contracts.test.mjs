@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustSourceTypeFamilyRegistry } from "../../../dist/analysis/project-types/type-families.js";
 import { createRustAssociatedRequirementCollector } from "../../../dist/analysis/declarations/associated-requirements.js";
+import { analyzeRustShapeGenericRequirements } from "../../../dist/analysis/declarations/generic-shape-requirements.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustCarrierSupportsTrait } from "../../../dist/target-model/types/carriers/traits.js";
 import { rustSourceTypeCarrier } from "../../../dist/target-model/types/carriers/source-types.js";
@@ -92,4 +93,27 @@ test("normalization uses proved implementations and rejects recursive output equ
   const closed = { ...projection, owner: signed };
   registry.registerImplementation({ family, owner: signed, output: closed, sourceFileName: "/storage.ts" });
   assert.throws(() => mapRustTargetTypes(closed, normalizer), /recursive native output equation/u);
+});
+
+test("structural shapes retain the independent requirements of nested generic records", () => {
+  const registry = createRustSourceTypeFamilyRegistry();
+  registry.register(family);
+  const declaration = {};
+  const record = rustSourceTypeCarrier("/holder.ts", "Holder", "object", [{ kind: "type", type: parameter }]);
+  const definition = { declaration, genericParameters: [{ kind: "type", targetName: "T" }] };
+  const policy = { definitionForCarrier: carrier => rustTargetTypeRefEquals(carrier, record) ? definition : undefined };
+  const contract = { declaration, typeParameters: [{ name: "T", requirements: ["clone"] }],
+    associatedTypes: [{ carrier: projection, requirements: ["default"] }] };
+  const shape = { kind: "tuple", elements: [record] };
+  const selected = analyzeRustShapeGenericRequirements(shape, policy, registry, owner => owner === declaration ? contract : undefined);
+  assert.deepEqual(selected.typeParameters, [{ name: "T", requirements: ["clone"] }]);
+  assert.deepEqual(selected.associatedTypes, [{ carrier: projection, requirements: ["default"] }]);
+  assert.equal(analyzeRustShapeGenericRequirements(shape, policy, registry, () => undefined), undefined);
+});
+
+test("nongeneric shapes acquire no speculative generic bounds", () => {
+  const registry = createRustSourceTypeFamilyRegistry();
+  const selected = analyzeRustShapeGenericRequirements({ kind: "tuple", elements: [signed, unsigned] },
+    { definitionForCarrier: () => undefined }, registry, () => undefined);
+  assert.deepEqual(selected, { typeParameters: [], associatedTypes: [] });
 });
