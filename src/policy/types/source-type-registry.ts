@@ -106,6 +106,7 @@ export interface RustSourceTypeRegistry extends RustTypeDefinitions {
   reserveSourceUnion(declaration: Node, carrier: TargetTypeRef): boolean;
   pendingSourceUnions(): readonly Node[];
   generatedSourceUnions(): readonly RustSourceUnion[];
+  generatedUnionCarrierForVariants(carriers: readonly TargetTypeRef[]): TargetTypeRef | undefined;
   sourceUnionForCarrier(carrier: TargetTypeRef): RustSourceUnion | undefined;
   sourceUnionVariantIndexesForTypes(
     carrier: TargetTypeRef,

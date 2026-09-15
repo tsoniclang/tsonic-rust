@@ -65,6 +65,7 @@ export function createRustSourceTypeRegistry(
   const sourceUnionsByDeclaration = new WeakMap<Node, RustSourceUnion>();
   const pendingUnions = new Set<Node>();
   const sourceUnionsByKey = new Map<string, RustSourceUnion>();
+  const generatedUnionCarriersByVariants = new Map<string, TargetTypeRef>();
   const sourceUnionIndexesByType = new Map<string, WeakMap<Type, readonly number[]>>();
   const sourceUnionKey = (carrier: TargetTypeRef): string | undefined => {
     const value = rustSourceUnionCarrierValue(carrier);
@@ -425,6 +426,10 @@ export function createRustSourceTypeRegistry(
         pendingUnions.delete(union.declaration);
       }
       if (byKey === undefined) sourceUnionsByKey.set(key, normalized);
+      if (union.declaration === undefined) {
+        const variantsKey = closedMetadataKey(union.variants.map(variant => variant.carrier));
+        if (!generatedUnionCarriersByVariants.has(variantsKey)) generatedUnionCarriersByVariants.set(variantsKey, normalized.carrier);
+      }
       for (const [sourceType, selected] of pendingIndexes) indexes.set(sourceType, selected);
       sourceUnionIndexesByType.set(key, indexes);
       if (union.declaration !== undefined) declarations.set(declarationKey, union.declaration);
@@ -435,6 +440,9 @@ export function createRustSourceTypeRegistry(
     },
     generatedSourceUnions() {
       return Object.freeze([...sourceUnionsByKey.values()].filter(union => union.declaration === undefined));
+    },
+    generatedUnionCarrierForVariants(carriers) {
+      return generatedUnionCarriersByVariants.get(closedMetadataKey(carriers));
     },
     sourceUnionForCarrier(carrier) {
       const key = sourceUnionKey(carrier);

@@ -5,6 +5,7 @@ import { rustSourceUnionCarrierValue } from "../../target-model/types/carriers/s
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { isRustNumberArrayPayload } from "../../target-model/types/carriers/array-unions.js";
 
 export interface RustGeneratedUnionDefinition {
   readonly ownerFileName: string;
@@ -12,6 +13,7 @@ export interface RustGeneratedUnionDefinition {
   readonly targetName: string;
   readonly variantNames: readonly string[];
   readonly sourceCarriers: readonly TargetTypeRef[];
+  readonly numberArrayLike: boolean;
 }
 
 export interface RustGeneratedUnionPlan {
@@ -52,6 +54,8 @@ export function createRustGeneratedUnionPlan(
       componentId: group.componentId,
       targetName: allocateRustGeneratedName(names, `Union${group.variantNames.length}`),
       variantNames: group.variantNames,
+      numberArrayLike: [...group.carriers.values()].some(carrier =>
+        rustSourceUnionCarrierValue(carrier)!.genericArguments.every(argument => argument.kind === "type" && isRustNumberArrayPayload(argument.type))),
       sourceCarriers: Object.freeze([...group.carriers].sort(([left], [right]) => left.localeCompare(right, "en")).map(([, carrier]) => carrier)),
     });
   });

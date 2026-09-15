@@ -61,6 +61,7 @@ import type { ExtensionFactSubject, Node } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { RustProviderOperationTemplate, RustTargetOperationFact } from "../../facts/keys.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { selectRustNumberArrayUnionMember } from "./number-array-unions.js";
 
 export function selectRustCheckedElementAccess(
   request: RustCheckedElementSelectionInput,
@@ -173,6 +174,8 @@ export function selectRustCheckedElementAccess(
   }
 
   const receiverCarrier = selectedReceiverCarrier;
+  const numericArrayMember = selectRustNumberArrayUnionMember(request, receiverCarrier, context, options);
+  if (numericArrayMember !== undefined) return numericArrayMember;
   if (receiverCarrier?.kind === "tuple") {
     const index = request.sourceSelectedElementIndex;
     const resultCarrier = index === undefined ? undefined : receiverCarrier.elements[index];

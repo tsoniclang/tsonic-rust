@@ -32,6 +32,7 @@ import type {
 import type { Node, ResolvedSourcePropertyAccessInfo } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { selectRustNumberArrayUnionMember } from "./number-array-unions.js";
 
 export function checkedPropertySelectionInput(
   context: RustOperationPolicyContext,
@@ -218,6 +219,8 @@ export function selectRustCheckedPropertyAccess(
   if (global !== undefined) {
     return mapProviderCheckedOperation(request.expression, global, "property", context, options, undefined, []);
   }
+  const numericArrayMember = selectRustNumberArrayUnionMember(request, selectedReceiverCarrier, context, options);
+  if (numericArrayMember !== undefined) return numericArrayMember;
   const structuralProperty = selectStructuralSourceProperty(
     request,
     selectedReceiverCarrier,

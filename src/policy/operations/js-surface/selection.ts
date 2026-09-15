@@ -1,4 +1,5 @@
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
+import { selectRustNumberArrayUnionOperation } from "./number-array-unions.js";
 import { rustJsArrayEntriesElementTargetType, rustJsArrayEntriesTargetType, rustJsArrayEntryTargetType } from "../../../target-model/types/carriers/array-entries.js";
 import { rustIteratorResultTargetType } from "../../../target-model/types/index.js";
 import {
@@ -570,6 +571,8 @@ function firstArgumentId(request: JsOperationRequest): string | undefined {
 }
 
 export function selectJsSurfaceOperation(request: JsOperationRequest, definitions: RustTypeDefinitions = emptyRustTypeDefinitions): JsOperationSelection | undefined {
+  const numberArrayUnion = selectRustNumberArrayUnionOperation(request, definitions);
+  if (numberArrayUnion !== undefined) return numberArrayUnion;
   const upcasts = rustNamedTypeCarrierValue(request.receiverCarrier)?.upcasts ?? [];
   if (upcasts.length > 0) {
     const selected = upcasts.filter((upcast) => laneOf(upcast.target, request.ownerName) !== undefined);
@@ -820,6 +823,7 @@ export function selectJsSurfaceOperation(request: JsOperationRequest, definition
     ...(callback === undefined ? {} : { callback }),
   };
 }
+
 
 function carrierRequirementsMatch(
   requirements: JsOperationRowData["requirements"],

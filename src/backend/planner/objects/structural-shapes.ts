@@ -40,6 +40,7 @@ import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
 import { rustLifetimeToAst } from "../types/lifetime-syntax.js";
 import { rustAssociatedPredicates } from "../types/associated-bounds.js";
 import { rustGenericRequirementBounds } from "../types/generic-bounds.js";
+import { planRustNumberArrayUnionImplementation } from "./number-array-unions.js";
 
 export function planRustStructuralShapeModule(
   input: RustPlanningContext,
@@ -88,6 +89,10 @@ export function planRustStructuralShapeModule(
       },
       variants: union.variantNames.map((name, index) => ({ name, fields: [{ kind: "named", path: `Payload${index}` }] })),
     });
+    if (union.numberArrayLike) {
+      usedAliases.add("js_abi");
+      structs.push(planRustNumberArrayUnionImplementation(union));
+    }
   }
   for (const definition of definitions) {
     const visibility: RustVisibility = publicShapeNames.has(definition.targetName)
