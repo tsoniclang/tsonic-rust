@@ -7,7 +7,7 @@ import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions }
 import { resolveRustTargetTypeRef } from "../types/resolution.js";
 import { resolveProviderTypeIdentity, providerCarrierFromRelations } from "../types/resolution/providers.js";
 import { selectRustProviderOperation, rustProviderOperationOwnerMatches } from "./provider-selection.js";
-import { isRustCopyCarrier, rustNamedTypeCarrierValue, rustTargetGenericBindingsForArguments, substituteRustTargetGenerics } from "../../target-model/types/index.js";
+import { isRustCopyCarrier, rustNamedTypeCarrierValue, rustStructuralObjectCarrierValue, rustTargetGenericBindingsForArguments, substituteRustTargetGenerics } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 type RustNativeMemorySelection = RustNativeMemoryLayout | {
@@ -49,8 +49,33 @@ export function selectRustNativeMemoryLayout(
     "native-int": layout.dataLayout.addressWidth / 8, "native-uint": layout.dataLayout.addressWidth / 8,
   };
   const fields: import("../../target-model/operations/native-memory.js").RustNativeMemoryField[] = [];
+  const structural = rustStructuralObjectCarrierValue(pointeeCarrier);
   if (pointeeCarrier.kind === "source-primitive") {
     if (layout.fields.length !== 0 || sizes[pointeeCarrier.name] !== layout.byteSize) return undefined;
+  } else if (structural !== undefined) {
+    if (structural.representation !== "value" || !isRustCopyCarrier(pointeeCarrier) ||
+      structural.fields.length !== layout.fields.length) return undefined;
+    const usedFields = new Set<number>();
+    for (const field of layout.fields) {
+      const declaration = options.sourceTypes.structuralFieldProjectionForDeclaration(field.selectedDeclaration, pointeeCarrier);
+      const symbol = field.selectedSymbol === undefined ? undefined :
+        options.sourceTypes.structuralFieldProjectionForSymbol(field.selectedSymbol, pointeeCarrier);
+      const selectedField = declaration ?? symbol;
+      if (selectedField === undefined || declaration !== undefined && symbol !== undefined &&
+        declaration.field.storageIndex !== symbol.field.storageIndex) return undefined;
+      const index = selectedField.field.storageIndex;
+      const member = structural.fields[index];
+      const child = selectRustNativeMemoryLayout(field.fieldLayout, context, options, selected);
+      if (child?.kind === "unsupported-array") { selected.set(layout, child); return child; }
+      if (member === undefined || usedFields.has(index) || member.accessor !== undefined || member.method === true ||
+        member.presence !== "required" || child === undefined ||
+        !rustTargetTypeRefEquals(selectedField.shape.carrier, pointeeCarrier) ||
+        !rustTargetTypeRefEquals(member.type, child.pointeeCarrier) ||
+        !rustTargetTypeRefEquals(selectedField.field.resultCarrier, child.pointeeCarrier)) return undefined;
+      usedFields.add(index);
+      fields.push(Object.freeze({ projection: Object.freeze({ kind: "value-field", storageIndex: index }),
+        offset: field.byteOffset, alignment: field.byteAlignment, layout: child }));
+    }
   } else {
     const named = rustNamedTypeCarrierValue(pointeeCarrier);
     if (named === undefined || !isRustCopyCarrier(pointeeCarrier)) return undefined;
@@ -72,7 +97,7 @@ export function selectRustNativeMemoryLayout(
       if (property.kind !== "selected" || setter.kind !== "selected" || property.row.target.form !== "field" ||
         setter.row.target.form !== "field" || property.row.target.name !== setter.row.target.name) return undefined;
       const name = property.row.target.name;
-      if (fields.some(field => field.name === name)) return undefined;
+      if (fields.some(field => field.projection.kind === "native-field" && field.projection.name === name)) return undefined;
       const instantiate = (carrier: TargetTypeRef | undefined): TargetTypeRef | undefined => carrier === undefined ? undefined :
         substituteRustTargetGenerics(carrier, substitutions.types, substitutions.lifetimes, substitutions.consts);
       const child = selectRustNativeMemoryLayout(field.fieldLayout, context, options, selected);
@@ -85,7 +110,7 @@ export function selectRustNativeMemoryLayout(
         !rustTargetTypeRefEquals(instantiate(property.row.resultCarrier), child.pointeeCarrier) ||
         setter.row.parameterCarriers?.length !== 1 || !rustTargetTypeRefEquals(instantiate(setter.row.parameterCarriers[0]), child.pointeeCarrier)) return undefined;
       usedFields.add(memberIdentity.memberId);
-      fields.push(Object.freeze({ name: property.row.target.name, offset: field.byteOffset,
+      fields.push(Object.freeze({ projection: Object.freeze({ kind: "native-field", name }), offset: field.byteOffset,
         alignment: field.byteAlignment, layout: child }));
     }
   }

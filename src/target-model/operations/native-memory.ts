@@ -14,7 +14,9 @@ export interface RustNativeMemoryLayout {
 }
 
 export interface RustNativeMemoryField {
-  readonly name: string;
+  readonly projection:
+    | { readonly kind: "native-field"; readonly name: string }
+    | { readonly kind: "value-field"; readonly storageIndex: number };
   readonly offset: number;
   readonly alignment: number;
   readonly layout: RustNativeMemoryLayout;
@@ -50,7 +52,11 @@ export function rustNativeMemoryLayoutsEqual(left: RustNativeMemoryLayout, right
       first.littleEndian !== second.littleEndian || first.fields.length !== second.fields.length) return false;
     for (const [index, field] of first.fields.entries()) {
       const other = second.fields[index]!;
-      if (field.name !== other.name || field.offset !== other.offset || field.alignment !== other.alignment) return false;
+      if (field.projection.kind !== other.projection.kind ||
+        (field.projection.kind === "native-field"
+          ? other.projection.kind !== "native-field" || field.projection.name !== other.projection.name
+          : other.projection.kind !== "value-field" || field.projection.storageIndex !== other.projection.storageIndex) ||
+        field.offset !== other.offset || field.alignment !== other.alignment) return false;
       pending.push([field.layout, other.layout]);
     }
   }

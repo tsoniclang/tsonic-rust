@@ -67,6 +67,10 @@ export function isRustCopyCarrier(carrier: TargetTypeRef | undefined): boolean {
   if (fixedArray !== undefined) {
     return isRustCopyCarrier(fixedArray.element);
   }
+  const structural = rustStructuralObjectCarrierValue(carrier);
+  if (structural !== undefined) {
+    return structural.representation === "value" && structural.fields.every(field => isRustCopyCarrier(field.type));
+  }
   const namedType = rustNamedTypeCarrierValue(carrier);
   if (namedType !== undefined) {
     return rustNamedTypeSupportsTrait(namedType, "core::marker::Copy");
@@ -209,6 +213,17 @@ export function rustCarrierSupportsTrait(
     return supportsCloneWithContracts(carrier, typeParameterSupports, associatedTypeSupports);
   }
   if (traitPath === "core::marker::Copy") {
+    const supports = (type: TargetTypeRef): boolean =>
+      rustCarrierSupportsTrait(type, traitPath, typeParameterSupports, associatedTypeSupports);
+    const structural = rustStructuralObjectCarrierValue(carrier);
+    if (structural !== undefined) return structural.representation === "value" && structural.fields.every(field => supports(field.type));
+    if (carrier.kind === "tuple") return carrier.elements.every(supports);
+    const fixedArray = rustFixedArrayCarrierValue(carrier);
+    if (fixedArray !== undefined) return supports(fixedArray.element);
+    if (carrier.kind === "target-named" && carrier.id === rustOptionTargetId) {
+      const parameters = rustOnlyTypeGenericArguments(carrier.genericArguments);
+      return parameters?.length === 1 && supports(parameters[0]!);
+    }
     return isRustCopyCarrier(carrier);
   }
   if (carrier.kind === "target-named" && carrier.id === rustFutureTargetId) {

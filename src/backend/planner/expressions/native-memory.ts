@@ -5,7 +5,8 @@ import { rustNativeBackingKey, rustRawLocationPlanKey } from "../../../target-mo
 import type { RustNativeMemoryLayout } from "../../../target-model/operations/native-memory.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
-import { rustOptionElementCarrier } from "../../../target-model/types/index.js";
+import { rustOptionElementCarrier, rustStructuralObjectCarrierValue } from "../../../target-model/types/index.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 
 export function planRustNativeAllocation(node: Node, initial: RustExpr, context: RustPlanContext): RustExpr | undefined {
   const layout = context.input.program.facts.getFact(node, rustNativeBackingKey);
@@ -61,11 +62,21 @@ export function planRustNativeLayout(layout: RustNativeMemoryLayout, context: Ru
     if (type === undefined) return undefined;
     if (current.kind === "record") {
       if (type.kind !== "named") return undefined;
+      const structural = rustStructuralObjectCarrierValue(current.pointeeCarrier);
+      if (structural !== undefined && (structural.representation !== "value" || structural.fields.length !== current.fields.length)) return undefined;
       const fields: { name: string; value: RustExpr }[] = [];
       for (const field of current.fields) {
-        const value = walk(field.layout, [...names, field.name], offset + field.offset, Math.min(alignment, field.alignment));
+        if ((structural !== undefined) !== (field.projection.kind === "value-field")) return undefined;
+        const stored = field.projection.kind === "value-field"
+          ? context.input.program.structuralShapes.field(current.pointeeCarrier, field.projection.storageIndex) : undefined;
+        if (field.projection.kind === "value-field" && (stored === undefined || stored.storage !== "stored" ||
+          stored.nativeLayout !== undefined || stored.method === true ||
+          !rustTargetTypeRefEquals(stored.carrier, field.layout.pointeeCarrier))) return undefined;
+        const name = field.projection.kind === "native-field" ? field.projection.name : stored!.targetName;
+        if (fields.some(candidate => candidate.name === name)) return undefined;
+        const value = walk(field.layout, [...names, name], offset + field.offset, Math.min(alignment, field.alignment));
         if (value === undefined) return undefined;
-        fields.push({ name: field.name, value });
+        fields.push({ name, value });
       }
       return { kind: "struct-literal", path: type.path, fields };
     }

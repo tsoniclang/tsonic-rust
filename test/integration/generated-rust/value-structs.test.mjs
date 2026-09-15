@@ -1,13 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { valueStructProofFiles } from "../../../../tsonic/test/fixtures/value-structs.mjs";
+import { valueRecordMemoryProofFiles } from "../../../../tsonic/test/fixtures/value-record-memory.mjs";
+import { memoryAbiCapability } from "../../helpers/memory-abi.mjs";
 import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { createRustStructuralShapePlan } from "../../../dist/analysis/objects/structural-shape-plan.js";
 import { rustCompileTimeSourceKey } from "../../../dist/target-model/facts/source-declarations.js";
-import { rustStructuralObjectCarrierValue, rustStructuralObjectTargetType } from "../../../dist/target-model/types/index.js";
+import { isRustCopyCarrier, rustCarrierSupportsTrait, rustOptionTargetType, rustStringTargetType, rustStructuralObjectCarrierValue, rustStructuralObjectTargetType } from "../../../dist/target-model/types/index.js";
 import { substituteRustTargetTypeParameters } from "../../../dist/target-model/types/carriers/substitution.js";
 import { writeRustStoredObjectField } from "../../../dist/backend/planner/objects/project-storage.js";
+import { rustNativeMemoryLayoutsEqual } from "../../../dist/target-model/operations/native-memory.js";
 
 for (const surfaces of [[], ["js"]]) {
   test(`value structs preserve stored mutation, copies and field locations in ${surfaces.length === 0 ? "native" : "JS"} source`, { timeout: 300_000 }, () => {
@@ -19,6 +22,54 @@ export function main(): void { if (!run()) throw new Error("value struct contrac
     });
     assert.deepEqual(result.diagnostics, []);
     validateGeneratedProject("value-struct-contract", result.artifacts, { run: true });
+  });
+  test(`value record native codecs preserve offsets, snapshots and aliases in ${surfaces.length === 0 ? "native" : "JS"} source`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({
+      surfaces, capabilities: [memoryAbiCapability("rust")],
+      target: { id: "rust", options: { outputType: "bin", crateName: "value_record_memory" } },
+      files: { ...valueRecordMemoryProofFiles, "index.ts": `${valueRecordMemoryProofFiles["index.ts"]}
+export function main(): void { if (!run()) throw new Error("value record memory contract"); }` },
+    });
+    assert.deepEqual(result.diagnostics, []);
+    validateGeneratedProject("value-record-memory", result.artifacts, { run: true });
+  });
+}
+
+test("value-record Copy requires exactly the field contracts and survives generic substitution", () => {
+  const field = type => ({ sourceName: "value", type, presence: "required", readonly: false });
+  const value = rustStructuralObjectTargetType("/value.ts", [field(rustOptionTargetType({ kind: "type-parameter", name: "T" }))], "value");
+  assert.equal(isRustCopyCarrier(value), false);
+  assert.equal(rustCarrierSupportsTrait(value, "core::marker::Copy", (name, trait) => name === "T" && trait === "core::marker::Copy"), true);
+  assert.equal(rustCarrierSupportsTrait(value, "core::marker::Copy", () => false), false);
+  assert.equal(isRustCopyCarrier(substituteRustTargetTypeParameters(value, new Map([["T", { kind: "source-primitive", name: "uint32" }]]))), true);
+  assert.equal(isRustCopyCarrier(substituteRustTargetTypeParameters(value, new Map([["T", rustStringTargetType()]]))), false);
+  assert.equal(isRustCopyCarrier(rustStructuralObjectTargetType("/reference.ts", [field({ kind: "source-primitive", name: "uint32" })])), false);
+});
+
+test("native layout equality binds the exact native or source field projection", () => {
+  const scalar = { kind: "scalar", pointeeCarrier: { kind: "source-primitive", name: "uint32" },
+    size: 4, alignment: 4, width: 64, littleEndian: true, fields: [] };
+  const selected = { projection: { kind: "value-field", storageIndex: 0 }, offset: 0, alignment: 4, layout: scalar };
+  const record = { ...scalar, kind: "record", fields: [selected] };
+  assert.equal(rustNativeMemoryLayoutsEqual(record, structuredClone(record)), true);
+  for (const mutation of [
+    { projection: { kind: "value-field", storageIndex: 1 } },
+    { projection: { kind: "native-field", name: "count" } },
+    { offset: 4 }, { alignment: 1 }, { layout: { ...scalar, width: 32 } },
+    { layout: { ...scalar, pointeeCarrier: { kind: "source-primitive", name: "int32" } } },
+  ]) assert.equal(rustNativeMemoryLayoutsEqual(record, { ...record, fields: [{ ...selected, ...mutation }] }), false);
+});
+
+for (const [name, replacement] of [
+  ["reference carrier", "export interface Word { count: uint32 }"],
+  ["mismatched scalar layout", "export const Word = struct({ count: field<uint8>() }); export type Word = typeof Word;"],
+]) {
+  test(`raw record storage rejects ${name} without publishing code`, () => {
+    const files = { ...valueRecordMemoryProofFiles, "layout.ts": valueRecordMemoryProofFiles["layout.ts"]
+      .replace("export const Word = struct({ count: field<uint32>() });\nexport type Word = typeof Word;", replacement) };
+    const { result } = compileRust({ capabilities: [memoryAbiCapability("rust")], files });
+    assert.ok(result.diagnostics.some(diagnostic => diagnostic.category === "error"), JSON.stringify(result.diagnostics));
+    assert.equal(result.artifacts.length, 0);
   });
 }
 

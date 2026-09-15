@@ -301,12 +301,13 @@ export function planRustStructuralShapeModule(
     const valueRepresentation = rustStructuralObjectCarrierValue(definition.carrier)?.representation === "value";
     const defaultable = valueRepresentation && rustCarrierSupportsTrait(definition.carrier, "core::default::Default", () => true);
     const cloneable = valueRepresentation && rustCarrierSupportsTrait(definition.carrier, "core::clone::Clone", () => true);
+    const copyable = valueRepresentation && rustCarrierSupportsTrait(definition.carrier, "core::marker::Copy", () => true);
     structs.push({
       kind: "struct",
       name: definition.targetName,
       visibility,
       ...(shapeDeadCode === undefined ? {} : { deadCode: shapeDeadCode }),
-      derives: [...(cloneable ? ["Clone"] : []), ...(defaultable ? ["Default"] : [])],
+      derives: [...(cloneable ? ["Clone"] : []), ...(copyable ? ["Copy"] : []), ...(defaultable ? ["Default"] : [])],
       generics,
       fields,
     });
