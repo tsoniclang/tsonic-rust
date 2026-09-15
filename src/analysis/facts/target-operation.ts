@@ -145,7 +145,7 @@ export function rustTargetOperationIsFallible(
         projectDispatch.write?.fallible === true
     );
     return dispatchIsFallible || fact.valueSemantics.kind === "accessor" ||
-      fact.storage === "object-handle" &&
+      fact.storage === "structural-object" &&
         structuralStorage.field(fact.receiverCarrier, fact.storageIndex)?.storage === "property";
   }
   if (fact.kind === "source-union-field") {
@@ -153,7 +153,7 @@ export function rustTargetOperationIsFallible(
       const variant = fact.variants[index];
       const field = variant?.field;
       return field?.valueSemantics.kind === "accessor" ||
-        variant !== undefined && field?.storage === "object-handle" &&
+        variant !== undefined && field?.storage === "structural-object" &&
           structuralStorage.field(
             variant.carrier,
             field.storageIndex,
@@ -163,7 +163,7 @@ export function rustTargetOperationIsFallible(
   if (fact.kind === "object-shape-projection") {
     return (fact.projection === "values" || fact.projection === "entries") &&
       fact.fields.some((field) => field.accessor !== undefined ||
-        fact.storage === "object-handle" && structuralStorage.field(
+        fact.storage === "structural-object" && structuralStorage.field(
           fact.sourceValueCarrier,
           field.storageIndex,
         )?.storage === "property");
@@ -172,7 +172,7 @@ export function rustTargetOperationIsFallible(
     return fact.contributions.some((contribution) =>
       contribution.kind === "spread" &&
       contribution.fields.some((field) => field.accessor !== undefined ||
-        contribution.sourceStorage === "object-handle" && structuralStorage.field(
+        contribution.sourceStorage === "structural-object" && structuralStorage.field(
           contribution.sourceCarrier,
           field.sourceStorageIndex,
         )?.storage === "property"));

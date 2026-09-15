@@ -233,7 +233,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
       const planned = planExpression(contribution.property, context);
       const field = fact.fields.find((candidate) =>
         candidate.storageIndex === contribution.targetStorageIndex);
-      const plannedField = fact.storage === "object-handle"
+      const plannedField = fact.storage === "structural-object"
         ? context.input.program.structuralShapes.field(
             fact.resultCarrier,
             contribution.targetStorageIndex,
@@ -245,7 +245,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
         : undefined;
       if (sourceName !== contribution.sourceName || planned === undefined ||
         field === undefined ||
-        (fact.storage === "object-handle" && (
+        (fact.storage === "structural-object" && (
           plannedField?.storage !== "property" ||
           contribution.role === "set" &&
             plannedField.property?.setterTargetName === undefined
@@ -346,7 +346,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
     bindings.push({ name: spreadName, value: plannedSpread });
     for (const field of retainedFields) {
       const value = field.method === true
-        ? contribution.sourceStorage === "object-handle"
+        ? contribution.sourceStorage === "structural-object"
           ? readRustStructuralObjectMethodStorage(
               contribution.sourceCarrier,
               { kind: "path", path: spreadName },
@@ -427,13 +427,13 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
     .RustStructuralObjectFieldInitializer[] = [];
   const projectFields: { name: string; value: RustExpr }[] = [];
   for (const field of [...fact.fields].sort((left, right) => left.storageIndex - right.storageIndex)) {
-    if (fact.storage === "object-handle" &&
+    if (fact.storage === "structural-object" &&
       field.storageIndex !== structuralInitializers.length) {
       return undefined;
     }
     const accessor = accessorValuesByStorageIndex.get(field.storageIndex);
     if (accessor !== undefined) {
-      if (fact.storage === "object-handle") {
+      if (fact.storage === "structural-object") {
         const plannedField = context.input.program.structuralShapes.field(
           fact.resultCarrier,
           field.storageIndex,
@@ -496,7 +496,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
       projectFields.push({ name: storagePath[0]!, value });
     }
   }
-  if (fact.storage === "object-handle" || projectRepresentation?.kind !== "value") {
+  if (fact.storage === "structural-object" || projectRepresentation?.kind !== "value") {
     context.usedAliases?.add("rt");
   }
   if (stateMarker !== undefined) {

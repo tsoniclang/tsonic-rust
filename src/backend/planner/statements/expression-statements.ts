@@ -48,7 +48,8 @@ import type { Node } from "@tsonic/tsts";
 import type { RustAssignmentOperationFact } from "./core.js";
 import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { rustMemoryMetadataKey } from "../../../target-model/operations/memory-layout.js";
+import { rustCompileTimeSourceKey } from "../../../target-model/facts/source-declarations.js";
+import { planRustValueFieldLocation, rustSourceFieldHasValueReceiver } from "../objects/value-fields.js";
 
 export function planExpressionStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const expression = Node_Expression(context.input.program.source.ast, node);
@@ -61,7 +62,7 @@ export function planExpressionAsStatement(
   expression: Node,
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
-  if (context.input.program.facts.getFact(expression, rustMemoryMetadataKey)) return [];
+  if (context.input.program.facts.getFact(expression, rustCompileTimeSourceKey)) return [];
   const { ast } = context.input.program.source;
   const expressionKind = ast.kindName(expression);
   if (expressionKind === KindBinaryExpression) {
@@ -158,6 +159,22 @@ export function planExpressionAsStatement(
           "Finalized equivalent assignment requires the proven binary value operand.",
         ));
         return undefined;
+      }
+      if (storageOverride?.valueForm !== "storage" && rustSourceFieldHasValueReceiver(left, context)) {
+        const location = planRustValueFieldLocation(left, context, "write");
+        const value = planExpression(valueNode, context);
+        if (location === undefined || value === undefined || context.syntheticNames === undefined) return undefined;
+        const currentName = allocateRustSyntheticName(context.syntheticNames, "field_previous");
+        const valueName = allocateRustSyntheticName(context.syntheticNames, "field_value");
+        const next = planRustCompoundAssignmentValue(fact, { kind: "path", path: currentName },
+          { kind: "path", path: valueName }, left, context);
+        const written = next === undefined ? undefined : location.write(next);
+        return written === undefined ? undefined : [{ kind: "expr", expr: {
+          kind: "block",
+          bindings: [...location.bindings, ...(operator === "=" ? [] : [{ name: currentName, value: location.read }]),
+            { name: valueName, value }],
+          value: written,
+        } }];
       }
       if (sourceField?.kind === "source-accessor") {
         return planRustSourceAccessorAssignment(

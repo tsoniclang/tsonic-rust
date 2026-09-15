@@ -454,7 +454,7 @@ function planObjectShapeProjectionCall(
       );
       break;
     case "assign": {
-      if (assignmentSourceName === undefined || fact.storage !== "object-handle" ||
+      if (assignmentSourceName === undefined || fact.storage !== "structural-object" ||
         fact.assignmentSourceCarrier === undefined || fact.assignmentFields === undefined) {
         context.diagnostics.push(missingFactDiagnostic(
           diagnosticInput(context, node),

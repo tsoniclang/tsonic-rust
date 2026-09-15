@@ -7,6 +7,7 @@ import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustActiveErrorType } from "../program/plan-context.js";
 import { rustTargetRuntimeErrorType } from "../types/error-boundary.js";
+import { rustTypeFromCarrierInContext } from "../types/render.js";
 import type { RustStructuralShapeField } from "../../../analysis/objects/structural-shape-plan.js";
 import {
   createRustStructuralObject,
@@ -22,6 +23,8 @@ import {
 } from "../names/synthetic.js";
 import {
   rustCallableProtocol,
+  isRustCopyCarrier,
+  rustStructuralObjectCarrierValue,
   rustLocationTargetType,
   rustOptionElementCarrier,
   rustOptionTargetType,
@@ -51,6 +54,8 @@ export function createRustStructuralObjectFromCarrier(
   if (definition === undefined || definition.fields.length !== initializers.length) {
     return undefined;
   }
+  if (rustStructuralObjectCarrierValue(carrier)?.representation === "value" &&
+    definition.fields.some(field => field.nativeLayout !== undefined)) return undefined;
   const fields = definition.fields.flatMap((field, index) => {
     const initializer = initializers[index];
     if (initializer === undefined ||
@@ -97,6 +102,14 @@ export function createRustStructuralObjectFromCarrier(
   if (fields.some((field) => field === undefined)) {
     return undefined;
   }
+  if (rustStructuralObjectCarrierValue(carrier)?.representation === "value") {
+    const type = rustTypeFromCarrierInContext(carrier, context);
+    return identity !== undefined || type?.kind !== "named" ? undefined : {
+      kind: "struct-literal",
+      path: type.path,
+      fields: fields as readonly { readonly name: string; readonly value: RustExpr }[],
+    };
+  }
   context.usedAliases?.add("rt");
   return createRustStructuralObject(
     `crate::${context.structuralShapesModuleName}::${definition.targetName}`,
@@ -127,20 +140,28 @@ export function rustDirectProjectFieldStoragePath(
 }
 
 export function readRustStoredObjectField(
-  storage: "project-object" | "object-handle",
+  storage: "project-object" | "structural-object",
   receiverCarrier: TargetTypeRef,
   receiver: RustExpr,
   storageIndex: number,
   resultCarrier: TargetTypeRef,
   context: RustPlanContext,
+  projection: readonly string[] = [],
 ): RustExpr | undefined {
-  if (storage === "object-handle") {
+  if (storage === "structural-object") {
     const field = context.input.program.structuralShapes.field(receiverCarrier, storageIndex);
     if (field === undefined) {
       return undefined;
     }
     if (field.method === true) {
       return undefined;
+    }
+    if (projection.length !== 0 && (field.storage !== "stored" || field.nativeLayout !== undefined)) return undefined;
+    const path = [field.targetName, ...projection];
+    if (rustStructuralObjectCarrierValue(receiverCarrier)?.representation === "value") {
+      if (field.storage !== "stored" || field.nativeLayout !== undefined) return undefined;
+      const selected = path.reduce<RustExpr>((value, name) => ({ kind: "field", receiver: value, name }), receiver);
+      return isRustCopyCarrier(resultCarrier) ? selected : { kind: "method-call", receiver: selected, method: "clone", args: [] };
     }
     if (field.nativeLayout !== undefined) return { kind: "method-call",
       receiver: readRustStructuralObjectField(receiver, field.targetName, rustLocationTargetType(field.carrier)),
@@ -153,13 +174,13 @@ export function readRustStoredObjectField(
           resultCarrier,
           context,
         )
-      : readRustStructuralObjectField(receiver, field.targetName, resultCarrier);
+      : readRustStructuralObjectField(receiver, path, resultCarrier);
   }
   const path = rustDirectProjectFieldStoragePath(receiverCarrier, storageIndex, context);
   const representation = rustProjectObjectRepresentation(receiverCarrier, context);
   return path === undefined || representation === undefined
     ? undefined
-    : readRustProjectObjectField(receiver, path, resultCarrier, representation);
+    : readRustProjectObjectField(receiver, [...path, ...projection], resultCarrier, representation);
 }
 
 export function readRustStructuralObjectMethodStorage(
@@ -255,21 +276,30 @@ export function invokeRustStructuralObjectMethod(
 }
 
 export function writeRustStoredObjectField(
-  storage: "project-object" | "object-handle",
+  storage: "project-object" | "structural-object",
   receiverCarrier: TargetTypeRef,
   receiver: RustExpr,
   storageIndex: number,
   operator: RustAssignmentOperator,
   value: RustExpr,
   context: RustPlanContext,
+  projection: readonly string[] = [],
 ): RustExpr | undefined {
-  if (storage === "object-handle") {
+  if (storage === "structural-object") {
     const field = context.input.program.structuralShapes.field(receiverCarrier, storageIndex);
     if (field === undefined) {
       return undefined;
     }
-    if (field.method === true || field.readonly) {
+    if (field.method === true || field.readonly && projection.length === 0) {
       return undefined;
+    }
+    if (projection.length !== 0 && (field.storage !== "stored" || field.nativeLayout !== undefined)) return undefined;
+    const path = [field.targetName, ...projection];
+    if (rustStructuralObjectCarrierValue(receiverCarrier)?.representation === "value") {
+      return field.storage !== "stored" || field.nativeLayout !== undefined ? undefined : {
+        kind: "assignment", operator,
+        target: path.reduce<RustExpr>((selected, name) => ({ kind: "field", receiver: selected, name }), receiver), value,
+      };
     }
     if (field.nativeLayout !== undefined) {
       const location = readRustStructuralObjectField(receiver, field.targetName, rustLocationTargetType(field.carrier));
@@ -289,27 +319,31 @@ export function writeRustStoredObjectField(
           value,
           context,
         )
-      : writeRustStructuralObjectField(receiver, field.targetName, operator, value);
+      : writeRustStructuralObjectField(receiver, path, operator, value);
   }
   const path = rustDirectProjectFieldStoragePath(receiverCarrier, storageIndex, context);
   const representation = rustProjectObjectRepresentation(receiverCarrier, context);
   return path === undefined || representation === undefined
     ? undefined
-    : writeRustProjectObjectField(receiver, path, operator, value, representation);
+    : writeRustProjectObjectField(receiver, [...path, ...projection], operator, value, representation);
 }
 
 export function mutateRustStoredObjectField(
-  storage: "project-object" | "object-handle",
+  storage: "project-object" | "structural-object",
   receiverCarrier: TargetTypeRef,
   receiver: RustExpr,
   storageIndex: number,
   mutation: (field: RustExpr) => RustExpr | undefined,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  if (storage === "object-handle") {
+  if (storage === "structural-object") {
     const field = context.input.program.structuralShapes.field(receiverCarrier, storageIndex);
     if (field === undefined) {
       return undefined;
+    }
+    if (rustStructuralObjectCarrierValue(receiverCarrier)?.representation === "value") {
+      return field.storage !== "stored" || field.method === true || field.readonly || field.nativeLayout !== undefined
+        ? undefined : mutation({ kind: "field", receiver, name: field.targetName });
     }
     if (field.nativeLayout !== undefined) {
       if (context.syntheticNames === undefined) return undefined;

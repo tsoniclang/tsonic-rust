@@ -165,7 +165,8 @@ export function rustCarrierCanEnterTsValue(carrier: TargetTypeRef | undefined): 
 export function rustCarrierReferentMutationRequiresMutableBinding(
   carrier: TargetTypeRef | undefined,
 ): boolean {
-  return rustStructuralObjectCarrierValue(carrier) === undefined &&
+  const structural = rustStructuralObjectCarrierValue(carrier);
+  return (structural === undefined || structural.representation === "value") &&
     rustSourceUnionCarrierValue(carrier) === undefined;
 }
 
@@ -275,6 +276,11 @@ function rustCarrierSupportsDefault(
 ): boolean {
   if (carrier.kind === "type-parameter") {
     return typeParameterSupports(carrier.name, "core::default::Default");
+  }
+  const structural = rustStructuralObjectCarrierValue(carrier);
+  if (structural !== undefined) {
+    return structural.representation === "value" && structural.fields.every(field =>
+      rustCarrierSupportsTrait(field.type, "core::default::Default", typeParameterSupports, associatedTypeSupports));
   }
   if (carrier.kind === "source-primitive") {
     return rustPrimitiveTypeName(carrier.name) !== undefined;

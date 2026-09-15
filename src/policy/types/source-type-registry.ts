@@ -32,7 +32,7 @@ export interface RustSourceObjectField {
 export interface RustSourceObjectShape {
   readonly sourceType: Type;
   readonly carrier: TargetTypeRef;
-  readonly storage: "project-object" | "object-handle";
+  readonly storage: "project-object" | "structural-object";
   readonly fields: readonly RustSourceObjectField[];
 }
 

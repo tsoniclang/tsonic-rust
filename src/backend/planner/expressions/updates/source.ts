@@ -11,6 +11,7 @@ import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { diagnosticInput } from "../../program/plan-context.js";
 import { expressionCarrier, negateRustPlannedBooleanExpression, planNumericLiteralWithCarrier, requireExpressionCarrier, rustOperationFact, selectedOperationMatches } from "../fundamentals.js";
 import { findRustUpdateProjectField, planRustBorrowedUpdateLocation, planRustDirectStorage, planRustOwnedUpdateLocation, planRustSourceFieldUpdate, planRustUpdateProjectionArguments, planRustUpdateValue } from "./target.js";
+import { planRustValueFieldLocation, rustSourceFieldHasValueReceiver } from "../../objects/value-fields.js";
 import { finishRustSourceAccessorCall, planRustSourceAccessorCall, sourceAccessorSelectedOperationMatches, sourceIndexSelectedOperationMatches, sourceStaticFieldSelectedOperationMatches, sourceUnionFieldSelectedOperationMatches } from "../properties.js";
 import { isRustBigIntCarrier } from "../../../../target-model/types/index.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
@@ -138,6 +139,13 @@ function planRustUpdateExpression(
   }
   const returnsPrevious = resultUse === "value" &&
     context.input.program.source.ast.kindName(expression) === KindPostfixUnaryExpression;
+  if (rustSourceFieldHasValueReceiver(operand, context)) {
+    const location = planRustValueFieldLocation(operand, context, "write");
+    return location === undefined ? undefined : planRustUpdateValue({
+      locationBindings: location.bindings, read: location.read, write: location.write,
+      update: fact, step, returnsPrevious, context,
+    });
+  }
   const sourceAccessor = findRustUpdateSourceAccessor(operand, context);
   if (sourceAccessor !== undefined) {
     return planRustSourceAccessorUpdate(

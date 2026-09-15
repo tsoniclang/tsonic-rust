@@ -306,6 +306,7 @@ export function inferRustTargetGenericBindings(
         const rightStructural = rustStructuralObjectCarrierValue(right);
         if (leftStructural !== undefined || rightStructural !== undefined) {
           return leftStructural !== undefined && rightStructural !== undefined &&
+            leftStructural.representation === rightStructural.representation &&
             leftStructural.fields.length === rightStructural.fields.length &&
             leftStructural.fields.every((field, index) => {
               const other = rightStructural.fields[index];

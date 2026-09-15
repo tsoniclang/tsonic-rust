@@ -139,7 +139,7 @@ function mapSelectedObjectShapeProjection(
     sourceValueCarrier,
   );
   if (sourceValueNode === undefined || sourceValueCarrier === undefined || shape === undefined ||
-    shape.storage !== "object-handle" ||
+    shape.storage !== "structural-object" ||
     !rustTargetTypeRefEquals(sourceValueCarrier, shape.carrier)) {
     return rejectSelectedOperation(
       request.source.call,
@@ -171,7 +171,7 @@ function mapSelectedObjectShapeProjection(
       );
   if (selection.projection === "assign" && (
     assignmentSourceNode === undefined || assignmentSourceCarrier === undefined ||
-    assignmentShape === undefined || assignmentShape.storage !== "object-handle" ||
+    assignmentShape === undefined || assignmentShape.storage !== "structural-object" ||
     !rustTargetTypeRefEquals(assignmentShape.carrier, assignmentSourceCarrier)
   )) {
     return rejectSelectedOperation(

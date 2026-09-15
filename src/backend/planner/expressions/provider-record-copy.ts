@@ -23,7 +23,7 @@ export function planProviderRecordCopy(
     const plan = context.input.program.structuralShapes.field(conversion.source, field.storageIndex);
     if (plan?.storage !== "stored" || plan.method === true ||
       !rustTargetTypeRefEquals(plan.carrier, field.carrier)) return undefined;
-    const value = readRustStoredObjectField("object-handle", conversion.source,
+    const value = readRustStoredObjectField("structural-object", conversion.source,
       { kind: "path", path: name }, field.storageIndex, field.carrier, context);
     return value === undefined ? undefined : { name: field.targetName, value };
   });

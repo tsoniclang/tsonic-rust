@@ -297,7 +297,7 @@ function selectObjectProjection(
 }
 
 interface ObjectBindingSource {
-  readonly storage: "project-object" | "object-handle";
+  readonly storage: "project-object" | "structural-object";
   readonly fields: readonly {
     readonly sourceName: string;
     readonly storageIndex: number;
@@ -319,7 +319,7 @@ function resolveObjectBindingSource(
   const structural = rustStructuralObjectCarrierValue(sourceCarrier);
   if (structural !== undefined) {
     return {
-      storage: "object-handle",
+      storage: "structural-object",
       fields: structural.fields.map((field, storageIndex) => ({
         sourceName: field.sourceName,
         storageIndex,
@@ -433,7 +433,7 @@ function resolveObjectRestBindingCarrier(
       !context.sourceTypes.registerStructuralObject({
         sourceType,
         carrier,
-        storage: "object-handle",
+        storage: "structural-object",
         fields: registeredFields as readonly RustSourceObjectField[],
       })
     ? undefined

@@ -332,14 +332,14 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
       ? false
       : projection?.kind === "object-field"
       ? projection.accessor !== undefined ||
-        projection.storage === "object-handle" &&
+        projection.storage === "structural-object" &&
           walk.context.structuralShapes.field(
             bindingProjection.sourceCarrier,
             projection.storageIndex,
           )?.storage === "property"
       : projection?.kind === "object-rest" &&
         projection.fields.some((field) => field.accessor !== undefined ||
-          projection.storage === "object-handle" &&
+          projection.storage === "structural-object" &&
             walk.context.structuralShapes.field(
               bindingProjection.sourceCarrier,
               field.sourceStorageIndex,

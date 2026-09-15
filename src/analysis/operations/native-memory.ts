@@ -106,7 +106,7 @@ export function recordRustNativeBacking(walk: RustFactWalk): readonly RustNative
         continue;
       }
       const field = context.facts.get(origin.storageExpression, rustTargetOperationFactKey);
-      if (field?.kind === "source-field" && field.storage === "object-handle") {
+      if (field?.kind === "source-field" && field.storage === "structural-object") {
         const shape = rustStructuralObjectCarrierValue(field.receiverCarrier);
         const member = shape?.fields[field.storageIndex];
         const implementations = walk.sourceTypes.structuralFieldImplementations().filter(implementation =>

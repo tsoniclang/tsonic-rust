@@ -577,7 +577,7 @@ function lowerStructuralObjectJsValueConversion(
     }
     const storedCarrier = structuralField.type;
     const stored = readRustStoredObjectField(
-      "object-handle",
+      "structural-object",
       contract.source,
       sourcePath,
       field.storageIndex,

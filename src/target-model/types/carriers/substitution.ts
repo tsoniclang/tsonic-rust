@@ -356,7 +356,7 @@ function substituteCarrierParts(
             constSubstitutions,
             normalize,
           ),
-        })));
+        })), structuralObject.representation);
       }
       const sourceUnion = rustSourceUnionCarrierValue(type);
       if (sourceUnion !== undefined) {

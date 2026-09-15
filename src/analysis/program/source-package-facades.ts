@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import { rustMemoryMetadataKey } from "../../target-model/operations/memory-layout.js";
+import { rustCompileTimeSourceKey } from "../../target-model/facts/source-declarations.js";
 import type {
   TargetSourcePackage,
 } from "@tsonic/target-api";
@@ -224,7 +224,7 @@ function rustDeclarationItemNames(
   context: RustAnalysisContext,
   declaration: Node,
 ): readonly string[] {
-  if (context.facts.getFact(declaration, rustMemoryMetadataKey)) return emptyNames;
+  if (context.facts.getFact(declaration, rustCompileTimeSourceKey)) return emptyNames;
   if (context.facts.getFact(declaration, rustTypeOnlyDeclarationFactKey) !== undefined) return emptyNames;
   if (
     context.ast.kindName(declaration) === "KindTypeAliasDeclaration" &&

@@ -30,7 +30,7 @@ import { rustTypedLocationStorageRootReference } from "../operations/typed-locat
 import { selectRustAddressOfSourceOperation } from "../../policy/operations/typed-location-source.js";
 import { rustProjectCallableTargetName } from "../facts/source-member-name.js";
 import { collectRustMutableProjectStorageRequirements } from "../project-types/mutable-storage-requirements.js";
-import { rustMemoryMetadataKey } from "../../target-model/operations/memory-layout.js";
+import { rustCompileTimeSourceKey } from "../../target-model/facts/source-declarations.js";
 import { recordRustNativeBacking } from "../operations/native-memory.js";
 import { collectRustThrownClassDeclarations } from "../resources/thrown-values.js";
 import { rustSourceTypeDeclarations } from "../../policy/types/source-declarations.js";
@@ -39,6 +39,7 @@ import { rustTypeFamilyNormalizer } from "../../policy/types/type-family-normali
 import { createRustArrayDensityQuery } from "../control-flow/array-density.js";
 import { recordRustTypeOnlyDeclarations } from "../declarations/type-only.js";
 import { recordRustProjectCallableAdapterFacts } from "../project-types/callable-adapters.js";
+import { recordRustValueStructDeclaration } from "../declarations/value-structs.js";
 
 export function analyzeRustProgram(context: RustAnalysisContext): void {
   const { ast } = context;
@@ -162,10 +163,11 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   }
   const promotedStorageDeclarations = new Set<Node>();
   const collectPromotedStorage = (node: Node): void => {
+    if (recordRustValueStructDeclaration(walk, node)) return;
     context.pointerBacking.record(node);
     const metadata = context.memoryMetadata.declaration(node);
     if (metadata !== undefined || context.memoryMetadata.isCompileTimeExpression(node)) {
-      context.facts.set(node, rustMemoryMetadataKey, true);
+      context.facts.set(node, rustCompileTimeSourceKey, true);
       for (const issue of metadata?.issues ?? []) appendRustDiagnostic(walk,
         "RUST_MEMORY_METADATA_RUNTIME_ESCAPE", issue.reason, issue.node, []);
       return;
@@ -199,10 +201,12 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     projectTypes,
     projectSourceFiles,
     providerRows,
+    node => rustStructuralObjectCarrierValue(resolveRustTargetTypeRef(node, rustResolutionContext(walk, node), operationOptions))?.representation === "value",
   );
   context.objectRepresentations.initialize({
     ast,
     navigation: context.source.navigation,
+    valueWrites: mutableStorageDeclarations.valueWrites,
     projectTypes,
     sourceFiles: projectSourceFiles,
     hasPromotedStorage(declaration) {
@@ -211,7 +215,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
         context.facts.resolve(declaration, rustLocationStorageFactKey) !== undefined;
     },
     hasMutableStorageUse(declaration) {
-      return mutableStorageDeclarations.has(declaration);
+      return mutableStorageDeclarations.declarations.has(declaration);
     },
   });
   for (const sourceFile of projectSourceFiles) {

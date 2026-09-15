@@ -43,7 +43,7 @@ function fixture() {
     sourceType: {}, resultCarrier: entry.type, storageIndex: index,
   }));
   assert.equal(sourceTypes.registerStructuralObject({ sourceType: templateType, carrier: templateCarrier,
-    storage: "object-handle", fields }), true);
+    storage: "structural-object", fields }), true);
   const member = (symbol, declaration) => ({ property: { symbol, rootSymbols: [], optional: false, readonly: false, type: {} },
     declarations: [declaration], getters: [], setters: [], read: "property" });
   const correspondence = { kind: "available",

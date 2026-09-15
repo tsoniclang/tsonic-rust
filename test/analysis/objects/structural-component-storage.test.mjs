@@ -16,7 +16,7 @@ test("structural storage unifies exact component contracts without erasing other
     ["/readonly.ts", field(primitive("int32"), { readonly: true })],
     ["/accessor.ts", field(primitive("int32"), { accessor: { getter: true, setter: true } })],
   ].map(([owner, value]) => ({
-    sourceType: {}, carrier: rustStructuralObjectTargetType(owner, [value]), storage: "object-handle", fields: [],
+    sourceType: {}, carrier: rustStructuralObjectTargetType(owner, [value]), storage: "structural-object", fields: [],
   }));
   const plan = createRustStructuralShapePlan(shapes, [], file => file === "/external.ts" ? "dependency" : "app", []);
   assert.equal(plan.definitions.length, 7);

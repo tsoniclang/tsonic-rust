@@ -46,6 +46,7 @@ export interface RustObjectRepresentationAnalysisInput {
   readonly navigation: SourceProgramNavigation;
   readonly projectTypes: RustProjectTypePolicy;
   readonly sourceFiles: readonly SourceFile[];
+  readonly valueWrites: ReadonlySet<Node>;
   readonly hasPromotedStorage: (declaration: Node) => boolean;
   readonly hasMutableStorageUse: (declaration: Node) => boolean;
 }
@@ -201,12 +202,17 @@ function collectMutatingProjectMethods(input: {
   readonly ast: AstReader;
   readonly navigation: SourceProgramNavigation;
   readonly projectTypes: RustProjectTypePolicy;
+  readonly valueWrites: ReadonlySet<Node>;
 }): ReadonlySet<Node> {
   const methods = input.projectTypes.definitions.flatMap((definition) =>
     input.ast.members(definition.declaration).filter((member): member is Node =>
       member !== undefined && isInstanceCallable(member, input.ast)));
   const methodSet = new Set(methods);
   const mutating = new Set<Node>();
+  for (const write of input.valueWrites) {
+    const caller = enclosingProjectMethod(write, input.ast, methodSet);
+    if (caller !== undefined) mutating.add(caller);
+  }
   const calls = new Map<Node, Set<Node>>();
   for (const definition of input.projectTypes.definitions) {
     for (const member of input.ast.members(definition.declaration)) {

@@ -83,7 +83,7 @@ export type RustSourceBindingFact =
 export type RustBindingProjection =
   | {
       readonly kind: "object-field";
-      readonly storage: "project-object" | "object-handle";
+      readonly storage: "project-object" | "structural-object";
       readonly storageIndex: number;
       readonly accessor?: {
         readonly getter: true;
@@ -92,7 +92,7 @@ export type RustBindingProjection =
     }
   | {
       readonly kind: "object-rest";
-      readonly storage: "project-object" | "object-handle";
+      readonly storage: "project-object" | "structural-object";
       readonly fields: readonly {
         readonly sourceStorageIndex: number;
         readonly targetStorageIndex: number;

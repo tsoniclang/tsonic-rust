@@ -23,7 +23,7 @@ import {
 } from "../../../target-model/types/index.js";
 import { asNode } from "../../evidence/selected-source.js";
 import { denseDefined, resolveProjectSourceCarrier } from "./project.js";
-import { functionPointerFactKey, pointerFactKey } from "@tsonic/tsts";
+import { functionPointerFactKey, pointerFactKey, structFactKey } from "@tsonic/tsts";
 import { resolveRustSourceMarker } from "./markers.js";
 import { instantiateProviderTargetType, providerCarrierFromRelations, resolveOwnedSourceProfileTypeName, resolveProviderTypeIdentity, resolveSourceProfileCarrierFromArguments } from "./providers.js";
 import { resolveCallableType, resolveSourcePrimitive, resolveSourceTypeParameter } from "./callables.js";
@@ -65,6 +65,17 @@ export function resolveRustTargetTypeRef(
 ): TargetTypeRef | undefined {
   if (subject === undefined) {
     return undefined;
+  }
+  const valueStruct = context.facts.resolve(subject, structFactKey) ?? context.facts.get(subject, structFactKey);
+  if (valueStruct !== undefined) {
+    const node = asNode(subject, context);
+    if (node === undefined) return undefined;
+    const semantics = context.semanticsFor(node);
+    const type = semantics.types.expressionType(node);
+    return type === undefined ? undefined : resolveStructuralObjectType(type, {
+      ...context,
+      currentSemantics: semantics,
+    }, options, new Set<object>(), node, valueStruct);
   }
   const rawLocation = readRustRawLocation(context.ast, context.source.sourceFacts, subject);
   if (rawLocation?.kind === "resolved") {
@@ -155,6 +166,34 @@ export function resolveRustTargetTypeSyntax(
   options: RustTargetTypeResolutionOptions,
   resolving: Set<object>,
 ): TargetTypeRef | undefined {
+  if (context.ast.is.IsTypeQueryNode(node)) {
+    const declaration = context.source.navigation.referenceFor(node)?.declaration;
+    if (declaration !== undefined && context.facts.get(declaration, structFactKey) !== undefined) {
+      if (resolving.has(declaration)) return undefined;
+      const existing = context.facts.getRuntimeCarrierFact(declaration)?.carrier;
+      if (existing !== undefined) return existing;
+      resolving.add(declaration);
+      try {
+        const semantics = context.semanticsFor(declaration);
+        const type = semantics.types.expressionType(declaration);
+        return type === undefined ? undefined : resolveStructuralObjectType(type, {
+          ...context,
+          currentSemantics: semantics,
+        }, options, resolving, declaration, context.facts.get(declaration, structFactKey));
+      } finally {
+        resolving.delete(declaration);
+      }
+    }
+  }
+  const valueStruct = context.facts.resolve(node, structFactKey) ?? context.facts.get(node, structFactKey);
+  if (valueStruct !== undefined) {
+    const semantics = context.semanticsFor(node);
+    const type = semantics.types.expressionType(node);
+    return type === undefined ? undefined : resolveStructuralObjectType(type, {
+      ...context,
+      currentSemantics: semantics,
+    }, options, resolving, node, valueStruct);
+  }
   const sourceFile = context.ast.getSourceFile(node);
   const semantics = sourceFile !== undefined && context.source.semantics.includes(sourceFile)
     ? context.semanticsFor(node)

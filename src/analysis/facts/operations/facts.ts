@@ -129,7 +129,7 @@ export type RustTargetOperationFact =
         readonly method?: true;
         readonly conversion?: RustValueConversion;
       }[];
-      readonly storage: "project-object" | "object-handle";
+      readonly storage: "project-object" | "structural-object";
       readonly resultCarrier: TargetTypeRef;
     }
   | {
@@ -243,7 +243,7 @@ export type RustTargetOperationFact =
       readonly declaration?: Node;
       readonly accessMode: "read" | "write" | "read-write";
       readonly receiverCarrier: TargetTypeRef;
-      readonly storage: "project-object" | "object-handle";
+      readonly storage: "project-object" | "structural-object";
       readonly storageIndex: number;
       readonly valueSemantics:
         | { readonly kind: "stored" }
@@ -318,7 +318,7 @@ export type RustTargetOperationFact =
         readonly name: string;
         readonly carrier: TargetTypeRef;
         readonly field?: {
-          readonly storage: "project-object" | "object-handle";
+          readonly storage: "project-object" | "structural-object";
           readonly storageIndex: number;
           readonly valueSemantics:
             | { readonly kind: "stored" }
@@ -404,7 +404,7 @@ export type RustTargetOperationFact =
   | {
       readonly kind: "record-literal";
       readonly operationId: string;
-      readonly storage: "project-object" | "object-handle";
+      readonly storage: "project-object" | "structural-object";
       readonly resultCarrier: TargetTypeRef;
       readonly fields: readonly {
         readonly implementationDeclaration?: Node;
@@ -451,7 +451,7 @@ export type RustTargetOperationFact =
             readonly kind: "spread";
             readonly property: Node;
             readonly expression: Node;
-            readonly sourceStorage: "project-object" | "object-handle";
+            readonly sourceStorage: "project-object" | "structural-object";
             readonly sourceCarrier: TargetTypeRef;
             readonly fields: readonly {
               readonly sourceName: string;

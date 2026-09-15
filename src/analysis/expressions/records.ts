@@ -218,7 +218,7 @@ export function resolveRecordLiteralCarrier(
   const unionValue = rustSourceUnionCarrierValue(selectedExpected);
   const structuralExpected = rustStructuralObjectCarrierValue(selectedExpected);
   let resultCarrier: TargetTypeRef;
-  let storage: "project-object" | "object-handle";
+  let storage: "project-object" | "structural-object";
   let selectedFields: readonly {
     readonly implementationDeclaration?: Node;
     readonly contractDeclarations: readonly Node[];
@@ -364,7 +364,7 @@ export function resolveRecordLiteralCarrier(
       return undefined;
     }
     resultCarrier = structuralCarrier;
-    storage = "object-handle";
+    storage = "structural-object";
     const structuralShape = walk.sourceTypes.structuralObjectForCarrier(structuralCarrier);
     if (structuralShape === undefined ||
       structuralShape.fields.length !== structuralValue.fields.length) {
@@ -454,7 +454,7 @@ export function resolveRecordLiteralCarrier(
         if (!rustTargetTypeRefEquals(sourceField.carrier, targetField.carrier) ||
           sourceField.method !== targetField.method ||
           sourceField.method === true && (
-            sourceShape.storage !== "object-handle" ||
+            sourceShape.storage !== "structural-object" ||
             !rustTargetTypeRefEquals(sourceCarrier, resultCarrier)
           )) {
           return undefined;
@@ -616,7 +616,7 @@ export function resolveRecordLiteralCarrier(
         : propertySemantics.declarations.symbolName(
             selectedElement.sourceSelectedSymbol,
           );
-      if (storage === "object-handle") {
+      if (storage === "structural-object") {
         const methodProjection = selectedDeclaration === undefined
           ? undefined
           : walk.sourceTypes.structuralFieldProjectionForDeclaration(
@@ -805,7 +805,7 @@ export function resolveRecordLiteralCarrier(
     ...(field.accessor === undefined ? {} : { accessor: field.accessor }),
     ...(field.method === true ? { method: true as const } : {}),
   }));
-  if (storage === "object-handle" && selectedFields.some((field) => {
+  if (storage === "structural-object" && selectedFields.some((field) => {
     if (field.method === true) {
       return false;
     }

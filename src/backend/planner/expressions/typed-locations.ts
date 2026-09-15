@@ -539,7 +539,7 @@ function planRustLocationStorage(
     return planNativeRustArrayAccess(expression, context, planExpression, "location_at");
   }
   const fieldOperation = context.input.program.facts.getFact(expression, rustTargetOperationFactKey);
-  if (fieldOperation?.kind === "source-field" && fieldOperation.storage === "object-handle") {
+  if (fieldOperation?.kind === "source-field" && fieldOperation.storage === "structural-object") {
     const field = context.input.program.structuralShapes.field(fieldOperation.receiverCarrier, fieldOperation.storageIndex);
     if (field?.nativeLayout !== undefined) {
       const receiver = Node_Expression(context.input.program.source.ast, expression);

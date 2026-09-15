@@ -20,6 +20,7 @@ import { readRustProjectDispatchedField, rustProjectObjectDispatchField } from "
 import { planRustProjectFieldDispatchRoles } from "../objects/project-field-dispatch.js";
 import { readRustSourceStaticField } from "../declarations/static-field-storage.js";
 import { readRustStoredObjectField } from "../objects/project-storage.js";
+import { planRustValueFieldLocation, rustSourceFieldHasValueReceiver } from "../objects/value-fields.js";
 import { rustCallableProtocol, rustSourceTypeCarrierValue } from "../../../target-model/types/index.js";
 import { rustFallibleFactKey, rustSourceAccessorEffectsFactKey } from "../../../analysis/facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -114,6 +115,10 @@ function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr
         "Project-source field fact conflicts with the TSTS-selected property fact.",
       ));
       return undefined;
+    }
+    if (rustSourceFieldHasValueReceiver(node, context)) {
+      const location = planRustValueFieldLocation(node, context, "read");
+      return location === undefined ? undefined : { kind: "block", bindings: location.bindings, value: location.read };
     }
     const receiverNode = Node_Expression(context.input.program.source.ast, node);
     const plannedReceiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);

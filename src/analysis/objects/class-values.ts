@@ -127,7 +127,7 @@ export function resolveRustClassValue(
   const owner = rustStructuralObjectCarrierValue(carrier)?.ownerFileName;
   const component = (file: string) => walk.context.sourcePackages.packages.find(entry => entry.sourceFiles.includes(file))?.componentId;
   const declarationFile = ast.getSourceFile(declaration);
-  if (shape.storage !== "object-handle" || owner === undefined ||
+  if (shape.storage !== "structural-object" || owner === undefined ||
     component(owner) === undefined || component(owner) !== component(ast.getFileName(declarationFile)) ||
     ast.parent(declaration) !== declarationFile) return reject();
   const correspondence = semantics.types.structuralMembers(sourceType, destinationType);

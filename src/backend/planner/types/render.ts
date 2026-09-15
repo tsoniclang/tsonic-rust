@@ -521,7 +521,7 @@ export function rustTypeFromCarrierInContext(
         ? {}
         : { genericArguments: genericArguments as readonly RustGenericArgument[] }),
     };
-    return union?.origin === "generated" ? stateType : {
+    return union?.origin === "generated" || rustStructuralObjectCarrierValue(shapeCarrier)?.representation === "value" ? stateType : {
       kind: "named",
       path: "rt::ObjectHandle",
       genericArguments: typeGenericArguments([stateType]),

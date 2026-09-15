@@ -27,6 +27,8 @@ import {
 } from "../types/render.js";
 import {
   rustOptionTargetType,
+  rustCarrierSupportsTrait,
+  rustStructuralObjectCarrierValue,
   rustLocationTargetType,
   rustStructuralPropertyGetterStorageCarrier,
   rustStructuralPropertySetterStorageCarrier,
@@ -296,12 +298,15 @@ export function planRustStructuralShapeModule(
       }
     }
     structs.push(...callableAliases);
+    const valueRepresentation = rustStructuralObjectCarrierValue(definition.carrier)?.representation === "value";
+    const defaultable = valueRepresentation && rustCarrierSupportsTrait(definition.carrier, "core::default::Default", () => true);
+    const cloneable = valueRepresentation && rustCarrierSupportsTrait(definition.carrier, "core::clone::Clone", () => true);
     structs.push({
       kind: "struct",
       name: definition.targetName,
       visibility,
       ...(shapeDeadCode === undefined ? {} : { deadCode: shapeDeadCode }),
-      derives: [],
+      derives: [...(cloneable ? ["Clone"] : []), ...(defaultable ? ["Default"] : [])],
       generics,
       fields,
     });
