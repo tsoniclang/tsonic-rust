@@ -3,7 +3,7 @@ import test from "node:test";
 import { analyzeRustSourcePackageComponents } from "../../../../dist/analysis/program/source-package-components.js";
 import { planRustSourcePackageErrors, resolveRustSourcePackageErrorBoundary } from "../../../../dist/backend/planner/program/source-package-errors.js";
 import { planRustProgramErrorModule } from "../../../../dist/backend/planner/program/errors.js";
-import { sourcePackageCallbackErrorFiles } from "../../../../../tsonic/test/fixtures/source-package-callback-errors.mjs";
+import { sourcePackageCallbackErrorFiles, sourcePackageCallbackErrorGraph } from "../../../../../tsonic/test/fixtures/source-package-callback-errors.mjs";
 import { compileRust } from "../../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
 
@@ -71,10 +71,12 @@ test("error ownership mutations reject before any program-error AST is emitted",
 test("retained cross-package callbacks preserve the original thrown object", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     surfaces: ["js"],
+    sourcePackages: sourcePackageCallbackErrorGraph,
     target: { id: "rust", options: { outputType: "bin", crateName: "package_callback_errors" } },
     files: { ...sourcePackageCallbackErrorFiles, "index.ts": `${sourcePackageCallbackErrorFiles["index.ts"]}
 export function main(): void { if (!run()) throw new Error("callback identity"); }` },
   });
   assert.deepEqual(result.diagnostics, []);
+  assert.equal(result.artifacts.filter(artifact => artifact.path.endsWith("Cargo.toml")).length, 3);
   assert.equal(validateGeneratedProject("package-callback-errors", result.artifacts, { run: true }).status, 0);
 });

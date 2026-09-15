@@ -27,10 +27,11 @@ import {
   writeGeneratedProject,
 } from "../../../helpers/cargo-projects.mjs";
 import { join, resolve } from "node:path";
-import { closedGenericDispatchPackageFiles } from "../../../../../tsonic/test/fixtures/closed-generic-dispatch.mjs";
+import { closedGenericDispatchPackageFiles, closedGenericDispatchPackageGraph } from "../../../../../tsonic/test/fixtures/closed-generic-dispatch.mjs";
 
 test("binary source-package generic dispatch closes across the exact component graph", { timeout: 300_000 }, () => {
   const { result } = compileRust({
+    sourcePackages: closedGenericDispatchPackageGraph,
     target: { id: "rust", options: { outputType: "bin", crateName: "package_generic_dispatch" } },
     files: { ...closedGenericDispatchPackageFiles, "index.ts": `${closedGenericDispatchPackageFiles["index.ts"]}
 export function main(): void { if (!run()) throw new Error("package generic dispatch"); }` },
@@ -43,6 +44,7 @@ export function main(): void { if (!run()) throw new Error("package generic disp
 
 test("library source-package generic dispatch retains its open-contract rejection", () => {
   const { result } = compileRust({
+    sourcePackages: closedGenericDispatchPackageGraph,
     target: { id: "rust", options: { outputType: "lib", crateName: "package_generic_dispatch" } },
     files: closedGenericDispatchPackageFiles,
   });

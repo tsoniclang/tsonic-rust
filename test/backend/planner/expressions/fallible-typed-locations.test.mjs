@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { falliblePointerFiles, falliblePointerPackageFiles } from "../../../../../tsonic/test/fixtures/fallible-pointer-views.mjs";
+import { falliblePointerFiles, falliblePointerPackageFiles, falliblePointerPackageGraph } from "../../../../../tsonic/test/fixtures/fallible-pointer-views.mjs";
 import { compileRust } from "../../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
 import { rustLocationCallbackCarrier } from "../../../../dist/analysis/operations/location-callbacks.js";
@@ -11,11 +11,13 @@ for (const [name, files] of [["files", falliblePointerFiles], ["packages", falli
   for (const surfaces of [undefined, ["js"]]) {
     test(`fallible pointer callbacks preserve aliases and selected errors across ${name}, ${surfaces?.[0] ?? "native"}`, { timeout: 300_000 }, () => {
       const { result } = compileRust({ surfaces,
+        sourcePackages: name === "packages" ? falliblePointerPackageGraph : undefined,
         target: { id: "rust", options: { outputType: "bin", crateName: "fallible_locations" } },
         files: { ...files, "index.ts": `${files["index.ts"]}
 export function main(): void { if (!run()) throw new Error("pointer callback contract"); }` },
       });
       assert.deepEqual(result.diagnostics, []);
+      assert.equal(result.artifacts.filter(artifact => artifact.path.endsWith("Cargo.toml")).length, name === "packages" ? 2 : 1);
       const code = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
       assert.match(code, /\.try_load\(\)\?/u);
       assert.match(code, /\.try_store\(/u);
