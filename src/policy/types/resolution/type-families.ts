@@ -16,6 +16,22 @@ export interface RustConditionalAliasSelection {
   readonly carrier: TargetTypeRef | undefined;
 }
 
+export function resolveRustSemanticConditionalAlias(
+  type: Type,
+  context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions,
+  resolving: Set<object>,
+): RustConditionalAliasSelection | undefined {
+  const application = context.currentSemantics.types.aliasApplication(type);
+  if (application?.kind !== "conditional") return undefined;
+  const root = application.conditionalSteps[0];
+  if (root === undefined || rustSourceTypeFamilyDeclaration(root.conditional, context) === undefined) return undefined;
+  const arguments_ = application.bindings.map(binding =>
+    resolveRustTargetType(binding.argument, context, options, resolving));
+  if (arguments_.some(argument => argument === undefined)) return { carrier: undefined };
+  return { carrier: resolveRustTypeFamilyApplication(application, arguments_ as readonly TargetTypeRef[], context, options, resolving) };
+}
+
 export function resolveRustConditionalAlias(
   node: Node,
   context: RustTargetTypeResolutionContext,

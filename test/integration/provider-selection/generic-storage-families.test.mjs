@@ -140,3 +140,46 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   validateGeneratedProject("independent-storage-families", result.artifacts, { run: true });
 });
+
+test("inferred pointer loads retain conditional family arguments across nested classes", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"], packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "inferred_pointer_family" } },
+    files: {
+      "storage.ts": storageDeclarations,
+      "reader.ts": `
+import type { Pointer } from "@tsonic/core/types.js";
+import { loadPointer } from "@tsonic/core/lang.js";
+import type { Storage as Selected } from "./storage.js";
+export class Box<T> { value: T; constructor(value: T) { this.value = value; } }
+export function read<T>(pointer: Pointer<Box<Selected<T>>>): Selected<T> {
+  return loadPointer(pointer).value;
+}
+export function retained<T>(pointer: Pointer<Box<Selected<T>>>): Pointer<Box<Selected<T>>> {
+  const value = pointer;
+  return value;
+}
+`,
+      "index.ts": `
+import { check } from "@acme/testing";
+import type { uint32 } from "@tsonic/core/types.js";
+import { allocatePointer } from "@tsonic/core/lang.js";
+import { storageKey } from "./storage.js";
+import { Box, read, retained } from "./reader.js";
+class Value { declare readonly [storageKey]: { count: uint32 }; }
+export function main(): void {
+  const maximum: uint32 = 4294967295;
+  const scalar = allocatePointer(new Box<uint32>(maximum));
+  check(read<uint32>(retained<uint32>(scalar)) === maximum);
+  const data = { count: maximum };
+  const record = allocatePointer(new Box(data));
+  const alias = read<Value>(retained<Value>(record));
+  alias.count = 7;
+  check(data.count === 7 && read<Value>(record).count === 7);
+}
+`,
+    },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  validateGeneratedProject("inferred-pointer-family", result.artifacts, { run: true });
+});

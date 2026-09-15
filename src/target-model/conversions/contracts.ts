@@ -600,6 +600,7 @@ export function rustValueConversionContract(
         fallible: false,
       };
   }
+  return undefined;
 }
 
 function contract(

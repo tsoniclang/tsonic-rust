@@ -38,6 +38,7 @@ import { isRustSourceRawPointer } from "../../operations/raw-pointer-source.js";
 import { resolveRustAuthoredBroadSourceValueTargetType } from "./broad-values.js";
 import { selectTsonicFixedArrayFromSource } from "@tsonic/source-core/facts";
 import type { TsonicFixedArrayFact } from "@tsonic/source-core/facts";
+import { resolveRustSemanticConditionalAlias } from "./type-families.js";
 import { resolveRustTypeComponentEvidence } from "./source-evidence.js";
 import { resolveRustSourceMarker } from "./markers.js";
 
@@ -108,6 +109,8 @@ export function resolveRustTargetType(
   resolving.add(type);
   try {
     const semantics = context.currentSemantics;
+    const conditional = resolveRustSemanticConditionalAlias(type, context, options, resolving);
+    if (conditional !== undefined) return conditional.carrier;
     if (resolveRustSourceMarker(type, context) === "pointer") {
       const arguments_ = semantics.types.effectiveTypeArguments(type);
       const pointee = arguments_?.length === 1
