@@ -36,7 +36,8 @@ import { collectRustThrownClassDeclarations } from "../resources/thrown-values.j
 import { rustSourceTypeDeclarations } from "../../policy/types/source-declarations.js";
 import { realizeRustSourceTypeFamilyDemands } from "../project-types/type-family-demands.js";
 import { rustTypeFamilyNormalizer } from "../../policy/types/type-family-normalization.js";
-import { createRustArrayDensityQuery } from "../control-flow/array-density.js";
+import { createJsArrayDensityQuery } from "@tsonic/js-source-profile";
+import { resolveSelectedJsSourceMember } from "../../policy/evidence/selected-source.js";
 import { recordRustTypeOnlyDeclarations } from "../declarations/type-only.js";
 import { recordRustProjectCallableAdapterFacts } from "../project-types/callable-adapters.js";
 import { recordRustValueStructDeclaration } from "../declarations/value-structs.js";
@@ -75,7 +76,10 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   const moduleBindings = createRustModuleBindingPolicy(context);
   let finalizedProjectTypes: RustProjectTypePolicy | undefined;
   const operationOptions: RustOperationsProviderOptions = {
-    arrayEntriesAreDense: createRustArrayDensityQuery(context, sourceProfiles),
+    arrayDensity: createJsArrayDensityQuery(context.source, {
+      closedSourceFiles,
+      memberIdentity: declaration => resolveSelectedJsSourceMember(context, declaration, sourceProfiles),
+    }),
     providerExports: providerSemantics.exports,
     providerRows,
     providerTypes: providerSemantics.types,

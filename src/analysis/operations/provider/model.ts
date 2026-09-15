@@ -10,6 +10,7 @@ import type { RustSourceProfileRegistry } from "../../../policy/types/source-pro
 import type { RustSourceTypeRegistry } from "../../project-types/source-type-registry.js";
 import type { RustTargetTypeResolutionOptions } from "../../../policy/types/resolution.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type { JsArrayDensityQueries } from "@tsonic/js-source-profile";
 
 export const sourceCallMarkerByIdentity = new Map(
   [
@@ -26,7 +27,7 @@ export const sourceCallMarkerByIdentity = new Map(
 );
 
 export interface RustOperationsProviderOptions {
-  readonly arrayEntriesAreDense: (expression: import("@tsonic/tsts").Node) => boolean;
+  readonly arrayDensity: JsArrayDensityQueries;
   readonly providerExports: readonly import("../../../providers/packages/model.js").RustProviderExportRow[];
   readonly providerRows: readonly RustProviderOperationRow[];
   readonly providerTypes: readonly import("../../../providers/packages/model.js").RustProviderTypeRow[];

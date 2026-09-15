@@ -316,7 +316,7 @@ export function selectRustCheckedIteration(
   }
   const iterable = resolveRustTargetTypeRef(request.expression, context, options);
   const targetIteration = rustIterableTargetPolicy(iterable,
-    rustJsArrayEntriesElementTargetType(iterable) !== undefined && options.arrayEntriesAreDense(request.expression));
+    rustJsArrayEntriesElementTargetType(iterable) !== undefined && options.arrayDensity.entries(request.expression));
   if (targetIteration === undefined) {
     return rejectSelectedOperation(
       request.statement,

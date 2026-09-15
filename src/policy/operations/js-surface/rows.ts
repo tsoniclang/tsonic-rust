@@ -305,6 +305,20 @@ export const jsOperationRows = defineJsOperationRows([
   { owner: "ArrayConstructor", member: "from", operationKind: "call", lane: "js-array", variant: "string", requirements: [{ carrier: { ref: "argument", index: 0 }, capability: "clone" }], shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::array_from_string", argModes: ["ref"] }, result: { ref: "string-array" }, params: [{ ref: "string" }] } },
   { owner: "ArrayConstructor", member: "from", operationKind: "call", lane: "js-array", variant: "native-array", selectedMethodTypeArgumentArity: 1, requirements: [{ carrier: { ref: "selected-method-type-argument", index: 0 }, capability: "clone" }], shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::array_from_vec", argModes: ["ref"] }, result: { ref: "selected-method-output-array", index: 0 }, params: [{ ref: "selected-method-input-array", index: 0 }] } },
   ...([
+    ["dense", "array_from_dense_array"],
+    ["optional-undefined", "array_from_optional_array"],
+    ["undefined", "array_from_undefined_array"],
+  ] as const).map(([mode, target]): JsOperationRowData => ({
+    owner: "ArrayConstructor", member: "from", operationKind: "call", lane: "js-array",
+    variant: `js-array-${mode}`, arrayCopyMode: mode, selectedMethodTypeArgumentArity: 1,
+    requirements: [{ carrier: { ref: "selected-method-type-argument", index: 0 }, capability: "clone" }],
+    shape: { op: "operation", operationKind: "method",
+      target: { form: "call", path: `js_abi::${target}`, argModes: ["ref"] },
+      result: { ref: "selected-method-output-array", index: 0 },
+      params: [{ ref: "selected-method-output-array", index: 0 }],
+    },
+  })),
+  ...([
     { arity: 0, variant: "zero", target: "array_from_string_map_zero", fallibleTarget: "array_from_string_try_map_zero" },
     { arity: 1, variant: "value", target: "array_from_string_map", fallibleTarget: "array_from_string_try_map" },
     { arity: 2, variant: "value-index", target: "array_from_string_map_with_index", fallibleTarget: "array_from_string_try_map_with_index" },
