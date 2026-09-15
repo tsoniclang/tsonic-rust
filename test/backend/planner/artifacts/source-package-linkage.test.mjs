@@ -27,6 +27,29 @@ import {
   writeGeneratedProject,
 } from "../../../helpers/cargo-projects.mjs";
 import { join, resolve } from "node:path";
+import { closedGenericDispatchPackageFiles } from "../../../../../tsonic/test/fixtures/closed-generic-dispatch.mjs";
+
+test("binary source-package generic dispatch closes across the exact component graph", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    target: { id: "rust", options: { outputType: "bin", crateName: "package_generic_dispatch" } },
+    files: { ...closedGenericDispatchPackageFiles, "index.ts": `${closedGenericDispatchPackageFiles["index.ts"]}
+export function main(): void { if (!run()) throw new Error("package generic dispatch"); }` },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  const manifests = result.artifacts.filter(artifact => artifact.path.endsWith("Cargo.toml"));
+  assert.ok(manifests.length > 1, "source packages must retain their separate Cargo components");
+  assert.equal(validateGeneratedProject("package-generic-dispatch", result.artifacts, { run: true }).status, 0);
+});
+
+test("library source-package generic dispatch retains its open-contract rejection", () => {
+  const { result } = compileRust({
+    target: { id: "rust", options: { outputType: "lib", crateName: "package_generic_dispatch" } },
+    files: closedGenericDispatchPackageFiles,
+  });
+  assert.ok(result.diagnostics.some(diagnostic => diagnostic.message.includes("open public target contract")));
+  assert.equal(result.artifacts.length, 0);
+});
+
 test("source-package components are dependency ordered and ignore inactive packages", () => {
   const identities = new Map([
     ["/root/index.ts", sourceIdentity("/root/index.ts", "root")],

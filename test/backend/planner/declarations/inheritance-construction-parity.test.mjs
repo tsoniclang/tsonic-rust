@@ -6,12 +6,25 @@ import {
   compileRust,
 } from "../../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
+import { genericBaseConstructorFiles } from "../../../../../tsonic/test/fixtures/generic-base-constructors.mjs";
 
 function compileExecutable(source, crateName) {
   return compileRust({
     packages: [acmeTestingPackage()],
     target: { id: "rust", options: { outputType: "bin", crateName } },
     files: { "index.ts": source },
+  });
+}
+
+for (const surfaces of [[], ["js"]]) {
+  test(`implicit generic base construction preserves initialization in profile ${surfaces.join() || "native"}`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ surfaces,
+      target: { id: "rust", options: { outputType: "bin", crateName: "generic_base_constructors" } },
+      files: { ...genericBaseConstructorFiles, "index.ts": `${genericBaseConstructorFiles["index.ts"]}
+export function main(): void { if (!run()) throw new Error("generic base constructor"); }` },
+    });
+    assert.deepEqual(result.diagnostics, []);
+    assert.equal(validateGeneratedProject("generic-base-constructors", result.artifacts, { run: true }).status, 0);
   });
 }
 

@@ -18,6 +18,7 @@ import { acceptProjectSourceCall, mapSelectedJsSpecialCall } from "../object-sha
 import { checkedPropertySelectionInput, selectRustCheckedPropertyAccess } from "../properties.js";
 import { acceptRustPolicy } from "../../../../policy/operations/contracts.js";
 import { acceptSelectedCall, checkedCallIsConstruction, instantiateSelectedCallTemplate, selectedCallReceiverValueCarrier, selectRustOptionalCallResult } from "./instantiation.js";
+import { selectedImplicitSuperConstructorClass } from "./implicit-super.js";
 import { substituteProviderOperationForm } from "./template-instantiation.js";
 import { closedMetadataKey } from "../../../../target-model/metadata/closed-data.js";
 import { mapRustSourceMarkerCall } from "./deferred.js";
@@ -698,28 +699,4 @@ function runtimeCallableProtocol(
     return { parameters: carrier.args, result: carrier.result };
   }
   return rustCallableProtocol(carrier);
-}
-
-function selectedImplicitSuperConstructorClass(
-  request: RustCheckedCallSelectionInput,
-  context: RustOperationPolicyContext,
-  options: RustOperationsProviderOptions,
-): Node | undefined {
-  if (context.ast.kindName(request.source.sourceCallee.expression) !== "KindSuperKeyword") {
-    return undefined;
-  }
-  const containing = options.projectTypes.definitionContainingDeclaration(
-    request.source.call,
-  );
-  if (containing?.kind !== "class") {
-    return undefined;
-  }
-  const matches = options.projectTypes.heritageForDefinition(containing).filter((edge) =>
-    edge.kind === "extends" &&
-    edge.target.kind === "class" &&
-    options.projectTypes.constructorForSignature(
-      edge.target,
-      request.source.selectedSignature,
-    ) !== undefined);
-  return matches.length === 1 ? matches[0]!.target.declaration : undefined;
 }

@@ -404,15 +404,15 @@ function collectSourcePackageBoundaries(
   for (const sourcePackage of context.sourcePackages.packages) {
     const publishesLibrary = sourcePackage.componentId !== rootPackage.componentId ||
       context.rootPublishesLibrary;
-    if (!publishesLibrary) {
+    if (!context.rootPublishesLibrary) {
       for (const fileName of sourcePackage.sourceFiles) {
         const sourceFile = sourceFileByName.get(normalizeSourceFileName(fileName));
         if (sourceFile !== undefined) {
           closedSourceFiles.add(sourceFile);
         }
       }
-      continue;
     }
+    if (!publishesLibrary) continue;
     for (const sourceExport of sourcePackage.exports) {
       const sourceFile = sourceFileByName.get(normalizeSourceFileName(sourceExport.sourceFile));
       if (sourceFile === undefined) {
