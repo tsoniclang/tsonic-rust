@@ -1,5 +1,6 @@
 import type { RustValueConversion } from "../../target-model/operations/model.js";
 import { rustNumericPromotionKind } from "../../target-model/conversions/numeric-promotion.js";
+import { rustNumberBoxingConversionId } from "../../target-model/conversions/number-boxing.js";
 import {
   isRustJsArrayCarrier,
   isRustBigIntCarrier,
@@ -32,9 +33,7 @@ import {
   rustBoolToJsValueConversion,
   rustFloat64ToInt32ValueConversion,
   rustFloat64ToUint8ValueConversion,
-  rustFloat64ToJsValueConversion,
   rustInt32ToFloat64ValueConversion,
-  rustInt32ToJsValueConversion,
   rustInt32ToUint8ValueConversion,
   rustJsValueCloneConversion,
   rustTsValueCloneConversion,
@@ -132,11 +131,11 @@ export function selectRustSourceValueConversion(
     if (rustTargetTypeRefEquals(source, boolCarrier)) {
       return rustBoolToJsValueConversion;
     }
-    if (rustTargetTypeRefEquals(source, float64Carrier)) {
-      return rustFloat64ToJsValueConversion;
-    }
-    if (rustTargetTypeRefEquals(source, int32Carrier)) {
-      return rustInt32ToJsValueConversion;
+    const numberBoxing = source.kind === "source-primitive"
+      ? rustNumberBoxingConversionId(source.name)
+      : undefined;
+    if (numberBoxing !== undefined) {
+      return Object.freeze({ kind: "semantic-conversion", id: numberBoxing });
     }
     if (isRustNullCarrier(source)) {
       return rustNullToJsValueConversion;

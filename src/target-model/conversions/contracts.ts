@@ -47,6 +47,7 @@ import {
 } from "../types/index.js";
 import type { RustPrimitiveTypeName } from "../syntax/tokens.js";
 import { rustNumericPromotionKind } from "./numeric-promotion.js";
+import { rustNumberBoxingSourceKind } from "./number-boxing.js";
 import { rustRestSequenceElements } from "../operations/rest-assembly.js";
 import { isDenseDataArray } from "../metadata/closed-data.js";
 import { rustNamedTypeCarrierValue } from "../types/carriers/native.js";
@@ -527,6 +528,11 @@ export function rustValueConversionContract(
         }
       : undefined;
   }
+  const numberBoxingSource = rustNumberBoxingSourceKind(value.id);
+  if (numberBoxingSource !== undefined) {
+    return contract(value.id, "exact", "js_abi::JsValue::from", "value",
+      rustSourcePrimitiveTargetType(numberBoxingSource), jsValueCarrier, false);
+  }
   switch (value.id) {
     case "js-numeric-from-number":
       return contract(value.id, "exact", "js_abi::JsNumeric::from_number", "value", float64Carrier, rustJsNumericTargetType(), false);
@@ -570,10 +576,6 @@ export function rustValueConversionContract(
       return contract(value.id, "js-number", "rt::conversions::u64_to_f64", "value", uint64Carrier, float64Carrier, false);
     case "js-value-from-bool":
       return contract(value.id, "exact", "js_abi::JsValue::from", "value", boolCarrier, jsValueCarrier, false);
-    case "js-value-from-f64":
-      return contract(value.id, "exact", "js_abi::JsValue::from", "value", float64Carrier, jsValueCarrier, false);
-    case "js-value-from-i32":
-      return contract(value.id, "exact", "js_abi::JsValue::from", "value", int32Carrier, jsValueCarrier, false);
     case "js-value-from-null":
       return contract(value.id, "exact", "js_abi::JsValue::from", "value", nullCarrier, jsValueCarrier, false);
     case "js-value-from-string":
