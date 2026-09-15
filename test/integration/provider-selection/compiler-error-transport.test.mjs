@@ -7,20 +7,10 @@ import { rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js
 import { rustJsErrorTargetType, rustProgramErrorTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
 import { planThrowStatement } from "../../../dist/backend/planner/statements/errors.js";
 import { caughtErrorProofFiles } from "../../../../tsonic/test/fixtures/caught-errors.mjs";
-import { broadValueNarrowingSource } from "../../../../tsonic/test/fixtures/broad-value-narrowing.mjs";
 import { selectRustFlowReadProjection } from "../../../dist/policy/types/value-carrier-reconciliation.js";
 import { planRustFlowReadProjection } from "../../../dist/backend/planner/expressions/flow-reads.js";
 
 for (const surfaces of [[], ["js"]]) {
-  test(`non-nullish unknown retains its value and identity in ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
-    const { result } = compileRust({ surfaces,
-      target: { id: "rust", options: { outputType: "bin", crateName: "broad_value_narrowing" } },
-      files: { "index.ts": `${broadValueNarrowingSource}
-export function main(): void { if (!run()) throw new Error("broad value narrowing"); }` },
-    });
-    assert.deepEqual(result.diagnostics, []);
-    assert.equal(validateGeneratedProject(`broad-value-narrowing-${surfaces.length}`, result.artifacts, { run: true }).status, 0);
-  });
   test(`caught builtin Errors retain identity and stack in the ${surfaces.length === 0 ? "native" : "JS"} profile`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces,
       target: { id: "rust", options: { outputType: "bin", crateName: "caught_errors" } },

@@ -107,7 +107,7 @@ export function resolveIdentifierCarrier(
           walk,
           initializer,
           sourceFile,
-          expected,
+          undefined,
         );
         if (initializerCarrier !== undefined) {
           setCarrierFact(walk, declaration, initializerCarrier);

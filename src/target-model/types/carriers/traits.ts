@@ -212,6 +212,10 @@ export function rustCarrierSupportsTrait(
   if (traitPath === "core::clone::Clone") {
     return supportsCloneWithContracts(carrier, typeParameterSupports, associatedTypeSupports);
   }
+  if (traitPath === rustJsClosedValueCarrierTraitPath && carrier.kind === "target-named" &&
+    carrier.id === rustEmptyObjectTargetId && (carrier.genericArguments?.length ?? 0) === 0) {
+    return true;
+  }
   if (traitPath === "core::marker::Copy") {
     const supports = (type: TargetTypeRef): boolean =>
       rustCarrierSupportsTrait(type, traitPath, typeParameterSupports, associatedTypeSupports);

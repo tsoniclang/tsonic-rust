@@ -8,6 +8,7 @@ import {
 import {
   rustOptionElementCarrier,
   rustEmptyObjectTargetId,
+  rustEmptyObjectTargetType,
   rustCallableProtocol,
   rustStructuralMethodCallableCarrier,
   rustClosureProtocol,
@@ -126,32 +127,27 @@ export function resolveRecordLiteralCarrier(
   const selectedSourceType = contextualSelection.kind === "selected"
     ? contextualSelection.type
     : sourceType;
-  let selectedExpected = expected ?? resolveRustTargetTypeRef(
-    selectedSourceType,
-    rustResolutionContext(walk, expression),
-    walk.operationOptions,
-  );
+  let selectedExpected = expected ?? (contextualSelection.kind !== "selected" && properties.length === 0
+    ? rustEmptyObjectTargetType()
+    : resolveRustTargetTypeRef(
+        selectedSourceType,
+        rustResolutionContext(walk, expression),
+        walk.operationOptions,
+      ));
   if (selectedExpected === undefined) {
     return undefined;
-  }
-  if (selectedExpected.kind === "target-named" && selectedExpected.id === rustEmptyObjectTargetId) {
-    if (properties.length !== 0) return undefined;
-    setRustOperationFact(walk, expression, {
-      kind: "empty-object-literal",
-      operationId: "tsonic.rust.object.empty-literal",
-      resultCarrier: selectedExpected,
-    });
-    return setCarrierFact(walk, expression, selectedExpected);
   }
   let contextualReconciliation: import("../../policy/types/value-carrier-reconciliation.js").RustAppliedValueCarrierReconciliation | undefined;
   if (expected !== undefined && rustSourceTypeCarrierValue(selectedExpected)?.shape !== "object" &&
     rustSourceUnionCarrierValue(selectedExpected) === undefined &&
     rustStructuralObjectCarrierValue(selectedExpected) === undefined) {
-    const sourceCarrier = resolveRustTargetTypeRef(
-      sourceType,
-      rustResolutionContext(walk, expression),
-      walk.operationOptions,
-    );
+    const sourceCarrier = properties.length === 0
+      ? rustEmptyObjectTargetType()
+      : resolveRustTargetTypeRef(
+          sourceType,
+          rustResolutionContext(walk, expression),
+          walk.operationOptions,
+        );
     const reconciliation = sourceCarrier === undefined
       ? undefined
       : selectRustValueCarrierReconciliation(
@@ -163,6 +159,19 @@ export function resolveRecordLiteralCarrier(
       selectedExpected = sourceCarrier!;
       contextualReconciliation = reconciliation;
     }
+  }
+  if (selectedExpected.kind === "target-named" && selectedExpected.id === rustEmptyObjectTargetId) {
+    if (properties.length !== 0) return undefined;
+    setRustOperationFact(walk, expression, {
+      kind: "empty-object-literal",
+      operationId: "tsonic.rust.object.empty-literal",
+      resultCarrier: selectedExpected,
+    });
+    const carrier = setCarrierFact(walk, expression, selectedExpected);
+    if (carrier !== undefined && contextualReconciliation !== undefined) {
+      recordRustValueCarrierReconciliation(walk.context.facts, expression, contextualReconciliation);
+    }
+    return carrier;
   }
   const indexedDefinition = walk.context.projectTypes.definitionForCarrier(selectedExpected);
   const indexedLayout = indexedDefinition?.kind === "interface"
