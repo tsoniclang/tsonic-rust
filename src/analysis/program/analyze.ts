@@ -38,6 +38,7 @@ import { realizeRustSourceTypeFamilyDemands } from "../project-types/type-family
 import { rustTypeFamilyNormalizer } from "../../policy/types/type-family-normalization.js";
 import { createRustArrayDensityQuery } from "../control-flow/array-density.js";
 import { recordRustTypeOnlyDeclarations } from "../declarations/type-only.js";
+import { recordRustProjectCallableAdapterFacts } from "../project-types/callable-adapters.js";
 
 export function analyzeRustProgram(context: RustAnalysisContext): void {
   const { ast } = context;
@@ -373,6 +374,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   });
   // Fallibility depends on finalized operation facts and the one whole-program
   // structural storage plan produced while walking bodies.
+  recordRustProjectCallableAdapterFacts(walk);
   recordFallibilityFacts(walk, projectSourceFiles);
   recordResourceManagementFacts(walk, projectSourceFiles);
   recordFutureValueFacts(walk, projectSourceFiles);

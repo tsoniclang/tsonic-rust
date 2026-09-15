@@ -1,105 +1,28 @@
 import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
 import { defineRustPlanKey } from "../../target-model/facts/keys.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustArgumentMode } from "../../target-model/operations/model.js";
-import type { RustContextualValueConversion } from "../../target-model/conversions/contextual.js";
 import type { RustErrorBoundary } from "../../target-model/operations/error-boundary.js";
 import type { RustFinalizedValueConversion } from "./finalized-operation-abi.js";
 import type { RustPlanKey } from "../../target-model/facts/keys.js";
-import type { RustSourceParameterAbiFact } from "./callables-and-resources.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
-export type RustObjectLiteralValueAdapter =
-  | {
-      readonly kind: "identity";
-      readonly sourceCarrier: TargetTypeRef;
-      readonly targetCarrier: TargetTypeRef;
-    }
-  | {
-      readonly kind: "conversion";
-      readonly sourceCarrier: TargetTypeRef;
-      readonly targetCarrier: TargetTypeRef;
-      readonly conversion: RustContextualValueConversion;
-    }
-  | {
-      readonly kind: "project-upcast";
-      readonly sourceCarrier: TargetTypeRef;
-      readonly targetCarrier: TargetTypeRef;
-    }
-  | {
-      readonly kind: "call-scoped-lifetime";
-      readonly sourceCarrier: TargetTypeRef;
-      readonly targetCarrier: TargetTypeRef;
-    }
-  | {
-      readonly kind: "option-some";
-      readonly sourceCarrier: TargetTypeRef;
-      readonly targetCarrier: TargetTypeRef;
-      readonly element: RustObjectLiteralValueAdapter;
-    }
-  | {
-      readonly kind: "option-map";
-      readonly sourceCarrier: TargetTypeRef;
-      readonly targetCarrier: TargetTypeRef;
-      readonly element: RustObjectLiteralValueAdapter;
-    };
-
-export interface RustObjectLiteralMethodParameterAbi {
-  readonly form: RustSourceParameterAbiFact["form"];
-  readonly valueCarrier: TargetTypeRef;
-  readonly parameterCarrier: TargetTypeRef;
-  readonly mode: RustArgumentMode;
-}
-
-export type RustObjectLiteralMethodParameterAdapter =
-  | {
-      readonly kind: "runtime-value";
-      readonly contractParameterIndex: number;
-      readonly source: RustObjectLiteralMethodParameterAbi;
-      readonly target: RustObjectLiteralMethodParameterAbi;
-      readonly adapter: RustObjectLiteralValueAdapter;
-    }
-  | {
-      readonly kind: "logical-value";
-      readonly contractParameterIndex: number;
-      readonly source: RustObjectLiteralMethodParameterAbi;
-      readonly target: RustObjectLiteralMethodParameterAbi;
-      readonly adapter: RustObjectLiteralValueAdapter;
-    }
-  | {
-      readonly kind: "omitted";
-      readonly target: RustObjectLiteralMethodParameterAbi;
-    }
-  | {
-      readonly kind: "fixed-rest";
-      readonly contractParameterIndexes: readonly number[];
-      readonly sources: readonly RustObjectLiteralMethodParameterAbi[];
-      readonly target: RustObjectLiteralMethodParameterAbi;
-      readonly elementAdapters: readonly RustObjectLiteralValueAdapter[];
-    }
-  | {
-      readonly kind: "sequence-rest";
-      readonly contractParameterIndex: number;
-      readonly source: RustObjectLiteralMethodParameterAbi;
-      readonly target: RustObjectLiteralMethodParameterAbi;
-      readonly elementAdapter: RustObjectLiteralValueAdapter;
-    };
+import type { RustCallableParameterAbi, RustCallableParameterAdapter, RustCallableValueAdapter } from "./callable-adapters.js";
 
 export interface RustObjectLiteralMethodAdapterFact {
   readonly implementations: readonly {
     readonly sourceCallable: Node;
     readonly typeParameterSubstitutions: readonly (readonly [string, TargetTypeRef])[];
-    readonly parameters: readonly RustObjectLiteralMethodParameterAbi[];
+    readonly parameters: readonly RustCallableParameterAbi[];
     readonly returnCarrier: TargetTypeRef;
   }[];
   readonly dispatches: readonly {
     readonly contractMethod: Node;
     readonly virtualSlot: string;
     readonly implementationIndex: number;
-    readonly parameters: readonly RustObjectLiteralMethodParameterAbi[];
+    readonly parameters: readonly RustCallableParameterAbi[];
     readonly returnCarrier: TargetTypeRef;
-    readonly parameterAdapters: readonly RustObjectLiteralMethodParameterAdapter[];
-    readonly resultAdapter: RustObjectLiteralValueAdapter;
+    readonly parameterAdapters: readonly RustCallableParameterAdapter[];
+    readonly resultAdapter: RustCallableValueAdapter;
     readonly adapterFallible: boolean;
   }[];
 }

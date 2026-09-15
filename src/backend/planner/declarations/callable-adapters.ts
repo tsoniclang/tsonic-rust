@@ -1,8 +1,9 @@
 import type { Node } from "@tsonic/tsts";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type {
-  RustObjectLiteralMethodParameterAbi,
-  RustObjectLiteralValueAdapter,
+  RustCallableParameterAbi,
+  RustCallableParameterAdapter,
+  RustCallableValueAdapter,
 } from "../../../analysis/facts/keys.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import {
@@ -10,12 +11,11 @@ import {
   isRustVecCarrier,
   rustCarrierSupportsClone,
 } from "../../../target-model/types/index.js";
-import type { RustExpr, RustStmt, RustType } from "../../target-ast/nodes.js";
+import type { RustExpr, RustFunctionParam, RustStmt, RustType } from "../../target-ast/nodes.js";
 import {
   lowerRustValueConversion,
   planRustProjectUpcast,
 } from "../expressions/index.js";
-import type { RustObjectLiteralMethodDispatchPlan } from "./object-literal-implementations.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustActiveErrorType } from "../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
@@ -25,22 +25,38 @@ import {
   createRustSyntheticNameState,
 } from "../names/synthetic.js";
 import { rustCompilerOwnedContextualConversionMatches } from "../../../target-model/conversions/contextual.js";
+import { closedMetadataEquals } from "../../../target-model/metadata/closed-data.js";
 
-export function planRustObjectLiteralMethodArguments(
-  method: RustObjectLiteralMethodDispatchPlan,
+export function planRustCallableArguments(
+  input: {
+    readonly declaration: Node;
+    readonly parameters: readonly RustFunctionParam[];
+    readonly parameterAbis: readonly RustCallableParameterAbi[];
+    readonly parameterAdapters: readonly RustCallableParameterAdapter[];
+  },
   context: RustPlanContext,
 ): { readonly statements: readonly RustStmt[]; readonly adaptedArguments: readonly RustExpr[] } | undefined {
-  const adapterPlan = method.adapter;
-  if (adapterPlan === undefined || method.parameters.length !== adapterPlan.parameterAbis.length) {
+  if (input.parameters.length !== input.parameterAbis.length) {
     return undefined;
   }
   const statements: RustStmt[] = [];
   const adaptedArguments: RustExpr[] = [];
   const parameterExpression = (index: number): RustExpr | undefined => {
-    const parameter = method.parameters[index];
+    const parameter = input.parameters[index];
     return parameter === undefined ? undefined : { kind: "path", path: parameter.name };
   };
-  for (const adapter of adapterPlan.parameterAdapters) {
+  for (const [implementationIndex, adapter] of input.parameterAdapters.entries()) {
+    if (adapter.kind === "omitted") {
+      if (implementationIndex < input.parameterAbis.length) return undefined;
+    } else if (adapter.kind === "fixed-rest") {
+      if (adapter.contractParameterIndexes.length !== Math.max(0, input.parameterAbis.length - implementationIndex) ||
+        adapter.contractParameterIndexes.some((index, offset) => index !== implementationIndex + offset ||
+          !closedMetadataEquals(adapter.sources[offset], input.parameterAbis[index]))) return undefined;
+    } else if (adapter.contractParameterIndex !== implementationIndex ||
+      !closedMetadataEquals(adapter.source, input.parameterAbis[implementationIndex]) ||
+      adapter.kind === "sequence-rest" && implementationIndex !== input.parameterAbis.length - 1) {
+      return undefined;
+    }
     if (adapter.kind === "omitted") {
       if (adapter.target.form === "optional" || adapter.target.form === "default") {
         adaptedArguments.push({ kind: "none" });
@@ -64,13 +80,13 @@ export function planRustObjectLiteralMethodArguments(
         const expression = parameterExpression(contractParameterIndex);
         const logical = expression === undefined
           ? undefined
-          : readObjectLiteralLogicalParameter(expression, source);
+          : readRustCallableLogicalParameter(expression, source);
         const adapted = logical === undefined
           ? undefined
-          : applyRustObjectLiteralValueAdapter(
+          : applyRustCallableValueAdapter(
               logical,
               valueAdapter,
-              method.contractMethod,
+              input.declaration,
               context,
             );
         if (adapted === undefined) {
@@ -95,14 +111,14 @@ export function planRustObjectLiteralMethodArguments(
       }
       const names = context.syntheticNames ?? createRustSyntheticNameState(
         context.input.program.source.ast,
-        method.contractMethod,
+        input.declaration,
         [],
       );
       const elementName = allocateRustSyntheticName(names, "rest_element");
-      const raw = applyRustObjectLiteralValueAdapterRaw(
+      const raw = applyRustCallableValueAdapterRaw(
         { kind: "path", path: elementName },
         adapter.elementAdapter,
-        method.contractMethod,
+        input.declaration,
         context,
       );
       if (raw === undefined) {
@@ -162,10 +178,10 @@ export function planRustObjectLiteralMethodArguments(
       return undefined;
     }
     if (adapter.kind === "runtime-value") {
-      const adapted = applyRustObjectLiteralValueAdapter(
+      const adapted = applyRustCallableValueAdapter(
         sourceExpression,
         adapter.adapter,
-        method.contractMethod,
+        input.declaration,
         context,
       );
       if (adapted === undefined) {
@@ -174,13 +190,13 @@ export function planRustObjectLiteralMethodArguments(
       adaptedArguments.push(adapted);
       continue;
     }
-    const logical = readObjectLiteralLogicalParameter(sourceExpression, adapter.source);
+    const logical = readRustCallableLogicalParameter(sourceExpression, adapter.source);
     const adapted = logical === undefined
       ? undefined
-      : applyRustObjectLiteralValueAdapter(
+      : applyRustCallableValueAdapter(
           logical,
           adapter.adapter,
-          method.contractMethod,
+          input.declaration,
           context,
         );
     if (adapted === undefined) {
@@ -200,7 +216,7 @@ export function planRustObjectLiteralMethodArguments(
     }
     const names = context.syntheticNames ?? createRustSyntheticNameState(
       context.input.program.source.ast,
-      method.contractMethod,
+      input.declaration,
       [],
     );
     const bindingName = allocateRustSyntheticName(names, "adapted_argument");
@@ -222,9 +238,9 @@ export function planRustObjectLiteralMethodArguments(
   };
 }
 
-function readObjectLiteralLogicalParameter(
+function readRustCallableLogicalParameter(
   expression: RustExpr,
-  abi: RustObjectLiteralMethodParameterAbi,
+  abi: RustCallableParameterAbi,
 ): RustExpr | undefined {
   if (abi.mode === "value") {
     return expression;
@@ -238,13 +254,13 @@ function readObjectLiteralLogicalParameter(
     : undefined;
 }
 
-export function applyRustObjectLiteralValueAdapter(
+export function applyRustCallableValueAdapter(
   expression: RustExpr,
-  adapter: RustObjectLiteralValueAdapter,
+  adapter: RustCallableValueAdapter,
   node: Node,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  const raw = applyRustObjectLiteralValueAdapterRaw(expression, adapter, node, context);
+  const raw = applyRustCallableValueAdapterRaw(expression, adapter, node, context);
   if (raw === undefined) {
     return undefined;
   }
@@ -262,9 +278,9 @@ export function applyRustObjectLiteralValueAdapter(
     : undefined;
 }
 
-function applyRustObjectLiteralValueAdapterRaw(
+function applyRustCallableValueAdapterRaw(
   expression: RustExpr,
-  adapter: RustObjectLiteralValueAdapter,
+  adapter: RustCallableValueAdapter,
   node: Node,
   context: RustPlanContext,
 ): { readonly expression: RustExpr; readonly fallible: boolean } | undefined {
@@ -315,7 +331,7 @@ function applyRustObjectLiteralValueAdapterRaw(
     case "call-scoped-lifetime":
       return { expression, fallible: false };
     case "option-some": {
-      const element = applyRustObjectLiteralValueAdapterRaw(expression, adapter.element, node, context);
+      const element = applyRustCallableValueAdapterRaw(expression, adapter.element, node, context);
       if (element === undefined) {
         return undefined;
       }
@@ -341,7 +357,7 @@ function applyRustObjectLiteralValueAdapterRaw(
         [],
       );
       const elementName = allocateRustSyntheticName(names, "option_value");
-      const element = applyRustObjectLiteralValueAdapterRaw(
+      const element = applyRustCallableValueAdapterRaw(
         { kind: "path", path: elementName },
         adapter.element,
         node,

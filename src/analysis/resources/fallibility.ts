@@ -48,6 +48,7 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustPreparedDeferredCheckedCall } from "../operations/provider/index.js";
 import type { RustTargetOperationFact } from "../facts/keys.js";
+import { rustProjectCallableAdaptersKey } from "../facts/project-callable-adapters.js";
 
 interface RustFutureOperationOrigin {
   readonly expression: Node;
@@ -284,6 +285,11 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
       if (dispatch.adapterFallible) {
         fallible.add(dispatch.contractMethod);
       }
+    }
+  }
+  for (const definition of walk.context.projectTypes.definitions) {
+    for (const adapter of walk.context.facts.get(definition.declaration, rustProjectCallableAdaptersKey) ?? []) {
+      if (adapter.adapterFallible) fallible.add(adapter.contract);
     }
   }
   for (const expression of walk.objectLiteralMethodSpreadExpressions) {

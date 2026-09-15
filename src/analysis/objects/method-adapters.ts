@@ -3,39 +3,13 @@ import { closedMetadataKey, isDenseDataArray } from "../../target-model/metadata
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustPlanBuilder } from "../facts/plan-store.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import {
-  rustObjectLiteralMethodAdapterFactKey,
-  rustSourceCallableReturnFactKey,
-  rustSourceParameterAbiFactKey,
-  rustTargetOperationFactKey,
-} from "../facts/keys.js";
-import type {
-  RustObjectLiteralMethodAdapterFact,
-  RustObjectLiteralMethodParameterAbi,
-  RustObjectLiteralMethodParameterAdapter,
-  RustObjectLiteralValueAdapter,
-  RustTargetOperationFact,
-} from "../facts/keys.js";
-import {
-  inferRustTargetTypeParameterBindings,
-  isRustCopyCarrier,
-  isRustVecCarrier,
-  rustCallableProtocol,
-  rustCarrierSupportsClone,
-  rustClosureProtocol,
-  rustOptionElementCarrier,
-  rustSourceTypeCarrierValue,
-  rustTargetGenericTypeArguments,
-  rustTargetTypeContainsTypeParameter,
-  substituteRustTargetTypeParameters,
-} from "../../target-model/types/index.js";
+import { rustObjectLiteralMethodAdapterFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
+import type { RustObjectLiteralMethodAdapterFact, RustTargetOperationFact } from "../facts/keys.js";
+import type { RustCallableParameterAbi } from "../facts/callable-adapters.js";
+import { inferRustTargetTypeParameterBindings, rustTargetTypeContainsTypeParameter, substituteRustTargetTypeParameters } from "../../target-model/types/index.js";
 import type { RustProjectMethodDispatchPlan } from "../project-types/method-dispatch.js";
-import type {
-  RustProjectTypeDefinition,
-  RustProjectTypePolicy,
-} from "../project-types/type-policy.js";
-import { selectRustValueCarrierReconciliation } from "../../policy/types/value-carrier-reconciliation.js";
-import { rustContextualValueConversionIsFallible } from "../../target-model/conversions/contextual.js";
+import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
+import { sourceCallableParameterAbis, sourceCallableReturnCarrier, substituteRustCallableParameterAbi, projectOwnerTypeSubstitutions, selectRustCallableParameterAdapters, selectRustCallableValueAdapter, rustCallableParameterAdapterIsFallible, rustCallableValueAdapterIsFallible } from "../callables/adapters.js";
 
 export interface RustObjectLiteralMethodAdapterIssue {
   readonly expression: Node;
@@ -168,17 +142,17 @@ function createObjectLiteralMethodAdapterFact(
           );
         }
         const implementationParameters = sourceParameters.map((parameter) =>
-          substituteObjectLiteralParameterAbi(parameter, sourceSubstitutions));
+          substituteRustCallableParameterAbi(parameter, sourceSubstitutions));
         const implementationReturnCarrier = substituteRustTargetTypeParameters(
           sourceReturnCarrier,
           sourceSubstitutions,
         );
-        const parameterAdapters = selectObjectLiteralParameterAdapters(
+        const parameterAdapters = selectRustCallableParameterAdapters(
           contractParameters,
           implementationParameters,
           input.projectTypes,
         );
-        const resultAdapter = selectObjectLiteralValueAdapter(
+        const resultAdapter = selectRustCallableValueAdapter(
           implementationReturnCarrier,
           contractReturnCarrier,
           input.projectTypes,
@@ -217,8 +191,8 @@ function createObjectLiteralMethodAdapterFact(
           returnCarrier: contractReturnCarrier,
           parameterAdapters: Object.freeze(parameterAdapters),
           resultAdapter,
-          adapterFallible: parameterAdapters.some(objectLiteralParameterAdapterIsFallible) ||
-            objectLiteralValueAdapterIsFallible(resultAdapter),
+          adapterFallible: parameterAdapters.some(rustCallableParameterAdapterIsFallible) ||
+            rustCallableValueAdapterIsFallible(resultAdapter),
         }));
       }
     }
@@ -246,74 +220,12 @@ function sourceCallableTypeParameterNames(
   return names.some((name) => name.length === 0) ? undefined : Object.freeze(names);
 }
 
-function sourceCallableParameterAbis(
-  input: { readonly ast: AstReader; readonly facts: RustPlanBuilder },
-  callable: Node,
-  substitutions: ReadonlyMap<string, TargetTypeRef>,
-): RustObjectLiteralMethodParameterAbi[] | undefined {
-  const parameters = input.ast.parameters(callable);
-  if (!isDenseDataArray(parameters) || parameters.some((parameter) => parameter === undefined)) {
-    return undefined;
-  }
-  const abis = (parameters as readonly Node[]).map((parameter) => {
-    const abi = input.facts.get(parameter, rustSourceParameterAbiFactKey) ??
-      input.facts.resolve(parameter, rustSourceParameterAbiFactKey);
-    return abi === undefined ? undefined : substituteObjectLiteralParameterAbi(abi, substitutions);
-  });
-  return abis.some((abi) => abi === undefined)
-    ? undefined
-    : abis as RustObjectLiteralMethodParameterAbi[];
-}
-
-function sourceCallableReturnCarrier(
-  input: { readonly facts: RustPlanBuilder },
-  callable: Node,
-  substitutions: ReadonlyMap<string, TargetTypeRef>,
-): TargetTypeRef | undefined {
-  const fact = input.facts.get(callable, rustSourceCallableReturnFactKey) ??
-    input.facts.resolve(callable, rustSourceCallableReturnFactKey);
-  const operation = fact === undefined
-    ? input.facts.get(callable, rustTargetOperationFactKey) ??
-      input.facts.resolve(callable, rustTargetOperationFactKey)
-    : undefined;
-  const operationReturn = operation?.kind === "closure"
-    ? rustClosureProtocol(operation.resultCarrier)?.result ??
-      rustCallableProtocol(operation.resultCarrier)?.result ??
-      (operation.resultCarrier.kind === "function-pointer" ? operation.resultCarrier.result : undefined)
-    : undefined;
-  const returnCarrier = fact?.returnCarrier ?? operationReturn;
-  return returnCarrier === undefined
-    ? undefined
-    : substituteRustTargetTypeParameters(returnCarrier, substitutions);
-}
-
-function substituteObjectLiteralParameterAbi(
-  abi: RustObjectLiteralMethodParameterAbi,
-  substitutions: ReadonlyMap<string, TargetTypeRef>,
-): RustObjectLiteralMethodParameterAbi {
-  return Object.freeze({
-    form: abi.form,
-    valueCarrier: substituteRustTargetTypeParameters(abi.valueCarrier, substitutions),
-    parameterCarrier: substituteRustTargetTypeParameters(abi.parameterCarrier, substitutions),
-    mode: abi.mode,
-  });
-}
-
-function projectOwnerTypeSubstitutions(
-  owner: RustProjectTypeDefinition,
-  carrier: TargetTypeRef,
-): Map<string, TargetTypeRef> {
-  const value = rustSourceTypeCarrierValue(carrier);
-  const typeArguments = rustTargetGenericTypeArguments(value?.genericArguments);
-  return new Map(owner.typeParameterNames.map((name, index) =>
-    [name, typeArguments[index] ?? { kind: "type-parameter", name }] as const));
-}
 
 function inferObjectLiteralImplementationSubstitutions(
   sourceTypeParameterNames: readonly string[],
-  sourceParameters: readonly RustObjectLiteralMethodParameterAbi[],
+  sourceParameters: readonly RustCallableParameterAbi[],
   sourceReturnCarrier: TargetTypeRef,
-  contractParameters: readonly RustObjectLiteralMethodParameterAbi[],
+  contractParameters: readonly RustCallableParameterAbi[],
   contractReturnCarrier: TargetTypeRef,
   contractTypeParameterNames: readonly string[],
   contractTypeArguments: readonly TargetTypeRef[],
@@ -364,176 +276,4 @@ function inferObjectLiteralImplementationSubstitutions(
     return undefined;
   }
   return inferred;
-}
-
-function selectObjectLiteralParameterAdapters(
-  contractParameters: readonly RustObjectLiteralMethodParameterAbi[],
-  implementationParameters: readonly RustObjectLiteralMethodParameterAbi[],
-  projectTypes: RustProjectTypePolicy,
-): RustObjectLiteralMethodParameterAdapter[] | undefined {
-  const adapters: RustObjectLiteralMethodParameterAdapter[] = [];
-  for (const [implementationIndex, target] of implementationParameters.entries()) {
-    if (target.form === "rest") {
-      if (!isRustVecCarrier(target.parameterCarrier)) {
-        return undefined;
-      }
-      const targetElementCarrier = target.parameterCarrier.element;
-      const remaining = contractParameters.slice(implementationIndex);
-      const sourceRest = remaining.length === 1 && remaining[0]?.form === "rest"
-        ? remaining[0]
-        : undefined;
-      if (sourceRest !== undefined && isRustVecCarrier(sourceRest.parameterCarrier)) {
-        const elementAdapter = selectObjectLiteralValueAdapter(
-          sourceRest.parameterCarrier.element,
-          targetElementCarrier,
-          projectTypes,
-        );
-        if (elementAdapter === undefined) {
-          return undefined;
-        }
-        adapters.push(Object.freeze({
-          kind: "sequence-rest",
-          contractParameterIndex: implementationIndex,
-          source: sourceRest,
-          target,
-          elementAdapter,
-        }));
-        continue;
-      }
-      if (remaining.some((source) => source.form !== "required")) {
-        return undefined;
-      }
-      const elementAdapters = remaining.map((source) =>
-        selectObjectLiteralValueAdapter(source.valueCarrier, targetElementCarrier, projectTypes));
-      if (elementAdapters.some((adapter) => adapter === undefined)) {
-        return undefined;
-      }
-      adapters.push(Object.freeze({
-        kind: "fixed-rest",
-        contractParameterIndexes: Object.freeze(remaining.map((_source, index) => implementationIndex + index)),
-        sources: Object.freeze(remaining),
-        target,
-        elementAdapters: Object.freeze(elementAdapters as RustObjectLiteralValueAdapter[]),
-      }));
-      continue;
-    }
-    const source = contractParameters[implementationIndex];
-    if (source === undefined) {
-      if (target.form !== "optional" && target.form !== "default") {
-        return undefined;
-      }
-      adapters.push(Object.freeze({ kind: "omitted", target }));
-      continue;
-    }
-    const runtimeAdapter = selectObjectLiteralValueAdapter(
-      source.parameterCarrier,
-      target.parameterCarrier,
-      projectTypes,
-    );
-    if (runtimeAdapter !== undefined &&
-      (source.mode === target.mode || source.mode === "mut-ref" && target.mode === "ref")) {
-      adapters.push(Object.freeze({
-        kind: "runtime-value",
-        contractParameterIndex: implementationIndex,
-        source,
-        target,
-        adapter: runtimeAdapter,
-      }));
-      continue;
-    }
-    if (source.form !== "required" ||
-      source.mode !== "value" && !isRustCopyCarrier(source.valueCarrier) &&
-        !rustCarrierSupportsClone(source.valueCarrier)) {
-      return undefined;
-    }
-    const targetLogicalCarrier = target.form === "optional"
-      ? rustOptionElementCarrier(target.parameterCarrier)
-      : target.valueCarrier;
-    const logicalAdapter = targetLogicalCarrier === undefined
-      ? undefined
-      : selectObjectLiteralValueAdapter(source.valueCarrier, targetLogicalCarrier, projectTypes);
-    if (logicalAdapter === undefined) {
-      return undefined;
-    }
-    adapters.push(Object.freeze({
-      kind: "logical-value",
-      contractParameterIndex: implementationIndex,
-      source,
-      target,
-      adapter: logicalAdapter,
-    }));
-  }
-  return adapters;
-}
-
-function selectObjectLiteralValueAdapter(
-  sourceCarrier: TargetTypeRef,
-  targetCarrier: TargetTypeRef,
-  projectTypes: RustProjectTypePolicy,
-): RustObjectLiteralValueAdapter | undefined {
-  if (rustTargetTypeRefEquals(sourceCarrier, targetCarrier)) {
-    return Object.freeze({ kind: "identity", sourceCarrier, targetCarrier });
-  }
-  const sourceOption = rustOptionElementCarrier(sourceCarrier);
-  const targetOption = rustOptionElementCarrier(targetCarrier);
-  if (targetOption !== undefined && sourceOption === undefined) {
-    const element = selectObjectLiteralValueAdapter(sourceCarrier, targetOption, projectTypes);
-    return element === undefined
-      ? undefined
-      : Object.freeze({ kind: "option-some", sourceCarrier, targetCarrier, element });
-  }
-  if (sourceOption !== undefined && targetOption !== undefined) {
-    const element = selectObjectLiteralValueAdapter(sourceOption, targetOption, projectTypes);
-    return element === undefined
-      ? undefined
-      : Object.freeze({ kind: "option-map", sourceCarrier, targetCarrier, element });
-  }
-  const selected = selectRustValueCarrierReconciliation(sourceCarrier, targetCarrier, projectTypes);
-  switch (selected.kind) {
-    case "identity":
-      return Object.freeze({ kind: "identity", sourceCarrier, targetCarrier });
-    case "conversion":
-      return Object.freeze({
-        kind: "conversion",
-        sourceCarrier,
-        targetCarrier,
-        conversion: selected.fact.conversion,
-      });
-    case "project-upcast":
-      return Object.freeze({ kind: "project-upcast", sourceCarrier, targetCarrier });
-    case "call-scoped-lifetime":
-      return Object.freeze({ kind: "call-scoped-lifetime", sourceCarrier, targetCarrier });
-    case "incompatible":
-      return undefined;
-  }
-}
-
-function objectLiteralValueAdapterIsFallible(adapter: RustObjectLiteralValueAdapter): boolean {
-  switch (adapter.kind) {
-    case "conversion":
-      return rustContextualValueConversionIsFallible(adapter.conversion);
-    case "option-some":
-    case "option-map":
-      return objectLiteralValueAdapterIsFallible(adapter.element);
-    case "identity":
-    case "call-scoped-lifetime":
-    case "project-upcast":
-      return false;
-  }
-}
-
-function objectLiteralParameterAdapterIsFallible(
-  adapter: RustObjectLiteralMethodParameterAdapter,
-): boolean {
-  switch (adapter.kind) {
-    case "runtime-value":
-    case "logical-value":
-      return objectLiteralValueAdapterIsFallible(adapter.adapter);
-    case "fixed-rest":
-      return adapter.elementAdapters.some(objectLiteralValueAdapterIsFallible);
-    case "sequence-rest":
-      return objectLiteralValueAdapterIsFallible(adapter.elementAdapter);
-    case "omitted":
-      return false;
-  }
 }
