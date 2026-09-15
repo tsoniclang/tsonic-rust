@@ -226,7 +226,7 @@ function resolveContextualBinaryOperandCarriers(
         walk,
         leftNode,
         sourceFile,
-        isRustNullishSourceCarrier(right) || right?.kind === "type-parameter" ? undefined : right,
+        contextualLiteralOperandCarrier(walk.context.ast, leftNode, right),
       ),
       right,
     };
@@ -239,7 +239,7 @@ function resolveContextualBinaryOperandCarriers(
         walk,
         rightNode,
         sourceFile,
-        isRustNullishSourceCarrier(left) || left?.kind === "type-parameter" ? undefined : left,
+        contextualLiteralOperandCarrier(walk.context.ast, rightNode, left),
       ),
     };
   }
@@ -247,6 +247,23 @@ function resolveContextualBinaryOperandCarriers(
     left: resolveExpressionCarrier(walk, leftNode, sourceFile, undefined),
     right: resolveExpressionCarrier(walk, rightNode, sourceFile, undefined),
   };
+}
+
+function contextualLiteralOperandCarrier(
+  ast: AstReader,
+  expression: Node,
+  counterpart: TargetTypeRef | undefined,
+): TargetTypeRef | undefined {
+  if (isRustNullishSourceCarrier(counterpart) || counterpart?.kind === "type-parameter") return undefined;
+  const kind = ast.kindName(expression);
+  if (kind === KindPrefixUnaryExpression || kind === KindParenthesizedExpression) {
+    const operand = kind === KindPrefixUnaryExpression ? Node_Operand(ast, expression) : Node_Expression(ast, expression);
+    return operand === undefined ? undefined : contextualLiteralOperandCarrier(ast, operand, counterpart);
+  }
+  if (kind === KindNumericLiteral && isRustBigIntCarrier(counterpart) ||
+    kind === KindBigIntLiteral && isRustNumericCarrier(counterpart) &&
+      (counterpart.name === "float64" || counterpart.name === "float32")) return undefined;
+  return counterpart;
 }
 
 export function rustSelectedAssignmentValueCarrier(

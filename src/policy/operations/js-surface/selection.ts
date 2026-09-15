@@ -770,11 +770,14 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
     fact: {
       kind: "provider-operation",
       operationId,
-      ...((row.requirements ?? []).some(requirement => requirement.capability === "clone" &&
-        !rustCarrierSupportsClone(resolveCarrierRef(requirement.carrier, bindings)))
-        ? { cloneCarriers: Object.freeze((row.requirements ?? [])
-            .filter(requirement => requirement.capability === "clone")
-            .map(requirement => resolveCarrierRef(requirement.carrier, bindings)!)) }
+      ...((row.requirements ?? []).some(requirement => requirement.capability === "numeric-parameter" ||
+        requirement.capability === "clone" && !rustCarrierSupportsClone(resolveCarrierRef(requirement.carrier, bindings)))
+        ? { carrierRequirements: Object.freeze((row.requirements ?? [])
+            .filter(requirement => requirement.capability === "clone" || requirement.capability === "numeric-parameter")
+            .map(requirement => Object.freeze({
+              carrier: resolveCarrierRef(requirement.carrier, bindings)!,
+              requirement: requirement.capability === "clone" ? "clone" as const : "source-numeric" as const,
+            }))) }
         : {}),
       operationKind: row.shape.operationKind,
       target: materializeTarget(target, copyReference),
@@ -827,6 +830,9 @@ function carrierRequirementsMatch(
         return isRustNumericCarrier(carrier);
       case "integer":
         return isRustIntegerCarrier(carrier);
+      case "numeric-parameter":
+        return carrier?.kind === "type-parameter" && requirement.carrier.ref === "argument" &&
+          request.numericParameterArgument?.(requirement.carrier.index, carrier) === true;
       case "clone":
         return rustCarrierSupportsClone(carrier) ||
           (carrier !== undefined && request.canRequireClone?.(carrier) === true);

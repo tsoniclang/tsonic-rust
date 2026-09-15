@@ -28,6 +28,7 @@ export interface JsOperationRequest {
   ) => TargetTypeRef | undefined;
   readonly carrierSupportsProjectIdentity?: (carrier: TargetTypeRef) => boolean;
   readonly canRequireClone?: (carrier: TargetTypeRef) => boolean;
+  readonly numericParameterArgument?: (index: number, carrier: TargetTypeRef) => boolean;
   readonly resultUse?: "consumed" | "discarded";
   readonly authoredPropertyKey?: string;
 }
@@ -169,7 +170,7 @@ export type JsCarrierRef =
   | { readonly ref: "source-result" }
   | { readonly ref: "argument"; readonly index: number };
 
-type JsCarrierCapability = "numeric" | "integer" | "clone" | "stringifiable" | "js-equality" | "project-identity-equality" | "object-identity";
+type JsCarrierCapability = "numeric" | "integer" | "numeric-parameter" | "clone" | "stringifiable" | "js-equality" | "project-identity-equality" | "object-identity";
 
 export interface JsOperationRowData {
   readonly owner: string;

@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustArgumentMode, RustProviderFactOperationKind, RustRuntimeSetOperationKind, RustSourceCallParameterPlan, RustValueConversion } from "../../../target-model/operations/model.js";
+import type { RustArgumentMode, RustOperationCarrierRequirement, RustProviderFactOperationKind, RustRuntimeSetOperationKind, RustSourceCallParameterPlan, RustValueConversion } from "../../../target-model/operations/model.js";
 import type { RustFinalizedOperationAbiFor } from "../finalized-operation-abi.js";
 import type { RustAssignmentOperator, RustOperationSymbol, RustOperatorToken } from "../../../target-model/syntax/tokens.js";
 import type {
@@ -86,7 +86,7 @@ export type RustTargetOperationFact =
   | {
       readonly kind: "provider-operation";
       readonly operationId: string;
-      readonly cloneCarriers?: readonly TargetTypeRef[];
+      readonly carrierRequirements?: readonly RustOperationCarrierRequirement[];
       readonly resultCarrier: TargetTypeRef;
       readonly sourceResultCarrier?: TargetTypeRef;
       readonly sourceAbsenceCarrier?: TargetTypeRef;

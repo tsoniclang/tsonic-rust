@@ -1,6 +1,18 @@
 import type { JsOperationRowData } from "./model.js";
 
 export const bigintOperationRows: readonly JsOperationRowData[] = [
+  ...([
+    ["NumberConstructor", "number", "to_number", "float64", false],
+    ["BigIntConstructor", "bigint", "to_bigint", "bigint", true],
+  ] as const).map(([owner, lane, method, result, fallible]): JsOperationRowData => ({
+    owner, member: "call", operationKind: "call", lane, variant: "numeric-parameter", fallible,
+    requirements: [{ carrier: { ref: "argument", index: 0 }, capability: "numeric-parameter" }],
+    shape: {
+      op: "operation", operationKind: "method",
+      target: { form: "call", path: `js_abi::SourceNumeric::${method}`, argModes: ["ref"] },
+      params: [{ ref: "argument", index: 0 }], result: { ref: result },
+    },
+  })),
   {
     owner: "BigInt", member: "toString", operationKind: "call", lane: "bigint",
     variant: "default",

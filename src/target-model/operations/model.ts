@@ -404,6 +404,11 @@ export type RustProviderOperationForm =
       readonly mutatesReceiver?: boolean;
     };
 
+export interface RustOperationCarrierRequirement {
+  readonly carrier: TargetTypeRef;
+  readonly requirement: "clone" | "source-numeric";
+}
+
 export interface RustProviderOperationTemplate<
   OperationKind extends RustProviderFactOperationKind | RustRuntimeSetOperationKind = RustProviderFactOperationKind,
 > {
@@ -419,7 +424,7 @@ export interface RustProviderOperationTemplate<
   readonly receiverCarrier?: TargetTypeRef;
   readonly genericParameters?: readonly RustProviderGenericParameter[];
   readonly typeRequirements?: readonly RustProviderTypeParameterRequirement[];
-  readonly cloneCarriers?: readonly TargetTypeRef[];
+  readonly carrierRequirements?: readonly RustOperationCarrierRequirement[];
   readonly targetGenericArguments?: readonly RustTargetGenericArgument[];
   readonly resultConversion?: RustValueConversion;
   readonly compileTimeSourceArgumentIndexes?: readonly number[];

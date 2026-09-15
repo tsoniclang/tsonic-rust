@@ -68,7 +68,7 @@ test("generic collection clone obligations require an explicit source declaratio
   assert.equal(selectJsSurfaceOperation(request), undefined);
   assert.equal(selectJsSurfaceOperation({ ...request, canRequireClone: () => false }), undefined);
   const selected = selectJsSurfaceOperation({ ...request, canRequireClone: carrier => carrier === parameter });
-  assert.deepEqual(selected.fact.cloneCarriers, [parameter]);
+  assert.deepEqual(selected.fact.carrierRequirements, [{ carrier: parameter, requirement: "clone" }]);
   assert.deepEqual(selected.resultCarrier, { kind: "array", element: parameter });
 });
 

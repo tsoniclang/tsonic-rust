@@ -518,8 +518,8 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       if (error !== undefined) return error;
     }
     if (operation?.kind === "provider-operation") {
-      for (const carrier of operation.cloneCarriers ?? []) {
-        const error = addUse(node, carrier, ["clone"]);
+      for (const requirement of operation.carrierRequirements ?? []) {
+        const error = addUse(node, requirement.carrier, [requirement.requirement]);
         if (error !== undefined) return error;
       }
     }

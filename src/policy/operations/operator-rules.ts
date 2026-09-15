@@ -1,5 +1,6 @@
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { selectRustNumericUnionComparison } from "./numeric-union.js";
+import { selectRustNumericConstraintComparison, selectRustNumericUnionComparison } from "./numeric-union.js";
+import { rustCarrierSupportsSourceNumeric } from "../../target-model/types/carriers/source-numeric.js";
 import type { RustArgumentMode, RustValueConversion } from "../../target-model/operations/model.js";
 import type {
   RustAssignmentOperator,
@@ -329,6 +330,11 @@ export function selectRustBinaryOperator(
   }
   const numericUnion = selectRustNumericUnionComparison(operatorKindName, left, right);
   if (numericUnion !== undefined) return numericUnion;
+  if (isRustBigIntCarrier(left) !== isRustBigIntCarrier(right) &&
+    rustCarrierSupportsSourceNumeric(left) && rustCarrierSupportsSourceNumeric(right)) {
+    const comparison = selectRustNumericConstraintComparison(operatorKindName);
+    if (comparison !== undefined) return comparison;
+  }
   const arithmetic = arithmeticTokens[operatorKindName];
   if (arithmetic !== undefined) {
     if (operatorKindName === KindPlusToken && isRustStringCarrier(left) && isRustStringCarrier(right)) {

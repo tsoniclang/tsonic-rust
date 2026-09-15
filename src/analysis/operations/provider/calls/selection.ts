@@ -37,6 +37,7 @@ import { sourceCallMarkerByIdentity } from "../model.js";
 import { mapSelectedStringRegExpProtocolCall } from "../regexp-protocols.js";
 import { selectedRustRegExpReplacementCallbackEvidence } from "../regexp-replacement-callback.js";
 import { canRequireSourceClone } from "./clone-requirements.js";
+import { rustOperandSupportsSourceNumeric } from "../../generic-numeric.js";
 import type {
   RustCheckedCallSelectionInput,
   RustCheckedCallSelectionResult,
@@ -321,6 +322,11 @@ export function selectRustCheckedCall(
       },
       carrierSupportsProjectIdentity: options.projectCarrierSupportsObjectIdentity,
       canRequireClone: carrier => canRequireSourceClone(carrier, request.source.call, context),
+      numericParameterArgument: (index, carrier) => {
+        const argument = selectedCallArgumentNodes(request)[index];
+        return argument !== undefined && carrier.kind === "type-parameter" &&
+          rustOperandSupportsSourceNumeric(argument, carrier, context, options);
+      },
       resultUse: context.source.navigation.expressionResultUse(request.source.call),
     });
     if (selection === undefined || selection.fact.kind !== "provider-operation" || selection.resultCarrier === undefined) {
