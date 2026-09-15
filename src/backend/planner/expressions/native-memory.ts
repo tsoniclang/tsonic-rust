@@ -42,7 +42,8 @@ export function planRustNativeMemoryCall(method: "allocate_native_location" | "l
   if (pointee === undefined || codec === undefined) return undefined;
   context.usedAliases?.add("rt");
   return { kind: "call", path: `rt::raw_memory::${method}`,
-    genericArguments: [{ kind: "type", type: pointee }],
+    genericArguments: [{ kind: "type", type: pointee },
+      ...(method === "location_to_raw" ? [{ kind: "type" as const, type: { kind: "infer" as const } }] : [])],
     args: [value, codec] };
 }
 
