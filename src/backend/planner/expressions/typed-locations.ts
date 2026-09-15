@@ -25,6 +25,7 @@ import {
 import {
   isRustCopyCarrier,
   rustLocationTargetType,
+  rustProgramErrorTargetType,
 } from "../../../target-model/types/index.js";
 import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
@@ -36,6 +37,8 @@ import {
   diagnosticInput,
   isValidRustIdentifier,
   rustSourceBindingPath,
+  rustCurrentErrorBoundary,
+  rustErrorType,
 } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustProjectObjectRepresentation } from "../objects/project-storage.js";
@@ -55,6 +58,7 @@ import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustNativeAllocation } from "./native-memory.js";
 import { rustNativeBackingKey, rustNativeArrayStorageKey } from "../../../target-model/operations/native-memory.js";
 import { planNativeRustArrayAccess } from "./native-arrays.js";
+import { planRustLocationCallback } from "./location-callbacks.js";
 
 export type RustExpressionPlanner = (
   node: Node,
@@ -88,44 +92,69 @@ export function planRustTypedLocationCall(
     }
     case "bind-pointer": {
       const identity = planExpression(plan.identityExpression, context);
-      const read = planExpression(plan.readExpression, context);
-      const write = planExpression(plan.writeExpression, context);
+      const readValue = planExpression(plan.readExpression, context);
+      const writeValue = planExpression(plan.writeExpression, context);
+      const read = readValue === undefined ? undefined : planRustLocationCallback(node, 1, readValue, context);
+      const write = writeValue === undefined ? undefined : planRustLocationCallback(node, 2, writeValue, context);
       if (identity === undefined || read === undefined || write === undefined ||
         !requireRustCarrierRequirements(fact.pointeeCarrier, ["static"], node, context)) return undefined;
-      return { kind: "call", path: "rt::Location::bind", args: [identity, read, write] };
+      return { kind: "call", path: "rt::Location::try_bind", args: [identity, read, write] };
     }
-    case "project-pointer": {
+    case "view-pointer": {
       const pointer = planExpression(plan.pointerExpression, context);
-      const read = planExpression(plan.fromSourceExpression, context);
-      const write = planExpression(plan.toSourceExpression, context);
+      const readValue = planExpression(plan.readExpression, context);
+      const writeValue = planExpression(plan.writeExpression, context);
+      const read = readValue === undefined ? undefined : planRustLocationCallback(node, 1, readValue, context);
+      const write = writeValue === undefined ? undefined : planRustLocationCallback(node, 2, writeValue, context);
       if (pointer === undefined || read === undefined || write === undefined ||
         !requireRustCarrierRequirements(plan.pointeeCarrier, ["static"], node, context) ||
         !requireRustCarrierRequirements(plan.sourcePointeeCarrier, ["static"], node, context)) return undefined;
       const source = planRustNonConsumingValue(plan.pointerExpression, pointer, context);
       return plan.optional
-        ? { kind: "call", path: "rt::Location::map_optional", args: [optionReference(source), read, write] }
-        : { kind: "method-call", receiver: source, method: "map", args: [read, write] };
+        ? { kind: "call", path: "rt::Location::try_view_optional", args: [{ kind: "reference", expr: source }, read, write] }
+        : { kind: "method-call", receiver: source, method: "try_view", args: [read, write] };
     }
-    case "address-of":
-      return planRustLocationStorage(
+    case "project-pointer": {
+      const pointer = planExpression(plan.pointerExpression, context);
+      const readValue = planExpression(plan.fromSourceExpression, context);
+      const writeValue = planExpression(plan.toSourceExpression, context);
+      const read = readValue === undefined ? undefined : planRustLocationCallback(node, 1, readValue, context);
+      const write = writeValue === undefined ? undefined : planRustLocationCallback(node, 2, writeValue, context);
+      if (pointer === undefined || read === undefined || write === undefined ||
+        !requireRustCarrierRequirements(plan.pointeeCarrier, ["static"], node, context) ||
+        !requireRustCarrierRequirements(plan.sourcePointeeCarrier, ["static"], node, context)) return undefined;
+      const source = planRustNonConsumingValue(plan.pointerExpression, pointer, context);
+      return plan.optional
+        ? { kind: "call", path: "rt::Location::try_map_optional", args: [optionReference(source), read, write] }
+        : { kind: "method-call", receiver: source, method: "try_map", args: [read, write] };
+    }
+    case "address-of": {
+      const location = planRustLocationStorage(
         plan.storageExpression,
         plan.rootExpression,
         plan.storageExpression === plan.rootExpression,
         context,
         planExpression,
       );
+      const error = rustTypeFromCarrierInContext(rustProgramErrorTargetType(), context);
+      return location === undefined || error === undefined ? undefined : {
+        kind: "method-call", receiver: location, method: "into_fallible",
+        genericArguments: [{ kind: "type", type: error }], args: [],
+      };
+    }
     case "allocate": {
       const initial = planExpression(plan.initialExpression, context);
       if (context.input.program.facts.getFact(node, rustNativeBackingKey) !== undefined) {
-        return initial === undefined ? undefined : planRustNativeAllocation(node, initial, context);
+        return initial === undefined ? undefined : planRustNativeAllocation(node, initial, context, rustProgramErrorTargetType());
       }
-      return initial === undefined || !requireRustLocationValueCarrier(
+      const owner = rustTypeFromCarrierInContext(fact.locationCarrier, context);
+      return initial === undefined || owner === undefined || !requireRustLocationValueCarrier(
         fact.pointeeCarrier,
         node,
         context,
       )
         ? undefined
-        : { kind: "call", path: "rt::Location::allocate", args: [initial] };
+        : { kind: "associated-call", owner, method: "allocate", args: [initial] };
     }
     case "load": {
       const pointer = locationMethodReceiver(
@@ -133,7 +162,7 @@ export function planRustTypedLocationCall(
       );
       return pointer === undefined
         ? undefined
-        : { kind: "method-call", receiver: pointer, method: "load", args: [] };
+        : fallibleLocationAccess(node, { kind: "method-call", receiver: pointer, method: "try_load", args: [] }, context);
     }
     case "store": {
       const pointer = locationMethodReceiver(
@@ -142,7 +171,7 @@ export function planRustTypedLocationCall(
       const value = planExpression(plan.valueExpression, context);
       return pointer === undefined || value === undefined
         ? undefined
-        : { kind: "method-call", receiver: pointer, method: "store", args: [value] };
+        : fallibleLocationAccess(node, { kind: "method-call", receiver: pointer, method: "try_store", args: [value] }, context);
     }
     case "equal-pointer": {
       const left = planExpression(plan.leftExpression, context);
@@ -162,6 +191,15 @@ export function planRustTypedLocationCall(
       };
     }
   }
+}
+
+function fallibleLocationAccess(node: Node, expression: RustExpr, context: RustPlanContext): RustExpr | undefined {
+  const operandBoundary = rustCurrentErrorBoundary(context);
+  if (operandBoundary === undefined || context.fallibleBoundary === undefined) {
+    return rejectLocationStorage(node, context, "A source pointer access requires its exact retained callback error boundary.");
+  }
+  return { kind: "try", expr: expression,
+    resultErrorType: rustErrorType(context.fallibleBoundary), operandErrorType: rustErrorType(operandBoundary) };
 }
 
 export function planRustIdentifierValue(

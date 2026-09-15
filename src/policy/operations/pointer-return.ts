@@ -4,7 +4,7 @@ import { resolveRustTargetTypeRef } from "../types/resolution.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import {
-  rustLocationTargetType,
+  rustSourceLocationTargetType,
   rustOptionTargetType,
   rustUndefinedTargetType,
 } from "../../target-model/types/index.js";
@@ -48,7 +48,7 @@ export function selectRustPointerReturnContract(
   if (nullish.some((type) => !rustTargetTypeRefEquals(type, rustUndefinedTargetType()))) {
     return undefined;
   }
-  const carrier = rustLocationTargetType(first);
+  const carrier = rustSourceLocationTargetType(first);
   return Object.freeze({
     returnCarrier: nullish.length === 0 ? carrier : rustOptionTargetType(carrier),
     undefinedReturn: nullish.length > 0,

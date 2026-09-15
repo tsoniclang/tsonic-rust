@@ -19,6 +19,7 @@ export const rustJsStringTargetId = "rust.js.JsString";
 export const rustBigIntTargetId = "rust.runtime.BigInt";
 export const rustOptionTargetId = "rust.std.Option";
 export const rustLocationTargetId = "rust.runtime.Location";
+export const rustInfallibleTargetId = "rust.core.Infallible";
 export const rustRawPointerTargetId = "rust.runtime.RawPointer";
 export const rustCallableTargetId = "rust.runtime.Callable";
 export const rustGeneratorTargetId = "rust.runtime.Generator";

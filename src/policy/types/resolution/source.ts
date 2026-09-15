@@ -9,7 +9,7 @@ import {
   rustBigIntTargetType,
   rustJsArrayTargetType,
   rustJsStringTargetType,
-  rustLocationTargetType,
+  rustSourceLocationTargetType,
   rustRawPointerTargetType,
   rustNullTargetType,
   rustNeverTargetType,
@@ -82,7 +82,7 @@ export function resolveRustTargetTypeRef(
     if (rawLocation.operation.operation === "to-raw") return rustOptionTargetType(rustRawPointerTargetType());
     const pointee = resolveRustTargetTypeRef(rawLocation.operation.explicitPointeeTypeNode ??
       rawLocation.layout.explicitTypeNode ?? rawLocation.operation.pointeeType, context, options);
-    return pointee === undefined ? undefined : rustOptionTargetType(rustLocationTargetType(pointee));
+    return pointee === undefined ? undefined : rustOptionTargetType(rustSourceLocationTargetType(pointee));
   }
   if (isRustSourceRawPointer(subject, context)) return rustRawPointerTargetType();
   if (resolveRustSourceMarker(subject, context) === "js-string") {
@@ -112,7 +112,7 @@ export function resolveRustTargetTypeRef(
     context.facts.get(subject, pointerFactKey);
   if (pointer !== undefined) {
     const pointee = resolveRustTargetTypeRef(pointer.pointee, context, options);
-    return pointee === undefined ? undefined : rustLocationTargetType(pointee);
+    return pointee === undefined ? undefined : rustSourceLocationTargetType(pointee);
   }
   const node = asNode(subject, context);
   const existing = context.facts.getRuntimeCarrierFact(node)?.carrier;
@@ -236,7 +236,7 @@ export function resolveRustTargetTypeSyntax(
     context.facts.get(node, pointerFactKey);
   if (pointer !== undefined) {
     const pointee = resolveRustAuthoredTargetType(pointer.pointee, context, options, resolving);
-    return pointee === undefined ? undefined : rustLocationTargetType(pointee);
+    return pointee === undefined ? undefined : rustSourceLocationTargetType(pointee);
   }
   const primitive = resolveSourcePrimitive(node, context);
   if (primitive !== undefined) {

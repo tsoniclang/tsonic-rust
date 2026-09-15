@@ -236,7 +236,7 @@ export function planCallableExpression(
     return undefined;
   }
   const fallible = context.input.program.facts.getFact(node, rustFallibleFactKey) !== undefined;
-  const resultIsFallible = callableProtocol !== undefined || fallible;
+  const resultIsFallible = callableProtocol !== undefined || nativeClosureProtocol?.fallible === true || fallible;
   const callableErrorBoundary = resultIsFallible
     ? context.fallibleBoundary ?? rustCurrentErrorBoundary(context)
     : undefined;

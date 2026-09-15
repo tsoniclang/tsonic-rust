@@ -195,5 +195,12 @@ function rustTypedLocationPlanEquals(
         left.fromSourceExpression === right.fromSourceExpression &&
         left.toSourceExpression === right.toSourceExpression &&
         rustTargetTypeRefEquals(left.sourcePointeeCarrier, right.sourcePointeeCarrier);
+    case "view-pointer":
+      return right.operation === left.operation &&
+        left.pointerExpression === right.pointerExpression &&
+        left.optional === right.optional &&
+        left.readExpression === right.readExpression &&
+        left.writeExpression === right.writeExpression &&
+        rustTargetTypeRefEquals(left.sourcePointeeCarrier, right.sourcePointeeCarrier);
   }
 }

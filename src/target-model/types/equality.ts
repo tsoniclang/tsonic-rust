@@ -284,6 +284,7 @@ function rustTargetTypeRefEqualsValidated(
     }
     case "closure": {
       if (right.kind !== left.kind) return false;
+      if ((left.fallible === true) !== (right.fallible === true)) return false;
       const nested = matchLifetimeBinders(
         left.lifetimeBinder,
         right.lifetimeBinder,
@@ -390,9 +391,10 @@ function validateRustTargetTypeRef(
       case "closure":
         return hasExactKeys(
           value,
-          ["kind", "args", "result", "lifetimeBinder"],
+          ["kind", "args", "result", "lifetimeBinder", "fallible"],
           ["kind", "args", "result"],
         ) && validateChildren(value.args) && validateChild(value.result) &&
+          (value.fallible === undefined || typeof value.fallible === "boolean") &&
           (value.lifetimeBinder === undefined || validateLifetimeBinder(value.lifetimeBinder));
       case "opaque":
         return hasExactKeys(value, ["kind", "id"], ["kind", "id"]) &&

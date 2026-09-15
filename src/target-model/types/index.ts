@@ -35,6 +35,7 @@ export {
   rustIteratorResultTargetType,
   rustLocationPointeeCarrier,
   rustLocationTargetType,
+  rustSourceLocationTargetType,
   rustRawPointerTargetType,
   rustNativeCallableProtocol,
   rustOptionalLocationPointeeCarrier,

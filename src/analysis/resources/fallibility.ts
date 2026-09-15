@@ -645,7 +645,8 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
           walk.context.facts.resolve(node, rustTargetOperationFactKey);
         const body = ast.body(node);
         if (operation?.kind === "closure" && body !== undefined && expressionRegionIsFallible(body)) {
-          if (rustCallableProtocol(operation.resultCarrier) !== undefined) {
+          if (rustCallableProtocol(operation.resultCarrier) !== undefined ||
+            operation.resultCarrier.kind === "closure" && operation.resultCarrier.fallible === true) {
             walk.context.facts.set(node, rustFallibleFactKey, { fallible: true }, [
               { message: "rust fallible first-class callable implementation" },
             ]);

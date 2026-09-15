@@ -180,7 +180,9 @@ export function rustTypeFromCarrier(
             trait: "Fn",
             binder: rustLifetimeBinderToAst(carrier.lifetimeBinder),
             parameters: parameters as RustType[],
-            result,
+            result: carrier.fallible === true ? {
+              kind: "named", path: "rt::TsonicResult", genericArguments: typeGenericArguments([result]),
+            } : result,
           }],
           outlives: Object.freeze([]),
           captures: Object.freeze([]),

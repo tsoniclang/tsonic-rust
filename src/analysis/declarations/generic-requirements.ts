@@ -461,10 +461,11 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       const error = addUse(node, typedLocation.pointeeCarrier, ["clone", "static"]);
       if (error !== undefined) return error;
     }
-    if (typedLocation?.operation === "bind-pointer" || typedLocation?.operation === "project-pointer") {
+    if (typedLocation?.operation === "bind-pointer" || typedLocation?.operation === "project-pointer" ||
+      typedLocation?.operation === "view-pointer") {
       const error = addUse(node, typedLocation.pointeeCarrier, ["static"]);
       if (error !== undefined) return error;
-      if (typedLocation.operation === "project-pointer") {
+      if (typedLocation.operation === "project-pointer" || typedLocation.operation === "view-pointer") {
         const sourceError = addUse(node, typedLocation.sourcePointeeCarrier, ["static"]);
         if (sourceError !== undefined) return sourceError;
       } else {
@@ -474,9 +475,9 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
           if (identityError !== undefined) return identityError;
         }
       }
-      const callbacks = typedLocation.operation === "bind-pointer"
-        ? [typedLocation.readExpression, typedLocation.writeExpression]
-        : [typedLocation.fromSourceExpression, typedLocation.toSourceExpression];
+      const callbacks = typedLocation.operation === "project-pointer"
+        ? [typedLocation.fromSourceExpression, typedLocation.toSourceExpression]
+        : [typedLocation.readExpression, typedLocation.writeExpression];
       for (const callback of callbacks) {
         const captures = facts.getFact(callback, rustClosureCaptureFactKey);
         for (const capture of captures?.captures ?? []) {

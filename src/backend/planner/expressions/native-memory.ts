@@ -5,12 +5,13 @@ import { rustNativeBackingKey, rustRawLocationPlanKey } from "../../../target-mo
 import type { RustNativeMemoryLayout } from "../../../target-model/operations/native-memory.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
-import { rustOptionElementCarrier, rustStructuralObjectCarrierValue } from "../../../target-model/types/index.js";
+import { rustOptionElementCarrier, rustStructuralObjectCarrierValue, rustProgramErrorTargetType } from "../../../target-model/types/index.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 
-export function planRustNativeAllocation(node: Node, initial: RustExpr, context: RustPlanContext): RustExpr | undefined {
+export function planRustNativeAllocation(node: Node, initial: RustExpr, context: RustPlanContext, errorCarrier?: TargetTypeRef): RustExpr | undefined {
   const layout = context.input.program.facts.getFact(node, rustNativeBackingKey);
-  return layout === undefined ? undefined : planRustNativeMemoryCall("allocate_native_location", initial, layout, context);
+  return layout === undefined ? undefined : planRustNativeMemoryCall("allocate_native_location", initial, layout, context, errorCarrier);
 }
 
 export function tryPlanRustRawLocation(
@@ -33,17 +34,20 @@ export function tryPlanRustRawLocation(
     ? { kind: "call", path: "Some", args: [{ kind: "reference", expr: borrowed }] }
     : { kind: "method-call", receiver: borrowed, method: "as_ref", args: [] };
   return { handled: true, expression: planRustNativeMemoryCall(plan.operation === "to-raw"
-    ? "location_to_raw" : "reinterpret_raw_location", argument, plan.layout, context) };
+    ? "location_to_raw" : "reinterpret_raw_location", argument, plan.layout, context, rustProgramErrorTargetType()) };
 }
 
-export function planRustNativeMemoryCall(method: "allocate_native_location" | "location_to_raw" | "reinterpret_raw_location", value: RustExpr, layout: RustNativeMemoryLayout, context: RustPlanContext): RustExpr | undefined {
+export function planRustNativeMemoryCall(method: "allocate_native_location" | "location_to_raw" | "reinterpret_raw_location", value: RustExpr, layout: RustNativeMemoryLayout, context: RustPlanContext, errorCarrier?: TargetTypeRef): RustExpr | undefined {
   const pointee = rustTypeFromCarrierInContext(layout.pointeeCarrier, context);
   const codec = planRustNativeLayout(layout, context);
   if (pointee === undefined || codec === undefined) return undefined;
+  const error = errorCarrier === undefined ? { kind: "named" as const, path: "core::convert::Infallible" }
+    : rustTypeFromCarrierInContext(errorCarrier, context);
+  if (error === undefined) return undefined;
   context.usedAliases?.add("rt");
   return { kind: "call", path: `rt::raw_memory::${method}`,
     genericArguments: [{ kind: "type", type: pointee },
-      ...(method === "location_to_raw" ? [{ kind: "type" as const, type: { kind: "infer" as const } }] : [])],
+      { kind: "type", type: method === "location_to_raw" ? { kind: "infer" } : error }],
     args: [value, codec] };
 }
 

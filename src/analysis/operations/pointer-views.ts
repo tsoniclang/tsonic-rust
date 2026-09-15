@@ -9,14 +9,14 @@ import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import {
   isRustDefinitelyNullishCarrier,
-  rustClosureTargetType,
-  rustLocationTargetType,
+  rustSourceLocationTargetType,
   rustOptionalLocationPointeeCarrier,
   rustOptionTargetType,
   rustUnitTargetType,
 } from "../../target-model/types/index.js";
 import type { RustOperationsProviderOptions } from "./provider/model.js";
-import { acceptSelectedCall } from "./provider/calls/instantiation.js";
+import { recordRustTypedLocationCall } from "./typed-locations.js";
+import { rustLocationCallbackCarrier } from "./location-callbacks.js";
 import { rejectSelectedOperation } from "./provider/result.js";
 
 export function selectRustPointerViewCall(
@@ -45,23 +45,18 @@ export function selectRustPointerViewCall(
       : !rustTargetTypeRefEquals(operandPointee, sourcePointee))) {
     return reject("Pointer views require exact source and destination pointee carriers.");
   }
-  const source = rustLocationTargetType(sourcePointee);
-  const target = rustLocationTargetType(pointee);
+  const source = rustSourceLocationTargetType(sourcePointee);
+  const target = rustSourceLocationTargetType(pointee);
   const parameters = [
     view.optional ? rustOptionTargetType(source) : source,
-    rustClosureTargetType([], pointee),
-    rustClosureTargetType([pointee], rustUnitTargetType()),
+    rustLocationCallbackCarrier(view.readExpression, [], pointee, context.ast),
+    rustLocationCallbackCarrier(view.writeExpression, [pointee], rustUnitTargetType(), context.ast),
   ];
-  return acceptSelectedCall(request, {
-    kind: "provider-operation", operationId: "tsonic.rust.location.view", operationKind: "method",
-    target: { form: "call", path: view.optional ? "rt::Location::view_optional" : "rt::Location::view",
-      argModes: ["ref", "value", "value"] },
-    parameterCarriers: parameters,
-    carrierRequirements: [
-      { carrier: sourcePointee, requirement: "static" },
-      { carrier: pointee, requirement: "static" },
-    ],
-    resultCarrier: view.optional ? rustOptionTargetType(target) : target,
-    isAsync: false, isFallible: false, errorBoundary: "none",
-  }, parameters, context, options, { sourceName: "viewPointer" });
+  return recordRustTypedLocationCall(request, {
+    call: request.source.call, operation: "view-pointer", pointeeCarrier: pointee,
+    locationCarrier: target, pointerExpression: view.pointerExpression,
+    sourcePointeeCarrier: sourcePointee, optional: view.optional,
+    readExpression: view.readExpression, writeExpression: view.writeExpression,
+  }, parameters, view.optional ? rustOptionTargetType(target) : target,
+  [sourcePointee, pointee], context);
 }

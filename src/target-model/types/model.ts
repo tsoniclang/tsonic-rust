@@ -88,6 +88,7 @@ export type RustTargetTypeRef =
       readonly kind: "closure";
       readonly args: readonly RustTargetTypeRef[];
       readonly result: RustTargetTypeRef;
+      readonly fallible?: boolean;
       readonly lifetimeBinder?: RustLifetimeBinder;
     }
   | { readonly kind: "opaque"; readonly id: string }

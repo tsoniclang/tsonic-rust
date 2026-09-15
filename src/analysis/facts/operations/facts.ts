@@ -624,6 +624,7 @@ export type RustTypedLocationOperationKind =
   | "bind-pointer"
   | "hash-pointer"
   | "project-pointer"
+  | "view-pointer"
   | "load"
   | "store"
   | "equal-pointer";
@@ -670,6 +671,14 @@ export type RustTypedLocationPlan = RustTypedLocationPlanBase & (
   | {
       readonly operation: "bind-pointer";
       readonly identityExpression: Node;
+      readonly readExpression: Node;
+      readonly writeExpression: Node;
+    }
+  | {
+      readonly operation: "view-pointer";
+      readonly pointerExpression: Node;
+      readonly sourcePointeeCarrier: TargetTypeRef;
+      readonly optional: boolean;
       readonly readExpression: Node;
       readonly writeExpression: Node;
     }

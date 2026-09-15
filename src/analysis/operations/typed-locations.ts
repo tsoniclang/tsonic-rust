@@ -39,19 +39,19 @@ import type {
   RustTypedLocationPlan,
 } from "../facts/keys.js";
 import {
-  rustLocationTargetType,
+  rustSourceLocationTargetType,
   rustOptionalLocationPointeeCarrier,
   rustOptionTargetType,
   rustSourcePrimitiveTargetType,
   rustUnitTargetType,
   rustCallableProtocol,
   rustClosureProtocol,
-  rustClosureTargetType,
   rustCarrierSupportsObjectIdentity,
   rustOptionElementCarrier,
   isRustDefinitelyNullishCarrier,
 } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustLocationCallbackCarrier } from "./location-callbacks.js";
 import type { RustOperationsProviderOptions } from "./provider/model.js";
 import {
   resolveRustTargetTypeRef,
@@ -154,7 +154,7 @@ function acceptRustTypedLocationCall(
       `Selected '${sourceOperation.operation}' operation has no closed Rust pointee carrier from finalized source evidence.`,
     );
   }
-  const locationCarrier = rustLocationTargetType(pointeeCarrier);
+  const locationCarrier = rustSourceLocationTargetType(pointeeCarrier);
   const optionLocationCarrier = rustOptionTargetType(locationCarrier);
   const boolCarrier = rustSourcePrimitiveTargetType("bool");
   const unitCarrier = rustUnitTargetType();
@@ -182,13 +182,13 @@ function acceptRustTypedLocationCall(
         "RUST_POINTER_IDENTITY_NOT_PROVEN", "Pointer binding requires a closed reference identity carrier.");
     }
     parameterCarriers = [identity,
-      rustClosureTargetType([], pointeeCarrier),
-      rustClosureTargetType([pointeeCarrier], unitCarrier)];
+      rustLocationCallbackCarrier(sourceOperation.readExpression, [], pointeeCarrier, context.ast),
+      rustLocationCallbackCarrier(sourceOperation.writeExpression, [pointeeCarrier], unitCarrier, context.ast)];
   } else if (plan.value.operation === "project-pointer") {
-    const sourceCarrier = rustLocationTargetType(plan.value.sourcePointeeCarrier);
+    const sourceCarrier = rustSourceLocationTargetType(plan.value.sourcePointeeCarrier);
     parameterCarriers = [plan.value.optional ? rustOptionTargetType(sourceCarrier) : sourceCarrier,
-      rustClosureTargetType([plan.value.sourcePointeeCarrier], pointeeCarrier),
-      rustClosureTargetType([pointeeCarrier], plan.value.sourcePointeeCarrier)];
+      rustLocationCallbackCarrier(plan.value.fromSourceExpression, [plan.value.sourcePointeeCarrier], pointeeCarrier, context.ast),
+      rustLocationCallbackCarrier(plan.value.toSourceExpression, [pointeeCarrier], plan.value.sourcePointeeCarrier, context.ast)];
   }
   const resultCarrier = sourceOperation.operation === "load"
     ? pointeeCarrier
@@ -200,11 +200,29 @@ function acceptRustTypedLocationCall(
           ? rustSourcePrimitiveTargetType("float64")
           : plan.value.operation === "project-pointer" && plan.value.optional
             ? optionLocationCarrier : locationCarrier;
+  const genericCarriers = plan.value.operation === "project-pointer"
+    ? [plan.value.sourcePointeeCarrier, pointeeCarrier] : [pointeeCarrier];
+  return recordRustTypedLocationCall(request, plan.value, parameterCarriers, resultCarrier,
+    genericCarriers, context, provider);
+}
+
+export function recordRustTypedLocationCall(
+  request: RustCheckedCallSelectionInput,
+  plan: RustTypedLocationPlan,
+  parameterCarriers: readonly TargetTypeRef[],
+  resultCarrier: TargetTypeRef,
+  genericCarriers: readonly TargetTypeRef[],
+  context: RustOperationPolicyContext,
+  provider?: ProviderDeclarationIdentity,
+): RustPolicySelection<RustCheckedCallSelectionResult> {
+  const { pointeeCarrier, locationCarrier } = plan;
+  const sourceOperation = plan;
+  const selectedGenericParameters = request.source.sourceSelectedMethodTypeArguments ?? [];
   const operationId = `tsonic.rust.location.${sourceOperation.operation}`;
   const evidence = [{
     message: `rust selected exact typed-location operation ${sourceOperation.operation}`,
   }];
-  context.facts.set(request.source.call, rustTypedLocationPlanKey, plan.value, evidence);
+  context.facts.set(request.source.call, rustTypedLocationPlanKey, plan, evidence);
   context.facts.set(request.source.call, rustTargetOperationFactKey, {
     kind: "typed-location",
     operationId,
@@ -233,8 +251,6 @@ function acceptRustTypedLocationCall(
       mode: "by-value",
     }, evidence);
   }
-  const genericCarriers = plan.value.operation === "project-pointer"
-    ? [plan.value.sourcePointeeCarrier, pointeeCarrier] : [pointeeCarrier];
   const member: RustTargetMember = {
     id: operationId,
     sourceName: sourceOperation.operation,

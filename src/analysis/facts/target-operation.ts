@@ -123,6 +123,9 @@ export function rustTargetOperationIsFallible(
   if (fact.kind === "regexp-create") {
     return true;
   }
+  if (fact.kind === "typed-location") {
+    return fact.operation === "load" || fact.operation === "store";
+  }
   if (fact.kind === "iteration") {
     return fact.iterationKind !== "for-in" && fact.lowering.kind === "fallible-owned";
   }

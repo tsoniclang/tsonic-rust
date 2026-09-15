@@ -4,7 +4,7 @@ import {
   rustFixedArrayTargetType,
   rustJsArrayTargetType,
   rustJsSymbolTargetType,
-  rustLocationTargetType,
+  rustSourceLocationTargetType,
   rustNullTargetType,
   rustNullishSourceTargetType,
   rustNeverTargetType,
@@ -116,7 +116,7 @@ export function resolveRustTargetType(
       const pointee = arguments_?.length === 1
         ? resolveRustTargetType(arguments_[0], context, options, resolving)
         : undefined;
-      return pointee === undefined ? undefined : rustLocationTargetType(pointee);
+      return pointee === undefined ? undefined : rustSourceLocationTargetType(pointee);
     }
     if (semantics.types.isNever(type)) {
       return rustNeverTargetType();
