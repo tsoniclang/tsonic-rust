@@ -8,6 +8,21 @@ import {
   compileRust,
 } from "../../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
+import { pointerViewFiles } from "../../../../../tsonic/test/fixtures/pointer-views.mjs";
+
+for (const surfaces of [undefined, ["js"]]) {
+  test(`read-free pointer views retain aliases and optional ownership in ${surfaces?.[0] ?? "native"} source`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ surfaces,
+      target: { id: "rust", options: { outputType: "bin" } },
+      files: { ...pointerViewFiles, "index.ts": `${pointerViewFiles["index.ts"]}
+export function main(): void { if (!run()) throw new Error("pointer view contract"); }` },
+    });
+    assert.deepEqual(result.diagnostics, []);
+    assert.match(artifactText(result, "src/index.rs"), /Location::view\(/u);
+    assert.doesNotMatch(artifactText(result, "src/index.rs"), /\bunsafe\b/u);
+    validateGeneratedProject(`pointer-views-${surfaces?.[0] ?? "native"}`, result.artifacts, { run: true });
+  });
+}
 
 test("raw pointer identity preserves optional address carriers through parameters and returns", { timeout: 300_000 }, () => {
   const { result } = compileRust({

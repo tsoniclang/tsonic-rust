@@ -412,7 +412,7 @@ export type RustProviderOperationForm =
 
 export interface RustOperationCarrierRequirement {
   readonly carrier: TargetTypeRef;
-  readonly requirement: "clone" | "source-numeric";
+  readonly requirement: "clone" | "source-numeric" | "static";
 }
 
 export interface RustProviderOperationTemplate<

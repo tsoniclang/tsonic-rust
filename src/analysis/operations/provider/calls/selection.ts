@@ -39,6 +39,7 @@ import { mapSelectedStringRegExpProtocolCall } from "../regexp-protocols.js";
 import { selectedRustRegExpReplacementCallbackEvidence } from "../regexp-replacement-callback.js";
 import { canRequireSourceClone } from "./clone-requirements.js";
 import { rustOperandSupportsSourceNumeric } from "../../generic-numeric.js";
+import { selectRustPointerViewCall } from "../../pointer-views.js";
 import type {
   RustCheckedCallSelectionInput,
   RustCheckedCallSelectionResult,
@@ -54,6 +55,8 @@ export function selectRustCheckedCall(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedCallSelectionResult> {
+  const pointerView = selectRustPointerViewCall(request, context, options);
+  if (pointerView !== undefined) return pointerView;
   const keepAlive = readRustSourceKeepAlive(request.source.call, context);
   if (keepAlive !== undefined) {
     const value = resolveRustTargetTypeRef(keepAlive.valueExpression, context, options);
