@@ -89,6 +89,8 @@ export function rustExpressionUsesTryInCurrentRegion(expression: RustExpr): bool
     case "vec-literal":
     case "slice-literal":
       return expression.elements.some(rustExpressionUsesTryInCurrentRegion);
+    case "array-repeat":
+      return rustExpressionUsesTryInCurrentRegion(expression.element);
     case "await":
       return rustExpressionUsesTryInCurrentRegion(expression.expr);
     case "return-expression":

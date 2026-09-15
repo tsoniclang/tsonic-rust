@@ -7,7 +7,7 @@ import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions }
 import { resolveRustTargetTypeRef } from "../types/resolution.js";
 import { resolveProviderTypeIdentity, providerCarrierFromRelations } from "../types/resolution/providers.js";
 import { selectRustProviderOperation, rustProviderOperationOwnerMatches } from "./provider-selection.js";
-import { isRustCopyCarrier, rustNamedTypeCarrierValue, rustStructuralObjectCarrierValue, rustTargetGenericBindingsForArguments, substituteRustTargetGenerics } from "../../target-model/types/index.js";
+import { isRustCopyCarrier, rustFixedArrayCarrierValue, rustNamedTypeCarrierValue, rustStructuralObjectCarrierValue, rustTargetGenericBindingsForArguments, substituteRustTargetGenerics } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 type RustNativeMemorySelection = RustNativeMemoryLayout | {
@@ -26,10 +26,27 @@ export function selectRustNativeMemoryLayout(
   if (selected.size === 0 && countTsonicMemoryLayoutValues(layout, 131_072) === undefined) return undefined;
   if (selected.has(layout)) return selected.get(layout);
   selected.set(layout, undefined);
+  const pointeeCarrier = resolveRustTargetTypeRef(layout.explicitTypeNode ?? layout.sourceType, context, options);
+  if (pointeeCarrier === undefined) return undefined;
   if (layout.kind === "array") {
-    const result = Object.freeze({
-      kind: "unsupported-array" as const,
-      reason: `Rust native raw/backing storage does not support an inline fixed-array layout with exact extent ${layout.fixedArray.length}; no native array layout adapter is implemented.`,
+    const array = rustFixedArrayCarrierValue(pointeeCarrier);
+    const element = selectRustNativeMemoryLayout(layout.elementLayout, context, options, selected);
+    if (element?.kind === "unsupported-array") { selected.set(layout, element); return element; }
+    if (array === undefined || array.length.kind !== "integer" ||
+      BigInt(array.length.value) !== layout.fixedArray.length || element === undefined ||
+      !isRustCopyCarrier(pointeeCarrier) || !rustTargetTypeRefEquals(array.element, element.pointeeCarrier) ||
+      element.width !== layout.dataLayout.addressWidth || element.littleEndian !== (layout.dataLayout.byteOrder === "little")) return undefined;
+    if (layout.fixedArray.length > (1n << BigInt(layout.dataLayout.addressWidth)) - 1n) {
+      const rejected = Object.freeze({ kind: "unsupported-array" as const,
+        reason: "The exact fixed-array extent exceeds the selected native address-width range." });
+      selected.set(layout, rejected);
+      return rejected;
+    }
+    const result: RustNativeMemoryLayout = Object.freeze({
+      kind: "array", pointeeCarrier, length: layout.fixedArray.length.toString(),
+      stride: layout.elementLayout.stride, element,
+      size: layout.byteSize, alignment: layout.byteAlignment,
+      width: layout.dataLayout.addressWidth, littleEndian: layout.dataLayout.byteOrder === "little",
     });
     selected.set(layout, result);
     return result;
@@ -41,8 +58,6 @@ export function selectRustNativeMemoryLayout(
       return child;
     }
   }
-  const pointeeCarrier = resolveRustTargetTypeRef(layout.explicitTypeNode ?? layout.sourceType, context, options);
-  if (pointeeCarrier === undefined) return undefined;
   const sizes: Readonly<Partial<Record<string, number>>> = {
     int8: 1, uint8: 1, int16: 2, uint16: 2, int32: 4, uint32: 4,
     int64: 8, uint64: 8, int128: 16, uint128: 16, float32: 4, float64: 8,

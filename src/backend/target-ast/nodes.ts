@@ -241,6 +241,7 @@ export type RustExpr =
   | { readonly kind: "reference"; readonly expr: RustExpr; readonly mutable?: boolean }
   | { readonly kind: "vec-literal"; readonly elements: readonly RustExpr[] }
   | { readonly kind: "slice-literal"; readonly elements: readonly RustExpr[] }
+  | { readonly kind: "array-repeat"; readonly element: RustExpr; readonly length: RustConstArgument }
   | { readonly kind: "closure"; readonly params: readonly { readonly name: string; readonly byRefCopy: boolean }[]; readonly move?: boolean; readonly body: RustExpr }
   | {
       readonly kind: "closure-block";

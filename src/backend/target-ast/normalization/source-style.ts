@@ -465,6 +465,9 @@ function finalizeRustExpressionStyle(expression: RustExpr): RustExpr {
     case "slice-literal":
       result = { ...expression, elements: expression.elements.map(finalizeRustExpressionStyle) };
       break;
+    case "array-repeat":
+      result = { ...expression, element: finalizeRustExpressionStyle(expression.element) };
+      break;
     case "closure":
       result = { ...expression, body: finalizeRustExpressionStyle(expression.body) };
       break;

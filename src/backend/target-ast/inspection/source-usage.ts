@@ -173,6 +173,10 @@ export function rustExpressionChildren(expression: RustExpr): readonly RustExpr[
     case "slice-literal":
     case "tuple-literal":
       return expression.elements;
+    case "array-repeat":
+      return expression.length.kind === "path"
+        ? [expression.element, { kind: "path", path: expression.length.path }]
+        : [expression.element];
     case "closure":
       return [expression.body];
     case "await":

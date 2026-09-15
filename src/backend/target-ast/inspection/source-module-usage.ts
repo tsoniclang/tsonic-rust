@@ -382,6 +382,10 @@ function rustExpressionReferencesModuleAlias(expression: RustExpr, alias: string
     case "tuple-literal":
       return expression.elements.some((element) =>
         rustExpressionReferencesModuleAlias(element, alias));
+    case "array-repeat":
+      return rustExpressionReferencesModuleAlias(expression.element, alias) ||
+        expression.length.kind === "path" &&
+          rustExpressionReferencesModuleAlias({ kind: "path", path: expression.length.path }, alias);
     case "closure":
       return rustExpressionReferencesModuleAlias(expression.body, alias);
     case "closure-block":

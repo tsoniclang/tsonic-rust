@@ -1,6 +1,6 @@
 import { printRustBlockStatements } from "../blocks.js";
 import { escapeRustChar, escapeRustString, printRustPattern } from "../patterns.js";
-import { printRustType } from "../types.js";
+import { printRustConstArgument, printRustType } from "../types.js";
 import {
   printRustAssociatedCallOwner,
   printRustAssociatedCallTarget,
@@ -115,6 +115,8 @@ export function printRustExpr(expression: RustExpr): string {
       return `vec![${expression.elements.map(printRustExpr).join(", ")}]`;
     case "slice-literal":
       return `[${expression.elements.map(printRustExpr).join(", ")}]`;
+    case "array-repeat":
+      return `[${printRustExpr(expression.element)}; ${printRustConstArgument(expression.length)}]`;
     case "closure":
       return `${expression.move === true ? "move " : ""}|${printRustClosureParams(expression.params)}| ${printRustExpr(expression.body)}`;
     case "closure-block": {

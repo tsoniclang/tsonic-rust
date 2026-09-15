@@ -240,27 +240,27 @@ test("huge fixed-array metadata observations erase before native value admission
   assert.equal(validateGeneratedProject("huge-fixed-array-metadata", result.artifacts, { run: true }).status, 0);
 });
 
-for (const [name, declarations, selectedLayout, body, diagnostic, extent] of [
+for (const [name, declarations, selectedLayout, body, diagnostic, accepted] of [
   ["direct fixed array", "", "array", "return reinterpretRawPointer(raw, array);",
-    "RUST_RAW_LOCATION_NOT_PROVEN", "2"],
+    "RUST_RAW_LOCATION_NOT_PROVEN", true],
   ["nested fixed array", `
     const nested = memoryArrayLayout<FixedArray<uint32, 2>, 3>(abi, 24, 4, 24, array, 3);
-  `, "nested", "return reinterpretRawPointer(raw, nested);", "RUST_RAW_LOCATION_NOT_PROVEN", "3"],
+  `, "nested", "return reinterpretRawPointer(raw, nested);", "RUST_RAW_LOCATION_NOT_PROVEN", true],
   ["record containing a fixed array", `
     interface Container { values: FixedArray<uint32, 2> }
     const record = memoryLayout<Container>(abi, 8, 4, 8,
       memoryField((value: Container) => value.values, 0, 4, array));
-  `, "record", "return reinterpretRawPointer(raw, record);", "RUST_RAW_LOCATION_NOT_PROVEN", "2"],
+  `, "record", "return reinterpretRawPointer(raw, record);", "RUST_RAW_LOCATION_NOT_PROVEN", false],
   ["fixed-array physical backing", "", "array", `
     let values: FixedArray<uint32, 2> = [1, 2];
     return toRawPointer(addressOf(values), array);
-  `, "RUST_NATIVE_BACKING_NOT_PROVEN", "2"],
+  `, "RUST_NATIVE_BACKING_NOT_PROVEN", true],
   ["huge zero-sized fixed array", `
     const zero = memoryLayout<{}>(abi, 0, 1, 0);
     const huge = memoryArrayLayout<{}, 9007199254740993n>(abi, 0, 1, 0, zero, 9007199254740993n);
-  `, "huge", "return reinterpretRawPointer(raw, huge);", "RUST_RAW_LOCATION_NOT_PROVEN", "9007199254740993"],
+  `, "huge", "return reinterpretRawPointer(raw, huge);", "RUST_RAW_LOCATION_NOT_PROVEN", false],
 ]) {
-  test(`native physical layouts reject ${name} explicitly`, () => {
+  test(`native physical layouts ${accepted ? "admit" : "reject unproved reference storage for"} ${name}`, () => {
     const { result } = compileRust({
       capabilities: [memoryAbiCapability("rust")],
       files: { "index.ts": `
@@ -278,9 +278,57 @@ for (const [name, declarations, selectedLayout, body, diagnostic, extent] of [
         }
       ` },
     });
-    const message = `Rust native raw/backing storage does not support an inline fixed-array layout with exact extent ${extent}; no native array layout adapter is implemented.`;
-    assert.ok(result.diagnostics.some(item => item.code === diagnostic && item.message === message),
+    if (accepted) {
+      assert.deepEqual(result.diagnostics, []);
+      assert.notEqual(result.artifacts.length, 0);
+      return;
+    }
+    assert.ok(result.diagnostics.some(item => item.code === diagnostic && item.message.includes("all-bit-pattern")),
       JSON.stringify(result.diagnostics));
     assert.deepEqual(result.artifacts, []);
   });
 }
+
+test("huge zero-sized native arrays retain their exact extent without element loops", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    capabilities: [memoryAbiCapability("rust")],
+    target: { id: "rust", options: { outputType: "bin", crateName: "huge_zero_array" } },
+    files: { "index.ts": `
+import { abi } from "test:abi";
+import { allocatePointer, loadPointer, memoryArrayLayout, memoryLayout,
+  reinterpretRawPointer, storePointer, struct, toRawPointer, unsafeContext } from "@tsonic/core/lang.js";
+const Empty = struct({});
+type Empty = typeof Empty;
+const empty = memoryLayout<Empty>(abi, 0, 1, 0);
+const huge = memoryArrayLayout<Empty, 9007199254740993n>(abi, 0, 1, 0, empty, 9007199254740993n);
+export function main(): void {
+  unsafeContext();
+  const origin = allocatePointer<Empty>({});
+  const raw = toRawPointer(origin, empty);
+  const pointer = reinterpretRawPointer(raw, huge);
+  if (pointer === undefined) throw new Error("zero-sized pointer");
+  const value = loadPointer(pointer);
+  storePointer(pointer, value);
+}
+` },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  const output = artifactText(result, "src/index.rs");
+  assert.match(output, /; 9007199254740993\]/u);
+  assert.doesNotMatch(output, /array::from_fn|for index_/u);
+  validateGeneratedProject("huge-zero-native-array", result.artifacts, { run: true });
+});
+
+test("native fixed-array layout identity retains count, stride and child signedness", async () => {
+  const { rustNativeMemoryLayoutsEqual } = await import("../../../../dist/target-model/operations/native-memory.js");
+  const { rustFixedArrayTargetType } = await import("../../../../dist/target-model/types/index.js");
+  const scalar = { kind: "scalar", pointeeCarrier: { kind: "source-primitive", name: "uint32" },
+    size: 4, alignment: 4, width: 64, littleEndian: true, fields: [] };
+  const array = { kind: "array", pointeeCarrier: rustFixedArrayTargetType(scalar.pointeeCarrier, 2),
+    size: 16, alignment: 4, width: 64, littleEndian: true, length: "2", stride: 8, element: scalar };
+  assert.equal(rustNativeMemoryLayoutsEqual(array, structuredClone(array)), true);
+  for (const change of [{ length: "3" }, { stride: 4 }, { element: { ...scalar, size: 8 } },
+    { element: { ...scalar, pointeeCarrier: { kind: "source-primitive", name: "int32" } } }]) {
+    assert.equal(rustNativeMemoryLayoutsEqual(array, { ...array, ...change }), false);
+  }
+});

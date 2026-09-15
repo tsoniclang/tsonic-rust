@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { valueStructProofFiles } from "../../../../tsonic/test/fixtures/value-structs.mjs";
 import { valueRecordMemoryProofFiles } from "../../../../tsonic/test/fixtures/value-record-memory.mjs";
+import { fixedArrayMemoryProofFiles } from "../../../../tsonic/test/fixtures/fixed-array-memory.mjs";
 import { memoryAbiCapability } from "../../helpers/memory-abi.mjs";
 import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
@@ -13,6 +14,16 @@ import { writeRustStoredObjectField } from "../../../dist/backend/planner/object
 import { rustNativeMemoryLayoutsEqual } from "../../../dist/target-model/operations/native-memory.js";
 
 for (const surfaces of [[], ["js"]]) {
+  test(`fixed-array native codecs retain exact strides and independent snapshots in ${surfaces.length === 0 ? "native" : "JS"} source`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({
+      surfaces, capabilities: [memoryAbiCapability("rust")],
+      target: { id: "rust", options: { outputType: "bin", crateName: "fixed_array_memory" } },
+      files: { ...fixedArrayMemoryProofFiles, "index.ts": `${fixedArrayMemoryProofFiles["index.ts"]}
+export function main(): void { if (!run()) throw new Error("fixed array memory contract"); }` },
+    });
+    assert.deepEqual(result.diagnostics, []);
+    validateGeneratedProject("fixed-array-memory", result.artifacts, { run: true });
+  });
   test(`value structs preserve stored mutation, copies and field locations in ${surfaces.length === 0 ? "native" : "JS"} source`, { timeout: 300_000 }, () => {
     const { result } = compileRust({
       surfaces,
