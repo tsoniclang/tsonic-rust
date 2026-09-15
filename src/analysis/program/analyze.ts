@@ -11,7 +11,7 @@ import {
   KindFunctionDeclaration,
   KindVariableStatement,
 } from "@tsonic/target-api/source";
-import { recordEnumFacts, registerTypeAlias } from "../declarations/types-and-bindings.js";
+import { recordEnumFacts, registerTypeAlias, reserveTypeAliasUnion } from "../declarations/types-and-bindings.js";
 import { recordExportAssignmentFacts, recordFunctionBodyFacts, recordStatementFacts, recordVariableStatementFacts } from "../control-flow/statements.js";
 import { recordFallibilityFacts } from "../resources/fallibility.js";
 import { recordFunctionSignatureFacts, recordNestedCallableTypeSignatureFacts, recordPredeclaredNativeFunctionBindingFacts, recordTopLevelCallableValueSignatureFacts } from "../callables/signatures.js";
@@ -60,7 +60,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     ast,
     jsEnabled,
   );
-  const sourceTypes = createRustSourceTypeRegistry(context.typeFamilies);
+  const sourceTypes = createRustSourceTypeRegistry(context.typeFamilies, context.typeDefinitions);
   const sourceCallableAbi = createRustSourceCallableAbiResolver();
   const projectSourceFiles = [...context.sourceFiles]
     .sort((left, right) => ast.getFileName(left).localeCompare(ast.getFileName(right)));
@@ -230,6 +230,11 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   });
   for (const sourceFile of projectSourceFiles) {
     for (const statement of ast.statements(sourceFile) as readonly Node[]) {
+      if (ast.kindName(statement) === "KindTypeAliasDeclaration") reserveTypeAliasUnion(walk, statement);
+    }
+  }
+  for (const sourceFile of projectSourceFiles) {
+    for (const statement of ast.statements(sourceFile) as readonly Node[]) {
       const kind = ast.kindName(statement);
       if (kind === "KindInterfaceDeclaration") {
         recordInterfaceFacts(walk, statement);
@@ -237,6 +242,11 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
         registerTypeAlias(walk, statement);
       }
     }
+  }
+  for (const declaration of sourceTypes.pendingSourceUnions()) {
+    appendRustDiagnostic(walk, "RUST_SOURCE_UNION_NOT_CLOSED",
+      "A declared runtime union has no complete, consistent set of native variant carriers.", declaration,
+      ["target.capability=rust.type.source-union"]);
   }
   // Pass 1: finalize every callable declaration ABI before walking any body.
   // Cross-file and forward calls therefore observe the same parameter facts.
@@ -345,6 +355,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     ast: walk.context.ast,
     facts: walk.context.facts,
     projectTypes: walk.context.projectTypes,
+    typeDefinitions: walk.context.typeDefinitions,
     projectMethodDispatch: walk.context.projectMethodDispatch,
     expressions: walk.objectLiteralMethodExpressions,
   })) {

@@ -38,7 +38,6 @@ export function resolveRustInferredObjectUnion(
   const carrier = rustSourceUnionTargetType(
     sorted[0]!.ownerFileName,
     `Union${variants.length}`,
-    variants.map(variant => ({ name: variant.name, carrier: variant.carrier })),
     variants.map(variant => ({ kind: "type", type: variant.carrier })),
     "generated",
   );

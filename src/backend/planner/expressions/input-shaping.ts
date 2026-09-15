@@ -110,7 +110,7 @@ function sourceReferenceReborrowMatches(
     rustCompilerOwnedContextualConversionMatches(
       fact.sourceCarrier,
       fact.targetCarrier,
-      fact.conversion,
+      fact.conversion, context.input.program.typeDefinitions,
     ) &&
     rustTargetTypeRefEquals(conversion.target, input.sourceCarrier) &&
     (input.mode === "ref" || input.mode === "mut-ref" && conversion.source.mutable);

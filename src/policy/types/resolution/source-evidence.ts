@@ -244,8 +244,9 @@ function combineRustSelectedTargets(
     return first;
   }
   const union = rustSourceUnionCarrierValue(selected);
-  return union?.origin === "generated" && union.variants.length === targets.length &&
-    targets.every(target => union.variants.filter(variant => rustTargetTypeRefEquals(variant.carrier, target)).length === 1)
+  const variants = selected === undefined ? undefined : options.sourceTypes.sourceUnionVariants(selected);
+  return union?.origin === "generated" && variants?.length === targets.length &&
+    targets.every(target => variants.filter(variant => rustTargetTypeRefEquals(variant.carrier, target)).length === 1)
     ? selected : options.resolveProjectUnionCarrier(targets);
 }
 

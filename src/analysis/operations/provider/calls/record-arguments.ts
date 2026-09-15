@@ -47,11 +47,11 @@ export function selectProviderRecordArgument(
     if (read.kind !== "selected" || write.kind !== "selected") return undefined;
     const readTemplate = instantiateProviderOperationTemplate(providerOperationTemplate(read.row, "property"), {
       sourceReceiverCarrier: target,
-    })?.template;
+    }, context.typeDefinitions)?.template;
     const writeTemplate = instantiateProviderOperationTemplate(providerOperationTemplate(write.row, "property-set"), {
       sourceReceiverCarrier: target,
       sourceParameterCarriers: [readTemplate?.resultCarrier],
-    })?.template;
+    }, context.typeDefinitions)?.template;
     if (readTemplate?.target.form !== "field" || writeTemplate?.target.form !== "field" ||
       readTemplate.receiverCarrier === undefined || writeTemplate.receiverCarrier === undefined ||
       !rustTargetTypeRefEquals(readTemplate.receiverCarrier, target) ||
@@ -81,5 +81,5 @@ export function selectProviderRecordArgument(
     row.target.form !== "field" || !targetNames.has(row.target.name))) return undefined;
   const conversion: RustProviderRecordCopy = Object.freeze({ kind: "provider-record-copy", source, target,
     completion: omitted ? "default" : "complete", fields: Object.freeze(fields) });
-  return rustProviderRecordCopyMatches(conversion, source, target) ? conversion : undefined;
+  return rustProviderRecordCopyMatches(conversion, source, target, context.typeDefinitions) ? conversion : undefined;
 }

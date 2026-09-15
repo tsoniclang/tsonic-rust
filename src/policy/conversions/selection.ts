@@ -19,7 +19,6 @@ import {
   rustJsErrorTargetType,
   rustOptionElementCarrier,
   rustSourcePrimitiveTargetType,
-  rustSourceUnionCarrierValue,
   rustStringTargetType,
   rustStructuralObjectCarrierValue,
   rustCallableProtocol,
@@ -29,6 +28,7 @@ import {
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustNamedTypeCarrierValue } from "../../target-model/types/carriers/native.js";
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import {
   rustBoolToJsValueConversion,
   rustFloat64ToInt32ValueConversion,
@@ -57,7 +57,12 @@ const tsValueCarrier = rustTsValueTargetType();
 export function selectRustSourceValueConversion(
   source: TargetTypeRef,
   target: TargetTypeRef,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
+  ancestors: readonly {readonly source: TargetTypeRef; readonly target: TargetTypeRef}[] = [],
 ): RustValueConversion | undefined {
+  if (ancestors.some(ancestor => rustTargetTypeRefEquals(ancestor.source, source) &&
+    rustTargetTypeRefEquals(ancestor.target, target))) return undefined;
+  const nextAncestors = [...ancestors, {source, target}];
   const upcasts = rustNamedTypeCarrierValue(source)?.upcasts.filter((upcast) =>
     rustTargetTypeRefEquals(upcast.target, target)) ?? [];
   if (upcasts.length === 1) {
@@ -81,6 +86,7 @@ export function selectRustSourceValueConversion(
     const elementConversion = selectRustSourceValueConversion(
       sourceOptionElement,
       targetOptionElement,
+      definitions, nextAncestors,
     );
     if (elementConversion === undefined || elementConversion.kind === "option-map" ||
       elementConversion.kind === "option-some") {
@@ -91,8 +97,8 @@ export function selectRustSourceValueConversion(
   if (isRustNeverCarrier(source)) {
     return Object.freeze({ kind: "bottom-coercion", source, target });
   }
-  const targetUnion = rustSourceUnionCarrierValue(target);
-  const matchingUnionVariants = targetUnion?.variants.filter((variant) =>
+  const targetUnion = definitions.sourceUnionVariants(target);
+  const matchingUnionVariants = targetUnion?.filter((variant) =>
     rustTargetTypeRefEquals(variant.carrier, source)) ?? [];
   if (matchingUnionVariants.length === 1) {
     return Object.freeze({
@@ -114,7 +120,7 @@ export function selectRustSourceValueConversion(
     if (rustTargetTypeRefEquals(source, tsValueCarrier)) {
       return rustTsValueCloneConversion;
     }
-    return rustCarrierCanEnterTsValue(source)
+    return rustCarrierCanEnterTsValue(source, definitions)
       ? Object.freeze({
           kind: "ts-value-from-closed-carrier" as const,
           source,
@@ -149,8 +155,8 @@ export function selectRustSourceValueConversion(
     if (isRustUndefinedCarrier(source)) {
       return rustUndefinedToJsValueConversion;
     }
-    if (rustCarrierSupportsClone(source) &&
-      rustCarrierSupportsTrait(source, rustJsClosedValueCarrierTraitPath)) {
+    if (rustCarrierSupportsClone(source, definitions) &&
+      rustCarrierSupportsTrait(source, rustJsClosedValueCarrierTraitPath, undefined, undefined, definitions)) {
       return Object.freeze({
         kind: "js-value-from-closed-carrier" as const,
         source,
@@ -161,6 +167,7 @@ export function selectRustSourceValueConversion(
       const elementConversion = selectRustSourceValueConversion(
         optionElement,
         jsValueCarrier,
+        definitions, nextAncestors,
       );
       return elementConversion === undefined ||
           elementConversion.kind === "option-map" ||
@@ -176,10 +183,11 @@ export function selectRustSourceValueConversion(
     const arrayElement = isRustJsArrayCarrier(source)
       ? rustJsArrayLikeElementTargetType(source)
       : undefined;
-    if (arrayElement !== undefined && rustCarrierSupportsClone(arrayElement)) {
+    if (arrayElement !== undefined && rustCarrierSupportsClone(arrayElement, definitions)) {
       const elementConversion = selectRustSourceValueConversion(
         arrayElement,
         jsValueCarrier,
+        definitions, nextAncestors,
       );
       return elementConversion === undefined ||
           elementConversion.kind === "option-map" ||
@@ -192,15 +200,16 @@ export function selectRustSourceValueConversion(
           elementConversion,
         });
     }
-    const sourceUnion = rustSourceUnionCarrierValue(source);
+    const sourceUnion = definitions.sourceUnionVariants(source);
     if (sourceUnion !== undefined) {
-      const variants = sourceUnion.variants.map((variant) => {
+      const variants = sourceUnion.map((variant) => {
         if (rustTargetTypeRefEquals(variant.carrier, source)) {
           return undefined;
         }
         const conversion = selectRustSourceValueConversion(
           variant.carrier,
           jsValueCarrier,
+          definitions, nextAncestors,
         );
         return conversion === undefined ||
             conversion.kind === "option-map" ||
@@ -226,7 +235,7 @@ export function selectRustSourceValueConversion(
     if (structural !== undefined) {
       const fields = selectStructuralObjectConversionFields(
         structural,
-        (sourceCarrier) => selectRustSourceValueConversion(sourceCarrier, jsValueCarrier),
+        (sourceCarrier) => selectRustSourceValueConversion(sourceCarrier, jsValueCarrier, definitions, nextAncestors),
       );
       return fields === undefined ? undefined : Object.freeze({
         kind: "js-value-from-structural-object" as const,
@@ -268,14 +277,16 @@ export function selectRustSourceValueConversion(
 
 export function selectRustJsonValueConversion(
   source: TargetTypeRef,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): RustValueConversion | undefined {
-  return selectJsonValueConversion(source, true, []);
+  return selectJsonValueConversion(source, true, [], definitions);
 }
 
 function selectJsonValueConversion(
   source: TargetTypeRef,
   applySelectedToJson: boolean,
   ancestors: readonly TargetTypeRef[],
+  definitions: RustTypeDefinitions,
 ): RustValueConversion | undefined {
   if (ancestors.some((ancestor) => rustTargetTypeRefEquals(ancestor, source))) {
     return undefined;
@@ -297,7 +308,7 @@ function selectJsonValueConversion(
     const resultConversion = callable === undefined ||
         rustTargetTypeRefEquals(callable.result, source)
       ? undefined
-      : selectJsonValueConversion(callable.result, false, nextAncestors);
+      : selectJsonValueConversion(callable.result, false, nextAncestors, definitions);
     if (callable === undefined || !validParameters || resultConversion === undefined ||
         resultConversion.kind === "option-map" ||
         resultConversion.kind === "option-some" ||
@@ -322,6 +333,7 @@ function selectJsonValueConversion(
       optionElement,
       applySelectedToJson,
       nextAncestors,
+      definitions,
     );
     return elementConversion === undefined ||
         elementConversion.kind === "option-map" ||
@@ -337,11 +349,12 @@ function selectJsonValueConversion(
   const arrayElement = isRustJsArrayCarrier(source)
     ? rustJsArrayLikeElementTargetType(source)
     : undefined;
-  if (arrayElement !== undefined && rustCarrierSupportsClone(arrayElement)) {
+  if (arrayElement !== undefined && rustCarrierSupportsClone(arrayElement, definitions)) {
     const elementConversion = selectJsonValueConversion(
       arrayElement,
       true,
       nextAncestors,
+      definitions,
     );
     return elementConversion === undefined ||
         elementConversion.kind === "option-map" ||
@@ -354,13 +367,14 @@ function selectJsonValueConversion(
           elementConversion,
         });
   }
-  const sourceUnion = rustSourceUnionCarrierValue(source);
+  const sourceUnion = definitions.sourceUnionVariants(source);
   if (sourceUnion !== undefined) {
-    const variants = sourceUnion.variants.map((variant) => {
+    const variants = sourceUnion.map((variant) => {
       const conversion = selectJsonValueConversion(
         variant.carrier,
         applySelectedToJson,
         nextAncestors,
+        definitions,
       );
       return conversion === undefined ||
           conversion.kind === "option-map" ||
@@ -385,7 +399,7 @@ function selectJsonValueConversion(
   if (structural !== undefined) {
     const fields = selectStructuralObjectConversionFields(
       structural,
-      (sourceCarrier) => selectJsonValueConversion(sourceCarrier, true, nextAncestors),
+      (sourceCarrier) => selectJsonValueConversion(sourceCarrier, true, nextAncestors, definitions),
     );
     return fields === undefined ? undefined : Object.freeze({
       kind: "js-value-from-structural-object" as const,
@@ -393,7 +407,7 @@ function selectJsonValueConversion(
       fields,
     });
   }
-  return selectRustSourceValueConversion(source, jsValueCarrier);
+  return selectRustSourceValueConversion(source, jsValueCarrier, definitions);
 }
 
 type StructuralObjectConversion = Extract<

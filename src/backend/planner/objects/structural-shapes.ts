@@ -309,9 +309,9 @@ export function planRustStructuralShapeModule(
     }
     structs.push(...callableAliases);
     const valueRepresentation = rustStructuralObjectCarrierValue(definition.carrier)?.representation === "value";
-    const defaultable = valueRepresentation && rustCarrierSupportsTrait(definition.carrier, "core::default::Default", () => true);
-    const cloneable = valueRepresentation && rustCarrierSupportsTrait(definition.carrier, "core::clone::Clone", () => true);
-    const copyable = valueRepresentation && rustCarrierSupportsTrait(definition.carrier, "core::marker::Copy", () => true);
+    const defaultable = valueRepresentation && rustCarrierSupportsTrait(definition.carrier, "core::default::Default", () => true, undefined, context.input.program.typeDefinitions);
+    const cloneable = valueRepresentation && rustCarrierSupportsTrait(definition.carrier, "core::clone::Clone", () => true, undefined, context.input.program.typeDefinitions);
+    const copyable = valueRepresentation && rustCarrierSupportsTrait(definition.carrier, "core::marker::Copy", () => true, undefined, context.input.program.typeDefinitions);
     structs.push({
       kind: "struct",
       name: definition.targetName,

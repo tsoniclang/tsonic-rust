@@ -1,6 +1,5 @@
 import type { Node } from "@tsonic/tsts";
 import { Node_Expression } from "@tsonic/target-api/source";
-import { rustSourceUnionCarrierValue } from "../../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { rustSourceCallEffectsFactKey } from "../../../../analysis/facts/keys.js";
 import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
@@ -25,13 +24,13 @@ export function planRustUnionMethodCall(
   const { ast } = context.input.program.source;
   const receiverNode = callee === undefined || !ast.is.IsPropertyAccessExpression(callee) ? undefined : Node_Expression(ast, callee);
   const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
-  const union = rustSourceUnionCarrierValue(target.receiverCarrier);
+  const variants = context.input.program.typeDefinitions.sourceUnionVariants(target.receiverCarrier);
   const typePath = rustUnionTypePathInContext(target.receiverCarrier, context);
   const selected = context.input.program.facts.getSelectedTargetCall(node)?.sourceUnionMethods;
   const effects = context.input.program.facts.getFact(node, rustSourceCallEffectsFactKey);
-  if (receiver === undefined || receiverNode === undefined || union === undefined || typePath === undefined ||
+  if (receiver === undefined || receiverNode === undefined || variants === undefined || typePath === undefined ||
     context.syntheticNames === undefined || selected === undefined || effects?.unionBranches === undefined ||
-    target.variants.length !== union.variants.length || target.variants.length !== selected.variants.length ||
+    target.variants.length !== variants.length || target.variants.length !== selected.variants.length ||
     target.variants.length !== effects.unionBranches.length || !rustTargetTypeRefEquals(selected.receiverCarrier, target.receiverCarrier)) return undefined;
   const receiverName = allocateRustSyntheticName(context.syntheticNames, "union_receiver");
   const mutable = target.variants.some(variant => variant.mutatesSelf);
@@ -39,7 +38,7 @@ export function planRustUnionMethodCall(
     ...args.map((value, index) => ({ name: allocateRustSyntheticName(context.syntheticNames!, `union_argument_${index}`), value }))];
   const arms: { pattern: RustPattern; expression: RustExpr }[] = [];
   for (const [index, method] of target.variants.entries()) {
-    const variant = union.variants[index]!;
+    const variant = variants[index]!;
     const selection = selected.variants[index]!;
     if (variant.name !== method.name || !rustTargetTypeRefEquals(variant.carrier, method.carrier) ||
       selection.declaration !== method.declaration || selection.targetName !== method.targetName ||
@@ -70,7 +69,7 @@ export function planRustUnionMethodCall(
     if (selection.resultConversion === undefined) {
       if (!rustTargetTypeRefEquals(selection.returnType, result)) return undefined;
     } else {
-      const conversion = rustValueConversionContract(selection.resultConversion);
+      const conversion = rustValueConversionContract(selection.resultConversion, context.input.program.typeDefinitions);
       if (conversion === undefined || conversion.fallible ||
         !rustTargetTypeRefEquals(conversion.source, selection.returnType) ||
         !rustTargetTypeRefEquals(conversion.target, result)) return undefined;

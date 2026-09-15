@@ -293,7 +293,7 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
           }, initializationContext);
           const type = rustTypeFromCarrierInContext(binding.value.carrier, initializationContext);
           if (value === undefined || type === undefined ||
-            !rustCarrierSupportsClone(binding.value.carrier)) {
+            !rustCarrierSupportsClone(binding.value.carrier, context.input.program.typeDefinitions)) {
             context.diagnostics.push(unsupportedConstructDiagnostic(
               diagnosticInput(context, statement),
               "rust.backend.hoisted-callable-value",
@@ -534,7 +534,7 @@ function planDefaultExportAssignment(
     ));
     return undefined;
   }
-  if (!rustCarrierSupportsClone(binding.valueCarrier)) {
+  if (!rustCarrierSupportsClone(binding.valueCarrier, context.input.program.typeDefinitions)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       { ast, sourceFile: context.sourceFile, node: declaration },
       "rust.backend.default-export-carrier",
@@ -629,7 +629,7 @@ function planTopLevelVariableStatement(
       }, context);
       const rustType = rustTypeFromCarrierInContext(binding.value.carrier, context);
       if (value === undefined || rustType === undefined ||
-        !rustCarrierSupportsClone(binding.value.carrier)) {
+        !rustCarrierSupportsClone(binding.value.carrier, context.input.program.typeDefinitions)) {
         context.diagnostics.push(unsupportedConstructDiagnostic(
           { ast, sourceFile: context.sourceFile, node: declaration },
           "rust.backend.module-callable-value",
@@ -681,7 +681,7 @@ function planTopLevelVariableStatement(
       });
       continue;
     }
-    if (!rustCarrierSupportsClone(binding.valueCarrier)) {
+    if (!rustCarrierSupportsClone(binding.valueCarrier, context.input.program.typeDefinitions)) {
       context.diagnostics.push(unsupportedConstructDiagnostic(
         { ast, sourceFile: context.sourceFile, node: declaration },
         "rust.backend.module-binding-carrier",

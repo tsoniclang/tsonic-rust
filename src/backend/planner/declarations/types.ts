@@ -253,7 +253,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
       if (indexLayout === undefined || keyCarrier === undefined || valueCarrier === undefined ||
         keyType === undefined || valueType === undefined || targetName === undefined ||
         (!isRustStringCarrier(keyCarrier) && !isRustIntegerCarrier(keyCarrier)) ||
-        !rustCarrierSupportsClone(valueCarrier)) {
+        !rustCarrierSupportsClone(valueCarrier, context.input.program.typeDefinitions)) {
         context.diagnostics.push(unsupportedConstructDiagnostic(
           diagnosticInput(context, member),
           "rust.backend.record-index-carrier",

@@ -228,6 +228,7 @@ function mapSelectedObjectShapeProjection(
         orderedAssignmentFields?.kind === "resolved"
           ? orderedAssignmentFields.fields
           : [],
+        context.typeDefinitions,
       )
     : undefined;
   if (assignmentFields?.kind === "rejected") {
@@ -244,6 +245,7 @@ function mapSelectedObjectShapeProjection(
         selection.projection,
         orderedFields.fields,
         innerResultCarrier,
+        context.typeDefinitions,
       );
   if (projectedFields.kind === "rejected") {
     return rejectSelectedOperation(

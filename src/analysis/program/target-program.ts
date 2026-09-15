@@ -36,6 +36,7 @@ import {
 import type { RustProviderBinaryHookRow } from "../../providers/packages/model.js";
 import { analyzeRustSourceModuleConstructions } from "../source-modules/index.js";
 import { analyzeRustFoundation } from "../foundation/plan.js";
+import { rustFoundationForCarrier } from "../foundation/requirements.js";
 import { maximumRustFoundation } from "../../target-model/foundation/model.js";
 import { analyzeRustProjectFlowReadSelections } from "../control-flow/project-flow-read-selections.js";
 
@@ -100,7 +101,8 @@ export function analyzeRustTargetProgram(
   const objectRepresentations = context.objectRepresentations.seal();
   const foundation = analyzeRustFoundation({
     selected: configuration.foundation,
-    factRequirement: context.facts.minimumFoundation(),
+    factRequirement: context.typeDefinitions.definitionCarriers().map(rustFoundationForCarrier)
+      .reduce(maximumRustFoundation, context.facts.minimumFoundation()),
     runtimeReferenceRequirement: [...runtimeReferences.plan.minimumFoundationByCrate.values()]
       .reduce(maximumRustFoundation, "core"),
     moduleInitializationRequirement: moduleInitialization.minimumFoundation(),
@@ -121,6 +123,7 @@ export function analyzeRustTargetProgram(
     context.typeFamilies,
     context.projectTypes,
     context.structuralShapes,
+    context.typeDefinitions,
   );
   if (declarationGenericRequirements.kind === "rejected") {
     return rejectedTargetStage(declarationGenericRequirements.diagnostics);
@@ -153,6 +156,7 @@ export function analyzeRustTargetProgram(
     sourceFiles: context.sourceFiles,
     facts,
     typeFamilies: context.typeFamilies.seal(),
+    typeDefinitions: context.typeDefinitions.seal(),
     projectTypes: context.projectTypes.seal(),
     objectRepresentations,
     projectMethodDispatch: context.projectMethodDispatch.seal(),

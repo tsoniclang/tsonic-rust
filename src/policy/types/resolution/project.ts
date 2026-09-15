@@ -26,6 +26,7 @@ export function resolveProjectSourceCarrier(
   selectedDeclaration?: Node,
   selectedType?: Type,
   resolving: Set<object> = new Set(),
+  referenceOnly = false,
 ): TargetTypeRef | undefined {
   const symbolDeclarations = symbol === undefined
     ? []
@@ -49,7 +50,6 @@ export function resolveProjectSourceCarrier(
         parameters.some((parameter, index) => parameter.kind !== genericArguments.values[index]?.kind)) continue;
       if (parameters.length === 0) return carrier;
       const template = options.sourceTypes.sourceUnionForCarrier(carrier);
-      if (selectedType === undefined || template === undefined) continue;
       const substitutions = new Map<string, TargetTypeRef>();
       const lifetimes = new Map<string, RustLifetimeRef>();
       parameters.forEach((parameter, index) => {
@@ -58,6 +58,7 @@ export function resolveProjectSourceCarrier(
         if (parameter.kind === "lifetime" && argument.kind === "lifetime") lifetimes.set(rustLifetimeKey(parameter.lifetime), argument.lifetime);
       });
       const instantiated = substituteRustTargetGenerics(carrier, substitutions, lifetimes);
+      if (template === undefined || selectedType === undefined || referenceOnly) return instantiated;
       const result = retainRustSourceUnionInstantiation(selectedType, template, instantiated, context, options, resolving);
       if (result !== undefined) return result;
       continue;

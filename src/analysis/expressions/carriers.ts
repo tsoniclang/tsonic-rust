@@ -311,7 +311,7 @@ function applyFlowReadLane(
   const selection = selectRustFlowReadProjection(
     sourceCarrier,
     selectedCarrier,
-    walk.context.projectTypes,
+    walk.context.projectTypes, walk.context.typeDefinitions,
   );
   if (selection.kind === "identity") {
     return sourceCarrier;
@@ -738,7 +738,7 @@ function applyOptionLane(
     const reconciliation = selectRustValueCarrierReconciliation(
       resolved,
       target,
-      walk.context.projectTypes,
+      walk.context.projectTypes, walk.context.typeDefinitions,
     );
     if (reconciliation.kind === "incompatible" && reconciliation.reason === "ambiguous") {
       appendRustDiagnostic(
@@ -808,7 +808,7 @@ export function reconcileRequiredCarrier(
   const reconciliation = selectRustValueCarrierReconciliation(
     sourceCarrier,
     targetCarrier,
-    walk.context.projectTypes,
+    walk.context.projectTypes, walk.context.typeDefinitions,
   );
   if (reconciliation.kind === "incompatible") {
     return false;

@@ -280,7 +280,7 @@ export function instantiateSelectedCallTemplate(
     ...(callScopedElisionBindings === undefined
       ? {}
       : { callScopedElisionBindings }),
-  });
+  }, context.typeDefinitions);
 }
 
 function selectedCallParameterInferenceCarriers(
@@ -378,7 +378,7 @@ export function acceptSelectedCall(
   const spreadIndexes = request.source.sourceArguments.flatMap((argument, index) =>
     context.ast.is.IsSpreadElement(argument.expression) ? [index] : []);
   const fact = finalizeProviderOperationFact(instantiatedTemplate, sourceArguments.carriers, selectedReceiverCarrier,
-    spreadIndexes.length === 0 ? undefined : spreadIndexes);
+    context.typeDefinitions, spreadIndexes.length === 0 ? undefined : spreadIndexes);
   if (fact === undefined) {
     return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_OPERATION_ABI_INCOMPLETE", `Selected call '${callIdentity.sourceName}' cannot finalize one total Rust operation ABI.`);
   }
@@ -595,7 +595,7 @@ function selectedCallSourceCarriers(
       let reconciliation = selectRustValueCarrierReconciliation(
         effective,
         expected,
-        options.projectTypes,
+        options.projectTypes, context.typeDefinitions,
       );
       if (reconciliation.kind === "incompatible" &&
         (rustProviderSourceArgumentMode(fact.target, index) ?? "value") === "value") {
@@ -655,14 +655,14 @@ function selectedCallSourceCarriers(
       if (sourceIndex < form.leadingArguments.length) {
         const target = form.leadingArguments[sourceIndex]!.carrier;
         return !rustTargetTypeRefEquals(carrier, target) &&
-          selectRustSourceValueConversion(carrier, target) === undefined;
+          selectRustSourceValueConversion(carrier, target, context.typeDefinitions) === undefined;
       }
       const exact = form.alternatives.filter((alternative) =>
         rustTargetTypeRefEquals(carrier, alternative.inputCarrier));
       const convertible = exact.length > 0
         ? []
         : form.alternatives.filter((alternative) =>
-            selectRustSourceValueConversion(carrier, alternative.inputCarrier) !== undefined);
+            selectRustSourceValueConversion(carrier, alternative.inputCarrier, context.typeDefinitions) !== undefined);
       return (exact.length > 0 ? exact : convertible).length !== 1;
     });
     return incompatible < 0

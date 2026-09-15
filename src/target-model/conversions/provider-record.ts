@@ -1,6 +1,7 @@
 import type { TargetTypeRef } from "../types/model.js";
 import { rustStructuralObjectCarrierValue, rustCarrierSupportsClone, rustNamedTypeCarrierValue } from "../types/index.js";
 import { rustTargetTypeRefEquals } from "../types/equality.js";
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../types/source-union-definitions.js";
 
 export interface RustProviderRecordCopy {
   readonly kind: "provider-record-copy";
@@ -18,6 +19,7 @@ export function rustProviderRecordCopyMatches(
   conversion: RustProviderRecordCopy,
   source: TargetTypeRef,
   target: TargetTypeRef,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): boolean {
   const shape = rustStructuralObjectCarrierValue(source);
   return shape !== undefined && rustNamedTypeCarrierValue(target) !== undefined &&
@@ -32,6 +34,6 @@ export function rustProviderRecordCopyMatches(
         sourceField !== undefined && sourceField.presence === "required" &&
         sourceField.accessor === undefined && sourceField.method !== true &&
         rustTargetTypeRefEquals(sourceField.type, field.carrier) &&
-        rustCarrierSupportsClone(field.carrier);
+        rustCarrierSupportsClone(field.carrier, definitions);
     });
 }

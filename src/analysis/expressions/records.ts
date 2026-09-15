@@ -153,7 +153,7 @@ export function resolveRecordLiteralCarrier(
       : selectRustValueCarrierReconciliation(
           sourceCarrier,
           selectedExpected,
-          walk.context.projectTypes,
+          walk.context.projectTypes, walk.context.typeDefinitions,
         );
     if (reconciliation?.kind === "conversion") {
       selectedExpected = sourceCarrier!;

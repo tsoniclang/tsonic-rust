@@ -331,13 +331,7 @@ export function inferRustTargetGenericBindings(
               (pattern, actual) => match(pattern, actual, lifetimeContext),
               (pattern, actual) => matchLifetime(pattern, actual, lifetimeContext),
               matchConst,
-            ) &&
-            leftUnion.variants.length === rightUnion.variants.length &&
-            leftUnion.variants.every((variant, index) => {
-              const other = rightUnion.variants[index];
-              return other !== undefined && variant.name === other.name &&
-                match(variant.carrier, other.carrier, lifetimeContext);
-            });
+            );
         }
         const leftNamed = rustNamedTypeCarrierValue(left);
         const rightNamed = rustNamedTypeCarrierValue(right);

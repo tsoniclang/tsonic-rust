@@ -12,6 +12,7 @@ import type { RustSourceTypeFamilyRegistry } from "../../policy/types/type-famil
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { inferRustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
+import { createRustTypeDefinitionRegistry, type RustTypeDefinitionRegistry } from "./type-definitions.js";
 import {
   KindStringLiteral,
   Node_Type,
@@ -49,6 +50,7 @@ export type {
 
 export function createRustSourceTypeRegistry(
   typeFamilies: RustSourceTypeFamilyRegistry = createRustSourceTypeFamilyRegistry(),
+  typeDefinitions: RustTypeDefinitionRegistry = createRustTypeDefinitionRegistry(),
 ): RustSourceTypeRegistry {
   const declarations = new Map<string, Node>();
   const carriersByDeclaration = new WeakMap<Node, TargetTypeRef>();
@@ -61,6 +63,7 @@ export function createRustSourceTypeRegistry(
   const structuralFieldImplementations: RustStructuralFieldImplementation[] = [];
   const selectedDeclarationsBySymbol = new WeakMap<Symbol, readonly Node[]>();
   const sourceUnionsByDeclaration = new WeakMap<Node, RustSourceUnion>();
+  const pendingUnions = new Set<Node>();
   const sourceUnionsByKey = new Map<string, RustSourceUnion>();
   const sourceUnionIndexesByType = new Map<string, WeakMap<Type, readonly number[]>>();
   const sourceUnionKey = (carrier: TargetTypeRef): string | undefined => {
@@ -110,6 +113,16 @@ export function createRustSourceTypeRegistry(
 
   return {
     typeFamilies,
+    sourceUnionVariants: typeDefinitions.sourceUnionVariants,
+    reserveSourceUnion(declaration, carrier) {
+      const value = rustSourceUnionCarrierValue(carrier);
+      const existing = carriersByDeclaration.get(declaration);
+      if (value?.origin !== "authored" || existing !== undefined && !rustTargetTypeRefEquals(existing, carrier)) return false;
+      carriersByDeclaration.set(declaration, carrier);
+      if (!sourceUnionsByDeclaration.has(declaration)) pendingUnions.add(declaration);
+      return true;
+    },
+    pendingSourceUnions: () => Object.freeze([...pendingUnions]),
     registerSourceFile(sourceFile, ast) {
       const fileName = ast.getFileName(sourceFile);
       if (fileName.length === 0 || ast.isDeclarationFile(sourceFile)) {
@@ -347,13 +360,8 @@ export function createRustSourceTypeRegistry(
     registerSourceUnion(union) {
       const value = rustSourceUnionCarrierValue(union.carrier);
       const key = sourceUnionKey(union.carrier);
-      if (value === undefined || key === undefined || value.variants.length !== union.variants.length ||
-        (value.origin === "authored") !== (union.declaration !== undefined) ||
-        value.variants.some((variant, index) => {
-          const selected = union.variants[index];
-          return selected === undefined || variant.name !== selected.name ||
-            !rustTargetTypeRefEquals(variant.carrier, selected.carrier);
-        })) {
+      if (value === undefined || key === undefined ||
+        (value.origin === "authored") !== (union.declaration !== undefined)) {
         return false;
       }
       const byDeclaration = union.declaration === undefined ? undefined : sourceUnionsByDeclaration.get(union.declaration);
@@ -407,9 +415,14 @@ export function createRustSourceTypeRegistry(
       if (union.declaration !== undefined && existingDeclaration !== undefined && existingDeclaration !== union.declaration) {
         return false;
       }
+      if (!typeDefinitions.registerSourceUnion({
+        carrier: normalized.carrier,
+        variants: normalized.variants.map(variant => ({name: variant.name, carrier: variant.carrier})),
+      }, byDeclaration === undefined && union.declaration !== undefined)) return false;
       if (byDeclaration === undefined && union.declaration !== undefined) {
         sourceUnionsByDeclaration.set(union.declaration, normalized);
         carriersByDeclaration.set(union.declaration, normalized.carrier);
+        pendingUnions.delete(union.declaration);
       }
       if (byKey === undefined) sourceUnionsByKey.set(key, normalized);
       for (const [sourceType, selected] of pendingIndexes) indexes.set(sourceType, selected);

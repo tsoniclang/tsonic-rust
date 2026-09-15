@@ -259,7 +259,7 @@ export function planExpressionBeforeValueProjections(
     isRustCopyCarrier(override.carrier)) {
     return override?.expression ?? planRawExpression(node, context, resultUse);
   }
-  if (!rustCarrierSupportsClone(override.carrier)) {
+  if (!rustCarrierSupportsClone(override.carrier, context.input.program.typeDefinitions)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.preconstruction-field-read",
@@ -363,7 +363,7 @@ function applyRustContextualValueConversion(
     if (!rustCompilerOwnedContextualConversionMatches(
       fact.sourceCarrier,
       fact.targetCarrier,
-      fact.conversion,
+      fact.conversion, context.input.program.typeDefinitions,
     )) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, node),
@@ -380,7 +380,7 @@ function applyRustContextualValueConversion(
   if (fact.conversion.kind === "empty-record") {
     return planRustEmptyRecordConversion(fact.conversion, expression, node, context);
   }
-  const contract = rustValueConversionContract(fact.conversion);
+  const contract = rustValueConversionContract(fact.conversion, context.input.program.typeDefinitions);
   if (contract === undefined ||
     !rustTargetTypeRefEquals(contract.target, fact.targetCarrier)) {
     context.diagnostics.push(missingFactDiagnostic(

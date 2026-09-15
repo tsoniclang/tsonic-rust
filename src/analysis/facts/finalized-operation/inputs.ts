@@ -1,3 +1,4 @@
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import { isRustCVariadicArgumentCarrier } from "../c-variadic.js";
 import { isRustFinalizedArrayInput, isRustFinalizedSliceInput, isRustFinalizedSourceInput, isRustFinalizedTaggedArrayInput, sourceInput } from "./conversions.js";
 import { rustSliceRefTargetType, rustStringTargetType } from "../../../target-model/types/index.js";
@@ -18,11 +19,12 @@ export function createInputFactory(
   receiverCarrier: TargetTypeRef | undefined,
   argumentCarriers: readonly TargetTypeRef[],
   spreadIndexes: ReadonlySet<number> = new Set(),
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ) {
   const receiver = (mode: RustArgumentMode, conversion?: RustValueConversion): RustFinalizedSourceInput | undefined =>
     receiverCarrier === undefined
       ? undefined
-      : sourceInput({ kind: "receiver" }, receiverCarrier, mode, conversion);
+      : sourceInput({ kind: "receiver" }, receiverCarrier, mode, conversion, definitions);
   const argument = (
     sourceIndex: number,
     mode: RustArgumentMode,
@@ -31,7 +33,7 @@ export function createInputFactory(
     const carrier = argumentCarriers[sourceIndex];
     return carrier === undefined
       ? undefined
-      : sourceInput({ kind: "argument", sourceIndex }, carrier, mode, conversion);
+      : sourceInput({ kind: "argument", sourceIndex }, carrier, mode, conversion, definitions);
   };
   const argumentTo = (
     sourceIndex: number,
@@ -42,17 +44,17 @@ export function createInputFactory(
     if (sourceCarrier === undefined) {
       return undefined;
     }
-    const conversion = selectRustSourceValueConversion(sourceCarrier, targetCarrier);
+    const conversion = selectRustSourceValueConversion(sourceCarrier, targetCarrier, definitions);
     const identical = rustTargetTypeRefEquals(sourceCarrier, targetCarrier);
     return !identical && conversion === undefined
       ? undefined
-      : sourceInput({ kind: "argument", sourceIndex }, sourceCarrier, mode, conversion);
+      : sourceInput({ kind: "argument", sourceIndex }, sourceCarrier, mode, conversion, definitions);
   };
   const sequenceTo = (sourceIndex: number, target: TargetTypeRef, holePolicy: "reject" | "number-nan") => {
     if (!spreadIndexes.has(sourceIndex)) return argumentTo(sourceIndex, "value", target);
     const carrier = argumentCarriers[sourceIndex];
     const conversion = carrier === undefined ? undefined
-      : selectRustRestSequenceConversion(carrier, target, holePolicy);
+      : selectRustRestSequenceConversion(carrier, target, holePolicy, definitions);
     return conversion === undefined ? undefined : argument(sourceIndex, "value", conversion);
   };
   const sourceArgumentCarrier = (sourceIndex: number): TargetTypeRef | undefined =>
@@ -65,6 +67,7 @@ export function finalizeTargetInputs(
   form: RustProviderOperationForm,
   input: ReturnType<typeof createInputFactory>,
   sourceArgumentCount: number,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): {
   readonly targetReceiver: RustFinalizedOperationAbi["targetReceiver"];
   readonly targetArguments: readonly RustFinalizedTargetInput[];
@@ -405,7 +408,7 @@ export function finalizeTargetInputs(
         const convertible = sourceCarrier === undefined || exact.length > 0
           ? []
           : form.alternatives.filter((candidate) =>
-              selectRustSourceValueConversion(sourceCarrier, candidate.inputCarrier) !== undefined);
+              selectRustSourceValueConversion(sourceCarrier, candidate.inputCarrier, definitions) !== undefined);
         const candidates = exact.length > 0 ? exact : convertible;
         const alternative = candidates.length === 1 ? candidates[0] : undefined;
         const selectedInput = alternative === undefined

@@ -1,3 +1,4 @@
+import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { TargetPlanningSourceNavigation } from "@tsonic/target-api/analysis";
 import {
@@ -84,6 +85,7 @@ export function analyzeRustGeneratedItemUsage(input: {
   readonly declarations: readonly Node[];
   readonly facts: RustPlanQueries;
   readonly projectTypes: RustProjectTypePolicy;
+  readonly typeDefinitions: RustTypeDefinitions;
   readonly objectRepresentations: RustObjectRepresentationPlan;
   readonly projectMethodProperties: RustProjectMethodPropertyPlan;
   readonly projectFieldDispatch: RustProjectFieldDispatchQueries;
@@ -343,7 +345,7 @@ export function analyzeRustGeneratedItemUsage(input: {
   }
   const visitConversion = (conversion: RustValueConversion | undefined): void => {
     if (conversion === undefined) return;
-    const contract = rustValueConversionContract(conversion);
+    const contract = rustValueConversionContract(conversion, input.typeDefinitions);
     if (contract === undefined) {
       throw new Error("A finalized Rust value conversion has no valid dead-code usage contract.");
     }
@@ -647,4 +649,5 @@ export function analyzeRustGeneratedItemUsage(input: {
       variantsByDeclaration.get(declaration)?.has(variantName) === true,
   });
 }
+
 import { rustObjectReferenceViewKey } from "../../../analysis/facts/object-reference-views.js";

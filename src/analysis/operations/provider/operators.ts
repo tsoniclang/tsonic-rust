@@ -356,7 +356,7 @@ function mapSelectedAssignment(
     ...(jsIdentity.memberName === "index" && authoredPropertyKey !== undefined
       ? { authoredPropertyKey }
       : {}),
-  });
+  }, context.typeDefinitions);
   if (selection === undefined || selection.fact.kind !== "runtime-set") {
     return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_ASSIGNMENT_UNSUPPORTED", `The selected JavaScript assignment '${jsIdentity.ownerName}.${jsIdentity.memberName}' has no closed Rust setter operation.`);
   }
@@ -395,7 +395,7 @@ function mapSelectedAssignment(
     resultCarrier: rustUnitTargetType(),
     isAsync: false,
     isFallible: false,
-  });
+  }, context.typeDefinitions);
   if (abi === undefined) {
     return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_ASSIGNMENT_ABI_INCOMPLETE", "The selected JavaScript setter cannot finalize one total Rust operation ABI.");
   }
@@ -456,7 +456,7 @@ function mapSelectedProviderAssignment(
     {
       ...(receiverCarrier === undefined ? {} : { sourceReceiverCarrier: receiverCarrier }),
       sourceParameterCarriers: rawArgumentCarriers,
-    },
+    }, context.typeDefinitions,
   );
   const template = instantiation?.template;
   if (template !== undefined && providerFormRequiresSourceReceiver(template.target) && receiverCarrier === undefined) {
@@ -510,7 +510,7 @@ function mapSelectedProviderAssignment(
     ...(template.errorBoundary === "none" ? {} : { errorBoundary: template.errorBoundary }),
     ...(template.errorCarrier === undefined ? {} : { errorCarrier: template.errorCarrier }),
     isUnsafe: template.isUnsafe,
-  });
+  }, context.typeDefinitions);
   if (abi === undefined) {
     return rejectSelectedOperation(
       request.expression,
@@ -613,7 +613,7 @@ export function selectedValueCarrier(
   const flowRead = selectRustFlowReadProjection(
     stored,
     selected,
-    options.projectTypes,
+    options.projectTypes, context.typeDefinitions,
   );
   if (flowRead.kind === "projection") {
     recordRustFlowReadProjection(

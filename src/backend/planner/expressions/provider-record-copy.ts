@@ -14,7 +14,7 @@ export function planProviderRecordCopy(
   node: Node,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  if (!rustProviderRecordCopyMatches(conversion, conversion.source, conversion.target)) return undefined;
+  if (!rustProviderRecordCopyMatches(conversion, conversion.source, conversion.target, context.input.program.typeDefinitions)) return undefined;
   const target = rustTypeFromCarrierInContext(conversion.target, context);
   if (target?.kind !== "named") return undefined;
   const name = allocateRustSyntheticName(context.syntheticNames ??

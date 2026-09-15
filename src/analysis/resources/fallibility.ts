@@ -349,12 +349,12 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
       operation,
       walk.context.structuralShapes,
       walk.context.projectFieldDispatch,
-      walk.context.frozenDataWrites,
+      walk.context.frozenDataWrites, walk.context.typeDefinitions,
     ) ||
       (operation?.kind === "source-call" && operation.target.form === "union-method" &&
         operation.target.variants.some(variant => fallible.has(variant.declaration))) ||
       bindingProjectionIsFallible ||
-      rustContextualValueConversionIsFallible(contextualConversion?.conversion);
+      rustContextualValueConversionIsFallible(contextualConversion?.conversion, walk.context.typeDefinitions);
   };
   const selectedAccessorDeclarations = (node: Node): readonly Node[] => {
     const operation = walk.context.facts.get(node, rustTargetOperationFactKey) ??

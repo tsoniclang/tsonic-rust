@@ -9,6 +9,8 @@ import { rustTargetTypeParameterNames } from "../../target-model/types/carriers/
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustSourceTypeCarrierValue } from "../../target-model/types/index.js";
 import { substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
+import { emptyRustTypeDefinitions, rustSourceUnionDefinitionIdentity, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
+import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 
 export type RustShapeGenericRequirementContract = Omit<RustDeclarationGenericRequirementContract, "declaration">;
 
@@ -17,15 +19,27 @@ export function analyzeRustShapeGenericRequirements(
   projectTypes: RustProjectTypePolicy,
   families: RustSourceTypeFamilyRegistry,
   contractFor: (declaration: Node) => RustDeclarationGenericRequirementContract | undefined,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): RustShapeGenericRequirementContract | undefined {
   const names = rustTargetTypeParameterNames(carrier);
   const declared = new Set(names);
   const parameters = new Map(names.map(name => [name, new Set<RustGenericRequirement>()] as const));
   const classify = (type: TargetTypeRef, requirements: readonly RustGenericRequirement[]): boolean =>
-    classifyCarrierRequirements(type, requirements, declared, parameters, associated.require);
+    classifyCarrierRequirements(type, requirements, declared, parameters, associated.require, definitions);
   const associated = createRustAssociatedRequirementCollector(declared, families, classify);
+  const activeUnions = new Map<string, string>();
   const visit = (type: TargetTypeRef): boolean => {
     if (!associated.collect(type)) return false;
+    const unionIdentity = rustSourceUnionDefinitionIdentity(type);
+    if (unionIdentity !== undefined) {
+      const key = closedMetadataKey(type);
+      if (activeUnions.has(unionIdentity)) return activeUnions.get(unionIdentity) === key;
+      const variants = definitions.sourceUnionVariants(type);
+      if (variants === undefined) return false;
+      activeUnions.set(unionIdentity, key);
+      try { return variants.every(variant => visit(variant.carrier)); }
+      finally { activeUnions.delete(unionIdentity); }
+    }
     const source = rustSourceTypeCarrierValue(type);
     const definition = source === undefined ? undefined : projectTypes.definitionForCarrier(type);
     if (definition !== undefined) {

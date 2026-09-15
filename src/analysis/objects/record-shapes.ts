@@ -118,7 +118,7 @@ export function resolveProjectIndexRecordLiteral(
   );
   if (keyCarrier === undefined || valueCarrier === undefined || storageName === undefined ||
     (!isRustStringCarrier(keyCarrier) && !isRustIntegerCarrier(keyCarrier)) ||
-    !rustCarrierSupportsClone(valueCarrier)) {
+    !rustCarrierSupportsClone(valueCarrier, walk.context.typeDefinitions)) {
     return undefined;
   }
   const contributions: Extract<

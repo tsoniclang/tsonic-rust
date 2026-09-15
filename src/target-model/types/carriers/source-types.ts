@@ -2,7 +2,7 @@ import {
   hasExactObjectKeys,
   isDenseDataArray,
 } from "../../metadata/closed-data.js";
-import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../equality.js";
+import { isRustTargetTypeRef } from "../equality.js";
 import type {
   RustTargetConstArgument,
   RustTargetGenericArgument,
@@ -124,7 +124,6 @@ export interface RustSourceUnionCarrierValue {
   readonly fileName: string;
   readonly typeName: string;
   readonly genericArguments: readonly RustTargetGenericArgument[];
-  readonly variants: readonly RustSourceUnionVariantCarrierValue[];
 }
 
 export function rustSourceTypeCarrier(
@@ -306,7 +305,6 @@ export function rustStructuralObjectCarrierValue(
 export function rustSourceUnionTargetType(
   fileName: string,
   typeName: string,
-  variants: readonly RustSourceUnionVariantCarrierValue[],
   genericArguments: readonly RustTargetGenericArgument[] = noRustSourceTypeGenericArguments,
   origin: RustSourceUnionCarrierValue["origin"] = "authored",
 ): TargetTypeRef {
@@ -314,7 +312,7 @@ export function rustSourceUnionTargetType(
     kind: "target-specific",
     target: "rust",
     name: rustSourceUnionCarrierName,
-    value: { fileName, typeName, variants, genericArguments, origin },
+    value: { fileName, typeName, genericArguments, origin },
   };
 }
 
@@ -327,7 +325,7 @@ export function rustSourceUnionCarrierValue(
   }
   const value = carrier.value;
   if (typeof value !== "object" || value === null || Array.isArray(value) ||
-    !hasExactObjectKeys(value, ["fileName", "typeName", "variants", "genericArguments", "origin"])) {
+    !hasExactObjectKeys(value, ["fileName", "typeName", "genericArguments", "origin"])) {
     return undefined;
   }
   const candidate = value as Partial<RustSourceUnionCarrierValue>;
@@ -335,37 +333,16 @@ export function rustSourceUnionCarrierValue(
     typeof candidate.fileName !== "string" || candidate.fileName.length === 0 ||
     typeof candidate.typeName !== "string" || candidate.typeName.length === 0 ||
     !isDenseDataArray(candidate.genericArguments) ||
-    !candidate.genericArguments.every(isRustSourceTypeGenericArgument) ||
-    !isDenseDataArray(candidate.variants) || candidate.variants.length < 2) {
+    !candidate.genericArguments.every(isRustSourceTypeGenericArgument)) {
     return undefined;
   }
-  const seenNames = new Set<string>();
-  const variants: RustSourceUnionVariantCarrierValue[] = [];
-  for (const variant of candidate.variants) {
-    if (typeof variant !== "object" || variant === null || Array.isArray(variant) ||
-      !hasExactObjectKeys(variant, ["carrier", "name"])) {
-      return undefined;
-    }
-    const selected = variant as Partial<RustSourceUnionVariantCarrierValue>;
-    if (typeof selected.name !== "string" || selected.name.length === 0 ||
-      seenNames.has(selected.name) || !isRustTargetTypeRef(selected.carrier)) {
-      return undefined;
-    }
-    seenNames.add(selected.name);
-    variants.push(selected as RustSourceUnionVariantCarrierValue);
-  }
   if (candidate.origin === "generated" &&
-    (candidate.typeName !== `Union${variants.length}` || candidate.genericArguments.length !== variants.length ||
-      variants.some((variant, index) => {
-        const argument = candidate.genericArguments![index];
-        return variant.name !== `Variant${index}` || argument?.kind !== "type" ||
-          !rustTargetTypeRefEquals(argument.type, variant.carrier);
-      }))) return undefined;
+    (candidate.genericArguments.length < 2 || candidate.typeName !== `Union${candidate.genericArguments.length}` ||
+      candidate.genericArguments.some(argument => argument.kind !== "type"))) return undefined;
   return {
     origin: candidate.origin,
     fileName: candidate.fileName,
     typeName: candidate.typeName,
     genericArguments: candidate.genericArguments,
-    variants: Object.freeze(variants),
   };
 }

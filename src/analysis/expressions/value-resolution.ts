@@ -94,7 +94,7 @@ export function resolveExpressionCarrierUncached(
       const effectiveExpected = contextualExpected === undefined ||
           rustRuntimeUnionProjection(contextualExpected, defaultCarrier) !== undefined ||
           !isRustNumericCarrier(contextualExpected) &&
-          selectRustSourceValueConversion(defaultCarrier, contextualExpected) !== undefined
+          selectRustSourceValueConversion(defaultCarrier, contextualExpected, walk.context.typeDefinitions) !== undefined
         ? defaultCarrier
         : contextualExpected;
       if (effectiveExpected !== undefined && isRustNumericCarrier(effectiveExpected) &&

@@ -1,6 +1,8 @@
 import { isRustBigIntCarrier, isRustJsStringCarrier, isRustNullCarrier, isRustStringCarrier, isRustUndefinedCarrier, isRustUnitCarrier } from "./js.js";
 import { isRustIntegerCarrier, rustFutureTargetId, rustPrimitiveTypeName } from "./primitives.js";
 import { rustRawPointerTargetId } from "./source-types.js";
+import { emptyRustTypeDefinitions, rustSourceUnionDefinitionIdentity, type RustTypeDefinitions } from "../source-union-definitions.js";
+import { closedMetadataKey } from "../../metadata/closed-data.js";
 import { rustBigIntTargetId, rustCallableTargetId, rustJsArrayTargetId, rustJsDateTargetId, rustJsErrorTargetId, rustJsMapTargetId, rustJsRegExpExecArrayTargetId, rustJsRegExpIndicesTargetId, rustJsRegExpMatchArrayTargetId, rustJsRegExpNamedGroupsTargetId, rustJsRegExpNamedIndicesTargetId, rustJsRegExpStringIteratorTargetId, rustJsRegExpTargetId, rustJsSetTargetId, rustJsStringTargetId, rustJsValueTargetId, rustLocationTargetId, rustNullTargetId, rustOptionTargetId, rustProgramErrorTargetId, rustRegExpExecArrayTargetId, rustRegExpIndicesTargetId, rustRegExpMatchArrayTargetId, rustRegExpNamedGroupsTargetId, rustRegExpNamedIndicesTargetId, rustRegExpStringIteratorTargetId, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustStringTargetId, rustStrTargetId, rustStructuralObjectCarrierValue, rustTsValueTargetId, rustUndefinedTargetId } from "./source-types.js";
 import { rustJsArrayEntriesTargetId } from "./array-entries.js";
 import {
@@ -87,8 +89,8 @@ export function isRustJsStrictEqualityCarrier(carrier: TargetTypeRef | undefined
   return carrier?.kind === "target-named" && rustJsStrictEqualityTargetIds.has(carrier.id);
 }
 
-export function rustCarrierSupportsClone(carrier: TargetTypeRef | undefined): boolean {
-  return supportsCloneWithContracts(carrier, () => false, () => false);
+export function rustCarrierSupportsClone(carrier: TargetTypeRef | undefined, definitions: RustTypeDefinitions = emptyRustTypeDefinitions): boolean {
+  return supportsCloneWithContracts(carrier, () => false, () => false, definitions);
 }
 
 type RustAssociatedTypeSupport = (
@@ -100,11 +102,13 @@ function supportsCloneWithContracts(
   carrier: TargetTypeRef | undefined,
   typeParameterSupports: (name: string, traitPath: string) => boolean,
   associatedTypeSupports: RustAssociatedTypeSupport,
+  definitions: RustTypeDefinitions,
+  active: Map<string, string> = new Map(),
 ): boolean {
   if (carrier?.kind === "type-parameter") return typeParameterSupports(carrier.name, "core::clone::Clone");
   if (carrier?.kind === "associated-type") return associatedTypeSupports(carrier, "core::clone::Clone");
   const supports = (type: TargetTypeRef): boolean =>
-    supportsCloneWithContracts(type, typeParameterSupports, associatedTypeSupports);
+    supportsCloneWithContracts(type, typeParameterSupports, associatedTypeSupports, definitions, active);
   if (carrier === undefined ||
     carrier.kind === "opaque" || carrier.kind === "closure" ||
     carrier.kind === "slice" ||
@@ -143,7 +147,7 @@ function supportsCloneWithContracts(
   }
   const namedType = rustNamedTypeCarrierValue(carrier);
   if (namedType !== undefined) {
-    return rustNamedTypeSupportsTrait(namedType, "core::clone::Clone", typeParameterSupports, associatedTypeSupports);
+    return rustNamedTypeSupportsTrait(namedType, "core::clone::Clone", typeParameterSupports, associatedTypeSupports, definitions, active);
   }
   const structuralObject = rustStructuralObjectCarrierValue(carrier);
   if (structuralObject !== undefined) {
@@ -151,14 +155,21 @@ function supportsCloneWithContracts(
   }
   const sourceUnion = rustSourceUnionCarrierValue(carrier);
   if (sourceUnion !== undefined) {
-    return sourceUnion.variants.every((variant) => supports(variant.carrier));
+    const variants = definitions.sourceUnionVariants(carrier);
+    if (variants === undefined) return false;
+    const identity = rustSourceUnionDefinitionIdentity(carrier)!;
+    const instantiation = closedMetadataKey(carrier);
+    if (active.has(identity)) return active.get(identity) === instantiation;
+    active.set(identity, instantiation);
+    try { return variants.every(variant => supports(variant.carrier)); }
+    finally { active.delete(identity); }
   }
   return carrier.kind === "target-specific" &&
     carrier.target === "rust" && carrier.name === "source-type";
 }
 
-export function rustCarrierCanEnterTsValue(carrier: TargetTypeRef | undefined): boolean {
-  if (!rustCarrierSupportsClone(carrier) || carrier === undefined) {
+export function rustCarrierCanEnterTsValue(carrier: TargetTypeRef | undefined, definitions: RustTypeDefinitions = emptyRustTypeDefinitions): boolean {
+  if (!rustCarrierSupportsClone(carrier, definitions) || carrier === undefined) {
     return false;
   }
   const references = rustTargetGenericReferences(carrier);
@@ -198,6 +209,8 @@ export function rustCarrierSupportsTrait(
   traitPath: string,
   typeParameterSupports: (name: string, traitPath: string) => boolean = () => false,
   associatedTypeSupports: RustAssociatedTypeSupport = () => false,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
+  active: Map<string, string> = new Map(),
 ): boolean {
   if (carrier === undefined) {
     return false;
@@ -207,10 +220,10 @@ export function rustCarrierSupportsTrait(
   }
   if (carrier.kind === "associated-type") return associatedTypeSupports(carrier, traitPath);
   if (traitPath === "core::default::Default") {
-    return rustCarrierSupportsDefault(carrier, typeParameterSupports, associatedTypeSupports);
+    return rustCarrierSupportsDefault(carrier, typeParameterSupports, associatedTypeSupports, definitions);
   }
   if (traitPath === "core::clone::Clone") {
-    return supportsCloneWithContracts(carrier, typeParameterSupports, associatedTypeSupports);
+    return supportsCloneWithContracts(carrier, typeParameterSupports, associatedTypeSupports, definitions, active);
   }
   if (traitPath === rustJsClosedValueCarrierTraitPath && carrier.kind === "target-named" &&
     carrier.id === rustEmptyObjectTargetId && (carrier.genericArguments?.length ?? 0) === 0) {
@@ -218,7 +231,7 @@ export function rustCarrierSupportsTrait(
   }
   if (traitPath === "core::marker::Copy") {
     const supports = (type: TargetTypeRef): boolean =>
-      rustCarrierSupportsTrait(type, traitPath, typeParameterSupports, associatedTypeSupports);
+      rustCarrierSupportsTrait(type, traitPath, typeParameterSupports, associatedTypeSupports, definitions);
     const structural = rustStructuralObjectCarrierValue(carrier);
     if (structural !== undefined) return structural.representation === "value" && structural.fields.every(field => field.bound !== true && supports(field.type));
     if (carrier.kind === "tuple") return carrier.elements.every(supports);
@@ -243,26 +256,26 @@ export function rustCarrierSupportsTrait(
   }
   if (carrier.kind === "tuple") {
     return rustEqHashTraitPaths.has(traitPath) &&
-      carrier.elements.every((element) => rustCarrierSupportsTrait(element, traitPath, typeParameterSupports, associatedTypeSupports));
+      carrier.elements.every((element) => rustCarrierSupportsTrait(element, traitPath, typeParameterSupports, associatedTypeSupports, definitions));
   }
   if (carrier.kind === "array") {
-    return rustEqHashTraitPaths.has(traitPath) && rustCarrierSupportsTrait(carrier.element, traitPath, typeParameterSupports, associatedTypeSupports);
+    return rustEqHashTraitPaths.has(traitPath) && rustCarrierSupportsTrait(carrier.element, traitPath, typeParameterSupports, associatedTypeSupports, definitions);
   }
   if (carrier.kind === "slice") {
-    return rustEqHashTraitPaths.has(traitPath) && rustCarrierSupportsTrait(carrier.element, traitPath, typeParameterSupports, associatedTypeSupports);
+    return rustEqHashTraitPaths.has(traitPath) && rustCarrierSupportsTrait(carrier.element, traitPath, typeParameterSupports, associatedTypeSupports, definitions);
   }
   const fixedArray = rustFixedArrayCarrierValue(carrier);
   if (fixedArray !== undefined) {
-    return rustEqHashTraitPaths.has(traitPath) && rustCarrierSupportsTrait(fixedArray.element, traitPath, typeParameterSupports, associatedTypeSupports);
+    return rustEqHashTraitPaths.has(traitPath) && rustCarrierSupportsTrait(fixedArray.element, traitPath, typeParameterSupports, associatedTypeSupports, definitions);
   }
   if (carrier.kind === "target-named" && carrier.id === rustOptionTargetId) {
     const [element] = rustOnlyTypeGenericArguments(carrier.genericArguments) ?? [];
     return rustEqHashTraitPaths.has(traitPath) && element !== undefined &&
-      rustCarrierSupportsTrait(element, traitPath, typeParameterSupports, associatedTypeSupports);
+      rustCarrierSupportsTrait(element, traitPath, typeParameterSupports, associatedTypeSupports, definitions);
   }
   const namedType = rustNamedTypeCarrierValue(carrier);
   if (namedType !== undefined) {
-    return rustNamedTypeSupportsTrait(namedType, traitPath, typeParameterSupports, associatedTypeSupports);
+    return rustNamedTypeSupportsTrait(namedType, traitPath, typeParameterSupports, associatedTypeSupports, definitions);
   }
   return false;
 }
@@ -271,12 +284,13 @@ export function rustCarrierSatisfiesTraitRef(
   carrier: TargetTypeRef | undefined,
   trait: RustTargetTraitRef,
   typeParameterSupports: (name: string, traitPath: string) => boolean = () => false,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): boolean {
   if (trait.lifetimeBinder !== undefined || trait.associatedConstraints.length > 0) {
     return false;
   }
   if (trait.genericArguments.length === 0) {
-    return rustCarrierSupportsTrait(carrier, trait.path, typeParameterSupports);
+    return rustCarrierSupportsTrait(carrier, trait.path, typeParameterSupports, undefined, definitions);
   }
   const [argument] = trait.genericArguments;
   return carrier !== undefined &&
@@ -292,6 +306,7 @@ function rustCarrierSupportsDefault(
   carrier: TargetTypeRef,
   typeParameterSupports: (name: string, traitPath: string) => boolean,
   associatedTypeSupports: RustAssociatedTypeSupport,
+  definitions: RustTypeDefinitions,
 ): boolean {
   if (carrier.kind === "type-parameter") {
     return typeParameterSupports(carrier.name, "core::default::Default");
@@ -299,7 +314,7 @@ function rustCarrierSupportsDefault(
   const structural = rustStructuralObjectCarrierValue(carrier);
   if (structural !== undefined) {
     return structural.representation === "value" && structural.fields.every(field =>
-      rustCarrierSupportsTrait(field.type, "core::default::Default", typeParameterSupports, associatedTypeSupports));
+      rustCarrierSupportsTrait(field.type, "core::default::Default", typeParameterSupports, associatedTypeSupports, definitions));
   }
   if (carrier.kind === "source-primitive") {
     return rustPrimitiveTypeName(carrier.name) !== undefined;
@@ -313,7 +328,7 @@ function rustCarrierSupportsDefault(
         element,
         "core::default::Default",
         typeParameterSupports,
-        associatedTypeSupports,
+        associatedTypeSupports, definitions,
       ));
   }
   if (carrier.kind === "target-named") {
@@ -326,7 +341,7 @@ function rustCarrierSupportsDefault(
       fixedArray.element,
       "core::default::Default",
       typeParameterSupports,
-      associatedTypeSupports,
+      associatedTypeSupports, definitions,
     );
   }
   const namedType = rustNamedTypeCarrierValue(carrier);
@@ -334,7 +349,7 @@ function rustCarrierSupportsDefault(
     namedType,
     "core::default::Default",
     typeParameterSupports,
-    associatedTypeSupports,
+    associatedTypeSupports, definitions,
   );
 }
 
@@ -343,6 +358,8 @@ export function rustNamedTypeSupportsTrait(
   traitPath: string,
   typeParameterSupports: (name: string, traitPath: string) => boolean = () => false,
   associatedTypeSupports: RustAssociatedTypeSupport = () => false,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
+  active: Map<string, string> = new Map(),
 ): boolean {
   const typeArguments = rustTargetGenericTypeArguments(namedType.genericArguments);
   return namedType.traits.implementations.some((implementation) =>
@@ -352,7 +369,7 @@ export function rustNamedTypeSupportsTrait(
         argument,
         requirement.traitPath,
         typeParameterSupports,
-        associatedTypeSupports,
+        associatedTypeSupports, definitions, active,
       );
     }));
 }

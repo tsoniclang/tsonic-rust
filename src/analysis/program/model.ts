@@ -58,6 +58,7 @@ export interface RustPlanningHost {
 }
 
 export interface RustTargetProgram {
+  readonly typeDefinitions: import("../../target-model/types/source-union-definitions.js").RustTypeDefinitions;
   readonly typeFamilies: RustSourceTypeFamilyPlan;
   readonly host: RustPlanningHost;
   readonly configuration: RustTargetConfiguration;

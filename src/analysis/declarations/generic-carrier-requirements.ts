@@ -1,3 +1,4 @@
+import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustGenericRequirement } from "./generic-requirements.js";
 import { rustCarrierSupportsSourceNumeric } from "../../target-model/types/carriers/source-numeric.js";
@@ -12,6 +13,7 @@ export function classifyCarrierRequirements(
   declared: ReadonlySet<string>,
   byParameter: Map<string, Set<RustGenericRequirement>>,
   associatedSupports: (carrier: Extract<TargetTypeRef, { readonly kind: "associated-type" }>, requirement: RustGenericRequirement) => boolean,
+  definitions: RustTypeDefinitions,
 ): boolean {
   if (isRustNeverCarrier(carrier)) {
     return true;
@@ -39,12 +41,13 @@ export function classifyCarrierRequirements(
       if (!declared.has(name) || selectedTrait !== traitPath) return false;
       byParameter.get(name)!.add(requirement);
       return true;
-    }, (projection, selectedTrait) => selectedTrait === traitPath && associatedSupports(projection, requirement))) {
+    }, (projection, selectedTrait) => selectedTrait === traitPath && associatedSupports(projection, requirement), definitions)) {
       return false;
     }
   }
   return true;
 }
+
 
 function classifyStaticCarrier(
   carrier: TargetTypeRef,

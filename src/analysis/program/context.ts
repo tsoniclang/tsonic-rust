@@ -21,6 +21,7 @@ import {
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { RustSourceTypeFamilyRegistry } from "../../policy/types/type-families.js";
 import { createRustSourceTypeFamilyRegistry } from "../project-types/type-families.js";
+import { createRustTypeDefinitionRegistry, type RustTypeDefinitionRegistry } from "../project-types/type-definitions.js";
 import { createRustClassValueRegistry, type RustClassValueRegistry } from "../objects/class-values.js";
 import {
   createRustPlanBuilder,
@@ -76,6 +77,7 @@ import {
 } from "./generated-declaration-uses.js";
 
 export interface RustAnalysisContext extends RustSourcePolicyContext {
+  readonly typeDefinitions: RustTypeDefinitionRegistry;
   readonly typeFamilies: RustSourceTypeFamilyRegistry;
   readonly pointerBacking: TsonicPointerBackingDemands;
   readonly memoryMetadata: TsonicMemoryMetadataIndex;
@@ -131,7 +133,8 @@ export function createRustAnalysisContext(
     navigation: input.source.navigation,
     safetyApplications,
   });
-  const facts = createRustPlanBuilder(input.source.sourceFacts);
+  const typeDefinitions = createRustTypeDefinitionRegistry();
+  const facts = createRustPlanBuilder(input.source.sourceFacts, typeDefinitions);
   const names = createRustNamePlan({
     ast,
     navigation: input.source.navigation,
@@ -151,6 +154,7 @@ export function createRustAnalysisContext(
   });
   const memoryBindings = createTsonicMemoryBindingIndex(input.source);
   return Object.freeze({
+    typeDefinitions,
     typeFamilies: createRustSourceTypeFamilyRegistry(),
     pointerBacking: createTsonicPointerBackingDemands(input.source),
     pointerReturns: createTsonicPointerReturnQueries(input.source),

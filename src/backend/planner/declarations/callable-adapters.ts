@@ -81,7 +81,7 @@ export function planRustCallableArguments(
         const expression = parameterExpression(contractParameterIndex);
         const logical = expression === undefined
           ? undefined
-          : readRustCallableLogicalParameter(expression, source);
+          : readRustCallableLogicalParameter(expression, source, context);
         const adapted = logical === undefined
           ? undefined
           : applyRustCallableValueAdapter(
@@ -191,7 +191,7 @@ export function planRustCallableArguments(
       adaptedArguments.push(adapted);
       continue;
     }
-    const logical = readRustCallableLogicalParameter(sourceExpression, adapter.source);
+    const logical = readRustCallableLogicalParameter(sourceExpression, adapter.source, context);
     const adapted = logical === undefined
       ? undefined
       : applyRustCallableValueAdapter(
@@ -242,6 +242,7 @@ export function planRustCallableArguments(
 function readRustCallableLogicalParameter(
   expression: RustExpr,
   abi: RustCallableParameterAbi,
+  context: RustPlanContext,
 ): RustExpr | undefined {
   if (abi.mode === "value") {
     return expression;
@@ -250,7 +251,7 @@ function readRustCallableLogicalParameter(
   if (isRustCopyCarrier(abi.valueCarrier)) {
     return value;
   }
-  return rustCarrierSupportsClone(abi.valueCarrier)
+  return rustCarrierSupportsClone(abi.valueCarrier, context.input.program.typeDefinitions)
     ? { kind: "method-call", receiver: value, method: "clone", args: [] }
     : undefined;
 }
@@ -301,12 +302,12 @@ function applyRustCallableValueAdapterRaw(
         return rustCompilerOwnedContextualConversionMatches(
           adapter.sourceCarrier,
           adapter.targetCarrier,
-          adapter.conversion,
+          adapter.conversion, context.input.program.typeDefinitions,
         )
           ? { expression, fallible: false }
           : undefined;
       }
-      const contract = rustValueConversionContract(adapter.conversion);
+      const contract = rustValueConversionContract(adapter.conversion, context.input.program.typeDefinitions);
       if (contract === undefined ||
         !rustTargetTypeRefEquals(contract.source, adapter.sourceCarrier) ||
         !rustTargetTypeRefEquals(contract.target, adapter.targetCarrier)) {

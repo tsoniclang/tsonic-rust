@@ -9,6 +9,7 @@ import type { RustCallableParameterAbi } from "../facts/callable-adapters.js";
 import { inferRustTargetTypeParameterBindings, rustTargetTypeContainsTypeParameter, substituteRustTargetTypeParameters } from "../../target-model/types/index.js";
 import type { RustProjectMethodDispatchPlan } from "../project-types/method-dispatch.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
+import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { sourceCallableParameterAbis, sourceCallableReturnCarrier, substituteRustCallableParameterAbi, projectOwnerTypeSubstitutions, selectRustCallableParameterAdapters, selectRustCallableValueAdapter, rustCallableParameterAdapterIsFallible, rustCallableValueAdapterIsFallible } from "../callables/adapters.js";
 
 export interface RustObjectLiteralMethodAdapterIssue {
@@ -21,6 +22,7 @@ export function recordRustObjectLiteralMethodAdapterFacts(input: {
   readonly ast: AstReader;
   readonly facts: RustPlanBuilder;
   readonly projectTypes: RustProjectTypePolicy;
+  readonly typeDefinitions: RustTypeDefinitions;
   readonly projectMethodDispatch: RustProjectMethodDispatchPlan;
   readonly expressions: readonly Node[];
 }): readonly RustObjectLiteralMethodAdapterIssue[] {
@@ -52,6 +54,7 @@ function createObjectLiteralMethodAdapterFact(
     readonly ast: AstReader;
     readonly facts: RustPlanBuilder;
     readonly projectTypes: RustProjectTypePolicy;
+    readonly typeDefinitions: RustTypeDefinitions;
     readonly projectMethodDispatch: RustProjectMethodDispatchPlan;
   },
   expression: Node,
@@ -150,12 +153,12 @@ function createObjectLiteralMethodAdapterFact(
         const parameterAdapters = selectRustCallableParameterAdapters(
           contractParameters,
           implementationParameters,
-          input.projectTypes,
+          input.projectTypes, input.typeDefinitions,
         );
         const resultAdapter = selectRustCallableValueAdapter(
           implementationReturnCarrier,
           contractReturnCarrier,
-          input.projectTypes,
+          input.projectTypes, input.typeDefinitions,
         );
         if (parameterAdapters === undefined || resultAdapter === undefined) {
           return reject(
@@ -191,8 +194,8 @@ function createObjectLiteralMethodAdapterFact(
           returnCarrier: contractReturnCarrier,
           parameterAdapters: Object.freeze(parameterAdapters),
           resultAdapter,
-          adapterFallible: parameterAdapters.some(rustCallableParameterAdapterIsFallible) ||
-            rustCallableValueAdapterIsFallible(resultAdapter),
+          adapterFallible: parameterAdapters.some(adapter => rustCallableParameterAdapterIsFallible(adapter, input.typeDefinitions)) ||
+            rustCallableValueAdapterIsFallible(resultAdapter, input.typeDefinitions),
         }));
       }
     }

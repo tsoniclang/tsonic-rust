@@ -1,3 +1,4 @@
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import {
   rustFixedArrayCarrierValue,
   rustJsArrayBufferTargetType,
@@ -205,7 +206,7 @@ function resolveConstructorResult(
   }
 }
 
-export function selectJsSurfaceConstructor(request: JsConstructorRequest): JsOperationSelection | undefined {
+export function selectJsSurfaceConstructor(request: JsConstructorRequest, definitions: RustTypeDefinitions = emptyRustTypeDefinitions): JsOperationSelection | undefined {
   if (request.className === "Array") {
     return selectJsArrayConstruction(request.typeArgumentCarriers, request.argumentCarriers, "constructor", request.soleArgumentNumberKind);
   }
@@ -252,7 +253,7 @@ export function selectJsSurfaceConstructor(request: JsConstructorRequest): JsOpe
     if (parameterCarriers.some((carrier, index) => {
       const actual = request.argumentCarriers[index];
       return row.jsonValueSourceArgumentIndexes?.includes(index) === true
-        ? actual === undefined || selectRustJsonValueConversion(actual) === undefined
+        ? actual === undefined || selectRustJsonValueConversion(actual, definitions) === undefined
         : carrier === undefined || actual === undefined ||
           !rustTargetTypeRefEquals(carrier, actual);
     })) {
@@ -268,7 +269,7 @@ export function selectJsSurfaceConstructor(request: JsConstructorRequest): JsOpe
           : { trailingArguments: row.trailingArguments }),
       },
       row.jsonValueSourceArgumentIndexes,
-      request.argumentCarriers,
+      request.argumentCarriers, definitions,
     );
     if (target === undefined) {
       return [];
@@ -310,7 +311,7 @@ export function selectJsSurfaceConstructorBySourceOwner(request: {
   readonly argumentCarriers: readonly (TargetTypeRef | undefined)[];
   readonly soleArgumentNumberKind?: "number" | "non-number";
   readonly carrierSupportsProjectIdentity?: (carrier: TargetTypeRef) => boolean;
-}): JsOperationSelection | undefined {
+}, definitions: RustTypeDefinitions = emptyRustTypeDefinitions): JsOperationSelection | undefined {
   if (request.sourceOwnerName === "ArrayConstructor") {
     return selectJsArrayConstruction(request.typeArgumentCarriers, request.argumentCarriers, "constructor", request.soleArgumentNumberKind);
   }
@@ -324,5 +325,5 @@ export function selectJsSurfaceConstructorBySourceOwner(request: {
         ...(request.carrierSupportsProjectIdentity === undefined
           ? {}
           : { carrierSupportsProjectIdentity: request.carrierSupportsProjectIdentity }),
-      });
+      }, definitions);
 }

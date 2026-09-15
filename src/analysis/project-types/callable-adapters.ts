@@ -88,8 +88,8 @@ function classifyAdapter(
   const implementationReturnCarrier = sourceCallableReturnCarrier(input, implementation, implementationSubstitutions);
   if (parameters === undefined || implementationParameters === undefined ||
     returnCarrier === undefined || implementationReturnCarrier === undefined) return undefined;
-  const parameterAdapters = selectRustCallableParameterAdapters(parameters, implementationParameters, projectTypes);
-  const resultAdapter = selectRustCallableValueAdapter(implementationReturnCarrier, returnCarrier, projectTypes);
+  const parameterAdapters = selectRustCallableParameterAdapters(parameters, implementationParameters, projectTypes, walk.context.typeDefinitions);
+  const resultAdapter = selectRustCallableValueAdapter(implementationReturnCarrier, returnCarrier, projectTypes, walk.context.typeDefinitions);
   if (parameterAdapters === undefined || resultAdapter === undefined) return undefined;
   return Object.freeze({
     contract, implementation, slot,
@@ -98,8 +98,8 @@ function classifyAdapter(
     returnCarrier, implementationReturnCarrier,
     parameterAdapters: Object.freeze(parameterAdapters),
     resultAdapter,
-    adapterFallible: parameterAdapters.some(rustCallableParameterAdapterIsFallible) ||
-      rustCallableValueAdapterIsFallible(resultAdapter),
+    adapterFallible: parameterAdapters.some(adapter => rustCallableParameterAdapterIsFallible(adapter, walk.context.typeDefinitions)) ||
+      rustCallableValueAdapterIsFallible(resultAdapter, walk.context.typeDefinitions),
   });
 
   function substitutions(owner: RustProjectTypeDefinition, member: Node): ReadonlyMap<string, TargetTypeRef> | undefined {

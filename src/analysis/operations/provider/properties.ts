@@ -93,7 +93,7 @@ export function selectRustCheckedDelete(
     operationKind: "delete",
     ...(receiverCarrier === undefined ? {} : { receiverCarrier }),
     argumentCarriers: [indexCarrier],
-  });
+  }, context.typeDefinitions);
   if (selection?.fact.kind !== "provider-operation") {
     return rejectSelectedOperation(
       request.expression,
@@ -342,7 +342,7 @@ export function selectRustCheckedPropertyAccess(
       ...(jsIdentity.memberName === "index" && authoredPropertyKey !== undefined
         ? { authoredPropertyKey }
         : {}),
-    });
+    }, context.typeDefinitions);
     if (selection === undefined || selection.fact.kind !== "provider-operation" || selection.resultCarrier === undefined) {
       return rejectSelectedOperation(
         request.expression,

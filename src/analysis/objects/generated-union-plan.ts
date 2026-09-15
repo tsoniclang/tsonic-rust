@@ -2,6 +2,8 @@ import type { RustSourceUnion } from "../../policy/types/source-type-registry.js
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import { rustSourceUnionCarrierValue } from "../../target-model/types/carriers/source-types.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export interface RustGeneratedUnionDefinition {
@@ -25,13 +27,19 @@ export function createRustGeneratedUnionPlan(
   const groups = new Map<string, { ownerFileName: string; componentId: string; variantNames: readonly string[]; carriers: Map<string, TargetTypeRef> }>();
   for (const union of unions) {
     const value = rustSourceUnionCarrierValue(union.carrier);
-    if (union.declaration !== undefined || value?.origin !== "generated") {
+    if (union.declaration !== undefined || value?.origin !== "generated" ||
+      !isDenseDataArray(union.variants) || union.variants.length !== value.genericArguments.length ||
+      union.variants.some((variant, index) => {
+        const argument = value.genericArguments[index];
+        return variant?.name !== `Variant${index}` || argument?.kind !== "type" ||
+          !rustTargetTypeRefEquals(variant.carrier, argument.type);
+      })) {
       throw new Error("A generated union plan requires an exact inferred union contract.");
     }
     const componentId = componentForFile(value.fileName);
     if (componentId === undefined) throw new Error("A generated union has no source-package owner.");
-    const key = JSON.stringify([componentId, value.variants.length]);
-    const group = groups.get(key) ?? { ownerFileName: value.fileName, componentId, variantNames: Object.freeze(value.variants.map(variant => variant.name)), carriers: new Map() };
+    const key = JSON.stringify([componentId, union.variants.length]);
+    const group = groups.get(key) ?? { ownerFileName: value.fileName, componentId, variantNames: Object.freeze(union.variants.map(variant => variant.name)), carriers: new Map() };
     if (value.fileName.localeCompare(group.ownerFileName, "en") < 0) group.ownerFileName = value.fileName;
     group.carriers.set(closedMetadataKey(union.carrier), union.carrier);
     groups.set(key, group);

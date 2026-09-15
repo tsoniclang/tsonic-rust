@@ -363,16 +363,6 @@ function substituteCarrierParts(
         return rustSourceUnionTargetType(
           sourceUnion.fileName,
           sourceUnion.typeName,
-          sourceUnion.variants.map((variant) => ({
-            ...variant,
-            carrier: substituteRustTargetGenerics(
-              variant.carrier,
-              substitutions,
-              lifetimeSubstitutions,
-              constSubstitutions,
-              normalize,
-            ),
-          })),
           substituteGenericArguments(sourceUnion.genericArguments, substitutions, lifetimeSubstitutions, constSubstitutions, normalize),
           sourceUnion.origin,
         );

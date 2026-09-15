@@ -1,7 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustRuntimeUnionProjection } from "../../../target-model/types/carriers/runtime-unions.js";
-import { rustSourceUnionCarrierValue } from "../../../target-model/types/carriers/source-types.js";
 import { rustUnionTypePathInContext } from "../types/render.js";
 import {
   isRustCopyCarrier,
@@ -74,12 +73,12 @@ export function planRustFlowReadProjection(
     return { kind: "method-call", receiver: planRustNonConsumingValue(node, expression, context), method: fact.method, args: [] };
   }
   if (fact.kind === "source-union") {
-    const union = rustSourceUnionCarrierValue(fact.sourceCarrier);
+    const variants = context.input.program.typeDefinitions.sourceUnionVariants(fact.sourceCarrier);
     const path = rustUnionTypePathInContext(fact.sourceCarrier, context);
-    const selected = union?.variants.filter(variant => variant.name === fact.variant &&
+    const selected = variants?.filter(variant => variant.name === fact.variant &&
       rustTargetTypeRefEquals(variant.carrier, fact.selectedCarrier));
     if (path === undefined || selected?.length !== 1 ||
-      !rustCarrierSupportsClone(fact.selectedCarrier) &&
+      !rustCarrierSupportsClone(fact.selectedCarrier, context.input.program.typeDefinitions) &&
         !requireRustCarrierRequirements(fact.selectedCarrier, ["clone"], node, context)) {
       context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
         "rust.backend.source-union-projection", "The selected union payload has no exact non-consuming projection."));
@@ -96,7 +95,7 @@ export function planRustFlowReadProjection(
     ] };
   }
   if (fact.kind === "option-value") {
-    if (!rustCarrierSupportsClone(fact.selectedCarrier) &&
+    if (!rustCarrierSupportsClone(fact.selectedCarrier, context.input.program.typeDefinitions) &&
       (context.callableDeclaration === undefined ||
         !requireRustCarrierRequirements(fact.selectedCarrier, ["clone"], node, context))) {
       context.diagnostics.push(missingFactDiagnostic(

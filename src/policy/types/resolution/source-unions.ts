@@ -17,8 +17,9 @@ export function retainRustSourceUnionInstantiation(
   const existing = options.sourceTypes.sourceUnionForCarrier(carrier);
   if (existing !== undefined && options.sourceTypes.sourceUnionVariantIndexesForTypes(carrier, [sourceType]) !== undefined) return carrier;
   const value = rustSourceUnionCarrierValue(carrier);
+  const expectedVariants = options.sourceTypes.sourceUnionVariants(carrier);
   const semantics = context.currentSemantics;
-  if (value === undefined || template.declaration === undefined || !semantics.types.isUnion(sourceType)) return undefined;
+  if (value === undefined || expectedVariants === undefined || template.declaration === undefined || !semantics.types.isUnion(sourceType)) return undefined;
   const members = semantics.types.unionOrIntersectionTypes(sourceType);
   if (members.length !== template.variants.length || members.some(member => member === undefined)) return undefined;
   const parameters = context.sourceLifetimes.contractFor(template.declaration)?.parameters ?? [];
@@ -39,7 +40,7 @@ export function retainRustSourceUnionInstantiation(
   if (selected.some(member => member.carrier === undefined)) return undefined;
   const used = new Set<Type>();
   const variants = template.variants.map((variant, index) => {
-    const expected = value.variants[index];
+    const expected = expectedVariants[index];
     const origin = sourceDeclarations(variant.sourceType, context);
     const matches = selected.filter(member => {
       if (!rustTargetTypeRefEquals(expected?.carrier, member.carrier)) return false;

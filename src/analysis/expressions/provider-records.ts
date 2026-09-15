@@ -163,14 +163,14 @@ export function resolveProviderRecordLiteral(
       {
         sourceReceiverCarrier: resultCarrier,
         sourceResultCarrier: selectedMemberCarrier,
-      },
+      }, walk.context.typeDefinitions,
     )?.template;
     const write = instantiateProviderOperationTemplate(
       providerOperationTemplate(writeSelection.row, "property-set"),
       {
         sourceReceiverCarrier: resultCarrier,
         sourceParameterCarriers: [selectedMemberCarrier],
-      },
+      }, walk.context.typeDefinitions,
     )?.template;
     const storageCarrier = read?.resultCarrier;
     const targetName = read?.target.form === "field"

@@ -1,3 +1,4 @@
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import { rustGenericNumericOperandsKey } from "../facts/generic-numeric.js";
 import { classifyCarrierRequirements } from "./generic-carrier-requirements.js";
@@ -114,6 +115,7 @@ export function analyzeRustDeclarationGenericRequirements(
   typeFamilies: RustSourceTypeFamilyRegistry,
   projectTypes: RustProjectTypePolicy,
   shapes: RustStructuralShapePlan,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): AnalyzeRustDeclarationGenericRequirementsResult {
   const ast = source.ast;
   const diagnostics: TargetDiagnostic[] = [];
@@ -169,6 +171,7 @@ export function analyzeRustDeclarationGenericRequirements(
       }
       const result = classifyCallableRequirements({
         ast,
+        typeDefinitions: definitions,
         declaration,
         facts,
         names,
@@ -233,7 +236,7 @@ export function analyzeRustDeclarationGenericRequirements(
         trait === "core::clone::Clone" && parameters.some(parameter =>
           parameter.name === name && parameter.requirements.includes("clone")),
         (projection, trait) => trait === "core::clone::Clone" && contract.associatedTypes.some(requirement =>
-          rustTargetTypeRefEquals(requirement.carrier, projection) && requirement.requirements.includes("clone")));
+          rustTargetTypeRefEquals(requirement.carrier, projection) && requirement.requirements.includes("clone")), definitions);
     },
     hasUse(
       declaration: Node,
@@ -251,7 +254,7 @@ export function analyzeRustDeclarationGenericRequirements(
   const shapeContracts = new Map<string, RustShapeGenericRequirementContract>();
   for (const carrier of [...shapes.definitions.map(definition => definition.carrier),
     ...shapes.unionDefinitions.flatMap(definition => definition.sourceCarriers)]) {
-    const contract = analyzeRustShapeGenericRequirements(carrier, projectTypes, typeFamilies, index.contractFor);
+    const contract = analyzeRustShapeGenericRequirements(carrier, projectTypes, typeFamilies, index.contractFor, definitions);
     if (contract === undefined) return { kind: "rejected", diagnostics: Object.freeze([diagnostic(
       "RUST_SHAPE_GENERIC_CONTRACT_NOT_PROVEN", "A structural source carrier has no exact generic or associated-output requirements.",
     )]) };
@@ -261,6 +264,7 @@ export function analyzeRustDeclarationGenericRequirements(
 }
 
 interface ClassifyCallableInput {
+  readonly typeDefinitions: RustTypeDefinitions;
   readonly ast: AstReader;
   readonly declaration: Node;
   readonly facts: RustPlanQueries;
@@ -272,6 +276,7 @@ interface ClassifyCallableInput {
   readonly implementationDeclaration: (declaration: Node) => Node;
   readonly contractFor: (declaration: Node) => RequirementContractState | undefined;
 }
+
 
 function classifyCallableRequirements(input: ClassifyCallableInput):
   | {
@@ -313,7 +318,7 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
   const uses: RequirementUse[] = [];
   const dependencies = new Set<string>();
   const associated = createRustAssociatedRequirementCollector(declared, input.typeFamilies,
-    (carrier, requirements) => classifyCarrierRequirements(carrier, requirements, declared, byParameter, associated.require));
+    (carrier, requirements) => classifyCarrierRequirements(carrier, requirements, declared, byParameter, associated.require, input.typeDefinitions));
   const addUse = (
     node: Node,
     carrier: TargetTypeRef | undefined,
@@ -329,6 +334,7 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       declared,
       byParameter,
       associated.require,
+      input.typeDefinitions,
     );
     if (!classified) {
       return `A generated Rust operation requires ${rustRequirementDescription(normalized)} that its exact target carrier does not provide.`;
@@ -496,6 +502,15 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       }
     }
     const operation = facts.getFact(node, rustTargetOperationFactKey);
+    if ((operation?.kind === "source-field" || operation?.kind === "source-union-field") &&
+      operation.accessMode !== "write") {
+      const fields = operation.kind === "source-field" ? [operation]
+        : operation.selectedVariantIndexes.map(index => operation.variants[index]?.field);
+      if (fields.some(field => field?.storage === "structural-object" && field.valueSemantics.kind === "stored")) {
+        const error = addUse(node, operation.resultCarrier, ["clone"]);
+        if (error !== undefined) return error;
+      }
+    }
     if (operation?.kind === "nullish-assignment") {
       const parent = ast.parent(node);
       if (parent === undefined || ast.kindName(parent) !== KindExpressionStatement) {

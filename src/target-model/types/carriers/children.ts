@@ -29,7 +29,7 @@ export function rustTargetTypeChildren(type: TargetTypeRef): readonly TargetType
       const shape = rustStructuralObjectCarrierValue(type);
       if (shape !== undefined) return shape.fields.map(field => field.type);
       const union = rustSourceUnionCarrierValue(type);
-      if (union !== undefined) return [...arguments_(union.genericArguments), ...union.variants.map(variant => variant.carrier)];
+      if (union !== undefined) return arguments_(union.genericArguments);
       const named = rustNamedTypeCarrierValue(type);
       if (named !== undefined) return [...arguments_(named.genericArguments), ...arguments_(named.genericDefaults), ...named.upcasts.map(upcast => upcast.target)];
       const fixed = rustFixedArrayCarrierValue(type);

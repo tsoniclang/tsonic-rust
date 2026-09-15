@@ -1,7 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
-import { rustSourceUnionCarrierValue } from "../../../target-model/types/index.js";
 import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
 import type { RustAssignmentOperator } from "../../../target-model/syntax/tokens.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
@@ -76,10 +75,10 @@ export function planRustSourceUnionFieldProjection(
     variantIndex: number,
   ) => RustExpr | undefined,
 ): RustExpr | undefined {
-  const union = rustSourceUnionCarrierValue(fact.unionCarrier);
+  const variants = context.input.program.typeDefinitions.sourceUnionVariants(fact.unionCarrier);
   const typePath = rustUnionTypePathInContext(fact.unionCarrier, context);
-  if (union === undefined || typePath === undefined || context.syntheticNames === undefined ||
-    union.variants.length !== fact.variants.length) {
+  if (variants === undefined || typePath === undefined || context.syntheticNames === undefined ||
+    variants.length !== fact.variants.length) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.source-union-field-shape",
@@ -100,7 +99,7 @@ export function planRustSourceUnionFieldProjection(
   }
   const arms: { readonly pattern: RustPattern; readonly expression: RustExpr }[] = [];
   for (const [variantIndex, variant] of fact.variants.entries()) {
-    const declaredVariant = union.variants[variantIndex];
+    const declaredVariant = variants[variantIndex];
     if (declaredVariant === undefined || declaredVariant.name !== variant.name ||
       !rustTargetTypeRefEquals(declaredVariant.carrier, variant.carrier) ||
       selectedVariantIndexes.has(variantIndex) !== (variant.field !== undefined)) {

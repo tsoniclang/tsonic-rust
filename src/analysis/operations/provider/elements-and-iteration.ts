@@ -1,3 +1,4 @@
+import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import { rustJsArrayEntriesElementTargetType, rustJsArrayEntryTargetType } from "../../../target-model/types/carriers/array-entries.js";
 import {
   asNode,
@@ -203,7 +204,7 @@ export function selectRustCheckedElementAccess(
   if (sourceProfileIdentity?.profile === "native" &&
     (sourceProfileIdentity.ownerName === "Array" || sourceProfileIdentity.ownerName === "ReadonlyArray") &&
     sourceProfileIdentity.memberName === "index" &&
-    nativeArrayReceiver !== undefined && (isRustCopyCarrier(nativeArrayReceiver.element) || rustCarrierSupportsClone(nativeArrayReceiver.element))) {
+    nativeArrayReceiver !== undefined && (isRustCopyCarrier(nativeArrayReceiver.element) || rustCarrierSupportsClone(nativeArrayReceiver.element, context.typeDefinitions))) {
     const template: RustProviderOperationTemplate = {
       kind: "provider-operation",
       operationId: `tsonic.rust.native.${sourceProfileIdentity.ownerName}.index`,
@@ -241,7 +242,7 @@ export function selectRustCheckedElementAccess(
       ...(receiverCarrier === undefined ? {} : { receiverCarrier }),
       argumentCarriers: [selectedArgumentCarrier],
       argumentMatchScore: selectedArgumentMatchScore([request.argument], context, options),
-    });
+    }, context.typeDefinitions);
     if (selection === undefined || selection.fact.kind !== "provider-operation" || selection.resultCarrier === undefined) {
       return rejectSelectedOperation(
         request.expression,
@@ -316,7 +317,7 @@ export function selectRustCheckedIteration(
   }
   const iterable = resolveRustTargetTypeRef(request.expression, context, options);
   const targetIteration = rustIterableTargetPolicy(iterable,
-    rustJsArrayEntriesElementTargetType(iterable) !== undefined && options.arrayDensity.entries(request.expression));
+    rustJsArrayEntriesElementTargetType(iterable) !== undefined && options.arrayDensity.entries(request.expression), context.typeDefinitions);
   if (targetIteration === undefined) {
     return rejectSelectedOperation(
       request.statement,
@@ -397,7 +398,7 @@ type RustIterableTargetPolicy =
       readonly path: string;
     };
 
-function rustIterableTargetPolicy(iterable: TargetTypeRef | undefined, denseEntries = false): RustIterableTargetPolicy | undefined {
+function rustIterableTargetPolicy(iterable: TargetTypeRef | undefined, denseEntries: boolean, definitions: RustTypeDefinitions): RustIterableTargetPolicy | undefined {
   const entryElement = rustJsArrayEntriesElementTargetType(iterable);
   if (entryElement !== undefined) {
     return {
@@ -430,8 +431,8 @@ function rustIterableTargetPolicy(iterable: TargetTypeRef | undefined, denseEntr
     return { kind: "js-array", elementCarrier: jsElement };
   }
   const mapTypes = getRustJsMapTargetTypes(iterable);
-  if (mapTypes !== undefined && rustCarrierSupportsClone(mapTypes.key) &&
-    rustCarrierSupportsClone(mapTypes.value)) {
+  if (mapTypes !== undefined && rustCarrierSupportsClone(mapTypes.key, definitions) &&
+    rustCarrierSupportsClone(mapTypes.value, definitions)) {
     return {
       kind: "receiver-method",
       elementCarrier: { kind: "tuple", elements: [mapTypes.key, mapTypes.value] },
@@ -439,7 +440,7 @@ function rustIterableTargetPolicy(iterable: TargetTypeRef | undefined, denseEntr
     };
   }
   const setElement = getRustJsSetElementTargetType(iterable);
-  if (setElement !== undefined && rustCarrierSupportsClone(setElement)) {
+  if (setElement !== undefined && rustCarrierSupportsClone(setElement, definitions)) {
     return { kind: "receiver-method", elementCarrier: setElement, method: "values" };
   }
   if (iterable?.kind === "target-named") {

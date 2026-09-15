@@ -82,7 +82,7 @@ export function planRustClassInitialization(
       ));
       return undefined;
     }
-    if (!rustCarrierSupportsClone(carrier)) {
+    if (!rustCarrierSupportsClone(carrier, context.input.program.typeDefinitions)) {
       context.diagnostics.push(unsupportedConstructDiagnostic(
         diagnosticInput(context, member),
         "rust.backend.static-field-carrier",

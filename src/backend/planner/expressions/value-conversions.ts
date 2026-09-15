@@ -2,7 +2,6 @@ import {
   rustOptionTargetType,
   rustCallableProtocol,
   rustStructuralObjectCarrierValue,
-  rustSourceUnionCarrierValue,
   isRustCopyCarrier,
 } from "../../../target-model/types/index.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
@@ -39,7 +38,7 @@ export function applyRustValueConversion(
   if (conversion === undefined) {
     return expression;
   }
-  const contract = rustValueConversionContract(conversion);
+  const contract = rustValueConversionContract(conversion, context.input.program.typeDefinitions);
   if (contract === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node ?? context.sourceFile),
@@ -215,10 +214,10 @@ export function lowerRustValueConversion(
         };
     }
     case "js-value-from-source-union": {
-      const union = rustSourceUnionCarrierValue(contract.source);
+      const variants = context.input.program.typeDefinitions.sourceUnionVariants(contract.source);
       const typePath = rustUnionTypePathInContext(contract.source, context);
-      if (union === undefined || typePath === undefined ||
-        union.variants.length !== contract.variants.length) {
+      if (variants === undefined || typePath === undefined ||
+        variants.length !== contract.variants.length) {
         context.diagnostics.push(missingFactDiagnostic(
           diagnosticInput(context, node ?? context.sourceFile),
           "rust.backend.js-value-source-union",
@@ -233,7 +232,7 @@ export function lowerRustValueConversion(
       );
       const arms: { readonly pattern: RustPattern; readonly expression: RustExpr }[] = [];
       for (const [index, variant] of contract.variants.entries()) {
-        const sourceVariant = union.variants[index];
+        const sourceVariant = variants[index];
         if (sourceVariant === undefined || sourceVariant.name !== variant.name ||
           !rustTargetTypeRefEquals(sourceVariant.carrier, variant.carrier)) {
           context.diagnostics.push(missingFactDiagnostic(
@@ -362,10 +361,10 @@ export function lowerRustValueConversion(
       };
     }
     case "source-union-variant": {
-      const union = rustSourceUnionCarrierValue(contract.target);
+      const variants = context.input.program.typeDefinitions.sourceUnionVariants(contract.target);
       const typePath = rustUnionTypePathInContext(contract.target, context);
-      if (union === undefined || typePath === undefined ||
-        union.variants.filter((variant) =>
+      if (variants === undefined || typePath === undefined ||
+        variants.filter((variant) =>
           variant.name === contract.variantName &&
           rustTargetTypeRefEquals(variant.carrier, contract.source)).length !== 1) {
         context.diagnostics.push(missingFactDiagnostic(

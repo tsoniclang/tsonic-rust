@@ -1,3 +1,4 @@
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import { rustSourceErrorConstructors } from "../../../target-model/identities/source-errors.js";
 import { rustJsArrayEntriesTargetType } from "../../../target-model/types/carriers/array-entries.js";
 import {
@@ -197,12 +198,14 @@ export function instantiateTargetType(
       kind: "type" as const,
       type: argument,
     })),
+    context.typeDefinitions,
   );
 }
 
 export function instantiateProviderTargetType(
   relation: RustProviderTypeRow,
   arguments_: readonly RustTargetGenericArgument[],
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): TargetTypeRef | undefined {
   const parameters = relation.genericParameters ?? [];
   if (arguments_.length > parameters.length) {
@@ -240,7 +243,7 @@ export function instantiateProviderTargetType(
       types: typeSubstitutions,
       lifetimes: lifetimeSubstitutions,
       consts: constSubstitutions,
-    },
+    }, definitions,
   )) {
     return undefined;
   }
@@ -251,6 +254,7 @@ export function instantiateProviderTargetType(
     constSubstitutions,
   );
 }
+
 
 function substituteGenericArgument(
   argument: RustTargetGenericArgument,

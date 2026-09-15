@@ -1,6 +1,5 @@
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustRuntimeUnionProjection } from "../../target-model/types/carriers/runtime-unions.js";
-import { rustSourceUnionCarrierValue } from "../../target-model/types/carriers/source-types.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type {
   RustCallScopedLifetimeReconciliationFact,
@@ -23,6 +22,7 @@ import { inferRustTargetGenericBindings } from "../../target-model/types/carrier
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { rustLifetimeKey, rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
 import { rustEmptyRecordCarrier } from "../../target-model/conversions/empty-record.js";
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 
 export type RustValueCarrierReconciliation =
   | { readonly kind: "identity" }
@@ -48,12 +48,13 @@ export function selectRustFlowReadProjection(
   sourceCarrier: TargetTypeRef,
   selectedCarrier: TargetTypeRef,
   projectTypes: RustProjectTypePolicy,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): RustFlowReadProjectionSelection {
   if (rustTargetTypeRefEquals(sourceCarrier, selectedCarrier)) {
     return { kind: "identity" };
   }
-  const union = rustSourceUnionCarrierValue(sourceCarrier);
-  const selectedVariants = union?.variants.filter(variant => rustTargetTypeRefEquals(variant.carrier, selectedCarrier));
+  const union = definitions.sourceUnionVariants(sourceCarrier);
+  const selectedVariants = union?.filter(variant => rustTargetTypeRefEquals(variant.carrier, selectedCarrier));
   if (selectedVariants?.length === 1) {
     return { kind: "projection", fact: { kind: "source-union", sourceCarrier, selectedCarrier,
       variant: selectedVariants[0]!.name } };
@@ -72,7 +73,7 @@ export function selectRustFlowReadProjection(
     const variant = selectedDefinition === undefined
       ? undefined
       : projectTypes.programErrorVariant(selectedDefinition);
-    return variant !== undefined && rustCarrierSupportsClone(selectedCarrier)
+    return variant !== undefined && rustCarrierSupportsClone(selectedCarrier, definitions)
       ? {
           kind: "projection",
           fact: {
@@ -91,7 +92,7 @@ export function selectRustFlowReadProjection(
       selectedCarrier,
       "core::clone::Clone",
       () => true,
-      (projection, trait) => trait === "core::clone::Clone" && projection.trait?.sourceItem !== undefined,
+      (projection, trait) => trait === "core::clone::Clone" && projection.trait?.sourceItem !== undefined, definitions,
     )
       ? {
           kind: "projection",
@@ -111,7 +112,7 @@ export function selectRustFlowReadProjection(
   if (relationship.kind !== "related" ||
     !rustTargetTypeRefEquals(relationship.targetType, dispatchCarrier) ||
     route === undefined ||
-    (optionalElement !== undefined && !rustCarrierSupportsClone(dispatchCarrier))) {
+    (optionalElement !== undefined && !rustCarrierSupportsClone(dispatchCarrier, definitions))) {
     return { kind: "incompatible" };
   }
   return {
@@ -129,6 +130,7 @@ export function selectRustValueCarrierReconciliation(
   sourceCarrier: TargetTypeRef,
   targetCarrier: TargetTypeRef,
   projectTypes: RustProjectTypePolicy,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): RustValueCarrierReconciliation {
   if (rustTargetTypeRefEquals(sourceCarrier, targetCarrier)) {
     return { kind: "identity" };
@@ -163,6 +165,7 @@ export function selectRustValueCarrierReconciliation(
   const nativeTraitObjectUpcast = selectRustNativeTraitObjectUpcast(
     sourceCarrier,
     targetCarrier,
+    definitions,
   );
   if (nativeTraitObjectUpcast !== undefined) {
     return {
@@ -174,7 +177,7 @@ export function selectRustValueCarrierReconciliation(
       },
     };
   }
-  const conversion = selectRustSourceValueConversion(sourceCarrier, targetCarrier);
+  const conversion = selectRustSourceValueConversion(sourceCarrier, targetCarrier, definitions);
   return conversion === undefined
     ? { kind: "incompatible", reason: "unrelated" }
     : {
@@ -186,6 +189,7 @@ export function selectRustValueCarrierReconciliation(
 export function selectRustNativeTraitObjectUpcast(
   source: TargetTypeRef,
   target: TargetTypeRef,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): Extract<
   RustContextualValueConversion,
   { readonly kind: "native-trait-object-upcast" }
@@ -197,7 +201,7 @@ export function selectRustNativeTraitObjectUpcast(
   if (traits.some((trait) => trait.lifetimeBinder !== undefined ||
     trait.genericArguments.length !== 0 ||
     trait.associatedConstraints.length !== 0 ||
-    !rustCarrierSupportsTrait(source, trait.path))) {
+    !rustCarrierSupportsTrait(source, trait.path, undefined, undefined, definitions))) {
     return undefined;
   }
   return Object.freeze({

@@ -1,3 +1,4 @@
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import { rustJsArrayEntriesElementTargetType, rustJsArrayEntriesTargetType, rustJsArrayEntryTargetType } from "../../../target-model/types/carriers/array-entries.js";
 import { rustIteratorResultTargetType } from "../../../target-model/types/index.js";
 import {
@@ -568,13 +569,13 @@ function firstArgumentId(request: JsOperationRequest): string | undefined {
   return carrier?.kind === "target-named" ? carrier.id : undefined;
 }
 
-export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperationSelection | undefined {
+export function selectJsSurfaceOperation(request: JsOperationRequest, definitions: RustTypeDefinitions = emptyRustTypeDefinitions): JsOperationSelection | undefined {
   const upcasts = rustNamedTypeCarrierValue(request.receiverCarrier)?.upcasts ?? [];
   if (upcasts.length > 0) {
     const selected = upcasts.filter((upcast) => laneOf(upcast.target, request.ownerName) !== undefined);
     if (selected.length !== 1) return undefined;
     const receiverCarrier = selected[0]!.target;
-    const result = selectJsSurfaceOperation({ ...request, receiverCarrier });
+    const result = selectJsSurfaceOperation({ ...request, receiverCarrier }, definitions);
     if (result?.fact.target.form !== "receiver-method" || result.fact.target.receiverConversion !== undefined) return undefined;
     return {
       ...result, fact: { ...result.fact, target: {
@@ -634,7 +635,7 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
           (request.selectedMethodTypeArgumentCarriers?.length ?? 0)) &&
       (candidate.callback === undefined || callbackArgumentCarrier === undefined ||
         isRustCallableCarrier(callbackArgumentCarrier)) &&
-      carrierRequirementsMatch(candidate.requirements, candidateBindings, request) &&
+      carrierRequirementsMatch(candidate.requirements, candidateBindings, request, definitions) &&
       (candidate.firstArgCarrierId === undefined
         ? firstArgumentId(request) === undefined || !jsOperationRows.some((other) =>
             other.owner === candidate.owner && other.member === candidate.member &&
@@ -652,7 +653,7 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
     const argumentScores = parameterCarriers.map((carrier, index) => {
       const actual = candidateArgumentCarriers[index];
       if (candidate.jsonValueSourceArgumentIndexes?.includes(index) === true) {
-        return actual !== undefined && selectRustJsonValueConversion(actual) !== undefined
+        return actual !== undefined && selectRustJsonValueConversion(actual, definitions) !== undefined
           ? 1
           : undefined;
       }
@@ -711,7 +712,7 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
     : materializeJsonValueConversions(
         authoredTarget,
         row.jsonValueSourceArgumentIndexes,
-        request.argumentCarriers ?? [],
+        request.argumentCarriers ?? [], definitions,
       );
   if (target === undefined) {
     return undefined;
@@ -773,7 +774,7 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
       kind: "provider-operation",
       operationId,
       ...((row.requirements ?? []).some(requirement => requirement.capability === "numeric-parameter" ||
-        requirement.capability === "clone" && !rustCarrierSupportsClone(resolveCarrierRef(requirement.carrier, bindings)))
+        requirement.capability === "clone" && !rustCarrierSupportsClone(resolveCarrierRef(requirement.carrier, bindings), definitions))
         ? { carrierRequirements: Object.freeze((row.requirements ?? [])
             .filter(requirement => requirement.capability === "clone" || requirement.capability === "numeric-parameter")
             .map(requirement => Object.freeze({
@@ -824,6 +825,7 @@ function carrierRequirementsMatch(
   requirements: JsOperationRowData["requirements"],
   bindings: JsLaneBindings,
   request: JsOperationRequest,
+  definitions: RustTypeDefinitions,
 ): boolean {
   return requirements?.every((requirement) => {
     const carrier = resolveCarrierRef(requirement.carrier, bindings);
@@ -836,7 +838,7 @@ function carrierRequirementsMatch(
         return carrier?.kind === "type-parameter" && requirement.carrier.ref === "argument" &&
           request.numericParameterArgument?.(requirement.carrier.index, carrier) === true;
       case "clone":
-        return rustCarrierSupportsClone(carrier) ||
+        return rustCarrierSupportsClone(carrier, definitions) ||
           (carrier !== undefined && request.canRequireClone?.(carrier) === true);
       case "stringifiable":
         return isRustSourceStringConvertibleCarrier(carrier);
@@ -855,6 +857,7 @@ function carrierRequirementsMatch(
     }
   }) ?? true;
 }
+
 
 function jsArgumentCarrierMatchScore(
   expected: TargetTypeRef | undefined,

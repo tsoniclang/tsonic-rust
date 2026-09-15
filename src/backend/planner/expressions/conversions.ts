@@ -84,7 +84,7 @@ export function planProviderOperationExpression(
     readonly overrides?: RustFinalizedInputPlanOverrides;
   },
 ): RustExpr | undefined {
-  if (!validateRustFinalizedOperationAbi(fact.abi)) {
+  if (!validateRustFinalizedOperationAbi(fact.abi, context.input.program.typeDefinitions)) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, operationNode),
       "rust.backend.provider-operation-abi",
@@ -372,7 +372,7 @@ export function planProviderOperationExpression(
       if (isRustCopyCarrier(fact.resultCarrier)) {
         return scoped(place);
       }
-      if (!rustCarrierSupportsClone(fact.resultCarrier)) {
+      if (!rustCarrierSupportsClone(fact.resultCarrier, context.input.program.typeDefinitions)) {
         context.diagnostics.push(unsupportedConstructDiagnostic(
           diagnosticInput(context, operationNode),
           `rust.backend.provider-${form.form}-read-ownership`,

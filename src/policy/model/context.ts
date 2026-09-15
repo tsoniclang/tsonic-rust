@@ -13,8 +13,10 @@ import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import type { TsonicPointerReturnQueries, TsonicMemoryBindingIndex } from "@tsonic/source-core/facts";
+import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 
 export interface RustSourcePolicyContext {
+  readonly typeDefinitions: RustTypeDefinitions;
   readonly source: TargetSourceProgram;
   readonly pointerReturns: TsonicPointerReturnQueries;
   readonly memoryBindings: TsonicMemoryBindingIndex;

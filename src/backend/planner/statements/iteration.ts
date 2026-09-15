@@ -61,7 +61,7 @@ export function planRuntimeSetStatement(
     ? ElementAccessExpression_ArgumentExpression(context.input.program.source.ast, left)
     : undefined;
   const sourceArgumentNodes = indexNode === undefined ? [right] : [indexNode, right];
-  if (!validateRustFinalizedOperationAbi(fact.abi) ||
+  if (!validateRustFinalizedOperationAbi(fact.abi, context.input.program.typeDefinitions) ||
     expectedOperationKind === undefined || fact.abi.operationKind !== expectedOperationKind ||
     (expectedOperationKind === "index-set" && indexNode === undefined) ||
     sourceArgumentNodes.length !== fact.abi.sourceArguments.length ||

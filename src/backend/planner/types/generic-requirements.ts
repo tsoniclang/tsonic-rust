@@ -12,7 +12,7 @@ export function rustCarrierHasCloneContract(
   carrier: TargetTypeRef | undefined,
   context: RustPlanContext,
 ): boolean {
-  return carrier !== undefined && (rustCarrierSupportsClone(carrier) ||
+  return carrier !== undefined && (rustCarrierSupportsClone(carrier, context.input.program.typeDefinitions) ||
     context.callableDeclaration !== undefined &&
     context.input.program.declarationGenericRequirements.supportsClone(context.callableDeclaration, carrier));
 }

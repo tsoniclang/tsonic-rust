@@ -507,7 +507,7 @@ export function requireProviderArgumentPassingFacts(
   fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }>,
   arguments_: readonly (Node | undefined)[],
 ): boolean {
-  if (!validateRustFinalizedOperationAbi(fact.abi) || arguments_.length !== fact.abi.sourceArguments.length) {
+  if (!validateRustFinalizedOperationAbi(fact.abi, context.input.program.typeDefinitions) || arguments_.length !== fact.abi.sourceArguments.length) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, arguments_.find((candidate): candidate is Node => candidate !== undefined) ?? context.sourceFile),
       "rust.backend.provider-argument-abi",

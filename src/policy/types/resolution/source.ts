@@ -469,7 +469,7 @@ export function resolveRustTargetTypeSyntax(
     );
     return providerArguments === undefined
       ? undefined
-      : instantiateProviderTargetType(relation, providerArguments);
+      : instantiateProviderTargetType(relation, providerArguments, context.typeDefinitions);
   }
   const sourceProfileName = resolveOwnedSourceProfileTypeName(
     selectedTypeSymbol,

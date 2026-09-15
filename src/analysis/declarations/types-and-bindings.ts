@@ -24,7 +24,7 @@ import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { recordRustBindingPatternFacts } from "../control-flow/binding-patterns.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
-import { rustSourceUnionTargetType } from "../../target-model/types/index.js";
+import { rustSourceUnionTargetType, rustSourceUnionCarrierValue } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
 import { sourceTypeCarrierForDeclaration } from "../operations/inputs.js";
@@ -32,6 +32,28 @@ import type { Node, SourceFile, Type } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { resolveRustTypeFamilyApplication, rustSourceTypeFamilyDeclaration } from "../../policy/types/resolution/type-families.js";
+
+export function reserveTypeAliasUnion(walk: RustFactWalk, declaration: Node): void {
+  const {ast} = walk.context;
+  const root = Node_Type(ast, declaration);
+  if (root === undefined || ast.kindName(root) !== "KindUnionType" ||
+    walk.sourceTypes.enumVariantsForDeclaration(declaration) !== undefined ||
+    walk.sourceTypes.carrierForDeclaration(declaration, ast) !== undefined) return;
+  const semantics = walk.context.semanticsFor(declaration);
+  const sourceType = semantics.declarations.declaredType(declaration);
+  if (sourceType === undefined || !semantics.types.isUnion(sourceType)) return;
+  const carrier = resolveRustTargetTypeRef(root, rustResolutionContext(walk, declaration), walk.operationOptions);
+  if (carrier !== undefined) return;
+  const contract = walk.context.sourceLifetimes.contractFor(declaration);
+  if (ast.typeParameters(declaration).length !== (contract?.parameters.length ?? 0)) return;
+  const typeName = ast.text(ast.name(declaration));
+  const fileName = ast.getFileName(ast.getSourceFile(declaration));
+  if (typeName.length === 0 || fileName.length === 0) return;
+  walk.sourceTypes.reserveSourceUnion(declaration, rustSourceUnionTargetType(fileName, typeName,
+    contract?.parameters.map(parameter => parameter.kind === "type"
+      ? {kind: "type" as const, type: {kind: "type-parameter" as const, name: parameter.targetName}}
+      : {kind: "lifetime" as const, lifetime: parameter.lifetime}) ?? []));
+}
 
 export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
   const variants = walk.sourceTypes.enumVariantsForDeclaration(declaration);
@@ -117,11 +139,13 @@ export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
       : "rust representation-preserving type alias declaration" }]);
     return;
   }
-  const compositeCarrier = resolveRustTargetTypeRef(
+  reserveTypeAliasUnion(walk, declaration);
+  const reservedCarrier = walk.sourceTypes.carrierForDeclaration(declaration, ast);
+  const compositeCarrier = rustSourceUnionCarrierValue(reservedCarrier) === undefined ? resolveRustTargetTypeRef(
     Node_Type(ast, declaration) ?? sourceType,
     rustResolutionContext(walk, declaration),
     walk.operationOptions,
-  );
+  ) : undefined;
   if (compositeCarrier !== undefined) {
     if (!walk.sourceTypes.registerDeclarationCarrier(declaration, compositeCarrier)) {
       return;
@@ -181,10 +205,6 @@ export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
   const carrier = rustSourceUnionTargetType(
     fileName,
     typeName,
-    finalizedVariants.map((variant) => ({
-      name: variant.name,
-      carrier: variant.carrier,
-    })),
     genericContract?.parameters.map(parameter => parameter.kind === "type"
       ? { kind: "type" as const, type: { kind: "type-parameter" as const, name: parameter.targetName } }
       : { kind: "lifetime" as const, lifetime: parameter.lifetime }) ?? [],

@@ -9,19 +9,17 @@ import { createRustSourceTypeRegistry } from "../../../dist/analysis/project-typ
 test("generated union definitions require complete exact payload identities and deterministic ownership", () => {
   const payloads = ["First", "Second", "Third"].map(name => rustSourceTypeCarrier("/src/backing.ts", name, "object"));
   const make = (members, fileName = "/src/backing.ts") => rustSourceUnionTargetType(fileName, `Union${members.length}`,
-    members.map((carrier, index) => ({ name: `Variant${index}`, carrier })), members.map(type => ({ kind: "type", type })), "generated");
+    members.map(type => ({ kind: "type", type })), "generated");
   const carrier = make(payloads);
   assert.equal(rustSourceUnionCarrierValue(carrier)?.origin, "generated");
   const absent = { ...carrier.value };
   delete absent.origin;
   const changes = [absent, { ...carrier.value, origin: "other" }, { ...carrier.value, typeName: "Union2" },
     { ...carrier.value, genericArguments: carrier.value.genericArguments.slice(1) },
-    { ...carrier.value, genericArguments: carrier.value.genericArguments.toReversed() },
-    { ...carrier.value, variants: carrier.value.variants.map(variant => ({ ...variant, name: "Variant0" })) },
-    { ...carrier.value, variants: carrier.value.variants.map(variant => ({ ...variant, unexpected: true })) }];
+    { ...carrier.value, variants: [] }];
   for (const value of changes) assert.equal(rustSourceUnionCarrierValue({ ...carrier, value }), undefined);
   const record = value => ({ sourceType: {}, carrier: value,
-    variants: value.value.variants.map(variant => ({ ...variant, sourceType: {} })), selectedProperties: [] });
+    variants: value.value.genericArguments.map((argument, index) => ({ name: `Variant${index}`, carrier: argument.type, sourceType: {} })), selectedProperties: [] });
   const first = record(carrier);
   const second = record(make(payloads.slice(0, 2), "/src/other.ts"));
   const third = record(make(payloads.slice(1), "/src/another.ts"));
@@ -39,6 +37,9 @@ test("generated union definitions require complete exact payload identities and 
   assert.equal(registry.registerSourceUnion({ ...first, declaration: {} }), false);
   assert.equal(registry.registerSourceUnion(first), true);
   assert.equal(registry.registerSourceUnion({ ...first, variants: first.variants.slice(1) }), false);
+  assert.equal(registry.registerSourceUnion({ ...first, variants: first.variants.toReversed() }), false);
+  assert.equal(registry.registerSourceUnion({ ...first, variants: first.variants.map(variant => ({ ...variant, name: "Variant0" })) }), false);
+  assert.equal(registry.registerSourceUnion({ ...first, carrier: make(payloads.toReversed()) }), false);
   assert.deepEqual(registry.generatedSourceUnions().map(union => union.carrier), [carrier]);
 });
 

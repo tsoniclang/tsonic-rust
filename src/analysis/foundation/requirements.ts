@@ -103,7 +103,7 @@ export function rustFoundationForCarrier(carrier: RustTargetTypeRef): RustFounda
         }
         const sourceUnion = rustSourceUnionCarrierValue(current);
         if (sourceUnion !== undefined) {
-          sourceUnion.variants.forEach((variant) => visit(variant.carrier));
+          sourceUnion.genericArguments.forEach(visitArgument);
           return;
         }
         const structural = rustStructuralObjectCarrierValue(current);

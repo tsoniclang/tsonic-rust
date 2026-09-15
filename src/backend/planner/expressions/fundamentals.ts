@@ -372,7 +372,7 @@ export function providerSelectedCallMatches(
   fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }>,
   context: RustPlanContext,
 ): boolean {
-  if (!validateRustFinalizedOperationAbi(fact.abi)) {
+  if (!validateRustFinalizedOperationAbi(fact.abi, context.input.program.typeDefinitions)) {
     return false;
   }
   const selected = context.input.program.facts.getSelectedTargetCall(node);

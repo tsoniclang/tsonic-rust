@@ -245,7 +245,7 @@ export function selectRustCheckedCall(
         argumentCarriers,
         soleArgumentNumberKind: selectedSoleArgumentNumberKind(request, context),
         carrierSupportsProjectIdentity: options.projectCarrierSupportsObjectIdentity,
-      });
+      }, context.typeDefinitions);
       if (selection === undefined || selection.fact.kind !== "provider-operation" || selection.resultCarrier === undefined) {
         return rejectSelectedOperation(
           request.source.call,
@@ -334,7 +334,7 @@ export function selectRustCheckedCall(
           rustOperandSupportsSourceNumeric(argument, carrier, context, options);
       },
       resultUse: context.source.navigation.expressionResultUse(request.source.call),
-    });
+    }, context.typeDefinitions);
     if (selection === undefined || selection.fact.kind !== "provider-operation" || selection.resultCarrier === undefined) {
       return rejectSelectedOperation(
         request.source.call,

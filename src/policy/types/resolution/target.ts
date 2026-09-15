@@ -13,6 +13,7 @@ import {
   rustSourcePrimitiveTargetType,
   rustStructuralObjectTargetType,
   rustStructuralObjectCarrierValue,
+  rustSourceUnionCarrierValue,
   rustStringTargetType,
   rustTupleTargetType,
   rustUnitTargetType,
@@ -70,8 +71,16 @@ export function resolveRustTargetType(
   resolving: Set<object>,
   authoredTypeRoot?: Node,
 ): TargetTypeRef | undefined {
-  if (type === undefined || resolving.has(type)) {
-    return undefined;
+  if (type === undefined) return undefined;
+  if (resolving.has(type)) {
+    const symbol = context.currentSemantics.declarations.typeAliasSymbol(type);
+    if (symbol === undefined || !context.currentSemantics.declarations.symbolDeclarations(symbol).some(declaration =>
+      rustSourceUnionCarrierValue(options.sourceTypes.carrierForDeclaration(declaration, context.ast)) !== undefined)) return undefined;
+    const arguments_ = context.currentSemantics.types.effectiveTypeArguments(type)?.map(argument =>
+      resolveRustTargetType(argument, context, options, resolving)) ?? [];
+    return arguments_.some(argument => argument === undefined) ? undefined : resolveProjectSourceCarrier(symbol,
+      {values: arguments_.map(argument => ({kind: "type" as const, type: argument!}))}, context, options,
+      undefined, type, resolving, true);
   }
   const fixedArray = selectTsonicFixedArrayFromSource(
     type,

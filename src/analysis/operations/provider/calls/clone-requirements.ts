@@ -16,5 +16,5 @@ export function canRequireSourceClone(
     }
   }
   return rustCarrierSupportsTrait(carrier, "core::clone::Clone", (name, trait) =>
-    trait === "core::clone::Clone" && parameters.has(name));
+    trait === "core::clone::Clone" && parameters.has(name), undefined, context.typeDefinitions);
 }

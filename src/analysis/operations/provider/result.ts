@@ -197,7 +197,7 @@ export function selectedMemberReceiverCarrier(
   if (rustTargetTypeRefEquals(sourceCarrier, selectedCarrier)) {
     return sourceCarrier;
   }
-  const flowProjection = selectRustFlowReadProjection(sourceCarrier, selectedCarrier, options.projectTypes);
+  const flowProjection = selectRustFlowReadProjection(sourceCarrier, selectedCarrier, options.projectTypes, context.typeDefinitions);
   if (flowProjection.kind === "projection" && flowProjection.fact.kind === "builtin-error") {
     return selectedCarrier;
   }
@@ -269,7 +269,7 @@ export function acceptRustMemberOperation(
     const projection = selectRustFlowReadProjection(
       operationReceiverCarrier,
       selectedReceiverCarrier,
-      options.projectTypes,
+      options.projectTypes, context.typeDefinitions,
     );
     if (projection.kind === "incompatible") {
       return rejectSelectedOperation(
@@ -596,7 +596,7 @@ export function normalizeSelectedOperationInputCarrier(
   if (optionElement === undefined || direct === undefined ||
     rustTargetTypeRefEquals(direct, expected)) {
     if (direct !== undefined && expected !== undefined &&
-      selectRustValueCarrierReconciliation(direct, expected, options.projectTypes).kind === "conversion") {
+      selectRustValueCarrierReconciliation(direct, expected, options.projectTypes, context.typeDefinitions).kind === "conversion") {
       return expected;
     }
     return direct;
@@ -682,7 +682,7 @@ export function selectedArgumentMatchScore(
     const reconciliation = selectRustValueCarrierReconciliation(
       actual,
       expected,
-      options.projectTypes,
+      options.projectTypes, context.typeDefinitions,
     );
     if (reconciliation.kind === "call-scoped-lifetime" ||
       reconciliation.kind === "conversion" || reconciliation.kind === "project-upcast") {

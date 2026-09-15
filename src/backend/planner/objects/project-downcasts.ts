@@ -128,7 +128,7 @@ function planRustNonConsumingProjectValue(
   context: RustPlanContext,
 ): RustExpr {
   const carrier = context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
-  return !isRustCopyCarrier(carrier) && rustCarrierSupportsClone(carrier) &&
+  return !isRustCopyCarrier(carrier) && rustCarrierSupportsClone(carrier, context.input.program.typeDefinitions) &&
       expression.kind === "method-call" && expression.method === "clone" &&
       expression.args.length === 0
     ? expression.receiver

@@ -80,8 +80,7 @@ export function visitRustTargetTypeParameters(
       }
       const sourceUnion = rustSourceUnionCarrierValue(type);
       if (sourceUnion !== undefined) {
-        return visitGenericArgumentTypes(sourceUnion.genericArguments, visit) || sourceUnion.variants.some((variant) =>
-          visitRustTargetTypeParameters(variant.carrier, visit));
+        return visitGenericArgumentTypes(sourceUnion.genericArguments, visit);
       }
       const namedType = rustNamedTypeCarrierValue(type);
       if (namedType !== undefined) {
@@ -275,7 +274,6 @@ export function rustTargetGenericReferences(
         const union = rustSourceUnionCarrierValue(value);
         if (union !== undefined) {
           visitArguments(union.genericArguments, bound);
-          union.variants.forEach((variant) => visitType(variant.carrier, bound));
           return;
         }
         const named = rustNamedTypeCarrierValue(value);

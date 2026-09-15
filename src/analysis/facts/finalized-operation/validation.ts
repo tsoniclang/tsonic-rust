@@ -1,3 +1,4 @@
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import {
   carrierAfterMode,
   finalizedConversionIsValid,
@@ -17,11 +18,10 @@ import {
 } from "../../../target-model/types/equality.js";
 import { rustFutureOutputCarrier, rustFutureTargetType, rustSliceRefTargetType } from "../../../target-model/types/index.js";
 import { rustProviderOperationFormAcceptsTargetGenericArguments, rustProviderOperationFormContractViolation } from "../../../policy/operations/forms.js";
-import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import type { RustFinalizedOperationAbi, RustFinalizedOperationResult, RustFinalizedSourceArgument, RustFinalizedSourceArgumentRole, RustFinalizedSourceInput, RustFinalizedTargetInput, RustFinalizedValueConversion } from "./model.js";
-import type { RustProviderConstantArgument, RustValueConversion } from "../keys.js";
+import type { RustProviderConstantArgument } from "../keys.js";
 
-export function validateRustFinalizedOperationAbi(candidate: unknown): candidate is RustFinalizedOperationAbi {
+export function validateRustFinalizedOperationAbi(candidate: unknown, definitions: RustTypeDefinitions = emptyRustTypeDefinitions): candidate is RustFinalizedOperationAbi {
   if (!isClosedMetadata(candidate) || !isRustFinalizedOperationAbiShape(candidate)) {
     return false;
   }
@@ -30,7 +30,7 @@ export function validateRustFinalizedOperationAbi(candidate: unknown): candidate
     abi.operationKind,
     abi.target,
     abi.sourceArguments.length,
-    abi.sourceArguments.filter((argument) => argument.disposition === "runtime").map((argument) => argument.sourceIndex),
+    abi.sourceArguments.filter((argument) => argument.disposition === "runtime").map((argument) => argument.sourceIndex), definitions,
   ) !== undefined ||
     (abi.targetGenericArguments.length > 0 &&
       !rustProviderOperationFormAcceptsTargetGenericArguments(abi.target)) ||
@@ -70,7 +70,7 @@ export function validateRustFinalizedOperationAbi(candidate: unknown): candidate
   const runtimeIndexes = new Set<number>();
   let receiverUsed = false;
   const validateSourceInput = (input: RustFinalizedSourceInput): boolean => {
-    if (!finalizedConversionIsValid(input.conversion) ||
+    if (!finalizedConversionIsValid(input.conversion, definitions) ||
       !rustTargetTypeRefEquals(input.sourceCarrier, input.conversion.sourceCarrier) ||
       !rustTargetTypeRefEquals(input.parameterCarrier, carrierAfterMode(input.conversion.targetCarrier, input.mode))) {
       return false;
@@ -147,8 +147,8 @@ export function validateRustFinalizedOperationAbi(candidate: unknown): candidate
     abi.operationKind,
     abi.target,
     createInputFactory(sourceReceiverCarrier, abi.sourceArguments.map((argument) => argument.carrier),
-      new Set(abi.sourceArguments.filter(argument => argument.form === "spread-sequence").map(argument => argument.sourceIndex))),
-    abi.sourceArguments.length,
+      new Set(abi.sourceArguments.filter(argument => argument.form === "spread-sequence").map(argument => argument.sourceIndex)), definitions),
+    abi.sourceArguments.length, definitions,
   );
   if (expectedMapping === undefined ||
     !closedMetadataEquals(expectedMapping.targetReceiver, abi.targetReceiver) ||
@@ -164,7 +164,7 @@ export function validateRustFinalizedOperationAbi(candidate: unknown): candidate
         ((abi.effects.awaiting === "infallible" && abi.effects.errorBoundary === "none") ||
           (abi.effects.awaiting === "fallible" && abi.effects.errorBoundary !== "none"));
     return effectsValid &&
-      finalizedConversionIsValid(abi.result.conversion) &&
+      finalizedConversionIsValid(abi.result.conversion, definitions) &&
       rustTargetTypeRefEquals(abi.result.rawCarrier, abi.result.conversion.sourceCarrier) &&
       rustTargetTypeRefEquals(abi.result.carrier, abi.result.conversion.targetCarrier);
   }
@@ -172,7 +172,7 @@ export function validateRustFinalizedOperationAbi(candidate: unknown): candidate
     (abi.effects.awaiting === "infallible" || abi.effects.awaiting === "fallible") &&
     ((abi.effects.awaiting === "infallible" && abi.effects.errorBoundary === "none") ||
       (abi.effects.awaiting === "fallible" && abi.effects.errorBoundary !== "none")) &&
-    finalizedConversionIsValid(abi.result.awaitedConversion) &&
+    finalizedConversionIsValid(abi.result.awaitedConversion, definitions) &&
     rustTargetTypeRefEquals(abi.result.awaitedRawCarrier, abi.result.awaitedConversion.sourceCarrier) &&
     rustTargetTypeRefEquals(abi.result.awaitedCarrier, abi.result.awaitedConversion.targetCarrier) &&
     rustTargetTypeRefEquals(abi.result.futureCarrier, rustFutureTargetType(abi.result.awaitedCarrier));
@@ -328,7 +328,6 @@ function isFinalizedConversion(value: unknown): value is RustFinalizedValueConve
     (value.conversion.kind === "option-map" &&
       hasExactKeys(value.conversion, ["kind", "elementConversion"]) &&
       isNonOptionValueConversion(value.conversion.elementConversion))) &&
-    rustValueConversionContract(value.conversion as RustValueConversion) !== undefined &&
     typeof value.fallible === "boolean";
 }
 

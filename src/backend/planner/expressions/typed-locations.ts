@@ -692,7 +692,7 @@ function planRustLocationStorage(
   const operation = context.input.program.facts.getFact(expression, rustTargetOperationFactKey);
   if (kind === "KindElementAccessExpression" && operation?.kind === "provider-operation" &&
       operation.indexedLocationMethod !== undefined) {
-    const contract = rustIndexedLocationContract(operation);
+    const contract = rustIndexedLocationContract(operation, context.input.program.typeDefinitions);
     const indexNode = ElementAccessExpression_ArgumentExpression(context.input.program.source.ast, expression);
     if (contract === undefined || indexNode === undefined) {
       return rejectLocationStorage(expression, context, "The selected index location has no exact finalized receiver, value and index input contract.");

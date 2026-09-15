@@ -1,3 +1,4 @@
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import { createInputFactory, finalizeSourceArguments, finalizeTargetInputs } from "./inputs.js";
 import {
   declaredCarriersMatch,
@@ -21,6 +22,7 @@ import type { RustFinalizedOperationKind } from "../../../target-model/operation
 
 export function finalizeRustProviderOperationAbi<OperationKind extends RustFinalizedOperationKind>(
   options: FinalizeRustProviderOperationAbiOptions<OperationKind>,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): RustFinalizedOperationAbiFor<OperationKind> | undefined {
   if (!operationKinds.has(options.operationKind) || !isRustTargetTypeRef(options.resultCarrier) ||
     (options.sourceReceiverCarrier !== undefined && !isRustTargetTypeRef(options.sourceReceiverCarrier)) ||
@@ -78,7 +80,7 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
     options.operationKind,
     options.form,
     options.sourceArgumentCarriers.length,
-    runtimeSourceIndexes,
+    runtimeSourceIndexes, definitions,
   ) !== undefined) {
     return undefined;
   }
@@ -90,12 +92,12 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
   )) {
     return undefined;
   }
-  const input = createInputFactory(options.sourceReceiverCarrier, options.sourceArgumentCarriers, spreadIndexes);
+  const input = createInputFactory(options.sourceReceiverCarrier, options.sourceArgumentCarriers, spreadIndexes, definitions);
   const mapping = finalizeTargetInputs(
     options.operationKind,
     options.form,
     input,
-    options.sourceArgumentCarriers.length,
+    options.sourceArgumentCarriers.length, definitions,
   );
   if (mapping === undefined) {
     return undefined;
@@ -120,7 +122,7 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
   if (sourceArguments === undefined) {
     return undefined;
   }
-  const resultConversion = finalizeValueConversion(options.resultConversion, undefined, options.resultCarrier);
+  const resultConversion = finalizeValueConversion(options.resultConversion, undefined, options.resultCarrier, definitions);
   if (resultConversion === undefined) {
     return undefined;
   }
@@ -174,7 +176,7 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
       safety: options.isUnsafe ? "requires-unsafe" : "safe",
     },
   };
-  return validateRustFinalizedOperationAbi(abi) ? abi : undefined;
+  return validateRustFinalizedOperationAbi(abi, definitions) ? abi : undefined;
 }
 
 function mappingUsesSourceReceiver(

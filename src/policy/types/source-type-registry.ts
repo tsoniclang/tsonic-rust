@@ -7,6 +7,7 @@ import type {
 } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustSourceTypeFamilyRegistry } from "./type-families.js";
+import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 
 export interface RustSourceEnumVariant {
   readonly name: string;
@@ -70,7 +71,7 @@ export interface RustStructuralInstantiation {
   readonly instance: TargetTypeRef;
 }
 
-export interface RustSourceTypeRegistry {
+export interface RustSourceTypeRegistry extends RustTypeDefinitions {
   readonly typeFamilies: RustSourceTypeFamilyRegistry;
   registerSourceFile(sourceFile: SourceFile, ast: AstReader): void;
   registerDeclarationCarrier(declaration: Node, carrier: TargetTypeRef): boolean;
@@ -102,6 +103,8 @@ export interface RustSourceTypeRegistry {
   ): RustStructuralFieldRegistration | undefined;
   declarationsForSelectedSymbol(symbol: Symbol): readonly Node[] | undefined;
   registerSourceUnion(union: RustSourceUnion): boolean;
+  reserveSourceUnion(declaration: Node, carrier: TargetTypeRef): boolean;
+  pendingSourceUnions(): readonly Node[];
   generatedSourceUnions(): readonly RustSourceUnion[];
   sourceUnionForCarrier(carrier: TargetTypeRef): RustSourceUnion | undefined;
   sourceUnionVariantIndexesForTypes(

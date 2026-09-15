@@ -1,3 +1,4 @@
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { RustTargetOperationFact } from "./keys.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -118,6 +119,7 @@ export function rustTargetOperationIsFallible(
   structuralStorage: RustStructuralStorageLookup,
   projectFieldDispatch: RustProjectFieldDispatchLookup,
   frozenDataWrites: import("../objects/frozen-data-writes.js").RustFrozenDataWritePlan,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): boolean {
   if (fact === undefined) {
     return false;
@@ -132,7 +134,7 @@ export function rustTargetOperationIsFallible(
     return fact.iterationKind !== "for-in" && fact.lowering.kind === "fallible-owned";
   }
   if (fact.kind === "source-conversion") {
-    return rustValueConversionIsFallible(fact.conversion);
+    return rustValueConversionIsFallible(fact.conversion, definitions);
   }
   if (fact.kind === "source-accessor") {
     return false;
@@ -165,7 +167,7 @@ export function rustTargetOperationIsFallible(
       return variant !== undefined && field !== undefined && rustTargetOperationIsFallible({
         kind: "source-field", operationId: fact.operationId, accessMode: fact.accessMode,
         receiverCarrier: variant.carrier, resultCarrier: fact.resultCarrier, ...field,
-      }, structuralStorage, projectFieldDispatch, frozenDataWrites);
+      }, structuralStorage, projectFieldDispatch, frozenDataWrites, definitions);
     });
   }
   if (fact.kind === "object-shape-projection") {
@@ -203,6 +205,7 @@ export function rustTargetOperationIsFallible(
   }
   return false;
 }
+
 
 export function rustOperationAbiInvocationIsFallible(abi: RustFinalizedOperationAbi): boolean {
   if (abi.effects.invocation === "fallible" ||

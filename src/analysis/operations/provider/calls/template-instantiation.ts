@@ -1,3 +1,4 @@
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../../target-model/types/source-union-definitions.js";
 import {
   inferRustTargetGenericBindings,
   rustStrTargetId,
@@ -55,6 +56,7 @@ export function instantiateProviderOperationTemplate<
     readonly directGenericArguments?: ReadonlyMap<string, RustTargetGenericArgument>;
     readonly callScopedElisionBindings?: ReadonlyMap<string, RustLifetimeRef>;
   },
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): InstantiatedProviderOperationTemplate<OperationKind> | undefined {
   const parameters = template.genericParameters ?? [];
   const borrowedStringTypeParameters = rustBorrowedStringTypeParameterNames(template);
@@ -130,7 +132,7 @@ export function instantiateProviderOperationTemplate<
   }
   if (!rustProviderOperationGenericRequirementsAreSelectable(
     template.typeRequirements,
-    bindings,
+    bindings, definitions,
   )) {
     return undefined;
   }
@@ -589,6 +591,7 @@ export function finalizeProviderOperationFact(
   template: RustProviderOperationTemplate,
   sourceArgumentCarriers: readonly TargetTypeRef[],
   sourceReceiverCarrier: TargetTypeRef | undefined,
+  definitions: RustTypeDefinitions,
   spreadSourceArgumentIndexes?: readonly number[],
 ): Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }> | undefined {
   const abi = finalizeRustProviderOperationAbi({
@@ -615,7 +618,7 @@ export function finalizeProviderOperationFact(
     ...(template.errorBoundary === "none" ? {} : { errorBoundary: template.errorBoundary }),
     ...(template.errorCarrier === undefined ? {} : { errorCarrier: template.errorCarrier }),
     isUnsafe: template.isUnsafe,
-  });
+  }, definitions);
   if (abi === undefined) {
     return undefined;
   }
@@ -633,7 +636,7 @@ export function finalizeProviderOperationFact(
       : { sourceAbsenceCarrier: template.sourceAbsenceCarrier }),
     abi,
   };
-  return fact.indexedLocationMethod !== undefined && rustIndexedLocationContract(fact) === undefined
+  return fact.indexedLocationMethod !== undefined && rustIndexedLocationContract(fact, definitions) === undefined
     ? undefined
     : fact;
 }

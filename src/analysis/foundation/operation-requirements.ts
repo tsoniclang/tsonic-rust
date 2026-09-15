@@ -1,3 +1,4 @@
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { RustTargetOperationFact } from "../facts/operations/facts.js";
 import type { RustValueConversion } from "../../target-model/operations/model.js";
 import type {
@@ -17,6 +18,7 @@ import {
 
 export function rustFoundationForTargetOperationFact(
   fact: RustTargetOperationFact,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): RustFoundation {
   let foundation: RustFoundation = "core";
   const require = (candidate: RustFoundation): void => {
@@ -26,7 +28,7 @@ export function rustFoundationForTargetOperationFact(
     if (carrier !== undefined) require(rustFoundationForCarrier(carrier));
   };
   const requireConversion = (conversion: RustValueConversion | undefined): void => {
-    if (conversion !== undefined) require(rustFoundationForValueConversion(conversion));
+    if (conversion !== undefined) require(rustFoundationForValueConversion(conversion, definitions));
   };
   const requireGenericArgument = (argument: RustTargetGenericArgument): void => {
     if (argument.kind === "type") requireCarrier(argument.type);
@@ -78,7 +80,7 @@ export function rustFoundationForTargetOperationFact(
       break;
     case "provider-operation":
     case "runtime-set":
-      require(rustFoundationForFinalizedOperationAbi(fact.abi));
+      require(rustFoundationForFinalizedOperationAbi(fact.abi, definitions));
       break;
     case "object-shape-projection":
       requireCarrier(fact.sourceValueCarrier);

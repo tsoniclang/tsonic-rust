@@ -7,25 +7,30 @@ import { substituteRustTargetTypeParameters } from "../../../dist/target-model/t
 import { inferRustTargetTypeParameterBindings } from "../../../dist/target-model/types/carriers/generic-inference.js";
 import { createRustSourceTypeRegistry } from "../../../dist/analysis/project-types/source-type-registry.js";
 import { createRustStructuralShapePlan } from "../../../dist/analysis/objects/structural-shape-plan.js";
+import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
 
 test("source union generic arguments survive substitution and reject malformed metadata", () => {
   const parameter = { kind: "type-parameter", name: "Element" };
   const integer = rustSourcePrimitiveTargetType("int32");
-  const original = rustSourceUnionTargetType("/src/region.ts", "Region", [
+  const original = rustSourceUnionTargetType("/src/region.ts", "Region", [{ kind: "type", type: parameter }]);
+  const definitions = createRustTypeDefinitionRegistry();
+  assert.equal(definitions.registerSourceUnion({ carrier: original, variants: [
     { name: "First", carrier: parameter },
     { name: "Second", carrier: rustSourcePrimitiveTargetType("bool") },
-  ], [{ kind: "type", type: parameter }]);
+  ] }, true), true);
   const substituted = substituteRustTargetTypeParameters(original, new Map([["Element", integer]]));
   const value = rustSourceUnionCarrierValue(substituted);
   assert.deepEqual(value.genericArguments, [{ kind: "type", type: integer }]);
-  assert.deepEqual(value.variants[0].carrier, integer);
+  assert.deepEqual(definitions.sourceUnionVariants(substituted)[0].carrier, integer);
   assert.deepEqual(inferRustTargetTypeParameterBindings(original, substituted, new Set(["Element"])), new Map([["Element", integer]]));
   const missingArguments = { ...substituted.value };
   delete missingArguments.genericArguments;
   assert.equal(rustSourceUnionCarrierValue({ ...substituted, value: missingArguments }), undefined);
   assert.equal(rustSourceUnionCarrierValue({ ...substituted, value: { ...substituted.value, genericArguments: [{ kind: "type" }] } }), undefined);
   const contradictory = { ...substituted, value: { ...substituted.value, genericArguments: [{ kind: "type", type: rustSourcePrimitiveTargetType("bool") }] } };
-  assert.equal(inferRustTargetTypeParameterBindings(original, contradictory, new Set(["Element"])), undefined);
+  assert.deepEqual(inferRustTargetTypeParameterBindings(original, contradictory, new Set(["Element"])), new Map([["Element", rustSourcePrimitiveTargetType("bool")]]));
+  assert.deepEqual(definitions.sourceUnionVariants(contradictory)[0].carrier, rustSourcePrimitiveTargetType("bool"));
+  assert.equal(definitions.registerSourceUnion({ carrier: substituted, variants: definitions.sourceUnionVariants(contradictory) }, false), false);
 });
 
 test("generic source unions retain cross-file narrowing and concrete instantiations", { timeout: 300_000 }, () => {
@@ -152,10 +157,7 @@ test("equal target carriers retain distinct source instantiations without ambigu
   const registry = createRustSourceTypeRegistry();
   const declaration = {};
   const parameter = { kind: "type-parameter", name: "Element" };
-  const carrier = rustSourceUnionTargetType("/src/region.ts", "Region", [
-    { name: "First", carrier: parameter },
-    { name: "Second", carrier: rustSourcePrimitiveTargetType("bool") },
-  ], [{ kind: "type", type: parameter }]);
+  const carrier = rustSourceUnionTargetType("/src/region.ts", "Region", [{ kind: "type", type: parameter }]);
   const firstType = {};
   const secondType = {};
   const first = { declaration, sourceType: {}, carrier, selectedProperties: [], variants: [

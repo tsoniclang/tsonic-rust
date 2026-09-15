@@ -353,7 +353,7 @@ export function applySelectedProjectSourceCall(
       const receiverProjection = selectRustFlowReadProjection(
         rawReceiverCarrier,
         selectedReceiverCarrier,
-        walk.context.projectTypes,
+        walk.context.projectTypes, walk.context.typeDefinitions,
       );
       if (receiverProjection.kind === "incompatible") {
         appendRustDiagnostic(

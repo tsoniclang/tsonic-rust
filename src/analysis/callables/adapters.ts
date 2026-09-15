@@ -9,6 +9,7 @@ import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { isRustCopyCarrier, isRustVecCarrier, rustCallableProtocol, rustCarrierSupportsClone, rustClosureProtocol, rustOptionElementCarrier, rustSourceTypeCarrierValue, rustTargetGenericTypeArguments, substituteRustTargetTypeParameters } from "../../target-model/types/index.js";
 import { selectRustValueCarrierReconciliation } from "../../policy/types/value-carrier-reconciliation.js";
 import { rustContextualValueConversionIsFallible } from "../../target-model/conversions/contextual.js";
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 
 export function sourceCallableParameterAbis(
   input: { readonly ast: AstReader; readonly facts: RustPlanBuilder },
@@ -80,6 +81,7 @@ export function selectRustCallableParameterAdapters(
   contractParameters: readonly RustCallableParameterAbi[],
   implementationParameters: readonly RustCallableParameterAbi[],
   projectTypes: RustProjectTypePolicy,
+  definitions: RustTypeDefinitions,
 ): RustCallableParameterAdapter[] | undefined {
   const adapters: RustCallableParameterAdapter[] = [];
   for (const [implementationIndex, target] of implementationParameters.entries()) {
@@ -96,7 +98,7 @@ export function selectRustCallableParameterAdapters(
         const elementAdapter = selectRustCallableValueAdapter(
           sourceRest.parameterCarrier.element,
           targetElementCarrier,
-          projectTypes,
+          projectTypes, definitions,
         );
         if (elementAdapter === undefined) {
           return undefined;
@@ -114,7 +116,7 @@ export function selectRustCallableParameterAdapters(
         return undefined;
       }
       const elementAdapters = remaining.map((source) =>
-        selectRustCallableValueAdapter(source.valueCarrier, targetElementCarrier, projectTypes));
+        selectRustCallableValueAdapter(source.valueCarrier, targetElementCarrier, projectTypes, definitions));
       if (elementAdapters.some((adapter) => adapter === undefined)) {
         return undefined;
       }
@@ -138,7 +140,7 @@ export function selectRustCallableParameterAdapters(
     const runtimeAdapter = selectRustCallableValueAdapter(
       source.parameterCarrier,
       target.parameterCarrier,
-      projectTypes,
+      projectTypes, definitions,
     );
     if (runtimeAdapter !== undefined &&
       (source.mode === target.mode || source.mode === "mut-ref" && target.mode === "ref")) {
@@ -153,7 +155,7 @@ export function selectRustCallableParameterAdapters(
     }
     if (source.form !== "required" ||
       source.mode !== "value" && !isRustCopyCarrier(source.valueCarrier) &&
-        !rustCarrierSupportsClone(source.valueCarrier)) {
+        !rustCarrierSupportsClone(source.valueCarrier, definitions)) {
       return undefined;
     }
     const targetLogicalCarrier = target.form === "optional"
@@ -161,7 +163,7 @@ export function selectRustCallableParameterAdapters(
       : target.valueCarrier;
     const logicalAdapter = targetLogicalCarrier === undefined
       ? undefined
-      : selectRustCallableValueAdapter(source.valueCarrier, targetLogicalCarrier, projectTypes);
+      : selectRustCallableValueAdapter(source.valueCarrier, targetLogicalCarrier, projectTypes, definitions);
     if (logicalAdapter === undefined) {
       return undefined;
     }
@@ -180,6 +182,7 @@ export function selectRustCallableValueAdapter(
   sourceCarrier: TargetTypeRef,
   targetCarrier: TargetTypeRef,
   projectTypes: RustProjectTypePolicy,
+  definitions: RustTypeDefinitions,
 ): RustCallableValueAdapter | undefined {
   if (rustTargetTypeRefEquals(sourceCarrier, targetCarrier)) {
     return Object.freeze({ kind: "identity", sourceCarrier, targetCarrier });
@@ -187,18 +190,18 @@ export function selectRustCallableValueAdapter(
   const sourceOption = rustOptionElementCarrier(sourceCarrier);
   const targetOption = rustOptionElementCarrier(targetCarrier);
   if (targetOption !== undefined && sourceOption === undefined) {
-    const element = selectRustCallableValueAdapter(sourceCarrier, targetOption, projectTypes);
+    const element = selectRustCallableValueAdapter(sourceCarrier, targetOption, projectTypes, definitions);
     return element === undefined
       ? undefined
       : Object.freeze({ kind: "option-some", sourceCarrier, targetCarrier, element });
   }
   if (sourceOption !== undefined && targetOption !== undefined) {
-    const element = selectRustCallableValueAdapter(sourceOption, targetOption, projectTypes);
+    const element = selectRustCallableValueAdapter(sourceOption, targetOption, projectTypes, definitions);
     return element === undefined
       ? undefined
       : Object.freeze({ kind: "option-map", sourceCarrier, targetCarrier, element });
   }
-  const selected = selectRustValueCarrierReconciliation(sourceCarrier, targetCarrier, projectTypes);
+  const selected = selectRustValueCarrierReconciliation(sourceCarrier, targetCarrier, projectTypes, definitions);
   switch (selected.kind) {
     case "identity":
       return Object.freeze({ kind: "identity", sourceCarrier, targetCarrier });
@@ -218,13 +221,13 @@ export function selectRustCallableValueAdapter(
   }
 }
 
-export function rustCallableValueAdapterIsFallible(adapter: RustCallableValueAdapter): boolean {
+export function rustCallableValueAdapterIsFallible(adapter: RustCallableValueAdapter, definitions: RustTypeDefinitions = emptyRustTypeDefinitions): boolean {
   switch (adapter.kind) {
     case "conversion":
-      return rustContextualValueConversionIsFallible(adapter.conversion);
+      return rustContextualValueConversionIsFallible(adapter.conversion, definitions);
     case "option-some":
     case "option-map":
-      return rustCallableValueAdapterIsFallible(adapter.element);
+      return rustCallableValueAdapterIsFallible(adapter.element, definitions);
     case "identity":
     case "call-scoped-lifetime":
     case "project-upcast":
@@ -234,15 +237,16 @@ export function rustCallableValueAdapterIsFallible(adapter: RustCallableValueAda
 
 export function rustCallableParameterAdapterIsFallible(
   adapter: RustCallableParameterAdapter,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): boolean {
   switch (adapter.kind) {
     case "runtime-value":
     case "logical-value":
-      return rustCallableValueAdapterIsFallible(adapter.adapter);
+      return rustCallableValueAdapterIsFallible(adapter.adapter, definitions);
     case "fixed-rest":
-      return adapter.elementAdapters.some(rustCallableValueAdapterIsFallible);
+      return adapter.elementAdapters.some(element => rustCallableValueAdapterIsFallible(element, definitions));
     case "sequence-rest":
-      return rustCallableValueAdapterIsFallible(adapter.elementAdapter);
+      return rustCallableValueAdapterIsFallible(adapter.elementAdapter, definitions);
     case "omitted":
       return false;
   }

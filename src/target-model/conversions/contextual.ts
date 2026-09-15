@@ -5,6 +5,7 @@ import { rustTargetTypeRefEquals } from "../types/equality.js";
 import { rustCarrierSupportsTrait } from "../types/carriers/traits.js";
 import { rustProviderRecordCopyMatches, type RustProviderRecordCopy } from "./provider-record.js";
 import { rustEmptyRecordConversionMatches, type RustEmptyRecordConversion } from "./empty-record.js";
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../types/source-union-definitions.js";
 
 export type RustContextualValueConversion =
   | RustValueConversion
@@ -25,12 +26,13 @@ export function rustCompilerOwnedContextualConversionMatches(
   sourceCarrier: TargetTypeRef,
   targetCarrier: TargetTypeRef,
   conversion: RustContextualValueConversion,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): boolean {
   if (conversion.kind === "empty-record") {
     return rustEmptyRecordConversionMatches(conversion, sourceCarrier, targetCarrier);
   }
   if (conversion.kind === "provider-record-copy") {
-    return rustProviderRecordCopyMatches(conversion, sourceCarrier, targetCarrier);
+    return rustProviderRecordCopyMatches(conversion, sourceCarrier, targetCarrier, definitions);
   }
   if (conversion.kind === "native-trait-object-upcast") {
     const traits = [conversion.target.principal, ...conversion.target.autoTraits];
@@ -39,7 +41,7 @@ export function rustCompilerOwnedContextualConversionMatches(
       traits.every((trait) => trait.lifetimeBinder === undefined &&
         trait.genericArguments.length === 0 &&
         trait.associatedConstraints.length === 0 &&
-        rustCarrierSupportsTrait(conversion.source, trait.path));
+        rustCarrierSupportsTrait(conversion.source, trait.path, undefined, undefined, definitions));
   }
   if (conversion.kind === "reference-reborrow") {
     return rustTargetTypeRefEquals(conversion.source, sourceCarrier) &&
@@ -51,11 +53,12 @@ export function rustCompilerOwnedContextualConversionMatches(
 
 export function rustContextualValueConversionIsFallible(
   conversion: RustContextualValueConversion | undefined,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): boolean {
   return conversion !== undefined &&
     conversion.kind !== "native-trait-object-upcast" &&
     conversion.kind !== "reference-reborrow" &&
     conversion.kind !== "provider-record-copy" &&
     conversion.kind !== "empty-record" &&
-    rustValueConversionIsFallible(conversion);
+    rustValueConversionIsFallible(conversion, definitions);
 }
