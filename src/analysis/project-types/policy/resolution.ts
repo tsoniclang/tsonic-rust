@@ -709,6 +709,23 @@ export function createRustProjectTypePolicy(
       "The project member implementation was not classified before the Rust target program was sealed.",
   });
   const frozenIssues = Object.freeze(issues);
+  const reachableDefinitionsByRoot = new WeakMap<RustProjectTypeDefinition, readonly RustProjectTypeDefinition[]>();
+  const reachableDefinitions = (root: RustProjectTypeDefinition): readonly RustProjectTypeDefinition[] => {
+    const cached = reachableDefinitionsByRoot.get(root);
+    if (cached !== undefined) return cached;
+    const reachable = new Set<RustProjectTypeDefinition>();
+    const pending = [root];
+    while (pending.length > 0) {
+      const definition = pending.pop()!;
+      if (reachable.has(definition)) continue;
+      reachable.add(definition);
+      for (const edge of heritageByDeclaration.get(definition.declaration) ?? []) pending.push(edge.target);
+    }
+    const result = Object.freeze([...reachable].sort((left, right) =>
+      definitionOrder.get(left)! - definitionOrder.get(right)!));
+    reachableDefinitionsByRoot.set(root, result);
+    return result;
+  };
   const policy: RustProjectTypePolicy = {
     definitions: frozenDefinitions,
     issues: frozenIssues,
@@ -749,7 +766,9 @@ export function createRustProjectTypePolicy(
       if (carriers.length < 2) {
         return undefined;
       }
-      const common = frozenDefinitions.flatMap((definition) => {
+      const firstDefinition = definitionForCarrier(carriers[0]);
+      if (firstDefinition === undefined) return undefined;
+      const common = reachableDefinitions(firstDefinition).flatMap((definition) => {
         const relationships = carriers.map((carrier) => relationship(carrier, definition));
         if (relationships.some((selected) => selected.kind !== "related")) {
           return [];
