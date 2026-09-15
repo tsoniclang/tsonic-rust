@@ -51,12 +51,42 @@ test("unproved local class evaluation and capture contracts fail before publicat
     `export function create(): boolean { class Entry {} return new Entry() instanceof Entry; }`,
     `export function create(): number { class Entry { static make(): number { return 1; } } const make = Entry.make; return make(); }`,
     `export function create(value: number): number { class Entry { static make(): number { return value; } } return Entry.make(); }`,
+    `class Base {} function selectBase(): typeof Base { return Base; } export function create(): void { class Entry extends selectBase() {} new Entry(); }`,
+    `class Base {} function effect(): void {} export function create(): void { class Entry extends (effect(), Base) {} new Entry(); }`,
   ]) {
     const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": source } });
     assert.ok(result.diagnostics.some(diagnostic => diagnostic.code === "RUST_LOCAL_CLASS_NOT_CLOSED"),
       JSON.stringify(result.diagnostics));
     assert.equal(result.artifacts.length, 0);
   }
+});
+
+test("local class factories retain fixed generic bases and other closed local class dependencies", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: ["js"], packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "local_inherited_factories" } },
+    files: { "index.ts": `
+import { check } from "@acme/testing";
+abstract class Holder<T> { abstract read(): T; }
+function create(value: number): number {
+  class Item {
+    value: number;
+    constructor(value: number) { this.value = value; }
+    static from(value: number): Item { return new Item(value); }
+  }
+  class LocalHolder extends Holder<Item> {
+    item: Item;
+    constructor(item: Item) { super(); this.item = item; }
+    static build(value: number): LocalHolder { return new LocalHolder(Item.from(value)); }
+    read(): Item { return this.item; }
+  }
+  const holder = LocalHolder.build(value);
+  return holder.read().value;
+}
+export function main(): void { check(create(7) === 7 && create(9) === 9); }
+` },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  assert.equal(validateGeneratedProject("local-inherited-factories", result.artifacts, { run: true }).status, 0);
 });
 
 test("local class static factories and implements clauses retain exact storage", { timeout: 300_000 }, () => {

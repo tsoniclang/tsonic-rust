@@ -14,7 +14,21 @@ export function rustLocalClassIssue(
     return { node: declaration, message: "Local class has no exact non-conflicting enclosing generic parameter contract." };
   }
   if (ast.extendsHeritageElements(declaration).length !== 0) {
-    return { node: declaration, message: "Local class heritage requires a per-evaluation constructor contract." };
+    const heritage = navigation.declaredHeritage(declaration);
+    if (heritage.kind !== "resolved" || heritage.edges.filter(edge => edge.kind === "extends").some(edge => {
+      let expression = ast.is.IsExpressionWithTypeArguments(edge.heritage)
+        ? ast.as.AsExpressionWithTypeArguments(edge.heritage)?.Expression
+        : edge.heritage;
+      while (expression !== undefined && ast.kindName(expression) === "KindParenthesizedExpression") {
+        expression = Node_Expression(ast, expression);
+      }
+      return expression === undefined ||
+        (ast.kindName(expression) !== "KindIdentifier" && ast.kindName(expression) !== "KindPropertyAccessExpression") ||
+        ast.kindName(edge.target.declaration) !== "KindClassDeclaration" ||
+        ast.parent(edge.target.declaration) !== ast.getSourceFile(edge.target.declaration);
+    })) {
+      return { node: declaration, message: "Local class heritage requires a directly selected module class without per-evaluation base effects." };
+    }
   }
   for (const member of ast.members(declaration)) {
     if (member === undefined) return { node: declaration, message: "Local class has an absent member." };
@@ -53,7 +67,8 @@ export function rustLocalClassIssue(
     if (ast.kindName(node) === "KindIdentifier") {
       const selected = navigation.sourceReferenceFor(node)?.declaration;
       if (selected !== undefined && genericParameters.some(parameter => parameter.declaration === selected)) return;
-      if (selected !== undefined && (ast.kindName(selected) === "KindTypeAliasDeclaration" ||
+      if (selected !== undefined && (ast.kindName(selected) === "KindClassDeclaration" ||
+        ast.kindName(selected) === "KindTypeAliasDeclaration" ||
         ast.kindName(selected) === "KindInterfaceDeclaration")) return;
       const memberOwner = selected === undefined ? undefined : sourceMemberOwner(ast, selected);
       if (memberOwner !== undefined && (ast.kindName(memberOwner) === "KindClassDeclaration" ||
