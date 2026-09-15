@@ -41,6 +41,7 @@ import type { RustExpr } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustSelectedTargetSignature as SelectedTargetSignatureFact, TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
+import { rustTypeFamilyNormalizer } from "../../../../policy/types/type-family-normalization.js";
 
 export function shapeRustSourceCallParameters(
   argumentNodes: readonly Node[],
@@ -214,6 +215,7 @@ export function planRustSelectedSourceCallArguments(
       fact,
       selected,
       sourceCallFinalizedResultCarrier(selected, context),
+      rustTypeFamilyNormalizer(context.input.program.typeFamilies),
     )) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, call),
@@ -408,6 +410,7 @@ export function sourceCallSelectedMemberMatches(
   fact: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>,
   selected: SelectedTargetSignatureFact,
   declaredResultCarrier: TargetTypeRef | undefined,
+  normalize: (carrier: TargetTypeRef) => TargetTypeRef,
 ): boolean {
   const member = selected.member;
   const sourceArguments = selected.sourceSelectedMethodTypeArguments ?? [];
@@ -450,6 +453,7 @@ export function sourceCallSelectedMemberMatches(
         substitutions.types,
         substitutions.lifetimes,
         substitutions.consts,
+        normalize,
       );
   const identityMatches = member.id === fact.operationId &&
     member.kind === expectedKind &&
@@ -482,6 +486,7 @@ export function sourceCallSelectedMemberMatches(
           substitutions.types,
           substitutions.lifetimes,
           substitutions.consts,
+          normalize,
         ),
         fact.parameters[index]?.parameterCarrier,
       ) && mode === fact.parameters[index]?.mode;

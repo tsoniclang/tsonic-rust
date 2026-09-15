@@ -55,6 +55,7 @@ export function createRustSourceTypeRegistry(
   const variantsByDeclaration = new Map<Node, readonly RustSourceEnumVariant[]>();
   const structuralObjectsByType = new WeakMap<Type, RustSourceObjectShape[]>();
   const structuralObjects: RustSourceObjectShape[] = [];
+  const structuralInstantiations: RustStructuralInstantiation[] = [];
   const structuralFieldsBySymbol = new WeakMap<Symbol, RustStructuralFieldRegistration[]>();
   const structuralFieldsByDeclaration = new WeakMap<Node, RustStructuralFieldRegistration[]>();
   const structuralFieldImplementations: RustStructuralFieldImplementation[] = [];
@@ -215,12 +216,22 @@ export function createRustSourceTypeRegistry(
         ? undefined
         : variantsByDeclaration.get(declaration)?.find((variant) => variant.literal === literal);
     },
-    registerStructuralObject(shape) {
+    registerStructuralObject(shape, template) {
       const normalized = freezeSourceObjectShape(shape);
+      const templateShape = template === undefined ? undefined : structuralObjects.find(candidate =>
+        rustTargetTypeRefEquals(candidate.carrier, template));
+      if (template !== undefined && templateShape === undefined) return false;
+      const retainInstantiation = (): void => {
+        if (templateShape === undefined || rustTargetTypeRefEquals(templateShape.carrier, normalized.carrier) ||
+          structuralInstantiations.some(entry => rustTargetTypeRefEquals(entry.template, templateShape.carrier) &&
+            rustTargetTypeRefEquals(entry.instance, normalized.carrier))) return;
+        structuralInstantiations.push(Object.freeze({ template: templateShape.carrier, instance: normalized.carrier }));
+      };
       const existingForType = structuralObjectsByType.get(shape.sourceType) ?? [];
       if (existingForType.some((existing) =>
         sourceObjectShapeEquals(existing, normalized)
       )) {
+        retainInstantiation();
         return true;
       }
       const sameCarrier = existingForType.filter((existing) =>
@@ -261,6 +272,7 @@ export function createRustSourceTypeRegistry(
       }
       structuralObjectsByType.set(shape.sourceType, [...existingForType, normalized]);
       structuralObjects.push(normalized);
+      retainInstantiation();
       for (const [symbol, declarationsForSymbol] of pendingDeclarationsBySymbol) {
         selectedDeclarationsBySymbol.set(symbol, declarationsForSymbol);
       }
@@ -419,7 +431,7 @@ export function createRustSourceTypeRegistry(
         : union;
     },
     structuralInstantiations() {
-      const result: RustStructuralInstantiation[] = [];
+      const result: RustStructuralInstantiation[] = [...structuralInstantiations];
       for (const union of sourceUnionsByKey.values()) {
         if (union.declaration === undefined) continue;
         const template = sourceUnionsByDeclaration.get(union.declaration);

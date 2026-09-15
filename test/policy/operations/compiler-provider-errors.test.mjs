@@ -68,6 +68,8 @@ export function main(): void {
   check(error === alias && error !== new Error("native"));
   check(error instanceof Error);
   check(error.name === "Error" && error.message === "native");
+  const stored = error.message;
+  check(stored === "native");
 }
 ` },
   });
@@ -76,6 +78,7 @@ export function main(): void {
   assert.match(source, /JsError::has_same_identity/u);
   assert.match(source, /JsError::has_distinct_identity/u);
   assert.doesNotMatch(source, /JsValue|\.error_value\(/u);
+  assert.doesNotMatch(source, /\.message\(\)\.to_owned\(\)\s*==/u);
   assert.equal(validateGeneratedProject("native-error-values", result.artifacts, { run: true }).status, 0);
 });
 
@@ -122,8 +125,8 @@ export function main(): void {
   const first = read(alias);
   check(first !== undefined);
   if (first !== undefined) {
-    check(first.startsWith("Error: failure 😀\\n"));
-    check(first.length > "Error: failure 😀\\n".length);
+    check(first !== "");
+    ${surfaces.length === 0 ? "" : 'check(first.startsWith("Error: failure 😀\\n")); check(first.length > "Error: failure 😀\\n".length);'}
   }
   check(read(error) === first);
   check(error === alias);

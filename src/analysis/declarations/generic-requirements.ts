@@ -1,11 +1,13 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import { rustGenericNumericOperandsKey } from "../facts/generic-numeric.js";
 import { classifyCarrierRequirements } from "./generic-carrier-requirements.js";
+import { isRustDeclarationPathUse } from "./generic-reference-uses.js";
 import { createRustAssociatedRequirementCollector, type RustAssociatedTypeRequirement } from "./associated-requirements.js";
 import type { RustSourceTypeFamilyRegistry } from "../../policy/types/type-families.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
 import { substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
+import { rustJsArrayEntriesElementTargetType } from "../../target-model/types/carriers/array-entries.js";
 import { rustTargetTypeParameterNames } from "../../target-model/types/carriers/generic-references.js";
 import { analyzeRustShapeGenericRequirements, type RustShapeGenericRequirementContract } from "./generic-shape-requirements.js";
 import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";
@@ -418,7 +420,15 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
             if (argument?.kind !== parameter.kind) return "A source type family use lost a class generic parameter kind.";
             if (parameter.kind === "type" && argument.kind === "type") substitutions.set(parameter.targetName, argument.type);
           }
-          for (const requirement of input.contractFor(definition.declaration)?.associatedTypes ?? []) {
+          const contract = input.contractFor(definition.declaration);
+          for (const parameter of contract?.typeParameters ?? []) {
+            if (parameter.requirements.length === 0) continue;
+            const argument = substitutions.get(parameter.name);
+            if (argument === undefined) return "A generic class use lost its required type argument.";
+            const error = addUse(node, argument, parameter.requirements);
+            if (error !== undefined) return error;
+          }
+          for (const requirement of contract?.associatedTypes ?? []) {
             const instantiated = substituteRustTargetTypeParameters(requirement.carrier, substitutions);
             if (!associated.collect(instantiated)) return "A generic class argument does not satisfy its dependent type contract.";
             const error = addUse(node, instantiated, requirement.requirements);
@@ -433,7 +443,7 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       return undefined;
     };
     const carrier = facts.getRuntimeCarrierFact(node)?.carrier;
-    if (carrier !== undefined) {
+    if (carrier !== undefined && !isRustDeclarationPathUse(node, ast, facts)) {
       const error = collectType(carrier);
       if (error !== undefined) return error;
       if (ast.kindName(node) === "KindPropertyDeclaration" && carrier.kind === "associated-type") {
@@ -476,6 +486,16 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       }
     }
     const operation = facts.getFact(node, rustTargetOperationFactKey);
+    if (operation?.kind === "iteration" && operation.iterationKind !== "for-in") {
+      const iterable = Node_Expression(ast, node);
+      const iterableCarrier = iterable === undefined ? undefined : facts.getRuntimeCarrierFact(iterable)?.carrier;
+      if (operation.lowering.kind === "js-array" ||
+        operation.lowering.kind === "borrowed" && operation.lowering.style === "cloned" ||
+        operation.lowering.kind === "receiver-method" && rustJsArrayEntriesElementTargetType(iterableCarrier) !== undefined) {
+        const error = addUse(node, operation.elementCarrier, ["clone"]);
+        if (error !== undefined) return error;
+      }
+    }
     for (const operand of facts.getFact(node, rustGenericNumericOperandsKey) ?? []) {
       const error = addUse(node, operand, ["source-numeric"]);
       if (error !== undefined) return error;

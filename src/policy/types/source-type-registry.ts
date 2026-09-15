@@ -80,7 +80,7 @@ export interface RustSourceTypeRegistry {
   propertyKeysForCarrier(carrier: TargetTypeRef, ast: AstReader): readonly string[] | undefined;
   enumVariantsForDeclaration(declaration: Node): readonly RustSourceEnumVariant[] | undefined;
   enumVariantForLiteral(carrier: TargetTypeRef, literal: string): RustSourceEnumVariant | undefined;
-  registerStructuralObject(shape: RustSourceObjectShape): boolean;
+  registerStructuralObject(shape: RustSourceObjectShape, template?: TargetTypeRef): boolean;
   registerStructuralFieldImplementation(
     implementation: RustStructuralFieldImplementation,
   ): boolean;

@@ -1,11 +1,21 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustGenericRequirement } from "../../../analysis/declarations/generic-requirements.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { rustCarrierSupportsClone } from "../../../target-model/types/index.js";
 import { unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 
 export type { RustGenericRequirement } from "../../../analysis/declarations/generic-requirements.js";
+
+export function rustCarrierHasCloneContract(
+  carrier: TargetTypeRef | undefined,
+  context: RustPlanContext,
+): boolean {
+  return carrier !== undefined && (rustCarrierSupportsClone(carrier) ||
+    context.callableDeclaration !== undefined &&
+    context.input.program.declarationGenericRequirements.supportsClone(context.callableDeclaration, carrier));
+}
 
 export function requireRustLocationValueCarrier(
   carrier: TargetTypeRef,

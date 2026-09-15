@@ -403,6 +403,7 @@ const rustJsStrictEqualityTargetIds: ReadonlySet<string> = new Set([
 ]);
 
 const rustUnconditionallyCloneTargetIds: ReadonlySet<string> = new Set([
+  rustJsArrayEntriesTargetId,
   rustJsStringNumberTargetId,
   rustJsNumericTargetId,
   rustEmptyObjectTargetId,

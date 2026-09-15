@@ -12,6 +12,22 @@ export interface ContainerStored<S> { readonly [containerKey]: S; }
 export type ContainerStorage<T> = T extends ContainerStored<infer S> ? S : T;
 `;
 
+test("metadata declarations cannot hide executable symbol or interface-member reads", () => {
+  for (const executable of [
+    "export function read(): unknown { return storageKey; }",
+    "export function read(value: Stored<number>): number { return value[storageKey]; }",
+  ]) {
+    const { result } = compileRust({
+      surfaces: ["js"],
+      files: { "index.ts": `${storageDeclarations}
+        export function select<T>(value: Storage<T>): Storage<T> { return value; }
+        ${executable}` },
+    });
+    assert.notEqual(result.diagnostics.length, 0);
+    assert.deepEqual(result.artifacts, []);
+  }
+});
+
 test("generic storage families preserve scalar widths and record aliasing across files", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     surfaces: ["js"], packages: [acmeTestingPackage()],

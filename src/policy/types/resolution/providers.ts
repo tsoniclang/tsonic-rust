@@ -355,10 +355,10 @@ export function resolveSourceProfileCarrier(
   if (regExpResultCarrier !== undefined) {
     return regExpResultCarrier();
   }
-  if (!context.currentSemantics.types.isTypeReference(type)) {
+  const arguments_ = context.currentSemantics.types.effectiveTypeArguments(type);
+  if (arguments_ === undefined) {
     return undefined;
   }
-  const arguments_ = context.currentSemantics.types.typeArguments(type);
   const targetArguments = arguments_.map((argument) => resolveRustTargetType(argument, context, options, resolving));
   if (options.jsEnabled && name === regExpIdentity.owners.regExpStringIterator) {
     const [element] = targetArguments;

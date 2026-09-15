@@ -27,4 +27,5 @@ export interface RustSourceTypeFamilyRegistry {
 export interface RustSourceTypeFamilyPlan {
   readonly families: readonly RustSourceTypeFamily[];
   readonly implementations: readonly RustSourceTypeFamilyImplementation[];
+  implementation(identity: string, owner: TargetTypeRef): RustSourceTypeFamilyImplementation | undefined;
 }

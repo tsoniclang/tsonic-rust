@@ -22,7 +22,7 @@ import {
   rustGeneratorFactKey,
 } from "../facts/keys.js";
 import { appendMalformedSourceAst } from "../declarations/project-types.js";
-import { appendRustDiagnostic } from "../program/walk.js";
+import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { recordBindingWrite, resolveParameterAbi, validateFlowMarkerAgainstMode } from "../declarations/types-and-bindings.js";
 import { selectRustFlowReadProjection } from "../../policy/types/value-carrier-reconciliation.js";
@@ -36,6 +36,7 @@ import { rustTypeFamilyNormalizer } from "../../policy/types/type-family-normali
 import { realizeRustSelectedTypeFamilies } from "./type-family-applications.js";
 import { finalizeProjectSourceGenericArguments } from "./project-call-generics.js";
 import { instantiateRustSourceParameterValueCarrier } from "../../policy/ownership/source-callable-abi.js";
+import { retainRustStructuralInstantiation } from "../../policy/types/resolution/structural-instantiations.js";
 import { sourceTypeCarrierForDeclaration } from "./inputs.js";
 import { rustSpreadElementCarrier } from "../../target-model/operations/rest-assembly.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
@@ -143,7 +144,12 @@ export function applySelectedProjectSourceCall(
         return undefined;
       }
     }
-    const valueCarrier = instantiateRustSourceParameterValueCarrier(parameterAbi, parameterCarrier);
+    const valueCarrier = instantiateRustSourceParameterValueCarrier(
+      parameterAbi,
+      parameterCarrier,
+      substitutions,
+      normalizeTypeFamily,
+    );
     if (valueCarrier === undefined) {
       appendRustDiagnostic(
         walk,
@@ -212,6 +218,14 @@ export function applySelectedProjectSourceCall(
         normalizeTypeFamily,
       );
   if (resultCarrier === undefined) {
+    return undefined;
+  }
+  if (declaredResultCarrier !== undefined && selectedSignature.sourceReturnType !== undefined &&
+    !retainRustStructuralInstantiation(selectedSignature.sourceReturnType, declaredResultCarrier,
+      resultCarrier, rustResolutionContext(walk, expression), walk.operationOptions)) {
+    appendRustDiagnostic(walk, "RUST_SOURCE_CALL_RESULT_STORAGE_MISSING",
+      "The selected source return type has no exact instantiated structural storage correspondence.", expression,
+      ["target.capability=rust.source-call.result-storage"]);
     return undefined;
   }
   const declarationKind = ast.kindName(selectedDeclaration);

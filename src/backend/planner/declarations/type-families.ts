@@ -7,6 +7,7 @@ import { missingFactDiagnostic } from "../diagnostics.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustProjectGenerics } from "../objects/polymorphism/names.js";
 import { rustTargetGenericReferences } from "../../../target-model/types/carriers/generic-references.js";
+import { rustAuthoredDeadCodeDisposition } from "../liveness/directives.js";
 
 export function planRustTypeFamilyDeclaration(
   declaration: Node,
@@ -16,8 +17,10 @@ export function planRustTypeFamilyDeclaration(
   if (family === undefined) return undefined;
   const name = context.input.program.names.nameForDeclaration(declaration);
   if (name === undefined) throw new Error("A sealed source type family has no target name.");
+  const deadCode = rustAuthoredDeadCodeDisposition(context, declaration);
   return [{
     kind: "trait", visibility: "public", name, generics: emptyRustGenerics,
+    ...(deadCode === undefined ? {} : { deadCode }),
     associatedTypes: [{ name: "Output", bounds: [] }], functions: [],
   }];
 }

@@ -164,6 +164,7 @@ export function createRustArrayDensityQuery(
         }
         if (ast.kindName(parent) === "KindElementAccessExpression" && Node_Expression(ast, parent) === reference &&
           use.role !== "write") continue;
+        if (ast.kindName(parent) === "KindForOfStatement" && Node_Expression(ast, parent) === reference) continue;
         if (use.role === "comparison" || use.role === "condition") continue;
         return false;
       }

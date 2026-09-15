@@ -3,6 +3,7 @@ import { Node_Initializer } from "@tsonic/target-api/source";
 import type { RustTargetProgram } from "../../../analysis/program/model.js";
 import { rustTypeAliasDeclarationFactKey } from "../../../analysis/facts/keys.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { rustTypeOnlyDeclarationFactKey } from "../../../analysis/facts/type-only.js";
 import {
   analyzeRustGeneratedItemUsage,
 } from "./generated-item-usage.js";
@@ -219,6 +220,7 @@ function declarationParticipatesInRustLiveness(
   declaration: Node,
   program: RustTargetProgram,
 ): boolean {
+  if (program.facts.getFact(declaration, rustTypeOnlyDeclarationFactKey) !== undefined) return false;
   return program.source.ast.kindName(declaration) !== "KindTypeAliasDeclaration" ||
     program.facts.getFact(declaration, rustTypeAliasDeclarationFactKey)?.kind !== "erased";
 }

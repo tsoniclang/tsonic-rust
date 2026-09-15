@@ -10,6 +10,7 @@ import { rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
 import type { RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 
 export type RustTypeAliasDeclarationFact =
+  | { readonly kind: "family" }
   | {
       readonly kind: "string-literal";
       readonly variants: readonly {

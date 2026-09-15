@@ -9,6 +9,7 @@ import {
   Node_Initializer,
   Node_Name,
   Node_Type,
+  sourceNodeIdentity,
 } from "@tsonic/target-api/source";
 import {
   rustMutatedBindingFactKey,
@@ -79,9 +80,14 @@ export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
         : resolveRustTypeFamilyApplication(application, carriers as readonly TargetTypeRef[],
           rustResolutionContext(walk, declaration), walk.operationOptions, new Set());
       if (carrier !== undefined) {
+        const root = application.conditionalSteps[0];
+        const identity = root === undefined ? undefined : sourceNodeIdentity(ast, root.conditional);
+        const family = identity === undefined ? undefined : walk.context.typeFamilies.get(identity);
+        if (family === undefined) return;
         setCarrierFact(walk, declaration, carrier);
         walk.context.facts.set(declaration, rustTypeAliasDeclarationFactKey,
-          { kind: "erased" }, [{ message: "Rust checked conditional type family declaration" }]);
+          { kind: family.declaration === declaration ? "family" : "erased" },
+          [{ message: "Rust checked conditional type family declaration ownership" }]);
       }
       return;
     }

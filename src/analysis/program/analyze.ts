@@ -37,6 +37,7 @@ import { rustSourceTypeDeclarations } from "../../policy/types/source-declaratio
 import { realizeRustSourceTypeFamilyDemands } from "../project-types/type-family-demands.js";
 import { rustTypeFamilyNormalizer } from "../../policy/types/type-family-normalization.js";
 import { createRustArrayDensityQuery } from "../control-flow/array-density.js";
+import { recordRustTypeOnlyDeclarations } from "../declarations/type-only.js";
 
 export function analyzeRustProgram(context: RustAnalysisContext): void {
   const { ast } = context;
@@ -340,6 +341,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     );
   }
   realizeRustSourceTypeFamilyDemands(walk, projectSourceFiles);
+  recordRustTypeOnlyDeclarations(walk, projectSourceFiles);
   const structuralObjects = sourceTypes.structuralObjects();
   const sourcePackageComponentByFile = new Map(context.sourcePackages.packages.flatMap((entry) =>
     entry.sourceFiles.map((fileName) => [fileName, entry.componentId] as const)));

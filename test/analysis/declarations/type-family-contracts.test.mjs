@@ -9,6 +9,8 @@ import { rustSourceTypeCarrier } from "../../../dist/target-model/types/carriers
 import { mapRustTargetTypes, substituteRustTargetGenerics } from "../../../dist/target-model/types/carriers/substitution.js";
 import { rustTypeFamilyNormalizer } from "../../../dist/policy/types/type-family-normalization.js";
 import { rustTypeFromCarrier } from "../../../dist/backend/planner/types/render.js";
+import { selectRustFlowReadProjection } from "../../../dist/policy/types/value-carrier-reconciliation.js";
+import { rustOptionTargetType } from "../../../dist/target-model/types/index.js";
 
 const signed = { kind: "source-primitive", name: "int32" };
 const unsigned = { kind: "source-primitive", name: "uint32" };
@@ -20,6 +22,15 @@ const family = {
     genericArguments: [], associatedConstraints: [] },
 };
 const projection = { kind: "associated-type", owner: parameter, trait: family.trait, name: "Output" };
+
+test("source family optional reads retain a later Clone obligation without admitting native unknown associated types", () => {
+  const selected = selectRustFlowReadProjection(rustOptionTargetType(projection), projection, {});
+  assert.equal(selected.kind, "projection");
+  assert.equal(selected.fact.kind, "option-value");
+  assert.deepEqual(selected.fact.selectedCarrier, projection);
+  const native = { ...projection, trait: { ...family.trait, sourceItem: undefined } };
+  assert.equal(selectRustFlowReadProjection(rustOptionTargetType(native), native, {}).kind, "incompatible");
+});
 
 test("dependent type families retain exact identity and reject conflicting output revisions", () => {
   const registry = createRustSourceTypeFamilyRegistry();
@@ -41,6 +52,8 @@ test("type family publication snapshots target carriers and prohibits late write
   mutable.name = "uint32";
   const sealed = registry.seal();
   assert.equal(sealed.implementations[0].output.name, "int32");
+  assert.deepEqual(sealed.implementation(family.trait.id, signed).output, signed);
+  assert.equal(sealed.implementation(family.trait.id, unsigned), undefined);
   assert.equal(Object.isFrozen(sealed.implementations[0].output), true);
   assert.throws(() => registry.register(family), /already sealed/u);
   assert.throws(() => registry.registerImplementation(sealed.implementations[0]), /already sealed/u);

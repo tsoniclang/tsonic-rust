@@ -1,6 +1,7 @@
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
 import type { RustObjectRepresentation } from "../../../../analysis/project-types/object-representation.js";
+import { rustGenericsWithAssociatedBounds } from "../../types/generic-bounds.js";
 import {
   rustSourceTypeCarrierValue,
 } from "../../../../target-model/types/index.js";
@@ -79,10 +80,8 @@ function rustProjectGenericsWithTypeOutlives(
           name: parameter.targetName,
           bounds: boundsFor(parameter),
         });
-  return Object.freeze({
-    parameters: Object.freeze(parameters),
-    wherePredicates: rustDeclarationAssociatedPredicates(definition.declaration, context),
-  });
+  return rustGenericsWithAssociatedBounds(parameters,
+    rustDeclarationAssociatedPredicates(definition.declaration, context));
 }
 
 

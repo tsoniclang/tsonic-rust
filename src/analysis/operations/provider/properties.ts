@@ -732,7 +732,7 @@ function selectProjectSourceAccessor(
       "Selected getter and setter declarations disagree on static ownership.",
     );
   }
-  const readCarrier = readDeclaration === undefined
+  const declaredReadCarrier = readDeclaration === undefined
     ? undefined
     : context.facts.get(readDeclaration, rustSourceCallableReturnFactKey)?.returnCarrier ??
       resolveRustTargetTypeRef(Node_Type(context.ast, readDeclaration), context, options) ??
@@ -744,7 +744,7 @@ function selectProjectSourceAccessor(
       isDenseDataArray(writeParameters) && writeParameters.length === 1
     ? writeParameters[0]
     : undefined;
-  const writeCarrier = writeDeclaration === undefined || writeParameter === undefined
+  const declaredWriteCarrier = writeDeclaration === undefined || writeParameter === undefined
     ? undefined
     : options.sourceCallableAbi.resolveParameterAbi(
         writeParameter,
@@ -753,6 +753,17 @@ function selectProjectSourceAccessor(
       )?.valueCarrier ??
       resolveRustTargetTypeRef(Node_Type(context.ast, writeParameter), context, options) ??
       resolveRustTargetTypeRef(request.sourceWriteType, context, options);
+  const instantiate = (declaration: Node | undefined, carrier: TargetTypeRef | undefined): TargetTypeRef | undefined =>
+    declaration === undefined || carrier === undefined
+      ? undefined
+      : staticAccess ? carrier
+        : selectedReceiverCarrier === undefined ? undefined
+          : instantiateRustSelectedMemberCarrier(
+              declaration, selectedReceiverCarrier, request.sourceReceiverType,
+              carrier, context, options,
+            );
+  const readCarrier = instantiate(readDeclaration, declaredReadCarrier);
+  const writeCarrier = instantiate(writeDeclaration, declaredWriteCarrier);
   if ((needsRead && readCarrier === undefined) ||
     (needsWrite && writeCarrier === undefined)) {
     return rejectSelectedOperation(

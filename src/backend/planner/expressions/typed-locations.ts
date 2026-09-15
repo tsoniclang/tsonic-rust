@@ -25,7 +25,6 @@ import {
 import {
   isRustCopyCarrier,
   rustLocationTargetType,
-  rustCarrierSupportsClone,
 } from "../../../target-model/types/index.js";
 import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
@@ -41,7 +40,7 @@ import {
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustProjectObjectRepresentation } from "../objects/project-storage.js";
 import { rustModuleCellAccess } from "../project/module-storage.js";
-import { requireRustCarrierRequirements, requireRustLocationValueCarrier } from "../types/generic-requirements.js";
+import { requireRustCarrierRequirements, requireRustLocationValueCarrier, rustCarrierHasCloneContract } from "../types/generic-requirements.js";
 import {
   readRustProjectDispatchedField,
   writeRustProjectDispatchedField,
@@ -275,8 +274,7 @@ export function planRustMutableProjectReceiver(
 
 function rustReadRequiresClone(carrier: TargetTypeRef | undefined, context: RustPlanContext): boolean {
   return carrier !== undefined && !isRustCopyCarrier(carrier) &&
-    (rustCarrierSupportsClone(carrier) || context.callableDeclaration !== undefined &&
-      context.input.program.declarationGenericRequirements.supportsClone(context.callableDeclaration, carrier));
+    rustCarrierHasCloneContract(carrier, context);
 }
 
 export function rustLocationStorageForReference(

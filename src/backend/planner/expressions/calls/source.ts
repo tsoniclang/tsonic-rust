@@ -46,6 +46,7 @@ import type { RustCallGenericArgument, RustExpr } from "../../../target-ast/node
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
 import { planRustUnionMethodCall } from "./union-methods.js";
+import { rustTypeFamilyNormalizer } from "../../../../policy/types/type-family-normalization.js";
 
 export function sourceCallEffectsMatch(
   fact: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>,
@@ -86,6 +87,7 @@ export function planSelectedSourceCall(
     fact,
     selected,
     sourceCallFinalizedResultCarrier(selected, context),
+    rustTypeFamilyNormalizer(context.input.program.typeFamilies),
   );
   if (!selectedMatches) {
     context.diagnostics.push(missingFactDiagnostic(

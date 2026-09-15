@@ -40,6 +40,12 @@ export function createRustSourceTypeFamilyRegistry(): RustSourceTypeFamilyRegist
     return bindings === undefined ? undefined : Object.freeze({ ...template, owner,
       output: substituteRustTargetTypeParameters(template.output, bindings) });
   };
+  const implementation = (identity: string, owner: TargetTypeRef): RustSourceTypeFamilyImplementation | undefined => {
+    const exact = implementations.get(key(identity, owner));
+    if (exact !== undefined) return exact;
+    const template = buckets.get(bucketKey(identity, owner))?.template;
+    return template === undefined ? undefined : instantiate(template, owner);
+  };
   return Object.freeze({
     register(family: RustSourceTypeFamily) {
       assertWritable();
@@ -95,18 +101,14 @@ export function createRustSourceTypeFamilyRegistry(): RustSourceTypeFamilyRegist
       implementations.set(identity, snapshot);
       return true;
     },
-    implementation(identity: string, owner: TargetTypeRef) {
-      const exact = implementations.get(key(identity, owner));
-      if (exact !== undefined) return exact;
-      const template = buckets.get(bucketKey(identity, owner))?.template;
-      return template === undefined ? undefined : instantiate(template, owner);
-    },
+    implementation,
     implementations() { return Object.freeze([...implementations.values()]); },
     seal() {
       sealed = true;
       return Object.freeze({
         families: Object.freeze([...families.values()]),
         implementations: Object.freeze([...implementations.values()]),
+        implementation,
       });
     },
   });

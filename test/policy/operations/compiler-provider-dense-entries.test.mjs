@@ -72,6 +72,7 @@ for (const mutation of [
   "alias.length = 4;",
   "alias[5] = 1;",
   "values.forEach((_value, _index, receiver) => { receiver.length = 4; });",
+  "for (const value of values) { if (value > 0) alias.length = 4; }",
   "escape(values);",
 ]) {
   test(`entries do not assert density after ${mutation}`, () => {

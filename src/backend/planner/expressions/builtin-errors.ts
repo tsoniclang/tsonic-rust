@@ -91,15 +91,16 @@ export function planRustBuiltinErrorProperty(
       args: [],
     };
   }
-  return {
+  const read: RustExpr = {
     kind: "method-call",
-    receiver: {
-      kind: "method-call",
-      receiver: planRustNonConsumingValue(receiverNode, receiver, context),
-      method: fact.property === "message" ? "message" : "kind",
-      args: [],
-    },
-    method: fact.property === "message" ? "to_owned" : "to_string",
+    receiver: planRustNonConsumingValue(receiverNode, receiver, context),
+    method: fact.property === "message" ? "message" : "kind",
     args: [],
+  };
+  return {
+    kind: "owned-string-from-borrowed-str",
+    expression: fact.property === "message"
+      ? read
+      : { kind: "method-call", receiver: read, method: "as_str", args: [] },
   };
 }

@@ -421,6 +421,12 @@ export function planProjectMethodVariants(
   member: Node,
   context: RustPlanContext,
 ): readonly RustImplFunction[] | undefined {
+  if (context.input.program.source.ast.body(member) === undefined) {
+    const implementation = context.input.program.sourceNavigation.callableImplementation(member);
+    if (implementation.kind === "resolved" && implementation.implementation.declaration !== member) {
+      return Object.freeze([]);
+    }
+  }
   const specializations = context.input.program.sourceCallableSpecializations;
   if (!specializations.requiresSpecialization(member)) {
     const method = planProjectMethod(member, context);

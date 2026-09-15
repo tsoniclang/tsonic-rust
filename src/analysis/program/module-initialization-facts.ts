@@ -1,4 +1,5 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
+import { rustTypeOnlyDeclarationFactKey } from "../facts/type-only.js";
 import {
   KindExportAssignment,
   KindExportDeclaration,
@@ -76,6 +77,7 @@ function classifyModuleInitialization(
       return unresolved(sourceFile, "Source file contains an undefined top-level statement slot.");
     }
     const kind = input.ast.kindName(statement);
+    if (input.facts.getFact(statement, rustTypeOnlyDeclarationFactKey) !== undefined) continue;
     if (kind === KindImportDeclaration || kind === KindExportDeclaration ||
       kind === KindFunctionDeclaration || kind === "KindInterfaceDeclaration" ||
       kind === "KindTypeAliasDeclaration" || kind === "KindEnumDeclaration" ||

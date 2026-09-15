@@ -18,6 +18,7 @@ import type { RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import { visitRustTargetTypeParameters } from "../../target-model/types/carriers/generic-references.js";
 import { substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
 import { inferRustTargetTypeParameterBindings } from "../../target-model/types/carriers/generic-inference.js";
+import { rustStructuralGenericCarrier } from "./structural-generic-carrier.js";
 import type {
   RustSourceObjectShape,
   RustStructuralFieldImplementation,
@@ -190,7 +191,8 @@ export function createRustStructuralShapePlan(
       const sourceCarriers = Object.freeze([...instances]
         .sort(([left], [right]) => left.localeCompare(right, "en"))
         .map(([, carrier]) => carrier));
-      const carrier = [...uniqueByKey.get(key)!].sort(([left], [right]) => left.localeCompare(right, "en"))[0]![1];
+      const carrier = rustStructuralGenericCarrier([...uniqueByKey.get(key)!]
+        .sort(([left], [right]) => left.localeCompare(right, "en"))[0]![1]);
       const structural = rustStructuralObjectCarrierValue(carrier);
       if (structural === undefined) {
         throw new Error("Rust structural shape plan contains a non-structural carrier.");

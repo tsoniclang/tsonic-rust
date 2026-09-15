@@ -72,6 +72,7 @@ import { resolveRecordLiteralCarrier } from "./records.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { selectedSourceLiteralIsRepresentable, selectedSourceLiteralOperandIsRepresentable } from "../../policy/types/selected-numeric-literal.js";
+import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustTargetOperationFact } from "../facts/keys.js";
@@ -91,7 +92,9 @@ export function resolveExpressionCarrierUncached(
         : expected;
       const defaultCarrier = rustSourcePrimitiveTargetType("float64");
       const effectiveExpected = contextualExpected === undefined ||
-          rustRuntimeUnionProjection(contextualExpected, defaultCarrier) !== undefined
+          rustRuntimeUnionProjection(contextualExpected, defaultCarrier) !== undefined ||
+          !isRustNumericCarrier(contextualExpected) &&
+          selectRustSourceValueConversion(defaultCarrier, contextualExpected) !== undefined
         ? defaultCarrier
         : contextualExpected;
       if (effectiveExpected !== undefined && isRustNumericCarrier(effectiveExpected) &&

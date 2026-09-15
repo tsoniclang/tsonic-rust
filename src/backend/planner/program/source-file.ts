@@ -1,6 +1,7 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { rustMemoryMetadataKey } from "../../../target-model/operations/memory-layout.js";
+import { rustTypeOnlyDeclarationFactKey } from "../../../analysis/facts/type-only.js";
 import {
   KindFunctionDeclaration,
   KindImportDeclaration,
@@ -321,6 +322,7 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
       continue;
     }
     if (kind === KindVariableStatement) {
+      if (context.input.program.facts.getFact(statement, rustTypeOnlyDeclarationFactKey) !== undefined) continue;
       const diagnosticCount = context.diagnostics.length;
       const planned = planTopLevelVariableStatement(
         statement,
@@ -383,6 +385,7 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
       continue;
     }
     if (kind === "KindInterfaceDeclaration") {
+      if (context.input.program.facts.getFact(statement, rustTypeOnlyDeclarationFactKey) !== undefined) continue;
       const diagnosticCount = context.diagnostics.length;
       const definition = context.input.program.projectTypes.definitionForDeclaration(statement);
       const planned = definition !== undefined && context.input.program.projectTypes.isPolymorphic(definition)

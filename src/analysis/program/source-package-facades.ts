@@ -6,6 +6,7 @@ import type {
 import type {
   TargetDiagnostic,
 } from "@tsonic/target-api/artifacts";
+import { rustTypeOnlyDeclarationFactKey } from "../facts/type-only.js";
 import {
   isValidRustIdentifier,
   rustModuleSegmentName,
@@ -224,6 +225,7 @@ function rustDeclarationItemNames(
   declaration: Node,
 ): readonly string[] {
   if (context.facts.getFact(declaration, rustMemoryMetadataKey)) return emptyNames;
+  if (context.facts.getFact(declaration, rustTypeOnlyDeclarationFactKey) !== undefined) return emptyNames;
   if (
     context.ast.kindName(declaration) === "KindTypeAliasDeclaration" &&
     context.facts.getFact(declaration, rustTypeAliasDeclarationFactKey)?.kind ===

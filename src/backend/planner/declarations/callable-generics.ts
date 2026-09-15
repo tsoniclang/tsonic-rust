@@ -1,5 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { rustGenericsWithAssociatedBounds } from "../types/generic-bounds.js";
 import {
   type RustSourceGenericParameterContract,
 } from "../../../target-model/lifetimes/index.js";
@@ -177,12 +178,11 @@ export function planRustCallableGenerics(
       bounds: rustTypeParameterBounds(parameter, requirements),
     }]);
   });
-  const generics: RustGenerics = Object.freeze({
-    parameters: Object.freeze(parameters),
-    wherePredicates: rustDeclarationAssociatedPredicates(declaration, {
+  const generics: RustGenerics = rustGenericsWithAssociatedBounds(parameters,
+    rustDeclarationAssociatedPredicates(declaration, {
       ...context, typeParameterSubstitutions: substitutions,
     }),
-  });
+  );
   return {
     context: {
       ...context,

@@ -1,5 +1,6 @@
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustPlanningContext } from "../context.js";
+import { rustGenericsWithAssociatedBounds } from "../types/generic-bounds.js";
 import {
   createRustSourceFile,
 } from "../../target-ast/nodes.js";
@@ -108,10 +109,8 @@ export function planRustStructuralShapeModule(
             name: parameter.name,
             bounds: rustGenericRequirementBounds(requirements.typeParameters.find(candidate => candidate.name === parameter.name)!.requirements),
           });
-    const generics: RustGenerics = {
-      parameters: genericParameters,
-      wherePredicates: rustAssociatedPredicates(requirements.associatedTypes, context),
-    };
+    const generics: RustGenerics = rustGenericsWithAssociatedBounds(genericParameters,
+      rustAssociatedPredicates(requirements.associatedTypes, context));
     const aliasGenericArguments: readonly RustGenericArgument[] = definition.genericParameters.map((parameter) =>
       parameter.kind === "lifetime"
         ? { kind: "lifetime", lifetime: rustLifetimeToAst(parameter.lifetime) }

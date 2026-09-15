@@ -409,11 +409,11 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
 }
 
 export function planTypeAliasDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
-  const family = planRustTypeFamilyDeclaration(node, context);
-  if (family !== undefined) return family;
+  const fact = context.input.program.facts.getRuntimeCarrierFact(node) === undefined
+    ? undefined : context.input.program.facts.getFact(node, rustTypeAliasDeclarationFactKey);
+  if (fact?.kind === "family") return planRustTypeFamilyDeclaration(node, context);
   const { ast } = context.input.program.source;
   const carrier = context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
-  const fact = context.input.program.facts.getFact(node, rustTypeAliasDeclarationFactKey);
   const aliasName = context.input.program.names.nameForDeclaration(node) ?? "";
   if (carrier === undefined || fact === undefined || !isValidRustIdentifier(aliasName)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(

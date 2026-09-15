@@ -20,6 +20,7 @@ import {
 } from "../../target-model/types/equality.js";
 import type { RustArgumentMode } from "../../target-model/operations/model.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustTargetGenericBindings } from "../../target-model/types/index.js";
 import type { RustLifetimeBinder } from "../../target-model/lifetimes/index.js";
 import {
   resolveRustTargetTypeRef,
@@ -61,16 +62,36 @@ export function rustSourceParameterContractCarrier(
 export function instantiateRustSourceParameterValueCarrier(
   abi: RustSourceParameterAbi,
   selectedParameterCarrier: TargetTypeRef,
+  selectedBindings: RustTargetGenericBindings,
+  normalize: (carrier: TargetTypeRef) => TargetTypeRef,
 ): TargetTypeRef | undefined {
   const references = rustTargetGenericReferences(abi.parameterCarrier);
-  const bindings = inferRustTargetGenericBindings(abi.parameterCarrier, selectedParameterCarrier, {
-    typeNames: new Set(references.typeNames),
-    lifetimeIdentities: new Set(references.lifetimeIdentities),
-    constIdentities: new Set(references.constIdentities),
-  });
+  const substituteSelected = (carrier: TargetTypeRef): TargetTypeRef =>
+    substituteRustTargetGenerics(
+      carrier,
+      selectedBindings.types,
+      selectedBindings.lifetimes,
+      selectedBindings.consts,
+      normalize,
+    );
+  const bindings = inferRustTargetGenericBindings(
+    substituteSelected(abi.parameterCarrier),
+    selectedParameterCarrier,
+    {
+      typeNames: new Set(references.typeNames.filter((name) => !selectedBindings.types.has(name))),
+      lifetimeIdentities: new Set(references.lifetimeIdentities.filter((identity) => !selectedBindings.lifetimes.has(identity))),
+      constIdentities: new Set(references.constIdentities.filter((identity) => !selectedBindings.consts.has(identity))),
+    },
+  );
   return bindings === undefined
     ? undefined
-    : substituteRustTargetGenerics(abi.valueCarrier, bindings.types, bindings.lifetimes, bindings.consts);
+    : substituteRustTargetGenerics(
+        substituteSelected(abi.valueCarrier),
+        bindings.types,
+        bindings.lifetimes,
+        bindings.consts,
+        normalize,
+      );
 }
 
 export function createRustSourceCallableAbiResolver(): RustSourceCallableAbiResolver {
