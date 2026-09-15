@@ -592,7 +592,26 @@ export function createRustProjectTypePolicy(
   }
 
   const frozenDefinitions = Object.freeze(definitions);
-  const orderedDefinitions = [...frozenDefinitions].sort(compareProjectDefinitions);
+  const definitionOrder = new Map(frozenDefinitions.map((definition, index) => [definition, index]));
+  const relatedContractsByClass = new Map<RustProjectTypeDefinition, readonly RustProjectTypeDefinition[]>();
+  const implementationsByContract = new Map<RustProjectTypeDefinition, RustProjectTypeDefinition[]>();
+  for (const definition of frozenDefinitions) {
+    if (definition.kind !== "class") continue;
+    const carrier = openCarrier(definition);
+    const contracts = [...(contractsForClass(definition) ?? [])]
+      .filter((candidate) => relationship(carrier, candidate).kind === "related")
+      .sort((left, right) => definitionOrder.get(left)! - definitionOrder.get(right)!);
+    relatedContractsByClass.set(definition, Object.freeze(contracts));
+    for (const contract of contracts) {
+      const implementations = implementationsByContract.get(contract) ?? [];
+      implementations.push(definition);
+      implementationsByContract.set(contract, implementations);
+    }
+  }
+  const concreteClassesByContract = new Map([...implementationsByContract].map(([contract, implementations]) => [
+    contract,
+    Object.freeze(implementations.filter((candidate) => !host.ast.hasModifierKind(candidate.declaration, "abstract"))),
+  ]));
   const downcastRoutesByDefinition = new WeakMap<
     RustProjectTypeDefinition,
     readonly RustProjectDowncastRoute[]
@@ -605,15 +624,14 @@ export function createRustProjectTypePolicy(
     const sourceComponent = host.sourcePackageComponentForFile(source.fileName);
     const implementations = sourceComponent === undefined
       ? []
-      : orderedDefinitions
-          .filter((target) => target.kind === "class")
+      : (implementationsByContract.get(source) ?? [])
           .filter((target) =>
-            host.sourcePackageComponentForFile(target.fileName) === sourceComponent)
-          .filter((target) => relationship(openCarrier(target), source).kind === "related");
+            host.sourcePackageComponentForFile(target.fileName) === sourceComponent);
     const ancestors = new Set(implementations.flatMap((implementation) => classLineage(implementation) ?? []));
-    const targets = orderedDefinitions.filter((target) => ancestors.has(target) &&
+    const targets = [...ancestors].filter((target) =>
       target.genericParameters.length === 0 &&
-      host.sourcePackageComponentForFile(target.fileName) === sourceComponent);
+      host.sourcePackageComponentForFile(target.fileName) === sourceComponent)
+      .sort(compareProjectDefinitions);
     downcastRoutesByDefinition.set(source, Object.freeze(targets.map((target) => Object.freeze({
       source,
       target,
@@ -635,8 +653,7 @@ export function createRustProjectTypePolicy(
     if (definition.kind !== "class") {
       continue;
     }
-    const relatedDefinitions = frozenDefinitions.filter((candidate) =>
-      relationship(openCarrier(definition), candidate).kind === "related");
+    const relatedDefinitions = relatedContractsByClass.get(definition) ?? [];
     const contractMembers = new Set<Node>();
     for (const related of relatedDefinitions) {
       for (
@@ -783,13 +800,7 @@ export function createRustProjectTypePolicy(
     classLineage,
     contractsForClass,
     concreteClassesFor(definition) {
-      return Object.freeze(definitions.filter((candidate) => {
-        if (candidate.kind !== "class" || host.ast.hasModifierKind(candidate.declaration, "abstract")) {
-          return false;
-        }
-        const relation = relationship(policy.openCarrier(candidate), definition);
-        return relation.kind === "related";
-      }));
+      return concreteClassesByContract.get(definition) ?? Object.freeze([]);
     },
     downcastRoutesFor(definition) {
       return downcastRoutesByDefinition.get(definition) ?? Object.freeze([]);
