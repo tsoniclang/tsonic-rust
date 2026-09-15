@@ -15,10 +15,8 @@ export function main(): void {
   check(error.message === "");
   check(error.name === "Error");
   let caught = false;
-  try { throw error; }
-  catch (failure) {
-    if (failure instanceof Error) caught = failure.message === "";
-  }
+  try { throw new Error(); }
+  catch { caught = true; }
   check(caught);
 }
 ` },

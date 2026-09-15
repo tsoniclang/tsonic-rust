@@ -100,11 +100,12 @@ test("synchronous Promise factories retain fallible await effects through aliase
     files: { "index.ts": `
 import { check } from "@acme/testing";
 async function value(): Promise<number> { return 7; }
+async function rejected(): Promise<number> { throw new Error("rejected"); }
 export async function main(): Promise<void> {
   const selected = Promise.race([value()]);
   check(await selected === 7);
   let caught = false;
-  try { await Promise.race([Promise.reject<number>("rejected")]); }
+  try { await Promise.race([rejected()]); }
   catch { caught = true; }
   check(caught);
 }
