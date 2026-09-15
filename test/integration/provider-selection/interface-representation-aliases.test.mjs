@@ -9,7 +9,16 @@ for (const surfaces of [undefined, ["js"]]) {
     const { result } = compileRust({ surfaces,
       target: { id: "rust", options: { outputType: "bin", crateName: "interface_aliases" } },
       files: { "index.ts": `${interfaceRepresentationAliasSource}
-export function main(): void { if (!run()) throw new Error("interface representation alias"); }` },
+export function main(): void {
+  if (!run()) throw new Error("interface representation alias");
+  ${surfaces === undefined ? "" : `
+  const tokens: MoreTokens = [{}, {}];
+  if (tokens.length !== 2) throw new Error("array facade length");
+  const original = [2, 3];
+  const alias: Values<number> = original;
+  original[0] = 7;
+  if (sum(alias) !== 10) throw new Error("array facade live alias");`}
+}` },
     });
     assert.deepEqual(result.diagnostics, []);
     assert.equal(validateGeneratedProject("interface-representation-aliases", result.artifacts, { run: true }).status, 0);
@@ -34,7 +43,7 @@ test("recursive interface facades cannot leave erased declarations in native typ
     "interface Recursive extends ReadonlyArray<Other> {} interface Other extends ReadonlyArray<Recursive> {}",
   ]) {
     const { result } = compileRust({ files: { "index.ts": `${declaration}
-export function length(value: Recursive): number { return value.length; }` } });
+export function identity(value: Recursive): Recursive { return value; }` } });
     assert.ok(result.diagnostics.some(diagnostic => diagnostic.code === "RUST_INTERFACE_REPRESENTATION_CYCLE"));
     assert.equal(result.artifacts.length, 0);
   }

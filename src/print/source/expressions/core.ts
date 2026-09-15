@@ -96,6 +96,9 @@ export function printRustExpr(expression: RustExpr): string {
     case "evaluate-then": {
       const effect = printRustExpr(expression.effect);
       const statement = expression.discard === "unit" ? `${effect};` : `let _ = ${effect};`;
+      if (expression.value.kind === "tuple-literal" && expression.value.elements.length === 0) {
+        return `{ ${statement} }`;
+      }
       return `{ ${statement} ${printRustExpr(expression.value)} }`;
     }
     case "string-concat": {

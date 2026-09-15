@@ -11,6 +11,7 @@ import { resolveRustConditionalAlias } from "./type-families.js";
 import { resolveRustTypeComponentEvidence } from "./source-evidence.js";
 import { rustSliceMutRefTargetType, rustSliceRefTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustTypeOnlyDeclarationFactKey } from "../../../analysis/facts/type-only.js";
 import {
   sourceTransformedTypeFactEvidenceNodes,
   sourceTupleElementTypeEvidenceNodes,
@@ -177,12 +178,19 @@ function sourceParameterTypeIsReadonlyArray(
     return false;
   }
   const typeName = TypeReferenceNode_TypeName(ast, typeNode);
-  const declaration = typeName === undefined
+  let declaration = typeName === undefined
     ? undefined
     : context.source.navigation.sourceReferenceFor(typeName)?.declaration;
-  return resolveOwnedSourceProfileTypeNameForDeclaration(
-    declaration,
-    context,
-    options.sourceProfiles,
-  ) === "ReadonlyArray";
+  const seen = new Set<Node>();
+  while (declaration !== undefined && !seen.has(declaration)) {
+    seen.add(declaration);
+    if (resolveOwnedSourceProfileTypeNameForDeclaration(declaration, context, options.sourceProfiles) === "ReadonlyArray") {
+      return true;
+    }
+    if (context.facts.getFact(declaration, rustTypeOnlyDeclarationFactKey)?.reason !== "representation-alias") return false;
+    const heritage = context.source.navigation.declaredHeritage(declaration);
+    if (heritage.kind !== "resolved" || heritage.edges.length !== 1 || heritage.edges[0]?.kind !== "extends") return false;
+    declaration = heritage.edges[0].target.declaration;
+  }
+  return false;
 }
