@@ -167,6 +167,7 @@ export function analyzeRustTargetProgram(
       navigation: context.source.navigation,
     }),
     structuralShapes: context.structuralShapes.seal(),
+    frozenDataWrites: context.frozenDataWrites.seal(),
     classValues: context.classValues.seal(context),
     runtimeReferences: runtimeReferences.plan,
     foundation: foundation.plan,

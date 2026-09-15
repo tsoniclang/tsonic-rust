@@ -117,6 +117,7 @@ export function rustTargetOperationIsFallible(
   fact: RustTargetOperationFact | undefined,
   structuralStorage: RustStructuralStorageLookup,
   projectFieldDispatch: RustProjectFieldDispatchLookup,
+  frozenDataWrites: import("../objects/frozen-data-writes.js").RustFrozenDataWritePlan,
 ): boolean {
   if (fact === undefined) {
     return false;
@@ -136,7 +137,12 @@ export function rustTargetOperationIsFallible(
   if (fact.kind === "source-accessor") {
     return false;
   }
+  if (fact.kind === "source-method-property") {
+    return fact.accessMode !== "read" && frozenDataWrites.receiverForDeclaration(fact.declaration) !== undefined;
+  }
   if (fact.kind === "source-field") {
+    if (fact.accessMode !== "read" && fact.valueSemantics.kind === "stored" &&
+      frozenDataWrites.receiverFor(fact.storage, fact.receiverCarrier, fact.storageIndex) !== undefined) return true;
     const projectDispatch = fact.dispatch === undefined
       ? undefined
       : fact.declaration === undefined
@@ -159,10 +165,15 @@ export function rustTargetOperationIsFallible(
       return variant !== undefined && field !== undefined && rustTargetOperationIsFallible({
         kind: "source-field", operationId: fact.operationId, accessMode: fact.accessMode,
         receiverCarrier: variant.carrier, resultCarrier: fact.resultCarrier, ...field,
-      }, structuralStorage, projectFieldDispatch);
+      }, structuralStorage, projectFieldDispatch, frozenDataWrites);
     });
   }
   if (fact.kind === "object-shape-projection") {
+    if (fact.projection === "assign") return fact.assignmentFields?.some(field =>
+      frozenDataWrites.receiverFor(fact.storage, fact.sourceValueCarrier, field.targetStorageIndex) !== undefined ||
+      fact.storage === "structural-object" && (rustStructuralFieldIsFallible(structuralStorage.field(
+        fact.sourceValueCarrier, field.targetStorageIndex)) || fact.assignmentSourceCarrier !== undefined &&
+        rustStructuralFieldIsFallible(structuralStorage.field(fact.assignmentSourceCarrier, field.sourceStorageIndex)))) === true;
     return (fact.projection === "values" || fact.projection === "entries") &&
       fact.fields.some((field) => field.accessor !== undefined ||
         fact.storage === "structural-object" && rustStructuralFieldIsFallible(structuralStorage.field(

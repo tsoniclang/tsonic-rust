@@ -601,6 +601,13 @@ export function analyzeRustGeneratedItemUsage(input: {
       const memoryBinding = input.facts.getFact(node, rustMemoryBindingPlanKey);
       if (memoryBinding?.kind === "record") markStructuralShapeConstructed(memoryBinding.carrier);
       visitProjectProjectionFacts(node);
+      const objectView = input.facts.getFact(node, rustObjectReferenceViewKey);
+      if (objectView !== undefined) {
+        markStructuralShapeConstructed(objectView.targetCarrier);
+        markProjectIdentityUsed(objectView.sourceCarrier);
+        for (const field of objectView.fields) visitFact(node, { ...field.source, operationId: "object-reference-view",
+          accessMode: field.writable ? "read-write" : "read" });
+      }
       const conversion = input.facts.getFact(node, rustContextualValueConversionFactKey)?.conversion;
       if (conversion?.kind === "empty-record") markStructuralShapeConstructed(conversion.target);
       if (conversion !== undefined && conversion.kind !== "native-trait-object-upcast" &&
@@ -640,3 +647,4 @@ export function analyzeRustGeneratedItemUsage(input: {
       variantsByDeclaration.get(declaration)?.has(variantName) === true,
   });
 }
+import { rustObjectReferenceViewKey } from "../../../analysis/facts/object-reference-views.js";

@@ -173,7 +173,7 @@ export type JsCarrierRef =
   | { readonly ref: "source-result" }
   | { readonly ref: "argument"; readonly index: number };
 
-type JsCarrierCapability = "numeric" | "integer" | "numeric-parameter" | "clone" | "stringifiable" | "js-equality" | "project-identity-equality" | "object-identity";
+type JsCarrierCapability = "numeric" | "integer" | "numeric-parameter" | "clone" | "stringifiable" | "js-equality" | "project-identity-equality" | "object-identity" | "freezable-object";
 
 export interface JsOperationRowData {
   readonly owner: string;

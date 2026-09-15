@@ -15,7 +15,8 @@ import {
   rustSourceCallableReturnFactKey,
   rustSourceParameterAbiFactKey,
 } from "../facts/keys.js";
-import { appendRustDiagnostic } from "../program/walk.js";
+import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
+import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { recordCallableReturnFact, recordCallableSuspensionFacts } from "../callables/signatures.js";
 import { recordParameterAbiFacts } from "./types-and-bindings.js";
 import { recordStatementFacts, resolveTypeNodeCarrier } from "../control-flow/statements.js";
@@ -77,7 +78,9 @@ export function recordClassSignatureFacts(walk: RustFactWalk, declaration: Node)
     if (memberKind === "KindPropertyDeclaration" || sourceParameterIsProperty(ast, member)) {
       const fieldCarrier = sourceParameterIsProperty(ast, member)
         ? walk.context.facts.get(member, rustRuntimeCarrierKey)?.carrier
-        : resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, member));
+        : Node_Type(ast, member) === undefined
+          ? resolveRustTargetTypeRef(member, rustResolutionContext(walk, member), walk.operationOptions)
+          : resolveTypeNodeCarrier(walk, Node_Type(ast, member));
       if (fieldCarrier !== undefined) {
         setCarrierFact(walk, member, fieldCarrier);
       }

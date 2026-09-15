@@ -7,6 +7,7 @@ import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustActiveErrorType } from "../program/plan-context.js";
 import { rustTargetRuntimeErrorType } from "../types/error-boundary.js";
+import { checkRustDataWrite } from "./data-writes.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import type { RustStructuralShapeField } from "../../../analysis/objects/structural-shape-plan.js";
 import { readRustBoundRecordField, writeRustBoundRecordField, mutateRustBoundRecordField } from "./record-fields.js";
@@ -295,6 +296,33 @@ export function writeRustStoredObjectField(
   context: RustPlanContext,
   projection: readonly string[] = [],
 ): RustExpr | undefined {
+  const check = context.input.program.frozenDataWrites.receiverFor(storage, receiverCarrier, storageIndex);
+  if (storage === "structural-object" && context.input.program.structuralShapes.field(receiverCarrier, storageIndex)?.storage === "property") {
+    return writeRustStoredObjectFieldStorage(storage, receiverCarrier, receiver, storageIndex, operator, value, context, projection);
+  }
+  if (check === undefined) return writeRustStoredObjectFieldStorage(storage, receiverCarrier, receiver, storageIndex, operator, value, context, projection);
+  const errorType = rustActiveErrorType(context);
+  if (errorType === undefined || context.syntheticNames === undefined) return undefined;
+  const receiverName = allocateRustSyntheticName(context.syntheticNames, "field_owner");
+  const valueName = allocateRustSyntheticName(context.syntheticNames, "field_value");
+  const selected: RustExpr = { kind: "path", path: receiverName };
+  const effect = writeRustStoredObjectFieldStorage(storage, receiverCarrier, selected, storageIndex, operator,
+    { kind: "path", path: valueName }, context, projection);
+  return effect === undefined ? undefined : { kind: "block", bindings: [
+    { name: receiverName, value: cloneExpression(receiver) }, { name: valueName, value },
+  ], value: checkRustDataWrite(check, selected, effect, errorType) };
+}
+
+function writeRustStoredObjectFieldStorage(
+  storage: "project-object" | "structural-object",
+  receiverCarrier: TargetTypeRef,
+  receiver: RustExpr,
+  storageIndex: number,
+  operator: RustAssignmentOperator,
+  value: RustExpr,
+  context: RustPlanContext,
+  projection: readonly string[] = [],
+): RustExpr | undefined {
   if (storage === "structural-object") {
     const field = context.input.program.structuralShapes.field(receiverCarrier, storageIndex);
     if (field === undefined) {
@@ -340,6 +368,28 @@ export function writeRustStoredObjectField(
 }
 
 export function mutateRustStoredObjectField(
+  storage: "project-object" | "structural-object",
+  receiverCarrier: TargetTypeRef,
+  receiver: RustExpr,
+  storageIndex: number,
+  mutation: (field: RustExpr) => RustExpr | undefined,
+  context: RustPlanContext,
+): RustExpr | undefined {
+  const check = context.input.program.frozenDataWrites.receiverFor(storage, receiverCarrier, storageIndex);
+  if (storage === "structural-object" && context.input.program.structuralShapes.field(receiverCarrier, storageIndex)?.storage === "property") {
+    return mutateRustStoredObjectFieldStorage(storage, receiverCarrier, receiver, storageIndex, mutation, context);
+  }
+  if (check === undefined) return mutateRustStoredObjectFieldStorage(storage, receiverCarrier, receiver, storageIndex, mutation, context);
+  const errorType = rustActiveErrorType(context);
+  if (errorType === undefined || context.syntheticNames === undefined) return undefined;
+  const receiverName = allocateRustSyntheticName(context.syntheticNames, "field_owner");
+  const selected: RustExpr = { kind: "path", path: receiverName };
+  const effect = mutateRustStoredObjectFieldStorage(storage, receiverCarrier, selected, storageIndex, mutation, context);
+  return effect === undefined ? undefined : { kind: "block", bindings: [{ name: receiverName, value: cloneExpression(receiver) }],
+    value: checkRustDataWrite(check, selected, effect, errorType) };
+}
+
+function mutateRustStoredObjectFieldStorage(
   storage: "project-object" | "structural-object",
   receiverCarrier: TargetTypeRef,
   receiver: RustExpr,
@@ -555,12 +605,19 @@ function writeRustStructuralObjectProperty(
   if (setterCall === undefined) {
     return undefined;
   }
-  const storedWrite = writeRustStructuralObjectField(
+  let storedWrite = writeRustStructuralObjectField(
     receiverPath,
     field.targetName,
     "=",
     { kind: "call", path: "Some", args: [selectedValue] },
   );
+  const fieldIndex = context.input.program.structuralShapes.definitionForCarrier(receiverCarrier)?.fields.indexOf(field);
+  if (fieldIndex === undefined || fieldIndex < 0) return undefined;
+  if (context.input.program.frozenDataWrites.receiverFor("structural-object", receiverCarrier, fieldIndex) !== undefined) {
+    const errorType = rustActiveErrorType(context);
+    if (errorType === undefined) return undefined;
+    storedWrite = checkRustDataWrite("receiver", receiverPath, storedWrite, errorType);
+  }
   const write: RustExpr = {
     kind: "match",
     expression: readRustStructuralObjectField(

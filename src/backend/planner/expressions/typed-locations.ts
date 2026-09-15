@@ -61,6 +61,7 @@ import { rustNativeBackingKey, rustNativeArrayStorageKey } from "../../../target
 import { planNativeRustArrayAccess } from "./native-arrays.js";
 import { planRustLocationCallback } from "./location-callbacks.js";
 import { rustRecordFieldStorageType, rustRecordFieldSelector } from "../objects/record-fields.js";
+import { rustExpressionHasReferenceObjectField, planRustReferenceObjectFieldLocation } from "./object-field-locations.js";
 
 export type RustExpressionPlanner = (
   node: Node,
@@ -131,7 +132,8 @@ export function planRustTypedLocationCall(
         : { kind: "method-call", receiver: source, method: "try_map", args: [read, write] };
     }
     case "address-of": {
-      if (rustExpressionHasBoundRecordField(plan.storageExpression, context)) {
+      if (rustExpressionHasBoundRecordField(plan.storageExpression, context) ||
+        rustExpressionHasReferenceObjectField(plan.storageExpression, context)) {
         return planRustSourceLocationStorage(plan.storageExpression, plan.rootExpression, context, planExpression);
       }
       const location = planRustLocationStorage(
@@ -474,7 +476,7 @@ export function planRustPromotedStorageWrite(
   if (root === undefined) {
     return { handled: false };
   }
-  if (rustExpressionHasBoundRecordField(expression, context)) {
+  if (rustExpressionHasBoundRecordField(expression, context) || rustExpressionHasReferenceObjectField(expression, context)) {
     const location = planRustSourceLocationStorage(expression, root.expression, context, planExpression);
     if (location === undefined || context.syntheticNames === undefined) return { handled: true };
     const locationName = allocateRustSyntheticName(context.syntheticNames, "field_location");
@@ -600,6 +602,9 @@ export function rustExpressionHasBoundRecordField(expression: Node, context: Rus
 export function planRustSourceLocationStorage(
   expression: Node, rootExpression: Node, context: RustPlanContext, planExpression: RustExpressionPlanner,
 ): RustExpr | undefined {
+  if (rustExpressionHasReferenceObjectField(expression, context)) {
+    return planRustReferenceObjectFieldLocation(expression, context, planExpression);
+  }
   const operation = context.input.program.facts.getFact(expression, rustTargetOperationFactKey);
   if (operation?.kind === "source-field" && operation.storage === "structural-object") {
     const field = context.input.program.structuralShapes.field(operation.receiverCarrier, operation.storageIndex);

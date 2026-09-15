@@ -382,10 +382,13 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     sourceTypes.structuralInstantiations(),
     sourceTypes.generatedSourceUnions(),
   );
+  context.frozenDataWrites.initialize({ jsEnabled: walk.jsEnabled, ast, projectTypes,
+    representations: context.objectRepresentations, structuralShapes: context.structuralShapes.seal() });
   context.projectFieldDispatch.initialize({
     ast,
     projectTypes,
     semanticsFor: context.semanticsFor,
+    frozenDataWrites: context.frozenDataWrites,
   });
   // Fallibility depends on finalized operation facts and the one whole-program
   // structural storage plan produced while walking bodies.

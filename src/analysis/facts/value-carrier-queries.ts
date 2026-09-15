@@ -1,4 +1,5 @@
 import type { ExtensionFactSubject } from "@tsonic/tsts";
+import { rustObjectReferenceViewKey } from "./object-reference-views.js";
 import type {
   RustPlanQueries,
   RustPlanWriter,
@@ -75,6 +76,7 @@ export function rustValueCarrierBeforeOptionProjection(
   subject: ExtensionFactSubject | undefined,
 ): TargetTypeRef | undefined {
   return facts.getFact(subject, rustContextualValueConversionFactKey)?.targetCarrier ??
+    facts.getFact(subject, rustObjectReferenceViewKey)?.targetCarrier ??
     rustValueCarrierBeforeContextualConversion(facts, subject);
 }
 

@@ -12,6 +12,10 @@ export function resolveRustInferredObjectUnion(
   options: RustTargetTypeResolutionOptions,
 ): TargetTypeRef | undefined {
   if (members.length < 2 || members.length !== carriers.length) return undefined;
+  const alias = context.currentSemantics.declarations.typeAliasSymbol(sourceType);
+  if (alias !== undefined && context.currentSemantics.declarations.symbolDeclarations(alias).some(declaration =>
+    context.ast.kindName(declaration) === "KindTypeAliasDeclaration" &&
+    context.source.navigation.isProjectDeclaration(declaration))) return undefined;
   const arms = carriers.map((carrier, index) => {
     const value = rustSourceTypeCarrierValue(carrier);
     const declaration = options.sourceTypes.declarationForCarrier(carrier);

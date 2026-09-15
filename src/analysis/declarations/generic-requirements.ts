@@ -452,6 +452,15 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       }
     }
     const location = facts.getFact(node, rustLocationStorageFactKey);
+    const objectView = facts.getFact(node, rustObjectReferenceViewKey);
+    if (objectView !== undefined) {
+      const error = addUse(node, objectView.sourceCarrier, ["clone", "static"]);
+      if (error !== undefined) return error;
+      for (const field of objectView.fields) {
+        const fieldError = addUse(node, field.source.resultCarrier, ["clone", "static"]);
+        if (fieldError !== undefined) return fieldError;
+      }
+    }
     if (location !== undefined) {
       const error = addUse(node, location.valueCarrier, ["clone", "static"]);
       if (error !== undefined) return error;
@@ -751,3 +760,4 @@ function diagnostic(
     evidence: ["target.capability=rust.callable.generic-contract-closure"],
   };
 }
+import { rustObjectReferenceViewKey } from "../facts/object-reference-views.js";

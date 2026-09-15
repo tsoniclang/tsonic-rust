@@ -4,6 +4,7 @@ import {
   isRustBigIntCarrier,
   rustBigIntTargetType,
   rustEmptyObjectTargetType,
+  rustStructuralObjectCarrierValue,
   rustJsNumericTargetType,
   getRustJsMapTargetTypes,
   getRustJsSetElementTargetType,
@@ -846,6 +847,11 @@ function carrierRequirementsMatch(
       case "object-identity":
         return rustCarrierSupportsObjectIdentity(carrier) ||
           (carrier !== undefined && request.carrierSupportsProjectIdentity?.(carrier) === true);
+      case "freezable-object": {
+        const shape = rustStructuralObjectCarrierValue(carrier);
+        return rustTargetTypeRefEquals(carrier, rustEmptyObjectTargetType()) ||
+          shape?.representation === "reference" && shape.fields.every(field => field.bound !== true);
+      }
     }
   }) ?? true;
 }

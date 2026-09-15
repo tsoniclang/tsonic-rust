@@ -25,6 +25,8 @@ import { allocateRustSyntheticName, createRustSyntheticNameState } from "../name
 import { applyRustValueConversion } from "./value-conversions.js";
 import { planProviderRecordCopy } from "./provider-record-copy.js";
 import { planRustEmptyRecordConversion } from "./empty-record-conversion.js";
+import { rustObjectReferenceViewKey } from "../../../analysis/facts/object-reference-views.js";
+import { planRustObjectReferenceView } from "./object-reference-views.js";
 import { diagnosticInput, sourceTypePath } from "../program/plan-context.js";
 import { findRustUpdateSourceAccessor } from "./updates/source.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
@@ -92,12 +94,14 @@ function planProjectedExpression(
     rustContextualValueConversionFactKey,
   );
   const projection = context.input.program.facts.getFact(node, rustOptionProjectionFactKey);
+  const objectView = context.input.program.facts.getFact(node, rustObjectReferenceViewKey);
   let currentCarrier = override?.carrier ??
     flowRead?.sourceCarrier ??
     upcast?.sourceCarrier ??
     downcast?.sourceCarrier ??
     lifetimeReconciliation?.sourceCarrier ??
     contextualConversion?.sourceCarrier ??
+    objectView?.sourceCarrier ??
     projection?.sourceCarrier ??
     context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
   let flowSelected = planned;
@@ -171,6 +175,18 @@ function planProjectedExpression(
   }
   if (finalStage === "source") return converted;
   let contextuallyConverted = converted;
+  if (objectView !== undefined) {
+    if (rustTargetTypeRefEquals(currentCarrier, objectView.sourceCarrier)) {
+      const selected = planRustObjectReferenceView(contextuallyConverted, objectView, context);
+      if (selected === undefined) return undefined;
+      contextuallyConverted = selected;
+      currentCarrier = objectView.targetCarrier;
+    } else if (!rustTargetTypeRefEquals(currentCarrier, objectView.targetCarrier)) {
+      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node), "rust.backend.object-view-order",
+        "The finalized object view does not match the current expression carrier."));
+      return undefined;
+    }
+  }
   if (contextualConversion !== undefined) {
     if (rustTargetTypeRefEquals(currentCarrier, contextualConversion.sourceCarrier)) {
       const selected = applyRustContextualValueConversion(

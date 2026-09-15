@@ -10,6 +10,7 @@ import type {
 } from "./type-policy.js";
 import { rustProjectObjectLayout } from "./object-layout.js";
 import { rustProjectMemberIsPrivate } from "./member-privacy.js";
+import type { RustFrozenDataWritePlan } from "../objects/frozen-data-writes.js";
 
 export interface RustProjectFieldDispatchRole {
   readonly selfMode: "ref" | "rc";
@@ -51,6 +52,7 @@ export interface RustProjectFieldDispatchPlanRegistry
   initialize(input: {
     readonly ast: AstReader;
     readonly projectTypes: RustProjectTypePolicy;
+    readonly frozenDataWrites: RustFrozenDataWritePlan;
     semanticsFor(node: Node): SourceFileSemantics;
   }): void;
   seal(): RustProjectFieldDispatchQueries;
@@ -155,7 +157,7 @@ export function createRustProjectFieldDispatchPlanRegistry(): RustProjectFieldDi
               : {
                   write: Object.freeze({
                     selfMode: accessorWrite ? "rc" as const : "ref" as const,
-                    fallible: accessorWrite,
+                    fallible: accessorWrite || input.frozenDataWrites.receiverForDeclaration(field.declaration) !== undefined,
                   }),
                 }),
           }));

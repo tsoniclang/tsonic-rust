@@ -236,6 +236,7 @@ export function planOptionalChainExpression(
     rustOperationFact(node, context),
     context.input.program.structuralShapes,
     context.input.program.projectFieldDispatch,
+    context.input.program.frozenDataWrites,
   ) ||
     sourceCallEffects?.invocation === "fallible" ||
     sourceAccessorEffects?.read === "fallible";

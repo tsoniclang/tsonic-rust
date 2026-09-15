@@ -33,6 +33,7 @@ import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { ProjectClassStateLayer } from "./model.js";
 import type { RustObjectRepresentation } from "../../../../analysis/project-types/object-representation.js";
 import { rustProjectMemberIsPrivate } from "../../../../analysis/project-types/member-privacy.js";
+import { checkRustDataWrite } from "../data-writes.js";
 
 export function planProjectRootImplementations(
   concrete: RustProjectTypeDefinition,
@@ -294,9 +295,11 @@ function planRootContractFunctions(
                     { kind: "path", path: "value" },
                     representation,
                   );
-              return expression === undefined
+              const check = context.input.program.frozenDataWrites.receiverForDeclaration(implementation.declaration);
+              return expression === undefined || check !== undefined && fieldErrorType === undefined
                 ? undefined
-                : { expression };
+                : { expression: check === undefined ? expression : checkRustDataWrite(check,
+                    { kind: "path", path: "self" }, expression, fieldErrorType!) };
             })()
         : implementation.setter === undefined
           ? undefined

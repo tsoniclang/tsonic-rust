@@ -50,6 +50,7 @@ import {
   createRustStructuralShapePlanRegistry,
 } from "../objects/structural-shape-plan.js";
 import type { RustStructuralShapePlanRegistry } from "../objects/structural-shape-plan.js";
+import { createRustFrozenDataWriteRegistry, type RustFrozenDataWriteRegistry } from "../objects/frozen-data-writes.js";
 import {
   createRustSafetyApplicationFactIndex,
 } from "../safety/application-index.js";
@@ -93,6 +94,7 @@ export interface RustAnalysisContext extends RustSourcePolicyContext {
   readonly sourceCallableSpecializations: RustSourceCallableSpecializationPlanRegistry;
   readonly sourceLifetimes: RustLifetimeIndex;
   readonly structuralShapes: RustStructuralShapePlanRegistry;
+  readonly frozenDataWrites: RustFrozenDataWriteRegistry;
   readonly classValues: RustClassValueRegistry;
   readonly providerSemantics: RustProviderSemantics;
   readonly safetyApplications: RustSafetyApplicationFactIndex;
@@ -170,6 +172,7 @@ export function createRustAnalysisContext(
     sourceCallableSpecializations: createRustSourceCallableSpecializationPlanRegistry(),
     sourceLifetimes: lifetimes.index ?? emptyRustLifetimeIndex,
     structuralShapes: createRustStructuralShapePlanRegistry(),
+    frozenDataWrites: createRustFrozenDataWriteRegistry(),
     classValues: createRustClassValueRegistry(),
     providerSemantics,
     safetyApplications,

@@ -349,6 +349,7 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
       operation,
       walk.context.structuralShapes,
       walk.context.projectFieldDispatch,
+      walk.context.frozenDataWrites,
     ) ||
       (operation?.kind === "source-call" && operation.target.form === "union-method" &&
         operation.target.variants.some(variant => fallible.has(variant.declaration))) ||

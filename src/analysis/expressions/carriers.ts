@@ -38,6 +38,7 @@ import {
   rustStructuralObjectCarrierValue,
 } from "../../target-model/types/index.js";
 import { rustRuntimeUnionContract, rustRuntimeUnionProjection } from "../../target-model/types/carriers/runtime-unions.js";
+import { recordRustObjectReferenceView } from "./object-reference-views.js";
 import {
   selectRustFlowReadProjection,
   selectRustValueCarrierReconciliation,
@@ -759,6 +760,8 @@ function applyOptionLane(
         ]);
       }
     }
+    if (reconciliation.kind === "incompatible" && reconciliation.reason === "unrelated" &&
+      recordRustObjectReferenceView(walk, expression, resolved, target)) projected = target;
   }
   if (expected === undefined || !isRustOptionCarrier(expected)) {
     return projected;
