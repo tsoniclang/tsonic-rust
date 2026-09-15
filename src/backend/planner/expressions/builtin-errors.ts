@@ -4,6 +4,7 @@ import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import {
   isRustJsValueCarrier,
+  isRustProgramErrorCarrier,
   rustJsErrorTargetType,
   rustOptionTargetType,
   rustSourcePrimitiveTargetType,
@@ -25,6 +26,8 @@ export function planRustBuiltinErrorTypeTest(
   const operand = operandNode === undefined ? undefined : planExpression(operandNode, context);
   const validSource = fact.lowering === "native-error"
     ? rustTargetTypeRefEquals(fact.sourceCarrier, rustJsErrorTargetType())
+    : fact.lowering === "program-error" ? isRustProgramErrorCarrier(fact.sourceCarrier) &&
+      context.input.program.projectTypes.builtinErrorProjectionAvailable === true
     : isRustJsValueCarrier(fact.sourceCarrier);
   if (operandNode === undefined || operand === undefined || !validSource ||
     !rustTargetTypeRefEquals(fact.resultCarrier, rustSourcePrimitiveTargetType("bool")) ||
@@ -42,13 +45,13 @@ export function planRustBuiltinErrorTypeTest(
   }
   const receiver = planRustNonConsumingValue(operandNode, operand, context);
   if (fact.errorKind === "any") {
-    return fact.lowering === "closed-value"
+    return fact.lowering !== "native-error"
       ? { kind: "method-call", receiver, method: "is_error", args: [] }
       : { kind: "evaluate-then", effect: receiver, discard: "value", value: { kind: "bool-literal", value: true } };
   }
   context.usedAliases?.add("rt");
   const errorKind: RustExpr = { kind: "path", path: `rt::JsErrorKind::${fact.errorKind}` };
-  return fact.lowering === "closed-value"
+  return fact.lowering !== "native-error"
     ? { kind: "method-call", receiver, method: "is_error_kind", args: [errorKind] }
     : {
         kind: "binary",

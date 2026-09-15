@@ -50,7 +50,9 @@ export function selectRustFlowReadProjection(
   if (rustTargetTypeRefEquals(sourceCarrier, selectedCarrier)) {
     return { kind: "identity" };
   }
-  if (isRustJsValueCarrier(sourceCarrier) && rustTargetTypeRefEquals(selectedCarrier, rustJsErrorTargetType())) {
+  if ((isRustJsValueCarrier(sourceCarrier) || isRustProgramErrorCarrier(sourceCarrier) &&
+    projectTypes.builtinErrorProjectionAvailable === true) &&
+    rustTargetTypeRefEquals(selectedCarrier, rustJsErrorTargetType())) {
     return { kind: "projection", fact: { kind: "builtin-error", sourceCarrier, selectedCarrier } };
   }
   const method = rustRuntimeUnionProjection(sourceCarrier, selectedCarrier);

@@ -228,7 +228,7 @@ export type RustTargetOperationFact =
       readonly sourceCarrier: TargetTypeRef;
       readonly resultCarrier: TargetTypeRef;
       readonly errorKind: "any" | "RangeError" | "TypeError" | "URIError";
-      readonly lowering: "native-error" | "closed-value";
+      readonly lowering: "native-error" | "closed-value" | "program-error";
     }
   | {
       readonly kind: "builtin-error-property";

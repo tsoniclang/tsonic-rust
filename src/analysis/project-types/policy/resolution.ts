@@ -702,6 +702,8 @@ export function createRustProjectTypePolicy(
     definitions: frozenDefinitions,
     issues: frozenIssues,
     programErrorDefinitions,
+    builtinErrorProjectionAvailable: !programErrorDefinitions.some(definition =>
+      externalBaseByDeclaration.get(definition.declaration)?.programError === true),
     definitionForDeclaration(declaration) {
       return declaration === undefined ? undefined : byDeclaration.get(declaration);
     },

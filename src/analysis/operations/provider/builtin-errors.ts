@@ -6,6 +6,7 @@ import {
 import { rustSourceErrorConstructors } from "../../../target-model/identities/source-errors.js";
 import {
   isRustJsValueCarrier,
+  isRustProgramErrorCarrier,
   rustJsErrorTargetType,
   rustOptionTargetType,
   rustSourcePrimitiveTargetType,
@@ -44,11 +45,16 @@ export function selectRustBuiltinErrorTypeTest(
     resolveRustTargetTypeRef(request.left, context, options);
   const lowering = rustTargetTypeRefEquals(sourceCarrier, rustJsErrorTargetType())
     ? "native-error"
-    : isRustJsValueCarrier(sourceCarrier) ? "closed-value" : undefined;
+    : isRustJsValueCarrier(sourceCarrier) ? "closed-value"
+    : isRustProgramErrorCarrier(sourceCarrier) ? "program-error" : undefined;
+  if (lowering === "program-error" && options.projectTypes.builtinErrorProjectionAvailable !== true) {
+    return rejectSelectedOperation(request.expression, context, "RUST_BUILTIN_ERROR_INHERITED_STORAGE",
+      "Caught builtin Error projection requires preserved Error identity; inherited mutable Error fields have no exact shared native Error storage yet.");
+  }
   if (sourceCarrier === undefined || lowering === undefined) {
     return rejectSelectedOperation(
       request.expression, context, "RUST_BUILTIN_ERROR_TYPE_TEST_CARRIER",
-      "A builtin Error test requires an exact native Error or closed JavaScript value carrier.",
+      "A builtin Error test requires an exact native Error, closed program error or closed JavaScript value carrier.",
     );
   }
   const resultCarrier = rustSourcePrimitiveTargetType("bool");

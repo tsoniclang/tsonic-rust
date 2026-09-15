@@ -13,6 +13,7 @@ import {
   type RustType,
 } from "../../target-ast/nodes.js";
 import { emptyRustGenerics } from "../../target-ast/nodes.js";
+import { planRustErrorObservations, planRustSuppressedErrorConstructor } from "./error-observations.js";
 
 const programErrorName = "TsonicError";
 const programResultName = "TsonicResult";
@@ -162,7 +163,7 @@ export function planRustProgramErrorModule(
         ...externalVariants.map(({ variant, type }) => ({ name: variant, fields: [type] })),
         {
           name: "Suppressed",
-          fields: [boxType(programErrorType), boxType(programErrorType)],
+          fields: [boxType(programErrorType), boxType(programErrorType), runtimeJsErrorType],
         },
       ],
     },
@@ -196,6 +197,10 @@ export function planRustProgramErrorModule(
       functions: [],
     },
     sourceStringImplementation(),
+    planRustSuppressedErrorConstructor(),
+    ...(input.program.projectTypes.builtinErrorProjectionAvailable === true
+      ? [planRustErrorObservations(externalVariants.map(item => item.variant),
+        exactProjectVariants.map(item => item.variant))] : []),
     finishResourceFunction(),
     finishFinallyFunction(),
   ];
@@ -281,6 +286,7 @@ function displayImplementation(projectVariants: readonly {
                   "Self::Suppressed",
                   binding("error"),
                   binding("suppressed"),
+                  { kind: "wildcard" },
                 ),
                 expression: {
                   kind: "format-write",
@@ -430,9 +436,9 @@ function finishResourceFunction(): RustItem {
               expression: call(
                 "Err",
                 call(
-                  "TsonicError::Suppressed",
-                  call("Box::new", path("error")),
-                  call("Box::new", path("suppressed")),
+                  "TsonicError::suppressed",
+                  path("error"),
+                  path("suppressed"),
                 ),
               ),
             },

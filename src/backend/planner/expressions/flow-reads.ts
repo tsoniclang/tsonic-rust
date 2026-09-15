@@ -4,6 +4,7 @@ import { rustRuntimeUnionProjection } from "../../../target-model/types/carriers
 import {
   isRustCopyCarrier,
   isRustJsValueCarrier,
+  isRustProgramErrorCarrier,
   rustJsErrorTargetType,
   rustCarrierSupportsClone,
 } from "../../../target-model/types/index.js";
@@ -51,7 +52,9 @@ export function planRustFlowReadProjection(
     return override.expression;
   }
   if (fact.kind === "builtin-error") {
-    if (!isRustJsValueCarrier(fact.sourceCarrier) || !rustTargetTypeRefEquals(fact.selectedCarrier, rustJsErrorTargetType())) {
+    if ((!isRustJsValueCarrier(fact.sourceCarrier) && !(isRustProgramErrorCarrier(fact.sourceCarrier) &&
+      context.input.program.projectTypes.builtinErrorProjectionAvailable === true)) ||
+      !rustTargetTypeRefEquals(fact.selectedCarrier, rustJsErrorTargetType())) {
       context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node), "rust.backend.builtin-error-projection",
         "The selected builtin Error projection has contradictory native carriers."));
       return undefined;

@@ -437,6 +437,46 @@ export class Consumer extends EngineBase {
   runCargo(consumerRoot, ["check", "--all-targets", "--locked", "--offline"]);
 });
 
+test("source-package error forwarding retains builtin identity and rejects object misclassification", { timeout: 300_000 }, () => {
+  const dependencyRoot = "/src/node_modules/@acme/engine";
+  const { result } = compileRust({
+    target: { id: "rust", options: { outputType: "bin", crateName: "package_errors" } },
+    sourcePackages: sourcePackageGraph(dependencyRoot),
+    files: {
+      "node_modules/@acme/engine/package.json": JSON.stringify({ name: "@acme/engine", type: "module",
+        exports: { "./index.js": "./index.ts" } }),
+      "node_modules/@acme/engine/index.ts": `export { fail, panic, PanicValue } from "./base.js";`,
+      "node_modules/@acme/engine/internal/helper.ts": `export function raise(error: Error): void { throw error; }`,
+      "node_modules/@acme/engine/base.ts": `
+import { raise } from "./internal/helper.js";
+export class PanicValue { code: number; constructor(code: number) { this.code = code; } }
+export function fail(error: Error): void { raise(error); }
+export function panic(): void { throw new PanicValue(7); }
+`,
+      "index.ts": `
+import { fail, panic, PanicValue } from "@acme/engine/index.js";
+export function main(): void {
+  const original = new Error("package");
+  const stack = original.stack;
+  let count = 0;
+  try { fail(original); }
+  catch (failure) {
+    if (failure instanceof Error && failure === original && failure.message === "package" && failure.stack === stack) count += 1;
+  }
+  try { panic(); }
+  catch (failure) {
+    if (failure instanceof Error) throw new Error("object classified as Error");
+    if (failure instanceof PanicValue && failure.code === 7) count += 1;
+  }
+  if (count !== 2) throw new Error("source-package error transport");
+}
+`,
+    },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  assert.equal(validateGeneratedProject("source-package-caught-errors", result.artifacts, { run: true }).status, 0);
+});
+
 test("cross-package error planning preserves each component-owned Result ABI", () => {
   const engineError = {
     fileName: "/dep/errors.ts",

@@ -53,6 +53,9 @@ export function createRustProjectTypePolicyRegistry(): RustProjectTypePolicyRegi
     get programErrorDefinitions() {
       return requireCurrent().programErrorDefinitions;
     },
+    get builtinErrorProjectionAvailable() {
+      return requireCurrent().builtinErrorProjectionAvailable;
+    },
     programErrorVariant(definition) {
       return requireCurrent().programErrorVariant(definition);
     },

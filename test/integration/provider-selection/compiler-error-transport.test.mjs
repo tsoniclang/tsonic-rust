@@ -4,10 +4,22 @@ import { Node_Expression } from "@tsonic/target-api/source";
 import { acmeTestingPackage, analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
-import { rustJsErrorTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
+import { rustJsErrorTargetType, rustProgramErrorTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
 import { planThrowStatement } from "../../../dist/backend/planner/statements/errors.js";
+import { caughtErrorProofFiles } from "../../../../tsonic/test/fixtures/caught-errors.mjs";
+import { selectRustFlowReadProjection } from "../../../dist/policy/types/value-carrier-reconciliation.js";
+import { planRustFlowReadProjection } from "../../../dist/backend/planner/expressions/flow-reads.js";
 
 for (const surfaces of [[], ["js"]]) {
+  test(`caught builtin Errors retain identity and stack in the ${surfaces.length === 0 ? "native" : "JS"} profile`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ surfaces,
+      target: { id: "rust", options: { outputType: "bin", crateName: "caught_errors" } },
+      files: { ...caughtErrorProofFiles, "index.ts": `${caughtErrorProofFiles["index.ts"]}
+export function main(): void { if (!run()) throw new Error("caught Error transport"); }` },
+    });
+    assert.deepEqual(result.diagnostics, []);
+    assert.equal(validateGeneratedProject(`caught-errors-${surfaces.length}`, result.artifacts, { run: true }).status, 0);
+  });
   test(`stored Error values cross native throw boundaries in the ${surfaces.length === 0 ? "native" : "JS"} profile`, { timeout: 300_000 }, () => {
     const { result } = compileRust({
       surfaces,
@@ -47,6 +59,82 @@ export function main(): void {
     assert.equal(validateGeneratedProject(`error-transport-${surfaces.length}`, result.artifacts, { run: true }).status, 0);
   });
 }
+
+test("closed program errors distinguish native subtypes from ordinary thrown objects", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: ["js"], packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "caught_error_variants" } },
+    files: { "index.ts": `
+import { check } from "@acme/testing";
+class PanicValue {
+  code: number;
+  constructor(code: number) { this.code = code; }
+}
+function panic(): void { throw new PanicValue(7); }
+export function main(): void {
+  const original = new RangeError("bounds");
+  const stack = original.stack;
+  let matches = 0;
+  try { throw original; }
+  catch (failure) {
+    check(!(failure instanceof TypeError));
+    check(failure instanceof Error);
+    if (failure instanceof RangeError) {
+      check(failure === original && failure.stack === stack && failure.message === "bounds");
+      matches += 1;
+    }
+  }
+  try { panic(); }
+  catch (failure) {
+    check(!(failure instanceof Error));
+    if (failure instanceof PanicValue) { check(failure.code === 7); matches += 1; }
+  }
+  check(matches === 2);
+}
+` },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  assert.equal(validateGeneratedProject("caught-error-variants", result.artifacts, { run: true }).status, 0);
+});
+
+test("inherited mutable Error storage cannot be silently reconstructed during catch narrowing", () => {
+  const { result } = compileRust({ files: { "index.ts": `
+class NamedError extends Error {
+  constructor() { super("original"); this.message = "changed"; }
+}
+export function run(): string {
+  try { throw new NamedError(); }
+  catch (failure) { if (failure instanceof Error) return failure.message; }
+  return "other";
+}
+` } });
+  assert.ok(result.diagnostics.some(diagnostic => diagnostic.code === "RUST_BUILTIN_ERROR_INHERITED_STORAGE"),
+    JSON.stringify(result.diagnostics));
+  assert.equal(result.artifacts.length, 0);
+});
+
+test("builtin catch projections require the sealed availability and exact selected carrier", () => {
+  const sourceCarrier = rustProgramErrorTargetType();
+  const selectedCarrier = rustJsErrorTargetType();
+  const policy = { builtinErrorProjectionAvailable: true, definitionForCarrier: () => undefined };
+  const selected = selectRustFlowReadProjection(sourceCarrier, selectedCarrier, policy);
+  assert.equal(selected.kind, "projection");
+  assert.equal(selected.fact.kind, "builtin-error");
+  for (const available of [false, undefined]) {
+    assert.equal(selectRustFlowReadProjection(sourceCarrier, selectedCarrier,
+      { ...policy, builtinErrorProjectionAvailable: available }).kind, "incompatible");
+    const diagnostics = [];
+    const node = {};
+    assert.equal(planRustFlowReadProjection(node, { kind: "path", path: "caught" }, selected.fact, {
+      input: { program: { facts: { getRuntimeCarrierFact: () => ({ carrier: sourceCarrier }) },
+        projectTypes: { ...policy, builtinErrorProjectionAvailable: available },
+        source: { ast: { getFileName: () => "", getSourceText: () => "", pos: () => -1,
+          end: () => -1, kindName: () => "KindIdentifier" } } } },
+      diagnostics,
+    }), undefined);
+    assert.equal(diagnostics.length, 1);
+    assert.match(diagnostics[0].message, /contradictory native carriers/u);
+  }
+});
 
 test("runtime throw facts bind the exact operand and native Error carrier", () => {
   const { program } = analyzeRust({ files: { "index.ts": `
