@@ -487,6 +487,13 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       }
     }
     const operation = facts.getFact(node, rustTargetOperationFactKey);
+    if (operation?.kind === "nullish-assignment") {
+      const parent = ast.parent(node);
+      if (parent === undefined || ast.kindName(parent) !== KindExpressionStatement) {
+        const error = addUse(node, operation.rightCarrier, ["clone"]);
+        if (error !== undefined) return error;
+      }
+    }
     if (operation?.kind === "iteration" && operation.iterationKind !== "for-in") {
       const iterable = Node_Expression(ast, node);
       const iterableCarrier = iterable === undefined ? undefined : facts.getRuntimeCarrierFact(iterable)?.carrier;

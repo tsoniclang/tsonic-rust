@@ -247,7 +247,7 @@ export function planExpressionInner(
     }
     case KindParenthesizedExpression: {
       const inner = Node_Expression(context.input.program.source.ast, node);
-      return inner === undefined ? undefined : planExpression(inner, context);
+      return inner === undefined ? undefined : planExpression(inner, context, resultUse);
     }
     case "KindAsExpression":
     case "KindTypeAssertionExpression": {
@@ -617,7 +617,7 @@ export function planExpressionInner(
       if (token !== undefined && ast.kindName(token) === KindEqualsToken) {
         return planAssignmentExpression(node, context);
       }
-      return planBinaryExpression(node, context);
+      return planBinaryExpression(node, context, resultUse);
     }
     case KindCallExpression: {
       return planCallExpression(node, context);

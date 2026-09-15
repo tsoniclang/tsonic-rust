@@ -559,6 +559,15 @@ export type RustTargetOperationFact =
     }
   | { readonly kind: "nullish-identity"; readonly operationId: string; readonly resultCarrier: TargetTypeRef }
   | {
+      readonly kind: "nullish-assignment";
+      readonly operationId: string;
+      readonly readCarrier: TargetTypeRef;
+      readonly rightCarrier: TargetTypeRef;
+      readonly presentResult: "value" | "option" | "identity";
+      readonly assignment: Extract<RustTargetOperationFact, { readonly kind: "operator-token" }>;
+      readonly resultCarrier: TargetTypeRef;
+    }
+  | {
       readonly kind: "source-conversion";
       readonly operationId: string;
       readonly conversion?: RustValueConversion;
@@ -733,6 +742,7 @@ export function rustTargetOperationResultCarrier(fact: RustTargetOperationFact):
     case "reference-operation":
     case "option-coalesce":
     case "nullish-identity":
+    case "nullish-assignment":
     case "non-null-expression":
     case "disjoint-equality":
     case "typed-location":

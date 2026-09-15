@@ -16,6 +16,7 @@ import {
   KindParenthesizedExpression,
   KindPrefixUnaryExpression,
   KindQuestionQuestionToken,
+  KindQuestionQuestionEqualsToken,
   KindStringLiteral,
   Node_Expression,
   Node_Type,
@@ -63,7 +64,7 @@ import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { rustSelectedOperationKey } from "../../target-model/facts/selections.js";
 import { rustTargetOperationSupportsAssignment, rustTargetOperationText } from "../facts/target-operation.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { rustValueCarrierBeforeOptionProjection } from "../facts/value-carrier-queries.js";
+import { rustValueCarrierBeforeContextualConversion, rustValueCarrierBeforeOptionProjection } from "../facts/value-carrier-queries.js";
 import { rustRuntimeUnionContract, rustRuntimeUnionProjection } from "../../target-model/types/carriers/runtime-unions.js";
 import { selectedSourceLiteralIsRepresentable } from "../../policy/types/selected-numeric-literal.js";
 import { setCarrierFact, setRustOperationFact } from "./project-calls.js";
@@ -93,6 +94,14 @@ export function resolveBinaryOperandCarriers(
     return undefined;
   }
   const operatorKind = walk.context.ast.kindName(operatorToken);
+  if (operatorKind === KindQuestionQuestionEqualsToken) {
+    const target = assignmentTarget(walk.context.ast, leftNode);
+    const left = resolveExpressionCarrierBeforeFlowReadProjection(walk, target, sourceFile, undefined);
+    const location = walk.context.facts.getFact(target, rustTargetOperationFactKey);
+    const storage = location?.kind === "source-accessor" ? location.write?.valueCarrier : left;
+    const right = resolveExpressionCarrier(walk, rightNode, sourceFile, storage);
+    return { left, right, leftNode, rightNode, operatorKind };
+  }
   if (operatorKind === KindInKeyword) {
     return {
       left: resolveExpressionCarrier(walk, leftNode, sourceFile, undefined),
@@ -306,10 +315,11 @@ export function resolvePostCheckBinaryCarrier(
     return undefined;
   }
   const { left, right, leftNode, rightNode, operatorKind } = operands;
-  const selectedLeftOperation = walk.context.facts.get(leftNode, rustSelectedOperationKey) ??
-    walk.context.facts.resolve(leftNode, rustSelectedOperationKey);
-  const selectedLeftFact = walk.context.facts.get(leftNode, rustTargetOperationFactKey) ??
-    walk.context.facts.resolve(leftNode, rustTargetOperationFactKey);
+  const location = operatorKind === KindQuestionQuestionEqualsToken ? assignmentTarget(walk.context.ast, leftNode) : leftNode;
+  const selectedLeftOperation = walk.context.facts.get(location, rustSelectedOperationKey) ??
+    walk.context.facts.resolve(location, rustSelectedOperationKey);
+  const selectedLeftFact = walk.context.facts.get(location, rustTargetOperationFactKey) ??
+    walk.context.facts.resolve(location, rustTargetOperationFactKey);
   const strictEquality = operatorKind === KindEqualsEqualsEqualsToken ||
     operatorKind === KindExclamationEqualsEqualsToken;
   const leftComparisonCarrier = strictEquality
@@ -355,6 +365,38 @@ export function resolvePostCheckBinaryCarrier(
   let fact: RustTargetOperationFact | undefined;
   if (errorEquality !== undefined) {
     fact = errorEquality;
+  } else if (operatorKind === KindQuestionQuestionEqualsToken && left !== undefined && right !== undefined &&
+    (walk.context.ast.kindName(location) === KindIdentifier && selectedLeftOperation === undefined ||
+      selectedLeftFact?.kind === "source-field" || selectedLeftFact?.kind === "source-accessor" ||
+      selectedLeftFact?.kind === "source-static-field") &&
+    (selectedLeftOperation === undefined || rustTargetOperationSupportsAssignment(selectedLeftFact))) {
+    const rightValue = rustValueCarrierBeforeContextualConversion(walk.context.facts, rightNode);
+    const inner = rustOptionElementCarrier(left);
+    const storage = selectedLeftFact?.kind === "source-accessor" ? selectedLeftFact.write?.valueCarrier : left;
+    const presentResult = inner !== undefined && rustTargetTypeRefEquals(inner, rightValue)
+      ? "value"
+      : inner !== undefined && rustTargetTypeRefEquals(left, rightValue)
+        ? "option"
+        : inner === undefined && !isRustNullishSourceCarrier(left) && rustTargetTypeRefEquals(left, rightValue)
+          ? "identity"
+          : undefined;
+    if (presentResult !== undefined && rightValue !== undefined && storage !== undefined &&
+      rustTargetTypeRefEquals(storage, right)) {
+      fact = {
+        kind: "nullish-assignment",
+        operationId: "tsonic.rust.assignment.nullish",
+        readCarrier: left,
+        rightCarrier: rightValue,
+        presentResult,
+        assignment: {
+          kind: "operator-token",
+          operationId: "tsonic.rust.assignment.nullish.write",
+          operator: "=",
+          resultCarrier: storage,
+        },
+        resultCarrier: presentResult === "value" ? inner! : left,
+      };
+    }
   } else if (operatorKind === KindQuestionQuestionToken) {
     const inner = rustOptionElementCarrier(left);
     if (inner !== undefined && right !== undefined &&
@@ -602,6 +644,16 @@ export function resolvePostCheckBinaryCarrier(
   setRustOperationFact(walk, expression, fact);
   recordFinalizedOperatorSelection(walk, expression, fact, resultCarrier);
   return setCarrierFact(walk, expression, resultCarrier);
+}
+
+function assignmentTarget(ast: AstReader, expression: Node): Node {
+  let target = expression;
+  while (ast.kindName(target) === KindParenthesizedExpression) {
+    const inner = Node_Expression(ast, target);
+    if (inner === undefined) break;
+    target = inner;
+  }
+  return target;
 }
 
 function inPlaceStringAppendDeclarationFor(

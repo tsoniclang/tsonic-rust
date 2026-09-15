@@ -15,3 +15,14 @@ export function main(): void { if (!run()) throw new Error("logical accessor ass
     assert.equal(validateGeneratedProject(`logical-access-${surfaces?.[0] ?? "native"}`, result.artifacts, { run: true }).status, 0);
   });
 }
+
+test("nullish assignment does not copy a fixed-array destination", () => {
+  const { result } = compileRust({ files: { "index.ts": `
+import type { FixedArray } from "@tsonic/core/types.js";
+export function fill(values: FixedArray<number | undefined, 2>): void {
+  values[0] ??= 7;
+}
+` } });
+  assert.ok(result.diagnostics.some(diagnostic => diagnostic.category === "error"));
+  assert.equal(result.artifacts.length, 0);
+});

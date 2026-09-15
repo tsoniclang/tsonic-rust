@@ -62,6 +62,12 @@ export function rustFoundationForTargetOperationFact(
       requireCarrier(fact.resultCarrier);
       fact.substitutions.forEach((substitution) => requireCarrier(substitution.carrier));
       break;
+    case "nullish-assignment":
+      requireCarrier(fact.readCarrier);
+      requireCarrier(fact.rightCarrier);
+      requireCarrier(fact.assignment.resultCarrier);
+      requireCarrier(fact.resultCarrier);
+      break;
     case "non-null-expression":
       requireCarrier(fact.sourceCarrier);
       requireCarrier(fact.resultCarrier);

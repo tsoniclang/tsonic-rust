@@ -5,6 +5,7 @@ import {
   KindArrayBindingPattern,
   KindObjectBindingPattern,
   KindPropertyAccessExpression,
+  KindParenthesizedExpression,
   Node_Expression,
   Node_Initializer,
   Node_Name,
@@ -371,6 +372,10 @@ export function recordBindingWrite(walk: RustFactWalk, target: Node | undefined,
   }
   const { ast } = walk.context;
   const kind = ast.kindName(target);
+  if (kind === KindParenthesizedExpression) {
+    recordBindingWrite(walk, Node_Expression(ast, target), writeKind);
+    return;
+  }
   if (kind === KindPropertyAccessExpression || kind === KindElementAccessExpression) {
     const receiver = Node_Expression(walk.context.ast, target);
     const receiverKind = receiver === undefined ? "" : ast.kindName(receiver);

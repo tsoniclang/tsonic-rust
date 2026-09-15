@@ -378,6 +378,7 @@ function rustOperatorText(kind: string | undefined): string | undefined {
     KindAmpersandAmpersandToken: "&&",
     KindBarBarToken: "||",
     KindQuestionQuestionToken: "??",
+    KindQuestionQuestionEqualsToken: "??=",
     KindPlusEqualsToken: "+=",
     KindMinusEqualsToken: "-=",
     KindAsteriskEqualsToken: "*=",

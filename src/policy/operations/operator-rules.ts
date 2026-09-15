@@ -22,6 +22,7 @@ import {
   KindBarBarToken,
   KindCaretToken,
   KindEqualsToken,
+  KindQuestionQuestionEqualsToken,
   KindEqualsEqualsEqualsToken,
   KindExclamationEqualsEqualsToken,
   KindGreaterThanEqualsToken,
@@ -278,6 +279,7 @@ const operatorKindByText: Readonly<Record<string, string>> = {
   "!=": "KindExclamationEqualsToken",
   "&&": KindAmpersandAmpersandToken,
   "||": KindBarBarToken,
+  "??=": KindQuestionQuestionEqualsToken,
   "+=": KindPlusEqualsToken,
   "-=": KindMinusEqualsToken,
   "*=": KindAsteriskEqualsToken,
@@ -527,7 +529,8 @@ const compoundAssignmentTokens: Readonly<Record<string, RustAssignmentOperator>>
 
 export function isRustAssignmentOperator(operatorKindOrText: string): boolean {
   const operatorKind = operatorKindByText[operatorKindOrText] ?? operatorKindOrText;
-  return operatorKind === KindEqualsToken || compoundAssignmentTokens[operatorKind] !== undefined;
+  return operatorKind === KindEqualsToken || operatorKind === KindQuestionQuestionEqualsToken ||
+    compoundAssignmentTokens[operatorKind] !== undefined;
 }
 
 export function selectRustCompoundAssignment(

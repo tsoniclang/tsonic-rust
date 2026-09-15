@@ -20,7 +20,9 @@ import { isRustBinaryOperator } from "../../../target-model/syntax/tokens.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { negateRustBooleanExpression, rustBorrowedStringView, rustStringConcat } from "../../target-ast/expressions.js";
 import { planExpression, planExpressionBeforeValueProjections } from "./entry.js";
+import type { RustExpressionResultUse } from "./entry.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
+import { planNullishAssignment } from "./nullish-assignment.js";
 import { planRustProgramErrorEquality, planRustProgramErrorTypeTest } from "./error-operations.js";
 import { planRustBuiltinErrorTypeTest } from "./builtin-errors.js";
 import {
@@ -91,7 +93,7 @@ export function planSelectedRustProjectTypeTest(
     : { fact, leftNode, left, test, ...(selection === undefined ? {} : { selection }) };
 }
 
-export function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
+export function planBinaryExpression(node: Node, context: RustPlanContext, resultUse: RustExpressionResultUse = "value"): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
   if (fact?.kind === "program-error-equality") {
     const leftNode = BinaryExpression_Left(context.input.program.source.ast, node);
@@ -159,6 +161,7 @@ export function planBinaryExpression(node: Node, context: RustPlanContext): Rust
     ));
     return undefined;
   }
+  if (fact?.kind === "nullish-assignment") return planNullishAssignment(node, fact, context, resultUse);
   if (fact !== undefined && fact.kind === "nullish-identity") {
     if (!requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.nullish-carrier")) {
       return undefined;
