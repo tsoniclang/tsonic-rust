@@ -68,7 +68,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
       return;
     }
   }
-  const externallyExtensibleDeclarations = collectExternallyExtensibleDeclarations(
+  const { externallyExtensibleDeclarations, closedSourceFiles } = collectSourcePackageBoundaries(
     context,
     projectSourceFiles,
   );
@@ -288,6 +288,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   const nativeFields = recordRustNativeBacking(walk);
   const callableSpecializations = context.sourceCallableSpecializations.initialize({
     ast,
+    closedSourceFiles,
     names: context.names,
     projectTypes,
     sourceLifetimes: context.sourceLifetimes,
@@ -384,22 +385,32 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   recordFutureValueFacts(walk, projectSourceFiles);
 }
 
-function collectExternallyExtensibleDeclarations(
+function collectSourcePackageBoundaries(
   context: RustAnalysisContext,
   sourceFiles: readonly SourceFile[],
-): ReadonlySet<Node> {
+): {
+  readonly externallyExtensibleDeclarations: ReadonlySet<Node>;
+  readonly closedSourceFiles: ReadonlySet<SourceFile>;
+} {
+  const externallyExtensibleDeclarations = new Set<Node>();
+  const closedSourceFiles = new Set<SourceFile>();
   const rootPackage = context.sourcePackages.packages.find((sourcePackage) =>
     sourcePackage.id === context.sourcePackages.rootPackageId);
   if (rootPackage === undefined) {
-    return Object.freeze(new Set<Node>());
+    return { externallyExtensibleDeclarations, closedSourceFiles };
   }
   const sourceFileByName = new Map(sourceFiles.map((sourceFile) =>
     [normalizeSourceFileName(context.ast.getFileName(sourceFile)), sourceFile] as const));
-  const result = new Set<Node>();
   for (const sourcePackage of context.sourcePackages.packages) {
     const publishesLibrary = sourcePackage.componentId !== rootPackage.componentId ||
       context.rootPublishesLibrary;
     if (!publishesLibrary) {
+      for (const fileName of sourcePackage.sourceFiles) {
+        const sourceFile = sourceFileByName.get(normalizeSourceFileName(fileName));
+        if (sourceFile !== undefined) {
+          closedSourceFiles.add(sourceFile);
+        }
+      }
       continue;
     }
     for (const sourceExport of sourcePackage.exports) {
@@ -409,12 +420,12 @@ function collectExternallyExtensibleDeclarations(
       }
       for (const exported of context.source.navigation.moduleExports(sourceFile)) {
         if (context.ast.is.IsClassDeclaration(exported.declaration)) {
-          result.add(exported.declaration);
+          externallyExtensibleDeclarations.add(exported.declaration);
         }
       }
     }
   }
-  return Object.freeze(result);
+  return Object.freeze({ externallyExtensibleDeclarations, closedSourceFiles });
 }
 
 function normalizeSourceFileName(value: string): string {

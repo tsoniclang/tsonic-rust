@@ -2,6 +2,34 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { acmeTestingPackage, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
+import { closedGenericDispatchProofFiles } from "../../../../tsonic/test/fixtures/closed-generic-dispatch.mjs";
+
+test("module exports inside a binary retain finite generic virtual dispatch", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"], packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "closed_generic_dispatch" } },
+    files: { ...closedGenericDispatchProofFiles,
+      "index.ts": `${closedGenericDispatchProofFiles["index.ts"]}
+import { check } from "@acme/testing";
+export function main(): void { check(run()); }
+` },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  validateGeneratedProject("closed-generic-dispatch", result.artifacts, { run: true });
+});
+
+test("library exports cannot replace an open generic dispatch ABI with finite variants", () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    target: { id: "rust", options: { outputType: "lib", crateName: "open_generic_dispatch" } },
+    files: closedGenericDispatchProofFiles,
+  });
+  assert.ok(result.diagnostics.some(diagnostic =>
+    diagnostic.code === "RUST_SOURCE_CALLABLE_SPECIALIZATION_NOT_CLOSED" &&
+    diagnostic.message.includes("open public target contract")),
+  JSON.stringify(result.diagnostics));
+  assert.deepEqual(result.artifacts, []);
+});
 
 test("compiler generic container methods instantiate receiver and method arguments independently", { timeout: 300_000 }, () => {
   const { result } = compileRust({

@@ -64,6 +64,7 @@ export interface RustSourceCallableSpecializationPlanRegistry
   }): RustSourceCallableSpecializationRegistration;
   initialize(input: {
     readonly ast: AstReader;
+    readonly closedSourceFiles: ReadonlySet<SourceFile>;
     readonly names: RustNamePlan;
     readonly projectTypes: RustProjectTypePolicy;
     readonly sourceLifetimes: RustLifetimeIndex;
@@ -182,6 +183,7 @@ function createRustSourceCallableSpecializationPlan(
   projectMethodCalls: readonly ProjectMethodEdge[],
   input: {
     readonly ast: AstReader;
+    readonly closedSourceFiles: ReadonlySet<SourceFile>;
     readonly names: RustNamePlan;
     readonly projectTypes: RustProjectTypePolicy;
     readonly sourceLifetimes: RustLifetimeIndex;
@@ -322,7 +324,9 @@ function createRustSourceCallableSpecializationPlan(
       );
       continue;
     }
-    if (callableIsExternallyReachable(declaration, input.ast)) {
+    const sourceFile = input.ast.getSourceFile(declaration);
+    if ((sourceFile === undefined || !input.closedSourceFiles.has(sourceFile)) &&
+      callableIsExternallyReachable(declaration, input.ast)) {
       addIssue(
         declaration,
         "An exported generic callable reaches Rust object-safe dynamic dispatch and cannot preserve an open public target contract; expose closed non-generic entry points instead.",
