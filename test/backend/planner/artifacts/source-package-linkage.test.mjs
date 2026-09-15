@@ -62,6 +62,7 @@ test("source-package components are dependency ordered and ignore inactive packa
       dependencyComponentIds: [],
       publishesImplementationAbi: true,
       errorDomain: "project",
+      errorOwnerComponentId: "dependency",
       root: false,
     }, {
       componentId: "root",
@@ -69,6 +70,7 @@ test("source-package components are dependency ordered and ignore inactive packa
       dependencyComponentIds: ["dependency"],
       publishesImplementationAbi: false,
       errorDomain: "project",
+      errorOwnerComponentId: "dependency",
       root: true,
     }]),
     projectTypes: {
@@ -513,12 +515,14 @@ test("cross-package error planning preserves each component-owned Result ABI", (
     crateName: "engine_crate",
     programModuleName: "program",
     errorDomain: "project",
+    errorOwnerComponentId: "dependency",
   }, {
     componentId: "root",
     sourceFileNames: new Set(["/root/index.ts"]),
     dependencyComponentIds: ["dependency"],
     programModuleName: "program",
     errorDomain: "project",
+    errorOwnerComponentId: "dependency",
   }];
   const result = planRustSourcePackageErrors(planningContext({
     projectTypes: {
@@ -545,7 +549,7 @@ test("cross-package error planning preserves each component-owned Result ABI", (
       componentId: "root",
       errorDomain: "project",
       errorTypePath: "rt::TsonicError",
-      errorTypeIdentity: "tsonic-source-package:root:TsonicError",
+      errorTypeIdentity: "tsonic-source-package:dependency:TsonicError",
     },
   );
   assert.deepEqual(
@@ -554,12 +558,7 @@ test("cross-package error planning preserves each component-owned Result ABI", (
   );
   assert.deepEqual(
     resolveRustProgramErrorRoute(result.plan, "root", engineError, "EngineFailure"),
-    {
-      kind: "external",
-      consumerVariant: "EngineCrateError",
-      ownerTypePath: "engine_crate::program::TsonicError",
-      ownerVariant: "EngineFailure",
-    },
+    { kind: "local", variant: "EngineFailure" },
   );
   assert.equal(
     resolveRustSourcePackageErrorBoundary(result.plan, "dependency", "root"),

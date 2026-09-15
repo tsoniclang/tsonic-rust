@@ -29,6 +29,7 @@ export interface RustSourcePackageComponentPlan {
   readonly publicImplementationItemIdentities: ReadonlySet<string>;
   readonly publishesImplementationAbi: boolean;
   readonly errorDomain: RustErrorDomain;
+  readonly errorOwnerComponentId: string | undefined;
   readonly root: boolean;
 }
 
@@ -143,6 +144,7 @@ export function planRustSourcePackageComponents(
         ) ?? Object.freeze(new Set<string>()),
       publishesImplementationAbi: component.publishesImplementationAbi,
       errorDomain: component.errorDomain,
+      errorOwnerComponentId: component.errorOwnerComponentId,
       root: component.root,
     }));
   }

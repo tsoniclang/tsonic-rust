@@ -13,7 +13,6 @@ import {
 } from "./module-initialization.js";
 import {
   resolveRustSourcePackageErrorBoundary,
-  rustSourcePackageErrorTypeIdentity,
   type RustSourcePackageErrorPlan,
 } from "./source-package-errors.js";
 
@@ -97,10 +96,7 @@ export function planRustWorkerEntries(input: {
       path: componentErrorDomain.errorDomain === "runtime"
         ? "tsonic_rust_runtime::TsonicError"
         : `crate::${component.programModuleName}::TsonicError`,
-      identity: rustSourcePackageErrorTypeIdentity(
-        component.componentId,
-        componentErrorDomain.errorDomain,
-      ),
+      identity: componentErrorDomain.errorTypeIdentity,
     };
     const initializers = planRustModuleInitializers(
       input.planning,

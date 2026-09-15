@@ -40,7 +40,6 @@ import {
 import {
   planRustSourcePackageErrors,
   rustRuntimeErrorTypeIdentity,
-  rustSourcePackageErrorTypeIdentity,
 } from "./source-package-errors.js";
 import { planRustSourcePackageComponents } from "./source-package-components.js";
 import {
@@ -325,10 +324,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     });
     return rejectedTargetStage(diagnostics);
   }
-  const rootErrorTypeIdentity = rustSourcePackageErrorTypeIdentity(
-    facadePlan.rootComponentId,
-    rootErrorDomain.errorDomain,
-  );
+  const rootErrorTypeIdentity = rootErrorDomain.errorTypeIdentity;
   const programErrorModel = rootCrateContent.programErrorModel;
   const rootCrateErrorType: import("../../target-ast/nodes.js").RustType = {
     kind: "named",

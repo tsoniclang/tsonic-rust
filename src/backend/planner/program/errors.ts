@@ -79,6 +79,11 @@ export function planRustProgramErrorModule(
   domain: import("./source-package-errors.js").RustSourcePackageErrorDomainPlan,
   diagnostics: TargetDiagnostic[],
 ): RustSourceFileModel | undefined {
+  if (domain.forwardModulePath !== undefined) {
+    return createRustSourceFile([{
+      kind: "use", visibility: "public", path: `${domain.forwardModulePath}::*`,
+    }]);
+  }
   const definitions = domain.definitions;
   const externalPackageErrors = domain.externalErrors;
   if (definitions.length === 0 && externalPackageErrors.length === 0) {
