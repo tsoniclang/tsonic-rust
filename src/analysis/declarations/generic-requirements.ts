@@ -253,7 +253,8 @@ export function analyzeRustDeclarationGenericRequirements(
   });
   const shapeContracts = new Map<string, RustShapeGenericRequirementContract>();
   for (const carrier of [...shapes.definitions.map(definition => definition.carrier),
-    ...shapes.unionDefinitions.flatMap(definition => definition.sourceCarriers)]) {
+    ...shapes.unionDefinitions.flatMap(definition => definition.sourceCarriers),
+    ...typeFamilies.implementations().map(implementation => ({ kind: "tuple" as const, elements: [implementation.owner, implementation.output] }))]) {
     const contract = analyzeRustShapeGenericRequirements(carrier, projectTypes, typeFamilies, index.contractFor, definitions);
     if (contract === undefined) return { kind: "rejected", diagnostics: Object.freeze([diagnostic(
       "RUST_SHAPE_GENERIC_CONTRACT_NOT_PROVEN", "A structural source carrier has no exact generic or associated-output requirements.",

@@ -3,6 +3,7 @@ import {
   rustSourceTypeCarrier,
   rustSourceTypeCarrierValue,
   rustSourceUnionCarrierValue,
+  rustStructuralObjectCarrierValue,
 } from "../../../target-model/types/index.js";
 import type { Node, Symbol, Type } from "@tsonic/tsts";
 import { substituteRustTargetGenerics } from "../../../target-model/types/carriers/substitution.js";
@@ -13,6 +14,7 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustTargetGenericArgument } from "../../../target-model/types/model.js";
 import { rustProjectGenericParameters } from "../project-generic-contract.js";
 import { resolveRustTargetType } from "./target.js";
+import { retainRustStructuralInstantiation } from "./structural-instantiations.js";
 
 export interface RustResolvedProjectGenericArguments {
   readonly values: readonly RustTargetGenericArgument[];
@@ -103,7 +105,11 @@ export function resolveProjectSourceCarrier(
         if (parameter.kind === "type" && argument.kind === "type") substitutions.set(parameter.targetName, argument.type);
         if (parameter.kind === "lifetime" && argument.kind === "lifetime") lifetimes.set(rustLifetimeKey(parameter.lifetime), argument.lifetime);
       });
-      return substituteRustTargetGenerics(carrier, substitutions, lifetimes);
+      const instantiated = substituteRustTargetGenerics(carrier, substitutions, lifetimes);
+      if (rustStructuralObjectCarrierValue(carrier) !== undefined &&
+        (selectedType === undefined || !retainRustStructuralInstantiation(
+          selectedType, carrier, instantiated, context, options))) continue;
+      return instantiated;
     }
   }
   return undefined;

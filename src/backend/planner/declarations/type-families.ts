@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustItem } from "../../target-ast/nodes.js";
+import type { RustGenerics, RustItem } from "../../target-ast/nodes.js";
 import { emptyRustGenerics } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { diagnosticInput } from "../program/plan-context.js";
@@ -8,6 +8,8 @@ import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustProjectGenerics } from "../objects/polymorphism/names.js";
 import { rustTargetGenericReferences } from "../../../target-model/types/carriers/generic-references.js";
 import { rustAuthoredDeadCodeDisposition } from "../liveness/directives.js";
+import { rustGenericRequirementBounds } from "../types/generic-bounds.js";
+import { rustAssociatedPredicates } from "../types/associated-bounds.js";
 
 export function planRustTypeFamilyDeclaration(
   declaration: Node,
@@ -35,8 +37,16 @@ export function planRustTypeFamilyImplementations(context: RustPlanContext): rea
     const output = rustTypeFromCarrierInContext(implementation.output, context);
     const parameters = rustTargetGenericReferences(implementation.owner);
     const definition = context.input.program.projectTypes.definitionForCarrier(implementation.owner);
-    const generics = parameters.typeNames.length === 0 && parameters.lifetimes.length === 0 && parameters.constIdentities.length === 0
-      ? emptyRustGenerics : definition === undefined ? undefined : rustProjectGenerics(definition, context);
+    const contract = context.input.program.declarationGenericRequirements.contractForCarrier({
+      kind: "tuple", elements: [implementation.owner, implementation.output],
+    });
+    const compoundGenerics: RustGenerics | undefined = contract === undefined ||
+      parameters.lifetimes.length !== 0 || parameters.constIdentities.length !== 0 ? undefined : {
+        parameters: contract.typeParameters.map(parameter => ({ kind: "type", name: parameter.name,
+          bounds: rustGenericRequirementBounds(parameter.requirements) })),
+        wherePredicates: rustAssociatedPredicates(contract.associatedTypes, context),
+      };
+    const generics = definition === undefined ? compoundGenerics : rustProjectGenerics(definition, context);
     if (owner === undefined || trait === undefined || output === undefined || generics === undefined) {
       context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, implementation.family.declaration),
         "rust.backend.type-family-implementation", "A checked type family implementation has no exact native declaration contract."));

@@ -2,6 +2,7 @@ import type { Type } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import { rustStructuralObjectCarrierValue } from "../../../target-model/types/carriers/source-types.js";
+import { rustJsArrayLikeElementTargetType, isRustJsArrayCarrier } from "../../../target-model/types/carriers/js.js";
 
 export function retainRustStructuralInstantiation(
   sourceType: Type,
@@ -10,6 +11,18 @@ export function retainRustStructuralInstantiation(
   context: RustTargetTypeResolutionContext,
   options: RustTargetTypeResolutionOptions,
 ): boolean {
+  const templateElement = templateCarrier.kind === "array" ? templateCarrier.element :
+    isRustJsArrayCarrier(templateCarrier) ? rustJsArrayLikeElementTargetType(templateCarrier) : undefined;
+  const element = carrier.kind === "array" ? carrier.element :
+    isRustJsArrayCarrier(carrier) ? rustJsArrayLikeElementTargetType(carrier) : undefined;
+  if (templateElement !== undefined || element !== undefined) {
+    if (templateElement === undefined || element === undefined ||
+      !context.currentSemantics.types.isArrayLike(sourceType) ||
+      !context.currentSemantics.types.isTypeReference(sourceType)) return false;
+    const arguments_ = context.currentSemantics.types.typeArguments(sourceType);
+    return arguments_.length === 1 && arguments_[0] !== undefined &&
+      retainRustStructuralInstantiation(arguments_[0], templateElement, element, context, options);
+  }
   const structural = rustStructuralObjectCarrierValue(carrier);
   if (structural === undefined || rustStructuralObjectCarrierValue(templateCarrier) === undefined) return true;
   const template = options.sourceTypes.structuralObjectForCarrier(templateCarrier);

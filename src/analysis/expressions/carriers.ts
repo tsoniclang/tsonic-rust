@@ -478,7 +478,6 @@ function resolveSelectedFlowReadCarrier(
         walk,
       );
     }
-    return sourceCarrier;
   }
   const semanticCarrier = resolveRustTargetTypeRef(
     selectedType,

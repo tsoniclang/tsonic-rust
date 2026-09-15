@@ -28,8 +28,9 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { selectRustPointerReturnCarrier } from "../../operations/pointer-return.js";
 import { rustTargetGenericReferences } from "../../../target-model/types/carriers/generic-references.js";
 import { inferRustTargetTypeParameterBindings } from "../../../target-model/types/carriers/generic-inference.js";
-import { substituteRustTargetTypeParameters } from "../../../target-model/types/carriers/substitution.js";
+import { mapRustTargetTypes } from "../../../target-model/types/carriers/substitution.js";
 import { resolveBoundSourceTypeParameter } from "./callables.js";
+import { rustTypeFamilyNormalizer } from "../type-family-normalization.js";
 
 export function resolveRustSignatureParameterListTarget(
   parameters: SourceCallableTypeEvidence["parameters"],
@@ -192,16 +193,19 @@ export function resolveRustTypeComponentEvidence(
     return rustTargetTypeRefEquals(authored, selectedParameter) ? selectedParameter : undefined;
   }
   if (authored !== undefined && selected !== undefined) {
-    const references = rustTargetGenericReferences(authored);
+    const normalize = rustTypeFamilyNormalizer(options.sourceTypes.typeFamilies);
+    const normalizedAuthored = mapRustTargetTypes(authored, normalize);
+    const normalizedSelected = mapRustTargetTypes(selected, normalize);
+    const references = rustTargetGenericReferences(normalizedAuthored);
     if (references.typeNames.length > 0) {
       const substitutions = inferRustTargetTypeParameterBindings(
-        authored,
-        selected,
+        normalizedAuthored,
+        normalizedSelected,
         new Set(references.typeNames),
       );
       return substitutions === undefined
         ? undefined
-        : substituteRustTargetTypeParameters(authored, substitutions);
+        : selected;
     }
   }
   if (selection.kind === "authored-members") {

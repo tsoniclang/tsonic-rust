@@ -3,11 +3,13 @@ import type { RustFactWalk } from "../program/walk.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { rustSourceParameterAbiFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
-import { substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
+import { mapRustTargetTypes, substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
 import { rustSourceTypeCarrierValue } from "../../target-model/types/index.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { resolveRustTypeFamilyApplication } from "../../policy/types/resolution/type-families.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustTypeFamilyNormalizer } from "../../policy/types/type-family-normalization.js";
 
 interface FamilyDemandContext {
   readonly types: ReadonlyMap<Type, Type>;
@@ -27,6 +29,7 @@ export function realizeRustSourceTypeFamilyDemands(walk: RustFactWalk, files: re
   const typeIds = new WeakMap<Type, number>();
   let nextTypeId = 0;
   let rejected = false;
+  const normalize = rustTypeFamilyNormalizer(walk.context.typeFamilies);
   const empty: FamilyDemandContext = { types: new Map(), carriers: new Map() };
   const typeId = (type: Type): number => {
     let identity = typeIds.get(type);
@@ -84,6 +87,12 @@ export function realizeRustSourceTypeFamilyDemands(walk: RustFactWalk, files: re
     if (carrier.kind === "associated-type" && carrier.trait?.sourceItem !== undefined) {
       const family = walk.context.typeFamilies.get(carrier.trait.id);
       const owner = substituteRustTargetTypeParameters(carrier.owner, demand.carriers);
+      const applicationCarrier: TargetTypeRef = { ...carrier, owner };
+      const normalized = mapRustTargetTypes(applicationCarrier, normalize);
+      if (!rustTargetTypeRefEquals(normalized, applicationCarrier)) {
+        visitCarrier(normalized, node, demand);
+        return;
+      }
       let type: Type | undefined;
       if (carrier.owner.kind === "type-parameter") {
         const declaration = enclosingParameter(node, carrier.owner.name, walk);
