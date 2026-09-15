@@ -405,7 +405,7 @@ function mapSelectedAssignment(
     sourceReceiver: receiver,
     sourceSelectedDeclaration: selectedDeclaration,
     sourceResultType: request.right,
-  }, right ?? left);
+  }, context.facts.getRuntimeCarrierFact(request.right)?.carrier ?? right ?? left);
 }
 
 function mapSelectedProviderAssignment(

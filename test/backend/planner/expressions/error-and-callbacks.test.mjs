@@ -3,6 +3,30 @@ import assert from "node:assert/strict";
 import { acmeTestingPackage, artifactText, compileRust, nodejsCapability } from "../../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
 
+test("Error construction without a message preserves throwing and catching", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "empty_error_message" } },
+    files: { "index.ts": `
+import { check } from "@acme/testing";
+export function main(): void {
+  const error = new Error();
+  check(error.message === "");
+  check(error.name === "Error");
+  let caught = false;
+  try { throw error; }
+  catch (failure) {
+    if (failure instanceof Error) caught = failure.message === "";
+  }
+  check(caught);
+}
+` },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  validateGeneratedProject("empty-error-message", result.artifacts, { run: true });
+});
+
 test("Error subclasses retain exact inherited field selection for reads and writes", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     surfaces: ["js"],
@@ -588,7 +612,7 @@ export function safe(xs: int32[]): int32 {
   assert.match(artifactText(result, "src/index.rs"), /xs\.map\(\|x\| x \* 2\)/u);
 });
 
-test("fallible provider rows are restricted to method, constructor, and property operations", async () => {
+test("fallible index operations require their exact native error carrier", async () => {
   const { createRustProviderPackage } = await import("../../../../dist/public/provider.js");
   assert.throws(
     () => createRustProviderPackage({
@@ -627,7 +651,7 @@ test("fallible provider rows are restricted to method, constructor, and property
       }],
       crates: [],
     }),
-    /isFallible is supported only on method, constructor, and property operations/u,
+    /provider-native row .* requires an exact errorCarrier/u,
   );
 });
 

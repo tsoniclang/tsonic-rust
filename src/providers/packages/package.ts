@@ -12,7 +12,7 @@ import { createRustProviderPackageSourceExtension, rustProviderBindingProviderId
 import { rustProviderPolicyContributionKind } from "./model.js";
 import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { validateProviderPackageDefinition } from "./validation.js";
-import { rustProviderGlobalDeclarations } from "./globals.js";
+import { rustProviderGlobalDeclarations } from "../../source/provider-globals.js";
 import type {
   SelectedTargetCapabilityContributions,
   TargetRuntimeContributionContext,

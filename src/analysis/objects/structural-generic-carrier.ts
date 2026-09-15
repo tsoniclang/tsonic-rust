@@ -5,8 +5,9 @@ import { rustTargetGenericReferences, rustTargetTypeParameterNames } from "../..
 
 export function rustStructuralGenericCarrier(carrier: TargetTypeRef): TargetTypeRef {
   const used = new Set(rustTargetGenericReferences(carrier).typeNames);
+  if (used.size === 0) return carrier;
   const parameters = new Map<string, TargetTypeRef>();
-  return mapRustTargetTypes(carrier, type => {
+  const selected = mapRustTargetTypes(carrier, type => {
     if (type.kind !== "associated-type" || rustTargetTypeParameterNames(type).length === 0) return type;
     const key = closedMetadataKey(type);
     const existing = parameters.get(key);
@@ -19,4 +20,5 @@ export function rustStructuralGenericCarrier(carrier: TargetTypeRef): TargetType
     parameters.set(key, parameter);
     return parameter;
   });
+  return parameters.size === 0 ? carrier : selected;
 }

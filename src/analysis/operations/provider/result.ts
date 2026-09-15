@@ -104,12 +104,11 @@ export function selectedMemberReceiverCarrier(
   }
   const flowRead = context.facts.get(receiver, rustFlowReadProjectionFactKey) ??
     context.facts.resolve(receiver, rustFlowReadProjectionFactKey);
-  if (flowRead !== undefined) {
-    return rustTargetTypeRefEquals(sourceCarrier, flowRead.sourceCarrier)
-      ? flowRead.selectedCarrier
-      : undefined;
+  if (flowRead !== undefined && !rustTargetTypeRefEquals(sourceCarrier, flowRead.sourceCarrier)) {
+    return undefined;
   }
-  const sourceUnionCarrier = rustOptionElementCarrier(sourceCarrier) ?? sourceCarrier;
+  const refinedCarrier = flowRead?.selectedCarrier ?? sourceCarrier;
+  const sourceUnionCarrier = rustOptionElementCarrier(refinedCarrier) ?? refinedCarrier;
   const sourceUnion = sourceUnionCarrier === undefined
     ? undefined
     : options.sourceTypes.sourceUnionForCarrier(sourceUnionCarrier);
@@ -125,6 +124,7 @@ export function selectedMemberReceiverCarrier(
       );
     }
   }
+  if (flowRead !== undefined) return flowRead.selectedCarrier;
   if (sourceUnionCarrier !== undefined &&
     options.sourceTypes.sourceUnionVariantIndexesForTypes(
       sourceUnionCarrier,

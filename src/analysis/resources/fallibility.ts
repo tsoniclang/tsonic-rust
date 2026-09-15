@@ -66,7 +66,7 @@ function resolveFutureOperationOrigin(
   try {
     const operation = walk.context.facts.get(node, rustTargetOperationFactKey) ??
       walk.context.facts.resolve(node, rustTargetOperationFactKey);
-    if ((operation?.kind === "provider-operation" && operation.abi.result.kind === "async") ||
+    if ((operation?.kind === "provider-operation" && operation.abi.effects.awaiting !== "not-applicable") ||
       (operation?.kind === "source-call" && rustFutureOutputCarrier(operation.resultCarrier) !== undefined)) {
       return { expression: node, operation };
     }

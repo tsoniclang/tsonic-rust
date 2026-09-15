@@ -52,8 +52,9 @@ test("type family publication snapshots target carriers and prohibits late write
   mutable.name = "uint32";
   const sealed = registry.seal();
   assert.equal(sealed.implementations[0].output.name, "int32");
-  assert.deepEqual(sealed.implementation(family.trait.id, signed).output, signed);
-  assert.equal(sealed.implementation(family.trait.id, unsigned), undefined);
+  assert.deepEqual(sealed.normalize({ ...projection, owner: signed }), signed);
+  const unselected = { ...projection, owner: unsigned };
+  assert.equal(sealed.normalize(unselected), unselected);
   assert.equal(Object.isFrozen(sealed.implementations[0].output), true);
   assert.throws(() => registry.register(family), /already sealed/u);
   assert.throws(() => registry.registerImplementation(sealed.implementations[0]), /already sealed/u);

@@ -37,6 +37,8 @@ export function resolveRustConditionalAlias(
   if (arguments_.some(argument => argument === undefined)) return undefined;
   const application = context.currentSemantics.types.instantiateAlias(declaration, arguments_ as readonly Type[]);
   if (application?.kind !== "conditional") return undefined;
+  const root = application.conditionalSteps[0];
+  if (root === undefined || rustSourceTypeFamilyDeclaration(root.conditional, context) === undefined) return undefined;
   if (resolving.has(node)) return { carrier: undefined };
   resolving.add(node);
   try {
@@ -57,7 +59,7 @@ export function resolveRustTypeFamilyApplication(
 ): TargetTypeRef | undefined {
   if (application.kind !== "conditional" || arguments_.length !== application.bindings.length) return undefined;
   const root = application.conditionalSteps[0];
-  const family = root === undefined ? undefined : sourceFamily(root.conditional, context);
+  const family = root === undefined ? undefined : rustSourceTypeFamilyDeclaration(root.conditional, context);
   if (family === undefined || application.bindings.length !== 1) return undefined;
   const rootBinding = root!.bindings.find(binding => binding.declarations.includes(family.parameter));
   const parameterIndex = application.bindings.findIndex(binding => binding.parameter === rootBinding?.applicationParameter);
@@ -114,7 +116,7 @@ export function resolveRustTypeFamilyApplication(
   return result;
 }
 
-function sourceFamily(
+export function rustSourceTypeFamilyDeclaration(
   conditional: Node,
   context: RustTargetTypeResolutionContext,
 ): RustSourceTypeFamily | undefined {

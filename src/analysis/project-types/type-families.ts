@@ -10,6 +10,7 @@ import { rustTargetTypeParameterNames } from "../../target-model/types/carriers/
 import { inferRustTargetTypeParameterBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
 import { rustNamedTypeCarrierValue, rustSourceTypeCarrierValue } from "../../target-model/types/index.js";
+import { rustTypeFamilyNormalizer } from "../../policy/types/type-family-normalization.js";
 
 interface ImplementationBucket {
   readonly closed: Map<string, RustSourceTypeFamilyImplementation>;
@@ -108,7 +109,7 @@ export function createRustSourceTypeFamilyRegistry(): RustSourceTypeFamilyRegist
       return Object.freeze({
         families: Object.freeze([...families.values()]),
         implementations: Object.freeze([...implementations.values()]),
-        implementation,
+        normalize: rustTypeFamilyNormalizer({ implementation }),
       });
     },
   });

@@ -1,6 +1,6 @@
 import { isTsonicSourceProfileDeclarationPath } from "@tsonic/target-api/provider";
 import type { Node, ProviderDeclarationIdentity } from "@tsonic/tsts";
-import { rustProviderGlobalsFileName } from "../../providers/packages/globals.js";
+import { rustProviderGlobalsFileName } from "../../source/provider-globals.js";
 import type { RustProviderExportRow } from "../../providers/packages/model.js";
 import type { RustSourcePolicyContext } from "../model/context.js";
 

@@ -119,13 +119,13 @@ test("provider setter metadata rejects readonly, non-unit, and incomplete contra
   );
 });
 
-test("provider setters cannot smuggle call-only effects or property signature guesses", () => {
+test("provider setters require exact error carriers and cannot smuggle async effects or signature guesses", () => {
   assert.throws(
     () => createRustProviderPackage(storeDefinition([propertySetter({
       isFallible: true,
       errorBoundary: "provider-native",
     })])),
-    /isFallible is supported only on method, constructor, and property operations/u,
+    /provider-native row .* requires an exact errorCarrier/u,
   );
   assert.throws(
     () => createRustProviderPackage(storeDefinition([propertySetter({ isAsync: true })])),

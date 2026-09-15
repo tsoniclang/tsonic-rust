@@ -637,7 +637,7 @@ test("backend provider lowering consumes only total finalized operation ABI", ()
   assert.match(expressionFacts, /function providerSelectedCallMatches\(/u);
   assert.match(expressionFacts, /getSelectedTargetCall\(node\)/u);
   assert.match(runtimeSet, /fact\.abi\.operationKind !== expectedOperationKind/u);
-  assert.match(runtimeSet, /fact\.abi\.effects\.invocation !== "infallible"/u);
+  assert.match(runtimeSet, /finishProviderOperationExpression\(context, fact, call, expression\)/u);
   assert.match(runtimeSet, /getRuntimeCarrierFact\(right\)/u);
   assert.match(runtimeSet, /selectedOperatorIdentityMatches/u);
 });

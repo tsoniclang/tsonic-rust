@@ -134,6 +134,9 @@ export const dog = animal as Dog;
   assert.deepEqual(result.diagnostics.map(({ code, message }) => ({ code, message })), [{
     code: "RUST_ASSERTION_UNSUPPORTED",
     message: "Checked source assertion does not map to an identity or explicit Rust runtime conversion.",
+  }, {
+    code: "RUST_AMBIENT_VALUE_IMPLEMENTATION_MISSING",
+    message: "A runtime read of an authored ambient variable requires an exact native implementation.",
   }]);
 });
 
@@ -156,25 +159,32 @@ export function second(pair: [int32, int32]): int32 {
   validateGeneratedProject("selected-tuple-ordinal", result.artifacts);
 });
 
-test("ambiguous tuple indexes do not fall back to source spelling", () => {
+test("homogeneous tuple indexes consume checked numeric conversion evidence", { timeout: 300_000 }, () => {
   const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "tuple_selected_index" } },
     files: {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
 
 export function pick(pair: [int32, int32], flag: boolean): int32 {
   const index: 0 | 1 = flag ? 0 : 1;
   return pair[index];
 }
+
+export function main(): void {
+  check(pick([17, 29], true) === 17);
+  check(pick([17, 29], false) === 29);
+}
 `,
     },
   });
 
-  assert.deepEqual(result.artifacts, []);
-  assert.deepEqual(result.diagnostics.map(({ code, message }) => ({ code, message })), [{
-    code: "RUST_FIXED_ARRAY_DYNAMIC_INDEX_CARRIER_UNSUPPORTED",
-    message: "Dynamic fixed-array element access requires an exact int32 index carrier; literal unions and other source carriers are not reconstructed from their spelling.",
-  }]);
+  assert.deepEqual(result.diagnostics, []);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /rt::conversions::f64_to_i32\(index\)\?/u);
+  validateGeneratedProject("tuple-selected-index", result.artifacts, { run: true });
 });
 
 test("flow-narrowed indexes consume the exact selected argument type", () => {

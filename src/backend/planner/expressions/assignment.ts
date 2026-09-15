@@ -1,6 +1,6 @@
 import { BinaryExpression_Right } from "@tsonic/target-api/source";
 import type { Node } from "@tsonic/tsts";
-import { rustValueCarrierBeforeOptionProjection } from "../../../analysis/facts/value-carrier-queries.js";
+import { rustValueCarrierBeforeContextualConversion } from "../../../analysis/facts/value-carrier-queries.js";
 import { isRustCopyCarrier } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { RustExpr } from "../../target-ast/nodes.js";
@@ -11,12 +11,12 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { planExpressionAsStatement } from "../statements/expression-statements.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
-import { planExpressionBeforeOptionProjection } from "./entry.js";
+import { planExpressionBeforeContextualConversion } from "./entry.js";
 import { expressionCarrier } from "./fundamentals.js";
 
 export function planAssignmentExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
   const right = BinaryExpression_Right(context.input.program.source.ast, node);
-  const carrier = rustValueCarrierBeforeOptionProjection(context.input.program.facts, right);
+  const carrier = rustValueCarrierBeforeContextualConversion(context.input.program.facts, right);
   const type = carrier === undefined ? undefined : rustTypeFromCarrierInContext(carrier, context);
   if (right === undefined || carrier === undefined || type === undefined ||
       context.syntheticNames === undefined ||
@@ -32,7 +32,7 @@ export function planAssignmentExpression(node: Node, context: RustPlanContext): 
   if (!copy && !requireRustCarrierRequirements(carrier, ["clone"], node, context)) {
     return undefined;
   }
-  const value = planExpressionBeforeOptionProjection(right, context);
+  const value = planExpressionBeforeContextualConversion(right, context);
   if (value === undefined) return undefined;
   const resultName = allocateRustSyntheticName(context.syntheticNames, "assignment_result");
   const valueName = allocateRustSyntheticName(context.syntheticNames, "assignment_value");

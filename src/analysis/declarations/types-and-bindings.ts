@@ -9,7 +9,6 @@ import {
   Node_Initializer,
   Node_Name,
   Node_Type,
-  sourceNodeIdentity,
 } from "@tsonic/target-api/source";
 import {
   rustMutatedBindingFactKey,
@@ -31,7 +30,7 @@ import { sourceTypeCarrierForDeclaration } from "../operations/inputs.js";
 import type { Node, SourceFile, Type } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { resolveRustTypeFamilyApplication } from "../../policy/types/resolution/type-families.js";
+import { resolveRustTypeFamilyApplication, rustSourceTypeFamilyDeclaration } from "../../policy/types/resolution/type-families.js";
 
 export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
   const variants = walk.sourceTypes.enumVariantsForDeclaration(declaration);
@@ -75,14 +74,15 @@ export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
       ? { kind: "type-parameter" as const, name: parameter.targetName } : undefined);
     const application = arguments_.some(argument => argument === undefined) ? undefined
       : semantics.types.instantiateAlias(declaration, arguments_ as readonly Type[]);
-    if (application?.kind === "conditional") {
+    const root = application?.conditionalSteps[0];
+    const selectedFamily = root === undefined ? undefined
+      : rustSourceTypeFamilyDeclaration(root.conditional, rustResolutionContext(walk, declaration));
+    if (application?.kind === "conditional" && selectedFamily !== undefined) {
       const carrier = carriers.some(value => value === undefined) ? undefined
         : resolveRustTypeFamilyApplication(application, carriers as readonly TargetTypeRef[],
           rustResolutionContext(walk, declaration), walk.operationOptions, new Set());
       if (carrier !== undefined) {
-        const root = application.conditionalSteps[0];
-        const identity = root === undefined ? undefined : sourceNodeIdentity(ast, root.conditional);
-        const family = identity === undefined ? undefined : walk.context.typeFamilies.get(identity);
+        const family = walk.context.typeFamilies.get(selectedFamily.trait.id);
         if (family === undefined) return;
         setCarrierFact(walk, declaration, carrier);
         walk.context.facts.set(declaration, rustTypeAliasDeclarationFactKey,

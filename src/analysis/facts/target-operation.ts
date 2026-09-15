@@ -207,8 +207,8 @@ export function rustOperationAbiInvocationIsFallible(abi: RustFinalizedOperation
 }
 
 export function rustOperationAbiAwaitIsFallible(abi: RustFinalizedOperationAbi): boolean {
-  return abi.result.kind === "async" &&
-    (abi.effects.awaiting === "fallible" || abi.result.awaitedConversion.fallible);
+  return abi.effects.awaiting === "fallible" ||
+    (abi.result.kind === "async" && abi.result.awaitedConversion.fallible);
 }
 
 export function rustFinalizedCarrierTransitionMatches(

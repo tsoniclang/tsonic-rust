@@ -222,50 +222,50 @@ function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readon
   if (isRustBoolCarrier(carrier)) {
     return { lane: "boolean", bindings: { receiver: carrier } };
   }
-  // Static owners have no receiver carrier; the lane comes from the owner row.
-  if (carrier === undefined && ownerName === "StringConstructor") {
+  const staticReceiver = carrier === undefined || isRustCallableCarrier(carrier);
+  if (staticReceiver && ownerName === "StringConstructor") {
     return { lane: "string", bindings: {} };
   }
-  if (carrier === undefined && ownerName === "ArrayConstructor") {
+  if (staticReceiver && ownerName === "ArrayConstructor") {
     return { lane: "js-array", bindings: {} };
   }
-  if (carrier === undefined && ownerName === "DateConstructor") {
+  if (staticReceiver && ownerName === "DateConstructor") {
     return { lane: "date", bindings: {} };
   }
-  if (carrier === undefined && ownerName === "JSON") {
+  if (staticReceiver && ownerName === "JSON") {
     return { lane: "json", bindings: {} };
   }
-  if (carrier === undefined && ownerName === "Math") {
+  if (staticReceiver && ownerName === "Math") {
     return { lane: "math", bindings: {} };
   }
-  if (carrier === undefined && ownerName === "NumberConstructor") {
+  if (staticReceiver && ownerName === "NumberConstructor") {
     return { lane: "number", bindings: {} };
   }
-  if (carrier === undefined && ownerName === "BigIntConstructor") {
+  if (staticReceiver && ownerName === "BigIntConstructor") {
     return { lane: "bigint", bindings: {} };
   }
-  if (carrier === undefined && Object.keys(rustJsTypedArrayTargetIds).some((name) => ownerName === `${name}Constructor`)) {
+  if (staticReceiver && Object.keys(rustJsTypedArrayTargetIds).some((name) => ownerName === `${name}Constructor`)) {
     return { lane: "typed-array", bindings: {} };
   }
-  if (carrier === undefined && ownerName === "Global") {
+  if (staticReceiver && ownerName === "Global") {
     return { lane: "global", bindings: {} };
   }
-  if (carrier === undefined && ownerName === "Atomics") {
+  if (staticReceiver && ownerName === "Atomics") {
     return { lane: "global", bindings: {} };
   }
-  if (carrier === undefined && ownerName === "Console") {
+  if (staticReceiver && ownerName === "Console") {
     return { lane: "console", bindings: {} };
   }
-  if (carrier === undefined && ownerName === "ObjectConstructor") {
+  if (staticReceiver && ownerName === "ObjectConstructor") {
     return { lane: "object", bindings: {} };
   }
-  if (carrier === undefined && ownerName === "RegExpConstructor") {
+  if (staticReceiver && ownerName === "RegExpConstructor") {
     return { lane: "regexp", bindings: {} };
   }
-  if (carrier === undefined && ownerName === "SymbolConstructor") {
+  if (staticReceiver && ownerName === "SymbolConstructor") {
     return { lane: "symbol", bindings: {} };
   }
-  if (carrier === undefined && ownerName === "PromiseConstructor") {
+  if (staticReceiver && ownerName === "PromiseConstructor") {
     return { lane: "promise", bindings: {} };
   }
   return undefined;

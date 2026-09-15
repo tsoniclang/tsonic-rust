@@ -51,21 +51,28 @@ export function planExpression(
   context: RustPlanContext,
   resultUse: RustExpressionResultUse = "value",
 ): RustExpr | undefined {
-  return planProjectedExpression(node, context, resultUse, true);
+  return planProjectedExpression(node, context, resultUse, "option");
 }
 
 export function planExpressionBeforeOptionProjection(
   node: Node,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  return planProjectedExpression(node, context, "value", false);
+  return planProjectedExpression(node, context, "value", "contextual");
+}
+
+export function planExpressionBeforeContextualConversion(
+  node: Node,
+  context: RustPlanContext,
+): RustExpr | undefined {
+  return planProjectedExpression(node, context, "value", "source");
 }
 
 function planProjectedExpression(
   node: Node,
   context: RustPlanContext,
   resultUse: RustExpressionResultUse,
-  includeOptionProjection: boolean,
+  finalStage: "source" | "contextual" | "option",
 ): RustExpr | undefined {
   const override = context.expressionOverrides?.get(node);
   const planned = planExpressionBeforeValueProjections(node, context, resultUse);
@@ -161,6 +168,7 @@ function planProjectedExpression(
       return undefined;
     }
   }
+  if (finalStage === "source") return converted;
   let contextuallyConverted = converted;
   if (contextualConversion !== undefined) {
     if (rustTargetTypeRefEquals(currentCarrier, contextualConversion.sourceCarrier)) {
@@ -187,7 +195,7 @@ function planProjectedExpression(
   if (contextuallyConverted === undefined) {
     return undefined;
   }
-  if (!includeOptionProjection) {
+  if (finalStage === "contextual") {
     return contextuallyConverted;
   }
   if (projection !== undefined &&

@@ -677,9 +677,10 @@ export function planFinalizedSourceInput(
     return undefined;
   }
   const expressionOverride = context.expressionOverrides?.get(sourceNode);
-  const sourceCarrier = expressionOverride?.carrier ??
-    context.input.program.facts.getRuntimeCarrierFact(sourceNode)?.carrier;
-  const convertedCarrier = expressionOverride === undefined
+  const originalCarrier = context.input.program.facts.getRuntimeCarrierFact(sourceNode)?.carrier;
+  const sourceCarrier = expressionOverride?.carrier ?? originalCarrier;
+  const convertedCarrier = expressionOverride === undefined ||
+      rustTargetTypeRefEquals(expressionOverride.carrier, originalCarrier)
     ? rustValueCarrierTransitionTarget(context.input.program.facts, sourceNode)
     : undefined;
   if (sourceCarrier === undefined) {
