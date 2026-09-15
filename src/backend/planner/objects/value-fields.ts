@@ -9,7 +9,8 @@ import { missingFactDiagnostic } from "../diagnostics.js";
 import { planExpression } from "../expressions/entry.js";
 import { sourceFieldSelectedOperationMatches } from "../expressions/properties.js";
 import { planRustDirectStorage } from "../expressions/updates/target.js";
-import { planRustSharedReceiver, rustLocationStorageForReference, rustRawLocationRoot } from "../expressions/typed-locations.js";
+import { findRustLocationStorageRoot, planRustSourceLocationStorage, rustExpressionHasBoundRecordField, planRustSharedReceiver, rustLocationStorageForReference, rustRawLocationRoot } from "../expressions/typed-locations.js";
+import { rustRecordFieldResult, readRustBoundRecordField, writeRustBoundRecordField } from "./record-fields.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
@@ -40,6 +41,29 @@ export function planRustValueFieldLocation(
   };
   if (!rustSourceFieldHasValueReceiver(node, context) || context.syntheticNames === undefined) return reject();
   const { ast } = context.input.program.source;
+  if (rustExpressionHasBoundRecordField(node, context)) {
+    const operation = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
+    if (operation?.kind !== "source-field") return reject();
+    const field = context.input.program.structuralShapes.field(operation.receiverCarrier, operation.storageIndex);
+    if (field === undefined) return reject();
+    const root = findRustLocationStorageRoot(node, context);
+    if (root !== undefined) {
+      const pointer = planRustSourceLocationStorage(node, root.expression, context, planExpression);
+      if (pointer === undefined) return reject();
+      const name = allocateRustSyntheticName(context.syntheticNames, "record_location");
+      const location: RustExpr = { kind: "path", path: name };
+      const read = rustRecordFieldResult({ kind: "method-call", receiver: location, method: "try_load", args: [] }, context);
+      return read === undefined ? reject() : { bindings: [{ name, value: pointer }], read,
+        write: value => rustRecordFieldResult({ kind: "method-call", receiver: location, method: "try_store", args: [value] }, context) };
+    }
+    const receiverNode = Node_Expression(ast, node);
+    const receiver = receiverNode === undefined ? undefined : access === "read"
+      ? planExpression(receiverNode, context) : planRustDirectStorage(receiverNode, context);
+    if (receiver === undefined) return reject();
+    const read = readRustBoundRecordField(operation.receiverCarrier, receiver, field, context);
+    return read === undefined ? reject() : { bindings: [], read,
+      write: value => writeRustBoundRecordField(operation.receiverCarrier, receiver, field, "=", value, context) };
+  }
   const names: string[] = [];
   let current = node;
   let leafCarrier: TargetTypeRef | undefined;

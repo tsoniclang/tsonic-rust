@@ -21,7 +21,7 @@ import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagno
 import { negateRustBooleanExpression, rustBorrowedStringView, rustStringConcat } from "../../target-ast/expressions.js";
 import { planExpression, planExpressionBeforeValueProjections } from "./entry.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
-import { planRustProgramErrorTypeTest } from "./error-operations.js";
+import { planRustProgramErrorEquality, planRustProgramErrorTypeTest } from "./error-operations.js";
 import { planRustBuiltinErrorTypeTest } from "./builtin-errors.js";
 import {
   planRustProjectTypeTest,
@@ -93,6 +93,25 @@ export function planSelectedRustProjectTypeTest(
 
 export function planBinaryExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
+  if (fact?.kind === "program-error-equality") {
+    const leftNode = BinaryExpression_Left(context.input.program.source.ast, node);
+    const rightNode = BinaryExpression_Right(context.input.program.source.ast, node);
+    const left = leftNode === undefined ? undefined : planExpression(leftNode, context);
+    const right = rightNode === undefined ? undefined : planExpression(rightNode, context);
+    if (leftNode === undefined || rightNode === undefined || left === undefined || right === undefined ||
+      !rustTargetTypeRefEquals(effectivePlannedExpressionCarrier(leftNode, context),
+        fact.errorOperand === "left" ? fact.sourceCarrier : fact.targetCarrier) ||
+      !rustTargetTypeRefEquals(effectivePlannedExpressionCarrier(rightNode, context),
+        fact.errorOperand === "right" ? fact.sourceCarrier : fact.targetCarrier) ||
+      !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.program-error-equality-carrier") ||
+      !selectedOperationMatches(context.input.program.facts.getSelectedTargetOperator(node),
+        fact.operationId, "operator", fact.resultCarrier, fact.operationId)) {
+      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+        "rust.backend.program-error-equality-evidence", "Program-error equality requires its exact finalized operand carriers."));
+      return undefined;
+    }
+    return planRustProgramErrorEquality(node, left, right, fact, context);
+  }
   if (fact?.kind === "builtin-error-type-test") {
     return planRustBuiltinErrorTypeTest(node, fact, context);
   }

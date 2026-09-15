@@ -31,12 +31,16 @@ export interface RustStructuralShapeField {
   readonly carrier: TargetTypeRef;
   readonly presence: "required" | "optional";
   readonly readonly: boolean;
-  readonly storage: "stored" | "property";
+  readonly storage: "stored" | "property" | "bound";
   readonly property?: {
     readonly getterTargetName: string;
     readonly setterTargetName?: string;
   };
   readonly method?: true;
+}
+
+export function rustStructuralFieldIsFallible(field: Pick<RustStructuralShapeField, "storage"> | undefined): boolean {
+  return field !== undefined && field.storage !== "stored";
 }
 
 export interface RustStructuralShapeDefinition {
@@ -225,7 +229,7 @@ export function createRustStructuralShapePlan(
           carrier: field.type,
           presence: field.presence,
           readonly: field.readonly,
-          storage: propertyStorage ? "property" as const : "stored" as const,
+          storage: field.bound === true ? "bound" as const : propertyStorage ? "property" as const : "stored" as const,
           ...(!propertyStorage
             ? {}
             : {

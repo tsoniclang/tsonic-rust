@@ -28,6 +28,46 @@ type RustProgramErrorFlowReadFact = Extract<
   { readonly kind: "program-error-variant" }
 >;
 
+export function planRustProgramErrorEquality(
+  node: Node,
+  left: RustExpr,
+  right: RustExpr,
+  fact: Extract<RustTargetOperationFact, { readonly kind: "program-error-equality" }>,
+  context: RustPlanContext,
+): RustExpr | undefined {
+  const route = resolveProgramErrorFactRoute(fact.sourceCarrier, fact.targetCarrier, fact.variant, context);
+  if (route === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.program-error-equality",
+      "Program-error equality conflicts with its exact closed error variant.",
+    ));
+    return undefined;
+  }
+  context.usedAliases?.add("rt");
+  const names = context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []);
+  const valueName = allocateRustSyntheticName(names, "error_value");
+  const otherName = allocateRustSyntheticName(names, "compared_value");
+  const errorPattern = programErrorPattern(route, { kind: "binding", name: valueName });
+  const otherPattern: RustPattern = { kind: "binding", name: otherName };
+  return {
+    kind: "match",
+    expression: { kind: "tuple-literal", elements: [
+      { kind: "reference", expr: left },
+      { kind: "reference", expr: right },
+    ] },
+    arms: [
+      {
+        pattern: { kind: "tuple", elements: fact.errorOperand === "left"
+          ? [errorPattern, otherPattern] : [otherPattern, errorPattern] },
+        expression: { kind: "binary", left: { kind: "path", path: valueName },
+          operator: fact.negated ? "!=" : "==", right: { kind: "path", path: otherName } },
+      },
+      { pattern: { kind: "wildcard" }, expression: { kind: "bool-literal", value: fact.negated } },
+    ],
+  };
+}
+
 export function planRustProgramErrorTypeTest(
   node: Node,
   expression: RustExpr,

@@ -9,6 +9,7 @@ import { rustActiveErrorType } from "../program/plan-context.js";
 import { rustTargetRuntimeErrorType } from "../types/error-boundary.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import type { RustStructuralShapeField } from "../../../analysis/objects/structural-shape-plan.js";
+import { readRustBoundRecordField, writeRustBoundRecordField, mutateRustBoundRecordField } from "./record-fields.js";
 import {
   createRustStructuralObject,
   mutateRustProjectObjectField,
@@ -37,6 +38,7 @@ import {
 
 export type RustStructuralObjectFieldInitializer =
   | { readonly kind: "stored"; readonly value: RustExpr }
+  | { readonly kind: "bound"; readonly value: RustExpr }
   | { readonly kind: "method"; readonly value: RustExpr }
   | {
       readonly kind: "accessor";
@@ -61,8 +63,15 @@ export function createRustStructuralObjectFromCarrier(
     if (initializer === undefined ||
       (field.method === true) !== (initializer.kind === "method") ||
       (field.storage === "stored" && initializer.kind === "accessor") ||
+      (field.storage !== "bound" && initializer.kind === "bound") ||
       (field.storage === "property" && initializer.kind === "method")) {
       return [undefined];
+    }
+    if (field.storage === "bound") {
+      if (initializer.kind !== "bound" && initializer.kind !== "stored") return [undefined];
+      context.usedAliases?.add("rt");
+      return [{ name: field.targetName, value: { kind: "call" as const,
+        path: `rt::RecordField::${initializer.kind === "bound" ? "Bound" : "Value"}`, args: [initializer.value] } }];
     }
     if (field.storage === "stored") {
       if (initializer.kind === "accessor") {
@@ -158,6 +167,7 @@ export function readRustStoredObjectField(
     }
     if (projection.length !== 0 && (field.storage !== "stored" || field.nativeLayout !== undefined)) return undefined;
     const path = [field.targetName, ...projection];
+    if (field.storage === "bound") return readRustBoundRecordField(receiverCarrier, receiver, field, context);
     if (rustStructuralObjectCarrierValue(receiverCarrier)?.representation === "value") {
       if (field.storage !== "stored" || field.nativeLayout !== undefined) return undefined;
       const selected = path.reduce<RustExpr>((value, name) => ({ kind: "field", receiver: value, name }), receiver);
@@ -295,6 +305,7 @@ export function writeRustStoredObjectField(
     }
     if (projection.length !== 0 && (field.storage !== "stored" || field.nativeLayout !== undefined)) return undefined;
     const path = [field.targetName, ...projection];
+    if (field.storage === "bound") return writeRustBoundRecordField(receiverCarrier, receiver, field, operator, value, context);
     if (rustStructuralObjectCarrierValue(receiverCarrier)?.representation === "value") {
       return field.storage !== "stored" || field.nativeLayout !== undefined ? undefined : {
         kind: "assignment", operator,
@@ -341,6 +352,7 @@ export function mutateRustStoredObjectField(
     if (field === undefined) {
       return undefined;
     }
+    if (field.storage === "bound") return mutateRustBoundRecordField(receiverCarrier, receiver, field, mutation, context);
     if (rustStructuralObjectCarrierValue(receiverCarrier)?.representation === "value") {
       return field.storage !== "stored" || field.method === true || field.readonly || field.nativeLayout !== undefined
         ? undefined : mutation({ kind: "field", receiver, name: field.targetName });

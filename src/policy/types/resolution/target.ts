@@ -382,6 +382,8 @@ export function resolveStructuralObjectType(
           resultCarrier: fieldCarrier,
           presence: property.optional ? "optional" as const : "required" as const,
           readonly: declaredField?.readonly === true || property.readonly,
+          ...(context.memoryBindings.hasBoundField([property.symbol, ...property.rootSymbols, ...projectDeclarations])
+            ? { bound: true as const } : {}),
           ...(accessor === undefined ? {} : { accessor }),
           ...(method === undefined ? {} : { method }),
         };
@@ -397,6 +399,7 @@ export function resolveStructuralObjectType(
     readonly resultCarrier: TargetTypeRef;
     readonly presence: "required" | "optional";
     readonly readonly: boolean;
+    readonly bound?: true;
     readonly accessor?: {
       readonly getter: true;
       readonly setter: boolean;
@@ -421,6 +424,7 @@ export function resolveStructuralObjectType(
     type: field.resultCarrier,
     presence: field.presence,
     readonly: field.readonly,
+    ...(field.bound === true ? { bound: true as const } : {}),
     ...(field.accessor === undefined ? {} : { accessor: field.accessor }),
     ...(field.method === true ? { method: true as const } : {}),
   })), representation);

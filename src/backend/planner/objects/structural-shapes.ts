@@ -30,6 +30,7 @@ import {
   rustCarrierSupportsTrait,
   rustStructuralObjectCarrierValue,
   rustLocationTargetType,
+  rustProgramErrorTargetType,
   rustStructuralPropertyGetterStorageCarrier,
   rustStructuralPropertySetterStorageCarrier,
   rustStructuralPropertyValueCarrier,
@@ -157,7 +158,11 @@ export function planRustStructuralShapeModule(
         });
         return undefined;
       }
-      if (field.storage === "stored") {
+      if (field.storage === "stored" || field.storage === "bound") {
+        const errorType = field.storage === "bound"
+          ? rustTypeFromCarrierInContext(rustProgramErrorTargetType(), definitionContext) : undefined;
+        if (field.storage === "bound" && errorType === undefined) return undefined;
+        if (field.storage === "bound") usedAliases.add("rt");
         const type = field.method === true
           ? structuralCallableAlias(
               callableAliases,
@@ -167,7 +172,12 @@ export function planRustStructuralShapeModule(
               renderedStorageType,
               visibility,
             )
-          : renderedStorageType;
+          : field.storage === "bound" ? {
+            kind: "named" as const, path: "rt::RecordField", genericArguments: [
+              { kind: "type" as const, type: renderedStorageType },
+              { kind: "type" as const, type: errorType! },
+            ],
+          } : renderedStorageType;
         const deadCode = rustStructuralFieldDeadCodeDisposition(
           context,
           definition.sourceCarriers,

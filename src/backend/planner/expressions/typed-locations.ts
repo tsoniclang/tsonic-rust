@@ -26,6 +26,7 @@ import {
   isRustCopyCarrier,
   rustLocationTargetType,
   rustProgramErrorTargetType,
+  rustStructuralObjectCarrierValue,
 } from "../../../target-model/types/index.js";
 import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
@@ -59,6 +60,7 @@ import { planRustNativeAllocation } from "./native-memory.js";
 import { rustNativeBackingKey, rustNativeArrayStorageKey } from "../../../target-model/operations/native-memory.js";
 import { planNativeRustArrayAccess } from "./native-arrays.js";
 import { planRustLocationCallback } from "./location-callbacks.js";
+import { rustRecordFieldStorageType, rustRecordFieldSelector } from "../objects/record-fields.js";
 
 export type RustExpressionPlanner = (
   node: Node,
@@ -129,6 +131,9 @@ export function planRustTypedLocationCall(
         : { kind: "method-call", receiver: source, method: "try_map", args: [read, write] };
     }
     case "address-of": {
+      if (rustExpressionHasBoundRecordField(plan.storageExpression, context)) {
+        return planRustSourceLocationStorage(plan.storageExpression, plan.rootExpression, context, planExpression);
+      }
       const location = planRustLocationStorage(
         plan.storageExpression,
         plan.rootExpression,
@@ -469,6 +474,26 @@ export function planRustPromotedStorageWrite(
   if (root === undefined) {
     return { handled: false };
   }
+  if (rustExpressionHasBoundRecordField(expression, context)) {
+    const location = planRustSourceLocationStorage(expression, root.expression, context, planExpression);
+    if (location === undefined || context.syntheticNames === undefined) return { handled: true };
+    const locationName = allocateRustSyntheticName(context.syntheticNames, "field_location");
+    const currentName = allocateRustSyntheticName(context.syntheticNames, "field_value");
+    const pointer: RustExpr = { kind: "path", path: locationName };
+    const current = operator === "=" ? undefined : fallibleLocationAccess(expression,
+      { kind: "method-call", receiver: pointer, method: "try_load", args: [] }, context);
+    if (operator !== "=" && current === undefined) return { handled: true };
+    const binary = assignmentBinaryOperator(operator);
+    if (operator !== "=" && binary === undefined) return { handled: true };
+    const next: RustExpr = operator === "=" ? value : { kind: "binary", operator: binary!,
+      left: { kind: "path", path: currentName }, right: value };
+    const write = fallibleLocationAccess(expression,
+      { kind: "method-call", receiver: pointer, method: "try_store", args: [next] }, context);
+    return { handled: true, ...(write === undefined ? {} : { statement: { kind: "expr", expr: {
+      kind: "block", bindings: [{ name: locationName, value: location },
+        ...(current === undefined ? [] : [{ name: currentName, value: current }])], value: write,
+    } } }) };
+  }
   const location = planRustLocationStorage(
     expression,
     root.expression,
@@ -564,6 +589,42 @@ function assignmentBinaryOperator(
     case "=":
       return undefined;
   }
+}
+
+export function rustExpressionHasBoundRecordField(expression: Node, context: RustPlanContext): boolean {
+  const operation = context.input.program.facts.getFact(expression, rustTargetOperationFactKey);
+  return operation?.kind === "source-field" && operation.storage === "structural-object" &&
+    context.input.program.structuralShapes.field(operation.receiverCarrier, operation.storageIndex)?.storage === "bound";
+}
+
+export function planRustSourceLocationStorage(
+  expression: Node, rootExpression: Node, context: RustPlanContext, planExpression: RustExpressionPlanner,
+): RustExpr | undefined {
+  const operation = context.input.program.facts.getFact(expression, rustTargetOperationFactKey);
+  if (operation?.kind === "source-field" && operation.storage === "structural-object") {
+    const field = context.input.program.structuralShapes.field(operation.receiverCarrier, operation.storageIndex);
+    if (field?.storage === "bound") {
+      const receiver = Node_Expression(context.input.program.source.ast, expression);
+      const owner = rustRecordFieldStorageType(field, context);
+      if (receiver === undefined || owner === undefined) return undefined;
+      const value = rustStructuralObjectCarrierValue(operation.receiverCarrier)?.representation === "value";
+      const selected = value ? planRustSourceLocationStorage(receiver, rootExpression, context, planExpression)
+        : planExpression(receiver, context);
+      if (selected === undefined) return undefined;
+      context.usedAliases?.add("rt");
+      const result: RustExpr = { kind: "associated-call", owner,
+        method: value ? "location_from_value" : "location_from_object", args: [
+          { kind: "reference", expr: selected },
+          { kind: "call", path: "String::from", args: [{ kind: "str-literal", value: operation.operationId }] },
+          rustRecordFieldSelector(field, false), rustRecordFieldSelector(field, true),
+        ] };
+      return value ? fallibleLocationAccess(expression, result, context) : result;
+    }
+  }
+  const location = planRustLocationStorage(expression, rootExpression, true, context, planExpression);
+  const error = rustTypeFromCarrierInContext(rustProgramErrorTargetType(), context);
+  return location === undefined || error === undefined ? undefined : { kind: "method-call", receiver: location, method: "into_fallible",
+    genericArguments: [{ kind: "type", type: error }], args: [] };
 }
 
 function planRustLocationStorage(
@@ -772,7 +833,7 @@ function locationMethodReceiver(
     : expression;
 }
 
-function findRustLocationStorageRoot(
+export function findRustLocationStorageRoot(
   expression: Node,
   context: RustPlanContext,
 ): { readonly expression: Node; readonly declaration: Node } | undefined {

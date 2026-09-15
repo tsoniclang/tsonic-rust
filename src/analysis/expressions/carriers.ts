@@ -78,6 +78,7 @@ import { readRustRawLocation } from "../../policy/operations/native-memory.js";
 import { selectRustMemoryLayoutObservation } from "../../policy/operations/memory-layout.js";
 import { resolveRustClassValue } from "../objects/class-values.js";
 import { rustGuardedArrayEntryCarrier } from "../control-flow/array-entry-values.js";
+import { selectTsonicMemoryFieldBinding, selectTsonicMemoryRecordBinding } from "@tsonic/source-core/facts";
 
 export function resolveExpressionCarrier(
   walk: RustFactWalk,
@@ -671,6 +672,8 @@ function resolveCallSelectionPrerequisites(
   sourceFile: SourceFile,
 ): void {
   if (readRustRawLocation(walk.context.ast, walk.context.source.sourceFacts, expression) !== undefined ||
+    selectTsonicMemoryFieldBinding(walk.context.ast, walk.context.source.sourceFacts, expression) !== undefined ||
+    selectTsonicMemoryRecordBinding(walk.context.ast, walk.context.source.sourceFacts, expression) !== undefined ||
     readRustSourceRawAddress(walk.context.source.sourceFacts, expression) !== undefined ||
     selectRustMemoryLayoutObservation(walk.context.source.sourceFacts, expression) !== undefined) return;
   const source = walk.context.semantics(sourceFile).operations.call(expression);

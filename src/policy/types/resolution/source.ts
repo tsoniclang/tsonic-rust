@@ -57,6 +57,7 @@ import {
 import { resolveRustAuthoredBroadSourceValueTargetType } from "./broad-values.js";
 import { resolveRustInferredClassUnion } from "./inferred-unions.js";
 import { resolveRustConditionalAlias } from "./type-families.js";
+import { tsonicMemoryFieldBindingFactKey, selectTsonicMemoryFieldBinding } from "@tsonic/source-core/facts";
 
 export function resolveRustTargetTypeRef(
   subject: ExtensionFactSubject | undefined,
@@ -65,6 +66,18 @@ export function resolveRustTargetTypeRef(
 ): TargetTypeRef | undefined {
   if (subject === undefined) {
     return undefined;
+  }
+  const subjectNode = asNode(subject, context);
+  const subjectFile = subjectNode === undefined ? undefined : context.ast.getSourceFile(subjectNode);
+  if (subjectFile !== undefined && context.source.semantics.includes(subjectFile) &&
+    subjectFile !== context.currentSemantics.sourceFile) {
+    context = { ...context, currentSemantics: context.semantics(subjectFile) };
+  }
+  const binding = context.source.sourceFacts.getFact(subject, tsonicMemoryFieldBindingFactKey);
+  if (binding !== undefined) {
+    if (selectTsonicMemoryFieldBinding(context.ast, context.source.sourceFacts, binding.call)?.kind !== "resolved") return undefined;
+    const pointee = resolveRustTargetTypeRef(binding.field.fieldLayout.explicitTypeNode ?? binding.pointeeType, context, options);
+    return pointee === undefined ? undefined : rustSourceLocationTargetType(pointee);
   }
   const valueStruct = context.facts.resolve(subject, structFactKey) ?? context.facts.get(subject, structFactKey);
   if (valueStruct !== undefined) {

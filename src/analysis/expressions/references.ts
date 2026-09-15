@@ -51,6 +51,8 @@ import { rustHigherRankedNativeFunctionCarrier } from "../callables/higher-ranke
 import { readRustSourceRawAddress } from "../../policy/operations/raw-address-source.js";
 import { readRustRawLocation } from "../../policy/operations/native-memory.js";
 import { resolveRustRawLocationCarrier } from "../operations/native-memory.js";
+import { resolveRustMemoryBindingCarrier } from "../operations/memory-bindings.js";
+import { selectTsonicMemoryFieldBinding, selectTsonicMemoryRecordBinding } from "@tsonic/source-core/facts";
 import { resolveRustRawAddressCarrier, resolveRustRawPointerIdentityCarrier } from "../operations/raw-addresses.js";
 import { readRustSourceRawPointerIdentity } from "../../policy/operations/raw-pointer-source.js";
 import { selectRustMemoryLayoutObservation } from "../../policy/operations/memory-layout.js";
@@ -295,6 +297,8 @@ export function isSharedSourceMarkerOperation(
 ): boolean {
   const sourceFacts = walk.context.source.sourceFacts;
   return readRustReferenceOperation(walk, expression) !== undefined ||
+    selectTsonicMemoryFieldBinding(walk.context.ast, sourceFacts, expression) !== undefined ||
+    selectTsonicMemoryRecordBinding(walk.context.ast, sourceFacts, expression) !== undefined ||
     readRustRawLocation(walk.context.ast, sourceFacts, expression) !== undefined ||
     selectRustMemoryLayoutObservation(sourceFacts, expression) !== undefined ||
     readRustSourceRawPointerIdentity(expression, sourceFacts) !== undefined ||
@@ -315,6 +319,8 @@ function resolveSharedSourceMarkerCarrier(
   expected: TargetTypeRef | undefined,
 ): RustSharedSourceMarkerCarrierResolution {
   const sourceFacts = walk.context.source.sourceFacts;
+  const memoryBinding = resolveRustMemoryBindingCarrier(walk, expression, sourceFile);
+  if (memoryBinding !== undefined) return memoryBinding;
   const rawLocation = resolveRustRawLocationCarrier(walk, expression, sourceFile);
   if (rawLocation !== undefined) return rawLocation;
   const layout = selectRustMemoryLayoutObservation(sourceFacts, expression);

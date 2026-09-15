@@ -180,7 +180,7 @@ export function resolveRustTypeComponentEvidence(
     options,
     resolving,
   );
-  const selection = semantics.types.authoredSelection(
+  const selection = context.currentSemantics.types.authoredSelection(
     component.authoredTypeNode,
     component.selectedType,
   );
@@ -260,8 +260,7 @@ export function resolveRustEvidenceNodesToCommonCarrier(
     return undefined;
   }
   const carriers = [...new Set(nodes)].map((node) => {
-    const semantics = context.semanticsFor(node);
-    const selection = semantics.types.authoredSelection(node, selectedType);
+    const selection = context.currentSemantics.types.authoredSelection(node, selectedType);
     if (selection.kind !== "authored-members") {
       return undefined;
     }

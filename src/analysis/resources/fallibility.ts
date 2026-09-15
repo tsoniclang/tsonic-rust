@@ -32,6 +32,7 @@ import {
   rustTargetOperationFactKey,
 } from "../facts/keys.js";
 import { appendRustDiagnostic, rustOperationContext } from "../program/walk.js";
+import { rustStructuralFieldIsFallible } from "../objects/structural-shape-plan.js";
 import { finalizeRustPreparedCheckedCall } from "../operations/provider/index.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { recordSelectedOperationInputs } from "../operations/inputs.js";
@@ -333,17 +334,17 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
       : projection?.kind === "object-field"
       ? projection.accessor !== undefined ||
         projection.storage === "structural-object" &&
-          walk.context.structuralShapes.field(
+          rustStructuralFieldIsFallible(walk.context.structuralShapes.field(
             bindingProjection.sourceCarrier,
             projection.storageIndex,
-          )?.storage === "property"
+          ))
       : projection?.kind === "object-rest" &&
         projection.fields.some((field) => field.accessor !== undefined ||
           projection.storage === "structural-object" &&
-            walk.context.structuralShapes.field(
+            rustStructuralFieldIsFallible(walk.context.structuralShapes.field(
               bindingProjection.sourceCarrier,
               field.sourceStorageIndex,
-            )?.storage === "property");
+            )));
     return rustTargetOperationIsFallible(
       operation,
       walk.context.structuralShapes,

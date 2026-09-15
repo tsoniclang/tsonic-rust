@@ -1,4 +1,4 @@
-import { createTsonicMemoryMetadataIndex, type TsonicMemoryMetadataIndex,
+import { createTsonicMemoryBindingIndex, createTsonicMemoryMetadataIndex, type TsonicMemoryMetadataIndex,
   createTsonicPointerBackingDemands, type TsonicPointerBackingDemands,
   createTsonicPointerReturnQueries } from "@tsonic/source-core/facts";
 import type {
@@ -147,11 +147,13 @@ export function createRustAnalysisContext(
     },
     semanticsFor: input.source.semantics.forNode,
   });
+  const memoryBindings = createTsonicMemoryBindingIndex(input.source);
   return Object.freeze({
     typeFamilies: createRustSourceTypeFamilyRegistry(),
     pointerBacking: createTsonicPointerBackingDemands(input.source),
     pointerReturns: createTsonicPointerReturnQueries(input.source),
     memoryMetadata: createTsonicMemoryMetadataIndex(input.source),
+    memoryBindings,
     source: input.source,
     target: input.target,
     jsEnabled,
@@ -174,7 +176,10 @@ export function createRustAnalysisContext(
     runtimeValueUses,
     generatedDeclarationUses: createRustGeneratedDeclarationUseRegistry(),
     names,
-    diagnostics: [...lifetimes.diagnostics],
+    diagnostics: [...lifetimes.diagnostics, ...memoryBindings.issues.map(issue => ({
+      code: "RUST_MEMORY_BINDING_NOT_PROVEN", category: "error" as const, source: "tsonic-rust",
+      sourceNode: issue.node, message: issue.reason,
+    }))],
     semantics: input.source.semantics.forFile,
     semanticsFor: input.source.semantics.forNode,
   });

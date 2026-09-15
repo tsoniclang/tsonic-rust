@@ -111,7 +111,7 @@ export function recordRustNativeBacking(walk: RustFactWalk): readonly RustNative
         const member = shape?.fields[field.storageIndex];
         const implementations = walk.sourceTypes.structuralFieldImplementations().filter(implementation =>
           implementation.storageIndex === field.storageIndex && rustTargetTypeRefEquals(implementation.carrier, field.receiverCarrier));
-        if (member === undefined || member.readonly || member.presence !== "required" || member.accessor !== undefined ||
+        if (member === undefined || member.bound === true || member.readonly || member.presence !== "required" || member.accessor !== undefined ||
           field.valueSemantics.kind !== "stored" || field.dispatch !== undefined ||
           implementations.some(implementation => implementation.kind === "accessor") ||
           !rustTargetTypeRefEquals(member.type, layout.pointeeCarrier)) {

@@ -11,6 +11,7 @@ import {
 } from "../../../analysis/facts/keys.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/operations/facts.js";
 import { rustClassValueFactKey } from "../../../analysis/facts/class-values.js";
+import { rustMemoryBindingPlanKey } from "../../../target-model/operations/memory-bindings.js";
 import {
   isRustFinalizedArrayInput,
   isRustFinalizedSliceInput,
@@ -590,6 +591,8 @@ export function analyzeRustGeneratedItemUsage(input: {
       const fact = input.facts.getFact(node, rustTargetOperationFactKey);
       const classValue = input.facts.getFact(node, rustClassValueFactKey);
       if (classValue !== undefined) markStructuralShapeConstructed(classValue.carrier);
+      const memoryBinding = input.facts.getFact(node, rustMemoryBindingPlanKey);
+      if (memoryBinding?.kind === "record") markStructuralShapeConstructed(memoryBinding.carrier);
       visitProjectProjectionFacts(node);
       const conversion = input.facts.getFact(node, rustContextualValueConversionFactKey)?.conversion;
       if (conversion !== undefined && conversion.kind !== "native-trait-object-upcast" &&

@@ -116,6 +116,7 @@ export function rustFoundationForTargetOperationFact(
       requireCarrier(fact.resultCarrier);
       break;
     case "program-error-type-test":
+    case "program-error-equality":
       requireCarrier(fact.sourceCarrier);
       requireCarrier(fact.targetCarrier);
       requireCarrier(fact.resultCarrier);

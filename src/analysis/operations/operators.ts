@@ -21,6 +21,7 @@ import {
   Node_Type,
 } from "@tsonic/target-api/source";
 import { selectRustGenericNumericOperation } from "./generic-numeric.js";
+import { selectRustProgramErrorEquality } from "./error-equality.js";
 import {
   isRustAssignmentOperator,
   rustBinaryResultCarrierIsIndependentOfOperands,
@@ -348,8 +349,13 @@ export function resolvePostCheckBinaryCarrier(
         rustTargetTypeRefEquals(rightOptionElement, leftComparisonCarrier)
       ? "right" as const
       : undefined;
+  const errorEquality = strictEquality
+    ? selectRustProgramErrorEquality(walk, left, right, operatorKind === KindExclamationEqualsEqualsToken)
+    : undefined;
   let fact: RustTargetOperationFact | undefined;
-  if (operatorKind === KindQuestionQuestionToken) {
+  if (errorEquality !== undefined) {
+    fact = errorEquality;
+  } else if (operatorKind === KindQuestionQuestionToken) {
     const inner = rustOptionElementCarrier(left);
     if (inner !== undefined && right !== undefined &&
       rustTargetTypeRefEquals(inner, right)) {

@@ -9,6 +9,7 @@ import {
 } from "./finalized-operation-abi.js";
 import type { RustFinalizedOperationAbi } from "./finalized-operation-abi.js";
 import { rustValueConversionIsFallible } from "../../target-model/conversions/contracts.js";
+import { rustStructuralFieldIsFallible } from "../objects/structural-shape-plan.js";
 
 export function rustTargetOperationText(fact: RustTargetOperationFact): string {
   if (fact.kind === "provider-operation") {
@@ -102,7 +103,7 @@ export interface RustStructuralStorageLookup {
   field(
     carrier: TargetTypeRef,
     storageIndex: number,
-  ): { readonly storage: "stored" | "property" } | undefined;
+  ): { readonly storage: "stored" | "property" | "bound" } | undefined;
 }
 
 export interface RustProjectFieldDispatchLookup {
@@ -149,7 +150,7 @@ export function rustTargetOperationIsFallible(
     );
     return dispatchIsFallible || fact.valueSemantics.kind === "accessor" ||
       fact.storage === "structural-object" &&
-        structuralStorage.field(fact.receiverCarrier, fact.storageIndex)?.storage === "property";
+        rustStructuralFieldIsFallible(structuralStorage.field(fact.receiverCarrier, fact.storageIndex));
   }
   if (fact.kind === "source-union-field") {
     return fact.selectedVariantIndexes.some((index) => {
@@ -157,28 +158,28 @@ export function rustTargetOperationIsFallible(
       const field = variant?.field;
       return field?.valueSemantics.kind === "accessor" ||
         variant !== undefined && field?.storage === "structural-object" &&
-          structuralStorage.field(
+          rustStructuralFieldIsFallible(structuralStorage.field(
             variant.carrier,
             field.storageIndex,
-          )?.storage === "property";
+          ));
     });
   }
   if (fact.kind === "object-shape-projection") {
     return (fact.projection === "values" || fact.projection === "entries") &&
       fact.fields.some((field) => field.accessor !== undefined ||
-        fact.storage === "structural-object" && structuralStorage.field(
+        fact.storage === "structural-object" && rustStructuralFieldIsFallible(structuralStorage.field(
           fact.sourceValueCarrier,
           field.storageIndex,
-        )?.storage === "property");
+        )));
   }
   if (fact.kind === "record-literal") {
     return fact.contributions.some((contribution) =>
       contribution.kind === "spread" &&
       contribution.fields.some((field) => field.accessor !== undefined ||
-        contribution.sourceStorage === "structural-object" && structuralStorage.field(
+        contribution.sourceStorage === "structural-object" && rustStructuralFieldIsFallible(structuralStorage.field(
           contribution.sourceCarrier,
           field.sourceStorageIndex,
-        )?.storage === "property"));
+        ))));
   }
   if (fact.kind === "operator-call") {
     return fact.fallible;

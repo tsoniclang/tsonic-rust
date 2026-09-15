@@ -69,7 +69,7 @@ export function isRustCopyCarrier(carrier: TargetTypeRef | undefined): boolean {
   }
   const structural = rustStructuralObjectCarrierValue(carrier);
   if (structural !== undefined) {
-    return structural.representation === "value" && structural.fields.every(field => isRustCopyCarrier(field.type));
+    return structural.representation === "value" && structural.fields.every(field => field.bound !== true && isRustCopyCarrier(field.type));
   }
   const namedType = rustNamedTypeCarrierValue(carrier);
   if (namedType !== undefined) {
@@ -216,7 +216,7 @@ export function rustCarrierSupportsTrait(
     const supports = (type: TargetTypeRef): boolean =>
       rustCarrierSupportsTrait(type, traitPath, typeParameterSupports, associatedTypeSupports);
     const structural = rustStructuralObjectCarrierValue(carrier);
-    if (structural !== undefined) return structural.representation === "value" && structural.fields.every(field => supports(field.type));
+    if (structural !== undefined) return structural.representation === "value" && structural.fields.every(field => field.bound !== true && supports(field.type));
     if (carrier.kind === "tuple") return carrier.elements.every(supports);
     const fixedArray = rustFixedArrayCarrierValue(carrier);
     if (fixedArray !== undefined) return supports(fixedArray.element);
@@ -362,7 +362,9 @@ export function rustCarrierSupportsJsEquality(carrier: TargetTypeRef | undefined
 }
 
 export function rustCarrierSupportsObjectIdentity(carrier: TargetTypeRef | undefined): boolean {
-  return carrier?.kind === "target-named" && rustObjectIdentityTargetIds.has(carrier.id);
+  const structural = rustStructuralObjectCarrierValue(carrier);
+  return structural !== undefined ? structural.representation !== "value"
+    : carrier?.kind === "target-named" && rustObjectIdentityTargetIds.has(carrier.id);
 }
 
 const rustObjectIdentityTargetIds: ReadonlySet<string> = new Set([

@@ -96,6 +96,7 @@ export interface RustSourceTypeCarrierValue {
 const noRustSourceTypeGenericArguments: readonly RustTargetGenericArgument[] = Object.freeze([]);
 
 export interface RustStructuralObjectFieldCarrierValue {
+  readonly bound?: true;
   readonly sourceName: string;
   readonly type: TargetTypeRef;
   readonly presence: "required" | "optional";
@@ -271,12 +272,15 @@ export function rustStructuralObjectCarrierValue(
       : candidate.method === true
         ? ["method", "presence", "readonly", "sourceName", "type"]
         : ["presence", "readonly", "sourceName", "type"];
+    if (candidate.bound === true) expectedKeys.push("bound");
     if (typeof candidate.sourceName !== "string" || candidate.sourceName.length === 0 ||
       seenNames.has(candidate.sourceName) || !isRustTargetTypeRef(candidate.type) ||
       (candidate.presence !== "required" && candidate.presence !== "optional") ||
       typeof candidate.readonly !== "boolean" ||
       !hasExactObjectKeys(field, expectedKeys) ||
       candidate.accessor !== undefined && candidate.method !== undefined ||
+      candidate.bound !== undefined && candidate.bound !== true ||
+      candidate.bound === true && (candidate.accessor !== undefined || candidate.method !== undefined || candidate.presence !== "required") ||
       candidateValue.representation === "value" &&
         (candidate.accessor !== undefined || candidate.method !== undefined || candidate.presence !== "required") ||
       candidate.method !== undefined && candidate.method !== true ||
