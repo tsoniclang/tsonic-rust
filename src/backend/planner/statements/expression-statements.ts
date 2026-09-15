@@ -311,8 +311,7 @@ export function planRustAssignmentWrite(
                 value: written,
               };
         }
-        const selectedValue: RustExpr = { kind: "path", path: valueName };
-        if (operator === "+=" && isRustStringCarrier(fact.resultCarrier)) {
+        if (operator !== "=") {
           const currentName = allocateRustSyntheticName(
             syntheticNames,
             "union_current",
@@ -332,10 +331,11 @@ export function planRustAssignmentWrite(
             receiverCarrier,
             payload,
             "=",
-            rustStringConcat([
-              { kind: "path", path: currentName },
-              selectedValue,
-            ]),
+            operator === "+=" && isRustStringCarrier(fact.resultCarrier)
+              ? rustStringConcat([{ kind: "path", path: currentName }, value])
+              : { kind: "evaluate-then", discard: "unit", effect: { kind: "assignment", operator,
+                  target: { kind: "path", path: currentName }, value },
+                  value: { kind: "path", path: currentName } },
             context,
           );
           if (written === undefined) {
@@ -345,6 +345,7 @@ export function planRustAssignmentWrite(
             kind: "block",
             bindings: [{
               name: currentName,
+              mutable: !(operator === "+=" && isRustStringCarrier(fact.resultCarrier)),
               value: current,
             }],
             value: written,
@@ -355,7 +356,7 @@ export function planRustAssignmentWrite(
           receiverCarrier,
           payload,
           operator,
-          selectedValue,
+          value,
           context,
         );
       },
@@ -368,7 +369,6 @@ export function planRustAssignmentWrite(
             kind: "block",
             bindings: [
               { name: receiverName, value: receiver },
-              ...(fact.kind === "operator-token" ? [{ name: valueName, value }] : []),
             ],
             value: projected,
           },
@@ -563,6 +563,29 @@ export function planRustAssignmentWrite(
           value: written,
         },
       }];
+    }
+    if (operator !== "=") {
+      const currentName = allocateRustSyntheticName(context.syntheticNames, "current");
+      const selectedReceiver: RustExpr = { kind: "path", path: receiverName };
+      const current = sourceField.dispatch === undefined
+        ? readRustStoredObjectField(sourceField.storage, sourceField.receiverCarrier, selectedReceiver,
+            sourceField.storageIndex, fact.resultCarrier, context)
+        : readRustProjectDispatchedField(selectedReceiver, sourceField.dispatch.read, dispatchReadRole!);
+      const next: RustExpr = { kind: "path", path: currentName };
+      const written = sourceField.dispatch === undefined
+        ? writeRustStoredObjectField(sourceField.storage, sourceField.receiverCarrier, selectedReceiver,
+            sourceField.storageIndex, "=", next, context)
+        : writeRustProjectDispatchedField(selectedReceiver,
+            allocateRustSyntheticName(context.syntheticNames, "dispatch_receiver"), sourceField.dispatch.read,
+            sourceField.dispatch.write, "=", next, { read: dispatchRoles!.read, write: dispatchRoles!.write! });
+      if (current === undefined || written === undefined) return undefined;
+      return [{ kind: "expr", expr: { kind: "block", bindings: [
+        { name: receiverName, value: receiver }, { name: currentName, mutable: true, value: current },
+        { name: valueName, value },
+      ], value: { kind: "evaluate-then", discard: "unit",
+        effect: { kind: "assignment", operator, target: next, value: { kind: "path", path: valueName } },
+        value: written,
+      } } }];
     }
     const written = sourceField.dispatch === undefined
       ? writeRustStoredObjectField(

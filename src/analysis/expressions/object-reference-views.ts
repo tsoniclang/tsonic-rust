@@ -18,6 +18,7 @@ export function recordRustObjectReferenceView(
   const sourceStructural = rustStructuralObjectCarrierValue(sourceCarrier);
   const project = walk.context.projectTypes.definitionForCarrier(sourceCarrier);
   if (sourceStructural?.representation !== "reference" && project === undefined) return false;
+  if (project !== undefined && walk.context.objectRepresentations.representationFor(project)?.kind === "value") return false;
   const semantics = walk.context.semanticsFor(expression);
   const sourceType = semantics.types.expressionType(expression);
   if (sourceType === undefined) return false;

@@ -1,4 +1,19 @@
 export const frozenObjectSources = {
+  "compound-order": `
+function change(value: {count: number}, freeze: boolean): number {
+  value.count = 9;
+  if (freeze) Object.freeze(value);
+  return 2;
+}
+export function main(): void {
+  const value = {count: 1};
+  value.count += change(value, false);
+  if (value.count !== 3) throw new Error("compound read precedes right operand");
+  let failed = false;
+  try { value.count += change(value, true); } catch (error) { if (!(error instanceof TypeError)) throw error; failed = true; }
+  if (!failed || value.count !== 9) throw new Error("freeze precedes final write");
+}
+`,
   "module-token": `
 const fileType = Object.freeze({ comparable: true });
 class File { type: {readonly comparable: boolean}; constructor(type = fileType) { this.type = type; } }

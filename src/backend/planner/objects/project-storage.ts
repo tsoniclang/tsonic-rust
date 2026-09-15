@@ -354,6 +354,7 @@ function writeRustStoredObjectFieldStorage(
           receiverCarrier,
           receiver,
           field,
+          storageIndex,
           operator,
           value,
           context,
@@ -423,6 +424,7 @@ function mutateRustStoredObjectFieldStorage(
           receiverCarrier,
           receiver,
           field,
+          storageIndex,
           mutation,
           context,
         )
@@ -541,6 +543,7 @@ function writeRustStructuralObjectProperty(
   receiverCarrier: TargetTypeRef,
   receiver: RustExpr,
   field: RustStructuralShapeField,
+  storageIndex: number,
   operator: RustAssignmentOperator,
   value: RustExpr,
   context: RustPlanContext,
@@ -611,9 +614,7 @@ function writeRustStructuralObjectProperty(
     "=",
     { kind: "call", path: "Some", args: [selectedValue] },
   );
-  const fieldIndex = context.input.program.structuralShapes.definitionForCarrier(receiverCarrier)?.fields.indexOf(field);
-  if (fieldIndex === undefined || fieldIndex < 0) return undefined;
-  if (context.input.program.frozenDataWrites.receiverFor("structural-object", receiverCarrier, fieldIndex) !== undefined) {
+  if (context.input.program.frozenDataWrites.receiverFor("structural-object", receiverCarrier, storageIndex) !== undefined) {
     const errorType = rustActiveErrorType(context);
     if (errorType === undefined) return undefined;
     storedWrite = checkRustDataWrite("receiver", receiverPath, storedWrite, errorType);
@@ -655,6 +656,7 @@ function mutateRustStructuralObjectProperty(
   receiverCarrier: TargetTypeRef,
   receiver: RustExpr,
   field: RustStructuralShapeField,
+  storageIndex: number,
   mutation: (field: RustExpr) => RustExpr | undefined,
   context: RustPlanContext,
 ): RustExpr | undefined {
@@ -685,6 +687,7 @@ function mutateRustStructuralObjectProperty(
     receiverCarrier,
     receiverPath,
     field,
+    storageIndex,
     "=",
     { kind: "path", path: valueName },
     context,
