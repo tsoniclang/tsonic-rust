@@ -156,12 +156,10 @@ export function rustTargetOperationIsFallible(
     return fact.selectedVariantIndexes.some((index) => {
       const variant = fact.variants[index];
       const field = variant?.field;
-      return field?.valueSemantics.kind === "accessor" ||
-        variant !== undefined && field?.storage === "structural-object" &&
-          rustStructuralFieldIsFallible(structuralStorage.field(
-            variant.carrier,
-            field.storageIndex,
-          ));
+      return variant !== undefined && field !== undefined && rustTargetOperationIsFallible({
+        kind: "source-field", operationId: fact.operationId, accessMode: fact.accessMode,
+        receiverCarrier: variant.carrier, resultCarrier: fact.resultCarrier, ...field,
+      }, structuralStorage, projectFieldDispatch);
     });
   }
   if (fact.kind === "object-shape-projection") {

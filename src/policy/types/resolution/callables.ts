@@ -2,7 +2,7 @@ import { asNode } from "../../evidence/selected-source.js";
 import { denseDefined } from "./project.js";
 import { resolveRustCallableEvidence } from "./source-evidence.js";
 import { resolveRustTargetType } from "./target.js";
-import { resolveRustInferredClassUnion } from "./inferred-unions.js";
+import { resolveRustInferredObjectUnion } from "./inferred-unions.js";
 import { rustOptionTargetType, rustSourcePrimitiveTargetType, rustStringTargetType } from "../../../target-model/types/index.js";
 import { isRustBigIntCarrier, rustJsNumericTargetType, rustJsStringNumberTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -168,7 +168,7 @@ export function resolveUnion(
     const common = options.resolveProjectUnionCarrier(valueCarriers as readonly TargetTypeRef[]);
     const selected = common !== undefined && valueCarriers.some(carrier => rustTargetTypeRefEquals(carrier, common))
       ? common
-      : resolveRustInferredClassUnion(type, valueMembers, valueCarriers as readonly TargetTypeRef[], context, options) ?? common;
+      : resolveRustInferredObjectUnion(type, valueMembers, valueCarriers as readonly TargetTypeRef[], context, options) ?? common;
     return selected === undefined || nullishMembers.length === 0 ? selected : rustOptionTargetType(selected);
   }
   return undefined;

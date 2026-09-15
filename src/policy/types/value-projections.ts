@@ -17,6 +17,12 @@ export type RustOptionProjectionFact =
 
 export type RustFlowReadProjectionFact =
   | {
+      readonly kind: "source-union";
+      readonly sourceCarrier: TargetTypeRef;
+      readonly selectedCarrier: TargetTypeRef;
+      readonly variant: string;
+    }
+  | {
       readonly kind: "builtin-error";
       readonly sourceCarrier: TargetTypeRef;
       readonly selectedCarrier: TargetTypeRef;

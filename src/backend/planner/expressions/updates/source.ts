@@ -15,10 +15,10 @@ import { planRustValueFieldLocation, rustSourceFieldHasValueReceiver } from "../
 import { finishRustSourceAccessorCall, planRustSourceAccessorCall, sourceAccessorSelectedOperationMatches, sourceIndexSelectedOperationMatches, sourceStaticFieldSelectedOperationMatches, sourceUnionFieldSelectedOperationMatches } from "../properties.js";
 import { isRustBigIntCarrier } from "../../../../target-model/types/index.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
-import { mutateRustStoredObjectField, rustProjectObjectRepresentation } from "../../objects/project-storage.js";
+import { rustProjectObjectRepresentation } from "../../objects/project-storage.js";
 import { planExpression } from "../entry.js";
 import { planRustMutableProjectReceiver, planRustSharedReceiver, planRustPromotedStorageLocation } from "../typed-locations.js";
-import { planRustSourceUnionFieldProjection } from "../unions.js";
+import { planRustSourceUnionFieldProjection, mutateRustUnionField } from "../unions.js";
 import { readRustProjectObjectIndex, writeRustProjectObjectIndex } from "../../objects/project-objects.js";
 import { rustSourceStaticFieldLocation } from "../../declarations/static-field-storage.js";
 import { rustTargetOperationFactKey } from "../../../../analysis/facts/keys.js";
@@ -541,11 +541,11 @@ function planRustSourceUnionFieldUpdate(
                 context,
               );
       };
-      const mutation = mutateRustStoredObjectField(
-        selectedField.storage,
+      const mutation = mutateRustUnionField(
+        selectedField,
         field.variants[variantIndex]!.carrier,
         payload,
-        selectedField.storageIndex,
+        field.resultCarrier,
         mutate,
         context,
       );

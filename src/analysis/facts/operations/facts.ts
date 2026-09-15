@@ -328,6 +328,12 @@ export type RustTargetOperationFact =
         readonly name: string;
         readonly carrier: TargetTypeRef;
         readonly field?: {
+          readonly declaration?: Node;
+          readonly dispatch?: {
+            readonly read: string;
+            readonly write: string;
+            readonly ownerCarrier: TargetTypeRef;
+          };
           readonly storage: "project-object" | "structural-object";
           readonly storageIndex: number;
           readonly valueSemantics:

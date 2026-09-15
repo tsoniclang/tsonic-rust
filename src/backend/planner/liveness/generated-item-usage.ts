@@ -434,6 +434,14 @@ export function analyzeRustGeneratedItemUsage(input: {
       case "source-union-field":
         for (const variant of fact.variants) {
           if (variant.field === undefined) continue;
+          if (fact.accessMode !== "write" && variant.field.declaration !== undefined) readAuthoredFields.add(variant.field.declaration);
+          if (variant.field.dispatch !== undefined) {
+            markProjectCarrierFieldUsed(variant.carrier, "wrapper-dispatch");
+            if (fact.accessMode !== "write") markProjectMemberUsed(variant.carrier, variant.field.declaration, "read");
+            if (fact.accessMode !== "read") markProjectMemberUsed(variant.carrier, variant.field.declaration, "write");
+          } else if (variant.field.storage === "project-object") {
+            markProjectCarrierFieldUsed(variant.carrier, "wrapper-state");
+          }
           if (fact.accessMode !== "write") {
             markStructuralFieldRead(variant.carrier, variant.field.storageIndex);
           }

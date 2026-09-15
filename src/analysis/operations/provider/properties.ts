@@ -11,8 +11,9 @@ import { isProjectAccessorDeclaration, selectRustFixedArrayLengthProperty, selec
 import { Node_Type } from "@tsonic/target-api/source";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
 import { instantiateRustSelectedMemberCarrier } from "./member-carriers.js";
+import { resolveRustProjectField } from "./project-fields.js";
 import { rustCallableProtocol, rustSourceTypeCarrier, rustSourcePrimitiveTargetType } from "../../../target-model/types/index.js";
-import { rustProjectObjectField, rustProjectStaticFieldStorage } from "../../project-types/object-layout.js";
+import { rustProjectStaticFieldStorage } from "../../project-types/object-layout.js";
 import { rustSourceCallableReturnFactKey } from "../../facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectJsSurfaceOperation } from "../../../policy/operations/js-surface.js";
@@ -448,21 +449,10 @@ export function selectRustCheckedPropertyAccess(
         });
       }
     }
-    const field = rustProjectObjectField(declaration, context.ast);
-    const sourceFieldType = Node_Type(context.ast, declaration) ??
-      (request.optionalChain === true ? undefined : request.sourceResultType);
-    const declaredCarrier = resolveRustTargetTypeRef(sourceFieldType, context, options);
-    const resultCarrier = declaredCarrier === undefined || selectedReceiverCarrier === undefined
-      ? undefined
-      : instantiateRustSelectedMemberCarrier(
-          declaration,
-          selectedReceiverCarrier,
-          request.sourceReceiverType,
-          declaredCarrier,
-          context,
-          options,
-        );
-    if (field !== undefined && resultCarrier !== undefined && selectedReceiverCarrier !== undefined) {
+    const field = selectedReceiverCarrier === undefined ? undefined : resolveRustProjectField(
+      declaration, selectedReceiverCarrier, request.sourceReceiverType,
+      request.optionalChain === true ? undefined : request.sourceResultType, context, options);
+    if (field !== undefined) {
       if (request.accessMode === "delete") {
         return rejectSelectedOperation(
           request.expression,
@@ -472,45 +462,10 @@ export function selectRustCheckedPropertyAccess(
         );
       }
       const operationId = sourceOperationId(context, declaration, "field");
-      const owner = options.projectTypes.definitionContainingDeclaration(declaration);
-      const storageIndex = field.storageIndex +
-        (owner === undefined
-          ? 0
-          : options.projectTypes.externalBaseForDefinition(owner)?.fields.length ?? 0);
-      const ownerRelationship = owner === undefined || selectedReceiverCarrier === undefined
-        ? undefined
-        : options.projectTypes.relationship(selectedReceiverCarrier, owner);
-      const ownerCarrier = ownerRelationship?.kind === "related"
-        ? ownerRelationship.targetType
-        : undefined;
-      const readSlot = owner !== undefined && options.projectTypes.isPolymorphic(owner)
-        ? options.projectTypes.memberSlotName(declaration, "read")
-        : undefined;
-      const writeSlot = readSlot === undefined
-        ? undefined
-        : options.projectTypes.memberSlotName(declaration, "write");
-      if (owner !== undefined && options.projectTypes.isPolymorphic(owner) &&
-        (readSlot === undefined || writeSlot === undefined || ownerCarrier === undefined)) {
-        return rejectSelectedOperation(
-          request.expression,
-          context,
-          "RUST_PROJECT_FIELD_SLOT_IDENTITY_MISSING",
-          "Selected project field has no deterministic Rust dispatch-slot identity.",
-        );
-      }
       return acceptRustMemberOperation(request, "property", {
-        kind: "source-field",
+        ...field,
         operationId,
-        declaration,
         accessMode: request.accessMode,
-        receiverCarrier: selectedReceiverCarrier,
-        storage: "project-object",
-        storageIndex,
-        valueSemantics: { kind: "stored" },
-        resultCarrier,
-        ...(readSlot === undefined || writeSlot === undefined
-          ? {}
-          : { dispatch: { read: readSlot, write: writeSlot, ownerCarrier: ownerCarrier! } }),
       }, context, options, {
         sourceExpression: request.expression,
         sourceReceiver: request.receiver,

@@ -24,6 +24,11 @@ import type { RustOperationsProviderOptions } from "./model.js";
 import type { RustProviderOperationTemplate } from "../../facts/keys.js";
 import type { RustStructuralFieldRegistration, RustSourceUnion } from "../../project-types/source-type-registry.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { resolveRustProjectField } from "./project-fields.js";
+import type { RustTargetOperationFact } from "../../facts/keys.js";
+
+type UnionField = NonNullable<Extract<RustTargetOperationFact,
+  { readonly kind: "source-union-field" }>["variants"][number]["field"]>;
 
 export function isProjectAccessorDeclaration(
   declaration: Node | undefined,
@@ -74,13 +79,33 @@ export function selectStructuralSourceProperty(
       );
     }
     const selectedIndexes = new Set(selectedVariantIndexes);
-    const fields = sourceUnion.variants.map((variant, index) => {
+    const fields = sourceUnion.variants.map((variant, index): {
+      readonly field: UnionField; readonly resultCarrier: TargetTypeRef;
+    } | undefined => {
       if (!selectedIndexes.has(index)) {
         return undefined;
       }
       const matches = variant.shape?.fields.filter((field) =>
         field.declarations.some((declaration) => selectedDeclarations.includes(declaration))) ?? [];
-      return matches.length === 1 ? matches[0] : undefined;
+      if (matches.length === 1) {
+        const selected = matches[0]!;
+        return { resultCarrier: selected.resultCarrier, field: {
+          storage: variant.shape!.storage, storageIndex: selected.storageIndex,
+          valueSemantics: selected.accessor !== undefined
+            ? { kind: "accessor", writable: selected.accessor.setter }
+            : selected.method === true ? { kind: "method" } : { kind: "stored" },
+        } };
+      }
+      if (matches.length !== 0) return undefined;
+      const projectFields = selectedDeclarations.map(declaration => resolveRustProjectField(
+        declaration, variant.carrier, variant.sourceType, undefined, context, options)).filter(field => field !== undefined);
+      if (projectFields.length !== 1) return undefined;
+      const selected = projectFields[0]!;
+      return { resultCarrier: selected.resultCarrier, field: {
+        storage: selected.storage, storageIndex: selected.storageIndex, valueSemantics: selected.valueSemantics,
+        ...(selected.declaration === undefined ? {} : { declaration: selected.declaration }),
+        ...(selected.dispatch === undefined ? {} : { dispatch: selected.dispatch }),
+      } };
     });
     if (selectedVariantIndexes.some((index) => fields[index] === undefined)) {
       return rejectSelectedOperation(
@@ -135,18 +160,7 @@ export function selectStructuralSourceProperty(
         ...(fields[index] === undefined
           ? {}
           : {
-              field: {
-                storage: variant.shape!.storage,
-                storageIndex: fields[index]!.storageIndex,
-                valueSemantics: fields[index]!.accessor === undefined
-                  ? fields[index]!.method === true
-                    ? { kind: "method" }
-                    : { kind: "stored" }
-                  : {
-                      kind: "accessor",
-                      writable: fields[index]!.accessor!.setter,
-                    },
-              },
+              field: fields[index]!.field,
             }),
       })),
       resultCarrier,

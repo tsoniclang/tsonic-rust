@@ -14,7 +14,7 @@ import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagno
 import { Node_Expression } from "@tsonic/target-api/source";
 import { planExpression } from "./entry.js";
 import { planRustNonConsumingValue, planRustSharedReceiver } from "./typed-locations.js";
-import { planRustSourceUnionFieldProjection } from "./unions.js";
+import { planRustSourceUnionFieldProjection, readRustUnionField } from "./unions.js";
 import { planRustBuiltinErrorProperty } from "./builtin-errors.js";
 import { readRustProjectDispatchedField, rustProjectObjectDispatchField } from "../objects/project-objects.js";
 import { planRustProjectFieldDispatchRoles } from "../objects/project-field-dispatch.js";
@@ -460,11 +460,10 @@ function planRustSourceUnionFieldRead(
     fact,
     context,
     (payload, field, variantIndex) => {
-      return readRustStoredObjectField(
-        field.storage,
+      return readRustUnionField(
+        field,
         fact.variants[variantIndex]!.carrier,
         payload,
-        field.storageIndex,
         fact.resultCarrier,
         context,
       );

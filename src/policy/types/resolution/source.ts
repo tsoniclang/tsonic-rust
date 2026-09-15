@@ -55,7 +55,7 @@ import {
   resolveRustTypeComponentEvidence,
 } from "./source-evidence.js";
 import { resolveRustAuthoredBroadSourceValueTargetType } from "./broad-values.js";
-import { resolveRustInferredClassUnion } from "./inferred-unions.js";
+import { resolveRustInferredObjectUnion } from "./inferred-unions.js";
 import { resolveRustConditionalAlias } from "./type-families.js";
 import { tsonicMemoryFieldBindingFactKey, selectTsonicMemoryFieldBinding } from "@tsonic/source-core/facts";
 
@@ -149,7 +149,11 @@ export function resolveRustTargetTypeRef(
   if (node !== undefined && context.ast.kindName(node) === "KindParameter") {
     const parameterType = Node_Type(context.ast, node);
     if (parameterType === undefined) {
-      return undefined;
+      const semantics = context.semanticsFor(node);
+      return resolveRustTargetType(semantics.types.expressionType(node), {
+        ...context,
+        currentSemantics: semantics,
+      }, options, new Set<object>(), node);
     }
     const carrier = resolveRustAuthoredTargetType(parameterType, context, options, new Set<object>());
     return rustParameterLaneTargetType(carrier, parameterType, context, options);
@@ -366,7 +370,7 @@ export function resolveRustTargetTypeSyntax(
       if (selectedTypes.every(type => type !== undefined) && selectedCarriers.every(carrier => carrier !== undefined)) {
         const common = options.resolveProjectUnionCarrier(selectedCarriers as TargetTypeRef[]);
         if (common !== undefined && selectedCarriers.some(carrier => rustTargetTypeRefEquals(carrier, common))) return common;
-        const union = resolveRustInferredClassUnion(sourceType, selectedTypes as Type[], selectedCarriers as TargetTypeRef[],
+        const union = resolveRustInferredObjectUnion(sourceType, selectedTypes as Type[], selectedCarriers as TargetTypeRef[],
           { ...context, currentSemantics: semantics, currentSourceFile: sourceFile! }, options);
         if (union !== undefined) return union;
         if (common !== undefined) return common;

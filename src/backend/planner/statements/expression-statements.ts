@@ -38,7 +38,7 @@ import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagno
 import { planExpression, sourceFieldSelectedOperationMatches, sourceUnionFieldSelectedOperationMatches } from "../expressions/index.js";
 import { planRuntimeSetStatement, selectedOperatorMatches } from "./iteration.js";
 import { planRustCompoundAssignmentValue, planRustDirectOperatorCallAssignment, planRustSourceAccessorAssignment, planRustSourceIndexAssignment, planRustSourceMethodPropertyAssignment, planRustSourceStaticFieldAssignment } from "./assignments.js";
-import { planRustSourceUnionFieldProjection } from "../expressions/unions.js";
+import { planRustSourceUnionFieldProjection, readRustUnionField, writeRustUnionField } from "../expressions/unions.js";
 import { readRustProjectDispatchedField, writeRustProjectDispatchedField } from "../objects/project-objects.js";
 import { planRustProjectFieldDispatchRoles } from "../objects/project-field-dispatch.js";
 import { readRustStoredObjectField, rustProjectObjectRepresentation, writeRustStoredObjectField } from "../objects/project-storage.js";
@@ -281,19 +281,17 @@ export function planRustAssignmentWrite(
             left,
             context,
           );
-          const current = readRustStoredObjectField(
-            field.storage,
+          const current = readRustUnionField(
+            field,
             receiverCarrier,
             payload,
-            field.storageIndex,
             fact.resultCarrier,
             context,
           );
-          const written = writeRustStoredObjectField(
-            field.storage,
+          const written = writeRustUnionField(
+            field,
             receiverCarrier,
             payload,
-            field.storageIndex,
             "=",
             { kind: "path", path: nextName },
             context,
@@ -319,22 +317,20 @@ export function planRustAssignmentWrite(
             syntheticNames,
             "union_current",
           );
-          const current = readRustStoredObjectField(
-            field.storage,
+          const current = readRustUnionField(
+            field,
             receiverCarrier,
             payload,
-            field.storageIndex,
             fact.resultCarrier,
             context,
           );
           if (current === undefined) {
             return undefined;
           }
-          const written = writeRustStoredObjectField(
-            field.storage,
+          const written = writeRustUnionField(
+            field,
             receiverCarrier,
             payload,
-            field.storageIndex,
             "=",
             rustStringConcat([
               { kind: "path", path: currentName },
@@ -354,11 +350,10 @@ export function planRustAssignmentWrite(
             value: written,
           };
         }
-        return writeRustStoredObjectField(
-          field.storage,
+        return writeRustUnionField(
+          field,
           receiverCarrier,
           payload,
-          field.storageIndex,
           operator,
           selectedValue,
           context,

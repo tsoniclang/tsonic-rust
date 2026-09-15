@@ -1,5 +1,6 @@
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustRuntimeUnionProjection } from "../../target-model/types/carriers/runtime-unions.js";
+import { rustSourceUnionCarrierValue } from "../../target-model/types/carriers/source-types.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type {
   RustCallScopedLifetimeReconciliationFact,
@@ -50,6 +51,12 @@ export function selectRustFlowReadProjection(
 ): RustFlowReadProjectionSelection {
   if (rustTargetTypeRefEquals(sourceCarrier, selectedCarrier)) {
     return { kind: "identity" };
+  }
+  const union = rustSourceUnionCarrierValue(sourceCarrier);
+  const selectedVariants = union?.variants.filter(variant => rustTargetTypeRefEquals(variant.carrier, selectedCarrier));
+  if (selectedVariants?.length === 1) {
+    return { kind: "projection", fact: { kind: "source-union", sourceCarrier, selectedCarrier,
+      variant: selectedVariants[0]!.name } };
   }
   if ((isRustJsValueCarrier(sourceCarrier) || isRustProgramErrorCarrier(sourceCarrier) &&
     projectTypes.builtinErrorProjectionAvailable === true) &&

@@ -326,22 +326,17 @@ export function resolveStructuralObjectType(
       return kind !== "KindGetAccessor" && kind !== "KindSetAccessor" &&
         kind !== "KindMethodDeclaration" && kind !== "KindMethodSignature";
     }) ?? [];
-    const authoredTypeNodes = [...new Set([
+    const propertyTypeNodes = [...new Set([
       ...(declaredField === undefined ? [] : [declaredField.type]),
       ...sourcePropertyTypeEvidenceNodes(context.ast, semantics, property),
       ...projectDeclarations.flatMap(declaration => {
         const node = context.ast.typeNode(declaration);
         return node !== undefined && resolveBoundSourceTypeParameter(node, context) !== undefined ? [node] : [];
       }),
-      ...(authoredTypeRoot === undefined
-        ? []
-        : sourceTransformedTypeFactEvidenceNodes(
-            context.ast,
-            semantics,
-            authoredTypeRoot,
-            property.type,
-          )),
     ])];
+    const authoredTypeNodes = propertyTypeNodes.length !== 0 || authoredTypeRoot === undefined
+      ? propertyTypeNodes
+      : sourceTransformedTypeFactEvidenceNodes(context.ast, semantics, authoredTypeRoot, property.type);
     const authoredCarriers = authoredTypeNodes.map((node) =>
       resolveRustTypeComponentEvidence({
         authoredTypeNode: node,

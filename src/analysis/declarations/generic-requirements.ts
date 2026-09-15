@@ -521,7 +521,7 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       }
     }
     const projection = facts.getFact(node, rustFlowReadProjectionFactKey);
-    if (projection?.kind === "option-value") {
+    if (projection?.kind === "option-value" || projection?.kind === "source-union") {
       const error = addUse(node, projection.selectedCarrier, ["clone"]);
       if (error !== undefined) return error;
     }

@@ -21,6 +21,8 @@ export const rustFlowReadProjectionFactKey: RustPlanKey<RustFlowReadProjectionFa
     left.kind === right.kind &&
     rustTargetTypeRefEquals(left.sourceCarrier, right.sourceCarrier) &&
     rustTargetTypeRefEquals(left.selectedCarrier, right.selectedCarrier) &&
+    (left.kind !== "source-union" ||
+      (right.kind === "source-union" && left.variant === right.variant)) &&
     (left.kind !== "runtime-union" ||
       (right.kind === "runtime-union" && left.method === right.method)) &&
     (left.kind !== "project-downcast" ||
