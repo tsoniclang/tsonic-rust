@@ -216,7 +216,7 @@ export function rustFoundationForTargetOperationFact(
       break;
     case "throw-op":
       require("alloc");
-      if (fact.error.kind === "project") requireCarrier(fact.error.carrier);
+      if (fact.error.kind !== "program") requireCarrier(fact.error.carrier);
       break;
     case "regexp-create":
       require("std");

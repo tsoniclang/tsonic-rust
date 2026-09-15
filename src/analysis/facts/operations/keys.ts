@@ -8,6 +8,11 @@ import type { RustTargetOperationFact, RustTypedLocationPlan } from "./facts.js"
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 function rustTargetOperationFactEquals(left: RustTargetOperationFact, right: RustTargetOperationFact): boolean {
+  if (left.kind === "throw-op" && left.error.kind === "runtime") {
+    return right.kind === "throw-op" && right.error.kind === "runtime" &&
+      left.operationId === right.operationId && left.error.expression === right.error.expression &&
+      rustTargetTypeRefEquals(left.error.carrier, right.error.carrier);
+  }
   return closedMetadataEquals(left, right);
 }
 

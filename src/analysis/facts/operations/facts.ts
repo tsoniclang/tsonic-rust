@@ -527,7 +527,7 @@ export type RustTargetOperationFact =
       readonly kind: "throw-op";
       readonly operationId: string;
       readonly error:
-        | { readonly kind: "runtime"; readonly constructorOperationId: string }
+        | { readonly kind: "runtime"; readonly expression: Node; readonly carrier: TargetTypeRef }
         | { readonly kind: "project"; readonly carrier: TargetTypeRef; readonly variant: string }
         | { readonly kind: "program" };
     }
