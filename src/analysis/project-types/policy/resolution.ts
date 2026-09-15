@@ -34,6 +34,7 @@ export function createRustProjectTypePolicy(
     const usedNames = sourceFileIdentifierNames(sourceFile, host.ast, host.names);
     usedModuleNamesBySourceFile.set(sourceFile, usedNames);
     for (const statement of rustSourceTypeDeclarations(sourceFile, host.ast)) {
+      if (host.isRepresentationAlias(statement)) continue;
       if (host.ast.kindName(statement) === "KindClassDeclaration") {
         const issue = rustLocalClassIssue(statement, host.ast, host.navigation, host.genericParametersFor(statement));
         if (issue !== undefined) {
@@ -356,7 +357,7 @@ export function createRustProjectTypePolicy(
     return Object.freeze(lineage);
   };
 
-  const interfacesForClass = (
+  const contractsForClass = (
     definition: RustProjectTypeDefinition,
   ): readonly RustProjectTypeDefinition[] | undefined => {
     const lineage = classLineage(definition);
@@ -364,25 +365,14 @@ export function createRustProjectTypePolicy(
       return undefined;
     }
     const result: RustProjectTypeDefinition[] = [];
-    const visit = (candidate: RustProjectTypeDefinition): boolean => {
-      if (result.includes(candidate)) {
-        return true;
-      }
+    const visit = (candidate: RustProjectTypeDefinition): void => {
+      if (result.includes(candidate)) return;
       result.push(candidate);
       for (const edge of heritageByDeclaration.get(candidate.declaration) ?? []) {
-        if (edge.target.kind === "interface" && !visit(edge.target)) {
-          return false;
-        }
+        visit(edge.target);
       }
-      return true;
     };
-    for (const classDefinition of lineage) {
-      for (const edge of heritageByDeclaration.get(classDefinition.declaration) ?? []) {
-        if (edge.kind === "implements" && !visit(edge.target)) {
-          return undefined;
-        }
-      }
-    }
+    for (const classDefinition of lineage) visit(classDefinition);
     return Object.freeze(result);
   };
 
@@ -613,13 +603,17 @@ export function createRustProjectTypePolicy(
       throw new Error("Rust project definition has no dispatch name scope.");
     }
     const sourceComponent = host.sourcePackageComponentForFile(source.fileName);
-    const targets = sourceComponent === undefined
+    const implementations = sourceComponent === undefined
       ? []
       : orderedDefinitions
-          .filter((target) => target.kind === "class" && target.genericParameters.length === 0)
+          .filter((target) => target.kind === "class")
           .filter((target) =>
             host.sourcePackageComponentForFile(target.fileName) === sourceComponent)
           .filter((target) => relationship(openCarrier(target), source).kind === "related");
+    const ancestors = new Set(implementations.flatMap((implementation) => classLineage(implementation) ?? []));
+    const targets = orderedDefinitions.filter((target) => ancestors.has(target) &&
+      target.genericParameters.length === 0 &&
+      host.sourcePackageComponentForFile(target.fileName) === sourceComponent);
     downcastRoutesByDefinition.set(source, Object.freeze(targets.map((target) => Object.freeze({
       source,
       target,
@@ -787,7 +781,7 @@ export function createRustProjectTypePolicy(
       return polymorphic.has(definition) || host.ast.hasModifierKind(definition.declaration, "abstract");
     },
     classLineage,
-    interfacesForClass,
+    contractsForClass,
     concreteClassesFor(definition) {
       return Object.freeze(definitions.filter((candidate) => {
         if (candidate.kind !== "class" || host.ast.hasModifierKind(candidate.declaration, "abstract")) {

@@ -91,8 +91,18 @@ export function resolveProjectSourceCarrier(
         Object.freeze(arguments_ as readonly RustTargetGenericArgument[]),
       );
     }
-    if (carrier !== undefined && genericArguments.values.length === 0) {
-      return carrier;
+    if (carrier !== undefined) {
+      const parameters = context.sourceLifetimes.contractFor(declaration)?.parameters ?? [];
+      if (parameters.length !== genericArguments.values.length ||
+        parameters.some((parameter, index) => parameter.kind !== genericArguments.values[index]?.kind)) continue;
+      const substitutions = new Map<string, TargetTypeRef>();
+      const lifetimes = new Map<string, RustLifetimeRef>();
+      parameters.forEach((parameter, index) => {
+        const argument = genericArguments.values[index]!;
+        if (parameter.kind === "type" && argument.kind === "type") substitutions.set(parameter.targetName, argument.type);
+        if (parameter.kind === "lifetime" && argument.kind === "lifetime") lifetimes.set(rustLifetimeKey(parameter.lifetime), argument.lifetime);
+      });
+      return substituteRustTargetGenerics(carrier, substitutions, lifetimes);
     }
   }
   return undefined;

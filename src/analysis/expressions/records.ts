@@ -28,7 +28,7 @@ import { resolveFunctionExpressionCarrier } from "../callables/closures.js";
 import { resolveObjectLiteralMethodCarrier, resolveProjectIndexRecordLiteral, resolveProjectMethodPropertyCarrier, resolveRustRecordShape, selectRustRecordLiteralUnionVariant, selectRustRecordLiteralUnionVariantByCheckedType } from "../objects/record-shapes.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { resolveTypeNodeCarrier } from "../control-flow/statements.js";
-import { rustProjectInterfaceContracts } from "../project-types/type-policy.js";
+import { rustProjectInstanceContracts } from "../project-types/type-policy.js";
 import { rustProjectObjectLayout } from "../project-types/object-layout.js";
 import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -247,7 +247,7 @@ export function resolveRecordLiteralCarrier(
     const definition = walk.context.projectTypes.definitionForCarrier(selectedExpected);
     const contracts = definition === undefined
       ? undefined
-      : rustProjectInterfaceContracts(
+      : rustProjectInstanceContracts(
           walk.context.projectTypes,
           definition,
           selectedExpected,

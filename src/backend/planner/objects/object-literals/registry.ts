@@ -10,7 +10,7 @@ import { allocateMemberFieldName, planContractImplementation } from "./contracts
 import { allocateRustSyntheticTypeName } from "../../names/synthetic.js";
 import { rustCallableProtocol, rustSourceTypeCarrierValue } from "../../../../target-model/types/index.js";
 import { rustFallibleFactKey, rustObjectLiteralMethodAdapterFactKey } from "../../../../analysis/facts/keys.js";
-import { rustProjectInterfaceContracts } from "../../../../analysis/project-types/type-policy.js";
+import { rustProjectInstanceContracts } from "../../../../analysis/project-types/type-policy.js";
 import { rustProjectObjectIdentityField, rustProjectObjectStateField } from "../project-objects.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import type {
@@ -46,7 +46,7 @@ export function createImplementationPlan(
   if (definition?.kind !== "interface" || sourceValue === undefined || wrapperType === undefined) {
     return undefined;
   }
-  const contracts = rustProjectInterfaceContracts(
+  const contracts = rustProjectInstanceContracts(
     context.input.program.projectTypes,
     definition,
     fact.resultCarrier,

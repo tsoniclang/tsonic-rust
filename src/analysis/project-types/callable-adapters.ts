@@ -21,12 +21,11 @@ export function recordRustProjectCallableAdapterFacts(walk: RustFactWalk): void 
   const { ast, projectTypes } = walk.context;
   for (const concrete of projectTypes.definitions) {
     if (concrete.kind !== "class" || !projectTypes.isPolymorphic(concrete)) continue;
-    const lineage = projectTypes.classLineage(concrete);
-    const interfaces = projectTypes.interfacesForClass(concrete);
-    if (lineage === undefined || interfaces === undefined) continue;
+    const contracts = projectTypes.contractsForClass(concrete);
+    if (contracts === undefined) continue;
     const receiver = projectTypes.openCarrier(concrete);
     const adapters: RustProjectCallableAdapter[] = [];
-    for (const owner of [...lineage, ...interfaces]) {
+    for (const owner of contracts) {
       const members = ast.members(owner.declaration);
       if (!isDenseDataArray(members) || members.some(member => member === undefined)) {
         reject(walk, owner.declaration, "Project dispatch requires a dense member inventory.");
@@ -47,7 +46,8 @@ export function recordRustProjectCallableAdapterFacts(walk: RustFactWalk): void 
           for (const variant of walk.context.projectMethodDispatch.variantsForMember(member)) {
             record(member, implementation, variant.virtualSlot, variant);
             if (owner.kind === "class" && !ast.hasModifierKind(member, "abstract")) {
-              record(member, member, variant.exactSlot, variant);
+              const inherited = projectTypes.classLineage(concrete)?.includes(owner) === true;
+              record(member, inherited ? member : implementation, variant.exactSlot, variant);
             }
           }
         }

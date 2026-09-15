@@ -31,6 +31,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustBlock, RustStmt } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
+import { rustTypeAliasDeclarationFactKey } from "../../../analysis/facts/keys.js";
 
 export type RustAssignmentOperationFact = Extract<
   RustTargetOperationFact,
@@ -56,6 +57,10 @@ function planStatementInner(node: Node, context: RustPlanContext): readonly Rust
   switch (kind) {
     case "KindClassDeclaration": {
       return context.input.program.projectTypes.definitionForDeclaration(node) === undefined ? undefined : [];
+    }
+    case "KindTypeAliasDeclaration": {
+      return context.input.program.facts.getFact(node, rustTypeAliasDeclarationFactKey)?.kind === "erased"
+        ? [] : undefined;
     }
     case KindVariableStatement: {
       return planVariableStatement(node, context);

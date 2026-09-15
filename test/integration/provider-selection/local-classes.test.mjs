@@ -49,12 +49,45 @@ test("unproved local class evaluation and capture contracts fail before publicat
     `export function create(): void { class Entry {} const alias = Entry; new alias(); }`,
     `export function create(): void { const make = () => new Entry(); make(); class Entry {} }`,
     `export function create(): boolean { class Entry {} return new Entry() instanceof Entry; }`,
+    `export function create(): number { class Entry { static make(): number { return 1; } } const make = Entry.make; return make(); }`,
+    `export function create(value: number): number { class Entry { static make(): number { return value; } } return Entry.make(); }`,
   ]) {
     const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": source } });
     assert.ok(result.diagnostics.some(diagnostic => diagnostic.code === "RUST_LOCAL_CLASS_NOT_CLOSED"),
       JSON.stringify(result.diagnostics));
     assert.equal(result.artifacts.length, 0);
   }
+});
+
+test("local class static factories and implements clauses retain exact storage", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: ["js"], packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "local_factories" } },
+    files: { "index.ts": `
+import { check } from "@acme/testing";
+interface Readable { read(): number; }
+let count = 0;
+function next(): number { count += 1; return count; }
+function create(): number {
+  type Storage = { value: number };
+  class Entry implements Readable {
+    storage: Storage;
+    constructor(storage: Storage) { this.storage = storage; }
+    static from(storage: Storage): Entry { return new Entry(storage); }
+    static storageOf(entry: Entry): Storage { return entry.storage; }
+    read(): number { return this.storage.value; }
+  }
+  const original = Entry.from({ value: next() });
+  const shared = Entry.from(Entry.storageOf(original));
+  shared.storage.value += 10;
+  return original.read();
+}
+export function main(): void {
+  check(create() === 11 && create() === 12 && count === 2);
+}
+` },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  assert.equal(validateGeneratedProject("local-static-factories", result.artifacts, { run: true }).status, 0);
 });
 
 test("local classes retain enclosing type arguments without capturing runtime values", { timeout: 300_000 }, () => {

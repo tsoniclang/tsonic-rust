@@ -136,8 +136,12 @@ function selectRustProjectTypeTest(
     );
   }
   const sourceToTarget = options.projectTypes.relationship(dispatchCarrier, targetDefinition);
+  const concreteTypes = options.projectTypes.concreteClassesFor(sourceDefinition);
+  const ancestryProven = options.projectTypes.classLineage(sourceDefinition)?.includes(targetDefinition) === true &&
+    concreteTypes.length > 0 && concreteTypes.every((concrete) =>
+      options.projectTypes.classLineage(concrete)?.includes(targetDefinition) === true);
   let lowering: Extract<RustTargetOperationFact, { readonly kind: "project-type-test" }>["lowering"];
-  if (sourceToTarget.kind === "related" && rustTargetTypeRefEquals(sourceToTarget.targetType, targetCarrier)) {
+  if (ancestryProven && sourceToTarget.kind === "related" && rustTargetTypeRefEquals(sourceToTarget.targetType, targetCarrier)) {
     lowering = rustOptionElementCarrier(sourceCarrier) === undefined
       ? { kind: "constant", value: true }
       : { kind: "option-presence" };
@@ -151,17 +155,16 @@ function selectRustProjectTypeTest(
         "Checked instanceof has more than one exact project heritage instantiation.",
       );
     }
-    if (targetToSource.kind === "related" &&
-      rustTargetTypeRefEquals(targetToSource.targetType, dispatchCarrier)) {
-      if (options.projectTypes.downcastRoute(sourceDefinition, targetCarrier) === undefined) {
-        return rejectSelectedOperation(
-          request.expression,
-          context,
-          "RUST_PROJECT_TYPE_TEST_ROUTE_MISSING",
-          "Checked instanceof requires one closed generated project downcast route.",
-        );
-      }
+    if (options.projectTypes.downcastRoute(sourceDefinition, targetCarrier) !== undefined) {
       lowering = { kind: "dispatch" };
+    } else if (targetToSource.kind === "related" &&
+      rustTargetTypeRefEquals(targetToSource.targetType, dispatchCarrier)) {
+      return rejectSelectedOperation(
+        request.expression,
+        context,
+        "RUST_PROJECT_TYPE_TEST_ROUTE_MISSING",
+        "Checked instanceof requires one closed generated project downcast route.",
+      );
     } else {
       lowering = { kind: "constant", value: false };
     }

@@ -55,7 +55,7 @@ export interface RustProjectTypeDefinition {
   readonly rootName?: string;
 }
 
-export interface RustProjectInterfaceContract {
+export interface RustProjectInstanceContract {
   readonly definition: RustProjectTypeDefinition;
   readonly carrier: TargetTypeRef;
 }
@@ -120,7 +120,7 @@ export interface RustProjectTypePolicy {
   ): TargetTypeRef | undefined;
   isPolymorphic(definition: RustProjectTypeDefinition): boolean;
   classLineage(definition: RustProjectTypeDefinition): readonly RustProjectTypeDefinition[] | undefined;
-  interfacesForClass(definition: RustProjectTypeDefinition): readonly RustProjectTypeDefinition[] | undefined;
+  contractsForClass(definition: RustProjectTypeDefinition): readonly RustProjectTypeDefinition[] | undefined;
   concreteClassesFor(definition: RustProjectTypeDefinition): readonly RustProjectTypeDefinition[];
   downcastRoutesFor(definition: RustProjectTypeDefinition): readonly RustProjectDowncastRoute[];
   downcastRoute(
@@ -162,6 +162,7 @@ export interface RustProjectTypePolicyHost {
   readonly thrownClassDeclarations: ReadonlySet<Node>;
   normalizeCarrier(carrier: TargetTypeRef): TargetTypeRef;
   genericParametersFor(declaration: Node): readonly RustSourceGenericParameterContract[] | undefined;
+  isRepresentationAlias(declaration: Node): boolean;
   externallyExtensible(declaration: Node): boolean;
   targetNameForCallable(declaration: Node): string | undefined;
   sourcePackageComponentForFile(fileName: string): string | undefined;
@@ -173,17 +174,17 @@ export interface RustProjectTypePolicyHost {
   resolveExternalHeritage(edge: SourceDeclaredHeritageEdge): RustExternalProjectBase | undefined;
 }
 
-export function rustProjectInterfaceContracts(
+export function rustProjectInstanceContracts(
   policy: RustProjectTypePolicy,
   definition: RustProjectTypeDefinition,
   carrier: TargetTypeRef,
-): readonly RustProjectInterfaceContract[] | undefined {
-  const ordered: RustProjectInterfaceContract[] = [];
+): readonly RustProjectInstanceContract[] | undefined {
+  const ordered: RustProjectInstanceContract[] = [];
   const visiting = new Set<RustProjectTypeDefinition>();
   const visited = new Map<RustProjectTypeDefinition, TargetTypeRef>();
   const visit = (current: RustProjectTypeDefinition): boolean => {
     const relation = policy.relationship(carrier, current);
-    if (current.kind !== "interface" || relation.kind !== "related") {
+    if (relation.kind !== "related") {
       return false;
     }
     const previous = visited.get(current);
@@ -195,7 +196,7 @@ export function rustProjectInterfaceContracts(
     }
     visiting.add(current);
     for (const edge of policy.heritageForDefinition(current)) {
-      if (edge.kind !== "extends" || !visit(edge.target)) {
+      if (!visit(edge.target)) {
         return false;
       }
     }

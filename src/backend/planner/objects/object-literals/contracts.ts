@@ -27,7 +27,7 @@ import { emptyRustGenerics } from "../../../target-ast/nodes.js";
 import { rustSelfParameter } from "../../declarations/self-parameter.js";
 
 export function planContractImplementation(
-  contract: import("../../../../analysis/project-types/type-policy.js").RustProjectInterfaceContract,
+  contract: import("../../../../analysis/project-types/type-policy.js").RustProjectInstanceContract,
   rootType: RustType,
   wrapperType: RustType,
   stateFields: readonly RustObjectLiteralImplementationPlan["stateFields"][number][],

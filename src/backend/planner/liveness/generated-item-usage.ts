@@ -298,10 +298,9 @@ export function analyzeRustGeneratedItemUsage(input: {
 
   for (const concrete of input.projectTypes.definitions) {
     if (concrete.kind !== "class" || !input.projectTypes.isPolymorphic(concrete)) continue;
-    const lineage = input.projectTypes.classLineage(concrete);
-    const interfaces = input.projectTypes.interfacesForClass(concrete);
-    if (lineage === undefined || interfaces === undefined) continue;
-    for (const contract of [...lineage, ...interfaces]) {
+    const contracts = input.projectTypes.contractsForClass(concrete);
+    if (contracts === undefined) continue;
+    for (const contract of contracts) {
       const layout = rustProjectObjectLayout(contract.declaration, input.ast);
       const contractFields = [
         ...(input.projectTypes.externalBaseForDefinition(contract)?.fields ?? []).map((field) => ({

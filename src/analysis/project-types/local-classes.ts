@@ -1,6 +1,6 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceProgramNavigation } from "@tsonic/target-api/source";
-import { Node_Expression, sourceClassFieldIsTypeOnly } from "@tsonic/target-api/source";
+import { Node_Expression, sourceClassFieldIsTypeOnly, sourceMemberOwner } from "@tsonic/target-api/source";
 import type { RustSourceGenericParameterContract } from "../../target-model/lifetimes/index.js";
 
 export function rustLocalClassIssue(
@@ -13,14 +13,14 @@ export function rustLocalClassIssue(
   if (genericParameters === undefined) {
     return { node: declaration, message: "Local class has no exact non-conflicting enclosing generic parameter contract." };
   }
-  if (ast.extendsHeritageElements(declaration).length !== 0 ||
-    ast.implementsHeritageElements(declaration).length !== 0) {
+  if (ast.extendsHeritageElements(declaration).length !== 0) {
     return { node: declaration, message: "Local class heritage requires a per-evaluation constructor contract." };
   }
   for (const member of ast.members(declaration)) {
     if (member === undefined) return { node: declaration, message: "Local class has an absent member." };
     if (!sourceClassFieldIsTypeOnly(ast, member) &&
-      (ast.hasModifierKind(member, "static") || ast.kindName(member) === "KindClassStaticBlockDeclaration")) {
+      (ast.hasModifierKind(member, "static") && ast.kindName(member) !== "KindMethodDeclaration" ||
+        ast.kindName(member) === "KindClassStaticBlockDeclaration")) {
       return { node: member, message: "Local class static state requires per-evaluation storage." };
     }
   }
@@ -32,8 +32,15 @@ export function rustLocalClassIssue(
       expression = parent;
       parent = ast.parent(expression);
     }
-    if (parent === undefined || ast.kindName(parent) !== "KindNewExpression" ||
-      Node_Expression(ast, parent) !== expression) {
+    const selectedMember = parent === undefined ? undefined : navigation.sourceReferenceFor(parent)?.declaration;
+    const call = parent === undefined ? undefined : ast.parent(parent);
+    const staticCall = parent !== undefined && ast.kindName(parent) === "KindPropertyAccessExpression" &&
+      Node_Expression(ast, parent) === expression && selectedMember !== undefined &&
+      ast.parent(selectedMember) === declaration && ast.kindName(selectedMember) === "KindMethodDeclaration" &&
+      ast.hasModifierKind(selectedMember, "static") && call !== undefined &&
+      ast.kindName(call) === "KindCallExpression" && Node_Expression(ast, call) === parent;
+    if (!staticCall && (parent === undefined || ast.kindName(parent) !== "KindNewExpression" ||
+      Node_Expression(ast, parent) !== expression)) {
       return { node: use.reference, message: "Local class constructor identity must not escape direct construction." };
     }
     if (!inside(use.reference, declaration, ast) && ast.pos(use.reference) < ast.end(declaration)) {
@@ -46,6 +53,11 @@ export function rustLocalClassIssue(
     if (ast.kindName(node) === "KindIdentifier") {
       const selected = navigation.sourceReferenceFor(node)?.declaration;
       if (selected !== undefined && genericParameters.some(parameter => parameter.declaration === selected)) return;
+      if (selected !== undefined && (ast.kindName(selected) === "KindTypeAliasDeclaration" ||
+        ast.kindName(selected) === "KindInterfaceDeclaration")) return;
+      const memberOwner = selected === undefined ? undefined : sourceMemberOwner(ast, selected);
+      if (memberOwner !== undefined && (ast.kindName(memberOwner) === "KindClassDeclaration" ||
+        ast.kindName(memberOwner) === "KindInterfaceDeclaration" || ast.kindName(memberOwner) === "KindTypeLiteral")) return;
       if (selected !== undefined && !inside(selected, declaration, ast)) {
         let owner = ast.parent(selected);
         while (owner !== undefined && ast.kindName(owner) !== "KindSourceFile") {

@@ -41,6 +41,8 @@ import { resolveSelectedJsSourceMember } from "../../policy/evidence/selected-so
 import { recordRustTypeOnlyDeclarations } from "../declarations/type-only.js";
 import { recordRustProjectCallableAdapterFacts } from "../project-types/callable-adapters.js";
 import { recordRustValueStructDeclaration } from "../declarations/value-structs.js";
+import { recordRustInterfaceRepresentationAliases } from "../declarations/interface-aliases.js";
+import { rustTypeOnlyDeclarationFactKey } from "../facts/type-only.js";
 
 export function analyzeRustProgram(context: RustAnalysisContext): void {
   const { ast } = context;
@@ -122,12 +124,16 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   for (const sourceFile of projectSourceFiles) {
     sourceTypes.registerSourceFile(sourceFile, ast);
   }
+  recordRustInterfaceRepresentationAliases(walk, projectSourceFiles);
   const projectTypes = context.projectTypes.initialize({
     ast,
     names: context.names,
     navigation: context.source.navigation,
     sourceFiles: projectSourceFiles,
     sourceLifetimes: context.sourceLifetimes,
+    isRepresentationAlias(declaration) {
+      return context.facts.getFact(declaration, rustTypeOnlyDeclarationFactKey)?.reason === "representation-alias";
+    },
     normalizeCarrier: rustTypeFamilyNormalizer(context.typeFamilies),
     genericParametersFor: declaration => rustProjectGenericParameters(declaration, context),
     thrownClassDeclarations: collectRustThrownClassDeclarations(context, projectSourceFiles),

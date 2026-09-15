@@ -41,10 +41,9 @@ export function planProjectRootImplementations(
   layers: readonly ProjectClassStateLayer[],
   context: RustPlanContext,
 ): readonly RustItem[] | undefined {
-  const lineage = context.input.program.projectTypes.classLineage(concrete);
-  const interfaces = context.input.program.projectTypes.interfacesForClass(concrete);
+  const contracts = context.input.program.projectTypes.contractsForClass(concrete);
   const representation = context.input.program.objectRepresentations.representationFor(concrete);
-  if (lineage === undefined || interfaces === undefined || representation === undefined) {
+  if (contracts === undefined || representation === undefined) {
     return undefined;
   }
   const items: RustItem[] = [];
@@ -99,7 +98,7 @@ export function planProjectRootImplementations(
     }
     return planned;
   };
-  for (const contract of [...lineage, ...interfaces]) {
+  for (const contract of contracts) {
     const relation = context.input.program.projectTypes.relationship(concreteCarrier, contract);
     if (relation.kind !== "related") {
       return undefined;
@@ -164,7 +163,8 @@ function planRootContractFunctions(
   const functions: RustImplFunction[] = [];
   for (const route of context.input.program.projectTypes.downcastRoutesFor(contract)) {
     const relation = context.input.program.projectTypes.relationship(concreteCarrier, route.target);
-    const matches = relation.kind === "related" &&
+    const matches = context.input.program.projectTypes.classLineage(concrete)?.includes(route.target) === true &&
+      relation.kind === "related" &&
       rustTargetTypeRefEquals(relation.targetType, route.targetCarrier);
     if (matches) {
       const implementation = planProjectDowncastRouteImplementation(route, true, context);
@@ -425,8 +425,10 @@ function planRootContractFunctions(
       }
       functions.push(virtualMethod);
       if (contract.kind === "class" && !context.input.program.source.ast.hasModifierKind(member, "abstract")) {
+        const inherited = context.input.program.projectTypes.classLineage(concrete)?.includes(contract) === true;
+        const exactImplementation = inherited ? member : virtualImplementation;
         const exactImplementationMethod = implementationFor(
-          member,
+          exactImplementation,
           variant.targetTypeArguments,
         );
         const exactMethod = exactImplementationMethod === undefined
@@ -434,7 +436,7 @@ function planRootContractFunctions(
           : planRootMethodForwarder(
               concreteCarrier,
               member,
-              member,
+              exactImplementation,
               variant,
               variant.exactSlot,
               rootType,

@@ -77,8 +77,8 @@ export function createRustProjectTypePolicyRegistry(): RustProjectTypePolicyRegi
     classLineage(definition) {
       return requireCurrent().classLineage(definition);
     },
-    interfacesForClass(definition) {
-      return requireCurrent().interfacesForClass(definition);
+    contractsForClass(definition) {
+      return requireCurrent().contractsForClass(definition);
     },
     concreteClassesFor(definition) {
       return requireCurrent().concreteClassesFor(definition);

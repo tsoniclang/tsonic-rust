@@ -57,7 +57,7 @@ import { appendRustDiagnostic, boolCarrier, rustResolutionContext } from "../pro
 import { collectDescendantsOfKind, recordForOfFacts } from "../operations/inputs.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { reconcileRequiredCarrier, resolveExpressionCarrier } from "../expressions/carriers.js";
-import { recordBindingPatternFacts } from "../declarations/types-and-bindings.js";
+import { recordBindingPatternFacts, registerTypeAlias } from "../declarations/types-and-bindings.js";
 import { recordCallableValueSignatureForDeclaration } from "../callables/signatures.js";
 import { recordThrowFacts } from "../resources/suspension.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
@@ -249,6 +249,10 @@ export function recordStatementFacts(
   const { ast } = walk.context;
   const kind = ast.kindName(statement);
   if (kind === "KindClassDeclaration" && walk.context.projectTypes.definitionForDeclaration(statement) !== undefined) return;
+  if (kind === "KindTypeAliasDeclaration") {
+    registerTypeAlias(walk, statement);
+    return;
+  }
   if (kind === KindBlock) {
     const statements = requireDenseSourceNodes(walk, ast.statements(statement), "Block contains an undefined or non-data statement slot.");
     if (statements === undefined) {

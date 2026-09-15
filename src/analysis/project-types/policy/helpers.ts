@@ -115,17 +115,15 @@ export function heritageKindIssue(
   target: RustProjectTypeDefinition,
 ): string | undefined {
   if (source.kind === "interface") {
-    return relation !== "extends" || target.kind !== "interface"
-      ? `Project interface '${source.sourceName}' can extend only another project interface.`
+    return relation !== "extends"
+      ? `Project interface '${source.sourceName}' requires an exact extends instance contract.`
       : undefined;
   }
   return relation === "extends"
     ? target.kind === "class"
       ? undefined
       : `Project class '${source.sourceName}' can extend only another project class.`
-    : target.kind === "interface"
-      ? undefined
-      : `Project class '${source.sourceName}' can implement only a project interface.`;
+    : undefined;
 }
 
 export function definitionKey(fileName: string, sourceName: string): string {

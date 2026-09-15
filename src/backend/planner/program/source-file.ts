@@ -449,7 +449,9 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
     if (definition.sourceFile !== context.sourceFile || definition.kind !== "class" ||
       ast.parent(definition.declaration) === context.sourceFile) continue;
     const diagnosticCount = context.diagnostics.length;
-    const planned = planClassDeclaration(definition.declaration, context);
+    const planned = context.input.program.projectTypes.isPolymorphic(definition)
+      ? planPolymorphicClassDeclaration(definition.declaration, context)
+      : planClassDeclaration(definition.declaration, context);
     if (planned === undefined) {
       ensureTopLevelPlanningDiagnostic(context, definition.declaration, diagnosticCount, "local-class");
     } else {
