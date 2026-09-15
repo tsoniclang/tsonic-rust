@@ -72,7 +72,7 @@ import {
 
 export const rustBuiltInCarrierRenderPaths: Readonly<Record<string, string>> = Object.freeze({
   [rustBigIntTargetId]: "rt::BigInt",
-  [rustEmptyObjectTargetId]: "js_abi::EmptyObject",
+  [rustEmptyObjectTargetId]: "tsonic_rust_runtime::EmptyObject",
   [rustJsNumericTargetId]: "js_abi::JsNumeric",
   [rustJsStringNumberTargetId]: "js_abi::JsStringNumber",
   [rustOptionTargetId]: "Option",

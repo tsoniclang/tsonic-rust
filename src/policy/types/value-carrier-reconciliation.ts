@@ -21,6 +21,7 @@ import { selectRustSourceValueConversion } from "../conversions/selection.js";
 import { inferRustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { rustLifetimeKey, rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
+import { rustEmptyRecordCarrier } from "../../target-model/conversions/empty-record.js";
 
 export type RustValueCarrierReconciliation =
   | { readonly kind: "identity" }
@@ -124,6 +125,12 @@ export function selectRustValueCarrierReconciliation(
 ): RustValueCarrierReconciliation {
   if (rustTargetTypeRefEquals(sourceCarrier, targetCarrier)) {
     return { kind: "identity" };
+  }
+  if (rustEmptyRecordCarrier(sourceCarrier) && rustEmptyRecordCarrier(targetCarrier)) {
+    return { kind: "conversion", fact: {
+      sourceCarrier, targetCarrier,
+      conversion: { kind: "empty-record", source: sourceCarrier, target: targetCarrier },
+    } };
   }
   const lifetimeReconciliation = selectRustCallScopedLifetimeReconciliation(
     sourceCarrier,

@@ -25,6 +25,7 @@ import {
   createRustSyntheticNameState,
 } from "../names/synthetic.js";
 import { rustCompilerOwnedContextualConversionMatches } from "../../../target-model/conversions/contextual.js";
+import { planRustEmptyRecordConversion } from "../expressions/empty-record-conversion.js";
 import { closedMetadataEquals } from "../../../target-model/metadata/closed-data.js";
 
 export function planRustCallableArguments(
@@ -290,6 +291,10 @@ function applyRustCallableValueAdapterRaw(
         ? { expression, fallible: false }
         : undefined;
     case "conversion": {
+      if (adapter.conversion.kind === "empty-record") {
+        const converted = planRustEmptyRecordConversion(adapter.conversion, expression, node, context);
+        return converted === undefined ? undefined : { expression: converted, fallible: false };
+      }
       if (adapter.conversion.kind === "provider-record-copy") return undefined;
       if (adapter.conversion.kind === "native-trait-object-upcast" ||
         adapter.conversion.kind === "reference-reborrow") {

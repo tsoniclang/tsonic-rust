@@ -12,6 +12,7 @@ import {
   rustOptionTargetType,
   rustSourcePrimitiveTargetType,
   rustStructuralObjectTargetType,
+  rustStructuralObjectCarrierValue,
   rustStringTargetType,
   rustTupleTargetType,
   rustUnitTargetType,
@@ -89,7 +90,9 @@ export function resolveRustTargetType(
       (context.sourceTypeParameterSubstitutions?.size ?? 0) === 0
     ? options.sourceTypes.structuralObjectForType(type)
     : undefined;
-  if (existingStructuralObject !== undefined) {
+  if (existingStructuralObject !== undefined &&
+    !(existingStructuralObject.fields.length === 0 &&
+      rustStructuralObjectCarrierValue(existingStructuralObject.carrier)?.representation === "value")) {
     return existingStructuralObject.carrier;
   }
   const primitive = resolveSourcePrimitive(type, context);
@@ -270,6 +273,7 @@ export function resolveStructuralObjectType(
   const struct = valueStruct ?? context.facts.resolve(type, structFactKey) ?? context.facts.get(type, structFactKey);
   if (struct !== undefined && (struct.valueType !== true || struct.fields === undefined)) return undefined;
   const representation = struct === undefined ? "reference" : "value";
+  if (semantics.types.isSymbolLike(type)) return undefined;
   const declaredFields = struct === undefined ? undefined : new Map(struct.fields!.map(field => [field.name, field]));
   if (declaredFields !== undefined && declaredFields.size !== struct!.fields!.length) return undefined;
   if (semantics.types.callSignatures(type).length !== 0 ||
@@ -282,7 +286,7 @@ export function resolveStructuralObjectType(
     return undefined;
   }
   if (properties.length === 0 && representation === "reference") {
-    return options.jsEnabled && !semantics.types.couldContainTypeVariables(type)
+    return !semantics.types.couldContainTypeVariables(type)
       ? rustEmptyObjectTargetType()
       : undefined;
   }

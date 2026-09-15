@@ -54,7 +54,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
         "rust.backend.empty-object", "Empty object construction requires exact finalized empty syntax and identity storage."));
       return undefined;
     }
-    return { kind: "call", path: "js_abi::EmptyObject::new", args: [] };
+    return { kind: "call", path: "tsonic_rust_runtime::EmptyObject::new", args: [] };
   }
   if (fact?.kind === "provider-record-literal") {
     return planProviderRecordLiteral(node, fact, context);

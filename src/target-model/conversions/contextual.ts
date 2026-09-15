@@ -4,10 +4,12 @@ import { rustValueConversionIsFallible } from "./contracts.js";
 import { rustTargetTypeRefEquals } from "../types/equality.js";
 import { rustCarrierSupportsTrait } from "../types/carriers/traits.js";
 import { rustProviderRecordCopyMatches, type RustProviderRecordCopy } from "./provider-record.js";
+import { rustEmptyRecordConversionMatches, type RustEmptyRecordConversion } from "./empty-record.js";
 
 export type RustContextualValueConversion =
   | RustValueConversion
   | RustProviderRecordCopy
+  | RustEmptyRecordConversion
   | {
       readonly kind: "native-trait-object-upcast";
       readonly source: TargetTypeRef;
@@ -24,6 +26,9 @@ export function rustCompilerOwnedContextualConversionMatches(
   targetCarrier: TargetTypeRef,
   conversion: RustContextualValueConversion,
 ): boolean {
+  if (conversion.kind === "empty-record") {
+    return rustEmptyRecordConversionMatches(conversion, sourceCarrier, targetCarrier);
+  }
   if (conversion.kind === "provider-record-copy") {
     return rustProviderRecordCopyMatches(conversion, sourceCarrier, targetCarrier);
   }
@@ -51,5 +56,6 @@ export function rustContextualValueConversionIsFallible(
     conversion.kind !== "native-trait-object-upcast" &&
     conversion.kind !== "reference-reborrow" &&
     conversion.kind !== "provider-record-copy" &&
+    conversion.kind !== "empty-record" &&
     rustValueConversionIsFallible(conversion);
 }

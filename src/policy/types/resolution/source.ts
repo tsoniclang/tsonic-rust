@@ -23,7 +23,7 @@ import {
 } from "../../../target-model/types/index.js";
 import { asNode } from "../../evidence/selected-source.js";
 import { denseDefined, resolveProjectSourceCarrier } from "./project.js";
-import { functionPointerFactKey, pointerFactKey, structFactKey } from "@tsonic/tsts";
+import { fieldFactKey, functionPointerFactKey, pointerFactKey, structFactKey } from "@tsonic/tsts";
 import { resolveRustSourceMarker } from "./markers.js";
 import { instantiateProviderTargetType, providerCarrierFromRelations, resolveOwnedSourceProfileTypeName, resolveProviderTypeIdentity, resolveSourceProfileCarrierFromArguments } from "./providers.js";
 import { resolveCallableType, resolveSourcePrimitive, resolveSourceTypeParameter } from "./callables.js";
@@ -76,7 +76,9 @@ export function resolveRustTargetTypeRef(
   const binding = context.source.sourceFacts.getFact(subject, tsonicMemoryFieldBindingFactKey);
   if (binding !== undefined) {
     if (selectTsonicMemoryFieldBinding(context.ast, context.source.sourceFacts, binding.call)?.kind !== "resolved") return undefined;
-    const pointee = resolveRustTargetTypeRef(binding.field.fieldLayout.explicitTypeNode ?? binding.pointeeType, context, options);
+    const typeNode = context.ast.typeNode(binding.field.selectedDeclaration) ??
+      context.source.sourceFacts.getFact(binding.field.selectedDeclaration, fieldFactKey)?.type;
+    const pointee = resolveRustTargetTypeRef(typeNode ?? binding.pointeeType, context, options);
     return pointee === undefined ? undefined : rustSourceLocationTargetType(pointee);
   }
   const valueStruct = context.facts.resolve(subject, structFactKey) ?? context.facts.get(subject, structFactKey);
@@ -180,7 +182,8 @@ export function resolveRustTargetTypeSyntax(
   resolving: Set<object>,
 ): TargetTypeRef | undefined {
   if (context.ast.is.IsTypeQueryNode(node)) {
-    const declaration = context.source.navigation.referenceFor(node)?.declaration;
+    const expression = context.ast.as.AsTypeQueryNode(node)?.ExprName;
+    const declaration = context.source.navigation.referenceFor(expression)?.declaration;
     if (declaration !== undefined && context.facts.get(declaration, structFactKey) !== undefined) {
       if (resolving.has(declaration)) return undefined;
       const existing = context.facts.getRuntimeCarrierFact(declaration)?.carrier;

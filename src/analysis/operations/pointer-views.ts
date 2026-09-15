@@ -36,9 +36,10 @@ export function selectRustPointerViewCall(
     return reject("Pointer views require the exact checked base, read and write arguments.");
   }
   const pointee = resolveRustTargetTypeRef(view.explicitPointeeTypeNode ?? view.pointeeType, context, options);
-  const sourcePointee = resolveRustTargetTypeRef(view.sourcePointeeType, context, options);
   const operand = resolveRustTargetTypeRef(view.pointerExpression, context, options);
   const operandPointee = rustOptionalLocationPointeeCarrier(operand);
+  const sourcePointee = operandPointee ??
+    resolveRustTargetTypeRef(view.sourcePointeeType, context, options);
   if (pointee === undefined || sourcePointee === undefined ||
     (operandPointee === undefined
       ? !view.optional || !isRustDefinitelyNullishCarrier(operand)

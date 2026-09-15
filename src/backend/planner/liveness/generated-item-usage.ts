@@ -595,8 +595,10 @@ export function analyzeRustGeneratedItemUsage(input: {
       if (memoryBinding?.kind === "record") markStructuralShapeConstructed(memoryBinding.carrier);
       visitProjectProjectionFacts(node);
       const conversion = input.facts.getFact(node, rustContextualValueConversionFactKey)?.conversion;
+      if (conversion?.kind === "empty-record") markStructuralShapeConstructed(conversion.target);
       if (conversion !== undefined && conversion.kind !== "native-trait-object-upcast" &&
-        conversion.kind !== "reference-reborrow" && conversion.kind !== "provider-record-copy") {
+        conversion.kind !== "reference-reborrow" && conversion.kind !== "provider-record-copy" &&
+        conversion.kind !== "empty-record") {
         visitConversion(conversion);
       }
       if (fact !== undefined) visitFact(node, fact);

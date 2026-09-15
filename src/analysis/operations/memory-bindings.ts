@@ -1,6 +1,7 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
+import { fieldFactKey } from "@tsonic/tsts";
 import { selectTsonicMemoryFieldBinding, selectTsonicMemoryRecordBinding } from "@tsonic/source-core/facts";
-import { rustSourceLocationTargetType, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
+import { rustEmptyObjectTargetType, rustSourceLocationTargetType, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { rustMemoryBindingPlanKey } from "../../target-model/operations/memory-bindings.js";
@@ -24,7 +25,9 @@ export function resolveRustMemoryBindingCarrier(walk: RustFactWalk, expression: 
   if (record?.kind === "rejected") return reject(record.reason);
   if (field?.kind === "resolved") {
     const operation = field.operation;
-    const pointee = resolveRustTargetTypeRef(operation.field.fieldLayout.explicitTypeNode ?? operation.pointeeType,
+    const typeNode = ast.typeNode(operation.field.selectedDeclaration) ??
+      resolution.source.sourceFacts.getFact(operation.field.selectedDeclaration, fieldFactKey)?.type;
+    const pointee = resolveRustTargetTypeRef(typeNode ?? operation.pointeeType,
       resolution, walk.operationOptions);
     if (pointee === undefined) return reject("The bound field has no exact native value carrier.");
     const carrier = rustSourceLocationTargetType(pointee);
@@ -37,6 +40,10 @@ export function resolveRustMemoryBindingCarrier(walk: RustFactWalk, expression: 
   const operation = record.operation;
   const carrier = resolveRustTargetTypeRef(operation.layout.explicitTypeNode ?? operation.sourceType, resolution, walk.operationOptions);
   const structural = rustStructuralObjectCarrierValue(carrier);
+  if (carrier !== undefined && rustTargetTypeRefEquals(carrier, rustEmptyObjectTargetType()) && operation.fields.length === 0) {
+    walk.context.facts.set(expression, rustMemoryBindingPlanKey, Object.freeze({ kind: "record", carrier, fields: Object.freeze([]) }));
+    return { handled: true as const, carrier: setCarrierFact(walk, expression, carrier) };
+  }
   if (carrier === undefined || structural === undefined || structural.fields.length !== operation.fields.length) {
     return reject("The bound record requires one exact complete structural carrier.");
   }
