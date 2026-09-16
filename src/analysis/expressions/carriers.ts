@@ -87,6 +87,7 @@ export function resolveExpressionCarrier(
   expression: Node,
   sourceFile: SourceFile,
   expected: TargetTypeRef | undefined,
+  purpose: "value" | "operation" = "value",
 ): TargetTypeRef | undefined {
   const facts = walk.context.facts;
   const contextualExpected = rustExpressionResolutionExpectation(
@@ -95,6 +96,7 @@ export function resolveExpressionCarrier(
     expected,
   );
   const finalize = (carrier: TargetTypeRef | undefined): TargetTypeRef | undefined => {
+    if (purpose === "operation") return carrier;
     const selectedOperation = facts.get(expression, rustSelectedOperationKey) ??
       facts.resolve(expression, rustSelectedOperationKey);
     const targetOperation = facts.get(expression, rustTargetOperationFactKey) ??
@@ -647,7 +649,7 @@ function resolveCallArgumentOperationPrerequisite(
   const kind = walk.context.ast.kindName(argument);
   const refinement = walk.context.source.semantics.selectValueTypeRefinement(argument);
   if (refinement.kind === "resolved") {
-    resolveExpressionCarrier(walk, argument, sourceFile, undefined);
+    resolveExpressionCarrier(walk, argument, sourceFile, undefined, "operation");
     return;
   }
   if (kind === KindIdentifier || kind === KindCallExpression || kind === KindNewExpression ||
@@ -655,16 +657,16 @@ function resolveCallArgumentOperationPrerequisite(
     kind === KindPropertyAccessExpression || kind === KindElementAccessExpression ||
     kind === KindBinaryExpression || kind === KindPrefixUnaryExpression ||
     kind === KindPostfixUnaryExpression) {
-    resolveExpressionCarrier(walk, argument, sourceFile, undefined);
+    resolveExpressionCarrier(walk, argument, sourceFile, undefined, "operation");
     return;
   }
   if (kind === KindNonNullExpression) {
-    resolveExpressionCarrier(walk, argument, sourceFile, undefined);
+    resolveExpressionCarrier(walk, argument, sourceFile, undefined, "operation");
     return;
   }
   if (kind === "KindAsExpression" || kind === "KindTypeAssertionExpression") {
     if (!walk.context.ast.isConstAssertion(argument)) {
-      resolveExpressionCarrier(walk, argument, sourceFile, undefined);
+      resolveExpressionCarrier(walk, argument, sourceFile, undefined, "operation");
     } else {
       const inner = Node_Expression(walk.context.ast, argument);
       if (inner !== undefined) resolveCallArgumentOperationPrerequisite(walk, inner, sourceFile);
@@ -715,7 +717,7 @@ function resolveIndependentCallArgumentOperation(
     kind === KindPropertyAccessExpression || kind === KindElementAccessExpression ||
     kind === KindNonNullExpression || kind === "KindAsExpression" ||
     kind === "KindTypeAssertionExpression") {
-    resolveExpressionCarrier(walk, argument, sourceFile, undefined);
+    resolveExpressionCarrier(walk, argument, sourceFile, undefined, "operation");
     return;
   }
   if (kind === KindParenthesizedExpression || kind === KindSatisfiesExpression ||

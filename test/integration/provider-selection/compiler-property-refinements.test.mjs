@@ -5,6 +5,18 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { nullishMemberStorageSource } from "../../../../tsonic/test/fixtures/nullish-member-storage.mjs";
 import { contextualClassArgumentsSource } from "../../../../tsonic/test/fixtures/contextual-class-arguments.mjs";
 import { classUnionUpcastSource, anonymousClassUnionUpcastSource } from "../../../../tsonic/test/fixtures/class-union-upcasts.mjs";
+import { optionalIndexedArgumentsSource } from "../../../../tsonic/test/fixtures/optional-indexed-arguments.mjs";
+
+test("optional indexed arguments retain absence and single evaluation", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"], packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "optional_indexed_arguments" } },
+    files: { "index.ts": `import { check } from "@acme/testing";\n${optionalIndexedArgumentsSource}\nexport function main(): void { check(run()); }` },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  const native = validateGeneratedProject("optional-indexed-arguments", result.artifacts, { run: true });
+  assert.equal(native.status, 0, native.stdout + native.stderr);
+});
 
 for (const surfaces of [[], ["js"]]) {
   for (const [name, sourceText] of [["generic", classUnionUpcastSource], ["anonymous", anonymousClassUnionUpcastSource]]) {
