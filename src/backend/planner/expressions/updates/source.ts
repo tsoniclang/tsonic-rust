@@ -103,7 +103,7 @@ export function planUnaryExpression(
       : planExpression(operandNode, context);
   return operand === undefined
     ? undefined
-    : fact.operator === "!"
+    : fact.operator === "!" && !isRustBigIntCarrier(fact.resultCarrier)
       ? negateRustPlannedBooleanExpression(operandNode, operand, context)
       : { kind: "unary", operator: fact.operator, operand };
 }

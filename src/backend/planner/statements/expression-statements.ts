@@ -45,7 +45,7 @@ import { readRustStoredObjectField, rustProjectObjectRepresentation, writeRustSt
 import { rustStringConcat } from "../../target-ast/expressions.js";
 import { planRustDirectStorage } from "../expressions/updates/target.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustAssignmentOperationFact } from "./core.js";
+import type { RustAssignmentOperationFact, RustAssignmentOperationPlan } from "./core.js";
 import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustCompileTimeSourceKey } from "../../../target-model/facts/source-declarations.js";
@@ -180,7 +180,7 @@ export function planRustAssignmentWrite(
   expression: Node,
   left: Node,
   valueNode: Node,
-  fact: RustAssignmentOperationFact,
+  fact: RustAssignmentOperationPlan,
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
   const { ast } = context.input.program.source;
@@ -194,8 +194,11 @@ export function planRustAssignmentWrite(
     return undefined;
   }
   const sourceField = context.input.program.facts.getFact(left, rustTargetOperationFactKey);
-  if (context.input.program.facts.getFact(expression, rustCompoundWriteFactKey) !== undefined) {
-    return planRustCompoundRuntimeWrite(expression, left, valueNode, fact, context);
+  const compoundWrite = context.input.program.facts.getFact(expression, rustCompoundWriteFactKey);
+  if (compoundWrite !== undefined) {
+    return operator === "="
+      ? planRuntimeSetStatement(expression, compoundWrite, context, true)
+      : planRustCompoundRuntimeWrite(expression, left, valueNode, fact, context);
   }
   const storageOverride = context.expressionOverrides?.get(left);
   const target = planRustDirectStorage(left, context);
@@ -755,11 +758,7 @@ export function planRustAssignmentWrite(
   if (promoted.handled) {
     return promoted.statement === undefined ? undefined : [promoted.statement];
   }
-  return operator === "+=" || operator === "-=" || operator === "*=" || operator === "/=" || operator === "%="
-    ? [{ kind: "assign", target, operator, value }]
-    : operator === "="
-      ? [{ kind: "assign", target, operator, value }]
-      : undefined;
+  return [{ kind: "assign", target, operator, value }];
 }
 
 function planInPlaceStringAppend(

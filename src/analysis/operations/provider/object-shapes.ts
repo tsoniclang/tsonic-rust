@@ -1,4 +1,4 @@
-import { rustStringTargetType } from "../../../target-model/types/index.js";
+import { isRustJsArrayCarrier, rustStringTargetType } from "../../../target-model/types/index.js";
 import { acceptRustPolicy } from "../../../policy/operations/contracts.js";
 import {
   checkedCallIsConstruction,
@@ -52,6 +52,11 @@ export function mapSelectedJsSpecialCall(
     memberName,
   );
   if (objectProjection !== undefined) {
+    const sourceArgument = request.source.sourceArguments[0];
+    if (objectProjection.projection === "keys" && sourceArgument !== undefined &&
+      isRustJsArrayCarrier(selectedValueCarrier(sourceArgument.expression, sourceArgument.type, context, options))) {
+      return undefined;
+    }
     return mapSelectedObjectShapeProjection(
       request,
       objectProjection,

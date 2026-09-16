@@ -234,6 +234,9 @@ function mapSelectedUnaryOperator(
   if (request.operator === "!" && isRustBoolCarrier(operand)) {
     targetOperator = "!";
     resultCarrier = operand;
+  } else if (request.operator === "~" && isRustBigIntCarrier(operand)) {
+    targetOperator = "!";
+    resultCarrier = operand;
   } else if (request.operator === "-" &&
     (isRustSignedNumericCarrier(operand) || isRustBigIntCarrier(operand))) {
     targetOperator = "-";

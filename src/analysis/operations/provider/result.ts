@@ -198,7 +198,8 @@ export function selectedMemberReceiverCarrier(
     return sourceCarrier;
   }
   const flowProjection = selectRustFlowReadProjection(sourceCarrier, selectedCarrier, options.projectTypes, context.typeDefinitions);
-  if (flowProjection.kind === "projection" && flowProjection.fact.kind === "builtin-error") {
+  if (flowProjection.kind === "projection") {
+    recordRustFlowReadProjection(context.facts, receiver, flowProjection.fact);
     return selectedCarrier;
   }
   if (rustRuntimeUnionProjection(sourceCarrier, selectedCarrier) !== undefined) {

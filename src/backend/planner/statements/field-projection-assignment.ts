@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import { Node_Expression } from "@tsonic/target-api/source";
 import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import type { RustAssignmentOperationFact } from "./core.js";
+import type { RustAssignmentOperationPlan } from "./core.js";
 import { planExpression, sourceFieldSelectedOperationMatches } from "../expressions/index.js";
 import { findRustUpdateProjectField, planRustDirectStorage, planRustUpdateProjectionArguments } from "../expressions/updates/target.js";
 import { planRustMutableProjectReceiver } from "../expressions/typed-locations.js";
@@ -14,7 +14,7 @@ import { rustArrayFieldMutationName } from "../objects/polymorphism/array-fields
 export function planRustFieldProjectionAssignment(
   left: Node,
   right: Node,
-  assignment: RustAssignmentOperationFact,
+  assignment: RustAssignmentOperationPlan,
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
   const field = findRustUpdateProjectField(left, context);

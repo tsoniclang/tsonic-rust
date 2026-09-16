@@ -4,7 +4,7 @@ import {
   resolveSelectedProviderDeclaration,
   resolveSelectedSourceProfilePropertyMembers,
 } from "../../../policy/evidence/selected-source.js";
-import { acceptDeclarationOperation, acceptRustMemberOperation, acceptRustOperation, isDeclarationFileSubject, normalizeSelectedLiteralCarrier, rejectSelectedOperation, selectedDeclarationIsCallable, selectedMemberReceiverCarrier, sourceOperationId } from "./result.js";
+import { acceptDeclarationOperation, acceptRustMemberOperation, acceptRustOperation, isDeclarationFileSubject, rejectSelectedOperation, selectedDeclarationIsCallable, selectedMemberReceiverCarrier, sourceOperationId } from "./result.js";
 import { finalizeProviderOperationFromSubjects, mapProviderCheckedOperation } from "./conversions.js";
 import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
 import { isProjectAccessorDeclaration, selectRustFixedArrayLengthProperty, selectStructuralSourceProperty } from "./structural-properties.js";
@@ -12,7 +12,7 @@ import { Node_Type } from "@tsonic/target-api/source";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
 import { instantiateRustSelectedMemberCarrier } from "./member-carriers.js";
 import { resolveRustProjectField } from "./project-fields.js";
-import { rustCallableProtocol, rustSourceTypeCarrier, rustSourcePrimitiveTargetType } from "../../../target-model/types/index.js";
+import { rustCallableProtocol, rustSourceTypeCarrier } from "../../../target-model/types/index.js";
 import { rustProjectStaticFieldStorage } from "../../project-types/object-layout.js";
 import { rustSourceCallableReturnFactKey } from "../../facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -79,15 +79,7 @@ export function selectRustCheckedDelete(
     );
   }
   const receiverCarrier = resolveRustTargetTypeRef(request.receiver, context, options);
-  const selectedIndexCarrier = resolveRustTargetTypeRef(request.index, context, options);
-  const int32Carrier = rustSourcePrimitiveTargetType("int32");
-  const indexCarrier = normalizeSelectedLiteralCarrier(
-    request.index,
-    selectedIndexCarrier,
-    int32Carrier,
-    context,
-    options,
-  );
+  const indexCarrier = resolveRustTargetTypeRef(request.index, context, options);
   const selection = selectJsSurfaceOperation({
     ownerName: identity.ownerName,
     memberName: identity.memberName,

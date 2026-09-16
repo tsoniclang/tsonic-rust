@@ -36,7 +36,6 @@ import {
   rustOptionElementCarrier,
   rustOptionTargetType,
   rustNullishSourceTargetType,
-  rustSourcePrimitiveTargetType,
   rustStructuralObjectCarrierValue,
 } from "../../target-model/types/index.js";
 import { rustRuntimeUnionContract, rustRuntimeUnionProjection } from "../../target-model/types/carriers/runtime-unions.js";
@@ -104,7 +103,8 @@ export function resolveExpressionCarrier(
       facts.resolve(expression, rustOptionalChainFactKey);
     const selectedOperationOwnsResult = selectedOperation !== undefined || targetOperation !== undefined;
     const flowCarrier = selectedOperationOwnsResult &&
-        (optionalChain !== undefined || rustOptionElementCarrier(carrier) === undefined &&
+        (optionalChain !== undefined || rustTargetTypeRefEquals(carrier, expected) ||
+          rustOptionElementCarrier(carrier) === undefined &&
           (carrier === undefined || rustRuntimeUnionContract(carrier) === undefined))
       ? carrier
       : applyFlowReadLane(walk, expression, carrier);
@@ -609,7 +609,7 @@ function resolveExpressionOperationDependencies(
         walk,
         index,
         sourceFile,
-        rustSourcePrimitiveTargetType("int32"),
+        undefined,
       );
     }
     return;

@@ -38,6 +38,10 @@ export type RustAssignmentOperationFact = Extract<
   { readonly kind: "operator-token" | "operator-call" }
 >;
 
+export type RustAssignmentOperationPlan =
+  | Omit<Extract<RustAssignmentOperationFact, { readonly kind: "operator-token" }>, "operationId">
+  | Extract<RustAssignmentOperationFact, { readonly kind: "operator-call" }>;
+
 export function planStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const diagnosticCount = context.diagnostics.length;
   const planned = planStatementInner(node, context);

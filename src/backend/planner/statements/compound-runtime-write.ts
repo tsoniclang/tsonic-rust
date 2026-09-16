@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import { ElementAccessExpression_ArgumentExpression, Node_Expression } from "@tsonic/target-api/source";
 import { rustCompoundWriteFactKey } from "../../../analysis/facts/operations/keys.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import type { RustAssignmentOperationFact } from "./core.js";
+import type { RustAssignmentOperationPlan } from "./core.js";
 import type { RustStmt } from "../../target-ast/nodes.js";
 import { planExpression } from "../expressions/entry.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
@@ -10,7 +10,7 @@ import { planRustCompoundAssignmentValue } from "./assignments.js";
 import { planRuntimeSetStatement } from "./iteration.js";
 
 export function planRustCompoundRuntimeWrite(
-  expression: Node, left: Node, right: Node, assignment: RustAssignmentOperationFact,
+  expression: Node, left: Node, right: Node, assignment: RustAssignmentOperationPlan,
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
   const write = context.input.program.facts.getFact(expression, rustCompoundWriteFactKey);

@@ -18,14 +18,13 @@ import {
 } from "@tsonic/target-api/analysis";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import {
-  BinaryExpression_OperatorToken,
   KindBinaryExpression,
-  KindEqualsToken,
   KindExpressionStatement,
   Node_Expression,
   sourceNodeIdentity,
 } from "@tsonic/target-api/source";
 import { rustValueCarrierBeforeOptionProjection } from "../facts/value-carrier-queries.js";
+import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 import type { TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
@@ -534,9 +533,11 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       if (error !== undefined) return error;
     }
     if (ast.kindName(node) === KindBinaryExpression) {
-      const token = BinaryExpression_OperatorToken(ast, node);
       const parent = ast.parent(node);
-      if (token !== undefined && ast.kindName(token) === KindEqualsToken &&
+      const assignment = operation?.kind === "runtime-set" ||
+        (operation?.kind === "operator-token" || operation?.kind === "operator-call") &&
+        isRustAssignmentOperator(operation.operator);
+      if (assignment &&
           (parent === undefined || ast.kindName(parent) !== KindExpressionStatement)) {
         const carrier = rustValueCarrierBeforeOptionProjection(facts, node);
         if (carrier !== undefined) {

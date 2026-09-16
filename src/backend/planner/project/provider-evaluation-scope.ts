@@ -328,7 +328,9 @@ function providerInputStabilizationKeys(
     const mutable = mutableInputs.get(slot.key);
     return [
       slot.key,
-      mutable?.kind === "direct" || mutable?.kind === "project-field"
+      context.expressionOverrides?.get(slot.node)?.expression.kind === "path"
+        ? noSourceExpressionEffects
+        : mutable?.kind === "direct" || mutable?.kind === "project-field"
         ? providerMutableStorageEffects(mutable.node, context)
         : context.input.program.sourceNavigation.expressionEffects(slot.node),
     ] as const;

@@ -391,6 +391,7 @@ function rustOperatorText(kind: string | undefined): string | undefined {
     KindBarEqualsToken: "|=",
     KindCaretEqualsToken: "^=",
     KindExclamationToken: "!",
+    KindTildeToken: "~",
     KindPlusPlusToken: "++",
     KindMinusMinusToken: "--",
     KindInstanceOfKeyword: "instanceof",

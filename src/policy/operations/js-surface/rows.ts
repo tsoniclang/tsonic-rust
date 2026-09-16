@@ -9,6 +9,7 @@ import {
   rustJsValueTargetType,
   rustJsArrayConcatItemTargetType,
   rustJsArrayTargetType,
+  rustJsArrayTargetId,
   rustSourcePrimitiveTargetType,
 } from "../../../target-model/types/index.js";
 import { defineJsOperationRows } from "./model.js";
@@ -297,6 +298,7 @@ const sharedArrayOperationRows = sharedArrayOwners.flatMap((owner): readonly JsO
 export const jsOperationRows = defineJsOperationRows([
   ...jsCapabilityOperationRows,
   ...stringConstructionRows,
+  { owner: "ObjectConstructor", member: "keys", operationKind: "call", lane: "object", firstArgCarrierId: rustJsArrayTargetId, shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::JsArray::object_keys", argModes: ["ref"] }, result: { ref: "string-array" }, params: [{ ref: "argument", index: 0 }] } },
   { owner: "ObjectConstructor", member: "is", operationKind: "call", lane: "object", variadic: true, shape: { op: "operation", operationKind: "method", target: { form: "call-value-array", path: "js_abi::object_is", leadingArguments: [], elementCarrier: rustJsValueTargetType() }, result: { ref: "bool" } } },
   { owner: "ObjectConstructor", member: "freeze", operationKind: "call", lane: "object", requirements: [{ carrier: { ref: "argument", index: 0 }, capability: "freezable-object" }], shape: { op: "operation", operationKind: "method", target: { form: "call", path: "tsonic_rust_runtime::freeze_object", argModes: ["ref"] }, result: { ref: "argument", index: 0 }, params: [{ ref: "argument", index: 0 }] } },
   { owner: "ObjectConstructor", member: "isFrozen", operationKind: "call", lane: "object", requirements: [{ carrier: { ref: "argument", index: 0 }, capability: "object-identity" }], shape: { op: "operation", operationKind: "method", target: { form: "call", path: "tsonic_rust_runtime::object_is_frozen", argModes: ["ref"] }, result: { ref: "bool" }, params: [{ ref: "argument", index: 0 }] } },

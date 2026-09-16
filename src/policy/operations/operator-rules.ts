@@ -252,6 +252,12 @@ function compoundBinaryOperator(
       return "/";
     case "%=":
       return "%";
+    case "&=":
+      return "&";
+    case "|=":
+      return "|";
+    case "^=":
+      return "^";
     case "<<=":
       return "<<";
     case ">>=":
@@ -290,6 +296,9 @@ const operatorKindByText: Readonly<Record<string, string>> = {
   "*=": KindAsteriskEqualsToken,
   "/=": KindSlashEqualsToken,
   "%=": KindPercentEqualsToken,
+  "&=": "KindAmpersandEqualsToken",
+  "|=": "KindBarEqualsToken",
+  "^=": "KindCaretEqualsToken",
   "<<=": "KindLessThanLessThanEqualsToken",
   ">>=": "KindGreaterThanGreaterThanEqualsToken",
 };
@@ -381,6 +390,9 @@ export function selectRustBinaryOperator(
   }
   const bitwise = bitwiseTokens[operatorKindName];
   if (bitwise !== undefined) {
+    if (isRustBigIntCarrier(left) && isRustBigIntCarrier(right)) {
+      return { kind: "operator-token", rustOperator: bitwise, resultCarrier: left };
+    }
     const sourceNumberOperands = selectRustSourceNumberOperands(left, right);
     if (sourceNumberOperands !== undefined) {
       return {
@@ -542,6 +554,9 @@ const compoundAssignmentTokens: Readonly<Record<string, RustAssignmentOperator>>
   [KindAsteriskEqualsToken]: "*=",
   [KindSlashEqualsToken]: "/=",
   [KindPercentEqualsToken]: "%=",
+  KindAmpersandEqualsToken: "&=",
+  KindBarEqualsToken: "|=",
+  KindCaretEqualsToken: "^=",
   KindLessThanLessThanEqualsToken: "<<=",
   KindGreaterThanGreaterThanEqualsToken: ">>=",
 };
@@ -569,12 +584,16 @@ export function selectRustCompoundAssignment(
   if (binaryOperator === undefined || !sameRustArithmeticCarrier(left, right)) {
     return undefined;
   }
-  if (binaryOperator === "<<" || binaryOperator === ">>") {
+  if (binaryOperator === "<<" || binaryOperator === ">>" ||
+    binaryOperator === "&" || binaryOperator === "|" || binaryOperator === "^") {
     const selected = selectRustBinaryOperator(binaryOperator, left, right);
-    return selected?.kind === "operator-call" && selected.leftConversion === undefined && selected.rightConversion === undefined
-      ? { kind: "operator-call", operator, path: selected.path, resultCarrier: selected.resultCarrier,
+    if (selected === undefined || selected.kind === "string-concat" ||
+      selected.leftConversion !== undefined || selected.rightConversion !== undefined ||
+      !rustTargetTypeRefEquals(selected.resultCarrier, left)) return undefined;
+    return selected.kind === "operator-call"
+      ? { kind: "operator-call", operator, path: selected.path, resultCarrier: left,
           fallible: selected.fallible, operandModes: selected.operandModes }
-      : undefined;
+      : { kind: "operator-token", operator, resultCarrier: left };
   }
   if (rustArithmeticOperatorHasDirectSemantics(binaryOperator, left)) {
     return { kind: "operator-token", operator, resultCarrier: left };

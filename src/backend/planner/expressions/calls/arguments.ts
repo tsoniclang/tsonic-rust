@@ -8,6 +8,7 @@ import {
   rustTargetGenericBindingsForArguments,
   substituteRustTargetGenerics,
 } from "../../../../target-model/types/index.js";
+import { mapRustTargetTypes } from "../../../../target-model/types/carriers/substitution.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
 import { diagnosticInput } from "../../program/plan-context.js";
 import { isDenseDataArray } from "../../../../target-model/metadata/closed-data.js";
@@ -458,7 +459,7 @@ export function sourceCallSelectedMemberMatches(
   const identityMatches = member.id === fact.operationId &&
     member.kind === expectedKind &&
     member.targetName === expectedTargetName &&
-    selectedReturn !== undefined && rustTargetTypeRefEquals(selectedReturn, fact.resultCarrier);
+    selectedReturn !== undefined && rustTargetTypeRefEquals(selectedReturn, mapRustTargetTypes(fact.resultCarrier, normalize));
   if (!identityMatches) {
     return false;
   }
@@ -471,17 +472,20 @@ export function sourceCallSelectedMemberMatches(
         carrier = substituteRustTargetGenerics(carrier, substitutions.types,
           substitutions.lifetimes, substitutions.consts, normalize);
         const parameter = fact.parameters[index];
-        if (parameter === undefined || !rustTargetTypeRefEquals(carrier, parameter.parameterCarrier)) return false;
+        if (parameter === undefined || !rustTargetTypeRefEquals(carrier, mapRustTargetTypes(parameter.parameterCarrier, normalize))) return false;
         if (parameter.mode === "value") return true;
+        const valueCarrier = mapRustTargetTypes(parameter.valueCarrier, normalize);
         return callableCarrier?.kind === "closure" && carrier.kind === "reference" &&
           parameter.mode === (carrier.mutable ? "mut-ref" : "ref") &&
-          (rustTargetTypeRefEquals(carrier.referent, parameter.valueCarrier) ||
-            parameter.valueCarrier.kind === "array" &&
-            rustTargetTypeRefEquals(rustSliceElementCarrier(carrier), parameter.valueCarrier.element));
+          (rustTargetTypeRefEquals(carrier.referent, valueCarrier) ||
+            valueCarrier.kind === "array" &&
+            rustTargetTypeRefEquals(rustSliceElementCarrier(carrier), valueCarrier.element));
       });
   }
   return isDenseDataArray(member.parameters) && member.parameters.length === fact.parameters.length &&
     member.parameters.every((parameter, index) => {
+      const factParameter = fact.parameters[index];
+      if (factParameter === undefined) return false;
       const mode = parameter.passingMode === "borrow-mut"
         ? "mut-ref"
         : parameter.passingMode === "borrow-shared"
@@ -495,8 +499,8 @@ export function sourceCallSelectedMemberMatches(
           substitutions.consts,
           normalize,
         ),
-        fact.parameters[index]?.parameterCarrier,
-      ) && mode === fact.parameters[index]?.mode;
+        mapRustTargetTypes(factParameter.parameterCarrier, normalize),
+      ) && mode === factParameter.mode;
     });
 }
 

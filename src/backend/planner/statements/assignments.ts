@@ -33,7 +33,7 @@ import { rustProjectObjectRepresentation } from "../objects/project-storage.js";
 import { rustStringConcat } from "../../target-ast/expressions.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustAssignmentOperationFact } from "./core.js";
+import type { RustAssignmentOperationPlan } from "./core.js";
 import type { RustAssignmentOperator, RustBinaryOperator } from "../../../target-model/syntax/tokens.js";
 import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
@@ -43,7 +43,7 @@ export function planRustSourceMethodPropertyAssignment(
   left: Node,
   valueNode: Node,
   method: Extract<RustTargetOperationFact, { readonly kind: "source-method-property" }>,
-  assignment: RustAssignmentOperationFact,
+  assignment: RustAssignmentOperationPlan,
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
   if (assignment.kind !== "operator-token" || assignment.operator !== "=" ||
@@ -140,7 +140,7 @@ export function planRustSourceStaticFieldAssignment(
   target: Node,
   valueNode: Node,
   field: Extract<RustTargetOperationFact, { readonly kind: "source-static-field" }>,
-  assignment: RustAssignmentOperationFact,
+  assignment: RustAssignmentOperationPlan,
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
   if (!isRustAssignmentOperator(assignment.operator)) {
@@ -230,7 +230,7 @@ export function planRustDirectOperatorCallAssignment(
   targetNode: Node,
   target: RustExpr,
   value: RustExpr,
-  assignment: Extract<RustAssignmentOperationFact, { readonly kind: "operator-call" }>,
+  assignment: Extract<RustAssignmentOperationPlan, { readonly kind: "operator-call" }>,
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
   if (context.syntheticNames === undefined) {
@@ -370,7 +370,7 @@ export function planRustSourceAccessorAssignment(
   target: Node,
   valueNode: Node,
   accessor: Extract<RustTargetOperationFact, { readonly kind: "source-accessor" }>,
-  assignment: RustAssignmentOperationFact,
+  assignment: RustAssignmentOperationPlan,
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
   const operator = assignment.operator;
@@ -507,7 +507,7 @@ export function planRustSourceAccessorAssignment(
 }
 
 export function planRustCompoundAssignmentValue(
-  assignment: RustAssignmentOperationFact,
+  assignment: RustAssignmentOperationPlan,
   current: RustExpr,
   value: RustExpr,
   node: Node,
@@ -537,7 +537,7 @@ export function planRustSourceIndexAssignment(
   target: Node,
   valueNode: Node,
   index: Extract<RustTargetOperationFact, { readonly kind: "source-index-signature" }>,
-  assignment: RustAssignmentOperationFact,
+  assignment: RustAssignmentOperationPlan,
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
   if (!index.writable || !sourceIndexSelectedOperationMatches(target, index, context) ||
