@@ -1,0 +1,74 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { nameRustSignatureTypes } from "../../../dist/backend/target-ast/normalization/signature-aliases.js";
+import { emptyRustGenerics } from "../../../dist/backend/target-ast/nodes.js";
+
+const named = (path, types = []) => ({ kind: "named", path,
+  genericArguments: types.map(type => ({ kind: "type", type })) });
+const nested = named("Vec", [named("Option", [named("Vec", [named("Option", [named("Vec", [named("Item")])])])])]);
+const makeFunction = (name, visibility = "private") => ({ kind: "function", name, visibility,
+  generics: { parameters: [{ kind: "type", name: "Item", bounds: [{ kind: "trait", path: "Clone" }] }], wherePredicates: [] },
+  params: [{ name: "values", type: nested, mutable: false }], returnType: nested,
+  body: { statements: [], tail: { kind: "path", path: "values" } },
+});
+
+test("signature aliases retain exact generic types, share definitions and promote visibility", () => {
+  const first = makeFunction("read");
+  const second = makeFunction("write", "public");
+  const result = nameRustSignatureTypes([first, second]);
+  const aliases = result.filter(item => item.kind === "type-alias");
+  assert.equal(aliases.length, 1);
+  assert.deepEqual(aliases[0].target, nested);
+  assert.equal(aliases[0].visibility, "public");
+  assert.deepEqual(aliases[0].generics.parameters, [{ kind: "type", name: "Item", bounds: [] }]);
+  for (const fn of result.filter(item => item.kind === "function")) {
+    assert.deepEqual(fn.generics, first.generics);
+    assert.equal(fn.params[0].type.path, aliases[0].name);
+    assert.deepEqual(fn.params[0].type.genericArguments, [{ kind: "type", type: { kind: "named", path: "Item" } }]);
+    assert.equal(fn.returnType.path, aliases[0].name);
+    assert.deepEqual(fn.body, first.body);
+  }
+  assert.deepEqual(nameRustSignatureTypes(result), result);
+});
+
+test("signature aliases avoid declarations, imports and generic parameter names", () => {
+  for (const collision of [
+    { kind: "struct", name: "ReadValues", visibility: "private", generics: emptyRustGenerics, fields: [], derives: [] },
+    { kind: "use", path: "models::ReadValues" },
+    { kind: "use", path: "models::Other", alias: "ReadValues" },
+    { ...makeFunction("other"), generics: { parameters: [{ kind: "type", name: "ReadValues", bounds: [] }], wherePredicates: [] } },
+  ]) {
+    const result = nameRustSignatureTypes([collision, makeFunction("read")]);
+    const alias = result.find(item => item.kind === "type-alias");
+    assert.notEqual(alias.name, "ReadValues");
+  }
+});
+
+test("borrowed and opaque boundaries remain in the function instead of escaping into aliases", () => {
+  const boundary = { kind: "reference", mutable: true, referent: { kind: "slice", element: nested } };
+  const opaque = { kind: "impl-trait", outlives: [], captures: [], bounds: [{ kind: "callable", trait: "Fn",
+    binder: [], parameters: [boundary], result: { kind: "unit" } }] };
+  const result = nameRustSignatureTypes([{ ...makeFunction("read"), params: [{ name: "callback", type: opaque }], returnType: undefined }]);
+  const fn = result.find(item => item.kind === "function");
+  assert.equal(fn.params[0].type.kind, "impl-trait");
+  const parameter = fn.params[0].type.bounds[0].parameters[0];
+  assert.equal(parameter.kind, "reference");
+  assert.equal(parameter.mutable, true);
+  assert.equal(parameter.referent.kind, "slice");
+  assert.equal(parameter.referent.element.path, result[0].name);
+  assert.deepEqual(result[0].target, nested);
+  const borrowedInside = named("Option", [named("Vec", [boundary])]);
+  const unchanged = { ...makeFunction("read"), params: [{ name: "values", type: borrowedInside }], returnType: undefined };
+  assert.deepEqual(nameRustSignatureTypes([unchanged]), [unchanged]);
+});
+
+test("const array dimensions are forwarded exactly through signature aliases", () => {
+  const dimension = { kind: "path", path: "COUNT" };
+  const type = named("Vec", [named("Option", [{ kind: "fixed-array", length: dimension, element: nested }])]);
+  const fn = { ...makeFunction("read"), params: [{ name: "values", type }], returnType: undefined,
+    generics: { parameters: [...makeFunction("read").generics.parameters,
+      { kind: "const", name: "COUNT", type: { kind: "primitive", name: "usize" } }], wherePredicates: [] } };
+  const result = nameRustSignatureTypes([fn]);
+  assert.deepEqual(result[0].target, type);
+  assert.deepEqual(result[1].params[0].type.genericArguments[1], { kind: "const", value: dimension });
+});

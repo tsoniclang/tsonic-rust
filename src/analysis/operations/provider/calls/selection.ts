@@ -164,6 +164,24 @@ export function selectRustCheckedCall(
     });
   }
 
+  if (selectedSourceMember?.ownerName === "ErrorConstructor" &&
+    selectedSourceMember.memberName === "captureStackTrace") {
+    const carriers = selectedCallArgumentCarriers(request, context, options);
+    const carrier = carriers[0];
+    const definition = carrier === undefined ? undefined : options.projectTypes.definitionForCarrier(carrier);
+    if (carriers.length !== 1 || carrier === undefined ||
+      (!rustTargetTypeRefEquals(carrier, rustJsErrorTargetType()) &&
+        (definition === undefined || options.projectTypes.externalBaseForDefinition(definition)?.programError !== true))) {
+      return rejectSelectedOperation(request.source.call, context, "RUST_ERROR_CAPTURE_CONTRACT",
+        "Error.captureStackTrace requires one exact builtin Error or Error-derived project value.");
+    }
+    return acceptSelectedCall(request, {
+      kind: "provider-operation", operationId: "tsonic.rust.error.capture-stack", operationKind: "method",
+      target: { form: "call", path: "rt::capture_error_stack", argModes: ["ref"] },
+      parameterCarriers: [carrier], resultCarrier: rustUnitTargetType(),
+      isAsync: false, isFallible: false, errorBoundary: "none",
+    }, [carrier], context, options, { sourceName: "captureStackTrace" });
+  }
   const errorConstructor = selectedSourceMember === undefined ? undefined :
     rustSourceErrorConstructors.find((entry) => entry.ownerName === selectedSourceMember.ownerName &&
       (entry.sourceName === "Error" || selectedSourceMember.profile === "js"));
@@ -700,7 +718,7 @@ function runtimeCallableProtocol(
   readonly parameters: readonly TargetTypeRef[];
   readonly result: TargetTypeRef;
 } | undefined {
-  if (carrier?.kind === "function-pointer") {
+  if (carrier?.kind === "function-pointer" || carrier?.kind === "closure") {
     return { parameters: carrier.args, result: carrier.result };
   }
   return rustCallableProtocol(carrier);

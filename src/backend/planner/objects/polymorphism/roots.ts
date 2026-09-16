@@ -14,6 +14,7 @@ import {
   writeRustProjectMethodOverride,
   writeRustProjectObjectField,
   writeRustProjectPrivateField,
+  mutateRustProjectObjectField,
 } from "../project-objects.js";
 import { rustProjectDispatchTraitType, rustProjectRepresentationGenerics } from "./names.js";
 import { emptyRustGenerics } from "../../../target-ast/nodes.js";
@@ -34,6 +35,7 @@ import type { ProjectClassStateLayer } from "./model.js";
 import type { RustObjectRepresentation } from "../../../../analysis/project-types/object-representation.js";
 import { rustProjectMemberIsPrivate } from "../../../../analysis/project-types/member-privacy.js";
 import { checkRustDataWrite } from "../data-writes.js";
+import { rustArrayFieldMutationName, rustArrayFieldMutationType } from "./array-fields.js";
 
 export function planProjectRootImplementations(
   concrete: RustProjectTypeDefinition,
@@ -234,6 +236,20 @@ function planRootContractFunctions(
       readValue === undefined ||
       dispatch.write !== undefined && write === undefined) {
       return undefined;
+    }
+    if (dispatch.stored && dispatch.mutableContent && field.carrier.kind === "array") {
+      if (storagePath === undefined) return undefined;
+      const mutation = mutateRustProjectObjectField({ kind: "path", path: "self" }, storagePath,
+        storage => ({ kind: "invoke", callee: { kind: "path", path: "action" }, args: [
+          { kind: "reference", mutable: true, expr: storage },
+        ] }), representation);
+      if (mutation === undefined) return undefined;
+      functions.push({
+        name: rustArrayFieldMutationName(read), visibility: "private", generics: emptyRustGenerics,
+        selfParam: rustSelfParameter("ref"),
+        params: [{ name: "action", type: rustArrayFieldMutationType(field.type) }],
+        body: { statements: [{ kind: "expr", expr: mutation }] },
+      });
     }
     const fieldErrorBoundary = dispatch.read.fallible || dispatch.write?.fallible === true
       ? rustErrorBoundaryForProjectMember(field.declaration, context)

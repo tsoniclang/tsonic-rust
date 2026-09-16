@@ -42,7 +42,7 @@ import { rustPolicyTargetDiagnostic } from "../../policy/operations/contracts.js
 import { rustRuntimeCarrierKey, rustSelectedCallKey } from "../../target-model/facts/selections.js";
 import { rustSourceParameterContractCarrier } from "../../policy/ownership/source-callable-abi.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { tryFlowMarkerCall } from "../declarations/types-and-bindings.js";
+import { resolveParameterAbi, tryFlowMarkerCall } from "../declarations/types-and-bindings.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustSelectedTargetSignature, TargetTypeRef } from "../../target-model/types/model.js";
@@ -589,9 +589,18 @@ function applySelectedRuntimeCallableCall(
     const form = parameter.paramsArray === true
       ? "rest" as const
       : parameter.optional === true ? "optional" as const : "required" as const;
-    const valueCarrier = form === "optional"
+    const sourceParameter = selectedParameters.find(selected =>
+      selected.parameterIndex === sourceParameterIndexes[index]);
+    const declaration = asSourceNode(sourceParameter?.parameterDeclaration, walk.context.ast);
+    const sourceAbi = carrier.kind !== "closure" || declaration === undefined
+      ? undefined : resolveParameterAbi(walk, declaration);
+    const borrowedAbi = sourceAbi !== undefined && form === "required" &&
+      sourceAbi.mode !== "value" &&
+      rustTargetTypeRefEquals(sourceAbi.parameterCarrier, parameterCarrier)
+      ? sourceAbi : undefined;
+    const valueCarrier = borrowedAbi?.valueCarrier ?? (form === "optional"
       ? rustOptionElementCarrier(parameterCarrier) ?? parameterCarrier
-      : parameterCarrier;
+      : parameterCarrier);
     const selectedBindings = bindings.filter((binding) =>
       form === "rest"
         ? binding.sourceParameterIndex === sourceParameterIndexes[index]
@@ -624,7 +633,7 @@ function applySelectedRuntimeCallableCall(
           form,
           valueCarrier,
           parameterCarrier,
-          mode: "value" as const,
+          mode: borrowedAbi?.mode ?? "value" as const,
           inputs: inputs as readonly NonNullable<typeof inputs[number]>[],
         };
   });

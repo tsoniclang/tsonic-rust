@@ -326,16 +326,34 @@ function planProjectExternalErrorImplementations(
   }
   const name = external.fields.find((field) => field.sourceName === "name");
   const message = external.fields.find((field) => field.sourceName === "message");
-  if (name === undefined || message === undefined) {
+  const stack = external.fields.find((field) => field.sourceName === "stack");
+  if (name === undefined || message === undefined || stack === undefined) {
     return undefined;
   }
   const nameRead = context.input.program.projectTypes.memberSlotName(name.declaration, "read");
   const messageRead = context.input.program.projectTypes.memberSlotName(message.declaration, "read");
-  if (nameRead === undefined || messageRead === undefined) {
+  const stackWrite = context.input.program.projectTypes.memberSlotName(stack.declaration, "write");
+  if (nameRead === undefined || messageRead === undefined || stackWrite === undefined) {
     return undefined;
   }
   const self = { kind: "path" as const, path: "self" };
   return [{
+    kind: "impl",
+    generics: rustProjectRepresentationGenerics(representation, context),
+    trait: { kind: "named", path: "rt::ErrorStack" },
+    target: wrapperType,
+    functions: [{
+      name: "set_stack", visibility: "private", generics: emptyRustGenerics,
+      selfParam: { kind: "reference", mutable: false },
+      params: [{ name: "stack", type: { kind: "named", path: "Option", genericArguments: [
+        { kind: "type", type: { kind: "string" } },
+      ] } }],
+      body: { statements: [{ kind: "expr", expr: {
+        kind: "method-call", receiver: { kind: "field", receiver: self, name: rustProjectObjectDispatchField },
+        method: stackWrite, args: [{ kind: "path", path: "stack" }],
+      } }] },
+    }],
+  }, {
     kind: "impl",
     generics: rustProjectRepresentationGenerics(representation, context),
     trait: { kind: "named", path: "core::fmt::Display" },

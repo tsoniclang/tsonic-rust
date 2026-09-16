@@ -28,6 +28,7 @@ import type { RustObjectRepresentation } from "../../../../analysis/project-type
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { rustProjectImplementationVisibility } from "../project-storage-abi.js";
 import { rustProjectObjectIdentityImplementation } from "../project-identity.js";
+import { rustArrayFieldMutationName, rustArrayFieldMutationType } from "./array-fields.js";
 
 export function projectIdentityImplementations(
   definition: RustProjectTypeDefinition,
@@ -194,6 +195,14 @@ export function planProjectDispatchTrait(
       "read",
       publiclyReachable,
     );
+    if (dispatch.stored && dispatch.mutableContent && field.carrier.kind === "array") {
+      functions.push({
+        name: rustArrayFieldMutationName(read), generics: emptyRustGenerics,
+        ...(readDeadCode === undefined ? {} : { deadCode: readDeadCode }),
+        selfParam: rustSelfParameter("ref"),
+        params: [{ name: "action", type: rustArrayFieldMutationType(field.type) }],
+      });
+    }
     functions.push({
       name: read,
       ...(readDeadCode === undefined ? {} : { deadCode: readDeadCode }),

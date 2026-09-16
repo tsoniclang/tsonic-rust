@@ -20,6 +20,8 @@ export interface RustProjectFieldDispatchRole {
 export interface RustProjectFieldDispatchPlan {
   readonly declaration: Node;
   readonly readonly: boolean;
+  readonly stored: boolean;
+  readonly mutableContent: boolean;
   readonly read: RustProjectFieldDispatchRole;
   readonly write?: RustProjectFieldDispatchRole;
 }
@@ -53,6 +55,7 @@ export interface RustProjectFieldDispatchPlanRegistry
     readonly ast: AstReader;
     readonly projectTypes: RustProjectTypePolicy;
     readonly frozenDataWrites: RustFrozenDataWritePlan;
+    readonly mutableContentFields: ReadonlySet<Node>;
     semanticsFor(node: Node): SourceFileSemantics;
   }): void;
   seal(): RustProjectFieldDispatchQueries;
@@ -112,6 +115,8 @@ export function createRustProjectFieldDispatchPlanRegistry(): RustProjectFieldDi
           nextPlans.set(field.declaration, Object.freeze({
             declaration: field.declaration,
             readonly: false,
+            stored: false,
+            mutableContent: false,
             read: Object.freeze({ selfMode: "ref", fallible: false }),
             write: Object.freeze({ selfMode: "ref", fallible: false }),
           }));
@@ -148,6 +153,8 @@ export function createRustProjectFieldDispatchPlanRegistry(): RustProjectFieldDi
           nextPlans.set(field.declaration, Object.freeze({
             declaration: field.declaration,
             readonly,
+            stored: !accessorRead && !accessorWrite,
+            mutableContent: input.mutableContentFields.has(field.declaration),
             read: Object.freeze({
               selfMode: accessorRead ? "rc" : "ref",
               fallible: accessorRead,

@@ -2,6 +2,7 @@ import {
   isRustCopyCarrier,
   isRustVecCarrier,
   rustCallableProtocol,
+  rustNativeCallableProtocol,
   rustFixedArrayCarrierValue,
   rustSliceElementCarrier,
   rustTargetGenericBindingsForArguments,
@@ -461,16 +462,21 @@ export function sourceCallSelectedMemberMatches(
   if (!identityMatches) {
     return false;
   }
-  const callable = fact.target.form === "callable" || fact.target.form === "structural-method"
-    ? rustCallableProtocol(fact.target.form === "callable"
-        ? fact.target.carrier
-        : fact.target.callableCarrier)
-    : undefined;
+  const callableCarrier = fact.target.form === "callable" ? fact.target.carrier
+    : fact.target.form === "structural-method" ? fact.target.callableCarrier : undefined;
+  const callable = rustNativeCallableProtocol(callableCarrier) ?? rustCallableProtocol(callableCarrier);
   if (callable !== undefined) {
     return callable.parameters.length === fact.parameters.length &&
-      callable.parameters.every((carrier, index) =>
-        fact.parameters[index]?.mode === "value" &&
-        rustTargetTypeRefEquals(carrier, fact.parameters[index]?.parameterCarrier));
+      callable.parameters.every((carrier, index) => {
+        const parameter = fact.parameters[index];
+        if (parameter === undefined || !rustTargetTypeRefEquals(carrier, parameter.parameterCarrier)) return false;
+        if (parameter.mode === "value") return true;
+        return callableCarrier?.kind === "closure" && carrier.kind === "reference" &&
+          parameter.mode === (carrier.mutable ? "mut-ref" : "ref") &&
+          (rustTargetTypeRefEquals(carrier.referent, parameter.valueCarrier) ||
+            parameter.valueCarrier.kind === "array" &&
+            rustTargetTypeRefEquals(rustSliceElementCarrier(carrier), parameter.valueCarrier.element));
+      });
   }
   return isDenseDataArray(member.parameters) && member.parameters.length === fact.parameters.length &&
     member.parameters.every((parameter, index) => {

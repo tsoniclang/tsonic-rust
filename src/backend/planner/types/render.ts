@@ -163,7 +163,7 @@ export function rustTypeFromCarrier(
           ...(carrier.isUnsafe === true ? { isUnsafe: true } : {}),
         };
   }
-  if (carrier.kind === "closure" && carrier.lifetimeBinder !== undefined) {
+  if (carrier.kind === "closure") {
     const parameters = carrier.args.map((argument) =>
       rustTypeFromCarrier(argument, resolveSourceTypePath, resolveStructuralShape));
     const result = rustReturnTypeFromCarrier(
@@ -178,7 +178,7 @@ export function rustTypeFromCarrier(
           bounds: [{
             kind: "callable",
             trait: "Fn",
-            binder: rustLifetimeBinderToAst(carrier.lifetimeBinder),
+            binder: carrier.lifetimeBinder === undefined ? [] : rustLifetimeBinderToAst(carrier.lifetimeBinder),
             parameters: parameters as RustType[],
             result: carrier.fallible === true ? {
               kind: "named", path: "rt::TsonicResult", genericArguments: typeGenericArguments([result]),
@@ -612,6 +612,7 @@ function rustTypeContainsImplTrait(type: RustType): boolean {
     case "slice":
       return rustTypeContainsImplTrait(type.element);
     case "function-pointer":
+    case "callable-trait":
       return type.parameters.some(rustTypeContainsImplTrait) ||
         rustTypeContainsImplTrait(type.result);
     case "tuple":
@@ -695,7 +696,7 @@ export function collectAliasesFromRustType(
     collectAliasesFromRustType(type.referent, register);
     return;
   }
-  if (type.kind === "function-pointer") {
+  if (type.kind === "function-pointer" || type.kind === "callable-trait") {
     for (const parameter of type.parameters) {
       collectAliasesFromRustType(parameter, register);
     }

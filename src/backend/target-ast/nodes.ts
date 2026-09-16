@@ -149,6 +149,12 @@ export type RustType =
   | { readonly kind: "fixed-array"; readonly element: RustType; readonly length: RustConstArgument }
   | { readonly kind: "slice"; readonly element: RustType }
   | {
+      readonly kind: "callable-trait";
+      readonly trait: "Fn" | "FnMut" | "FnOnce";
+      readonly parameters: readonly RustType[];
+      readonly result: RustType;
+    }
+  | {
       readonly kind: "function-pointer";
       readonly binder?: readonly RustLifetimeParameter[];
       readonly parameters: readonly RustType[];

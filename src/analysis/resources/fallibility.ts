@@ -699,11 +699,14 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
           walk.context.facts.resolve(node, rustTargetOperationFactKey);
         if (operation?.kind === "source-call") {
           const declaration = selectedProjectDeclaration(node);
+          const nativeCallable = operation.target.form === "callable" &&
+            (operation.target.carrier.kind === "closure" || operation.target.carrier.kind === "function-pointer");
           const runtimeCallable = (operation.target.form === "callable" &&
-              rustCallableProtocol(operation.target.carrier) !== undefined) ||
+              (rustCallableProtocol(operation.target.carrier) !== undefined ||
+                operation.target.carrier.kind === "closure" && operation.target.carrier.fallible === true)) ||
             operation.target.form === "structural-method" &&
               rustCallableProtocol(operation.target.callableCarrier) !== undefined;
-          if (runtimeCallable || declaration !== undefined) {
+          if (nativeCallable || runtimeCallable || declaration !== undefined) {
             const isAsync = rustFutureOutputCarrier(operation.resultCarrier) !== undefined;
             const unionBranches = operation.target.form === "union-method"
               ? operation.target.variants.map(variant => fallible.has(variant.declaration) ? "fallible" as const : "infallible" as const)

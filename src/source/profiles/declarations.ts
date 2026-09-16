@@ -2,7 +2,7 @@ import {
   targetSourceProfileDeclaration,
   typescriptNoLibUtilityDeclarations,
 } from "@tsonic/target-api/provider";
-import { jsStandardSourceProfileDeclarations } from "@tsonic/js-source-profile";
+import { jsStandardSourceProfileDeclarations, sourceErrorDeclarations } from "@tsonic/js-source-profile";
 import type { TargetSourceProfileContributions } from "@tsonic/target-api/provider";
 import { rustTargetId } from "../../target-model/identities/target.js";
 import { rustSourceErrorConstructors } from "../../target-model/identities/source-errors.js";
@@ -26,16 +26,7 @@ interface Number {}
 interface String {}
 interface RegExp {}
 
-interface Error {
-  name: string;
-  message: string;
-  stack?: string;
-}
-interface ErrorConstructor {
-  new (message?: string): Error;
-  (message?: string): Error;
-}
-declare var Error: ErrorConstructor;
+${sourceErrorDeclarations}
 
 interface PromiseLike<T> {
   then<TResult1 = T, TResult2 = never>(

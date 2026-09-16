@@ -170,6 +170,7 @@ function rustTypeReferencesModuleAlias(type: RustType, alias: string): boolean {
     case "slice":
       return rustTypeReferencesModuleAlias(type.element, alias);
     case "function-pointer":
+    case "callable-trait":
       return type.parameters.some((parameter) =>
         rustTypeReferencesModuleAlias(parameter, alias)) ||
         rustTypeReferencesModuleAlias(type.result, alias);

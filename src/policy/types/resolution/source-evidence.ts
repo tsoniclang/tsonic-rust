@@ -10,7 +10,7 @@ import {
   rustVecTargetType,
 } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { resolveRustAuthoredTargetType } from "./tuples.js";
+import { resolveRustAuthoredTargetType, rustParameterLaneTargetType } from "./tuples.js";
 import {
   resolveRustExactNullishValueCarrier,
   resolveRustTargetType,
@@ -106,6 +106,23 @@ export function resolveRustCallableEvidence(
           result,
           lifetimeBinder: genericContract.lifetimeBinder,
         });
+  }
+  if (!options.jsEnabled && parameters.some(parameter => parameter?.kind === "array") &&
+    declaration !== undefined && context.ast.kindName(declaration) === "KindFunctionType") {
+    const owner = context.ast.parent(declaration);
+    const uses = owner === undefined ? undefined : context.source.navigation.parameterUseSummary(owner);
+    if (owner !== undefined && context.ast.is.IsParameterDeclaration(owner) && uses !== undefined &&
+      uses.uses.length > 0 && uses.uses.every(use => use.kind === "direct-call" && !use.captured && !use.throughMember)) {
+      const borrowed = parameters.map((parameter, index) => {
+        const sourceParameter = callable.parameters[index]?.declaration;
+        const syntax = sourceParameter === undefined ? undefined : context.ast.typeNode(sourceParameter);
+        return parameter?.kind !== "array" ? parameter : syntax === undefined ? undefined
+          : rustParameterLaneTargetType(parameter, syntax, context, options);
+      });
+      if (borrowed.every(parameter => parameter !== undefined)) {
+        return { kind: "closure", args: borrowed as readonly TargetTypeRef[], result, fallible: true };
+      }
+    }
   }
   return rustCallableTargetType(parameters as readonly TargetTypeRef[], result);
 }

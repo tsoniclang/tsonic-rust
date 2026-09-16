@@ -50,6 +50,7 @@ import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustCompileTimeSourceKey } from "../../../target-model/facts/source-declarations.js";
 import { planRustValueFieldLocation, rustSourceFieldHasValueReceiver } from "../objects/value-fields.js";
+import { planRustFieldProjectionAssignment } from "./field-projection-assignment.js";
 
 export function planExpressionStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const expression = Node_Expression(context.input.program.source.ast, node);
@@ -187,6 +188,10 @@ export function planRustAssignmentWrite(
   const sourceField = context.input.program.facts.getFact(left, rustTargetOperationFactKey);
   const storageOverride = context.expressionOverrides?.get(left);
   const target = planRustDirectStorage(left, context);
+  if (target === undefined) {
+    const projection = planRustFieldProjectionAssignment(left, valueNode, fact, context);
+    if (projection !== undefined) return projection;
+  }
   if (target === undefined && sourceField?.kind !== "source-accessor" &&
     sourceField?.kind !== "source-static-field" &&
     sourceField?.kind !== "source-field" &&

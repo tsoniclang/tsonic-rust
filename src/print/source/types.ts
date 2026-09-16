@@ -75,6 +75,8 @@ export function printRustType(type: RustType): string {
     case "slice": {
       return `[${printRustType(type.element)}]`;
     }
+    case "callable-trait":
+      return `${type.trait}(${type.parameters.map(printRustType).join(", ")}) -> ${printRustType(type.result)}`;
     case "function-pointer": {
       const abiName = type.abi?.length === 1 && type.abi[0] !== "target-default"
         ? type.abi[0]

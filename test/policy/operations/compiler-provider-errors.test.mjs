@@ -110,14 +110,19 @@ export function main(): void {
 });
 
 for (const surfaces of [[], ["js"]]) {
-  test(`builtin Error exposes its optional creation stack in the ${surfaces.length === 0 ? "native" : "JS"} profile`, { timeout: 300_000 }, () => {
+  test(`builtin Error exposes only an explicitly captured stack in the ${surfaces.length === 0 ? "native" : "JS"} profile`, { timeout: 300_000 }, () => {
     const { result } = compileRust({
       surfaces,
       packages: [acmeTestingPackage()],
       target: { id: "rust", options: { outputType: "bin", crateName: "error_creation_stack" } },
       files: { "index.ts": `
 import { check } from "@acme/testing";
-function create(): Error { return new Error("failure 😀"); }
+function create(): Error {
+  const error = new Error("failure 😀");
+  check(error.stack === undefined);
+  Error.captureStackTrace(error);
+  return error;
+}
 function read(error: Error): string | undefined { return error.stack; }
 export function main(): void {
   const error = create();

@@ -412,6 +412,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     projectTypes,
     semanticsFor: context.semanticsFor,
     frozenDataWrites: context.frozenDataWrites,
+    mutableContentFields: mutableStorageDeclarations.declarations,
   });
   // Fallibility depends on finalized operation facts and the one whole-program
   // structural storage plan produced while walking bodies.

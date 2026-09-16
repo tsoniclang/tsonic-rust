@@ -57,6 +57,9 @@ export function rustTypeEquals(
         sameStrings(left.abi, right.abi) && bindersEqual(left.binder, right.binder) &&
         sameTypes(left.parameters, right.parameters) &&
         rustTypeEquals(left.result, right.result);
+    case "callable-trait":
+      return right.kind === "callable-trait" && left.trait === right.trait &&
+        sameTypes(left.parameters, right.parameters) && rustTypeEquals(left.result, right.result);
     case "tuple":
       return right.kind === "tuple" && sameTypes(left.elements, right.elements);
   }

@@ -380,7 +380,9 @@ export function mutateRustStoredObjectField(
   storageIndex: number,
   mutation: (field: RustExpr) => RustExpr | undefined,
   context: RustPlanContext,
+  access: "property" | "content" = "property",
 ): RustExpr | undefined {
+  if (access === "content") return mutateRustStoredObjectFieldStorage(storage, receiverCarrier, receiver, storageIndex, mutation, context, access);
   const check = context.input.program.frozenDataWrites.receiverFor(storage, receiverCarrier, storageIndex);
   if (storage === "structural-object" && context.input.program.structuralShapes.field(receiverCarrier, storageIndex)?.storage === "property") {
     return mutateRustStoredObjectFieldStorage(storage, receiverCarrier, receiver, storageIndex, mutation, context);
@@ -402,6 +404,7 @@ function mutateRustStoredObjectFieldStorage(
   storageIndex: number,
   mutation: (field: RustExpr) => RustExpr | undefined,
   context: RustPlanContext,
+  access: "property" | "content" = "property",
 ): RustExpr | undefined {
   if (storage === "structural-object") {
     const field = context.input.program.structuralShapes.field(receiverCarrier, storageIndex);
@@ -410,7 +413,7 @@ function mutateRustStoredObjectFieldStorage(
     }
     if (field.storage === "bound") return mutateRustBoundRecordField(receiverCarrier, receiver, field, mutation, context);
     if (rustStructuralObjectCarrierValue(receiverCarrier)?.representation === "value") {
-      return field.storage !== "stored" || field.method === true || field.readonly || field.nativeLayout !== undefined
+      return field.storage !== "stored" || field.method === true || access === "property" && field.readonly || field.nativeLayout !== undefined
         ? undefined : mutation({ kind: "field", receiver, name: field.targetName });
     }
     if (field.nativeLayout !== undefined) {
@@ -421,7 +424,7 @@ function mutateRustStoredObjectFieldStorage(
         receiver: readRustStructuralObjectField(receiver, field.targetName, rustLocationTargetType(field.carrier)),
         method: "with_mut", args: [{ kind: "closure", params: [{ name: valueName, byRefCopy: false }], body }] };
     }
-    if (field.method === true || field.readonly) {
+    if (field.method === true || access === "property" && field.readonly) {
       return undefined;
     }
     return field.storage === "property"

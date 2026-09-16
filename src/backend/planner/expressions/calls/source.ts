@@ -398,7 +398,7 @@ export function planSelectedSourceCall(
     : fact.target.form === "structural-method"
       ? fact.target.callableCarrier
       : undefined;
-  const operandBoundary = rustCallableProtocol(callableCarrier) !== undefined
+  const operandBoundary = rustCallableProtocol(callableCarrier) !== undefined || callableCarrier?.kind === "closure"
     ? rustCurrentErrorBoundary(context)
     : selected.sourceDeclaration === undefined
       ? undefined

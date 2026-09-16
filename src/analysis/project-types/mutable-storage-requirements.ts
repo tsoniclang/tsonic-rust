@@ -54,6 +54,13 @@ export function collectRustMutableProjectStorageRequirements(
       if (declaration !== undefined &&
         projectTypes.definitionContainingDeclaration(declaration) !== undefined) {
         mutableDeclarations.add(declaration);
+        const owner = projectTypes.definitionContainingDeclaration(declaration)!;
+        for (const concrete of projectTypes.concreteClassesFor(owner)) {
+          const selected = projectTypes.memberImplementation(concrete, declaration);
+          if (selected.kind === "resolved" && ast.is.IsPropertyDeclaration(selected.implementation.declaration)) {
+            mutableDeclarations.add(selected.implementation.declaration);
+          }
+        }
       }
       collectStoragePath(Node_Expression(ast, node));
       return;
@@ -73,6 +80,12 @@ export function collectRustMutableProjectStorageRequirements(
   const visit = (sourceFile: SourceFile, node: Node): void => {
     const { ast } = context;
     const kind = ast.kindName(node);
+    if (kind === KindElementAccessExpression) {
+      const selected = context.semantics(sourceFile).operations.elementAccess(node);
+      if (selected !== undefined && selected.accessMode !== "read") {
+        collectStoragePath(Node_Expression(ast, node));
+      }
+    }
     if (kind === KindPropertyAccessExpression) {
       const selected = context.semantics(sourceFile).operations.propertyAccess(node);
       if (selected !== undefined && (selected.accessMode === "write" || selected.accessMode === "read-write") &&

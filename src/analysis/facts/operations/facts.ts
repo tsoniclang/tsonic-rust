@@ -228,7 +228,7 @@ export type RustTargetOperationFact =
       readonly operationId: string;
       readonly sourceCarrier: TargetTypeRef;
       readonly targetCarrier: TargetTypeRef;
-      readonly variant: string;
+      readonly comparison: { readonly kind: "builtin" } | { readonly kind: "project"; readonly variant: string };
       readonly errorOperand: "left" | "right";
       readonly negated: boolean;
       readonly resultCarrier: TargetTypeRef;

@@ -1,0 +1,112 @@
+import type { RustGenericArgument, RustGenericParameter, RustItem, RustType } from "../nodes.js";
+import { rustTypeEquals } from "../inspection/type-equality.js";
+import { rustPascalCaseIdentifier } from "../../../target-model/names/identifiers.js";
+
+interface ClosedTypeSummary {
+  readonly weight: number;
+  readonly names: ReadonlySet<string>;
+}
+
+export function nameRustSignatureTypes(items: readonly RustItem[]): readonly RustItem[] {
+  const reserved = new Set(items.flatMap(item => [
+    ...("name" in item ? [item.name] : []),
+    ...("generics" in item ? item.generics.parameters.map(parameter => parameter.name) : []),
+    ...(item.kind === "use" ? [item.alias ?? item.path.split("::").slice(-1)[0]!] : []),
+  ]));
+  const aliases: Extract<RustItem, { readonly kind: "type-alias" }>[] = [];
+  const result = items.map(item => {
+    if (item.kind !== "function") return item;
+    const nameType = (type: RustType, role: string): RustType => {
+      if (type.kind === "reference") return { ...type, referent: nameType(type.referent, role) };
+      if (type.kind === "slice") return { ...type, element: nameType(type.element, `${role}Element`) };
+      if (type.kind === "impl-trait") return { ...type, bounds: type.bounds.map(bound =>
+        bound.kind !== "callable" ? bound : { ...bound,
+          parameters: bound.parameters.map((parameter, index) => nameType(parameter, `${role}Arg${index}`)),
+          result: nameType(bound.result, `${role}Result`),
+        }) };
+      const summary = summarizeClosedType(type);
+      if (summary === undefined || summary.weight < 160) return type;
+      const parameters = item.generics.parameters.filter(parameter => summary.names.has(parameter.name))
+        .map((parameter): RustGenericParameter => parameter.kind === "type"
+          ? { kind: "type", name: parameter.name, bounds: [] }
+          : parameter.kind === "const" ? { kind: "const", name: parameter.name, type: parameter.type }
+            : { ...parameter, outlives: [] });
+      const arguments_: RustGenericArgument[] = parameters.map(parameter => parameter.kind === "type"
+        ? { kind: "type", type: { kind: "named", path: parameter.name } }
+        : parameter.kind === "const" ? { kind: "const", value: { kind: "path", path: parameter.name } }
+          : { kind: "lifetime", lifetime: { kind: "named", name: parameter.name } });
+      let alias = aliases.find(candidate => rustTypeEquals(candidate.target, type) &&
+        candidate.generics.parameters.length === parameters.length &&
+        candidate.generics.parameters.every((parameter, index) => {
+          const expected = parameters[index];
+          return parameter.kind === expected?.kind && parameter.name === expected.name &&
+            (parameter.kind !== "const" || expected.kind === "const" && rustTypeEquals(parameter.type, expected.type));
+        }));
+      if (alias === undefined) {
+        const base = rustPascalCaseIdentifier(`${item.name}_${role}`);
+        let name = base;
+        let suffix = 2;
+        while (reserved.has(name)) name = `${base}${suffix++}`;
+        reserved.add(name);
+        alias = { kind: "type-alias", name, visibility: item.visibility,
+          generics: { parameters, wherePredicates: [] }, target: type };
+        aliases.push(alias);
+      } else if (item.visibility === "public" && alias.visibility !== "public") {
+        const index = aliases.indexOf(alias);
+        alias = { ...alias, visibility: "public" };
+        aliases[index] = alias;
+      }
+      return { kind: "named", path: alias.name, genericArguments: arguments_ };
+    };
+    return { ...item, params: item.params.map(parameter => ({ ...parameter,
+      type: nameType(parameter.type, parameter.name),
+    })), ...(item.returnType === undefined ? {} : { returnType: nameType(item.returnType, "Result") }) };
+  });
+  return [...aliases, ...result];
+}
+
+function summarizeClosedType(type: RustType): ClosedTypeSummary | undefined {
+  const names = new Set<string>();
+  let weight = 0;
+  const arguments_ = (values: readonly RustGenericArgument[] | undefined, depth: number): boolean =>
+    (values ?? []).every(value => {
+      if (value.kind === "type") return visit(value.type, depth);
+      if (value.kind === "const") {
+        if (value.value.kind === "path") names.add(value.value.path);
+        return true;
+      }
+      return false;
+    });
+  const visit = (value: RustType, depth: number): boolean => {
+    weight += depth * 10;
+    switch (value.kind) {
+      case "named":
+        names.add(value.path);
+        return arguments_(value.genericArguments, depth + 1);
+      case "qualified":
+        return visit(value.owner, depth + 1) && (value.trait === undefined || visit(value.trait, depth + 1)) &&
+          arguments_(value.genericArguments, depth + 1);
+      case "tuple":
+        return value.elements.every(element => visit(element, depth + 1));
+      case "fixed-array":
+        if (value.length.kind === "path") names.add(value.length.path);
+        return visit(value.element, depth + 1);
+      case "primitive":
+      case "string":
+      case "str":
+      case "unit":
+      case "never":
+        return true;
+      case "infer":
+      case "impl-trait":
+      case "trait-object":
+      case "reference":
+      case "raw-pointer":
+      case "slice":
+      case "function-pointer":
+      case "callable-trait":
+        return false;
+    }
+  };
+  return visit(type, 1) ? { weight, names } : undefined;
+}

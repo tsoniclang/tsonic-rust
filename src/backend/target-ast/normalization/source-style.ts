@@ -14,11 +14,12 @@ import { finalizeRustBlockLiveness } from "../inspection/source-liveness.js";
 import { rustLintAttributes } from "./lint-policy.js";
 import { rustBlockReferencesPath } from "../inspection/source-usage.js";
 import { collapseRustForwardingClosure } from "./forwarding-closures.js";
+import { nameRustSignatureTypes } from "./signature-aliases.js";
 
 export function finalizeRustSourceStyle(
   model: RustSourceFileModel,
 ): RustSourceFileModel {
-  const items = closePublicRustTypeVisibility(model.items);
+  const items = closePublicRustTypeVisibility(nameRustSignatureTypes(model.items));
   const publicTypes = publicDeclaredRustTypeNames(items);
   return {
     ...model,
@@ -654,6 +655,7 @@ function rustTypeNames(type: RustType): readonly string[] {
     case "slice":
       return rustTypeNames(type.element);
     case "function-pointer":
+    case "callable-trait":
       return [...type.parameters.flatMap(rustTypeNames), ...rustTypeNames(type.result)];
     case "tuple":
       return type.elements.flatMap(rustTypeNames);
