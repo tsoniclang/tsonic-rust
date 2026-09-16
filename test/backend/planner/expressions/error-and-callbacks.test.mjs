@@ -3,12 +3,13 @@ import assert from "node:assert/strict";
 import { acmeTestingPackage, artifactText, compileRust, nodejsCapability } from "../../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
 
-test("Error construction without a message preserves throwing and catching", { timeout: 300_000 }, () => {
-  const { result } = compileRust({
-    surfaces: ["js"],
-    packages: [acmeTestingPackage()],
-    target: { id: "rust", options: { outputType: "bin", crateName: "empty_error_message" } },
-    files: { "index.ts": `
+for (const surfaces of [[], ["js"]]) {
+  test(`Error construction without a message preserves throwing and catching (${surfaces[0] ?? "native"})`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({
+      surfaces,
+      packages: [acmeTestingPackage()],
+      target: { id: "rust", options: { outputType: "bin", crateName: "empty_error_message" } },
+      files: { "index.ts": `
 import { check } from "@acme/testing";
 export function main(): void {
   const error = new Error();
@@ -20,10 +21,11 @@ export function main(): void {
   check(caught);
 }
 ` },
+    });
+    assert.deepEqual(result.diagnostics, []);
+    validateGeneratedProject("empty-error-message", result.artifacts, { run: true });
   });
-  assert.deepEqual(result.diagnostics, []);
-  validateGeneratedProject("empty-error-message", result.artifacts, { run: true });
-});
+}
 
 test("Error subclasses retain exact inherited field selection for reads and writes", { timeout: 300_000 }, () => {
   const { result } = compileRust({
