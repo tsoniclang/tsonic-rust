@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { frozenObjectSources } from "../../fixtures/frozen-objects.mjs";
+import { frozenObjectSources } from "../../../../tsonic/test/fixtures/frozen-objects.mjs";
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 

@@ -8,7 +8,7 @@ import { selectRustSourceValueConversion } from "../../../dist/policy/conversion
 import { finalizeRustProviderOperationAbi, validateRustFinalizedOperationAbi } from "../../../dist/analysis/facts/finalized-operation-abi.js";
 import { acmeTestingPackage, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
-import { recursiveSourceUnionFiles } from "../../fixtures/recursive-source-unions.mjs";
+import { recursiveSourceUnionFiles } from "../../../../tsonic/test/fixtures/recursive-source-unions.mjs";
 
 const integer = rustSourcePrimitiveTargetType("int32");
 const parameter = { kind: "type-parameter", name: "Value" };
@@ -114,7 +114,8 @@ for (const surfaces of [[], ["js"]]) {
   test(`recursive generic and mutually recursive unions execute on ${surfaces.length === 0 ? "native" : "js"} profile`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, packages: [acmeTestingPackage()],
       target: { id: "rust", options: { outputType: "bin", crateName: "recursive_unions" } },
-      files: recursiveSourceUnionFiles });
+      files: { ...recursiveSourceUnionFiles, "index.ts": `${recursiveSourceUnionFiles["index.ts"]}
+        import { check } from "@acme/testing"; export function main(): void { check(run()); }` } });
     assert.deepEqual(result.diagnostics, []);
     assert.match(artifactText(result, "src/steps.rs"), /enum Step<Value>/u);
     const run = validateGeneratedProject("recursive-source-unions", result.artifacts, { run: true });

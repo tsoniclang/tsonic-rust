@@ -7,6 +7,7 @@ import {
   rustJsArrayTargetId, rustOptionElementCarrier, rustUndefinedTargetType,
 } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { isRustNumberArrayUnion } from "../../target-model/types/carriers/array-unions.js";
 
 export function selectRustArrayCopyMode(
   request: RustCheckedCallSelectionInput,
@@ -17,6 +18,7 @@ export function selectRustArrayCopyMode(
     request.source.sourceSelectedMethodTypeArguments?.length !== 1) return undefined;
   const expression = request.source.sourceArguments[0]!.expression;
   const source = resolveRustTargetTypeRef(expression, context, options);
+  if (isRustNumberArrayUnion(source, context.typeDefinitions)) return options.arrayDensity.array(expression) ? "dense" : undefined;
   if (source?.kind !== "target-named" || source.id !== rustJsArrayTargetId) return undefined;
   if (options.arrayDensity.array(expression)) return "dense";
   const selection = request.source.sourceSelectedMethodTypeArguments[0]!;

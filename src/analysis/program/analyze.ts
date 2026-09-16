@@ -37,6 +37,7 @@ import { rustSourceTypeDeclarations } from "../../policy/types/source-declaratio
 import { realizeRustSourceTypeFamilyDemands } from "../project-types/type-family-demands.js";
 import { rustTypeFamilyNormalizer } from "../../policy/types/type-family-normalization.js";
 import { createJsArrayDensityQuery } from "@tsonic/js-source-profile";
+import { rustJsTypedArrayTargetIds } from "../../target-model/types/carriers/js.js";
 import { resolveSelectedJsSourceMember } from "../../policy/evidence/selected-source.js";
 import { recordRustTypeOnlyDeclarations } from "../declarations/type-only.js";
 import { recordRustProjectCallableAdapterFacts } from "../project-types/callable-adapters.js";
@@ -80,6 +81,15 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   const operationOptions: RustOperationsProviderOptions = {
     arrayDensity: createJsArrayDensityQuery(context.source, {
       closedSourceFiles,
+      intrinsicallyDense(expression) {
+        const semantics = context.semanticsFor(expression);
+        const type = semantics.types.expressionType(expression);
+        const symbol = type === undefined ? undefined : semantics.declarations.typeSymbol(type);
+        const declarations = symbol === undefined ? [] : semantics.declarations.symbolDeclarations(symbol);
+        return declarations.length > 0 && declarations.every(declaration =>
+          sourceProfiles.profileForNode(declaration, context.ast) === "js" && context.ast.is.IsInterfaceDeclaration(declaration) &&
+          Object.prototype.hasOwnProperty.call(rustJsTypedArrayTargetIds, context.ast.text(context.ast.name(declaration))));
+      },
       memberIdentity: declaration => resolveSelectedJsSourceMember(context, declaration, sourceProfiles),
     }),
     providerExports: providerSemantics.exports,
