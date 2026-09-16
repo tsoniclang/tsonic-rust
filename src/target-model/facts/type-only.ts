@@ -1,4 +1,4 @@
-import { defineRustPlanKey } from "../../target-model/facts/keys.js";
+import { defineRustPlanKey } from "./keys.js";
 
 export const rustTypeOnlyDeclarationFactKey = defineRustPlanKey<{
   readonly reason: "ambient" | "type-family-predicate" | "representation-alias";

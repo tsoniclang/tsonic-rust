@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { locationMethodReceiver, locationIndexExpression, typedLocationFactMatchesPlan, optionReference } from "./location-expressions.js";
 import type {
   RustAssignmentOperator,
   RustBinaryOperator,
@@ -7,13 +8,11 @@ import {
   ElementAccessExpression_ArgumentExpression,
   Node_Expression,
 } from "@tsonic/target-api/source";
-import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustIndexedLocationContract } from "../../../analysis/facts/indexed-location.js";
 import { planFinalizedTargetInput } from "./conversions.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type {
   RustTargetOperationFact,
-  RustTypedLocationPlan,
 } from "../../../analysis/facts/keys.js";
 import {
   rustLocationStorageFactKey,
@@ -829,14 +828,6 @@ function planRustLocationStorage(
   );
 }
 
-function locationMethodReceiver(
-  expression: RustExpr | undefined,
-): RustExpr | undefined {
-  return expression?.kind === "method-call" &&
-      expression.method === "clone" && expression.args.length === 0
-    ? expression.receiver
-    : expression;
-}
 
 export function findRustLocationStorageRoot(
   expression: Node,
@@ -868,32 +859,8 @@ export function findRustLocationStorageRoot(
     : { expression: root, declaration: storage.declaration };
 }
 
-function locationIndexExpression(expression: RustExpr | undefined): RustExpr | undefined {
-  if (expression?.kind === "index") {
-    return expression.index;
-  }
-  return expression?.kind === "evaluate-then" && expression.value.kind === "index"
-    ? {
-        kind: "evaluate-then",
-        effect: expression.effect,
-        discard: expression.discard,
-        value: expression.value.index,
-      }
-    : undefined;
-}
 
-function typedLocationFactMatchesPlan(
-  fact: Extract<RustTargetOperationFact, { readonly kind: "typed-location" }>,
-  plan: RustTypedLocationPlan,
-): boolean {
-  return fact.operation === plan.operation &&
-    rustTargetTypeRefEquals(fact.pointeeCarrier, plan.pointeeCarrier) &&
-    rustTargetTypeRefEquals(fact.locationCarrier, plan.locationCarrier);
-}
 
-function optionReference(value: RustExpr): RustExpr {
-  return { kind: "method-call", receiver: value, method: "as_ref", args: [] };
-}
 
 function rejectLocationStorage(
   node: Node,

@@ -78,6 +78,11 @@ for (const [name, replacement] of [
   test(`raw record storage rejects ${name} without publishing code`, () => {
     const files = { ...valueRecordMemoryProofFiles, "layout.ts": valueRecordMemoryProofFiles["layout.ts"]
       .replace("export const Word = struct({ count: field<uint32>() });\nexport type Word = typeof Word;", replacement) };
+    if (name === "mismatched scalar layout") {
+      assert.throws(() => compileRust({ capabilities: [memoryAbiCapability("rust")], files }),
+        /TSEXT9901180: memoryField requires the exact selected child layout for its field type/u);
+      return;
+    }
     const { result } = compileRust({ capabilities: [memoryAbiCapability("rust")], files });
     assert.ok(result.diagnostics.some(diagnostic => diagnostic.category === "error"), JSON.stringify(result.diagnostics));
     assert.equal(result.artifacts.length, 0);
@@ -129,20 +134,19 @@ export function run(): uint32 { return struct(4); }
 });
 
 test("a struct cannot erase unproved field calls", () => {
-  const { result } = compileRust({ files: { "index.ts": `
+  assert.throws(() => compileRust({ files: { "index.ts": `
       import { field, struct } from "@tsonic/core/lang.js";
       import type { uint32 } from "@tsonic/core/types.js";
       function value(): uint32 { return 1; }
-      const Point = struct({ x: value() });` } });
-  assert.ok(result.diagnostics.some(diagnostic => diagnostic.code === "SOURCE_SEMANTICS_STRUCT_FIELD_NOT_PROVEN"));
-  assert.equal(result.artifacts.length, 0);
+      const Point = struct({ x: value() });` } }), /TSEXT9901109: struct\(\.\.\.\) field shape members require finalized field<T>\(\) facts/u);
 });
 
 test("stored value-field writes require writable sealed field metadata", () => {
   const field = { sourceName: "count", type: { kind: "source-primitive", name: "uint32" }, presence: "required", readonly: false };
   const carrier = rustStructuralObjectTargetType("/value.ts", [field], "value");
   const stored = { targetName: "count", carrier: field.type, storage: "stored", readonly: false };
-  const context = selected => ({ input: { program: { structuralShapes: { field: () => selected } } } });
+  const context = selected => ({ input: { program: { structuralShapes: { field: () => selected },
+    frozenDataWrites: { receiverFor: () => undefined } } } });
   const write = selected => writeRustStoredObjectField("structural-object", carrier, { kind: "path", path: "value" }, 0,
     "=", { kind: "int-literal", text: "3" }, context(selected));
   assert.deepEqual(write(stored), { kind: "assignment", operator: "=",
@@ -151,4 +155,26 @@ test("stored value-field writes require writable sealed field metadata", () => {
   assert.equal(write({ ...stored, readonly: true }), undefined);
   assert.equal(write({ ...stored, storage: "property" }), undefined);
   assert.equal(write(undefined), undefined);
+});
+
+test("nested value-field writes do not assign the containing frozen property", () => {
+  const scalar = { kind: "source-primitive", name: "uint32" };
+  const nested = rustStructuralObjectTargetType("/point.ts", [
+    { sourceName: "x", type: scalar, presence: "required", readonly: false },
+  ], "value");
+  const carrier = rustStructuralObjectTargetType("/owner.ts", [
+    { sourceName: "point", type: nested, presence: "required", readonly: true },
+  ], "value");
+  let checks = 0;
+  const context = { input: { program: {
+    structuralShapes: { field: () => ({ targetName: "point", carrier: nested, storage: "stored", readonly: true }) },
+    frozenDataWrites: { receiverFor: () => { checks += 1; return "receiver"; } },
+  } } };
+  const receiver = { kind: "path", path: "owner" };
+  const value = { kind: "int-literal", text: "3" };
+  assert.deepEqual(writeRustStoredObjectField("structural-object", carrier, receiver, 0, "=", value, context, ["x"]), {
+    kind: "assignment", operator: "=", value,
+    target: { kind: "field", receiver: { kind: "field", receiver, name: "point" }, name: "x" },
+  });
+  assert.equal(checks, 0);
 });

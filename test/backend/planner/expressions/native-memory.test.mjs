@@ -80,7 +80,7 @@ export function main(): void { if (!run()) throw new Error("native location alia
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /allocate_native_location/u);
-  assert.match(output, /reinterpret_raw_location::<u32>/u);
+  assert.match(output, /reinterpret_raw_location::<u32, rt::TsonicError>/u);
   assert.doesNotMatch(output, /as \*mut|as \*const/u);
   validateGeneratedProject("native-location-aliases", result.artifacts, { run: true });
 });

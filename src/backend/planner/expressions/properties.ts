@@ -17,7 +17,7 @@ import { planRustNonConsumingValue, planRustSharedReceiver } from "./typed-locat
 import { planRustSourceUnionFieldProjection, readRustUnionField } from "./unions.js";
 import { planRustBuiltinErrorProperty } from "./builtin-errors.js";
 import { readRustProjectDispatchedField, rustProjectObjectDispatchField } from "../objects/project-objects.js";
-import { planRustProjectFieldDispatchRoles } from "../objects/project-field-dispatch.js";
+import { planRustProjectFieldDispatchRole } from "../objects/project-field-dispatch.js";
 import { readRustSourceStaticField } from "../declarations/static-field-storage.js";
 import { readRustStoredObjectField } from "../objects/project-storage.js";
 import { planRustValueFieldLocation, rustSourceFieldHasValueReceiver } from "../objects/value-fields.js";
@@ -154,8 +154,8 @@ function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr
       ));
       return undefined;
     }
-    const dispatchRoles = planRustProjectFieldDispatchRoles(dispatchPlan, context);
-    if (dispatchRoles === undefined) {
+    const dispatchRead = planRustProjectFieldDispatchRole(dispatchPlan, "read", context);
+    if (dispatchRead === undefined) {
       return undefined;
     }
     const receiverName = allocateRustSyntheticName(
@@ -171,7 +171,7 @@ function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr
       value: readRustProjectDispatchedField(
         { kind: "path", path: receiverName },
         fact.dispatch.read,
-        dispatchRoles.read,
+        dispatchRead,
       ),
     };
   }

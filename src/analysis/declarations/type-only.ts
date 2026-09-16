@@ -2,7 +2,7 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import { sourceClassFieldIsTypeOnly, VariableDeclarationList_Declarations, VariableStatement_DeclarationList } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
 import { appendRustDiagnostic } from "../program/walk.js";
-import { rustTypeOnlyDeclarationFactKey } from "../facts/type-only.js";
+import { rustTypeOnlyDeclarationFactKey } from "../../target-model/facts/type-only.js";
 
 export function recordRustTypeOnlyDeclarations(walk: RustFactWalk, sourceFiles: readonly SourceFile[]): void {
   const { ast, source, typeFamilies, facts } = walk.context;

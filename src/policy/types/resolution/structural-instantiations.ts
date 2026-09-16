@@ -11,6 +11,7 @@ export function retainRustStructuralInstantiation(
   context: RustTargetTypeResolutionContext,
   options: RustTargetTypeResolutionOptions,
 ): boolean {
+  if (!containsStructuralStorage(templateCarrier)) return true;
   const templateElement = templateCarrier.kind === "array" ? templateCarrier.element :
     isRustJsArrayCarrier(templateCarrier) ? rustJsArrayLikeElementTargetType(templateCarrier) : undefined;
   const element = carrier.kind === "array" ? carrier.element :
@@ -24,7 +25,7 @@ export function retainRustStructuralInstantiation(
       retainRustStructuralInstantiation(arguments_[0], templateElement, element, context, options);
   }
   const structural = rustStructuralObjectCarrierValue(carrier);
-  if (structural === undefined || rustStructuralObjectCarrierValue(templateCarrier) === undefined) return true;
+  if (structural === undefined || rustStructuralObjectCarrierValue(templateCarrier) === undefined) return false;
   const template = options.sourceTypes.structuralObjectForCarrier(templateCarrier);
   if (template === undefined) return false;
   const correspondence = context.currentSemantics.types.structuralMembers(sourceType, template.sourceType);
@@ -43,8 +44,8 @@ export function retainRustStructuralInstantiation(
       selected.source.property.optional !== selected.destination.property.optional ||
       selected.source.property.readonly !== selected.destination.property.readonly ||
       selected.source.read !== selected.destination.read ||
-      selected.source.declarations.length !== field.declarations.length ||
-      selected.source.declarations.some(declaration => !field.declarations.includes(declaration))) return undefined;
+      selected.destination.declarations.length !== field.declarations.length ||
+      selected.destination.declarations.some(declaration => !field.declarations.includes(declaration))) return undefined;
     if (!retainRustStructuralInstantiation(selected.source.property.type, field.resultCarrier,
       targetField.type, context, options)) return undefined;
     return {
@@ -58,4 +59,15 @@ export function retainRustStructuralInstantiation(
   if (fields.some(field => field === undefined)) return false;
   return options.sourceTypes.registerStructuralObject({ ...template, sourceType, carrier,
     fields: fields as NonNullable<(typeof fields)[number]>[] }, templateCarrier);
+}
+
+function containsStructuralStorage(carrier: TargetTypeRef): boolean {
+  let current = carrier;
+  for (;;) {
+    if (rustStructuralObjectCarrierValue(current) !== undefined) return true;
+    const element = current.kind === "array" ? current.element :
+      isRustJsArrayCarrier(current) ? rustJsArrayLikeElementTargetType(current) : undefined;
+    if (element === undefined) return false;
+    current = element;
+  }
 }

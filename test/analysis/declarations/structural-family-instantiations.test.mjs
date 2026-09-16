@@ -95,11 +95,33 @@ test("selected record instantiation retains exact reordered members and one gene
   assert.equal(plan.definitionForCarrier(input.templateCarrier).genericArguments.length, 2);
 });
 
-test("record instantiation rejects missing, duplicated, foreign and incompatible selected members", () => {
+test("record instantiation preserves independently declared source members through exact correspondence", () => {
+  const input = fixture();
+  const sourceDeclarations = [{}, {}];
+  input.correspondence.members.forEach((pair, index) => {
+    pair.source.declarations = [sourceDeclarations[index]];
+  });
+  assert.equal(input.retain(), true);
+  for (const pair of input.correspondence.members) {
+    const selected = input.sourceTypes.structuralFieldProjectionForSymbol(pair.source.property.symbol, input.selectedCarrier);
+    assert.deepEqual(selected.field.declarations, pair.source.declarations);
+    assert.deepEqual(selected.field.resultCarrier, scalar);
+  }
+});
+
+test("nonstructural nested arrays do not request structural instantiation metadata", () => {
+  const nested = { kind: "array", element: { kind: "array", element: scalar } };
+  const context = { currentSemantics: { types: new Proxy({}, { get() {
+    throw new Error("No structural metadata is needed for scalar array storage");
+  } }) } };
+  assert.equal(retainRustStructuralInstantiation({}, nested, nested, context, {}), true);
+});
+
+test("record instantiation rejects missing, duplicated, foreign destination and incompatible selected members", () => {
   for (const mutate of [
     input => { input.correspondence.members[0] = { ...input.correspondence.members[0], kind: "absent" }; },
     input => { input.correspondence.members[0] = input.correspondence.members[1]; },
-    input => { input.correspondence.members[0].source.declarations = [{}]; },
+    input => { input.correspondence.members[0].destination.declarations = [{}]; },
     input => { input.correspondence.members[0].source.property.optional = true; },
     input => { input.correspondence.members[0].source.property.readonly = true; },
     input => { input.correspondence.members[0].source.read = "accessor"; },

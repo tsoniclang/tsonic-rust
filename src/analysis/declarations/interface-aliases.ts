@@ -2,7 +2,7 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustFactWalk } from "../program/walk.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
-import { rustTypeOnlyDeclarationFactKey } from "../facts/type-only.js";
+import { rustTypeOnlyDeclarationFactKey } from "../../target-model/facts/type-only.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { rustSourceTypeCarrierValue } from "../../target-model/types/index.js";
 import { setCarrierFact } from "../operations/project-calls.js";

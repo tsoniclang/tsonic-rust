@@ -38,7 +38,7 @@ function verifyProviderSource(sourceText, records = false) {
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, records ? /NativeLayout::<native_memory_proof::Envelope>::new/u : /native_memory_proof::acquire/u);
-  assert.match(source, /reinterpret_raw_location::<u32>/u);
+  assert.match(source, /reinterpret_raw_location::<u32, rt::TsonicError>/u);
   const output = join(root, "output");
   mkdirSync(output, { recursive: true });
   for (const artifact of result.artifacts) {

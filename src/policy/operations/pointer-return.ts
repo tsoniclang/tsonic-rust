@@ -9,6 +9,7 @@ import {
   rustUndefinedTargetType,
 } from "../../target-model/types/index.js";
 import { resolveRustExactNullishValueCarrier } from "../types/resolution/target.js";
+import { readRustRawLocation, resolveRustMemoryLayoutPointee } from "./native-memory.js";
 
 export interface RustPointerReturnContract {
   readonly returnCarrier: TargetTypeRef;
@@ -33,11 +34,17 @@ export function selectRustPointerReturnContract(
   if (evidence === undefined) {
     return undefined;
   }
-  const pointees = evidence.pointees.map((value) => resolveRustTargetTypeRef(value.typeNode ?? value.type, {
-    ...context,
-    currentSourceFile: context.ast.getSourceFile(value.subject)!,
-    currentSemantics: context.semanticsFor(value.subject),
-  }, options));
+  const pointees = evidence.pointees.map(value => {
+    const selectedContext = { ...context, currentSourceFile: context.ast.getSourceFile(value.subject)!,
+      currentSemantics: context.semanticsFor(value.subject) };
+    const rawLocation = readRustRawLocation(context.ast, context.source.sourceFacts, value.subject);
+    if (rawLocation?.kind === "resolved" && rawLocation.operation.operation === "reinterpret") {
+      return rawLocation.operation.explicitPointeeTypeNode === undefined
+        ? resolveRustMemoryLayoutPointee(rawLocation.layout, selectedContext, options)
+        : resolveRustTargetTypeRef(rawLocation.operation.explicitPointeeTypeNode, selectedContext, options);
+    }
+    return resolveRustTargetTypeRef(value.typeNode ?? value.type, selectedContext, options);
+  });
   const first = pointees[0];
   if (first === undefined || pointees.some((type) =>
     type === undefined || !rustTargetTypeRefEquals(type, first))) {

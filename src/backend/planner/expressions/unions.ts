@@ -6,7 +6,7 @@ import type { RustAssignmentOperator } from "../../../target-model/syntax/tokens
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { readRustStoredObjectField, writeRustStoredObjectField, mutateRustStoredObjectField } from "../objects/project-storage.js";
 import { readRustProjectDispatchedField, writeRustProjectDispatchedField } from "../objects/project-objects.js";
-import { planRustProjectFieldDispatchRoles } from "../objects/project-field-dispatch.js";
+import { planRustProjectFieldDispatchRole, planRustProjectFieldDispatchRoles } from "../objects/project-field-dispatch.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { diagnosticInput, rustLocalBindingName } from "../program/plan-context.js";
 import { rustUnionTypePathInContext } from "../types/render.js";
@@ -28,20 +28,22 @@ function unionFieldDispatch(field: RustSelectedSourceUnionField, carrier: Target
   const plan = field.declaration === undefined ? undefined : context.input.program.projectFieldDispatch.planFor(field.declaration);
   return field.dispatch === undefined || relationship?.kind !== "related" ||
     !rustTargetTypeRefEquals(relationship.targetType, field.dispatch.ownerCarrier) || plan === undefined
-    ? undefined : planRustProjectFieldDispatchRoles(plan, context);
+    ? undefined : plan;
 }
 
 export function readRustUnionField(field: RustSelectedSourceUnionField, carrier: TargetTypeRef,
   receiver: RustExpr, resultCarrier: TargetTypeRef, context: RustPlanContext): RustExpr | undefined {
   if (field.dispatch === undefined) return readRustStoredObjectField(field.storage, carrier, receiver, field.storageIndex, resultCarrier, context);
-  const roles = unionFieldDispatch(field, carrier, context);
-  return roles === undefined ? undefined : readRustProjectDispatchedField(receiver, field.dispatch.read, roles.read);
+  const plan = unionFieldDispatch(field, carrier, context);
+  const read = plan === undefined ? undefined : planRustProjectFieldDispatchRole(plan, "read", context);
+  return read === undefined ? undefined : readRustProjectDispatchedField(receiver, field.dispatch.read, read);
 }
 
 export function writeRustUnionField(field: RustSelectedSourceUnionField, carrier: TargetTypeRef,
   receiver: RustExpr, operator: RustAssignmentOperator, value: RustExpr, context: RustPlanContext): RustExpr | undefined {
   if (field.dispatch === undefined) return writeRustStoredObjectField(field.storage, carrier, receiver, field.storageIndex, operator, value, context);
-  const roles = unionFieldDispatch(field, carrier, context);
+  const plan = unionFieldDispatch(field, carrier, context);
+  const roles = plan === undefined ? undefined : planRustProjectFieldDispatchRoles(plan, context);
   if (roles?.write === undefined || context.syntheticNames === undefined) return undefined;
   return writeRustProjectDispatchedField(receiver, allocateRustSyntheticName(context.syntheticNames, "union_receiver"),
     field.dispatch.read, field.dispatch.write, operator, value, { read: roles.read, write: roles.write });

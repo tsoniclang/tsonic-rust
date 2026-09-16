@@ -123,17 +123,20 @@ export function main(): void { check(BigInt(4) === 5 && Object.freeze(4) === 6);
   assert.equal(run.status, 0, JSON.stringify(run));
 });
 
-test("freezing a writable nonempty carrier is not erased", () => {
-  const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": `
-export function example(): number {
+test("freezing a writable nonempty carrier rejects writes without changing its value", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: ["js"],
+    target: { id: "rust", options: { outputType: "bin", crateName: "frozen_write" } },
+    files: { "index.ts": `
+export function main(): void {
   const value = { count: 1 };
   Object.freeze(value);
-  value.count = 2;
-  return value.count;
+  let rejected = false;
+  try { value.count = 2; } catch (error) { rejected = error instanceof TypeError; }
+  if (!rejected || value.count !== 1 || !Object.isFrozen(value)) throw new Error("frozen write was erased");
 }
 ` } });
-  assert(result.diagnostics.some(diagnostic => diagnostic.code === "RUST_SELECTED_OPERATION_UNSUPPORTED"));
-  assert.equal(result.artifacts.length, 0);
+  assert.deepEqual(result.diagnostics, []);
+  validateGeneratedProject("frozen-write", result.artifacts, { run: true });
 });
 
 test("empty identity storage rejects nonempty payloads and unresolved generic storage", () => {

@@ -11,7 +11,7 @@ import { resolveRustConditionalAlias } from "./type-families.js";
 import { resolveRustTypeComponentEvidence } from "./source-evidence.js";
 import { rustSliceMutRefTargetType, rustSliceRefTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { rustTypeOnlyDeclarationFactKey } from "../../../analysis/facts/type-only.js";
+import { rustTypeOnlyDeclarationFactKey } from "../../../target-model/facts/type-only.js";
 import {
   sourceTransformedTypeFactEvidenceNodes,
   sourceTupleElementTypeEvidenceNodes,

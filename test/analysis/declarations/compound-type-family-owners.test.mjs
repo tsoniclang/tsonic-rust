@@ -18,17 +18,15 @@ for (const surfaces of [[], ["js"]]) {
     const files = { ...compoundTypeFamilyOwnerFiles,
       "storage.ts": compoundTypeFamilyOwnerFiles["storage.ts"].replace(
         "if (value === undefined) return undefined;", "") };
-    const { result } = compileRust({ surfaces, files, packages: [acmeTestingPackage()] });
-    assert.ok(result.diagnostics.some(diagnostic => diagnostic.code === "TS2345"), JSON.stringify(result.diagnostics));
-    assert.equal(result.artifacts.length, 0);
+    assert.throws(() => compileRust({ surfaces, files, packages: [acmeTestingPackage()] }),
+      /error TS2345:.*Pointer<Job<Value>> \| undefined.*Pointer<Job<Value>>/u);
   });
 
   test(`structural alias instantiation preserves incompatible field types (${profile})`, () => {
     const files = { ...compoundTypeFamilyOwnerFiles,
       "index.ts": compoundTypeFamilyOwnerFiles["index.ts"].replace(
         "{ key: 1, value: numeric }", '{ key: "wrong", value: numeric }') };
-    const { result } = compileRust({ surfaces, files, packages: [acmeTestingPackage()] });
-    assert.ok(result.diagnostics.some(diagnostic => diagnostic.code === "TS2322"), JSON.stringify(result.diagnostics));
-    assert.equal(result.artifacts.length, 0);
+    assert.throws(() => compileRust({ surfaces, files, packages: [acmeTestingPackage()] }),
+      /error TS2322: Type 'string' is not assignable to type 'number'/u);
   });
 }

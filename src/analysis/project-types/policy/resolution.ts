@@ -8,7 +8,6 @@ import {
   rustTypeGenericArgument,
   substituteRustTargetGenerics,
 } from "../../../target-model/types/index.js";
-import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { Node, Signature, SourceFile } from "@tsonic/tsts";
 import { sourceClassFieldIsTypeOnly, sourceObjectMemberDeclarations, sourceParameterIsProperty } from "@tsonic/target-api/source";
@@ -20,6 +19,7 @@ import type { RustProjectConstructorSignature, RustProjectDowncastRoute, RustPro
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustSourceTypeDeclarations } from "../../../policy/types/source-declarations.js";
 import { rustLocalClassIssue } from "../local-classes.js";
+import { projectGenericSubstitutions } from "./generic-substitutions.js";
 
 export function createRustProjectTypePolicy(
   host: RustProjectTypePolicyHost,
@@ -876,28 +876,4 @@ export function createRustProjectTypePolicy(
     },
   };
   return Object.freeze(policy);
-}
-
-function projectGenericSubstitutions(
-  definition: RustProjectTypeDefinition,
-  arguments_: readonly import("../../../target-model/types/model.js").RustTargetGenericArgument[] | undefined,
-): {
-  readonly types: ReadonlyMap<string, TargetTypeRef>;
-  readonly lifetimes: ReadonlyMap<string, import("../../../target-model/lifetimes/index.js").RustLifetimeRef>;
-} | undefined {
-  const values = arguments_ ?? [];
-  if (values.length !== definition.genericParameters.length) return undefined;
-  const types = new Map<string, TargetTypeRef>();
-  const lifetimes = new Map<string, import("../../../target-model/lifetimes/index.js").RustLifetimeRef>();
-  for (const [index, parameter] of definition.genericParameters.entries()) {
-    const argument = values[index];
-    if (parameter.kind === "lifetime") {
-      if (argument?.kind !== "lifetime") return undefined;
-      lifetimes.set(rustLifetimeKey(parameter.lifetime), argument.lifetime);
-      continue;
-    }
-    if (argument?.kind !== "type") return undefined;
-    types.set(parameter.sourceName, argument.type);
-  }
-  return Object.freeze({ types, lifetimes });
 }

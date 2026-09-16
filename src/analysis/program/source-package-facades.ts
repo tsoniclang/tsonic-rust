@@ -6,7 +6,7 @@ import type {
 import type {
   TargetDiagnostic,
 } from "@tsonic/target-api/artifacts";
-import { rustTypeOnlyDeclarationFactKey } from "../facts/type-only.js";
+import { rustTypeOnlyDeclarationFactKey } from "../../target-model/facts/type-only.js";
 import {
   isValidRustIdentifier,
   rustModuleSegmentName,

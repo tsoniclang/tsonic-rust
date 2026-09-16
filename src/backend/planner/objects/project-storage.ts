@@ -296,7 +296,9 @@ export function writeRustStoredObjectField(
   context: RustPlanContext,
   projection: readonly string[] = [],
 ): RustExpr | undefined {
-  const check = context.input.program.frozenDataWrites.receiverFor(storage, receiverCarrier, storageIndex);
+  const check = projection.length === 0
+    ? context.input.program.frozenDataWrites.receiverFor(storage, receiverCarrier, storageIndex)
+    : undefined;
   if (storage === "structural-object" && context.input.program.structuralShapes.field(receiverCarrier, storageIndex)?.storage === "property") {
     return writeRustStoredObjectFieldStorage(storage, receiverCarrier, receiver, storageIndex, operator, value, context, projection);
   }

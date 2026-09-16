@@ -36,14 +36,15 @@ import { collectRustThrownClassDeclarations } from "../resources/thrown-values.j
 import { rustSourceTypeDeclarations } from "../../policy/types/source-declarations.js";
 import { realizeRustSourceTypeFamilyDemands } from "../project-types/type-family-demands.js";
 import { rustTypeFamilyNormalizer } from "../../policy/types/type-family-normalization.js";
-import { createJsArrayDensityQuery } from "@tsonic/js-source-profile";
+import { createSourceArrayDensityQuery } from "@tsonic/target-api/source";
+import { jsArrayMemberEffect } from "@tsonic/js-source-profile";
 import { rustJsTypedArrayTargetIds } from "../../target-model/types/carriers/js.js";
 import { resolveSelectedJsSourceMember } from "../../policy/evidence/selected-source.js";
 import { recordRustTypeOnlyDeclarations } from "../declarations/type-only.js";
 import { recordRustProjectCallableAdapterFacts } from "../project-types/callable-adapters.js";
 import { recordRustValueStructDeclaration } from "../declarations/value-structs.js";
 import { recordRustInterfaceRepresentationAliases } from "../declarations/interface-aliases.js";
-import { rustTypeOnlyDeclarationFactKey } from "../facts/type-only.js";
+import { rustTypeOnlyDeclarationFactKey } from "../../target-model/facts/type-only.js";
 
 export function analyzeRustProgram(context: RustAnalysisContext): void {
   const { ast } = context;
@@ -79,7 +80,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   const moduleBindings = createRustModuleBindingPolicy(context);
   let finalizedProjectTypes: RustProjectTypePolicy | undefined;
   const operationOptions: RustOperationsProviderOptions = {
-    arrayDensity: createJsArrayDensityQuery(context.source, {
+    arrayDensity: createSourceArrayDensityQuery(context.source, {
       closedSourceFiles,
       intrinsicallyDense(expression) {
         const semantics = context.semanticsFor(expression);
@@ -90,7 +91,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
           sourceProfiles.profileForNode(declaration, context.ast) === "js" && context.ast.is.IsInterfaceDeclaration(declaration) &&
           Object.prototype.hasOwnProperty.call(rustJsTypedArrayTargetIds, context.ast.text(context.ast.name(declaration))));
       },
-      memberIdentity: declaration => resolveSelectedJsSourceMember(context, declaration, sourceProfiles),
+      memberEffect: declaration => jsArrayMemberEffect(resolveSelectedJsSourceMember(context, declaration, sourceProfiles)),
     }),
     providerExports: providerSemantics.exports,
     providerRows,

@@ -5,6 +5,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustNativeMemoryLayout } from "../../target-model/operations/native-memory.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "../types/resolution.js";
 import { resolveRustTargetTypeRef } from "../types/resolution.js";
+import { resolveRustFixedArrayTargetType } from "../types/resolution/target.js";
 import { resolveProviderTypeIdentity, providerCarrierFromRelations } from "../types/resolution/providers.js";
 import { selectRustProviderOperation, rustProviderOperationOwnerMatches } from "./provider-selection.js";
 import { isRustCopyCarrier, rustFixedArrayCarrierValue, rustNamedTypeCarrierValue, rustStructuralObjectCarrierValue, rustTargetGenericBindingsForArguments, substituteRustTargetGenerics } from "../../target-model/types/index.js";
@@ -19,6 +20,16 @@ export function readRustRawLocation(ast: AstReader, facts: ReadonlySourceFactRes
   return selectTsonicRawLocationOperation(ast, facts, subject);
 }
 
+export function resolveRustMemoryLayoutPointee(
+  layout: TsonicMemoryLayoutFact, context: RustTargetTypeResolutionContext, options: RustTargetTypeResolutionOptions,
+): TargetTypeRef | undefined {
+  const layoutContext = { ...context, currentSemantics: context.semanticsFor(layout.call),
+    currentSourceFile: context.ast.getSourceFile(layout.call)! };
+  return layout.kind === "array"
+    ? resolveRustFixedArrayTargetType(layout.fixedArray, layoutContext, options, new Set<object>())
+    : resolveRustTargetTypeRef(layout.explicitTypeNode ?? layout.sourceType, layoutContext, options);
+}
+
 export function selectRustNativeMemoryLayout(
   layout: TsonicMemoryLayoutFact, context: RustTargetTypeResolutionContext, options: RustTargetTypeResolutionOptions,
   selected = new Map<TsonicMemoryLayoutFact, RustNativeMemorySelection | undefined>(),
@@ -26,7 +37,7 @@ export function selectRustNativeMemoryLayout(
   if (selected.size === 0 && countTsonicMemoryLayoutValues(layout, 131_072) === undefined) return undefined;
   if (selected.has(layout)) return selected.get(layout);
   selected.set(layout, undefined);
-  const pointeeCarrier = resolveRustTargetTypeRef(layout.explicitTypeNode ?? layout.sourceType, context, options);
+  const pointeeCarrier = resolveRustMemoryLayoutPointee(layout, context, options);
   if (pointeeCarrier === undefined) return undefined;
   if (layout.kind === "array") {
     const array = rustFixedArrayCarrierValue(pointeeCarrier);

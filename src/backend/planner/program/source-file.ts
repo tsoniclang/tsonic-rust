@@ -1,7 +1,7 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { rustCompileTimeSourceKey } from "../../../target-model/facts/source-declarations.js";
-import { rustTypeOnlyDeclarationFactKey } from "../../../analysis/facts/type-only.js";
+import { rustTypeOnlyDeclarationFactKey } from "../../../target-model/facts/type-only.js";
 import {
   KindFunctionDeclaration,
   KindImportDeclaration,

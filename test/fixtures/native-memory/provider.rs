@@ -71,7 +71,7 @@ pub fn live_leases() -> u32 {
 
 pub fn collect() {}
 
-pub fn relay<Value>(pointer: Location<Value>) -> Location<Value> {
+pub fn relay<Value, Error>(pointer: Location<Value, Error>) -> Location<Value, Error> {
     pointer
 }
 
@@ -79,7 +79,7 @@ pub fn identity<Value>(value: Value) -> Value {
     value
 }
 
-pub fn location(value: u32) -> Location<u32> {
+pub fn location<Error: 'static>(value: u32) -> Location<u32, Error> {
     let raw = acquire(value);
     unsafe {
         raw_memory::reinterpret_raw_location(

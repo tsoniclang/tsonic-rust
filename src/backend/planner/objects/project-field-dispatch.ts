@@ -30,15 +30,20 @@ export function planRustProjectFieldDispatchRoles(
   plan: RustProjectFieldDispatchPlan,
   context: RustPlanContext,
 ): RustPlannedProjectFieldDispatchRoles | undefined {
-  const fallible = plan.read.fallible || plan.write?.fallible === true;
-  if (!fallible) {
-    return {
-      read: { selfMode: plan.read.selfMode, fallible: false },
-      ...(plan.write === undefined
-        ? {}
-        : { write: { selfMode: plan.write.selfMode, fallible: false } }),
-    };
-  }
+  const read = planRustProjectFieldDispatchRole(plan, "read", context);
+  const write = plan.write === undefined ? undefined : planRustProjectFieldDispatchRole(plan, "write", context);
+  return read === undefined || plan.write !== undefined && write === undefined
+    ? undefined : { read, ...(write === undefined ? {} : { write }) };
+}
+
+export function planRustProjectFieldDispatchRole(
+  plan: RustProjectFieldDispatchPlan,
+  access: "read" | "write",
+  context: RustPlanContext,
+): RustPlannedProjectFieldDispatchRole | undefined {
+  const selected = plan[access];
+  if (selected === undefined) return undefined;
+  if (!selected.fallible) return { selfMode: selected.selfMode, fallible: false };
   const resultErrorType = rustActiveErrorType(context);
   if (resultErrorType === undefined) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -58,18 +63,10 @@ export function planRustProjectFieldDispatchRoles(
     return undefined;
   }
   const operandErrorType = rustErrorType(operandBoundary);
-  const role = (
-    value: RustProjectFieldDispatchPlan["read"],
-  ): RustPlannedProjectFieldDispatchRole => value.fallible
-    ? {
-        selfMode: value.selfMode,
-        fallible: true,
-        resultErrorType,
-        operandErrorType,
-      }
-    : { selfMode: value.selfMode, fallible: false };
   return {
-    read: role(plan.read),
-    ...(plan.write === undefined ? {} : { write: role(plan.write) }),
+    selfMode: selected.selfMode,
+    fallible: true,
+    resultErrorType,
+    operandErrorType,
   };
 }

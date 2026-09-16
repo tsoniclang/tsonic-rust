@@ -82,6 +82,7 @@ import {
   rustUnitTargetType,
 } from "../../../target-model/types/index.js";
 import { selectJsArrayConstruction } from "./array-construction.js";
+import { jsArgumentCarrierMatchScore } from "./argument-matching.js";
 import { jsOperationRows, rustInferCarrier } from "./rows.js";
 import { selectRustJsonValueConversion } from "../../conversions/selection.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -861,40 +862,3 @@ function carrierRequirementsMatch(
     }
   }) ?? true;
 }
-
-
-function jsArgumentCarrierMatchScore(
-  expected: TargetTypeRef | undefined,
-  actual: TargetTypeRef | undefined,
-  index: number,
-  relationScore: JsOperationRequest["argumentMatchScore"],
-): number | undefined {
-  if (actual === undefined) {
-    return expected === undefined
-      ? undefined
-      : relationScore?.(expected, actual, index);
-  }
-  if (expected === undefined || (expected.kind === "opaque" && expected.id === "tsonic.rust.infer")) {
-    return 0;
-  }
-  if (expected.kind === "closure" && actual.kind === "closure") {
-    if (expected.args.length !== actual.args.length) {
-      return relationScore?.(expected, actual, index);
-    }
-    const scores = [
-      ...expected.args.map((argument, argumentIndex) =>
-        jsArgumentCarrierMatchScore(argument, actual.args[argumentIndex], index, relationScore)),
-      jsArgumentCarrierMatchScore(expected.result, actual.result, index, relationScore),
-    ];
-    return scores.some((score) => score === undefined)
-      ? relationScore?.(expected, actual, index)
-      : (scores as number[]).reduce((total, score) => total + score, 0);
-  }
-  if (rustTargetTypeRefEquals(expected, actual)) {
-    return 0;
-  }
-  return relationScore?.(expected, actual, index);
-}
-
-// Constructor rows: matched by lib class declaration identity plus argument
-// and type-argument shape guards.

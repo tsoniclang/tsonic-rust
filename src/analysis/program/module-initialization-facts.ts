@@ -1,5 +1,5 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
-import { rustTypeOnlyDeclarationFactKey } from "../facts/type-only.js";
+import { rustTypeOnlyDeclarationFactKey } from "../../target-model/facts/type-only.js";
 import {
   KindExportAssignment,
   KindExportDeclaration,

@@ -1,5 +1,5 @@
 import { createRustProviderPackage } from "../../dist/public/provider.js";
-import { rustLocationTargetType, rustOptionTargetType, rustRawPointerTargetType } from "../../dist/target-model/types/index.js";
+import { rustSourceLocationTargetType, rustOptionTargetType, rustRawPointerTargetType, rustProgramErrorTargetType } from "../../dist/target-model/types/index.js";
 
 export const nativeProviderInferredProofSource = `
 import * as native from "test:memory";
@@ -31,7 +31,7 @@ export function nativeMemoryProvider(cratePath, { missingRelation = false, wrong
   const word = { kind: "source-primitive", name: "uint32" };
   const genericSource = { kind: "provider-ref", moduleSpecifier: "@tsonic/core/types.js", exportName: "Pointer",
     typeArguments: [{ kind: "type-parameter", name: "Value" }] };
-  const genericCarrier = rustLocationTargetType({ kind: "type-parameter", name: "Value" });
+  const genericCarrier = rustSourceLocationTargetType({ kind: "type-parameter", name: "Value" });
   const definitions = [
     ["acquire", "acquire", [{ name: "value", type: word }],
       { kind: "provider-ref", moduleSpecifier: "@tsonic/core/types.js", exportName: "RawPointer" }, rustRawPointerTargetType()],
@@ -41,7 +41,7 @@ export function nativeMemoryProvider(cratePath, { missingRelation = false, wrong
     ["collect", "collect", [], { kind: "void" }, { kind: "tuple", elements: [] }],
     ["location", "location", [{ name: "value", type: word }],
       { kind: "provider-ref", moduleSpecifier: "@tsonic/core/types.js", exportName: "Pointer", typeArguments: [word] },
-      rustLocationTargetType(word)],
+      rustSourceLocationTargetType(word)],
     ["relay", "relay", [{ name: "pointer", type: genericSource }], genericSource, genericCarrier,
       [{ name: "Value" }], [genericCarrier]],
     ["identity", "identity", [{ name: "value", type: { kind: "type-parameter", name: "Value" } }],
@@ -66,13 +66,16 @@ export function nativeMemoryProvider(cratePath, { missingRelation = false, wrong
         resultCarrier: wrongCarrier && name === "acquire" ? word
           : wrongOptional && name === "acquire" ? rustOptionTargetType(resultCarrier)
           : (wrongPointee && name === "location" || wrongGenericPointee && name === "relay")
-            ? rustLocationTargetType({ kind: "source-primitive", name: "int32" })
+            ? rustSourceLocationTargetType({ kind: "source-primitive", name: "int32" })
           : resultCarrier,
         parameterCarriers: parameterCarriers ?? parameters.map(() => word),
         ...(typeParameters === undefined ? {} : {
           genericParameters: typeParameters.map(parameter => ({ kind: "type", sourceName: parameter.name })),
-          targetGenericArguments: typeParameters.map(parameter => ({ kind: "type", type: { kind: "type-parameter", name: parameter.name } })),
         }),
+        targetGenericArguments: [
+          ...(typeParameters ?? []).map(parameter => ({ kind: "type", type: { kind: "type-parameter", name: parameter.name } })),
+          ...(name === "location" || name === "relay" ? [{ kind: "type", type: rustProgramErrorTargetType() }] : []),
+        ],
       })),
     crates: [{ crateName: "native_memory_proof", cargoPath: cratePath }],
   });

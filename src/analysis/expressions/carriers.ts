@@ -622,7 +622,7 @@ function resolveExpressionOperationDependencies(
   if (kind === "KindAsExpression" || kind === "KindTypeAssertionExpression") {
     const operand = Node_Expression(ast, expression);
     if (operand !== undefined) {
-      resolveExpressionCarrier(walk, operand, sourceFile, undefined);
+      resolveExpressionCarrier(walk, operand, sourceFile, ast.isConstAssertion(expression) ? expected : undefined);
     }
     return;
   }
@@ -655,7 +655,12 @@ function resolveCallArgumentOperationPrerequisite(
     return;
   }
   if (kind === "KindAsExpression" || kind === "KindTypeAssertionExpression") {
-    resolveExpressionCarrier(walk, argument, sourceFile, undefined);
+    if (!walk.context.ast.isConstAssertion(argument)) {
+      resolveExpressionCarrier(walk, argument, sourceFile, undefined);
+    } else {
+      const inner = Node_Expression(walk.context.ast, argument);
+      if (inner !== undefined) resolveCallArgumentOperationPrerequisite(walk, inner, sourceFile);
+    }
     return;
   }
   if (kind === KindParenthesizedExpression || kind === KindSatisfiesExpression) {
