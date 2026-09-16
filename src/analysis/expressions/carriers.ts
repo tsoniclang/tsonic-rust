@@ -93,7 +93,12 @@ export function resolveExpressionCarrier(
     expected,
   );
   const finalize = (carrier: TargetTypeRef | undefined): TargetTypeRef | undefined => {
-    if (purpose === "operation") return carrier;
+    if (purpose === "operation") {
+      const refinement = walk.context.source.semantics.selectValueTypeRefinement(expression);
+      return refinement.kind === "resolved" && refinement.refinement.kind === "members"
+        ? applyFlowReadLane(walk, expression, carrier)
+        : carrier;
+    }
     const selectedOperation = facts.get(expression, rustSelectedOperationKey) ??
       facts.resolve(expression, rustSelectedOperationKey);
     const targetOperation = facts.get(expression, rustTargetOperationFactKey) ??

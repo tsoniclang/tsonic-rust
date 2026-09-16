@@ -55,6 +55,35 @@ export function main(): void {
   assert.equal(run.status, 0);
 });
 
+test("native path calls borrow class String snapshots without redundant references", { timeout: 300_000 }, async () => {
+  const { result } = compileRust({
+    surfaces: ["js"], capabilities: [await nodejsCapability()], packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "field_string_borrow" } },
+    files: { "index.ts": `
+import { existsSync, mkdirSync, rmSync, statSync } from "node:fs";
+import { check } from "@acme/testing";
+class PathHolder {
+  path: string;
+  calls = 0;
+  constructor(path: string) { this.path = path; }
+  observed(): PathHolder { this.calls++; return this; }
+}
+export function main(): void {
+  const manifest = new PathHolder("Cargo.toml");
+  check(statSync(manifest.observed().path).isFile());
+  check(manifest.calls === 1 && manifest.path === "Cargo.toml");
+  const directory = new PathHolder("field-string-borrow-proof");
+  mkdirSync(directory.path, { recursive: true });
+  check(statSync(directory.path).isDirectory());
+  rmSync(directory.path, { recursive: true, force: true });
+  check(!existsSync(directory.path));
+}
+` },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  assert.equal(validateGeneratedProject("field-string-borrow", result.artifacts, { run: true }).status, 0);
+});
+
 test("dynamic fixed-array locations support checked read-modify-write", { timeout: 300_000 }, async () => {
   const { result } = compileRust({
     packages: [acmeTestingPackage()],
