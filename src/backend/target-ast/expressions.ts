@@ -200,6 +200,7 @@ export function rustExpressionContainsStatementBlock(expression: RustExpr): bool
     case "closure":
       return rustExpressionContainsStatementBlock(expression.body);
     case "await":
+    case "option-try":
     case "try":
       return rustExpressionContainsStatementBlock(expression.expr);
     case "return-expression":

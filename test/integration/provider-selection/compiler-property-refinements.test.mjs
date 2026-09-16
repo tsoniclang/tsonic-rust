@@ -16,6 +16,11 @@ test("optional indexed arguments retain absence and single evaluation", { timeou
   assert.deepEqual(result.diagnostics, []);
   const native = validateGeneratedProject("optional-indexed-arguments", result.artifacts, { run: true });
   assert.equal(native.status, 0, native.stdout + native.stderr);
+  const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
+  assert.match(output, /position\.as_ref\(\)\?/);
+  assert.match(output, /value\.as_ref\(\)\?/);
+  assert.match(output, /observed\(value\)\.as_ref\(\)\?/);
+  assert.doesNotMatch(output, /allow\(clippy::question_mark/);
 });
 
 for (const surfaces of [[], ["js"]]) {

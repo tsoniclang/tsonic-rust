@@ -273,6 +273,7 @@ function rustConditionPrintsAsBlock(expression: RustExpr): boolean {
     case "unsafe":
     case "owned-string-from-borrowed-str":
       return rustConditionPrintsAsBlock(expression.expression);
+    case "option-try":
     case "try":
     case "await":
       return rustConditionPrintsAsBlock(expression.expr);
@@ -477,6 +478,7 @@ function finalizeRustExpressionStyle(expression: RustExpr): RustExpr {
       result = { ...expression, body: finalizeRustFunctionBodyStyle(expression.body) };
       break;
     case "await":
+    case "option-try":
     case "try":
       result = { ...expression, expr: finalizeRustExpressionStyle(expression.expr) };
       break;

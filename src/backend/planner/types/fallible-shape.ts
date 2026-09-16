@@ -26,6 +26,8 @@ export function rustExpressionUsesTryInCurrentRegion(expression: RustExpr): bool
   switch (expression.kind) {
     case "try":
       return true;
+    case "option-try":
+      return rustExpressionUsesTryInCurrentRegion(expression.expr);
     case "bottom":
       return rustExpressionUsesTryInCurrentRegion(expression.expression);
     case "owned-string-from-borrowed-str":

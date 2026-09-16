@@ -43,6 +43,7 @@ import { planVariableStatement } from "./variable-declarations.js";
 import { planForInStatement, planForOfStatement } from "./iteration.js";
 import {
   rustMutatedBindingFactKey,
+  rustOptionProjectionFactKey,
   rustSourceBindingFactKey,
   rustTargetOperationFactKey,
 } from "../../../analysis/facts/keys.js";
@@ -103,6 +104,21 @@ export function planIfStatement(node: Node, context: RustPlanContext): readonly 
   const elseBlock = elseStatement === undefined ? undefined : planEmbeddedBlock(elseStatement, context);
   if (thenBlock === undefined || (elseStatement !== undefined && elseBlock === undefined)) {
     return undefined;
+  }
+  const terminal = thenBlock.statements.length === 1 ? thenBlock.statements[0] : undefined;
+  const ast = context.input.program.source.ast;
+  const sourceStatements = thenStatement !== undefined && ast.is.IsBlock(thenStatement)
+    ? ast.statements(thenStatement) : [thenStatement];
+  const sourceReturn = sourceStatements.length === 1 ? sourceStatements[0] : undefined;
+  const returnedExpression = sourceReturn !== undefined && ast.is.IsReturnStatement(sourceReturn)
+    ? Node_Expression(ast, sourceReturn) : undefined;
+  const returnedOption = context.input.program.facts.getFact(returnedExpression, rustOptionProjectionFactKey);
+  if (elseBlock === undefined && planned.kind === "option-presence" && !planned.present &&
+    terminal?.kind === "return" && terminal.expr?.kind === "associated-value" &&
+    returnedOption?.kind === "none") {
+    return [{ kind: "expr", expr: { kind: "option-try", expr: {
+      kind: "method-call", receiver: planned.receiver, method: "as_ref", args: [],
+    } } }];
   }
   return [{
     kind: "if",

@@ -128,6 +128,7 @@ export function printRustExpr(expression: RustExpr): string {
     }
     case "await":
       return `${printOperand(expression.expr, RustPrecedence.Postfix, false)}.await`;
+    case "option-try":
     case "try":
       return `${printOperand(expression.expr, RustPrecedence.Postfix, false)}?`;
     case "return-expression":

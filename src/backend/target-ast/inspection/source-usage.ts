@@ -180,6 +180,7 @@ export function rustExpressionChildren(expression: RustExpr): readonly RustExpr[
     case "closure":
       return [expression.body];
     case "await":
+    case "option-try":
     case "try":
       return [expression.expr];
     case "return-expression":

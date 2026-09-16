@@ -394,6 +394,7 @@ function rustExpressionReferencesModuleAlias(expression: RustExpr, alias: string
       return rustBlockReferencesModuleAlias(expression.body, alias);
     case "await":
       return rustExpressionReferencesModuleAlias(expression.expr, alias);
+    case "option-try":
     case "try":
       return rustExpressionReferencesModuleAlias(expression.expr, alias);
     case "return-expression":

@@ -258,6 +258,7 @@ export type RustExpr =
       readonly body: RustBlock;
     }
   | { readonly kind: "await"; readonly expr: RustExpr }
+  | { readonly kind: "option-try"; readonly expr: RustExpr }
   | {
       readonly kind: "try";
       readonly expr: RustExpr;

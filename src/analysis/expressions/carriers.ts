@@ -649,7 +649,7 @@ function resolveCallArgumentOperationPrerequisite(
   const kind = walk.context.ast.kindName(argument);
   const refinement = walk.context.source.semantics.selectValueTypeRefinement(argument);
   if (refinement.kind === "resolved") {
-    resolveExpressionCarrier(walk, argument, sourceFile, undefined, "operation");
+    resolveExpressionCarrier(walk, argument, sourceFile, undefined);
     return;
   }
   if (kind === KindIdentifier || kind === KindCallExpression || kind === KindNewExpression ||
@@ -657,16 +657,16 @@ function resolveCallArgumentOperationPrerequisite(
     kind === KindPropertyAccessExpression || kind === KindElementAccessExpression ||
     kind === KindBinaryExpression || kind === KindPrefixUnaryExpression ||
     kind === KindPostfixUnaryExpression) {
-    resolveExpressionCarrier(walk, argument, sourceFile, undefined, "operation");
+    resolveExpressionCarrier(walk, argument, sourceFile, undefined);
     return;
   }
   if (kind === KindNonNullExpression) {
-    resolveExpressionCarrier(walk, argument, sourceFile, undefined, "operation");
+    resolveExpressionCarrier(walk, argument, sourceFile, undefined);
     return;
   }
   if (kind === "KindAsExpression" || kind === "KindTypeAssertionExpression") {
     if (!walk.context.ast.isConstAssertion(argument)) {
-      resolveExpressionCarrier(walk, argument, sourceFile, undefined, "operation");
+      resolveExpressionCarrier(walk, argument, sourceFile, undefined);
     } else {
       const inner = Node_Expression(walk.context.ast, argument);
       if (inner !== undefined) resolveCallArgumentOperationPrerequisite(walk, inner, sourceFile);

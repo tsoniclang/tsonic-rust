@@ -72,6 +72,7 @@ export function expressionPrecedence(expression: RustExpr): RustPrecedence {
     case "field":
     case "index":
     case "await":
+    case "option-try":
     case "try":
       return RustPrecedence.Postfix;
     default:
