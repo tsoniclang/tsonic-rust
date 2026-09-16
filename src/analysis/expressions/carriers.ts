@@ -2,9 +2,6 @@ import {
   ElementAccessExpression_ArgumentExpression,
   BinaryExpression_Left,
   BinaryExpression_OperatorToken,
-  ConditionalExpression_Condition,
-  ConditionalExpression_WhenFalse,
-  ConditionalExpression_WhenTrue,
   Node_Operand,
   KindBinaryExpression,
   KindCallExpression,
@@ -56,7 +53,7 @@ import {
   rustTargetOperationFactKey,
   rustTargetOperationResultCarrier,
 } from "../facts/keys.js";
-import { appendRustDiagnostic, boolCarrier, rustResolutionContext, selectExpressionOperation } from "../program/walk.js";
+import { appendRustDiagnostic, rustResolutionContext, selectExpressionOperation } from "../program/walk.js";
 import { isRustAssignmentOperator } from "../../policy/operations/operator-rules.js";
 import { recordAssignmentWrite, recordBindingWrite } from "../declarations/types-and-bindings.js";
 import { recordSelectedOperationInputs } from "../operations/inputs.js";
@@ -562,21 +559,6 @@ function resolveExpressionOperationDependencies(
   const kind = ast.kindName(expression);
   if (kind === KindBinaryExpression) {
     resolveBinaryOperandCarriers(walk, expression, sourceFile, expected, true);
-    return;
-  }
-  if (kind === KindConditionalExpression) {
-    const condition = ConditionalExpression_Condition(ast, expression);
-    const whenTrue = ConditionalExpression_WhenTrue(ast, expression);
-    const whenFalse = ConditionalExpression_WhenFalse(ast, expression);
-    if (condition !== undefined) {
-      resolveExpressionCarrier(walk, condition, sourceFile, boolCarrier);
-    }
-    if (whenTrue !== undefined) {
-      resolveExpressionCarrier(walk, whenTrue, sourceFile, expected);
-    }
-    if (whenFalse !== undefined) {
-      resolveExpressionCarrier(walk, whenFalse, sourceFile, expected);
-    }
     return;
   }
   if (kind === KindPrefixUnaryExpression || kind === KindPostfixUnaryExpression) {

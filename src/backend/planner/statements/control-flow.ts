@@ -113,7 +113,8 @@ export function planIfStatement(node: Node, context: RustPlanContext): readonly 
   const returnedExpression = sourceReturn !== undefined && ast.is.IsReturnStatement(sourceReturn)
     ? Node_Expression(ast, sourceReturn) : undefined;
   const returnedOption = context.input.program.facts.getFact(returnedExpression, rustOptionProjectionFactKey);
-  if (elseBlock === undefined && planned.kind === "option-presence" && !planned.present &&
+  if (context.fallibleBoundary === undefined && context.generator === undefined &&
+    elseBlock === undefined && planned.kind === "option-presence" && !planned.present &&
     terminal?.kind === "return" && terminal.expr?.kind === "associated-value" &&
     returnedOption?.kind === "none") {
     return [{ kind: "expr", expr: { kind: "option-try", expr: {
