@@ -138,7 +138,7 @@ export function resolveRecordLiteralCarrier(
     return undefined;
   }
   let contextualReconciliation: import("../../policy/types/value-carrier-reconciliation.js").RustAppliedValueCarrierReconciliation | undefined;
-  if (expected !== undefined && rustSourceTypeCarrierValue(selectedExpected)?.shape !== "object" &&
+  if ((expected !== undefined || contextualSelection.kind === "selected") && rustSourceTypeCarrierValue(selectedExpected)?.shape !== "object" &&
     rustSourceUnionCarrierValue(selectedExpected) === undefined &&
     rustStructuralObjectCarrierValue(selectedExpected) === undefined) {
     const sourceCarrier = properties.length === 0

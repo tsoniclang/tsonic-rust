@@ -24,6 +24,8 @@ import {
   rustNativeCallableProtocol,
   rustSourcePrimitiveTargetType,
   rustUnitTargetType,
+  rustTargetGenericBindingsForArguments,
+  substituteRustTargetGenerics,
 } from "../../target-model/types/index.js";
 import { appendRustDiagnostic, rustOperationContext, rustResolutionContext } from "../program/walk.js";
 import { applySelectedProjectSourceCall, applySelectedSourceCallArguments, recordTargetOperation, setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
@@ -549,7 +551,15 @@ function applySelectedRuntimeCallableCall(
   selectedSignature: RustSelectedTargetSignature,
 ): TargetTypeRef | undefined {
   const carrier = selectedSignature.sourceCallableCarrier;
-  const callable = rustNativeCallableProtocol(carrier) ?? rustCallableProtocol(carrier);
+  const protocol = rustNativeCallableProtocol(carrier) ?? rustCallableProtocol(carrier);
+  const genericBindings = rustTargetGenericBindingsForArguments(
+    selectedSignature.member.genericParameters ?? [], selectedSignature.targetGenericArguments ?? [],
+  );
+  const instantiate = (type: TargetTypeRef): TargetTypeRef => genericBindings === undefined ? type
+    : substituteRustTargetGenerics(type, genericBindings.types, genericBindings.lifetimes, genericBindings.consts);
+  const callable = protocol === undefined || genericBindings === undefined ? undefined : {
+    parameters: protocol.parameters.map(instantiate), result: instantiate(protocol.result),
+  };
   const bindings = selectedSignature.sourceArgumentBindings;
   const memberParameters = selectedSignature.member.parameters;
   const sourceParameterIndexes = selectedSignature.sourceCallableParameterIndexes;
@@ -562,8 +572,9 @@ function applySelectedRuntimeCallableCall(
     selectedParameters === undefined ||
     !isDenseDataArray(callArguments) ||
     callArguments.some((argument) => argument === undefined) ||
-    (selectedSignature.sourceSelectedMethodTypeArguments?.length ?? 0) !== 0 ||
-    (selectedSignature.targetGenericArguments?.length ?? 0) !== 0 ||
+    (selectedSignature.sourceSelectedMethodTypeArguments?.length ?? 0) !==
+      (selectedSignature.targetGenericArguments?.length ?? 0) ||
+    selectedSignature.targetGenericArguments?.some(argument => argument.kind !== "lifetime") ||
     callable.parameters.length !== memberParameters.length ||
     sourceParameterIndexes.length !== memberParameters.length ||
     sourceParameterIndexes.some((index) => !Number.isSafeInteger(index) || index < 0 ||
@@ -718,6 +729,9 @@ function applySelectedRuntimeCallableCall(
     target,
     parameters: finalizedParameters,
     resultCarrier: callable.result,
+    ...(selectedSignature.targetGenericArguments === undefined ? {} : {
+      targetGenericArguments: selectedSignature.targetGenericArguments,
+    }),
   });
   if (target.form === "callable") {
     resolveExpressionCarrier(walk, callee, sourceFile, carrier);

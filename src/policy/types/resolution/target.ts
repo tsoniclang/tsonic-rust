@@ -1,6 +1,7 @@
 import {
   rustBigIntTargetType,
   rustEmptyObjectTargetType,
+  rustObjectIdentityTargetType,
   rustFixedArrayTargetType,
   rustJsArrayTargetType,
   rustJsSymbolTargetType,
@@ -294,10 +295,10 @@ export function resolveStructuralObjectType(
     return undefined;
   }
   if (properties.length === 0 && representation === "reference") {
-    return semantics.declarations.typeSymbol(type) !== undefined &&
-      !semantics.types.couldContainTypeVariables(type)
-      ? rustEmptyObjectTargetType()
-      : undefined;
+    if (semantics.types.couldContainTypeVariables(type)) return undefined;
+    return semantics.declarations.typeSymbol(type) === undefined
+      ? rustObjectIdentityTargetType()
+      : rustEmptyObjectTargetType();
   }
   const selected = properties.map((property) => {
     const declaredField = declaredFields?.get(property.name);

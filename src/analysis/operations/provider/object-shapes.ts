@@ -492,9 +492,20 @@ export function acceptProjectSourceCall(
   const callableDeclaration = callableImplementation?.kind === "resolved"
     ? callableImplementation.implementation.declaration
     : selectedCallableDeclaration;
-  const genericOwner = construction
-    ? selectedOwnerDefinition?.declaration
-    : selectedCallableDeclaration;
+  const selectedTypeArguments = request.source.sourceSelectedMethodTypeArguments ?? [];
+  const genericOwners = construction
+    ? [...new Set([selectedOwnerDefinition?.declaration, callableOwner?.declaration])]
+        .filter((owner): owner is Node => owner !== undefined)
+    : [selectedCallableDeclaration];
+  const matchingOwners = genericOwners.filter(owner => {
+    const parameters = ast.typeParameters(owner);
+    return parameters.length === selectedTypeArguments.length && parameters.every((parameter, index) =>
+      parameter !== undefined && context.currentSemantics.facts.typeSubjects(selectedTypeArguments[index]!.typeParameter)
+        .some(subject => asNode(subject, context) === parameter));
+  });
+  const genericOwner = selectedTypeArguments.length === 0
+    ? matchingOwners[0]
+    : matchingOwners.length === 1 ? matchingOwners[0] : undefined;
   const targetGenericArguments = genericOwner === undefined
     ? undefined
     : mapSelectedProjectGenericArguments(request, genericOwner, context, options);

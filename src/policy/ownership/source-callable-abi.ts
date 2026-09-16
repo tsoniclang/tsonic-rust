@@ -13,6 +13,7 @@ import {
   rustProgramErrorTargetType,
   rustTsValueTargetType,
   rustEmptyObjectTargetType,
+  rustObjectIdentityTargetType,
 } from "../../target-model/types/index.js";
 import {
   rustTargetTypeRefEquals,
@@ -125,7 +126,8 @@ export function createRustSourceCallableAbiResolver(): RustSourceCallableAbiReso
             : "required" as const;
       if (form === "required" &&
         (isRustJsValueCarrier(base) || rustTargetTypeRefEquals(base, rustTsValueTargetType()) ||
-          rustTargetTypeRefEquals(base, rustEmptyObjectTargetType())) &&
+          rustTargetTypeRefEquals(base, rustEmptyObjectTargetType()) ||
+          rustTargetTypeRefEquals(base, rustObjectIdentityTargetType())) &&
         parameterOnlyForwardsThrownValue(parameter, context)) {
         base = rustProgramErrorTargetType();
       }

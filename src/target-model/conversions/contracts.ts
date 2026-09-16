@@ -43,6 +43,8 @@ import {
   rustJsClosedValueCarrierTraitPath,
   substituteRustTargetGenerics,
   rustTsValueTargetType,
+  rustEmptyObjectTargetType,
+  rustObjectIdentityTargetType,
 } from "../types/index.js";
 import type { RustPrimitiveTypeName } from "../syntax/tokens.js";
 import { rustNumericPromotionKind } from "./numeric-promotion.js";
@@ -535,6 +537,8 @@ export function rustValueConversionContract(
       rustSourcePrimitiveTargetType(numberBoxingSource), jsValueCarrier, false);
   }
   switch (value.id) {
+    case "object-identity-from-empty":
+      return contract(value.id, "projection", "rt::source_object_identity", "ref", rustEmptyObjectTargetType(), rustObjectIdentityTargetType(), false);
     case "js-numeric-from-number":
       return contract(value.id, "exact", "js_abi::JsNumeric::from_number", "value", float64Carrier, rustJsNumericTargetType(), false);
     case "js-string-number-from-string":

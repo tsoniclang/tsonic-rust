@@ -88,6 +88,7 @@ export type RustValueConversionId =
   | "js-numeric-from-number"
   | "js-numeric-from-int32"
   | "js-numeric-from-bigint"
+  | "object-identity-from-empty"
   | "checked-i32-to-usize"
   | "checked-i32-to-u8"
   | "checked-f64-to-u8-trunc"

@@ -3,6 +3,7 @@ import {
   rustAsyncGeneratorTargetId,
   rustBigIntTargetId,
   rustEmptyObjectTargetId,
+  rustObjectIdentityTargetId,
   rustJsNumericTargetId,
   rustJsStringNumberTargetId,
   rustBorrowedAsyncGeneratorTargetId,
@@ -73,6 +74,7 @@ import {
 export const rustBuiltInCarrierRenderPaths: Readonly<Record<string, string>> = Object.freeze({
   [rustBigIntTargetId]: "rt::BigInt",
   [rustEmptyObjectTargetId]: "tsonic_rust_runtime::EmptyObject",
+  [rustObjectIdentityTargetId]: "tsonic_rust_runtime::ObjectIdentity",
   [rustJsNumericTargetId]: "js_abi::JsNumeric",
   [rustJsStringNumberTargetId]: "js_abi::JsStringNumber",
   [rustOptionTargetId]: "Option",

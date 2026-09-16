@@ -198,7 +198,9 @@ export function rustTargetOperationIsFallible(
   if (fact.kind === "source-call" &&
     (fact.target.form === "callable" || fact.target.form === "structural-method")) {
     return fact.target.form === "structural-method" ||
-      fact.target.carrier.kind !== "function-pointer";
+      (fact.target.carrier.kind === "closure"
+        ? fact.target.carrier.fallible === true
+        : fact.target.carrier.kind !== "function-pointer");
   }
   if (fact.kind === "provider-operation" || fact.kind === "runtime-set") {
     return rustOperationAbiInvocationIsFallible(fact.abi);

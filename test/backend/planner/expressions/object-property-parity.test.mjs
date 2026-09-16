@@ -389,5 +389,6 @@ export function read(counter: CounterPatch): int32 {
   });
 
   assert.ok(result.diagnostics.some(({ code }) =>
-    code === "RUST_STRUCTURAL_METHOD_VALUE_UNSUPPORTED"));
+    code === "RUST_COPIED_METHOD_RECEIVER_NOT_PROVEN"));
+  assert.equal(result.artifacts.length, 0);
 });

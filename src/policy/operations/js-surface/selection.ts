@@ -6,6 +6,7 @@ import {
   isRustBigIntCarrier,
   rustBigIntTargetType,
   rustEmptyObjectTargetType,
+  rustObjectIdentityTargetType,
   rustStructuralObjectCarrierValue,
   rustJsNumericTargetType,
   getRustJsMapTargetTypes,
@@ -857,6 +858,7 @@ function carrierRequirementsMatch(
       case "freezable-object": {
         const shape = rustStructuralObjectCarrierValue(carrier);
         return rustTargetTypeRefEquals(carrier, rustEmptyObjectTargetType()) ||
+          rustTargetTypeRefEquals(carrier, rustObjectIdentityTargetType()) ||
           shape?.representation === "reference" && shape.fields.every(field => field.bound !== true);
       }
     }

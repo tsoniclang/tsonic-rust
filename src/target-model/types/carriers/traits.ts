@@ -31,7 +31,7 @@ import {
   rustJsWeakSetTargetId,
 } from "./source-types.js";
 import { rustFixedArrayCarrierValue, rustNamedTypeCarrierValue } from "./native.js";
-import { rustEmptyObjectTargetId, rustJsNumericTargetId, rustJsStringNumberTargetId } from "./source-types.js";
+import { rustEmptyObjectTargetId, rustObjectIdentityTargetId, rustJsNumericTargetId, rustJsStringNumberTargetId } from "./source-types.js";
 import { rustTargetGenericReferences } from "./generic-references.js";
 import type { RustNamedTypeCarrierValue } from "./native.js";
 import type { TargetTypeRef } from "../model.js";
@@ -390,6 +390,7 @@ export function rustCarrierSupportsObjectIdentity(carrier: TargetTypeRef | undef
 
 const rustObjectIdentityTargetIds: ReadonlySet<string> = new Set([
   rustEmptyObjectTargetId,
+  rustObjectIdentityTargetId,
   rustJsArrayTargetId,
   rustJsMapTargetId,
   rustJsSetTargetId,
@@ -417,6 +418,7 @@ const rustObjectIdentityTargetIds: ReadonlySet<string> = new Set([
 
 const rustJsStrictEqualityTargetIds: ReadonlySet<string> = new Set([
   rustEmptyObjectTargetId,
+  rustObjectIdentityTargetId,
   rustNullTargetId,
   rustUndefinedTargetId,
   rustJsValueTargetId,
@@ -451,6 +453,7 @@ const rustUnconditionallyCloneTargetIds: ReadonlySet<string> = new Set([
   rustJsStringNumberTargetId,
   rustJsNumericTargetId,
   rustEmptyObjectTargetId,
+  rustObjectIdentityTargetId,
   rustJsIntlGroupingTargetId,
   rustJsIntlNumberFormatPartTargetId,
   rustRawPointerTargetId,

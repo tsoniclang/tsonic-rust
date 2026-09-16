@@ -317,6 +317,7 @@ export async function* borrowedAsyncValues<L extends Life>(
   );
   assert.match(source, /pub async fn retain<'l>\(value: &'l i32\) -> &'l i32/u);
   assert.match(source, /reader: impl for<'l> Fn\(&'l i32\) -> i32/u);
+  assert.match(source, /pub fn accept_reader\(reader: impl for<'l> Fn\(&'l i32\) -> i32\) -> i32/u);
   assert.match(source, /reader\(&value\)/u);
   assert.match(source, /pub fn static_reader\(value: &'static i32\)/u);
   assert.match(source, /pub fn invoke_captured\(value: &'static i32\)/u);

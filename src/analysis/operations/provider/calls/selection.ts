@@ -12,6 +12,8 @@ import {
   rustStructuralObjectCarrierValue,
   rustStringTargetType,
   rustUnitTargetType,
+  rustTargetGenericBindingsForArguments,
+  substituteRustTargetGenerics,
 } from "../../../../target-model/types/index.js";
 import { readRustSourceKeepAlive } from "../../../../policy/operations/reachability-source.js";
 import { acceptProjectSourceCall, mapSelectedJsSpecialCall } from "../object-shapes.js";
@@ -38,6 +40,8 @@ import { sourceCallMarkerByIdentity } from "../model.js";
 import { mapSelectedStringRegExpProtocolCall } from "../regexp-protocols.js";
 import { selectedRustRegExpReplacementCallbackEvidence } from "../regexp-replacement-callback.js";
 import { canRequireSourceClone } from "./clone-requirements.js";
+import { selectRustRuntimeCallableGenerics } from "./runtime-callable-generics.js";
+import { rustLifetimeKey } from "../../../../target-model/lifetimes/index.js";
 import { rustOperandSupportsSourceNumeric } from "../../generic-numeric.js";
 import { selectRustPointerViewCall } from "../../pointer-views.js";
 import { selectRustArrayCopyMode } from "../../array-copy.js";
@@ -598,9 +602,27 @@ function acceptRuntimeCallableCarrierCall(
   if (calleeCarrier === undefined || protocol === undefined) {
     return undefined;
   }
+  const targetGenericArguments = selectRustRuntimeCallableGenerics(request, calleeCarrier, context);
+  if (targetGenericArguments === undefined) {
+    return rejectSelectedOperation(request.source.call, context,
+      "RUST_RUNTIME_CALLABLE_GENERIC_CONTRACT_CONFLICT",
+      "Runtime callable generic arguments require the exact selected lifetime binder; runtime type generics are not erased.");
+  }
+  const genericParameters = calleeCarrier.kind !== "closure" || calleeCarrier.lifetimeBinder === undefined ? []
+    : calleeCarrier.lifetimeBinder.parameters.map((parameter, index) => ({
+        kind: "lifetime" as const,
+        sourceName: request.source.sourceSelectedMethodTypeArguments![index]!.typeParameterName,
+        targetIdentity: rustLifetimeKey(parameter.lifetime),
+      }));
+  const substitutions = rustTargetGenericBindingsForArguments(genericParameters, targetGenericArguments);
+  if (substitutions === undefined) return undefined;
+  const instantiate = (carrier: TargetTypeRef): TargetTypeRef => substituteRustTargetGenerics(
+    carrier, substitutions.types, substitutions.lifetimes, substitutions.consts,
+  );
+  const resultCarrier = instantiate(protocol.result);
   const parameterPlan = runtimeCallableTargetParameters(
     request,
-    protocol.parameters,
+    protocol.parameters.map(instantiate),
     context,
   );
   if (parameterPlan === undefined) {
@@ -608,7 +630,7 @@ function acceptRuntimeCallableCarrierCall(
   }
   const optionalResult = selectRustOptionalCallResult(
     request,
-    protocol.result,
+    resultCarrier,
     context,
     options,
     optionalGuard,
@@ -627,11 +649,13 @@ function acceptRuntimeCallableCarrierCall(
     targetName: "call",
     kind: "method",
     parameters: parameterPlan.parameters,
-    returnType: protocol.result,
+    returnType: resultCarrier,
+    ...(genericParameters.length === 0 ? {} : { genericParameters }),
   };
   const selectedSignature = {
     member,
     sourceCallableCarrier: calleeCarrier,
+    ...(targetGenericArguments.length === 0 ? {} : { targetGenericArguments }),
     sourceCallableParameterIndexes: parameterPlan.sourceParameterIndexes,
     ...(sourceSelectedReceiverCarrier === undefined
       ? {}

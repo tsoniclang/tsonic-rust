@@ -252,6 +252,10 @@ function compoundBinaryOperator(
       return "/";
     case "%=":
       return "%";
+    case "<<=":
+      return "<<";
+    case ">>=":
+      return ">>";
     default:
       return undefined;
   }
@@ -286,6 +290,8 @@ const operatorKindByText: Readonly<Record<string, string>> = {
   "*=": KindAsteriskEqualsToken,
   "/=": KindSlashEqualsToken,
   "%=": KindPercentEqualsToken,
+  "<<=": "KindLessThanLessThanEqualsToken",
+  ">>=": "KindGreaterThanGreaterThanEqualsToken",
 };
 
 export function rustBinaryResultCarrierIsIndependentOfOperands(
@@ -401,6 +407,13 @@ export function selectRustBinaryOperator(
   }
   const shift = shiftOperations[operatorKindName];
   if (shift !== undefined) {
+    if (isRustBigIntCarrier(left) && isRustBigIntCarrier(right) && shift.operator !== ">>>") {
+      return {
+        kind: "operator-call", rustOperator: shift.operator, resultCarrier: left,
+        path: shift.operator === "<<" ? "rt::BigInt::checked_shift_left" : "rt::BigInt::checked_shift_right",
+        fallible: true, operandModes: ["value", "value"],
+      };
+    }
     const sourceNumberOperands = selectRustSourceNumberOperands(left, right);
     if (sourceNumberOperands !== undefined) {
       return {
@@ -529,6 +542,8 @@ const compoundAssignmentTokens: Readonly<Record<string, RustAssignmentOperator>>
   [KindAsteriskEqualsToken]: "*=",
   [KindSlashEqualsToken]: "/=",
   [KindPercentEqualsToken]: "%=",
+  KindLessThanLessThanEqualsToken: "<<=",
+  KindGreaterThanGreaterThanEqualsToken: ">>=",
 };
 
 export function isRustAssignmentOperator(operatorKindOrText: string): boolean {
@@ -553,6 +568,13 @@ export function selectRustCompoundAssignment(
   }
   if (binaryOperator === undefined || !sameRustArithmeticCarrier(left, right)) {
     return undefined;
+  }
+  if (binaryOperator === "<<" || binaryOperator === ">>") {
+    const selected = selectRustBinaryOperator(binaryOperator, left, right);
+    return selected?.kind === "operator-call" && selected.leftConversion === undefined && selected.rightConversion === undefined
+      ? { kind: "operator-call", operator, path: selected.path, resultCarrier: selected.resultCarrier,
+          fallible: selected.fallible, operandModes: selected.operandModes }
+      : undefined;
   }
   if (rustArithmeticOperatorHasDirectSemantics(binaryOperator, left)) {
     return { kind: "operator-token", operator, resultCarrier: left };

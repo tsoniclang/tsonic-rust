@@ -468,6 +468,8 @@ export function sourceCallSelectedMemberMatches(
   if (callable !== undefined) {
     return callable.parameters.length === fact.parameters.length &&
       callable.parameters.every((carrier, index) => {
+        carrier = substituteRustTargetGenerics(carrier, substitutions.types,
+          substitutions.lifetimes, substitutions.consts, normalize);
         const parameter = fact.parameters[index];
         if (parameter === undefined || !rustTargetTypeRefEquals(carrier, parameter.parameterCarrier)) return false;
         if (parameter.mode === "value") return true;
