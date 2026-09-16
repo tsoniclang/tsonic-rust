@@ -835,8 +835,11 @@ test("project-source backend calls require the exact finalized selected member A
   assert.match(selectedGate, /sourceSelectedMethodTypeArguments/u);
   assert.match(selectedGate, /substituteRustTargetGenerics/u);
   assert.match(selectedGate, /fact\.targetGenericArguments/u);
-  assert.match(selectedGate, /fact\.parameters\[index\]\?\.parameterCarrier/u);
-  assert.match(selectedGate, /mode === fact\.parameters\[index\]\?\.mode/u);
+  assert.match(selectedGate, /const factParameter = fact\.parameters\[index\];/u);
+  assert.match(selectedGate, /if \(factParameter === undefined\) return false;/u);
+  assert.match(selectedGate, /mapRustTargetTypes\(factParameter\.parameterCarrier, normalize\)/u);
+  assert.match(selectedGate, /mapRustTargetTypes\(fact\.resultCarrier, normalize\)/u);
+  assert.match(selectedGate, /mode === factParameter\.mode/u);
   assert.doesNotMatch(selectedGate, /sourceName ===|memberName|includes\(|toLowerCase/u);
 });
 
