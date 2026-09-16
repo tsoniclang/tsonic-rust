@@ -34,6 +34,7 @@ import { selectedSourceLiteralIsRepresentable, selectedSourceNumericLiteralOpera
 import { selectJsSurfaceOperation } from "../../../policy/operations/js-surface.js";
 import { selectRustOptionalChain } from "../../../policy/operations/optional-chains.js";
 import { selectRustValueCarrierReconciliation } from "../../../policy/types/value-carrier-reconciliation.js";
+import { contextualConditionalArgumentMatches } from "./calls/contextual-conditionals.js";
 import type {
   RustCheckedElementSelectionInput,
   RustCheckedOperationSelectionResult,
@@ -623,6 +624,8 @@ export function normalizeSelectedArgumentCarrier(
   options: RustOperationsProviderOptions,
 ): TargetTypeRef | undefined {
   const node = asNode(subject, context);
+  if (node !== undefined && expected !== undefined &&
+    contextualConditionalArgumentMatches(node, expected, context, options)) return expected;
   if (node !== undefined) {
     const providerObjectLiteral = selectRustProviderObjectLiteralConstruction(
       node,

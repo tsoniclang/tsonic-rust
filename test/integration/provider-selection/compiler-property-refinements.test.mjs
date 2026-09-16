@@ -2,6 +2,31 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { acmeTestingPackage, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
+import { nullishMemberStorageSource } from "../../../../tsonic/test/fixtures/nullish-member-storage.mjs";
+import { contextualClassArgumentsSource } from "../../../../tsonic/test/fixtures/contextual-class-arguments.mjs";
+
+for (const surfaces of [[], ["js"]]) {
+  if (surfaces[0] === "js") test("contextual class arguments preserve branch identity", { timeout: 300_000 }, () => {
+    const { result } = compileRust({
+      surfaces, packages: [acmeTestingPackage()],
+      target: { id: "rust", options: { outputType: "bin", crateName: "contextual_class_arguments" } },
+      files: { "index.ts": `import { check } from "@acme/testing";\n${contextualClassArgumentsSource}\nexport function main(): void { check(run()); }` },
+    });
+    assert.deepEqual(result.diagnostics, []);
+    const native = validateGeneratedProject(`contextual-class-arguments-${surfaces[0] ?? "native"}`, result.artifacts, { run: true });
+    assert.equal(native.status, 0, native.stdout + native.stderr);
+  });
+  test(`required nullish members retain exact storage (${surfaces[0] ?? "native"})`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({
+      surfaces,
+      packages: [acmeTestingPackage()],
+      target: { id: "rust", options: { outputType: "bin", crateName: "nullish_member_storage" } },
+      files: { "index.ts": `import { check } from "@acme/testing";\n${nullishMemberStorageSource}\nexport function main(): void { check(run()); }` },
+    });
+    assert.deepEqual(result.diagnostics, []);
+    assert.equal(validateGeneratedProject(`nullish-member-storage-${surfaces[0] ?? "native"}`, result.artifacts, { run: true }).status, 0);
+  });
+}
 
 test("compiler property refinements and lazy byte storage preserve selected values", { timeout: 300_000 }, () => {
   const { result } = compileRust({

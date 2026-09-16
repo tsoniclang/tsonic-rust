@@ -462,16 +462,19 @@ export function resolvePostCheckBinaryCarrier(
       value: (operatorKind === KindExclamationEqualsEqualsToken) !== optionNullishRelationship.negated,
     };
   } else if ((operatorKind === KindEqualsEqualsEqualsToken ||
-      operatorKind === KindExclamationEqualsEqualsToken) &&
-    isRustDefinitelyNullishCarrier(left) && isRustDefinitelyNullishCarrier(right) &&
-    !rustTargetTypeRefEquals(left, right)) {
+      operatorKind === KindExclamationEqualsEqualsToken ||
+      operatorKind === "KindEqualsEqualsToken" || operatorKind === "KindExclamationEqualsToken") &&
+    isRustDefinitelyNullishCarrier(left) && isRustDefinitelyNullishCarrier(right)) {
+    const equal = operatorKind === "KindEqualsEqualsToken" || operatorKind === "KindExclamationEqualsToken" ||
+      rustTargetTypeRefEquals(left, right);
+    const negated = operatorKind === KindExclamationEqualsEqualsToken || operatorKind === "KindExclamationEqualsToken";
     fact = {
       kind: "constant-equality",
-      operationId: operatorKind === KindExclamationEqualsEqualsToken
-        ? "tsonic.rust.equality.nullish-disjoint.not-equal"
-        : "tsonic.rust.equality.nullish-disjoint.equal",
+      operationId: negated
+        ? "tsonic.rust.equality.nullish.not-equal"
+        : "tsonic.rust.equality.nullish.equal",
       resultCarrier: rustSourcePrimitiveTargetType("bool"),
-      value: operatorKind === KindExclamationEqualsEqualsToken,
+      value: negated ? !equal : equal,
     };
   } else if ((operatorKind === KindEqualsEqualsEqualsToken ||
       operatorKind === KindExclamationEqualsEqualsToken) &&
