@@ -63,7 +63,7 @@ export function createRustFrozenDataWriteRegistry(): RustFrozenDataWriteRegistry
           if (storage === "structural-object") {
             const field = input.structuralShapes.field(carrier, index);
             return rustStructuralObjectCarrierValue(carrier)?.representation === "reference" && field !== undefined && field.storage !== "bound" &&
-              field.method !== true && field.nativeLayout === undefined ? "receiver" as const : undefined;
+              (field.method !== true || field.receiverIndependent === true) && field.nativeLayout === undefined ? "receiver" as const : undefined;
           }
           const definition = input.projectTypes.definitionForCarrier(carrier);
           return definition === undefined ? undefined : fields.get(definition)?.get(index);

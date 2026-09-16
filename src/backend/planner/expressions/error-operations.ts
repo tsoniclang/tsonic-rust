@@ -1,4 +1,6 @@
 import type { Node } from "@tsonic/tsts";
+import { BinaryExpression_Left, BinaryExpression_Right } from "@tsonic/target-api/source";
+import { planRustNonConsumingValue } from "./typed-locations.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type {
   RustFlowReadProjectionFact,
@@ -56,9 +58,14 @@ export function planRustProgramErrorEquality(
     ? { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: valueName }] }
     : programErrorPattern(route!, { kind: "binding", name: valueName });
   const otherPattern: RustPattern = { kind: "binding", name: otherName };
-  const operand = (expression: RustExpr, side: "left" | "right"): RustExpr => builtin && fact.errorOperand === side
-    ? { kind: "method-call", receiver: expression, method: "source_error", args: [] }
-    : { kind: "reference", expr: expression };
+  const operand = (expression: RustExpr, side: "left" | "right"): RustExpr => {
+    const source = side === "left" ? BinaryExpression_Left(context.input.program.source.ast, node)
+      : BinaryExpression_Right(context.input.program.source.ast, node);
+    const value = source === undefined ? expression : planRustNonConsumingValue(source, expression, context);
+    return builtin && fact.errorOperand === side
+      ? { kind: "method-call", receiver: value, method: "source_error", args: [] }
+      : { kind: "reference", expr: value };
+  };
   return {
     kind: "match",
     expression: { kind: "tuple-literal", elements: [

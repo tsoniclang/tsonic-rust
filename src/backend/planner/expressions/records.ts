@@ -43,6 +43,7 @@ import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { rustReceiverIndependentMethodFactKey } from "../../../analysis/facts/operations/keys.js";
 
 export function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
@@ -196,7 +197,8 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
         field?.method !== true) {
         return undefined;
       }
-      const storageCarrier = rustStructuralMethodStorageCarrier(
+      const independent = context.input.program.facts.getFact(contribution.expression, rustReceiverIndependentMethodFactKey);
+      const storageCarrier = independent?.carrier ?? rustStructuralMethodStorageCarrier(
         fact.resultCarrier,
         field.carrier,
         field.presence,
@@ -206,7 +208,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
         : storageCarrier;
       if (rawStorageCarrier === undefined ||
         !rustTargetTypeRefEquals(
-          expressionCarrier(contribution.expression, context),
+          independent?.carrier ?? expressionCarrier(contribution.expression, context),
           rawStorageCarrier,
         )) {
         return undefined;

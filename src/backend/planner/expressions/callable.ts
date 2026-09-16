@@ -51,6 +51,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { rustReceiverIndependentMethodFactKey } from "../../../analysis/facts/operations/keys.js";
 
 export function planCallableExpression(
   node: Node,
@@ -105,6 +106,8 @@ export function planCallableExpression(
   }
   const sourceParams = context.input.program.source.ast.parameters(node);
   const leadingParameters = closureFact.leadingParameters ?? [];
+  const independent = context.input.program.facts.getFact(node, rustReceiverIndependentMethodFactKey);
+  const constructionCarrier = independent?.carrier ?? closureFact.resultCarrier;
   if (allParameterCarriers === undefined || resultCarrier === undefined ||
     leadingParameters.length > allParameterCarriers.length ||
     !leadingParameters.every((parameter, index) =>
@@ -236,7 +239,7 @@ export function planCallableExpression(
   if (resultIsFallible) {
     context.usedAliases?.add("rt");
   }
-  const leadingParameterPlans = leadingParameters.map((parameter) => ({
+  const leadingParameterPlans = (independent === undefined ? leadingParameters : []).map((parameter) => ({
     ...parameter,
     name: context.syntheticNames === undefined
       ? undefined
@@ -475,7 +478,7 @@ export function planCallableExpression(
         : { kind: "block", bindings: captureBindings, value: closure };
     }
     const callableType = rustCallableConstructionType(
-      closureFact.resultCarrier,
+      constructionCarrier,
       context,
     );
     if (callableType === undefined) {
@@ -562,7 +565,7 @@ export function planCallableExpression(
       : { kind: "block", bindings: captureBindings, value: closure };
   }
   const callableType = rustCallableConstructionType(
-    closureFact.resultCarrier,
+    constructionCarrier,
     context,
   );
   if (callableType === undefined) {

@@ -51,6 +51,8 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { rustCompileTimeSourceKey } from "../../../target-model/facts/source-declarations.js";
 import { planRustValueFieldLocation, rustSourceFieldHasValueReceiver } from "../objects/value-fields.js";
 import { planRustFieldProjectionAssignment } from "./field-projection-assignment.js";
+import { planRustCompoundRuntimeWrite } from "./compound-runtime-write.js";
+import { rustCompoundWriteFactKey } from "../../../analysis/facts/operations/keys.js";
 
 export function planExpressionStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const expression = Node_Expression(context.input.program.source.ast, node);
@@ -186,6 +188,9 @@ export function planRustAssignmentWrite(
     return undefined;
   }
   const sourceField = context.input.program.facts.getFact(left, rustTargetOperationFactKey);
+  if (context.input.program.facts.getFact(expression, rustCompoundWriteFactKey) !== undefined) {
+    return planRustCompoundRuntimeWrite(expression, left, valueNode, fact, context);
+  }
   const storageOverride = context.expressionOverrides?.get(left);
   const target = planRustDirectStorage(left, context);
   if (target === undefined) {

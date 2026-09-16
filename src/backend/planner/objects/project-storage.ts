@@ -62,10 +62,10 @@ export function createRustStructuralObjectFromCarrier(
   const fields = definition.fields.flatMap((field, index) => {
     const initializer = initializers[index];
     if (initializer === undefined ||
-      (field.method === true) !== (initializer.kind === "method") ||
+      (field.method === true && field.receiverIndependent !== true) !== (initializer.kind === "method" && field.receiverIndependent !== true) ||
       (field.storage === "stored" && initializer.kind === "accessor") ||
       (field.storage !== "bound" && initializer.kind === "bound") ||
-      (field.storage === "property" && initializer.kind === "method")) {
+      (field.storage === "property" && initializer.kind === "method" && field.receiverIndependent !== true)) {
       return [undefined];
     }
     if (field.storage === "bound") {
@@ -82,7 +82,7 @@ export function createRustStructuralObjectFromCarrier(
         : planRustNativeMemoryCall("allocate_native_location", initializer.value, field.nativeLayout, context);
       return value === undefined ? [undefined] : [{ name: field.targetName, value }];
     }
-    if (field.property === undefined || initializer.kind === "method") {
+    if (field.property === undefined || initializer.kind === "method" && field.receiverIndependent !== true) {
       return [undefined];
     }
     const stored = initializer.kind === "accessor"
@@ -164,7 +164,7 @@ export function readRustStoredObjectField(
     if (field === undefined) {
       return undefined;
     }
-    if (field.method === true) {
+    if (field.method === true && field.receiverIndependent !== true) {
       return undefined;
     }
     if (projection.length !== 0 && (field.storage !== "stored" || field.nativeLayout !== undefined)) return undefined;
@@ -202,17 +202,15 @@ export function readRustStructuralObjectMethodStorage(
   context: RustPlanContext,
 ): RustExpr | undefined {
   const field = context.input.program.structuralShapes.field(receiverCarrier, storageIndex);
-  const storageCarrier = field?.method === true
+  const storageCarrier = field?.receiverIndependent === true ? field.carrier : field?.method === true
     ? rustStructuralMethodStorageCarrier(receiverCarrier, field.carrier, field.presence)
     : undefined;
   if (field === undefined || storageCarrier === undefined) {
     return undefined;
   }
-  return readRustStructuralObjectField(
-    receiver,
-    field.targetName,
-    storageCarrier,
-  );
+  return field.receiverIndependent === true
+    ? readRustStoredObjectField("structural-object", receiverCarrier, receiver, storageIndex, storageCarrier, context)
+    : readRustStructuralObjectField(receiver, field.targetName, storageCarrier);
 }
 
 export interface RustStructuralMethodStorageOverride {
@@ -234,7 +232,7 @@ export function invokeRustStructuralObjectMethod(
     ? rustStructuralMethodCallableCarrier(field.carrier, field.presence)
     : undefined;
   const callable = rustCallableProtocol(callableCarrier);
-  const storageCarrier = field?.method === true
+  const storageCarrier = field?.receiverIndependent === true ? field.carrier : field?.method === true
     ? rustStructuralMethodStorageCarrier(receiverCarrier, field.carrier, field.presence)
     : undefined;
   const rawStorageCarrier = field?.presence === "optional"
@@ -259,11 +257,8 @@ export function invokeRustStructuralObjectMethod(
     "structural_method",
   );
   const receiverPath: RustExpr = { kind: "path", path: receiverName };
-  const method = storageOverride?.expression ?? readRustStructuralObjectField(
-    receiverPath,
-    field.targetName,
-    rawStorageCarrier,
-  );
+  const method = storageOverride?.expression ?? readRustStructuralObjectMethodStorage(receiverCarrier, receiverPath, storageIndex, context);
+  if (method === undefined) return undefined;
   return {
     kind: "block",
     bindings: [{ name: receiverName, value: receiver }, {
@@ -276,12 +271,12 @@ export function invokeRustStructuralObjectMethod(
       method: "call",
       args: [{
         kind: "tuple-literal",
-        elements: [{
+        elements: [...(field.receiverIndependent === true ? [] : [{
           kind: "method-call",
           receiver: receiverPath,
           method: "clone",
           args: [],
-        }, ...arguments_],
+        } satisfies RustExpr]), ...arguments_],
       }],
     },
   };
@@ -333,7 +328,7 @@ function writeRustStoredObjectFieldStorage(
     if (field === undefined) {
       return undefined;
     }
-    if (field.method === true || field.readonly && projection.length === 0) {
+    if (field.method === true && field.receiverIndependent !== true || field.readonly && projection.length === 0) {
       return undefined;
     }
     if (projection.length !== 0 && (field.storage !== "stored" || field.nativeLayout !== undefined)) return undefined;

@@ -2,6 +2,16 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust, acmeTestingPackage } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
+import { compoundIndexedWriteSource } from "../../../../tsonic/test/fixtures/compound-indexed-write.mjs";
+
+test("JS indexed compound writes preserve evaluation order and exact result carriers", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: ["js"], packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "compound_indexed_write" } },
+    files: { "index.ts": `${compoundIndexedWriteSource}\nimport { check } from "@acme/testing"; export function main(): void { check(run()); }` },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  validateGeneratedProject("compound-indexed-write", result.artifacts, { run: true });
+});
 
 for (const surfaces of [[], ["js"]]) {
   const profile = surfaces[0] ?? "native";

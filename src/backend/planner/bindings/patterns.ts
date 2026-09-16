@@ -277,7 +277,7 @@ function planObjectRest(
   }
   return createRustStructuralObjectFromCarrier(
     fact.bindingCarrier,
-    values.map((value) => ({ kind: "stored" as const, value })),
+    values.map((value, index) => ({ kind: target.fields[index]?.method === true ? "method" as const : "stored" as const, value })),
     context,
   );
 }

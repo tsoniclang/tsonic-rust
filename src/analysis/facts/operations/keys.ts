@@ -19,6 +19,12 @@ function rustTargetOperationFactEquals(left: RustTargetOperationFact, right: Rus
 export const rustTargetOperationFactKey: RustPlanKey<RustTargetOperationFact> =
   defineRustPlanKey("targetOperation", rustTargetOperationFactEquals);
 
+export const rustCompoundWriteFactKey: RustPlanKey<Extract<RustTargetOperationFact, { kind: "runtime-set" }>> =
+  defineRustPlanKey("compoundWrite", closedMetadataEquals);
+
+export const rustReceiverIndependentMethodFactKey: RustPlanKey<{ readonly carrier: TargetTypeRef }> =
+  defineRustPlanKey("receiverIndependentMethod", (left, right) => rustTargetTypeRefEquals(left.carrier, right.carrier));
+
 export interface RustPreparedOperationResultFact {
   readonly operationId: string;
   readonly operationKind: RustProviderFactOperationKind;

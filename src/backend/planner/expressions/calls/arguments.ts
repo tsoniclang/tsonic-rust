@@ -305,7 +305,7 @@ function shapeRustSourceCallInput(
   const nonConsumingInput = planRustNonConsumingValue(argumentNode, selectedInput, context);
   return sourceParameterAbi?.mode === parameter.mode &&
       rustTargetTypeRefEquals(sourceParameterAbi.parameterCarrier, parameter.parameterCarrier)
-    ? selectedInput
+    ? nonConsumingInput
     : nonConsumingInput.kind === "string-literal" && !mutable
       ? { kind: "str-literal", value: nonConsumingInput.value }
       : mutable

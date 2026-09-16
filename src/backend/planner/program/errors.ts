@@ -203,9 +203,9 @@ export function planRustProgramErrorModule(
     },
     sourceStringImplementation(),
     planRustSuppressedErrorConstructor(),
-    ...(input.program.projectTypes.builtinErrorProjectionAvailable === true
-      ? [planRustErrorObservations(externalVariants.map(item => item.variant),
-        exactProjectVariants.map(item => item.variant))] : []),
+    planRustErrorObservations(externalVariants.map(item => item.variant),
+      exactProjectVariants.map(item => item.variant),
+      input.program.projectTypes.builtinErrorProjectionAvailable === true),
     finishResourceFunction(),
     finishFinallyFunction(),
   ];

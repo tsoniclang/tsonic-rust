@@ -14,7 +14,7 @@ export function recordRustObjectReferenceView(
   const target = walk.sourceTypes.structuralObjectForCarrier(targetCarrier);
   const structural = rustStructuralObjectCarrierValue(targetCarrier);
   if (target === undefined || structural?.representation !== "reference" ||
-    structural.fields.some(field => field.method === true || field.bound === true)) return false;
+    structural.fields.some(field => field.bound === true)) return false;
   const sourceStructural = rustStructuralObjectCarrierValue(sourceCarrier);
   const project = walk.context.projectTypes.definitionForCarrier(sourceCarrier);
   if (sourceStructural?.representation !== "reference" && project === undefined) return false;
@@ -31,7 +31,7 @@ export function recordRustObjectReferenceView(
   for (const pair of correspondence.members) {
     if (pair.kind === "absent") return false;
     const destination = structuralProjection(walk, pair.destination.property.symbol, pair.destination.declarations, targetCarrier);
-    if (destination === undefined || destinations.has(destination.field.storageIndex) || destination.field.method === true) return false;
+    if (destination === undefined || destinations.has(destination.field.storageIndex)) return false;
     const source = structuralProjection(walk, pair.source.property.symbol, pair.source.declarations, sourceCarrier);
     const projectFields = source !== undefined ? [] : pair.source.declarations.flatMap(declaration => {
       const selected = resolveRustProjectField(declaration, sourceCarrier, sourceType, pair.source.property.type,
@@ -42,9 +42,9 @@ export function recordRustObjectReferenceView(
       ? projectFields.length === 1 ? projectFields[0] : undefined
       : { kind: "source-field", storage: source.shape.storage, storageIndex: source.field.storageIndex,
           receiverCarrier: sourceCarrier, resultCarrier: source.field.resultCarrier,
-          valueSemantics: { kind: "stored" } };
+          valueSemantics: { kind: source.field.method === true ? "method" : "stored" } };
     if (selected === undefined || !rustTargetTypeRefEquals(selected.resultCarrier, destination.field.resultCarrier) ||
-      source !== undefined && (source.field.method === true || source.field.presence !== destination.field.presence ||
+      source !== undefined && (source.field.method !== destination.field.method || source.field.presence !== destination.field.presence ||
         source.field.readonly && !destination.field.readonly)) return false;
     destinations.add(destination.field.storageIndex);
     fields.push({ destinationIndex: destination.field.storageIndex, source: selected, writable: !destination.field.readonly });

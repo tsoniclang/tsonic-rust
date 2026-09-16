@@ -206,14 +206,6 @@ export function selectStructuralSourceProperty(
     );
   }
   const { field, shape } = selected;
-  if (field.method === true) {
-    return rejectSelectedOperation(
-      request.expression,
-      context,
-      "RUST_STRUCTURAL_METHOD_VALUE_UNSUPPORTED",
-      "Reading a structural method as a standalone function value requires an explicit JavaScript this-binding carrier; direct receiver calls are supported without guessing.",
-    );
-  }
   if (request.accessMode === "delete") {
     return rejectSelectedOperation(
       request.expression,

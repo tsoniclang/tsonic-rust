@@ -29,6 +29,7 @@ import { planRustNonConsumingValue } from "../expressions/typed-locations.js";
 import { rustMutatedBindingFactKey, rustSourceBindingFactKey, rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { validateRustFinalizedOperationAbi } from "../../../analysis/facts/finalized-operation-abi.js";
+import { rustCompoundWriteFactKey } from "../../../analysis/facts/operations/keys.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustAssignmentOperationFact } from "./core.js";
 import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
@@ -39,6 +40,7 @@ export function planRuntimeSetStatement(
   expression: Node,
   fact: Extract<import("../../../analysis/facts/keys.js").RustTargetOperationFact, { kind: "runtime-set" }>,
   context: RustPlanContext,
+  computedValue = false,
 ): readonly RustStmt[] | undefined {
   const { ast } = context.input.program.source;
   const left = BinaryExpression_Left(context.input.program.source.ast, expression);
@@ -87,7 +89,8 @@ export function planRuntimeSetStatement(
     return undefined;
   }
   const selectedResult = context.input.program.facts.getRuntimeCarrierFact(right)?.carrier;
-  if (selectedResult === undefined || !selectedOperatorIdentityMatches(
+  if (computedValue ? context.input.program.facts.getFact(expression, rustCompoundWriteFactKey) !== fact :
+    selectedResult === undefined || !selectedOperatorIdentityMatches(
     expression,
     fact.operationId,
     fact.operationId,

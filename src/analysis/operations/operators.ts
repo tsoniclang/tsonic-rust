@@ -23,6 +23,7 @@ import {
 } from "@tsonic/target-api/source";
 import { selectRustGenericNumericOperation } from "./generic-numeric.js";
 import { selectRustProgramErrorEquality } from "./error-equality.js";
+import { recordRustCompoundWrite } from "./provider/compound-writes.js";
 import {
   isRustAssignmentOperator,
   rustBinaryResultCarrierIsIndependentOfOperands,
@@ -645,6 +646,10 @@ export function resolvePostCheckBinaryCarrier(
   }
   setRustOperationFact(walk, expression, fact);
   recordFinalizedOperatorSelection(walk, expression, fact, resultCarrier);
+  if ((fact.kind === "operator-token" || fact.kind === "operator-call") &&
+    fact.operator !== "=" && isRustAssignmentOperator(fact.operator)) {
+    recordRustCompoundWrite(walk, expression, leftNode, resultCarrier);
+  }
   return setCarrierFact(walk, expression, resultCarrier);
 }
 

@@ -10,7 +10,11 @@ const binding = (name: string): RustPattern => ({ kind: "binding", name });
 const variant = (name: string, ...elements: readonly RustPattern[]): RustPattern =>
   ({ kind: "tuple-variant", path: name, elements });
 
-export function planRustErrorObservations(externalVariants: readonly string[], projectVariants: readonly string[]): RustItem {
+export function planRustErrorObservations(
+  externalVariants: readonly string[],
+  projectVariants: readonly string[],
+  includeBuiltinProjection: boolean,
+): RustItem {
   const optionalSource: RustType = { kind: "named", path: "Option", genericArguments: [{ kind: "type",
     type: { kind: "reference", mutable: false, referent: sourceError } }] };
   const source = method(path("self"), "source_error");
@@ -29,7 +33,7 @@ export function planRustErrorObservations(externalVariants: readonly string[], p
         ...projectVariants.map(name => ({ pattern: variant(`Self::${name}`, { kind: "wildcard" }),
           expression: { kind: "none" as const } })),
       ] } }] },
-    }, {
+    }, ...(includeBuiltinProjection ? [{
       name: "is_error", visibility: "public", generics: emptyRustGenerics,
       selfParam: { kind: "reference", mutable: false }, params: [], returnType: { kind: "primitive", name: "bool" },
       body: { statements: [{ kind: "tail", expr: method(source, "is_some") }] },
@@ -49,7 +53,7 @@ export function planRustErrorObservations(externalVariants: readonly string[], p
         { pattern: { kind: "path", path: "None" }, expression: { kind: "unreachable",
           message: "checked flow selected a non-Error thrown value" } },
       ] } }] },
-    }],
+    }] satisfies NonNullable<Extract<RustItem, { kind: "impl" }>["functions"]> : [])],
   };
 }
 

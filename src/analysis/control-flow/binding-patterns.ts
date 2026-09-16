@@ -213,9 +213,6 @@ function selectObjectProjection(
     }
     const remaining = sourceShape.fields.filter((field) =>
       !extractedSourceNames.has(field.sourceName));
-    if (remaining.some((field) => field.method === true)) {
-      return undefined;
-    }
     const bindingCarrier = resolveObjectRestBindingCarrier(
       name,
       remaining,
@@ -378,6 +375,7 @@ function resolveObjectRestBindingCarrier(
     readonly carrier: TargetTypeRef;
     readonly presence: "required" | "optional";
     readonly readonly: boolean;
+    readonly method?: true;
   }[],
   context: RustBindingPatternFactContext,
 ): TargetTypeRef | undefined {
@@ -398,6 +396,7 @@ function resolveObjectRestBindingCarrier(
     type: field.carrier,
     presence: field.presence,
     readonly: field.readonly,
+    ...(field.method === true ? { method: true as const } : {}),
   })));
   const canonical = rustStructuralObjectCarrierValue(carrier);
   if (canonical === undefined) {
@@ -427,6 +426,7 @@ function resolveObjectRestBindingCarrier(
       resultCarrier: field.type,
       presence: property.optional ? "optional" as const : "required" as const,
       readonly: property.readonly,
+      ...(field.method === true ? { method: true as const } : {}),
     };
   });
   return registeredFields.some((field) => field === undefined) ||

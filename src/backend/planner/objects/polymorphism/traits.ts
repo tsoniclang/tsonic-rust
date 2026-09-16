@@ -196,9 +196,12 @@ export function planProjectDispatchTrait(
       publiclyReachable,
     );
     if (dispatch.stored && dispatch.mutableContent && field.carrier.kind === "array") {
+      const contentDeadCode = rustGeneratedDispatchDeadCodeDisposition(
+        context, definition.declaration, field.declaration, "content", publiclyReachable,
+      );
       functions.push({
         name: rustArrayFieldMutationName(read), generics: emptyRustGenerics,
-        ...(readDeadCode === undefined ? {} : { deadCode: readDeadCode }),
+        ...(contentDeadCode === undefined ? {} : { deadCode: contentDeadCode }),
         selfParam: rustSelfParameter("ref"),
         params: [{ name: "action", type: rustArrayFieldMutationType(field.type) }],
       });

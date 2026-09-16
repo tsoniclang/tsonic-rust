@@ -133,7 +133,7 @@ export function planRustStructuralShapeModule(
     const callableAliases: RustItem[] = [];
     const fields: RustStructField[] = [];
     for (const [storageIndex, field] of definition.fields.entries()) {
-      const methodStorageCarrier = field.method === true
+      const methodStorageCarrier = field.receiverIndependent === true ? field.carrier : field.method === true
         ? rustStructuralMethodStorageCarrier(
             definition.carrier,
             field.carrier,
@@ -198,7 +198,7 @@ export function planRustStructuralShapeModule(
         });
         continue;
       }
-      if (field.method === true || field.property === undefined) {
+      if (field.method === true && field.receiverIndependent !== true || field.property === undefined) {
         diagnostics.push({
           code: "RUST_STRUCTURAL_SHAPE_PROPERTY_STORAGE_INVALID",
           category: "error",

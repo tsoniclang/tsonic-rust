@@ -4,7 +4,7 @@ import { compileRust, acmeTestingPackage } from "../../helpers/rust-session.mjs"
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { explicitErrorStackSource, invalidErrorStackSources } from "../../../../tsonic/test/fixtures/explicit-error-stacks.mjs";
 import { sourceClassAnnotationSource, invalidSourceClassAnnotations } from "../../../../tsonic/test/fixtures/source-class-annotations.mjs";
-import { structuralMethodRestSource } from "../../../../tsonic/test/fixtures/structural-method-rest.mjs";
+import { structuralMethodRestSource, receiverBoundMethodRestSource } from "../../../../tsonic/test/fixtures/structural-method-rest.mjs";
 
 for (const surfaces of [[], ["js"]]) {
   const profile = surfaces[0] ?? "native";
@@ -25,6 +25,12 @@ for (const surfaces of [[], ["js"]]) {
     for (const { source, code } of invalidSourceClassAnnotations) {
       assert.throws(() => compileRust({ surfaces, files: { "index.ts": source } }), new RegExp(code, "u"));
     }
+  });
+  test(`object rest never binds a copied method to its original receiver (${profile})`, () => {
+    const { result } = compileRust({ surfaces, files: { "index.ts": receiverBoundMethodRestSource } });
+    assert.equal(result.artifacts.length, 0);
+    assert.ok(result.diagnostics.some(({ code }) => code === "RUST_COPIED_METHOD_RECEIVER_NOT_PROVEN"),
+      JSON.stringify(result.diagnostics));
   });
 }
 

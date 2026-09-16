@@ -39,6 +39,7 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustOptionElementCarrier, rustSourceUnionCarrierValue } from "../../../target-model/types/index.js";
 import {
   isRustPreconstructionThisOperation,
+  isRustArrayFieldContentAssignment,
   markBinaryProjectIdentityUsed,
   structuralFieldKey,
   visitConversionContract,
@@ -47,6 +48,7 @@ import {
 export type RustDispatchMemberRole =
   | "read"
   | "write"
+  | "content"
   | "method-virtual"
   | "method-exact";
 
@@ -260,9 +262,9 @@ export function analyzeRustGeneratedItemUsage(input: {
       const implementation = selected.kind === "resolved"
         ? selected.implementation.declaration
         : declaration;
-      if (role === "read" || role === "write") {
+      if (role === "read" || role === "write" || role === "content") {
         markProjectStatePathUsed(concrete, implementation);
-        if (role === "read") readAuthoredFields.add(implementation);
+        if (role !== "write") readAuthoredFields.add(implementation);
         continue;
       }
       if (input.projectMethodProperties.usageFor(implementation)?.writable === true) {
@@ -417,7 +419,10 @@ export function analyzeRustGeneratedItemUsage(input: {
         }
         if (fact.dispatch !== undefined) {
           markProjectCarrierFieldUsed(fact.receiverCarrier, "wrapper-dispatch");
-          if (fact.accessMode !== "write") {
+          if (fact.resultCarrier.kind === "array" && fact.valueSemantics.kind === "stored" &&
+              isRustArrayFieldContentAssignment(node, input.ast, input.facts)) {
+            markProjectMemberUsed(fact.receiverCarrier, fact.declaration, "content");
+          } else if (fact.accessMode !== "write") {
             markProjectMemberUsed(fact.receiverCarrier, fact.declaration, "read");
           }
           if (fact.accessMode !== "read") {

@@ -45,6 +45,7 @@ import { recordRustProjectCallableAdapterFacts } from "../project-types/callable
 import { recordRustValueStructDeclaration } from "../declarations/value-structs.js";
 import { recordRustInterfaceRepresentationAliases } from "../declarations/interface-aliases.js";
 import { rustTypeOnlyDeclarationFactKey } from "../../target-model/facts/type-only.js";
+import { finalizeRustCopiedMethods } from "../objects/copied-methods.js";
 
 export function analyzeRustProgram(context: RustAnalysisContext): void {
   const { ast } = context;
@@ -404,6 +405,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     nativeFields,
     sourceTypes.structuralInstantiations(),
     sourceTypes.generatedSourceUnions(),
+    finalizeRustCopiedMethods(walk, projectSourceFiles, fileName => sourcePackageComponentByFile.get(fileName)!),
   );
   context.frozenDataWrites.initialize({ jsEnabled: walk.jsEnabled, ast, projectTypes,
     representations: context.objectRepresentations, structuralShapes: context.structuralShapes.seal() });

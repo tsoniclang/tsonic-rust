@@ -37,6 +37,7 @@ export interface RustStructuralShapeField {
     readonly setterTargetName?: string;
   };
   readonly method?: true;
+  readonly receiverIndependent?: true;
 }
 
 export function rustStructuralFieldIsFallible(field: Pick<RustStructuralShapeField, "storage"> | undefined): boolean {
@@ -77,6 +78,7 @@ export interface RustStructuralShapePlanRegistry extends RustStructuralShapePlan
     nativeFields: readonly RustNativeObjectField[],
     instantiations: readonly RustStructuralInstantiation[],
     unions: readonly RustSourceUnion[],
+    receiverIndependentMethods?: ReadonlySet<string>,
   ): RustStructuralShapePlan;
   isInitialized(): boolean;
   seal(): RustStructuralShapePlan;
@@ -98,11 +100,12 @@ export function createRustStructuralShapePlanRegistry(): RustStructuralShapePlan
       nativeFields: readonly RustNativeObjectField[],
       instantiations: readonly RustStructuralInstantiation[],
       unions: readonly RustSourceUnion[],
+      receiverIndependentMethods: ReadonlySet<string> = new Set(),
     ) {
       if (current !== undefined) {
         throw new Error("Rust structural shape plan can be initialized only once.");
       }
-      current = createRustStructuralShapePlan(shapes, implementations, componentForFile, nativeFields, instantiations, unions);
+      current = createRustStructuralShapePlan(shapes, implementations, componentForFile, nativeFields, instantiations, unions, receiverIndependentMethods);
       return current;
     },
     isInitialized() {
@@ -142,6 +145,7 @@ export function createRustStructuralShapePlan(
   nativeFields: readonly RustNativeObjectField[],
   instantiations: readonly RustStructuralInstantiation[] = [],
   unions: readonly RustSourceUnion[] = [],
+  receiverIndependentMethods: ReadonlySet<string> = new Set(),
 ): RustStructuralShapePlan {
   const uniqueByKey = new Map<string, Map<string, TargetTypeRef>>();
   for (const shape of shapes) {
@@ -249,6 +253,8 @@ export function createRustStructuralShapePlan(
                 }),
               }),
           ...(field.method === true ? { method: true as const } : {}),
+          ...(receiverIndependentMethods.has(`${structuralStorageKey(carrier, componentForFile)}#${storageIndex}`)
+            ? { receiverIndependent: true as const } : {}),
         });
       });
       const genericReferences = rustTargetGenericReferences(carrier);
@@ -332,7 +338,7 @@ export function createRustStructuralShapePlan(
   });
 }
 
-function structuralStorageKey(carrier: TargetTypeRef, componentForFile: (fileName: string) => string): string {
+export function structuralStorageKey(carrier: TargetTypeRef, componentForFile: (fileName: string) => string): string {
   const substitutions = new Map<string, TargetTypeRef>();
   visitRustTargetTypeParameters(carrier, (name) => {
     if (!substitutions.has(name)) {

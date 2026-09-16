@@ -47,6 +47,7 @@ import {
   isRustNumericCarrier,
   isRustStringCarrier,
   rustJsErrorTargetType,
+  rustCallableProtocol,
   rustSourcePrimitiveTargetType,
   rustStructuralObjectCarrierValue,
   sameRustPrimitiveCarrier,
@@ -486,6 +487,9 @@ export function selectRustBinaryOperator(
     const sameObject = leftEnum !== undefined && rightEnum !== undefined &&
       leftEnum.shape === "object" && rightEnum.shape === "object" &&
       leftEnum.fileName === rightEnum.fileName && leftEnum.typeName === rightEnum.typeName;
+    if (rustCallableProtocol(left) !== undefined && rustTargetTypeRefEquals(left, right)) {
+      return { kind: "operator-token", rustOperator: equality, resultCarrier: rustSourcePrimitiveTargetType("bool") };
+    }
     const sameStructuralObject = rustStructuralObjectCarrierValue(left) !== undefined &&
       rustStructuralObjectCarrierValue(right) !== undefined &&
       rustTargetTypeRefEquals(left, right);
