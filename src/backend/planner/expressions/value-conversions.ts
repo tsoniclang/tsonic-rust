@@ -163,6 +163,10 @@ export function lowerRustValueConversion(
       return { kind: "numeric-cast", expression: source, target: contract.targetType };
     case "owned-string-from-borrowed-str":
       return { kind: "owned-string-from-borrowed-str", expression: source };
+    case "borrowed-str-from-owned-string":
+      return source.kind === "reference"
+        ? { kind: "method-call", receiver: source.expr, method: "as_str", args: [] }
+        : source;
     case "copy-from-reference":
       return { kind: "dereference", pointer: source };
     case "js-value-from-option": {

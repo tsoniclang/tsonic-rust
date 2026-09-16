@@ -128,6 +128,7 @@ function rustFoundationForConversionContract(
     case "option-some":
     case "js-argument-vector-callback":
     case "owned-string-from-borrowed-str":
+    case "borrowed-str-from-owned-string":
     case "copy-from-reference":
       break;
   }

@@ -94,13 +94,7 @@ export function applyFinalizedRustArgumentMode(
   }
   return input.mode === "mut-ref"
     ? createRustMutableReferenceArgument(expression)
-    : createRustSharedReferenceArgument(
-        context,
-        expression,
-        sourceNode,
-        input.parameterCarrier.kind === "reference" &&
-          isRustStringCarrier(input.parameterCarrier.referent),
-      );
+    : createRustSharedReferenceArgument(context, expression, sourceNode);
 }
 
 function sourceReferenceReborrowMatches(
@@ -135,7 +129,6 @@ function createRustSharedReferenceArgument(
   context: RustPlanContext,
   argument: RustExpr,
   node: Node | undefined,
-  stringView = false,
 ): RustExpr {
   const borrowedString = rustBorrowedStringView(argument);
   if (borrowedString !== argument) {
@@ -155,9 +148,6 @@ function createRustSharedReferenceArgument(
   }
   if (argument.kind === "string-literal") {
     return { kind: "str-literal", value: argument.value };
-  }
-  if (stringView) {
-    return { kind: "method-call", receiver: argument, method: "as_str", args: [] };
   }
   if (argument.kind === "vec-literal") {
     return { kind: "reference", expr: { kind: "slice-literal", elements: argument.elements } };

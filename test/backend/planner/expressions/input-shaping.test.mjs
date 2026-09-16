@@ -3,6 +3,9 @@ import test from "node:test";
 import { applyFinalizedRustArgumentMode } from "../../../../dist/backend/planner/expressions/input-shaping.js";
 import { rustStringTargetType } from "../../../../dist/target-model/types/index.js";
 import { rustSourceParameterAbiFactKey } from "../../../../dist/analysis/facts/keys.js";
+import { lowerRustValueConversion } from "../../../../dist/backend/planner/expressions/value-conversions.js";
+import { rustValueConversionContract } from "../../../../dist/target-model/conversions/contracts.js";
+import { rustStringToBorrowedStrValueConversion } from "../../../../dist/public/provider.js";
 
 const stringCarrier = rustStringTargetType();
 const input = {
@@ -22,13 +25,13 @@ function context(parameter, override) {
   };
 }
 
-test("finalized native string references use views without copying or consuming values", () => {
+test("ordinary String reference arguments are not silently changed to native str views", () => {
   for (const expression of [
     { kind: "path", path: "value" },
-    { kind: "call", callee: "next_value", args: [] },
+    { kind: "call", path: "next_value", args: [] },
   ]) {
     assert.deepEqual(applyFinalizedRustArgumentMode(context(), sourceNode, expression, input, false), {
-      kind: "method-call", receiver: expression, method: "as_str", args: [],
+      kind: "reference", expr: expression,
     });
   }
   assert.deepEqual(applyFinalizedRustArgumentMode(context(), sourceNode,
@@ -45,4 +48,24 @@ test("already borrowed native parameters and optional receiver views retain thei
     kind: "method-call", receiver: expression, method: "as_str", args: [],
   });
   assert.equal(applyFinalizedRustArgumentMode(context(), sourceNode, expression, { ...input, mode: "value" }, false), expression);
+});
+
+test("explicit native str conversion creates a view without copying or reevaluating the source", () => {
+  const contract = rustValueConversionContract(rustStringToBorrowedStrValueConversion);
+  assert.equal(contract.sourceMode, "ref");
+  assert.equal(contract.fallible, false);
+  for (const expression of [
+    { kind: "path", path: "value" },
+    { kind: "call", path: "next_value", args: [] },
+  ]) {
+    assert.deepEqual(lowerRustValueConversion(contract, { kind: "reference", expr: expression }, {}, undefined), {
+      kind: "method-call", receiver: expression, method: "as_str", args: [],
+    });
+  }
+  for (const borrowed of [
+    { kind: "str-literal", value: "value" },
+    { kind: "path", path: "borrowed_parameter" },
+  ]) {
+    assert.equal(lowerRustValueConversion(contract, borrowed, {}, undefined), borrowed);
+  }
 });

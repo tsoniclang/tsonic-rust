@@ -72,6 +72,14 @@ export function main(): void {
   const manifest = new PathHolder("Cargo.toml");
   check(statSync(manifest.observed().path).isFile());
   check(manifest.calls === 1 && manifest.path === "Cargo.toml");
+  const names = ["Cargo.toml"];
+  check(names.includes(manifest.path));
+  check(!names.includes("missing"));
+  check(names.includes("Cargo.toml", 0));
+  check(names.indexOf("Cargo.toml") === 0);
+  check(names.indexOf("Cargo.toml", 1) === -1);
+  check(names.lastIndexOf("Cargo.toml") === 0);
+  check(names.lastIndexOf("Cargo.toml", -1) === 0);
   const directory = new PathHolder("field-string-borrow-proof");
   mkdirSync(directory.path, { recursive: true });
   check(statSync(directory.path).isDirectory());

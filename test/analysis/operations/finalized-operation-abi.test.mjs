@@ -16,6 +16,8 @@ import {
 import {
   rustProviderOperationFormDeclaresWritableInput,
 } from "../../../dist/policy/operations/forms.js";
+import { rustStringToBorrowedStrValueConversion } from "../../../dist/public/provider.js";
+import { rustStrTargetType } from "../../../dist/target-model/types/index.js";
 
 const bool = { kind: "source-primitive", name: "bool" };
 const float64 = { kind: "source-primitive", name: "float64" };
@@ -280,6 +282,47 @@ test("provider results preserve exact borrowed-string ownership conversion", () 
     carrier: string,
   });
   assert.equal(validateRustFinalizedOperationAbi(abi), true);
+});
+
+test("provider String-to-str inputs retain exact zero-copy source and destination carriers", () => {
+  const options = {
+    operationKind: "method",
+    form: {
+      form: "call", path: "acme::accept_str", argModes: ["value"],
+      argConversions: [rustStringToBorrowedStrValueConversion],
+    },
+    sourceArgumentCarriers: [string],
+    resultCarrier: unit,
+    isAsync: false,
+    isFallible: false,
+  };
+  const borrowedStr = { kind: "reference", referent: rustStrTargetType(), mutable: false };
+  const abi = finalizeRustProviderOperationAbi(options);
+  assert.ok(abi);
+  assert.deepEqual(abi.targetArguments[0], {
+    source: { kind: "argument", sourceIndex: 0 },
+    sourceCarrier: string,
+    conversion: {
+      kind: "semantic", conversion: rustStringToBorrowedStrValueConversion,
+      sourceCarrier: string, targetCarrier: borrowedStr, fallible: false,
+    },
+    mode: "value",
+    parameterCarrier: borrowedStr,
+  });
+  assert.equal(validateRustFinalizedOperationAbi(abi), true);
+  for (const source of [int32, bool, borrowedStr]) {
+    assert.equal(finalizeRustProviderOperationAbi({ ...options, sourceArgumentCarriers: [source] }), undefined);
+  }
+  for (const mutation of [
+    { sourceCarrier: int32 },
+    { parameterCarrier: string },
+    { mode: "mut-ref" },
+    { conversion: { ...abi.targetArguments[0].conversion, targetCarrier: string } },
+  ]) {
+    assert.equal(validateRustFinalizedOperationAbi({
+      ...abi, targetArguments: [{ ...abi.targetArguments[0], ...mutation }],
+    }), false);
+  }
 });
 
 test("provider methods finalize receiver, source order, passing modes, conversions, and result", () => {

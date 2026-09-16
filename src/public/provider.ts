@@ -34,6 +34,7 @@ export type {
 } from "../target-model/operations/error-boundary.js";
 export {
   rustBorrowedStrToStringValueConversion,
+  rustStringToBorrowedStrValueConversion,
   rustFloat64ToInt32ValueConversion,
   rustInt32ToFloat64ValueConversion,
   rustInt32ToUint8ValueConversion,
