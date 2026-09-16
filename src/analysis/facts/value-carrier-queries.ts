@@ -9,7 +9,8 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type {
   RustAppliedValueCarrierReconciliation,
 } from "../../policy/types/value-carrier-reconciliation.js";
-import type { RustFlowReadProjectionFact } from "../../policy/types/value-projections.js";
+import type { RustFlowReadProjectionFact, RustProjectUpcastFact } from "../../policy/types/value-projections.js";
+import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import {
   rustCallScopedLifetimeReconciliationFactKey,
   rustContextualValueConversionFactKey,
@@ -98,4 +99,18 @@ export function rustValueCarrierTransitionTarget(
       rustTargetTypeRefEquals(source, effective)
     ? undefined
     : effective;
+}
+
+export function rustProjectUpcastSourceMatches(
+  fact: RustProjectUpcastFact,
+  definitions: RustTypeDefinitions,
+): boolean {
+  const variants = definitions.sourceUnionVariants(fact.sourceCarrier);
+  if (variants === undefined) return fact.sourceVariants === undefined;
+  return variants.length > 0 && fact.sourceVariants !== undefined &&
+    fact.sourceVariants.length === variants.length && variants.every((variant, index) => {
+      const selected = fact.sourceVariants?.[index];
+      return selected !== undefined && selected.name === variant.name &&
+        rustTargetTypeRefEquals(selected.carrier, variant.carrier);
+    });
 }

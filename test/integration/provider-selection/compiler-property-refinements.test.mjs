@@ -4,8 +4,24 @@ import { acmeTestingPackage, compileRust } from "../../helpers/rust-session.mjs"
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { nullishMemberStorageSource } from "../../../../tsonic/test/fixtures/nullish-member-storage.mjs";
 import { contextualClassArgumentsSource } from "../../../../tsonic/test/fixtures/contextual-class-arguments.mjs";
+import { classUnionUpcastSource, anonymousClassUnionUpcastSource } from "../../../../tsonic/test/fixtures/class-union-upcasts.mjs";
 
 for (const surfaces of [[], ["js"]]) {
+  for (const [name, sourceText] of [["generic", classUnionUpcastSource], ["anonymous", anonymousClassUnionUpcastSource]]) {
+    test(`class union upcasts preserve ${name} base identity (${surfaces[0] ?? "native"})`, { timeout: 300_000 }, () => {
+      const { result } = compileRust({
+        surfaces, packages: [acmeTestingPackage()],
+        target: { id: "rust", options: { outputType: "bin", crateName: "class_union_upcasts" } },
+        files: { "index.ts": `import { check } from "@acme/testing";\n${sourceText}\nexport function main(): void { check(run()); }` },
+      });
+      assert.deepEqual(result.diagnostics, []);
+      const native = validateGeneratedProject(`class-union-upcasts-${surfaces[0] ?? "native"}`, result.artifacts, { run: true });
+      assert.equal(native.status, 0, native.stdout + native.stderr);
+      const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
+      if (name === "anonymous") assert.match(output, /match &value/);
+      assert.doesNotMatch(output, /match value\.clone\(\)/);
+    });
+  }
   if (surfaces[0] === "js") test("contextual class arguments preserve branch identity", { timeout: 300_000 }, () => {
     const { result } = compileRust({
       surfaces, packages: [acmeTestingPackage()],

@@ -41,9 +41,7 @@ export const rustCallScopedLifetimeReconciliationFactKey:
     rustTargetTypeRefEquals(left.selectedCarrier, right.selectedCarrier));
 
 export const rustProjectUpcastFactKey: RustPlanKey<RustProjectUpcastFact> =
-  defineRustPlanKey("projectUpcast", (left, right) =>
-    rustTargetTypeRefEquals(left.sourceCarrier, right.sourceCarrier) &&
-    rustTargetTypeRefEquals(left.targetCarrier, right.targetCarrier));
+  defineRustPlanKey("projectUpcast", closedMetadataEquals);
 
 export const rustProjectDowncastFactKey: RustPlanKey<RustProjectDowncastFact> =
   defineRustPlanKey("projectDowncast", (left, right) =>

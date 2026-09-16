@@ -66,7 +66,7 @@ export function resolveProjectSourceCarrier(
       continue;
     }
     const sourceType = rustSourceTypeCarrierValue(carrier);
-    if (sourceType !== undefined) {
+    if (sourceType !== undefined && context.ast.kindName(declaration) !== "KindTypeAliasDeclaration") {
       const parameters = rustProjectGenericParameters(declaration, context);
       const own = context.sourceLifetimes.contractFor(declaration)?.parameters ?? [];
       if (parameters === undefined || genericArguments.values.length !== own.length ||

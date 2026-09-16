@@ -148,7 +148,7 @@ export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
     walk.operationOptions,
   ) : undefined;
   if (compositeCarrier !== undefined) {
-    if (!walk.sourceTypes.registerDeclarationCarrier(declaration, compositeCarrier)) {
+    if (!walk.sourceTypes.registerRepresentationAlias(declaration, compositeCarrier)) {
       return;
     }
     setCarrierFact(walk, declaration, compositeCarrier);
@@ -186,7 +186,7 @@ export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
   }
   if (uniqueVariants.length === 1) {
     const carrier = uniqueVariants[0]!.carrier;
-    if (!walk.sourceTypes.registerDeclarationCarrier(declaration, carrier)) {
+    if (!walk.sourceTypes.registerRepresentationAlias(declaration, carrier)) {
       return;
     }
     setCarrierFact(walk, declaration, carrier);

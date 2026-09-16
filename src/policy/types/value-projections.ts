@@ -65,6 +65,10 @@ export interface RustCallScopedLifetimeReconciliationFact {
 export interface RustProjectUpcastFact {
   readonly sourceCarrier: TargetTypeRef;
   readonly targetCarrier: TargetTypeRef;
+  readonly sourceVariants?: readonly {
+    readonly name: string;
+    readonly carrier: TargetTypeRef;
+  }[];
 }
 
 export interface RustProjectDowncastFact {

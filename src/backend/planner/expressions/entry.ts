@@ -37,13 +37,13 @@ import { planRustProjectDowncast } from "../objects/project-downcasts.js";
 import { rustProjectObjectDispatchField, rustProjectObjectIdentityField } from "../objects/project-objects.js";
 import { rustSelectedAccessorRequiresUnsafe, rustSelectedCallRequiresUnsafe, tryPlanRustExplicitSafetyExpression } from "../safety/explicit-safety.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { rustTypeFromCarrierInContext } from "../types/render.js";
-import { rustValueCarrierBeforeContextualConversion } from "../../../analysis/facts/value-carrier-queries.js";
+import { rustTypeFromCarrierInContext, rustUnionTypePathInContext } from "../types/render.js";
+import { rustValueCarrierBeforeContextualConversion, rustProjectUpcastSourceMatches } from "../../../analysis/facts/value-carrier-queries.js";
 import { rustCompilerOwnedContextualConversionMatches } from "../../../target-model/conversions/contextual.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import { tryPlanRustNativePointerOperation } from "./native-pointers.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
@@ -430,14 +430,42 @@ export function planRustProjectUpcast(
   actual: TargetTypeRef | undefined,
   context: RustPlanContext,
 ): RustExpr | undefined {
+  if (!rustTargetTypeRefEquals(actual, fact.sourceCarrier) ||
+    !rustProjectUpcastSourceMatches(fact, context.input.program.typeDefinitions)) {
+    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+      "rust.backend.project-upcast", "Project-type upcast has no exact finalized source variant correspondence."));
+    return undefined;
+  }
+  if (fact.sourceVariants !== undefined) {
+    const typePath = rustUnionTypePathInContext(fact.sourceCarrier, context);
+    if (typePath === undefined) {
+      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+        "rust.backend.project-upcast", "Project-type upcast has no emitted source union."));
+      return undefined;
+    }
+    const names = context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []);
+    const arms: { readonly pattern: RustPattern; readonly expression: RustExpr }[] = [];
+    for (const variant of fact.sourceVariants) {
+      const name = allocateRustSyntheticName(names, "upcast_variant");
+      const projected = planRustProjectUpcast(node, { kind: "path", path: name }, {
+        sourceCarrier: variant.carrier, targetCarrier: fact.targetCarrier,
+      }, variant.carrier, context);
+      if (projected === undefined) return undefined;
+      arms.push({
+        pattern: { kind: "tuple-variant", path: `${typePath}::${variant.name}`,
+          elements: [{ kind: "binding", name }] },
+        expression: projected,
+      });
+    }
+    return { kind: "match", expression: { kind: "reference", expr: planRustNonConsumingValue(node, expression, context) }, arms };
+  }
   const targetDefinition = context.input.program.projectTypes.definitionForCarrier(fact.targetCarrier);
   const targetValue = rustSourceTypeCarrierValue(fact.targetCarrier);
   const targetPath = targetValue === undefined ? undefined : sourceTypePath(context, targetValue);
   const relationship = targetDefinition === undefined
     ? { kind: "unrelated" as const }
     : context.input.program.projectTypes.relationship(fact.sourceCarrier, targetDefinition);
-  if (!rustTargetTypeRefEquals(actual, fact.sourceCarrier) ||
-    relationship.kind !== "related" ||
+  if (relationship.kind !== "related" ||
     !rustTargetTypeRefEquals(relationship.targetType, fact.targetCarrier) ||
     targetPath === undefined) {
     context.diagnostics.push(missingFactDiagnostic(

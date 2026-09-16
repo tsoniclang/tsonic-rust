@@ -149,6 +149,18 @@ export function selectRustValueCarrierReconciliation(
     return { kind: "call-scoped-lifetime", fact: lifetimeReconciliation };
   }
   const targetDefinition = projectTypes.definitionForCarrier(targetCarrier);
+  const sourceVariants = definitions.sourceUnionVariants(sourceCarrier);
+  if (targetDefinition !== undefined && sourceVariants !== undefined && sourceVariants.length > 0) {
+    for (const variant of sourceVariants) {
+      const relationship = projectTypes.relationship(variant.carrier, targetDefinition);
+      if (relationship.kind === "ambiguous") return { kind: "incompatible", reason: "ambiguous" };
+      if (relationship.kind !== "related" ||
+        !rustTargetTypeRefEquals(relationship.targetType, targetCarrier)) {
+        return { kind: "incompatible", reason: "unrelated" };
+      }
+    }
+    return { kind: "project-upcast", fact: { sourceCarrier, targetCarrier, sourceVariants } };
+  }
   const relationship = targetDefinition === undefined
     ? { kind: "unrelated" as const }
     : projectTypes.relationship(sourceCarrier, targetDefinition);

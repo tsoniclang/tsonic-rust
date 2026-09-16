@@ -280,8 +280,10 @@ export function analyzeRustGeneratedItemUsage(input: {
     }
     const upcast = input.facts.getFact(node, rustProjectUpcastFactKey);
     if (upcast !== undefined) {
-      markProjectCarrierFieldUsed(upcast.sourceCarrier, "wrapper-identity");
-      markProjectCarrierFieldUsed(upcast.sourceCarrier, "wrapper-dispatch");
+      for (const carrier of upcast.sourceVariants?.map(variant => variant.carrier) ?? [upcast.sourceCarrier]) {
+        markProjectCarrierFieldUsed(carrier, "wrapper-identity");
+        markProjectCarrierFieldUsed(carrier, "wrapper-dispatch");
+      }
       markProjectTypeConstructed(upcast.targetCarrier);
     }
     const downcast = input.facts.getFact(node, rustProjectDowncastFactKey);
