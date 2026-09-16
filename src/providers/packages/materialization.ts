@@ -509,6 +509,7 @@ function materializeProviderValueConversion(
         pointee: materializeProviderCarrier(conversion.pointee, carrierPaths, carrierTraits),
       };
     case "source-union-variant":
+    case "object-identity-erasure":
     case "native-upcast":
     case "bottom-coercion":
     case "js-argument-vector-callback":

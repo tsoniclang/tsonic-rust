@@ -62,6 +62,7 @@ import type { RustOperationsProviderOptions } from "./model.js";
 import type { RustProviderOperationTemplate, RustTargetOperationFact } from "../../facts/keys.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { selectRustNumberArrayUnionMember } from "./number-array-unions.js";
+import { selectedRustForInKeys } from "./for-in-keys.js";
 
 export function selectRustCheckedElementAccess(
   request: RustCheckedElementSelectionInput,
@@ -295,7 +296,7 @@ export function selectRustCheckedIteration(
         "Rust property-key iteration requires the exact checked source key to map to String.",
       );
     }
-    const lowering = rustPropertyKeyIterationLowering(iterable, context.ast, options);
+    const lowering = rustPropertyKeyIterationLowering(iterable, request.expression, context, options);
     if (iterable === undefined || lowering === undefined) {
       return rejectSelectedOperation(
         request.statement,
@@ -363,7 +364,8 @@ type RustPropertyKeyIterationLowering = Extract<
 
 function rustPropertyKeyIterationLowering(
   iterable: TargetTypeRef | undefined,
-  ast: import("@tsonic/tsts").AstReader,
+  expression: Node,
+  context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): RustPropertyKeyIterationLowering | undefined {
   if (iterable?.kind === "array" ||
@@ -376,7 +378,7 @@ function rustPropertyKeyIterationLowering(
   }
   const keys = iterable === undefined
     ? undefined
-    : options.sourceTypes.propertyKeysForCarrier(iterable, ast);
+    : selectedRustForInKeys(expression, iterable, context, options);
   return keys === undefined ? undefined : { kind: "static-keys", keys };
 }
 

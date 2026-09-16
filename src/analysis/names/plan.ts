@@ -6,7 +6,7 @@ import {
   rustScreamingSnakeIdentifier,
   rustSnakeCaseIdentifier,
 } from "../../target-model/names/identifiers.js";
-import { Node_Initializer, sourceParameterIsProperty } from "@tsonic/target-api/source";
+import { Node_Initializer, ObjectLiteralProperty_SourceName, sourceParameterIsProperty } from "@tsonic/target-api/source";
 import type { RustRuntimeValueUsePlan } from "../program/runtime-value-uses.js";
 import { rustSourceDeclarationTypeName } from "../../policy/types/source-declarations.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
@@ -228,13 +228,13 @@ function collectNameCandidates(
   if (role !== undefined && scope !== undefined) {
     const name = ast.name(node);
     const nameKind = name === undefined ? undefined : ast.kindName(name);
+    const propertyName = ObjectLiteralProperty_SourceName(ast, node);
     const sourceName = ast.kindName(node) === "KindExportAssignment" &&
         ast.as.AsExportAssignment(node)?.IsExportEquals !== true
       ? "default"
-      : name === undefined ||
-          (nameKind !== "KindIdentifier" && nameKind !== "KindPrivateIdentifier")
-        ? ""
-        : ast.text(name);
+      : nameKind === "KindPrivateIdentifier"
+        ? ast.text(name)
+        : propertyName.kind === "resolved" ? propertyName.name : "";
     if (sourceName.length > 0) {
       candidates.push({
         declaration: node,

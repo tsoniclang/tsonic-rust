@@ -16,6 +16,7 @@ import { createRustTypeDefinitionRegistry, type RustTypeDefinitionRegistry } fro
 import {
   KindStringLiteral,
   Node_Type,
+  ObjectLiteralProperty_SourceName,
   sourceClassFieldIsTypeOnly,
   sourceObjectMemberDeclarations,
   sourceParameterIsProperty,
@@ -202,11 +203,12 @@ export function createRustSourceTypeRegistry(
           if (ast.hasModifierKind(member, "static")) {
             continue;
           }
-          const nameNode = ast.name(member);
-          const name = nameNode === undefined ? "" : ast.text(nameNode);
-          if (name.length === 0 || seen.has(name)) {
+          if (ast.questionToken(member) !== undefined) return undefined;
+          const selectedName = ObjectLiteralProperty_SourceName(ast, member);
+          if (selectedName.kind !== "resolved" || selectedName.name.length === 0 || seen.has(selectedName.name)) {
             return undefined;
           }
+          const name = selectedName.name;
           seen.add(name);
           keys.push(name);
           continue;

@@ -25,6 +25,12 @@ interface Pair {
   first: int32;
   second: int32;
 }
+interface NumericKeys {
+  2: int32;
+  10: int32;
+  last: int32;
+  first: int32;
+}
 
 export function main(): void {
   let denseKeys: string = "";
@@ -42,12 +48,18 @@ export function main(): void {
   }
   check(sparseKeys === "02");
 
-  const pair: Pair = { first: 1, second: 2 };
+  const pair: Pair = { second: 2, first: 1 };
+  const alias = pair;
   let shapeKeys: string = "";
-  for (const key in pair) {
+  for (const key in alias) {
     shapeKeys = shapeKeys + key;
   }
-  check(shapeKeys === "firstsecond");
+  check(shapeKeys === "secondfirst");
+
+  const numeric: NumericKeys = { last: 3, 10: 4, first: 5, 2: 6 };
+  let numericKeys: string = "";
+  for (const key in numeric) numericKeys = numericKeys + key + ":";
+  check(numericKeys === "2:10:last:first:");
 
   let assignedKey: string = "";
   for (assignedKey in [7, 8]) {
@@ -66,6 +78,40 @@ export function main(): void {
   assert.match(source, /assigned_key = for_in_key;/u);
   assert.doesNotMatch(source, /retains unused generated storage/u);
   assert.equal(validateGeneratedProject("for-in-policies", result.artifacts, { run: true }).status, 0);
+});
+
+test("for-in cannot invent a derived object's keys from its base parameter", () => {
+  const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": `
+    class Base { count = 1; }
+    class Derived extends Base { extra = 2; }
+    function keys(value: Base): string {
+      let text = "";
+      for (const key in value) text += key;
+      return text;
+    }
+    export function run(): string { return keys(new Derived()); }
+  ` } });
+  assert.ok(result.diagnostics.some(diagnostic => diagnostic.code === "RUST_ITERATION_CARRIER_UNSUPPORTED"));
+  assert.equal(result.artifacts.length, 0);
+});
+
+test("for-in requires one unchanged closed construction origin", () => {
+  for (const body of [
+    `let value: Pair = { first: 1, second: 2 }; value = { second: 2, first: 1 };`,
+    `const value: Pair = { ...{ second: 2, first: 1 } };`,
+  ]) {
+    const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": `
+      interface Pair { first: number; second: number; }
+      export function run(): string {
+        ${body}
+        let text = "";
+        for (const key in value) text += key;
+        return text;
+      }
+    ` } });
+    assert.ok(result.diagnostics.some(diagnostic => diagnostic.code === "RUST_ITERATION_CARRIER_UNSUPPORTED"));
+    assert.equal(result.artifacts.length, 0);
+  }
 });
 
 test("for-in fails closed when the target carrier has no key policy", () => {

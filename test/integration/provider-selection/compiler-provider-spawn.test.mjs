@@ -2,6 +2,20 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { acmeTestingPackage, compileRust, nodejsCapability } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
+import { nativeNodeSpawnSource } from "../../../../tsonic/test/fixtures/native-node-spawn.mjs";
+
+test("shared Node spawn proof preserves byte views, options and absent results", { timeout: 300_000 }, async () => {
+  const { result } = compileRust({
+    surfaces: ["js"], packages: [acmeTestingPackage()], capabilities: [await nodejsCapability()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "shared_provider_spawn" } },
+    files: { "index.ts": `${nativeNodeSpawnSource(process.execPath)}
+      import { check } from "@acme/testing";
+      export function main(): void { check(run()); }
+    ` },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  validateGeneratedProject("shared-provider-spawn", result.artifacts, { run: true });
+});
 
 test("compiler subprocess options preserve child state and binary results", { timeout: 300_000 }, async () => {
   const { result } = compileRust({
