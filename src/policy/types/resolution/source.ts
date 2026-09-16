@@ -7,6 +7,7 @@ import {
 } from "@tsonic/target-api/source";
 import {
   rustBigIntTargetType,
+  rustEmptyObjectTargetType,
   rustJsArrayTargetType,
   rustJsStringTargetType,
   rustSourceLocationTargetType,
@@ -134,6 +135,10 @@ export function resolveRustTargetTypeRef(
   const existing = context.facts.getRuntimeCarrierFact(node)?.carrier;
   if (existing !== undefined) {
     return existing;
+  }
+  if (node !== undefined && context.ast.kindName(node) === "KindObjectLiteralExpression" &&
+    context.ast.properties(node).length === 0) {
+    return rustEmptyObjectTargetType();
   }
   const operationResult = context.facts.getSelectedTargetOperator(subject)?.resultType;
   if (operationResult !== undefined) {

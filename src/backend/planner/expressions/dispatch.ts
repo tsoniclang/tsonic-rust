@@ -620,7 +620,7 @@ export function planExpressionInner(
       return planBinaryExpression(node, context, resultUse);
     }
     case KindCallExpression: {
-      return planCallExpression(node, context);
+      return planCallExpression(node, context, resultUse);
     }
     case KindNewExpression: {
       return planNewExpression(node, context);

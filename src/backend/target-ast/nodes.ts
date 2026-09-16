@@ -163,6 +163,7 @@ export type RustPattern =
   | { readonly kind: "binding"; readonly name: string }
   | { readonly kind: "path"; readonly path: string }
   | { readonly kind: "tuple"; readonly elements: readonly RustPattern[] }
+  | { readonly kind: "or"; readonly alternatives: readonly RustPattern[] }
   | {
       readonly kind: "tuple-variant";
       readonly path: string;
@@ -178,7 +179,7 @@ export type RustExpr =
   | { readonly kind: "string-literal"; readonly value: string }
   | { readonly kind: "str-literal"; readonly value: string }
   | { readonly kind: "owned-string-from-borrowed-str"; readonly expression: RustExpr }
-  | { readonly kind: "path"; readonly path: string }
+  | { readonly kind: "path"; readonly path: string; readonly genericArguments?: readonly RustCallGenericArgument[] }
   | { readonly kind: "bottom"; readonly expression: RustExpr }
   | { readonly kind: "unary"; readonly operator: "-" | "!"; readonly operand: RustExpr }
   | { readonly kind: "dereference"; readonly pointer: RustExpr }

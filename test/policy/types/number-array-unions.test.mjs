@@ -31,7 +31,7 @@ test("typed and ordinary numeric arrays cross files without copying their input 
   },
     target: { id: "rust", options: { outputType: "bin", crateName: "number_array_unions" } } });
   assert.deepEqual(result.diagnostics, []);
-  assert.match(artifactText(result, "src/shapes.rs"), /NumberArrayLike for Union2/u);
+  assert.match(artifactText(result, "src/shapes.rs"), /NumberArrayLike\s+for Union2/u);
   assert.match(artifactText(result, "src/arrays.rs"), /number_array_from/u);
   const run = validateGeneratedProject("number-array-unions", result.artifacts, { run: true });
   assert.equal(run.status, 0, JSON.stringify(run));

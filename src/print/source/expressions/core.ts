@@ -32,7 +32,7 @@ export function printRustExpr(expression: RustExpr): string {
     case "str-literal":
       return `"${escapeRustString(expression.value)}"`;
     case "path":
-      return expression.path;
+      return printRustDirectCallTarget(expression);
     case "bottom":
       return printRustExpr(expression.expression);
     case "owned-string-from-borrowed-str":

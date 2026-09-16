@@ -160,9 +160,12 @@ export function applySelectedProjectSourceCall(
       );
       return undefined;
     }
-    if (selectedParameter !== undefined && !retainRustStructuralInstantiation(
-      selectedParameter.selectedType, parameterAbi.valueCarrier, valueCarrier,
-      rustResolutionContext(walk, expression), walk.operationOptions)) {
+    const selectedValueType = parameterAbi.form === "default" && selectedParameter !== undefined
+      ? walk.context.semantics(sourceFile).types.withoutMissingOrUndefined(selectedParameter.selectedType)
+      : selectedParameter?.selectedType;
+    if (selectedParameter !== undefined && (selectedValueType === undefined || !retainRustStructuralInstantiation(
+      selectedValueType, parameterAbi.valueCarrier, valueCarrier,
+      rustResolutionContext(walk, expression), walk.operationOptions))) {
       appendRustDiagnostic(walk, "RUST_SOURCE_CALL_PARAMETER_STORAGE_MISSING",
         "The selected source parameter type has no exact instantiated structural storage correspondence.",
         expression, ["target.capability=rust.source-call.parameter-storage"]);

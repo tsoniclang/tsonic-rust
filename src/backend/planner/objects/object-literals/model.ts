@@ -107,6 +107,10 @@ export function rustObjectLiteralRequiresDispatchImplementation(
     contribution.kind === "spread" && contribution.methods.length > 0)) {
     return true;
   }
+  const definition = context.input.program.projectTypes.definitionForCarrier(fact.resultCarrier);
+  if (definition !== undefined && !context.input.program.projectTypes.isPolymorphic(definition)) {
+    return false;
+  }
   return fact.fields.some((field) => field.contractDeclarations.some((declaration) => {
     const dispatch = context.input.program.projectFieldDispatch.planFor(declaration);
     return dispatch === undefined ||

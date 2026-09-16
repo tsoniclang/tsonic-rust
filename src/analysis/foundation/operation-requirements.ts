@@ -52,7 +52,7 @@ export function rustFoundationForTargetOperationFact(
     case "void-expression":
     case "identity-expression":
     case "default-value":
-    case "disjoint-equality":
+    case "constant-equality":
     case "source-enum-member":
     case "tuple-index":
     case "await-op":

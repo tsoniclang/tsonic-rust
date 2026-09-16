@@ -366,5 +366,5 @@ export function create(): Contract { return new Implementation(); }
   assert.equal(result.artifacts.length, 0);
   assert.ok(result.diagnostics.some(({ code, message }) =>
     code === "RUST_MISSING_TARGET_FACT" &&
-    message.includes("does not preserve the exact contract Rust ABI")));
+    message.includes("does not preserve its finalized contract-to-implementation Rust ABI adapter")));
 });

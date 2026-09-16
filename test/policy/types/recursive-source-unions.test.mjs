@@ -50,9 +50,13 @@ test("finalized union input and result conversions require the exact sealed defi
   assert.ok(conversion);
   for (const isAsync of [false, true]) {
     const options = { operationKind: "method", form: { form: "call", path: "acme::convert", argConversions: [conversion] },
-      sourceArgumentCarriers: [integer], resultCarrier: integer, resultConversion: conversion, isAsync, isFallible: false };
+      sourceArgumentCarriers: [integer], resultCarrier: carrier, resultConversion: conversion, isAsync, isFallible: false };
+    assert.equal(finalizeRustProviderOperationAbi({ ...options, resultCarrier: integer }, definitions), undefined);
     const abi = finalizeRustProviderOperationAbi(options, definitions);
     assert.ok(abi);
+    const selected = isAsync ? abi.result.awaitedConversion : abi.result.conversion;
+    assert.deepEqual(selected.sourceCarrier, integer);
+    assert.deepEqual(selected.targetCarrier, carrier);
     assert.equal(validateRustFinalizedOperationAbi(abi, definitions), true);
     assert.equal(validateRustFinalizedOperationAbi(abi), false);
     const changedInput = structuredClone(abi);

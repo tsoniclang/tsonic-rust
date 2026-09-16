@@ -6,7 +6,6 @@ import {
   rustJsSymbolTargetType,
   rustSourceLocationTargetType,
   rustNullTargetType,
-  rustNullishSourceTargetType,
   rustNeverTargetType,
   rustOptionElementCarrier,
   rustOptionTargetType,
@@ -196,7 +195,7 @@ export function resolveRustTargetType(
     }
 
     if (semantics.types.isNullish(type)) {
-      return rustNullishSourceTargetType();
+      return resolveRustExactNullishValueCarrier(type, semantics);
     }
     if (semantics.types.isStringLike(type)) {
       return rustStringTargetType();
@@ -295,7 +294,8 @@ export function resolveStructuralObjectType(
     return undefined;
   }
   if (properties.length === 0 && representation === "reference") {
-    return !semantics.types.couldContainTypeVariables(type)
+    return semantics.declarations.typeSymbol(type) !== undefined &&
+      !semantics.types.couldContainTypeVariables(type)
       ? rustEmptyObjectTargetType()
       : undefined;
   }

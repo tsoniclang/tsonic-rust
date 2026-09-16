@@ -14,6 +14,8 @@ export function printRustPattern(pattern: RustPattern): string {
     }
     case "tuple-variant":
       return `${pattern.path}(${pattern.elements.map(printRustPattern).join(", ")})`;
+    case "or":
+      return pattern.alternatives.map(printRustPattern).join(" | ");
   }
 }
 

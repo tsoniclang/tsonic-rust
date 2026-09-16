@@ -16,7 +16,7 @@ export function selectRustUnionMethods(
   options: RustOperationsProviderOptions,
 ): readonly RustSelectedUnionMethodIdentity[] | undefined {
   const value = rustSourceUnionCarrierValue(receiver);
-  if (receiver === undefined || value?.origin !== "generated") return undefined;
+  if (receiver === undefined || value === undefined) return undefined;
   const union = options.sourceTypes.sourceUnionForCarrier(receiver);
   const symbol = selectedCallCalleeSymbol(request);
   if (union === undefined || symbol === undefined) return undefined;

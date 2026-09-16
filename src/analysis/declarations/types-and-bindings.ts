@@ -32,6 +32,7 @@ import type { Node, SourceFile, Type } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { resolveRustTypeFamilyApplication, rustSourceTypeFamilyDeclaration } from "../../policy/types/resolution/type-families.js";
+import { resolveRustEvidenceNodesToCommonCarrier } from "../../policy/types/resolution/source-evidence.js";
 
 export function reserveTypeAliasUnion(walk: RustFactWalk, declaration: Node): void {
   const {ast} = walk.context;
@@ -165,11 +166,15 @@ export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
     readonly sourceType: Type;
     readonly carrier: TargetTypeRef;
   }[] = [];
+  const authoredType = Node_Type(ast, declaration);
+  if (authoredType === undefined) return;
   for (const member of sourceMembers as readonly Type[]) {
-    const carrier = resolveRustTargetTypeRef(
+    const carrier = resolveRustEvidenceNodesToCommonCarrier(
+      [authoredType],
       member,
       rustResolutionContext(walk, declaration),
       walk.operationOptions,
+      new Set(),
     );
     if (carrier === undefined) {
       return;
@@ -209,8 +214,10 @@ export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
       ? { kind: "type" as const, type: { kind: "type-parameter" as const, name: parameter.targetName } }
       : { kind: "lifetime" as const, lifetime: parameter.lifetime }) ?? [],
   );
-  const variantFieldDeclarations = new Set(finalizedVariants.flatMap((variant) =>
-    variant.shape?.fields.flatMap((field) => field.declarations) ?? []));
+  const variantMemberDeclarations = new Set(finalizedVariants.flatMap((variant) =>
+    semantics.types.propertyInfos(variant.sourceType).flatMap(property =>
+      [property.symbol, ...property.rootSymbols].flatMap(symbol =>
+        semantics.declarations.symbolDeclarations(symbol)))));
   const selectedProperties = semantics.types.propertyInfos(sourceType).map((property) => {
     const declarations = semantics.declarations.symbolDeclarations(property.symbol);
     if (!isDenseDataArray(declarations) || declarations.length === 0 ||
@@ -220,7 +227,7 @@ export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
     const selectedDeclarations = declarations as readonly Node[];
     return selectedDeclarations.every((selected) =>
       walk.context.source.navigation.isProjectDeclaration(selected) &&
-      variantFieldDeclarations.has(selected))
+      variantMemberDeclarations.has(selected))
       ? {
           symbol: property.symbol,
           declarations: Object.freeze([...selectedDeclarations]),

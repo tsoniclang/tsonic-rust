@@ -124,7 +124,7 @@ test("cross-file equivalent layouts preserve one native backing location", { tim
   assert.equal(result.diagnostics.length, 0, result.diagnostics.map(item => `${item.code}: ${item.message}`).join("\n"));
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /allocate_native_location/u);
-  assert.match(output, /reinterpret_raw_location::<u32>/u);
+  assert.match(output, /reinterpret_raw_location::<u32, rt::TsonicError>/u);
   assert.doesNotMatch(output, /as \*mut|as \*const/u);
   validateGeneratedProject("native-cross-file-aliases", result.artifacts, { run: true });
 });

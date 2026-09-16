@@ -27,6 +27,7 @@ import type { Node } from "@tsonic/tsts";
 import type { PlannedProjectObjectField } from "./classes.js";
 import type { RustItem, RustStructField } from "../../target-ast/nodes.js";
 import { emptyRustGenerics } from "../../target-ast/nodes.js";
+import { rustProjectWrapperTraits } from "../objects/project-wrapper-traits.js";
 import { rustSourceDeclarationGenerics } from "./callable-generics.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustProjectImplementationVisibility } from "../objects/project-storage-abi.js";
@@ -197,11 +198,12 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
     return undefined;
   }
   const generics = rustProjectGenerics(definition, context);
+  const interfaceType = rustTypeFromCarrierInContext(context.input.program.projectTypes.openCarrier(definition), context);
   const stateType = rustProjectStateType(
     context.input.program.projectTypes.openCarrier(definition),
     context,
   );
-  if (stateType === undefined) {
+  if (stateType === undefined || interfaceType === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.record-state-carrier",
@@ -335,6 +337,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
     node,
     interfaceVisibility === "public",
   );
+  const explicitWrapperTraits = generics.parameters.some(parameter => parameter.kind === "type");
   return [{
     kind: "struct",
     name: definition.stateName,
@@ -387,7 +390,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
     ...(interfaceAttributes.length === 0 ? {} : { attrs: interfaceAttributes }),
     ...(interfaceDeadCode === undefined ? {} : { deadCode: interfaceDeadCode }),
     visibility: interfaceVisibility,
-    derives: ["Clone", "Debug", "PartialEq"],
+    derives: explicitWrapperTraits ? [] : ["Clone", "Debug", "PartialEq"],
     generics,
     fields: [{
       name: rustProjectObjectStateField,
@@ -405,7 +408,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
         return deadCode === undefined ? {} : { deadCode };
       })(),
     }],
-  }];
+  }, ...(explicitWrapperTraits ? rustProjectWrapperTraits(interfaceType, interfaceName, generics) : [])];
 }
 
 export function planTypeAliasDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {

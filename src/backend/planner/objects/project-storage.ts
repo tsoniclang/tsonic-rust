@@ -157,6 +157,7 @@ export function readRustStoredObjectField(
   resultCarrier: TargetTypeRef,
   context: RustPlanContext,
   projection: readonly string[] = [],
+  receiverIsBorrowed = false,
 ): RustExpr | undefined {
   if (storage === "structural-object") {
     const field = context.input.program.structuralShapes.field(receiverCarrier, storageIndex);
@@ -168,7 +169,7 @@ export function readRustStoredObjectField(
     }
     if (projection.length !== 0 && (field.storage !== "stored" || field.nativeLayout !== undefined)) return undefined;
     const path = [field.targetName, ...projection];
-    if (field.storage === "bound") return readRustBoundRecordField(receiverCarrier, receiver, field, context);
+    if (field.storage === "bound") return readRustBoundRecordField(receiverCarrier, receiver, field, context, receiverIsBorrowed);
     if (rustStructuralObjectCarrierValue(receiverCarrier)?.representation === "value") {
       if (field.storage !== "stored" || field.nativeLayout !== undefined) return undefined;
       const selected = path.reduce<RustExpr>((value, name) => ({ kind: "field", receiver: value, name }), receiver);
@@ -295,14 +296,15 @@ export function writeRustStoredObjectField(
   value: RustExpr,
   context: RustPlanContext,
   projection: readonly string[] = [],
+  receiverIsBorrowed = false,
 ): RustExpr | undefined {
   const check = projection.length === 0
     ? context.input.program.frozenDataWrites.receiverFor(storage, receiverCarrier, storageIndex)
     : undefined;
   if (storage === "structural-object" && context.input.program.structuralShapes.field(receiverCarrier, storageIndex)?.storage === "property") {
-    return writeRustStoredObjectFieldStorage(storage, receiverCarrier, receiver, storageIndex, operator, value, context, projection);
+    return writeRustStoredObjectFieldStorage(storage, receiverCarrier, receiver, storageIndex, operator, value, context, projection, receiverIsBorrowed);
   }
-  if (check === undefined) return writeRustStoredObjectFieldStorage(storage, receiverCarrier, receiver, storageIndex, operator, value, context, projection);
+  if (check === undefined) return writeRustStoredObjectFieldStorage(storage, receiverCarrier, receiver, storageIndex, operator, value, context, projection, receiverIsBorrowed);
   const errorType = rustActiveErrorType(context);
   if (errorType === undefined || context.syntheticNames === undefined) return undefined;
   const receiverName = allocateRustSyntheticName(context.syntheticNames, "field_owner");
@@ -324,6 +326,7 @@ function writeRustStoredObjectFieldStorage(
   value: RustExpr,
   context: RustPlanContext,
   projection: readonly string[] = [],
+  receiverIsBorrowed = false,
 ): RustExpr | undefined {
   if (storage === "structural-object") {
     const field = context.input.program.structuralShapes.field(receiverCarrier, storageIndex);
@@ -335,7 +338,7 @@ function writeRustStoredObjectFieldStorage(
     }
     if (projection.length !== 0 && (field.storage !== "stored" || field.nativeLayout !== undefined)) return undefined;
     const path = [field.targetName, ...projection];
-    if (field.storage === "bound") return writeRustBoundRecordField(receiverCarrier, receiver, field, operator, value, context);
+    if (field.storage === "bound") return writeRustBoundRecordField(receiverCarrier, receiver, field, operator, value, context, receiverIsBorrowed);
     if (rustStructuralObjectCarrierValue(receiverCarrier)?.representation === "value") {
       return field.storage !== "stored" || field.nativeLayout !== undefined ? undefined : {
         kind: "assignment", operator,

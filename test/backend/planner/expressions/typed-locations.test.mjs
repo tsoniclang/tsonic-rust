@@ -18,7 +18,7 @@ for (const surfaces of [undefined, ["js"]]) {
 export function main(): void { if (!run()) throw new Error("pointer view contract"); }` },
     });
     assert.deepEqual(result.diagnostics, []);
-    assert.match(artifactText(result, "src/index.rs"), /Location::view\(/u);
+    assert.match(artifactText(result, "src/index.rs"), /base\.try_view\(/u);
     assert.doesNotMatch(artifactText(result, "src/index.rs"), /\bunsafe\b/u);
     validateGeneratedProject(`pointer-views-${surfaces?.[0] ?? "native"}`, result.artifacts, { run: true });
   });
@@ -63,9 +63,9 @@ export function optional(pointer: Pointer<int32> | undefined): Pointer<int32> | 
   });
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
-  assert.match(output, /Location::<T>::hash\(pointer\.as_ref\(\)\)/u);
-  assert.match(output, /pointer\.map\(/u);
-  assert.match(output, /Location::map_optional\(/u);
+  assert.match(output, /Location::<T, rt::TsonicError>::hash\(pointer\.as_ref\(\)\)/u);
+  assert.match(output, /pointer\.try_map\(/u);
+  assert.match(output, /Location::try_map_optional\(/u);
   validateGeneratedProject("typed-location-projections", result.artifacts);
 });
 
@@ -89,8 +89,8 @@ export function run(): int32 {
   });
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
-  assert.match(output, /Location::bind\(/u);
-  assert.match(output, /Location::bind\(\s*identity,/u);
+  assert.match(output, /Location::try_bind\(/u);
+  assert.match(output, /Location::try_bind\(\s*identity,/u);
   validateGeneratedProject("typed-location-binding", result.artifacts);
 });
 
@@ -122,11 +122,11 @@ export function bothMissing(): boolean {
 
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
-  assert.match(output, /pub fn replace<T>\(pointer: rt::Location<T>, value: T\) -> T/u);
-  assert.match(output, /pointer\.store\(value\);\s*pointer\.load\(\)/u);
-  assert.match(output, /pub fn same<T>\(left: Option<rt::Location<T>>, right: Option<rt::Location<T>>\) -> bool/u);
-  assert.match(output, /rt::Location::<T>::same\(left\.as_ref\(\), right\.as_ref\(\)\)/u);
-  assert.match(output, /rt::Location::<i32>::same\(\s*Option::<rt::Location<i32>>::None\.as_ref\(\),\s*Option::<rt::Location<i32>>::None\.as_ref\(\),?\s*\)/u);
+  assert.match(output, /pub fn replace<T>\(\s*pointer: rt::Location<T, rt::TsonicError>,\s*value: T,?\s*\) -> Result<T, rt::TsonicError>/u);
+  assert.match(output, /pointer\.try_store\(value\)\?;\s*pointer\.try_load\(\)/u);
+  assert.match(output, /pub fn same<T>\(\s*left: Option<rt::Location<T, rt::TsonicError>>,\s*right: Option<rt::Location<T, rt::TsonicError>>,?\s*\) -> bool/u);
+  assert.match(output, /rt::Location::<T, rt::TsonicError>::same\(left\.as_ref\(\), right\.as_ref\(\)\)/u);
+  assert.match(output, /rt::Location::<i32, rt::TsonicError>::same\(\s*Option::<rt::Location<i32, rt::TsonicError>>::None\.as_ref\(\),\s*Option::<rt::Location<i32, rt::TsonicError>>::None\.as_ref\(\),?\s*\)/u);
   assert.doesNotMatch(output, /(?:left|right)\.clone\(\)/u);
   assert.doesNotMatch(output, /equalPointer|loadPointer|storePointer/u);
 });
@@ -154,8 +154,8 @@ export function retainFunction<T>(
 
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
-  assert.match(output, /pub fn retain_raw<T: 'static>\(value: \*const T\) -> rt::Location<\*const T>/u);
-  assert.match(output, /pub fn retain_function<T: 'static>\(value: fn\(T\) -> T\) -> rt::Location<fn\(T\) -> T>/u);
+  assert.match(output, /pub fn retain_raw<T: 'static>\(value: \*const T\) -> rt::Location<\*const T, rt::TsonicError>/u);
+  assert.match(output, /pub fn retain_function<T: 'static>\(value: fn\(T\) -> T\) -> rt::Location<fn\(T\) -> T, rt::TsonicError>/u);
   assert.doesNotMatch(output, /retain_(?:raw|function)<T: Clone/u);
   validateGeneratedProject("typed-location-pointer-generics", result.artifacts);
 });
@@ -312,11 +312,11 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
-  assert.match(output, /let local: rt::Location<i32> = rt::Location::allocate\(1\);/u);
-  assert.match(output, /fn allocate_generic<T: Clone \+ 'static>\(value: T\) -> rt::Location<T>/u);
-  assert.match(output, /\.project_member\(/u);
+  assert.match(output, /let local: rt::Location<i32, core::convert::Infallible> = rt::Location::allocate\(1\);/u);
+  assert.match(output, /fn allocate_generic<T: Clone \+ 'static>\(value: T\) -> rt::Location<T, rt::TsonicError>/u);
+  assert.match(output, /rt::Location::try_bind_projected\(/u);
   assert.match(output, /\.project_index\(/u);
-  assert.match(output, /rt::Location::<i32>::same/u);
+  assert.match(output, /rt::Location::<i32, rt::TsonicError>::same/u);
   const run = validateGeneratedProject("typed-location-proof-bin", result.artifacts, { run: true });
   assert.equal(run.status, 0);
 });
@@ -476,15 +476,15 @@ export function publicValue<V>(value: V): Pointer<V> {
   assert.deepEqual(result.diagnostics, []);
   assert.match(
     artifactText(result, "src/storage.rs"),
-    /pub fn allocate_value<T: Clone \+ 'static>\(value: T\) -> rt::Location<T>/u,
+    /pub fn allocate_value<T: Clone \+ 'static>\(value: T\) -> rt::Location<T, rt::TsonicError>/u,
   );
   assert.match(
     artifactText(result, "src/middle.rs"),
-    /pub fn forward_value<U: Clone \+ 'static>\(value: U\) -> rt::Location<U>/u,
+    /pub fn forward_value<U: Clone \+ 'static>\(value: U\) -> rt::Location<U, rt::TsonicError>/u,
   );
   assert.match(
     artifactText(result, "src/index.rs"),
-    /pub fn public_value<V: Clone \+ 'static>\(value: V\) -> rt::Location<V>/u,
+    /pub fn public_value<V: Clone \+ 'static>\(value: V\) -> rt::Location<V, rt::TsonicError>/u,
   );
   validateGeneratedProject("typed-location-transitive-contract-lib", result.artifacts);
 });
@@ -688,17 +688,29 @@ export function reject(): void {
   }]);
 });
 
-test("pointer binding rejects identities without a reference identity contract", () => {
-  assertRustTargetRejection({ files: { "index.ts": `
-import { bindPointer } from "@tsonic/core/lang.js";
+test("pointer binding retains the exact empty-object reference identity", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    target: { id: "rust", options: { outputType: "bin" } },
+    files: { "index.ts": `
+import { bindPointer, equalPointer, loadPointer, storePointer } from "@tsonic/core/lang.js";
 import type { int32, Pointer } from "@tsonic/core/types.js";
-export function reject(): Pointer<int32> {
-  return bindPointer<int32>({}, () => 1, value => {});
+function create(): Pointer<int32> {
+  let current: int32 = 1;
+  return bindPointer<int32>({}, () => current, value => { current = value; });
 }
-` } }, [{
-    code: "RUST_POINTER_IDENTITY_NOT_PROVEN",
-    message: "Pointer binding requires a closed reference identity carrier.",
-  }]);
+export function main(): void {
+  const first = create();
+  const alias = first;
+  const second = create();
+  storePointer(alias, 7);
+  if (loadPointer(first) !== 7 || loadPointer(second) !== 1 ||
+      !equalPointer(first, alias) || equalPointer(first, second)) {
+    throw new Error("empty-object pointer identity");
+  }
+}
+` } });
+  assert.deepEqual(result.diagnostics, []);
+  validateGeneratedProject("typed-location-empty-identity", result.artifacts, { run: true });
 });
 
 test("reachability uses exact marker identity and retains later source uses", { timeout: 300_000 }, () => {

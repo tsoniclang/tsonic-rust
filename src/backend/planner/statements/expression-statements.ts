@@ -326,16 +326,18 @@ export function planRustAssignmentWrite(
           if (current === undefined) {
             return undefined;
           }
+          const nextName = allocateRustSyntheticName(syntheticNames, "union_next");
+          const next: RustExpr = operator === "+=" && isRustStringCarrier(fact.resultCarrier)
+            ? rustStringConcat([{ kind: "path", path: currentName }, value])
+            : { kind: "evaluate-then", discard: "unit", effect: { kind: "assignment", operator,
+                target: { kind: "path", path: currentName }, value },
+                value: { kind: "path", path: currentName } };
           const written = writeRustUnionField(
             field,
             receiverCarrier,
             payload,
             "=",
-            operator === "+=" && isRustStringCarrier(fact.resultCarrier)
-              ? rustStringConcat([{ kind: "path", path: currentName }, value])
-              : { kind: "evaluate-then", discard: "unit", effect: { kind: "assignment", operator,
-                  target: { kind: "path", path: currentName }, value },
-                  value: { kind: "path", path: currentName } },
+            { kind: "path", path: nextName },
             context,
           );
           if (written === undefined) {
@@ -347,18 +349,23 @@ export function planRustAssignmentWrite(
               name: currentName,
               mutable: !(operator === "+=" && isRustStringCarrier(fact.resultCarrier)),
               value: current,
-            }],
+            }, { name: nextName, value: next }],
             value: written,
           };
         }
-        return writeRustUnionField(
+        const written = writeRustUnionField(
           field,
           receiverCarrier,
           payload,
           operator,
-          value,
+          { kind: "path", path: valueName },
           context,
         );
+        return written === undefined ? undefined : {
+          kind: "block",
+          bindings: [{ name: valueName, value }],
+          value: written,
+        };
       },
     );
     return projected === undefined
@@ -451,6 +458,8 @@ export function planRustAssignmentWrite(
             sourceField.storageIndex,
             fact.resultCarrier,
             context,
+            [],
+            true,
           )
         : readRustProjectDispatchedField(
             selectedReceiver,
@@ -477,6 +486,8 @@ export function planRustAssignmentWrite(
             "=",
             { kind: "path", path: nextName },
             context,
+            [],
+            true,
           )
         : writeRustProjectDispatchedField(
             selectedReceiver,
@@ -520,6 +531,8 @@ export function planRustAssignmentWrite(
             sourceField.storageIndex,
             fact.resultCarrier,
             context,
+            [],
+            true,
           )
         : readRustProjectDispatchedField(
             selectedReceiver,
@@ -539,6 +552,8 @@ export function planRustAssignmentWrite(
             "=",
             concatenated,
             context,
+            [],
+            true,
           )
         : writeRustProjectDispatchedField(
             selectedReceiver,
@@ -569,12 +584,12 @@ export function planRustAssignmentWrite(
       const selectedReceiver: RustExpr = { kind: "path", path: receiverName };
       const current = sourceField.dispatch === undefined
         ? readRustStoredObjectField(sourceField.storage, sourceField.receiverCarrier, selectedReceiver,
-            sourceField.storageIndex, fact.resultCarrier, context)
+            sourceField.storageIndex, fact.resultCarrier, context, [], true)
         : readRustProjectDispatchedField(selectedReceiver, sourceField.dispatch.read, dispatchReadRole!);
       const next: RustExpr = { kind: "path", path: currentName };
       const written = sourceField.dispatch === undefined
         ? writeRustStoredObjectField(sourceField.storage, sourceField.receiverCarrier, selectedReceiver,
-            sourceField.storageIndex, "=", next, context)
+            sourceField.storageIndex, "=", next, context, [], true)
         : writeRustProjectDispatchedField(selectedReceiver,
             allocateRustSyntheticName(context.syntheticNames, "dispatch_receiver"), sourceField.dispatch.read,
             sourceField.dispatch.write, "=", next, { read: dispatchRoles!.read, write: dispatchRoles!.write! });
@@ -596,6 +611,8 @@ export function planRustAssignmentWrite(
           operator,
           { kind: "path", path: valueName },
           context,
+          [],
+          true,
         )
       : writeRustProjectDispatchedField(
           { kind: "path", path: receiverName },

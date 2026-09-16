@@ -226,6 +226,11 @@ function rustDeclarationItemNames(
 ): readonly string[] {
   if (context.facts.getFact(declaration, rustCompileTimeSourceKey)) return emptyNames;
   if (context.facts.getFact(declaration, rustTypeOnlyDeclarationFactKey) !== undefined) return emptyNames;
+  if (context.ast.is.IsFunctionDeclaration(declaration) &&
+    context.sourceCallableSpecializations.requiresSpecialization(declaration)) {
+    return Object.freeze(context.sourceCallableSpecializations.variantsForCallable(declaration)
+      .map(variant => variant.targetName).sort(compareNames));
+  }
   if (
     context.ast.kindName(declaration) === "KindTypeAliasDeclaration" &&
     context.facts.getFact(declaration, rustTypeAliasDeclarationFactKey)?.kind ===

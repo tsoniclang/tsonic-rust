@@ -482,7 +482,7 @@ export function create(): Base { return new Derived(); }
   assert.ok(result.diagnostics.some(({ code }) =>
     code === "RUST_MISSING_TARGET_FACT"));
   assert.ok(result.diagnostics.some(({ message }) =>
-    message.includes("does not preserve the exact contract Rust ABI")));
+    message.includes("does not preserve its finalized contract-to-implementation Rust ABI adapter")));
 });
 
 test("conflicting declaration safety contracts fail once at the exact declaration", () => {

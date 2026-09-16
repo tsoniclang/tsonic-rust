@@ -116,6 +116,7 @@ export function rustGuardedArrayEntryCarrier(
     if (statement === undefined || condition === undefined) continue;
     const selected = facts.getFact(condition, rustTargetOperationFactKey);
     if (selected?.kind !== "option-check" || !rustTargetTypeRefEquals(selected.nullishCarrier, rustUndefinedTargetType()) ||
+      selected.nullishDepths.length !== 1 || selected.nullishDepths[0] !== 0 ||
       !rustTargetTypeRefEquals(selected.optionCarrier, sourceCarrier)) continue;
     const checked = selected.optionOperand === "left" ? BinaryExpression_Left(ast, condition) : BinaryExpression_Right(ast, condition);
     const present = (statement.ThenStatement === child && selected.negated) ||

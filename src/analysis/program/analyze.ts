@@ -39,7 +39,7 @@ import { rustTypeFamilyNormalizer } from "../../policy/types/type-family-normali
 import { createSourceArrayDensityQuery } from "@tsonic/target-api/source";
 import { jsArrayMemberEffect } from "@tsonic/js-source-profile";
 import { rustJsTypedArrayTargetIds } from "../../target-model/types/carriers/js.js";
-import { resolveSelectedJsSourceMember } from "../../policy/evidence/selected-source.js";
+import { resolveSelectedJsSourceExportName, resolveSelectedJsSourceMember } from "../../policy/evidence/selected-source.js";
 import { recordRustTypeOnlyDeclarations } from "../declarations/type-only.js";
 import { recordRustProjectCallableAdapterFacts } from "../project-types/callable-adapters.js";
 import { recordRustValueStructDeclaration } from "../declarations/value-structs.js";
@@ -87,9 +87,10 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
         const type = semantics.types.expressionType(expression);
         const symbol = type === undefined ? undefined : semantics.declarations.typeSymbol(type);
         const declarations = symbol === undefined ? [] : semantics.declarations.symbolDeclarations(symbol);
-        return declarations.length > 0 && declarations.every(declaration =>
-          sourceProfiles.profileForNode(declaration, context.ast) === "js" && context.ast.is.IsInterfaceDeclaration(declaration) &&
-          Object.prototype.hasOwnProperty.call(rustJsTypedArrayTargetIds, context.ast.text(context.ast.name(declaration))));
+        return declarations.length > 0 && declarations.every(declaration => {
+          const name = resolveSelectedJsSourceExportName(context, declaration, sourceProfiles);
+          return name !== undefined && Object.prototype.hasOwnProperty.call(rustJsTypedArrayTargetIds, name);
+        });
       },
       memberEffect: declaration => jsArrayMemberEffect(resolveSelectedJsSourceMember(context, declaration, sourceProfiles)),
     }),

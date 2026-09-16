@@ -1,5 +1,6 @@
 import {
   CatchClause_Block,
+  ClassStaticBlock_Body,
   TryStatement_CatchClause,
   TryStatement_FinallyBlock,
   TryStatement_TryBlock,
@@ -622,16 +623,24 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
     ]);
   }
   for (const sourceFile of projectSourceFiles) {
-    const runtimeStatements = (ast.statements(sourceFile) as readonly Node[]).filter((statement) => {
+    const runtimeStatements = (ast.statements(sourceFile) as readonly Node[]).flatMap((statement): readonly Node[] => {
       const kind = ast.kindName(statement);
+      if (kind === "KindClassDeclaration") {
+        return ast.members(statement).flatMap(member => {
+          if (member === undefined) return [];
+          const initializer = ast.kindName(member) === "KindClassStaticBlockDeclaration"
+            ? ClassStaticBlock_Body(ast, member)
+            : ast.hasModifierKind(member, "static") ? Node_Initializer(ast, member) : undefined;
+          return initializer === undefined ? [] : [initializer];
+        });
+      }
       return kind !== KindFunctionDeclaration &&
-        kind !== "KindClassDeclaration" &&
         kind !== "KindInterfaceDeclaration" &&
         kind !== "KindTypeAliasDeclaration" &&
         kind !== "KindEnumDeclaration" &&
         kind !== "KindImportDeclaration" &&
         kind !== "KindExportDeclaration" &&
-        kind !== "KindEndOfFile";
+        kind !== "KindEndOfFile" ? [statement] : [];
     });
     if (runtimeStatements.some(expressionRegionIsFallible)) {
       walk.context.facts.set(sourceFile, rustFallibleFactKey, { fallible: true }, [

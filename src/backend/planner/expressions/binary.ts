@@ -19,6 +19,7 @@ import { effectivePlannedExpressionCarrier, expressionCarrier, requireExpression
 import { isRustBinaryOperator } from "../../../target-model/syntax/tokens.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { negateRustBooleanExpression, rustBorrowedStringView, rustStringConcat } from "../../target-ast/expressions.js";
+import { foldRustIntegerComparison } from "../../target-ast/integer-comparisons.js";
 import { planExpression, planExpressionBeforeValueProjections } from "./entry.js";
 import type { RustExpressionResultUse } from "./entry.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
@@ -32,9 +33,10 @@ import {
 import { rustOptionProjectionFactKey } from "../../../analysis/facts/keys.js";
 import { rustTargetOperationText } from "../../../analysis/facts/target-operation.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustOptionNestingDepth } from "../../../target-model/types/carriers/optional.js";
 import { rustValueCarrierBeforeOptionProjection } from "../../../analysis/facts/value-carrier-queries.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
@@ -285,11 +287,35 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
       ));
       return undefined;
     }
-    const check = (receiver: RustExpr): RustExpr => ({
-      kind: "option-presence",
-      receiver,
-      present: fact.negated,
-    });
+    const patterns: RustPattern[] = [];
+    const rejectDepths = (): undefined => {
+      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+        "rust.backend.option-check-depths", "Option nullish depths must be ordered, unique and contained in the exact operand carrier."));
+      return undefined;
+    };
+    if (!Array.isArray(fact.nullishDepths) || fact.nullishDepths.length === 0) return rejectDepths();
+    for (const [index, depth] of fact.nullishDepths.entries()) {
+      let carrier = fact.optionCarrier;
+      let pattern: RustPattern = { kind: "path", path: "None" };
+      if (!Number.isSafeInteger(depth) || depth < 0 ||
+        (index > 0 && depth <= fact.nullishDepths[index - 1]!)) return rejectDepths();
+      for (let layer = 0; layer < depth; layer += 1) {
+        const element = rustOptionElementCarrier(carrier);
+        if (element === undefined) return rejectDepths();
+        carrier = element;
+        pattern = { kind: "tuple-variant", path: "Some", elements: [pattern] };
+      }
+      if (rustOptionElementCarrier(carrier) === undefined) return rejectDepths();
+      patterns.push(pattern);
+    }
+    const check = (receiver: RustExpr): RustExpr => {
+      if (fact.nullishDepths.length === 1 && fact.nullishDepths[0] === 0) {
+        return { kind: "option-presence", receiver, present: fact.negated };
+      }
+      const matched: RustExpr = { kind: "matches", expression: receiver,
+        pattern: patterns.length === 1 ? patterns[0]! : { kind: "or", alternatives: patterns } };
+      return fact.negated ? { kind: "unary", operator: "!", operand: matched } : matched;
+    };
     if (isExplicitRustNullishValue(nullish)) {
       return check(planRustNonConsumingValue(optionNode, option, context));
     }
@@ -384,10 +410,12 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
     const valueCarrier = valueNode === undefined
       ? undefined
       : rustValueCarrierBeforeOptionProjection(context.input.program.facts, valueNode);
+    const nestingDepth = rustOptionNestingDepth(fact.optionCarrier, fact.valueCarrier);
+    const remainingDepth = rustOptionNestingDepth(fact.optionCarrier, valueProjection?.resultCarrier ?? fact.valueCarrier);
     if (optionNode === undefined || valueNode === undefined || option === undefined || value === undefined ||
       !rustTargetTypeRefEquals(optionCarrier, fact.optionCarrier) ||
       !rustTargetTypeRefEquals(valueCarrier, fact.valueCarrier) ||
-      !rustTargetTypeRefEquals(rustOptionElementCarrier(fact.optionCarrier), fact.valueCarrier) ||
+      nestingDepth === undefined || nestingDepth === 0 || remainingDepth === undefined ||
       !requireExpressionCarrier(
         node,
         rustSourcePrimitiveTargetType("bool"),
@@ -404,7 +432,7 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
       (valueProjection !== undefined &&
         (valueProjection.kind !== "some" ||
           !rustTargetTypeRefEquals(valueProjection.sourceCarrier, fact.valueCarrier) ||
-          !rustTargetTypeRefEquals(valueProjection.resultCarrier, fact.optionCarrier)))) {
+          !rustTargetTypeRefEquals(rustOptionElementCarrier(valueProjection.resultCarrier), fact.valueCarrier)))) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, node),
         "rust.backend.option-value-equality",
@@ -412,9 +440,10 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
       ));
       return undefined;
     }
-    const comparableValue: RustExpr = valueProjection === undefined
-      ? { kind: "call", path: "Some", args: [value] }
-      : value;
+    let comparableValue: RustExpr = value;
+    for (let depth = 0; depth < remainingDepth; depth += 1) {
+      comparableValue = { kind: "call", path: "Some", args: [comparableValue] };
+    }
     return {
       kind: "binary",
       operator: fact.negated ? "!=" : "==",
@@ -426,13 +455,13 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
         : planRustNonConsumingValue(optionNode, option, context),
     };
   }
-  if (fact !== undefined && fact.kind === "disjoint-equality") {
+  if (fact !== undefined && fact.kind === "constant-equality") {
     const leftNode = BinaryExpression_Left(context.input.program.source.ast, node);
     const rightNode = BinaryExpression_Right(context.input.program.source.ast, node);
     const left = leftNode === undefined ? undefined : planExpression(leftNode, context);
     const right = rightNode === undefined ? undefined : planExpression(rightNode, context);
     if (leftNode === undefined || rightNode === undefined || left === undefined || right === undefined ||
-      !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.disjoint-equality-carrier") ||
+      !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.constant-equality-carrier") ||
       !selectedOperationMatches(
         context.input.program.facts.getSelectedTargetOperator(node),
         fact.operationId,
@@ -442,8 +471,8 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
       )) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, node),
-        "rust.backend.disjoint-equality-selected-evidence",
-        "Disjoint equality conflicts with its exact finalized source operation evidence.",
+        "rust.backend.constant-equality-selected-evidence",
+        "Constant equality conflicts with its exact finalized source operation evidence.",
       ));
       return undefined;
     }
@@ -525,6 +554,8 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
       ));
       return undefined;
     }
+    const integerComparison = foldRustIntegerComparison(fact.operator, comparisonLeft, comparisonRight);
+    if (integerComparison !== undefined) return integerComparison;
     const booleanComparison = planBooleanLiteralComparison(
       fact.operator,
       comparisonLeft,

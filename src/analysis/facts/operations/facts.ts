@@ -181,6 +181,7 @@ export type RustTargetOperationFact =
       readonly optionOperand: "left" | "right";
       readonly optionCarrier: TargetTypeRef;
       readonly nullishCarrier: TargetTypeRef;
+      readonly nullishDepths: readonly number[];
     }
   | {
       readonly kind: "option-equality";
@@ -197,7 +198,7 @@ export type RustTargetOperationFact =
       readonly valueCarrier: TargetTypeRef;
     }
   | {
-      readonly kind: "disjoint-equality";
+      readonly kind: "constant-equality";
       readonly operationId: string;
       readonly resultCarrier: TargetTypeRef;
       readonly value: boolean;
@@ -750,7 +751,7 @@ export function rustTargetOperationResultCarrier(fact: RustTargetOperationFact):
     case "nullish-identity":
     case "nullish-assignment":
     case "non-null-expression":
-    case "disjoint-equality":
+    case "constant-equality":
     case "typed-location":
     case "native-pointer":
     case "project-type-test":

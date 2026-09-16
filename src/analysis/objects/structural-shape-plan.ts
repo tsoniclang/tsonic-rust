@@ -282,6 +282,15 @@ export function createRustStructuralShapePlan(
   const byKey = new Map(definitions.flatMap((definition) =>
     definition.sourceCarriers.map((carrier) =>
       [closedMetadataKey(carrier), instantiateStructuralDefinition(definition, carrier)] as const)));
+  for (const definition of definitions) {
+    const key = closedMetadataKey(definition.carrier);
+    const existing = byKey.get(key);
+    if (existing !== undefined && (existing.targetName !== definition.targetName ||
+      existing.componentId !== definition.componentId)) {
+      throw new Error("Rust structural storage has conflicting canonical template identities.");
+    }
+    byKey.set(key, definition);
+  }
   return Object.freeze({
     ...createRustGeneratedUnionPlan(unions, componentForFile, usedTypeNamesByComponent),
     definitions: Object.freeze(definitions),

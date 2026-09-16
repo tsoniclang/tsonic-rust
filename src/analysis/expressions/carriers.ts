@@ -27,6 +27,8 @@ import {
 } from "@tsonic/target-api/source";
 import {
   isRustDefinitelyNullishCarrier,
+  isRustBigIntCarrier,
+  isRustNumericCarrier,
   isRustOptionCarrier,
   isRustProgramErrorCarrier,
   isRustJsValueCarrier,
@@ -409,6 +411,8 @@ function resolveSelectedFlowReadCarrier(
     const carrier = resolveRustTargetTypeRef(
       selectedType, rustResolutionContext(walk, expression), walk.operationOptions,
     );
+    if (rustTargetTypeRefEquals(carrier, rustJsErrorTargetType()) &&
+      walk.context.projectTypes.builtinErrorProjectionAvailable === true) return carrier;
     const definition = walk.context.projectTypes.definitionForCarrier(carrier);
     return definition !== undefined &&
       walk.context.projectTypes.programErrorVariant(definition) !== undefined
@@ -576,7 +580,11 @@ function resolveExpressionOperationDependencies(
   if (kind === KindPrefixUnaryExpression || kind === KindPostfixUnaryExpression) {
     const operand = Node_Operand(ast, expression);
     if (operand !== undefined) {
-      resolveExpressionCarrier(walk, operand, sourceFile, expected);
+      const numericUnary = ast.operatorKindName(expression) === "KindMinusToken" ||
+        ast.operatorKindName(expression) === "KindPlusToken";
+      const operandExpected = numericUnary && !isRustNumericCarrier(expected) && !isRustBigIntCarrier(expected)
+        ? undefined : expected;
+      resolveExpressionCarrier(walk, operand, sourceFile, operandExpected);
     }
     return;
   }

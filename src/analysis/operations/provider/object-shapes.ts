@@ -493,7 +493,7 @@ export function acceptProjectSourceCall(
     ? callableImplementation.implementation.declaration
     : selectedCallableDeclaration;
   const genericOwner = construction
-    ? callableOwner?.declaration
+    ? selectedOwnerDefinition?.declaration
     : selectedCallableDeclaration;
   const targetGenericArguments = genericOwner === undefined
     ? undefined
@@ -568,7 +568,7 @@ export function acceptProjectSourceCall(
     : selectedCallReceiverValueCarrier(request, context, options);
   const unionMethods = construction ? undefined : selectRustUnionMethods(request, receiverCarrier, context, options);
   const ownerCarrier = unionMethods === undefined ? receiverCarrier : rustUnionMethodOwner(unionMethods, callableDeclaration);
-  if (rustSourceUnionCarrierValue(receiverCarrier)?.origin === "generated" &&
+  if (rustSourceUnionCarrierValue(receiverCarrier) !== undefined &&
     (unionMethods === undefined || ownerCarrier === undefined)) {
     return rejectSelectedOperation(request.source.call, context, "RUST_UNION_METHOD_IDENTITY_MISSING",
       "A closed class union call requires one exact selected method implementation per arm.");

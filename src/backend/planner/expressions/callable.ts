@@ -52,21 +52,6 @@ import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
-function collapseExactForwardingClosure(
-  closure: RustExpr,
-  captureCount: number,
-): RustExpr {
-  if (captureCount !== 0 || closure.kind !== "closure" || closure.move === true ||
-    closure.params.some((parameter) => parameter.byRefCopy) ||
-    closure.body.kind !== "call" || (closure.body.genericArguments?.length ?? 0) !== 0 ||
-    closure.body.args.length !== closure.params.length ||
-    !closure.body.args.every((argument, index) =>
-      argument.kind === "path" && argument.path === closure.params[index]?.name)) {
-    return closure;
-  }
-  return { kind: "path", path: closure.body.path };
-}
-
 export function planCallableExpression(
   node: Node,
   context: RustPlanContext,
@@ -485,9 +470,8 @@ export function planCallableExpression(
           },
         };
     if (callableProtocol === undefined) {
-      const nativeCallable = collapseExactForwardingClosure(closure, captureBindings.length);
       return nativeClosureProtocol === undefined || captureBindings.length === 0
-        ? nativeCallable
+        ? closure
         : { kind: "block", bindings: captureBindings, value: closure };
     }
     const callableType = rustCallableConstructionType(
@@ -573,9 +557,8 @@ export function planCallableExpression(
         body: finalizedBlock,
       };
   if (callableProtocol === undefined) {
-    const nativeCallable = collapseExactForwardingClosure(closure, captureBindings.length);
     return nativeClosureProtocol === undefined || captureBindings.length === 0
-      ? nativeCallable
+      ? closure
       : { kind: "block", bindings: captureBindings, value: closure };
   }
   const callableType = rustCallableConstructionType(

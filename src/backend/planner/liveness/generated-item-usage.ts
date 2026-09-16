@@ -557,7 +557,7 @@ export function analyzeRustGeneratedItemUsage(input: {
       case "option-check":
       case "option-equality":
       case "option-value-equality":
-      case "disjoint-equality":
+      case "constant-equality":
       case "program-error-type-test":
       case "builtin-error-type-test":
       case "builtin-error-property":

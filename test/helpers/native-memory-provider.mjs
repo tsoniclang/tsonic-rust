@@ -72,10 +72,10 @@ export function nativeMemoryProvider(cratePath, { missingRelation = false, wrong
         ...(typeParameters === undefined ? {} : {
           genericParameters: typeParameters.map(parameter => ({ kind: "type", sourceName: parameter.name })),
         }),
-        targetGenericArguments: [
+        ...(typeParameters !== undefined || name === "location" ? { targetGenericArguments: [
           ...(typeParameters ?? []).map(parameter => ({ kind: "type", type: { kind: "type-parameter", name: parameter.name } })),
           ...(name === "location" || name === "relay" ? [{ kind: "type", type: rustProgramErrorTargetType() }] : []),
-        ],
+        ] } : {}),
       })),
     crates: [{ crateName: "native_memory_proof", cargoPath: cratePath }],
   });

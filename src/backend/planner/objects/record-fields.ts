@@ -33,6 +33,7 @@ export function rustRecordFieldResult(expression: RustExpr, context: RustPlanCon
 
 export function readRustBoundRecordField(
   receiverCarrier: TargetTypeRef, receiver: RustExpr, field: RustStructuralShapeField, context: RustPlanContext,
+  receiverIsBorrowed = false,
 ): RustExpr | undefined {
   context.usedAliases?.add("rt");
   const owner = rustRecordFieldStorageType(field, context);
@@ -41,13 +42,14 @@ export function readRustBoundRecordField(
   return rustRecordFieldResult(value ? {
     kind: "method-call", receiver: { kind: "field", receiver, name: field.targetName }, method: "try_load", args: [],
   } : { kind: "associated-call", owner, method: "try_load_object", args: [
-    { kind: "reference", expr: receiver }, rustRecordFieldSelector(field, false),
+    receiverIsBorrowed ? receiver : { kind: "reference", expr: receiver }, rustRecordFieldSelector(field, false),
   ] }, context);
 }
 
 export function writeRustBoundRecordField(
   receiverCarrier: TargetTypeRef, receiver: RustExpr, field: RustStructuralShapeField,
   operator: RustAssignmentOperator, value: RustExpr, context: RustPlanContext,
+  receiverIsBorrowed = false,
 ): RustExpr | undefined {
   if (operator !== "=") return mutateRustBoundRecordField(receiverCarrier, receiver, field,
     current => ({ kind: "assignment", target: current, operator, value }), context);
@@ -58,7 +60,7 @@ export function writeRustBoundRecordField(
   return rustRecordFieldResult(direct ? {
     kind: "method-call", receiver: { kind: "field", receiver, name: field.targetName }, receiverMode: "mut-ref", method: "try_store", args: [value],
   } : { kind: "associated-call", owner, method: "try_store_object", args: [
-    { kind: "reference", expr: receiver }, rustRecordFieldSelector(field, false), rustRecordFieldSelector(field, true), value,
+    receiverIsBorrowed ? receiver : { kind: "reference", expr: receiver }, rustRecordFieldSelector(field, false), rustRecordFieldSelector(field, true), value,
   ] }, context);
 }
 

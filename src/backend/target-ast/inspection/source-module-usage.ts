@@ -296,7 +296,8 @@ function rustExpressionReferencesModuleAlias(expression: RustExpr, alias: string
     case "unreachable":
       return false;
     case "path":
-      return rustPathReferencesModuleAlias(expression.path, alias);
+      return rustPathReferencesModuleAlias(expression.path, alias) ||
+        rustGenericArgumentsReferenceModuleAlias(expression.genericArguments, alias);
     case "bottom":
     case "numeric-cast":
     case "unsafe":
@@ -416,6 +417,8 @@ function rustPatternReferencesModuleAlias(pattern: RustPattern, alias: string): 
     case "tuple":
       return pattern.elements.some((element) =>
         rustPatternReferencesModuleAlias(element, alias));
+    case "or":
+      return pattern.alternatives.some(alternative => rustPatternReferencesModuleAlias(alternative, alias));
     case "tuple-variant":
       return rustPathReferencesModuleAlias(pattern.path, alias) ||
         pattern.elements.some((element) =>

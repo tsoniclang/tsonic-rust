@@ -890,11 +890,12 @@ test("source-package semantics are sealed before physical Rust planning", () => 
     "utf8",
   );
   assert.match(componentAnalysis, /publishesImplementationAbi/u);
-  assert.match(componentAnalysis, /componentReachesError/u);
+  assert.match(componentAnalysis, /errorOwnerComponentId/u);
+  assert.match(componentAnalysis, /errorOwners\.get/u);
   assert.match(componentPlanner, /program\.sourcePackageComponents/u);
   assert.doesNotMatch(
     componentPlanner,
-    /programErrorDefinitions|componentReachesError|configuration\.outputType/u,
+    /programErrorDefinitions|componentReachesError|errorOwners\.|configuration\.outputType/u,
   );
 });
 

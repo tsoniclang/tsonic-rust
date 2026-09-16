@@ -89,6 +89,9 @@ test("selected record instantiation retains exact reordered members and one gene
     input.sourceTypes.structuralInstantiations());
   assert.equal(plan.definitions.length, 1);
   assert.equal(plan.definitions[0].genericParameters.length, 2);
+  assert.deepEqual(plan.definitionForCarrier(plan.definitions[0].carrier), plan.definitions[0]);
+  assert.deepEqual(plan.definitionForCarrier(plan.definitions[0].carrier).genericArguments.map(argument => argument.type),
+    [{ kind: "type-parameter", name: "Storage0" }, { kind: "type-parameter", name: "Storage1" }]);
   const selected = plan.definitionForCarrier(input.selectedCarrier);
   assert.deepEqual(selected.genericArguments.map(argument => argument.type), [scalar, scalar]);
   assert.deepEqual(selected.fields.map(entry => entry.carrier), [scalar, scalar]);

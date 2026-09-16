@@ -171,7 +171,7 @@ export function main(): void {
   const maximum: uint32 = 4294967295;
   const scalar = allocatePointer(new Box<uint32>(maximum));
   check(read<uint32>(retained<uint32>(scalar)) === maximum);
-  const data = { count: maximum };
+  const data: { count: uint32 } = { count: maximum };
   const record = allocatePointer(new Box(data));
   const alias = read<Value>(retained<Value>(record));
   alias.count = 7;
@@ -183,3 +183,49 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   validateGeneratedProject("inferred-pointer-family", result.artifacts, { run: true });
 });
+
+test("pointer transport rejects inferred number storage as an annotated uint32 record", () => {
+  const { result } = compileRust({ surfaces: ["js"], files: {
+    "index.ts": `
+import type { Pointer, uint32 } from "@tsonic/core/types.js";
+import { allocatePointer, loadPointer } from "@tsonic/core/lang.js";
+class Box<T> { value: T; constructor(value: T) { this.value = value; } }
+function read(pointer: Pointer<Box<{ count: uint32 }>>): uint32 {
+  return loadPointer(pointer).value.count;
+}
+export function example(): uint32 {
+  const maximum: uint32 = 4294967295;
+  const data = { count: maximum };
+  return read(allocatePointer(new Box(data)));
+}
+` },
+  });
+  assert.deepEqual(result.artifacts, []);
+  assert.ok(result.diagnostics.some(diagnostic => diagnostic.code === "RUST_UNSUPPORTED_AST" &&
+    diagnostic.evidence?.includes("target.capability=rust.backend.source-call-argument-carrier")));
+});
+
+for (const surfaces of [[], ["js"]]) {
+  test(`generic reference interfaces retain pointer storage without payload trait bounds (${surfaces[0] ?? "native"})`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({
+      surfaces, packages: [acmeTestingPackage()],
+      target: { id: "rust", options: { outputType: "bin", crateName: "generic_reference_interfaces" } },
+      files: { "index.ts": `
+import type { Pointer, uint8 } from "@tsonic/core/types.js";
+import { allocatePointer, loadPointer } from "@tsonic/core/lang.js";
+import { check } from "@acme/testing";
+interface Holder<T> { value: T; }
+function keep<T>(value: Holder<T>): Holder<T> { return value; }
+function replace<T>(holder: Holder<T>, value: T): void { holder.value = value; }
+export function main(): void {
+  const holder: Holder<Pointer<uint8>> = { value: allocatePointer<uint8>(7) };
+  const alias = keep(holder);
+  replace(alias, allocatePointer<uint8>(11));
+  check(loadPointer(holder.value) === 11);
+}
+` },
+    });
+    assert.deepEqual(result.diagnostics, []);
+    validateGeneratedProject(`generic-reference-interfaces-${surfaces[0] ?? "native"}`, result.artifacts, { run: true });
+  });
+}

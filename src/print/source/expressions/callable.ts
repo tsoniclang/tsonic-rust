@@ -5,7 +5,7 @@ import type {
   RustType,
 } from "../../../backend/target-ast/nodes.js";
 
-type RustDirectCall = Extract<RustExpr, { readonly kind: "call" }>;
+type RustDirectCall = Extract<RustExpr, { readonly kind: "call" | "path" }>;
 type RustAssociatedCall = Extract<RustExpr, { readonly kind: "associated-call" }>;
 type RustMethodCall = Extract<RustExpr, { readonly kind: "method-call" }>;
 

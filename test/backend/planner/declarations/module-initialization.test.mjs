@@ -299,6 +299,32 @@ export function main(): void {}
   validateGeneratedProject("fallible-module-proof", result.artifacts, { run: true });
 });
 
+for (const [label, body] of [
+  ["field", 'static value: unknown = JSON.parse("1");'],
+  ["block", 'static { JSON.parse("1"); }'],
+]) {
+  test(`static class ${label} errors participate in module initialization`, () => {
+    const { result } = compileRust({
+      surfaces: ["js"],
+      target: { id: "rust", options: { outputType: "bin", crateName: "static_error_proof" } },
+      files: { "index.ts": `export class State { ${body} } export function main(): void {}` },
+    });
+    assert.deepEqual(result.diagnostics, []);
+    assert.match(artifactText(result, "src/index.rs"),
+      /pub fn module_init\(\) -> Result<\(\), rt::TsonicError>[\s\S]*?json_parse\("1"\)\?/u);
+    assert.match(artifactText(result, "src/main.rs"), /static_error_proof::initialize\(\)\?;/u);
+    validateGeneratedProject(`static-${label}-errors`, result.artifacts, { run: true });
+  });
+}
+
+test("instance method errors do not make class definition execution fallible", () => {
+  const { result } = compileRust({ surfaces: ["js"], files: {
+    "index.ts": 'export class State { value(): unknown { return JSON.parse("1"); } }',
+  } });
+  assert.deepEqual(result.diagnostics, []);
+  assert.doesNotMatch(artifactText(result, "src/index.rs"), /pub fn module_init\(\) -> Result/u);
+});
+
 test("an active provider crate runs its declared binary hook after authored main", () => {
   const { result } = compileRust({
     packages: [acmeFilesPackage({

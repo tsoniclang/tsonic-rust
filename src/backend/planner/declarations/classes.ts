@@ -56,6 +56,7 @@ import {
   rustProjectMemberStorageVisibility,
 } from "../objects/project-storage-abi.js";
 import { rustProjectObjectIdentityImplementation } from "../objects/project-identity.js";
+import { rustProjectWrapperTraits } from "../objects/project-wrapper-traits.js";
 
 export interface PlannedProjectObjectField {
   readonly declaration: Node;
@@ -400,12 +401,14 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   if (structFields === undefined) {
     return undefined;
   }
+  const explicitWrapperTraits = representation.kind !== "value" &&
+    generics.parameters.some(parameter => parameter.kind === "type");
   const structItem: RustItem = {
     kind: "struct",
     name: className,
     ...(generatedStructAttributes.length === 0 ? {} : { attrs: generatedStructAttributes }),
     visibility: structVisibility,
-    derives: ["Clone", "Debug", "PartialEq"],
+    derives: explicitWrapperTraits ? [] : ["Clone", "Debug", "PartialEq"],
     generics,
     fields: structFields,
   };
@@ -419,6 +422,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   return [
     ...(representation.kind === "value" ? [] : [stateItem]),
     structItem,
+    ...(explicitWrapperTraits ? rustProjectWrapperTraits(openType, className, generics) : []),
     ...(representation.kind === "value"
       ? []
       : [rustProjectObjectIdentityImplementation(openType, generics, {

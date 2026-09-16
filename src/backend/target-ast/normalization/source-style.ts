@@ -13,6 +13,7 @@ import type {
 import { finalizeRustBlockLiveness } from "../inspection/source-liveness.js";
 import { rustLintAttributes } from "./lint-policy.js";
 import { rustBlockReferencesPath } from "../inspection/source-usage.js";
+import { collapseRustForwardingClosure } from "./forwarding-closures.js";
 
 export function finalizeRustSourceStyle(
   model: RustSourceFileModel,
@@ -469,7 +470,7 @@ function finalizeRustExpressionStyle(expression: RustExpr): RustExpr {
       result = { ...expression, element: finalizeRustExpressionStyle(expression.element) };
       break;
     case "closure":
-      result = { ...expression, body: finalizeRustExpressionStyle(expression.body) };
+      result = collapseRustForwardingClosure({ ...expression, body: finalizeRustExpressionStyle(expression.body) });
       break;
     case "closure-block":
       result = { ...expression, body: finalizeRustFunctionBodyStyle(expression.body) };
