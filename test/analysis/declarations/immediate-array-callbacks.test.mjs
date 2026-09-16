@@ -3,6 +3,20 @@ import test from "node:test";
 import { compileRust, acmeTestingPackage } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { compoundIndexedWriteSource } from "../../../../tsonic/test/fixtures/compound-indexed-write.mjs";
+import { bigintOperatorSource } from "../../../../tsonic/test/fixtures/bigint-operators.mjs";
+import { jsNumericPropertySource } from "../../../../tsonic/test/fixtures/js-numeric-properties.mjs";
+import { flowClassReadSource } from "../../../../tsonic/test/fixtures/flow-class-reads.mjs";
+
+for (const [name, source] of [["bigint_operators", bigintOperatorSource], ["js_numeric_properties", jsNumericPropertySource]]) {
+  test(`${name} preserves the shared source contract`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ surfaces: ["js"], packages: [acmeTestingPackage()],
+      target: { id: "rust", options: { outputType: "bin", crateName: name } },
+      files: { "index.ts": `${source}\nimport { check } from "@acme/testing"; export function main(): void { check(run()); }` },
+    });
+    assert.deepEqual(result.diagnostics, []);
+    validateGeneratedProject(name, result.artifacts, { run: true });
+  });
+}
 
 test("JS indexed compound writes preserve evaluation order and exact result carriers", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], packages: [acmeTestingPackage()],
@@ -15,6 +29,14 @@ test("JS indexed compound writes preserve evaluation order and exact result carr
 
 for (const surfaces of [[], ["js"]]) {
   const profile = surfaces[0] ?? "native";
+  test(`class flow reads preserve declaration storage and selected members (${profile})`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ surfaces, packages: [acmeTestingPackage()],
+      target: { id: "rust", options: { outputType: "bin", crateName: "flow_class_reads" } },
+      files: { "index.ts": `${flowClassReadSource}\nimport { check } from "@acme/testing"; export function main(): void { check(run()); }` },
+    });
+    assert.deepEqual(result.diagnostics, []);
+    validateGeneratedProject(`flow-class-reads-${profile}`, result.artifacts, { run: true });
+  });
   test(`direct array callbacks preserve caller mutations across repeated calls (${profile})`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, packages: [acmeTestingPackage()],
       target: { id: "rust", options: { outputType: "bin", crateName: "immediate_array_callbacks" } },

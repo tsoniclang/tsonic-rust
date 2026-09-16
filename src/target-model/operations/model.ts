@@ -88,7 +88,6 @@ export type RustValueConversionId =
   | "js-numeric-from-number"
   | "js-numeric-from-int32"
   | "js-numeric-from-bigint"
-  | "object-identity-from-empty"
   | "checked-i32-to-usize"
   | "checked-i32-to-u8"
   | "checked-f64-to-u8-trunc"
@@ -120,6 +119,11 @@ export type RustValueConversionId =
   | "owned-string-from-borrowed-str";
 
 export type RustNonOptionValueConversion =
+  | {
+      readonly kind: "object-identity-erasure";
+      readonly source: TargetTypeRef;
+      readonly target: TargetTypeRef;
+    }
   | {
       readonly kind: "native-upcast";
       readonly source: TargetTypeRef;

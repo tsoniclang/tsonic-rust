@@ -81,6 +81,12 @@ export function planExpressionAsStatement(
       KindAsteriskEqualsToken,
       KindSlashEqualsToken,
       KindPercentEqualsToken,
+      "KindLessThanLessThanEqualsToken",
+      "KindGreaterThanGreaterThanEqualsToken",
+      "KindGreaterThanGreaterThanGreaterThanEqualsToken",
+      "KindAmpersandEqualsToken",
+      "KindBarEqualsToken",
+      "KindCaretEqualsToken",
     ];
     let selectedAssignmentFact: RustAssignmentOperationFact | undefined;
     if (operatorKind === KindEqualsToken) {

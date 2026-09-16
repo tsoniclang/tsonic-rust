@@ -3,6 +3,7 @@ import type {
   TargetTypeRef,
 } from "../types/model.js";
 import type { RustLifetimeRef } from "../lifetimes/index.js";
+import { rustObjectIdentityErasureMatches } from "./object-identity.js";
 import {
   isRustTargetTypeRef,
   rustTargetTypeRefEquals,
@@ -43,8 +44,6 @@ import {
   rustJsClosedValueCarrierTraitPath,
   substituteRustTargetGenerics,
   rustTsValueTargetType,
-  rustEmptyObjectTargetType,
-  rustObjectIdentityTargetType,
 } from "../types/index.js";
 import type { RustPrimitiveTypeName } from "../syntax/tokens.js";
 import { rustNumericPromotionKind } from "./numeric-promotion.js";
@@ -165,6 +164,12 @@ export function rustValueConversionContract(
   value: RustValueConversion,
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): RustValueConversionContract | undefined {
+  if (value.kind === "object-identity-erasure") {
+    return isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) &&
+      !rustTargetTypeRefEquals(value.source, value.target) && rustObjectIdentityErasureMatches(value.source, value.target)
+      ? { category: "exact", lowering: "identity", sourceMode: "value", source: value.source, target: value.target, fallible: false }
+      : undefined;
+  }
   if (value.kind === "native-upcast") {
     const upcasts = rustNamedTypeCarrierValue(value.source)?.upcasts.filter((upcast) =>
       rustTargetTypeRefEquals(upcast.target, value.target)) ?? [];
@@ -537,8 +542,6 @@ export function rustValueConversionContract(
       rustSourcePrimitiveTargetType(numberBoxingSource), jsValueCarrier, false);
   }
   switch (value.id) {
-    case "object-identity-from-empty":
-      return contract(value.id, "projection", "rt::source_object_identity", "ref", rustEmptyObjectTargetType(), rustObjectIdentityTargetType(), false);
     case "js-numeric-from-number":
       return contract(value.id, "exact", "js_abi::JsNumeric::from_number", "value", float64Carrier, rustJsNumericTargetType(), false);
     case "js-string-number-from-string":
@@ -625,6 +628,9 @@ export function rustValueConversionIsFallible(value: RustValueConversion | undef
 }
 
 export function rustValueConversionIdentity(value: RustValueConversion): string {
+  if (value.kind === "object-identity-erasure") {
+    return `object-identity-erasure.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}`;
+  }
   if (value.kind === "native-upcast") {
     return `native-upcast.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}.${value.path}`;
   }
@@ -700,6 +706,7 @@ export function substituteRustValueConversion(
         ),
       });
     case "source-union-variant":
+    case "object-identity-erasure":
     case "native-upcast":
     case "bottom-coercion":
     case "js-argument-vector-callback":

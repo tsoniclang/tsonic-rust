@@ -14,6 +14,13 @@ export function main(): void {
   ${surfaces === undefined ? "" : `
   const tokens: MoreTokens = [{}, {}];
   if (tokens.length !== 2) throw new Error("array facade length");
+  const originalTokens = [{}, {}];
+  const tokenAlias: MoreTokens = originalTokens;
+  const replacement = {};
+  originalTokens[0] = replacement;
+  if (tokenAlias[0] !== replacement) throw new Error("identity facade live alias");
+  Object.freeze(replacement);
+  if (!Object.isFrozen(tokenAlias[0])) throw new Error("identity facade frozen alias");
   const original = [2, 3];
   const alias: Values<number> = original;
   original[0] = 7;
