@@ -245,7 +245,7 @@ export function load(path: string): string {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn load\(path: String\) -> Result<String, rt::TsonicError> \{/u);
-  assert.match(text, /tsonic_rust_node::fs::read_file_sync_string\(&path, "utf8"\)/u);
+  assert.match(text, /tsonic_rust_node::fs::read_file_sync_string\(path\.as_str\(\), "utf8"\)/u);
   assert.doesNotMatch(text, /Ok\(tsonic_rust_node::fs::read_file_sync_string/u);
 });
 
