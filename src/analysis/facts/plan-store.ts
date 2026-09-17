@@ -1,3 +1,4 @@
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type {
   ExtensionFactKey,
   ExtensionFactSubject,
@@ -34,6 +35,7 @@ export interface RustPlanBuilder extends RustPlanWriter {
 
 export function createRustPlanBuilder(
   sourceFacts: ReadonlySourceFactResolver,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): RustPlanBuilder {
   const values = new Map<RustPlanKey<unknown>, WeakMap<object, unknown>>();
   let sealed = false;
@@ -114,7 +116,7 @@ export function createRustPlanBuilder(
         minimumFoundation = maximumRustFoundation(
           minimumFoundation,
           rustFoundationForTargetOperationFact(
-            value as import("./operations/facts.js").RustTargetOperationFact,
+            value as import("./operations/facts.js").RustTargetOperationFact, definitions,
           ),
         );
       }

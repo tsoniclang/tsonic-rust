@@ -24,6 +24,8 @@ import {
   rustNativeCallableProtocol,
   rustSourcePrimitiveTargetType,
   rustUnitTargetType,
+  rustTargetGenericBindingsForArguments,
+  substituteRustTargetGenerics,
 } from "../../target-model/types/index.js";
 import { appendRustDiagnostic, rustOperationContext, rustResolutionContext } from "../program/walk.js";
 import { applySelectedProjectSourceCall, applySelectedSourceCallArguments, recordTargetOperation, setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
@@ -42,7 +44,7 @@ import { rustPolicyTargetDiagnostic } from "../../policy/operations/contracts.js
 import { rustRuntimeCarrierKey, rustSelectedCallKey } from "../../target-model/facts/selections.js";
 import { rustSourceParameterContractCarrier } from "../../policy/ownership/source-callable-abi.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { tryFlowMarkerCall } from "../declarations/types-and-bindings.js";
+import { resolveParameterAbi, tryFlowMarkerCall } from "../declarations/types-and-bindings.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustSelectedTargetSignature, TargetTypeRef } from "../../target-model/types/model.js";
@@ -51,10 +53,13 @@ import { rustHigherRankedNativeFunctionCarrier } from "../callables/higher-ranke
 import { readRustSourceRawAddress } from "../../policy/operations/raw-address-source.js";
 import { readRustRawLocation } from "../../policy/operations/native-memory.js";
 import { resolveRustRawLocationCarrier } from "../operations/native-memory.js";
+import { resolveRustMemoryBindingCarrier } from "../operations/memory-bindings.js";
+import { selectTsonicMemoryFieldBinding, selectTsonicMemoryRecordBinding } from "@tsonic/source-core/facts";
 import { resolveRustRawAddressCarrier, resolveRustRawPointerIdentityCarrier } from "../operations/raw-addresses.js";
 import { readRustSourceRawPointerIdentity } from "../../policy/operations/raw-pointer-source.js";
 import { selectRustMemoryLayoutObservation } from "../../policy/operations/memory-layout.js";
 import { rustMemoryLayoutObservationKey } from "../../target-model/operations/memory-layout.js";
+import { resolveRustClassValue } from "../objects/class-values.js";
 
 export function resolveIdentifierCarrier(
   walk: RustFactWalk,
@@ -68,6 +73,10 @@ export function resolveIdentifierCarrier(
   if (reference !== undefined && declaration !== undefined && reference.project) {
     const declarationKind = ast.kindName(declaration);
     recordProjectSourceBinding(walk, identifier);
+    if (declarationKind === "KindClassDeclaration") {
+      const value = resolveRustClassValue(walk, identifier, expected);
+      if (value !== undefined) return value;
+    }
     if (declarationKind === KindExportAssignment) {
       const exportCarrier = recordExportAssignmentFacts(walk, declaration);
       if (exportCarrier !== undefined) {
@@ -100,7 +109,7 @@ export function resolveIdentifierCarrier(
           walk,
           initializer,
           sourceFile,
-          expected,
+          undefined,
         );
         if (initializerCarrier !== undefined) {
           setCarrierFact(walk, declaration, initializerCarrier);
@@ -290,6 +299,8 @@ export function isSharedSourceMarkerOperation(
 ): boolean {
   const sourceFacts = walk.context.source.sourceFacts;
   return readRustReferenceOperation(walk, expression) !== undefined ||
+    selectTsonicMemoryFieldBinding(walk.context.ast, sourceFacts, expression) !== undefined ||
+    selectTsonicMemoryRecordBinding(walk.context.ast, sourceFacts, expression) !== undefined ||
     readRustRawLocation(walk.context.ast, sourceFacts, expression) !== undefined ||
     selectRustMemoryLayoutObservation(sourceFacts, expression) !== undefined ||
     readRustSourceRawPointerIdentity(expression, sourceFacts) !== undefined ||
@@ -310,6 +321,8 @@ function resolveSharedSourceMarkerCarrier(
   expected: TargetTypeRef | undefined,
 ): RustSharedSourceMarkerCarrierResolution {
   const sourceFacts = walk.context.source.sourceFacts;
+  const memoryBinding = resolveRustMemoryBindingCarrier(walk, expression, sourceFile);
+  if (memoryBinding !== undefined) return memoryBinding;
   const rawLocation = resolveRustRawLocationCarrier(walk, expression, sourceFile);
   if (rawLocation !== undefined) return rawLocation;
   const layout = selectRustMemoryLayoutObservation(sourceFacts, expression);
@@ -538,7 +551,15 @@ function applySelectedRuntimeCallableCall(
   selectedSignature: RustSelectedTargetSignature,
 ): TargetTypeRef | undefined {
   const carrier = selectedSignature.sourceCallableCarrier;
-  const callable = rustNativeCallableProtocol(carrier) ?? rustCallableProtocol(carrier);
+  const protocol = rustNativeCallableProtocol(carrier) ?? rustCallableProtocol(carrier);
+  const genericBindings = rustTargetGenericBindingsForArguments(
+    selectedSignature.member.genericParameters ?? [], selectedSignature.targetGenericArguments ?? [],
+  );
+  const instantiate = (type: TargetTypeRef): TargetTypeRef => genericBindings === undefined ? type
+    : substituteRustTargetGenerics(type, genericBindings.types, genericBindings.lifetimes, genericBindings.consts);
+  const callable = protocol === undefined || genericBindings === undefined ? undefined : {
+    parameters: protocol.parameters.map(instantiate), result: instantiate(protocol.result),
+  };
   const bindings = selectedSignature.sourceArgumentBindings;
   const memberParameters = selectedSignature.member.parameters;
   const sourceParameterIndexes = selectedSignature.sourceCallableParameterIndexes;
@@ -551,8 +572,9 @@ function applySelectedRuntimeCallableCall(
     selectedParameters === undefined ||
     !isDenseDataArray(callArguments) ||
     callArguments.some((argument) => argument === undefined) ||
-    (selectedSignature.sourceSelectedMethodTypeArguments?.length ?? 0) !== 0 ||
-    (selectedSignature.targetGenericArguments?.length ?? 0) !== 0 ||
+    (selectedSignature.sourceSelectedMethodTypeArguments?.length ?? 0) !==
+      (selectedSignature.targetGenericArguments?.length ?? 0) ||
+    selectedSignature.targetGenericArguments?.some(argument => argument.kind !== "lifetime") ||
     callable.parameters.length !== memberParameters.length ||
     sourceParameterIndexes.length !== memberParameters.length ||
     sourceParameterIndexes.some((index) => !Number.isSafeInteger(index) || index < 0 ||
@@ -578,9 +600,18 @@ function applySelectedRuntimeCallableCall(
     const form = parameter.paramsArray === true
       ? "rest" as const
       : parameter.optional === true ? "optional" as const : "required" as const;
-    const valueCarrier = form === "optional"
+    const sourceParameter = selectedParameters.find(selected =>
+      selected.parameterIndex === sourceParameterIndexes[index]);
+    const declaration = asSourceNode(sourceParameter?.parameterDeclaration, walk.context.ast);
+    const sourceAbi = carrier.kind !== "closure" || declaration === undefined
+      ? undefined : resolveParameterAbi(walk, declaration);
+    const borrowedAbi = sourceAbi !== undefined && form === "required" &&
+      sourceAbi.mode !== "value" &&
+      rustTargetTypeRefEquals(sourceAbi.parameterCarrier, parameterCarrier)
+      ? sourceAbi : undefined;
+    const valueCarrier = borrowedAbi?.valueCarrier ?? (form === "optional"
       ? rustOptionElementCarrier(parameterCarrier) ?? parameterCarrier
-      : parameterCarrier;
+      : parameterCarrier);
     const selectedBindings = bindings.filter((binding) =>
       form === "rest"
         ? binding.sourceParameterIndex === sourceParameterIndexes[index]
@@ -613,7 +644,7 @@ function applySelectedRuntimeCallableCall(
           form,
           valueCarrier,
           parameterCarrier,
-          mode: "value" as const,
+          mode: borrowedAbi?.mode ?? "value" as const,
           inputs: inputs as readonly NonNullable<typeof inputs[number]>[],
         };
   });
@@ -698,6 +729,9 @@ function applySelectedRuntimeCallableCall(
     target,
     parameters: finalizedParameters,
     resultCarrier: callable.result,
+    ...(selectedSignature.targetGenericArguments === undefined ? {} : {
+      targetGenericArguments: selectedSignature.targetGenericArguments,
+    }),
   });
   if (target.form === "callable") {
     resolveExpressionCarrier(walk, callee, sourceFile, carrier);

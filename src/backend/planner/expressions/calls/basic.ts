@@ -11,6 +11,7 @@ import {
 } from "@tsonic/target-api/source";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
 import { planExpression } from "../entry.js";
+import type { RustExpressionResultUse } from "../entry.js";
 import { planRustNonConsumingValue, planRustSharedReceiver, planRustTypedLocationCall } from "../typed-locations.js";
 import { planRustSourceCallArgumentEvaluation, requireProviderArgumentPassingFacts } from "./arguments.js";
 import { planSelectedSourceCall, sourceCallEffectsMatch } from "./source.js";
@@ -28,16 +29,16 @@ import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
 import { planRustReferenceOperationCall } from "../reference-operations.js";
 
-export function planCallExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
+export function planCallExpression(node: Node, context: RustPlanContext, resultUse: RustExpressionResultUse = "value"): RustExpr | undefined {
   return planOptionalChainExpression(
     node,
     context,
     "method",
-    (innerContext) => planCallExpressionInner(node, innerContext),
+    (innerContext) => planCallExpressionInner(node, innerContext, resultUse),
   );
 }
 
-function planCallExpressionInner(node: Node, context: RustPlanContext): RustExpr | undefined {
+function planCallExpressionInner(node: Node, context: RustPlanContext, resultUse: RustExpressionResultUse): RustExpr | undefined {
   const { ast } = context.input.program.source;
   const fact = rustOperationFact(node, context);
   const callCarrier = context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
@@ -101,7 +102,7 @@ function planCallExpressionInner(node: Node, context: RustPlanContext): RustExpr
       : argument;
   }
   if (fact !== undefined && fact.kind === "object-shape-projection") {
-    return planObjectShapeProjectionCall(node, fact, context);
+    return planObjectShapeProjectionCall(node, fact, context, resultUse);
   }
   if (fact !== undefined && fact.kind === "default-value") {
     return planRustDefaultValueCall(node, fact, context);
@@ -241,6 +242,7 @@ function planObjectShapeProjectionCall(
   node: Node,
   fact: Extract<RustTargetOperationFact, { readonly kind: "object-shape-projection" }>,
   context: RustPlanContext,
+  resultUse: RustExpressionResultUse,
 ): RustExpr | undefined {
   const sourceArguments = context.input.program.source.ast.arguments(node);
   const staticCall = fact.sourceValueOrigin.kind === "argument";
@@ -454,7 +456,7 @@ function planObjectShapeProjectionCall(
       );
       break;
     case "assign": {
-      if (assignmentSourceName === undefined || fact.storage !== "object-handle" ||
+      if (assignmentSourceName === undefined || fact.storage !== "structural-object" ||
         fact.assignmentSourceCarrier === undefined || fact.assignmentFields === undefined) {
         context.diagnostics.push(missingFactDiagnostic(
           diagnosticInput(context, node),
@@ -511,7 +513,7 @@ function planObjectShapeProjectionCall(
           discard: "unit",
           value: next,
         }),
-        {
+        resultUse === "discarded" ? { kind: "tuple-literal", elements: [] } : {
           kind: "method-call",
           receiver,
           method: "clone",

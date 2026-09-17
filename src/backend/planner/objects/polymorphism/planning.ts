@@ -101,7 +101,7 @@ export function planPolymorphicClassDeclaration(
     return undefined;
   }
   const diagnosticCountBeforeRootImplementations = context.diagnostics.length;
-  const rootImplementations = planProjectRootImplementations(
+  const rootImplementations = constructor.construct === undefined ? [] : planProjectRootImplementations(
     definition,
     openCarrier,
     rootType,
@@ -119,7 +119,7 @@ export function planPolymorphicClassDeclaration(
     return undefined;
   }
   context.usedAliases?.add("rt");
-  const generics = rustProjectRepresentationGenerics(representation);
+  const generics = rustProjectRepresentationGenerics(representation, context);
   const stateMarker = rustProjectStateMarker(definition, context);
   const programErrorVariant = context.input.program.projectTypes.programErrorVariant(definition);
   const publiclyReachable = programErrorVariant !== undefined ||
@@ -154,7 +154,7 @@ export function planPolymorphicClassDeclaration(
   }
   const implementationVisibility = rustProjectImplementationVisibility(publiclyReachable);
   const wrapperVisibility = exported || publiclyReachable ? "public" as const : "crate" as const;
-  const defaultImplementation = rustDefaultImplementation(
+  const defaultImplementation = constructor.construct === undefined ? undefined : rustDefaultImplementation(
     wrapperType,
     generics,
     constructor.construct,
@@ -268,9 +268,9 @@ export function planPolymorphicClassDeclaration(
         },
       ],
     },
-    ...projectIdentityImplementations(definition, wrapperType, representation),
-    {
-      kind: "struct",
+    ...projectIdentityImplementations(definition, wrapperType, representation, context),
+    ...(constructor.construct === undefined ? [] : [{
+      kind: "struct" as const,
       name: rustProjectRootName(definition),
       visibility: "crate",
       derives: [],
@@ -301,12 +301,12 @@ export function planPolymorphicClassDeclaration(
           })(),
         },
       ],
-    },
+    } satisfies RustItem]),
     {
       kind: "impl",
       generics,
       target: wrapperType,
-      functions: [constructor.initialize, constructor.construct, ...staticMethods],
+      functions: [constructor.initialize, ...(constructor.construct === undefined ? [] : [constructor.construct]), ...staticMethods],
     },
     ...(defaultImplementation === undefined ? [] : [defaultImplementation]),
     ...rootImplementations,
@@ -326,18 +326,36 @@ function planProjectExternalErrorImplementations(
   }
   const name = external.fields.find((field) => field.sourceName === "name");
   const message = external.fields.find((field) => field.sourceName === "message");
-  if (name === undefined || message === undefined) {
+  const stack = external.fields.find((field) => field.sourceName === "stack");
+  if (name === undefined || message === undefined || stack === undefined) {
     return undefined;
   }
   const nameRead = context.input.program.projectTypes.memberSlotName(name.declaration, "read");
   const messageRead = context.input.program.projectTypes.memberSlotName(message.declaration, "read");
-  if (nameRead === undefined || messageRead === undefined) {
+  const stackWrite = context.input.program.projectTypes.memberSlotName(stack.declaration, "write");
+  if (nameRead === undefined || messageRead === undefined || stackWrite === undefined) {
     return undefined;
   }
   const self = { kind: "path" as const, path: "self" };
   return [{
     kind: "impl",
-    generics: rustProjectRepresentationGenerics(representation),
+    generics: rustProjectRepresentationGenerics(representation, context),
+    trait: { kind: "named", path: "rt::ErrorStack" },
+    target: wrapperType,
+    functions: [{
+      name: "set_stack", visibility: "private", generics: emptyRustGenerics,
+      selfParam: { kind: "reference", mutable: false },
+      params: [{ name: "stack", type: { kind: "named", path: "Option", genericArguments: [
+        { kind: "type", type: { kind: "string" } },
+      ] } }],
+      body: { statements: [{ kind: "expr", expr: {
+        kind: "method-call", receiver: { kind: "field", receiver: self, name: rustProjectObjectDispatchField },
+        method: stackWrite, args: [{ kind: "path", path: "stack" }],
+      } }] },
+    }],
+  }, {
+    kind: "impl",
+    generics: rustProjectRepresentationGenerics(representation, context),
     trait: { kind: "named", path: "core::fmt::Display" },
     target: wrapperType,
     functions: [{
@@ -375,7 +393,7 @@ function planProjectExternalErrorImplementations(
     }],
   }, {
     kind: "impl",
-    generics: rustProjectRepresentationGenerics(representation),
+    generics: rustProjectRepresentationGenerics(representation, context),
     trait: { kind: "named", path: "rt::ToSourceString" },
     target: wrapperType,
     functions: [{
@@ -418,7 +436,7 @@ export function planPolymorphicInterfaceDeclaration(
     return undefined;
   }
   context.usedAliases?.add("rt");
-  const generics = rustProjectRepresentationGenerics(representation);
+  const generics = rustProjectRepresentationGenerics(representation, context);
   const exported = context.input.program.source.ast.hasModifierKind(declaration, "export");
   const publiclyReachable = rustProjectTypeHasPublicImplementationAbi(
     context,
@@ -468,6 +486,6 @@ export function planPolymorphicInterfaceDeclaration(
         },
       ],
     },
-    ...projectIdentityImplementations(definition, wrapperType, representation),
+    ...projectIdentityImplementations(definition, wrapperType, representation, context),
   ];
 }

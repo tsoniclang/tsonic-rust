@@ -1,8 +1,10 @@
 import type { JsOperationRowData } from "./model.js";
+import { atomicOperationRows } from "./atomic-rows.js";
 import {
   rustJsValueTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
+  rustJsTypedArrayTargetIds,
 } from "../../../target-model/types/index.js";
 
 const falseArgument = { kind: "boolean", value: false } as const;
@@ -33,9 +35,31 @@ const arrayBufferRows: readonly JsOperationRowData[] = [
 ];
 
 const dataViewRows: readonly JsOperationRowData[] = [
-  { owner: "DataView", member: "buffer", operationKind: "property", lane: "data-view", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "buffer" }, result: { ref: "array-buffer" }, evaluation: "pure" } },
-  { owner: "DataView", member: "byteLength", operationKind: "property", lane: "data-view", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "byte_length" }, result: { ref: "float64" }, evaluation: "pure" } },
-  { owner: "DataView", member: "byteOffset", operationKind: "property", lane: "data-view", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: "byte_offset" }, result: { ref: "float64" }, evaluation: "pure" } },
+  ...([false, true] as const).flatMap((explicitEndian): readonly JsOperationRowData[] => [
+    {
+      owner: "DataView", member: "getBigUint64", operationKind: "call", lane: "data-view",
+      variant: explicitEndian ? "endian" : "default-endian", fallible: true,
+      shape: {
+        op: "operation", operationKind: "method",
+        target: { form: "receiver-method", name: "get_big_uint64", ...(explicitEndian ? {} : { trailingArguments: [falseArgument] }) },
+        result: { ref: "bigint" }, params: [{ ref: "float64" }, ...(explicitEndian ? [{ ref: "bool" } as const] : [])],
+      },
+    },
+    {
+      owner: "DataView", member: "setBigUint64", operationKind: "call", lane: "data-view",
+      variant: explicitEndian ? "endian" : "default-endian", fallible: true,
+      shape: {
+        op: "operation", operationKind: "method",
+        target: { form: "receiver-method", name: "set_big_uint64", argModes: explicitEndian ? ["value", "ref", "value"] : ["value", "ref"], ...(explicitEndian ? {} : { trailingArguments: [falseArgument] }) },
+        result: { ref: "unit" }, params: [{ ref: "float64" }, { ref: "bigint" }, ...(explicitEndian ? [{ ref: "bool" } as const] : [])],
+      },
+    },
+  ]),
+  ...(["data-view", "typed-array"] as const).flatMap((lane) => [
+    ["buffer", "buffer", { ref: "array-buffer" }],
+    ["byteLength", "byte_length", { ref: "float64" }],
+    ["byteOffset", "byte_offset", { ref: "float64" }],
+  ].map(([member, name, result]): JsOperationRowData => ({ owner: "ArrayBufferView", member: member as string, operationKind: "property", lane, shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: name as string }, result: result as { readonly ref: "array-buffer" | "float64" }, evaluation: "pure" } }))),
   ...["Int8", "Uint8"].map((suffix): JsOperationRowData => ({ owner: "DataView", member: `get${suffix}`, operationKind: "call", lane: "data-view", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: `get_${suffix.toLowerCase()}` }, result: { ref: "float64" }, params: [{ ref: "float64" }] } })),
   ...["Int16", "Uint16", "Int32", "Uint32", "Float32", "Float64"].flatMap((suffix): readonly JsOperationRowData[] => {
     const name = suffix.replace(/([a-z])([A-Z])/gu, "$1_$2").toLowerCase();
@@ -55,10 +79,27 @@ const dataViewRows: readonly JsOperationRowData[] = [
 ];
 
 const typedArrayRows: readonly JsOperationRowData[] = [
+  ...Object.keys(rustJsTypedArrayTargetIds).map((name): JsOperationRowData => ({
+    owner: `${name}Constructor`, member: "BYTES_PER_ELEMENT", operationKind: "property", lane: "typed-array",
+    shape: { op: "operation", operationKind: "property", target: { form: "path", path: `js_abi::${name}::BYTES_PER_ELEMENT` }, result: { ref: "float64" }, evaluation: "pure" },
+  })),
+  {
+    owner: "Uint8ArrayConstructor", member: "from", operationKind: "call", lane: "typed-array", variant: "typed-array", fallible: true,
+    shape: {
+      op: "operation", operationKind: "method",
+      target: { form: "call", path: "js_abi::Uint8Array::from_typed_array", argModes: ["ref"] },
+      result: { ref: "uint8-array" }, params: [{ ref: "uint8-array" }],
+    },
+  },
+  {
+    owner: "Uint8ArrayConstructor", member: "from", operationKind: "call", lane: "typed-array", variant: "array", fallible: true,
+    shape: {
+      op: "operation", operationKind: "method",
+      target: { form: "call", path: "js_abi::Uint8Array::from_array", argModes: ["ref"] },
+      result: { ref: "source-result" }, params: [{ ref: "float64-array" }],
+    },
+  },
   ...[
-    ["buffer", "buffer", { ref: "array-buffer" }],
-    ["byteLength", "byte_length", { ref: "float64" }],
-    ["byteOffset", "byte_offset", { ref: "float64" }],
     ["length", "length", { ref: "float64" }],
     ["BYTES_PER_ELEMENT", "bytes_per_element", { ref: "float64" }],
   ].map(([member, name, result]): JsOperationRowData => ({ owner: "TypedArray", member: member as string, operationKind: "property", lane: "typed-array", shape: { op: "operation", operationKind: "property", target: { form: "receiver-method", name: name as string }, result: result as { readonly ref: "array-buffer" | "float64" }, evaluation: "pure" } })),
@@ -488,9 +529,11 @@ const jsonRows: readonly JsOperationRowData[] = ([
 }));
 
 export const jsCapabilityOperationRows: readonly JsOperationRowData[] = [
+  ...atomicOperationRows,
   ...symbolRows,
   ...weakCollectionRows,
   ...arrayBufferRows,
+  ...arrayBufferRows.map(row => ({ ...row, owner: "SharedArrayBuffer" })),
   ...dataViewRows,
   ...typedArrayRows,
   ...intlRows,

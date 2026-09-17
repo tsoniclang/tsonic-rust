@@ -3,14 +3,15 @@ import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js"
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { RustNamePlan } from "../../../target-model/names/model.js";
 import type { RustProjectTypeDefinition } from "../../../policy/types/project-types.js";
-import type { RustLifetimeIndex } from "../../../target-model/lifetimes/index.js";
+import type { RustSourceGenericParameterContract } from "../../../target-model/lifetimes/index.js";
+import { rustSourceDeclarationTypeName } from "../../../policy/types/source-declarations.js";
 
 export function projectDefinition(
   declaration: Node,
   sourceFile: SourceFile,
   ast: AstReader,
   namePlan: RustNamePlan,
-  sourceLifetimes: RustLifetimeIndex,
+  genericContract: readonly RustSourceGenericParameterContract[] | undefined,
   usedNames: Set<string>,
 ): RustProjectTypeDefinition | undefined {
   const kindName = ast.kindName(declaration);
@@ -22,18 +23,15 @@ export function projectDefinition(
   if (kind === undefined) {
     return undefined;
   }
-  const nameNode = ast.name(declaration);
-  const sourceName = nameNode === undefined ? "" : ast.text(nameNode);
+  const sourceName = rustSourceDeclarationTypeName(declaration, ast);
   const targetName = namePlan.nameForDeclaration(declaration);
   const fileName = ast.getFileName(sourceFile);
   const rawParameters = ast.typeParameters(declaration);
   const parameters = denseNodes(rawParameters);
-  const genericContract = parameters === undefined || parameters.length === 0
-    ? Object.freeze([])
-    : sourceLifetimes.contractFor(declaration)?.parameters;
+  const ownContract = genericContract?.filter(parameter => ast.parent(parameter.declaration) === declaration);
   const contractMatches = parameters !== undefined && genericContract !== undefined &&
-    parameters.length === genericContract.length &&
-    genericContract.every((parameter, index) => parameter.declaration === parameters[index]);
+    ownContract !== undefined && parameters.length === ownContract.length &&
+    ownContract.every((parameter, index) => parameter.declaration === parameters[index]);
   const ordinaryParameters = contractMatches
     ? genericContract.filter((parameter) => parameter.kind === "type")
     : undefined;
@@ -117,17 +115,15 @@ export function heritageKindIssue(
   target: RustProjectTypeDefinition,
 ): string | undefined {
   if (source.kind === "interface") {
-    return relation !== "extends" || target.kind !== "interface"
-      ? `Project interface '${source.sourceName}' can extend only another project interface.`
+    return relation !== "extends"
+      ? `Project interface '${source.sourceName}' requires an exact extends instance contract.`
       : undefined;
   }
   return relation === "extends"
     ? target.kind === "class"
       ? undefined
       : `Project class '${source.sourceName}' can extend only another project class.`
-    : target.kind === "interface"
-      ? undefined
-      : `Project class '${source.sourceName}' can implement only a project interface.`;
+    : undefined;
 }
 
 export function definitionKey(fileName: string, sourceName: string): string {

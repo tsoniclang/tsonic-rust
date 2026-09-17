@@ -9,6 +9,8 @@ import type {
 } from "./value-projections.js";
 import {
   isRustProgramErrorCarrier,
+  isRustJsValueCarrier,
+  rustJsErrorTargetType,
   rustCarrierSupportsClone,
   rustCarrierSupportsTrait,
   rustOptionElementCarrier,
@@ -19,6 +21,8 @@ import { selectRustSourceValueConversion } from "../conversions/selection.js";
 import { inferRustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { rustLifetimeKey, rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
+import { rustEmptyRecordCarrier } from "../../target-model/conversions/empty-record.js";
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 
 export type RustValueCarrierReconciliation =
   | { readonly kind: "identity" }
@@ -44,9 +48,21 @@ export function selectRustFlowReadProjection(
   sourceCarrier: TargetTypeRef,
   selectedCarrier: TargetTypeRef,
   projectTypes: RustProjectTypePolicy,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): RustFlowReadProjectionSelection {
   if (rustTargetTypeRefEquals(sourceCarrier, selectedCarrier)) {
     return { kind: "identity" };
+  }
+  const union = definitions.sourceUnionVariants(sourceCarrier);
+  const selectedVariants = union?.filter(variant => rustTargetTypeRefEquals(variant.carrier, selectedCarrier));
+  if (selectedVariants?.length === 1) {
+    return { kind: "projection", fact: { kind: "source-union", sourceCarrier, selectedCarrier,
+      variant: selectedVariants[0]!.name } };
+  }
+  if ((isRustJsValueCarrier(sourceCarrier) || isRustProgramErrorCarrier(sourceCarrier) &&
+    projectTypes.builtinErrorProjectionAvailable === true) &&
+    rustTargetTypeRefEquals(selectedCarrier, rustJsErrorTargetType())) {
+    return { kind: "projection", fact: { kind: "builtin-error", sourceCarrier, selectedCarrier } };
   }
   const method = rustRuntimeUnionProjection(sourceCarrier, selectedCarrier);
   if (method !== undefined) {
@@ -57,7 +73,7 @@ export function selectRustFlowReadProjection(
     const variant = selectedDefinition === undefined
       ? undefined
       : projectTypes.programErrorVariant(selectedDefinition);
-    return variant !== undefined && rustCarrierSupportsClone(selectedCarrier)
+    return variant !== undefined && rustCarrierSupportsClone(selectedCarrier, definitions)
       ? {
           kind: "projection",
           fact: {
@@ -72,7 +88,12 @@ export function selectRustFlowReadProjection(
   const optionalElement = rustOptionElementCarrier(sourceCarrier);
   if (optionalElement !== undefined &&
     rustTargetTypeRefEquals(optionalElement, selectedCarrier)) {
-    return rustCarrierSupportsClone(selectedCarrier)
+    return rustCarrierSupportsTrait(
+      selectedCarrier,
+      "core::clone::Clone",
+      () => true,
+      (projection, trait) => trait === "core::clone::Clone" && projection.trait?.sourceItem !== undefined, definitions,
+    )
       ? {
           kind: "projection",
           fact: { kind: "option-value", sourceCarrier, selectedCarrier },
@@ -91,7 +112,7 @@ export function selectRustFlowReadProjection(
   if (relationship.kind !== "related" ||
     !rustTargetTypeRefEquals(relationship.targetType, dispatchCarrier) ||
     route === undefined ||
-    (optionalElement !== undefined && !rustCarrierSupportsClone(dispatchCarrier))) {
+    (optionalElement !== undefined && !rustCarrierSupportsClone(dispatchCarrier, definitions))) {
     return { kind: "incompatible" };
   }
   return {
@@ -109,9 +130,16 @@ export function selectRustValueCarrierReconciliation(
   sourceCarrier: TargetTypeRef,
   targetCarrier: TargetTypeRef,
   projectTypes: RustProjectTypePolicy,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): RustValueCarrierReconciliation {
   if (rustTargetTypeRefEquals(sourceCarrier, targetCarrier)) {
     return { kind: "identity" };
+  }
+  if (rustEmptyRecordCarrier(sourceCarrier) && rustEmptyRecordCarrier(targetCarrier)) {
+    return { kind: "conversion", fact: {
+      sourceCarrier, targetCarrier,
+      conversion: { kind: "empty-record", source: sourceCarrier, target: targetCarrier },
+    } };
   }
   const lifetimeReconciliation = selectRustCallScopedLifetimeReconciliation(
     sourceCarrier,
@@ -121,6 +149,18 @@ export function selectRustValueCarrierReconciliation(
     return { kind: "call-scoped-lifetime", fact: lifetimeReconciliation };
   }
   const targetDefinition = projectTypes.definitionForCarrier(targetCarrier);
+  const sourceVariants = definitions.sourceUnionVariants(sourceCarrier);
+  if (targetDefinition !== undefined && sourceVariants !== undefined && sourceVariants.length > 0) {
+    for (const variant of sourceVariants) {
+      const relationship = projectTypes.relationship(variant.carrier, targetDefinition);
+      if (relationship.kind === "ambiguous") return { kind: "incompatible", reason: "ambiguous" };
+      if (relationship.kind !== "related" ||
+        !rustTargetTypeRefEquals(relationship.targetType, targetCarrier)) {
+        return { kind: "incompatible", reason: "unrelated" };
+      }
+    }
+    return { kind: "project-upcast", fact: { sourceCarrier, targetCarrier, sourceVariants } };
+  }
   const relationship = targetDefinition === undefined
     ? { kind: "unrelated" as const }
     : projectTypes.relationship(sourceCarrier, targetDefinition);
@@ -137,6 +177,7 @@ export function selectRustValueCarrierReconciliation(
   const nativeTraitObjectUpcast = selectRustNativeTraitObjectUpcast(
     sourceCarrier,
     targetCarrier,
+    definitions,
   );
   if (nativeTraitObjectUpcast !== undefined) {
     return {
@@ -148,7 +189,7 @@ export function selectRustValueCarrierReconciliation(
       },
     };
   }
-  const conversion = selectRustSourceValueConversion(sourceCarrier, targetCarrier);
+  const conversion = selectRustSourceValueConversion(sourceCarrier, targetCarrier, definitions);
   return conversion === undefined
     ? { kind: "incompatible", reason: "unrelated" }
     : {
@@ -160,6 +201,7 @@ export function selectRustValueCarrierReconciliation(
 export function selectRustNativeTraitObjectUpcast(
   source: TargetTypeRef,
   target: TargetTypeRef,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): Extract<
   RustContextualValueConversion,
   { readonly kind: "native-trait-object-upcast" }
@@ -171,7 +213,7 @@ export function selectRustNativeTraitObjectUpcast(
   if (traits.some((trait) => trait.lifetimeBinder !== undefined ||
     trait.genericArguments.length !== 0 ||
     trait.associatedConstraints.length !== 0 ||
-    !rustCarrierSupportsTrait(source, trait.path))) {
+    !rustCarrierSupportsTrait(source, trait.path, undefined, undefined, definitions))) {
     return undefined;
   }
   return Object.freeze({

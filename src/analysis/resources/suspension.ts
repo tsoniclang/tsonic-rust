@@ -1,6 +1,5 @@
 import {
   KindIdentifier,
-  KindNewExpression,
   KindParenthesizedExpression,
   KindVariableDeclaration,
   Node_Expression,
@@ -18,7 +17,8 @@ import {
 } from "../facts/keys.js";
 import { appendRustDiagnostic, rustOperationContext } from "../program/walk.js";
 import { collectDescendantsOfKind } from "../operations/inputs.js";
-import { isRustProgramErrorCarrier, rustStringTargetType } from "../../target-model/types/index.js";
+import { isRustProgramErrorCarrier, rustJsErrorTargetType } from "../../target-model/types/index.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { rustFutureValueForOperation, rustFutureValueMatchesCarrier } from "../facts/future-values.js";
 import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
@@ -95,7 +95,7 @@ export function recordFutureValueFacts(walk: RustFactWalk, sourceFiles: readonly
         ? walk.context.facts.get(node, rustSourceCallEffectsFactKey) ??
           walk.context.facts.resolve(node, rustSourceCallEffectsFactKey)
         : undefined;
-      let fact = rustFutureValueForOperation(operation, effects);
+      let fact = rustFutureValueForOperation(operation, effects, walk.context.typeDefinitions);
       if (fact === undefined) {
         const kind = walk.context.ast.kindName(node);
         if (kind === KindParenthesizedExpression || kind === "KindAsExpression" ||
@@ -159,26 +159,17 @@ export function recordFutureValueFacts(walk: RustFactWalk, sourceFiles: readonly
 }
 
 export function recordThrowFacts(walk: RustFactWalk, statement: Node, sourceFile: SourceFile): void {
-  const { ast } = walk.context;
   const expression = Node_Expression(walk.context.ast, statement);
   if (expression === undefined) {
     return;
   }
   const carrier = resolveExpressionCarrier(walk, expression, sourceFile, undefined);
-  const constructor = walk.context.facts.get(expression, rustTargetOperationFactKey) ??
-    walk.context.facts.resolve(expression, rustTargetOperationFactKey);
-  if (ast.kindName(expression) === KindNewExpression &&
-    constructor?.kind === "provider-operation" &&
-    constructor.operationId === "tsonic.rust.error.constructor") {
-    const [message] = ast.arguments(expression);
-    if (message !== undefined) {
-      resolveExpressionCarrier(walk, message, sourceFile, rustStringTargetType());
-    }
-    setRustOperationFact(walk, statement, {
+  if (carrier !== undefined && rustTargetTypeRefEquals(carrier, rustJsErrorTargetType())) {
+    setRustOperationFact(walk, statement, Object.freeze({
       kind: "throw-op",
       operationId: "tsonic.rust.error.throw.runtime",
-      error: { kind: "runtime", constructorOperationId: constructor.operationId },
-    });
+      error: Object.freeze({ kind: "runtime", expression, carrier }),
+    }));
     return;
   }
   const definition = walk.context.projectTypes.definitionForCarrier(carrier);

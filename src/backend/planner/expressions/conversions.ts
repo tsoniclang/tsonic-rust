@@ -48,6 +48,7 @@ import {
 } from "./input-shaping.js";
 import { invokeRustStructuralObjectMethod } from "../objects/project-storage.js";
 import { applyFinalizedValueConversion } from "./value-conversions.js";
+import { planRustRestAssembly } from "./calls/rest-assembly.js";
 
 function providerConstantExpression(argument: RustProviderConstantArgument): RustExpr {
   switch (argument.kind) {
@@ -83,7 +84,7 @@ export function planProviderOperationExpression(
     readonly overrides?: RustFinalizedInputPlanOverrides;
   },
 ): RustExpr | undefined {
-  if (!validateRustFinalizedOperationAbi(fact.abi)) {
+  if (!validateRustFinalizedOperationAbi(fact.abi, context.input.program.typeDefinitions)) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, operationNode),
       "rust.backend.provider-operation-abi",
@@ -110,6 +111,8 @@ export function planProviderOperationExpression(
     planExpression,
     planProviderOperationExpression,
     options.overrides?.inputs,
+    input => planFinalizedSourceInput(context, input, receiverNode, argumentNodes, operationNode,
+      "target-argument", options.overrides),
   );
   if (evaluationScope.kind === "failed") {
     return undefined;
@@ -369,7 +372,7 @@ export function planProviderOperationExpression(
       if (isRustCopyCarrier(fact.resultCarrier)) {
         return scoped(place);
       }
-      if (!rustCarrierSupportsClone(fact.resultCarrier)) {
+      if (!rustCarrierSupportsClone(fact.resultCarrier, context.input.program.typeDefinitions)) {
         context.diagnostics.push(unsupportedConstructDiagnostic(
           diagnosticInput(context, operationNode),
           `rust.backend.provider-${form.form}-read-ownership`,
@@ -524,7 +527,7 @@ function applyProviderOperationChain(
 
 export function finishProviderOperationExpression(
   context: RustPlanContext,
-  fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }>,
+  fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" | "runtime-set" }>,
   expression: RustExpr,
   node: Node,
 ): RustExpr | undefined {
@@ -564,7 +567,7 @@ export function finishProviderOperationExpression(
     node,
     "operation-result",
   );
-  return converted === undefined || !isRustNeverCarrier(fact.resultCarrier)
+  return converted === undefined || !isRustNeverCarrier(fact.abi.result.carrier)
     ? converted
     : rustBottomExpression(converted);
 }
@@ -626,6 +629,13 @@ export function planFinalizedTargetInput(
         : planned;
       elements.push(asTargetElement);
     }
+    const sequenceFlags = input.elements.map(element => element.conversion.kind === "semantic" &&
+      element.conversion.conversion.kind === "rest-sequence");
+    if (sequenceFlags.some(Boolean)) {
+      if (!isRustFinalizedSliceInput(input)) return undefined;
+      const value = planRustRestAssembly(elements.map((value, index) => ({ value, sequence: sequenceFlags[index]! })), context);
+      return value === undefined ? undefined : { kind: "reference", expr: value };
+    }
     return isRustFinalizedSliceInput(input)
       ? { kind: "reference", expr: { kind: "slice-literal", elements } }
       : { kind: "slice-literal", elements };
@@ -650,9 +660,14 @@ export function planFinalizedSourceInput(
   position: "target-argument" | "target-receiver" = "target-argument",
   overrides?: RustFinalizedInputPlanOverrides,
 ): RustExpr | undefined {
-  const sourceNode = input.source.kind === "receiver"
+  const occurrence = input.source.kind === "receiver"
     ? receiverNode
     : argumentNodes[input.source.sourceIndex];
+  const sequence = input.conversion.kind === "semantic" && input.conversion.conversion.kind === "rest-sequence";
+  const sourceNode = sequence
+    ? occurrence !== undefined && context.input.program.source.ast.is.IsSpreadElement(occurrence)
+      ? context.input.program.source.ast.as.AsSpreadElement(occurrence)?.Expression : undefined
+    : occurrence;
   if (sourceNode === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, operationNode),
@@ -662,9 +677,10 @@ export function planFinalizedSourceInput(
     return undefined;
   }
   const expressionOverride = context.expressionOverrides?.get(sourceNode);
-  const sourceCarrier = expressionOverride?.carrier ??
-    context.input.program.facts.getRuntimeCarrierFact(sourceNode)?.carrier;
-  const convertedCarrier = expressionOverride === undefined
+  const originalCarrier = context.input.program.facts.getRuntimeCarrierFact(sourceNode)?.carrier;
+  const sourceCarrier = expressionOverride?.carrier ?? originalCarrier;
+  const convertedCarrier = expressionOverride === undefined ||
+      rustTargetTypeRefEquals(expressionOverride.carrier, originalCarrier)
     ? rustValueCarrierTransitionTarget(context.input.program.facts, sourceNode)
     : undefined;
   if (sourceCarrier === undefined) {

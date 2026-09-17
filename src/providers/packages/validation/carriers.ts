@@ -289,6 +289,10 @@ export function validateCarrier(
             fail,
           );
         }
+        for (const [index, upcast] of namedType.upcasts.entries()) {
+          validateCarrier(upcast.target, definition, `${where}.value.upcasts[${index}].target`, fail);
+          if (!rustPathPattern.test(upcast.path)) fail(`${where} has an invalid native upcast path`);
+        }
         return;
       }
       const fixedArray = rustFixedArrayCarrierValue(carrier);
@@ -357,6 +361,11 @@ export function validateValueConversion(
     if (!isRustTargetTypeRef(conversion.target)) {
       fail(`${where}.target is not a closed Rust target type`);
     }
+  } else if (conversion.kind === "native-upcast") {
+    requireExactKeys(asRecord(conversion), ["kind", "source", "target", "path"], where, fail);
+    validateCarrier(conversion.source, definition, `${where}.source`, fail);
+    validateCarrier(conversion.target, definition, `${where}.target`, fail);
+    requireRustPath(conversion.path, `${where}.path`, fail);
   } else if (conversion.kind === "source-union-variant") {
     requireExactKeys(asRecord(conversion), ["kind", "source", "target", "variantName"], where, fail);
     if (!isRustTargetTypeRef(conversion.source) || !isRustTargetTypeRef(conversion.target) ||

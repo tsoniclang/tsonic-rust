@@ -198,6 +198,9 @@ function validateRuntimeModuleGraph(
     if (initialized.length === 0) {
       continue;
     }
+    if (component.every(sourceFile => input.program.moduleInitialization.hasStateIndependentCycle(sourceFile))) {
+      continue;
+    }
     valid = false;
     const files = component
       .map((sourceFile) => input.program.source.ast.getFileName(sourceFile))

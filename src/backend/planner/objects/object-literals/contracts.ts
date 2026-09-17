@@ -6,7 +6,7 @@ import {
   writeRustProjectObjectField,
   writeRustProjectMethodOverride,
 } from "../project-objects.js";
-import { applyRustObjectLiteralValueAdapter, planRustObjectLiteralMethodArguments } from "../method-adapters.js";
+import { applyRustCallableValueAdapter, planRustCallableArguments } from "../../declarations/callable-adapters.js";
 import { projectOwnFields, projectOwnMethods } from "../polymorphism/model.js";
 import { rustProjectDispatchTraitType } from "../polymorphism/names.js";
 import type {
@@ -25,9 +25,10 @@ import { applyRustFallibleResultExpression } from "../../types/fallible-shape.js
 import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js";
 import { emptyRustGenerics } from "../../../target-ast/nodes.js";
 import { rustSelfParameter } from "../../declarations/self-parameter.js";
+import { checkRustDataWrite } from "../data-writes.js";
 
 export function planContractImplementation(
-  contract: import("../../../../analysis/project-types/type-policy.js").RustProjectInterfaceContract,
+  contract: import("../../../../analysis/project-types/type-policy.js").RustProjectInstanceContract,
   rootType: RustType,
   wrapperType: RustType,
   stateFields: readonly RustObjectLiteralImplementationPlan["stateFields"][number][],
@@ -115,7 +116,7 @@ export function planContractImplementation(
       },
     });
     if (dispatch.write !== undefined) {
-      const writeValue: RustExpr | undefined = stateField !== undefined
+      let writeValue: RustExpr | undefined = stateField !== undefined
         ? writeRustProjectObjectField(
             { kind: "path", path: "self" },
             stateField.targetName,
@@ -141,6 +142,12 @@ export function planContractImplementation(
                 ],
               }],
             };
+      const check = stateField === undefined ? undefined
+        : context.input.program.frozenDataWrites.receiverForDeclaration(field.declaration);
+      if (writeValue !== undefined && check !== undefined) {
+        if (fieldErrorType === undefined) return undefined;
+        writeValue = checkRustDataWrite(check, { kind: "path", path: "self" }, writeValue, fieldErrorType);
+      }
       if (writeValue === undefined || !dispatch.write.fallible && accessor !== undefined) {
         return undefined;
       }
@@ -325,7 +332,12 @@ export function planContractImplementation(
         });
         continue;
       }
-      const adapted = planRustObjectLiteralMethodArguments(method, adapterContext);
+      const adapted = planRustCallableArguments({
+        declaration: method.contractMethod,
+        parameters: method.parameters,
+        parameterAbis: method.adapter.parameterAbis,
+        parameterAdapters: method.adapter.parameterAdapters,
+      }, adapterContext);
       if (adapted === undefined) {
         return undefined;
       }
@@ -346,7 +358,7 @@ export function planContractImplementation(
           operandErrorType: method.implementation.errorType,
         };
       }
-      const adaptedResult = applyRustObjectLiteralValueAdapter(
+      const adaptedResult = applyRustCallableValueAdapter(
         invocation,
         method.adapter.resultAdapter,
         method.contractMethod,

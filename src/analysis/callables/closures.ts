@@ -231,7 +231,9 @@ export function resolveFunctionExpressionCarrier(
   walk.currentCallableDeclaration = expression;
   walk.currentGeneratorDeclaration = undefined;
   walk.currentMethodDeclaration = options?.selectedMethodDeclaration;
-  walk.currentThisCarrier = leadingParameters.find((parameter) => parameter.kind === "this")?.carrier;
+  walk.currentThisCarrier = walk.context.ast.kindName(expression) === "KindArrowFunction"
+    ? previousThis
+    : leadingParameters.find((parameter) => parameter.kind === "this")?.carrier;
   try {
     if (ast.kindName(body) === KindBlock) {
       if (bodyCarrier === undefined) {

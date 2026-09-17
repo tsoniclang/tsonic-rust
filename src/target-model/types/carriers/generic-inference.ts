@@ -205,7 +205,8 @@ export function inferRustTargetGenericBindings(
       }
       case "trait-ref": {
         if (right.kind !== "trait-ref" || left.id !== right.id ||
-          left.path !== right.path) return false;
+          left.path !== right.path || left.sourceItem?.fileName !== right.sourceItem?.fileName ||
+          left.sourceItem?.typeName !== right.sourceItem?.typeName) return false;
         const nested = matchBinder(left.lifetimeBinder, right.lifetimeBinder, lifetimeContext);
         return nested !== undefined &&
           matchGenericArguments(
@@ -305,6 +306,7 @@ export function inferRustTargetGenericBindings(
         const rightStructural = rustStructuralObjectCarrierValue(right);
         if (leftStructural !== undefined || rightStructural !== undefined) {
           return leftStructural !== undefined && rightStructural !== undefined &&
+            leftStructural.representation === rightStructural.representation &&
             leftStructural.fields.length === rightStructural.fields.length &&
             leftStructural.fields.every((field, index) => {
               const other = rightStructural.fields[index];
@@ -321,14 +323,15 @@ export function inferRustTargetGenericBindings(
         const rightUnion = rustSourceUnionCarrierValue(right);
         if (leftUnion !== undefined || rightUnion !== undefined) {
           return leftUnion !== undefined && rightUnion !== undefined &&
+            leftUnion.origin === rightUnion.origin &&
             leftUnion.fileName === rightUnion.fileName &&
             leftUnion.typeName === rightUnion.typeName &&
-            leftUnion.variants.length === rightUnion.variants.length &&
-            leftUnion.variants.every((variant, index) => {
-              const other = rightUnion.variants[index];
-              return other !== undefined && variant.name === other.name &&
-                match(variant.carrier, other.carrier, lifetimeContext);
-            });
+            matchGenericArguments(
+              leftUnion.genericArguments, rightUnion.genericArguments,
+              (pattern, actual) => match(pattern, actual, lifetimeContext),
+              (pattern, actual) => matchLifetime(pattern, actual, lifetimeContext),
+              matchConst,
+            );
         }
         const leftNamed = rustNamedTypeCarrierValue(left);
         const rightNamed = rustNamedTypeCarrierValue(right);

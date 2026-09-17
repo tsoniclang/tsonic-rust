@@ -195,9 +195,12 @@ export function rustExpressionContainsStatementBlock(expression: RustExpr): bool
     case "slice-literal":
     case "tuple-literal":
       return expression.elements.some(rustExpressionContainsStatementBlock);
+    case "array-repeat":
+      return rustExpressionContainsStatementBlock(expression.element);
     case "closure":
       return rustExpressionContainsStatementBlock(expression.body);
     case "await":
+    case "option-try":
     case "try":
       return rustExpressionContainsStatementBlock(expression.expr);
     case "return-expression":

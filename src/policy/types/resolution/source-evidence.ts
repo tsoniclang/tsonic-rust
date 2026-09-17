@@ -5,11 +5,12 @@ import {
   rustJsArrayTargetType,
   rustOptionElementCarrier,
   rustOptionTargetType,
+  rustSourceUnionCarrierValue,
   rustTupleTargetType,
   rustVecTargetType,
 } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { resolveRustAuthoredTargetType } from "./tuples.js";
+import { resolveRustAuthoredTargetType, rustParameterLaneTargetType } from "./tuples.js";
 import {
   resolveRustExactNullishValueCarrier,
   resolveRustTargetType,
@@ -25,6 +26,11 @@ import type {
 } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { selectRustPointerReturnCarrier } from "../../operations/pointer-return.js";
+import { rustTargetGenericReferences } from "../../../target-model/types/carriers/generic-references.js";
+import { inferRustTargetTypeParameterBindings } from "../../../target-model/types/carriers/generic-inference.js";
+import { mapRustTargetTypes } from "../../../target-model/types/carriers/substitution.js";
+import { resolveBoundSourceTypeParameter } from "./callables.js";
+import { rustTypeFamilyNormalizer } from "../type-family-normalization.js";
 
 export function resolveRustSignatureParameterListTarget(
   parameters: SourceCallableTypeEvidence["parameters"],
@@ -101,6 +107,23 @@ export function resolveRustCallableEvidence(
           lifetimeBinder: genericContract.lifetimeBinder,
         });
   }
+  if (!options.jsEnabled && parameters.some(parameter => parameter?.kind === "array") &&
+    declaration !== undefined && context.ast.kindName(declaration) === "KindFunctionType") {
+    const owner = context.ast.parent(declaration);
+    const uses = owner === undefined ? undefined : context.source.navigation.parameterUseSummary(owner);
+    if (owner !== undefined && context.ast.is.IsParameterDeclaration(owner) && uses !== undefined &&
+      uses.uses.length > 0 && uses.uses.every(use => use.kind === "direct-call" && !use.captured && !use.throughMember)) {
+      const borrowed = parameters.map((parameter, index) => {
+        const sourceParameter = callable.parameters[index]?.declaration;
+        const syntax = sourceParameter === undefined ? undefined : context.ast.typeNode(sourceParameter);
+        return parameter?.kind !== "array" ? parameter : syntax === undefined ? undefined
+          : rustParameterLaneTargetType(parameter, syntax, context, options);
+      });
+      if (borrowed.every(parameter => parameter !== undefined)) {
+        return { kind: "closure", args: borrowed as readonly TargetTypeRef[], result, fallible: true };
+      }
+    }
+  }
   return rustCallableTargetType(parameters as readonly TargetTypeRef[], result);
 }
 
@@ -144,14 +167,16 @@ export function resolveRustTypeComponentEvidence(
   resolving: Set<object>,
 ): TargetTypeRef | undefined {
   if (component.authoredTypeNode === undefined) {
+    const pointerReturn = component.declaration === undefined ? undefined
+      : selectRustPointerReturnCarrier(component.declaration, context, options);
+    if (pointerReturn !== undefined) return pointerReturn;
     const selected = resolveRustTargetType(
       component.selectedType,
       context,
       options,
       resolving,
     );
-    return selected ?? (component.declaration === undefined ? undefined
-      : selectRustPointerReturnCarrier(component.declaration, context, options));
+    return selected;
   }
   const authoredSourceFile = context.ast.getSourceFile(component.authoredTypeNode);
   const semantics = authoredSourceFile !== undefined &&
@@ -173,12 +198,32 @@ export function resolveRustTypeComponentEvidence(
     options,
     resolving,
   );
-  const selection = semantics.types.authoredSelection(
+  const selection = context.currentSemantics.types.authoredSelection(
     component.authoredTypeNode,
     component.selectedType,
   );
   if (selection.kind === "ambiguous") {
     return undefined;
+  }
+  const selectedParameter = resolveBoundSourceTypeParameter(component.authoredTypeNode, context);
+  if (selectedParameter !== undefined) {
+    return rustTargetTypeRefEquals(authored, selectedParameter) ? selectedParameter : undefined;
+  }
+  if (authored !== undefined && selected !== undefined) {
+    const normalize = rustTypeFamilyNormalizer(options.sourceTypes.typeFamilies);
+    const normalizedAuthored = mapRustTargetTypes(authored, normalize);
+    const normalizedSelected = mapRustTargetTypes(selected, normalize);
+    const references = rustTargetGenericReferences(normalizedAuthored);
+    if (references.typeNames.length > 0) {
+      const substitutions = inferRustTargetTypeParameterBindings(
+        normalizedAuthored,
+        normalizedSelected,
+        new Set(references.typeNames),
+      );
+      return substitutions === undefined
+        ? undefined
+        : selected;
+    }
   }
   if (selection.kind === "authored-members") {
     const targets = [
@@ -194,6 +239,7 @@ export function resolveRustTypeComponentEvidence(
       targets as readonly TargetTypeRef[],
       selection.selectedNullishTypes.length,
       options,
+      selected,
     );
   }
   return selected ?? authored;
@@ -203,6 +249,7 @@ function combineRustSelectedTargets(
   targets: readonly TargetTypeRef[],
   nullishCount: number,
   options: RustTargetTypeResolutionOptions,
+  selected?: TargetTypeRef,
 ): TargetTypeRef | undefined {
   if (targets.length === 0) {
     return undefined;
@@ -217,7 +264,11 @@ function combineRustSelectedTargets(
   if (targets.every((target) => rustTargetTypeRefEquals(first, target))) {
     return first;
   }
-  return options.resolveProjectUnionCarrier(targets);
+  const union = rustSourceUnionCarrierValue(selected);
+  const variants = selected === undefined ? undefined : options.sourceTypes.sourceUnionVariants(selected);
+  return union?.origin === "generated" && variants?.length === targets.length &&
+    targets.every(target => variants.filter(variant => rustTargetTypeRefEquals(variant.carrier, target)).length === 1)
+    ? selected : options.resolveProjectUnionCarrier(targets);
 }
 
 export function resolveRustEvidenceNodesToCommonCarrier(
@@ -231,8 +282,7 @@ export function resolveRustEvidenceNodesToCommonCarrier(
     return undefined;
   }
   const carriers = [...new Set(nodes)].map((node) => {
-    const semantics = context.semanticsFor(node);
-    const selection = semantics.types.authoredSelection(node, selectedType);
+    const selection = context.currentSemantics.types.authoredSelection(node, selectedType);
     if (selection.kind !== "authored-members") {
       return undefined;
     }

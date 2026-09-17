@@ -88,7 +88,7 @@ export function planProjectPrivateStateAccessors(
   }
   return [{
     kind: "impl",
-    generics: rustProjectRepresentationGenerics(representation),
+    generics: rustProjectRepresentationGenerics(representation, context),
     target: stateType,
     functions,
   }];

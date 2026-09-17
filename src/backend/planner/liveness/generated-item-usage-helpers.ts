@@ -12,6 +12,26 @@ import type {
 import type { RustPlanQueries } from "../../../target-model/facts/selections.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";
+import { isRustAssignmentOperator } from "../../../target-model/syntax/tokens.js";
+
+export function isRustArrayFieldContentAssignment(node: Node, ast: AstReader, facts: RustPlanQueries): boolean {
+  let current = node;
+  let parent = ast.parent(current);
+  let indexed = false;
+  while (parent !== undefined &&
+    (ast.kindName(parent) === "KindParenthesizedExpression" || ast.kindName(parent) === "KindElementAccessExpression") &&
+    Node_Expression(ast, parent) === current) {
+    indexed ||= ast.kindName(parent) === "KindElementAccessExpression";
+    current = parent;
+    parent = ast.parent(current);
+  }
+  if (!indexed || parent === undefined || ast.kindName(parent) !== KindBinaryExpression ||
+    BinaryExpression_Left(ast, parent) !== current) return false;
+  const operation = facts.getFact(parent, rustTargetOperationFactKey);
+  return (operation?.kind === "operator-token" || operation?.kind === "operator-call") &&
+    isRustAssignmentOperator(operation.operator);
+}
 
 export function markBinaryProjectIdentityUsed(
   node: Node,
@@ -77,6 +97,11 @@ export function visitConversionContract(
   markVariantConstructed: (carrier: TargetTypeRef, variantName: string) => void,
 ): void {
   switch (contract.lowering) {
+    case "rest-sequence":
+      for (const conversion of contract.elementConversions) {
+        if (conversion !== null) visitConversionContract(conversion, markStructuralFieldRead, markVariantConstructed);
+      }
+      return;
     case "source-union-variant":
       markVariantConstructed(contract.target, contract.variantName);
       return;

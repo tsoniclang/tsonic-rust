@@ -118,7 +118,7 @@ export function resolveProjectIndexRecordLiteral(
   );
   if (keyCarrier === undefined || valueCarrier === undefined || storageName === undefined ||
     (!isRustStringCarrier(keyCarrier) && !isRustIntegerCarrier(keyCarrier)) ||
-    !rustCarrierSupportsClone(valueCarrier)) {
+    !rustCarrierSupportsClone(valueCarrier, walk.context.typeDefinitions)) {
     return undefined;
   }
   const contributions: Extract<
@@ -275,7 +275,7 @@ export function resolveObjectLiteralMethodCarrier(
 }
 
 interface RustResolvedRecordShape {
-  readonly storage: "project-object" | "object-handle";
+  readonly storage: "project-object" | "structural-object";
   readonly fields: readonly {
     readonly sourceName: string;
     readonly storageIndex: number;
@@ -338,7 +338,7 @@ export function resolveRustRecordShape(
   return structural === undefined
     ? undefined
     : {
-        storage: "object-handle",
+        storage: "structural-object",
         fields: structural.fields.map((field, storageIndex) => ({
           sourceName: field.sourceName,
           storageIndex,

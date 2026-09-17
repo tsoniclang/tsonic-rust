@@ -1,3 +1,4 @@
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import {
   KindPropertyAssignment,
   KindShorthandPropertyAssignment,
@@ -140,6 +141,7 @@ export function selectObjectShapeProjectionFields(
   projection: SelectedObjectShapeProjection["projection"],
   fields: readonly RustSourceObjectField[],
   resultCarrier: TargetTypeRef,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): SelectedProjectionFields {
   if (projection === "has-own") {
     return rustTargetTypeRefEquals(resultCarrier, rustSourcePrimitiveTargetType("bool"))
@@ -189,9 +191,9 @@ export function selectObjectShapeProjectionFields(
     }
     const conversion = selectRustSourceValueConversion(
       field.resultCarrier,
-      valueCarrier,
+      valueCarrier, definitions,
     );
-    return conversion === undefined || rustValueConversionIsFallible(conversion)
+    return conversion === undefined || rustValueConversionIsFallible(conversion, definitions)
       ? undefined
       : {
           ...projectIdentityField(field),
@@ -225,6 +227,7 @@ type SelectedAssignmentFields =
 export function selectObjectAssignmentFields(
   targetFields: readonly RustSourceObjectField[],
   sourceFields: readonly RustSourceObjectField[],
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): SelectedAssignmentFields {
   const relations = sourceFields.map((sourceField) => {
     const targets = targetFields.filter((targetField) =>
@@ -252,9 +255,9 @@ export function selectObjectAssignmentFields(
       ? undefined
       : selectRustSourceValueConversion(
           sourceField.resultCarrier,
-          targetField.resultCarrier,
+          targetField.resultCarrier, definitions,
         );
-    if (conversion !== undefined && rustValueConversionIsFallible(conversion) ||
+    if (conversion !== undefined && rustValueConversionIsFallible(conversion, definitions) ||
       conversion === undefined && !rustTargetTypeRefEquals(
         sourceField.resultCarrier,
         targetField.resultCarrier,

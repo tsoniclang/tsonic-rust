@@ -8,13 +8,17 @@ import type {
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustProviderOperationFormDeclaresWritableInput } from "../forms.js";
 
+export type JsArrayCopyMode = "dense" | "optional-undefined" | "undefined";
+
 export interface JsOperationRequest {
+  readonly arrayCopyMode?: () => JsArrayCopyMode | undefined;
   readonly ownerName: string;
   readonly memberName: string;
   readonly operationKind: "call" | "property" | "indexer" | "constructor" | "property-set" | "index-set" | "delete";
   readonly receiverCarrier?: TargetTypeRef;
   readonly sourceResultCarrier?: TargetTypeRef;
   readonly argumentCarriers?: readonly (TargetTypeRef | undefined)[];
+  readonly soleArgumentNumberKind?: "number" | "non-number";
   readonly selectedMethodTypeArgumentCarriers?: readonly (TargetTypeRef | undefined)[];
   readonly authoredMethodTypeArgumentCarriers?: readonly (TargetTypeRef | undefined)[];
   readonly argumentMatchScore?: (
@@ -26,6 +30,8 @@ export interface JsOperationRequest {
     callback: RustCallbackOperationTemplate,
   ) => TargetTypeRef | undefined;
   readonly carrierSupportsProjectIdentity?: (carrier: TargetTypeRef) => boolean;
+  readonly canRequireClone?: (carrier: TargetTypeRef) => boolean;
+  readonly numericParameterArgument?: (index: number, carrier: TargetTypeRef) => boolean;
   readonly resultUse?: "consumed" | "discarded";
   readonly authoredPropertyKey?: string;
 }
@@ -39,6 +45,7 @@ export interface JsOperationSelection {
 
 export type JsLane =
   | "js-array"
+  | "array-entries"
   | "string"
   | "js-string"
   | "map"
@@ -90,6 +97,8 @@ export type JsCarrierRef =
   | { readonly ref: "bool" }
   | { readonly ref: "intl-grouping" }
   | { readonly ref: "bigint" }
+  | { readonly ref: "empty-object" }
+  | { readonly ref: "js-numeric" }
   | { readonly ref: "unit" }
   | { readonly ref: "string-array" }
   | { readonly ref: "float64-array" }
@@ -124,6 +133,8 @@ export type JsCarrierRef =
   | { readonly ref: "option-of-string-array" }
   | { readonly ref: "option-of-js-string-array" }
   | { readonly ref: "element-array" }
+  | { readonly ref: "array-entries" }
+  | { readonly ref: "array-entry-result" }
   | { readonly ref: "option-of-float64" }
   | { readonly ref: "string" }
   | { readonly ref: "js-string" }
@@ -148,6 +159,8 @@ export type JsCarrierRef =
   | { readonly ref: "weak-map-entry-array" }
   | { readonly ref: "weak-key-array" }
   | { readonly ref: "array-buffer" }
+  | { readonly ref: "uint8-array" }
+  | { readonly ref: "int32-array" }
   | { readonly ref: "date" }
   | { readonly ref: "future-output" }
   | { readonly ref: "promise-output" }
@@ -160,7 +173,7 @@ export type JsCarrierRef =
   | { readonly ref: "source-result" }
   | { readonly ref: "argument"; readonly index: number };
 
-type JsCarrierCapability = "numeric" | "integer" | "clone" | "stringifiable" | "js-equality" | "project-identity-equality" | "object-identity";
+type JsCarrierCapability = "numeric" | "integer" | "numeric-parameter" | "clone" | "stringifiable" | "js-equality" | "project-identity-equality" | "object-identity" | "freezable-object";
 
 export interface JsOperationRowData {
   readonly owner: string;
@@ -168,6 +181,7 @@ export interface JsOperationRowData {
   readonly operationKind: JsOperationRequest["operationKind"];
   readonly lane: JsLane;
   readonly variant?: string;
+  readonly arrayCopyMode?: JsArrayCopyMode;
   readonly requirements?: readonly {
     readonly carrier: JsCarrierRef;
     readonly capability: JsCarrierCapability;
@@ -191,6 +205,7 @@ export interface JsOperationRowData {
         readonly operationKind: "method" | "constructor" | "property" | "indexer";
         readonly target: RustProviderOperationForm;
         readonly discardedTarget?: RustProviderOperationForm;
+        readonly indexedLocationMethod?: string;
         readonly resultConversion?: RustValueConversion;
         readonly evaluation?: "pure";
         readonly result: JsCarrierRef;

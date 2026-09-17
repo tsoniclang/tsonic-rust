@@ -1,0 +1,69 @@
+import type { RustSourceUnion } from "../../policy/types/source-type-registry.js";
+import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
+import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
+import { rustSourceUnionCarrierValue } from "../../target-model/types/carriers/source-types.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { isRustNumberArrayPayload } from "../../target-model/types/carriers/array-unions.js";
+
+export interface RustGeneratedUnionDefinition {
+  readonly ownerFileName: string;
+  readonly componentId: string;
+  readonly targetName: string;
+  readonly variantNames: readonly string[];
+  readonly sourceCarriers: readonly TargetTypeRef[];
+  readonly numberArrayLike: boolean;
+}
+
+export interface RustGeneratedUnionPlan {
+  readonly unionDefinitions: readonly RustGeneratedUnionDefinition[];
+  unionForCarrier(carrier: TargetTypeRef): RustGeneratedUnionDefinition | undefined;
+}
+
+export function createRustGeneratedUnionPlan(
+  unions: readonly RustSourceUnion[],
+  componentForFile: (fileName: string) => string,
+  usedNamesByComponent: Map<string, Set<string>>,
+): RustGeneratedUnionPlan {
+  const groups = new Map<string, { ownerFileName: string; componentId: string; variantNames: readonly string[]; carriers: Map<string, TargetTypeRef> }>();
+  for (const union of unions) {
+    const value = rustSourceUnionCarrierValue(union.carrier);
+    if (union.declaration !== undefined || value?.origin !== "generated" ||
+      !isDenseDataArray(union.variants) || union.variants.length !== value.genericArguments.length ||
+      union.variants.some((variant, index) => {
+        const argument = value.genericArguments[index];
+        return variant?.name !== `Variant${index}` || argument?.kind !== "type" ||
+          !rustTargetTypeRefEquals(variant.carrier, argument.type);
+      })) {
+      throw new Error("A generated union plan requires an exact inferred union contract.");
+    }
+    const componentId = componentForFile(value.fileName);
+    if (componentId === undefined) throw new Error("A generated union has no source-package owner.");
+    const key = JSON.stringify([componentId, union.variants.length]);
+    const group = groups.get(key) ?? { ownerFileName: value.fileName, componentId, variantNames: Object.freeze(union.variants.map(variant => variant.name)), carriers: new Map() };
+    if (value.fileName.localeCompare(group.ownerFileName, "en") < 0) group.ownerFileName = value.fileName;
+    group.carriers.set(closedMetadataKey(union.carrier), union.carrier);
+    groups.set(key, group);
+  }
+  const definitions = [...groups].sort(([left], [right]) => left.localeCompare(right, "en")).map(([, group]) => {
+    const names = usedNamesByComponent.get(group.componentId) ?? new Set<string>();
+    usedNamesByComponent.set(group.componentId, names);
+    return Object.freeze({
+      ownerFileName: group.ownerFileName,
+      componentId: group.componentId,
+      targetName: allocateRustGeneratedName(names, `Union${group.variantNames.length}`),
+      variantNames: group.variantNames,
+      numberArrayLike: [...group.carriers.values()].some(carrier =>
+        rustSourceUnionCarrierValue(carrier)!.genericArguments.every(argument => argument.kind === "type" && isRustNumberArrayPayload(argument.type))),
+      sourceCarriers: Object.freeze([...group.carriers].sort(([left], [right]) => left.localeCompare(right, "en")).map(([, carrier]) => carrier)),
+    });
+  });
+  const byCarrier = new Map(definitions.flatMap(definition => definition.sourceCarriers.map(carrier => [closedMetadataKey(carrier), definition] as const)));
+  return Object.freeze({
+    unionDefinitions: Object.freeze(definitions),
+    unionForCarrier(carrier: TargetTypeRef) {
+      return rustSourceUnionCarrierValue(carrier)?.origin === "generated" ? byCarrier.get(closedMetadataKey(carrier)) : undefined;
+    },
+  });
+}

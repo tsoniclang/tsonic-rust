@@ -32,7 +32,7 @@ import {
   rustSourceParameterAbiFactKey,
 } from "../../../analysis/facts/keys.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { applyRustTailShape, rustBlockTerminates } from "../statements/block-flow.js";
+import { applyRustTailShape, rustBlockTerminates, retainRustCheckedCompletion } from "../statements/block-flow.js";
 import { planRustReturnExit } from "../statements/completion-exits.js";
 import {
   finishRuntimeCallableExpression,
@@ -51,21 +51,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-
-function collapseExactForwardingClosure(
-  closure: RustExpr,
-  captureCount: number,
-): RustExpr {
-  if (captureCount !== 0 || closure.kind !== "closure" || closure.move === true ||
-    closure.params.some((parameter) => parameter.byRefCopy) ||
-    closure.body.kind !== "call" || (closure.body.genericArguments?.length ?? 0) !== 0 ||
-    closure.body.args.length !== closure.params.length ||
-    !closure.body.args.every((argument, index) =>
-      argument.kind === "path" && argument.path === closure.params[index]?.name)) {
-    return closure;
-  }
-  return { kind: "path", path: closure.body.path };
-}
+import { rustReceiverIndependentMethodFactKey } from "../../../analysis/facts/operations/keys.js";
 
 export function planCallableExpression(
   node: Node,
@@ -120,6 +106,8 @@ export function planCallableExpression(
   }
   const sourceParams = context.input.program.source.ast.parameters(node);
   const leadingParameters = closureFact.leadingParameters ?? [];
+  const independent = context.input.program.facts.getFact(node, rustReceiverIndependentMethodFactKey);
+  const constructionCarrier = independent?.carrier ?? closureFact.resultCarrier;
   if (allParameterCarriers === undefined || resultCarrier === undefined ||
     leadingParameters.length > allParameterCarriers.length ||
     !leadingParameters.every((parameter, index) =>
@@ -236,7 +224,7 @@ export function planCallableExpression(
     return undefined;
   }
   const fallible = context.input.program.facts.getFact(node, rustFallibleFactKey) !== undefined;
-  const resultIsFallible = callableProtocol !== undefined || fallible;
+  const resultIsFallible = callableProtocol !== undefined || nativeClosureProtocol?.fallible === true || fallible;
   const callableErrorBoundary = resultIsFallible
     ? context.fallibleBoundary ?? rustCurrentErrorBoundary(context)
     : undefined;
@@ -251,7 +239,7 @@ export function planCallableExpression(
   if (resultIsFallible) {
     context.usedAliases?.add("rt");
   }
-  const leadingParameterPlans = leadingParameters.map((parameter) => ({
+  const leadingParameterPlans = (independent === undefined ? leadingParameters : []).map((parameter) => ({
     ...parameter,
     name: context.syntheticNames === undefined
       ? undefined
@@ -485,13 +473,12 @@ export function planCallableExpression(
           },
         };
     if (callableProtocol === undefined) {
-      const nativeCallable = collapseExactForwardingClosure(closure, captureBindings.length);
       return nativeClosureProtocol === undefined || captureBindings.length === 0
-        ? nativeCallable
+        ? closure
         : { kind: "block", bindings: captureBindings, value: closure };
     }
     const callableType = rustCallableConstructionType(
-      closureFact.resultCarrier,
+      constructionCarrier,
       context,
     );
     if (callableType === undefined) {
@@ -528,10 +515,10 @@ export function planCallableExpression(
   if (plannedBody === undefined) {
     return undefined;
   }
-  const block = {
+  const block = retainRustCheckedCompletion({
     statements: [...plannedBody.statements, ...(sourceReturn?.fallthroughUndefined
       ? [planRustReturnExit({ kind: "path", path: "None" }, bodyContext)] : [])],
-  };
+  }, !isRustUnitCarrier(resultCarrier) ? sourceReturn?.canFallThrough : undefined);
   if (!isRustUnitCarrier(resultCarrier) && !rustBlockTerminates(block)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, bodyNode),
@@ -573,13 +560,12 @@ export function planCallableExpression(
         body: finalizedBlock,
       };
   if (callableProtocol === undefined) {
-    const nativeCallable = collapseExactForwardingClosure(closure, captureBindings.length);
     return nativeClosureProtocol === undefined || captureBindings.length === 0
-      ? nativeCallable
+      ? closure
       : { kind: "block", bindings: captureBindings, value: closure };
   }
   const callableType = rustCallableConstructionType(
-    closureFact.resultCarrier,
+    constructionCarrier,
     context,
   );
   if (callableType === undefined) {

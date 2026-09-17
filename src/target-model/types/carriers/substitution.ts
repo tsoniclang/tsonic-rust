@@ -21,6 +21,22 @@ export function substituteRustTargetGenerics(
   substitutions: ReadonlyMap<string, TargetTypeRef>,
   lifetimeSubstitutions: ReadonlyMap<string, RustLifetimeRef>,
   constSubstitutions: ReadonlyMap<string, RustTargetConstArgument> = new Map(),
+  normalize?: (type: TargetTypeRef) => TargetTypeRef,
+): TargetTypeRef {
+  const result = substituteCarrierParts(type, substitutions, lifetimeSubstitutions, constSubstitutions, normalize);
+  return normalize === undefined ? result : normalize(result);
+}
+
+export function mapRustTargetTypes(type: TargetTypeRef, normalize: (type: TargetTypeRef) => TargetTypeRef): TargetTypeRef {
+  return substituteRustTargetGenerics(type, new Map(), new Map(), new Map(), normalize);
+}
+
+function substituteCarrierParts(
+  type: TargetTypeRef,
+  substitutions: ReadonlyMap<string, TargetTypeRef>,
+  lifetimeSubstitutions: ReadonlyMap<string, RustLifetimeRef>,
+  constSubstitutions: ReadonlyMap<string, RustTargetConstArgument>,
+  normalize?: (type: TargetTypeRef) => TargetTypeRef,
 ): TargetTypeRef {
   const substituteLifetime = (lifetime: RustLifetimeRef): RustLifetimeRef =>
     lifetimeSubstitutions.get(rustLifetimeKey(lifetime)) ?? lifetime;
@@ -38,6 +54,7 @@ export function substituteRustTargetGenerics(
                 substitutions,
                 lifetimeSubstitutions,
                 constSubstitutions,
+                normalize,
               ),
             }),
       };
@@ -49,6 +66,7 @@ export function substituteRustTargetGenerics(
           substitutions,
           lifetimeSubstitutions,
           constSubstitutions,
+          normalize,
         ),
       };
     case "slice":
@@ -59,6 +77,7 @@ export function substituteRustTargetGenerics(
           substitutions,
           lifetimeSubstitutions,
           constSubstitutions,
+          normalize,
         ),
       };
     case "tuple":
@@ -69,6 +88,7 @@ export function substituteRustTargetGenerics(
           substitutions,
           lifetimeSubstitutions,
           constSubstitutions,
+          normalize,
         )),
       };
     case "reference":
@@ -80,6 +100,7 @@ export function substituteRustTargetGenerics(
           substitutions,
           lifetimeSubstitutions,
           constSubstitutions,
+          normalize,
         ),
       };
     case "pointer":
@@ -90,6 +111,7 @@ export function substituteRustTargetGenerics(
           substitutions,
           lifetimeSubstitutions,
           constSubstitutions,
+          normalize,
         ),
       };
     case "function-pointer":
@@ -118,12 +140,14 @@ export function substituteRustTargetGenerics(
             substitutions,
             nestedLifetimes,
             constSubstitutions,
+            normalize,
           )),
         result: substituteRustTargetGenerics(
           type.result,
           substitutions,
           nestedLifetimes,
           constSubstitutions,
+          normalize,
         ),
         };
       })();
@@ -152,6 +176,7 @@ export function substituteRustTargetGenerics(
             substitutions,
             nestedLifetimes,
             constSubstitutions,
+            normalize,
           ),
           associatedConstraints: type.associatedConstraints.map((constraint) =>
             constraint.kind === "equality"
@@ -162,12 +187,14 @@ export function substituteRustTargetGenerics(
                     substitutions,
                     nestedLifetimes,
                     constSubstitutions,
+                    normalize,
                   ),
                   type: substituteRustTargetGenerics(
                     constraint.type,
                     substitutions,
                     nestedLifetimes,
                     constSubstitutions,
+                    normalize,
                   ),
                 }
               : {
@@ -177,6 +204,7 @@ export function substituteRustTargetGenerics(
                     substitutions,
                     nestedLifetimes,
                     constSubstitutions,
+                    normalize,
                   ),
                   traits: constraint.traits.map((trait) =>
                     substituteRustTargetTraitRef(
@@ -184,6 +212,7 @@ export function substituteRustTargetGenerics(
                       substitutions,
                       nestedLifetimes,
                       constSubstitutions,
+                      normalize,
                     )),
                   outlives: constraint.outlives.map((lifetime) =>
                     nestedLifetimes.get(rustLifetimeKey(lifetime)) ?? lifetime),
@@ -216,12 +245,14 @@ export function substituteRustTargetGenerics(
             substitutions,
             nestedLifetimes,
             constSubstitutions,
+            normalize,
           )),
         result: substituteRustTargetGenerics(
           type.result,
           substitutions,
           nestedLifetimes,
           constSubstitutions,
+          normalize,
         ),
         };
       })();
@@ -233,6 +264,7 @@ export function substituteRustTargetGenerics(
           substitutions,
           lifetimeSubstitutions,
           constSubstitutions,
+          normalize,
         ),
         autoTraits: type.autoTraits.map((trait) =>
           substituteRustTargetTraitRef(
@@ -240,6 +272,7 @@ export function substituteRustTargetGenerics(
             substitutions,
             lifetimeSubstitutions,
             constSubstitutions,
+            normalize,
           )),
         ...(type.lifetime === undefined ? {} : { lifetime: substituteLifetime(type.lifetime) }),
       };
@@ -252,6 +285,7 @@ export function substituteRustTargetGenerics(
             substitutions,
             lifetimeSubstitutions,
             constSubstitutions,
+            normalize,
           )),
         outlives: type.outlives.map(substituteLifetime),
         captures: substituteGenericArguments(
@@ -259,6 +293,7 @@ export function substituteRustTargetGenerics(
           substitutions,
           lifetimeSubstitutions,
           constSubstitutions,
+          normalize,
         ),
       };
     case "associated-type":
@@ -269,6 +304,7 @@ export function substituteRustTargetGenerics(
           substitutions,
           lifetimeSubstitutions,
           constSubstitutions,
+          normalize,
         ),
         ...(type.trait === undefined
           ? {}
@@ -278,6 +314,7 @@ export function substituteRustTargetGenerics(
                 substitutions,
                 lifetimeSubstitutions,
                 constSubstitutions,
+                normalize,
               ),
             }),
         ...(type.genericArguments === undefined
@@ -288,6 +325,7 @@ export function substituteRustTargetGenerics(
                 substitutions,
                 lifetimeSubstitutions,
                 constSubstitutions,
+                normalize,
               ),
             }),
       };
@@ -303,6 +341,7 @@ export function substituteRustTargetGenerics(
             substitutions,
             lifetimeSubstitutions,
             constSubstitutions,
+            normalize,
           ),
         );
       }
@@ -315,23 +354,17 @@ export function substituteRustTargetGenerics(
             substitutions,
             lifetimeSubstitutions,
             constSubstitutions,
+            normalize,
           ),
-        })));
+        })), structuralObject.representation);
       }
       const sourceUnion = rustSourceUnionCarrierValue(type);
       if (sourceUnion !== undefined) {
         return rustSourceUnionTargetType(
           sourceUnion.fileName,
           sourceUnion.typeName,
-          sourceUnion.variants.map((variant) => ({
-            ...variant,
-            carrier: substituteRustTargetGenerics(
-              variant.carrier,
-              substitutions,
-              lifetimeSubstitutions,
-              constSubstitutions,
-            ),
-          })),
+          substituteGenericArguments(sourceUnion.genericArguments, substitutions, lifetimeSubstitutions, constSubstitutions, normalize),
+          sourceUnion.origin,
         );
       }
       const namedType = rustNamedTypeCarrierValue(type);
@@ -344,14 +377,20 @@ export function substituteRustTargetGenerics(
             substitutions,
             lifetimeSubstitutions,
             constSubstitutions,
+            normalize,
           ),
           substituteGenericArguments(
             namedType.genericDefaults,
             substitutions,
             lifetimeSubstitutions,
             constSubstitutions,
+            normalize,
           ),
           namedType.traits,
+          namedType.upcasts.map((upcast) => ({
+            ...upcast,
+            target: substituteRustTargetGenerics(upcast.target, substitutions, lifetimeSubstitutions, constSubstitutions, normalize),
+          })),
         );
       }
       const fixedArray = rustFixedArrayCarrierValue(type);
@@ -363,6 +402,7 @@ export function substituteRustTargetGenerics(
               substitutions,
               lifetimeSubstitutions,
               constSubstitutions,
+              normalize,
             ),
             fixedArray.length.kind === "parameter"
               ? constSubstitutions.get(fixedArray.length.identity) ?? fixedArray.length
@@ -379,12 +419,14 @@ function substituteRustTargetTraitRef(
   substitutions: ReadonlyMap<string, TargetTypeRef>,
   lifetimeSubstitutions: ReadonlyMap<string, RustLifetimeRef>,
   constSubstitutions: ReadonlyMap<string, RustTargetConstArgument>,
+  normalize?: (type: TargetTypeRef) => TargetTypeRef,
 ): RustTargetTraitRef {
   const substituted = substituteRustTargetGenerics(
     trait,
     substitutions,
     lifetimeSubstitutions,
     constSubstitutions,
+    normalize,
   );
   if (substituted.kind !== "trait-ref") {
     throw new Error("Rust trait substitution changed the exact target trait carrier kind.");
@@ -397,6 +439,7 @@ function substituteGenericArguments(
   typeSubstitutions: ReadonlyMap<string, TargetTypeRef>,
   lifetimeSubstitutions: ReadonlyMap<string, RustLifetimeRef>,
   constSubstitutions: ReadonlyMap<string, RustTargetConstArgument>,
+  normalize?: (type: TargetTypeRef) => TargetTypeRef,
 ): readonly RustTargetGenericArgument[] {
   return Object.freeze(arguments_.map((argument): RustTargetGenericArgument => {
     switch (argument.kind) {
@@ -414,6 +457,7 @@ function substituteGenericArguments(
             typeSubstitutions,
             lifetimeSubstitutions,
             constSubstitutions,
+            normalize,
           ),
         };
       case "const":
@@ -432,12 +476,14 @@ export function substituteRustTargetGenericArgument(
   typeSubstitutions: ReadonlyMap<string, TargetTypeRef>,
   lifetimeSubstitutions: ReadonlyMap<string, RustLifetimeRef>,
   constSubstitutions: ReadonlyMap<string, RustTargetConstArgument> = new Map(),
+  normalize?: (type: TargetTypeRef) => TargetTypeRef,
 ): RustTargetGenericArgument {
   return substituteGenericArguments(
     [argument],
     typeSubstitutions,
     lifetimeSubstitutions,
     constSubstitutions,
+    normalize,
   )[0]!;
 }
 

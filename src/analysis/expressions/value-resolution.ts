@@ -30,7 +30,7 @@ import {
   KindVoidExpression,
   Node_Expression,
 } from "@tsonic/target-api/source";
-import { rustRuntimeUnionContract } from "../../target-model/types/carriers/runtime-unions.js";
+import { rustRuntimeUnionContract, rustRuntimeUnionProjection } from "../../target-model/types/carriers/runtime-unions.js";
 import {
   rustFutureOutputCarrier,
   getRustGeneratorProtocol,
@@ -59,7 +59,7 @@ import {
   rustTargetOperationResultCarrier,
   rustYieldFactKey,
 } from "../facts/keys.js";
-import { appendRustDiagnostic, boolCarrier, rustResolutionContext, selectExpressionOperation } from "../program/walk.js";
+import { appendRustDiagnostic, boolCarrier, hasSelectedRuntimeCallableUse, rustResolutionContext, selectExpressionOperation } from "../program/walk.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { parseSourceBigIntLiteral, sourceCharCodeUnit } from "../../target-model/syntax/literals.js";
 import { recordFinalizedOperatorSelection, resolvePostCheckBinaryCarrier, resolvePostCheckUnaryCarrier } from "../operations/operators.js";
@@ -72,6 +72,7 @@ import { resolveRecordLiteralCarrier } from "./records.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { selectedSourceLiteralIsRepresentable, selectedSourceLiteralOperandIsRepresentable } from "../../policy/types/selected-numeric-literal.js";
+import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustTargetOperationFact } from "../facts/keys.js";
@@ -89,8 +90,13 @@ export function resolveExpressionCarrierUncached(
       const contextualExpected = expected !== undefined && isRustOptionCarrier(expected)
         ? rustOptionElementCarrier(expected)
         : expected;
-      const effectiveExpected = contextualExpected ??
-        rustSourcePrimitiveTargetType("float64");
+      const defaultCarrier = rustSourcePrimitiveTargetType("float64");
+      const effectiveExpected = contextualExpected === undefined ||
+          rustRuntimeUnionProjection(contextualExpected, defaultCarrier) !== undefined ||
+          !isRustNumericCarrier(contextualExpected) &&
+          selectRustSourceValueConversion(defaultCarrier, contextualExpected, walk.context.typeDefinitions) !== undefined
+        ? defaultCarrier
+        : contextualExpected;
       if (effectiveExpected !== undefined && isRustNumericCarrier(effectiveExpected) &&
         (!isRustIntegerCarrier(effectiveExpected) ||
           (selectedSourceLiteralIsRepresentable(
@@ -151,7 +157,11 @@ export function resolveExpressionCarrierUncached(
         );
         return undefined;
       }
-      const carrier = effectiveExpected ?? rustBigIntTargetType();
+      const defaultCarrier = rustBigIntTargetType();
+      const carrier = effectiveExpected === undefined ||
+          rustRuntimeUnionProjection(effectiveExpected, defaultCarrier) !== undefined
+        ? defaultCarrier
+        : effectiveExpected;
       if (!isRustBigIntCarrier(carrier)) {
         appendRustDiagnostic(
           walk,
@@ -498,7 +508,7 @@ export function resolveExpressionCarrierUncached(
     case KindPropertyAccessExpression: {
       const semantics = walk.context.semanticsFor(expression);
       const source = semantics.operations.propertyAccess(expression);
-      if (source === undefined || source.callCallee) {
+      if (source === undefined || source.callCallee && !hasSelectedRuntimeCallableUse(walk, expression)) {
         return undefined;
       }
       const receiverCarrier = resolveExpressionCarrier(

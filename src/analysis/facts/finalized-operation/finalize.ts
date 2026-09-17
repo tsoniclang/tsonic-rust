@@ -1,3 +1,4 @@
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import { createInputFactory, finalizeSourceArguments, finalizeTargetInputs } from "./inputs.js";
 import {
   declaredCarriersMatch,
@@ -21,6 +22,7 @@ import type { RustFinalizedOperationKind } from "../../../target-model/operation
 
 export function finalizeRustProviderOperationAbi<OperationKind extends RustFinalizedOperationKind>(
   options: FinalizeRustProviderOperationAbiOptions<OperationKind>,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): RustFinalizedOperationAbiFor<OperationKind> | undefined {
   if (!operationKinds.has(options.operationKind) || !isRustTargetTypeRef(options.resultCarrier) ||
     (options.sourceReceiverCarrier !== undefined && !isRustTargetTypeRef(options.sourceReceiverCarrier)) ||
@@ -62,6 +64,15 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
     return undefined;
   }
   const compileTimeIndexes = new Set(options.compileTimeSourceArgumentIndexes ?? []);
+  if (options.spreadSourceArgumentIndexes !== undefined &&
+    !isDenseDataArray(options.spreadSourceArgumentIndexes)) return undefined;
+  const spreadIndexes = new Set(options.spreadSourceArgumentIndexes ?? []);
+  if (options.spreadSourceArgumentIndexes !== undefined &&
+    (spreadIndexes.size !== options.spreadSourceArgumentIndexes.length ||
+      options.form.form !== "call-value-slice" ||
+      options.spreadSourceArgumentIndexes.some(index => !Number.isSafeInteger(index) ||
+        index < (options.form.form === "call-value-slice" ? options.form.leadingArguments.length : 0) ||
+        index >= options.sourceArgumentCarriers.length || compileTimeIndexes.has(index)))) return undefined;
   const runtimeSourceIndexes = options.sourceArgumentCarriers
     .map((_carrier, index) => index)
     .filter((index) => !compileTimeIndexes.has(index));
@@ -69,7 +80,7 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
     options.operationKind,
     options.form,
     options.sourceArgumentCarriers.length,
-    runtimeSourceIndexes,
+    runtimeSourceIndexes, definitions,
   ) !== undefined) {
     return undefined;
   }
@@ -81,12 +92,12 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
   )) {
     return undefined;
   }
-  const input = createInputFactory(options.sourceReceiverCarrier, options.sourceArgumentCarriers);
+  const input = createInputFactory(options.sourceReceiverCarrier, options.sourceArgumentCarriers, spreadIndexes, definitions);
   const mapping = finalizeTargetInputs(
     options.operationKind,
     options.form,
     input,
-    options.sourceArgumentCarriers.length,
+    options.sourceArgumentCarriers.length, definitions,
   );
   if (mapping === undefined) {
     return undefined;
@@ -106,11 +117,12 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
     options.sourceArgumentCarriers,
     mapping,
     options.compileTimeSourceArgumentIndexes,
+    spreadIndexes,
   );
   if (sourceArguments === undefined) {
     return undefined;
   }
-  const resultConversion = finalizeValueConversion(options.resultConversion, undefined, options.resultCarrier);
+  const resultConversion = finalizeValueConversion(options.resultConversion, undefined, options.resultCarrier, definitions);
   if (resultConversion === undefined) {
     return undefined;
   }
@@ -164,7 +176,7 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
       safety: options.isUnsafe ? "requires-unsafe" : "safe",
     },
   };
-  return validateRustFinalizedOperationAbi(abi) ? abi : undefined;
+  return validateRustFinalizedOperationAbi(abi, definitions) ? abi : undefined;
 }
 
 function mappingUsesSourceReceiver(

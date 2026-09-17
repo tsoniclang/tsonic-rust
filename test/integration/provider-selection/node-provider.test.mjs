@@ -186,7 +186,7 @@ export function invalid(path: string): void {
     },
   }));
 
-  assert.equal([...diagnostics.matchAll(/TS2559/gu)].length, 2);
+  assert.equal([...diagnostics.matchAll(/TS2769/gu)].length, 2);
 });
 
 test("borrowed provider strings materialize ownership only in owned contexts", async () => {

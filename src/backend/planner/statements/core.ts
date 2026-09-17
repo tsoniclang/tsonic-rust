@@ -31,11 +31,16 @@ import type { Node } from "@tsonic/tsts";
 import type { RustBlock, RustStmt } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
+import { rustTypeAliasDeclarationFactKey } from "../../../analysis/facts/keys.js";
 
 export type RustAssignmentOperationFact = Extract<
   RustTargetOperationFact,
   { readonly kind: "operator-token" | "operator-call" }
 >;
+
+export type RustAssignmentOperationPlan =
+  | Omit<Extract<RustAssignmentOperationFact, { readonly kind: "operator-token" }>, "operationId">
+  | Extract<RustAssignmentOperationFact, { readonly kind: "operator-call" }>;
 
 export function planStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const diagnosticCount = context.diagnostics.length;
@@ -54,6 +59,13 @@ function planStatementInner(node: Node, context: RustPlanContext): readonly Rust
   const { ast } = context.input.program.source;
   const kind = ast.kindName(node);
   switch (kind) {
+    case "KindClassDeclaration": {
+      return context.input.program.projectTypes.definitionForDeclaration(node) === undefined ? undefined : [];
+    }
+    case "KindTypeAliasDeclaration": {
+      return context.input.program.facts.getFact(node, rustTypeAliasDeclarationFactKey)?.kind === "erased"
+        ? [] : undefined;
+    }
     case KindVariableStatement: {
       return planVariableStatement(node, context);
     }

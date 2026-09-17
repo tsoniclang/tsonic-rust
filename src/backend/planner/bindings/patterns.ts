@@ -18,7 +18,6 @@ import {
   isRustCopyCarrier,
   isRustJsArrayCarrier,
   isRustVecCarrier,
-  rustCarrierSupportsClone,
   rustFixedArrayCarrierValue,
   rustTargetConstInteger,
   rustStructuralObjectCarrierValue,
@@ -38,6 +37,7 @@ import {
 import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
+import { rustCarrierHasCloneContract } from "../types/generic-requirements.js";
 import { rustOptionDefaultValue } from "../option-default.js";
 
 export type RustBindingExpressionPlanner = (
@@ -168,7 +168,7 @@ function planBindingProjection(
 ): RustExpr | undefined {
   switch (fact.projection.kind) {
     case "object-field":
-      if (!isRustCopyCarrier(fact.projectedCarrier) && !rustCarrierSupportsClone(fact.projectedCarrier)) {
+      if (!isRustCopyCarrier(fact.projectedCarrier) && !rustCarrierHasCloneContract(fact.projectedCarrier, context)) {
         return rejectClone(node, context);
       }
       return readRustStoredObjectField(
@@ -192,7 +192,7 @@ function planBindingProjection(
       return ownedProjection(indexExpression(source, fact.projection.index), fact.projectedCarrier, node, context);
     case "vec-element": {
       if (fact.projection.checked) {
-        if (!rustCarrierSupportsClone(fact.sourceCarrier.kind === "array" ? fact.sourceCarrier.element : undefined)) {
+        if (!rustCarrierHasCloneContract(fact.sourceCarrier.kind === "array" ? fact.sourceCarrier.element : undefined, context)) {
           return rejectClone(node, context);
         }
         return {
@@ -259,7 +259,7 @@ function planObjectRest(
   }
   const values: RustExpr[] = [];
   for (const field of fields) {
-    if (!isRustCopyCarrier(field.carrier) && !rustCarrierSupportsClone(field.carrier)) {
+    if (!isRustCopyCarrier(field.carrier) && !rustCarrierHasCloneContract(field.carrier, context)) {
       return rejectClone(node, context);
     }
     const value = readRustStoredObjectField(
@@ -277,7 +277,7 @@ function planObjectRest(
   }
   return createRustStructuralObjectFromCarrier(
     fact.bindingCarrier,
-    values.map((value) => ({ kind: "stored" as const, value })),
+    values.map((value, index) => ({ kind: target.fields[index]?.method === true ? "method" as const : "stored" as const, value })),
     context,
   );
 }
@@ -362,7 +362,7 @@ function planVecRest(
   const start = fact.projection.kind === "vec-rest" ? fact.projection.start : 0;
   if (!isRustVecCarrier(fact.sourceCarrier) || !isRustVecCarrier(fact.bindingCarrier) ||
     !rustTargetTypeRefEquals(fact.sourceCarrier.element, fact.bindingCarrier.element) ||
-    !rustCarrierSupportsClone(fact.sourceCarrier.element)) {
+    !rustCarrierHasCloneContract(fact.sourceCarrier.element, context)) {
     return rejectProjection(node, context, "Vector rest projection has incompatible or non-cloneable finalized carriers.");
   }
   return {
@@ -457,7 +457,7 @@ function ownedProjection(
   if (isRustCopyCarrier(carrier)) {
     return value;
   }
-  if (!rustCarrierSupportsClone(carrier)) {
+  if (!rustCarrierHasCloneContract(carrier, context)) {
     return rejectClone(node, context);
   }
   return { kind: "method-call", receiver: value, method: "clone", args: [] };

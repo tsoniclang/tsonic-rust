@@ -8,11 +8,22 @@ import type { RustTargetOperationFact, RustTypedLocationPlan } from "./facts.js"
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 function rustTargetOperationFactEquals(left: RustTargetOperationFact, right: RustTargetOperationFact): boolean {
+  if (left.kind === "throw-op" && left.error.kind === "runtime") {
+    return right.kind === "throw-op" && right.error.kind === "runtime" &&
+      left.operationId === right.operationId && left.error.expression === right.error.expression &&
+      rustTargetTypeRefEquals(left.error.carrier, right.error.carrier);
+  }
   return closedMetadataEquals(left, right);
 }
 
 export const rustTargetOperationFactKey: RustPlanKey<RustTargetOperationFact> =
   defineRustPlanKey("targetOperation", rustTargetOperationFactEquals);
+
+export const rustCompoundWriteFactKey: RustPlanKey<Extract<RustTargetOperationFact, { kind: "runtime-set" }>> =
+  defineRustPlanKey("compoundWrite", closedMetadataEquals);
+
+export const rustReceiverIndependentMethodFactKey: RustPlanKey<{ readonly carrier: TargetTypeRef }> =
+  defineRustPlanKey("receiverIndependentMethod", (left, right) => rustTargetTypeRefEquals(left.carrier, right.carrier));
 
 export interface RustPreparedOperationResultFact {
   readonly operationId: string;
@@ -189,6 +200,13 @@ function rustTypedLocationPlanEquals(
         left.optional === right.optional &&
         left.fromSourceExpression === right.fromSourceExpression &&
         left.toSourceExpression === right.toSourceExpression &&
+        rustTargetTypeRefEquals(left.sourcePointeeCarrier, right.sourcePointeeCarrier);
+    case "view-pointer":
+      return right.operation === left.operation &&
+        left.pointerExpression === right.pointerExpression &&
+        left.optional === right.optional &&
+        left.readExpression === right.readExpression &&
+        left.writeExpression === right.writeExpression &&
         rustTargetTypeRefEquals(left.sourcePointeeCarrier, right.sourcePointeeCarrier);
   }
 }

@@ -11,8 +11,8 @@ import type {
   RustTargetTraitRef,
 } from "../../target-model/types/model.js";
 import type {
-  RustProviderBinaryEpilogueDefinition,
-  RustProviderBinaryEpilogueRow,
+  RustProviderBinaryHookDefinition,
+  RustProviderBinaryHookRow,
   RustProviderOperationDefinition,
   RustProviderOperationRow,
 } from "./model.js";
@@ -121,15 +121,16 @@ export function materializeProviderOperationRow(
   };
 }
 
-export function materializeProviderBinaryEpilogueRow(
-  epilogue: RustProviderBinaryEpilogueDefinition,
+export function materializeProviderBinaryHookRow(
+  epilogue: RustProviderBinaryHookDefinition,
   aliases: ReadonlyMap<string, string>,
   carrierPaths: Readonly<Record<string, string>>,
   carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>>,
-  owner: Pick<RustProviderBinaryEpilogueRow, "providerPackageId" | "providerVersion">,
-): RustProviderBinaryEpilogueRow {
+  owner: Pick<RustProviderBinaryHookRow, "providerPackageId" | "providerVersion">,
+): RustProviderBinaryHookRow {
   const base = {
     id: epilogue.id,
+    phase: epilogue.phase,
     path: expandProviderPath(epilogue.path, aliases),
     requiredCrate: epilogue.requiredCrate,
     ...owner,
@@ -261,7 +262,16 @@ function materializeProviderOperationForm(
   if (form.form === "index" && form.indexConversion !== undefined) {
     return form;
   }
-  if ((form.form === "receiver-method" || form.form === "arg-receiver-method") &&
+  if (form.form === "receiver-method") {
+    return {
+      ...form,
+      ...(argConversions === undefined ? {} : { argConversions }),
+      ...(form.receiverConversion === undefined ? {} : {
+        receiverConversion: materializeProviderValueConversion(form.receiverConversion, carrierPaths, carrierTraits),
+      }),
+    };
+  }
+  if (form.form === "arg-receiver-method" &&
     argConversions !== undefined) {
     return { ...form, argConversions };
   }
@@ -301,6 +311,10 @@ export function materializeProviderCarrier(
         carrierTraits,
       ),
       traits ?? named.traits,
+      named.upcasts.map((upcast) => ({
+        ...upcast,
+        target: materializeProviderCarrier(upcast.target, carrierPaths, carrierTraits),
+      })),
     );
   }
   if (carrier.kind === "target-named") {
@@ -476,6 +490,14 @@ function materializeProviderValueConversion(
   carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>>,
 ): RustValueConversion {
   switch (conversion.kind) {
+    case "rest-sequence":
+      return {
+        ...conversion,
+        source: materializeProviderCarrier(conversion.source, carrierPaths, carrierTraits),
+        elementTarget: materializeProviderCarrier(conversion.elementTarget, carrierPaths, carrierTraits),
+        elementConversions: conversion.elementConversions.map(element => element === null ? null :
+          materializeProviderValueConversion(element, carrierPaths, carrierTraits)) as typeof conversion.elementConversions,
+      };
     case "copy-from-reference":
       return {
         ...conversion,
@@ -487,6 +509,8 @@ function materializeProviderValueConversion(
         pointee: materializeProviderCarrier(conversion.pointee, carrierPaths, carrierTraits),
       };
     case "source-union-variant":
+    case "object-identity-erasure":
+    case "native-upcast":
     case "bottom-coercion":
     case "js-argument-vector-callback":
       return {

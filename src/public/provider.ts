@@ -1,7 +1,7 @@
 export { createRustProviderPackage } from "../providers/packages/package.js";
 export type {
-  RustProviderBinaryEpilogueDefinition,
-  RustProviderBinaryEpilogueRow,
+  RustProviderBinaryHookDefinition,
+  RustProviderBinaryHookRow,
   RustProviderCrateDefinition,
   RustProviderExportRow,
   RustProviderImmediateCallbackDefinition,
@@ -34,6 +34,7 @@ export type {
 } from "../target-model/operations/error-boundary.js";
 export {
   rustBorrowedStrToStringValueConversion,
+  rustStringToBorrowedStrValueConversion,
   rustFloat64ToInt32ValueConversion,
   rustInt32ToFloat64ValueConversion,
   rustInt32ToUint8ValueConversion,
@@ -52,8 +53,11 @@ export {
   rustClosureTargetType,
   rustJsArrayConcatItemTargetType,
   rustJsArrayTargetType,
+  rustJsStringNumberTargetType,
   rustJsPromiseTargetType,
+  rustJsTypedArrayTargetType,
   rustNeverTargetType,
+  rustNamedTargetType,
   rustOptionTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,

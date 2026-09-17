@@ -2,7 +2,7 @@ import { createImplementationPlan } from "./registry.js";
 import { rustTargetOperationFactKey } from "../../../../analysis/facts/keys.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFunctionParam, RustItem, RustType } from "../../../target-ast/nodes.js";
-import type { RustObjectLiteralMethodParameterAbi, RustObjectLiteralMethodParameterAdapter, RustObjectLiteralValueAdapter } from "../../../../analysis/facts/keys.js";
+import type { RustCallableParameterAbi, RustCallableParameterAdapter, RustCallableValueAdapter } from "../../../../analysis/facts/keys.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustSyntheticNameState } from "../../names/synthetic.js";
 import type { RustProjectMethodDispatchVariant } from "../../../../analysis/project-types/method-dispatch.js";
@@ -42,9 +42,9 @@ export interface RustObjectLiteralMethodDispatchPlan {
   readonly implementation: RustObjectLiteralMethodImplementationPlan;
   readonly parameters: readonly RustFunctionParam[];
   readonly adapter?: {
-    readonly parameterAbis: readonly RustObjectLiteralMethodParameterAbi[];
-    readonly parameterAdapters: readonly RustObjectLiteralMethodParameterAdapter[];
-    readonly resultAdapter: RustObjectLiteralValueAdapter;
+    readonly parameterAbis: readonly RustCallableParameterAbi[];
+    readonly parameterAdapters: readonly RustCallableParameterAdapter[];
+    readonly resultAdapter: RustCallableValueAdapter;
   };
   readonly override?: RustObjectLiteralMethodOverridePlan;
   readonly returnType?: RustType;
@@ -106,6 +106,10 @@ export function rustObjectLiteralRequiresDispatchImplementation(
     contribution.kind === "method" || contribution.kind === "accessor" ||
     contribution.kind === "spread" && contribution.methods.length > 0)) {
     return true;
+  }
+  const definition = context.input.program.projectTypes.definitionForCarrier(fact.resultCarrier);
+  if (definition !== undefined && !context.input.program.projectTypes.isPolymorphic(definition)) {
+    return false;
   }
   return fact.fields.some((field) => field.contractDeclarations.some((declaration) => {
     const dispatch = context.input.program.projectFieldDispatch.planFor(declaration);

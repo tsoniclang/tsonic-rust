@@ -96,10 +96,19 @@ export function printRustItem(item: RustItem): string {
         : `: ${item.superTraits.map(printRustType).join(" + ")}`;
       const declaration = `${printRustVisibility(item.visibility)}trait ${item.name}${generics.parameters}${superTraits}`;
       const header = appendRustWhereEnding(declaration, generics, 0, "{");
-      const functions = item.functions.map(printRustTraitFunction).join("\n");
-      return `${printAttributes(item.attrs, 0)}${header}${functions.length === 0 ? "}" : `\n${functions}\n}`}`;
+      const types = (item.associatedTypes ?? []).map((type) => {
+        const bounds = type.bounds.length === 0
+          ? ""
+          : `: ${type.bounds.map(printRustTypeBound).join(" + ")}`;
+        return `    type ${type.name}${bounds};`;
+      });
+      const members = [...types, ...item.functions.map(printRustTraitFunction)].join("\n");
+      return `${printAttributes(item.attrs, 0)}${header}${members.length === 0 ? "}" : `\n${members}\n}`}`;
     }
     case "impl": {
+      if (item.trait === undefined && (item.associatedTypes?.length ?? 0) !== 0) {
+        throw new Error("Associated type definitions require an exact trait implementation.");
+      }
       const generics = printRustGenerics(item.generics);
       const target = printRustType(item.target);
       const declaration = item.trait === undefined
@@ -113,7 +122,9 @@ export function printRustItem(item: RustItem): string {
         return `${printAttributes(constant.attrs, 1)}    ${visibility}const ${constant.name}: ${printRustType(constant.type)} = ${printRustExpr(constant.value)};`;
       });
       const functions = item.functions.map((fn) => printRustImplFunction(fn, item.trait === undefined));
-      const members = [...constants, ...functions].join("\n\n");
+      const types = (item.associatedTypes ?? []).map((type) =>
+        `    type ${type.name} = ${printRustType(type.type)};`);
+      const members = [...types, ...constants, ...functions].join("\n\n");
       return members.length === 0 ? `${header}}` : `${header}\n${members}\n}`;
     }
     case "function":

@@ -1,4 +1,5 @@
 import { carrierOf } from "./classes.js";
+import { planRustTypeFamilyDeclaration } from "./type-families.js";
 import {
   diagnosticInput,
   isUpperSnakeName,
@@ -26,6 +27,7 @@ import type { Node } from "@tsonic/tsts";
 import type { PlannedProjectObjectField } from "./classes.js";
 import type { RustItem, RustStructField } from "../../target-ast/nodes.js";
 import { emptyRustGenerics } from "../../target-ast/nodes.js";
+import { rustProjectWrapperTraits } from "../objects/project-wrapper-traits.js";
 import { rustSourceDeclarationGenerics } from "./callable-generics.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustProjectImplementationVisibility } from "../objects/project-storage-abi.js";
@@ -195,12 +197,13 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
     ));
     return undefined;
   }
-  const generics = rustProjectGenerics(definition);
+  const generics = rustProjectGenerics(definition, context);
+  const interfaceType = rustTypeFromCarrierInContext(context.input.program.projectTypes.openCarrier(definition), context);
   const stateType = rustProjectStateType(
     context.input.program.projectTypes.openCarrier(definition),
     context,
   );
-  if (stateType === undefined) {
+  if (stateType === undefined || interfaceType === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.record-state-carrier",
@@ -252,7 +255,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
       if (indexLayout === undefined || keyCarrier === undefined || valueCarrier === undefined ||
         keyType === undefined || valueType === undefined || targetName === undefined ||
         (!isRustStringCarrier(keyCarrier) && !isRustIntegerCarrier(keyCarrier)) ||
-        !rustCarrierSupportsClone(valueCarrier)) {
+        !rustCarrierSupportsClone(valueCarrier, context.input.program.typeDefinitions)) {
         context.diagnostics.push(unsupportedConstructDiagnostic(
           diagnosticInput(context, member),
           "rust.backend.record-index-carrier",
@@ -334,6 +337,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
     node,
     interfaceVisibility === "public",
   );
+  const explicitWrapperTraits = generics.parameters.some(parameter => parameter.kind === "type");
   return [{
     kind: "struct",
     name: definition.stateName,
@@ -386,7 +390,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
     ...(interfaceAttributes.length === 0 ? {} : { attrs: interfaceAttributes }),
     ...(interfaceDeadCode === undefined ? {} : { deadCode: interfaceDeadCode }),
     visibility: interfaceVisibility,
-    derives: ["Clone", "Debug", "PartialEq"],
+    derives: explicitWrapperTraits ? [] : ["Clone", "Debug", "PartialEq"],
     generics,
     fields: [{
       name: rustProjectObjectStateField,
@@ -404,13 +408,15 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
         return deadCode === undefined ? {} : { deadCode };
       })(),
     }],
-  }];
+  }, ...(explicitWrapperTraits ? rustProjectWrapperTraits(interfaceType, interfaceName, generics) : [])];
 }
 
 export function planTypeAliasDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
+  const fact = context.input.program.facts.getRuntimeCarrierFact(node) === undefined
+    ? undefined : context.input.program.facts.getFact(node, rustTypeAliasDeclarationFactKey);
+  if (fact?.kind === "family") return planRustTypeFamilyDeclaration(node, context);
   const { ast } = context.input.program.source;
   const carrier = context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
-  const fact = context.input.program.facts.getFact(node, rustTypeAliasDeclarationFactKey);
   const aliasName = context.input.program.names.nameForDeclaration(node) ?? "";
   if (carrier === undefined || fact === undefined || !isValidRustIdentifier(aliasName)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -467,9 +473,18 @@ export function planTypeAliasDeclaration(node: Node, context: RustPlanContext): 
     ? "public" as const
     : "crate" as const;
   const deadCode = rustAuthoredDeadCodeDisposition(context, node);
+  const sourceContract = context.input.program.sourceLifetimes.contractFor(node);
+  const unionGenerics = sourceContract === undefined
+    ? emptyRustGenerics
+    : rustSourceDeclarationGenerics(sourceContract);
+  if (unionGenerics === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+      "rust.backend.union-generics", "Runtime union has no exact renderable generic contract."));
+    return undefined;
+  }
   return [{
     kind: "enum",
-    generics: emptyRustGenerics,
+    generics: unionGenerics,
     name: aliasName,
     visibility,
     ...(deadCode === undefined ? {} : { deadCode }),

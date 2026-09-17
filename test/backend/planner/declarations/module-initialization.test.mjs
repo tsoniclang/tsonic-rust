@@ -108,7 +108,7 @@ export function main(): void {
   validateGeneratedProject("module-cycle-functions", result.artifacts, { run: true });
 });
 
-test("a cyclic component with one initializer fails without cyclic call evidence", () => {
+test("a cyclic component with independent initialization preserves later calls", () => {
   const { result } = compileRust({
     target: {
       id: "rust",
@@ -141,9 +141,65 @@ export function main(): void {
     },
   });
 
-  assert.equal(result.artifacts.length, 0);
-  assert.equal(result.diagnostics.filter((diagnostic) =>
-    diagnostic.code === "RUST_UNSUPPORTED_RUNTIME_MODULE_CYCLE").length, 1);
+  assert.deepEqual(result.diagnostics, []);
+  validateGeneratedProject("module-cycle-single-init", result.artifacts, { run: true });
+});
+
+test("cyclic modules retain fresh local static construction and class identity", () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    target: { id: "rust", options: { outputType: "bin", crateName: "module_cycle_construction" } },
+    files: {
+      "a.ts": `
+import { State, cycle } from "./b.js";
+class Text {
+  readonly value: string;
+  constructor(value: string) { this.value = value; }
+}
+export class Box {
+  static readonly empty: Box = new Box(new Text(""));
+  readonly text: Text;
+  constructor(text: Text) { this.text = text; }
+}
+export function ready(): boolean { return State.ready && cycle() === Box.empty; }
+`,
+      "b.ts": `
+import { Box } from "./a.js";
+export class State { static readonly ready: boolean = true; }
+export function cycle(): Box { return Box.empty; }
+`,
+      "index.ts": `
+import { Box, ready } from "./a.js";
+export function main(): void {
+  if (!ready() || Box.empty.text.value !== "") throw new Error("cyclic construction mismatch");
+}
+`,
+    },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  validateGeneratedProject("module-cycle-construction", result.artifacts, { run: true });
+});
+
+test("cyclic initialization proof rejects eager effects and unavailable class bindings", () => {
+  for (const source of [
+    "export let value: number = fromB();",
+    "class Value { constructor() { fromB(); } } export const value = new Value();",
+    "export function create(): Value { return new Value(); } export const value = create(); class Value {}",
+    "export class Value { static { fromB(); } }",
+    "export class Value extends Base { static readonly value: number = 1; }",
+  ]) {
+    const { result } = compileRust({
+      surfaces: ["js"],
+      files: {
+        "a.ts": `import { fromB, Base } from "./b.js";\n${source}\nexport function fromA(): number { return 1; }`,
+        "b.ts": `import { fromA } from "./a.js"; export function fromB(): number { return fromA(); } export class Base {}`,
+        "index.ts": `import { fromA } from "./a.js"; export function main(): void { fromA(); }`,
+      },
+    });
+    assert.equal(result.artifacts.length, 0, source);
+    assert.ok(result.diagnostics.some(diagnostic => diagnostic.code === "RUST_UNSUPPORTED_RUNTIME_MODULE_CYCLE"),
+      `${source}\n${JSON.stringify(result.diagnostics)}`);
+  }
 });
 
 test("cycles with competing runtime initializers fail before publication", () => {
@@ -243,13 +299,39 @@ export function main(): void {}
   validateGeneratedProject("fallible-module-proof", result.artifacts, { run: true });
 });
 
-test("an active provider crate runs its declared binary epilogue after authored main", () => {
+for (const [label, body] of [
+  ["field", 'static value: unknown = JSON.parse("1");'],
+  ["block", 'static { JSON.parse("1"); }'],
+]) {
+  test(`static class ${label} errors participate in module initialization`, () => {
+    const { result } = compileRust({
+      surfaces: ["js"],
+      target: { id: "rust", options: { outputType: "bin", crateName: "static_error_proof" } },
+      files: { "index.ts": `export class State { ${body} } export function main(): void {}` },
+    });
+    assert.deepEqual(result.diagnostics, []);
+    assert.match(artifactText(result, "src/index.rs"),
+      /pub fn module_init\(\) -> Result<\(\), rt::TsonicError>[\s\S]*?json_parse\("1"\)\?/u);
+    assert.match(artifactText(result, "src/main.rs"), /static_error_proof::initialize\(\)\?;/u);
+    validateGeneratedProject(`static-${label}-errors`, result.artifacts, { run: true });
+  });
+}
+
+test("instance method errors do not make class definition execution fallible", () => {
+  const { result } = compileRust({ surfaces: ["js"], files: {
+    "index.ts": 'export class State { value(): unknown { return JSON.parse("1"); } }',
+  } });
+  assert.deepEqual(result.diagnostics, []);
+  assert.doesNotMatch(artifactText(result, "src/index.rs"), /pub fn module_init\(\) -> Result/u);
+});
+
+test("an active provider crate runs its declared binary hook after authored main", () => {
   const { result } = compileRust({
     packages: [acmeFilesPackage({
-      binaryEpilogues: [{
+      binaryHooks: [{
         id: "drain-runtime",
         path: "acme_files::drain_runtime",
-        requiredCrate: "acme_files",
+        phase: "after-entry", requiredCrate: "acme_files",
       }],
     })],
     target: {
@@ -274,13 +356,13 @@ export function main(): void {
   validateGeneratedProject("provider-epilogue-proof", result.artifacts);
 });
 
-test("a type-only provider selection does not activate its binary epilogue", () => {
+test("a type-only provider selection does not activate its binary hook", () => {
   const { result } = compileRust({
     packages: [acmePlatformPackage({
-      binaryEpilogues: [{
+      binaryHooks: [{
         id: "drain-runtime",
         path: "acme_platform::drain_runtime",
-        requiredCrate: "acme_platform",
+        phase: "after-entry", requiredCrate: "acme_platform",
       }],
     })],
     target: {
@@ -305,10 +387,10 @@ export function main(): void {}
 test("a fallible provider epilogue makes binary completion explicitly fallible", () => {
   const { result } = compileRust({
     packages: [acmeFilesPackage({
-      binaryEpilogues: [{
+      binaryHooks: [{
         id: "drain-runtime",
         path: "acme_files::drain_runtime_fallible",
-        requiredCrate: "acme_files",
+        phase: "after-entry", requiredCrate: "acme_files",
         isFallible: true,
         errorBoundary: "provider-native",
         errorCarrier: { kind: "target-named", id: "rust.runtime.JsError" },

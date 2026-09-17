@@ -97,7 +97,7 @@ export function rustExpressionReferencesPath(expression: RustExpr, path: string)
   }
   if (expression.kind === "block") {
     for (const binding of expression.bindings) {
-      if (rustExpressionReferencesPath(binding.value, path)) {
+      if (binding.value !== undefined && rustExpressionReferencesPath(binding.value, path)) {
         return true;
       }
       if (binding.name === path) {
@@ -160,7 +160,7 @@ export function rustExpressionChildren(expression: RustExpr): readonly RustExpr[
     case "index":
       return [expression.receiver, expression.index];
     case "block":
-      return [...expression.bindings.map((binding) => binding.value), expression.value];
+      return [...expression.bindings.flatMap((binding) => binding.value === undefined ? [] : [binding.value]), expression.value];
     case "evaluate-then":
       return [expression.effect, expression.value];
     case "string-concat":
@@ -173,9 +173,14 @@ export function rustExpressionChildren(expression: RustExpr): readonly RustExpr[
     case "slice-literal":
     case "tuple-literal":
       return expression.elements;
+    case "array-repeat":
+      return expression.length.kind === "path"
+        ? [expression.element, { kind: "path", path: expression.length.path }]
+        : [expression.element];
     case "closure":
       return [expression.body];
     case "await":
+    case "option-try":
     case "try":
       return [expression.expr];
     case "return-expression":

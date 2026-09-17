@@ -1,11 +1,19 @@
 import { flowStateFactKey } from "@tsonic/tsts";
 import type { Node } from "@tsonic/tsts";
 import {
+  inferRustTargetGenericBindings,
+  rustTargetGenericReferences,
+  substituteRustTargetGenerics,
   isRustVecCarrier,
   isRustStringCarrier,
   rustOptionElementCarrier,
   rustOptionTargetType,
   rustSliceElementCarrier,
+  isRustJsValueCarrier,
+  rustProgramErrorTargetType,
+  rustTsValueTargetType,
+  rustEmptyObjectTargetType,
+  rustObjectIdentityTargetType,
 } from "../../target-model/types/index.js";
 import {
   rustTargetTypeRefEquals,
@@ -13,6 +21,7 @@ import {
 } from "../../target-model/types/equality.js";
 import type { RustArgumentMode } from "../../target-model/operations/model.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustTargetGenericBindings } from "../../target-model/types/index.js";
 import type { RustLifetimeBinder } from "../../target-model/lifetimes/index.js";
 import {
   resolveRustTargetTypeRef,
@@ -24,6 +33,7 @@ import type {
 } from "../types/resolution.js";
 import {
   Node_Initializer,
+  Node_Expression,
   Node_Type,
 } from "@tsonic/target-api/source";
 
@@ -50,6 +60,41 @@ export function rustSourceParameterContractCarrier(
     : abi.parameterCarrier;
 }
 
+export function instantiateRustSourceParameterValueCarrier(
+  abi: RustSourceParameterAbi,
+  selectedParameterCarrier: TargetTypeRef,
+  selectedBindings: RustTargetGenericBindings,
+  normalize: (carrier: TargetTypeRef) => TargetTypeRef,
+): TargetTypeRef | undefined {
+  const references = rustTargetGenericReferences(abi.parameterCarrier);
+  const substituteSelected = (carrier: TargetTypeRef): TargetTypeRef =>
+    substituteRustTargetGenerics(
+      carrier,
+      selectedBindings.types,
+      selectedBindings.lifetimes,
+      selectedBindings.consts,
+      normalize,
+    );
+  const bindings = inferRustTargetGenericBindings(
+    substituteSelected(abi.parameterCarrier),
+    selectedParameterCarrier,
+    {
+      typeNames: new Set(references.typeNames.filter((name) => !selectedBindings.types.has(name))),
+      lifetimeIdentities: new Set(references.lifetimeIdentities.filter((identity) => !selectedBindings.lifetimes.has(identity))),
+      constIdentities: new Set(references.constIdentities.filter((identity) => !selectedBindings.consts.has(identity))),
+    },
+  );
+  return bindings === undefined
+    ? undefined
+    : substituteRustTargetGenerics(
+        substituteSelected(abi.valueCarrier),
+        bindings.types,
+        bindings.lifetimes,
+        bindings.consts,
+        normalize,
+      );
+}
+
 export function createRustSourceCallableAbiResolver(): RustSourceCallableAbiResolver {
   const cache = new WeakMap<object, RustSourceParameterAbi | null>();
 
@@ -60,7 +105,7 @@ export function createRustSourceCallableAbiResolver(): RustSourceCallableAbiReso
         return cached ?? undefined;
       }
       const typeNode = Node_Type(context.ast, parameter);
-      const base = typeNode === undefined
+      let base = typeNode === undefined
         ? resolveRustTargetTypeRef(parameter, context, options)
         : resolveRustTargetTypeRef(typeNode, context, options);
       if (base === undefined) {
@@ -79,6 +124,13 @@ export function createRustSourceCallableAbiResolver(): RustSourceCallableAbiReso
           : context.ast.questionToken(parameter) !== undefined
             ? "optional" as const
             : "required" as const;
+      if (form === "required" &&
+        (isRustJsValueCarrier(base) || rustTargetTypeRefEquals(base, rustTsValueTargetType()) ||
+          rustTargetTypeRefEquals(base, rustEmptyObjectTargetType()) ||
+          rustTargetTypeRefEquals(base, rustObjectIdentityTargetType())) &&
+        parameterOnlyForwardsThrownValue(parameter, context)) {
+        base = rustProgramErrorTargetType();
+      }
       const requiresOwnedValue = parameterUsesFlowState(
         parameter,
         "moved",
@@ -290,6 +342,27 @@ function parameterCanUseSharedBorrow(
       context.facts.get(reference, flowStateFactKey);
     return flow?.state === "borrowed-shared" ||
       role === "receiver";
+  });
+}
+
+function parameterOnlyForwardsThrownValue(
+  parameter: Node,
+  context: RustTargetTypeResolutionContext,
+): boolean {
+  const summary = context.source.navigation.parameterUseSummary(parameter);
+  if (summary === undefined || summary.uses.length === 0 || summary.bindingWritten ||
+    summary.memberWritten || summary.captured || summary.returned || summary.yielded ||
+    summary.aliasedOrStored || summary.exported) return false;
+  return summary.uses.every(({ reference }) => {
+    let operand = reference;
+    let parent = context.ast.parent(operand);
+    while (parent !== undefined && context.ast.kindName(parent) === "KindParenthesizedExpression" &&
+      Node_Expression(context.ast, parent) === operand) {
+      operand = parent;
+      parent = context.ast.parent(parent);
+    }
+    return parent !== undefined && context.ast.kindName(parent) === "KindThrowStatement" &&
+      Node_Expression(context.ast, parent) === operand;
   });
 }
 

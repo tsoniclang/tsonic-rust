@@ -8,6 +8,83 @@ import {
 } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
+for (const surfaces of [[], ["js"]]) {
+  test(`bigint bitwise operations retain arbitrary precision (${surfaces[0] ?? "native"})`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({
+      surfaces,
+      packages: [acmeTestingPackage()],
+      target: { id: "rust", options: { outputType: "bin", crateName: "bigint_bitwise" } },
+      files: { "index.ts": `
+import { check } from "@acme/testing";
+function invert(value: bigint): bigint { return ~value; }
+function combine(left: bigint, right: bigint): bigint { return (left | right) ^ (left & right); }
+export function main(): void {
+  const high = 18446744073709551616n;
+  const mask = 18446744073709551615n;
+  const alias = high;
+  let value = high;
+  value |= mask;
+  check(value === 36893488147419103231n);
+  value ^= mask;
+  check(value === high);
+  value &= mask;
+  check(value === 0n && alias === high);
+  const assigned = value |= high;
+  check(assigned === high && value === high);
+  check(invert(mask) === -high && invert(-1n) === 0n);
+  check(combine(high, mask) === 36893488147419103231n);
+}
+` },
+    });
+    assert.deepEqual(result.diagnostics, []);
+    const source = artifactText(result, "src/index.rs");
+    assert.match(source, /!value/u);
+    assert.doesNotMatch(source, /as (?:f32|f64|i64|u64)/u);
+    validateGeneratedProject(`bigint-bitwise-${surfaces[0] ?? "native"}`, result.artifacts, { run: true });
+  });
+
+  test(`consumed compound assignments preserve stores and failure order (${surfaces[0] ?? "native"})`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({
+      surfaces,
+      packages: [acmeTestingPackage()],
+      target: { id: "rust", options: { outputType: "bin", crateName: "compound_assignment_values" } },
+      files: { "index.ts": `
+import { check } from "@acme/testing";
+let trace = "";
+class Counter {
+  value = 21n;
+  static shared = 3n;
+  get amount(): bigint { trace += "get;"; return this.value; }
+  set amount(value: bigint) { trace += "set;"; this.value = value; }
+}
+const counter = new Counter();
+function owner(): Counter { trace += "owner;"; return counter; }
+function divisor(): bigint { trace += "right;"; counter.value = 100n; return 3n; }
+export function main(): void {
+  const divided = owner().amount /= divisor();
+  check(divided === 7n && counter.value === 7n && trace === "owner;get;right;set;");
+  trace = "";
+  let failed = false;
+  try { const result = owner().amount /= 0n; check(result === 0n); }
+  ${surfaces.length === 0 ? "catch { failed = true; }" : "catch (error) { failed = error instanceof RangeError; }"}
+  check(failed && counter.value === 7n && trace === "owner;get;");
+  const shifted = Counter.shared <<= 2n;
+  check(shifted === 12n && Counter.shared === 12n);
+  let count = 1;
+  const sum = count += 4;
+  check(sum === 5 && count === 5);
+  const values = [3n];
+  const indexed = values[0] <<= 2n;
+  check(indexed === 12n && values[0] === 12n);
+}
+` },
+    });
+    assert.deepEqual(result.diagnostics, []);
+    if (surfaces.length === 0) assert.doesNotMatch(artifactText(result, "src/index.rs"), /values\.clone\(\)|values\.to_vec\(\)/u);
+    validateGeneratedProject(`compound-assignment-values-${surfaces[0] ?? "native"}`, result.artifacts, { run: true });
+  });
+}
+
 test("native integral bitwise operations preserve promotion and masked shifts", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     packages: [acmeTestingPackage()],

@@ -9,12 +9,15 @@ import {
   rustJsValueTargetType,
   rustJsArrayConcatItemTargetType,
   rustJsArrayTargetType,
+  rustJsArrayTargetId,
   rustSourcePrimitiveTargetType,
 } from "../../../target-model/types/index.js";
 import { defineJsOperationRows } from "./model.js";
 import { exactJsStringOperationRows } from "./exact-string-rows.js";
 import { jsCapabilityOperationRows } from "./capability-rows.js";
 import { regexpOperationRows } from "./regexp-rows.js";
+import { bigintOperationRows } from "./bigint-rows.js";
+import { stringConstructionRows } from "./string-construction-rows.js";
 import type { JsOperationRowData } from "./model.js";
 import type { RustCallbackOperationTemplate, RustProviderOperationForm, RustValueConversion } from "../../../target-model/operations/model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
@@ -225,8 +228,8 @@ const sharedArrayOperationRows = sharedArrayOwners.flatMap((owner): readonly JsO
   { owner, member: "indexOf", operationKind: "call", lane: "js-array", variant: "from", requirements: [{ carrier: { ref: "element" }, capability: "js-equality" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "index_of", argModes: ["ref", "value"] }, resultConversion: rustIsizeToInt32ValueConversion, result: { ref: "int32" }, params: [{ ref: "element" }, { ref: "float64" }] } },
   { owner, member: "lastIndexOf", operationKind: "call", lane: "js-array", variant: "default", requirements: [{ carrier: { ref: "element" }, capability: "js-equality" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "last_index_of_from_end", argModes: ["ref"] }, resultConversion: rustIsizeToInt32ValueConversion, result: { ref: "int32" }, params: [{ ref: "element" }] } },
   { owner, member: "lastIndexOf", operationKind: "call", lane: "js-array", variant: "from", requirements: [{ carrier: { ref: "element" }, capability: "js-equality" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "last_index_of", argModes: ["ref", "value"] }, resultConversion: rustIsizeToInt32ValueConversion, result: { ref: "int32" }, params: [{ ref: "element" }, { ref: "float64" }] } },
-  { owner, member: "index", operationKind: "indexer", lane: "js-array", variant: "number", shape: { op: "operation", operationKind: "indexer", target: { form: "receiver-method", name: "get_number", argModes: ["value"] }, evaluation: "pure", result: { ref: "option-of-element" }, sourceResult: { ref: "element" }, sourceAbsence: "undefined", params: [{ ref: "float64" }] } },
-  { owner, member: "index", operationKind: "indexer", lane: "js-array", variant: "int32", shape: { op: "operation", operationKind: "indexer", target: { form: "receiver-method", name: "get_number", argModes: ["value"], argConversions: [rustInt32ToFloat64ValueConversion] }, evaluation: "pure", result: { ref: "option-of-element" }, sourceResult: { ref: "element" }, sourceAbsence: "undefined", params: [{ ref: "int32" }] } },
+  { owner, member: "index", operationKind: "indexer", lane: "js-array", variant: "number", shape: { op: "operation", operationKind: "indexer", target: { form: "receiver-method", name: "get_number", argModes: ["value"] }, ...(owner === "Array" ? { indexedLocationMethod: "element_location" } : {}), evaluation: "pure", result: { ref: "option-of-element" }, sourceResult: { ref: "element" }, sourceAbsence: "undefined", params: [{ ref: "float64" }] } },
+  { owner, member: "index", operationKind: "indexer", lane: "js-array", variant: "int32", shape: { op: "operation", operationKind: "indexer", target: { form: "receiver-method", name: "get_number", argModes: ["value"], argConversions: [rustInt32ToFloat64ValueConversion] }, ...(owner === "Array" ? { indexedLocationMethod: "element_location" } : {}), evaluation: "pure", result: { ref: "option-of-element" }, sourceResult: { ref: "element" }, sourceAbsence: "undefined", params: [{ ref: "int32" }] } },
   ...arrayPredicateRows.flatMap((predicateRow) =>
     arrayCallbackRows.map(({ arity, variant, suffix }): JsOperationRowData => ({
       owner,
@@ -294,11 +297,49 @@ const sharedArrayOperationRows = sharedArrayOwners.flatMap((owner): readonly JsO
 
 export const jsOperationRows = defineJsOperationRows([
   ...jsCapabilityOperationRows,
+  ...stringConstructionRows,
+  { owner: "ObjectConstructor", member: "keys", operationKind: "call", lane: "object", firstArgCarrierId: rustJsArrayTargetId, shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::JsArray::object_keys", argModes: ["ref"] }, result: { ref: "string-array" }, params: [{ ref: "argument", index: 0 }] } },
   { owner: "ObjectConstructor", member: "is", operationKind: "call", lane: "object", variadic: true, shape: { op: "operation", operationKind: "method", target: { form: "call-value-array", path: "js_abi::object_is", leadingArguments: [], elementCarrier: rustJsValueTargetType() }, result: { ref: "bool" } } },
+  { owner: "ObjectConstructor", member: "freeze", operationKind: "call", lane: "object", requirements: [{ carrier: { ref: "argument", index: 0 }, capability: "freezable-object" }], shape: { op: "operation", operationKind: "method", target: { form: "call", path: "tsonic_rust_runtime::freeze_object", argModes: ["ref"] }, result: { ref: "argument", index: 0 }, params: [{ ref: "argument", index: 0 }] } },
+  { owner: "ObjectConstructor", member: "isFrozen", operationKind: "call", lane: "object", requirements: [{ carrier: { ref: "argument", index: 0 }, capability: "object-identity" }], shape: { op: "operation", operationKind: "method", target: { form: "call", path: "tsonic_rust_runtime::object_is_frozen", argModes: ["ref"] }, result: { ref: "bool" }, params: [{ ref: "argument", index: 0 }] } },
   ...sharedArrayOperationRows,
   { owner: "ArrayConstructor", member: "isArray", operationKind: "call", lane: "js-array", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::array_is_array_value", argModes: ["ref"] }, result: { ref: "bool" }, params: [{ ref: "jsvalue" }] } },
   { owner: "ArrayConstructor", member: "from", operationKind: "call", lane: "js-array", variant: "string", requirements: [{ carrier: { ref: "argument", index: 0 }, capability: "clone" }], shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::array_from_string", argModes: ["ref"] }, result: { ref: "string-array" }, params: [{ ref: "string" }] } },
   { owner: "ArrayConstructor", member: "from", operationKind: "call", lane: "js-array", variant: "native-array", selectedMethodTypeArgumentArity: 1, requirements: [{ carrier: { ref: "selected-method-type-argument", index: 0 }, capability: "clone" }], shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::array_from_vec", argModes: ["ref"] }, result: { ref: "selected-method-output-array", index: 0 }, params: [{ ref: "selected-method-input-array", index: 0 }] } },
+  ...([
+    ["dense", "array_from_dense_array"],
+    ["optional-undefined", "array_from_optional_array"],
+    ["undefined", "array_from_undefined_array"],
+  ] as const).map(([mode, target]): JsOperationRowData => ({
+    owner: "ArrayConstructor", member: "from", operationKind: "call", lane: "js-array",
+    variant: `js-array-${mode}`, arrayCopyMode: mode, selectedMethodTypeArgumentArity: 1,
+    requirements: [{ carrier: { ref: "selected-method-type-argument", index: 0 }, capability: "clone" }],
+    shape: { op: "operation", operationKind: "method",
+      target: { form: "call", path: `js_abi::${target}`, argModes: ["ref"] },
+      result: { ref: "selected-method-output-array", index: 0 },
+      params: [{ ref: "selected-method-output-array", index: 0 }],
+    },
+  })),
+  ...([
+    { arity: 0, variant: "zero", target: "array_from_string_map_zero", fallibleTarget: "array_from_string_try_map_zero" },
+    { arity: 1, variant: "value", target: "array_from_string_map", fallibleTarget: "array_from_string_try_map" },
+    { arity: 2, variant: "value-index", target: "array_from_string_map_with_index", fallibleTarget: "array_from_string_try_map_with_index" },
+  ] as const).map(({ arity, variant, target, fallibleTarget }): JsOperationRowData => ({
+    owner: "ArrayConstructor",
+    member: "from",
+    operationKind: "call",
+    lane: "js-array",
+    variant: `string-map-${variant}`,
+    selectedMethodTypeArgumentArity: 2,
+    callback: staticCallbackOperation(1, `js_abi::${fallibleTarget}`),
+    shape: {
+      op: "operation",
+      operationKind: "method",
+      target: { form: "call", path: `js_abi::${target}`, argModes: ["ref", "value"] },
+      result: { ref: "selected-method-output-array", index: 1 },
+      params: [{ ref: "string" }, { ref: "cb-array-from-map", arity }],
+    },
+  })),
   ...([
     { arity: 0, variant: "zero", target: "array_from_vec_map_zero", fallibleTarget: "array_from_vec_try_map_zero" },
     { arity: 1, variant: "value", target: "array_from_vec_map", fallibleTarget: "array_from_vec_try_map" },
@@ -325,6 +366,8 @@ export const jsOperationRows = defineJsOperationRows([
   })),
   { owner: "ArrayConstructor", member: "of", operationKind: "call", lane: "js-array", selectedMethodTypeArgumentArity: 1, variadic: true, shape: { op: "operation", operationKind: "method", target: { form: "call-value-array", path: "js_abi::array_of", leadingArguments: [], elementCarrier: rustInferCarrier }, result: { ref: "element-array" } } },
   { owner: "Array", member: "length", operationKind: "property-set", lane: "js-array", shape: { op: "set", target: { form: "receiver-method", name: "set_len", argConversions: [rustInt32ToUsizeValueConversion] }, params: [{ ref: "int32" }] } },
+  ...["Array", "ReadonlyArray"].map(owner => ({ owner, member: "entries", operationKind: "call", lane: "js-array", requirements: [{ carrier: { ref: "element" }, capability: "clone" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "entries" }, result: { ref: "array-entries" }, params: [] } } satisfies JsOperationRowData)),
+  { owner: "ArrayEntriesIterator", member: "next", operationKind: "call", lane: "array-entries", requirements: [{ carrier: { ref: "element" }, capability: "clone" }], shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "next_result" }, result: { ref: "array-entry-result" }, params: [] } },
   { owner: "Array", member: "push", operationKind: "call", lane: "js-array", variadic: true, shape: { op: "operation", operationKind: "method", target: { form: "receiver-value-array", name: "push_many", receiverMode: "ref", leadingArguments: [], elementCarrier: rustInferCarrier }, discardedTarget: { form: "receiver-value-array", name: "push_many_discard", receiverMode: "ref", leadingArguments: [], elementCarrier: rustInferCarrier }, resultConversion: rustUsizeToInt32ValueConversion, result: { ref: "int32" } } },
   { owner: "Array", member: "pop", operationKind: "call", lane: "js-array", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "pop" }, result: { ref: "option-of-element" } } },
   { owner: "Array", member: "shift", operationKind: "call", lane: "js-array", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "shift" }, result: { ref: "option-of-element" } } },
@@ -484,8 +527,8 @@ export const jsOperationRows = defineJsOperationRows([
   { owner: "String", member: "split", operationKind: "call", lane: "string", variant: "string-default", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::split_all", receiverMode: "ref", argModes: ["ref"] }, result: { ref: "string-array" }, params: [{ ref: "string" }] } },
   ...jsNumberArgumentRows.map(({ variant, carrier, conversion }): JsOperationRowData => ({ owner: "String", member: "split", operationKind: "call", lane: "string", variant: `string-limit-${variant}`, fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::split", receiverMode: "ref", argModes: ["ref", "value"], argConversions: [undefined, conversion] }, result: { ref: "string-array" }, params: [{ ref: "string" }, carrier] } })),
   { owner: "String", member: "concat", operationKind: "call", lane: "string", variadic: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call-str-slice", path: "js_string::concat", receiverMode: "ref" }, result: { ref: "string" } } },
-  { owner: "StringConstructor", member: "fromCharCode", operationKind: "call", lane: "string", variadic: true, fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "call-value-slice", path: "js_string::from_char_code", leadingArguments: [], elementCarrier: rustSourcePrimitiveTargetType("float64") }, result: { ref: "string" } } },
-  { owner: "StringConstructor", member: "fromCodePoint", operationKind: "call", lane: "string", variadic: true, fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "call-value-slice", path: "js_string::from_code_point", leadingArguments: [], elementCarrier: rustSourcePrimitiveTargetType("float64") }, result: { ref: "string" } } },
+  { owner: "StringConstructor", member: "fromCharCode", operationKind: "call", lane: "string", variadic: true, fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "call-value-slice", path: "js_string::from_char_code", leadingArguments: [], elementCarrier: rustSourcePrimitiveTargetType("float64"), sequenceHolePolicy: "number-nan" }, result: { ref: "string" } } },
+  { owner: "StringConstructor", member: "fromCodePoint", operationKind: "call", lane: "string", variadic: true, fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "call-value-slice", path: "js_string::from_code_point", leadingArguments: [], elementCarrier: rustSourcePrimitiveTargetType("float64"), sequenceHolePolicy: "number-nan" }, result: { ref: "string" } } },
 
   // Map lane.
   ...(["Map", "ReadonlyMap"] as const).flatMap((owner): readonly JsOperationRowData[] => [
@@ -544,6 +587,7 @@ export const jsOperationRows = defineJsOperationRows([
 
   // JSON lane (static owner; fallible rows require a fallible context).
   { owner: "JSON", member: "parse", operationKind: "call", lane: "json", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::json_parse", argModes: ["ref"] }, result: { ref: "jsvalue" }, params: [{ ref: "string" }] } },
+  { owner: "JSON", member: "stringify", operationKind: "call", lane: "json", variant: "string-only", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::json_stringify_string", argModes: ["ref"] }, result: { ref: "string" }, params: [{ ref: "string" }] } },
   { owner: "JSON", member: "stringify", operationKind: "call", lane: "json", variant: "value-only", fallible: true, jsonValueSourceArgumentIndexes: [0], shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::json_stringify", argModes: ["ref"] }, result: { ref: "option-of-string" }, params: [{ ref: "jsvalue" }] } },
 
   ...consoleRows.map(({ member, path }) => ({
@@ -567,6 +611,7 @@ export const jsOperationRows = defineJsOperationRows([
 
   ...exactJsStringOperationRows,
   ...regexpOperationRows,
+  ...bigintOperationRows,
   { owner: "String", member: "padStart", operationKind: "call", lane: "string", variant: "float64-default", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::pad_start", receiverMode: "ref", argModes: ["value"] }, result: { ref: "string" }, params: [{ ref: "float64" }] } },
   { owner: "String", member: "padStart", operationKind: "call", lane: "string", variant: "float64-fill", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::pad_start_with", receiverMode: "ref", argModes: ["value", "ref"] }, result: { ref: "string" }, params: [{ ref: "float64" }, { ref: "string" }] } },
   { owner: "String", member: "padStart", operationKind: "call", lane: "string", variant: "int32-default", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_string::pad_start", receiverMode: "ref", argModes: ["value"], argConversions: [rustInt32ToFloat64ValueConversion] }, result: { ref: "string" }, params: [{ ref: "int32" }] } },
@@ -607,7 +652,7 @@ export const jsOperationRows = defineJsOperationRows([
   { owner: "Math", member: "exp", operationKind: "call", lane: "math", shape: { op: "operation", operationKind: "method", target: { form: "arg-method", name: "exp" }, result: { ref: "float64" }, params: [{ ref: "float64" }] } },
   { owner: "Math", member: "expm1", operationKind: "call", lane: "math", shape: { op: "operation", operationKind: "method", target: { form: "arg-method", name: "exp_m1" }, result: { ref: "float64" }, params: [{ ref: "float64" }] } },
   { owner: "Math", member: "fround", operationKind: "call", lane: "math", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::math_fround" }, result: { ref: "float64" }, params: [{ ref: "float64" }] } },
-  { owner: "Math", member: "hypot", operationKind: "call", lane: "math", variadic: true, shape: { op: "operation", operationKind: "method", target: { form: "call-value-slice", path: "js_abi::math_hypot", leadingArguments: [], elementCarrier: rustSourcePrimitiveTargetType("float64") }, result: { ref: "float64" } } },
+  { owner: "Math", member: "hypot", operationKind: "call", lane: "math", variadic: true, shape: { op: "operation", operationKind: "method", target: { form: "call-value-slice", path: "js_abi::math_hypot", leadingArguments: [], elementCarrier: rustSourcePrimitiveTargetType("float64"), sequenceHolePolicy: "number-nan" }, result: { ref: "float64" } } },
   { owner: "Math", member: "imul", operationKind: "call", lane: "math", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::math_imul" }, result: { ref: "float64" }, resultConversion: rustInt32ToFloat64ValueConversion, params: [{ ref: "float64" }, { ref: "float64" }] } },
   { owner: "Math", member: "log", operationKind: "call", lane: "math", shape: { op: "operation", operationKind: "method", target: { form: "arg-method", name: "ln" }, result: { ref: "float64" }, params: [{ ref: "float64" }] } },
   { owner: "Math", member: "log1p", operationKind: "call", lane: "math", shape: { op: "operation", operationKind: "method", target: { form: "arg-method", name: "ln_1p" }, result: { ref: "float64" }, params: [{ ref: "float64" }] } },
@@ -621,8 +666,8 @@ export const jsOperationRows = defineJsOperationRows([
   { owner: "Math", member: "sinh", operationKind: "call", lane: "math", shape: { op: "operation", operationKind: "method", target: { form: "arg-method", name: "sinh" }, result: { ref: "float64" }, params: [{ ref: "float64" }] } },
   { owner: "Math", member: "tan", operationKind: "call", lane: "math", shape: { op: "operation", operationKind: "method", target: { form: "arg-method", name: "tan" }, result: { ref: "float64" }, params: [{ ref: "float64" }] } },
   { owner: "Math", member: "tanh", operationKind: "call", lane: "math", shape: { op: "operation", operationKind: "method", target: { form: "arg-method", name: "tanh" }, result: { ref: "float64" }, params: [{ ref: "float64" }] } },
-  { owner: "Math", member: "max", operationKind: "call", lane: "math", variadic: true, shape: { op: "operation", operationKind: "method", target: { form: "call-value-slice", path: "js_abi::math_max", leadingArguments: [], elementCarrier: rustSourcePrimitiveTargetType("float64") }, result: { ref: "float64" } } },
-  { owner: "Math", member: "min", operationKind: "call", lane: "math", variadic: true, shape: { op: "operation", operationKind: "method", target: { form: "call-value-slice", path: "js_abi::math_min", leadingArguments: [], elementCarrier: rustSourcePrimitiveTargetType("float64") }, result: { ref: "float64" } } },
+  { owner: "Math", member: "max", operationKind: "call", lane: "math", variadic: true, shape: { op: "operation", operationKind: "method", target: { form: "call-value-slice", path: "js_abi::math_max", leadingArguments: [], elementCarrier: rustSourcePrimitiveTargetType("float64"), sequenceHolePolicy: "number-nan" }, result: { ref: "float64" } } },
+  { owner: "Math", member: "min", operationKind: "call", lane: "math", variadic: true, shape: { op: "operation", operationKind: "method", target: { form: "call-value-slice", path: "js_abi::math_min", leadingArguments: [], elementCarrier: rustSourcePrimitiveTargetType("float64"), sequenceHolePolicy: "number-nan" }, result: { ref: "float64" } } },
   { owner: "Math", member: "random", operationKind: "call", lane: "math", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::math_random" }, result: { ref: "float64" } } },
   ...([
     ["E", "js_abi::MATH_E"],
@@ -691,7 +736,18 @@ export const jsOperationRows = defineJsOperationRows([
     ["getUTCMinutes", "get_utc_minutes_number"],
     ["getUTCSeconds", "get_utc_seconds_number"],
     ["getUTCMilliseconds", "get_utc_milliseconds_number"],
+    ["getMilliseconds", "get_milliseconds"],
   ] as const).map(([member, name]): JsOperationRowData => ({ owner: "Date", member, operationKind: "call", lane: "date", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name }, result: { ref: "float64" } } })),
+  ...([
+    ["getFullYear", "get_full_year"],
+    ["getMonth", "get_month"],
+    ["getDate", "get_date"],
+    ["getDay", "get_day"],
+    ["getHours", "get_hours"],
+    ["getMinutes", "get_minutes"],
+    ["getSeconds", "get_seconds"],
+    ["getTimezoneOffset", "get_timezone_offset"],
+  ] as const).map(([member, name]): JsOperationRowData => ({ owner: "Date", member, operationKind: "call", lane: "date", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name }, result: { ref: "float64" } } })),
   ...dateReceiverNumberRows("setTime", ["set_time"]),
   ...dateReceiverNumberRows("setUTCMilliseconds", ["set_utc_milliseconds"]),
   ...dateReceiverNumberRows("setUTCSeconds", ["set_utc_seconds", "set_utc_seconds_milliseconds"]),

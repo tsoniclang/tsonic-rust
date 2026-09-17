@@ -1,0 +1,70 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { acmeTestingPackage, compileRust } from "../../helpers/rust-session.mjs";
+import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
+
+test("compiler provider integer formatting and string iteration run natively", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"], packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "provider_primitives" } },
+    files: { "shadow.ts": `
+class RangeError { value: number = 17; }
+export function localErrorValue(): number { return new RangeError().value; }
+`, "index.ts": `
+import { check } from "@acme/testing";
+import { localErrorValue } from "./shadow.js";
+function format(value: bigint, radix: number): string { return value.toString(radix); }
+function rejectRange(): void { throw new RangeError("invalid integer"); }
+function rejectType(): void { throw new TypeError("invalid function"); }
+function rejectUri(): void { throw new URIError("invalid escape"); }
+function rejectEmpty(): void { throw new Error(); }
+export function main(): void {
+  let caught = 0;
+  try { rejectRange(); } catch { caught += 1; }
+  try { rejectType(); } catch { caught += 1; }
+  try { rejectUri(); } catch { caught += 1; }
+  try { rejectEmpty(); } catch { caught += 1; }
+  check(caught === 4);
+  check(localErrorValue() === 17);
+  check(format(-9007199254740993n, 16) === "-20000000000001");
+  check(format(35n, 36) === "z");
+  check((9007199254740993n).toString() === "9007199254740993");
+  const buffer = new ArrayBuffer(16);
+  const view = new DataView(buffer);
+  const shifted = new DataView(buffer, 1, 8);
+  shifted.setBigUint64(0, 9007199254740993n, true);
+  check(view.getBigUint64(1, true) === 9007199254740993n);
+  view.setBigUint64(0, -1n);
+  check(view.getBigUint64(0) === 18446744073709551615n);
+  check(new Uint8Array().length === 0);
+  const numbers = [0, 255, 256, -1, 3.9];
+  const bytes = Uint8Array.from(numbers);
+  check(bytes.length === 5 && bytes[0] === 0 && bytes[1] === 255);
+  check(bytes[2] === 0 && bytes[3] === 255 && bytes[4] === 3);
+  numbers[0] = 9;
+  check(bytes[0] === 0);
+  bytes[1] = 7;
+  check(numbers[1] === 255);
+  let source = "aé😀z";
+  let visited = "";
+  let count = 0;
+  for (const value of source) {
+    visited += value;
+    count += 1;
+    source = "changed";
+  }
+  check(visited === "aé😀z" && count === 4 && source === "changed");
+  for (const value of "") { visited += value; count += 1; }
+  check(count === 4);
+  for (const value of "xyz") { visited = value; break; }
+  check(visited === "x");
+}
+` },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  const emitted = result.artifacts.map((artifact) => artifact.text).join("\n");
+  for (const name of ["range_error", "type_error", "uri_error"]) {
+    assert.ok(emitted.includes(`js_abi::${name}(`));
+  }
+  validateGeneratedProject("compiler-provider-primitives", result.artifacts, { run: true });
+});

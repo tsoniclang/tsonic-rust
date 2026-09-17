@@ -1,4 +1,4 @@
-import { createTsonicMemoryMetadataIndex, type TsonicMemoryMetadataIndex,
+import { createTsonicMemoryBindingIndex, createTsonicMemoryMetadataIndex, type TsonicMemoryMetadataIndex,
   createTsonicPointerBackingDemands, type TsonicPointerBackingDemands,
   createTsonicPointerReturnQueries } from "@tsonic/source-core/facts";
 import type {
@@ -19,6 +19,10 @@ import {
   createRustNamePlan,
 } from "../names/plan.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
+import type { RustSourceTypeFamilyRegistry } from "../../policy/types/type-families.js";
+import { createRustSourceTypeFamilyRegistry } from "../project-types/type-families.js";
+import { createRustTypeDefinitionRegistry, type RustTypeDefinitionRegistry } from "../project-types/type-definitions.js";
+import { createRustClassValueRegistry, type RustClassValueRegistry } from "../objects/class-values.js";
 import {
   createRustPlanBuilder,
 } from "../facts/plan-store.js";
@@ -47,6 +51,7 @@ import {
   createRustStructuralShapePlanRegistry,
 } from "../objects/structural-shape-plan.js";
 import type { RustStructuralShapePlanRegistry } from "../objects/structural-shape-plan.js";
+import { createRustFrozenDataWriteRegistry, type RustFrozenDataWriteRegistry } from "../objects/frozen-data-writes.js";
 import {
   createRustSafetyApplicationFactIndex,
 } from "../safety/application-index.js";
@@ -72,6 +77,8 @@ import {
 } from "./generated-declaration-uses.js";
 
 export interface RustAnalysisContext extends RustSourcePolicyContext {
+  readonly typeDefinitions: RustTypeDefinitionRegistry;
+  readonly typeFamilies: RustSourceTypeFamilyRegistry;
   readonly pointerBacking: TsonicPointerBackingDemands;
   readonly memoryMetadata: TsonicMemoryMetadataIndex;
   readonly target: TargetSelection;
@@ -89,6 +96,8 @@ export interface RustAnalysisContext extends RustSourcePolicyContext {
   readonly sourceCallableSpecializations: RustSourceCallableSpecializationPlanRegistry;
   readonly sourceLifetimes: RustLifetimeIndex;
   readonly structuralShapes: RustStructuralShapePlanRegistry;
+  readonly frozenDataWrites: RustFrozenDataWriteRegistry;
+  readonly classValues: RustClassValueRegistry;
   readonly providerSemantics: RustProviderSemantics;
   readonly safetyApplications: RustSafetyApplicationFactIndex;
   readonly runtimeValueUses: RustRuntimeValueUsePlan;
@@ -124,7 +133,8 @@ export function createRustAnalysisContext(
     navigation: input.source.navigation,
     safetyApplications,
   });
-  const facts = createRustPlanBuilder(input.source.sourceFacts);
+  const typeDefinitions = createRustTypeDefinitionRegistry();
+  const facts = createRustPlanBuilder(input.source.sourceFacts, typeDefinitions);
   const names = createRustNamePlan({
     ast,
     navigation: input.source.navigation,
@@ -142,10 +152,14 @@ export function createRustAnalysisContext(
     },
     semanticsFor: input.source.semantics.forNode,
   });
+  const memoryBindings = createTsonicMemoryBindingIndex(input.source);
   return Object.freeze({
+    typeDefinitions,
+    typeFamilies: createRustSourceTypeFamilyRegistry(),
     pointerBacking: createTsonicPointerBackingDemands(input.source),
     pointerReturns: createTsonicPointerReturnQueries(input.source),
     memoryMetadata: createTsonicMemoryMetadataIndex(input.source),
+    memoryBindings,
     source: input.source,
     target: input.target,
     jsEnabled,
@@ -162,12 +176,17 @@ export function createRustAnalysisContext(
     sourceCallableSpecializations: createRustSourceCallableSpecializationPlanRegistry(),
     sourceLifetimes: lifetimes.index ?? emptyRustLifetimeIndex,
     structuralShapes: createRustStructuralShapePlanRegistry(),
+    frozenDataWrites: createRustFrozenDataWriteRegistry(),
+    classValues: createRustClassValueRegistry(),
     providerSemantics,
     safetyApplications,
     runtimeValueUses,
     generatedDeclarationUses: createRustGeneratedDeclarationUseRegistry(),
     names,
-    diagnostics: [...lifetimes.diagnostics],
+    diagnostics: [...lifetimes.diagnostics, ...memoryBindings.issues.map(issue => ({
+      code: "RUST_MEMORY_BINDING_NOT_PROVEN", category: "error" as const, source: "tsonic-rust",
+      sourceNode: issue.node, message: issue.reason,
+    }))],
     semantics: input.source.semantics.forFile,
     semanticsFor: input.source.semantics.forNode,
   });

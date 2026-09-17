@@ -1,3 +1,4 @@
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import {
   carrierAfterMode,
   finalizedConversionIsValid,
@@ -17,11 +18,10 @@ import {
 } from "../../../target-model/types/equality.js";
 import { rustFutureOutputCarrier, rustFutureTargetType, rustSliceRefTargetType } from "../../../target-model/types/index.js";
 import { rustProviderOperationFormAcceptsTargetGenericArguments, rustProviderOperationFormContractViolation } from "../../../policy/operations/forms.js";
-import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import type { RustFinalizedOperationAbi, RustFinalizedOperationResult, RustFinalizedSourceArgument, RustFinalizedSourceArgumentRole, RustFinalizedSourceInput, RustFinalizedTargetInput, RustFinalizedValueConversion } from "./model.js";
-import type { RustProviderConstantArgument, RustValueConversion } from "../keys.js";
+import type { RustProviderConstantArgument } from "../keys.js";
 
-export function validateRustFinalizedOperationAbi(candidate: unknown): candidate is RustFinalizedOperationAbi {
+export function validateRustFinalizedOperationAbi(candidate: unknown, definitions: RustTypeDefinitions = emptyRustTypeDefinitions): candidate is RustFinalizedOperationAbi {
   if (!isClosedMetadata(candidate) || !isRustFinalizedOperationAbiShape(candidate)) {
     return false;
   }
@@ -30,7 +30,7 @@ export function validateRustFinalizedOperationAbi(candidate: unknown): candidate
     abi.operationKind,
     abi.target,
     abi.sourceArguments.length,
-    abi.sourceArguments.filter((argument) => argument.disposition === "runtime").map((argument) => argument.sourceIndex),
+    abi.sourceArguments.filter((argument) => argument.disposition === "runtime").map((argument) => argument.sourceIndex), definitions,
   ) !== undefined ||
     (abi.targetGenericArguments.length > 0 &&
       !rustProviderOperationFormAcceptsTargetGenericArguments(abi.target)) ||
@@ -60,6 +60,9 @@ export function validateRustFinalizedOperationAbi(candidate: unknown): candidate
     return argument.sourceIndex !== index ||
       (argument.mode !== "value" && argument.mode !== "ref" && argument.mode !== "mut-ref") ||
       (argument.disposition !== "runtime" && argument.disposition !== "compile-time") ||
+      (argument.form === "spread-sequence" &&
+        (argument.disposition !== "runtime" || abi.target.form !== "call-value-slice" ||
+          index < abi.target.leadingArguments.length)) ||
       argument.role !== expectedRole;
   })) {
     return false;
@@ -67,7 +70,7 @@ export function validateRustFinalizedOperationAbi(candidate: unknown): candidate
   const runtimeIndexes = new Set<number>();
   let receiverUsed = false;
   const validateSourceInput = (input: RustFinalizedSourceInput): boolean => {
-    if (!finalizedConversionIsValid(input.conversion) ||
+    if (!finalizedConversionIsValid(input.conversion, definitions) ||
       !rustTargetTypeRefEquals(input.sourceCarrier, input.conversion.sourceCarrier) ||
       !rustTargetTypeRefEquals(input.parameterCarrier, carrierAfterMode(input.conversion.targetCarrier, input.mode))) {
       return false;
@@ -106,7 +109,10 @@ export function validateRustFinalizedOperationAbi(candidate: unknown): candidate
         return false;
       }
       if (input.elements.some((element) =>
-        !rustTargetTypeRefEquals(element.parameterCarrier, input.elementCarrier)) ||
+        !rustTargetTypeRefEquals(element.parameterCarrier,
+          element.source.kind === "argument" &&
+            abi.sourceArguments[element.source.sourceIndex]?.form === "spread-sequence"
+            ? { kind: "array", element: input.elementCarrier } : input.elementCarrier)) ||
         (isRustFinalizedSliceInput(input) &&
           !rustTargetTypeRefEquals(input.parameterCarrier, rustSliceRefTargetType(input.elementCarrier)))) {
         return false;
@@ -140,8 +146,9 @@ export function validateRustFinalizedOperationAbi(candidate: unknown): candidate
   const expectedMapping = finalizeTargetInputs(
     abi.operationKind,
     abi.target,
-    createInputFactory(sourceReceiverCarrier, abi.sourceArguments.map((argument) => argument.carrier)),
-    abi.sourceArguments.length,
+    createInputFactory(sourceReceiverCarrier, abi.sourceArguments.map((argument) => argument.carrier),
+      new Set(abi.sourceArguments.filter(argument => argument.form === "spread-sequence").map(argument => argument.sourceIndex)), definitions),
+    abi.sourceArguments.length, definitions,
   );
   if (expectedMapping === undefined ||
     !closedMetadataEquals(expectedMapping.targetReceiver, abi.targetReceiver) ||
@@ -157,7 +164,7 @@ export function validateRustFinalizedOperationAbi(candidate: unknown): candidate
         ((abi.effects.awaiting === "infallible" && abi.effects.errorBoundary === "none") ||
           (abi.effects.awaiting === "fallible" && abi.effects.errorBoundary !== "none"));
     return effectsValid &&
-      finalizedConversionIsValid(abi.result.conversion) &&
+      finalizedConversionIsValid(abi.result.conversion, definitions) &&
       rustTargetTypeRefEquals(abi.result.rawCarrier, abi.result.conversion.sourceCarrier) &&
       rustTargetTypeRefEquals(abi.result.carrier, abi.result.conversion.targetCarrier);
   }
@@ -165,7 +172,7 @@ export function validateRustFinalizedOperationAbi(candidate: unknown): candidate
     (abi.effects.awaiting === "infallible" || abi.effects.awaiting === "fallible") &&
     ((abi.effects.awaiting === "infallible" && abi.effects.errorBoundary === "none") ||
       (abi.effects.awaiting === "fallible" && abi.effects.errorBoundary !== "none")) &&
-    finalizedConversionIsValid(abi.result.awaitedConversion) &&
+    finalizedConversionIsValid(abi.result.awaitedConversion, definitions) &&
     rustTargetTypeRefEquals(abi.result.awaitedRawCarrier, abi.result.awaitedConversion.sourceCarrier) &&
     rustTargetTypeRefEquals(abi.result.awaitedCarrier, abi.result.awaitedConversion.targetCarrier) &&
     rustTargetTypeRefEquals(abi.result.futureCarrier, rustFutureTargetType(abi.result.awaitedCarrier));
@@ -212,7 +219,8 @@ function isSourceReceiver(value: unknown): value is RustFinalizedOperationAbi["s
 }
 
 function isSourceArgument(value: unknown): value is RustFinalizedSourceArgument {
-  return isRecord(value) && hasExactKeys(value, ["sourceIndex", "carrier", "mode", "role", "disposition"]) &&
+  return isRecord(value) && hasExactKeys(value, ["sourceIndex", "form", "carrier", "mode", "role", "disposition"]) &&
+    (value.form === "value" || value.form === "spread-sequence") &&
     Number.isSafeInteger(value.sourceIndex) && (value.sourceIndex as number) >= 0 &&
     isRustTargetTypeRef(value.carrier) && argumentModes.has(value.mode) && argumentRoles.has(value.role) &&
     dispositions.has(value.disposition);
@@ -320,7 +328,6 @@ function isFinalizedConversion(value: unknown): value is RustFinalizedValueConve
     (value.conversion.kind === "option-map" &&
       hasExactKeys(value.conversion, ["kind", "elementConversion"]) &&
       isNonOptionValueConversion(value.conversion.elementConversion))) &&
-    rustValueConversionContract(value.conversion as RustValueConversion) !== undefined &&
     typeof value.fallible === "boolean";
 }
 
@@ -359,6 +366,18 @@ function isNonOptionValueConversion(value: unknown): boolean {
 }
 
 function isValueProjectionConversion(value: Record<string, unknown>): boolean {
+  if (value.kind === "native-upcast") {
+    return hasExactKeys(value, ["kind", "source", "target", "path"]) &&
+      isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) &&
+      typeof value.path === "string";
+  }
+  if (value.kind === "rest-sequence") {
+    return hasExactKeys(value, ["kind", "source", "elementTarget", "holePolicy", "elementConversions"]) &&
+      isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.elementTarget) &&
+      (value.holePolicy === "reject" || value.holePolicy === "number-nan") &&
+      Array.isArray(value.elementConversions) && value.elementConversions.every(conversion =>
+        conversion === null || isNonOptionValueConversion(conversion));
+  }
   if (value.kind === "js-value-from-closed-carrier" ||
     value.kind === "ts-value-from-closed-carrier") {
     return hasExactKeys(value, ["kind", "source"]) &&

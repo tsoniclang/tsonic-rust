@@ -1,3 +1,4 @@
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import {
   rustFixedArrayCarrierValue,
   rustJsArrayBufferTargetType,
@@ -16,6 +17,7 @@ import {
   rustCarrierSupportsObjectIdentity,
 } from "../../../target-model/types/index.js";
 import { resolveCarrierRef } from "./selection.js";
+import { selectJsArrayConstruction } from "./array-construction.js";
 import { materializeJsonValueConversions } from "./materialization.js";
 import { selectRustJsonValueConversion } from "../../conversions/selection.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -125,6 +127,8 @@ function intlConstructorRows(
 }
 
 const jsConstructorRows = defineJsConstructorRows([
+  { className: "SharedArrayBuffer", sourceOwnerName: "SharedArrayBufferConstructor", typeArgumentCount: 0, argumentCount: 1, path: "js_abi::ArrayBuffer::new_shared", result: { kind: "array-buffer" }, fallible: true, params: [{ ref: "float64" }] },
+  { className: "Uint8Array", sourceOwnerName: "Uint8ArrayConstructor", typeArgumentCount: 0, argumentCount: 0, path: "js_abi::Uint8Array::new", result: { kind: "typed-array", name: "Uint8Array" }, fallible: true, trailingArguments: [{ kind: "float64", value: 0 }], variant: "empty" },
   { className: "Map", sourceOwnerName: "MapConstructor", typeArgumentCount: 2, argumentCount: 0, path: "js_abi::JsMap::new", result: { kind: "map" } },
   { className: "Map", sourceOwnerName: "MapConstructor", typeArgumentCount: 2, argumentCount: 1, path: "js_abi::JsMap::from_array", result: { kind: "map" }, params: [{ ref: "js-map-entry-array" }], argModes: ["ref"], variant: "js-array" },
   { className: "Set", sourceOwnerName: "SetConstructor", typeArgumentCount: 1, argumentCount: 0, path: "js_abi::JsSet::new", result: { kind: "set" } },
@@ -166,6 +170,7 @@ export interface JsConstructorRequest {
   readonly className: string;
   readonly typeArgumentCarriers: readonly (TargetTypeRef | undefined)[];
   readonly argumentCarriers: readonly (TargetTypeRef | undefined)[];
+  readonly soleArgumentNumberKind?: "number" | "non-number";
   readonly carrierSupportsProjectIdentity?: (carrier: TargetTypeRef) => boolean;
 }
 
@@ -201,7 +206,10 @@ function resolveConstructorResult(
   }
 }
 
-export function selectJsSurfaceConstructor(request: JsConstructorRequest): JsOperationSelection | undefined {
+export function selectJsSurfaceConstructor(request: JsConstructorRequest, definitions: RustTypeDefinitions = emptyRustTypeDefinitions): JsOperationSelection | undefined {
+  if (request.className === "Array") {
+    return selectJsArrayConstruction(request.typeArgumentCarriers, request.argumentCarriers, "constructor", request.soleArgumentNumberKind);
+  }
   const rows = jsConstructorRows.filter((candidate) =>
     candidate.className === request.className &&
     candidate.typeArgumentCount === request.typeArgumentCarriers.length &&
@@ -245,7 +253,7 @@ export function selectJsSurfaceConstructor(request: JsConstructorRequest): JsOpe
     if (parameterCarriers.some((carrier, index) => {
       const actual = request.argumentCarriers[index];
       return row.jsonValueSourceArgumentIndexes?.includes(index) === true
-        ? actual === undefined || selectRustJsonValueConversion(actual) === undefined
+        ? actual === undefined || selectRustJsonValueConversion(actual, definitions) === undefined
         : carrier === undefined || actual === undefined ||
           !rustTargetTypeRefEquals(carrier, actual);
     })) {
@@ -261,7 +269,7 @@ export function selectJsSurfaceConstructor(request: JsConstructorRequest): JsOpe
           : { trailingArguments: row.trailingArguments }),
       },
       row.jsonValueSourceArgumentIndexes,
-      request.argumentCarriers,
+      request.argumentCarriers, definitions,
     );
     if (target === undefined) {
       return [];
@@ -301,8 +309,12 @@ export function selectJsSurfaceConstructorBySourceOwner(request: {
   readonly sourceOwnerName: string;
   readonly typeArgumentCarriers: readonly (TargetTypeRef | undefined)[];
   readonly argumentCarriers: readonly (TargetTypeRef | undefined)[];
+  readonly soleArgumentNumberKind?: "number" | "non-number";
   readonly carrierSupportsProjectIdentity?: (carrier: TargetTypeRef) => boolean;
-}): JsOperationSelection | undefined {
+}, definitions: RustTypeDefinitions = emptyRustTypeDefinitions): JsOperationSelection | undefined {
+  if (request.sourceOwnerName === "ArrayConstructor") {
+    return selectJsArrayConstruction(request.typeArgumentCarriers, request.argumentCarriers, "constructor", request.soleArgumentNumberKind);
+  }
   const row = jsConstructorRows.find((candidate) => candidate.sourceOwnerName === request.sourceOwnerName);
   return row === undefined
     ? undefined
@@ -313,5 +325,5 @@ export function selectJsSurfaceConstructorBySourceOwner(request: {
         ...(request.carrierSupportsProjectIdentity === undefined
           ? {}
           : { carrierSupportsProjectIdentity: request.carrierSupportsProjectIdentity }),
-      });
+      }, definitions);
 }

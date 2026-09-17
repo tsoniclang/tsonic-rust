@@ -28,13 +28,15 @@ import type { RustObjectRepresentation } from "../../../../analysis/project-type
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { rustProjectImplementationVisibility } from "../project-storage-abi.js";
 import { rustProjectObjectIdentityImplementation } from "../project-identity.js";
+import { rustArrayFieldMutationName, rustArrayFieldMutationType } from "./array-fields.js";
 
 export function projectIdentityImplementations(
   definition: RustProjectTypeDefinition,
   wrapperType: RustType,
   representation: RustObjectRepresentation,
+  context: RustPlanContext,
 ): readonly RustItem[] {
-  const generics = rustProjectRepresentationGenerics(representation);
+  const generics = rustProjectRepresentationGenerics(representation, context);
   return [
     {
       kind: "impl",
@@ -193,6 +195,17 @@ export function planProjectDispatchTrait(
       "read",
       publiclyReachable,
     );
+    if (dispatch.stored && dispatch.mutableContent && field.carrier.kind === "array") {
+      const contentDeadCode = rustGeneratedDispatchDeadCodeDisposition(
+        context, definition.declaration, field.declaration, "content", publiclyReachable,
+      );
+      functions.push({
+        name: rustArrayFieldMutationName(read), generics: emptyRustGenerics,
+        ...(contentDeadCode === undefined ? {} : { deadCode: contentDeadCode }),
+        selfParam: rustSelfParameter("ref"),
+        params: [{ name: "action", type: rustArrayFieldMutationType(field.type) }],
+      });
+    }
     functions.push({
       name: read,
       ...(readDeadCode === undefined ? {} : { deadCode: readDeadCode }),
@@ -297,7 +310,7 @@ export function planProjectDispatchTrait(
         };
       };
       functions.push(signature(variant.virtualSlot, "method-virtual"));
-      if (definition.kind === "class") {
+      if (definition.kind === "class" && !context.input.program.source.ast.hasModifierKind(member, "abstract")) {
         functions.push(signature(variant.exactSlot, "method-exact"));
       }
     }
@@ -337,7 +350,7 @@ export function planProjectDispatchTrait(
   if (superTraits.some((type) => type === undefined)) {
     return undefined;
   }
-  const generics = rustProjectRepresentationGenerics(representation);
+  const generics = rustProjectRepresentationGenerics(representation, context);
   const visibility = rustProjectImplementationVisibility(publiclyReachable);
   const deadCode = rustAuthoredDeadCodeDisposition(context, definition.declaration);
   return {

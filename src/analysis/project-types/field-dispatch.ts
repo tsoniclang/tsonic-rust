@@ -3,12 +3,14 @@ import type {
   Node,
 } from "@tsonic/tsts";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
+import { sourceParameterIsProperty } from "@tsonic/target-api/source";
 import type {
   RustProjectTypeDefinition,
   RustProjectTypePolicy,
 } from "./type-policy.js";
 import { rustProjectObjectLayout } from "./object-layout.js";
 import { rustProjectMemberIsPrivate } from "./member-privacy.js";
+import type { RustFrozenDataWritePlan } from "../objects/frozen-data-writes.js";
 
 export interface RustProjectFieldDispatchRole {
   readonly selfMode: "ref" | "rc";
@@ -18,6 +20,8 @@ export interface RustProjectFieldDispatchRole {
 export interface RustProjectFieldDispatchPlan {
   readonly declaration: Node;
   readonly readonly: boolean;
+  readonly stored: boolean;
+  readonly mutableContent: boolean;
   readonly read: RustProjectFieldDispatchRole;
   readonly write?: RustProjectFieldDispatchRole;
 }
@@ -50,6 +54,8 @@ export interface RustProjectFieldDispatchPlanRegistry
   initialize(input: {
     readonly ast: AstReader;
     readonly projectTypes: RustProjectTypePolicy;
+    readonly frozenDataWrites: RustFrozenDataWritePlan;
+    readonly mutableContentFields: ReadonlySet<Node>;
     semanticsFor(node: Node): SourceFileSemantics;
   }): void;
   seal(): RustProjectFieldDispatchQueries;
@@ -109,6 +115,8 @@ export function createRustProjectFieldDispatchPlanRegistry(): RustProjectFieldDi
           nextPlans.set(field.declaration, Object.freeze({
             declaration: field.declaration,
             readonly: false,
+            stored: false,
+            mutableContent: false,
             read: Object.freeze({ selfMode: "ref", fallible: false }),
             write: Object.freeze({ selfMode: "ref", fallible: false }),
           }));
@@ -145,6 +153,8 @@ export function createRustProjectFieldDispatchPlanRegistry(): RustProjectFieldDi
           nextPlans.set(field.declaration, Object.freeze({
             declaration: field.declaration,
             readonly,
+            stored: !accessorRead && !accessorWrite,
+            mutableContent: input.mutableContentFields.has(field.declaration),
             read: Object.freeze({
               selfMode: accessorRead ? "rc" : "ref",
               fallible: accessorRead,
@@ -154,7 +164,7 @@ export function createRustProjectFieldDispatchPlanRegistry(): RustProjectFieldDi
               : {
                   write: Object.freeze({
                     selfMode: accessorWrite ? "rc" as const : "ref" as const,
-                    fallible: accessorWrite,
+                    fallible: accessorWrite || input.frozenDataWrites.receiverForDeclaration(field.declaration) !== undefined,
                   }),
                 }),
           }));
@@ -206,7 +216,8 @@ function resolveFieldImplementation(
   }
   const declaration = selected.implementation.declaration;
   const kind = input.ast.kindName(declaration);
-  if (kind === "KindPropertyDeclaration" || kind === "KindPropertySignature") {
+  if (kind === "KindPropertyDeclaration" || kind === "KindPropertySignature" ||
+    sourceParameterIsProperty(input.ast, declaration)) {
     return Object.freeze({ kind: "stored", declaration });
   }
   if (kind !== "KindGetAccessor" && kind !== "KindSetAccessor") {

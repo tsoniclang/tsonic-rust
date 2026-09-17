@@ -49,7 +49,7 @@ export function validateOperationRows(
     }
     const signature = row.signatureId === undefined ? undefined : signaturesById.get(row.signatureId);
     if (row.signatureId !== undefined && (signature === undefined || signature.exportId !== row.exportId ||
-      (row.memberId !== undefined && signature.memberId !== row.memberId))) {
+      signature.memberId !== row.memberId)) {
       fail(`row '${label}' targets signatureId '${row.signatureId}' outside its selected declaration`);
     }
     if (row.memberId === undefined && row.operationKind === "property" &&
@@ -57,7 +57,8 @@ export function validateOperationRows(
       fail(`row '${label}' declares a provider value operation for non-value export kind '${String(exported?.declaration.kind)}'`);
     }
     if (row.memberId === undefined && exported?.declaration.kind === "value" &&
-      row.operationKind !== "property" && row.operationKind !== "property-set") {
+      row.operationKind !== "property" && row.operationKind !== "property-set" &&
+      !(row.operationKind === "method" && signature !== undefined)) {
       fail(`row '${label}' must represent provider value export '${row.exportId}' as a property read or property-set operation`);
     }
     if (row.operationKind === "property-set" || row.operationKind === "index-set") {
@@ -99,8 +100,10 @@ export function validateOperationRows(
     if (row.isFallible !== true && row.errorBoundary !== undefined) {
       fail(`infallible row '${label}' cannot declare an errorBoundary.`);
     }
-    if (row.isFallible === true && row.operationKind !== "method" && row.operationKind !== "constructor" && row.operationKind !== "property") {
-      fail(`isFallible is supported only on method, constructor, and property operations (row '${label}').`);
+    if (row.isFallible === true &&
+      (row.operationKind === "property-set" || row.operationKind === "index-set") &&
+      row.target.form !== "call" && row.target.form !== "receiver-method") {
+      fail(`fallible setters require a native call or receiver-method (row '${label}').`);
     }
     if (row.isAsync === true && row.operationKind !== "method") {
       fail(`isAsync is supported only on method operations (row '${label}').`);
@@ -371,8 +374,8 @@ function valueConversionCarriers(
     conversion.kind === "numeric-promotion") return [];
   if (conversion.kind === "raw-pointer-mut-to-const") return [conversion.pointee];
   if (conversion.kind === "copy-from-reference") return [conversion.target];
-  if (conversion.kind === "source-union-variant" || conversion.kind === "bottom-coercion" ||
-    conversion.kind === "js-argument-vector-callback") {
+  if (conversion.kind === "source-union-variant" || conversion.kind === "object-identity-erasure" || conversion.kind === "bottom-coercion" ||
+    conversion.kind === "js-argument-vector-callback" || conversion.kind === "native-upcast") {
     return [conversion.source, conversion.target];
   }
   if (conversion.kind === "js-value-from-closed-carrier" ||
@@ -411,6 +414,10 @@ function valueConversionCarriers(
         ...valueConversionCarriers(field.conversion),
       ]),
     ];
+  }
+  if (conversion.kind === "rest-sequence") {
+    return [conversion.source, conversion.elementTarget,
+      ...conversion.elementConversions.flatMap(element => element === null ? [] : valueConversionCarriers(element))];
   }
   if (conversion.kind === "option-some") return [conversion.element];
   return valueConversionCarriers(conversion.elementConversion);

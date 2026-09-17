@@ -1,6 +1,11 @@
+import { rustJsArrayEntriesTargetId } from "./array-entries.js";
 import {
   rustAsyncGeneratorTargetId,
   rustBigIntTargetId,
+  rustEmptyObjectTargetId,
+  rustObjectIdentityTargetId,
+  rustJsNumericTargetId,
+  rustJsStringNumberTargetId,
   rustBorrowedAsyncGeneratorTargetId,
   rustBorrowedGeneratorTargetId,
   rustCallableTargetId,
@@ -49,6 +54,7 @@ import {
   rustJsWeakMapTargetId,
   rustJsWeakSetTargetId,
   rustLocationTargetId,
+  rustInfallibleTargetId,
   rustRawPointerTargetId,
   rustNullTargetId,
   rustOptionTargetId,
@@ -67,8 +73,13 @@ import {
 
 export const rustBuiltInCarrierRenderPaths: Readonly<Record<string, string>> = Object.freeze({
   [rustBigIntTargetId]: "rt::BigInt",
+  [rustEmptyObjectTargetId]: "tsonic_rust_runtime::EmptyObject",
+  [rustObjectIdentityTargetId]: "tsonic_rust_runtime::EmptyObject",
+  [rustJsNumericTargetId]: "js_abi::JsNumeric",
+  [rustJsStringNumberTargetId]: "js_abi::JsStringNumber",
   [rustOptionTargetId]: "Option",
   [rustLocationTargetId]: "rt::Location",
+  [rustInfallibleTargetId]: "core::convert::Infallible",
   [rustRawPointerTargetId]: "rt::RawPointer",
   [rustGeneratorTargetId]: "rt::Generator",
   [rustAsyncGeneratorTargetId]: "rt::AsyncGenerator",
@@ -82,6 +93,7 @@ export const rustBuiltInCarrierRenderPaths: Readonly<Record<string, string>> = O
   [rustTsValueTargetId]: "rt::TsValue",
   [rustJsValueTargetId]: "js_abi::JsValue",
   [rustJsArrayTargetId]: "js_abi::JsArray",
+  [rustJsArrayEntriesTargetId]: "js_abi::JsArrayEntries",
   [rustJsArrayConcatItemTargetId]: "js_abi::JsArrayConcatItem",
   [rustJsMapTargetId]: "js_abi::JsMap",
   [rustJsPromiseTargetId]: "js_abi::JsPromise",

@@ -3,18 +3,23 @@ import type { TargetTypeRef } from "../types/model.js";
 import { rustTargetTypeRefEquals } from "../types/equality.js";
 import { defineRustPlanKey } from "../facts/keys.js";
 
-export interface RustNativeMemoryLayout {
-  readonly kind: "scalar" | "record";
+interface RustNativeMemoryDimensions {
   readonly pointeeCarrier: TargetTypeRef;
   readonly size: number;
   readonly alignment: number;
   readonly width: 32 | 64;
   readonly littleEndian: boolean;
-  readonly fields: readonly RustNativeMemoryField[];
 }
 
+export type RustNativeMemoryLayout = RustNativeMemoryDimensions & (
+  | { readonly kind: "scalar" | "record"; readonly fields: readonly RustNativeMemoryField[] }
+  | { readonly kind: "array"; readonly length: string; readonly stride: number; readonly element: RustNativeMemoryLayout }
+);
+
 export interface RustNativeMemoryField {
-  readonly name: string;
+  readonly projection:
+    | { readonly kind: "native-field"; readonly name: string }
+    | { readonly kind: "value-field"; readonly storageIndex: number };
   readonly offset: number;
   readonly alignment: number;
   readonly layout: RustNativeMemoryLayout;
@@ -47,10 +52,21 @@ export function rustNativeMemoryLayoutsEqual(left: RustNativeMemoryLayout, right
     visited.set(first, compared);
     if (first.kind !== second.kind || !rustTargetTypeRefEquals(first.pointeeCarrier, second.pointeeCarrier) ||
       first.size !== second.size || first.alignment !== second.alignment || first.width !== second.width ||
-      first.littleEndian !== second.littleEndian || first.fields.length !== second.fields.length) return false;
+      first.littleEndian !== second.littleEndian) return false;
+    if (first.kind === "array" || second.kind === "array") {
+      if (first.kind !== "array" || second.kind !== "array" ||
+        first.length !== second.length || first.stride !== second.stride) return false;
+      pending.push([first.element, second.element]);
+      continue;
+    }
+    if (first.fields.length !== second.fields.length) return false;
     for (const [index, field] of first.fields.entries()) {
       const other = second.fields[index]!;
-      if (field.name !== other.name || field.offset !== other.offset || field.alignment !== other.alignment) return false;
+      if (field.projection.kind !== other.projection.kind ||
+        (field.projection.kind === "native-field"
+          ? other.projection.kind !== "native-field" || field.projection.name !== other.projection.name
+          : other.projection.kind !== "value-field" || field.projection.storageIndex !== other.projection.storageIndex) ||
+        field.offset !== other.offset || field.alignment !== other.alignment) return false;
       pending.push([field.layout, other.layout]);
     }
   }

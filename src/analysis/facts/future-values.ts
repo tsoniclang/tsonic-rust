@@ -1,4 +1,5 @@
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustFutureOutputCarrier } from "../../target-model/types/index.js";
 import { validateRustFinalizedOperationAbi } from "./finalized-operation-abi.js";
@@ -11,9 +12,10 @@ import type {
 export function rustFutureValueForOperation(
   operation: RustTargetOperationFact | undefined,
   sourceCallEffects?: RustSourceCallEffectsFact,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): RustFutureValueFact | undefined {
   if (operation?.kind === "provider-operation") {
-    if (!validateRustFinalizedOperationAbi(operation.abi)) {
+    if (!validateRustFinalizedOperationAbi(operation.abi, definitions)) {
       return undefined;
     }
     const awaiting = operation.abi.effects.awaiting;

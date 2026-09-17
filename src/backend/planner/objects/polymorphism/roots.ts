@@ -14,6 +14,7 @@ import {
   writeRustProjectMethodOverride,
   writeRustProjectObjectField,
   writeRustProjectPrivateField,
+  mutateRustProjectObjectField,
 } from "../project-objects.js";
 import { rustProjectDispatchTraitType, rustProjectRepresentationGenerics } from "./names.js";
 import { emptyRustGenerics } from "../../../target-ast/nodes.js";
@@ -33,6 +34,8 @@ import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { ProjectClassStateLayer } from "./model.js";
 import type { RustObjectRepresentation } from "../../../../analysis/project-types/object-representation.js";
 import { rustProjectMemberIsPrivate } from "../../../../analysis/project-types/member-privacy.js";
+import { checkRustDataWrite } from "../data-writes.js";
+import { rustArrayFieldMutationName, rustArrayFieldMutationType } from "./array-fields.js";
 
 export function planProjectRootImplementations(
   concrete: RustProjectTypeDefinition,
@@ -41,14 +44,13 @@ export function planProjectRootImplementations(
   layers: readonly ProjectClassStateLayer[],
   context: RustPlanContext,
 ): readonly RustItem[] | undefined {
-  const lineage = context.input.program.projectTypes.classLineage(concrete);
-  const interfaces = context.input.program.projectTypes.interfacesForClass(concrete);
+  const contracts = context.input.program.projectTypes.contractsForClass(concrete);
   const representation = context.input.program.objectRepresentations.representationFor(concrete);
-  if (lineage === undefined || interfaces === undefined || representation === undefined) {
+  if (contracts === undefined || representation === undefined) {
     return undefined;
   }
   const items: RustItem[] = [];
-  const generics = rustProjectRepresentationGenerics(representation);
+  const generics = rustProjectRepresentationGenerics(representation, context);
   const methodImplementations = new Map<Node, RustImplFunction[]>();
   const accessorImplementations = new Map<Node, RustImplFunction>();
   const implementationFor = (
@@ -99,7 +101,7 @@ export function planProjectRootImplementations(
     }
     return planned;
   };
-  for (const contract of [...lineage, ...interfaces]) {
+  for (const contract of contracts) {
     const relation = context.input.program.projectTypes.relationship(concreteCarrier, contract);
     if (relation.kind !== "related") {
       return undefined;
@@ -164,7 +166,8 @@ function planRootContractFunctions(
   const functions: RustImplFunction[] = [];
   for (const route of context.input.program.projectTypes.downcastRoutesFor(contract)) {
     const relation = context.input.program.projectTypes.relationship(concreteCarrier, route.target);
-    const matches = relation.kind === "related" &&
+    const matches = context.input.program.projectTypes.classLineage(concrete)?.includes(route.target) === true &&
+      relation.kind === "related" &&
       rustTargetTypeRefEquals(relation.targetType, route.targetCarrier);
     if (matches) {
       const implementation = planProjectDowncastRouteImplementation(route, true, context);
@@ -234,6 +237,20 @@ function planRootContractFunctions(
       dispatch.write !== undefined && write === undefined) {
       return undefined;
     }
+    if (dispatch.stored && dispatch.mutableContent && field.carrier.kind === "array") {
+      if (storagePath === undefined) return undefined;
+      const mutation = mutateRustProjectObjectField({ kind: "path", path: "self" }, storagePath,
+        storage => ({ kind: "invoke", callee: { kind: "path", path: "action" }, args: [
+          { kind: "reference", mutable: true, expr: storage },
+        ] }), representation);
+      if (mutation === undefined) return undefined;
+      functions.push({
+        name: rustArrayFieldMutationName(read), visibility: "private", generics: emptyRustGenerics,
+        selfParam: rustSelfParameter("ref"),
+        params: [{ name: "action", type: rustArrayFieldMutationType(field.type) }],
+        body: { statements: [{ kind: "expr", expr: mutation }] },
+      });
+    }
     const fieldErrorBoundary = dispatch.read.fallible || dispatch.write?.fallible === true
       ? rustErrorBoundaryForProjectMember(field.declaration, context)
       : undefined;
@@ -294,9 +311,11 @@ function planRootContractFunctions(
                     { kind: "path", path: "value" },
                     representation,
                   );
-              return expression === undefined
+              const check = context.input.program.frozenDataWrites.receiverForDeclaration(implementation.declaration);
+              return expression === undefined || check !== undefined && fieldErrorType === undefined
                 ? undefined
-                : { expression };
+                : { expression: check === undefined ? expression : checkRustDataWrite(check,
+                    { kind: "path", path: "self" }, expression, fieldErrorType!) };
             })()
         : implementation.setter === undefined
           ? undefined
@@ -424,9 +443,11 @@ function planRootContractFunctions(
         return undefined;
       }
       functions.push(virtualMethod);
-      if (contract.kind === "class") {
+      if (contract.kind === "class" && !context.input.program.source.ast.hasModifierKind(member, "abstract")) {
+        const inherited = context.input.program.projectTypes.classLineage(concrete)?.includes(contract) === true;
+        const exactImplementation = inherited ? member : virtualImplementation;
         const exactImplementationMethod = implementationFor(
-          member,
+          exactImplementation,
           variant.targetTypeArguments,
         );
         const exactMethod = exactImplementationMethod === undefined
@@ -434,7 +455,7 @@ function planRootContractFunctions(
           : planRootMethodForwarder(
               concreteCarrier,
               member,
-              member,
+              exactImplementation,
               variant,
               variant.exactSlot,
               rootType,

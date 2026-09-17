@@ -11,13 +11,14 @@ import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { diagnosticInput } from "../../program/plan-context.js";
 import { expressionCarrier, negateRustPlannedBooleanExpression, planNumericLiteralWithCarrier, requireExpressionCarrier, rustOperationFact, selectedOperationMatches } from "../fundamentals.js";
 import { findRustUpdateProjectField, planRustBorrowedUpdateLocation, planRustDirectStorage, planRustOwnedUpdateLocation, planRustSourceFieldUpdate, planRustUpdateProjectionArguments, planRustUpdateValue } from "./target.js";
+import { planRustValueFieldLocation, rustSourceFieldHasValueReceiver } from "../../objects/value-fields.js";
 import { finishRustSourceAccessorCall, planRustSourceAccessorCall, sourceAccessorSelectedOperationMatches, sourceIndexSelectedOperationMatches, sourceStaticFieldSelectedOperationMatches, sourceUnionFieldSelectedOperationMatches } from "../properties.js";
 import { isRustBigIntCarrier } from "../../../../target-model/types/index.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
-import { mutateRustStoredObjectField, rustProjectObjectRepresentation } from "../../objects/project-storage.js";
+import { rustProjectObjectRepresentation } from "../../objects/project-storage.js";
 import { planExpression } from "../entry.js";
 import { planRustMutableProjectReceiver, planRustSharedReceiver, planRustPromotedStorageLocation } from "../typed-locations.js";
-import { planRustSourceUnionFieldProjection } from "../unions.js";
+import { planRustSourceUnionFieldProjection, mutateRustUnionField } from "../unions.js";
 import { readRustProjectObjectIndex, writeRustProjectObjectIndex } from "../../objects/project-objects.js";
 import { rustSourceStaticFieldLocation } from "../../declarations/static-field-storage.js";
 import { rustTargetOperationFactKey } from "../../../../analysis/facts/keys.js";
@@ -102,7 +103,7 @@ export function planUnaryExpression(
       : planExpression(operandNode, context);
   return operand === undefined
     ? undefined
-    : fact.operator === "!"
+    : fact.operator === "!" && !isRustBigIntCarrier(fact.resultCarrier)
       ? negateRustPlannedBooleanExpression(operandNode, operand, context)
       : { kind: "unary", operator: fact.operator, operand };
 }
@@ -138,6 +139,13 @@ function planRustUpdateExpression(
   }
   const returnsPrevious = resultUse === "value" &&
     context.input.program.source.ast.kindName(expression) === KindPostfixUnaryExpression;
+  if (rustSourceFieldHasValueReceiver(operand, context)) {
+    const location = planRustValueFieldLocation(operand, context, "write");
+    return location === undefined ? undefined : planRustUpdateValue({
+      locationBindings: location.bindings, read: location.read, write: location.write,
+      update: fact, step, returnsPrevious, context,
+    });
+  }
   const sourceAccessor = findRustUpdateSourceAccessor(operand, context);
   if (sourceAccessor !== undefined) {
     return planRustSourceAccessorUpdate(
@@ -533,11 +541,11 @@ function planRustSourceUnionFieldUpdate(
                 context,
               );
       };
-      const mutation = mutateRustStoredObjectField(
-        selectedField.storage,
+      const mutation = mutateRustUnionField(
+        selectedField,
         field.variants[variantIndex]!.carrier,
         payload,
-        selectedField.storageIndex,
+        field.resultCarrier,
         mutate,
         context,
       );

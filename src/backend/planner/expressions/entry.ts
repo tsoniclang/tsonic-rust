@@ -23,6 +23,10 @@ import {
 } from "../../../analysis/facts/keys.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { applyRustValueConversion } from "./value-conversions.js";
+import { planProviderRecordCopy } from "./provider-record-copy.js";
+import { planRustEmptyRecordConversion } from "./empty-record-conversion.js";
+import { rustObjectReferenceViewKey } from "../../../analysis/facts/object-reference-views.js";
+import { planRustObjectReferenceView } from "./object-reference-views.js";
 import { diagnosticInput, sourceTypePath } from "../program/plan-context.js";
 import { findRustUpdateSourceAccessor } from "./updates/source.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
@@ -33,13 +37,13 @@ import { planRustProjectDowncast } from "../objects/project-downcasts.js";
 import { rustProjectObjectDispatchField, rustProjectObjectIdentityField } from "../objects/project-objects.js";
 import { rustSelectedAccessorRequiresUnsafe, rustSelectedCallRequiresUnsafe, tryPlanRustExplicitSafetyExpression } from "../safety/explicit-safety.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { rustTypeFromCarrierInContext } from "../types/render.js";
-import { rustValueCarrierBeforeContextualConversion } from "../../../analysis/facts/value-carrier-queries.js";
+import { rustTypeFromCarrierInContext, rustUnionTypePathInContext } from "../types/render.js";
+import { rustValueCarrierBeforeContextualConversion, rustProjectUpcastSourceMatches } from "../../../analysis/facts/value-carrier-queries.js";
 import { rustCompilerOwnedContextualConversionMatches } from "../../../target-model/conversions/contextual.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import { tryPlanRustNativePointerOperation } from "./native-pointers.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
@@ -49,6 +53,29 @@ export function planExpression(
   node: Node,
   context: RustPlanContext,
   resultUse: RustExpressionResultUse = "value",
+): RustExpr | undefined {
+  return planProjectedExpression(node, context, resultUse, "option");
+}
+
+export function planExpressionBeforeOptionProjection(
+  node: Node,
+  context: RustPlanContext,
+): RustExpr | undefined {
+  return planProjectedExpression(node, context, "value", "contextual");
+}
+
+export function planExpressionBeforeContextualConversion(
+  node: Node,
+  context: RustPlanContext,
+): RustExpr | undefined {
+  return planProjectedExpression(node, context, "value", "source");
+}
+
+function planProjectedExpression(
+  node: Node,
+  context: RustPlanContext,
+  resultUse: RustExpressionResultUse,
+  finalStage: "source" | "contextual" | "option",
 ): RustExpr | undefined {
   const override = context.expressionOverrides?.get(node);
   const planned = planExpressionBeforeValueProjections(node, context, resultUse);
@@ -67,12 +94,14 @@ export function planExpression(
     rustContextualValueConversionFactKey,
   );
   const projection = context.input.program.facts.getFact(node, rustOptionProjectionFactKey);
+  const objectView = context.input.program.facts.getFact(node, rustObjectReferenceViewKey);
   let currentCarrier = override?.carrier ??
     flowRead?.sourceCarrier ??
     upcast?.sourceCarrier ??
     downcast?.sourceCarrier ??
     lifetimeReconciliation?.sourceCarrier ??
     contextualConversion?.sourceCarrier ??
+    objectView?.sourceCarrier ??
     projection?.sourceCarrier ??
     context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
   let flowSelected = planned;
@@ -144,7 +173,20 @@ export function planExpression(
       return undefined;
     }
   }
+  if (finalStage === "source") return converted;
   let contextuallyConverted = converted;
+  if (objectView !== undefined) {
+    if (rustTargetTypeRefEquals(currentCarrier, objectView.sourceCarrier)) {
+      const selected = planRustObjectReferenceView(contextuallyConverted, objectView, context);
+      if (selected === undefined) return undefined;
+      contextuallyConverted = selected;
+      currentCarrier = objectView.targetCarrier;
+    } else if (!rustTargetTypeRefEquals(currentCarrier, objectView.targetCarrier)) {
+      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node), "rust.backend.object-view-order",
+        "The finalized object view does not match the current expression carrier."));
+      return undefined;
+    }
+  }
   if (contextualConversion !== undefined) {
     if (rustTargetTypeRefEquals(currentCarrier, contextualConversion.sourceCarrier)) {
       const selected = applyRustContextualValueConversion(
@@ -170,6 +212,9 @@ export function planExpression(
   if (contextuallyConverted === undefined) {
     return undefined;
   }
+  if (finalStage === "contextual") {
+    return contextuallyConverted;
+  }
   if (projection !== undefined &&
     !rustTargetTypeRefEquals(currentCarrier, projection.sourceCarrier) &&
     !rustTargetTypeRefEquals(currentCarrier, projection.resultCarrier)) {
@@ -193,7 +238,11 @@ export function planExpression(
       ));
       return undefined;
     }
-    return { kind: "associated-value", owner: optionType, name: "None" };
+    const value: RustExpr = { kind: "associated-value", owner: optionType, name: "None" };
+    if (contextuallyConverted.kind === "bottom") return contextuallyConverted;
+    return contextuallyConverted.kind === "none" || contextuallyConverted.kind === "path" || contextuallyConverted.kind === "associated-value"
+      ? value
+      : { kind: "evaluate-then", effect: contextuallyConverted, discard: "value", value };
   }
   return projection?.kind === "some"
     ? { kind: "call", path: "Some", args: [contextuallyConverted] }
@@ -210,7 +259,7 @@ export function planExpressionBeforeValueProjections(
     isRustCopyCarrier(override.carrier)) {
     return override?.expression ?? planRawExpression(node, context, resultUse);
   }
-  if (!rustCarrierSupportsClone(override.carrier)) {
+  if (!rustCarrierSupportsClone(override.carrier, context.input.program.typeDefinitions)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.preconstruction-field-read",
@@ -314,7 +363,7 @@ function applyRustContextualValueConversion(
     if (!rustCompilerOwnedContextualConversionMatches(
       fact.sourceCarrier,
       fact.targetCarrier,
-      fact.conversion,
+      fact.conversion, context.input.program.typeDefinitions,
     )) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, node),
@@ -325,7 +374,13 @@ function applyRustContextualValueConversion(
     }
     return expression;
   }
-  const contract = rustValueConversionContract(fact.conversion);
+  if (fact.conversion.kind === "provider-record-copy") {
+    return planProviderRecordCopy(fact.conversion, expression, node, context);
+  }
+  if (fact.conversion.kind === "empty-record") {
+    return planRustEmptyRecordConversion(fact.conversion, expression, node, context);
+  }
+  const contract = rustValueConversionContract(fact.conversion, context.input.program.typeDefinitions);
   if (contract === undefined ||
     !rustTargetTypeRefEquals(contract.target, fact.targetCarrier)) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -375,14 +430,42 @@ export function planRustProjectUpcast(
   actual: TargetTypeRef | undefined,
   context: RustPlanContext,
 ): RustExpr | undefined {
+  if (!rustTargetTypeRefEquals(actual, fact.sourceCarrier) ||
+    !rustProjectUpcastSourceMatches(fact, context.input.program.typeDefinitions)) {
+    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+      "rust.backend.project-upcast", "Project-type upcast has no exact finalized source variant correspondence."));
+    return undefined;
+  }
+  if (fact.sourceVariants !== undefined) {
+    const typePath = rustUnionTypePathInContext(fact.sourceCarrier, context);
+    if (typePath === undefined) {
+      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+        "rust.backend.project-upcast", "Project-type upcast has no emitted source union."));
+      return undefined;
+    }
+    const names = context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []);
+    const arms: { readonly pattern: RustPattern; readonly expression: RustExpr }[] = [];
+    for (const variant of fact.sourceVariants) {
+      const name = allocateRustSyntheticName(names, "upcast_variant");
+      const projected = planRustProjectUpcast(node, { kind: "path", path: name }, {
+        sourceCarrier: variant.carrier, targetCarrier: fact.targetCarrier,
+      }, variant.carrier, context);
+      if (projected === undefined) return undefined;
+      arms.push({
+        pattern: { kind: "tuple-variant", path: `${typePath}::${variant.name}`,
+          elements: [{ kind: "binding", name }] },
+        expression: projected,
+      });
+    }
+    return { kind: "match", expression: { kind: "reference", expr: planRustNonConsumingValue(node, expression, context) }, arms };
+  }
   const targetDefinition = context.input.program.projectTypes.definitionForCarrier(fact.targetCarrier);
   const targetValue = rustSourceTypeCarrierValue(fact.targetCarrier);
   const targetPath = targetValue === undefined ? undefined : sourceTypePath(context, targetValue);
   const relationship = targetDefinition === undefined
     ? { kind: "unrelated" as const }
     : context.input.program.projectTypes.relationship(fact.sourceCarrier, targetDefinition);
-  if (!rustTargetTypeRefEquals(actual, fact.sourceCarrier) ||
-    relationship.kind !== "related" ||
+  if (relationship.kind !== "related" ||
     !rustTargetTypeRefEquals(relationship.targetType, fact.targetCarrier) ||
     targetPath === undefined) {
     context.diagnostics.push(missingFactDiagnostic(

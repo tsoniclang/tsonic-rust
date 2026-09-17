@@ -128,6 +128,7 @@ export interface RustCheckedPropertySelectionInput {
   readonly sourceReceiverType?: Type;
   readonly sourceReceiverDeclaration?: Node;
   readonly sourceReceiverValueDeclaration?: Node;
+  readonly sourceReceiverIntrinsic?: ResolvedSourcePropertyAccessInfo["receiver"]["intrinsic"];
   readonly accessMode: ResolvedSourcePropertyAccessInfo["accessMode"];
   readonly sourceSelectedSymbol?: Symbol;
   readonly sourceSelectedDeclaration?: Node;

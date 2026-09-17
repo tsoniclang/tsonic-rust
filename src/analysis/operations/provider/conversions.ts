@@ -77,7 +77,7 @@ export function selectRustCheckedConversion(
     }
     const reconciliation = sourceCarrier === undefined
       ? undefined
-      : selectRustValueCarrierReconciliation(sourceCarrier, targetCarrier, options.projectTypes);
+      : selectRustValueCarrierReconciliation(sourceCarrier, targetCarrier, options.projectTypes, context.typeDefinitions);
     if (reconciliation?.kind === "call-scoped-lifetime" ||
       reconciliation?.kind === "project-upcast") {
       recordRustValueCarrierReconciliation(context.facts, request.expression, reconciliation);
@@ -128,7 +128,7 @@ export function selectRustCheckedConversion(
   const identity = rustTargetTypeRefEquals(sourceCarrier, targetCarrier);
   const reconciliation = identity
     ? { kind: "identity" as const }
-    : selectRustValueCarrierReconciliation(sourceCarrier, targetCarrier, options.projectTypes);
+    : selectRustValueCarrierReconciliation(sourceCarrier, targetCarrier, options.projectTypes, context.typeDefinitions);
   const projectUpcast = reconciliation.kind === "project-upcast";
   if (projectUpcast) {
     recordRustValueCarrierReconciliation(context.facts, request.expression, reconciliation);
@@ -142,7 +142,7 @@ export function selectRustCheckedConversion(
   );
   const conversion = identity || projectUpcast || projectDowncast
     ? undefined
-    : selectRustSourceValueConversion(sourceCarrier, targetCarrier);
+    : selectRustSourceValueConversion(sourceCarrier, targetCarrier, context.typeDefinitions);
   if (!identity && !projectUpcast && !projectDowncast && conversion === undefined) {
     return rejectSelectedOperation(
       request.expression,
@@ -297,7 +297,7 @@ export function finalizeProviderOperationFromSubjects(
   const instantiation = instantiateProviderOperationTemplate(template, {
     sourceReceiverCarrier: rawReceiverCarrier,
     sourceParameterCarriers: rawArgumentCarriers,
-  });
+  }, context.typeDefinitions);
   if (instantiation === undefined) {
     return undefined;
   }
@@ -321,5 +321,5 @@ export function finalizeProviderOperationFromSubjects(
   if (providerFormRequiresSourceReceiver(instantiatedTemplate.target) && sourceReceiverCarrier === undefined) {
     return undefined;
   }
-  return finalizeProviderOperationFact(instantiatedTemplate, sourceArgumentCarriers as TargetTypeRef[], sourceReceiverCarrier);
+  return finalizeProviderOperationFact(instantiatedTemplate, sourceArgumentCarriers as TargetTypeRef[], sourceReceiverCarrier, context.typeDefinitions);
 }

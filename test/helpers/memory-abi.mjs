@@ -148,6 +148,25 @@ function callableResults(): boolean {
     loadPointer(closedGeneric()) === 93;
 }
 function sameWord(actual: uint32, expected: uint32): boolean { return actual === expected; }
+let nilEvaluationOrder: uint32 = 0;
+function nilStep(step: uint32): uint32 {
+  nilEvaluationOrder = nilEvaluationOrder * 10 + step;
+  return step;
+}
+function nilFailure(): never { nilStep(3); throw new Error("void operand"); }
+function nilUnit(): void { nilStep(4); }
+function nilExpressions(): boolean {
+  unsafeContext();
+  nilEvaluationOrder = 0;
+  const plain = toRawPointer<uint32>(void 0, word);
+  const same = equalRawPointer(toRawPointer<uint32>(void nilStep(1), word),
+    toRawPointer<uint32>((void nilStep(2)), word));
+  let caught = false;
+  try { toRawPointer<uint32>(void nilFailure(), word); } catch { caught = true; }
+  const unit = toRawPointer<uint32>(void nilUnit(), word);
+  return same && caught && nilEvaluationOrder === 1234 && equalRawPointer(plain, undefined) &&
+    equalRawPointer(unit, undefined) && reinterpretRawPointer(plain, word) === undefined;
+}
 export function parameterRoundTrip(value: uint32 = 71): Pointer<uint32> {
   unsafeContext();
   const original = addressOf(value);
@@ -233,6 +252,7 @@ export function run(): boolean {
   if (!callableResults()) return false;
   const nil = toRawPointer<uint32>(undefined, word);
   if (!equalRawPointer(nil, undefined) || reinterpretRawPointer(nil, word) !== undefined) return false;
+  if (!nilExpressions()) return false;
   keepAlive(raw);
   return equalRawPointer(toRawPointer(restored, word), raw);
 }

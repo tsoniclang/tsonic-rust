@@ -6,6 +6,8 @@ import {
   rustGeneratorTargetId,
   rustIteratorResultTargetId,
   rustLocationTargetId,
+  rustInfallibleTargetId,
+  rustProgramErrorTargetId,
   rustRawPointerTargetId,
 } from "./source-types.js";
 import { rustOptionElementCarrier, rustOptionTargetType } from "./optional.js";
@@ -18,12 +20,19 @@ import {
 } from "../generic-arguments.js";
 import type { RustLifetimeRef } from "../../lifetimes/index.js";
 
-export function rustLocationTargetType(pointee: TargetTypeRef): TargetTypeRef {
+export function rustLocationTargetType(
+  pointee: TargetTypeRef,
+  error: TargetTypeRef = { kind: "target-named", id: rustInfallibleTargetId },
+): TargetTypeRef {
   return {
     kind: "target-named",
     id: rustLocationTargetId,
-    genericArguments: rustTypeGenericArguments([pointee]),
+    genericArguments: rustTypeGenericArguments([pointee, error]),
   };
+}
+
+export function rustSourceLocationTargetType(pointee: TargetTypeRef): TargetTypeRef {
+  return rustLocationTargetType(pointee, { kind: "target-named", id: rustProgramErrorTargetId });
 }
 
 export function rustRawPointerTargetType(): TargetTypeRef {
@@ -124,15 +133,16 @@ export function rustStructuralPropertySetterStorageCarrier(
 export function rustClosureTargetType(
   parameters: readonly TargetTypeRef[],
   result: TargetTypeRef,
+  fallible = false,
 ): TargetTypeRef {
-  return { kind: "closure", args: parameters, result };
+  return { kind: "closure", args: parameters, result, ...(fallible ? { fallible: true } : {}) };
 }
 
 export function rustClosureProtocol(
   carrier: TargetTypeRef | undefined,
-): { readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef } | undefined {
+): { readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef; readonly fallible: boolean } | undefined {
   return carrier?.kind === "closure"
-    ? { parameters: carrier.args, result: carrier.result }
+    ? { parameters: carrier.args, result: carrier.result, fallible: carrier.fallible === true }
     : undefined;
 }
 
@@ -272,7 +282,7 @@ export function rustLocationPointeeCarrier(
 ): TargetTypeRef | undefined {
   if (carrier?.kind !== "target-named" || carrier.id !== rustLocationTargetId) return undefined;
   const arguments_ = rustOnlyTypeGenericArguments(carrier.genericArguments);
-  return arguments_?.length === 1 ? arguments_[0] : undefined;
+  return arguments_?.length === 2 ? arguments_[0] : undefined;
 }
 
 export function rustOptionalLocationPointeeCarrier(

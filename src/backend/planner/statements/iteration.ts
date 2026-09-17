@@ -17,6 +17,7 @@ import {
   Node_Name,
 } from "@tsonic/target-api/source";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
+import { finishProviderOperationExpression } from "../expressions/conversions.js";
 import { collectVariableDeclarations, planResourceManagedBody, resourceDisposalReceiverMode, resourceFactForPlanning } from "./resources.js";
 import { createRustLoopTarget, withRustControlTarget } from "./control-flow.js";
 import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustActiveErrorType } from "../program/plan-context.js";
@@ -28,6 +29,7 @@ import { planRustNonConsumingValue } from "../expressions/typed-locations.js";
 import { rustMutatedBindingFactKey, rustSourceBindingFactKey, rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { validateRustFinalizedOperationAbi } from "../../../analysis/facts/finalized-operation-abi.js";
+import { rustCompoundWriteFactKey } from "../../../analysis/facts/operations/keys.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustAssignmentOperationFact } from "./core.js";
 import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
@@ -38,6 +40,7 @@ export function planRuntimeSetStatement(
   expression: Node,
   fact: Extract<import("../../../analysis/facts/keys.js").RustTargetOperationFact, { kind: "runtime-set" }>,
   context: RustPlanContext,
+  computedValue = false,
 ): readonly RustStmt[] | undefined {
   const { ast } = context.input.program.source;
   const left = BinaryExpression_Left(context.input.program.source.ast, expression);
@@ -60,12 +63,12 @@ export function planRuntimeSetStatement(
     ? ElementAccessExpression_ArgumentExpression(context.input.program.source.ast, left)
     : undefined;
   const sourceArgumentNodes = indexNode === undefined ? [right] : [indexNode, right];
-  if (!validateRustFinalizedOperationAbi(fact.abi) ||
+  if (!validateRustFinalizedOperationAbi(fact.abi, context.input.program.typeDefinitions) ||
     expectedOperationKind === undefined || fact.abi.operationKind !== expectedOperationKind ||
     (expectedOperationKind === "index-set" && indexNode === undefined) ||
     sourceArgumentNodes.length !== fact.abi.sourceArguments.length ||
     fact.abi.sourceArguments.some((argument) => argument.disposition !== "runtime") ||
-    fact.abi.effects.invocation !== "infallible" || fact.abi.effects.awaiting !== "not-applicable" ||
+    fact.abi.effects.awaiting !== "not-applicable" ||
     fact.abi.result.kind !== "sync" || !isRustUnitCarrier(fact.abi.result.carrier)) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, expression),
@@ -86,7 +89,8 @@ export function planRuntimeSetStatement(
     return undefined;
   }
   const selectedResult = context.input.program.facts.getRuntimeCarrierFact(right)?.carrier;
-  if (selectedResult === undefined || !selectedOperatorIdentityMatches(
+  if (computedValue ? context.input.program.facts.getFact(expression, rustCompoundWriteFactKey) !== fact :
+    selectedResult === undefined || !selectedOperatorIdentityMatches(
     expression,
     fact.operationId,
     fact.operationId,
@@ -204,7 +208,8 @@ export function planRuntimeSetStatement(
         call = { kind: "method-call", receiver: call, method: step.name, args: [] };
       }
     }
-    return [{ kind: "expr", expr: call }];
+    const completed = finishProviderOperationExpression(context, fact, call, expression);
+    return completed === undefined ? undefined : [{ kind: "expr", expr: completed }];
   }
   if (fact.abi.target.form === "receiver-method" || fact.abi.target.form === "method" ||
     fact.abi.target.form === "arg-method" ||
@@ -241,10 +246,8 @@ export function planRuntimeSetStatement(
         call = { kind: "method-call", receiver: call, method: step.name, args: [] };
       }
     }
-    return [{
-      kind: "expr",
-      expr: call,
-    }];
+    const completed = finishProviderOperationExpression(context, fact, call, expression);
+    return completed === undefined ? undefined : [{ kind: "expr", expr: completed }];
   }
   context.diagnostics.push(unsupportedConstructDiagnostic(
     diagnosticInput(context, expression),
@@ -444,6 +447,9 @@ export function planForOfStatement(
   if (fact.lowering.kind === "borrowed") {
     context.usedAliases?.add("rt");
   }
+  if (fact.lowering.kind === "owned-call") {
+    registerAliasFromPath(context, fact.lowering.path);
+  }
   const targetIterable: RustExpr = fact.lowering.kind === "borrowed"
     ? {
         kind: "call",
@@ -456,6 +462,8 @@ export function planForOfStatement(
       ? { kind: "method-call", receiver: nonConsumingIterable, method: "iter_values", args: [] }
       : fact.lowering.kind === "receiver-method"
         ? { kind: "method-call", receiver: nonConsumingIterable, method: fact.lowering.name, args: [] }
+      : fact.lowering.kind === "owned-call"
+        ? { kind: "call", path: fact.lowering.path, args: [iterable] }
       : fact.lowering.kind === "fallible-owned"
         ? { kind: "method-call", receiver: nonConsumingIterable, method: "iterator", args: [] }
       : iterable;

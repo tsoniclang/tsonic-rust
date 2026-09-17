@@ -102,6 +102,11 @@ export function f(text: string): string {
 export function primitive(name: string): string {
   return inspect(name);
 }
+
+export function empty(): string {
+  const token = {};
+  return inspect(token);
+}
 `,
     },
   });
@@ -109,24 +114,27 @@ export function primitive(name: string): string {
   const text = artifactText(good.result, "src/index.rs");
   assert.match(text, /tsonic_rust_node::util::inspect\(&value\)/u);
   assert.match(text, /tsonic_rust_node::util::inspect\(&js_abi::js_value_from_string\(&name\)\)/u);
+  assert.match(text, /tsonic_rust_node::util::inspect\(&js_abi::js_value_from_closed\(&token\)\)/u);
 
-  const badOptions = {
+  for (const sourceType of ["object", "object[]", "{ token: object }"]) {
+    const badOptions = {
     surfaces: ["js"],
     capabilities: [capability],
     files: {
       "index.ts": `
 import { inspect } from "node:util";
 
-export function f(value: object): string {
+export function f(value: ${sourceType}): string {
   return inspect(value);
 }
 `,
     },
   };
-  assertRustTargetRejection(badOptions, [{
-    code: "RUST_PARAMETER_CARRIER_UNSUPPORTED",
-    message: "Parameter type has no closed Rust runtime carrier under the selected source-profile and surface policy.",
-  }]);
+    assertRustTargetRejection(badOptions, [{
+      code: "RUST_CALL_ARGUMENT_CONVERSION_UNSUPPORTED",
+      message: "The TSTS-selected call argument cannot be represented by the selected Rust target parameter carrier.",
+    }]);
+  }
 });
 
 test("RegExp operations lower through the complete runtime engine", async () => {

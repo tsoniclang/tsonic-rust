@@ -14,6 +14,7 @@ import {
 } from "../objects/project-storage.js";
 import {
   isRustIntegerCarrier,
+  rustEmptyObjectTargetId,
   isRustStringCarrier,
   rustOptionElementCarrier,
   rustSourceTypeCarrierValue,
@@ -42,9 +43,20 @@ import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { rustReceiverIndependentMethodFactKey } from "../../../analysis/facts/operations/keys.js";
 
 export function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
+  if (fact?.kind === "empty-object-literal") {
+    if (fact.resultCarrier.kind !== "target-named" || fact.resultCarrier.id !== rustEmptyObjectTargetId ||
+      context.input.program.source.ast.properties(node).length !== 0 ||
+      !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.empty-object")) {
+      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+        "rust.backend.empty-object", "Empty object construction requires exact finalized empty syntax and identity storage."));
+      return undefined;
+    }
+    return { kind: "call", path: "tsonic_rust_runtime::EmptyObject::new", args: [] };
+  }
   if (fact?.kind === "provider-record-literal") {
     return planProviderRecordLiteral(node, fact, context);
   }
@@ -185,7 +197,8 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
         field?.method !== true) {
         return undefined;
       }
-      const storageCarrier = rustStructuralMethodStorageCarrier(
+      const independent = context.input.program.facts.getFact(contribution.expression, rustReceiverIndependentMethodFactKey);
+      const storageCarrier = independent?.carrier ?? rustStructuralMethodStorageCarrier(
         fact.resultCarrier,
         field.carrier,
         field.presence,
@@ -195,7 +208,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
         : storageCarrier;
       if (rawStorageCarrier === undefined ||
         !rustTargetTypeRefEquals(
-          expressionCarrier(contribution.expression, context),
+          independent?.carrier ?? expressionCarrier(contribution.expression, context),
           rawStorageCarrier,
         )) {
         return undefined;
@@ -222,7 +235,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
       const planned = planExpression(contribution.property, context);
       const field = fact.fields.find((candidate) =>
         candidate.storageIndex === contribution.targetStorageIndex);
-      const plannedField = fact.storage === "object-handle"
+      const plannedField = fact.storage === "structural-object"
         ? context.input.program.structuralShapes.field(
             fact.resultCarrier,
             contribution.targetStorageIndex,
@@ -234,7 +247,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
         : undefined;
       if (sourceName !== contribution.sourceName || planned === undefined ||
         field === undefined ||
-        (fact.storage === "object-handle" && (
+        (fact.storage === "structural-object" && (
           plannedField?.storage !== "property" ||
           contribution.role === "set" &&
             plannedField.property?.setterTargetName === undefined
@@ -335,7 +348,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
     bindings.push({ name: spreadName, value: plannedSpread });
     for (const field of retainedFields) {
       const value = field.method === true
-        ? contribution.sourceStorage === "object-handle"
+        ? contribution.sourceStorage === "structural-object"
           ? readRustStructuralObjectMethodStorage(
               contribution.sourceCarrier,
               { kind: "path", path: spreadName },
@@ -416,13 +429,13 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
     .RustStructuralObjectFieldInitializer[] = [];
   const projectFields: { name: string; value: RustExpr }[] = [];
   for (const field of [...fact.fields].sort((left, right) => left.storageIndex - right.storageIndex)) {
-    if (fact.storage === "object-handle" &&
+    if (fact.storage === "structural-object" &&
       field.storageIndex !== structuralInitializers.length) {
       return undefined;
     }
     const accessor = accessorValuesByStorageIndex.get(field.storageIndex);
     if (accessor !== undefined) {
-      if (fact.storage === "object-handle") {
+      if (fact.storage === "structural-object") {
         const plannedField = context.input.program.structuralShapes.field(
           fact.resultCarrier,
           field.storageIndex,
@@ -485,7 +498,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
       projectFields.push({ name: storagePath[0]!, value });
     }
   }
-  if (fact.storage === "object-handle" || projectRepresentation?.kind !== "value") {
+  if (fact.storage === "structural-object" || projectRepresentation?.kind !== "value") {
     context.usedAliases?.add("rt");
   }
   if (stateMarker !== undefined) {
@@ -664,6 +677,10 @@ function planProviderRecordLiteral(
       "Provider object-literal field values conflict with their finalized storage carriers.",
     ));
     return undefined;
+  }
+  if (fields.length === 0 && fact.completion === "default") {
+    return { kind: "associated-call", owner: type,
+      trait: { kind: "named", path: "core::default::Default" }, method: "default", args: [] };
   }
   return {
     kind: "struct-literal",

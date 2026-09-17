@@ -58,6 +58,18 @@ export function resolveProviderRecordLiteral(
     );
   }
   const { carrier: resultCarrier, typeRow } = construction;
+  if (typeRow.objectLiteralConstruction?.kind === "default") {
+    if (properties.length !== 0) {
+      return rejectProviderRecordLiteral(walk, expression,
+        "Opaque provider default construction accepts only an empty object literal.");
+    }
+    setRustOperationFact(walk, expression, {
+      kind: "provider-record-literal", operationId: "tsonic.rust.provider.default",
+      resultCarrier, completion: "default", fields: [],
+    });
+    setCarrierFact(walk, expression, resultCarrier);
+    return { kind: "selected", carrier: resultCarrier };
+  }
   const targetFields = providerRecordTargetFields(walk, typeRow);
   if (targetFields === undefined) {
     return rejectProviderRecordLiteral(
@@ -151,14 +163,14 @@ export function resolveProviderRecordLiteral(
       {
         sourceReceiverCarrier: resultCarrier,
         sourceResultCarrier: selectedMemberCarrier,
-      },
+      }, walk.context.typeDefinitions,
     )?.template;
     const write = instantiateProviderOperationTemplate(
       providerOperationTemplate(writeSelection.row, "property-set"),
       {
         sourceReceiverCarrier: resultCarrier,
         sourceParameterCarriers: [selectedMemberCarrier],
-      },
+      }, walk.context.typeDefinitions,
     )?.template;
     const storageCarrier = read?.resultCarrier;
     const targetName = read?.target.form === "field"

@@ -1,6 +1,7 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import { rustMemoryMetadataKey } from "../../../target-model/operations/memory-layout.js";
+import { rustCompileTimeSourceKey } from "../../../target-model/facts/source-declarations.js";
+import { rustTypeOnlyDeclarationFactKey } from "../../../target-model/facts/type-only.js";
 import {
   KindFunctionDeclaration,
   KindImportDeclaration,
@@ -72,6 +73,8 @@ import {
   type PlannedRustModuleCell,
 } from "../project/module-storage.js";
 import { planRustClassInitialization } from "../declarations/class-static-fields.js";
+import { planProjectStaticFunctionItems } from "../declarations/methods.js";
+import { planRustTypeFamilyImplementations } from "../declarations/type-families.js";
 import { createRustObjectLiteralImplementationRegistry } from "../objects/object-literal-implementations.js";
 import { planRustSourceCallableValue } from "../expressions/source-callable-value.js";
 import { rustModuleInitializerFunctionName } from "./source-package-initializers.js";
@@ -134,7 +137,9 @@ export function planRustSourceFile(
     usedAliases,
     planBlock: planBlockLike,
   };
-  const plannedModule = planModuleItems(context);
+  const baseModule = planModuleItems(context);
+  const plannedModule = { ...baseModule,
+    items: [...baseModule.items, ...planRustTypeFamilyImplementations(context)] };
   const initializationRequirement = input.program.moduleInitialization.requirementFor(sourceFile);
   if (initializationRequirement.kind === "unresolved") {
     diagnostics.push(unsupportedConstructDiagnostic(
@@ -288,7 +293,7 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
           }, initializationContext);
           const type = rustTypeFromCarrierInContext(binding.value.carrier, initializationContext);
           if (value === undefined || type === undefined ||
-            !rustCarrierSupportsClone(binding.value.carrier)) {
+            !rustCarrierSupportsClone(binding.value.carrier, context.input.program.typeDefinitions)) {
             context.diagnostics.push(unsupportedConstructDiagnostic(
               diagnosticInput(context, statement),
               "rust.backend.hoisted-callable-value",
@@ -317,6 +322,7 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
       continue;
     }
     if (kind === KindVariableStatement) {
+      if (context.input.program.facts.getFact(statement, rustTypeOnlyDeclarationFactKey) !== undefined) continue;
       const diagnosticCount = context.diagnostics.length;
       const planned = planTopLevelVariableStatement(
         statement,
@@ -379,6 +385,7 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
       continue;
     }
     if (kind === "KindInterfaceDeclaration") {
+      if (context.input.program.facts.getFact(statement, rustTypeOnlyDeclarationFactKey) !== undefined) continue;
       const diagnosticCount = context.diagnostics.length;
       const definition = context.input.program.projectTypes.definitionForDeclaration(statement);
       const planned = definition !== undefined && context.input.program.projectTypes.isPolymorphic(definition)
@@ -429,6 +436,26 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
     const planned = planStatement(statement, initializationContext);
     if (planned !== undefined) {
       initializationStatements.push(...planned);
+    }
+  }
+  for (const definition of context.input.program.projectTypes.definitions) {
+    if (definition.sourceFile === context.sourceFile && definition.kind === "class") {
+      const diagnosticCount = context.diagnostics.length;
+      const staticFunctions = planProjectStaticFunctionItems(definition, context);
+      if (staticFunctions === undefined) {
+        ensureTopLevelPlanningDiagnostic(context, definition.declaration, diagnosticCount, "static-function");
+      } else items.push(...staticFunctions);
+    }
+    if (definition.sourceFile !== context.sourceFile || definition.kind !== "class" ||
+      ast.parent(definition.declaration) === context.sourceFile) continue;
+    const diagnosticCount = context.diagnostics.length;
+    const planned = context.input.program.projectTypes.isPolymorphic(definition)
+      ? planPolymorphicClassDeclaration(definition.declaration, context)
+      : planClassDeclaration(definition.declaration, context);
+    if (planned === undefined) {
+      ensureTopLevelPlanningDiagnostic(context, definition.declaration, diagnosticCount, "local-class");
+    } else {
+      items.push(...planned);
     }
   }
   if (initializationStatements.length === 0) {
@@ -507,7 +534,7 @@ function planDefaultExportAssignment(
     ));
     return undefined;
   }
-  if (!rustCarrierSupportsClone(binding.valueCarrier)) {
+  if (!rustCarrierSupportsClone(binding.valueCarrier, context.input.program.typeDefinitions)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       { ast, sourceFile: context.sourceFile, node: declaration },
       "rust.backend.default-export-carrier",
@@ -559,7 +586,7 @@ function planTopLevelVariableStatement(
   const items: RustItem[] = [];
   const initialization: import("../../target-ast/nodes.js").RustStmt[] = [];
   for (const declaration of declarations) {
-    if (context.input.program.facts.getFact(declaration, rustMemoryMetadataKey)) continue;
+    if (context.input.program.facts.getFact(declaration, rustCompileTimeSourceKey)) continue;
     const name = context.input.program.names.nameForDeclaration(declaration) ?? "";
     const initializer = Node_Initializer(ast, declaration);
     const binding = context.input.program.facts.getFact(declaration, rustModuleBindingFactKey);
@@ -602,7 +629,7 @@ function planTopLevelVariableStatement(
       }, context);
       const rustType = rustTypeFromCarrierInContext(binding.value.carrier, context);
       if (value === undefined || rustType === undefined ||
-        !rustCarrierSupportsClone(binding.value.carrier)) {
+        !rustCarrierSupportsClone(binding.value.carrier, context.input.program.typeDefinitions)) {
         context.diagnostics.push(unsupportedConstructDiagnostic(
           { ast, sourceFile: context.sourceFile, node: declaration },
           "rust.backend.module-callable-value",
@@ -654,7 +681,7 @@ function planTopLevelVariableStatement(
       });
       continue;
     }
-    if (!rustCarrierSupportsClone(binding.valueCarrier)) {
+    if (!rustCarrierSupportsClone(binding.valueCarrier, context.input.program.typeDefinitions)) {
       context.diagnostics.push(unsupportedConstructDiagnostic(
         { ast, sourceFile: context.sourceFile, node: declaration },
         "rust.backend.module-binding-carrier",

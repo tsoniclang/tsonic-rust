@@ -1,5 +1,6 @@
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustPlanningContext } from "../context.js";
+import { rustGenericsWithAssociatedBounds } from "../types/generic-bounds.js";
 import {
   createRustSourceFile,
 } from "../../target-ast/nodes.js";
@@ -26,7 +27,10 @@ import {
 } from "../types/render.js";
 import {
   rustOptionTargetType,
+  rustCarrierSupportsTrait,
+  rustStructuralObjectCarrierValue,
   rustLocationTargetType,
+  rustProgramErrorTargetType,
   rustStructuralPropertyGetterStorageCarrier,
   rustStructuralPropertySetterStorageCarrier,
   rustStructuralPropertyValueCarrier,
@@ -34,6 +38,9 @@ import {
 } from "../../../target-model/types/index.js";
 import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
 import { rustLifetimeToAst } from "../types/lifetime-syntax.js";
+import { rustAssociatedPredicates } from "../types/associated-bounds.js";
+import { rustGenericRequirementBounds } from "../types/generic-bounds.js";
+import { planRustNumberArrayUnionImplementation } from "./number-array-unions.js";
 
 export function planRustStructuralShapeModule(
   input: RustPlanningContext,
@@ -44,12 +51,14 @@ export function planRustStructuralShapeModule(
   crateName: string | undefined,
   structuralShapesModuleName: string,
   rootComponentId: string,
+  programModuleName: string | undefined,
   publicShapeNames: ReadonlySet<string>,
   diagnostics: TargetDiagnostic[],
 ): RustSourceFileModel | undefined {
   const definitions = input.program.structuralShapes.definitions.filter((definition) =>
     definition.componentId === rootComponentId);
-  if (definitions.length === 0) {
+  const unions = input.program.structuralShapes.unionDefinitions.filter(definition => definition.componentId === rootComponentId);
+  if (definitions.length === 0 && unions.length === 0) {
     return undefined;
   }
   const usedAliases = new Set<string>();
@@ -65,15 +74,37 @@ export function planRustStructuralShapeModule(
     usedAliases,
   };
   const structs: RustItem[] = [];
+  for (const union of unions) {
+    const visibility: RustVisibility = publicShapeNames.has(union.targetName) ? "public" : "crate";
+    const deadCode = rustStructuralShapeDeadCodeDisposition(context, union.sourceCarriers, visibility === "public");
+    structs.push({
+      kind: "enum",
+      name: union.targetName,
+      visibility,
+      derives: ["Clone"],
+      ...(deadCode === undefined ? {} : { deadCode }),
+      generics: {
+        parameters: union.variantNames.map((_, index) => ({ kind: "type", name: `Payload${index}`, bounds: [] })),
+        wherePredicates: [],
+      },
+      variants: union.variantNames.map((name, index) => ({ name, fields: [{ kind: "named", path: `Payload${index}` }] })),
+    });
+    if (union.numberArrayLike) {
+      usedAliases.add("js_abi");
+      structs.push(planRustNumberArrayUnionImplementation(union));
+    }
+  }
   for (const definition of definitions) {
     const visibility: RustVisibility = publicShapeNames.has(definition.targetName)
       ? "public"
       : "crate";
     const shapeDeadCode = rustStructuralShapeDeadCodeDisposition(
       context,
-      definition.carrier,
+      definition.sourceCarriers,
       visibility === "public",
     );
+    const requirements = input.program.declarationGenericRequirements.contractForCarrier(definition.carrier);
+    if (requirements === undefined) throw new Error("A structural shape has no sealed generic requirements.");
     const genericParameters: readonly RustGenericParameter[] = definition.genericParameters.map((parameter) =>
       parameter.kind === "lifetime"
         ? {
@@ -84,12 +115,10 @@ export function planRustStructuralShapeModule(
         : {
             kind: "type",
             name: parameter.name,
-            bounds: [],
+            bounds: rustGenericRequirementBounds(requirements.typeParameters.find(candidate => candidate.name === parameter.name)!.requirements),
           });
-    const generics: RustGenerics = {
-      parameters: genericParameters,
-      wherePredicates: [],
-    };
+    const generics: RustGenerics = rustGenericsWithAssociatedBounds(genericParameters,
+      rustAssociatedPredicates(requirements.associatedTypes, context));
     const aliasGenericArguments: readonly RustGenericArgument[] = definition.genericParameters.map((parameter) =>
       parameter.kind === "lifetime"
         ? { kind: "lifetime", lifetime: rustLifetimeToAst(parameter.lifetime) }
@@ -104,7 +133,7 @@ export function planRustStructuralShapeModule(
     const callableAliases: RustItem[] = [];
     const fields: RustStructField[] = [];
     for (const [storageIndex, field] of definition.fields.entries()) {
-      const methodStorageCarrier = field.method === true
+      const methodStorageCarrier = field.receiverIndependent === true ? field.carrier : field.method === true
         ? rustStructuralMethodStorageCarrier(
             definition.carrier,
             field.carrier,
@@ -134,7 +163,11 @@ export function planRustStructuralShapeModule(
         });
         return undefined;
       }
-      if (field.storage === "stored") {
+      if (field.storage === "stored" || field.storage === "bound") {
+        const errorType = field.storage === "bound"
+          ? rustTypeFromCarrierInContext(rustProgramErrorTargetType(), definitionContext) : undefined;
+        if (field.storage === "bound" && errorType === undefined) return undefined;
+        if (field.storage === "bound") usedAliases.add("rt");
         const type = field.method === true
           ? structuralCallableAlias(
               callableAliases,
@@ -144,10 +177,15 @@ export function planRustStructuralShapeModule(
               renderedStorageType,
               visibility,
             )
-          : renderedStorageType;
+          : field.storage === "bound" ? {
+            kind: "named" as const, path: "rt::RecordField", genericArguments: [
+              { kind: "type" as const, type: renderedStorageType },
+              { kind: "type" as const, type: errorType! },
+            ],
+          } : renderedStorageType;
         const deadCode = rustStructuralFieldDeadCodeDisposition(
           context,
-          definition.carrier,
+          definition.sourceCarriers,
           storageIndex,
           visibility === "public",
           "value",
@@ -160,7 +198,7 @@ export function planRustStructuralShapeModule(
         });
         continue;
       }
-      if (field.method === true || field.property === undefined) {
+      if (field.method === true && field.receiverIndependent !== true || field.property === undefined) {
         diagnostics.push({
           code: "RUST_STRUCTURAL_SHAPE_PROPERTY_STORAGE_INVALID",
           category: "error",
@@ -208,7 +246,7 @@ export function planRustStructuralShapeModule(
       usedAliases.add("rt");
       const storedDeadCode = rustStructuralFieldDeadCodeDisposition(
         context,
-        definition.carrier,
+        definition.sourceCarriers,
         storageIndex,
         visibility === "public",
         "value",
@@ -229,7 +267,7 @@ export function planRustStructuralShapeModule(
       );
       const getterDeadCode = rustStructuralFieldDeadCodeDisposition(
         context,
-        definition.carrier,
+        definition.sourceCarriers,
         storageIndex,
         visibility === "public",
         "getter",
@@ -261,7 +299,7 @@ export function planRustStructuralShapeModule(
         );
         const setterDeadCode = rustStructuralFieldDeadCodeDisposition(
           context,
-          definition.carrier,
+          definition.sourceCarriers,
           storageIndex,
           visibility === "public",
           "setter",
@@ -275,12 +313,16 @@ export function planRustStructuralShapeModule(
       }
     }
     structs.push(...callableAliases);
+    const valueRepresentation = rustStructuralObjectCarrierValue(definition.carrier)?.representation === "value";
+    const defaultable = valueRepresentation && rustCarrierSupportsTrait(definition.carrier, "core::default::Default", () => true, undefined, context.input.program.typeDefinitions);
+    const cloneable = valueRepresentation && rustCarrierSupportsTrait(definition.carrier, "core::clone::Clone", () => true, undefined, context.input.program.typeDefinitions);
+    const copyable = valueRepresentation && rustCarrierSupportsTrait(definition.carrier, "core::marker::Copy", () => true, undefined, context.input.program.typeDefinitions);
     structs.push({
       kind: "struct",
       name: definition.targetName,
       visibility,
       ...(shapeDeadCode === undefined ? {} : { deadCode: shapeDeadCode }),
-      derives: [],
+      derives: [...(cloneable ? ["Clone"] : []), ...(copyable ? ["Copy"] : []), ...(defaultable ? ["Default"] : [])],
       generics,
       fields,
     });
@@ -288,7 +330,9 @@ export function planRustStructuralShapeModule(
   const uses: RustItem[] = [...usedAliases]
     .sort((left, right) => left.localeCompare(right, "en"))
     .flatMap((alias) => {
-      const entry = rustRuntimeAliasImports.get(alias);
+      const entry = alias === "rt" && programModuleName !== undefined
+        ? { path: `crate::${programModuleName}`, alias }
+        : rustRuntimeAliasImports.get(alias);
       return entry === undefined
         ? []
         : [{ kind: "use" as const, path: entry.path, alias: entry.alias }];

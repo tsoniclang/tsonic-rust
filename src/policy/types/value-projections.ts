@@ -17,6 +17,17 @@ export type RustOptionProjectionFact =
 
 export type RustFlowReadProjectionFact =
   | {
+      readonly kind: "source-union";
+      readonly sourceCarrier: TargetTypeRef;
+      readonly selectedCarrier: TargetTypeRef;
+      readonly variant: string;
+    }
+  | {
+      readonly kind: "builtin-error";
+      readonly sourceCarrier: TargetTypeRef;
+      readonly selectedCarrier: TargetTypeRef;
+    }
+  | {
       readonly kind: "runtime-union";
       readonly sourceCarrier: TargetTypeRef;
       readonly selectedCarrier: TargetTypeRef;
@@ -54,6 +65,10 @@ export interface RustCallScopedLifetimeReconciliationFact {
 export interface RustProjectUpcastFact {
   readonly sourceCarrier: TargetTypeRef;
   readonly targetCarrier: TargetTypeRef;
+  readonly sourceVariants?: readonly {
+    readonly name: string;
+    readonly carrier: TargetTypeRef;
+  }[];
 }
 
 export interface RustProjectDowncastFact {
@@ -78,7 +93,7 @@ export type RustSourceBindingFact =
 export type RustBindingProjection =
   | {
       readonly kind: "object-field";
-      readonly storage: "project-object" | "object-handle";
+      readonly storage: "project-object" | "structural-object";
       readonly storageIndex: number;
       readonly accessor?: {
         readonly getter: true;
@@ -87,7 +102,7 @@ export type RustBindingProjection =
     }
   | {
       readonly kind: "object-rest";
-      readonly storage: "project-object" | "object-handle";
+      readonly storage: "project-object" | "structural-object";
       readonly fields: readonly {
         readonly sourceStorageIndex: number;
         readonly targetStorageIndex: number;

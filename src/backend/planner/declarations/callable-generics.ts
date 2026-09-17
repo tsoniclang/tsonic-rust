@@ -1,5 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { rustGenericsWithAssociatedBounds } from "../types/generic-bounds.js";
 import {
   type RustSourceGenericParameterContract,
 } from "../../../target-model/lifetimes/index.js";
@@ -13,6 +14,8 @@ import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagno
 import { diagnosticInput, isValidRustIdentifier } from "../program/plan-context.js";
 import { rustLifetimeToAst } from "../types/lifetime-syntax.js";
 import type { RustPlanContext } from "../program/plan-context.js";
+import { rustDeclarationAssociatedPredicates } from "../types/associated-bounds.js";
+import { rustTypeParameterBounds } from "../types/generic-bounds.js";
 
 export interface RustCallableGenericPlan {
   readonly context: RustPlanContext;
@@ -115,7 +118,7 @@ export function planRustCallableGenerics(
   const sourceTypeParameterNames = Object.freeze(
     ordinaryParameters.map((parameter) => parameter.sourceName),
   );
-  const requirementContract = context.input.program.callableGenericRequirements.contractFor(
+  const requirementContract = context.input.program.declarationGenericRequirements.contractFor(
     declaration,
   );
   if (requirementContract === undefined ||
@@ -172,13 +175,14 @@ export function planRustCallableGenerics(
     return Object.freeze([{
       kind: "type" as const,
       name: parameter.targetName,
-      bounds: mergeTypeBounds(parameter, requirements),
+      bounds: rustTypeParameterBounds(parameter, requirements),
     }]);
   });
-  const generics: RustGenerics = Object.freeze({
-    parameters: Object.freeze(parameters),
-    wherePredicates: Object.freeze([]),
-  });
+  const generics: RustGenerics = rustGenericsWithAssociatedBounds(parameters,
+    rustDeclarationAssociatedPredicates(declaration, {
+      ...context, typeParameterSubstitutions: substitutions,
+    }),
+  );
   return {
     context: {
       ...context,
@@ -202,38 +206,4 @@ export function rustCallableSpecialization(
   }
   return new Map(sourceTypeParameterNames.map((name, index) =>
     [name, targetTypeArguments[index]!] as const));
-}
-
-function mergeTypeBounds(
-  parameter: Extract<RustSourceGenericParameterContract, { readonly kind: "type" }>,
-  requirements: readonly import("../../../analysis/callables/generic-requirements.js").RustGenericRequirement[],
-): readonly RustTypeBound[] {
-  const bounds: RustTypeBound[] = [
-    ...parameter.outlives.map((lifetime): RustTypeBound => ({
-      kind: "lifetime",
-      lifetime: rustLifetimeToAst(lifetime),
-    })),
-    ...(parameter.maybeSized ? [{ kind: "maybe-sized" as const }] : []),
-  ];
-  for (const requirement of requirements) {
-    const candidate: RustTypeBound = requirement === "static"
-      ? { kind: "lifetime", lifetime: { kind: "static" } }
-      : {
-          kind: "trait",
-          path: requirement === "clone" ? "Clone" : "Default",
-        };
-    if (!bounds.some((bound) => typeBoundsEqual(bound, candidate))) bounds.push(candidate);
-  }
-  return Object.freeze(bounds);
-}
-
-function typeBoundsEqual(left: RustTypeBound, right: RustTypeBound): boolean {
-  if (left.kind !== right.kind) return false;
-  if (left.kind === "trait" && right.kind === "trait") return left.path === right.path;
-  if (left.kind === "lifetime" && right.kind === "lifetime") {
-    return left.lifetime.kind === right.lifetime.kind &&
-      (left.lifetime.kind !== "named" ||
-        right.lifetime.kind === "named" && left.lifetime.name === right.lifetime.name);
-  }
-  return left.kind === "maybe-sized" && right.kind === "maybe-sized";
 }

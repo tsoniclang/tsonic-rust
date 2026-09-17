@@ -182,6 +182,7 @@ test("operation fact equality is structural and independent of metadata key orde
       traits: { implementations: [] },
       genericArguments: [],
       genericDefaults: [],
+      upcasts: [],
     },
   };
   const abi = finalizeRustProviderOperationAbi({
@@ -247,10 +248,11 @@ test("project-source call consumption requires exact selected member kind, targe
     returnType: int32,
   };
   const selected = { member };
-  assert.equal(sourceCallSelectedMemberMatches(fact, selected, member.returnType), true);
-  assert.equal(sourceCallSelectedMemberMatches(fact, { member: { ...member, kind: "property" } }, member.returnType), false);
-  assert.equal(sourceCallSelectedMemberMatches(fact, { member: { ...member, targetName: "other" } }, member.returnType), false);
-  assert.equal(sourceCallSelectedMemberMatches(fact, { member: { ...member, parameters: [,] } }, member.returnType), false);
+  const normalize = carrier => carrier;
+  assert.equal(sourceCallSelectedMemberMatches(fact, selected, member.returnType, normalize), true);
+  assert.equal(sourceCallSelectedMemberMatches(fact, { member: { ...member, kind: "property" } }, member.returnType, normalize), false);
+  assert.equal(sourceCallSelectedMemberMatches(fact, { member: { ...member, targetName: "other" } }, member.returnType, normalize), false);
+  assert.equal(sourceCallSelectedMemberMatches(fact, { member: { ...member, parameters: [,] } }, member.returnType, normalize), false);
 });
 
 test("project-source call consumption accepts only proven target-finalized inferred type arguments", () => {
@@ -303,21 +305,22 @@ test("project-source call consumption accepts only proven target-finalized infer
     sourceSelectedMethodTypeArguments: [inferredSourceArgument],
   };
 
-  assert.equal(sourceCallSelectedMemberMatches(fact, selected, member.returnType), true);
+  const normalize = carrier => carrier;
+  assert.equal(sourceCallSelectedMemberMatches(fact, selected, member.returnType, normalize), true);
   assert.equal(sourceCallSelectedMemberMatches(fact, {
     ...selected,
     sourceSelectedMethodTypeArguments: [{
       ...inferredSourceArgument,
       explicitTypeNode: {},
     }],
-  }, member.returnType), false);
+  }, member.returnType, normalize), false);
   assert.equal(sourceCallSelectedMemberMatches(fact, {
     ...selected,
     member: {
       ...member,
       genericParameters: [{ kind: "lifetime", sourceName: "T", targetIdentity: "life:T" }],
     },
-  }, member.returnType), false);
+  }, member.returnType, normalize), false);
 });
 
 test("compile-time provider arguments never require runtime carrier or passing facts", () => {

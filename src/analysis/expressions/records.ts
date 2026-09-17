@@ -7,6 +7,8 @@ import {
 } from "@tsonic/target-api/source";
 import {
   rustOptionElementCarrier,
+  rustEmptyObjectTargetId,
+  rustEmptyObjectTargetType,
   rustCallableProtocol,
   rustStructuralMethodCallableCarrier,
   rustClosureProtocol,
@@ -26,7 +28,7 @@ import { resolveFunctionExpressionCarrier } from "../callables/closures.js";
 import { resolveObjectLiteralMethodCarrier, resolveProjectIndexRecordLiteral, resolveProjectMethodPropertyCarrier, resolveRustRecordShape, selectRustRecordLiteralUnionVariant, selectRustRecordLiteralUnionVariantByCheckedType } from "../objects/record-shapes.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { resolveTypeNodeCarrier } from "../control-flow/statements.js";
-import { rustProjectInterfaceContracts } from "../project-types/type-policy.js";
+import { rustProjectInstanceContracts } from "../project-types/type-policy.js";
 import { rustProjectObjectLayout } from "../project-types/object-layout.js";
 import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -38,44 +40,8 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustTargetOperationFact } from "../facts/keys.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustProjectTypeDefinition } from "../project-types/type-policy.js";
+import { projectRecordMemberImplementation, selectedProjectMethodContracts } from "../objects/record-member-contracts.js";
 import { resolveProviderRecordLiteral } from "./provider-records.js";
-
-function projectRecordMemberImplementation(
-  walk: RustFactWalk,
-  definition: RustProjectTypeDefinition | undefined,
-  contract: Node,
-): Node | undefined {
-  if (definition === undefined) return undefined;
-  const implementation = walk.context.source.navigation.memberImplementation(
-    definition.declaration,
-    contract,
-  );
-  return implementation.kind === "resolved"
-    ? implementation.implementation.declaration
-    : undefined;
-}
-
-function selectedProjectMethodContracts(
-  walk: RustFactWalk,
-  candidates: readonly Node[],
-  selectedDeclarations: readonly Node[],
-): readonly Node[] | undefined {
-  const candidateSet = new Set(candidates);
-  const selected = candidates.filter((candidate) =>
-    selectedDeclarations.includes(candidate));
-  if (selected.length === 0) return Object.freeze([]);
-  const matched = new Set<Node>();
-  for (const implementation of selected) {
-    matched.add(implementation);
-    const contracts = walk.context.source.navigation.memberContracts(implementation);
-    if (contracts.kind === "unresolved") return undefined;
-    for (const contract of contracts.contracts) {
-      if (candidateSet.has(contract)) matched.add(contract);
-    }
-  }
-  return Object.freeze(candidates.filter((candidate) => matched.has(candidate)));
-}
 
 export function requireDenseSourceNodes(
   walk: RustFactWalk,
@@ -161,34 +127,51 @@ export function resolveRecordLiteralCarrier(
   const selectedSourceType = contextualSelection.kind === "selected"
     ? contextualSelection.type
     : sourceType;
-  let selectedExpected = expected ?? resolveRustTargetTypeRef(
-    selectedSourceType,
-    rustResolutionContext(walk, expression),
-    walk.operationOptions,
-  );
+  let selectedExpected = expected ?? (contextualSelection.kind !== "selected" && properties.length === 0
+    ? rustEmptyObjectTargetType()
+    : resolveRustTargetTypeRef(
+        selectedSourceType,
+        rustResolutionContext(walk, expression),
+        walk.operationOptions,
+      ));
   if (selectedExpected === undefined) {
     return undefined;
   }
   let contextualReconciliation: import("../../policy/types/value-carrier-reconciliation.js").RustAppliedValueCarrierReconciliation | undefined;
-  if (expected !== undefined && rustSourceTypeCarrierValue(selectedExpected)?.shape !== "object" &&
+  if ((expected !== undefined || contextualSelection.kind === "selected") && rustSourceTypeCarrierValue(selectedExpected)?.shape !== "object" &&
     rustSourceUnionCarrierValue(selectedExpected) === undefined &&
     rustStructuralObjectCarrierValue(selectedExpected) === undefined) {
-    const sourceCarrier = resolveRustTargetTypeRef(
-      sourceType,
-      rustResolutionContext(walk, expression),
-      walk.operationOptions,
-    );
+    const sourceCarrier = properties.length === 0
+      ? rustEmptyObjectTargetType()
+      : resolveRustTargetTypeRef(
+          sourceType,
+          rustResolutionContext(walk, expression),
+          walk.operationOptions,
+        );
     const reconciliation = sourceCarrier === undefined
       ? undefined
       : selectRustValueCarrierReconciliation(
           sourceCarrier,
           selectedExpected,
-          walk.context.projectTypes,
+          walk.context.projectTypes, walk.context.typeDefinitions,
         );
     if (reconciliation?.kind === "conversion") {
       selectedExpected = sourceCarrier!;
       contextualReconciliation = reconciliation;
     }
+  }
+  if (selectedExpected.kind === "target-named" && selectedExpected.id === rustEmptyObjectTargetId) {
+    if (properties.length !== 0) return undefined;
+    setRustOperationFact(walk, expression, {
+      kind: "empty-object-literal",
+      operationId: "tsonic.rust.object.empty-literal",
+      resultCarrier: selectedExpected,
+    });
+    const carrier = setCarrierFact(walk, expression, selectedExpected);
+    if (carrier !== undefined && contextualReconciliation !== undefined) {
+      recordRustValueCarrierReconciliation(walk.context.facts, expression, contextualReconciliation);
+    }
+    return carrier;
   }
   const indexedDefinition = walk.context.projectTypes.definitionForCarrier(selectedExpected);
   const indexedLayout = indexedDefinition?.kind === "interface"
@@ -244,7 +227,7 @@ export function resolveRecordLiteralCarrier(
   const unionValue = rustSourceUnionCarrierValue(selectedExpected);
   const structuralExpected = rustStructuralObjectCarrierValue(selectedExpected);
   let resultCarrier: TargetTypeRef;
-  let storage: "project-object" | "object-handle";
+  let storage: "project-object" | "structural-object";
   let selectedFields: readonly {
     readonly implementationDeclaration?: Node;
     readonly contractDeclarations: readonly Node[];
@@ -264,7 +247,7 @@ export function resolveRecordLiteralCarrier(
     const definition = walk.context.projectTypes.definitionForCarrier(selectedExpected);
     const contracts = definition === undefined
       ? undefined
-      : rustProjectInterfaceContracts(
+      : rustProjectInstanceContracts(
           walk.context.projectTypes,
           definition,
           selectedExpected,
@@ -390,7 +373,7 @@ export function resolveRecordLiteralCarrier(
       return undefined;
     }
     resultCarrier = structuralCarrier;
-    storage = "object-handle";
+    storage = "structural-object";
     const structuralShape = walk.sourceTypes.structuralObjectForCarrier(structuralCarrier);
     if (structuralShape === undefined ||
       structuralShape.fields.length !== structuralValue.fields.length) {
@@ -480,7 +463,7 @@ export function resolveRecordLiteralCarrier(
         if (!rustTargetTypeRefEquals(sourceField.carrier, targetField.carrier) ||
           sourceField.method !== targetField.method ||
           sourceField.method === true && (
-            sourceShape.storage !== "object-handle" ||
+            sourceShape.storage !== "structural-object" ||
             !rustTargetTypeRefEquals(sourceCarrier, resultCarrier)
           )) {
           return undefined;
@@ -642,7 +625,7 @@ export function resolveRecordLiteralCarrier(
         : propertySemantics.declarations.symbolName(
             selectedElement.sourceSelectedSymbol,
           );
-      if (storage === "object-handle") {
+      if (storage === "structural-object") {
         const methodProjection = selectedDeclaration === undefined
           ? undefined
           : walk.sourceTypes.structuralFieldProjectionForDeclaration(
@@ -831,7 +814,7 @@ export function resolveRecordLiteralCarrier(
     ...(field.accessor === undefined ? {} : { accessor: field.accessor }),
     ...(field.method === true ? { method: true as const } : {}),
   }));
-  if (storage === "object-handle" && selectedFields.some((field) => {
+  if (storage === "structural-object" && selectedFields.some((field) => {
     if (field.method === true) {
       return false;
     }

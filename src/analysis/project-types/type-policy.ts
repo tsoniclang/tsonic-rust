@@ -1,9 +1,9 @@
-export { rustInheritedProjectConstructor, rustProjectInterfaceContracts } from "../../policy/types/project-types.js";
+export { rustInheritedProjectConstructor, rustProjectInstanceContracts } from "../../policy/types/project-types.js";
 export type {
   RustProjectConstructorSignature,
   RustProjectDowncastRoute,
   RustProjectHeritageEdge,
-  RustProjectInterfaceContract,
+  RustProjectInstanceContract,
   RustProjectTypeDefinition,
   RustProjectTypeIssue,
   RustProjectTypePolicy,

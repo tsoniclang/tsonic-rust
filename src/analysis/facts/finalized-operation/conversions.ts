@@ -1,3 +1,4 @@
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
@@ -46,8 +47,9 @@ export function sourceInput(
   sourceCarrier: TargetTypeRef,
   mode: RustArgumentMode,
   conversion: RustValueConversion | undefined,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): RustFinalizedSourceInput | undefined {
-  const finalized = finalizeValueConversion(conversion, sourceCarrier, undefined);
+  const finalized = finalizeValueConversion(conversion, sourceCarrier, undefined, definitions);
   const parameterCarrier = finalized === undefined ? undefined : carrierAfterMode(finalized.targetCarrier, mode);
   return finalized === undefined || parameterCarrier === undefined ? undefined : {
     source,
@@ -62,6 +64,7 @@ export function finalizeValueConversion(
   conversion: RustValueConversion | undefined,
   sourceCarrier: TargetTypeRef | undefined,
   targetCarrier: TargetTypeRef | undefined,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): RustFinalizedValueConversion | undefined {
   if (conversion === undefined) {
     const carrier = sourceCarrier ?? targetCarrier;
@@ -75,7 +78,7 @@ export function finalizeValueConversion(
           fallible: false,
         };
   }
-  const contract = rustValueConversionContract(conversion);
+  const contract = rustValueConversionContract(conversion, definitions);
   if (contract === undefined ||
     (sourceCarrier !== undefined && !rustTargetTypeRefEquals(sourceCarrier, contract.source)) ||
     (targetCarrier !== undefined && !rustTargetTypeRefEquals(targetCarrier, contract.target))) {
@@ -90,11 +93,11 @@ export function finalizeValueConversion(
   };
 }
 
-export function finalizedConversionIsValid(conversion: RustFinalizedValueConversion): boolean {
+export function finalizedConversionIsValid(conversion: RustFinalizedValueConversion, definitions: RustTypeDefinitions = emptyRustTypeDefinitions): boolean {
   if (conversion.kind === "identity") {
     return conversion.fallible === false && rustTargetTypeRefEquals(conversion.sourceCarrier, conversion.targetCarrier);
   }
-  const contract = rustValueConversionContract(conversion.conversion);
+  const contract = rustValueConversionContract(conversion.conversion, definitions);
   return contract !== undefined &&
     rustTargetTypeRefEquals(conversion.sourceCarrier, contract.source) &&
     rustTargetTypeRefEquals(conversion.targetCarrier, contract.target) &&

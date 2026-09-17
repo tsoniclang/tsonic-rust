@@ -42,11 +42,15 @@ function rustItemReferencesModuleAlias(item: RustItem, alias: string): boolean {
       return rustGenericsReferenceModuleAlias(item.generics, alias) ||
         item.superTraits?.some((type) =>
           rustTypeReferencesModuleAlias(type, alias)) === true ||
+        item.associatedTypes?.some((type) => type.bounds.some((bound) =>
+          rustTypeBoundReferencesModuleAlias(bound, alias))) === true ||
         item.functions.some((fn) => rustTraitFunctionReferencesModuleAlias(fn, alias));
     case "impl":
       return rustGenericsReferenceModuleAlias(item.generics, alias) ||
         rustOptionalTypeReferencesModuleAlias(item.trait, alias) ||
         rustTypeReferencesModuleAlias(item.target, alias) ||
+        item.associatedTypes?.some((type) =>
+          rustTypeReferencesModuleAlias(type.type, alias)) === true ||
         item.functions.some((fn) => rustImplFunctionReferencesModuleAlias(fn, alias));
     case "enum":
       return rustGenericsReferenceModuleAlias(item.generics, alias) ||
@@ -166,6 +170,7 @@ function rustTypeReferencesModuleAlias(type: RustType, alias: string): boolean {
     case "slice":
       return rustTypeReferencesModuleAlias(type.element, alias);
     case "function-pointer":
+    case "callable-trait":
       return type.parameters.some((parameter) =>
         rustTypeReferencesModuleAlias(parameter, alias)) ||
         rustTypeReferencesModuleAlias(type.result, alias);
@@ -292,7 +297,8 @@ function rustExpressionReferencesModuleAlias(expression: RustExpr, alias: string
     case "unreachable":
       return false;
     case "path":
-      return rustPathReferencesModuleAlias(expression.path, alias);
+      return rustPathReferencesModuleAlias(expression.path, alias) ||
+        rustGenericArgumentsReferenceModuleAlias(expression.genericArguments, alias);
     case "bottom":
     case "numeric-cast":
     case "unsafe":
@@ -359,7 +365,7 @@ function rustExpressionReferencesModuleAlias(expression: RustExpr, alias: string
     case "block":
       return expression.bindings.some((binding) =>
         rustOptionalTypeReferencesModuleAlias(binding.type, alias) ||
-        rustExpressionReferencesModuleAlias(binding.value, alias)) ||
+        (binding.value !== undefined && rustExpressionReferencesModuleAlias(binding.value, alias))) ||
         rustExpressionReferencesModuleAlias(expression.value, alias);
     case "evaluate-then":
       return rustExpressionReferencesModuleAlias(expression.effect, alias) ||
@@ -378,12 +384,17 @@ function rustExpressionReferencesModuleAlias(expression: RustExpr, alias: string
     case "tuple-literal":
       return expression.elements.some((element) =>
         rustExpressionReferencesModuleAlias(element, alias));
+    case "array-repeat":
+      return rustExpressionReferencesModuleAlias(expression.element, alias) ||
+        expression.length.kind === "path" &&
+          rustExpressionReferencesModuleAlias({ kind: "path", path: expression.length.path }, alias);
     case "closure":
       return rustExpressionReferencesModuleAlias(expression.body, alias);
     case "closure-block":
       return rustBlockReferencesModuleAlias(expression.body, alias);
     case "await":
       return rustExpressionReferencesModuleAlias(expression.expr, alias);
+    case "option-try":
     case "try":
       return rustExpressionReferencesModuleAlias(expression.expr, alias);
     case "return-expression":
@@ -408,6 +419,8 @@ function rustPatternReferencesModuleAlias(pattern: RustPattern, alias: string): 
     case "tuple":
       return pattern.elements.some((element) =>
         rustPatternReferencesModuleAlias(element, alias));
+    case "or":
+      return pattern.alternatives.some(alternative => rustPatternReferencesModuleAlias(alternative, alias));
     case "tuple-variant":
       return rustPathReferencesModuleAlias(pattern.path, alias) ||
         pattern.elements.some((element) =>

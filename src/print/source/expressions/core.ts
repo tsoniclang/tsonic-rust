@@ -1,6 +1,6 @@
 import { printRustBlockStatements } from "../blocks.js";
 import { escapeRustChar, escapeRustString, printRustPattern } from "../patterns.js";
-import { printRustType } from "../types.js";
+import { printRustConstArgument, printRustType } from "../types.js";
 import {
   printRustAssociatedCallOwner,
   printRustAssociatedCallTarget,
@@ -32,7 +32,7 @@ export function printRustExpr(expression: RustExpr): string {
     case "str-literal":
       return `"${escapeRustString(expression.value)}"`;
     case "path":
-      return expression.path;
+      return printRustDirectCallTarget(expression);
     case "bottom":
       return printRustExpr(expression.expression);
     case "owned-string-from-borrowed-str":
@@ -96,6 +96,9 @@ export function printRustExpr(expression: RustExpr): string {
     case "evaluate-then": {
       const effect = printRustExpr(expression.effect);
       const statement = expression.discard === "unit" ? `${effect};` : `let _ = ${effect};`;
+      if (expression.value.kind === "tuple-literal" && expression.value.elements.length === 0) {
+        return `{ ${statement} }`;
+      }
       return `{ ${statement} ${printRustExpr(expression.value)} }`;
     }
     case "string-concat": {
@@ -115,6 +118,8 @@ export function printRustExpr(expression: RustExpr): string {
       return `vec![${expression.elements.map(printRustExpr).join(", ")}]`;
     case "slice-literal":
       return `[${expression.elements.map(printRustExpr).join(", ")}]`;
+    case "array-repeat":
+      return `[${printRustExpr(expression.element)}; ${printRustConstArgument(expression.length)}]`;
     case "closure":
       return `${expression.move === true ? "move " : ""}|${printRustClosureParams(expression.params)}| ${printRustExpr(expression.body)}`;
     case "closure-block": {
@@ -123,6 +128,7 @@ export function printRustExpr(expression: RustExpr): string {
     }
     case "await":
       return `${printOperand(expression.expr, RustPrecedence.Postfix, false)}.await`;
+    case "option-try":
     case "try":
       return `${printOperand(expression.expr, RustPrecedence.Postfix, false)}?`;
     case "return-expression":
@@ -208,7 +214,8 @@ function printRustBlockExpressionContents(
 ): string {
   const bindings = expression.bindings.map((binding) => {
     const attributes = binding.attrs?.join(" ") ?? "";
-    const declaration = `let ${binding.mutable === true ? "mut " : ""}${binding.name}${binding.type === undefined ? "" : `: ${printRustType(binding.type)}`} = ${printRustExpr(binding.value)};`;
+    const initializer = binding.value === undefined ? "" : ` = ${printRustExpr(binding.value)}`;
+    const declaration = `let ${binding.mutable === true ? "mut " : ""}${binding.name}${binding.type === undefined ? "" : `: ${printRustType(binding.type)}`}${initializer};`;
     return attributes.length === 0 ? declaration : `${attributes} ${declaration}`;
   });
   return [

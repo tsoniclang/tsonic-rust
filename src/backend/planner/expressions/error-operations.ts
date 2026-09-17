@@ -1,10 +1,12 @@
 import type { Node } from "@tsonic/tsts";
+import { BinaryExpression_Left, BinaryExpression_Right } from "@tsonic/target-api/source";
+import { planRustNonConsumingValue } from "./typed-locations.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type {
   RustFlowReadProjectionFact,
   RustTargetOperationFact,
 } from "../../../analysis/facts/keys.js";
-import { isRustProgramErrorCarrier } from "../../../target-model/types/index.js";
+import { isRustProgramErrorCarrier, rustJsErrorTargetType } from "../../../target-model/types/index.js";
 import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { diagnosticInput } from "../program/plan-context.js";
@@ -27,6 +29,63 @@ type RustProgramErrorFlowReadFact = Extract<
   RustFlowReadProjectionFact,
   { readonly kind: "program-error-variant" }
 >;
+
+export function planRustProgramErrorEquality(
+  node: Node,
+  left: RustExpr,
+  right: RustExpr,
+  fact: Extract<RustTargetOperationFact, { readonly kind: "program-error-equality" }>,
+  context: RustPlanContext,
+): RustExpr | undefined {
+  const builtin = fact.comparison.kind === "builtin";
+  const route = fact.comparison.kind === "project"
+    ? resolveProgramErrorFactRoute(fact.sourceCarrier, fact.targetCarrier, fact.comparison.variant, context)
+    : undefined;
+  if (builtin ? !isRustProgramErrorCarrier(fact.sourceCarrier) ||
+    !rustTargetTypeRefEquals(fact.targetCarrier, rustJsErrorTargetType()) : route === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(
+      diagnosticInput(context, node),
+      "rust.backend.program-error-equality",
+      "Program-error equality conflicts with its exact closed error variant.",
+    ));
+    return undefined;
+  }
+  context.usedAliases?.add("rt");
+  const names = context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []);
+  const valueName = allocateRustSyntheticName(names, "error_value");
+  const otherName = allocateRustSyntheticName(names, "compared_value");
+  const errorPattern: RustPattern = builtin
+    ? { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: valueName }] }
+    : programErrorPattern(route!, { kind: "binding", name: valueName });
+  const otherPattern: RustPattern = { kind: "binding", name: otherName };
+  const operand = (expression: RustExpr, side: "left" | "right"): RustExpr => {
+    const source = side === "left" ? BinaryExpression_Left(context.input.program.source.ast, node)
+      : BinaryExpression_Right(context.input.program.source.ast, node);
+    const value = source === undefined ? expression : planRustNonConsumingValue(source, expression, context);
+    return builtin && fact.errorOperand === side
+      ? { kind: "method-call", receiver: value, method: "source_error", args: [] }
+      : { kind: "reference", expr: value };
+  };
+  return {
+    kind: "match",
+    expression: { kind: "tuple-literal", elements: [
+      operand(left, "left"),
+      operand(right, "right"),
+    ] },
+    arms: [
+      {
+        pattern: { kind: "tuple", elements: fact.errorOperand === "left"
+          ? [errorPattern, otherPattern] : [otherPattern, errorPattern] },
+        expression: builtin ? {
+          kind: "call", path: `rt::JsError::${fact.negated ? "has_distinct_identity" : "has_same_identity"}`,
+          args: [{ kind: "path", path: valueName }, { kind: "path", path: otherName }],
+        } : { kind: "binary", left: { kind: "path", path: valueName },
+          operator: fact.negated ? "!=" : "==", right: { kind: "path", path: otherName } },
+      },
+      { pattern: { kind: "wildcard" }, expression: { kind: "bool-literal", value: fact.negated } },
+    ],
+  };
+}
 
 export function planRustProgramErrorTypeTest(
   node: Node,
@@ -83,11 +142,16 @@ export function planRustProgramErrorFlowRead(
   );
   return {
     kind: "match",
-    expression,
+    expression: { kind: "reference", expr: expression },
     arms: [
       {
         pattern: programErrorPattern(route, { kind: "binding", name: valueName }),
-        expression: { kind: "path", path: valueName },
+        expression: {
+          kind: "method-call",
+          receiver: { kind: "path", path: valueName },
+          method: "clone",
+          args: [],
+        },
       },
       {
         pattern: { kind: "wildcard" },

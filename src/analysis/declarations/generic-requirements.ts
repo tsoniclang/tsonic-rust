@@ -1,26 +1,41 @@
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
+import { rustGenericNumericOperandsKey } from "../facts/generic-numeric.js";
+import { classifyCarrierRequirements } from "./generic-carrier-requirements.js";
+import { isRustDeclarationPathUse } from "./generic-reference-uses.js";
+import { createRustAssociatedRequirementCollector, type RustAssociatedTypeRequirement } from "./associated-requirements.js";
+import type { RustSourceTypeFamilyRegistry } from "../../policy/types/type-families.js";
+import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
+import { substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
+import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
+import { rustJsArrayEntriesElementTargetType } from "../../target-model/types/carriers/array-entries.js";
+import { rustTargetTypeParameterNames } from "../../target-model/types/carriers/generic-references.js";
+import { analyzeRustShapeGenericRequirements, type RustShapeGenericRequirementContract } from "./generic-shape-requirements.js";
+import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";
+import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import {
   resolveTargetContractFixedPoint,
 } from "@tsonic/target-api/analysis";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import { Node_Expression, sourceNodeIdentity } from "@tsonic/target-api/source";
+import {
+  KindBinaryExpression,
+  KindExpressionStatement,
+  Node_Expression,
+  sourceNodeIdentity,
+} from "@tsonic/target-api/source";
+import { rustValueCarrierBeforeOptionProjection } from "../facts/value-carrier-queries.js";
+import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 import type { TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import {
   getRustGeneratorProtocol,
-  isRustNeverCarrier,
   rustCarrierSupportsTrait,
   rustClosureProtocol,
-  rustFixedArrayCarrierValue,
   rustJsPromiseTargetId,
-  rustLocationTargetId,
-  rustNamedTypeCarrierValue,
-  rustOptionTargetId,
   rustSourceTypeCarrierValue,
   rustTargetGenericTypeArguments,
-  rustTargetLifetimeArguments,
 } from "../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
@@ -29,6 +44,7 @@ import {
   rustClosureCaptureFactKey,
   rustGeneratorFactKey,
   rustFutureValueFactKey,
+  rustFlowReadProjectionFactKey,
   rustLocationStorageFactKey,
   rustSourceParameterAbiFactKey,
   rustTargetOperationFactKey,
@@ -36,20 +52,23 @@ import {
   rustYieldFactKey,
 } from "../facts/keys.js";
 
-export type RustGenericRequirement = "clone" | "default" | "static";
+export type RustGenericRequirement = "clone" | "default" | "static" | "source-numeric";
 
-export interface RustCallableTypeParameterRequirements {
+export interface RustDeclarationTypeParameterRequirements {
   readonly name: string;
   readonly requirements: readonly RustGenericRequirement[];
 }
 
-export interface RustCallableGenericRequirementContract {
+export interface RustDeclarationGenericRequirementContract {
   readonly declaration: Node;
-  readonly typeParameters: readonly RustCallableTypeParameterRequirements[];
+  readonly typeParameters: readonly RustDeclarationTypeParameterRequirements[];
+  readonly associatedTypes: readonly RustAssociatedTypeRequirement[];
 }
 
-export interface RustCallableGenericRequirementIndex {
-  contractFor(declaration: Node): RustCallableGenericRequirementContract | undefined;
+export interface RustDeclarationGenericRequirementIndex {
+  contractFor(declaration: Node): RustDeclarationGenericRequirementContract | undefined;
+  contractForCarrier(carrier: TargetTypeRef): RustShapeGenericRequirementContract | undefined;
+  supportsClone(declaration: Node, carrier: TargetTypeRef): boolean;
   hasUse(
     declaration: Node,
     node: Node,
@@ -58,10 +77,10 @@ export interface RustCallableGenericRequirementIndex {
   ): boolean;
 }
 
-export type AnalyzeRustCallableGenericRequirementsResult =
+export type AnalyzeRustDeclarationGenericRequirementsResult =
   | {
       readonly kind: "resolved";
-      readonly index: RustCallableGenericRequirementIndex;
+      readonly index: RustDeclarationGenericRequirementIndex;
     }
   | {
       readonly kind: "rejected";
@@ -74,23 +93,29 @@ interface RequirementUse {
   readonly requirements: readonly RustGenericRequirement[];
 }
 
-interface RequirementContractState extends RustCallableGenericRequirementContract {
+interface RequirementContractState extends RustDeclarationGenericRequirementContract {
   readonly uses: readonly RequirementUse[];
+  readonly capturedTypeParameters: readonly RustDeclarationTypeParameterRequirements[];
 }
 
 const requirementOrder: readonly RustGenericRequirement[] = [
   "clone",
   "default",
   "static",
+  "source-numeric",
 ];
 
-export function analyzeRustCallableGenericRequirements(
+export function analyzeRustDeclarationGenericRequirements(
   source: TargetSourceProgram,
   sourceFiles: readonly SourceFile[],
   facts: RustPlanQueries,
   names: RustNamePlan,
   sourceLifetimes: RustLifetimeIndex,
-): AnalyzeRustCallableGenericRequirementsResult {
+  typeFamilies: RustSourceTypeFamilyRegistry,
+  projectTypes: RustProjectTypePolicy,
+  shapes: RustStructuralShapePlan,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
+): AnalyzeRustDeclarationGenericRequirementsResult {
   const ast = source.ast;
   const diagnostics: TargetDiagnostic[] = [];
   const declarations = collectCallableDeclarations(ast, sourceFiles);
@@ -145,10 +170,13 @@ export function analyzeRustCallableGenericRequirements(
       }
       const result = classifyCallableRequirements({
         ast,
+        typeDefinitions: definitions,
         declaration,
         facts,
         names,
         sourceLifetimes,
+        typeFamilies,
+        projectTypes,
         idByDeclaration,
         implementationDeclaration,
         contractFor(candidate) {
@@ -194,9 +222,20 @@ export function analyzeRustCallableGenericRequirements(
       usesByNode.set(use.node, uses);
     }
   }
-  const index: RustCallableGenericRequirementIndex = Object.freeze({
+  const index: RustDeclarationGenericRequirementIndex = Object.freeze({
     contractFor(declaration: Node) {
       return contractByDeclaration.get(declaration);
+    },
+    contractForCarrier(carrier: TargetTypeRef) { return shapeContracts.get(closedMetadataKey(carrier)); },
+    supportsClone(declaration: Node, carrier: TargetTypeRef) {
+      const contract = contractByDeclaration.get(declaration);
+      if (contract === undefined) return false;
+      const parameters = [...contract.typeParameters, ...contract.capturedTypeParameters];
+      return rustCarrierSupportsTrait(carrier, "core::clone::Clone", (name, trait) =>
+        trait === "core::clone::Clone" && parameters.some(parameter =>
+          parameter.name === name && parameter.requirements.includes("clone")),
+        (projection, trait) => trait === "core::clone::Clone" && contract.associatedTypes.some(requirement =>
+          rustTargetTypeRefEquals(requirement.carrier, projection) && requirement.requirements.includes("clone")), definitions);
     },
     hasUse(
       declaration: Node,
@@ -211,19 +250,33 @@ export function analyzeRustCallableGenericRequirements(
           stringListsEqual(use.requirements, normalized));
     },
   });
+  const shapeContracts = new Map<string, RustShapeGenericRequirementContract>();
+  for (const carrier of [...shapes.definitions.map(definition => definition.carrier),
+    ...shapes.unionDefinitions.flatMap(definition => definition.sourceCarriers),
+    ...typeFamilies.implementations().map(implementation => ({ kind: "tuple" as const, elements: [implementation.owner, implementation.output] }))]) {
+    const contract = analyzeRustShapeGenericRequirements(carrier, projectTypes, typeFamilies, index.contractFor, definitions);
+    if (contract === undefined) return { kind: "rejected", diagnostics: Object.freeze([diagnostic(
+      "RUST_SHAPE_GENERIC_CONTRACT_NOT_PROVEN", "A structural source carrier has no exact generic or associated-output requirements.",
+    )]) };
+    shapeContracts.set(closedMetadataKey(carrier), contract);
+  }
   return { kind: "resolved", index };
 }
 
 interface ClassifyCallableInput {
+  readonly typeDefinitions: RustTypeDefinitions;
   readonly ast: AstReader;
   readonly declaration: Node;
   readonly facts: RustPlanQueries;
   readonly names: RustNamePlan;
   readonly sourceLifetimes: RustLifetimeIndex;
+  readonly typeFamilies: RustSourceTypeFamilyRegistry;
+  readonly projectTypes: RustProjectTypePolicy;
   readonly idByDeclaration: WeakMap<Node, string>;
   readonly implementationDeclaration: (declaration: Node) => Node;
   readonly contractFor: (declaration: Node) => RequirementContractState | undefined;
 }
+
 
 function classifyCallableRequirements(input: ClassifyCallableInput):
   | {
@@ -233,7 +286,9 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
     }
   | { readonly kind: "rejected"; readonly reason: string } {
   const { ast, declaration, facts, names } = input;
-  const typeParameterNodes = ast.typeParameters(declaration).filter(
+  const definition = input.projectTypes.definitionForDeclaration(declaration);
+  const typeParameterNodes = (definition === undefined ? ast.typeParameters(declaration)
+    : definition.genericParameters.map(parameter => parameter.declaration)).filter(
     (candidate): candidate is Node => candidate !== undefined &&
       input.sourceLifetimes.parameterFor(candidate)?.kind !== "lifetime",
   );
@@ -246,11 +301,24 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
     };
   }
   const exactNames = typeParameterNames as string[];
-  const declared = new Set(exactNames);
-  const byParameter = new Map(exactNames.map((name) =>
+  const capturedNames: string[] = [];
+  for (let ancestor = ast.parent(declaration); ancestor !== undefined; ancestor = ast.parent(ancestor)) {
+    if (!isIndependentCallable(ast, ancestor) && ast.kindName(ancestor) !== "KindClassDeclaration") continue;
+    for (const parameter of ast.typeParameters(ancestor)) {
+      if (parameter === undefined || input.sourceLifetimes.parameterFor(parameter)?.kind === "lifetime") continue;
+      const name = names.nameForDeclaration(parameter);
+      if (name === undefined) return { kind: "rejected", reason: "A captured Rust type parameter has no exact target identity." };
+      if (!exactNames.includes(name) && !capturedNames.includes(name)) capturedNames.push(name);
+    }
+  }
+  const declared = new Set([...exactNames, ...capturedNames]);
+  const byParameter = new Map([...declared].map((name) =>
     [name, new Set<RustGenericRequirement>()] as const));
+  if (definition !== undefined) for (const name of exactNames) byParameter.get(name)!.add("clone");
   const uses: RequirementUse[] = [];
   const dependencies = new Set<string>();
+  const associated = createRustAssociatedRequirementCollector(declared, input.typeFamilies,
+    (carrier, requirements) => classifyCarrierRequirements(carrier, requirements, declared, byParameter, associated.require, input.typeDefinitions));
   const addUse = (
     node: Node,
     carrier: TargetTypeRef | undefined,
@@ -265,6 +333,8 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       normalized,
       declared,
       byParameter,
+      associated.require,
+      input.typeDefinitions,
     );
     if (!classified) {
       return `A generated Rust operation requires ${rustRequirementDescription(normalized)} that its exact target carrier does not provide.`;
@@ -321,23 +391,96 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
     }
   }
   const visit = (node: Node): string | undefined => {
-    if (node !== declaration && isIndependentCallable(ast, node)) {
+    if (node !== declaration && (isIndependentCallable(ast, node) || isGenericTypeDeclaration(ast, node))) {
+      const nestedId = input.idByDeclaration.get(node);
+      if (nestedId !== undefined) {
+        dependencies.add(nestedId);
+        for (const parameter of input.contractFor(node)?.capturedTypeParameters ?? []) {
+          if (parameter.requirements.length === 0) continue;
+          const error = addUse(node, { kind: "type-parameter", name: parameter.name }, parameter.requirements);
+          if (error !== undefined) return error;
+        }
+        for (const requirement of input.contractFor(node)?.associatedTypes ?? []) {
+          if (!rustTargetTypeParameterNames(requirement.carrier).every(name => declared.has(name))) continue;
+          if (!associated.collect(requirement.carrier)) return "A captured associated output has no enclosing generic contract.";
+          const error = addUse(node, requirement.carrier, requirement.requirements);
+          if (error !== undefined) return error;
+        }
+      }
       return undefined;
     }
+    const collectType = (carrier: TargetTypeRef): string | undefined => {
+      if (!associated.collect(carrier)) return "A dependent Rust type has no exact family implementation or generic obligation.";
+      const sourceType = rustSourceTypeCarrierValue(carrier);
+      const definition = sourceType === undefined ? undefined : input.projectTypes.definitionForCarrier(carrier);
+      if (definition !== undefined && definition.declaration !== declaration) {
+        const dependency = input.idByDeclaration.get(definition.declaration);
+        if (dependency !== undefined) {
+          dependencies.add(dependency);
+          const parameters = definition.genericParameters;
+          const arguments_ = sourceType!.genericArguments;
+          if (parameters.length !== arguments_.length) return "A source type family use has inconsistent generic class arity.";
+          const substitutions = new Map<string, TargetTypeRef>();
+          for (const [index, parameter] of parameters.entries()) {
+            const argument = arguments_[index];
+            if (argument?.kind !== parameter.kind) return "A source type family use lost a class generic parameter kind.";
+            if (parameter.kind === "type" && argument.kind === "type") substitutions.set(parameter.targetName, argument.type);
+          }
+          const contract = input.contractFor(definition.declaration);
+          for (const parameter of contract?.typeParameters ?? []) {
+            if (parameter.requirements.length === 0) continue;
+            const argument = substitutions.get(parameter.name);
+            if (argument === undefined) return "A generic class use lost its required type argument.";
+            const error = addUse(node, argument, parameter.requirements);
+            if (error !== undefined) return error;
+          }
+          for (const requirement of contract?.associatedTypes ?? []) {
+            const instantiated = substituteRustTargetTypeParameters(requirement.carrier, substitutions);
+            if (!associated.collect(instantiated)) return "A generic class argument does not satisfy its dependent type contract.";
+            const error = addUse(node, instantiated, requirement.requirements);
+            if (error !== undefined) return error;
+          }
+        }
+      }
+      for (const child of rustTargetTypeChildren(carrier)) {
+        const error = collectType(child);
+        if (error !== undefined) return error;
+      }
+      return undefined;
+    };
+    const carrier = facts.getRuntimeCarrierFact(node)?.carrier;
+    if (carrier !== undefined && !isRustDeclarationPathUse(node, ast, facts)) {
+      const error = collectType(carrier);
+      if (error !== undefined) return error;
+      if (ast.kindName(node) === "KindPropertyDeclaration" && carrier.kind === "associated-type") {
+        const fieldError = addUse(node, carrier, ["clone"]);
+        if (fieldError !== undefined) return fieldError;
+      }
+    }
     const location = facts.getFact(node, rustLocationStorageFactKey);
+    const objectView = facts.getFact(node, rustObjectReferenceViewKey);
+    if (objectView !== undefined) {
+      const error = addUse(node, objectView.sourceCarrier, ["clone", "static"]);
+      if (error !== undefined) return error;
+      for (const field of objectView.fields) {
+        const fieldError = addUse(node, field.source.resultCarrier, ["clone", "static"]);
+        if (fieldError !== undefined) return fieldError;
+      }
+    }
     if (location !== undefined) {
       const error = addUse(node, location.valueCarrier, ["clone", "static"]);
       if (error !== undefined) return error;
     }
     const typedLocation = facts.getFact(node, rustTypedLocationPlanKey);
-    if (typedLocation?.operation === "allocate") {
+    if (typedLocation?.operation === "allocate" || typedLocation?.operation === "address-of") {
       const error = addUse(node, typedLocation.pointeeCarrier, ["clone", "static"]);
       if (error !== undefined) return error;
     }
-    if (typedLocation?.operation === "bind-pointer" || typedLocation?.operation === "project-pointer") {
+    if (typedLocation?.operation === "bind-pointer" || typedLocation?.operation === "project-pointer" ||
+      typedLocation?.operation === "view-pointer") {
       const error = addUse(node, typedLocation.pointeeCarrier, ["static"]);
       if (error !== undefined) return error;
-      if (typedLocation.operation === "project-pointer") {
+      if (typedLocation.operation === "project-pointer" || typedLocation.operation === "view-pointer") {
         const sourceError = addUse(node, typedLocation.sourcePointeeCarrier, ["static"]);
         if (sourceError !== undefined) return sourceError;
       } else {
@@ -347,9 +490,9 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
           if (identityError !== undefined) return identityError;
         }
       }
-      const callbacks = typedLocation.operation === "bind-pointer"
-        ? [typedLocation.readExpression, typedLocation.writeExpression]
-        : [typedLocation.fromSourceExpression, typedLocation.toSourceExpression];
+      const callbacks = typedLocation.operation === "project-pointer"
+        ? [typedLocation.fromSourceExpression, typedLocation.toSourceExpression]
+        : [typedLocation.readExpression, typedLocation.writeExpression];
       for (const callback of callbacks) {
         const captures = facts.getFact(callback, rustClosureCaptureFactKey);
         for (const capture of captures?.captures ?? []) {
@@ -359,6 +502,61 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       }
     }
     const operation = facts.getFact(node, rustTargetOperationFactKey);
+    if ((operation?.kind === "source-field" || operation?.kind === "source-union-field") &&
+      operation.accessMode !== "write") {
+      const fields = operation.kind === "source-field" ? [operation]
+        : operation.selectedVariantIndexes.map(index => operation.variants[index]?.field);
+      if (fields.some(field => field?.storage === "structural-object" && field.valueSemantics.kind === "stored")) {
+        const error = addUse(node, operation.resultCarrier, ["clone"]);
+        if (error !== undefined) return error;
+      }
+    }
+    if (operation?.kind === "nullish-assignment") {
+      const parent = ast.parent(node);
+      if (parent === undefined || ast.kindName(parent) !== KindExpressionStatement) {
+        const error = addUse(node, operation.rightCarrier, ["clone"]);
+        if (error !== undefined) return error;
+      }
+    }
+    if (operation?.kind === "iteration" && operation.iterationKind !== "for-in") {
+      const iterable = Node_Expression(ast, node);
+      const iterableCarrier = iterable === undefined ? undefined : facts.getRuntimeCarrierFact(iterable)?.carrier;
+      if (operation.lowering.kind === "js-array" ||
+        operation.lowering.kind === "borrowed" && operation.lowering.style === "cloned" ||
+        operation.lowering.kind === "receiver-method" && rustJsArrayEntriesElementTargetType(iterableCarrier) !== undefined) {
+        const error = addUse(node, operation.elementCarrier, ["clone"]);
+        if (error !== undefined) return error;
+      }
+    }
+    for (const operand of facts.getFact(node, rustGenericNumericOperandsKey) ?? []) {
+      const error = addUse(node, operand, ["source-numeric"]);
+      if (error !== undefined) return error;
+    }
+    if (ast.kindName(node) === KindBinaryExpression) {
+      const parent = ast.parent(node);
+      const assignment = operation?.kind === "runtime-set" ||
+        (operation?.kind === "operator-token" || operation?.kind === "operator-call") &&
+        isRustAssignmentOperator(operation.operator);
+      if (assignment &&
+          (parent === undefined || ast.kindName(parent) !== KindExpressionStatement)) {
+        const carrier = rustValueCarrierBeforeOptionProjection(facts, node);
+        if (carrier !== undefined) {
+          const error = addUse(node, carrier, ["clone"]);
+          if (error !== undefined) return error;
+        }
+      }
+    }
+    const projection = facts.getFact(node, rustFlowReadProjectionFactKey);
+    if (projection?.kind === "option-value" || projection?.kind === "source-union") {
+      const error = addUse(node, projection.selectedCarrier, ["clone"]);
+      if (error !== undefined) return error;
+    }
+    if (operation?.kind === "provider-operation") {
+      for (const requirement of operation.carrierRequirements ?? []) {
+        const error = addUse(node, requirement.carrier, [requirement.requirement]);
+        if (error !== undefined) return error;
+      }
+    }
     if (ast.kindName(node) === "KindAwaitExpression") {
       const operand = Node_Expression(ast, node);
       const operandCarrier = operand === undefined
@@ -425,6 +623,15 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
               const error = addUse(node, targetTypeArguments[index], requirements);
               if (error !== undefined) return error;
             }
+            const substitutions = new Map(callee.typeParameters.map((parameter, index) =>
+              [parameter.name, targetTypeArguments[index]!] as const));
+            for (const requirement of callee.associatedTypes) {
+              const carrier = substituteRustTargetTypeParameters(requirement.carrier, substitutions);
+              const collected = collectType(carrier);
+              if (collected !== undefined) return collected;
+              const error = addUse(node, carrier, requirement.requirements);
+              if (error !== undefined) return error;
+            }
           }
         }
       }
@@ -437,8 +644,7 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
     });
     return childError;
   };
-  const body = ast.body(declaration);
-  const error = body === undefined ? undefined : visit(declaration);
+  const error = visit(declaration);
   if (error !== undefined) {
     return { kind: "rejected", reason: error };
   }
@@ -447,7 +653,12 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
     dependencies: Object.freeze([...dependencies]),
     contract: Object.freeze({
       declaration,
+      associatedTypes: associated.seal(),
       typeParameters: Object.freeze(exactNames.map((name) => Object.freeze({
+        name,
+        requirements: normalizeRequirements([...(byParameter.get(name) ?? [])]),
+      }))),
+      capturedTypeParameters: Object.freeze(capturedNames.map((name) => Object.freeze({
         name,
         requirements: normalizeRequirements([...(byParameter.get(name) ?? [])]),
       }))),
@@ -462,7 +673,7 @@ function collectCallableDeclarations(
 ): readonly Node[] {
   const result: Node[] = [];
   const visit = (node: Node): void => {
-    if (isIndependentCallable(ast, node) && ast.body(node) !== undefined) {
+    if (isIndependentCallable(ast, node) || isGenericTypeDeclaration(ast, node)) {
       result.push(node);
     }
     ast.forEachChild(node, (child) => {
@@ -471,6 +682,11 @@ function collectCallableDeclarations(
   };
   for (const sourceFile of sourceFiles) visit(sourceFile);
   return Object.freeze(result);
+}
+
+function isGenericTypeDeclaration(ast: AstReader, node: Node): boolean {
+  const kind = ast.kindName(node);
+  return kind === "KindClassDeclaration" || kind === "KindInterfaceDeclaration" || kind === "KindTypeAliasDeclaration";
 }
 
 function isIndependentCallable(ast: AstReader, node: Node): boolean {
@@ -484,176 +700,6 @@ function isIndependentCallable(ast: AstReader, node: Node): boolean {
     kind === "KindSetAccessor";
 }
 
-function classifyCarrierRequirements(
-  carrier: TargetTypeRef,
-  required: readonly RustGenericRequirement[],
-  declared: ReadonlySet<string>,
-  byParameter: Map<string, Set<RustGenericRequirement>>,
-): boolean {
-  if (isRustNeverCarrier(carrier)) {
-    return true;
-  }
-  for (const requirement of required) {
-    if (requirement === "static") {
-      if (!classifyStaticCarrier(carrier, declared, byParameter)) return false;
-      continue;
-    }
-    const traitPath = requirement === "clone"
-      ? "core::clone::Clone"
-      : "core::default::Default";
-    if (!rustCarrierSupportsTrait(carrier, traitPath, (name, selectedTrait) => {
-      if (!declared.has(name) || selectedTrait !== traitPath) return false;
-      byParameter.get(name)!.add(requirement);
-      return true;
-    })) {
-      return false;
-    }
-  }
-  return true;
-}
-
-function classifyStaticCarrier(
-  carrier: TargetTypeRef,
-  declared: ReadonlySet<string>,
-  byParameter: Map<string, Set<RustGenericRequirement>>,
-): boolean {
-  switch (carrier.kind) {
-    case "type-parameter":
-      if (declared.has(carrier.name)) {
-        byParameter.get(carrier.name)!.add("static");
-      }
-      return true;
-    case "array":
-      return classifyStaticCarrier(carrier.element, declared, byParameter);
-    case "slice":
-      return false;
-    case "tuple":
-      return carrier.elements.every((element) =>
-        classifyStaticCarrier(element, declared, byParameter));
-    case "target-named": {
-      if (rustTargetLifetimeArguments(carrier.genericArguments).some((lifetime) =>
-        lifetime.kind !== "static")) {
-        return false;
-      }
-      const arguments_ = rustTargetGenericTypeArguments(carrier.genericArguments);
-      if (carrier.id === rustOptionTargetId || carrier.id === rustLocationTargetId) {
-        return arguments_.every((argument) =>
-          classifyStaticCarrier(argument, declared, byParameter));
-      }
-      return !arguments_.some((argument) =>
-        containsDeclaredTypeParameter(argument, declared));
-    }
-    case "target-specific": {
-      const fixedArray = rustFixedArrayCarrierValue(carrier);
-      if (fixedArray !== undefined) {
-        return classifyStaticCarrier(fixedArray.element, declared, byParameter);
-      }
-      const named = rustNamedTypeCarrierValue(carrier);
-      if (named !== undefined) {
-        if (rustTargetLifetimeArguments(named.genericArguments).some((lifetime) =>
-          lifetime.kind !== "static")) return false;
-        return !rustTargetGenericTypeArguments(named.genericArguments).some((argument) =>
-          containsDeclaredTypeParameter(argument, declared));
-      }
-      const sourceType = rustSourceTypeCarrierValue(carrier);
-      return sourceType === undefined ||
-        rustTargetLifetimeArguments(sourceType.genericArguments).every((lifetime) =>
-          lifetime.kind === "static") &&
-        !rustTargetGenericTypeArguments(sourceType.genericArguments).some((argument) =>
-          containsDeclaredTypeParameter(argument, declared));
-    }
-    case "reference":
-      return carrier.lifetime?.kind === "static" &&
-        classifyStaticCarrier(carrier.referent, declared, byParameter);
-    case "pointer":
-      return classifyStaticCarrier(carrier.pointee, declared, byParameter);
-    case "function-pointer":
-      return carrier.args.every((argument) =>
-        classifyStaticCarrier(argument, declared, byParameter)) &&
-        classifyStaticCarrier(carrier.result, declared, byParameter);
-    case "trait-object":
-      return carrier.lifetime?.kind === "static" &&
-        classifyStaticCarrier(carrier.principal, declared, byParameter) &&
-        carrier.autoTraits.every((trait) =>
-          classifyStaticCarrier(trait, declared, byParameter));
-    case "impl-trait":
-      return carrier.captures.every((capture) => {
-        if (capture.kind === "const") return true;
-        if (capture.kind === "lifetime") return capture.lifetime.kind === "static";
-        return classifyStaticCarrier(capture.type, declared, byParameter);
-      }) &&
-        carrier.bounds.every((bound) =>
-          classifyStaticCarrier(bound, declared, byParameter));
-    case "closure":
-      return !containsDeclaredTypeParameter(carrier, declared);
-    case "associated-type":
-      return rustTargetLifetimeArguments(carrier.genericArguments).every((lifetime) =>
-        lifetime.kind === "static") &&
-        !containsDeclaredTypeParameter(carrier, declared);
-    default:
-      return true;
-  }
-}
-
-function containsDeclaredTypeParameter(
-  carrier: TargetTypeRef,
-  declared: ReadonlySet<string>,
-): boolean {
-  switch (carrier.kind) {
-    case "type-parameter":
-      return declared.has(carrier.name);
-    case "target-named":
-      return rustTargetGenericTypeArguments(carrier.genericArguments).some((argument) =>
-        containsDeclaredTypeParameter(argument, declared));
-    case "array":
-    case "slice":
-      return containsDeclaredTypeParameter(carrier.element, declared);
-    case "tuple":
-      return carrier.elements.some((element) =>
-        containsDeclaredTypeParameter(element, declared));
-    case "reference":
-      return containsDeclaredTypeParameter(carrier.referent, declared);
-    case "pointer":
-      return containsDeclaredTypeParameter(carrier.pointee, declared);
-    case "function-pointer":
-    case "closure":
-      return carrier.args.some((argument) =>
-        containsDeclaredTypeParameter(argument, declared)) ||
-        containsDeclaredTypeParameter(carrier.result, declared);
-    case "associated-type":
-      return containsDeclaredTypeParameter(carrier.owner, declared) ||
-        (carrier.trait !== undefined &&
-          containsDeclaredTypeParameter(carrier.trait, declared)) ||
-        rustTargetGenericTypeArguments(carrier.genericArguments).some((argument) =>
-          containsDeclaredTypeParameter(argument, declared));
-    case "trait-object":
-      return containsDeclaredTypeParameter(carrier.principal, declared) ||
-        carrier.autoTraits.some((trait) =>
-          containsDeclaredTypeParameter(trait, declared));
-    case "impl-trait":
-      return carrier.bounds.some((bound) =>
-        containsDeclaredTypeParameter(bound, declared)) ||
-        carrier.captures.some((capture) => capture.kind === "type" &&
-          containsDeclaredTypeParameter(capture.type, declared));
-    case "target-specific": {
-      const fixedArray = rustFixedArrayCarrierValue(carrier);
-      if (fixedArray !== undefined) {
-        return containsDeclaredTypeParameter(fixedArray.element, declared);
-      }
-      const named = rustNamedTypeCarrierValue(carrier);
-      if (named !== undefined) {
-        return rustTargetGenericTypeArguments(named.genericArguments).some((argument) =>
-          containsDeclaredTypeParameter(argument, declared));
-      }
-      const sourceType = rustSourceTypeCarrierValue(carrier);
-      return sourceType !== undefined &&
-        rustTargetGenericTypeArguments(sourceType.genericArguments).some((argument) =>
-          containsDeclaredTypeParameter(argument, declared));
-    }
-    default:
-      return false;
-  }
-}
 
 function normalizeRequirements(
   requirements: readonly RustGenericRequirement[],
@@ -671,6 +717,7 @@ function rustRequirementDescription(
       ? "an exact Rust Clone implementation"
       : requirement === "default"
         ? "an exact Rust Default implementation"
+        : requirement === "source-numeric" ? "an exact source numeric comparison contract"
         : "an exact Rust 'static lifetime");
   if (descriptions.length <= 1) return descriptions[0] ?? "an exact Rust carrier contract";
   return `${descriptions.slice(0, -1).join(", ")} and ${descriptions[descriptions.length - 1]}`;
@@ -681,6 +728,18 @@ function requirementContractsEqual(
   right: RequirementContractState,
 ): boolean {
   return left.declaration === right.declaration &&
+    left.associatedTypes.length === right.associatedTypes.length &&
+    left.associatedTypes.every((requirement, index) => {
+      const other = right.associatedTypes[index];
+      return other !== undefined && rustTargetTypeRefEquals(requirement.carrier, other.carrier) &&
+        stringListsEqual(requirement.requirements, other.requirements);
+    }) &&
+    left.capturedTypeParameters.length === right.capturedTypeParameters.length &&
+    left.capturedTypeParameters.every((parameter, index) => {
+      const other = right.capturedTypeParameters[index];
+      return other !== undefined && parameter.name === other.name &&
+        stringListsEqual(parameter.requirements, other.requirements);
+    }) &&
     left.typeParameters.length === right.typeParameters.length &&
     left.typeParameters.every((parameter, index) => {
       const other = right.typeParameters[index];
@@ -718,3 +777,4 @@ function diagnostic(
     evidence: ["target.capability=rust.callable.generic-contract-closure"],
   };
 }
+import { rustObjectReferenceViewKey } from "../facts/object-reference-views.js";

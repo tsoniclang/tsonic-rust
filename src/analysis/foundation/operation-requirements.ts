@@ -1,3 +1,4 @@
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { RustTargetOperationFact } from "../facts/operations/facts.js";
 import type { RustValueConversion } from "../../target-model/operations/model.js";
 import type {
@@ -17,6 +18,7 @@ import {
 
 export function rustFoundationForTargetOperationFact(
   fact: RustTargetOperationFact,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): RustFoundation {
   let foundation: RustFoundation = "core";
   const require = (candidate: RustFoundation): void => {
@@ -26,7 +28,7 @@ export function rustFoundationForTargetOperationFact(
     if (carrier !== undefined) require(rustFoundationForCarrier(carrier));
   };
   const requireConversion = (conversion: RustValueConversion | undefined): void => {
-    if (conversion !== undefined) require(rustFoundationForValueConversion(conversion));
+    if (conversion !== undefined) require(rustFoundationForValueConversion(conversion, definitions));
   };
   const requireGenericArgument = (argument: RustTargetGenericArgument): void => {
     if (argument.kind === "type") requireCarrier(argument.type);
@@ -50,7 +52,7 @@ export function rustFoundationForTargetOperationFact(
     case "void-expression":
     case "identity-expression":
     case "default-value":
-    case "disjoint-equality":
+    case "constant-equality":
     case "source-enum-member":
     case "tuple-index":
     case "await-op":
@@ -62,6 +64,12 @@ export function rustFoundationForTargetOperationFact(
       requireCarrier(fact.resultCarrier);
       fact.substitutions.forEach((substitution) => requireCarrier(substitution.carrier));
       break;
+    case "nullish-assignment":
+      requireCarrier(fact.readCarrier);
+      requireCarrier(fact.rightCarrier);
+      requireCarrier(fact.assignment.resultCarrier);
+      requireCarrier(fact.resultCarrier);
+      break;
     case "non-null-expression":
       requireCarrier(fact.sourceCarrier);
       requireCarrier(fact.resultCarrier);
@@ -72,7 +80,7 @@ export function rustFoundationForTargetOperationFact(
       break;
     case "provider-operation":
     case "runtime-set":
-      require(rustFoundationForFinalizedOperationAbi(fact.abi));
+      require(rustFoundationForFinalizedOperationAbi(fact.abi, definitions));
       break;
     case "object-shape-projection":
       requireCarrier(fact.sourceValueCarrier);
@@ -116,8 +124,17 @@ export function rustFoundationForTargetOperationFact(
       requireCarrier(fact.resultCarrier);
       break;
     case "program-error-type-test":
+    case "program-error-equality":
       requireCarrier(fact.sourceCarrier);
       requireCarrier(fact.targetCarrier);
+      requireCarrier(fact.resultCarrier);
+      break;
+    case "builtin-error-type-test":
+      requireCarrier(fact.sourceCarrier);
+      requireCarrier(fact.resultCarrier);
+      break;
+    case "builtin-error-property":
+      requireCarrier(fact.receiverCarrier);
       requireCarrier(fact.resultCarrier);
       break;
     case "source-field":
@@ -176,6 +193,9 @@ export function rustFoundationForTargetOperationFact(
       fact.fields.forEach((field) => requireCarrier(field.storageCarrier));
       requireCarrier(fact.resultCarrier);
       break;
+    case "empty-object-literal":
+      requireCarrier(fact.resultCarrier);
+      break;
     case "record-literal":
       fact.fields.forEach((field) => requireCarrier(field.carrier));
       fact.contributions.forEach((contribution) => {
@@ -205,7 +225,7 @@ export function rustFoundationForTargetOperationFact(
       break;
     case "throw-op":
       require("alloc");
-      if (fact.error.kind === "project") requireCarrier(fact.error.carrier);
+      if (fact.error.kind !== "program") requireCarrier(fact.error.carrier);
       break;
     case "regexp-create":
       require("std");

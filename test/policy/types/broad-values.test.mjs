@@ -172,3 +172,46 @@ export function main(): void {
     0,
   );
 });
+
+test("native empty values retain passive unknown transport without activating Rust-JS", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    target: { id: "rust", options: { outputType: "bin", crateName: "passive_empty_values" } },
+    files: { "index.ts": `
+function retain(value: unknown): unknown { return value; }
+function consume(_value: unknown): void {}
+export function main(): void {
+  const token = {};
+  consume(retain(token));
+  consume(retain({}));
+}
+` },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /TsValue::from_closed/u);
+  assert.doesNotMatch(source, /js_abi|tsonic_rust_js/u);
+  assert.equal(validateGeneratedProject("passive-empty-values", result.artifacts, { run: true }).status, 0);
+});
+
+test("boxing an empty identity does not replace its declared storage", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: ["js"],
+    target: { id: "rust", options: { outputType: "bin", crateName: "boxed_empty_identity" } },
+    files: { "index.ts": `
+function retain(value: unknown): unknown { return value; }
+export function main(): void {
+  const token = {};
+  const alias = token;
+  const boxed = retain(token);
+  Object.freeze(token);
+  if (!Object.isFrozen(alias) || token !== alias || boxed !== retain(alias) || boxed === retain({})) {
+    throw new Error("empty identity was replaced");
+  }
+  if (JSON.stringify(boxed) !== "{}") {
+    throw new Error("empty value projection differs");
+  }
+}
+` },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  assert.equal(validateGeneratedProject("boxed-empty-identity", result.artifacts, { run: true }).status, 0);
+});

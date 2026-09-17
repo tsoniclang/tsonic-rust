@@ -9,6 +9,7 @@ import type {
 
 export interface RustExternalSourcePackageError {
   readonly componentId: string;
+  readonly errorOwnerComponentId: string;
   readonly crateName: string;
   readonly typePath: string;
   readonly variant: string;
@@ -17,6 +18,9 @@ export interface RustExternalSourcePackageError {
 export interface RustSourcePackageErrorDomainPlan {
   readonly componentId: string;
   readonly errorDomain: RustErrorDomain;
+  readonly errorTypeIdentity: string;
+  readonly errorOwnerComponentId: string | undefined;
+  readonly forwardModulePath?: string;
   readonly definitions: readonly RustProjectTypeDefinition[];
   readonly externalErrors: readonly RustExternalSourcePackageError[];
 }
@@ -25,6 +29,7 @@ export interface RustSourcePackageErrorPlan {
   readonly componentIdByFileName: ReadonlyMap<string, string>;
   readonly componentIdByDefinition: ReadonlyMap<RustProjectTypeDefinition, string>;
   readonly domainsByComponentId: ReadonlyMap<string, RustSourcePackageErrorDomainPlan>;
+  readonly dependencyErrorsByComponentId: ReadonlyMap<string, readonly RustExternalSourcePackageError[]>;
 }
 
 export interface RustSourcePackageErrorBoundary {
@@ -101,6 +106,7 @@ export function planRustSourcePackageErrors(
   const componentById = new Map(components.map((component) =>
     [component.componentId, component] as const));
   const domainsByComponentId = new Map<string, RustSourcePackageErrorDomainPlan>();
+  const dependencyErrorsByComponentId = new Map<string, readonly RustExternalSourcePackageError[]>();
   for (const component of components) {
     const definitions = Object.freeze([
       ...(definitionsByComponentId.get(component.componentId) ?? []),
@@ -111,6 +117,8 @@ export function planRustSourcePackageErrors(
       ...definitions.map((definition) => input.program.projectTypes.programErrorVariant(definition)!),
     ]);
     const externalErrors: RustExternalSourcePackageError[] = [];
+    const dependencyErrors: RustExternalSourcePackageError[] = [];
+    const externalByOwner = new Map<string, RustExternalSourcePackageError>();
     for (const dependencyComponentId of component.dependencyComponentIds) {
       const dependency = componentById.get(dependencyComponentId);
       if (dependency === undefined) {
@@ -123,6 +131,11 @@ export function planRustSourcePackageErrors(
       if (dependency.errorDomain !== "project") {
         continue;
       }
+      if (dependency.errorOwnerComponentId === undefined) {
+        diagnostics.push(errorPlanDiagnostic("RUST_SOURCE_PACKAGE_ERROR_OWNER_MISSING",
+          `Source-package component '${dependencyComponentId}' has no sealed project-error owner.`));
+        continue;
+      }
       if (dependency.crateName === undefined) {
         diagnostics.push(errorPlanDiagnostic(
           "RUST_EXTERNAL_SOURCE_PACKAGE_ERROR_CRATE_MISSING",
@@ -130,18 +143,44 @@ export function planRustSourcePackageErrors(
         ));
         continue;
       }
+      const existing = externalByOwner.get(dependency.errorOwnerComponentId);
       const preferredVariantName = `${rustPascalCaseIdentifier(dependency.crateName)}Error`;
-      const variant = allocateVariantName(preferredVariantName, usedVariantNames);
-      externalErrors.push(Object.freeze({
+      const variant = existing?.variant ?? allocateVariantName(preferredVariantName, usedVariantNames);
+      const external = Object.freeze({
         componentId: dependencyComponentId,
+        errorOwnerComponentId: dependency.errorOwnerComponentId,
         crateName: dependency.crateName,
         typePath: `${dependency.crateName}::${dependency.programModuleName}::TsonicError`,
         variant,
-      }));
+      });
+      dependencyErrors.push(external);
+      if (existing === undefined) {
+        externalByOwner.set(dependency.errorOwnerComponentId, external);
+        externalErrors.push(external);
+      }
     }
+    const owner = component.errorOwnerComponentId;
+    const forwarding = owner === undefined || owner === component.componentId
+      ? undefined : externalByOwner.get(owner);
+    const validDomain = component.errorDomain === "runtime"
+      ? owner === undefined && definitions.length === 0 && externalErrors.length === 0
+      : owner !== undefined && (owner === component.componentId
+        ? definitions.length > 0 || externalErrors.length > 1
+        : forwarding !== undefined && definitions.length === 0 && externalErrors.length === 1);
+    if (!validDomain) {
+      diagnostics.push(errorPlanDiagnostic("RUST_SOURCE_PACKAGE_ERROR_OWNER_CONFLICT",
+        `Source-package component '${component.componentId}' disagrees with its sealed error-domain ownership.`));
+      continue;
+    }
+    dependencyErrorsByComponentId.set(component.componentId, Object.freeze(dependencyErrors));
     domainsByComponentId.set(component.componentId, Object.freeze({
       componentId: component.componentId,
       errorDomain: component.errorDomain,
+      errorOwnerComponentId: owner,
+      errorTypeIdentity: rustSourcePackageErrorTypeIdentity(owner ?? component.componentId, component.errorDomain),
+      ...(forwarding === undefined ? {} : {
+        forwardModulePath: `${forwarding.crateName}::${componentById.get(forwarding.componentId)!.programModuleName}`,
+      }),
       definitions,
       externalErrors: Object.freeze(externalErrors),
     }));
@@ -154,6 +193,7 @@ export function planRustSourcePackageErrors(
       componentIdByFileName: new Map(componentIdByFileName),
       componentIdByDefinition: new Map(componentIdByDefinition),
       domainsByComponentId: new Map(domainsByComponentId),
+      dependencyErrorsByComponentId: new Map(dependencyErrorsByComponentId),
     }),
     diagnostics: Object.freeze([]),
   };
@@ -173,10 +213,7 @@ export function resolveRustSourcePackageErrorBoundary(
       componentId: ownerComponentId,
       errorDomain: ownerDomain.errorDomain,
       errorTypePath: "rt::TsonicError",
-      errorTypeIdentity: rustSourcePackageErrorTypeIdentity(
-        ownerComponentId,
-        ownerDomain.errorDomain,
-      ),
+      errorTypeIdentity: ownerDomain.errorTypeIdentity,
     });
   }
   if (ownerDomain.errorDomain === "runtime") {
@@ -187,18 +224,15 @@ export function resolveRustSourcePackageErrorBoundary(
       errorTypeIdentity: rustRuntimeErrorTypeIdentity,
     });
   }
-  const external = plan.domainsByComponentId.get(consumerComponentId)
-    ?.externalErrors.find((candidate) => candidate.componentId === ownerComponentId);
+  const external = plan.dependencyErrorsByComponentId.get(consumerComponentId)
+    ?.find((candidate) => candidate.componentId === ownerComponentId);
   return external === undefined
     ? undefined
     : Object.freeze({
         componentId: ownerComponentId,
         errorDomain: "project",
         errorTypePath: external.typePath,
-        errorTypeIdentity: rustSourcePackageErrorTypeIdentity(
-          ownerComponentId,
-          "project",
-        ),
+        errorTypeIdentity: ownerDomain.errorTypeIdentity,
       });
 }
 
@@ -212,12 +246,12 @@ export function resolveRustProgramErrorRoute(
   if (ownerComponentId === undefined) {
     return undefined;
   }
-  if (ownerComponentId === componentId) {
+  const consumerDomain = plan.domainsByComponentId.get(componentId);
+  if (ownerComponentId === componentId || consumerDomain?.errorOwnerComponentId === ownerComponentId) {
     return Object.freeze({ kind: "local", variant: ownerVariant });
   }
-  const consumerDomain = plan.domainsByComponentId.get(componentId);
   const external = consumerDomain?.externalErrors.find((candidate) =>
-    candidate.componentId === ownerComponentId);
+    candidate.errorOwnerComponentId === ownerComponentId);
   return external === undefined
     ? undefined
     : Object.freeze({

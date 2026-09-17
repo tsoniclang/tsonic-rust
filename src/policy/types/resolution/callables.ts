@@ -2,7 +2,9 @@ import { asNode } from "../../evidence/selected-source.js";
 import { denseDefined } from "./project.js";
 import { resolveRustCallableEvidence } from "./source-evidence.js";
 import { resolveRustTargetType } from "./target.js";
+import { resolveRustInferredObjectUnion } from "./inferred-unions.js";
 import { rustOptionTargetType, rustSourcePrimitiveTargetType, rustStringTargetType } from "../../../target-model/types/index.js";
+import { isRustBigIntCarrier, rustJsNumericTargetType, rustJsStringNumberTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { sourceNodesEqual } from "@tsonic/target-api/source";
 import { sourcePrimitiveFactKey } from "@tsonic/tsts";
@@ -57,8 +59,22 @@ export function resolveSourceTypeParameter(
   if (declaration === undefined || context.ast.kindName(declaration) !== "KindTypeParameter") {
     return undefined;
   }
+  const substitution = context.sourceTypeParameterSubstitutions?.get(declaration);
+  if (substitution !== undefined) return substitution;
   const name = context.ast.text(context.ast.name(declaration));
   return name.length === 0 ? undefined : { kind: "type-parameter", name };
+}
+
+export function resolveBoundSourceTypeParameter(
+  node: Node,
+  context: RustTargetTypeResolutionContext,
+): TargetTypeRef | undefined {
+  if ((context.sourceTypeParameterSubstitutions?.size ?? 0) === 0) return undefined;
+  const semantics = context.semanticsFor(node);
+  const type = semantics.types.authoredType(node);
+  const symbol = type === undefined ? undefined : semantics.declarations.typeSymbol(type);
+  const declaration = symbol === undefined ? undefined : semantics.declarations.primarySymbolDeclaration(symbol);
+  return declaration === undefined ? undefined : context.sourceTypeParameterSubstitutions?.get(declaration);
 }
 
 export function resolveSourcePrimitive(
@@ -126,6 +142,18 @@ export function resolveUnion(
       ? rustOptionTargetType(distinctValueCarriers[0]!)
       : undefined;
   }
+  if (options.jsEnabled && distinctValueCarriers.length === 2 &&
+    distinctValueCarriers.some(carrier => rustTargetTypeRefEquals(carrier, rustStringTargetType())) &&
+    distinctValueCarriers.some(carrier => rustTargetTypeRefEquals(carrier, rustSourcePrimitiveTargetType("float64")))) {
+    return rustJsStringNumberTargetType();
+  }
+  if (options.jsEnabled && distinctValueCarriers.length === 2 &&
+    distinctValueCarriers.some(isRustBigIntCarrier) &&
+    distinctValueCarriers.some(carrier => rustTargetTypeRefEquals(carrier, rustSourcePrimitiveTargetType("float64")))) {
+    return nullishMembers.length === 0 ? rustJsNumericTargetType()
+      : nullishMembers.length === 1 ? rustOptionTargetType(rustJsNumericTargetType())
+      : undefined;
+  }
   if (members.length > 0 && members.every((member) => context.currentSemantics.types.isStringLike(member))) {
     return rustStringTargetType();
   }
@@ -135,12 +163,13 @@ export function resolveUnion(
   if (members.length > 0 && members.every((member) => context.currentSemantics.types.isBooleanLike(member))) {
     return rustSourcePrimitiveTargetType("bool");
   }
-  const memberCarriers = members.map((member) =>
-    resolveRustTargetType(member, context, options, resolving));
-  if (memberCarriers.length > 1 && memberCarriers.every((carrier) => carrier !== undefined)) {
-    return options.resolveProjectUnionCarrier(
-      memberCarriers as readonly TargetTypeRef[],
-    );
+  if (nullishMembers.length <= 1 && valueCarriers.length > 1 &&
+    valueCarriers.every((carrier) => carrier !== undefined)) {
+    const common = options.resolveProjectUnionCarrier(valueCarriers as readonly TargetTypeRef[]);
+    const selected = common !== undefined && valueCarriers.some(carrier => rustTargetTypeRefEquals(carrier, common))
+      ? common
+      : resolveRustInferredObjectUnion(type, valueMembers, valueCarriers as readonly TargetTypeRef[], context, options) ?? common;
+    return selected === undefined || nullishMembers.length === 0 ? selected : rustOptionTargetType(selected);
   }
   return undefined;
 }

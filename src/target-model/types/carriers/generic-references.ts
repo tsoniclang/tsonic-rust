@@ -31,7 +31,7 @@ export function rustTargetTypeParameterNames(type: TargetTypeRef): readonly stri
   return Object.freeze([...names].sort());
 }
 
-function visitRustTargetTypeParameters(
+export function visitRustTargetTypeParameters(
   type: TargetTypeRef,
   visit: (name: string) => boolean,
 ): boolean {
@@ -80,13 +80,13 @@ function visitRustTargetTypeParameters(
       }
       const sourceUnion = rustSourceUnionCarrierValue(type);
       if (sourceUnion !== undefined) {
-        return sourceUnion.variants.some((variant) =>
-          visitRustTargetTypeParameters(variant.carrier, visit));
+        return visitGenericArgumentTypes(sourceUnion.genericArguments, visit);
       }
       const namedType = rustNamedTypeCarrierValue(type);
       if (namedType !== undefined) {
         return visitGenericArgumentTypes(namedType.genericArguments, visit) ||
-          visitGenericArgumentTypes(namedType.genericDefaults, visit);
+          visitGenericArgumentTypes(namedType.genericDefaults, visit) ||
+          namedType.upcasts.some((upcast) => visitRustTargetTypeParameters(upcast.target, visit));
       }
       const fixedArray = rustFixedArrayCarrierValue(type);
       return fixedArray !== undefined &&
@@ -273,13 +273,14 @@ export function rustTargetGenericReferences(
         }
         const union = rustSourceUnionCarrierValue(value);
         if (union !== undefined) {
-          union.variants.forEach((variant) => visitType(variant.carrier, bound));
+          visitArguments(union.genericArguments, bound);
           return;
         }
         const named = rustNamedTypeCarrierValue(value);
         if (named !== undefined) {
           visitArguments(named.genericArguments, bound);
           visitArguments(named.genericDefaults, bound);
+          named.upcasts.forEach((upcast) => visitType(upcast.target, bound));
           return;
         }
         const fixedArray = rustFixedArrayCarrierValue(value);

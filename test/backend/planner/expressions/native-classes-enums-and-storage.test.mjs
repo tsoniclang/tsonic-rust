@@ -63,7 +63,7 @@ test("classes lower to reference-backed object wrappers with fact-backed members
   assert.match(text, /fn exact_counter_add/u);
   assert.match(
     text,
-    /write_counter_value\(dispatch_receiver\.dispatch\.read_counter_value\(\) \+ value_2\)/u,
+    /let mut current = receiver\.dispatch\.read_counter_value\(\);\s+let value_2 = delta;\s+\{\s+current \+= value_2;\s+\{\s+let dispatch_receiver = receiver;\s+dispatch_receiver\.dispatch\.write_counter_value\(current\)/u,
   );
   assert.match(text, /fn exact_counter_current/u);
   assert.match(text, /let counter: Counter = Counter::new\(10\);/u);
@@ -666,9 +666,11 @@ export function bad(): int32 {
   }]);
 });
 
-test("JS array parameters preserve shared identity with visible writes", () => {
+test("JS array parameters preserve shared identity and assignment values", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     surfaces: ["js"],
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "js_array_assignment_values" } },
     files: {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
@@ -682,6 +684,27 @@ export function drive(): int32 {
   bump(values);
   return values.length;
 }
+
+export function assign(values: int32[]): int32 {
+  return values[0] = 43;
+}
+
+export function box(values: unknown[]): number {
+  return values[0] = 44;
+}
+
+import { check } from "@acme/testing";
+
+export function main(): void {
+  const values: int32[] = [1];
+  bump(values);
+  check(values[0] === 42);
+  check(assign(values) === 43);
+  check(values[0] === 43);
+  const boxed: unknown[] = [];
+  check(box(boxed) === 44);
+  check(boxed[0] === 44);
+}
 `,
     },
   });
@@ -691,6 +714,7 @@ export function drive(): int32 {
   assert.match(text, /pub fn bump\(xs: js_abi::JsArray<i32>\)/u);
   assert.match(text, /xs\.set_number\(0\.0, 42\);/u);
   assert.match(text, /bump\(values\.clone\(\)\);/u);
+  validateGeneratedProject("js-array-assignment-values", result.artifacts, { run: true });
 });
 
 test("native array parameters preserve caller storage through exact slice ABIs", { timeout: 300_000 }, () => {

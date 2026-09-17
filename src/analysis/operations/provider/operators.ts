@@ -3,6 +3,7 @@ import {
   isRustBoolCarrier,
   isRustProgramErrorCarrier,
   isRustNumericCarrier,
+  isRustNullishSourceCarrier,
   rustOptionElementCarrier,
   isRustSignedNumericCarrier,
 } from "../../../target-model/types/index.js";
@@ -23,6 +24,7 @@ import { finalizeRustProviderOperationAbi } from "../../facts/finalized-operatio
 import { providerFormRequiresSourceReceiver } from "./calls/instantiation.js";
 import { instantiateProviderOperationTemplate } from "./calls/template-instantiation.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
+import { resolveRustExactNullishValueCarrier } from "../../../policy/types/resolution/target.js";
 import {
   recordRustFlowReadProjection,
   rustEffectiveValueCarrier,
@@ -32,6 +34,7 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import { selectRustFlowReadProjection } from "../../../policy/types/value-carrier-reconciliation.js";
 import { selectJsSurfaceOperation } from "../../../policy/operations/js-surface.js";
 import { selectRustProviderOperation } from "../../../policy/operations/provider-selection.js";
+import { selectRustBuiltinErrorTypeTest } from "./builtin-errors.js";
 import type {
   RustCheckedCallSelectionInput,
   RustCheckedOperationSelectionResult,
@@ -59,7 +62,8 @@ export function selectRustCheckedOperator(
     return acceptDeclarationOperation("operator");
   }
   if (request.operator === "instanceof") {
-    return selectRustProjectTypeTest(request, context, options);
+    return selectRustBuiltinErrorTypeTest(request, context, options) ??
+      selectRustProjectTypeTest(request, context, options);
   }
   if (request.right !== undefined) {
     if (request.operator !== "=") {
@@ -67,6 +71,15 @@ export function selectRustCheckedOperator(
     }
     let left = resolveRustTargetTypeRef(request.left, context, options);
     let right = resolveRustTargetTypeRef(request.right, context, options);
+    if (isRustNullishSourceCarrier(right)) {
+      const rightNode = asNode(request.right, context);
+      const rightType = rightNode === undefined
+        ? undefined
+        : context.currentSemantics.types.expressionType(rightNode);
+      if (rightType !== undefined && !context.currentSemantics.types.isUnion(rightType)) {
+        right = resolveRustExactNullishValueCarrier(rightType, context.currentSemantics);
+      }
+    }
     left = normalizeSelectedLiteralCarrier(request.left, left, right, context, options);
     right = normalizeSelectedLiteralCarrier(request.right, right, left, context, options);
     const selectedSet = mapSelectedAssignment(request, left, right, context, options);
@@ -123,8 +136,12 @@ function selectRustProjectTypeTest(
     );
   }
   const sourceToTarget = options.projectTypes.relationship(dispatchCarrier, targetDefinition);
+  const concreteTypes = options.projectTypes.concreteClassesFor(sourceDefinition);
+  const ancestryProven = options.projectTypes.classLineage(sourceDefinition)?.includes(targetDefinition) === true &&
+    concreteTypes.length > 0 && concreteTypes.every((concrete) =>
+      options.projectTypes.classLineage(concrete)?.includes(targetDefinition) === true);
   let lowering: Extract<RustTargetOperationFact, { readonly kind: "project-type-test" }>["lowering"];
-  if (sourceToTarget.kind === "related" && rustTargetTypeRefEquals(sourceToTarget.targetType, targetCarrier)) {
+  if (ancestryProven && sourceToTarget.kind === "related" && rustTargetTypeRefEquals(sourceToTarget.targetType, targetCarrier)) {
     lowering = rustOptionElementCarrier(sourceCarrier) === undefined
       ? { kind: "constant", value: true }
       : { kind: "option-presence" };
@@ -138,17 +155,16 @@ function selectRustProjectTypeTest(
         "Checked instanceof has more than one exact project heritage instantiation.",
       );
     }
-    if (targetToSource.kind === "related" &&
-      rustTargetTypeRefEquals(targetToSource.targetType, dispatchCarrier)) {
-      if (options.projectTypes.downcastRoute(sourceDefinition, targetCarrier) === undefined) {
-        return rejectSelectedOperation(
-          request.expression,
-          context,
-          "RUST_PROJECT_TYPE_TEST_ROUTE_MISSING",
-          "Checked instanceof requires one closed generated project downcast route.",
-        );
-      }
+    if (options.projectTypes.downcastRoute(sourceDefinition, targetCarrier) !== undefined) {
       lowering = { kind: "dispatch" };
+    } else if (targetToSource.kind === "related" &&
+      rustTargetTypeRefEquals(targetToSource.targetType, dispatchCarrier)) {
+      return rejectSelectedOperation(
+        request.expression,
+        context,
+        "RUST_PROJECT_TYPE_TEST_ROUTE_MISSING",
+        "Checked instanceof requires one closed generated project downcast route.",
+      );
     } else {
       lowering = { kind: "constant", value: false };
     }
@@ -218,6 +234,9 @@ function mapSelectedUnaryOperator(
   if (request.operator === "!" && isRustBoolCarrier(operand)) {
     targetOperator = "!";
     resultCarrier = operand;
+  } else if (request.operator === "~" && isRustBigIntCarrier(operand)) {
+    targetOperator = "!";
+    resultCarrier = operand;
   } else if (request.operator === "-" &&
     (isRustSignedNumericCarrier(operand) || isRustBigIntCarrier(operand))) {
     targetOperator = "-";
@@ -279,7 +298,8 @@ function mapSelectedAssignment(
     : selectedLeft?.provenance?.providerDeclaration;
   const jsIdentity = resolveSelectedJsSourceMember(context, selectedDeclaration, options.sourceProfiles);
   const receiver = selectedLeft?.provenance?.sourceReceiver;
-  const receiverCarrier = resolveRustTargetTypeRef(receiver, context, options);
+  const receiverCarrier = rustEffectiveValueCarrier(context.facts, receiver) ??
+    resolveRustTargetTypeRef(receiver, context, options);
   const operationKind = selectedLeft?.operationKind === "property"
     ? "property-set"
     : selectedLeft?.operationKind === "indexer"
@@ -339,13 +359,13 @@ function mapSelectedAssignment(
     ...(jsIdentity.memberName === "index" && authoredPropertyKey !== undefined
       ? { authoredPropertyKey }
       : {}),
-  });
+  }, context.typeDefinitions);
   if (selection === undefined || selection.fact.kind !== "runtime-set") {
     return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_ASSIGNMENT_UNSUPPORTED", `The selected JavaScript assignment '${jsIdentity.ownerName}.${jsIdentity.memberName}' has no closed Rust setter operation.`);
   }
   const valueIndex = operationKind === "index-set" ? 1 : 0;
   const valueCarrier = selection.parameterCarriers?.[valueIndex];
-  const selectedRight = normalizeSelectedLiteralCarrier(request.right, right, valueCarrier, context, options);
+  const selectedRight = normalizeSelectedOperationInputCarrier(request.right, right, valueCarrier, context, options);
   if (valueCarrier === undefined || selectedRight === undefined ||
     !rustTargetTypeRefEquals(valueCarrier, selectedRight)) {
     return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_ASSIGNMENT_VALUE_MISMATCH", "The selected JavaScript setter value does not match its finalized Rust carrier.");
@@ -378,7 +398,7 @@ function mapSelectedAssignment(
     resultCarrier: rustUnitTargetType(),
     isAsync: false,
     isFallible: false,
-  });
+  }, context.typeDefinitions);
   if (abi === undefined) {
     return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_ASSIGNMENT_ABI_INCOMPLETE", "The selected JavaScript setter cannot finalize one total Rust operation ABI.");
   }
@@ -391,7 +411,7 @@ function mapSelectedAssignment(
     sourceReceiver: receiver,
     sourceSelectedDeclaration: selectedDeclaration,
     sourceResultType: request.right,
-  }, selectedRight ?? left);
+  }, context.facts.getRuntimeCarrierFact(request.right)?.carrier ?? right ?? left);
 }
 
 function mapSelectedProviderAssignment(
@@ -439,7 +459,7 @@ function mapSelectedProviderAssignment(
     {
       ...(receiverCarrier === undefined ? {} : { sourceReceiverCarrier: receiverCarrier }),
       sourceParameterCarriers: rawArgumentCarriers,
-    },
+    }, context.typeDefinitions,
   );
   const template = instantiation?.template;
   if (template !== undefined && providerFormRequiresSourceReceiver(template.target) && receiverCarrier === undefined) {
@@ -493,7 +513,7 @@ function mapSelectedProviderAssignment(
     ...(template.errorBoundary === "none" ? {} : { errorBoundary: template.errorBoundary }),
     ...(template.errorCarrier === undefined ? {} : { errorCarrier: template.errorCarrier }),
     isUnsafe: template.isUnsafe,
-  });
+  }, context.typeDefinitions);
   if (abi === undefined) {
     return rejectSelectedOperation(
       request.expression,
@@ -503,7 +523,17 @@ function mapSelectedProviderAssignment(
     );
   }
   const selectedRight = finalizedSourceArgumentCarriers[finalizedSourceArgumentCarriers.length - 1];
-  const sourceResultCarrier = context.facts.getRuntimeCarrierFact(request.right)?.carrier ?? right;
+  let sourceResultCarrier = context.facts.getRuntimeCarrierFact(request.right)?.carrier ?? right;
+  const rightNode = asNode(request.right, context);
+  if (rightNode !== undefined && context.ast.kindName(rightNode) === "KindArrayLiteralExpression") {
+    sourceResultCarrier = rustOptionElementCarrier(selectedRight) ?? selectedRight;
+  }
+  if (isRustNullishSourceCarrier(sourceResultCarrier)) {
+    const sourceNode = asNode(request.right, context);
+    const sourceType = sourceNode === undefined ? undefined : context.currentSemantics.types.expressionType(sourceNode);
+    sourceResultCarrier = sourceType === undefined ? undefined
+      : resolveRustExactNullishValueCarrier(sourceType, context.currentSemantics);
+  }
   return acceptRustOperation(request.expression, {
     kind: "runtime-set",
     operationId: template.operationId,
@@ -556,6 +586,13 @@ export function selectedSourceValueCarrier(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): TargetTypeRef | undefined {
+  if (context.ast.is.IsSpreadElement(value.expression)) {
+    const operand = context.ast.as.AsSpreadElement(value.expression)?.Expression;
+    return operand === undefined
+      ? undefined
+      : rustEffectiveValueCarrier(context.facts, operand) ??
+        resolveRustTargetTypeRef(operand, context, options);
+  }
   return selectedValueCarrier(value.expression, value.type, context, options);
 }
 
@@ -579,7 +616,7 @@ export function selectedValueCarrier(
   const flowRead = selectRustFlowReadProjection(
     stored,
     selected,
-    options.projectTypes,
+    options.projectTypes, context.typeDefinitions,
   );
   if (flowRead.kind === "projection") {
     recordRustFlowReadProjection(

@@ -21,6 +21,8 @@ export const rustFlowReadProjectionFactKey: RustPlanKey<RustFlowReadProjectionFa
     left.kind === right.kind &&
     rustTargetTypeRefEquals(left.sourceCarrier, right.sourceCarrier) &&
     rustTargetTypeRefEquals(left.selectedCarrier, right.selectedCarrier) &&
+    (left.kind !== "source-union" ||
+      (right.kind === "source-union" && left.variant === right.variant)) &&
     (left.kind !== "runtime-union" ||
       (right.kind === "runtime-union" && left.method === right.method)) &&
     (left.kind !== "project-downcast" ||
@@ -39,9 +41,7 @@ export const rustCallScopedLifetimeReconciliationFactKey:
     rustTargetTypeRefEquals(left.selectedCarrier, right.selectedCarrier));
 
 export const rustProjectUpcastFactKey: RustPlanKey<RustProjectUpcastFact> =
-  defineRustPlanKey("projectUpcast", (left, right) =>
-    rustTargetTypeRefEquals(left.sourceCarrier, right.sourceCarrier) &&
-    rustTargetTypeRefEquals(left.targetCarrier, right.targetCarrier));
+  defineRustPlanKey("projectUpcast", closedMetadataEquals);
 
 export const rustProjectDowncastFactKey: RustPlanKey<RustProjectDowncastFact> =
   defineRustPlanKey("projectDowncast", (left, right) =>

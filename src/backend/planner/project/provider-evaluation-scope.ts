@@ -92,6 +92,7 @@ export function planRustProviderEvaluationScope(
   planExpression: RustExpressionPlanner,
   planProviderOperation: RustProviderOperationExpressionPlanner,
   preplannedInputs?: ReadonlyMap<RustFinalizedSourceInput, RustExpr>,
+  planSequenceInput?: (input: RustFinalizedSourceInput) => RustExpr | undefined,
 ): RustProviderEvaluationScopeSelection {
   const mutableInputs = collectMutableInputs(
     context,
@@ -144,7 +145,25 @@ export function planRustProviderEvaluationScope(
     context.sourceFile;
   const syntheticNames = context.syntheticNames ??
     createRustSyntheticNameState(context.input.program.source.ast, nameRoot, []);
+  const sequenceInputs = new Map<string, RustFinalizedSourceInput>();
+  for (const input of providerSourceInputs(fact)) {
+    if (input.conversion.kind !== "semantic" ||
+      input.conversion.conversion.kind !== "rest-sequence") continue;
+    const key = providerSourceInputKey(input);
+    if (sequenceInputs.has(key)) return { kind: "failed" };
+    sequenceInputs.set(key, input);
+  }
   for (const [index, slot] of sourceSlots.entries()) {
+    const input = sequenceInputs.get(slot.key);
+    if (input !== undefined) {
+      if (planSequenceInput === undefined) return { kind: "failed" };
+      const value = planSequenceInput(input);
+      if (value === undefined) return { kind: "failed" };
+      const name = allocateRustSyntheticName(syntheticNames, `operation_sequence_${index}`);
+      bindings.push({ name, value });
+      inputOverrides.set(input, { kind: "path", path: name });
+      continue;
+    }
     const mutable = mutableInputs.get(slot.key);
     if (mutable?.kind === "promoted") {
       const name = allocateRustSyntheticName(syntheticNames, `location_${index}`);
@@ -285,6 +304,9 @@ function providerInputStabilizationKeys(
   preplannedInputs: ReadonlyMap<RustFinalizedSourceInput, RustExpr> | undefined,
 ): ReadonlySet<string> {
   const keys = new Set<string>();
+  if (fact.abi.sourceArguments.some(argument => argument.form === "spread-sequence")) {
+    for (const slot of sourceSlots) keys.add(slot.key);
+  }
   const inputsBySlot = new Map<string, RustFinalizedSourceInput[]>();
   for (const input of providerSourceInputs(fact)) {
     const key = providerSourceInputKey(input);
@@ -306,7 +328,9 @@ function providerInputStabilizationKeys(
     const mutable = mutableInputs.get(slot.key);
     return [
       slot.key,
-      mutable?.kind === "direct" || mutable?.kind === "project-field"
+      context.expressionOverrides?.get(slot.node)?.expression.kind === "path"
+        ? noSourceExpressionEffects
+        : mutable?.kind === "direct" || mutable?.kind === "project-field"
         ? providerMutableStorageEffects(mutable.node, context)
         : context.input.program.sourceNavigation.expressionEffects(slot.node),
     ] as const;

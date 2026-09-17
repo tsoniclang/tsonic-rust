@@ -83,7 +83,13 @@ function publicItemSurface(item: RustItem): readonly string[] {
       return item.visibility === "public" ? [closedMetadataKey(item)] : [];
     case "impl":
       if (item.trait !== undefined) {
-        return [];
+        return (item.associatedTypes?.length ?? 0) === 0 ? [] : [closedMetadataKey({
+          kind: "associated-type-implementation",
+          trait: item.trait,
+          target: item.target,
+          generics: item.generics,
+          associatedTypes: item.associatedTypes,
+        })];
       }
       return item.functions
         .filter((fn) => fn.visibility === "public")

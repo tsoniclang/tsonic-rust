@@ -1,3 +1,6 @@
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
+import { rustSourceErrorConstructors } from "../../../target-model/identities/source-errors.js";
+import { rustJsArrayEntriesTargetType } from "../../../target-model/types/carriers/array-entries.js";
 import {
   rustFutureTargetType,
   rustGeneratorTargetType,
@@ -150,7 +153,7 @@ export function selectRustProviderObjectLiteralConstruction(
     return { kind: "not-applicable" };
   }
   const typeRow = providerCarrierFromRelations(identity, options);
-  if (typeRow?.objectLiteralConstruction?.kind !== "struct-default") {
+  if (typeRow?.objectLiteralConstruction === undefined) {
     return { kind: "not-applicable" };
   }
   const carrier = instantiateTargetType(
@@ -195,12 +198,14 @@ export function instantiateTargetType(
       kind: "type" as const,
       type: argument,
     })),
+    context.typeDefinitions,
   );
 }
 
 export function instantiateProviderTargetType(
   relation: RustProviderTypeRow,
   arguments_: readonly RustTargetGenericArgument[],
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): TargetTypeRef | undefined {
   const parameters = relation.genericParameters ?? [];
   if (arguments_.length > parameters.length) {
@@ -238,7 +243,7 @@ export function instantiateProviderTargetType(
       types: typeSubstitutions,
       lifetimes: lifetimeSubstitutions,
       consts: constSubstitutions,
-    },
+    }, definitions,
   )) {
     return undefined;
   }
@@ -249,6 +254,7 @@ export function instantiateProviderTargetType(
     constSubstitutions,
   );
 }
+
 
 function substituteGenericArgument(
   argument: RustTargetGenericArgument,
@@ -353,10 +359,10 @@ export function resolveSourceProfileCarrier(
   if (regExpResultCarrier !== undefined) {
     return regExpResultCarrier();
   }
-  if (!context.currentSemantics.types.isTypeReference(type)) {
+  const arguments_ = context.currentSemantics.types.effectiveTypeArguments(type);
+  if (arguments_ === undefined) {
     return undefined;
   }
-  const arguments_ = context.currentSemantics.types.typeArguments(type);
   const targetArguments = arguments_.map((argument) => resolveRustTargetType(argument, context, options, resolving));
   if (options.jsEnabled && name === regExpIdentity.owners.regExpStringIterator) {
     const [element] = targetArguments;
@@ -437,10 +443,14 @@ export function resolveSourceProfileCarrierFromArguments(
   arguments_: readonly TargetTypeRef[],
   options: RustTargetTypeResolutionOptions,
 ): TargetTypeRef | undefined {
+  if (options.jsEnabled && name === "ArrayEntriesIterator" && arguments_.length === 1) {
+    return rustJsArrayEntriesTargetType(arguments_[0]!);
+  }
   if (name === "String") {
     return rustStringTargetType();
   }
-  if (name === "Error" && arguments_.length === 0) {
+  if (arguments_.length === 0 && rustSourceErrorConstructors.some((entry) =>
+    entry.sourceName === name && (name === "Error" || options.jsEnabled))) {
     return rustJsErrorTargetType();
   }
   if (name === "Promise" || name === "PromiseLike") {
@@ -537,7 +547,8 @@ export function resolveSourceProfileCarrierFromArguments(
 
 function rustDirectJsSourceProfileCarrier(name: string): TargetTypeRef | undefined {
   switch (name) {
-    case "ArrayBuffer": return rustJsArrayBufferTargetType();
+    case "ArrayBuffer":
+    case "SharedArrayBuffer": return rustJsArrayBufferTargetType();
     case "DataView": return rustJsDataViewTargetType();
     case "Int8Array": return rustJsTypedArrayTargetType("Int8Array");
     case "Uint8Array": return rustJsTypedArrayTargetType("Uint8Array");

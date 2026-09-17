@@ -17,6 +17,9 @@ import {
   KindClassStaticBlockDeclaration,
   Node_Initializer,
   Node_Type,
+  sourceClassFieldIsTypeOnly,
+  sourceObjectMemberDeclarations,
+  sourceParameterIsProperty,
 } from "@tsonic/target-api/source";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planExpression } from "../expressions/index.js";
@@ -53,6 +56,7 @@ import {
   rustProjectMemberStorageVisibility,
 } from "../objects/project-storage-abi.js";
 import { rustProjectObjectIdentityImplementation } from "../objects/project-identity.js";
+import { rustProjectWrapperTraits } from "../objects/project-wrapper-traits.js";
 
 export interface PlannedProjectObjectField {
   readonly declaration: Node;
@@ -82,7 +86,9 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     return undefined;
   }
   const exported = ast.hasModifierKind(node, "export");
-  const publiclyReachable = rustProjectTypeHasPublicImplementationAbi(context, className);
+  const publiclyReachable = definition !== undefined &&
+    context.input.program.projectTypes.programErrorVariant(definition) !== undefined ||
+    rustProjectTypeHasPublicImplementationAbi(context, className);
   const storageVisibility = rustProjectImplementationVisibility(publiclyReachable);
   const structVisibility = exported || publiclyReachable ? "public" as const : "crate" as const;
   if (ast.extendsHeritageElements(node).length > 0 || ast.implementsHeritageElements(node).length > 0) {
@@ -137,7 +143,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     ));
     return undefined;
   }
-  const generics = rustProjectGenerics(definition);
+  const generics = rustProjectGenerics(definition, context);
   const stateMarker = rustProjectStateMarker(definition, context);
 
   const layout = rustProjectObjectLayout(node, ast);
@@ -154,7 +160,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   const methods: Node[] = [];
   const accessors: { readonly declaration: Node; readonly role: "read" | "write" }[] = [];
   let failed = false;
-  for (const member of ast.members(node)) {
+  for (const member of sourceObjectMemberDeclarations(ast, node)) {
     if (member === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, node),
@@ -165,10 +171,11 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
       continue;
     }
     const memberKind = ast.kindName(member);
+    if (sourceClassFieldIsTypeOnly(ast, member)) continue;
     if (memberKind === KindClassStaticBlockDeclaration) {
       continue;
     }
-    if (memberKind === "KindPropertyDeclaration") {
+    if (memberKind === "KindPropertyDeclaration" || sourceParameterIsProperty(ast, member)) {
       if (ast.hasModifierKind(member, "static")) {
         continue;
       }
@@ -196,7 +203,9 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
         failed = true;
         continue;
       }
-      const initializer = Node_Initializer(ast, member);
+      const initializer = sourceParameterIsProperty(ast, member)
+        ? ast.name(member)
+        : Node_Initializer(ast, member);
       fields.push({
         declaration: member,
         sourceName: layoutField.sourceName,
@@ -290,6 +299,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   }
   const implFunctions: RustImplFunction[] = [constructorFn];
   for (const method of methods) {
+    if (context.input.program.projectTypes.memberSlotName(method, "static") !== undefined) continue;
     const planned = planProjectMethodVariants(method, context);
     if (planned === undefined) {
       return undefined;
@@ -391,12 +401,14 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   if (structFields === undefined) {
     return undefined;
   }
+  const explicitWrapperTraits = representation.kind !== "value" &&
+    generics.parameters.some(parameter => parameter.kind === "type");
   const structItem: RustItem = {
     kind: "struct",
     name: className,
     ...(generatedStructAttributes.length === 0 ? {} : { attrs: generatedStructAttributes }),
     visibility: structVisibility,
-    derives: ["Clone", "Debug", "PartialEq"],
+    derives: explicitWrapperTraits ? [] : ["Clone", "Debug", "PartialEq"],
     generics,
     fields: structFields,
   };
@@ -410,6 +422,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   return [
     ...(representation.kind === "value" ? [] : [stateItem]),
     structItem,
+    ...(explicitWrapperTraits ? rustProjectWrapperTraits(openType, className, generics) : []),
     ...(representation.kind === "value"
       ? []
       : [rustProjectObjectIdentityImplementation(openType, generics, {

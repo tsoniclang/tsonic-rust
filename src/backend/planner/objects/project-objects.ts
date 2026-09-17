@@ -77,11 +77,12 @@ export function createRustProjectObject(
 export function createRustStructuralObject(
   statePath: string,
   fields: readonly { readonly name: string; readonly value: RustExpr }[],
+  identity?: RustExpr,
 ): RustExpr {
   return {
     kind: "call",
-    path: "rt::ObjectHandle::new",
-    args: [{ kind: "struct-literal", path: statePath, fields }],
+    path: identity === undefined ? "rt::ObjectHandle::new" : "rt::ObjectHandle::with_identity",
+    args: [{ kind: "struct-literal", path: statePath, fields }, ...(identity === undefined ? [] : [identity])],
   };
 }
 

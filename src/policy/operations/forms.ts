@@ -1,3 +1,4 @@
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type {
   RustArgumentMode,
   RustFinalizedOperationKind,
@@ -176,6 +177,7 @@ export function rustProviderOperationFormContractViolation(
   form: RustProviderOperationForm,
   sourceArgumentCount: number,
   runtimeSourceIndexes: readonly number[] = Array.from({ length: sourceArgumentCount }, (_, index) => index),
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): string | undefined {
   if (!Number.isSafeInteger(sourceArgumentCount) || sourceArgumentCount < 0 || !isRecord(form) ||
     !isDenseDataArray(runtimeSourceIndexes) || new Set(runtimeSourceIndexes).size !== runtimeSourceIndexes.length ||
@@ -202,7 +204,7 @@ export function rustProviderOperationFormContractViolation(
     }
     if (value.argConversions !== undefined &&
       (!isDenseDataArray(value.argConversions) || value.argConversions.length !== runtimeSourceIndexes.length ||
-        value.argConversions.some((conversion) => conversion !== undefined && rustValueConversionContract(conversion) === undefined))) {
+        value.argConversions.some((conversion) => conversion !== undefined && rustValueConversionContract(conversion, definitions) === undefined))) {
       return "argument conversions must exactly cover all source arguments with known contracts";
     }
     if (value.argOrder !== undefined && !isPermutation(value.argOrder, runtimeSourceIndexes)) {
@@ -281,9 +283,12 @@ export function rustProviderOperationFormContractViolation(
     case "call-value-array":
       return hasExactKeys(
         form,
-        ["form", "path", "leadingArguments", "elementCarrier"],
+        ["form", "path", "leadingArguments", "elementCarrier", ...(form.form === "call-value-slice" ? ["sequenceHolePolicy"] : [])],
         ["form", "path", "leadingArguments", "elementCarrier"],
       ) && typeof form.path === "string" && rustPathPattern.test(form.path) &&
+        (form.form !== "call-value-slice" || form.sequenceHolePolicy === undefined ||
+          form.sequenceHolePolicy === "number-nan" && isRustTargetTypeRef(form.elementCarrier) && form.elementCarrier.kind === "source-primitive" &&
+          form.elementCarrier.name === "float64") &&
         isDenseDataArray(form.leadingArguments) &&
         form.leadingArguments.every((argument) =>
           hasExactKeys(argument, ["carrier", "mode"], ["carrier", "mode"]) &&
@@ -357,7 +362,7 @@ export function rustProviderOperationFormContractViolation(
           form.argConversions.length === runtimeSourceIndexes.length &&
           form.argConversions[0] === undefined &&
           form.argConversions.every((conversion) =>
-            conversion === undefined || rustValueConversionContract(conversion) !== undefined)
+            conversion === undefined || rustValueConversionContract(conversion, definitions) !== undefined)
         ? undefined
         : "argument-receiver method conversions must exactly cover source arguments without converting the receiver argument";
     }
@@ -374,7 +379,7 @@ export function rustProviderOperationFormContractViolation(
           form.argConversions.length === runtimeSourceIndexes.length &&
           form.argConversions[0] === undefined &&
           form.argConversions.every((conversion) =>
-            conversion === undefined || rustValueConversionContract(conversion) !== undefined)) &&
+            conversion === undefined || rustValueConversionContract(conversion, definitions) !== undefined)) &&
         (form.trailingArguments === undefined ||
           isDenseDataArray(form.trailingArguments) &&
           form.trailingArguments.every((argument) => constantIsValid(argument)))
@@ -382,7 +387,7 @@ export function rustProviderOperationFormContractViolation(
         : "argument structural-method form requires one exact storage index, receiver/argument metadata, closed trailing constants, and at least one source argument";
     case "index":
       return hasExactKeys(form, ["form", "indexConversion"], ["form"]) &&
-        (form.indexConversion === undefined || rustValueConversionContract(form.indexConversion) !== undefined) &&
+        (form.indexConversion === undefined || rustValueConversionContract(form.indexConversion, definitions) !== undefined) &&
         ((operationKind === "indexer" && runtimeSourceIndexes.length === 1) ||
           (operationKind === "index-set" && runtimeSourceIndexes.length === 2))
         ? undefined
@@ -466,8 +471,9 @@ export function rustProviderOperationFormContractViolation(
       }
       return validateArguments(form);
     case "receiver-method":
-      if (!hasExactKeys(form, ["form", "name", "argModes", "argConversions", "argOrder", "trailingArguments", "chain", "mutatesReceiver"], ["form", "name"]) ||
+      if (!hasExactKeys(form, ["form", "name", "receiverConversion", "argModes", "argConversions", "argOrder", "trailingArguments", "chain", "mutatesReceiver"], ["form", "name"]) ||
         typeof form.name !== "string" || !rustIdentifierPattern.test(form.name) ||
+        (form.receiverConversion !== undefined && (!isRecord(form.receiverConversion) || rustValueConversionContract(form.receiverConversion, definitions) === undefined)) ||
         (form.mutatesReceiver !== undefined && typeof form.mutatesReceiver !== "boolean")) {
         return "receiver-method form is malformed";
       }

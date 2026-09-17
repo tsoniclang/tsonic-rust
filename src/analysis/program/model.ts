@@ -8,7 +8,7 @@ import type { TargetStageResult } from "@tsonic/target-api/artifacts";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 import type { RustSourceCallableSpecializationPlan } from "../callables/specializations.js";
-import type { RustCallableGenericRequirementIndex } from "../callables/generic-requirements.js";
+import type { RustDeclarationGenericRequirementIndex } from "../declarations/generic-requirements.js";
 import type { RustProjectFieldDispatchQueries } from "../project-types/field-dispatch.js";
 import type { RustProjectMethodDispatchPlan } from "../project-types/method-dispatch.js";
 import type { RustProjectMethodPropertyPlan } from "../project-types/method-properties.js";
@@ -20,7 +20,7 @@ import type { RustModuleInitializationPlan } from "./module-initialization-facts
 import type { RustTargetConfiguration } from "../../target-model/configuration/model.js";
 import type { RustValueLifetimePlan } from "./value-lifetimes.js";
 import type { RustRuntimeReferencePlan } from "../runtime/index.js";
-import type { RustBinaryEpiloguePlan } from "../runtime/index.js";
+import type { RustBinaryHookPlan } from "../runtime/index.js";
 import type {
   RustEnumMemberConstantIndex,
 } from "../declarations/enum-member-constants.js";
@@ -41,6 +41,7 @@ import type { RustSourceModuleConstructionIndex } from "../source-modules/index.
 import type { RustFoundationPlan } from "../foundation/plan.js";
 import type { RustProjectFlowReadSelectionIndex } from "../control-flow/project-flow-read-selections.js";
 import type { RustGeneratedDeclarationUse } from "./generated-declaration-uses.js";
+import type { RustSourceTypeFamilyPlan } from "../../policy/types/type-families.js";
 
 export interface RustTargetAnalysisRequest {
   readonly input: TargetCompileInput;
@@ -57,6 +58,8 @@ export interface RustPlanningHost {
 }
 
 export interface RustTargetProgram {
+  readonly typeDefinitions: import("../../target-model/types/source-union-definitions.js").RustTypeDefinitions;
+  readonly typeFamilies: RustSourceTypeFamilyPlan;
   readonly host: RustPlanningHost;
   readonly configuration: RustTargetConfiguration;
   readonly source: TargetSourceSyntaxProgram;
@@ -70,12 +73,14 @@ export interface RustTargetProgram {
   readonly projectFieldDispatch: RustProjectFieldDispatchQueries;
   readonly sourceCallableSpecializations: RustSourceCallableSpecializationPlan;
   readonly sourceLifetimes: RustLifetimeIndex;
-  readonly callableGenericRequirements: RustCallableGenericRequirementIndex;
+  readonly declarationGenericRequirements: RustDeclarationGenericRequirementIndex;
   readonly valueLifetimes: RustValueLifetimePlan;
   readonly structuralShapes: RustStructuralShapePlan;
+  readonly frozenDataWrites: import("../objects/frozen-data-writes.js").RustFrozenDataWritePlan;
+  readonly classValues: import("../objects/class-values.js").RustClassValuePlan;
   readonly runtimeReferences: RustRuntimeReferencePlan;
   readonly foundation: RustFoundationPlan;
-  readonly binaryEpilogues: readonly RustBinaryEpiloguePlan[];
+  readonly binaryHooks: readonly RustBinaryHookPlan[];
   readonly providerErrorCarriers: readonly import("../../target-model/types/model.js").TargetTypeRef[];
   readonly safetyApplications: RustSafetyApplicationFactIndex;
   readonly moduleInitialization: RustModuleInitializationPlan;

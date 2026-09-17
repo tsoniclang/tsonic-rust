@@ -444,7 +444,7 @@ export function rustBlockDefinitelyExits(block: RustBlock): boolean {
   if (last.kind === "scope" || last.kind === "unsafe-scope") {
     return rustBlockDefinitelyExits(last.body);
   }
-  if (last.kind === "resource-scope") {
+  if (last.kind === "resource-scope" || last.kind === "try-scope") {
     return last.terminates;
   }
   return last.kind === "if" && last.else !== undefined &&
@@ -461,6 +461,8 @@ export function tailCompletionExits(block: RustBlock): RustBlock {
   if (last.kind === "completion-exit") {
     replacement = { ...last, tail: true };
   } else if (last.kind === "throw") {
+    replacement = { ...last, tail: true };
+  } else if (last.kind === "try-scope" || last.kind === "resource-scope") {
     replacement = { ...last, tail: true };
   } else if (last.kind === "scope" || last.kind === "unsafe-scope") {
     replacement = { ...last, body: tailCompletionExits(last.body) };

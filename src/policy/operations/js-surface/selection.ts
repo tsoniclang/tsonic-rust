@@ -1,6 +1,14 @@
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
+import { selectRustNumberArrayUnionOperation } from "./number-array-unions.js";
+import { rustJsArrayEntriesElementTargetType, rustJsArrayEntriesTargetType, rustJsArrayEntryTargetType } from "../../../target-model/types/carriers/array-entries.js";
+import { rustIteratorResultTargetType } from "../../../target-model/types/index.js";
 import {
   isRustBigIntCarrier,
   rustBigIntTargetType,
+  rustEmptyObjectTargetType,
+  rustObjectIdentityTargetType,
+  rustStructuralObjectCarrierValue,
+  rustJsNumericTargetType,
   getRustJsMapTargetTypes,
   getRustJsSetElementTargetType,
   getRustJsWeakMapTargetTypes,
@@ -34,6 +42,8 @@ import {
   rustJsIntlResolvedNumberFormatOptionsTargetId,
   rustJsSymbolTargetType,
   rustJsTypedArrayName,
+  rustJsTypedArrayTargetType,
+  rustJsTypedArrayTargetIds,
   rustFutureOutputCarrier,
   rustJsPromiseOutputTargetType,
   rustJsPromiseSettledResultTargetType,
@@ -72,9 +82,12 @@ import {
   rustStringTargetType,
   rustUnitTargetType,
 } from "../../../target-model/types/index.js";
+import { selectJsArrayConstruction } from "./array-construction.js";
+import { jsArgumentCarrierMatchScore } from "./argument-matching.js";
 import { jsOperationRows, rustInferCarrier } from "./rows.js";
 import { selectRustJsonValueConversion } from "../../conversions/selection.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustNamedTypeCarrierValue } from "../../../target-model/types/carriers/native.js";
 import { rustJsIntlGroupingTargetId } from "../../../target-model/types/carriers/source-types.js";
 import {
   materializeJsonValueConversions,
@@ -132,6 +145,10 @@ function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readon
     const weakSetValue = getRustJsWeakSetElementTargetType(carrier);
     if (weakSetValue !== undefined) {
       return { lane: "weak-set", bindings: { weakKey: weakSetValue, receiver: carrier } };
+    }
+    const entryElement = rustJsArrayEntriesElementTargetType(carrier);
+    if (entryElement !== undefined) {
+      return { lane: "array-entries", bindings: { element: entryElement, receiver: carrier } };
     }
     if (carrier.id === rustJsDateTargetId) {
       return { lane: "date", bindings: { receiver: carrier } };
@@ -210,41 +227,50 @@ function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readon
   if (isRustBoolCarrier(carrier)) {
     return { lane: "boolean", bindings: { receiver: carrier } };
   }
-  // Static owners have no receiver carrier; the lane comes from the owner row.
-  if (carrier === undefined && ownerName === "StringConstructor") {
+  const staticReceiver = carrier === undefined || isRustCallableCarrier(carrier);
+  if (staticReceiver && ownerName === "StringConstructor") {
     return { lane: "string", bindings: {} };
   }
-  if (carrier === undefined && ownerName === "ArrayConstructor") {
+  if (staticReceiver && ownerName === "ArrayConstructor") {
     return { lane: "js-array", bindings: {} };
   }
-  if (carrier === undefined && ownerName === "DateConstructor") {
+  if (staticReceiver && ownerName === "DateConstructor") {
     return { lane: "date", bindings: {} };
   }
-  if (carrier === undefined && ownerName === "JSON") {
+  if (staticReceiver && ownerName === "JSON") {
     return { lane: "json", bindings: {} };
   }
-  if (carrier === undefined && ownerName === "Math") {
+  if (staticReceiver && ownerName === "Math") {
     return { lane: "math", bindings: {} };
   }
-  if (carrier === undefined && ownerName === "NumberConstructor") {
+  if (staticReceiver && ownerName === "NumberConstructor") {
     return { lane: "number", bindings: {} };
   }
-  if (carrier === undefined && ownerName === "Global") {
+  if (staticReceiver && ownerName === "BigIntConstructor") {
+    return { lane: "bigint", bindings: {} };
+  }
+  if (staticReceiver && Object.keys(rustJsTypedArrayTargetIds).some((name) => ownerName === `${name}Constructor`)) {
+    return { lane: "typed-array", bindings: {} };
+  }
+  if (staticReceiver && ownerName === "Global") {
     return { lane: "global", bindings: {} };
   }
-  if (carrier === undefined && ownerName === "Console") {
+  if (staticReceiver && ownerName === "Atomics") {
+    return { lane: "global", bindings: {} };
+  }
+  if (staticReceiver && ownerName === "Console") {
     return { lane: "console", bindings: {} };
   }
-  if (carrier === undefined && ownerName === "ObjectConstructor") {
+  if (staticReceiver && ownerName === "ObjectConstructor") {
     return { lane: "object", bindings: {} };
   }
-  if (carrier === undefined && ownerName === "RegExpConstructor") {
+  if (staticReceiver && ownerName === "RegExpConstructor") {
     return { lane: "regexp", bindings: {} };
   }
-  if (carrier === undefined && ownerName === "SymbolConstructor") {
+  if (staticReceiver && ownerName === "SymbolConstructor") {
     return { lane: "symbol", bindings: {} };
   }
-  if (carrier === undefined && ownerName === "PromiseConstructor") {
+  if (staticReceiver && ownerName === "PromiseConstructor") {
     return { lane: "promise", bindings: {} };
   }
   return undefined;
@@ -254,9 +280,9 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
   switch (reference.ref) {
     case "cb-array-from-map": {
       const source = bindings.selectedMethodTypeArguments?.[0];
-      const result = bindings.selectedMethodTypeArguments?.[1];
+      const result = bindings.authoredMethodTypeArguments?.[1] ?? rustInferCarrier;
       const args = [source, rustSourcePrimitiveTargetType("float64")].slice(0, reference.arity);
-      return result === undefined || args.some((argument) => argument === undefined)
+      return args.some((argument) => argument === undefined)
         ? undefined
         : rustClosureTargetType(args as TargetTypeRef[], result);
     }
@@ -389,6 +415,10 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
       return { kind: "target-named", id: rustJsIntlGroupingTargetId };
     case "bigint":
       return rustBigIntTargetType();
+    case "empty-object":
+      return rustEmptyObjectTargetType();
+    case "js-numeric":
+      return rustJsNumericTargetType();
     case "unit":
       return rustUnitTargetType();
     case "string":
@@ -401,6 +431,15 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
       return bindings.element;
     case "option-of-element":
       return bindings.element === undefined ? undefined : rustOptionTargetType(bindings.element);
+    case "array-entries":
+      return bindings.element === undefined ? undefined : rustJsArrayEntriesTargetType(bindings.element);
+    case "uint8-array":
+      return rustJsTypedArrayTargetType("Uint8Array");
+    case "array-entry-result":
+      return bindings.element === undefined ? undefined : rustIteratorResultTargetType({
+        yieldType: rustJsArrayEntryTargetType(bindings.element),
+        returnType: rustUndefinedTargetType(),
+      });
     case "receiver":
       return bindings.receiver;
     case "map-key":
@@ -455,6 +494,8 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
         : rustJsArrayTargetType(bindings.weakKey);
     case "array-buffer":
       return rustJsArrayBufferTargetType();
+    case "int32-array":
+      return rustJsTypedArrayTargetType("Int32Array");
     case "date":
       return { kind: "target-named", id: rustJsDateTargetId };
     case "future-output":
@@ -531,7 +572,26 @@ function firstArgumentId(request: JsOperationRequest): string | undefined {
   return carrier?.kind === "target-named" ? carrier.id : undefined;
 }
 
-export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperationSelection | undefined {
+export function selectJsSurfaceOperation(request: JsOperationRequest, definitions: RustTypeDefinitions = emptyRustTypeDefinitions): JsOperationSelection | undefined {
+  const numberArrayUnion = selectRustNumberArrayUnionOperation(request, definitions);
+  if (numberArrayUnion !== undefined) return numberArrayUnion;
+  const upcasts = rustNamedTypeCarrierValue(request.receiverCarrier)?.upcasts ?? [];
+  if (upcasts.length > 0) {
+    const selected = upcasts.filter((upcast) => laneOf(upcast.target, request.ownerName) !== undefined);
+    if (selected.length !== 1) return undefined;
+    const receiverCarrier = selected[0]!.target;
+    const result = selectJsSurfaceOperation({ ...request, receiverCarrier }, definitions);
+    if (result?.fact.target.form !== "receiver-method" || result.fact.target.receiverConversion !== undefined) return undefined;
+    return {
+      ...result, fact: { ...result.fact, target: {
+        ...result.fact.target,
+        receiverConversion: { kind: "native-upcast", source: request.receiverCarrier!, target: receiverCarrier, path: selected[0]!.path },
+      } },
+    };
+  }
+  if (request.ownerName === "ArrayConstructor" && request.memberName === "call" && request.operationKind === "call") {
+    return selectJsArrayConstruction(request.selectedMethodTypeArgumentCarriers ?? [], request.argumentCarriers ?? [], "method", request.soleArgumentNumberKind);
+  }
   const laneMatch = laneOf(request.receiverCarrier, request.ownerName);
   if (laneMatch === undefined) {
     return undefined;
@@ -574,12 +634,13 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
       candidate.member === request.memberName &&
       candidate.operationKind === request.operationKind &&
       candidate.lane === lane &&
+      (candidate.arrayCopyMode === undefined || candidate.arrayCopyMode === request.arrayCopyMode?.()) &&
       (candidate.selectedMethodTypeArgumentArity === undefined ||
         candidate.selectedMethodTypeArgumentArity ===
           (request.selectedMethodTypeArgumentCarriers?.length ?? 0)) &&
       (candidate.callback === undefined || callbackArgumentCarrier === undefined ||
         isRustCallableCarrier(callbackArgumentCarrier)) &&
-      carrierRequirementsMatch(candidate.requirements, candidateBindings, request) &&
+      carrierRequirementsMatch(candidate.requirements, candidateBindings, request, definitions) &&
       (candidate.firstArgCarrierId === undefined
         ? firstArgumentId(request) === undefined || !jsOperationRows.some((other) =>
             other.owner === candidate.owner && other.member === candidate.member &&
@@ -597,7 +658,7 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
     const argumentScores = parameterCarriers.map((carrier, index) => {
       const actual = candidateArgumentCarriers[index];
       if (candidate.jsonValueSourceArgumentIndexes?.includes(index) === true) {
-        return actual !== undefined && selectRustJsonValueConversion(actual) !== undefined
+        return actual !== undefined && selectRustJsonValueConversion(actual, definitions) !== undefined
           ? 1
           : undefined;
       }
@@ -656,7 +717,7 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
     : materializeJsonValueConversions(
         authoredTarget,
         row.jsonValueSourceArgumentIndexes,
-        request.argumentCarriers ?? [],
+        request.argumentCarriers ?? [], definitions,
       );
   if (target === undefined) {
     return undefined;
@@ -717,8 +778,18 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
     fact: {
       kind: "provider-operation",
       operationId,
+      ...((row.requirements ?? []).some(requirement => requirement.capability === "numeric-parameter" ||
+        requirement.capability === "clone" && !rustCarrierSupportsClone(resolveCarrierRef(requirement.carrier, bindings), definitions))
+        ? { carrierRequirements: Object.freeze((row.requirements ?? [])
+            .filter(requirement => requirement.capability === "clone" || requirement.capability === "numeric-parameter")
+            .map(requirement => Object.freeze({
+              carrier: resolveCarrierRef(requirement.carrier, bindings)!,
+              requirement: requirement.capability === "clone" ? "clone" as const : "source-numeric" as const,
+            }))) }
+        : {}),
       operationKind: row.shape.operationKind,
       target: materializeTarget(target, copyReference),
+      ...(row.shape.indexedLocationMethod === undefined ? {} : { indexedLocationMethod: row.shape.indexedLocationMethod }),
       resultCarrier,
       ...(sourceResultCarrier === undefined ? {} : { sourceResultCarrier }),
       ...(row.shape.sourceAbsence === undefined
@@ -755,10 +826,12 @@ export function selectJsSurfaceOperation(request: JsOperationRequest): JsOperati
   };
 }
 
+
 function carrierRequirementsMatch(
   requirements: JsOperationRowData["requirements"],
   bindings: JsLaneBindings,
   request: JsOperationRequest,
+  definitions: RustTypeDefinitions,
 ): boolean {
   return requirements?.every((requirement) => {
     const carrier = resolveCarrierRef(requirement.carrier, bindings);
@@ -767,8 +840,12 @@ function carrierRequirementsMatch(
         return isRustNumericCarrier(carrier);
       case "integer":
         return isRustIntegerCarrier(carrier);
+      case "numeric-parameter":
+        return carrier?.kind === "type-parameter" && requirement.carrier.ref === "argument" &&
+          request.numericParameterArgument?.(requirement.carrier.index, carrier) === true;
       case "clone":
-        return rustCarrierSupportsClone(carrier);
+        return rustCarrierSupportsClone(carrier, definitions) ||
+          (carrier !== undefined && request.canRequireClone?.(carrier) === true);
       case "stringifiable":
         return isRustSourceStringConvertibleCarrier(carrier);
       case "js-equality":
@@ -778,42 +855,12 @@ function carrierRequirementsMatch(
       case "object-identity":
         return rustCarrierSupportsObjectIdentity(carrier) ||
           (carrier !== undefined && request.carrierSupportsProjectIdentity?.(carrier) === true);
+      case "freezable-object": {
+        const shape = rustStructuralObjectCarrierValue(carrier);
+        return rustTargetTypeRefEquals(carrier, rustEmptyObjectTargetType()) ||
+          rustTargetTypeRefEquals(carrier, rustObjectIdentityTargetType()) ||
+          shape?.representation === "reference" && shape.fields.every(field => field.bound !== true);
+      }
     }
   }) ?? true;
 }
-
-function jsArgumentCarrierMatchScore(
-  expected: TargetTypeRef | undefined,
-  actual: TargetTypeRef | undefined,
-  index: number,
-  relationScore: JsOperationRequest["argumentMatchScore"],
-): number | undefined {
-  if (actual === undefined) {
-    return expected === undefined
-      ? undefined
-      : relationScore?.(expected, actual, index);
-  }
-  if (expected === undefined || (expected.kind === "opaque" && expected.id === "tsonic.rust.infer")) {
-    return 0;
-  }
-  if (expected.kind === "closure" && actual.kind === "closure") {
-    if (expected.args.length !== actual.args.length) {
-      return relationScore?.(expected, actual, index);
-    }
-    const scores = [
-      ...expected.args.map((argument, argumentIndex) =>
-        jsArgumentCarrierMatchScore(argument, actual.args[argumentIndex], index, relationScore)),
-      jsArgumentCarrierMatchScore(expected.result, actual.result, index, relationScore),
-    ];
-    return scores.some((score) => score === undefined)
-      ? relationScore?.(expected, actual, index)
-      : (scores as number[]).reduce((total, score) => total + score, 0);
-  }
-  if (rustTargetTypeRefEquals(expected, actual)) {
-    return 0;
-  }
-  return relationScore?.(expected, actual, index);
-}
-
-// Constructor rows: matched by lib class declaration identity plus argument
-// and type-argument shape guards.

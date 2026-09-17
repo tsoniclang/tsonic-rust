@@ -7,9 +7,10 @@ import {
 } from "@tsonic/target-api/source";
 import {
   rustBigIntTargetType,
+  rustEmptyObjectTargetType,
   rustJsArrayTargetType,
   rustJsStringTargetType,
-  rustLocationTargetType,
+  rustSourceLocationTargetType,
   rustRawPointerTargetType,
   rustNullTargetType,
   rustNeverTargetType,
@@ -23,7 +24,8 @@ import {
 } from "../../../target-model/types/index.js";
 import { asNode } from "../../evidence/selected-source.js";
 import { denseDefined, resolveProjectSourceCarrier } from "./project.js";
-import { functionPointerFactKey, pointerFactKey, sourceMarkerFactKey } from "@tsonic/tsts";
+import { fieldFactKey, functionPointerFactKey, pointerFactKey, structFactKey } from "@tsonic/tsts";
+import { resolveRustSourceMarker } from "./markers.js";
 import { instantiateProviderTargetType, providerCarrierFromRelations, resolveOwnedSourceProfileTypeName, resolveProviderTypeIdentity, resolveSourceProfileCarrierFromArguments } from "./providers.js";
 import { resolveCallableType, resolveSourcePrimitive, resolveSourceTypeParameter } from "./callables.js";
 import { resolveReferencedDeclarationType, resolveRustAuthoredTargetType, resolveRustTupleElementTargetTypeWithState, rustParameterLaneTargetType } from "./tuples.js";
@@ -44,7 +46,8 @@ import {
   rustSourceLifetimeTypeContract,
 } from "./lifetimes.js";
 import { parseSourceIntegerLiteral } from "../../../target-model/syntax/literals.js";
-import { readRustRawLocation } from "../../operations/native-memory.js";
+import { readRustRawLocation, resolveRustMemoryLayoutPointee } from "../../operations/native-memory.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import {
   resolveRustCallableEvidence,
   resolveRustEvidenceNodesToCommonCarrier,
@@ -53,6 +56,9 @@ import {
   resolveRustTypeComponentEvidence,
 } from "./source-evidence.js";
 import { resolveRustAuthoredBroadSourceValueTargetType } from "./broad-values.js";
+import { resolveRustInferredObjectUnion } from "./inferred-unions.js";
+import { resolveRustConditionalAlias } from "./type-families.js";
+import { tsonicMemoryFieldBindingFactKey, selectTsonicMemoryFieldBinding } from "@tsonic/source-core/facts";
 
 export function resolveRustTargetTypeRef(
   subject: ExtensionFactSubject | undefined,
@@ -62,12 +68,38 @@ export function resolveRustTargetTypeRef(
   if (subject === undefined) {
     return undefined;
   }
+  const subjectNode = asNode(subject, context);
+  const subjectFile = subjectNode === undefined ? undefined : context.ast.getSourceFile(subjectNode);
+  if (subjectFile !== undefined && context.source.semantics.includes(subjectFile) &&
+    subjectFile !== context.currentSemantics.sourceFile) {
+    context = { ...context, currentSemantics: context.semantics(subjectFile) };
+  }
+  const binding = context.source.sourceFacts.getFact(subject, tsonicMemoryFieldBindingFactKey);
+  if (binding !== undefined) {
+    if (selectTsonicMemoryFieldBinding(context.ast, context.source.sourceFacts, binding.call)?.kind !== "resolved") return undefined;
+    const typeNode = context.ast.typeNode(binding.field.selectedDeclaration) ??
+      context.source.sourceFacts.getFact(binding.field.selectedDeclaration, fieldFactKey)?.type;
+    const pointee = resolveRustTargetTypeRef(typeNode ?? binding.pointeeType, context, options);
+    return pointee === undefined ? undefined : rustSourceLocationTargetType(pointee);
+  }
+  const valueStruct = context.facts.resolve(subject, structFactKey) ?? context.facts.get(subject, structFactKey);
+  if (valueStruct !== undefined) {
+    const node = asNode(subject, context);
+    if (node === undefined) return undefined;
+    const semantics = context.semanticsFor(node);
+    const type = semantics.types.expressionType(node);
+    return type === undefined ? undefined : resolveStructuralObjectType(type, {
+      ...context,
+      currentSemantics: semantics,
+    }, options, new Set<object>(), node, valueStruct);
+  }
   const rawLocation = readRustRawLocation(context.ast, context.source.sourceFacts, subject);
   if (rawLocation?.kind === "resolved") {
     if (rawLocation.operation.operation === "to-raw") return rustOptionTargetType(rustRawPointerTargetType());
-    const pointee = resolveRustTargetTypeRef(rawLocation.operation.explicitPointeeTypeNode ??
-      rawLocation.layout.explicitTypeNode ?? rawLocation.operation.pointeeType, context, options);
-    return pointee === undefined ? undefined : rustOptionTargetType(rustLocationTargetType(pointee));
+    const pointee = rawLocation.operation.explicitPointeeTypeNode === undefined
+      ? resolveRustMemoryLayoutPointee(rawLocation.layout, context, options)
+      : resolveRustTargetTypeRef(rawLocation.operation.explicitPointeeTypeNode, context, options);
+    return pointee === undefined ? undefined : rustOptionTargetType(rustSourceLocationTargetType(pointee));
   }
   if (isRustSourceRawPointer(subject, context)) return rustRawPointerTargetType();
   if (resolveRustSourceMarker(subject, context) === "js-string") {
@@ -97,12 +129,16 @@ export function resolveRustTargetTypeRef(
     context.facts.get(subject, pointerFactKey);
   if (pointer !== undefined) {
     const pointee = resolveRustTargetTypeRef(pointer.pointee, context, options);
-    return pointee === undefined ? undefined : rustLocationTargetType(pointee);
+    return pointee === undefined ? undefined : rustSourceLocationTargetType(pointee);
   }
   const node = asNode(subject, context);
   const existing = context.facts.getRuntimeCarrierFact(node)?.carrier;
   if (existing !== undefined) {
     return existing;
+  }
+  if (node !== undefined && context.ast.kindName(node) === "KindObjectLiteralExpression" &&
+    context.ast.properties(node).length === 0) {
+    return rustEmptyObjectTargetType();
   }
   const operationResult = context.facts.getSelectedTargetOperator(subject)?.resultType;
   if (operationResult !== undefined) {
@@ -119,11 +155,18 @@ export function resolveRustTargetTypeRef(
   if (node !== undefined && context.ast.kindName(node) === "KindParameter") {
     const parameterType = Node_Type(context.ast, node);
     if (parameterType === undefined) {
-      return undefined;
+      const semantics = context.semanticsFor(node);
+      return resolveRustTargetType(semantics.types.expressionType(node), {
+        ...context,
+        currentSemantics: semantics,
+      }, options, new Set<object>(), node);
     }
     const carrier = resolveRustAuthoredTargetType(parameterType, context, options, new Set<object>());
     return rustParameterLaneTargetType(carrier, parameterType, context, options);
   }
+  const conditional = node === undefined ? undefined
+    : resolveRustConditionalAlias(node, context, options, new Set<object>());
+  if (conditional !== undefined) return conditional.carrier;
   const syntax = node === undefined
     ? undefined
     : resolveRustTargetTypeSyntax(node, context, options, new Set<object>());
@@ -142,31 +185,41 @@ export function resolveRustTargetTypeRef(
   return resolveRustTargetType(type, context, options, new Set<object>());
 }
 
-function resolveRustSourceMarker(
-  subject: ExtensionFactSubject,
-  context: RustTargetTypeResolutionContext,
-): string | undefined {
-  const node = asNode(subject, context);
-  const subjects = node === undefined
-    ? [subject, ...context.currentSemantics.facts.typeSubjects(subject as Type)]
-    : [subject];
-  const markers = new Set<string>();
-  for (const candidate of subjects) {
-    const marker = context.facts.resolve(candidate, sourceMarkerFactKey) ??
-      context.facts.get(candidate, sourceMarkerFactKey);
-    if (marker !== undefined) {
-      markers.add(marker.marker);
-    }
-  }
-  return markers.size === 1 ? markers.values().next().value : undefined;
-}
-
 export function resolveRustTargetTypeSyntax(
   node: Node,
   context: RustTargetTypeResolutionContext,
   options: RustTargetTypeResolutionOptions,
   resolving: Set<object>,
 ): TargetTypeRef | undefined {
+  if (context.ast.is.IsTypeQueryNode(node)) {
+    const expression = context.ast.as.AsTypeQueryNode(node)?.ExprName;
+    const declaration = context.source.navigation.referenceFor(expression)?.declaration;
+    if (declaration !== undefined && context.facts.get(declaration, structFactKey) !== undefined) {
+      if (resolving.has(declaration)) return undefined;
+      const existing = context.facts.getRuntimeCarrierFact(declaration)?.carrier;
+      if (existing !== undefined) return existing;
+      resolving.add(declaration);
+      try {
+        const semantics = context.semanticsFor(declaration);
+        const type = semantics.types.expressionType(declaration);
+        return type === undefined ? undefined : resolveStructuralObjectType(type, {
+          ...context,
+          currentSemantics: semantics,
+        }, options, resolving, declaration, context.facts.get(declaration, structFactKey));
+      } finally {
+        resolving.delete(declaration);
+      }
+    }
+  }
+  const valueStruct = context.facts.resolve(node, structFactKey) ?? context.facts.get(node, structFactKey);
+  if (valueStruct !== undefined) {
+    const semantics = context.semanticsFor(node);
+    const type = semantics.types.expressionType(node);
+    return type === undefined ? undefined : resolveStructuralObjectType(type, {
+      ...context,
+      currentSemantics: semantics,
+    }, options, resolving, node, valueStruct);
+  }
   const sourceFile = context.ast.getSourceFile(node);
   const semantics = sourceFile !== undefined && context.source.semantics.includes(sourceFile)
     ? context.semanticsFor(node)
@@ -209,7 +262,7 @@ export function resolveRustTargetTypeSyntax(
     context.facts.get(node, pointerFactKey);
   if (pointer !== undefined) {
     const pointee = resolveRustAuthoredTargetType(pointer.pointee, context, options, resolving);
-    return pointee === undefined ? undefined : rustLocationTargetType(pointee);
+    return pointee === undefined ? undefined : rustSourceLocationTargetType(pointee);
   }
   const primitive = resolveSourcePrimitive(node, context);
   if (primitive !== undefined) {
@@ -222,6 +275,9 @@ export function resolveRustTargetTypeSyntax(
   }
   if (kind === "KindUndefinedKeyword") {
     return rustUndefinedTargetType();
+  }
+  if (kind === "KindVoidExpression") {
+    return ast.as.AsVoidExpression(node)?.Expression === undefined ? undefined : rustUndefinedTargetType();
   }
   if (kind === "KindLiteralType") {
     const literal = ast.as.AsLiteralTypeNode(node)?.Literal;
@@ -313,6 +369,19 @@ export function resolveRustTargetTypeSyntax(
       }
     }
     const semanticMembers = members.filter((child) => ast.kindName(child) !== "KindBarToken");
+    const sourceType = semantics?.types.expressionType(node);
+    if (semantics !== undefined && sourceType !== undefined) {
+      const selectedTypes = semanticMembers.map(member => semantics.types.expressionType(member));
+      const selectedCarriers = semanticMembers.map(member => resolveRustAuthoredTargetType(member, context, options, resolving));
+      if (selectedTypes.every(type => type !== undefined) && selectedCarriers.every(carrier => carrier !== undefined)) {
+        const common = options.resolveProjectUnionCarrier(selectedCarriers as TargetTypeRef[]);
+        if (common !== undefined && selectedCarriers.some(carrier => rustTargetTypeRefEquals(carrier, common))) return common;
+        const union = resolveRustInferredObjectUnion(sourceType, selectedTypes as Type[], selectedCarriers as TargetTypeRef[],
+          { ...context, currentSemantics: semantics, currentSourceFile: sourceFile! }, options);
+        if (union !== undefined) return union;
+        if (common !== undefined) return common;
+      }
+    }
     if (semanticMembers.length === 2) {
       const nullish = semanticMembers.find((member) => {
         const memberKind = ast.kindName(member);
@@ -406,7 +475,7 @@ export function resolveRustTargetTypeSyntax(
     );
     return providerArguments === undefined
       ? undefined
-      : instantiateProviderTargetType(relation, providerArguments);
+      : instantiateProviderTargetType(relation, providerArguments, context.typeDefinitions);
   }
   const sourceProfileName = resolveOwnedSourceProfileTypeName(
     selectedTypeSymbol,
@@ -425,6 +494,8 @@ export function resolveRustTargetTypeSyntax(
     context,
     options,
     referencedDeclaration,
+    selectedType,
+    resolving,
   );
   if (sourceType !== undefined) {
     return sourceType;

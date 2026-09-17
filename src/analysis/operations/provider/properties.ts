@@ -4,18 +4,23 @@ import {
   resolveSelectedProviderDeclaration,
   resolveSelectedSourceProfilePropertyMembers,
 } from "../../../policy/evidence/selected-source.js";
-import { acceptDeclarationOperation, acceptRustMemberOperation, acceptRustOperation, isDeclarationFileSubject, normalizeSelectedLiteralCarrier, rejectSelectedOperation, selectedDeclarationIsCallable, selectedMemberReceiverCarrier, sourceOperationId } from "./result.js";
+import { acceptDeclarationOperation, acceptRustMemberOperation, acceptRustOperation, isDeclarationFileSubject, rejectSelectedOperation, selectedDeclarationIsCallable, selectedMemberReceiverCarrier, sourceOperationId } from "./result.js";
 import { finalizeProviderOperationFromSubjects, mapProviderCheckedOperation } from "./conversions.js";
 import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
 import { isProjectAccessorDeclaration, selectRustFixedArrayLengthProperty, selectStructuralSourceProperty } from "./structural-properties.js";
 import { Node_Type } from "@tsonic/target-api/source";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
-import { rustCallableProtocol, rustSourceTypeCarrier, rustSourcePrimitiveTargetType } from "../../../target-model/types/index.js";
-import { rustProjectObjectField, rustProjectStaticFieldStorage } from "../../project-types/object-layout.js";
+import { instantiateRustSelectedMemberCarrier } from "./member-carriers.js";
+import { resolveRustProjectField } from "./project-fields.js";
+import { rustCallableProtocol, rustSourceTypeCarrier } from "../../../target-model/types/index.js";
+import { rustProjectStaticFieldStorage } from "../../project-types/object-layout.js";
 import { rustSourceCallableReturnFactKey } from "../../facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectJsSurfaceOperation } from "../../../policy/operations/js-surface.js";
 import { selectRustGeneratorSourceProperty } from "../../../policy/types/generator-source-profile.js";
+import { selectRustBuiltinErrorProperty } from "./builtin-errors.js";
+import { isIntrinsicSourceQualifier } from "./source-qualifiers.js";
+import { selectedRustProviderGlobal } from "../../../policy/evidence/provider-globals.js";
 import { tsonicFixedArrayProviderMember } from "@tsonic/source-core/facts";
 import type {
   RustCheckedDeleteSelectionInput,
@@ -24,9 +29,36 @@ import type {
   RustOperationPolicyContext,
   RustPolicySelection,
 } from "../../../policy/operations/contracts.js";
-import type { Node } from "@tsonic/tsts";
+import type { Node, ResolvedSourcePropertyAccessInfo } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { selectRustNumberArrayUnionMember } from "./number-array-unions.js";
+
+export function checkedPropertySelectionInput(
+  context: RustOperationPolicyContext,
+  expression: Node,
+  source: ResolvedSourcePropertyAccessInfo,
+): RustCheckedPropertySelectionInput {
+  const receiverReference = context.source.navigation.sourceReferenceFor(source.receiver.expression);
+  return {
+    target: "rust",
+    expression,
+    receiver: source.receiver.expression,
+    sourceReceiverType: source.receiver.type,
+    ...(source.receiver.declaration === undefined ? {} : { sourceReceiverDeclaration: source.receiver.declaration }),
+    ...(receiverReference?.declaration === undefined ? {} : { sourceReceiverValueDeclaration: receiverReference.declaration }),
+    ...(source.receiver.intrinsic === undefined ? {} : { sourceReceiverIntrinsic: source.receiver.intrinsic }),
+    accessMode: source.accessMode,
+    ...(source.selectedSymbol === undefined ? {} : { sourceSelectedSymbol: source.selectedSymbol }),
+    ...(source.selectedDeclaration === undefined ? {} : { sourceSelectedDeclaration: source.selectedDeclaration }),
+    ...(source.selectedReadDeclaration === undefined ? {} : { sourceSelectedReadDeclaration: source.selectedReadDeclaration }),
+    ...(source.selectedWriteDeclaration === undefined ? {} : { sourceSelectedWriteDeclaration: source.selectedWriteDeclaration }),
+    ...(source.sourceReadType === undefined ? {} : { sourceReadType: source.sourceReadType }),
+    ...(source.sourceWriteType === undefined ? {} : { sourceWriteType: source.sourceWriteType }),
+    sourceResultType: source.sourceReadType ?? source.sourceWriteType,
+    optionalChain: source.optionalChain,
+  };
+}
 
 export function selectRustCheckedDelete(
   request: RustCheckedDeleteSelectionInput,
@@ -47,22 +79,14 @@ export function selectRustCheckedDelete(
     );
   }
   const receiverCarrier = resolveRustTargetTypeRef(request.receiver, context, options);
-  const selectedIndexCarrier = resolveRustTargetTypeRef(request.index, context, options);
-  const int32Carrier = rustSourcePrimitiveTargetType("int32");
-  const indexCarrier = normalizeSelectedLiteralCarrier(
-    request.index,
-    selectedIndexCarrier,
-    int32Carrier,
-    context,
-    options,
-  );
+  const indexCarrier = resolveRustTargetTypeRef(request.index, context, options);
   const selection = selectJsSurfaceOperation({
     ownerName: identity.ownerName,
     memberName: identity.memberName,
     operationKind: "delete",
     ...(receiverCarrier === undefined ? {} : { receiverCarrier }),
     argumentCarriers: [indexCarrier],
-  });
+  }, context.typeDefinitions);
   if (selection?.fact.kind !== "provider-operation") {
     return rejectSelectedOperation(
       request.expression,
@@ -177,6 +201,18 @@ export function selectRustCheckedPropertyAccess(
   if (isDeclarationFileSubject(request.expression, context)) {
     return acceptDeclarationOperation("property");
   }
+  if (isIntrinsicSourceQualifier(request, context, options)) {
+    return acceptDeclarationOperation("property");
+  }
+  const global = request.sourceReceiverIntrinsic === "global-object" &&
+    request.accessMode === "read" && request.optionalChain !== true
+    ? selectedRustProviderGlobal(request.sourceSelectedDeclaration, context, options.providerExports)
+    : undefined;
+  if (global !== undefined) {
+    return mapProviderCheckedOperation(request.expression, global, "property", context, options, undefined, []);
+  }
+  const numericArrayMember = selectRustNumberArrayUnionMember(request, selectedReceiverCarrier, context, options);
+  if (numericArrayMember !== undefined) return numericArrayMember;
   const structuralProperty = selectStructuralSourceProperty(
     request,
     selectedReceiverCarrier,
@@ -205,6 +241,10 @@ export function selectRustCheckedPropertyAccess(
     request.sourceSelectedDeclaration,
     options.sourceProfiles,
   );
+  const builtinError = selectRustBuiltinErrorProperty(
+    request, selectedReceiverCarrier, sourceProfileMembers, context, options,
+  );
+  if (builtinError !== undefined) return builtinError;
   const providerEvidence = resolveSelectedProviderDeclaration(
     context,
     request.sourceSelectedDeclaration,
@@ -297,7 +337,7 @@ export function selectRustCheckedPropertyAccess(
       ...(jsIdentity.memberName === "index" && authoredPropertyKey !== undefined
         ? { authoredPropertyKey }
         : {}),
-    });
+    }, context.typeDefinitions);
     if (selection === undefined || selection.fact.kind !== "provider-operation" || selection.resultCarrier === undefined) {
       return rejectSelectedOperation(
         request.expression,
@@ -404,18 +444,10 @@ export function selectRustCheckedPropertyAccess(
         });
       }
     }
-    const field = rustProjectObjectField(declaration, context.ast);
-    const sourceFieldType = Node_Type(context.ast, declaration) ??
-      (request.optionalChain === true ? undefined : request.sourceResultType);
-    const declaredCarrier = resolveRustTargetTypeRef(sourceFieldType, context, options);
-    const resultCarrier = declaredCarrier === undefined || selectedReceiverCarrier === undefined
-      ? undefined
-      : options.projectTypes.instantiateMemberCarrier(
-          declaration,
-          selectedReceiverCarrier,
-          declaredCarrier,
-        );
-    if (field !== undefined && resultCarrier !== undefined && selectedReceiverCarrier !== undefined) {
+    const field = selectedReceiverCarrier === undefined ? undefined : resolveRustProjectField(
+      declaration, selectedReceiverCarrier, request.sourceReceiverType,
+      request.optionalChain === true ? undefined : request.sourceResultType, context, options);
+    if (field !== undefined) {
       if (request.accessMode === "delete") {
         return rejectSelectedOperation(
           request.expression,
@@ -425,45 +457,10 @@ export function selectRustCheckedPropertyAccess(
         );
       }
       const operationId = sourceOperationId(context, declaration, "field");
-      const owner = options.projectTypes.definitionContainingDeclaration(declaration);
-      const storageIndex = field.storageIndex +
-        (owner === undefined
-          ? 0
-          : options.projectTypes.externalBaseForDefinition(owner)?.fields.length ?? 0);
-      const ownerRelationship = owner === undefined || selectedReceiverCarrier === undefined
-        ? undefined
-        : options.projectTypes.relationship(selectedReceiverCarrier, owner);
-      const ownerCarrier = ownerRelationship?.kind === "related"
-        ? ownerRelationship.targetType
-        : undefined;
-      const readSlot = owner !== undefined && options.projectTypes.isPolymorphic(owner)
-        ? options.projectTypes.memberSlotName(declaration, "read")
-        : undefined;
-      const writeSlot = readSlot === undefined
-        ? undefined
-        : options.projectTypes.memberSlotName(declaration, "write");
-      if (owner !== undefined && options.projectTypes.isPolymorphic(owner) &&
-        (readSlot === undefined || writeSlot === undefined || ownerCarrier === undefined)) {
-        return rejectSelectedOperation(
-          request.expression,
-          context,
-          "RUST_PROJECT_FIELD_SLOT_IDENTITY_MISSING",
-          "Selected project field has no deterministic Rust dispatch-slot identity.",
-        );
-      }
       return acceptRustMemberOperation(request, "property", {
-        kind: "source-field",
+        ...field,
         operationId,
-        declaration,
         accessMode: request.accessMode,
-        receiverCarrier: selectedReceiverCarrier,
-        storage: "project-object",
-        storageIndex,
-        valueSemantics: { kind: "stored" },
-        resultCarrier,
-        ...(readSlot === undefined || writeSlot === undefined
-          ? {}
-          : { dispatch: { read: readSlot, write: writeSlot, ownerCarrier: ownerCarrier! } }),
       }, context, options, {
         sourceExpression: request.expression,
         sourceReceiver: request.receiver,
@@ -685,7 +682,7 @@ function selectProjectSourceAccessor(
       "Selected getter and setter declarations disagree on static ownership.",
     );
   }
-  const readCarrier = readDeclaration === undefined
+  const declaredReadCarrier = readDeclaration === undefined
     ? undefined
     : context.facts.get(readDeclaration, rustSourceCallableReturnFactKey)?.returnCarrier ??
       resolveRustTargetTypeRef(Node_Type(context.ast, readDeclaration), context, options) ??
@@ -697,7 +694,7 @@ function selectProjectSourceAccessor(
       isDenseDataArray(writeParameters) && writeParameters.length === 1
     ? writeParameters[0]
     : undefined;
-  const writeCarrier = writeDeclaration === undefined || writeParameter === undefined
+  const declaredWriteCarrier = writeDeclaration === undefined || writeParameter === undefined
     ? undefined
     : options.sourceCallableAbi.resolveParameterAbi(
         writeParameter,
@@ -706,6 +703,17 @@ function selectProjectSourceAccessor(
       )?.valueCarrier ??
       resolveRustTargetTypeRef(Node_Type(context.ast, writeParameter), context, options) ??
       resolveRustTargetTypeRef(request.sourceWriteType, context, options);
+  const instantiate = (declaration: Node | undefined, carrier: TargetTypeRef | undefined): TargetTypeRef | undefined =>
+    declaration === undefined || carrier === undefined
+      ? undefined
+      : staticAccess ? carrier
+        : selectedReceiverCarrier === undefined ? undefined
+          : instantiateRustSelectedMemberCarrier(
+              declaration, selectedReceiverCarrier, request.sourceReceiverType,
+              carrier, context, options,
+            );
+  const readCarrier = instantiate(readDeclaration, declaredReadCarrier);
+  const writeCarrier = instantiate(writeDeclaration, declaredWriteCarrier);
   if ((needsRead && readCarrier === undefined) ||
     (needsWrite && writeCarrier === undefined)) {
     return rejectSelectedOperation(

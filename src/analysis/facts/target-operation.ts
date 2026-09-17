@@ -1,3 +1,4 @@
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { RustTargetOperationFact } from "./keys.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -9,6 +10,7 @@ import {
 } from "./finalized-operation-abi.js";
 import type { RustFinalizedOperationAbi } from "./finalized-operation-abi.js";
 import { rustValueConversionIsFallible } from "../../target-model/conversions/contracts.js";
+import { rustStructuralFieldIsFallible } from "../objects/structural-shape-plan.js";
 
 export function rustTargetOperationText(fact: RustTargetOperationFact): string {
   if (fact.kind === "provider-operation") {
@@ -62,7 +64,8 @@ export function rustTargetOperationText(fact: RustTargetOperationFact): string {
   if (fact.kind === "source-conversion") {
     return fact.conversion === undefined ? "identity" : "runtime-conversion";
   }
-  if (fact.kind === "project-type-test" || fact.kind === "program-error-type-test") {
+  if (fact.kind === "project-type-test" || fact.kind === "program-error-type-test" ||
+    fact.kind === "builtin-error-type-test") {
     return fact.kind;
   }
   return fact.operationId;
@@ -101,7 +104,7 @@ export interface RustStructuralStorageLookup {
   field(
     carrier: TargetTypeRef,
     storageIndex: number,
-  ): { readonly storage: "stored" | "property" } | undefined;
+  ): { readonly storage: "stored" | "property" | "bound" } | undefined;
 }
 
 export interface RustProjectFieldDispatchLookup {
@@ -115,6 +118,8 @@ export function rustTargetOperationIsFallible(
   fact: RustTargetOperationFact | undefined,
   structuralStorage: RustStructuralStorageLookup,
   projectFieldDispatch: RustProjectFieldDispatchLookup,
+  frozenDataWrites: import("../objects/frozen-data-writes.js").RustFrozenDataWritePlan,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): boolean {
   if (fact === undefined) {
     return false;
@@ -122,16 +127,24 @@ export function rustTargetOperationIsFallible(
   if (fact.kind === "regexp-create") {
     return true;
   }
+  if (fact.kind === "typed-location") {
+    return fact.operation === "load" || fact.operation === "store";
+  }
   if (fact.kind === "iteration") {
     return fact.iterationKind !== "for-in" && fact.lowering.kind === "fallible-owned";
   }
   if (fact.kind === "source-conversion") {
-    return rustValueConversionIsFallible(fact.conversion);
+    return rustValueConversionIsFallible(fact.conversion, definitions);
   }
   if (fact.kind === "source-accessor") {
     return false;
   }
+  if (fact.kind === "source-method-property") {
+    return fact.accessMode !== "read" && frozenDataWrites.receiverForDeclaration(fact.declaration) !== undefined;
+  }
   if (fact.kind === "source-field") {
+    if (fact.accessMode !== "read" && fact.valueSemantics.kind === "stored" &&
+      frozenDataWrites.receiverFor(fact.storage, fact.receiverCarrier, fact.storageIndex) !== undefined) return true;
     const projectDispatch = fact.dispatch === undefined
       ? undefined
       : fact.declaration === undefined
@@ -144,37 +157,40 @@ export function rustTargetOperationIsFallible(
         projectDispatch.write?.fallible === true
     );
     return dispatchIsFallible || fact.valueSemantics.kind === "accessor" ||
-      fact.storage === "object-handle" &&
-        structuralStorage.field(fact.receiverCarrier, fact.storageIndex)?.storage === "property";
+      fact.storage === "structural-object" &&
+        rustStructuralFieldIsFallible(structuralStorage.field(fact.receiverCarrier, fact.storageIndex));
   }
   if (fact.kind === "source-union-field") {
     return fact.selectedVariantIndexes.some((index) => {
       const variant = fact.variants[index];
       const field = variant?.field;
-      return field?.valueSemantics.kind === "accessor" ||
-        variant !== undefined && field?.storage === "object-handle" &&
-          structuralStorage.field(
-            variant.carrier,
-            field.storageIndex,
-          )?.storage === "property";
+      return variant !== undefined && field !== undefined && rustTargetOperationIsFallible({
+        kind: "source-field", operationId: fact.operationId, accessMode: fact.accessMode,
+        receiverCarrier: variant.carrier, resultCarrier: fact.resultCarrier, ...field,
+      }, structuralStorage, projectFieldDispatch, frozenDataWrites, definitions);
     });
   }
   if (fact.kind === "object-shape-projection") {
+    if (fact.projection === "assign") return fact.assignmentFields?.some(field =>
+      frozenDataWrites.receiverFor(fact.storage, fact.sourceValueCarrier, field.targetStorageIndex) !== undefined ||
+      fact.storage === "structural-object" && (rustStructuralFieldIsFallible(structuralStorage.field(
+        fact.sourceValueCarrier, field.targetStorageIndex)) || fact.assignmentSourceCarrier !== undefined &&
+        rustStructuralFieldIsFallible(structuralStorage.field(fact.assignmentSourceCarrier, field.sourceStorageIndex)))) === true;
     return (fact.projection === "values" || fact.projection === "entries") &&
       fact.fields.some((field) => field.accessor !== undefined ||
-        fact.storage === "object-handle" && structuralStorage.field(
+        fact.storage === "structural-object" && rustStructuralFieldIsFallible(structuralStorage.field(
           fact.sourceValueCarrier,
           field.storageIndex,
-        )?.storage === "property");
+        )));
   }
   if (fact.kind === "record-literal") {
     return fact.contributions.some((contribution) =>
       contribution.kind === "spread" &&
       contribution.fields.some((field) => field.accessor !== undefined ||
-        contribution.sourceStorage === "object-handle" && structuralStorage.field(
+        contribution.sourceStorage === "structural-object" && rustStructuralFieldIsFallible(structuralStorage.field(
           contribution.sourceCarrier,
           field.sourceStorageIndex,
-        )?.storage === "property"));
+        ))));
   }
   if (fact.kind === "operator-call") {
     return fact.fallible;
@@ -182,13 +198,16 @@ export function rustTargetOperationIsFallible(
   if (fact.kind === "source-call" &&
     (fact.target.form === "callable" || fact.target.form === "structural-method")) {
     return fact.target.form === "structural-method" ||
-      fact.target.carrier.kind !== "function-pointer";
+      (fact.target.carrier.kind === "closure"
+        ? fact.target.carrier.fallible === true
+        : fact.target.carrier.kind !== "function-pointer");
   }
   if (fact.kind === "provider-operation" || fact.kind === "runtime-set") {
     return rustOperationAbiInvocationIsFallible(fact.abi);
   }
   return false;
 }
+
 
 export function rustOperationAbiInvocationIsFallible(abi: RustFinalizedOperationAbi): boolean {
   if (abi.effects.invocation === "fallible" ||
@@ -206,8 +225,8 @@ export function rustOperationAbiInvocationIsFallible(abi: RustFinalizedOperation
 }
 
 export function rustOperationAbiAwaitIsFallible(abi: RustFinalizedOperationAbi): boolean {
-  return abi.result.kind === "async" &&
-    (abi.effects.awaiting === "fallible" || abi.result.awaitedConversion.fallible);
+  return abi.effects.awaiting === "fallible" ||
+    (abi.result.kind === "async" && abi.result.awaitedConversion.fallible);
 }
 
 export function rustFinalizedCarrierTransitionMatches(

@@ -1,5 +1,6 @@
 import {
   rustCallableProtocol,
+  isRustDefinitelyNullishCarrier,
   rustLifetimeGenericArgument,
   rustStrTargetType,
   rustStringTargetId,
@@ -10,6 +11,7 @@ import {
 } from "../../../../target-model/types/index.js";
 import { acceptRustPolicy } from "../../../../policy/operations/contracts.js";
 import { asNode } from "../../../../policy/evidence/selected-source.js";
+import { selectProviderRecordArgument } from "./record-arguments.js";
 import { isRustCVariadicArgumentCarrier } from "../../../facts/c-variadic.js";
 import {
   KindCallExpression,
@@ -29,12 +31,13 @@ import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality
 import { selectedCallArgumentNodes, selectedCallCalleeDeclaration, selectedCallCalleeSymbol, selectedSourceValueCarrier } from "../operators.js";
 import { selectRustOptionalChain } from "../../../../policy/operations/optional-chains.js";
 import { selectRustSourceValueConversion } from "../../../../policy/conversions/selection.js";
+import { selectedCallSourceParameterCarriers, selectedRestSequenceIsClosed } from "./source-sequences.js";
 import { resolveRustProviderGenericArgument } from "../../../../policy/types/resolution/source.js";
 import {
   finalizeProviderOperationFact,
   instantiateProviderOperationTemplate,
 } from "./template-instantiation.js";
-import { isRustFinalizedSourceInput } from "../../../facts/finalized-operation-abi.js";
+import { selectReferenceReborrow, selectReceiverReferenceReborrow } from "./reference-reborrows.js";
 import type { InstantiatedProviderOperationTemplate } from "./template-instantiation.js";
 import type {
   RustCheckedCallSelectionInput,
@@ -277,7 +280,7 @@ export function instantiateSelectedCallTemplate(
     ...(callScopedElisionBindings === undefined
       ? {}
       : { callScopedElisionBindings }),
-  });
+  }, context.typeDefinitions);
 }
 
 function selectedCallParameterInferenceCarriers(
@@ -372,7 +375,10 @@ export function acceptSelectedCall(
   if (providerFormRequiresSourceReceiver(instantiatedTemplate.target) && selectedReceiverCarrier === undefined) {
     return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_RECEIVER_CARRIER_MISSING", `Selected call '${callIdentity.sourceName}' has no closed Rust receiver carrier.`);
   }
-  const fact = finalizeProviderOperationFact(instantiatedTemplate, sourceArguments.carriers, selectedReceiverCarrier);
+  const spreadIndexes = request.source.sourceArguments.flatMap((argument, index) =>
+    context.ast.is.IsSpreadElement(argument.expression) ? [index] : []);
+  const fact = finalizeProviderOperationFact(instantiatedTemplate, sourceArguments.carriers, selectedReceiverCarrier,
+    context.typeDefinitions, spreadIndexes.length === 0 ? undefined : spreadIndexes);
   if (fact === undefined) {
     return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_OPERATION_ABI_INCOMPLETE", `Selected call '${callIdentity.sourceName}' cannot finalize one total Rust operation ABI.`);
   }
@@ -537,23 +543,8 @@ function selectedCallSourceCarriers(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): SelectedCallSourceCarriers {
-  const compileTimeIndexes = new Set(fact.compileTimeSourceArgumentIndexes ?? []);
-  const runtimeIndexes = selectedCallArgumentNodes(request)
-    .map((_argument, index) => index)
-    .filter((index) => !compileTimeIndexes.has(index));
-  const declaredBySourceIndex = new Map<number, TargetTypeRef | undefined>();
-  for (const sourceIndex of runtimeIndexes) {
-    const bindings = request.source.sourceArgumentBindings.filter((binding) =>
-      binding.sourceArgumentIndex === sourceIndex);
-    const first = bindings[0];
-    if (first === undefined || bindings.some((binding) =>
-      binding.sourceParameterIndex !== first.sourceParameterIndex ||
-      binding.sourceForm !== first.sourceForm) ||
-      request.source.sourceSelectedSignatureParameters[first.sourceParameterIndex] === undefined) {
-      return { kind: "missing" };
-    }
-    declaredBySourceIndex.set(sourceIndex, declared?.[first.sourceParameterIndex]);
-  }
+  const declaredBySourceIndex = selectedCallSourceParameterCarriers(request, fact, declared, context, options);
+  if (declaredBySourceIndex === undefined) return { kind: "missing" };
   let incompatibility: Extract<SelectedCallSourceCarriers, { readonly kind: "incompatible" }> | undefined;
   const reconciliations: {
     readonly sourceIndex: number;
@@ -564,8 +555,19 @@ function selectedCallSourceCarriers(
     const targetExpected = selectedCallArgumentTargetCarrier(fact.target, index);
     const expected = targetExpected ?? declaredBySourceIndex.get(index);
     const resolved = selectedSourceValueCarrier(sourceArgument, context, options);
+    if (context.ast.is.IsSpreadElement(argument)) {
+      if (!selectedRestSequenceIsClosed(request, index, resolved, fact.target)) {
+        incompatibility ??= { kind: "incompatible", sourceIndex: index, actual: resolved, expected };
+      }
+      return resolved;
+    }
     const normalized = normalizeSelectedArgumentCarrier(argument, resolved, expected, context, options);
     let effective = rustEffectiveValueCarrier(context.facts, argument) ?? normalized;
+    const optionElement = rustOptionElementCarrier(expected);
+    if (optionElement !== undefined && effective !== undefined &&
+      (isRustDefinitelyNullishCarrier(effective) || rustTargetTypeRefEquals(effective, optionElement))) {
+      effective = expected;
+    }
     if (effective !== undefined && expected !== undefined &&
       !rustTargetTypeRefEquals(effective, expected)) {
       const reborrow = selectReferenceReborrow(
@@ -590,11 +592,24 @@ function selectedCallSourceCarriers(
     }
     if (effective !== undefined && expected !== undefined &&
       !rustTargetTypeRefEquals(effective, expected)) {
-      const reconciliation = selectRustValueCarrierReconciliation(
+      let reconciliation = selectRustValueCarrierReconciliation(
         effective,
         expected,
-        options.projectTypes,
+        options.projectTypes, context.typeDefinitions,
       );
+      if (reconciliation.kind === "incompatible" &&
+        (rustProviderSourceArgumentMode(fact.target, index) ?? "value") === "value") {
+        const bindings = request.source.sourceArgumentBindings.filter(binding =>
+          binding.sourceArgumentIndex === index && binding.sourceForm === "value");
+        const selected = bindings.length === 1 ? bindings[0] : undefined;
+        const conversion = selected === undefined ? undefined : selectProviderRecordArgument(
+          selected.selectedArgumentType, selected.selectedParameterType,
+          effective, expected, context, options,
+        );
+        if (conversion !== undefined) reconciliation = { kind: "conversion", fact: {
+          sourceCarrier: effective, targetCarrier: expected, conversion,
+        } };
+      }
       if (reconciliation.kind === "call-scoped-lifetime" ||
         reconciliation.kind === "conversion" || reconciliation.kind === "project-upcast") {
         if (reconciliation.kind === "call-scoped-lifetime" ||
@@ -640,14 +655,14 @@ function selectedCallSourceCarriers(
       if (sourceIndex < form.leadingArguments.length) {
         const target = form.leadingArguments[sourceIndex]!.carrier;
         return !rustTargetTypeRefEquals(carrier, target) &&
-          selectRustSourceValueConversion(carrier, target) === undefined;
+          selectRustSourceValueConversion(carrier, target, context.typeDefinitions) === undefined;
       }
       const exact = form.alternatives.filter((alternative) =>
         rustTargetTypeRefEquals(carrier, alternative.inputCarrier));
       const convertible = exact.length > 0
         ? []
         : form.alternatives.filter((alternative) =>
-            selectRustSourceValueConversion(carrier, alternative.inputCarrier) !== undefined);
+            selectRustSourceValueConversion(carrier, alternative.inputCarrier, context.typeDefinitions) !== undefined);
       return (exact.length > 0 ? exact : convertible).length !== 1;
     });
     return incompatible < 0
@@ -669,71 +684,6 @@ function selectedCallSourceCarriers(
   return { kind: "resolved", carriers: actual as TargetTypeRef[], reconciliations };
 }
 
-function selectReferenceReborrow(
-  source: TargetTypeRef,
-  target: TargetTypeRef,
-  mode: import("../../../../target-model/operations/model.js").RustArgumentMode | undefined,
-): Extract<
-  import("../../../../target-model/conversions/contextual.js").RustContextualValueConversion,
-  { readonly kind: "reference-reborrow" }
-> | undefined {
-  return source.kind === "reference" &&
-      (mode === "ref" || mode === "mut-ref" && source.mutable) &&
-      rustTargetTypeRefEquals(source.referent, target)
-    ? Object.freeze({ kind: "reference-reborrow", source, target })
-    : undefined;
-}
-
-function selectReceiverReferenceReborrow(
-  request: RustCheckedCallSelectionInput,
-  abi: import("../../../facts/finalized-operation-abi.js").RustFinalizedOperationAbi,
-  context: RustOperationPolicyContext,
-  options: RustOperationsProviderOptions,
-): Extract<
-  RustAppliedValueCarrierReconciliation,
-  { readonly kind: "conversion" }
-> | undefined {
-  const receiver = request.source.sourceReceiver;
-  if (receiver === undefined || abi.sourceReceiver.kind !== "receiver") {
-    return undefined;
-  }
-  const source = rustEffectiveValueCarrier(context.facts, receiver.expression) ??
-    resolveRustTargetTypeRef(receiver.expression, context, options);
-  const target = abi.sourceReceiver.carrier;
-  if (source === undefined || rustTargetTypeRefEquals(source, target)) {
-    return undefined;
-  }
-  const modes = new Set<import("../../../../target-model/operations/model.js").RustArgumentMode>();
-  const collect = (
-    input: import("../../../facts/finalized-operation-abi.js").RustFinalizedTargetInput,
-  ): void => {
-    if (isRustFinalizedSourceInput(input) && input.source.kind === "receiver") {
-      modes.add(input.mode);
-    }
-  };
-  if (abi.targetReceiver.kind === "input") {
-    collect(abi.targetReceiver.input);
-  }
-  abi.targetArguments.forEach(collect);
-  if (modes.size !== 1) {
-    return undefined;
-  }
-  const conversion = selectReferenceReborrow(
-    source,
-    target,
-    modes.values().next().value,
-  );
-  return conversion === undefined
-    ? undefined
-    : {
-        kind: "conversion",
-        fact: {
-          sourceCarrier: source,
-          targetCarrier: target,
-          conversion,
-        },
-      };
-}
 
 function selectedCallArgumentTargetCarrier(
   form: RustProviderOperationForm,

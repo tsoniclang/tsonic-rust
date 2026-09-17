@@ -13,11 +13,13 @@ import type {
 import { finalizeRustBlockLiveness } from "../inspection/source-liveness.js";
 import { rustLintAttributes } from "./lint-policy.js";
 import { rustBlockReferencesPath } from "../inspection/source-usage.js";
+import { collapseRustForwardingClosure } from "./forwarding-closures.js";
+import { nameRustSignatureTypes } from "./signature-aliases.js";
 
 export function finalizeRustSourceStyle(
   model: RustSourceFileModel,
 ): RustSourceFileModel {
-  const items = closePublicRustTypeVisibility(model.items);
+  const items = closePublicRustTypeVisibility(nameRustSignatureTypes(model.items));
   const publicTypes = publicDeclaredRustTypeNames(items);
   return {
     ...model,
@@ -271,6 +273,7 @@ function rustConditionPrintsAsBlock(expression: RustExpr): boolean {
     case "unsafe":
     case "owned-string-from-borrowed-str":
       return rustConditionPrintsAsBlock(expression.expression);
+    case "option-try":
     case "try":
     case "await":
       return rustConditionPrintsAsBlock(expression.expr);
@@ -430,7 +433,7 @@ function finalizeRustExpressionStyle(expression: RustExpr): RustExpr {
         ...expression,
         bindings: expression.bindings.map((binding) => ({
           ...binding,
-          value: finalizeRustExpressionStyle(binding.value),
+          ...(binding.value === undefined ? {} : { value: finalizeRustExpressionStyle(binding.value) }),
         })),
         value: finalizeRustExpressionStyle(expression.value),
       };
@@ -465,13 +468,17 @@ function finalizeRustExpressionStyle(expression: RustExpr): RustExpr {
     case "slice-literal":
       result = { ...expression, elements: expression.elements.map(finalizeRustExpressionStyle) };
       break;
+    case "array-repeat":
+      result = { ...expression, element: finalizeRustExpressionStyle(expression.element) };
+      break;
     case "closure":
-      result = { ...expression, body: finalizeRustExpressionStyle(expression.body) };
+      result = collapseRustForwardingClosure({ ...expression, body: finalizeRustExpressionStyle(expression.body) });
       break;
     case "closure-block":
       result = { ...expression, body: finalizeRustFunctionBodyStyle(expression.body) };
       break;
     case "await":
+    case "option-try":
     case "try":
       result = { ...expression, expr: finalizeRustExpressionStyle(expression.expr) };
       break;
@@ -557,6 +564,8 @@ function publicSignatureTypes(
       return publicTypes.has(item.name)
         ? [
             ...(item.superTraits ?? []),
+            ...(item.associatedTypes ?? []).flatMap((type) =>
+              type.bounds.flatMap(rustTypeBoundTypes)),
             ...item.functions.flatMap((fn) => [
               ...fn.params.map((parameter) => parameter.type),
               ...optionalType(fn.returnType),
@@ -564,13 +573,17 @@ function publicSignatureTypes(
           ]
         : [];
     case "impl":
-      return rustTypeNames(item.target).some((name) => publicTypes.has(name))
-        ? item.functions.flatMap((fn) => fn.visibility === "public"
+      return [...rustTypeNames(item.target), ...optionalType(item.trait).flatMap(rustTypeNames)]
+        .some((name) => publicTypes.has(name))
+        ? [
+          ...(item.associatedTypes ?? []).map((type) => type.type),
+          ...item.functions.flatMap((fn) => fn.visibility === "public"
           ? [
               ...fn.params.map((parameter) => parameter.type),
               ...optionalType(fn.returnType),
             ]
-          : [])
+          : []),
+        ]
         : [];
     case "type-alias":
       return publicTypes.has(item.name) ? [item.target] : [];
@@ -583,6 +596,20 @@ function publicSignatureTypes(
 
 function optionalType(type: RustType | undefined): readonly RustType[] {
   return type === undefined ? [] : [type];
+}
+
+function rustTypeBoundTypes(bound: RustTypeBound): readonly RustType[] {
+  switch (bound.kind) {
+    case "trait":
+      return [{ kind: "named", path: bound.path }];
+    case "trait-type":
+      return [bound.reference.trait];
+    case "callable":
+      return [...bound.parameters, bound.result];
+    case "lifetime":
+    case "maybe-sized":
+      return [];
+  }
 }
 
 function collectLocalRustTypeNames(
@@ -630,6 +657,7 @@ function rustTypeNames(type: RustType): readonly string[] {
     case "slice":
       return rustTypeNames(type.element);
     case "function-pointer":
+    case "callable-trait":
       return [...type.parameters.flatMap(rustTypeNames), ...rustTypeNames(type.result)];
     case "tuple":
       return type.elements.flatMap(rustTypeNames);

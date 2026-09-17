@@ -8,7 +8,7 @@ import { rustNativeBackingKey, rustNativeMemoryLayoutsEqual, rustRawLocationPlan
 import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
 import type { RustNativeObjectField } from "../../target-model/operations/native-memory.js";
 import { rustSourceParameterAbiFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
-import { rustLocationTargetType, rustOptionTargetType, rustRawPointerTargetType, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
+import { rustSourceLocationTargetType, rustOptionTargetType, rustRawPointerTargetType, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { setCarrierFact } from "./project-calls.js";
@@ -30,7 +30,7 @@ export function resolveRustRawLocationCarrier(walk: RustFactWalk, expression: No
     const explicit = resolveRustTargetTypeRef(selected.operation.explicitPointeeTypeNode, resolution, walk.operationOptions);
     if (!rustTargetTypeRefEquals(explicit, layout.pointeeCarrier)) return reject("Reinterpretation and its layout have different exact Rust pointee types.");
   }
-  const location = rustOptionTargetType(rustLocationTargetType(layout.pointeeCarrier));
+  const location = rustOptionTargetType(rustSourceLocationTargetType(layout.pointeeCarrier));
   const raw = rustOptionTargetType(rustRawPointerTargetType());
   const expected = selected.operation.operation === "to-raw" ? location : raw;
   const inputCarrier = resolveExpressionCarrier(walk, selected.expression, file, expected);
@@ -106,12 +106,12 @@ export function recordRustNativeBacking(walk: RustFactWalk): readonly RustNative
         continue;
       }
       const field = context.facts.get(origin.storageExpression, rustTargetOperationFactKey);
-      if (field?.kind === "source-field" && field.storage === "object-handle") {
+      if (field?.kind === "source-field" && field.storage === "structural-object") {
         const shape = rustStructuralObjectCarrierValue(field.receiverCarrier);
         const member = shape?.fields[field.storageIndex];
         const implementations = walk.sourceTypes.structuralFieldImplementations().filter(implementation =>
           implementation.storageIndex === field.storageIndex && rustTargetTypeRefEquals(implementation.carrier, field.receiverCarrier));
-        if (member === undefined || member.readonly || member.presence !== "required" || member.accessor !== undefined ||
+        if (member === undefined || member.bound === true || member.readonly || member.presence !== "required" || member.accessor !== undefined ||
           field.valueSemantics.kind !== "stored" || field.dispatch !== undefined ||
           implementations.some(implementation => implementation.kind === "accessor") ||
           !rustTargetTypeRefEquals(member.type, layout.pointeeCarrier)) {

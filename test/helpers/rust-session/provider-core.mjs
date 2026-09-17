@@ -9,7 +9,7 @@ export const boolCarrier = { kind: "source-primitive", name: "bool" };
 export const neverCarrier = { kind: "target-specific", target: "rust", name: "never" };
 export const storeCarrier = { kind: "target-named", id: "acme.platform.Store" };
 
-export function acmeFilesPackage({ binaryEpilogues } = {}) {
+export function acmeFilesPackage({ binaryHooks } = {}) {
   return createRustProviderPackage({
     id: "acme-files",
     displayName: "Acme files",
@@ -36,7 +36,7 @@ export function acmeFilesPackage({ binaryEpilogues } = {}) {
       resultCarrier: stringCarrier,
       parameterCarriers: [stringCarrier],
     }],
-    ...(binaryEpilogues === undefined ? {} : { binaryEpilogues }),
+    ...(binaryHooks === undefined ? {} : { binaryHooks }),
     crates: [{ crateName: "acme_files", cargoPath: resolve(fixtureCratesRoot, "acme_files") }],
   });
 }
@@ -122,7 +122,7 @@ export function acmeTestingPackage() {
   });
 }
 
-export function acmePlatformPackage({ includeHomeDir = true, includeSetters = false, binaryEpilogues } = {}) {
+export function acmePlatformPackage({ includeHomeDir = true, includeSetters = false, binaryHooks } = {}) {
   return createRustProviderPackage({
     id: "acme-platform",
     displayName: "Acme platform",
@@ -220,7 +220,7 @@ export function acmePlatformPackage({ includeHomeDir = true, includeSetters = fa
         : []),
     ].filter((row) => includeHomeDir || row.memberId !== "@acme/platform::Env.homeDir"),
     carrierPaths: { "acme.platform.Store": "acme_platform::Store" },
-    ...(binaryEpilogues === undefined ? {} : { binaryEpilogues }),
+    ...(binaryHooks === undefined ? {} : { binaryHooks }),
     crates: [{ crateName: "acme_platform", cargoPath: resolve(fixtureCratesRoot, "acme_platform") }],
   });
 }

@@ -3,11 +3,14 @@ import {
   isRustProgramErrorCarrier,
   isRustNumericCarrier,
   rustOptionElementCarrier,
+  isRustJsArrayCarrier,
+  isRustVecCarrier,
 } from "../../../target-model/types/index.js";
 import {
   rustTargetOperationResultCarrier,
   rustTargetOperationFactKey,
   rustPreparedOperationResultFactKey,
+  rustFlowReadProjectionFactKey,
   rustOptionalChainFactKey,
   rustPostCheckUnaryMinusOperationId,
   rustPostCheckUnaryPlusOperationId,
@@ -18,8 +21,10 @@ import {
   resolveSelectedSourceProfilePropertyMembers,
 } from "../../../policy/evidence/selected-source.js";
 import { selectRustFlowReadProjection } from "../../../policy/types/value-carrier-reconciliation.js";
+import { rustRuntimeUnionProjection } from "../../../target-model/types/carriers/runtime-unions.js";
 import { recordRustFlowReadProjection } from "../../facts/value-carrier-queries.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
+import { retainRustSourceUnionInstantiation } from "../../../policy/types/resolution/source-unions.js";
 import { selectRustProviderObjectLiteralConstruction } from "../../../policy/types/resolution/providers.js";
 import { rustCallableProtocol, rustStructuralObjectCarrierValue } from "../../../target-model/types/index.js";
 import { rustRuntimeCarrierKey, rustSelectedOperationKey } from "../../../target-model/facts/selections.js";
@@ -29,6 +34,7 @@ import { selectedSourceLiteralIsRepresentable, selectedSourceNumericLiteralOpera
 import { selectJsSurfaceOperation } from "../../../policy/operations/js-surface.js";
 import { selectRustOptionalChain } from "../../../policy/operations/optional-chains.js";
 import { selectRustValueCarrierReconciliation } from "../../../policy/types/value-carrier-reconciliation.js";
+import { contextualConditionalArgumentMatches } from "./calls/contextual-conditionals.js";
 import type {
   RustCheckedElementSelectionInput,
   RustCheckedOperationSelectionResult,
@@ -97,6 +103,36 @@ export function selectedMemberReceiverCarrier(
   if (request.sourceReceiverType === undefined) {
     return undefined;
   }
+  const flowRead = context.facts.get(receiver, rustFlowReadProjectionFactKey) ??
+    context.facts.resolve(receiver, rustFlowReadProjectionFactKey);
+  if (flowRead !== undefined && !rustTargetTypeRefEquals(sourceCarrier, flowRead.sourceCarrier)) {
+    return undefined;
+  }
+  const refinedCarrier = flowRead?.selectedCarrier ?? sourceCarrier;
+  const sourceUnionCarrier = rustOptionElementCarrier(refinedCarrier) ?? refinedCarrier;
+  const sourceUnion = sourceUnionCarrier === undefined
+    ? undefined
+    : options.sourceTypes.sourceUnionForCarrier(sourceUnionCarrier);
+  if (sourceUnion !== undefined && sourceUnionCarrier !== undefined &&
+    options.sourceTypes.sourceUnionVariantIndexesForTypes(sourceUnionCarrier, [request.sourceReceiverType]) === undefined) {
+    const refinement = context.source.semantics.selectValueTypeRefinement(receiver);
+    const declaredType = refinement.kind === "resolved"
+      ? context.currentSemantics.types.withoutMissingOrUndefined(refinement.declaredType)
+      : undefined;
+    if (declaredType !== undefined) {
+      retainRustSourceUnionInstantiation(
+        declaredType, sourceUnion, sourceUnionCarrier, context, options, new Set(),
+      );
+    }
+  }
+  if (flowRead !== undefined) return flowRead.selectedCarrier;
+  if (sourceUnionCarrier !== undefined &&
+    options.sourceTypes.sourceUnionVariantIndexesForTypes(
+      sourceUnionCarrier,
+      [request.sourceReceiverType],
+    ) !== undefined) {
+    return sourceUnionCarrier;
+  }
   const selectedCarrier = resolveRustTargetTypeRef(
     request.sourceReceiverType,
     context,
@@ -161,6 +197,14 @@ export function selectedMemberReceiverCarrier(
   }
   if (rustTargetTypeRefEquals(sourceCarrier, selectedCarrier)) {
     return sourceCarrier;
+  }
+  const flowProjection = selectRustFlowReadProjection(sourceCarrier, selectedCarrier, options.projectTypes, context.typeDefinitions);
+  if (flowProjection.kind === "projection") {
+    recordRustFlowReadProjection(context.facts, receiver, flowProjection.fact);
+    return selectedCarrier;
+  }
+  if (rustRuntimeUnionProjection(sourceCarrier, selectedCarrier) !== undefined) {
+    return selectedCarrier;
   }
   if (isRustProgramErrorCarrier(sourceCarrier)) {
     const selectedDefinition = options.projectTypes.definitionForCarrier(selectedCarrier);
@@ -227,7 +271,7 @@ export function acceptRustMemberOperation(
     const projection = selectRustFlowReadProjection(
       operationReceiverCarrier,
       selectedReceiverCarrier,
-      options.projectTypes,
+      options.projectTypes, context.typeDefinitions,
     );
     if (projection.kind === "incompatible") {
       return rejectSelectedOperation(
@@ -426,6 +470,7 @@ function genericOperationKind(fact: RustTargetOperationFact): RustTargetOperatio
     case "source-index-signature":
       return "indexer";
     case "source-field":
+    case "builtin-error-property":
     case "source-method-property":
     case "source-static-field":
     case "source-accessor":
@@ -536,6 +581,12 @@ export function normalizeSelectedOperationInputCarrier(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): TargetTypeRef | undefined {
+  const node = asNode(subject, context);
+  const valueExpected = rustOptionElementCarrier(expected) ?? expected;
+  if (node !== undefined && context.ast.kindName(node) === "KindArrayLiteralExpression" &&
+    (isRustJsArrayCarrier(valueExpected) || isRustVecCarrier(valueExpected))) {
+    return expected;
+  }
   const direct = normalizeSelectedLiteralCarrier(
     subject,
     actual,
@@ -546,6 +597,10 @@ export function normalizeSelectedOperationInputCarrier(
   const optionElement = rustOptionElementCarrier(expected);
   if (optionElement === undefined || direct === undefined ||
     rustTargetTypeRefEquals(direct, expected)) {
+    if (direct !== undefined && expected !== undefined &&
+      selectRustValueCarrierReconciliation(direct, expected, options.projectTypes, context.typeDefinitions).kind === "conversion") {
+      return expected;
+    }
     return direct;
   }
   if (isRustDefinitelyNullishCarrier(direct)) {
@@ -569,6 +624,8 @@ export function normalizeSelectedArgumentCarrier(
   options: RustOperationsProviderOptions,
 ): TargetTypeRef | undefined {
   const node = asNode(subject, context);
+  if (node !== undefined && expected !== undefined &&
+    contextualConditionalArgumentMatches(node, expected, context, options)) return expected;
   if (node !== undefined) {
     const providerObjectLiteral = selectRustProviderObjectLiteralConstruction(
       node,
@@ -618,10 +675,18 @@ export function selectedArgumentMatchScore(
     if (actual === undefined) {
       return 10;
     }
+    const optionElement = rustOptionElementCarrier(expected);
+    if (optionElement !== undefined &&
+      (isRustDefinitelyNullishCarrier(actual) ||
+        rustTargetTypeRefEquals(actual, optionElement) ||
+        (optionElement.kind === "source-primitive" && isRustNumericCarrier(optionElement) &&
+          sourceLiteralIsRepresentableAsPrimitive(node, optionElement.name, context)))) {
+      return 1;
+    }
     const reconciliation = selectRustValueCarrierReconciliation(
       actual,
       expected,
-      options.projectTypes,
+      options.projectTypes, context.typeDefinitions,
     );
     if (reconciliation.kind === "call-scoped-lifetime" ||
       reconciliation.kind === "conversion" || reconciliation.kind === "project-upcast") {

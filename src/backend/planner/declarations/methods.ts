@@ -8,6 +8,7 @@ import {
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { applyFallibleShape } from "../types/fallible-shape.js";
 import { applyRustTailShape, rustBlockTerminates } from "./functions.js";
+import { retainRustCheckedCompletion } from "../statements/block-flow.js";
 import {
   diagnosticInput,
   isValidRustIdentifier,
@@ -242,8 +243,9 @@ export function planProjectMethod(
   if (plannedBody === undefined) {
     return undefined;
   }
-  const body = { statements: [...plannedBody.statements, ...(sourceReturn?.fallthroughUndefined
-    ? [planRustReturnExit({ kind: "path", path: "None" }, bodyContext)] : [])] };
+  const body = retainRustCheckedCompletion({ statements: [...plannedBody.statements, ...(sourceReturn?.fallthroughUndefined
+    ? [planRustReturnExit({ kind: "path", path: "None" }, bodyContext)] : [])] },
+    !isUnit && generatorFact === undefined ? sourceReturn?.canFallThrough : undefined);
   if (generatorFact === undefined && !isUnit && !rustBlockTerminates(body)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, bodyNode),
@@ -419,6 +421,12 @@ export function planProjectMethodVariants(
   member: Node,
   context: RustPlanContext,
 ): readonly RustImplFunction[] | undefined {
+  if (context.input.program.source.ast.body(member) === undefined) {
+    const implementation = context.input.program.sourceNavigation.callableImplementation(member);
+    if (implementation.kind === "resolved" && implementation.implementation.declaration !== member) {
+      return Object.freeze([]);
+    }
+  }
   const specializations = context.input.program.sourceCallableSpecializations;
   if (!specializations.requiresSpecialization(member)) {
     const method = planProjectMethod(member, context);
@@ -458,6 +466,7 @@ export function planProjectStaticMethods(
     if (!context.input.program.source.ast.hasModifierKind(member, "static")) {
       continue;
     }
+    if (context.input.program.projectTypes.memberSlotName(member, "static") !== undefined) continue;
     const planned = planProjectMethodVariants(member, context);
     if (planned === undefined) {
       return undefined;
@@ -465,4 +474,23 @@ export function planProjectStaticMethods(
     methods.push(...planned);
   }
   return methods;
+}
+
+export function planProjectStaticFunctionItems(
+  definition: RustProjectTypeDefinition,
+  context: RustPlanContext,
+): readonly import("../../target-ast/nodes.js").RustItem[] | undefined {
+  const items: import("../../target-ast/nodes.js").RustItem[] = [];
+  for (const member of projectOwnMethods(definition, context)) {
+    const name = context.input.program.projectTypes.memberSlotName(member, "static");
+    if (name === undefined) continue;
+    const planned = planProjectMethodVariants(member, context);
+    if (planned === undefined) return undefined;
+    const specialized = context.input.program.sourceCallableSpecializations.requiresSpecialization(member);
+    for (const method of planned) {
+      if (method.selfParam !== undefined) return undefined;
+      items.push({ ...method, kind: "function", name: specialized ? method.name : name });
+    }
+  }
+  return items;
 }

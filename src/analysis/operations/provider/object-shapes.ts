@@ -1,4 +1,4 @@
-import { rustStringTargetType } from "../../../target-model/types/index.js";
+import { isRustJsArrayCarrier, rustStringTargetType } from "../../../target-model/types/index.js";
 import { acceptRustPolicy } from "../../../policy/operations/contracts.js";
 import {
   checkedCallIsConstruction,
@@ -37,6 +37,8 @@ import type { RustOperationsProviderOptions } from "./model.js";
 import type { RustTargetMember, TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustTargetOperationFact } from "../../facts/keys.js";
 import { selectRustPointerReturnCarrier } from "../../../policy/operations/pointer-return.js";
+import { resolveRustUnionMethodContracts, rustUnionMethodOwner, selectRustUnionMethods } from "./calls/union-methods.js";
+import { rustSourceUnionCarrierValue } from "../../../target-model/types/carriers/source-types.js";
 
 export function mapSelectedJsSpecialCall(
   request: RustCheckedCallSelectionInput,
@@ -50,6 +52,11 @@ export function mapSelectedJsSpecialCall(
     memberName,
   );
   if (objectProjection !== undefined) {
+    const sourceArgument = request.source.sourceArguments[0];
+    if (objectProjection.projection === "keys" && sourceArgument !== undefined &&
+      isRustJsArrayCarrier(selectedValueCarrier(sourceArgument.expression, sourceArgument.type, context, options))) {
+      return undefined;
+    }
     return mapSelectedObjectShapeProjection(
       request,
       objectProjection,
@@ -137,7 +144,7 @@ function mapSelectedObjectShapeProjection(
     sourceValueCarrier,
   );
   if (sourceValueNode === undefined || sourceValueCarrier === undefined || shape === undefined ||
-    shape.storage !== "object-handle" ||
+    shape.storage !== "structural-object" ||
     !rustTargetTypeRefEquals(sourceValueCarrier, shape.carrier)) {
     return rejectSelectedOperation(
       request.source.call,
@@ -169,7 +176,7 @@ function mapSelectedObjectShapeProjection(
       );
   if (selection.projection === "assign" && (
     assignmentSourceNode === undefined || assignmentSourceCarrier === undefined ||
-    assignmentShape === undefined || assignmentShape.storage !== "object-handle" ||
+    assignmentShape === undefined || assignmentShape.storage !== "structural-object" ||
     !rustTargetTypeRefEquals(assignmentShape.carrier, assignmentSourceCarrier)
   )) {
     return rejectSelectedOperation(
@@ -226,6 +233,7 @@ function mapSelectedObjectShapeProjection(
         orderedAssignmentFields?.kind === "resolved"
           ? orderedAssignmentFields.fields
           : [],
+        context.typeDefinitions,
       )
     : undefined;
   if (assignmentFields?.kind === "rejected") {
@@ -242,6 +250,7 @@ function mapSelectedObjectShapeProjection(
         selection.projection,
         orderedFields.fields,
         innerResultCarrier,
+        context.typeDefinitions,
       );
   if (projectedFields.kind === "rejected") {
     return rejectSelectedOperation(
@@ -488,9 +497,20 @@ export function acceptProjectSourceCall(
   const callableDeclaration = callableImplementation?.kind === "resolved"
     ? callableImplementation.implementation.declaration
     : selectedCallableDeclaration;
-  const genericOwner = construction
-    ? callableOwner?.declaration
-    : selectedCallableDeclaration;
+  const selectedTypeArguments = request.source.sourceSelectedMethodTypeArguments ?? [];
+  const genericOwners = construction
+    ? [...new Set([selectedOwnerDefinition?.declaration, callableOwner?.declaration])]
+        .filter((owner): owner is Node => owner !== undefined)
+    : [selectedCallableDeclaration];
+  const matchingOwners = genericOwners.filter(owner => {
+    const parameters = ast.typeParameters(owner);
+    return parameters.length === selectedTypeArguments.length && parameters.every((parameter, index) =>
+      parameter !== undefined && context.currentSemantics.facts.typeSubjects(selectedTypeArguments[index]!.typeParameter)
+        .some(subject => asNode(subject, context) === parameter));
+  });
+  const genericOwner = selectedTypeArguments.length === 0
+    ? matchingOwners[0]
+    : matchingOwners.length === 1 ? matchingOwners[0] : undefined;
   const targetGenericArguments = genericOwner === undefined
     ? undefined
     : mapSelectedProjectGenericArguments(request, genericOwner, context, options);
@@ -559,9 +579,16 @@ export function acceptProjectSourceCall(
       "The checker-selected construction result does not identify the selected project class.",
     );
   }
-  const ownerCarrier = construction
+  const receiverCarrier = construction
     ? selectedOwnerCarrier
     : selectedCallReceiverValueCarrier(request, context, options);
+  const unionMethods = construction ? undefined : selectRustUnionMethods(request, receiverCarrier, context, options);
+  const ownerCarrier = unionMethods === undefined ? receiverCarrier : rustUnionMethodOwner(unionMethods, callableDeclaration);
+  if (rustSourceUnionCarrierValue(receiverCarrier) !== undefined &&
+    (unionMethods === undefined || ownerCarrier === undefined)) {
+    return rejectSelectedOperation(request.source.call, context, "RUST_UNION_METHOD_IDENTITY_MISSING",
+      "A closed class union call requires one exact selected method implementation per arm.");
+  }
   const sourceParameters = ast.kindName(callableDeclaration) === "KindClassDeclaration"
     ? request.source.sourceSelectedSignatureParameters.map((parameter) =>
         parameter.parameterDeclaration)
@@ -607,9 +634,9 @@ export function acceptProjectSourceCall(
     returnType = ownerCarrier;
   } else {
     const sourceReturn = Node_Type(ast, callableDeclaration) ?? request.source.sourceResultType;
-    const declaredReturnType = (sourceReturn === undefined
+    const declaredReturnType = selectRustPointerReturnCarrier(callableDeclaration, context, options) ?? (sourceReturn === undefined
       ? undefined
-      : resolveRustTargetTypeRef(sourceReturn, context, options)) ?? selectRustPointerReturnCarrier(callableDeclaration, context, options);
+      : resolveRustTargetTypeRef(sourceReturn, context, options));
     returnType = declaredReturnType === undefined || ownerCarrier === undefined
       ? declaredReturnType
       : options.projectTypes.instantiateMemberCarrier(
@@ -621,6 +648,14 @@ export function acceptProjectSourceCall(
   if (returnType === undefined) {
     return rejectSelectedOperation(request.source.call, context, "RUST_SOURCE_CALL_RETURN_CARRIER_MISSING", "The exact TSTS-selected project-source declaration has no closed Rust return carrier.");
   }
+  const unionContract = unionMethods === undefined ? undefined : resolveRustUnionMethodContracts(
+    unionMethods, parameters as RustTargetMember["parameters"], returnType, context, options,
+  );
+  if (unionMethods !== undefined && unionContract === undefined) {
+    return rejectSelectedOperation(request.source.call, context, "RUST_UNION_METHOD_ABI_UNSUPPORTED",
+      "The selected union methods require exact synchronous parameter contracts and a lossless closed common result.");
+  }
+  returnType = unionContract?.result ?? returnType;
   const optionalResult = selectRustOptionalCallResult(
     request,
     returnType,
@@ -668,9 +703,10 @@ export function acceptProjectSourceCall(
   };
   const selectedSignature = {
     member,
+    ...(unionContract === undefined ? {} : { sourceUnionMethods: { receiverCarrier: receiverCarrier!, variants: unionContract.methods } }),
     ...(construction || ownerCarrier === undefined
       ? {}
-      : { sourceSelectedReceiverCarrier: ownerCarrier }),
+      : { sourceSelectedReceiverCarrier: receiverCarrier }),
     sourceDeclaration: callableDeclaration,
     ...(request.source.selectedSignature === undefined ? {} : { sourceSignature: request.source.selectedSignature }),
     ...(selectedCallCalleeSymbol(request) === undefined ? {} : { sourceCalleeSymbol: selectedCallCalleeSymbol(request) }),
@@ -691,20 +727,6 @@ export function acceptProjectSourceCall(
   }
   context.facts.set(request.source.call, rustSelectedCallKey, selectedSignature);
   return acceptRustPolicy({
-    selectedSignature: {
-      member,
-      ...(construction || ownerCarrier === undefined
-        ? {}
-        : { sourceSelectedReceiverCarrier: ownerCarrier }),
-      sourceDeclaration: callableDeclaration,
-      ...(request.source.selectedSignature === undefined ? {} : { sourceSignature: request.source.selectedSignature }),
-      ...(selectedCallCalleeSymbol(request) === undefined ? {} : { sourceCalleeSymbol: selectedCallCalleeSymbol(request) }),
-      ...(selectedCallCalleeDeclaration(request) === undefined ? {} : { sourceCalleeDeclaration: selectedCallCalleeDeclaration(request) }),
-      ...(request.source.sourceResultType === undefined ? {} : { sourceReturnType: request.source.sourceResultType }),
-      sourceArgumentBindings: request.source.sourceArgumentBindings,
-      sourceSelectedSignatureParameters: request.source.sourceSelectedSignatureParameters,
-      ...(request.source.sourceSelectedMethodTypeArguments === undefined ? {} : { sourceSelectedMethodTypeArguments: request.source.sourceSelectedMethodTypeArguments }),
-      ...(targetGenericArguments.length === 0 ? {} : { targetGenericArguments }),
-    },
+    selectedSignature,
   }, [{ message: `rust selected project-source call ${member.id}` }]);
 }

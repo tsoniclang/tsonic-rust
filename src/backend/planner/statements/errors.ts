@@ -17,12 +17,14 @@ import {
 } from "../program/plan-context.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planBlockLike } from "./core.js";
-import { planExpression, providerSelectedCallMatches } from "../expressions/index.js";
+import { planExpression } from "../expressions/index.js";
+import { effectivePlannedExpressionCarrier } from "../expressions/fundamentals.js";
 import { rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustCompletionBoundary, RustPlanContext } from "../program/plan-context.js";
 import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustJsErrorTargetType } from "../../../target-model/types/index.js";
 import { resolveRustProgramErrorRoute } from "../program/source-package-errors.js";
 
 export function planThrowStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
@@ -54,15 +56,13 @@ export function planThrowStatement(node: Node, context: RustPlanContext): readon
     return undefined;
   }
   if (fact.error.kind === "runtime") {
-    const constructor = context.input.program.facts.getFact(expression, rustTargetOperationFactKey);
-    if (constructor === undefined || constructor.kind !== "provider-operation" ||
-      constructor.operationId !== fact.error.constructorOperationId ||
-      constructor.abi.operationKind !== "constructor" ||
-      !providerSelectedCallMatches(expression, constructor, context)) {
+    if (fact.error.expression !== expression ||
+      !rustTargetTypeRefEquals(fact.error.carrier, rustJsErrorTargetType()) ||
+      !rustTargetTypeRefEquals(effectivePlannedExpressionCarrier(expression, context), fact.error.carrier)) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, expression),
-        "rust.backend.throw-constructor",
-        "Finalized runtime throw fact conflicts with the selected provider Error constructor ABI.",
+        "rust.backend.throw-carrier",
+        "Finalized runtime throw fact conflicts with its exact source operand or native Error carrier.",
       ));
       return undefined;
     }

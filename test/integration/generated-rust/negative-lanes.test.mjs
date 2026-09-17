@@ -70,6 +70,9 @@ export function read(): string {
   assertRustTargetRejection(options, [{
     code: "RUST_SELECTED_EVIDENCE_MISSING",
     message: "Checked property access has no selected provider, source-profile, or project-source declaration evidence.",
+  }, {
+    code: "RUST_AMBIENT_VALUE_IMPLEMENTATION_MISSING",
+    message: "A runtime read of an authored ambient variable requires an exact native implementation.",
   }]);
 });
 
@@ -88,6 +91,9 @@ export function run(): void {
   assertRustTargetRejection(options, [{
     code: "RUST_SELECTED_PROJECT_DECLARATION_MISSING",
     message: "Checked project-source call has callee evidence but no exact selected callable declaration evidence.",
+  }, {
+    code: "RUST_AMBIENT_VALUE_IMPLEMENTATION_MISSING",
+    message: "A runtime read of an authored ambient variable requires an exact native implementation.",
   }]);
 });
 
@@ -159,20 +165,4 @@ export class Box {
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn no_annotation\(a: f64\) -> f64/u);
   assert.match(text, /fn dispatch_box_value\(self: alloc::rc::Rc<Self>\) -> f64/u);
-});
-
-test("throw Error requires the exact selected one-message constructor shape", () => {
-  const options = {
-    files: {
-      "index.ts": `
-export function invalid(): void {
-  throw new Error();
-}
-`,
-    },
-  };
-  assertRustTargetRejection(options, [{
-    code: "RUST_ERROR_MESSAGE_REQUIRED",
-    message: "Rust Error construction currently requires one checked string message argument.",
-  }]);
 });

@@ -15,10 +15,10 @@ import type {
 } from "./model.js";
 import { createRustModuleInitializationPlan } from "./module-initialization-facts.js";
 import { analyzeRustProviderErrorCarriers } from "./provider-errors.js";
-import { analyzeRustCallableGenericRequirements } from "../callables/generic-requirements.js";
+import { analyzeRustDeclarationGenericRequirements } from "../declarations/generic-requirements.js";
 import { analyzeRustValueLifetimes } from "./value-lifetimes.js";
 import {
-  analyzeRustBinaryEpilogues,
+  analyzeRustBinaryHooks,
   analyzeRustRuntimeReferences,
 } from "../runtime/index.js";
 import {
@@ -33,14 +33,16 @@ import {
 import {
   analyzeRustCountedLoopRepresentations,
 } from "../control-flow/counted-loop-representations.js";
-import type { RustProviderBinaryEpilogueRow } from "../../providers/packages/model.js";
+import type { RustProviderBinaryHookRow } from "../../providers/packages/model.js";
 import { analyzeRustSourceModuleConstructions } from "../source-modules/index.js";
 import { analyzeRustFoundation } from "../foundation/plan.js";
+import { rustFoundationForCarrier } from "../foundation/requirements.js";
 import { maximumRustFoundation } from "../../target-model/foundation/model.js";
 import { analyzeRustProjectFlowReadSelections } from "../control-flow/project-flow-read-selections.js";
 
-const rustJsTimerEpilogue: RustProviderBinaryEpilogueRow = Object.freeze({
+const rustJsTimerEpilogue: RustProviderBinaryHookRow = Object.freeze({
   id: "tsonic.rust.js.timers",
+  phase: "after-entry",
   path: "tsonic_rust_js::abi::run_timers",
   requiredCrate: "tsonic_rust_js",
   isFallible: true,
@@ -66,10 +68,10 @@ export function analyzeRustTargetProgram(
   if (runtimeReferences.kind === "rejected") {
     return rejectedTargetStage(runtimeReferences.diagnostics);
   }
-  const binaryEpilogues = analyzeRustBinaryEpilogues(
+  const binaryHooks = analyzeRustBinaryHooks(
     jsEnabled
-      ? [...providerSemantics.binaryEpilogues, rustJsTimerEpilogue]
-      : providerSemantics.binaryEpilogues,
+      ? [...providerSemantics.binaryHooks, rustJsTimerEpilogue]
+      : providerSemantics.binaryHooks,
     runtimeReferences.plan.activeCrates,
   );
   const context = createRustAnalysisContext(
@@ -99,7 +101,8 @@ export function analyzeRustTargetProgram(
   const objectRepresentations = context.objectRepresentations.seal();
   const foundation = analyzeRustFoundation({
     selected: configuration.foundation,
-    factRequirement: context.facts.minimumFoundation(),
+    factRequirement: context.typeDefinitions.definitionCarriers().map(rustFoundationForCarrier)
+      .reduce(maximumRustFoundation, context.facts.minimumFoundation()),
     runtimeReferenceRequirement: [...runtimeReferences.plan.minimumFoundationByCrate.values()]
       .reduce(maximumRustFoundation, "core"),
     moduleInitializationRequirement: moduleInitialization.minimumFoundation(),
@@ -111,15 +114,19 @@ export function analyzeRustTargetProgram(
     return rejectedTargetStage(foundation.diagnostics);
   }
   const facts = context.facts.seal();
-  const callableGenericRequirements = analyzeRustCallableGenericRequirements(
+  const declarationGenericRequirements = analyzeRustDeclarationGenericRequirements(
     context.source,
     context.sourceFiles,
     facts,
     context.names,
     context.sourceLifetimes,
+    context.typeFamilies,
+    context.projectTypes,
+    context.structuralShapes,
+    context.typeDefinitions,
   );
-  if (callableGenericRequirements.kind === "rejected") {
-    return rejectedTargetStage(callableGenericRequirements.diagnostics);
+  if (declarationGenericRequirements.kind === "rejected") {
+    return rejectedTargetStage(declarationGenericRequirements.diagnostics);
   }
   const sourceModuleConstructions = analyzeRustSourceModuleConstructions({
     source: context.source,
@@ -148,6 +155,8 @@ export function analyzeRustTargetProgram(
     sourceNavigation: snapshotTargetPlanningSourceNavigation(context.source),
     sourceFiles: context.sourceFiles,
     facts,
+    typeFamilies: context.typeFamilies.seal(),
+    typeDefinitions: context.typeDefinitions.seal(),
     projectTypes: context.projectTypes.seal(),
     objectRepresentations,
     projectMethodDispatch: context.projectMethodDispatch.seal(),
@@ -155,21 +164,23 @@ export function analyzeRustTargetProgram(
     projectFieldDispatch: context.projectFieldDispatch.seal(),
     sourceCallableSpecializations: context.sourceCallableSpecializations.seal(),
     sourceLifetimes: context.sourceLifetimes,
-    callableGenericRequirements: callableGenericRequirements.index,
+    declarationGenericRequirements: declarationGenericRequirements.index,
     valueLifetimes: analyzeRustValueLifetimes({
       ast: context.ast,
       sourceFiles: context.sourceFiles,
       navigation: context.source.navigation,
     }),
     structuralShapes: context.structuralShapes.seal(),
+    frozenDataWrites: context.frozenDataWrites.seal(),
+    classValues: context.classValues.seal(context),
     runtimeReferences: runtimeReferences.plan,
     foundation: foundation.plan,
-    binaryEpilogues,
+    binaryHooks,
     providerErrorCarriers: analyzeRustProviderErrorCarriers(
       context.ast,
       context.sourceFiles,
       facts,
-      binaryEpilogues,
+      binaryHooks,
     ),
     safetyApplications: context.safetyApplications,
     moduleInitialization,

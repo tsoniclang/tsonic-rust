@@ -828,7 +828,7 @@
     "area": "Date",
     "lane": "local-time getters/setters and locale strings",
     "classification": "target-limit",
-    "reason": "the deterministic Rust runtime has no selected timezone database or locale-data version and does not defer source semantics to machine-dependent host defaults"
+    "reason": "local getters and timezone offsets use the native timezone source; local setters and locale string formatting still lack a selected implementation"
   },
   {
     "area": "Date",

@@ -8,15 +8,18 @@ import {
   rustTypeGenericArgument,
   substituteRustTargetGenerics,
 } from "../../../target-model/types/index.js";
-import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { Node, Signature, SourceFile } from "@tsonic/tsts";
+import { sourceClassFieldIsTypeOnly, sourceObjectMemberDeclarations, sourceParameterIsProperty } from "@tsonic/target-api/source";
 import type {
   SourceProjectMemberImplementationResult,
 } from "@tsonic/target-api/source";
 import type { RustExternalProjectBase } from "../../../policy/types/external-project-types.js";
 import type { RustProjectConstructorSignature, RustProjectDowncastRoute, RustProjectHeritageEdge, RustProjectMemberSlotCandidate, RustProjectMemberSlotRole, RustProjectTypeDefinition, RustProjectTypeIssue, RustProjectTypePolicy, RustProjectTypePolicyHost, RustProjectTypeRelationship } from "../../../policy/types/project-types.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { rustSourceTypeDeclarations } from "../../../policy/types/source-declarations.js";
+import { rustLocalClassIssue } from "../local-classes.js";
+import { projectGenericSubstitutions } from "./generic-substitutions.js";
 
 export function createRustProjectTypePolicy(
   host: RustProjectTypePolicyHost,
@@ -30,13 +33,21 @@ export function createRustProjectTypePolicy(
   for (const sourceFile of host.sourceFiles) {
     const usedNames = sourceFileIdentifierNames(sourceFile, host.ast, host.names);
     usedModuleNamesBySourceFile.set(sourceFile, usedNames);
-    for (const statement of denseNodes(host.ast.statements(sourceFile)) ?? []) {
+    for (const statement of rustSourceTypeDeclarations(sourceFile, host.ast)) {
+      if (host.isRepresentationAlias(statement)) continue;
+      if (host.ast.kindName(statement) === "KindClassDeclaration") {
+        const issue = rustLocalClassIssue(statement, host.ast, host.navigation, host.genericParametersFor(statement));
+        if (issue !== undefined) {
+          issues.push({ ...issue, code: "RUST_LOCAL_CLASS_NOT_CLOSED" });
+          continue;
+        }
+      }
       const definition = projectDefinition(
         statement,
         sourceFile,
         host.ast,
         host.names,
-        host.sourceLifetimes,
+        host.genericParametersFor(statement),
         usedNames,
       );
       if (definition === undefined) {
@@ -286,7 +297,9 @@ export function createRustProjectTypePolicy(
   }
 
   const programErrorDefinitions = Object.freeze(definitions
-    .filter((definition) => externalBaseByDeclaration.get(definition.declaration)?.programError === true)
+    .filter((definition) => externalBaseByDeclaration.get(definition.declaration)?.programError === true ||
+      definition.kind === "class" && definition.genericParameters.length === 0 &&
+      host.thrownClassDeclarations.has(definition.declaration))
     .sort((left, right) => {
       const fileOrder = left.fileName.localeCompare(right.fileName, "en");
       return fileOrder === 0 ? left.sourceName.localeCompare(right.sourceName, "en") : fileOrder;
@@ -344,7 +357,7 @@ export function createRustProjectTypePolicy(
     return Object.freeze(lineage);
   };
 
-  const interfacesForClass = (
+  const contractsForClass = (
     definition: RustProjectTypeDefinition,
   ): readonly RustProjectTypeDefinition[] | undefined => {
     const lineage = classLineage(definition);
@@ -352,25 +365,14 @@ export function createRustProjectTypePolicy(
       return undefined;
     }
     const result: RustProjectTypeDefinition[] = [];
-    const visit = (candidate: RustProjectTypeDefinition): boolean => {
-      if (result.includes(candidate)) {
-        return true;
-      }
+    const visit = (candidate: RustProjectTypeDefinition): void => {
+      if (result.includes(candidate)) return;
       result.push(candidate);
       for (const edge of heritageByDeclaration.get(candidate.declaration) ?? []) {
-        if (edge.target.kind === "interface" && !visit(edge.target)) {
-          return false;
-        }
+        visit(edge.target);
       }
-      return true;
     };
-    for (const classDefinition of lineage) {
-      for (const edge of heritageByDeclaration.get(classDefinition.declaration) ?? []) {
-        if (edge.kind === "implements" && !visit(edge.target)) {
-          return undefined;
-        }
-      }
-    }
+    for (const classDefinition of lineage) visit(classDefinition);
     return Object.freeze(result);
   };
 
@@ -434,7 +436,7 @@ export function createRustProjectTypePolicy(
         allocateGeneratedName(usedNames, rustSnakeCaseIdentifier(field.sourceName)),
       );
     }
-    for (const member of denseNodes(host.ast.members(definition.declaration)) ?? []) {
+    for (const member of denseNodes(sourceObjectMemberDeclarations(host.ast, definition.declaration)) ?? []) {
       const kind = host.ast.kindName(member);
       if (definition.kind === "interface" && kind === "KindIndexSignature") {
         names.set(
@@ -462,7 +464,9 @@ export function createRustProjectTypePolicy(
         continue;
       }
       const isField = definition.kind === "class"
-        ? kind === "KindPropertyDeclaration" && !host.ast.hasModifierKind(member, "static")
+        ? (kind === "KindPropertyDeclaration" || sourceParameterIsProperty(host.ast, member)) &&
+          !sourceClassFieldIsTypeOnly(host.ast, member) &&
+          !host.ast.hasModifierKind(member, "static")
         : kind === "KindPropertySignature";
       if (!isField) {
         continue;
@@ -517,7 +521,7 @@ export function createRustProjectTypePolicy(
         roles: ["read", "write"] as readonly RustProjectMemberSlotRole[],
       })),
     ];
-    for (const member of denseNodes(host.ast.members(definition.declaration)) ?? []) {
+    for (const member of denseNodes(sourceObjectMemberDeclarations(host.ast, definition.declaration)) ?? []) {
       const kind = host.ast.kindName(member);
       const targetName = kind === "KindMethodDeclaration" || kind === "KindMethodSignature"
         ? host.targetNameForCallable(member)
@@ -527,6 +531,16 @@ export function createRustProjectTypePolicy(
       }
       if (kind === "KindMethodDeclaration" || kind === "KindMethodSignature") {
         callableTargetNames.set(member, targetName);
+        if (definition.genericParameters.length > 0 && host.ast.hasModifierKind(member, "static")) {
+          const canonical = canonicalCallable(member);
+          const slots = canonicalSlotNames.get(canonical) ?? new Map<RustProjectMemberSlotRole, string>();
+          const name = slots.get("static") ?? allocateGeneratedName(moduleUsedNames,
+            rustSnakeCaseIdentifier(`${definition.targetName}_${host.targetNameForCallable(canonical) ?? targetName}`));
+          slots.set("static", name);
+          canonicalSlotNames.set(canonical, slots);
+          setMemberSlotName(member, "static", name);
+          setMemberSlotName(canonical, "static", name);
+        }
       }
       if (kind === "KindPropertyDeclaration" && host.ast.hasModifierKind(member, "static")) {
         const staticName = allocateGeneratedName(
@@ -538,7 +552,8 @@ export function createRustProjectTypePolicy(
         setMemberSlotName(member, "static", staticName);
         continue;
       }
-      if (kind === "KindPropertyDeclaration" || kind === "KindPropertySignature") {
+      if (kind === "KindPropertyDeclaration" || kind === "KindPropertySignature" ||
+        sourceParameterIsProperty(host.ast, member)) {
         candidates.push({ declaration: member, targetName, roles: ["read", "write"] });
       } else if (kind === "KindGetAccessor") {
         candidates.push({ declaration: member, targetName, roles: ["read"] });
@@ -577,7 +592,26 @@ export function createRustProjectTypePolicy(
   }
 
   const frozenDefinitions = Object.freeze(definitions);
-  const orderedDefinitions = [...frozenDefinitions].sort(compareProjectDefinitions);
+  const definitionOrder = new Map(frozenDefinitions.map((definition, index) => [definition, index]));
+  const relatedContractsByClass = new Map<RustProjectTypeDefinition, readonly RustProjectTypeDefinition[]>();
+  const implementationsByContract = new Map<RustProjectTypeDefinition, RustProjectTypeDefinition[]>();
+  for (const definition of frozenDefinitions) {
+    if (definition.kind !== "class") continue;
+    const carrier = openCarrier(definition);
+    const contracts = [...(contractsForClass(definition) ?? [])]
+      .filter((candidate) => relationship(carrier, candidate).kind === "related")
+      .sort((left, right) => definitionOrder.get(left)! - definitionOrder.get(right)!);
+    relatedContractsByClass.set(definition, Object.freeze(contracts));
+    for (const contract of contracts) {
+      const implementations = implementationsByContract.get(contract) ?? [];
+      implementations.push(definition);
+      implementationsByContract.set(contract, implementations);
+    }
+  }
+  const concreteClassesByContract = new Map([...implementationsByContract].map(([contract, implementations]) => [
+    contract,
+    Object.freeze(implementations.filter((candidate) => !host.ast.hasModifierKind(candidate.declaration, "abstract"))),
+  ]));
   const downcastRoutesByDefinition = new WeakMap<
     RustProjectTypeDefinition,
     readonly RustProjectDowncastRoute[]
@@ -588,13 +622,16 @@ export function createRustProjectTypePolicy(
       throw new Error("Rust project definition has no dispatch name scope.");
     }
     const sourceComponent = host.sourcePackageComponentForFile(source.fileName);
-    const targets = sourceComponent === undefined
+    const implementations = sourceComponent === undefined
       ? []
-      : orderedDefinitions
-          .filter((target) => target.kind === "class" && target.genericParameters.length === 0)
+      : (implementationsByContract.get(source) ?? [])
           .filter((target) =>
-            host.sourcePackageComponentForFile(target.fileName) === sourceComponent)
-          .filter((target) => relationship(openCarrier(target), source).kind === "related");
+            host.sourcePackageComponentForFile(target.fileName) === sourceComponent);
+    const ancestors = new Set(implementations.flatMap((implementation) => classLineage(implementation) ?? []));
+    const targets = [...ancestors].filter((target) =>
+      target.genericParameters.length === 0 &&
+      host.sourcePackageComponentForFile(target.fileName) === sourceComponent)
+      .sort(compareProjectDefinitions);
     downcastRoutesByDefinition.set(source, Object.freeze(targets.map((target) => Object.freeze({
       source,
       target,
@@ -616,13 +653,12 @@ export function createRustProjectTypePolicy(
     if (definition.kind !== "class") {
       continue;
     }
-    const relatedDefinitions = frozenDefinitions.filter((candidate) =>
-      relationship(openCarrier(definition), candidate).kind === "related");
+    const relatedDefinitions = relatedContractsByClass.get(definition) ?? [];
     const contractMembers = new Set<Node>();
     for (const related of relatedDefinitions) {
       for (
         const member of
-          denseNodes(host.ast.members(related.declaration)) ?? []
+          denseNodes(sourceObjectMemberDeclarations(host.ast, related.declaration)) ?? []
       ) {
         contractMembers.add(member);
       }
@@ -673,10 +709,29 @@ export function createRustProjectTypePolicy(
       "The project member implementation was not classified before the Rust target program was sealed.",
   });
   const frozenIssues = Object.freeze(issues);
+  const reachableDefinitionsByRoot = new WeakMap<RustProjectTypeDefinition, readonly RustProjectTypeDefinition[]>();
+  const reachableDefinitions = (root: RustProjectTypeDefinition): readonly RustProjectTypeDefinition[] => {
+    const cached = reachableDefinitionsByRoot.get(root);
+    if (cached !== undefined) return cached;
+    const reachable = new Set<RustProjectTypeDefinition>();
+    const pending = [root];
+    while (pending.length > 0) {
+      const definition = pending.pop()!;
+      if (reachable.has(definition)) continue;
+      reachable.add(definition);
+      for (const edge of heritageByDeclaration.get(definition.declaration) ?? []) pending.push(edge.target);
+    }
+    const result = Object.freeze([...reachable].sort((left, right) =>
+      definitionOrder.get(left)! - definitionOrder.get(right)!));
+    reachableDefinitionsByRoot.set(root, result);
+    return result;
+  };
   const policy: RustProjectTypePolicy = {
     definitions: frozenDefinitions,
     issues: frozenIssues,
     programErrorDefinitions,
+    builtinErrorProjectionAvailable: !programErrorDefinitions.some(definition =>
+      externalBaseByDeclaration.get(definition.declaration)?.programError === true),
     definitionForDeclaration(declaration) {
       return declaration === undefined ? undefined : byDeclaration.get(declaration);
     },
@@ -711,7 +766,9 @@ export function createRustProjectTypePolicy(
       if (carriers.length < 2) {
         return undefined;
       }
-      const common = frozenDefinitions.flatMap((definition) => {
+      const firstDefinition = definitionForCarrier(carriers[0]);
+      if (firstDefinition === undefined) return undefined;
+      const common = reachableDefinitions(firstDefinition).flatMap((definition) => {
         const relationships = carriers.map((carrier) => relationship(carrier, definition));
         if (relationships.some((selected) => selected.kind !== "related")) {
           return [];
@@ -752,21 +809,17 @@ export function createRustProjectTypePolicy(
         declaredCarrier,
         substitutions.types,
         substitutions.lifetimes,
+        new Map(),
+        host.normalizeCarrier,
       );
     },
     isPolymorphic(definition) {
-      return polymorphic.has(definition);
+      return polymorphic.has(definition) || host.ast.hasModifierKind(definition.declaration, "abstract");
     },
     classLineage,
-    interfacesForClass,
+    contractsForClass,
     concreteClassesFor(definition) {
-      return Object.freeze(definitions.filter((candidate) => {
-        if (candidate.kind !== "class") {
-          return false;
-        }
-        const relation = relationship(policy.openCarrier(candidate), definition);
-        return relation.kind === "related";
-      }));
+      return concreteClassesByContract.get(definition) ?? Object.freeze([]);
     },
     downcastRoutesFor(definition) {
       return downcastRoutesByDefinition.get(definition) ?? Object.freeze([]);
@@ -823,28 +876,4 @@ export function createRustProjectTypePolicy(
     },
   };
   return Object.freeze(policy);
-}
-
-function projectGenericSubstitutions(
-  definition: RustProjectTypeDefinition,
-  arguments_: readonly import("../../../target-model/types/model.js").RustTargetGenericArgument[] | undefined,
-): {
-  readonly types: ReadonlyMap<string, TargetTypeRef>;
-  readonly lifetimes: ReadonlyMap<string, import("../../../target-model/lifetimes/index.js").RustLifetimeRef>;
-} | undefined {
-  const values = arguments_ ?? [];
-  if (values.length !== definition.genericParameters.length) return undefined;
-  const types = new Map<string, TargetTypeRef>();
-  const lifetimes = new Map<string, import("../../../target-model/lifetimes/index.js").RustLifetimeRef>();
-  for (const [index, parameter] of definition.genericParameters.entries()) {
-    const argument = values[index];
-    if (parameter.kind === "lifetime") {
-      if (argument?.kind !== "lifetime") return undefined;
-      lifetimes.set(rustLifetimeKey(parameter.lifetime), argument.lifetime);
-      continue;
-    }
-    if (argument?.kind !== "type") return undefined;
-    types.set(parameter.sourceName, argument.type);
-  }
-  return Object.freeze({ types, lifetimes });
 }

@@ -12,11 +12,15 @@ import {
   rustStructuralObjectCarrierValue,
   rustStringTargetType,
   rustUnitTargetType,
+  rustTargetGenericBindingsForArguments,
+  substituteRustTargetGenerics,
 } from "../../../../target-model/types/index.js";
 import { readRustSourceKeepAlive } from "../../../../policy/operations/reachability-source.js";
 import { acceptProjectSourceCall, mapSelectedJsSpecialCall } from "../object-shapes.js";
+import { checkedPropertySelectionInput, selectRustCheckedPropertyAccess } from "../properties.js";
 import { acceptRustPolicy } from "../../../../policy/operations/contracts.js";
 import { acceptSelectedCall, checkedCallIsConstruction, instantiateSelectedCallTemplate, selectedCallReceiverValueCarrier, selectRustOptionalCallResult } from "./instantiation.js";
+import { selectedImplicitSuperConstructorClass } from "./implicit-super.js";
 import { substituteProviderOperationForm } from "./template-instantiation.js";
 import { closedMetadataKey } from "../../../../target-model/metadata/closed-data.js";
 import { mapRustSourceMarkerCall } from "./deferred.js";
@@ -28,12 +32,19 @@ import { rustRuntimeCarrierKey, rustSelectedCallKey } from "../../../../target-m
 import { selectedCallArgumentCarriers, selectedCallArgumentNodes, selectedCallCalleeDeclaration, selectedCallCalleeSymbol, selectedValueCarrier } from "../operators.js";
 import { selectJsSurfaceConstructorBySourceOwner, selectJsSurfaceOperation } from "../../../../policy/operations/js-surface.js";
 import { selectRustGeneratorSourceCall } from "../../../../policy/types/generator-source-profile.js";
+import { rustSourceErrorConstructors } from "../../../../target-model/identities/source-errors.js";
 import { selectRustProviderOperation } from "../../../../policy/operations/provider-selection.js";
 import { selectRustProviderPointerResult } from "../../../../policy/operations/provider-pointer-result.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { sourceCallMarkerByIdentity } from "../model.js";
 import { mapSelectedStringRegExpProtocolCall } from "../regexp-protocols.js";
 import { selectedRustRegExpReplacementCallbackEvidence } from "../regexp-replacement-callback.js";
+import { canRequireSourceClone } from "./clone-requirements.js";
+import { selectRustRuntimeCallableGenerics } from "./runtime-callable-generics.js";
+import { rustLifetimeKey } from "../../../../target-model/lifetimes/index.js";
+import { rustOperandSupportsSourceNumeric } from "../../generic-numeric.js";
+import { selectRustPointerViewCall } from "../../pointer-views.js";
+import { selectRustArrayCopyMode } from "../../array-copy.js";
 import type {
   RustCheckedCallSelectionInput,
   RustCheckedCallSelectionResult,
@@ -49,6 +60,8 @@ export function selectRustCheckedCall(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedCallSelectionResult> {
+  const pointerView = selectRustPointerViewCall(request, context, options);
+  if (pointerView !== undefined) return pointerView;
   const keepAlive = readRustSourceKeepAlive(request.source.call, context);
   if (keepAlive !== undefined) {
     const value = resolveRustTargetTypeRef(keepAlive.valueExpression, context, options);
@@ -156,28 +169,56 @@ export function selectRustCheckedCall(
   }
 
   if (selectedSourceMember?.ownerName === "ErrorConstructor" &&
-    selectedSourceMember.memberName === "constructor" && checkedCallIsConstruction(request, context)) {
-    if (selectedCallArgumentNodes(request).length !== 1) {
+    selectedSourceMember.memberName === "captureStackTrace") {
+    const carriers = selectedCallArgumentCarriers(request, context, options);
+    const carrier = carriers[0];
+    const definition = carrier === undefined ? undefined : options.projectTypes.definitionForCarrier(carrier);
+    if (carriers.length !== 1 || carrier === undefined ||
+      (!rustTargetTypeRefEquals(carrier, rustJsErrorTargetType()) &&
+        (definition === undefined || options.projectTypes.externalBaseForDefinition(definition)?.programError !== true))) {
+      return rejectSelectedOperation(request.source.call, context, "RUST_ERROR_CAPTURE_CONTRACT",
+        "Error.captureStackTrace requires one exact builtin Error or Error-derived project value.");
+    }
+    return acceptSelectedCall(request, {
+      kind: "provider-operation", operationId: "tsonic.rust.error.capture-stack", operationKind: "method",
+      target: { form: "call", path: "rt::capture_error_stack", argModes: ["ref"] },
+      parameterCarriers: [carrier], resultCarrier: rustUnitTargetType(),
+      isAsync: false, isFallible: false, errorBoundary: "none",
+    }, [carrier], context, options, { sourceName: "captureStackTrace" });
+  }
+  const errorConstructor = selectedSourceMember === undefined ? undefined :
+    rustSourceErrorConstructors.find((entry) => entry.ownerName === selectedSourceMember.ownerName &&
+      (entry.sourceName === "Error" || selectedSourceMember.profile === "js"));
+  if (errorConstructor !== undefined &&
+    (selectedSourceMember?.memberName === "call" ||
+      selectedSourceMember?.memberName === "constructor" && checkedCallIsConstruction(request, context))) {
+    const argumentCount = selectedCallArgumentNodes(request).length;
+    if (argumentCount > 1) {
       return rejectSelectedOperation(
         request.source.call,
         context,
         "RUST_ERROR_MESSAGE_REQUIRED",
-        "Rust Error construction currently requires one checked string message argument.",
+        "Rust error construction requires an empty argument list or one checked string message.",
       );
     }
     const resultCarrier = rustJsErrorTargetType();
+    const parameterCarriers = argumentCount === 0 ? [] : [rustStringTargetType()];
     return acceptSelectedCall(request, {
       kind: "provider-operation",
-      operationId: "tsonic.rust.error.constructor",
+      operationId: errorConstructor.operationId,
       operationKind: "constructor",
-      target: { form: "call", path: "rt::JsError::error", argModes: ["ref"] },
-      parameterCarriers: [rustStringTargetType()],
+      target: {
+        form: "call", path: errorConstructor.path,
+        argModes: argumentCount === 0 ? [] : ["ref"],
+        ...(argumentCount === 0 ? { trailingArguments: [{ kind: "string", value: "" } as const] } : {}),
+      },
+      parameterCarriers,
       resultCarrier,
       isAsync: false,
       isFallible: false,
       errorBoundary: "none",
-    }, [rustStringTargetType()], context, options, {
-      sourceName: "Error",
+    }, parameterCarriers, context, options, {
+      sourceName: errorConstructor.sourceName,
     });
   }
   if (selectedSourceMember !== undefined) {
@@ -224,8 +265,9 @@ export function selectRustCheckedCall(
         sourceOwnerName: selectedSourceMember.ownerName,
         typeArgumentCarriers,
         argumentCarriers,
+        soleArgumentNumberKind: selectedSoleArgumentNumberKind(request, context),
         carrierSupportsProjectIdentity: options.projectCarrierSupportsObjectIdentity,
-      });
+      }, context.typeDefinitions);
       if (selection === undefined || selection.fact.kind !== "provider-operation" || selection.resultCarrier === undefined) {
         return rejectSelectedOperation(
           request.source.call,
@@ -283,9 +325,11 @@ export function selectRustCheckedCall(
       ? undefined
       : resolveRustTargetTypeRef(request.source.sourceResultType, context, options);
     const selection = selectJsSurfaceOperation({
+      arrayCopyMode: () => selectRustArrayCopyMode(request, context, options),
       ownerName: selectedSourceMember.ownerName,
       memberName: selectedSourceMember.memberName,
       operationKind: "call",
+      soleArgumentNumberKind: selectedSoleArgumentNumberKind(request, context),
       ...(receiverCarrier === undefined ? {} : { receiverCarrier }),
       ...(sourceResultCarrier === undefined ? {} : { sourceResultCarrier }),
       ...(argumentCarriers.length === 0 ? {} : { argumentCarriers }),
@@ -305,8 +349,14 @@ export function selectRustCheckedCall(
           : undefined;
       },
       carrierSupportsProjectIdentity: options.projectCarrierSupportsObjectIdentity,
+      canRequireClone: carrier => canRequireSourceClone(carrier, request.source.call, context),
+      numericParameterArgument: (index, carrier) => {
+        const argument = selectedCallArgumentNodes(request)[index];
+        return argument !== undefined && carrier.kind === "type-parameter" &&
+          rustOperandSupportsSourceNumeric(argument, carrier, context, options);
+      },
       resultUse: context.source.navigation.expressionResultUse(request.source.call),
-    });
+    }, context.typeDefinitions);
     if (selection === undefined || selection.fact.kind !== "provider-operation" || selection.resultCarrier === undefined) {
       return rejectSelectedOperation(
         request.source.call,
@@ -363,6 +413,11 @@ export function selectRustCheckedCall(
     return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_PROJECT_DECLARATION_MISSING", "Checked project-source call has callee evidence but no exact selected callable declaration evidence.");
   }
   if (sourceDeclaration !== undefined) {
+    const declarationKind = context.ast.kindName(sourceDeclaration);
+    if (declarationKind === "KindFunctionType" || declarationKind === "KindCallSignature") {
+      const runtimeCallable = acceptRuntimeCallableCall(request, context, options);
+      if (runtimeCallable !== undefined) return runtimeCallable;
+    }
     const structuralMethod = acceptStructuralRuntimeMethodCall(
       request,
       sourceDeclaration,
@@ -383,6 +438,23 @@ export function selectRustCheckedCall(
   );
 }
 
+function selectedSoleArgumentNumberKind(
+  request: RustCheckedCallSelectionInput,
+  context: RustOperationPolicyContext,
+): "number" | "non-number" | undefined {
+  const argument = request.source.sourceArguments[0];
+  if (request.source.sourceArguments.length !== 1 || argument === undefined) return undefined;
+  const types = context.currentSemantics.types;
+  const members = types.isUnion(argument.type)
+    ? types.unionOrIntersectionTypes(argument.type)
+    : [argument.type];
+  if (members.length === 0 || members.some(member => member === undefined || types.isAny(member) || types.isUnknown(member))) {
+    return undefined;
+  }
+  const numeric = members.map(member => types.isNumberLike(member!));
+  return numeric.every(Boolean) ? "number" : numeric.every(value => !value) ? "non-number" : undefined;
+}
+
 function acceptRuntimeCallableCall(
   request: RustCheckedCallSelectionInput,
   context: RustOperationPolicyContext,
@@ -390,6 +462,19 @@ function acceptRuntimeCallableCall(
 ): RustPolicySelection<RustCheckedCallSelectionResult> | undefined {
   if (checkedCallIsConstruction(request, context)) {
     return undefined;
+  }
+  const callee = request.source.sourceCallee.expression;
+  if (context.ast.kindName(callee) === "KindPropertyAccessExpression") {
+    const selected = resolveRustTargetTypeRef(request.source.sourceCallee.type, context, options);
+    if (runtimeCallableProtocol(selected) === undefined) return undefined;
+    const property = context.currentSemantics.operations.propertyAccess(callee);
+    if (property === undefined) return undefined;
+    const selection = selectRustCheckedPropertyAccess(
+      checkedPropertySelectionInput(context, callee, property),
+      context,
+      options,
+    );
+    if (selection.kind === "reject") return selection;
   }
   const calleeCarrier = selectedValueCarrier(
     request.source.sourceCallee.expression,
@@ -517,9 +602,27 @@ function acceptRuntimeCallableCarrierCall(
   if (calleeCarrier === undefined || protocol === undefined) {
     return undefined;
   }
+  const targetGenericArguments = selectRustRuntimeCallableGenerics(request, calleeCarrier, context);
+  if (targetGenericArguments === undefined) {
+    return rejectSelectedOperation(request.source.call, context,
+      "RUST_RUNTIME_CALLABLE_GENERIC_CONTRACT_CONFLICT",
+      "Runtime callable generic arguments require the exact selected lifetime binder; runtime type generics are not erased.");
+  }
+  const genericParameters = calleeCarrier.kind !== "closure" || calleeCarrier.lifetimeBinder === undefined ? []
+    : calleeCarrier.lifetimeBinder.parameters.map((parameter, index) => ({
+        kind: "lifetime" as const,
+        sourceName: request.source.sourceSelectedMethodTypeArguments![index]!.typeParameterName,
+        targetIdentity: rustLifetimeKey(parameter.lifetime),
+      }));
+  const substitutions = rustTargetGenericBindingsForArguments(genericParameters, targetGenericArguments);
+  if (substitutions === undefined) return undefined;
+  const instantiate = (carrier: TargetTypeRef): TargetTypeRef => substituteRustTargetGenerics(
+    carrier, substitutions.types, substitutions.lifetimes, substitutions.consts,
+  );
+  const resultCarrier = instantiate(protocol.result);
   const parameterPlan = runtimeCallableTargetParameters(
     request,
-    protocol.parameters,
+    protocol.parameters.map(instantiate),
     context,
   );
   if (parameterPlan === undefined) {
@@ -527,7 +630,7 @@ function acceptRuntimeCallableCarrierCall(
   }
   const optionalResult = selectRustOptionalCallResult(
     request,
-    protocol.result,
+    resultCarrier,
     context,
     options,
     optionalGuard,
@@ -546,11 +649,13 @@ function acceptRuntimeCallableCarrierCall(
     targetName: "call",
     kind: "method",
     parameters: parameterPlan.parameters,
-    returnType: protocol.result,
+    returnType: resultCarrier,
+    ...(genericParameters.length === 0 ? {} : { genericParameters }),
   };
   const selectedSignature = {
     member,
     sourceCallableCarrier: calleeCarrier,
+    ...(targetGenericArguments.length === 0 ? {} : { targetGenericArguments }),
     sourceCallableParameterIndexes: parameterPlan.sourceParameterIndexes,
     ...(sourceSelectedReceiverCarrier === undefined
       ? {}
@@ -637,32 +742,8 @@ function runtimeCallableProtocol(
   readonly parameters: readonly TargetTypeRef[];
   readonly result: TargetTypeRef;
 } | undefined {
-  if (carrier?.kind === "function-pointer") {
+  if (carrier?.kind === "function-pointer" || carrier?.kind === "closure") {
     return { parameters: carrier.args, result: carrier.result };
   }
   return rustCallableProtocol(carrier);
-}
-
-function selectedImplicitSuperConstructorClass(
-  request: RustCheckedCallSelectionInput,
-  context: RustOperationPolicyContext,
-  options: RustOperationsProviderOptions,
-): Node | undefined {
-  if (context.ast.kindName(request.source.sourceCallee.expression) !== "KindSuperKeyword") {
-    return undefined;
-  }
-  const containing = options.projectTypes.definitionContainingDeclaration(
-    request.source.call,
-  );
-  if (containing?.kind !== "class") {
-    return undefined;
-  }
-  const matches = options.projectTypes.heritageForDefinition(containing).filter((edge) =>
-    edge.kind === "extends" &&
-    edge.target.kind === "class" &&
-    options.projectTypes.constructorForSignature(
-      edge.target,
-      request.source.selectedSignature,
-    ) !== undefined);
-  return matches.length === 1 ? matches[0]!.target.declaration : undefined;
 }

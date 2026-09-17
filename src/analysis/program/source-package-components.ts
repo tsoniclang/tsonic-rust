@@ -14,6 +14,7 @@ export interface RustSourcePackageComponentSemantics {
   readonly dependencyComponentIds: readonly string[];
   readonly publishesImplementationAbi: boolean;
   readonly errorDomain: RustErrorDomain;
+  readonly errorOwnerComponentId: string | undefined;
   readonly root: boolean;
 }
 
@@ -146,20 +147,16 @@ export function analyzeRustSourcePackageComponents(
     return { kind: "rejected", diagnostics: Object.freeze(diagnostics) };
   }
 
-  const reachesError = new Map<string, boolean>();
-  const componentReachesError = (componentId: string): boolean => {
-    const existing = reachesError.get(componentId);
-    if (existing !== undefined) {
-      return existing;
-    }
+  const errorOwners = new Map<string, string | undefined>();
+  for (const componentId of order) {
     const component = componentById.get(componentId)!;
-    const value = errorComponents.has(componentId) ||
-      component.dependencies
-        .filter((dependency) => activeComponentIds.has(dependency))
-        .some(componentReachesError);
-    reachesError.set(componentId, value);
-    return value;
-  };
+    const dependencyOwners = new Set(component.dependencies.flatMap((dependency) => {
+      const owner = errorOwners.get(dependency);
+      return owner === undefined ? [] : [owner];
+    }));
+    errorOwners.set(componentId, errorComponents.has(componentId) || dependencyOwners.size > 1
+      ? componentId : [...dependencyOwners][0]);
+  }
   const components = Object.freeze(order.map(
     (componentId): RustSourcePackageComponentSemantics => {
       const component = componentById.get(componentId)!;
@@ -173,9 +170,10 @@ export function analyzeRustSourcePackageComponents(
           .filter((candidate) => activeComponentIds.has(candidate))
           .sort(compareNames)),
         publishesImplementationAbi: !root || outputType === "lib",
-        errorDomain: componentReachesError(componentId)
+        errorDomain: errorOwners.get(componentId) !== undefined
           ? "project"
           : "runtime",
+        errorOwnerComponentId: errorOwners.get(componentId),
         root,
       });
     },

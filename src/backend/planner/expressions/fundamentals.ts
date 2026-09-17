@@ -34,7 +34,7 @@ import { planRustFallibleReturnExpression } from "../statements/completion-exits
 import { planRustNonConsumingValue } from "./typed-locations.js";
 import { requireProviderArgumentPassingFacts } from "./calls/arguments.js";
 import { rustArgumentPassingMode } from "../../../analysis/facts/parameter-passing.js";
-import { rustEffectiveValueCarrier, rustValueCarrierBeforeOptionProjection } from "../../../analysis/facts/value-carrier-queries.js";
+import { rustEffectiveValueCarrier, rustValueCarrierBeforeContextualConversion } from "../../../analysis/facts/value-carrier-queries.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { validateRustFinalizedOperationAbi } from "../../../analysis/facts/finalized-operation-abi.js";
 import type { Node } from "@tsonic/tsts";
@@ -372,7 +372,7 @@ export function providerSelectedCallMatches(
   fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }>,
   context: RustPlanContext,
 ): boolean {
-  if (!validateRustFinalizedOperationAbi(fact.abi)) {
+  if (!validateRustFinalizedOperationAbi(fact.abi, context.input.program.typeDefinitions)) {
     return false;
   }
   const selected = context.input.program.facts.getSelectedTargetCall(node);
@@ -428,7 +428,7 @@ export function planSourceConversion(node: Node, context: RustPlanContext): Rust
 }
 
 export function planNumericLiteral(node: Node, context: RustPlanContext): RustExpr | undefined {
-  const carrier = rustValueCarrierBeforeOptionProjection(context.input.program.facts, node);
+  const carrier = rustValueCarrierBeforeContextualConversion(context.input.program.facts, node);
   if (carrier === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -441,7 +441,7 @@ export function planNumericLiteral(node: Node, context: RustPlanContext): RustEx
 }
 
 export function planBigIntLiteral(node: Node, context: RustPlanContext): RustExpr | undefined {
-  const carrier = expressionCarrier(node, context);
+  const carrier = rustValueCarrierBeforeContextualConversion(context.input.program.facts, node);
   const value = parseSourceBigIntLiteral(context.input.program.source.ast.text(node));
   if (value !== undefined && isRustIntegerCarrier(carrier)) {
     return { kind: "int-literal", text: value.toString(10) };

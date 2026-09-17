@@ -1,6 +1,9 @@
-import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustSourceUnion, RustStructuralInstantiation } from "../../policy/types/source-type-registry.js";
+import { createRustGeneratedUnionPlan, type RustGeneratedUnionPlan } from "./generated-union-plan.js";
 import type { RustNativeMemoryLayout, RustNativeObjectField } from "../../target-model/operations/native-memory.js";
-import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustNativeMemoryLayoutsEqual } from "../../target-model/operations/native-memory.js";
+import { rustTargetGenericArgumentEquals, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import {
   rustPascalCaseIdentifier,
@@ -8,9 +11,14 @@ import {
 } from "../../target-model/names/identifiers.js";
 import {
   rustStructuralObjectCarrierValue,
+  rustStructuralObjectTargetType,
   rustTargetGenericReferences,
 } from "../../target-model/types/index.js";
 import type { RustLifetimeRef } from "../../target-model/lifetimes/index.js";
+import { visitRustTargetTypeParameters } from "../../target-model/types/carriers/generic-references.js";
+import { substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
+import { inferRustTargetTypeParameterBindings } from "../../target-model/types/carriers/generic-inference.js";
+import { rustStructuralGenericCarrier } from "./structural-generic-carrier.js";
 import type {
   RustSourceObjectShape,
   RustStructuralFieldImplementation,
@@ -23,20 +31,27 @@ export interface RustStructuralShapeField {
   readonly carrier: TargetTypeRef;
   readonly presence: "required" | "optional";
   readonly readonly: boolean;
-  readonly storage: "stored" | "property";
+  readonly storage: "stored" | "property" | "bound";
   readonly property?: {
     readonly getterTargetName: string;
     readonly setterTargetName?: string;
   };
   readonly method?: true;
+  readonly receiverIndependent?: true;
+}
+
+export function rustStructuralFieldIsFallible(field: Pick<RustStructuralShapeField, "storage"> | undefined): boolean {
+  return field !== undefined && field.storage !== "stored";
 }
 
 export interface RustStructuralShapeDefinition {
   readonly carrier: TargetTypeRef;
+  readonly sourceCarriers: readonly TargetTypeRef[];
   readonly ownerFileName: string;
   readonly componentId: string;
   readonly targetName: string;
   readonly genericParameters: readonly RustStructuralShapeGenericParameter[];
+  readonly genericArguments: readonly RustTargetGenericArgument[];
   readonly fields: readonly RustStructuralShapeField[];
 }
 
@@ -47,9 +62,10 @@ export type RustStructuralShapeGenericParameter =
     }
   | { readonly kind: "type"; readonly name: string };
 
-export interface RustStructuralShapePlan {
+export interface RustStructuralShapePlan extends RustGeneratedUnionPlan {
   readonly definitions: readonly RustStructuralShapeDefinition[];
   definitionForCarrier(carrier: TargetTypeRef | undefined): RustStructuralShapeDefinition | undefined;
+  sharesStorage(left: TargetTypeRef, right: TargetTypeRef): boolean;
   fieldName(carrier: TargetTypeRef, storageIndex: number): string | undefined;
   field(carrier: TargetTypeRef, storageIndex: number): RustStructuralShapeField | undefined;
 }
@@ -60,6 +76,9 @@ export interface RustStructuralShapePlanRegistry extends RustStructuralShapePlan
     implementations: readonly RustStructuralFieldImplementation[],
     componentForFile: (fileName: string) => string,
     nativeFields: readonly RustNativeObjectField[],
+    instantiations: readonly RustStructuralInstantiation[],
+    unions: readonly RustSourceUnion[],
+    receiverIndependentMethods?: ReadonlySet<string>,
   ): RustStructuralShapePlan;
   isInitialized(): boolean;
   seal(): RustStructuralShapePlan;
@@ -79,11 +98,14 @@ export function createRustStructuralShapePlanRegistry(): RustStructuralShapePlan
       implementations: readonly RustStructuralFieldImplementation[],
       componentForFile: (fileName: string) => string,
       nativeFields: readonly RustNativeObjectField[],
+      instantiations: readonly RustStructuralInstantiation[],
+      unions: readonly RustSourceUnion[],
+      receiverIndependentMethods: ReadonlySet<string> = new Set(),
     ) {
       if (current !== undefined) {
         throw new Error("Rust structural shape plan can be initialized only once.");
       }
-      current = createRustStructuralShapePlan(shapes, implementations, componentForFile, nativeFields);
+      current = createRustStructuralShapePlan(shapes, implementations, componentForFile, nativeFields, instantiations, unions, receiverIndependentMethods);
       return current;
     },
     isInitialized() {
@@ -95,8 +117,17 @@ export function createRustStructuralShapePlanRegistry(): RustStructuralShapePlan
     get definitions() {
       return requireCurrent().definitions;
     },
+    get unionDefinitions() {
+      return requireCurrent().unionDefinitions;
+    },
+    unionForCarrier(carrier: TargetTypeRef) {
+      return requireCurrent().unionForCarrier(carrier);
+    },
     definitionForCarrier(carrier: TargetTypeRef | undefined) {
       return requireCurrent().definitionForCarrier(carrier);
+    },
+    sharesStorage(left: TargetTypeRef, right: TargetTypeRef) {
+      return requireCurrent().sharesStorage(left, right);
     },
     fieldName(carrier: TargetTypeRef, storageIndex: number) {
       return requireCurrent().fieldName(carrier, storageIndex);
@@ -112,25 +143,64 @@ export function createRustStructuralShapePlan(
   implementations: readonly RustStructuralFieldImplementation[],
   componentForFile: (fileName: string) => string,
   nativeFields: readonly RustNativeObjectField[],
+  instantiations: readonly RustStructuralInstantiation[] = [],
+  unions: readonly RustSourceUnion[] = [],
+  receiverIndependentMethods: ReadonlySet<string> = new Set(),
 ): RustStructuralShapePlan {
-  const uniqueByKey = new Map<string, TargetTypeRef>();
+  const uniqueByKey = new Map<string, Map<string, TargetTypeRef>>();
   for (const shape of shapes) {
     const structural = rustStructuralObjectCarrierValue(shape.carrier);
     if (structural === undefined) {
       continue;
     }
-    const key = closedMetadataKey(shape.carrier);
-    const existing = uniqueByKey.get(key);
+    const key = structuralStorageKey(shape.carrier, componentForFile);
+    const instances = uniqueByKey.get(key) ?? new Map<string, TargetTypeRef>();
+    uniqueByKey.set(key, instances);
+    const instanceKey = closedMetadataKey(shape.carrier);
+    const existing = instances.get(instanceKey);
     if (existing === undefined) {
-      uniqueByKey.set(key, shape.carrier);
+      instances.set(instanceKey, shape.carrier);
     } else if (!rustTargetTypeRefEquals(existing, shape.carrier)) {
       throw new Error("Rust structural carrier canonicalization produced a non-injective identity.");
     }
   }
+  const roots = new Map<string, string>();
+  for (const { template, instance } of instantiations) {
+    const templateKey = structuralStorageKey(template, componentForFile);
+    const instanceKey = structuralStorageKey(instance, componentForFile);
+    if (templateKey === instanceKey) continue;
+    const prior = roots.get(instanceKey);
+    if (prior !== undefined && prior !== templateKey) {
+      throw new Error("Rust structural instantiation has contradictory storage templates.");
+    }
+    roots.set(instanceKey, templateKey);
+  }
+  const rootFor = (key: string): string => {
+    const visited = new Set<string>();
+    while (roots.has(key)) {
+      if (visited.has(key)) throw new Error("Rust structural instantiation has cyclic storage templates.");
+      visited.add(key);
+      key = roots.get(key)!;
+    }
+    return key;
+  };
+  const grouped = new Map<string, Map<string, TargetTypeRef>>();
+  for (const [key, instances] of uniqueByKey) {
+    const root = rootFor(key);
+    if (!uniqueByKey.has(root)) throw new Error("Rust structural instantiation is missing its declared storage template.");
+    const group = grouped.get(root) ?? new Map<string, TargetTypeRef>();
+    grouped.set(root, group);
+    for (const [instanceKey, carrier] of instances) group.set(instanceKey, carrier);
+  }
   const usedTypeNamesByComponent = new Map<string, Set<string>>();
-  const definitions = [...uniqueByKey]
+  const definitions = [...grouped]
     .sort(([left], [right]) => left.localeCompare(right, "en"))
-    .map(([, carrier]): RustStructuralShapeDefinition => {
+    .map(([key, instances]): RustStructuralShapeDefinition => {
+      const sourceCarriers = Object.freeze([...instances]
+        .sort(([left], [right]) => left.localeCompare(right, "en"))
+        .map(([, carrier]) => carrier));
+      const carrier = rustStructuralGenericCarrier([...uniqueByKey.get(key)!]
+        .sort(([left], [right]) => left.localeCompare(right, "en"))[0]![1]);
       const structural = rustStructuralObjectCarrierValue(carrier);
       if (structural === undefined) {
         throw new Error("Rust structural shape plan contains a non-structural carrier.");
@@ -140,15 +210,20 @@ export function createRustStructuralShapePlan(
       usedTypeNamesByComponent.set(componentId, usedTypeNames);
       const usedFieldNames = new Set<string>();
       const fields = structural.fields.map((field, storageIndex): RustStructuralShapeField => {
-        const nativeLayout = nativeFields.find(candidate => candidate.storageIndex === storageIndex &&
-          rustTargetTypeRefEquals(candidate.owner, carrier))?.layout;
+        const selectedNativeFields = nativeFields.filter(candidate => candidate.storageIndex === storageIndex &&
+          instances.has(closedMetadataKey(candidate.owner)));
+        const nativeLayout = selectedNativeFields[0]?.layout;
+        if (nativeLayout !== undefined && selectedNativeFields.some(candidate =>
+          !rustNativeMemoryLayoutsEqual(candidate.layout, nativeLayout))) {
+          throw new Error("Equivalent Rust structural carriers have contradictory native field layouts.");
+        }
         const targetName = allocateSnakeName(
           usedFieldNames,
           rustSnakeCaseIdentifier(field.sourceName),
         );
         const fieldImplementations = implementations.filter((implementation) =>
           implementation.storageIndex === storageIndex &&
-          rustTargetTypeRefEquals(implementation.carrier, carrier));
+          instances.has(closedMetadataKey(implementation.carrier)));
         const propertyStorage = field.accessor !== undefined ||
           fieldImplementations.some((implementation) => implementation.kind === "accessor");
         return Object.freeze({
@@ -158,7 +233,7 @@ export function createRustStructuralShapePlan(
           carrier: field.type,
           presence: field.presence,
           readonly: field.readonly,
-          storage: propertyStorage ? "property" as const : "stored" as const,
+          storage: field.bound === true ? "bound" as const : propertyStorage ? "property" as const : "stored" as const,
           ...(!propertyStorage
             ? {}
             : {
@@ -178,6 +253,8 @@ export function createRustStructuralShapePlan(
                 }),
               }),
           ...(field.method === true ? { method: true as const } : {}),
+          ...(receiverIndependentMethods.has(`${structuralStorageKey(carrier, componentForFile)}#${storageIndex}`)
+            ? { receiverIndependent: true as const } : {}),
         });
       });
       const genericReferences = rustTargetGenericReferences(carrier);
@@ -187,6 +264,7 @@ export function createRustStructuralShapePlan(
       }
       return Object.freeze({
         carrier,
+        sourceCarriers,
         ownerFileName: structural.ownerFileName,
         componentId,
         targetName: allocatePascalName(usedTypeNames, preferredShapeName(fields)),
@@ -200,13 +278,40 @@ export function createRustStructuralShapePlan(
             name,
           })),
         ]),
+        genericArguments: Object.freeze([
+          ...genericReferences.lifetimes.map(lifetime => ({ kind: "lifetime" as const, lifetime })),
+          ...genericReferences.typeNames.map(name => ({ kind: "type" as const, type: { kind: "type-parameter" as const, name } })),
+        ]),
         fields: Object.freeze(fields),
       });
     });
-  const byKey = new Map(definitions.map((definition) =>
-    [closedMetadataKey(definition.carrier), definition] as const));
+  const byKey = new Map(definitions.flatMap((definition) =>
+    definition.sourceCarriers.map((carrier) =>
+      [closedMetadataKey(carrier), instantiateStructuralDefinition(definition, carrier)] as const)));
+  for (const definition of definitions) {
+    const key = closedMetadataKey(definition.carrier);
+    const existing = byKey.get(key);
+    if (existing !== undefined && (existing.targetName !== definition.targetName ||
+      existing.componentId !== definition.componentId)) {
+      throw new Error("Rust structural storage has conflicting canonical template identities.");
+    }
+    byKey.set(key, definition);
+  }
   return Object.freeze({
+    ...createRustGeneratedUnionPlan(unions, componentForFile, usedTypeNamesByComponent),
     definitions: Object.freeze(definitions),
+    sharesStorage(left: TargetTypeRef, right: TargetTypeRef) {
+      const leftDefinition = byKey.get(closedMetadataKey(left));
+      const rightDefinition = byKey.get(closedMetadataKey(right));
+      return leftDefinition !== undefined && rightDefinition !== undefined &&
+        rustTargetTypeRefEquals(leftDefinition.carrier, left) &&
+        rustTargetTypeRefEquals(rightDefinition.carrier, right) &&
+        leftDefinition.componentId === rightDefinition.componentId &&
+        leftDefinition.targetName === rightDefinition.targetName &&
+        leftDefinition.genericArguments.length === rightDefinition.genericArguments.length &&
+        leftDefinition.genericArguments.every((argument, index) =>
+          rustTargetGenericArgumentEquals(argument, rightDefinition.genericArguments[index]!));
+    },
     definitionForCarrier(carrier: TargetTypeRef | undefined) {
       if (carrier === undefined || rustStructuralObjectCarrierValue(carrier) === undefined) {
         return undefined;
@@ -230,6 +335,50 @@ export function createRustStructuralShapePlan(
         ? definition.fields[storageIndex]
         : undefined;
     },
+  });
+}
+
+export function structuralStorageKey(carrier: TargetTypeRef, componentForFile: (fileName: string) => string): string {
+  const substitutions = new Map<string, TargetTypeRef>();
+  visitRustTargetTypeParameters(carrier, (name) => {
+    if (!substitutions.has(name)) {
+      substitutions.set(name, { kind: "type-parameter", name: `ShapeParameter${substitutions.size}` });
+    }
+    return false;
+  });
+  const normalized = substituteRustTargetTypeParameters(carrier, substitutions);
+  const shape = rustStructuralObjectCarrierValue(normalized);
+  return closedMetadataKey(shape === undefined ? normalized :
+    rustStructuralObjectTargetType(componentForFile(shape.ownerFileName), shape.fields, shape.representation));
+}
+
+function instantiateStructuralDefinition(
+  definition: RustStructuralShapeDefinition,
+  carrier: TargetTypeRef,
+): RustStructuralShapeDefinition {
+  if (rustTargetTypeRefEquals(definition.carrier, carrier)) {
+    return definition;
+  }
+  const parameters = new Set(definition.genericParameters.flatMap(parameter =>
+    parameter.kind === "type" ? [parameter.name] : []));
+  const shape = rustStructuralObjectCarrierValue(carrier);
+  const aligned = shape === undefined ? carrier : rustStructuralObjectTargetType(definition.ownerFileName, shape.fields, shape.representation);
+  const bindings = inferRustTargetTypeParameterBindings(definition.carrier, aligned, parameters);
+  if (bindings === undefined || bindings.size !== parameters.size ||
+    !rustTargetTypeRefEquals(substituteRustTargetTypeParameters(definition.carrier, bindings), aligned)) {
+    throw new Error("Rust structural storage requires an exact generic-parameter correspondence.");
+  }
+  return Object.freeze({
+    ...definition,
+    carrier,
+    genericArguments: Object.freeze(definition.genericArguments.map(argument => {
+      if (argument.kind !== "type") return argument;
+      return Object.freeze({ kind: "type" as const, type: substituteRustTargetTypeParameters(argument.type, bindings) });
+    })),
+    fields: Object.freeze(definition.fields.map(field => Object.freeze({
+      ...field,
+      carrier: substituteRustTargetTypeParameters(field.carrier, bindings),
+    }))),
   });
 }
 

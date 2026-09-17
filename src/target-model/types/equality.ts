@@ -264,7 +264,9 @@ function rustTargetTypeRefEqualsValidated(
         rustTargetTypeRefEqualsValidated(left.result, right.result, nested);
     }
     case "trait-ref": {
-      if (right.kind !== left.kind || left.id !== right.id || left.path !== right.path) {
+      if (right.kind !== left.kind || left.id !== right.id || left.path !== right.path ||
+        left.sourceItem?.fileName !== right.sourceItem?.fileName ||
+        left.sourceItem?.typeName !== right.sourceItem?.typeName) {
         return false;
       }
       const nested = matchLifetimeBinders(
@@ -282,6 +284,7 @@ function rustTargetTypeRefEqualsValidated(
     }
     case "closure": {
       if (right.kind !== left.kind) return false;
+      if ((left.fallible === true) !== (right.fallible === true)) return false;
       const nested = matchLifetimeBinders(
         left.lifetimeBinder,
         right.lifetimeBinder,
@@ -375,18 +378,23 @@ function validateRustTargetTypeRef(
       case "trait-ref":
         return hasExactKeys(
           value,
-          ["kind", "id", "path", "genericArguments", "associatedConstraints", "lifetimeBinder"],
+          ["kind", "id", "path", "genericArguments", "associatedConstraints", "lifetimeBinder", "sourceItem"],
           ["kind", "id", "path", "genericArguments", "associatedConstraints"],
         ) && nonEmptyString(value.id) && nonEmptyString(value.path) &&
+          (value.sourceItem === undefined || isPlainRecord(value.sourceItem) &&
+            hasExactKeys(value.sourceItem, ["fileName", "typeName"], ["fileName", "typeName"]) &&
+            nonEmptyString(value.sourceItem.fileName) &&
+            value.sourceItem.typeName === value.path) &&
           validateGenericArguments(value.genericArguments, validateChild) &&
           validateAssociatedConstraints(value.associatedConstraints, validateChild) &&
           (value.lifetimeBinder === undefined || validateLifetimeBinder(value.lifetimeBinder));
       case "closure":
         return hasExactKeys(
           value,
-          ["kind", "args", "result", "lifetimeBinder"],
+          ["kind", "args", "result", "lifetimeBinder", "fallible"],
           ["kind", "args", "result"],
         ) && validateChildren(value.args) && validateChild(value.result) &&
+          (value.fallible === undefined || typeof value.fallible === "boolean") &&
           (value.lifetimeBinder === undefined || validateLifetimeBinder(value.lifetimeBinder));
       case "opaque":
         return hasExactKeys(value, ["kind", "id"], ["kind", "id"]) &&

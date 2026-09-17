@@ -57,7 +57,7 @@ import { appendRustDiagnostic, boolCarrier, rustResolutionContext } from "../pro
 import { collectDescendantsOfKind, recordForOfFacts } from "../operations/inputs.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { reconcileRequiredCarrier, resolveExpressionCarrier } from "../expressions/carriers.js";
-import { recordBindingPatternFacts } from "../declarations/types-and-bindings.js";
+import { recordBindingPatternFacts, registerTypeAlias } from "../declarations/types-and-bindings.js";
 import { recordCallableValueSignatureForDeclaration } from "../callables/signatures.js";
 import { recordThrowFacts } from "../resources/suspension.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
@@ -69,7 +69,7 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustTargetOperationFact } from "../facts/keys.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { rustMemoryMetadataKey } from "../../target-model/operations/memory-layout.js";
+import { rustCompileTimeSourceKey } from "../../target-model/facts/source-declarations.js";
 
 export function recordFunctionBodyFacts(walk: RustFactWalk, declaration: Node, sourceFile: SourceFile): void {
   const { ast } = walk.context;
@@ -117,7 +117,7 @@ export function recordVariableStatementFacts(walk: RustFactWalk, statement: Node
     return;
   }
   for (const declaration of declarationSlots as readonly Node[]) {
-    if (walk.context.facts.get(declaration, rustMemoryMetadataKey)) continue;
+    if (walk.context.facts.get(declaration, rustCompileTimeSourceKey)) continue;
     recordCallableValueSignatureForDeclaration(walk, declaration);
     const nativeCallable = moduleLevel
       ? walk.context.facts.get(declaration, rustModuleBindingFactKey) ??
@@ -248,6 +248,11 @@ export function recordStatementFacts(
 ): void {
   const { ast } = walk.context;
   const kind = ast.kindName(statement);
+  if (kind === "KindClassDeclaration" && walk.context.projectTypes.definitionForDeclaration(statement) !== undefined) return;
+  if (kind === "KindTypeAliasDeclaration") {
+    registerTypeAlias(walk, statement);
+    return;
+  }
   if (kind === KindBlock) {
     const statements = requireDenseSourceNodes(walk, ast.statements(statement), "Block contains an undefined or non-data statement slot.");
     if (statements === undefined) {
@@ -300,7 +305,7 @@ export function recordStatementFacts(
     if (expression === undefined) {
       return;
     }
-    if (!walk.context.facts.get(expression, rustMemoryMetadataKey)) resolveExpressionCarrier(walk, expression, sourceFile, undefined);
+    if (!walk.context.facts.get(expression, rustCompileTimeSourceKey)) resolveExpressionCarrier(walk, expression, sourceFile, undefined);
     return;
   }
   if (kind === "KindThrowStatement") {

@@ -3,6 +3,7 @@ import type {
   TargetTypeRef,
 } from "../types/model.js";
 import type { RustLifetimeRef } from "../lifetimes/index.js";
+import { rustObjectIdentityErasureMatches } from "./object-identity.js";
 import {
   isRustTargetTypeRef,
   rustTargetTypeRefEquals,
@@ -13,6 +14,9 @@ import type {
 } from "../operations/model.js";
 import {
   isRustNeverCarrier,
+  rustJsNumericTargetType,
+  rustJsStringNumberTargetType,
+  rustBigIntTargetType,
   isRustNumericCarrier,
   rustCallableProtocol,
   rustClosureProtocol,
@@ -22,12 +26,13 @@ import {
   rustNeverTargetType,
   rustOptionTargetType,
   rustJsValueTargetType,
+  rustJsErrorTargetType,
   rustOptionElementCarrier,
   rustPrimitiveTypeName,
-  rustSourceUnionCarrierValue,
   rustSourcePrimitiveTargetType,
   rustBorrowedStrTargetType,
   rustStringTargetType,
+  rustStrTargetType,
   rustStructuralObjectCarrierValue,
   rustJsArrayLikeElementTargetType,
   isRustJsArrayCarrier,
@@ -43,6 +48,11 @@ import {
 } from "../types/index.js";
 import type { RustPrimitiveTypeName } from "../syntax/tokens.js";
 import { rustNumericPromotionKind } from "./numeric-promotion.js";
+import { rustNumberBoxingSourceKind } from "./number-boxing.js";
+import { rustRestSequenceElements } from "../operations/rest-assembly.js";
+import { isDenseDataArray } from "../metadata/closed-data.js";
+import { rustNamedTypeCarrierValue } from "../types/carriers/native.js";
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../types/source-union-definitions.js";
 
 const boolCarrier = rustSourcePrimitiveTargetType("bool");
 const int32Carrier = rustSourcePrimitiveTargetType("int32");
@@ -69,6 +79,12 @@ interface RustValueConversionContractBase {
 }
 
 export type RustValueConversionContract = RustValueConversionContractBase & (
+  | {
+      readonly lowering: "rest-sequence";
+      readonly collection: "vec" | "js-array" | "fixed-array" | "tuple";
+      readonly holePolicy: "reject" | "number-nan";
+      readonly elementConversions: readonly (RustValueConversionContract | null)[];
+    }
   | {
       readonly lowering: "call";
       readonly path: string;
@@ -104,6 +120,9 @@ export type RustValueConversionContract = RustValueConversionContractBase & (
     }
   | {
       readonly lowering: "owned-string-from-borrowed-str";
+    }
+  | {
+      readonly lowering: "borrowed-str-from-owned-string";
     }
   | {
       readonly lowering: "copy-from-reference";
@@ -147,9 +166,51 @@ export type RustValueConversionContract = RustValueConversionContractBase & (
 
 export function rustValueConversionContract(
   value: RustValueConversion,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): RustValueConversionContract | undefined {
+  if (value.kind === "object-identity-erasure") {
+    return isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) &&
+      !rustTargetTypeRefEquals(value.source, value.target) && rustObjectIdentityErasureMatches(value.source, value.target)
+      ? { category: "exact", lowering: "identity", sourceMode: "value", source: value.source, target: value.target, fallible: false }
+      : undefined;
+  }
+  if (value.kind === "native-upcast") {
+    const upcasts = rustNamedTypeCarrierValue(value.source)?.upcasts.filter((upcast) =>
+      rustTargetTypeRefEquals(upcast.target, value.target)) ?? [];
+    return upcasts.length !== 1 || upcasts[0]!.path !== value.path ? undefined : {
+      category: "projection", lowering: "call", path: value.path,
+      sourceMode: "ref", source: value.source, target: value.target, fallible: false,
+    };
+  }
+  if (value.kind === "rest-sequence") {
+    const sequence = rustRestSequenceElements(value.source);
+    if (sequence === undefined || !isDenseDataArray(value.elementConversions) ||
+      value.elementConversions.length !== sequence.elements.length) return undefined;
+    const conversions = value.elementConversions.map(conversion => conversion === null ? null : rustValueConversionContract(conversion, definitions));
+    if (!isRustTargetTypeRef(value.elementTarget) || sequence.elements.some(element => !rustCarrierSupportsClone(element, definitions)) ||
+      (value.holePolicy !== "reject" && value.holePolicy !== "number-nan") ||
+      (sequence.collection === "js-array" && value.holePolicy !== "number-nan") ||
+      (value.holePolicy === "number-nan" && !rustTargetTypeRefEquals(value.elementTarget, float64Carrier)) ||
+      sequence.elements.some((element, index) => {
+        const conversion = conversions[index];
+        return conversion === null ? !rustTargetTypeRefEquals(element, value.elementTarget)
+        : conversion === undefined || conversion.fallible ||
+          (conversion.category !== "exact" && conversion.category !== "numeric-promotion" &&
+            conversion.category !== "js-number") ||
+          !rustTargetTypeRefEquals(conversion.source, element) ||
+          !rustTargetTypeRefEquals(conversion.target, value.elementTarget);
+      })) {
+      return undefined;
+    }
+    return {
+      category: "projection", lowering: "rest-sequence", collection: sequence.collection,
+      holePolicy: value.holePolicy, sourceMode: "ref", source: value.source,
+      target: { kind: "array", element: value.elementTarget }, fallible: false,
+      elementConversions: conversions as readonly (RustValueConversionContract | null)[],
+    };
+  }
   if (value.kind === "ts-value-from-closed-carrier") {
-    return !rustCarrierCanEnterTsValue(value.source)
+    return !rustCarrierCanEnterTsValue(value.source, definitions)
       ? undefined
       : {
           category: "projection",
@@ -162,8 +223,8 @@ export function rustValueConversionContract(
         };
   }
   if (value.kind === "js-value-from-closed-carrier") {
-    return !rustCarrierSupportsClone(value.source) ||
-        !rustCarrierSupportsTrait(value.source, rustJsClosedValueCarrierTraitPath)
+    return !rustCarrierSupportsClone(value.source, definitions) ||
+        !rustCarrierSupportsTrait(value.source, rustJsClosedValueCarrierTraitPath, undefined, undefined, definitions)
       ? undefined
       : {
           category: "projection",
@@ -176,7 +237,7 @@ export function rustValueConversionContract(
         };
   }
   if (value.kind === "js-value-from-option") {
-    const elementConversion = rustValueConversionContract(value.elementConversion);
+    const elementConversion = rustValueConversionContract(value.elementConversion, definitions);
     return !rustTargetTypeRefEquals(value.source, rustOptionTargetType(value.element)) ||
         elementConversion === undefined || elementConversion.fallible ||
         !rustTargetTypeRefEquals(elementConversion.source, value.element) ||
@@ -194,7 +255,7 @@ export function rustValueConversionContract(
         };
   }
   if (value.kind === "js-value-from-array") {
-    const elementConversion = rustValueConversionContract(value.elementConversion);
+    const elementConversion = rustValueConversionContract(value.elementConversion, definitions);
     return !isRustJsArrayCarrier(value.source) ||
         !rustTargetTypeRefEquals(
           rustJsArrayLikeElementTargetType(value.source),
@@ -215,13 +276,13 @@ export function rustValueConversionContract(
         };
   }
   if (value.kind === "js-value-from-source-union") {
-    const union = rustSourceUnionCarrierValue(value.source);
-    if (union === undefined || union.variants.length !== value.variants.length) {
+    const union = definitions.sourceUnionVariants(value.source);
+    if (union === undefined || !isDenseDataArray(value.variants) || union.length !== value.variants.length) {
       return undefined;
     }
     const variants = value.variants.map((variant, index) => {
-      const sourceVariant = union.variants[index];
-      const conversion = rustValueConversionContract(variant.conversion);
+      const sourceVariant = union[index];
+      const conversion = rustValueConversionContract(variant.conversion, definitions);
       return sourceVariant === undefined || sourceVariant.name !== variant.name ||
           !rustTargetTypeRefEquals(sourceVariant.carrier, variant.carrier) ||
           conversion === undefined || conversion.fallible ||
@@ -253,7 +314,7 @@ export function rustValueConversionContract(
         field.sourceName === "toJSON"
       ? rustCallableProtocol(field.type)
       : undefined;
-    const resultConversion = rustValueConversionContract(value.resultConversion);
+    const resultConversion = rustValueConversionContract(value.resultConversion, definitions);
     const parametersMatch = callable?.parameters.length === 0
       ? value.passesPropertyKey === false
       : callable?.parameters.length === 1 &&
@@ -290,7 +351,7 @@ export function rustValueConversionContract(
     }
     const fields = value.fields.map((field) => {
       const sourceField = structural.fields[field.storageIndex];
-      const conversion = rustValueConversionContract(field.conversion);
+      const conversion = rustValueConversionContract(field.conversion, definitions);
       const expectedCarrier = sourceField?.presence === "optional"
         ? rustOptionElementCarrier(sourceField.type)
         : sourceField?.type;
@@ -380,7 +441,7 @@ export function rustValueConversionContract(
       : undefined;
   }
   if (value.kind === "option-map") {
-    const element = rustValueConversionContract(value.elementConversion);
+    const element = rustValueConversionContract(value.elementConversion, definitions);
     return element === undefined
       ? undefined
       : {
@@ -406,8 +467,8 @@ export function rustValueConversionContract(
       : undefined;
   }
   if (value.kind === "source-union-variant") {
-    const union = rustSourceUnionCarrierValue(value.target);
-    const matches = union?.variants.filter((variant) =>
+    const union = definitions.sourceUnionVariants(value.target);
+    const matches = union?.filter((variant) =>
       variant.name === value.variantName &&
       rustTargetTypeRefEquals(variant.carrier, value.source)) ?? [];
     return isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.target) &&
@@ -479,11 +540,34 @@ export function rustValueConversionContract(
         }
       : undefined;
   }
+  const numberBoxingSource = rustNumberBoxingSourceKind(value.id);
+  if (numberBoxingSource !== undefined) {
+    return contract(value.id, "exact", "js_abi::JsValue::from", "value",
+      rustSourcePrimitiveTargetType(numberBoxingSource), jsValueCarrier, false);
+  }
   switch (value.id) {
+    case "js-numeric-from-number":
+      return contract(value.id, "exact", "js_abi::JsNumeric::from_number", "value", float64Carrier, rustJsNumericTargetType(), false);
+    case "js-string-number-from-string":
+      return contract(value.id, "exact", "js_abi::JsStringNumber::from_string", "value", stringCarrier, rustJsStringNumberTargetType(), false);
+    case "js-string-number-from-number":
+      return contract(value.id, "exact", "js_abi::JsStringNumber::from_number", "value", float64Carrier, rustJsStringNumberTargetType(), false);
+    case "js-string-number-from-int32":
+      return contract(value.id, "exact", "js_abi::JsStringNumber::from_int32", "value", int32Carrier, rustJsStringNumberTargetType(), false);
+    case "js-string-number-from-null":
+      return contract(value.id, "exact", "js_abi::JsStringNumber::from_null", "value", nullCarrier, rustJsStringNumberTargetType(), false);
+    case "js-string-number-from-undefined":
+      return contract(value.id, "exact", "js_abi::JsStringNumber::from_undefined", "value", undefinedCarrier, rustJsStringNumberTargetType(), false);
+    case "js-numeric-from-int32":
+      return contract(value.id, "exact", "js_abi::JsNumeric::from_int32", "value", int32Carrier, rustJsNumericTargetType(), false);
+    case "js-numeric-from-bigint":
+      return contract(value.id, "exact", "js_abi::JsNumeric::from_bigint", "ref", rustBigIntTargetType(), rustJsNumericTargetType(), false);
     case "checked-i32-to-usize":
       return contract(value.id, "checked-range", "rt::conversions::i32_to_usize", "value", int32Carrier, usizeCarrier, true);
     case "checked-i32-to-u8":
       return contract(value.id, "checked-range", "rt::conversions::i32_to_u8", "value", int32Carrier, uint8Carrier, true);
+    case "checked-f64-to-u8-trunc":
+      return contract(value.id, "checked-range", "rt::conversions::f64_to_u8", "value", float64Carrier, uint8Carrier, true);
     case "checked-usize-to-i32":
       return contract(value.id, "checked-range", "rt::conversions::usize_to_i32", "value", usizeCarrier, int32Carrier, true);
     case "checked-isize-to-i32":
@@ -504,16 +588,14 @@ export function rustValueConversionContract(
       return contract(value.id, "js-number", "rt::conversions::u64_to_f64", "value", uint64Carrier, float64Carrier, false);
     case "js-value-from-bool":
       return contract(value.id, "exact", "js_abi::JsValue::from", "value", boolCarrier, jsValueCarrier, false);
-    case "js-value-from-f64":
-      return contract(value.id, "exact", "js_abi::JsValue::from", "value", float64Carrier, jsValueCarrier, false);
-    case "js-value-from-i32":
-      return contract(value.id, "exact", "js_abi::JsValue::from", "value", int32Carrier, jsValueCarrier, false);
     case "js-value-from-null":
       return contract(value.id, "exact", "js_abi::JsValue::from", "value", nullCarrier, jsValueCarrier, false);
     case "js-value-from-string":
       return contract(value.id, "exact", "js_abi::js_value_from_string", "ref", stringCarrier, jsValueCarrier, false);
     case "js-value-from-symbol":
       return contract(value.id, "exact", "js_abi::JsValue::from", "value", symbolCarrier, jsValueCarrier, false);
+    case "js-value-from-error":
+      return contract(value.id, "exact", "js_abi::JsValue::from_error", "ref", rustJsErrorTargetType(), jsValueCarrier, false);
     case "js-value-from-undefined":
       return contract(value.id, "exact", "js_abi::JsValue::from", "value", undefinedCarrier, jsValueCarrier, false);
     case "js-value-clone":
@@ -529,7 +611,17 @@ export function rustValueConversionContract(
         target: stringCarrier,
         fallible: false,
       };
+    case "borrowed-str-from-owned-string":
+      return {
+        category: "ownership",
+        lowering: "borrowed-str-from-owned-string",
+        sourceMode: "ref",
+        source: stringCarrier,
+        target: { kind: "reference", referent: rustStrTargetType(), mutable: false },
+        fallible: false,
+      };
   }
+  return undefined;
 }
 
 function contract(
@@ -544,11 +636,20 @@ function contract(
   return { category, lowering: "call", path, sourceMode, source, target, fallible };
 }
 
-export function rustValueConversionIsFallible(value: RustValueConversion | undefined): boolean {
-  return value !== undefined && rustValueConversionContract(value)?.fallible === true;
+export function rustValueConversionIsFallible(value: RustValueConversion | undefined, definitions: RustTypeDefinitions = emptyRustTypeDefinitions): boolean {
+  return value !== undefined && rustValueConversionContract(value, definitions)?.fallible === true;
 }
 
 export function rustValueConversionIdentity(value: RustValueConversion): string {
+  if (value.kind === "object-identity-erasure") {
+    return `object-identity-erasure.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}`;
+  }
+  if (value.kind === "native-upcast") {
+    return `native-upcast.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}.${value.path}`;
+  }
+  if (value.kind === "rest-sequence") {
+    return `rest-sequence.${JSON.stringify(value.source)}.${JSON.stringify(value.elementTarget)}.${value.holePolicy}.${value.elementConversions.map(conversion => conversion === null ? "identity" : rustValueConversionIdentity(conversion)).join("|")}`;
+  }
   return value.kind === "semantic-conversion"
     ? value.id
     : value.kind === "numeric-promotion"
@@ -589,6 +690,14 @@ export function substituteRustValueConversion(
   constSubstitutions: ReadonlyMap<string, RustTargetConstArgument> = new Map(),
 ): RustValueConversion {
   switch (value.kind) {
+    case "rest-sequence":
+      return Object.freeze({
+        ...value,
+        source: substituteRustTargetGenerics(value.source, substitutions, lifetimeSubstitutions, constSubstitutions),
+        elementTarget: substituteRustTargetGenerics(value.elementTarget, substitutions, lifetimeSubstitutions, constSubstitutions),
+        elementConversions: value.elementConversions.map(conversion => conversion === null ? null :
+          substituteRustValueConversion(conversion, substitutions, lifetimeSubstitutions, constSubstitutions)) as typeof value.elementConversions,
+      });
     case "copy-from-reference":
       return Object.freeze({
         ...value,
@@ -610,6 +719,8 @@ export function substituteRustValueConversion(
         ),
       });
     case "source-union-variant":
+    case "object-identity-erasure":
+    case "native-upcast":
     case "bottom-coercion":
     case "js-argument-vector-callback":
       return Object.freeze({

@@ -286,6 +286,9 @@ export function read(): string {
   assertRustTargetRejection(options, [{
     code: "RUST_SELECTED_EVIDENCE_MISSING",
     message: "Checked property access has no selected provider, source-profile, or project-source declaration evidence.",
+  }, {
+    code: "RUST_AMBIENT_VALUE_IMPLEMENTATION_MISSING",
+    message: "A runtime read of an authored ambient variable requires an exact native implementation.",
   }]);
 });
 

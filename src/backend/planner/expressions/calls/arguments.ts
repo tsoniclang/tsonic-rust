@@ -2,11 +2,13 @@ import {
   isRustCopyCarrier,
   isRustVecCarrier,
   rustCallableProtocol,
+  rustNativeCallableProtocol,
   rustFixedArrayCarrierValue,
   rustSliceElementCarrier,
   rustTargetGenericBindingsForArguments,
   substituteRustTargetGenerics,
 } from "../../../../target-model/types/index.js";
+import { mapRustTargetTypes } from "../../../../target-model/types/carriers/substitution.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
 import { diagnosticInput } from "../../program/plan-context.js";
 import { isDenseDataArray } from "../../../../target-model/metadata/closed-data.js";
@@ -33,7 +35,8 @@ import {
   rustTargetTypeRefEquals,
 } from "../../../../target-model/types/equality.js";
 import { rustValueCarrierTransitionTarget } from "../../../../analysis/facts/value-carrier-queries.js";
-import { rustSpreadElementCarrier, rustVecRestAssembly } from "../../../../target-model/operations/rest-assembly.js";
+import { rustSpreadElementCarrier } from "../../../../target-model/operations/rest-assembly.js";
+import { planRustRestAssembly } from "./rest-assembly.js";
 import { validateRustFinalizedOperationAbi } from "../../../../analysis/facts/finalized-operation-abi.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../../target-ast/nodes.js";
@@ -131,15 +134,7 @@ function shapeRustRestSequenceInputs(
       context,
     );
   }
-  if (context.syntheticNames === undefined) {
-    return undefined;
-  }
-  const collectionName = allocateRustSyntheticName(
-    context.syntheticNames,
-    "spread_rest",
-  );
-  const collection: RustExpr = { kind: "path", path: collectionName };
-  const effects: RustExpr[] = [];
+  const segments: { readonly value: RustExpr; readonly sequence: boolean }[] = [];
   for (const input of parameter.inputs) {
     const value = shapeRustSourceCallInput(
       parameterIndex,
@@ -152,33 +147,9 @@ function shapeRustRestSequenceInputs(
     if (value === undefined) {
       return undefined;
     }
-    effects.push({
-      kind: "method-call",
-      receiver: collection,
-      method: input.sourceForm === "spread-sequence"
-        ? rustVecRestAssembly.appendSequenceMethod
-        : rustVecRestAssembly.appendElementMethod,
-      args: [value],
-    });
+    segments.push({ value, sequence: input.sourceForm === "spread-sequence" });
   }
-  let value: RustExpr = collection;
-  for (let index = effects.length - 1; index >= 0; index -= 1) {
-    value = {
-      kind: "evaluate-then",
-      effect: effects[index]!,
-      discard: "unit",
-      value,
-    };
-  }
-  return {
-    kind: "block",
-    bindings: [{
-      name: collectionName,
-      mutable: true,
-      value: { kind: "vec-literal", elements: [] },
-    }],
-    value,
-  };
+  return planRustRestAssembly(segments, context);
 }
 
 export function planRustSourceCallArgumentEvaluation(
@@ -245,6 +216,7 @@ export function planRustSelectedSourceCallArguments(
       fact,
       selected,
       sourceCallFinalizedResultCarrier(selected, context),
+      context.input.program.typeFamilies.normalize,
     )) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, call),
@@ -307,6 +279,7 @@ function shapeRustSourceCallInput(
     sourceCarrier,
     convertedCarrier,
     argument,
+    context,
   );
   if (selectedInput === undefined) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -333,7 +306,7 @@ function shapeRustSourceCallInput(
   const nonConsumingInput = planRustNonConsumingValue(argumentNode, selectedInput, context);
   return sourceParameterAbi?.mode === parameter.mode &&
       rustTargetTypeRefEquals(sourceParameterAbi.parameterCarrier, parameter.parameterCarrier)
-    ? selectedInput
+    ? nonConsumingInput
     : nonConsumingInput.kind === "string-literal" && !mutable
       ? { kind: "str-literal", value: nonConsumingInput.value }
       : mutable
@@ -346,6 +319,7 @@ function resolveFinalizedRustSpreadInput(
   sourceCarrier: TargetTypeRef | undefined,
   convertedCarrier: TargetTypeRef | undefined,
   sourceExpression: RustExpr,
+  context: RustPlanContext,
 ): RustExpr | undefined {
   if (sourceCarrier === undefined) {
     return undefined;
@@ -355,7 +329,8 @@ function resolveFinalizedRustSpreadInput(
       sourceCarrier,
       convertedCarrier,
       input.carrier,
-    )
+    ) || convertedCarrier === undefined &&
+      context.input.program.structuralShapes.sharesStorage(sourceCarrier, input.carrier)
       ? sourceExpression
       : undefined;
   }
@@ -436,6 +411,7 @@ export function sourceCallSelectedMemberMatches(
   fact: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>,
   selected: SelectedTargetSignatureFact,
   declaredResultCarrier: TargetTypeRef | undefined,
+  normalize: (carrier: TargetTypeRef) => TargetTypeRef,
 ): boolean {
   const member = selected.member;
   const sourceArguments = selected.sourceSelectedMethodTypeArguments ?? [];
@@ -468,7 +444,9 @@ export function sourceCallSelectedMemberMatches(
       ? member.targetName
       : fact.target.form === "function"
         ? fact.target.selectedTargetName
-        : fact.target.name;
+        : fact.target.form === "union-method"
+          ? fact.target.variants.find(variant => variant.declaration === selected.sourceDeclaration)?.targetName
+          : fact.target.name;
   const selectedReturn = declaredResultCarrier === undefined
     ? undefined
     : substituteRustTargetGenerics(
@@ -476,27 +454,38 @@ export function sourceCallSelectedMemberMatches(
         substitutions.types,
         substitutions.lifetimes,
         substitutions.consts,
+        normalize,
       );
   const identityMatches = member.id === fact.operationId &&
     member.kind === expectedKind &&
     member.targetName === expectedTargetName &&
-    selectedReturn !== undefined && rustTargetTypeRefEquals(selectedReturn, fact.resultCarrier);
+    selectedReturn !== undefined && rustTargetTypeRefEquals(selectedReturn, mapRustTargetTypes(fact.resultCarrier, normalize));
   if (!identityMatches) {
     return false;
   }
-  const callable = fact.target.form === "callable" || fact.target.form === "structural-method"
-    ? rustCallableProtocol(fact.target.form === "callable"
-        ? fact.target.carrier
-        : fact.target.callableCarrier)
-    : undefined;
+  const callableCarrier = fact.target.form === "callable" ? fact.target.carrier
+    : fact.target.form === "structural-method" ? fact.target.callableCarrier : undefined;
+  const callable = rustNativeCallableProtocol(callableCarrier) ?? rustCallableProtocol(callableCarrier);
   if (callable !== undefined) {
     return callable.parameters.length === fact.parameters.length &&
-      callable.parameters.every((carrier, index) =>
-        fact.parameters[index]?.mode === "value" &&
-        rustTargetTypeRefEquals(carrier, fact.parameters[index]?.parameterCarrier));
+      callable.parameters.every((carrier, index) => {
+        carrier = substituteRustTargetGenerics(carrier, substitutions.types,
+          substitutions.lifetimes, substitutions.consts, normalize);
+        const parameter = fact.parameters[index];
+        if (parameter === undefined || !rustTargetTypeRefEquals(carrier, mapRustTargetTypes(parameter.parameterCarrier, normalize))) return false;
+        if (parameter.mode === "value") return true;
+        const valueCarrier = mapRustTargetTypes(parameter.valueCarrier, normalize);
+        return callableCarrier?.kind === "closure" && carrier.kind === "reference" &&
+          parameter.mode === (carrier.mutable ? "mut-ref" : "ref") &&
+          (rustTargetTypeRefEquals(carrier.referent, valueCarrier) ||
+            valueCarrier.kind === "array" &&
+            rustTargetTypeRefEquals(rustSliceElementCarrier(carrier), valueCarrier.element));
+      });
   }
   return isDenseDataArray(member.parameters) && member.parameters.length === fact.parameters.length &&
     member.parameters.every((parameter, index) => {
+      const factParameter = fact.parameters[index];
+      if (factParameter === undefined) return false;
       const mode = parameter.passingMode === "borrow-mut"
         ? "mut-ref"
         : parameter.passingMode === "borrow-shared"
@@ -508,9 +497,10 @@ export function sourceCallSelectedMemberMatches(
           substitutions.types,
           substitutions.lifetimes,
           substitutions.consts,
+          normalize,
         ),
-        fact.parameters[index]?.parameterCarrier,
-      ) && mode === fact.parameters[index]?.mode;
+        mapRustTargetTypes(factParameter.parameterCarrier, normalize),
+      ) && mode === factParameter.mode;
     });
 }
 
@@ -529,7 +519,7 @@ export function requireProviderArgumentPassingFacts(
   fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }>,
   arguments_: readonly (Node | undefined)[],
 ): boolean {
-  if (!validateRustFinalizedOperationAbi(fact.abi) || arguments_.length !== fact.abi.sourceArguments.length) {
+  if (!validateRustFinalizedOperationAbi(fact.abi, context.input.program.typeDefinitions) || arguments_.length !== fact.abi.sourceArguments.length) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, arguments_.find((candidate): candidate is Node => candidate !== undefined) ?? context.sourceFile),
       "rust.backend.provider-argument-abi",

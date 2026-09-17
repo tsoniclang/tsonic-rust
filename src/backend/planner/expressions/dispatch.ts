@@ -1,4 +1,6 @@
 import { rustRuntimeUnionContract } from "../../../target-model/types/carriers/runtime-unions.js";
+import { rustClassValueFactKey } from "../../../analysis/facts/class-values.js";
+import { planRustClassValueRead } from "../objects/class-values.js";
 import {
   rustBottomAfterEffect,
   rustBottomExpression,
@@ -22,6 +24,8 @@ import {
 } from "../../../target-model/types/index.js";
 import {
   KindBinaryExpression,
+  KindEqualsToken,
+  BinaryExpression_OperatorToken,
   KindBigIntLiteral,
   KindCallExpression,
   KindConditionalExpression,
@@ -69,6 +73,7 @@ import { expressionCarrier, planBigIntLiteral, planDeleteExpression, planGenerat
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planArrayLiteral, planElementAccess } from "./elements.js";
 import { planBinaryExpression } from "./binary.js";
+import { planAssignmentExpression } from "./assignment.js";
 import { planCallExpression } from "./calls/basic.js";
 import { planCallableExpression } from "./callable.js";
 import { planExpression } from "./entry.js";
@@ -158,6 +163,9 @@ export function planExpressionInner(
       return { kind: "path", path: "rt::Null" };
     }
     case KindIdentifier: {
+      if (context.input.program.facts.getFact(node, rustClassValueFactKey) !== undefined) {
+        return planRustClassValueRead(node, context);
+      }
       const identifierFact = rustOperationFact(node, context);
       const binding = context.input.program.facts.getFact(node, rustSourceBindingFactKey);
       if (identifierFact !== undefined && identifierFact.kind === "option-none") {
@@ -206,6 +214,13 @@ export function planExpressionInner(
         ));
         return undefined;
       }
+      if (ast.kindName(binding.sourceDeclaration) === "KindClassDeclaration") {
+        context.diagnostics.push(unsupportedConstructDiagnostic(
+          diagnosticInput(context, node), "rust.backend.class-value",
+          "Class constructor used as a value has no exact finalized constructor-object view.",
+        ));
+        return undefined;
+      }
       const name = context.input.program.names.nameForDeclaration(binding.sourceDeclaration) ?? "";
       if (!isValidRustIdentifier(name)) {
         context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -232,7 +247,7 @@ export function planExpressionInner(
     }
     case KindParenthesizedExpression: {
       const inner = Node_Expression(context.input.program.source.ast, node);
-      return inner === undefined ? undefined : planExpression(inner, context);
+      return inner === undefined ? undefined : planExpression(inner, context, resultUse);
     }
     case "KindAsExpression":
     case "KindTypeAssertionExpression": {
@@ -385,6 +400,9 @@ export function planExpressionInner(
         return undefined;
       }
       const operand = planExpression(operandNode, context);
+      if (operand !== undefined && isRustNeverCarrier(expressionCarrier(operandNode, context))) {
+        return { kind: "bottom", expression: operand };
+      }
       context.usedAliases?.add("rt");
       return operand === undefined
         ? undefined
@@ -595,10 +613,14 @@ export function planExpressionInner(
       return planUnaryExpression(node, context, resultUse);
     }
     case KindBinaryExpression: {
-      return planBinaryExpression(node, context);
+      const token = BinaryExpression_OperatorToken(ast, node);
+      if (token !== undefined && ast.kindName(token) === KindEqualsToken) {
+        return planAssignmentExpression(node, context);
+      }
+      return planBinaryExpression(node, context, resultUse);
     }
     case KindCallExpression: {
-      return planCallExpression(node, context);
+      return planCallExpression(node, context, resultUse);
     }
     case KindNewExpression: {
       return planNewExpression(node, context);

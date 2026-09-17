@@ -3,6 +3,7 @@ import { resolveSelectedProviderDeclaration } from "../../../policy/evidence/sel
 import { mapProviderCheckedOperation } from "./conversions.js";
 import { rejectSelectedOperation } from "./result.js";
 import { selectRustProviderExport } from "../../../policy/operations/provider-selection.js";
+import { selectedRustProviderGlobal } from "../../../policy/evidence/provider-globals.js";
 import type {
   RustCheckedValueSelectionInput,
   RustCheckedValueSelectionResult,
@@ -16,6 +17,10 @@ export function selectRustCheckedValue(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedValueSelectionResult> {
+  const global = selectedRustProviderGlobal(request.sourceSelectedDeclaration, context, options.providerExports);
+  if (global !== undefined) {
+    return mapProviderCheckedOperation(request.expression, global, "property", context, options, undefined, []);
+  }
   const providerEvidence = resolveSelectedProviderDeclaration(
     context,
     request.sourceSelectedDeclaration,

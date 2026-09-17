@@ -46,7 +46,7 @@ export function probe(): string {
   assert.match(text, /h\.update_str_owned\("abc"\)\?/u);
   assert.match(text, /h\.digest_string\("hex"\)\?/u);
   assert.match(text, /rt::conversions::u32_to_i32\(tsonic_rust_node::process::pid\(\)\)\?/u);
-  assert.match(text, /rt::option_coalesce\(\s*tsonic_rust_node::process::env_get\("PATH"\),\s*core::convert::identity,/u);
+  assert.match(text, /rt::option_coalesce\(\s*tsonic_rust_node::process::environment\(\)\.get\("PATH"\),\s*core::convert::identity,/u);
 });
 
 test("portable Node boundaries lower through exact selected provider evidence", async () => {
@@ -287,29 +287,31 @@ export async function roundtrip(dir: string, file: string): Promise<int32> {
   validateGeneratedProject("r7-async-fs-lib", result.artifacts);
 });
 
-test("process env writes fail closed", async () => {
+test("process env writes retain native environment identity and stringify undefined", { timeout: 300_000 }, async () => {
   const { result } = compileRust({
     surfaces: ["js"],
     capabilities: [await nodejsCapability()],
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "process_environment_values" } },
     files: {
       "index.ts": `
 import { env } from "node:process";
+import { check } from "@acme/testing";
 
-export function bad(): void {
-  env["X"] = "1";
+export function main(): void {
+  const name = "TSONIC_ENVIRONMENT_WRITE_PROOF";
+  const previous = env[name];
+  env[name] = "1";
+  check(env[name] === "1");
+  env[name] = undefined;
+  check(env[name] === "undefined");
+  if (previous !== undefined) env[name] = previous;
 }
 `,
     },
   });
-  assert.deepEqual(result.artifacts, []);
-  assert.deepEqual(result.diagnostics.map(({ code, message, evidence }) => ({ code, message, evidence })), [{
-    code: "RUST_SELECTED_ASSIGNMENT_UNSUPPORTED",
-    message: "Checked assignment target has no finalized Rust write operation.",
-    evidence: [
-      "target.capability=rust.operation.assignment",
-      "source.operatorKind=KindEqualsToken",
-    ],
-  }]);
+  assert.deepEqual(result.diagnostics, []);
+  validateGeneratedProject("process-environment-values", result.artifacts, { run: true });
 });
 
 test("absent env reads preserve undefined", async () => {
@@ -332,7 +334,7 @@ export function read(name: string): string {
   });
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /tsonic_rust_node::process::env_get\(&name\)/u);
+  assert.match(text, /tsonic_rust_node::process::environment\(\)\.get\(&name\)/u);
   assert.match(text, /value\.is_none\(\)/u);
 });
 
@@ -355,8 +357,8 @@ export function closeStreams(inputPath: string, outputPath: string): void {
   });
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /tsonic_rust_node::fs::create_read_stream\(&input_path\)\?/u);
-  assert.match(text, /tsonic_rust_node::fs::create_write_stream\(&output_path\)\?/u);
+  assert.match(text, /tsonic_rust_node::fs::create_read_stream\(input_path\.as_str\(\)\)\?/u);
+  assert.match(text, /tsonic_rust_node::fs::create_write_stream\(output_path\.as_str\(\)\)\?/u);
   assert.match(text, /readable\.close\(\)/u);
   assert.match(text, /writable\.close\(\)\?/u);
   validateGeneratedProject("r9-node-stream-constructors", result.artifacts);

@@ -27,6 +27,31 @@ import {
   writeGeneratedProject,
 } from "../../../helpers/cargo-projects.mjs";
 import { join, resolve } from "node:path";
+import { closedGenericDispatchPackageFiles, closedGenericDispatchPackageGraph } from "../../../../../tsonic/test/fixtures/closed-generic-dispatch.mjs";
+
+test("binary source-package generic dispatch closes across the exact component graph", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    sourcePackages: closedGenericDispatchPackageGraph,
+    target: { id: "rust", options: { outputType: "bin", crateName: "package_generic_dispatch" } },
+    files: { ...closedGenericDispatchPackageFiles, "index.ts": `${closedGenericDispatchPackageFiles["index.ts"]}
+export function main(): void { if (!run()) throw new Error("package generic dispatch"); }` },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  const manifests = result.artifacts.filter(artifact => artifact.path.endsWith("Cargo.toml"));
+  assert.ok(manifests.length > 1, "source packages must retain their separate Cargo components");
+  assert.equal(validateGeneratedProject("package-generic-dispatch", result.artifacts, { run: true }).status, 0);
+});
+
+test("library source-package generic dispatch retains its open-contract rejection", () => {
+  const { result } = compileRust({
+    sourcePackages: closedGenericDispatchPackageGraph,
+    target: { id: "rust", options: { outputType: "lib", crateName: "package_generic_dispatch" } },
+    files: closedGenericDispatchPackageFiles,
+  });
+  assert.ok(result.diagnostics.some(diagnostic => diagnostic.message.includes("open public target contract")));
+  assert.equal(result.artifacts.length, 0);
+});
+
 test("source-package components are dependency ordered and ignore inactive packages", () => {
   const identities = new Map([
     ["/root/index.ts", sourceIdentity("/root/index.ts", "root")],
@@ -39,6 +64,7 @@ test("source-package components are dependency ordered and ignore inactive packa
       dependencyComponentIds: [],
       publishesImplementationAbi: true,
       errorDomain: "project",
+      errorOwnerComponentId: "dependency",
       root: false,
     }, {
       componentId: "root",
@@ -46,6 +72,7 @@ test("source-package components are dependency ordered and ignore inactive packa
       dependencyComponentIds: ["dependency"],
       publishesImplementationAbi: false,
       errorDomain: "project",
+      errorOwnerComponentId: "dependency",
       root: true,
     }]),
     projectTypes: {
@@ -437,6 +464,46 @@ export class Consumer extends EngineBase {
   runCargo(consumerRoot, ["check", "--all-targets", "--locked", "--offline"]);
 });
 
+test("source-package error forwarding retains builtin identity and rejects object misclassification", { timeout: 300_000 }, () => {
+  const dependencyRoot = "/src/node_modules/@acme/engine";
+  const { result } = compileRust({
+    target: { id: "rust", options: { outputType: "bin", crateName: "package_errors" } },
+    sourcePackages: sourcePackageGraph(dependencyRoot),
+    files: {
+      "node_modules/@acme/engine/package.json": JSON.stringify({ name: "@acme/engine", type: "module",
+        exports: { "./index.js": "./index.ts" } }),
+      "node_modules/@acme/engine/index.ts": `export { fail, panic, PanicValue } from "./base.js";`,
+      "node_modules/@acme/engine/internal/helper.ts": `export function raise(error: Error): void { throw error; }`,
+      "node_modules/@acme/engine/base.ts": `
+import { raise } from "./internal/helper.js";
+export class PanicValue { code: number; constructor(code: number) { this.code = code; } }
+export function fail(error: Error): void { raise(error); }
+export function panic(): void { throw new PanicValue(7); }
+`,
+      "index.ts": `
+import { fail, panic, PanicValue } from "@acme/engine/index.js";
+export function main(): void {
+  const original = new Error("package");
+  const stack = original.stack;
+  let count = 0;
+  try { fail(original); }
+  catch (failure) {
+    if (failure instanceof Error && failure === original && failure.message === "package" && failure.stack === stack) count += 1;
+  }
+  try { panic(); }
+  catch (failure) {
+    if (failure instanceof Error) throw new Error("object classified as Error");
+    if (failure instanceof PanicValue && failure.code === 7) count += 1;
+  }
+  if (count !== 2) throw new Error("source-package error transport");
+}
+`,
+    },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  assert.equal(validateGeneratedProject("source-package-caught-errors", result.artifacts, { run: true }).status, 0);
+});
+
 test("cross-package error planning preserves each component-owned Result ABI", () => {
   const engineError = {
     fileName: "/dep/errors.ts",
@@ -450,12 +517,14 @@ test("cross-package error planning preserves each component-owned Result ABI", (
     crateName: "engine_crate",
     programModuleName: "program",
     errorDomain: "project",
+    errorOwnerComponentId: "dependency",
   }, {
     componentId: "root",
     sourceFileNames: new Set(["/root/index.ts"]),
     dependencyComponentIds: ["dependency"],
     programModuleName: "program",
     errorDomain: "project",
+    errorOwnerComponentId: "dependency",
   }];
   const result = planRustSourcePackageErrors(planningContext({
     projectTypes: {
@@ -482,7 +551,7 @@ test("cross-package error planning preserves each component-owned Result ABI", (
       componentId: "root",
       errorDomain: "project",
       errorTypePath: "rt::TsonicError",
-      errorTypeIdentity: "tsonic-source-package:root:TsonicError",
+      errorTypeIdentity: "tsonic-source-package:dependency:TsonicError",
     },
   );
   assert.deepEqual(
@@ -491,12 +560,7 @@ test("cross-package error planning preserves each component-owned Result ABI", (
   );
   assert.deepEqual(
     resolveRustProgramErrorRoute(result.plan, "root", engineError, "EngineFailure"),
-    {
-      kind: "external",
-      consumerVariant: "EngineCrateError",
-      ownerTypePath: "engine_crate::program::TsonicError",
-      ownerVariant: "EngineFailure",
-    },
+    { kind: "local", variant: "EngineFailure" },
   );
   assert.equal(
     resolveRustSourcePackageErrorBoundary(result.plan, "dependency", "root"),

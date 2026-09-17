@@ -2,6 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import {
   Node_Initializer,
   Node_Type,
+  sourceParameterIsProperty,
 } from "@tsonic/target-api/source";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import {
@@ -106,7 +107,7 @@ export function projectClassStateLayers(
     layers.push({
       definition: owner,
       carrier: relation.targetType,
-      fields,
+      fields: fields.filter((field) => !context.input.program.source.ast.hasModifierKind(field.declaration, "abstract")),
       methodProperties,
     });
   }
@@ -166,7 +167,9 @@ export function projectOwnFields(
       ));
       return undefined;
     }
-    const initializer = Node_Initializer(context.input.program.source.ast, layoutField.declaration);
+    const initializer = sourceParameterIsProperty(context.input.program.source.ast, layoutField.declaration)
+      ? context.input.program.source.ast.name(layoutField.declaration)
+      : Node_Initializer(context.input.program.source.ast, layoutField.declaration);
     fields.push({
       declaration: layoutField.declaration,
       sourceName: layoutField.sourceName,

@@ -1,3 +1,5 @@
+import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
+import { rustJsArrayEntriesElementTargetType, rustJsArrayEntryTargetType } from "../../../target-model/types/carriers/array-entries.js";
 import {
   asNode,
   isProjectSourceDeclaration,
@@ -10,6 +12,7 @@ import {
   getRustGeneratorProtocol,
   isRustJsArrayLikeCarrier,
   isRustStringCarrier,
+  rustStringTargetType,
   rustJsArrayLikeIterationElementTargetType,
   rustJsRegExpExecArrayTargetType,
   rustJsRegExpStringIteratorTargetId,
@@ -45,6 +48,7 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import { selectedValueCarrier } from "./operators.js";
 import { selectJsSurfaceOperation } from "../../../policy/operations/js-surface.js";
 import { selectRustFixedArrayElementAccess } from "./structural-properties.js";
+import { isIntrinsicSourceQualifier } from "./source-qualifiers.js";
 import { tsonicFixedArrayProviderMember } from "@tsonic/source-core/facts";
 import type {
   RustCheckedElementSelectionInput,
@@ -57,6 +61,8 @@ import type { ExtensionFactSubject, Node } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { RustProviderOperationTemplate, RustTargetOperationFact } from "../../facts/keys.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { selectRustNumberArrayUnionMember } from "./number-array-unions.js";
+import { selectedRustForInKeys } from "./for-in-keys.js";
 
 export function selectRustCheckedElementAccess(
   request: RustCheckedElementSelectionInput,
@@ -68,6 +74,9 @@ export function selectRustCheckedElementAccess(
     return rejectSelectedOperation(request.expression, context, "RUST_OPTIONAL_CHAIN_EVIDENCE_MISSING", "Optional-chain element access has no exact TSTS-selected non-null receiver type.");
   }
   if (isDeclarationFileSubject(request.expression, context)) {
+    return acceptDeclarationOperation("indexer");
+  }
+  if (isIntrinsicSourceQualifier(request, context, options)) {
     return acceptDeclarationOperation("indexer");
   }
   const sourceProfileIdentity = resolveSelectedSourceProfileMember(
@@ -166,6 +175,8 @@ export function selectRustCheckedElementAccess(
   }
 
   const receiverCarrier = selectedReceiverCarrier;
+  const numericArrayMember = selectRustNumberArrayUnionMember(request, receiverCarrier, context, options);
+  if (numericArrayMember !== undefined) return numericArrayMember;
   if (receiverCarrier?.kind === "tuple") {
     const index = request.sourceSelectedElementIndex;
     const resultCarrier = index === undefined ? undefined : receiverCarrier.elements[index];
@@ -197,7 +208,7 @@ export function selectRustCheckedElementAccess(
   if (sourceProfileIdentity?.profile === "native" &&
     (sourceProfileIdentity.ownerName === "Array" || sourceProfileIdentity.ownerName === "ReadonlyArray") &&
     sourceProfileIdentity.memberName === "index" &&
-    nativeArrayReceiver !== undefined && (isRustCopyCarrier(nativeArrayReceiver.element) || rustCarrierSupportsClone(nativeArrayReceiver.element))) {
+    nativeArrayReceiver !== undefined && (isRustCopyCarrier(nativeArrayReceiver.element) || rustCarrierSupportsClone(nativeArrayReceiver.element, context.typeDefinitions))) {
     const template: RustProviderOperationTemplate = {
       kind: "provider-operation",
       operationId: `tsonic.rust.native.${sourceProfileIdentity.ownerName}.index`,
@@ -235,7 +246,7 @@ export function selectRustCheckedElementAccess(
       ...(receiverCarrier === undefined ? {} : { receiverCarrier }),
       argumentCarriers: [selectedArgumentCarrier],
       argumentMatchScore: selectedArgumentMatchScore([request.argument], context, options),
-    });
+    }, context.typeDefinitions);
     if (selection === undefined || selection.fact.kind !== "provider-operation" || selection.resultCarrier === undefined) {
       return rejectSelectedOperation(
         request.expression,
@@ -285,7 +296,7 @@ export function selectRustCheckedIteration(
         "Rust property-key iteration requires the exact checked source key to map to String.",
       );
     }
-    const lowering = rustPropertyKeyIterationLowering(iterable, context.ast, options);
+    const lowering = rustPropertyKeyIterationLowering(iterable, request.expression, context, options);
     if (iterable === undefined || lowering === undefined) {
       return rejectSelectedOperation(
         request.statement,
@@ -309,7 +320,8 @@ export function selectRustCheckedIteration(
     }, elementCarrier);
   }
   const iterable = resolveRustTargetTypeRef(request.expression, context, options);
-  const targetIteration = rustIterableTargetPolicy(iterable);
+  const targetIteration = rustIterableTargetPolicy(iterable,
+    rustJsArrayEntriesElementTargetType(iterable) !== undefined && options.arrayDensity.entries(request.expression), context.typeDefinitions);
   if (targetIteration === undefined) {
     return rejectSelectedOperation(
       request.statement,
@@ -352,7 +364,8 @@ type RustPropertyKeyIterationLowering = Extract<
 
 function rustPropertyKeyIterationLowering(
   iterable: TargetTypeRef | undefined,
-  ast: import("@tsonic/tsts").AstReader,
+  expression: Node,
+  context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): RustPropertyKeyIterationLowering | undefined {
   if (iterable?.kind === "array" ||
@@ -365,7 +378,7 @@ function rustPropertyKeyIterationLowering(
   }
   const keys = iterable === undefined
     ? undefined
-    : options.sourceTypes.propertyKeysForCarrier(iterable, ast);
+    : selectedRustForInKeys(expression, iterable, context, options);
   return keys === undefined ? undefined : { kind: "static-keys", keys };
 }
 
@@ -383,9 +396,31 @@ type RustIterableTargetPolicy =
       readonly kind: "receiver-method";
       readonly elementCarrier: TargetTypeRef;
       readonly method: string;
+    }
+  | {
+      readonly kind: "owned-call";
+      readonly elementCarrier: TargetTypeRef;
+      readonly path: string;
     };
 
-function rustIterableTargetPolicy(iterable: TargetTypeRef | undefined): RustIterableTargetPolicy | undefined {
+function rustIterableTargetPolicy(iterable: TargetTypeRef | undefined, denseEntries: boolean, definitions: RustTypeDefinitions): RustIterableTargetPolicy | undefined {
+  const entryElement = rustJsArrayEntriesElementTargetType(iterable);
+  if (entryElement !== undefined) {
+    return {
+      kind: "receiver-method",
+      elementCarrier: denseEntries
+        ? { kind: "tuple", elements: [{ kind: "source-primitive", name: "float64" }, entryElement] }
+        : rustJsArrayEntryTargetType(entryElement),
+      method: denseEntries ? "checked_present_values" : "clone",
+    };
+  }
+  if (isRustStringCarrier(iterable)) {
+    return {
+      kind: "owned-call",
+      elementCarrier: rustStringTargetType(),
+      path: "js_abi::NativeStringIterator::new",
+    };
+  }
   if (iterable?.kind === "array") {
     return { kind: "borrowed", elementCarrier: iterable.element, input: "reference" };
   }
@@ -401,8 +436,8 @@ function rustIterableTargetPolicy(iterable: TargetTypeRef | undefined): RustIter
     return { kind: "js-array", elementCarrier: jsElement };
   }
   const mapTypes = getRustJsMapTargetTypes(iterable);
-  if (mapTypes !== undefined && rustCarrierSupportsClone(mapTypes.key) &&
-    rustCarrierSupportsClone(mapTypes.value)) {
+  if (mapTypes !== undefined && rustCarrierSupportsClone(mapTypes.key, definitions) &&
+    rustCarrierSupportsClone(mapTypes.value, definitions)) {
     return {
       kind: "receiver-method",
       elementCarrier: { kind: "tuple", elements: [mapTypes.key, mapTypes.value] },
@@ -410,7 +445,7 @@ function rustIterableTargetPolicy(iterable: TargetTypeRef | undefined): RustIter
     };
   }
   const setElement = getRustJsSetElementTargetType(iterable);
-  if (setElement !== undefined && rustCarrierSupportsClone(setElement)) {
+  if (setElement !== undefined && rustCarrierSupportsClone(setElement, definitions)) {
     return { kind: "receiver-method", elementCarrier: setElement, method: "values" };
   }
   if (iterable?.kind === "target-named") {
@@ -446,6 +481,11 @@ function selectRustIterationLowering(
 >["lowering"] | undefined {
   if (source.mechanism.kind === "union" || source.mechanism.kind === "untyped-dynamic-iteration") {
     return undefined;
+  }
+  if (target.kind === "owned-call") {
+    return source.mechanism.kind === "asynchronous-iterator-protocol"
+      ? undefined
+      : { kind: "owned-call", path: target.path };
   }
   if (source.iterationKind === "for-of") {
     if (target.kind === "async-generator") {

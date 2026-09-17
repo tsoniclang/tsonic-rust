@@ -223,7 +223,7 @@ function maxWritesInExpression(expression: RustExpr, path: string): number {
   if (expression.kind === "block") {
     let writes = 0;
     for (const binding of expression.bindings) {
-      writes = cappedWriteCount(writes + maxWritesInExpression(binding.value, path));
+      writes = cappedWriteCount(writes + (binding.value === undefined ? 0 : maxWritesInExpression(binding.value, path)));
       if (writes === 2 || binding.name === path) {
         return writes;
       }
@@ -469,7 +469,9 @@ function firstAccessesInBlockExpression(
 ): ReadonlySet<FirstAccess> {
   let outcomes = new Set<FirstAccess>(["none"]);
   for (const binding of expression.bindings) {
-    outcomes = replaceNone(outcomes, firstAccessesInExpression(binding.value, path));
+    if (binding.value !== undefined) {
+      outcomes = replaceNone(outcomes, firstAccessesInExpression(binding.value, path));
+    }
     if (!outcomes.has("none") || binding.name === path) {
       return outcomes;
     }

@@ -19,6 +19,7 @@ export const rustJsStringTargetId = "rust.js.JsString";
 export const rustBigIntTargetId = "rust.runtime.BigInt";
 export const rustOptionTargetId = "rust.std.Option";
 export const rustLocationTargetId = "rust.runtime.Location";
+export const rustInfallibleTargetId = "rust.core.Infallible";
 export const rustRawPointerTargetId = "rust.runtime.RawPointer";
 export const rustCallableTargetId = "rust.runtime.Callable";
 export const rustGeneratorTargetId = "rust.runtime.Generator";
@@ -32,6 +33,10 @@ export const rustJsErrorTargetId = "rust.runtime.JsError";
 export const rustProgramErrorTargetId = "rust.program.TsonicError";
 export const rustTsValueTargetId = "rust.runtime.TsValue";
 export const rustJsValueTargetId = "rust.js.JsValue";
+export const rustEmptyObjectTargetId = "rust.runtime.EmptyObject";
+export const rustObjectIdentityTargetId = "rust.runtime.ObjectIdentity";
+export const rustJsNumericTargetId = "rust.js.JsNumeric";
+export const rustJsStringNumberTargetId = "rust.js.JsStringNumber";
 export const rustJsArrayTargetId = "rust.js.JsArray";
 export const rustJsArrayConcatItemTargetId = "rust.js.JsArrayConcatItem";
 export const rustJsMapTargetId = "rust.js.JsMap";
@@ -92,6 +97,7 @@ export interface RustSourceTypeCarrierValue {
 const noRustSourceTypeGenericArguments: readonly RustTargetGenericArgument[] = Object.freeze([]);
 
 export interface RustStructuralObjectFieldCarrierValue {
+  readonly bound?: true;
   readonly sourceName: string;
   readonly type: TargetTypeRef;
   readonly presence: "required" | "optional";
@@ -105,6 +111,7 @@ export interface RustStructuralObjectFieldCarrierValue {
 
 export interface RustStructuralObjectCarrierValue {
   readonly ownerFileName: string;
+  readonly representation: "reference" | "value";
   readonly fields: readonly RustStructuralObjectFieldCarrierValue[];
 }
 
@@ -114,9 +121,10 @@ export interface RustSourceUnionVariantCarrierValue {
 }
 
 export interface RustSourceUnionCarrierValue {
+  readonly origin: "authored" | "generated";
   readonly fileName: string;
   readonly typeName: string;
-  readonly variants: readonly RustSourceUnionVariantCarrierValue[];
+  readonly genericArguments: readonly RustTargetGenericArgument[];
 }
 
 export function rustSourceTypeCarrier(
@@ -215,6 +223,7 @@ function isRustSourceTypeConstArgument(value: unknown): value is RustTargetConst
 export function rustStructuralObjectTargetType(
   ownerFileName: string,
   fields: readonly RustStructuralObjectFieldCarrierValue[],
+  representation: "reference" | "value" = "reference",
 ): TargetTypeRef {
   const canonicalFields = Object.freeze(
     [...fields].sort((left, right) => left.sourceName.localeCompare(right.sourceName)),
@@ -223,7 +232,7 @@ export function rustStructuralObjectTargetType(
     kind: "target-specific",
     target: "rust",
     name: rustStructuralObjectCarrierName,
-    value: { ownerFileName, fields: canonicalFields },
+    value: { ownerFileName, representation, fields: canonicalFields },
   };
 }
 
@@ -236,17 +245,19 @@ export function rustStructuralObjectCarrierValue(
   }
   const value = carrier.value;
   if (typeof value !== "object" || value === null || Array.isArray(value) ||
-    !hasExactObjectKeys(value, ["fields", "ownerFileName"])) {
+    !hasExactObjectKeys(value, ["fields", "ownerFileName", "representation"])) {
     return undefined;
   }
   const candidateValue = value as {
     readonly fields?: unknown;
     readonly ownerFileName?: unknown;
+    readonly representation?: unknown;
   };
   const fields = candidateValue.fields;
   if (typeof candidateValue.ownerFileName !== "string" ||
     candidateValue.ownerFileName.length === 0 ||
-    !isDenseDataArray(fields) || fields.length === 0) {
+    (candidateValue.representation !== "reference" && candidateValue.representation !== "value") ||
+    !isDenseDataArray(fields) || (fields.length === 0 && candidateValue.representation !== "value")) {
     return undefined;
   }
   const seenNames = new Set<string>();
@@ -261,12 +272,17 @@ export function rustStructuralObjectCarrierValue(
       : candidate.method === true
         ? ["method", "presence", "readonly", "sourceName", "type"]
         : ["presence", "readonly", "sourceName", "type"];
+    if (candidate.bound === true) expectedKeys.push("bound");
     if (typeof candidate.sourceName !== "string" || candidate.sourceName.length === 0 ||
       seenNames.has(candidate.sourceName) || !isRustTargetTypeRef(candidate.type) ||
       (candidate.presence !== "required" && candidate.presence !== "optional") ||
       typeof candidate.readonly !== "boolean" ||
       !hasExactObjectKeys(field, expectedKeys) ||
       candidate.accessor !== undefined && candidate.method !== undefined ||
+      candidate.bound !== undefined && candidate.bound !== true ||
+      candidate.bound === true && (candidate.accessor !== undefined || candidate.method !== undefined || candidate.presence !== "required") ||
+      candidateValue.representation === "value" &&
+        (candidate.accessor !== undefined || candidate.method !== undefined || candidate.presence !== "required") ||
       candidate.method !== undefined && candidate.method !== true ||
       candidate.accessor !== undefined && (
         typeof candidate.accessor !== "object" || candidate.accessor === null ||
@@ -282,6 +298,7 @@ export function rustStructuralObjectCarrierValue(
   }
   return {
     ownerFileName: candidateValue.ownerFileName,
+    representation: candidateValue.representation,
     fields: Object.freeze(normalized),
   };
 }
@@ -289,13 +306,14 @@ export function rustStructuralObjectCarrierValue(
 export function rustSourceUnionTargetType(
   fileName: string,
   typeName: string,
-  variants: readonly RustSourceUnionVariantCarrierValue[],
+  genericArguments: readonly RustTargetGenericArgument[] = noRustSourceTypeGenericArguments,
+  origin: RustSourceUnionCarrierValue["origin"] = "authored",
 ): TargetTypeRef {
   return {
     kind: "target-specific",
     target: "rust",
     name: rustSourceUnionCarrierName,
-    value: { fileName, typeName, variants },
+    value: { fileName, typeName, genericArguments, origin },
   };
 }
 
@@ -308,33 +326,24 @@ export function rustSourceUnionCarrierValue(
   }
   const value = carrier.value;
   if (typeof value !== "object" || value === null || Array.isArray(value) ||
-    !hasExactObjectKeys(value, ["fileName", "typeName", "variants"])) {
+    !hasExactObjectKeys(value, ["fileName", "typeName", "genericArguments", "origin"])) {
     return undefined;
   }
   const candidate = value as Partial<RustSourceUnionCarrierValue>;
-  if (typeof candidate.fileName !== "string" || candidate.fileName.length === 0 ||
+  if ((candidate.origin !== "authored" && candidate.origin !== "generated") ||
+    typeof candidate.fileName !== "string" || candidate.fileName.length === 0 ||
     typeof candidate.typeName !== "string" || candidate.typeName.length === 0 ||
-    !isDenseDataArray(candidate.variants) || candidate.variants.length < 2) {
+    !isDenseDataArray(candidate.genericArguments) ||
+    !candidate.genericArguments.every(isRustSourceTypeGenericArgument)) {
     return undefined;
   }
-  const seenNames = new Set<string>();
-  const variants: RustSourceUnionVariantCarrierValue[] = [];
-  for (const variant of candidate.variants) {
-    if (typeof variant !== "object" || variant === null || Array.isArray(variant) ||
-      !hasExactObjectKeys(variant, ["carrier", "name"])) {
-      return undefined;
-    }
-    const selected = variant as Partial<RustSourceUnionVariantCarrierValue>;
-    if (typeof selected.name !== "string" || selected.name.length === 0 ||
-      seenNames.has(selected.name) || !isRustTargetTypeRef(selected.carrier)) {
-      return undefined;
-    }
-    seenNames.add(selected.name);
-    variants.push(selected as RustSourceUnionVariantCarrierValue);
-  }
+  if (candidate.origin === "generated" &&
+    (candidate.genericArguments.length < 2 || candidate.typeName !== `Union${candidate.genericArguments.length}` ||
+      candidate.genericArguments.some(argument => argument.kind !== "type"))) return undefined;
   return {
+    origin: candidate.origin,
     fileName: candidate.fileName,
     typeName: candidate.typeName,
-    variants: Object.freeze(variants),
+    genericArguments: candidate.genericArguments,
   };
 }

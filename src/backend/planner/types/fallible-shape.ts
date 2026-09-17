@@ -26,6 +26,8 @@ export function rustExpressionUsesTryInCurrentRegion(expression: RustExpr): bool
   switch (expression.kind) {
     case "try":
       return true;
+    case "option-try":
+      return rustExpressionUsesTryInCurrentRegion(expression.expr);
     case "bottom":
       return rustExpressionUsesTryInCurrentRegion(expression.expression);
     case "owned-string-from-borrowed-str":
@@ -72,7 +74,7 @@ export function rustExpressionUsesTryInCurrentRegion(expression: RustExpr): bool
         rustExpressionUsesTryInCurrentRegion(expression.index);
     case "block":
       return expression.bindings.some((binding) =>
-        rustExpressionUsesTryInCurrentRegion(binding.value)) ||
+        binding.value !== undefined && rustExpressionUsesTryInCurrentRegion(binding.value)) ||
         rustExpressionUsesTryInCurrentRegion(expression.value);
     case "unsafe":
       return rustExpressionUsesTryInCurrentRegion(expression.expression);
@@ -89,6 +91,8 @@ export function rustExpressionUsesTryInCurrentRegion(expression: RustExpr): bool
     case "vec-literal":
     case "slice-literal":
       return expression.elements.some(rustExpressionUsesTryInCurrentRegion);
+    case "array-repeat":
+      return rustExpressionUsesTryInCurrentRegion(expression.element);
     case "await":
       return rustExpressionUsesTryInCurrentRegion(expression.expr);
     case "return-expression":

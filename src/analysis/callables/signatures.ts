@@ -73,7 +73,7 @@ function recordCallableParameterSignatureFacts(walk: RustFactWalk, declaration: 
   }
 }
 
-import { rustMemoryMetadataKey } from "../../target-model/operations/memory-layout.js";
+import { rustCompileTimeSourceKey } from "../../target-model/facts/source-declarations.js";
 
 export function recordNestedCallableTypeSignatureFacts(walk: RustFactWalk, sourceFile: SourceFile): void {
   const { ast } = walk.context;
@@ -81,7 +81,7 @@ export function recordNestedCallableTypeSignatureFacts(walk: RustFactWalk, sourc
     if (node === undefined) {
       return;
     }
-    if (walk.context.facts.get(node, rustMemoryMetadataKey)) return;
+    if (walk.context.facts.get(node, rustCompileTimeSourceKey)) return;
     const kind = ast.kindName(node);
     if (kind === "KindFunctionType" || kind === "KindCallSignature") {
       recordCallableTypeSignatureFacts(walk, node);
@@ -583,8 +583,10 @@ export function recordCallableReturnFact(
   }
   const carrier = pointer?.returnCarrier ?? selected;
   if (carrier !== undefined) {
+    const completion = walk.context.semanticsFor(declaration).operations.callableCompletion(declaration);
     walk.context.facts.set(declaration, rustSourceCallableReturnFactKey, {
       returnCarrier: carrier,
+      ...(completion === undefined ? {} : { canFallThrough: completion.canFallThrough }),
       ...(pointer?.undefinedReturn ? { undefinedReturn: true } : {}),
       ...(pointer?.fallthroughUndefined ? { fallthroughUndefined: true } : {}),
     }, [{ message: "rust finalized source callable return carrier" }]);

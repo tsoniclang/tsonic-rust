@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import {
+  acmeTestingPackage,
   compileRust,
   createRustSession,
   rustSourceDiagnostics,
@@ -89,6 +90,29 @@ test("JavaScript capability globals remain absent from the native Rust source pr
   assert.match(diagnostics, /Cannot find name 'ArrayBuffer'/u);
   assert.match(diagnostics, /Cannot find name 'Intl'/u);
   assert.match(diagnostics, /Cannot find name 'setTimeout'/u);
+});
+
+test("synchronous Promise factories retain fallible await effects through aliases", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "promise_factory_await" } },
+    files: { "index.ts": `
+import { check } from "@acme/testing";
+async function value(): Promise<number> { return 7; }
+async function rejected(): Promise<number> { throw new Error("rejected"); }
+export async function main(): Promise<void> {
+  const selected = Promise.race([value()]);
+  check(await selected === 7);
+  let caught = false;
+  try { await Promise.race([rejected()]); }
+  catch { caught = true; }
+  check(caught);
+}
+` },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  validateGeneratedProject("promise-factory-await", result.artifacts, { run: true });
 });
 
 test("generated Rust closes Promise, Intl, JSON, console, and timer APIs", { timeout: 300_000 }, () => {

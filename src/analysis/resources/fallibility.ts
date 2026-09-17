@@ -1,5 +1,6 @@
 import {
   CatchClause_Block,
+  ClassStaticBlock_Body,
   TryStatement_CatchClause,
   TryStatement_FinallyBlock,
   TryStatement_TryBlock,
@@ -32,6 +33,7 @@ import {
   rustTargetOperationFactKey,
 } from "../facts/keys.js";
 import { appendRustDiagnostic, rustOperationContext } from "../program/walk.js";
+import { rustStructuralFieldIsFallible } from "../objects/structural-shape-plan.js";
 import { finalizeRustPreparedCheckedCall } from "../operations/provider/index.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { recordSelectedOperationInputs } from "../operations/inputs.js";
@@ -48,6 +50,7 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustPreparedDeferredCheckedCall } from "../operations/provider/index.js";
 import type { RustTargetOperationFact } from "../facts/keys.js";
+import { rustProjectCallableAdaptersKey } from "../facts/project-callable-adapters.js";
 
 interface RustFutureOperationOrigin {
   readonly expression: Node;
@@ -66,7 +69,7 @@ function resolveFutureOperationOrigin(
   try {
     const operation = walk.context.facts.get(node, rustTargetOperationFactKey) ??
       walk.context.facts.resolve(node, rustTargetOperationFactKey);
-    if ((operation?.kind === "provider-operation" && operation.abi.result.kind === "async") ||
+    if ((operation?.kind === "provider-operation" && operation.abi.effects.awaiting !== "not-applicable") ||
       (operation?.kind === "source-call" && rustFutureOutputCarrier(operation.resultCarrier) !== undefined)) {
       return { expression: node, operation };
     }
@@ -286,6 +289,11 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
       }
     }
   }
+  for (const definition of walk.context.projectTypes.definitions) {
+    for (const adapter of walk.context.facts.get(definition.declaration, rustProjectCallableAdaptersKey) ?? []) {
+      if (adapter.adapterFallible) fallible.add(adapter.contract);
+    }
+  }
   for (const expression of walk.objectLiteralMethodSpreadExpressions) {
     const operation = walk.context.facts.get(expression, rustTargetOperationFactKey) ??
       walk.context.facts.resolve(expression, rustTargetOperationFactKey);
@@ -326,25 +334,28 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
       ? false
       : projection?.kind === "object-field"
       ? projection.accessor !== undefined ||
-        projection.storage === "object-handle" &&
-          walk.context.structuralShapes.field(
+        projection.storage === "structural-object" &&
+          rustStructuralFieldIsFallible(walk.context.structuralShapes.field(
             bindingProjection.sourceCarrier,
             projection.storageIndex,
-          )?.storage === "property"
+          ))
       : projection?.kind === "object-rest" &&
         projection.fields.some((field) => field.accessor !== undefined ||
-          projection.storage === "object-handle" &&
-            walk.context.structuralShapes.field(
+          projection.storage === "structural-object" &&
+            rustStructuralFieldIsFallible(walk.context.structuralShapes.field(
               bindingProjection.sourceCarrier,
               field.sourceStorageIndex,
-            )?.storage === "property");
+            )));
     return rustTargetOperationIsFallible(
       operation,
       walk.context.structuralShapes,
       walk.context.projectFieldDispatch,
+      walk.context.frozenDataWrites, walk.context.typeDefinitions,
     ) ||
+      (operation?.kind === "source-call" && operation.target.form === "union-method" &&
+        operation.target.variants.some(variant => fallible.has(variant.declaration))) ||
       bindingProjectionIsFallible ||
-      rustContextualValueConversionIsFallible(contextualConversion?.conversion);
+      rustContextualValueConversionIsFallible(contextualConversion?.conversion, walk.context.typeDefinitions);
   };
   const selectedAccessorDeclarations = (node: Node): readonly Node[] => {
     const operation = walk.context.facts.get(node, rustTargetOperationFactKey) ??
@@ -612,16 +623,24 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
     ]);
   }
   for (const sourceFile of projectSourceFiles) {
-    const runtimeStatements = (ast.statements(sourceFile) as readonly Node[]).filter((statement) => {
+    const runtimeStatements = (ast.statements(sourceFile) as readonly Node[]).flatMap((statement): readonly Node[] => {
       const kind = ast.kindName(statement);
+      if (kind === "KindClassDeclaration") {
+        return ast.members(statement).flatMap(member => {
+          if (member === undefined) return [];
+          const initializer = ast.kindName(member) === "KindClassStaticBlockDeclaration"
+            ? ClassStaticBlock_Body(ast, member)
+            : ast.hasModifierKind(member, "static") ? Node_Initializer(ast, member) : undefined;
+          return initializer === undefined ? [] : [initializer];
+        });
+      }
       return kind !== KindFunctionDeclaration &&
-        kind !== "KindClassDeclaration" &&
         kind !== "KindInterfaceDeclaration" &&
         kind !== "KindTypeAliasDeclaration" &&
         kind !== "KindEnumDeclaration" &&
         kind !== "KindImportDeclaration" &&
         kind !== "KindExportDeclaration" &&
-        kind !== "KindEndOfFile";
+        kind !== "KindEndOfFile" ? [statement] : [];
     });
     if (runtimeStatements.some(expressionRegionIsFallible)) {
       walk.context.facts.set(sourceFile, rustFallibleFactKey, { fallible: true }, [
@@ -637,7 +656,8 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
           walk.context.facts.resolve(node, rustTargetOperationFactKey);
         const body = ast.body(node);
         if (operation?.kind === "closure" && body !== undefined && expressionRegionIsFallible(body)) {
-          if (rustCallableProtocol(operation.resultCarrier) !== undefined) {
+          if (rustCallableProtocol(operation.resultCarrier) !== undefined ||
+            operation.resultCarrier.kind === "closure" && operation.resultCarrier.fallible === true) {
             walk.context.facts.set(node, rustFallibleFactKey, { fallible: true }, [
               { message: "rust fallible first-class callable implementation" },
             ]);
@@ -679,14 +699,22 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
           walk.context.facts.resolve(node, rustTargetOperationFactKey);
         if (operation?.kind === "source-call") {
           const declaration = selectedProjectDeclaration(node);
+          const nativeCallable = operation.target.form === "callable" &&
+            (operation.target.carrier.kind === "closure" || operation.target.carrier.kind === "function-pointer");
           const runtimeCallable = (operation.target.form === "callable" &&
-              rustCallableProtocol(operation.target.carrier) !== undefined) ||
+              (rustCallableProtocol(operation.target.carrier) !== undefined ||
+                operation.target.carrier.kind === "closure" && operation.target.carrier.fallible === true)) ||
             operation.target.form === "structural-method" &&
               rustCallableProtocol(operation.target.callableCarrier) !== undefined;
-          if (runtimeCallable || declaration !== undefined) {
+          if (nativeCallable || runtimeCallable || declaration !== undefined) {
             const isAsync = rustFutureOutputCarrier(operation.resultCarrier) !== undefined;
-            const isFallible = declaration !== undefined && fallible.has(declaration);
+            const unionBranches = operation.target.form === "union-method"
+              ? operation.target.variants.map(variant => fallible.has(variant.declaration) ? "fallible" as const : "infallible" as const)
+              : undefined;
+            const isFallible = unionBranches === undefined ? declaration !== undefined && fallible.has(declaration)
+              : unionBranches.some(branch => branch === "fallible");
             walk.context.facts.set(node, rustSourceCallEffectsFactKey, {
+              ...(unionBranches === undefined ? {} : { unionBranches }),
               invocation: runtimeCallable || isFallible && !isAsync
                 ? "fallible"
                 : "infallible",

@@ -14,11 +14,13 @@ import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagno
 import { Node_Expression } from "@tsonic/target-api/source";
 import { planExpression } from "./entry.js";
 import { planRustNonConsumingValue, planRustSharedReceiver } from "./typed-locations.js";
-import { planRustSourceUnionFieldProjection } from "./unions.js";
+import { planRustSourceUnionFieldProjection, readRustUnionField } from "./unions.js";
+import { planRustBuiltinErrorProperty } from "./builtin-errors.js";
 import { readRustProjectDispatchedField, rustProjectObjectDispatchField } from "../objects/project-objects.js";
-import { planRustProjectFieldDispatchRoles } from "../objects/project-field-dispatch.js";
+import { planRustProjectFieldDispatchRole } from "../objects/project-field-dispatch.js";
 import { readRustSourceStaticField } from "../declarations/static-field-storage.js";
 import { readRustStoredObjectField } from "../objects/project-storage.js";
+import { planRustValueFieldLocation, rustSourceFieldHasValueReceiver } from "../objects/value-fields.js";
 import { rustCallableProtocol, rustSourceTypeCarrierValue } from "../../../target-model/types/index.js";
 import { rustFallibleFactKey, rustSourceAccessorEffectsFactKey } from "../../../analysis/facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -39,6 +41,9 @@ export function planPropertyAccess(node: Node, context: RustPlanContext): RustEx
 }
 function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
+  if (fact?.kind === "builtin-error-property") {
+    return planRustBuiltinErrorProperty(node, fact, context);
+  }
   if (fact !== undefined && fact.kind === "source-method-property") {
     return planRustSourceMethodPropertyRead(node, fact, context);
   }
@@ -111,6 +116,10 @@ function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr
       ));
       return undefined;
     }
+    if (rustSourceFieldHasValueReceiver(node, context)) {
+      const location = planRustValueFieldLocation(node, context, "read");
+      return location === undefined ? undefined : { kind: "block", bindings: location.bindings, value: location.read };
+    }
     const receiverNode = Node_Expression(context.input.program.source.ast, node);
     const plannedReceiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
     if (receiverNode === undefined || plannedReceiver === undefined) {
@@ -145,8 +154,8 @@ function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr
       ));
       return undefined;
     }
-    const dispatchRoles = planRustProjectFieldDispatchRoles(dispatchPlan, context);
-    if (dispatchRoles === undefined) {
+    const dispatchRead = planRustProjectFieldDispatchRole(dispatchPlan, "read", context);
+    if (dispatchRead === undefined) {
       return undefined;
     }
     const receiverName = allocateRustSyntheticName(
@@ -162,7 +171,7 @@ function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr
       value: readRustProjectDispatchedField(
         { kind: "path", path: receiverName },
         fact.dispatch.read,
-        dispatchRoles.read,
+        dispatchRead,
       ),
     };
   }
@@ -451,11 +460,10 @@ function planRustSourceUnionFieldRead(
     fact,
     context,
     (payload, field, variantIndex) => {
-      return readRustStoredObjectField(
-        field.storage,
+      return readRustUnionField(
+        field,
         fact.variants[variantIndex]!.carrier,
         payload,
-        field.storageIndex,
         fact.resultCarrier,
         context,
       );

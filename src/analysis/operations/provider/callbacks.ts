@@ -80,17 +80,17 @@ export function finalizeRustCallbackOperation(
 
 function rustCallbackProtocol(
   carrier: TargetTypeRef | undefined,
-): { readonly representation: "closure" | "function-pointer" | "callable"; readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef } | undefined {
+): { readonly representation: "closure" | "function-pointer" | "callable"; readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef; readonly fallible: boolean } | undefined {
   if (carrier?.kind === "closure") {
-    return { representation: "closure", parameters: carrier.args, result: carrier.result };
+    return { representation: "closure", parameters: carrier.args, result: carrier.result, fallible: carrier.fallible === true };
   }
   if (carrier?.kind === "function-pointer") {
-    return { representation: "function-pointer", parameters: carrier.args, result: carrier.result };
+    return { representation: "function-pointer", parameters: carrier.args, result: carrier.result, fallible: false };
   }
   const callable = rustCallableProtocol(carrier);
   return callable === undefined
     ? undefined
-    : { representation: "callable", parameters: callable.parameters, result: callable.result };
+    : { representation: "callable", parameters: callable.parameters, result: callable.result, fallible: true };
 }
 
 function rustCallbackCarrierMatchesTemplate(
@@ -105,6 +105,7 @@ function rustCallbackCarrierMatchesTemplate(
   if (templateProtocol !== undefined || actualProtocol !== undefined) {
     return templateProtocol !== undefined && actualProtocol !== undefined &&
       templateProtocol.representation === actualProtocol.representation &&
+      templateProtocol.fallible === actualProtocol.fallible &&
       templateProtocol.parameters.length === actualProtocol.parameters.length &&
       templateProtocol.parameters.every((parameter, index) =>
         actualProtocol.parameters[index] !== undefined &&

@@ -13,6 +13,7 @@ import type {
   RustLifetimeBinder,
   RustLifetimeRef,
 } from "../lifetimes/index.js";
+import type { RustValueConversion } from "../operations/model.js";
 
 export type RustTargetConstArgument =
   | { readonly kind: "integer"; readonly value: string }
@@ -30,6 +31,10 @@ export interface RustTargetTraitRef {
   readonly kind: "trait-ref";
   readonly id: string;
   readonly path: string;
+  readonly sourceItem?: {
+    readonly fileName: string;
+    readonly typeName: string;
+  };
   readonly genericArguments: readonly RustTargetGenericArgument[];
   readonly associatedConstraints: readonly RustTargetAssociatedConstraint[];
   readonly lifetimeBinder?: RustLifetimeBinder;
@@ -83,6 +88,7 @@ export type RustTargetTypeRef =
       readonly kind: "closure";
       readonly args: readonly RustTargetTypeRef[];
       readonly result: RustTargetTypeRef;
+      readonly fallible?: boolean;
       readonly lifetimeBinder?: RustLifetimeBinder;
     }
   | { readonly kind: "opaque"; readonly id: string }
@@ -170,6 +176,10 @@ export interface RustTargetCallArgumentSlot {
 
 export interface RustSelectedTargetSignature {
   readonly member: RustTargetMember;
+  readonly sourceUnionMethods?: {
+    readonly receiverCarrier: RustTargetTypeRef;
+    readonly variants: readonly RustSelectedUnionMethod[];
+  };
   readonly sourceSelectedReceiverCarrier?: RustTargetTypeRef;
   readonly sourceCallableCarrier?: RustTargetTypeRef;
   readonly sourceCallableParameterIndexes?: readonly number[];
@@ -188,6 +198,18 @@ export interface RustSelectedTargetSignature {
   readonly sourceArgumentBindings?: ResolvedSourceCallInfo["sourceArgumentBindings"];
   readonly sourceSelectedSignatureParameters?: ResolvedSourceCallInfo["sourceSelectedSignatureParameters"];
   readonly sourceSelectedMethodTypeArguments?: ResolvedSourceCallInfo["sourceSelectedMethodTypeArguments"];
+}
+
+export interface RustSelectedUnionMethodIdentity {
+  readonly name: string;
+  readonly carrier: RustTargetTypeRef;
+  readonly declaration: Node;
+  readonly targetName: string;
+}
+
+export interface RustSelectedUnionMethod extends RustSelectedUnionMethodIdentity {
+  readonly returnType: RustTargetTypeRef;
+  readonly resultConversion: RustValueConversion | undefined;
 }
 
 export interface RustSelectedTargetOperation {

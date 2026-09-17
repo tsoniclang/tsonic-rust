@@ -4,13 +4,14 @@ import { createRustModuleBindingPolicy } from "./module-bindings.js";
 import { createRustSourceCallableAbiResolver } from "../../policy/ownership/source-callable-abi.js";
 import { createRustSourceProfileRegistry } from "../facts/source-profile-registry.js";
 import { createRustSourceTypeRegistry } from "../project-types/source-type-registry.js";
+import { rustProjectGenericParameters } from "../../policy/types/project-generic-contract.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import {
   KindExportAssignment,
   KindFunctionDeclaration,
   KindVariableStatement,
 } from "@tsonic/target-api/source";
-import { recordEnumFacts, registerTypeAlias } from "../declarations/types-and-bindings.js";
+import { recordEnumFacts, registerTypeAlias, reserveTypeAliasUnion } from "../declarations/types-and-bindings.js";
 import { recordExportAssignmentFacts, recordFunctionBodyFacts, recordStatementFacts, recordVariableStatementFacts } from "../control-flow/statements.js";
 import { recordFallibilityFacts } from "../resources/fallibility.js";
 import { recordFunctionSignatureFacts, recordNestedCallableTypeSignatureFacts, recordPredeclaredNativeFunctionBindingFacts, recordTopLevelCallableValueSignatureFacts } from "../callables/signatures.js";
@@ -29,8 +30,22 @@ import { rustTypedLocationStorageRootReference } from "../operations/typed-locat
 import { selectRustAddressOfSourceOperation } from "../../policy/operations/typed-location-source.js";
 import { rustProjectCallableTargetName } from "../facts/source-member-name.js";
 import { collectRustMutableProjectStorageRequirements } from "../project-types/mutable-storage-requirements.js";
-import { rustMemoryMetadataKey } from "../../target-model/operations/memory-layout.js";
+import { rustCompileTimeSourceKey } from "../../target-model/facts/source-declarations.js";
 import { recordRustNativeBacking } from "../operations/native-memory.js";
+import { collectRustThrownClassDeclarations } from "../resources/thrown-values.js";
+import { rustSourceTypeDeclarations } from "../../policy/types/source-declarations.js";
+import { realizeRustSourceTypeFamilyDemands } from "../project-types/type-family-demands.js";
+import { rustTypeFamilyNormalizer } from "../../policy/types/type-family-normalization.js";
+import { createSourceArrayDensityQuery } from "@tsonic/target-api/source";
+import { jsArrayMemberEffect } from "@tsonic/js-source-profile";
+import { rustJsTypedArrayTargetIds } from "../../target-model/types/carriers/js.js";
+import { resolveSelectedJsSourceExportName, resolveSelectedJsSourceMember } from "../../policy/evidence/selected-source.js";
+import { recordRustTypeOnlyDeclarations } from "../declarations/type-only.js";
+import { recordRustProjectCallableAdapterFacts } from "../project-types/callable-adapters.js";
+import { recordRustValueStructDeclaration } from "../declarations/value-structs.js";
+import { recordRustInterfaceRepresentationAliases } from "../declarations/interface-aliases.js";
+import { rustTypeOnlyDeclarationFactKey } from "../../target-model/facts/type-only.js";
+import { finalizeRustCopiedMethods } from "../objects/copied-methods.js";
 
 export function analyzeRustProgram(context: RustAnalysisContext): void {
   const { ast } = context;
@@ -48,7 +63,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     ast,
     jsEnabled,
   );
-  const sourceTypes = createRustSourceTypeRegistry();
+  const sourceTypes = createRustSourceTypeRegistry(context.typeFamilies, context.typeDefinitions);
   const sourceCallableAbi = createRustSourceCallableAbiResolver();
   const projectSourceFiles = [...context.sourceFiles]
     .sort((left, right) => ast.getFileName(left).localeCompare(ast.getFileName(right)));
@@ -59,13 +74,27 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
       return;
     }
   }
-  const externallyExtensibleDeclarations = collectExternallyExtensibleDeclarations(
+  const { externallyExtensibleDeclarations, closedSourceFiles } = collectSourcePackageBoundaries(
     context,
     projectSourceFiles,
   );
   const moduleBindings = createRustModuleBindingPolicy(context);
   let finalizedProjectTypes: RustProjectTypePolicy | undefined;
   const operationOptions: RustOperationsProviderOptions = {
+    arrayDensity: createSourceArrayDensityQuery(context.source, {
+      closedSourceFiles,
+      intrinsicallyDense(expression) {
+        const semantics = context.semanticsFor(expression);
+        const type = semantics.types.expressionType(expression);
+        const symbol = type === undefined ? undefined : semantics.declarations.typeSymbol(type);
+        const declarations = symbol === undefined ? [] : semantics.declarations.symbolDeclarations(symbol);
+        return declarations.length > 0 && declarations.every(declaration => {
+          const name = resolveSelectedJsSourceExportName(context, declaration, sourceProfiles);
+          return name !== undefined && Object.prototype.hasOwnProperty.call(rustJsTypedArrayTargetIds, name);
+        });
+      },
+      memberEffect: declaration => jsArrayMemberEffect(resolveSelectedJsSourceMember(context, declaration, sourceProfiles)),
+    }),
     providerExports: providerSemantics.exports,
     providerRows,
     providerTypes: providerSemantics.types,
@@ -108,12 +137,19 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   for (const sourceFile of projectSourceFiles) {
     sourceTypes.registerSourceFile(sourceFile, ast);
   }
+  recordRustInterfaceRepresentationAliases(walk, projectSourceFiles);
   const projectTypes = context.projectTypes.initialize({
     ast,
     names: context.names,
     navigation: context.source.navigation,
     sourceFiles: projectSourceFiles,
     sourceLifetimes: context.sourceLifetimes,
+    isRepresentationAlias(declaration) {
+      return context.facts.getFact(declaration, rustTypeOnlyDeclarationFactKey)?.reason === "representation-alias";
+    },
+    normalizeCarrier: rustTypeFamilyNormalizer(context.typeFamilies),
+    genericParametersFor: declaration => rustProjectGenericParameters(declaration, context),
+    thrownClassDeclarations: collectRustThrownClassDeclarations(context, projectSourceFiles),
     externallyExtensible(declaration) {
       return externallyExtensibleDeclarations.has(declaration);
     },
@@ -150,10 +186,11 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   }
   const promotedStorageDeclarations = new Set<Node>();
   const collectPromotedStorage = (node: Node): void => {
+    if (recordRustValueStructDeclaration(walk, node)) return;
     context.pointerBacking.record(node);
     const metadata = context.memoryMetadata.declaration(node);
     if (metadata !== undefined || context.memoryMetadata.isCompileTimeExpression(node)) {
-      context.facts.set(node, rustMemoryMetadataKey, true);
+      context.facts.set(node, rustCompileTimeSourceKey, true);
       for (const issue of metadata?.issues ?? []) appendRustDiagnostic(walk,
         "RUST_MEMORY_METADATA_RUNTIME_ESCAPE", issue.reason, issue.node, []);
       return;
@@ -187,10 +224,12 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     projectTypes,
     projectSourceFiles,
     providerRows,
+    node => rustStructuralObjectCarrierValue(resolveRustTargetTypeRef(node, rustResolutionContext(walk, node), operationOptions))?.representation === "value",
   );
   context.objectRepresentations.initialize({
     ast,
     navigation: context.source.navigation,
+    valueWrites: mutableStorageDeclarations.valueWrites,
     projectTypes,
     sourceFiles: projectSourceFiles,
     hasPromotedStorage(declaration) {
@@ -199,9 +238,14 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
         context.facts.resolve(declaration, rustLocationStorageFactKey) !== undefined;
     },
     hasMutableStorageUse(declaration) {
-      return mutableStorageDeclarations.has(declaration);
+      return mutableStorageDeclarations.declarations.has(declaration);
     },
   });
+  for (const sourceFile of projectSourceFiles) {
+    for (const statement of ast.statements(sourceFile) as readonly Node[]) {
+      if (ast.kindName(statement) === "KindTypeAliasDeclaration") reserveTypeAliasUnion(walk, statement);
+    }
+  }
   for (const sourceFile of projectSourceFiles) {
     for (const statement of ast.statements(sourceFile) as readonly Node[]) {
       const kind = ast.kindName(statement);
@@ -212,11 +256,16 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
       }
     }
   }
+  for (const declaration of sourceTypes.pendingSourceUnions()) {
+    appendRustDiagnostic(walk, "RUST_SOURCE_UNION_NOT_CLOSED",
+      "A declared runtime union has no complete, consistent set of native variant carriers.", declaration,
+      ["target.capability=rust.type.source-union"]);
+  }
   // Pass 1: finalize every callable declaration ABI before walking any body.
   // Cross-file and forward calls therefore observe the same parameter facts.
   const signatureDiagnosticCount = context.diagnostics.length;
   for (const sourceFile of projectSourceFiles) {
-    for (const statement of ast.statements(sourceFile) as readonly Node[]) {
+    for (const statement of rustSourceTypeDeclarations(sourceFile, ast)) {
       const kind = ast.kindName(statement);
       if (kind === KindFunctionDeclaration) {
         recordFunctionSignatureFacts(walk, statement);
@@ -262,10 +311,17 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
         recordStatementFacts(walk, statement, sourceFile, undefined);
       }
     }
+    for (const definition of context.projectTypes.definitions) {
+      if (definition.sourceFile === sourceFile && definition.kind === "class" &&
+        ast.parent(definition.declaration) !== sourceFile) {
+        recordClassBodyFacts(walk, definition.declaration, sourceFile);
+      }
+    }
   }
   const nativeFields = recordRustNativeBacking(walk);
   const callableSpecializations = context.sourceCallableSpecializations.initialize({
     ast,
+    closedSourceFiles,
     names: context.names,
     projectTypes,
     sourceLifetimes: context.sourceLifetimes,
@@ -312,6 +368,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     ast: walk.context.ast,
     facts: walk.context.facts,
     projectTypes: walk.context.projectTypes,
+    typeDefinitions: walk.context.typeDefinitions,
     projectMethodDispatch: walk.context.projectMethodDispatch,
     expressions: walk.objectLiteralMethodExpressions,
   })) {
@@ -323,6 +380,8 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
       ["target.capability=rust.object-literal-method.exact-adapter"],
     );
   }
+  realizeRustSourceTypeFamilyDemands(walk, projectSourceFiles);
+  recordRustTypeOnlyDeclarations(walk, projectSourceFiles);
   const structuralObjects = sourceTypes.structuralObjects();
   const sourcePackageComponentByFile = new Map(context.sourcePackages.packages.flatMap((entry) =>
     entry.sourceFiles.map((fileName) => [fileName, entry.componentId] as const)));
@@ -344,37 +403,55 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     sourceTypes.structuralFieldImplementations(),
     (fileName) => sourcePackageComponentByFile.get(fileName)!,
     nativeFields,
+    sourceTypes.structuralInstantiations(),
+    sourceTypes.generatedSourceUnions(),
+    finalizeRustCopiedMethods(walk, projectSourceFiles, fileName => sourcePackageComponentByFile.get(fileName)!),
   );
+  context.frozenDataWrites.initialize({ jsEnabled: walk.jsEnabled, ast, projectTypes,
+    representations: context.objectRepresentations, structuralShapes: context.structuralShapes.seal() });
   context.projectFieldDispatch.initialize({
     ast,
     projectTypes,
     semanticsFor: context.semanticsFor,
+    frozenDataWrites: context.frozenDataWrites,
+    mutableContentFields: mutableStorageDeclarations.declarations,
   });
   // Fallibility depends on finalized operation facts and the one whole-program
   // structural storage plan produced while walking bodies.
+  recordRustProjectCallableAdapterFacts(walk);
   recordFallibilityFacts(walk, projectSourceFiles);
   recordResourceManagementFacts(walk, projectSourceFiles);
   recordFutureValueFacts(walk, projectSourceFiles);
 }
 
-function collectExternallyExtensibleDeclarations(
+function collectSourcePackageBoundaries(
   context: RustAnalysisContext,
   sourceFiles: readonly SourceFile[],
-): ReadonlySet<Node> {
+): {
+  readonly externallyExtensibleDeclarations: ReadonlySet<Node>;
+  readonly closedSourceFiles: ReadonlySet<SourceFile>;
+} {
+  const externallyExtensibleDeclarations = new Set<Node>();
+  const closedSourceFiles = new Set<SourceFile>();
   const rootPackage = context.sourcePackages.packages.find((sourcePackage) =>
     sourcePackage.id === context.sourcePackages.rootPackageId);
   if (rootPackage === undefined) {
-    return Object.freeze(new Set<Node>());
+    return { externallyExtensibleDeclarations, closedSourceFiles };
   }
   const sourceFileByName = new Map(sourceFiles.map((sourceFile) =>
     [normalizeSourceFileName(context.ast.getFileName(sourceFile)), sourceFile] as const));
-  const result = new Set<Node>();
   for (const sourcePackage of context.sourcePackages.packages) {
     const publishesLibrary = sourcePackage.componentId !== rootPackage.componentId ||
       context.rootPublishesLibrary;
-    if (!publishesLibrary) {
-      continue;
+    if (!context.rootPublishesLibrary) {
+      for (const fileName of sourcePackage.sourceFiles) {
+        const sourceFile = sourceFileByName.get(normalizeSourceFileName(fileName));
+        if (sourceFile !== undefined) {
+          closedSourceFiles.add(sourceFile);
+        }
+      }
     }
+    if (!publishesLibrary) continue;
     for (const sourceExport of sourcePackage.exports) {
       const sourceFile = sourceFileByName.get(normalizeSourceFileName(sourceExport.sourceFile));
       if (sourceFile === undefined) {
@@ -382,12 +459,12 @@ function collectExternallyExtensibleDeclarations(
       }
       for (const exported of context.source.navigation.moduleExports(sourceFile)) {
         if (context.ast.is.IsClassDeclaration(exported.declaration)) {
-          result.add(exported.declaration);
+          externallyExtensibleDeclarations.add(exported.declaration);
         }
       }
     }
   }
-  return Object.freeze(result);
+  return Object.freeze({ externallyExtensibleDeclarations, closedSourceFiles });
 }
 
 function normalizeSourceFileName(value: string): string {

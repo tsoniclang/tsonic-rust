@@ -64,6 +64,7 @@ export interface RustSourceCallableSpecializationPlanRegistry
   }): RustSourceCallableSpecializationRegistration;
   initialize(input: {
     readonly ast: AstReader;
+    readonly closedSourceFiles: ReadonlySet<SourceFile>;
     readonly names: RustNamePlan;
     readonly projectTypes: RustProjectTypePolicy;
     readonly sourceLifetimes: RustLifetimeIndex;
@@ -182,6 +183,7 @@ function createRustSourceCallableSpecializationPlan(
   projectMethodCalls: readonly ProjectMethodEdge[],
   input: {
     readonly ast: AstReader;
+    readonly closedSourceFiles: ReadonlySet<SourceFile>;
     readonly names: RustNamePlan;
     readonly projectTypes: RustProjectTypePolicy;
     readonly sourceLifetimes: RustLifetimeIndex;
@@ -322,7 +324,9 @@ function createRustSourceCallableSpecializationPlan(
       );
       continue;
     }
-    if (callableIsExternallyReachable(declaration, input.ast)) {
+    const sourceFile = input.ast.getSourceFile(declaration);
+    if ((sourceFile === undefined || !input.closedSourceFiles.has(sourceFile)) &&
+      callableIsExternallyReachable(declaration, input.ast)) {
       addIssue(
         declaration,
         "An exported generic callable reaches Rust object-safe dynamic dispatch and cannot preserve an open public target contract; expose closed non-generic entry points instead.",
@@ -338,7 +342,7 @@ function createRustSourceCallableSpecializationPlan(
     }
   }
 
-  assignCallableVariantNames(variants, input.ast, input.names);
+  assignCallableVariantNames(variants, input.ast, input.names, input.projectTypes);
   for (const declarationVariants of variants.values()) {
     declarationVariants.sort((left, right) => variantKey(left).localeCompare(variantKey(right), "en"));
     declarationVariants.forEach((variant) => {
@@ -420,6 +424,7 @@ function assignCallableVariantNames(
   variants: ReadonlyMap<Node, MutableSpecializationVariant[]>,
   ast: AstReader,
   names: RustNamePlan,
+  projectTypes: RustProjectTypePolicy,
 ): void {
   const usedByScope = new WeakMap<object, Set<string>>();
   const usedNames = (scope: Node | SourceFile): Set<string> => {
@@ -444,18 +449,27 @@ function assignCallableVariantNames(
       });
     };
     visit(scope);
+    for (const definition of projectTypes.definitions) {
+      if (definition.sourceFile !== scope) continue;
+      for (const member of ast.members(definition.declaration)) {
+        if (member === undefined) continue;
+        const name = projectTypes.memberSlotName(member, "static");
+        if (name !== undefined) used.add(name);
+      }
+    }
     usedByScope.set(scope, used);
     return used;
   };
   for (const [declaration, entries] of variants) {
     const kind = ast.kindName(declaration);
-    const base = kind === "KindFunctionDeclaration"
+    const staticFunction = projectTypes.memberSlotName(declaration, "static");
+    const base = staticFunction ?? (kind === "KindFunctionDeclaration"
       ? names.functionNameForDeclaration(declaration)
-      : names.nameForDeclaration(declaration);
+      : names.nameForDeclaration(declaration));
     if (base === undefined) {
       continue;
     }
-    const scope = kind === "KindFunctionDeclaration"
+    const scope = kind === "KindFunctionDeclaration" || staticFunction !== undefined
       ? ast.getSourceFile(declaration)
       : ast.parent(declaration);
     if (scope === undefined) {

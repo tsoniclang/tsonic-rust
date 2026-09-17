@@ -294,6 +294,7 @@ test("provider paths and named carriers materialize before facts reach the backe
       },
       genericArguments: [],
       genericDefaults: [],
+      upcasts: [],
     },
   });
 });

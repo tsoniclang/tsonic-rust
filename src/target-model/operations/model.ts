@@ -80,8 +80,17 @@ export type RustProviderChainStep =
   | { readonly kind: "copy-selected-carrier" };
 
 export type RustValueConversionId =
+  | "js-string-number-from-string"
+  | "js-string-number-from-number"
+  | "js-string-number-from-int32"
+  | "js-string-number-from-null"
+  | "js-string-number-from-undefined"
+  | "js-numeric-from-number"
+  | "js-numeric-from-int32"
+  | "js-numeric-from-bigint"
   | "checked-i32-to-usize"
   | "checked-i32-to-u8"
+  | "checked-f64-to-u8-trunc"
   | "checked-usize-to-i32"
   | "checked-isize-to-i32"
   | "checked-u32-to-i32"
@@ -92,17 +101,43 @@ export type RustValueConversionId =
   | "js-number-from-usize"
   | "js-number-from-u64"
   | "js-value-from-bool"
+  | "js-value-from-i8"
+  | "js-value-from-u8"
+  | "js-value-from-i16"
+  | "js-value-from-u16"
+  | "js-value-from-u32"
+  | "js-value-from-f32"
   | "js-value-from-f64"
   | "js-value-from-i32"
   | "js-value-from-null"
   | "js-value-from-string"
   | "js-value-from-symbol"
+  | "js-value-from-error"
   | "js-value-from-undefined"
   | "js-value-clone"
   | "ts-value-clone"
-  | "owned-string-from-borrowed-str";
+  | "owned-string-from-borrowed-str"
+  | "borrowed-str-from-owned-string";
 
 export type RustNonOptionValueConversion =
+  | {
+      readonly kind: "object-identity-erasure";
+      readonly source: TargetTypeRef;
+      readonly target: TargetTypeRef;
+    }
+  | {
+      readonly kind: "native-upcast";
+      readonly source: TargetTypeRef;
+      readonly target: TargetTypeRef;
+      readonly path: string;
+    }
+  | {
+      readonly kind: "rest-sequence";
+      readonly source: TargetTypeRef;
+      readonly elementTarget: TargetTypeRef;
+      readonly holePolicy: "reject" | "number-nan";
+      readonly elementConversions: readonly (RustNonOptionValueConversion | null)[];
+    }
   | {
       readonly kind: "semantic-conversion";
       readonly id: RustValueConversionId;
@@ -254,6 +289,7 @@ export type RustProviderOperationForm =
         readonly mode: RustArgumentMode;
       }[];
       readonly elementCarrier: TargetTypeRef;
+      readonly sequenceHolePolicy?: "number-nan";
     }
   | {
       readonly form: "call-value-array";
@@ -371,6 +407,7 @@ export type RustProviderOperationForm =
       // it is row metadata, never derived from method names.
       readonly form: "receiver-method";
       readonly name: string;
+      readonly receiverConversion?: RustValueConversion;
       readonly argModes?: readonly RustArgumentMode[];
       readonly argConversions?: readonly (RustValueConversion | undefined)[];
       readonly argOrder?: readonly number[];
@@ -378,6 +415,11 @@ export type RustProviderOperationForm =
       readonly chain?: readonly RustProviderChainStep[];
       readonly mutatesReceiver?: boolean;
     };
+
+export interface RustOperationCarrierRequirement {
+  readonly carrier: TargetTypeRef;
+  readonly requirement: "clone" | "source-numeric" | "static";
+}
 
 export interface RustProviderOperationTemplate<
   OperationKind extends RustProviderFactOperationKind | RustRuntimeSetOperationKind = RustProviderFactOperationKind,
@@ -389,10 +431,12 @@ export interface RustProviderOperationTemplate<
   readonly resultCarrier: TargetTypeRef;
   readonly sourceResultCarrier?: TargetTypeRef;
   readonly sourceAbsenceCarrier?: TargetTypeRef;
+  readonly indexedLocationMethod?: string;
   readonly parameterCarriers?: readonly (TargetTypeRef | undefined)[];
   readonly receiverCarrier?: TargetTypeRef;
   readonly genericParameters?: readonly RustProviderGenericParameter[];
   readonly typeRequirements?: readonly RustProviderTypeParameterRequirement[];
+  readonly carrierRequirements?: readonly RustOperationCarrierRequirement[];
   readonly targetGenericArguments?: readonly RustTargetGenericArgument[];
   readonly resultConversion?: RustValueConversion;
   readonly compileTimeSourceArgumentIndexes?: readonly number[];

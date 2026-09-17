@@ -4,17 +4,29 @@ import type {
   Symbol,
   Type,
 } from "@tsonic/tsts";
+import { rustSourceDeclarationTypeName, rustSourceTypeDeclarations } from "../../policy/types/source-declarations.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { createRustSourceTypeFamilyRegistry } from "./type-families.js";
+import type { RustSourceTypeFamilyRegistry } from "../../policy/types/type-families.js";
+import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
+import { inferRustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
+import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
+import { createRustTypeDefinitionRegistry, type RustTypeDefinitionRegistry } from "./type-definitions.js";
 import {
   KindStringLiteral,
   Node_Type,
+  ObjectLiteralProperty_SourceName,
+  sourceClassFieldIsTypeOnly,
+  sourceObjectMemberDeclarations,
+  sourceParameterIsProperty,
 } from "@tsonic/target-api/source";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import {
   rustSourceTypeCarrier,
   rustSourceTypeCarrierValue,
   rustSourceUnionCarrierValue,
+  rustStructuralObjectCarrierValue,
 } from "../../target-model/types/index.js";
 import type {
   RustSourceEnumVariant,
@@ -24,6 +36,7 @@ import type {
   RustSourceUnion,
   RustStructuralFieldImplementation,
   RustStructuralFieldRegistration,
+  RustStructuralInstantiation,
 } from "../../policy/types/source-type-registry.js";
 export type {
   RustSourceEnumVariant,
@@ -36,18 +49,30 @@ export type {
   RustStructuralFieldRegistration,
 } from "../../policy/types/source-type-registry.js";
 
-export function createRustSourceTypeRegistry(): RustSourceTypeRegistry {
+export function createRustSourceTypeRegistry(
+  typeFamilies: RustSourceTypeFamilyRegistry = createRustSourceTypeFamilyRegistry(),
+  typeDefinitions: RustTypeDefinitionRegistry = createRustTypeDefinitionRegistry(),
+): RustSourceTypeRegistry {
   const declarations = new Map<string, Node>();
   const carriersByDeclaration = new WeakMap<Node, TargetTypeRef>();
   const variantsByDeclaration = new Map<Node, readonly RustSourceEnumVariant[]>();
   const structuralObjectsByType = new WeakMap<Type, RustSourceObjectShape[]>();
   const structuralObjects: RustSourceObjectShape[] = [];
+  const structuralInstantiations: RustStructuralInstantiation[] = [];
   const structuralFieldsBySymbol = new WeakMap<Symbol, RustStructuralFieldRegistration[]>();
   const structuralFieldsByDeclaration = new WeakMap<Node, RustStructuralFieldRegistration[]>();
   const structuralFieldImplementations: RustStructuralFieldImplementation[] = [];
   const selectedDeclarationsBySymbol = new WeakMap<Symbol, readonly Node[]>();
   const sourceUnionsByDeclaration = new WeakMap<Node, RustSourceUnion>();
+  const pendingUnions = new Set<Node>();
   const sourceUnionsByKey = new Map<string, RustSourceUnion>();
+  const generatedUnionCarriersByVariants = new Map<string, TargetTypeRef>();
+  const sourceUnionIndexesByType = new Map<string, WeakMap<Type, readonly number[]>>();
+  const sourceUnionKey = (carrier: TargetTypeRef): string | undefined => {
+    const value = rustSourceUnionCarrierValue(carrier);
+    return value === undefined ? undefined :
+      `${value.origin}::${value.fileName}::${value.typeName}::${closedMetadataKey(value.genericArguments)}`;
+  };
 
   const keyForCarrier = (carrier: TargetTypeRef): string | undefined => {
     const value = rustSourceTypeCarrierValue(carrier);
@@ -82,13 +107,24 @@ export function createRustSourceTypeRegistry(): RustSourceTypeRegistry {
     if (shape === undefined) {
       return undefined;
     }
-    const typeName = ast.text(ast.name(declaration));
+    const typeName = rustSourceDeclarationTypeName(declaration, ast);
     return typeName.length === 0
       ? undefined
       : rustSourceTypeCarrier(fileName, typeName, shape);
   };
 
   return {
+    typeFamilies,
+    sourceUnionVariants: typeDefinitions.sourceUnionVariants,
+    reserveSourceUnion(declaration, carrier) {
+      const value = rustSourceUnionCarrierValue(carrier);
+      const existing = carriersByDeclaration.get(declaration);
+      if (value?.origin !== "authored" || existing !== undefined && !rustTargetTypeRefEquals(existing, carrier)) return false;
+      carriersByDeclaration.set(declaration, carrier);
+      if (!sourceUnionsByDeclaration.has(declaration)) pendingUnions.add(declaration);
+      return true;
+    },
+    pendingSourceUnions: () => Object.freeze([...pendingUnions]),
     registerSourceFile(sourceFile, ast) {
       const fileName = ast.getFileName(sourceFile);
       if (fileName.length === 0 || ast.isDeclarationFile(sourceFile)) {
@@ -98,7 +134,7 @@ export function createRustSourceTypeRegistry(): RustSourceTypeRegistry {
       if (!isDenseDataArray(statements) || statements.some((declaration) => declaration === undefined)) {
         return;
       }
-      for (const declaration of statements as readonly Node[]) {
+      for (const declaration of rustSourceTypeDeclarations(sourceFile, ast)) {
         if (ast.kindName(declaration) === "KindTypeAliasDeclaration") {
           const variants = closedStringUnionVariants(declaration, ast);
           if (variants !== undefined) {
@@ -152,24 +188,27 @@ export function createRustSourceTypeRegistry(): RustSourceTypeRegistry {
         return undefined;
       }
       const declarationKind = ast.kindName(declaration);
-      const members = denseNodes(ast.members(declaration));
+      const members = denseNodes(sourceObjectMemberDeclarations(ast, declaration));
       if (members === undefined) {
         return undefined;
       }
       const keys: string[] = [];
       const seen = new Set<string>();
       for (const member of members) {
+        if (sourceClassFieldIsTypeOnly(ast, member) || ast.hasModifierKind(member, "abstract")) continue;
         const kind = ast.kindName(member);
         if ((declarationKind === "KindInterfaceDeclaration" && kind === "KindPropertySignature") ||
-          (declarationKind === "KindClassDeclaration" && kind === "KindPropertyDeclaration")) {
+          (declarationKind === "KindClassDeclaration" &&
+            (kind === "KindPropertyDeclaration" || sourceParameterIsProperty(ast, member)))) {
           if (ast.hasModifierKind(member, "static")) {
             continue;
           }
-          const nameNode = ast.name(member);
-          const name = nameNode === undefined ? "" : ast.text(nameNode);
-          if (name.length === 0 || seen.has(name)) {
+          if (ast.questionToken(member) !== undefined) return undefined;
+          const selectedName = ObjectLiteralProperty_SourceName(ast, member);
+          if (selectedName.kind !== "resolved" || selectedName.name.length === 0 || seen.has(selectedName.name)) {
             return undefined;
           }
+          const name = selectedName.name;
           seen.add(name);
           keys.push(name);
           continue;
@@ -193,12 +232,22 @@ export function createRustSourceTypeRegistry(): RustSourceTypeRegistry {
         ? undefined
         : variantsByDeclaration.get(declaration)?.find((variant) => variant.literal === literal);
     },
-    registerStructuralObject(shape) {
+    registerStructuralObject(shape, template) {
       const normalized = freezeSourceObjectShape(shape);
+      const templateShape = template === undefined ? undefined : structuralObjects.find(candidate =>
+        rustTargetTypeRefEquals(candidate.carrier, template));
+      if (template !== undefined && templateShape === undefined) return false;
+      const retainInstantiation = (): void => {
+        if (templateShape === undefined || rustTargetTypeRefEquals(templateShape.carrier, normalized.carrier) ||
+          structuralInstantiations.some(entry => rustTargetTypeRefEquals(entry.template, templateShape.carrier) &&
+            rustTargetTypeRefEquals(entry.instance, normalized.carrier))) return;
+        structuralInstantiations.push(Object.freeze({ template: templateShape.carrier, instance: normalized.carrier }));
+      };
       const existingForType = structuralObjectsByType.get(shape.sourceType) ?? [];
       if (existingForType.some((existing) =>
         sourceObjectShapeEquals(existing, normalized)
       )) {
+        retainInstantiation();
         return true;
       }
       const sameCarrier = existingForType.filter((existing) =>
@@ -239,6 +288,7 @@ export function createRustSourceTypeRegistry(): RustSourceTypeRegistry {
       }
       structuralObjectsByType.set(shape.sourceType, [...existingForType, normalized]);
       structuralObjects.push(normalized);
+      retainInstantiation();
       for (const [symbol, declarationsForSymbol] of pendingDeclarationsBySymbol) {
         selectedDeclarationsBySymbol.set(symbol, declarationsForSymbol);
       }
@@ -312,22 +362,42 @@ export function createRustSourceTypeRegistry(): RustSourceTypeRegistry {
     },
     registerSourceUnion(union) {
       const value = rustSourceUnionCarrierValue(union.carrier);
-      const key = value === undefined ? undefined : `${value.fileName}::${value.typeName}`;
-      if (value === undefined || key === undefined || value.variants.length !== union.variants.length ||
-        value.variants.some((variant, index) => {
-          const selected = union.variants[index];
-          return selected === undefined || variant.name !== selected.name ||
-            !rustTargetTypeRefEquals(variant.carrier, selected.carrier);
-        })) {
+      const key = sourceUnionKey(union.carrier);
+      if (value === undefined || key === undefined ||
+        (value.origin === "authored") !== (union.declaration !== undefined)) {
         return false;
       }
-      const byDeclaration = sourceUnionsByDeclaration.get(union.declaration);
+      const byDeclaration = union.declaration === undefined ? undefined : sourceUnionsByDeclaration.get(union.declaration);
       const byKey = sourceUnionsByKey.get(key);
-      if (byDeclaration !== undefined || byKey !== undefined) {
-        return byDeclaration !== undefined && byKey === byDeclaration &&
-          sourceUnionEquals(byDeclaration, union);
+      if (byKey !== undefined) {
+        if (!sourceUnionTargetContractEquals(byKey, union)) return false;
+      }
+      if (byDeclaration !== undefined && byKey === undefined) {
+        const references = rustTargetGenericReferences(byDeclaration.carrier);
+        if (value.genericArguments.length === 0 || inferRustTargetGenericBindings(
+          byDeclaration.carrier, union.carrier, {
+            typeNames: new Set(references.typeNames),
+            lifetimeIdentities: new Set(references.lifetimeIdentities),
+            constIdentities: new Set(),
+          },
+        ) === undefined) return false;
       }
       const normalized = freezeSourceUnion(union);
+      const indexes = sourceUnionIndexesByType.get(key) ?? new WeakMap<Type, readonly number[]>();
+      const pendingIndexes = new Map<Type, readonly number[]>([
+        [union.sourceType, Object.freeze(union.variants.map((_, index) => index))],
+      ]);
+      for (const [index, variant] of union.variants.entries()) {
+        const selected = Object.freeze([index]);
+        const existing = pendingIndexes.get(variant.sourceType) ?? indexes.get(variant.sourceType);
+        if (existing !== undefined && (existing.length !== 1 || existing[0] !== index)) return false;
+        pendingIndexes.set(variant.sourceType, selected);
+      }
+      for (const [sourceType, selected] of pendingIndexes) {
+        const existing = indexes.get(sourceType);
+        if (existing !== undefined && (existing.length !== selected.length ||
+          existing.some((index, position) => index !== selected[position]))) return false;
+      }
       const pendingDeclarationsBySymbol = new Map<Symbol, readonly Node[]>();
       for (const property of normalized.selectedProperties) {
         const existingDeclarations = pendingDeclarationsBySymbol.get(property.symbol) ??
@@ -338,48 +408,82 @@ export function createRustSourceTypeRegistry(): RustSourceTypeRegistry {
         }
         pendingDeclarationsBySymbol.set(property.symbol, property.declarations);
       }
-      const existingCarrier = carriersByDeclaration.get(union.declaration);
-      if (existingCarrier !== undefined &&
+      const existingCarrier = union.declaration === undefined ? undefined : carriersByDeclaration.get(union.declaration);
+      if (byDeclaration === undefined && existingCarrier !== undefined &&
         !rustTargetTypeRefEquals(existingCarrier, normalized.carrier)) {
         return false;
       }
-      const existingDeclaration = declarations.get(key);
-      if (existingDeclaration !== undefined && existingDeclaration !== union.declaration) {
+      const declarationKey = `${value.fileName}::${value.typeName}`;
+      const existingDeclaration = declarations.get(declarationKey);
+      if (union.declaration !== undefined && existingDeclaration !== undefined && existingDeclaration !== union.declaration) {
         return false;
       }
-      sourceUnionsByDeclaration.set(union.declaration, normalized);
-      sourceUnionsByKey.set(key, normalized);
-      carriersByDeclaration.set(union.declaration, normalized.carrier);
-      declarations.set(key, union.declaration);
+      if (!typeDefinitions.registerSourceUnion({
+        carrier: normalized.carrier,
+        variants: normalized.variants.map(variant => ({name: variant.name, carrier: variant.carrier})),
+      }, byDeclaration === undefined && union.declaration !== undefined)) return false;
+      if (byDeclaration === undefined && union.declaration !== undefined) {
+        sourceUnionsByDeclaration.set(union.declaration, normalized);
+        carriersByDeclaration.set(union.declaration, normalized.carrier);
+        pendingUnions.delete(union.declaration);
+      }
+      if (byKey === undefined) sourceUnionsByKey.set(key, normalized);
+      if (union.declaration === undefined) {
+        const variantsKey = closedMetadataKey(union.variants.map(variant => variant.carrier));
+        if (!generatedUnionCarriersByVariants.has(variantsKey)) generatedUnionCarriersByVariants.set(variantsKey, normalized.carrier);
+      }
+      for (const [sourceType, selected] of pendingIndexes) indexes.set(sourceType, selected);
+      sourceUnionIndexesByType.set(key, indexes);
+      if (union.declaration !== undefined) declarations.set(declarationKey, union.declaration);
       for (const [symbol, declarationsForSymbol] of pendingDeclarationsBySymbol) {
         selectedDeclarationsBySymbol.set(symbol, declarationsForSymbol);
       }
       return true;
     },
+    generatedSourceUnions() {
+      return Object.freeze([...sourceUnionsByKey.values()].filter(union => union.declaration === undefined));
+    },
+    generatedUnionCarrierForVariants(carriers) {
+      return generatedUnionCarriersByVariants.get(closedMetadataKey(carriers));
+    },
     sourceUnionForCarrier(carrier) {
-      const value = rustSourceUnionCarrierValue(carrier);
-      return value === undefined
+      const key = sourceUnionKey(carrier);
+      const union = key === undefined ? undefined : sourceUnionsByKey.get(key);
+      return union === undefined || !rustTargetTypeRefEquals(carrier, union.carrier)
         ? undefined
-        : sourceUnionsByKey.get(`${value.fileName}::${value.typeName}`);
+        : union;
+    },
+    structuralInstantiations() {
+      const result: RustStructuralInstantiation[] = [...structuralInstantiations];
+      for (const union of sourceUnionsByKey.values()) {
+        if (union.declaration === undefined) continue;
+        const template = sourceUnionsByDeclaration.get(union.declaration);
+        if (template === undefined || template === union) continue;
+        for (const [index, variant] of union.variants.entries()) {
+          const original = template.variants[index];
+          if (original !== undefined && rustStructuralObjectCarrierValue(original.carrier) !== undefined &&
+            rustStructuralObjectCarrierValue(variant.carrier) !== undefined) {
+            result.push(Object.freeze({ template: original.carrier, instance: variant.carrier }));
+          }
+        }
+      }
+      return Object.freeze(result);
     },
     sourceUnionVariantIndexesForTypes(carrier, types) {
-      const value = rustSourceUnionCarrierValue(carrier);
-      const union = value === undefined
+      const key = sourceUnionKey(carrier);
+      const union = key === undefined
         ? undefined
-        : sourceUnionsByKey.get(`${value.fileName}::${value.typeName}`);
-      if (union === undefined || types.length === 0) {
+        : sourceUnionsByKey.get(key);
+      const byType = key === undefined ? undefined : sourceUnionIndexesByType.get(key);
+      if (union === undefined || byType === undefined ||
+        !rustTargetTypeRefEquals(carrier, union.carrier) || types.length === 0) {
         return undefined;
       }
       const indexes: number[] = [];
       for (const type of types) {
-        const matches = union.variants.flatMap((variant, index) =>
-          variant.sourceType === type ? [index] : []);
-        if (matches.length !== 1) {
-          return undefined;
-        }
-        if (!indexes.includes(matches[0]!)) {
-          indexes.push(matches[0]!);
-        }
+        const matches = byType.get(type);
+        if (matches === undefined) return undefined;
+        for (const index of matches) if (!indexes.includes(index)) indexes.push(index);
       }
       return Object.freeze(indexes.sort((left, right) => left - right));
     },
@@ -591,35 +695,23 @@ function sourceObjectShapeEquals(
       sourceObjectFieldEquals(field, right.fields[index]!));
 }
 
-function sourceUnionEquals(
+function sourceUnionTargetContractEquals(
   left: RustSourceUnion,
   right: RustSourceUnion,
 ): boolean {
   return left.declaration === right.declaration &&
-    left.sourceType === right.sourceType &&
     rustTargetTypeRefEquals(left.carrier, right.carrier) &&
     left.variants.length === right.variants.length &&
     left.variants.every((variant, index) => {
       const selected = right.variants[index];
       return selected !== undefined && variant.name === selected.name &&
-        variant.sourceType === selected.sourceType &&
         rustTargetTypeRefEquals(variant.carrier, selected.carrier) &&
-        optionalSourceObjectShapeEquals(variant.shape, selected.shape);
-    }) && left.selectedProperties.length === right.selectedProperties.length &&
-    left.selectedProperties.every((property, index) => {
-      const selected = right.selectedProperties[index];
-      return selected !== undefined && property.symbol === selected.symbol &&
-        nodeListsEqual(property.declarations, selected.declarations);
+        (variant.shape === undefined || selected.shape === undefined
+          ? variant.shape === selected.shape
+          : sourceObjectTargetContractEquals(variant.shape, selected.shape) &&
+            variant.shape.fields.every((field, fieldIndex) =>
+              nodeListsEqual(field.declarations, selected.shape!.fields[fieldIndex]!.declarations)));
     });
-}
-
-function optionalSourceObjectShapeEquals(
-  left: RustSourceObjectShape | undefined,
-  right: RustSourceObjectShape | undefined,
-): boolean {
-  return left === undefined || right === undefined
-    ? left === right
-    : sourceObjectShapeEquals(left, right);
 }
 
 function nodeListsEqual(left: readonly Node[], right: readonly Node[]): boolean {

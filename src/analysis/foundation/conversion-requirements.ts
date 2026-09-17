@@ -1,3 +1,4 @@
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type {
   RustFinalizedOperationAbi,
   RustFinalizedTargetInput,
@@ -30,8 +31,9 @@ import {
 
 export function rustFoundationForValueConversion(
   conversion: RustValueConversion,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): RustFoundation {
-  const contract = rustValueConversionContract(conversion);
+  const contract = rustValueConversionContract(conversion, definitions);
   if (contract === undefined) {
     throw new Error("A finalized Rust value conversion has no valid lowering contract.");
   }
@@ -40,8 +42,9 @@ export function rustFoundationForValueConversion(
 
 export function rustFoundationForFinalizedOperationAbi(
   abi: RustFinalizedOperationAbi,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): RustFoundation {
-  let foundation = rustFoundationForProviderOperationForm(abi.target);
+  let foundation = rustFoundationForProviderOperationForm(abi.target, definitions);
   const require = (candidate: RustFoundation): void => {
     foundation = maximumRustFoundation(foundation, candidate);
   };
@@ -52,22 +55,22 @@ export function rustFoundationForFinalizedOperationAbi(
     require(rustFoundationForCarrier(argument.carrier));
   }
   if (abi.targetReceiver.kind === "input") {
-    require(rustFoundationForFinalizedTargetInput(abi.targetReceiver.input));
+    require(rustFoundationForFinalizedTargetInput(abi.targetReceiver.input, definitions));
   }
   for (const input of abi.targetArguments) {
-    require(rustFoundationForFinalizedTargetInput(input));
+    require(rustFoundationForFinalizedTargetInput(input, definitions));
   }
   for (const argument of abi.targetGenericArguments) {
     require(rustFoundationForGenericArgument(argument));
   }
   if (abi.result.kind === "sync") {
     require(rustFoundationForCarrier(abi.result.rawCarrier));
-    require(rustFoundationForFinalizedConversion(abi.result.conversion));
+    require(rustFoundationForFinalizedConversion(abi.result.conversion, definitions));
     require(rustFoundationForCarrier(abi.result.carrier));
   } else {
     require(rustFoundationForCarrier(abi.result.futureCarrier));
     require(rustFoundationForCarrier(abi.result.awaitedRawCarrier));
-    require(rustFoundationForFinalizedConversion(abi.result.awaitedConversion));
+    require(rustFoundationForFinalizedConversion(abi.result.awaitedConversion, definitions));
     require(rustFoundationForCarrier(abi.result.awaitedCarrier));
   }
   if (abi.effects.errorCarrier !== undefined) {
@@ -87,6 +90,11 @@ function rustFoundationForConversionContract(
     foundation = maximumRustFoundation(foundation, candidate);
   };
   switch (contract.lowering) {
+    case "rest-sequence":
+      for (const conversion of contract.elementConversions) {
+        if (conversion !== null) require(rustFoundationForConversionContract(conversion));
+      }
+      break;
     case "call":
       require(rustFoundationForPath(contract.path));
       break;
@@ -120,6 +128,7 @@ function rustFoundationForConversionContract(
     case "option-some":
     case "js-argument-vector-callback":
     case "owned-string-from-borrowed-str":
+    case "borrowed-str-from-owned-string":
     case "copy-from-reference":
       break;
   }
@@ -128,6 +137,7 @@ function rustFoundationForConversionContract(
 
 function rustFoundationForFinalizedConversion(
   conversion: RustFinalizedValueConversion,
+  definitions: RustTypeDefinitions,
 ): RustFoundation {
   let foundation = maximumRustFoundation(
     rustFoundationForCarrier(conversion.sourceCarrier),
@@ -136,7 +146,7 @@ function rustFoundationForFinalizedConversion(
   if (conversion.kind === "semantic") {
     foundation = maximumRustFoundation(
       foundation,
-      rustFoundationForValueConversion(conversion.conversion),
+      rustFoundationForValueConversion(conversion.conversion, definitions),
     );
   }
   return foundation;
@@ -144,6 +154,7 @@ function rustFoundationForFinalizedConversion(
 
 function rustFoundationForFinalizedTargetInput(
   input: RustFinalizedTargetInput,
+  definitions: RustTypeDefinitions,
 ): RustFoundation {
   let foundation: RustFoundation = "core";
   const require = (candidate: RustFoundation): void => {
@@ -151,22 +162,22 @@ function rustFoundationForFinalizedTargetInput(
   };
   if (isRustFinalizedSourceInput(input)) {
     require(rustFoundationForCarrier(input.sourceCarrier));
-    require(rustFoundationForFinalizedConversion(input.conversion));
+    require(rustFoundationForFinalizedConversion(input.conversion, definitions));
     require(rustFoundationForCarrier(input.parameterCarrier));
   } else if (isRustFinalizedSliceInput(input)) {
     input.elements.forEach((element) => {
-      require(rustFoundationForFinalizedTargetInput(element));
+      require(rustFoundationForFinalizedTargetInput(element, definitions));
     });
     require(rustFoundationForCarrier(input.elementCarrier));
     require(rustFoundationForCarrier(input.parameterCarrier));
   } else if (isRustFinalizedArrayInput(input)) {
     input.elements.forEach((element) => {
-      require(rustFoundationForFinalizedTargetInput(element));
+      require(rustFoundationForFinalizedTargetInput(element, definitions));
     });
     require(rustFoundationForCarrier(input.elementCarrier));
   } else if (isRustFinalizedTaggedArrayInput(input)) {
     input.elements.forEach((element) => {
-      require(rustFoundationForFinalizedTargetInput(element.input));
+      require(rustFoundationForFinalizedTargetInput(element.input, definitions));
       require(rustFoundationForPath(element.constructorPath));
     });
     require(rustFoundationForCarrier(input.elementCarrier));
@@ -176,6 +187,7 @@ function rustFoundationForFinalizedTargetInput(
 
 function rustFoundationForProviderOperationForm(
   form: RustProviderOperationForm,
+  definitions: RustTypeDefinitions,
 ): RustFoundation {
   let foundation: RustFoundation = "core";
   const require = (candidate: RustFoundation): void => {
@@ -185,7 +197,7 @@ function rustFoundationForProviderOperationForm(
     require(rustFoundationForCarrier(carrier));
   };
   const requireConversion = (conversion: RustValueConversion | undefined): void => {
-    if (conversion !== undefined) require(rustFoundationForValueConversion(conversion));
+    if (conversion !== undefined) require(rustFoundationForValueConversion(conversion, definitions));
   };
   const requireGenericArgument = (argument: RustTargetGenericArgument): void => {
     require(rustFoundationForGenericArgument(argument));
@@ -260,11 +272,13 @@ function rustFoundationForProviderOperationForm(
       requireCarrier(form.owner);
       break;
     case "receiver-method":
+      requireConversion(form.receiverConversion);
       form.argConversions?.forEach(requireConversion);
       break;
   }
   return foundation;
 }
+
 
 function rustFoundationForGenericArgument(
   argument: RustTargetGenericArgument,

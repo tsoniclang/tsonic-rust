@@ -149,6 +149,12 @@ export type RustType =
   | { readonly kind: "fixed-array"; readonly element: RustType; readonly length: RustConstArgument }
   | { readonly kind: "slice"; readonly element: RustType }
   | {
+      readonly kind: "callable-trait";
+      readonly trait: "Fn" | "FnMut" | "FnOnce";
+      readonly parameters: readonly RustType[];
+      readonly result: RustType;
+    }
+  | {
       readonly kind: "function-pointer";
       readonly binder?: readonly RustLifetimeParameter[];
       readonly parameters: readonly RustType[];
@@ -163,6 +169,7 @@ export type RustPattern =
   | { readonly kind: "binding"; readonly name: string }
   | { readonly kind: "path"; readonly path: string }
   | { readonly kind: "tuple"; readonly elements: readonly RustPattern[] }
+  | { readonly kind: "or"; readonly alternatives: readonly RustPattern[] }
   | {
       readonly kind: "tuple-variant";
       readonly path: string;
@@ -178,7 +185,7 @@ export type RustExpr =
   | { readonly kind: "string-literal"; readonly value: string }
   | { readonly kind: "str-literal"; readonly value: string }
   | { readonly kind: "owned-string-from-borrowed-str"; readonly expression: RustExpr }
-  | { readonly kind: "path"; readonly path: string }
+  | { readonly kind: "path"; readonly path: string; readonly genericArguments?: readonly RustCallGenericArgument[] }
   | { readonly kind: "bottom"; readonly expression: RustExpr }
   | { readonly kind: "unary"; readonly operator: "-" | "!"; readonly operand: RustExpr }
   | { readonly kind: "dereference"; readonly pointer: RustExpr }
@@ -222,7 +229,7 @@ export type RustExpr =
       readonly innerAttrs?: readonly string[];
       readonly bindings: readonly {
         readonly name: string;
-        readonly value: RustExpr;
+        readonly value?: RustExpr;
         readonly type?: RustType;
         readonly mutable?: boolean;
         readonly attrs?: readonly string[];
@@ -241,6 +248,7 @@ export type RustExpr =
   | { readonly kind: "reference"; readonly expr: RustExpr; readonly mutable?: boolean }
   | { readonly kind: "vec-literal"; readonly elements: readonly RustExpr[] }
   | { readonly kind: "slice-literal"; readonly elements: readonly RustExpr[] }
+  | { readonly kind: "array-repeat"; readonly element: RustExpr; readonly length: RustConstArgument }
   | { readonly kind: "closure"; readonly params: readonly { readonly name: string; readonly byRefCopy: boolean }[]; readonly move?: boolean; readonly body: RustExpr }
   | {
       readonly kind: "closure-block";
@@ -250,6 +258,7 @@ export type RustExpr =
       readonly body: RustBlock;
     }
   | { readonly kind: "await"; readonly expr: RustExpr }
+  | { readonly kind: "option-try"; readonly expr: RustExpr }
   | {
       readonly kind: "try";
       readonly expr: RustExpr;
@@ -424,6 +433,16 @@ export interface RustTraitFunction {
   readonly body?: RustBlock;
 }
 
+export interface RustTraitAssociatedType {
+  readonly name: string;
+  readonly bounds: readonly RustTypeBound[];
+}
+
+export interface RustImplAssociatedType {
+  readonly name: string;
+  readonly type: RustType;
+}
+
 export type RustItem =
   | {
       readonly kind: "function";
@@ -461,8 +480,8 @@ export type RustItem =
   | { readonly kind: "mod-decl"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly string[] }
   | { readonly kind: "extern-crate"; readonly name: string }
   | { readonly kind: "struct"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly string[]; readonly deadCode?: RustDeadCodeDisposition; readonly derives: readonly string[]; readonly generics: RustGenerics; readonly fields: readonly RustStructField[] }
-  | { readonly kind: "trait"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly string[]; readonly deadCode?: RustDeadCodeDisposition; readonly generics: RustGenerics; readonly superTraits?: readonly RustType[]; readonly functions: readonly RustTraitFunction[] }
-  | { readonly kind: "impl"; readonly generics: RustGenerics; readonly trait?: RustType; readonly target: RustType; readonly constants?: readonly RustImplConstant[]; readonly functions: readonly RustImplFunction[] }
+  | { readonly kind: "trait"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly string[]; readonly deadCode?: RustDeadCodeDisposition; readonly generics: RustGenerics; readonly superTraits?: readonly RustType[]; readonly associatedTypes?: readonly RustTraitAssociatedType[]; readonly functions: readonly RustTraitFunction[] }
+  | { readonly kind: "impl"; readonly generics: RustGenerics; readonly trait?: RustType; readonly target: RustType; readonly constants?: readonly RustImplConstant[]; readonly associatedTypes?: readonly RustImplAssociatedType[]; readonly functions: readonly RustImplFunction[] }
   | { readonly kind: "enum"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly string[]; readonly deadCode?: RustDeadCodeDisposition; readonly derives: readonly string[]; readonly generics: RustGenerics; readonly variants: readonly { readonly name: string; readonly attrs?: readonly string[]; readonly deadCode?: RustDeadCodeDisposition; readonly discriminant?: string; readonly fields?: readonly RustType[] }[] }
   | { readonly kind: "type-alias"; readonly name: string; readonly visibility: RustVisibility; readonly attrs?: readonly string[]; readonly deadCode?: RustDeadCodeDisposition; readonly generics: RustGenerics; readonly target: RustType }
   | { readonly kind: "use"; readonly path: string; readonly alias?: string; readonly visibility?: RustVisibility };

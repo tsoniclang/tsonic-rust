@@ -12,6 +12,7 @@ import { createRustProviderPackageSourceExtension, rustProviderBindingProviderId
 import { rustProviderPolicyContributionKind } from "./model.js";
 import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { validateProviderPackageDefinition } from "./validation.js";
+import { rustProviderGlobalDeclarations } from "../../source/provider-globals.js";
 import type {
   SelectedTargetCapabilityContributions,
   TargetRuntimeContributionContext,
@@ -47,6 +48,9 @@ export function createRustProviderPackage(definition: RustProviderPackageDefinit
     }))),
     sourceCompilerContributions(): { readonly extensions: readonly CompilerExtension[] } {
       return { extensions: [createRustProviderPackageSourceExtension(closedDefinition)] };
+    },
+    sourceProfileContributions() {
+      return rustProviderGlobalDeclarations(closedDefinition);
     },
     runtimeContributions(_context: TargetRuntimeContributionContext): TargetRuntimeContributions {
       return {

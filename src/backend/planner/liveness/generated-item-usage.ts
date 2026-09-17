@@ -1,7 +1,9 @@
+import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { TargetPlanningSourceNavigation } from "@tsonic/target-api/analysis";
 import {
   rustFlowReadProjectionFactKey,
+  rustContextualValueConversionFactKey,
   rustBindingProjectionFactKey,
   rustProjectDowncastFactKey,
   rustProjectUpcastFactKey,
@@ -9,6 +11,8 @@ import {
   rustTypeAliasDeclarationFactKey,
 } from "../../../analysis/facts/keys.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/operations/facts.js";
+import { rustClassValueFactKey } from "../../../analysis/facts/class-values.js";
+import { rustMemoryBindingPlanKey } from "../../../target-model/operations/memory-bindings.js";
 import {
   isRustFinalizedArrayInput,
   isRustFinalizedSliceInput,
@@ -32,9 +36,10 @@ import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js
 import type { RustValueConversion } from "../../../target-model/operations/model.js";
 import type { RustPlanQueries } from "../../../target-model/facts/selections.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { rustOptionElementCarrier } from "../../../target-model/types/index.js";
+import { rustOptionElementCarrier, rustSourceUnionCarrierValue } from "../../../target-model/types/index.js";
 import {
   isRustPreconstructionThisOperation,
+  isRustArrayFieldContentAssignment,
   markBinaryProjectIdentityUsed,
   structuralFieldKey,
   visitConversionContract,
@@ -43,6 +48,7 @@ import {
 export type RustDispatchMemberRole =
   | "read"
   | "write"
+  | "content"
   | "method-virtual"
   | "method-exact";
 
@@ -81,6 +87,7 @@ export function analyzeRustGeneratedItemUsage(input: {
   readonly declarations: readonly Node[];
   readonly facts: RustPlanQueries;
   readonly projectTypes: RustProjectTypePolicy;
+  readonly typeDefinitions: RustTypeDefinitions;
   readonly objectRepresentations: RustObjectRepresentationPlan;
   readonly projectMethodProperties: RustProjectMethodPropertyPlan;
   readonly projectFieldDispatch: RustProjectFieldDispatchQueries;
@@ -188,6 +195,9 @@ export function analyzeRustGeneratedItemUsage(input: {
     }
   };
   const markVariantConstructed = (carrier: TargetTypeRef, variantName: string): void => {
+    if (rustSourceUnionCarrierValue(carrier)?.origin === "generated") {
+      constructedStructuralShapes.add(closedMetadataKey(carrier));
+    }
     for (const declaration of declarationsByCarrier.get(closedMetadataKey(carrier)) ?? []) {
       const variants = variantsByDeclaration.get(declaration) ?? new Set<string>();
       variants.add(variantName);
@@ -252,9 +262,9 @@ export function analyzeRustGeneratedItemUsage(input: {
       const implementation = selected.kind === "resolved"
         ? selected.implementation.declaration
         : declaration;
-      if (role === "read" || role === "write") {
+      if (role === "read" || role === "write" || role === "content") {
         markProjectStatePathUsed(concrete, implementation);
-        if (role === "read") readAuthoredFields.add(implementation);
+        if (role !== "write") readAuthoredFields.add(implementation);
         continue;
       }
       if (input.projectMethodProperties.usageFor(implementation)?.writable === true) {
@@ -270,8 +280,10 @@ export function analyzeRustGeneratedItemUsage(input: {
     }
     const upcast = input.facts.getFact(node, rustProjectUpcastFactKey);
     if (upcast !== undefined) {
-      markProjectCarrierFieldUsed(upcast.sourceCarrier, "wrapper-identity");
-      markProjectCarrierFieldUsed(upcast.sourceCarrier, "wrapper-dispatch");
+      for (const carrier of upcast.sourceVariants?.map(variant => variant.carrier) ?? [upcast.sourceCarrier]) {
+        markProjectCarrierFieldUsed(carrier, "wrapper-identity");
+        markProjectCarrierFieldUsed(carrier, "wrapper-dispatch");
+      }
       markProjectTypeConstructed(upcast.targetCarrier);
     }
     const downcast = input.facts.getFact(node, rustProjectDowncastFactKey);
@@ -292,10 +304,9 @@ export function analyzeRustGeneratedItemUsage(input: {
 
   for (const concrete of input.projectTypes.definitions) {
     if (concrete.kind !== "class" || !input.projectTypes.isPolymorphic(concrete)) continue;
-    const lineage = input.projectTypes.classLineage(concrete);
-    const interfaces = input.projectTypes.interfacesForClass(concrete);
-    if (lineage === undefined || interfaces === undefined) continue;
-    for (const contract of [...lineage, ...interfaces]) {
+    const contracts = input.projectTypes.contractsForClass(concrete);
+    if (contracts === undefined) continue;
+    for (const contract of contracts) {
       const layout = rustProjectObjectLayout(contract.declaration, input.ast);
       const contractFields = [
         ...(input.projectTypes.externalBaseForDefinition(contract)?.fields ?? []).map((field) => ({
@@ -338,7 +349,7 @@ export function analyzeRustGeneratedItemUsage(input: {
   }
   const visitConversion = (conversion: RustValueConversion | undefined): void => {
     if (conversion === undefined) return;
-    const contract = rustValueConversionContract(conversion);
+    const contract = rustValueConversionContract(conversion, input.typeDefinitions);
     if (contract === undefined) {
       throw new Error("A finalized Rust value conversion has no valid dead-code usage contract.");
     }
@@ -410,7 +421,10 @@ export function analyzeRustGeneratedItemUsage(input: {
         }
         if (fact.dispatch !== undefined) {
           markProjectCarrierFieldUsed(fact.receiverCarrier, "wrapper-dispatch");
-          if (fact.accessMode !== "write") {
+          if (fact.resultCarrier.kind === "array" && fact.valueSemantics.kind === "stored" &&
+              isRustArrayFieldContentAssignment(node, input.ast, input.facts)) {
+            markProjectMemberUsed(fact.receiverCarrier, fact.declaration, "content");
+          } else if (fact.accessMode !== "write") {
             markProjectMemberUsed(fact.receiverCarrier, fact.declaration, "read");
           }
           if (fact.accessMode !== "read") {
@@ -429,6 +443,14 @@ export function analyzeRustGeneratedItemUsage(input: {
       case "source-union-field":
         for (const variant of fact.variants) {
           if (variant.field === undefined) continue;
+          if (fact.accessMode !== "write" && variant.field.declaration !== undefined) readAuthoredFields.add(variant.field.declaration);
+          if (variant.field.dispatch !== undefined) {
+            markProjectCarrierFieldUsed(variant.carrier, "wrapper-dispatch");
+            if (fact.accessMode !== "write") markProjectMemberUsed(variant.carrier, variant.field.declaration, "read");
+            if (fact.accessMode !== "read") markProjectMemberUsed(variant.carrier, variant.field.declaration, "write");
+          } else if (variant.field.storage === "project-object") {
+            markProjectCarrierFieldUsed(variant.carrier, "wrapper-state");
+          }
           if (fact.accessMode !== "write") {
             markStructuralFieldRead(variant.carrier, variant.field.storageIndex);
           }
@@ -441,6 +463,14 @@ export function analyzeRustGeneratedItemUsage(input: {
         if (isRustPreconstructionThisOperation(input.ast, node)) return;
         if (fact.target.form === "constructor") {
           markProjectConstructorInvoked(fact.target.typeCarrier);
+        } else if (fact.target.form === "union-method") {
+          for (const method of fact.target.variants) {
+            if (method.dispatchOwner !== undefined) {
+              markProjectCarrierFieldUsed(method.carrier, "wrapper-dispatch");
+            }
+            markProjectMemberUsed(method.carrier, method.declaration,
+              method.dispatchOwner === undefined ? "method-exact" : "method-virtual");
+          }
         } else if (fact.target.form === "method" && fact.target.dispatch !== undefined) {
           const selected = input.facts.getSelectedTargetCall(node);
           const receiverCarrier = selected?.sourceSelectedReceiverCarrier ??
@@ -534,8 +564,10 @@ export function analyzeRustGeneratedItemUsage(input: {
       case "option-check":
       case "option-equality":
       case "option-value-equality":
-      case "disjoint-equality":
+      case "constant-equality":
       case "program-error-type-test":
+      case "builtin-error-type-test":
+      case "builtin-error-property":
       case "source-static-field":
       case "provider-record-literal":
       case "fixed-array-literal":
@@ -573,7 +605,25 @@ export function analyzeRustGeneratedItemUsage(input: {
         markProjectTypeUsed(input.facts.getRuntimeCarrierFact(node)?.carrier);
       }
       const fact = input.facts.getFact(node, rustTargetOperationFactKey);
+      const classValue = input.facts.getFact(node, rustClassValueFactKey);
+      if (classValue !== undefined) markStructuralShapeConstructed(classValue.carrier);
+      const memoryBinding = input.facts.getFact(node, rustMemoryBindingPlanKey);
+      if (memoryBinding?.kind === "record") markStructuralShapeConstructed(memoryBinding.carrier);
       visitProjectProjectionFacts(node);
+      const objectView = input.facts.getFact(node, rustObjectReferenceViewKey);
+      if (objectView !== undefined) {
+        markStructuralShapeConstructed(objectView.targetCarrier);
+        markProjectIdentityUsed(objectView.sourceCarrier);
+        for (const field of objectView.fields) visitFact(node, { ...field.source, operationId: "object-reference-view",
+          accessMode: field.writable ? "read-write" : "read" });
+      }
+      const conversion = input.facts.getFact(node, rustContextualValueConversionFactKey)?.conversion;
+      if (conversion?.kind === "empty-record") markStructuralShapeConstructed(conversion.target);
+      if (conversion !== undefined && conversion.kind !== "native-trait-object-upcast" &&
+        conversion.kind !== "reference-reborrow" && conversion.kind !== "provider-record-copy" &&
+        conversion.kind !== "empty-record") {
+        visitConversion(conversion);
+      }
       if (fact !== undefined) visitFact(node, fact);
       input.ast.forEachChild(node, (child) => {
         if (child !== undefined) pending.push({ node: child, insideTypeAlias });
@@ -606,3 +656,5 @@ export function analyzeRustGeneratedItemUsage(input: {
       variantsByDeclaration.get(declaration)?.has(variantName) === true,
   });
 }
+
+import { rustObjectReferenceViewKey } from "../../../analysis/facts/object-reference-views.js";

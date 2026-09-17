@@ -1,3 +1,4 @@
+import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../../target-model/types/source-union-definitions.js";
 import {
   inferRustTargetGenericBindings,
   rustStrTargetId,
@@ -6,6 +7,7 @@ import {
   substituteRustTargetGenerics,
 } from "../../../../target-model/types/index.js";
 import { finalizeRustProviderOperationAbi } from "../../../facts/finalized-operation-abi.js";
+import { rustIndexedLocationContract } from "../../../facts/indexed-location.js";
 import { rustProviderOperationGenericRequirementsAreSelectable } from "../../../../policy/types/provider-generic-requirements.js";
 import {
   rustTargetGenericArgumentEquals,
@@ -54,6 +56,7 @@ export function instantiateProviderOperationTemplate<
     readonly directGenericArguments?: ReadonlyMap<string, RustTargetGenericArgument>;
     readonly callScopedElisionBindings?: ReadonlyMap<string, RustLifetimeRef>;
   },
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): InstantiatedProviderOperationTemplate<OperationKind> | undefined {
   const parameters = template.genericParameters ?? [];
   const borrowedStringTypeParameters = rustBorrowedStringTypeParameterNames(template);
@@ -129,7 +132,7 @@ export function instantiateProviderOperationTemplate<
   }
   if (!rustProviderOperationGenericRequirementsAreSelectable(
     template.typeRequirements,
-    bindings,
+    bindings, definitions,
   )) {
     return undefined;
   }
@@ -505,20 +508,28 @@ export function substituteProviderOperationForm(
     case "call":
     case "free-call":
     case "receiver-method":
-      return form.argConversions === undefined
-        ? form
-        : {
-            ...form,
-            argConversions: form.argConversions.map((conversion) =>
-              conversion === undefined
-                ? undefined
-                : substituteRustValueConversion(
-                    conversion,
-                    substitutions.types,
-                    substitutions.lifetimes,
-                    substitutions.consts,
-                  )),
-          };
+      return {
+        ...form,
+        ...(form.form !== "receiver-method" || form.receiverConversion === undefined ? {} : {
+          receiverConversion: substituteRustValueConversion(
+            form.receiverConversion,
+            substitutions.types,
+            substitutions.lifetimes,
+            substitutions.consts,
+          ),
+        }),
+        ...(form.argConversions === undefined ? {} : {
+          argConversions: form.argConversions.map((conversion) =>
+            conversion === undefined
+              ? undefined
+              : substituteRustValueConversion(
+                  conversion,
+                  substitutions.types,
+                  substitutions.lifetimes,
+                  substitutions.consts,
+                )),
+        }),
+      };
     case "source-module-construction": {
       const argConversions = form.argConversions === undefined
         ? undefined
@@ -580,12 +591,15 @@ export function finalizeProviderOperationFact(
   template: RustProviderOperationTemplate,
   sourceArgumentCarriers: readonly TargetTypeRef[],
   sourceReceiverCarrier: TargetTypeRef | undefined,
+  definitions: RustTypeDefinitions,
+  spreadSourceArgumentIndexes?: readonly number[],
 ): Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }> | undefined {
   const abi = finalizeRustProviderOperationAbi({
     operationKind: template.operationKind,
     form: template.target,
     ...(sourceReceiverCarrier === undefined ? {} : { sourceReceiverCarrier }),
     sourceArgumentCarriers,
+    ...(spreadSourceArgumentIndexes === undefined ? {} : { spreadSourceArgumentIndexes }),
     declaredSourceArgumentCarriers: template.parameterCarriers,
     ...(template.compileTimeSourceArgumentIndexes === undefined
       ? {}
@@ -604,13 +618,15 @@ export function finalizeProviderOperationFact(
     ...(template.errorBoundary === "none" ? {} : { errorBoundary: template.errorBoundary }),
     ...(template.errorCarrier === undefined ? {} : { errorCarrier: template.errorCarrier }),
     isUnsafe: template.isUnsafe,
-  });
+  }, definitions);
   if (abi === undefined) {
     return undefined;
   }
-  return {
+  const fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }> = {
     kind: "provider-operation",
     operationId: template.operationId,
+    ...(template.indexedLocationMethod === undefined ? {} : { indexedLocationMethod: template.indexedLocationMethod }),
+    ...(template.carrierRequirements === undefined ? {} : { carrierRequirements: template.carrierRequirements }),
     resultCarrier: abi.result.kind === "async" ? abi.result.futureCarrier : abi.result.carrier,
     ...(template.sourceResultCarrier === undefined
       ? {}
@@ -620,4 +636,7 @@ export function finalizeProviderOperationFact(
       : { sourceAbsenceCarrier: template.sourceAbsenceCarrier }),
     abi,
   };
+  return fact.indexedLocationMethod !== undefined && rustIndexedLocationContract(fact, definitions) === undefined
+    ? undefined
+    : fact;
 }

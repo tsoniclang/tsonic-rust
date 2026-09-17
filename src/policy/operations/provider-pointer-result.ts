@@ -4,7 +4,7 @@ import { resolveRustTargetTypeRef } from "../types/resolution.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "../types/resolution.js";
 import {
   rustJsArrayTargetType,
-  rustLocationTargetType,
+  rustSourceLocationTargetType,
   rustOptionTargetType,
   rustRawPointerTargetType,
   rustSourcePrimitiveTargetType,
@@ -22,7 +22,7 @@ export function selectRustProviderPointerResult(
   return selectTsonicProviderPointerResult<TargetTypeRef>(source, context.ast, context.currentSemantics, context.source.sourceFacts, {
     primitive: rustSourcePrimitiveTargetType,
     raw: rustRawPointerTargetType,
-    pointer: rustLocationTargetType,
+    pointer: rustSourceLocationTargetType,
     optional: rustOptionTargetType,
     array: element => options.jsEnabled ? rustJsArrayTargetType(element) : rustVecTargetType(element),
     tuple: rustTupleTargetType,

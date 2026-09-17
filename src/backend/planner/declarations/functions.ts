@@ -29,7 +29,7 @@ import {
   allocateRustSyntheticName,
   createRustSyntheticNameState,
 } from "../names/synthetic.js";
-import { applyRustTailShape, rustBlockTerminates } from "../statements/block-flow.js";
+import { applyRustTailShape, rustBlockTerminates, retainRustCheckedCompletion } from "../statements/block-flow.js";
 import { planExpression } from "../expressions/index.js";
 import {
   planRustCallableParameterPrelude,
@@ -317,10 +317,10 @@ function planRustFunctionItem(
   if (plannedBody === undefined) {
     return undefined;
   }
-  const body: RustBlock = {
+  const body: RustBlock = retainRustCheckedCompletion({
     statements: [...plannedBody.statements, ...(sourceReturn?.fallthroughUndefined
       ? [planRustReturnExit({ kind: "path", path: "None" }, bodyContext)] : [])],
-  };
+  }, !isUnit && generatorFact === undefined ? sourceReturn?.canFallThrough : undefined);
   if (generatorFact !== undefined) {
     if (!isRustUnitCarrier(generatorFact.returnType) && !rustBlockTerminates(body)) {
       context.diagnostics.push(unsupportedConstructDiagnostic(

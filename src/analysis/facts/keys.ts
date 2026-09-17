@@ -34,9 +34,6 @@ export {
 export type {
   RustFutureValueFact,
   RustObjectLiteralMethodAdapterFact,
-  RustObjectLiteralMethodParameterAbi,
-  RustObjectLiteralMethodParameterAdapter,
-  RustObjectLiteralValueAdapter,
   RustSourceAccessorEffectsFact,
   RustSourceCallEffectsFact,
 } from "./object-methods.js";
@@ -106,3 +103,5 @@ export type {
   RustProjectUpcastFact,
   RustSourceBindingFact,
 } from "../../policy/types/value-projections.js";
+
+export type { RustCallableParameterAbi, RustCallableParameterAdapter, RustCallableValueAdapter } from "./callable-adapters.js";

@@ -23,7 +23,7 @@ function structuralShape(sourceType, declaration, symbol, resultCarrier = int32C
   return {
     sourceType,
     carrier: receiverCarrier,
-    storage: "object-handle",
+    storage: "structural-object",
     fields: [{
       declarations: [declaration],
       symbols: [symbol],

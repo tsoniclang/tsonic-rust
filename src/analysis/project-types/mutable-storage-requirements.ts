@@ -21,13 +21,20 @@ import type { RustAnalysisContext } from "../program/context.js";
 import type { RustProjectTypePolicy } from "./type-policy.js";
 import type { RustProviderOperationRow } from "../../providers/packages/model.js";
 
+export interface RustMutableProjectStorageRequirements {
+  readonly declarations: ReadonlySet<Node>;
+  readonly valueWrites: ReadonlySet<Node>;
+}
+
 export function collectRustMutableProjectStorageRequirements(
   context: RustAnalysisContext,
   projectTypes: RustProjectTypePolicy,
   sourceFiles: readonly SourceFile[],
   providerRows: readonly RustProviderOperationRow[],
-): ReadonlySet<Node> {
+  hasValueReceiver: (node: Node) => boolean,
+): RustMutableProjectStorageRequirements {
   const mutableDeclarations = new Set<Node>();
+  const valueWrites = new Set<Node>();
   const collectStoragePath = (node: Node | undefined): void => {
     if (node === undefined) {
       return;
@@ -47,6 +54,13 @@ export function collectRustMutableProjectStorageRequirements(
       if (declaration !== undefined &&
         projectTypes.definitionContainingDeclaration(declaration) !== undefined) {
         mutableDeclarations.add(declaration);
+        const owner = projectTypes.definitionContainingDeclaration(declaration)!;
+        for (const concrete of projectTypes.concreteClassesFor(owner)) {
+          const selected = projectTypes.memberImplementation(concrete, declaration);
+          if (selected.kind === "resolved" && ast.is.IsPropertyDeclaration(selected.implementation.declaration)) {
+            mutableDeclarations.add(selected.implementation.declaration);
+          }
+        }
       }
       collectStoragePath(Node_Expression(ast, node));
       return;
@@ -66,6 +80,20 @@ export function collectRustMutableProjectStorageRequirements(
   const visit = (sourceFile: SourceFile, node: Node): void => {
     const { ast } = context;
     const kind = ast.kindName(node);
+    if (kind === KindElementAccessExpression) {
+      const selected = context.semantics(sourceFile).operations.elementAccess(node);
+      if (selected !== undefined && selected.accessMode !== "read") {
+        collectStoragePath(Node_Expression(ast, node));
+      }
+    }
+    if (kind === KindPropertyAccessExpression) {
+      const selected = context.semantics(sourceFile).operations.propertyAccess(node);
+      if (selected !== undefined && (selected.accessMode === "write" || selected.accessMode === "read-write") &&
+        hasValueReceiver(selected.receiver.expression)) {
+        collectStoragePath(selected.receiver.expression);
+        valueWrites.add(node);
+      }
+    }
     if (kind === KindCallExpression || kind === KindNewExpression) {
       const semantics = context.semantics(sourceFile);
       const source = semantics.operations.call(node);
@@ -124,5 +152,5 @@ export function collectRustMutableProjectStorageRequirements(
   for (const sourceFile of sourceFiles) {
     visit(sourceFile, sourceFile);
   }
-  return mutableDeclarations;
+  return Object.freeze({ declarations: mutableDeclarations, valueWrites });
 }

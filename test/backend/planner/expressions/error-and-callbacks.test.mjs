@@ -3,6 +3,30 @@ import assert from "node:assert/strict";
 import { acmeTestingPackage, artifactText, compileRust, nodejsCapability } from "../../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
 
+for (const surfaces of [[], ["js"]]) {
+  test(`Error construction without a message preserves throwing and catching (${surfaces[0] ?? "native"})`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({
+      surfaces,
+      packages: [acmeTestingPackage()],
+      target: { id: "rust", options: { outputType: "bin", crateName: "empty_error_message" } },
+      files: { "index.ts": `
+import { check } from "@acme/testing";
+export function main(): void {
+  const error = new Error();
+  check(error.message === "");
+  check(error.name === "Error");
+  let caught = false;
+  try { throw new Error(); }
+  catch { caught = true; }
+  check(caught);
+}
+` },
+    });
+    assert.deepEqual(result.diagnostics, []);
+    validateGeneratedProject("empty-error-message", result.artifacts, { run: true });
+  });
+}
+
 test("Error subclasses retain exact inherited field selection for reads and writes", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     surfaces: ["js"],
@@ -221,7 +245,7 @@ export function load(path: string): string {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn load\(path: String\) -> Result<String, rt::TsonicError> \{/u);
-  assert.match(text, /tsonic_rust_node::fs::read_file_sync_string\(&path, "utf8"\)/u);
+  assert.match(text, /tsonic_rust_node::fs::read_file_sync_string\(path\.as_str\(\), "utf8"\)/u);
   assert.doesNotMatch(text, /Ok\(tsonic_rust_node::fs::read_file_sync_string/u);
 });
 
@@ -588,7 +612,7 @@ export function safe(xs: int32[]): int32 {
   assert.match(artifactText(result, "src/index.rs"), /xs\.map\(\|x\| x \* 2\)/u);
 });
 
-test("fallible provider rows are restricted to method, constructor, and property operations", async () => {
+test("fallible index operations require their exact native error carrier", async () => {
   const { createRustProviderPackage } = await import("../../../../dist/public/provider.js");
   assert.throws(
     () => createRustProviderPackage({
@@ -627,7 +651,7 @@ test("fallible provider rows are restricted to method, constructor, and property
       }],
       crates: [],
     }),
-    /isFallible is supported only on method, constructor, and property operations/u,
+    /provider-native row .* requires an exact errorCarrier/u,
   );
 });
 

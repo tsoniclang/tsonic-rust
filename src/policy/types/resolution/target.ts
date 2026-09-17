@@ -1,15 +1,19 @@
 import {
   rustBigIntTargetType,
+  rustEmptyObjectTargetType,
+  rustObjectIdentityTargetType,
   rustFixedArrayTargetType,
   rustJsArrayTargetType,
   rustJsSymbolTargetType,
+  rustSourceLocationTargetType,
   rustNullTargetType,
-  rustNullishSourceTargetType,
   rustNeverTargetType,
   rustOptionElementCarrier,
   rustOptionTargetType,
   rustSourcePrimitiveTargetType,
   rustStructuralObjectTargetType,
+  rustStructuralObjectCarrierValue,
+  rustSourceUnionCarrierValue,
   rustStringTargetType,
   rustTupleTargetType,
   rustUnitTargetType,
@@ -19,14 +23,15 @@ import {
 import { denseDefined, resolveProjectSourceCarrier } from "./project.js";
 import { instantiateTargetType, providerCarrierFromRelations, resolveOwnedSourceProfileTypeName, resolveProviderTypeIdentity, resolveSourceProfileCarrier } from "./providers.js";
 import { isRustStructuralObjectFieldDeclaration } from "../source-shapes.js";
-import { resolveCallableType, resolveSourcePrimitive, resolveSourceTypeParameter, resolveUnion } from "./callables.js";
+import { resolveBoundSourceTypeParameter, resolveCallableType, resolveSourcePrimitive, resolveSourceTypeParameter, resolveUnion } from "./callables.js";
 import { resolveRustAuthoredTargetType, resolveRustTupleElementTargetTypeWithState } from "./tuples.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import {
   sourcePropertyTypeEvidenceNodes,
   sourceTransformedTypeFactEvidenceNodes,
 } from "@tsonic/target-api/source";
-import type { Node, Symbol, Type } from "@tsonic/tsts";
+import { structFactKey } from "@tsonic/tsts";
+import type { Node, StructFact, Symbol, Type } from "@tsonic/tsts";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
@@ -35,6 +40,9 @@ import { isRustSourceRawPointer } from "../../operations/raw-pointer-source.js";
 import { resolveRustAuthoredBroadSourceValueTargetType } from "./broad-values.js";
 import { selectTsonicFixedArrayFromSource } from "@tsonic/source-core/facts";
 import type { TsonicFixedArrayFact } from "@tsonic/source-core/facts";
+import { resolveRustSemanticConditionalAlias } from "./type-families.js";
+import { resolveRustTypeComponentEvidence } from "./source-evidence.js";
+import { resolveRustSourceMarker } from "./markers.js";
 
 export function resolveRustFixedArrayTargetType(
   fixedArray: TsonicFixedArrayFact,
@@ -63,8 +71,16 @@ export function resolveRustTargetType(
   resolving: Set<object>,
   authoredTypeRoot?: Node,
 ): TargetTypeRef | undefined {
-  if (type === undefined || resolving.has(type)) {
-    return undefined;
+  if (type === undefined) return undefined;
+  if (resolving.has(type)) {
+    const symbol = context.currentSemantics.declarations.typeAliasSymbol(type);
+    if (symbol === undefined || !context.currentSemantics.declarations.symbolDeclarations(symbol).some(declaration =>
+      rustSourceUnionCarrierValue(options.sourceTypes.carrierForDeclaration(declaration, context.ast)) !== undefined)) return undefined;
+    const arguments_ = context.currentSemantics.types.effectiveTypeArguments(type)?.map(argument =>
+      resolveRustTargetType(argument, context, options, resolving)) ?? [];
+    return arguments_.some(argument => argument === undefined) ? undefined : resolveProjectSourceCarrier(symbol,
+      {values: arguments_.map(argument => ({kind: "type" as const, type: argument!}))}, context, options,
+      undefined, type, resolving, true);
   }
   const fixedArray = selectTsonicFixedArrayFromSource(
     type,
@@ -79,10 +95,13 @@ export function resolveRustTargetType(
   if (context.currentSemantics.facts.typeSubjects(type).some(subject => isRustSourceRawPointer(subject, context))) {
     return rustRawPointerTargetType();
   }
-  const existingStructuralObject = authoredTypeRoot === undefined
+  const existingStructuralObject = authoredTypeRoot === undefined &&
+      (context.sourceTypeParameterSubstitutions?.size ?? 0) === 0
     ? options.sourceTypes.structuralObjectForType(type)
     : undefined;
-  if (existingStructuralObject !== undefined) {
+  if (existingStructuralObject !== undefined &&
+    !(existingStructuralObject.fields.length === 0 &&
+      rustStructuralObjectCarrierValue(existingStructuralObject.carrier)?.representation === "value")) {
     return existingStructuralObject.carrier;
   }
   const primitive = resolveSourcePrimitive(type, context);
@@ -102,6 +121,15 @@ export function resolveRustTargetType(
   resolving.add(type);
   try {
     const semantics = context.currentSemantics;
+    const conditional = resolveRustSemanticConditionalAlias(type, context, options, resolving);
+    if (conditional !== undefined) return conditional.carrier;
+    if (resolveRustSourceMarker(type, context) === "pointer") {
+      const arguments_ = semantics.types.effectiveTypeArguments(type);
+      const pointee = arguments_?.length === 1
+        ? resolveRustTargetType(arguments_[0], context, options, resolving)
+        : undefined;
+      return pointee === undefined ? undefined : rustSourceLocationTargetType(pointee);
+    }
     if (semantics.types.isNever(type)) {
       return rustNeverTargetType();
     }
@@ -149,6 +177,9 @@ export function resolveRustTargetType(
           },
           context,
           options,
+          undefined,
+          type,
+          resolving,
         );
     if (sourceType !== undefined) {
       return sourceType;
@@ -165,7 +196,7 @@ export function resolveRustTargetType(
     }
 
     if (semantics.types.isNullish(type)) {
-      return rustNullishSourceTargetType();
+      return resolveRustExactNullishValueCarrier(type, semantics);
     }
     if (semantics.types.isStringLike(type)) {
       return rustStringTargetType();
@@ -245,18 +276,33 @@ export function resolveStructuralObjectType(
   options: RustTargetTypeResolutionOptions,
   resolving: Set<object>,
   authoredTypeRoot?: Node,
+  valueStruct?: StructFact,
 ): TargetTypeRef | undefined {
   const semantics = context.currentSemantics;
+  const struct = valueStruct ?? context.facts.resolve(type, structFactKey) ?? context.facts.get(type, structFactKey);
+  if (struct !== undefined && (struct.valueType !== true || struct.fields === undefined)) return undefined;
+  const representation = struct === undefined ? "reference" : "value";
+  if (semantics.types.isSymbolLike(type)) return undefined;
+  const declaredFields = struct === undefined ? undefined : new Map(struct.fields!.map(field => [field.name, field]));
+  if (declaredFields !== undefined && declaredFields.size !== struct!.fields!.length) return undefined;
   if (semantics.types.callSignatures(type).length !== 0 ||
     semantics.types.constructSignatures(type).length !== 0 ||
     semantics.types.indexInfos(type).length !== 0) {
     return undefined;
   }
   const properties = denseDefined(semantics.types.propertyInfos(type));
-  if (properties === undefined || properties.length === 0) {
+  if (properties === undefined) {
     return undefined;
   }
+  if (properties.length === 0 && representation === "reference") {
+    if (semantics.types.couldContainTypeVariables(type)) return undefined;
+    return semantics.declarations.typeSymbol(type) === undefined
+      ? rustObjectIdentityTargetType()
+      : rustEmptyObjectTargetType();
+  }
   const selected = properties.map((property) => {
+    const declaredField = declaredFields?.get(property.name);
+    if (declaredFields !== undefined && (declaredField === undefined || property.optional)) return undefined;
     const declarations = denseDefined([...new Set([
       ...semantics.declarations.symbolDeclarations(property.symbol),
       ...property.rootSymbols.flatMap((symbol) =>
@@ -264,10 +310,14 @@ export function resolveStructuralObjectType(
       ),
     ])]);
     const projectDeclarations = declarations?.filter((declaration) =>
-      context.source.navigation.isProjectDeclaration(declaration) &&
+      (declaredField !== undefined || context.source.navigation.isProjectDeclaration(declaration)) &&
       isRustStructuralObjectFieldDeclaration(declaration, context.ast));
     const hasExactTransformedIdentity = authoredTypeRoot !== undefined &&
-      projectDeclarations !== undefined && projectDeclarations.length === 0;
+      declarations !== undefined && projectDeclarations?.length === 0 &&
+      declarations.every(declaration => {
+        const identity = resolveProviderTypeIdentity([declaration], context);
+        return identity !== undefined && providerCarrierFromRelations(identity, options) !== undefined;
+      });
     if (projectDeclarations === undefined ||
       (!hasExactTransformedIdentity && projectDeclarations.length === 0) ||
       (!hasExactTransformedIdentity && projectDeclarations.length !== declarations?.length)) {
@@ -286,19 +336,22 @@ export function resolveStructuralObjectType(
       return kind !== "KindGetAccessor" && kind !== "KindSetAccessor" &&
         kind !== "KindMethodDeclaration" && kind !== "KindMethodSignature";
     }) ?? [];
-    const authoredTypeNodes = [
+    const propertyTypeNodes = [...new Set([
+      ...(declaredField === undefined ? [] : [declaredField.type]),
       ...sourcePropertyTypeEvidenceNodes(context.ast, semantics, property),
-      ...(authoredTypeRoot === undefined
-        ? []
-        : sourceTransformedTypeFactEvidenceNodes(
-            context.ast,
-            semantics,
-            authoredTypeRoot,
-            property.type,
-          )),
-    ];
+      ...projectDeclarations.flatMap(declaration => {
+        const node = context.ast.typeNode(declaration);
+        return node !== undefined && resolveBoundSourceTypeParameter(node, context) !== undefined ? [node] : [];
+      }),
+    ])];
+    const authoredTypeNodes = propertyTypeNodes.length !== 0 || authoredTypeRoot === undefined
+      ? propertyTypeNodes
+      : sourceTransformedTypeFactEvidenceNodes(context.ast, semantics, authoredTypeRoot, property.type);
     const authoredCarriers = authoredTypeNodes.map((node) =>
-      resolveRustAuthoredTargetType(node, context, options, resolving));
+      resolveRustTypeComponentEvidence({
+        authoredTypeNode: node,
+        selectedType: property.type,
+      }, context, options, resolving));
     const authoredCarrier = authoredCarriers.length > 0 &&
         authoredCarriers.every((carrier) =>
           carrier !== undefined && rustTargetTypeRefEquals(carrier, authoredCarriers[0]))
@@ -320,6 +373,7 @@ export function resolveStructuralObjectType(
         setters.length === 0 && ordinaryDeclarations.length === 0
       ? true as const
       : undefined;
+    if (representation === "value" && (getters.length !== 0 || setters.length !== 0 || methods.length !== 0)) return undefined;
     return fieldCarrier === undefined
         || getters.length > 1 || setters.length > 1 ||
         getters.length === 0 && setters.length > 0 ||
@@ -336,12 +390,14 @@ export function resolveStructuralObjectType(
           sourceType: property.type,
           resultCarrier: fieldCarrier,
           presence: property.optional ? "optional" as const : "required" as const,
-          readonly: property.readonly,
+          readonly: declaredField?.readonly === true || property.readonly,
+          ...(context.memoryBindings.hasBoundField([property.symbol, ...property.rootSymbols, ...projectDeclarations])
+            ? { bound: true as const } : {}),
           ...(accessor === undefined ? {} : { accessor }),
           ...(method === undefined ? {} : { method }),
         };
   });
-  if (selected.some((field) => field === undefined)) {
+  if (selected.some((field) => field === undefined) || declaredFields !== undefined && properties.length !== declaredFields.size) {
     return undefined;
   }
   const fields = [...(selected as readonly {
@@ -352,6 +408,7 @@ export function resolveStructuralObjectType(
     readonly resultCarrier: TargetTypeRef;
     readonly presence: "required" | "optional";
     readonly readonly: boolean;
+    readonly bound?: true;
     readonly accessor?: {
       readonly getter: true;
       readonly setter: boolean;
@@ -363,10 +420,10 @@ export function resolveStructuralObjectType(
   if (new Set(fields.map((field) => field.sourceName)).size !== fields.length) {
     return undefined;
   }
-  const ownerFileNames = new Set([
-    ...fields.flatMap((field) => field.declarations),
-    ...(authoredTypeRoot === undefined ? [] : [authoredTypeRoot]),
-  ].map((node) => context.ast.getFileName(context.ast.getSourceFile(node))));
+  const ownerNodes = representation === "value" && authoredTypeRoot !== undefined
+    ? [authoredTypeRoot]
+    : [...fields.flatMap((field) => field.declarations), ...(authoredTypeRoot === undefined ? [] : [authoredTypeRoot])];
+  const ownerFileNames = new Set(ownerNodes.map((node) => context.ast.getFileName(context.ast.getSourceFile(node))));
   if (ownerFileNames.size !== 1) {
     return undefined;
   }
@@ -376,13 +433,14 @@ export function resolveStructuralObjectType(
     type: field.resultCarrier,
     presence: field.presence,
     readonly: field.readonly,
+    ...(field.bound === true ? { bound: true as const } : {}),
     ...(field.accessor === undefined ? {} : { accessor: field.accessor }),
     ...(field.method === true ? { method: true as const } : {}),
-  })));
+  })), representation);
   return options.sourceTypes.registerStructuralObject({
     sourceType: type,
     carrier,
-    storage: "object-handle",
+    storage: "structural-object",
     fields,
   })
     ? carrier

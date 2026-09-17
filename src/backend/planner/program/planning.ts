@@ -40,7 +40,6 @@ import {
 import {
   planRustSourcePackageErrors,
   rustRuntimeErrorTypeIdentity,
-  rustSourcePackageErrorTypeIdentity,
 } from "./source-package-errors.js";
 import { planRustSourcePackageComponents } from "./source-package-components.js";
 import {
@@ -177,12 +176,12 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     "initialize",
     [structuralShapesModuleName, programModuleName, initializerFacadeModuleName],
   );
-  const activeEpilogues = input.program.binaryEpilogues;
-  const epilogueErrorTypes = new Map<
-    (typeof activeEpilogues)[number],
+  const activeHooks = input.program.binaryHooks;
+  const hookErrorTypes = new Map<
+    (typeof activeHooks)[number],
     import("../../target-ast/nodes.js").RustType
   >();
-  for (const epilogue of activeEpilogues) {
+  for (const epilogue of activeHooks) {
     if (epilogue.errorBoundary === "provider-native") {
       const errorType = rustTypeFromCarrier(epilogue.errorCarrier);
       if (errorType === undefined) {
@@ -194,7 +193,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
           evidence: ["target.capability=rust.error.provider-conversion"],
         });
       } else {
-        epilogueErrorTypes.set(epilogue, errorType);
+        hookErrorTypes.set(epilogue, errorType);
       }
     }
   }
@@ -325,10 +324,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     });
     return rejectedTargetStage(diagnostics);
   }
-  const rootErrorTypeIdentity = rustSourcePackageErrorTypeIdentity(
-    facadePlan.rootComponentId,
-    rootErrorDomain.errorDomain,
-  );
+  const rootErrorTypeIdentity = rootErrorDomain.errorTypeIdentity;
   const programErrorModel = rootCrateContent.programErrorModel;
   const rootCrateErrorType: import("../../target-ast/nodes.js").RustType = {
     kind: "named",
@@ -442,7 +438,10 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
       ? {
           kind: "call" as const,
           path: "tsonic_rust_runtime::block_on",
-          args: [entryCall],
+          args: [entryFunction.async === "js-promise"
+            ? { kind: "method-call" as const, receiver: entryCall,
+                method: entryFunction.fallible ? "await_result" : "await_value", args: [] }
+            : entryCall],
         }
       : entryCall;
     const initializationStatements = crateInitializer === undefined
@@ -486,7 +485,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
                   args: [],
                 },
         }];
-    const epilogueStatements = activeEpilogues.map((epilogue) => {
+    const planHook = (epilogue: (typeof activeHooks)[number]) => {
       const call = { kind: "call" as const, path: epilogue.path, args: [] };
       if (epilogue.isFallible !== true) {
         return { kind: "expr" as const, expr: call };
@@ -498,11 +497,13 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
           epilogue.errorBoundary,
           mainErrorType,
           epilogue.errorBoundary === "provider-native"
-            ? epilogueErrorTypes.get(epilogue)
+            ? hookErrorTypes.get(epilogue)
             : undefined,
         ),
       };
-    });
+    };
+    const startupStatements = activeHooks.filter(hook => hook.phase === "before-initialization").map(planHook);
+    const epilogueStatements = activeHooks.filter(hook => hook.phase === "after-entry").map(planHook);
     const workerDispatchStatements = planRustWorkerDispatch(
       input,
       workerEntries.entries,
@@ -516,7 +517,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     const mainFallible = entryFunction.fallible ||
       crateInitializer?.errorType !== undefined ||
       workerEntries.entries.length > 0 ||
-      activeEpilogues.some((epilogue) => epilogue.isFallible === true);
+      activeHooks.some((epilogue) => epilogue.isFallible === true);
     const entryStatement = {
       kind: "expr" as const,
       expr: entryFunction.fallible
@@ -551,9 +552,9 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
       ...(mainFallible
         ? {
             errorType: mainErrorType,
-            body: { statements: [...workerDispatchStatements, ...initializationStatements, entryStatement, ...epilogueStatements, ...completionStatements] },
+            body: { statements: [...startupStatements, ...workerDispatchStatements, ...initializationStatements, entryStatement, ...epilogueStatements, ...completionStatements] },
           }
-        : { body: { statements: [...workerDispatchStatements, ...initializationStatements, entryStatement, ...epilogueStatements] } }),
+        : { body: { statements: [...startupStatements, ...workerDispatchStatements, ...initializationStatements, entryStatement, ...epilogueStatements] } }),
     };
     artifacts.push(rustSourceArtifact(
       "src/main.rs",
@@ -780,7 +781,7 @@ interface RustBinaryEntry {
   readonly sourceFile: SourceFile;
   readonly moduleName: string;
   readonly functionName: string;
-  readonly async: boolean;
+  readonly async?: "native-future" | "js-promise";
   readonly fallible: boolean;
 }
 
@@ -876,7 +877,7 @@ function resolveBinaryEntry(
       sourceFile: entrySourceFile,
       moduleName,
       functionName: "main",
-      async: asyncFact !== undefined,
+      async: asyncFact?.kind,
       fallible: input.program.facts.getFact(declaration, rustFallibleFactKey) !== undefined,
     };
   }

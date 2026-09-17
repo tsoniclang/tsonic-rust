@@ -3,6 +3,7 @@ import {
   rustNativeCallableProtocol,
   rustTargetGenericTypeArguments,
   substituteRustTargetGenerics,
+  isRustProgramErrorCarrier,
 } from "../../target-model/types/index.js";
 import {
   KindFunctionDeclaration,
@@ -21,7 +22,7 @@ import {
   rustGeneratorFactKey,
 } from "../facts/keys.js";
 import { appendMalformedSourceAst } from "../declarations/project-types.js";
-import { appendRustDiagnostic } from "../program/walk.js";
+import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { recordBindingWrite, resolveParameterAbi, validateFlowMarkerAgainstMode } from "../declarations/types-and-bindings.js";
 import { selectRustFlowReadProjection } from "../../policy/types/value-carrier-reconciliation.js";
@@ -31,7 +32,11 @@ import { rustArgumentPassingKey, rustRuntimeCarrierKey, rustSelectedOperationKey
 import { rustArgumentPassingMode } from "../facts/parameter-passing.js";
 import { rustProjectCallableTargetName } from "../facts/source-member-name.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustTypeFamilyNormalizer } from "../../policy/types/type-family-normalization.js";
+import { realizeRustSelectedTypeFamilies } from "./type-family-applications.js";
 import { finalizeProjectSourceGenericArguments } from "./project-call-generics.js";
+import { instantiateRustSourceParameterValueCarrier } from "../../policy/ownership/source-callable-abi.js";
+import { retainRustStructuralInstantiation } from "../../policy/types/resolution/structural-instantiations.js";
 import { sourceTypeCarrierForDeclaration } from "./inputs.js";
 import { rustSpreadElementCarrier } from "../../target-model/operations/rest-assembly.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
@@ -66,6 +71,8 @@ export function applySelectedProjectSourceCall(
     return undefined;
   }
   const { substitutions, targetGenericArguments } = genericInstantiation;
+  if (!realizeRustSelectedTypeFamilies(walk, expression, selectedSignature, targetGenericArguments)) return undefined;
+  const normalizeTypeFamily = rustTypeFamilyNormalizer(walk.context.typeFamilies);
   const targetTypeArguments = rustTargetGenericTypeArguments(targetGenericArguments);
   const bindings = selectedSignature.sourceArgumentBindings;
   const selectedParameters = selectedSignature.sourceSelectedSignatureParameters;
@@ -123,13 +130,47 @@ export function applySelectedProjectSourceCall(
       substitutions.types,
       substitutions.lifetimes,
       substitutions.consts,
+      normalizeTypeFamily,
     );
-    const valueCarrier = substituteRustTargetGenerics(
-      parameterAbi.valueCarrier,
-      substitutions.types,
-      substitutions.lifetimes,
-      substitutions.consts,
+    if (isRustProgramErrorCarrier(parameterCarrier)) {
+      const ownerFile = ast.getSourceFile(selectedDeclaration);
+      const componentFor = (file: SourceFile | undefined) => file === undefined ? undefined :
+        walk.context.sourcePackages.packages.find(entry => entry.sourceFiles.includes(ast.getFileName(file)))?.componentId;
+      const owner = componentFor(ownerFile);
+      if (owner === undefined || owner !== componentFor(sourceFile)) {
+        appendRustDiagnostic(walk, "RUST_SOURCE_ERROR_PARAMETER_DOMAIN_CONFLICT",
+          "Exception forwarding requires the exact owning source-package error domain; reverse conversion from an unrelated error domain is not proven.",
+          expression, ["target.capability=rust.source-call.error-parameter-domain"]);
+        return undefined;
+      }
+    }
+    const valueCarrier = instantiateRustSourceParameterValueCarrier(
+      parameterAbi,
+      parameterCarrier,
+      substitutions,
+      normalizeTypeFamily,
     );
+    if (valueCarrier === undefined) {
+      appendRustDiagnostic(
+        walk,
+        "RUST_SOURCE_CALL_PARAMETER_INSTANTIATION_CONFLICT",
+        `Project-source parameter ${index} does not match its exact selected ABI.`,
+        expression,
+        ["target.capability=rust.source-call.parameter-instantiation"],
+      );
+      return undefined;
+    }
+    const selectedValueType = parameterAbi.form === "default" && selectedParameter !== undefined
+      ? walk.context.semantics(sourceFile).types.withoutMissingOrUndefined(selectedParameter.selectedType)
+      : selectedParameter?.selectedType;
+    if (selectedParameter !== undefined && (selectedValueType === undefined || !retainRustStructuralInstantiation(
+      selectedValueType, parameterAbi.valueCarrier, valueCarrier,
+      rustResolutionContext(walk, expression), walk.operationOptions))) {
+      appendRustDiagnostic(walk, "RUST_SOURCE_CALL_PARAMETER_STORAGE_MISSING",
+        "The selected source parameter type has no exact instantiated structural storage correspondence.",
+        expression, ["target.capability=rust.source-call.parameter-storage"]);
+      return undefined;
+    }
     const mode = targetParameter.passingMode === "borrow-mut"
       ? "mut-ref" as const
       : targetParameter.passingMode === "borrow-shared"
@@ -185,8 +226,17 @@ export function applySelectedProjectSourceCall(
         substitutions.types,
         substitutions.lifetimes,
         substitutions.consts,
+        normalizeTypeFamily,
       );
   if (resultCarrier === undefined) {
+    return undefined;
+  }
+  if (declaredResultCarrier !== undefined && selectedSignature.sourceReturnType !== undefined &&
+    !retainRustStructuralInstantiation(selectedSignature.sourceReturnType, declaredResultCarrier,
+      resultCarrier, rustResolutionContext(walk, expression), walk.operationOptions)) {
+    appendRustDiagnostic(walk, "RUST_SOURCE_CALL_RESULT_STORAGE_MISSING",
+      "The selected source return type has no exact instantiated structural storage correspondence.", expression,
+      ["target.capability=rust.source-call.result-storage"]);
     return undefined;
   }
   const declarationKind = ast.kindName(selectedDeclaration);
@@ -232,6 +282,32 @@ export function applySelectedProjectSourceCall(
       name,
       selectedTargetName: selectedMember.targetName,
     };
+  } else if (selectedSignature.sourceUnionMethods !== undefined) {
+    const union = selectedSignature.sourceUnionMethods;
+    const receiver = ast.kindName(callee) === KindPropertyAccessExpression ? Node_Expression(ast, callee) : undefined;
+    if (receiver === undefined) return undefined;
+    const receiverCarrier = resolveExpressionCarrier(walk, receiver, sourceFile, undefined);
+    if (!rustTargetTypeRefEquals(receiverCarrier, union.receiverCarrier)) return undefined;
+    const variants = union.variants.map(variant => {
+      const selfMode = walk.context.facts.get(variant.declaration, rustSelfModeFactKey) ??
+        walk.context.facts.resolve(variant.declaration, rustSelfModeFactKey);
+      const owner = walk.context.projectTypes.definitionContainingDeclaration(variant.declaration);
+      const polymorphic = owner !== undefined && walk.context.projectTypes.isPolymorphic(owner);
+      const relationship = owner === undefined ? undefined : walk.context.projectTypes.relationship(variant.carrier, owner);
+      if (polymorphic && relationship?.kind !== "related") return undefined;
+      return selfMode === undefined ? undefined : {
+        name: variant.name,
+        carrier: variant.carrier,
+        declaration: variant.declaration,
+        targetName: variant.targetName,
+        mutatesSelf: selfMode.mode === "mut-ref",
+        ...(polymorphic && relationship?.kind === "related" ? { dispatchOwner: relationship.targetType } : {}),
+      };
+    });
+    if (variants.some(variant => variant === undefined)) return undefined;
+    if (variants.some(variant => variant!.mutatesSelf)) recordBindingWrite(walk, receiver, "referent");
+    walk.context.generatedDeclarationUses.record(expression, union.variants.map(variant => variant.declaration));
+    target = { form: "union-method", receiverCarrier: union.receiverCarrier, variants: variants as NonNullable<typeof variants[number]>[] };
   } else if (indirectCallable) {
     target = { form: "callable", carrier: selectedCallableCarrier };
   } else if (selectedMember.kind === "constructor") {
@@ -248,6 +324,7 @@ export function applySelectedProjectSourceCall(
       return undefined;
     }
     if (ast.hasModifierKind(selectedDeclaration, "static")) {
+      const moduleFunction = walk.context.projectTypes.memberSlotName(selectedDeclaration, "static");
       const classDeclaration = ast.parent(selectedDeclaration);
       const typeCarrier = classDeclaration === undefined
         ? undefined
@@ -255,7 +332,10 @@ export function applySelectedProjectSourceCall(
       if (typeCarrier === undefined) {
         return undefined;
       }
-      target = { form: "static-method", name: methodName, typeCarrier };
+      target = moduleFunction === undefined
+        ? { form: "static-method", name: methodName, typeCarrier }
+        : { form: "function", name: moduleFunction,
+            fileName: ast.getFileName(ast.getSourceFile(selectedDeclaration)), selectedTargetName: selectedMember.targetName };
     } else {
       const receiver = ast.kindName(callee) === KindPropertyAccessExpression
         ? Node_Expression(walk.context.ast, callee)
@@ -284,7 +364,7 @@ export function applySelectedProjectSourceCall(
       const receiverProjection = selectRustFlowReadProjection(
         rawReceiverCarrier,
         selectedReceiverCarrier,
-        walk.context.projectTypes,
+        walk.context.projectTypes, walk.context.typeDefinitions,
       );
       if (receiverProjection.kind === "incompatible") {
         appendRustDiagnostic(
@@ -430,6 +510,7 @@ export function applySelectedProjectSourceCall(
         substitutions.types,
         substitutions.lifetimes,
         substitutions.consts,
+        normalizeTypeFamily,
       );
       if (!rustTargetTypeRefEquals(callableResult, resultCarrier)) {
         appendRustDiagnostic(
@@ -450,6 +531,7 @@ export function applySelectedProjectSourceCall(
               substitutions.types,
               substitutions.lifetimes,
               substitutions.consts,
+              normalizeTypeFamily,
             );
         const contractCarrier = parameter.mode === "value"
           ? parameter.parameterCarrier

@@ -16,6 +16,7 @@ export type RustFinalizedSourceArgumentRole = "parameter" | "index" | "compile-t
 
 export interface RustFinalizedSourceArgument {
   readonly sourceIndex: number;
+  readonly form: "value" | "spread-sequence";
   readonly carrier: TargetTypeRef;
   readonly mode: RustArgumentMode;
   readonly role: RustFinalizedSourceArgumentRole;
@@ -127,6 +128,7 @@ export interface FinalizeRustProviderOperationAbiOptions<
   readonly form: RustProviderOperationForm;
   readonly sourceReceiverCarrier?: TargetTypeRef;
   readonly sourceArgumentCarriers: readonly TargetTypeRef[];
+  readonly spreadSourceArgumentIndexes?: readonly number[];
   readonly declaredSourceArgumentCarriers?: readonly (TargetTypeRef | undefined)[];
   readonly compileTimeSourceArgumentIndexes?: readonly number[];
   readonly resultCarrier: TargetTypeRef;

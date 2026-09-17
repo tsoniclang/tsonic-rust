@@ -54,6 +54,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustRawAddressPlanKey } from "../../target-model/operations/raw-addresses.js";
 import { rustMemoryLayoutObservationKey } from "../../target-model/operations/memory-layout.js";
 import { rustRawLocationPlanKey } from "../../target-model/operations/native-memory.js";
+import { rustMemoryBindingPlanKey } from "../../target-model/operations/memory-bindings.js";
 
 export function recordSelectedOperationInputs(
   walk: RustFactWalk,
@@ -62,6 +63,12 @@ export function recordSelectedOperationInputs(
   fact: RustTargetOperationFact | undefined,
 ): void {
   if (walk.context.facts.get(expression, rustMemoryLayoutObservationKey) !== undefined) return;
+  const memoryBinding = walk.context.facts.get(expression, rustMemoryBindingPlanKey);
+  if (memoryBinding !== undefined) {
+    if (memoryBinding.kind === "field") resolveExpressionCarrier(walk, memoryBinding.expression, sourceFile, memoryBinding.carrier);
+    else for (const field of memoryBinding.fields) resolveExpressionCarrier(walk, field.expression, sourceFile, field.carrier);
+    return;
+  }
   const rawLocation = walk.context.facts.get(expression, rustRawLocationPlanKey);
   if (rawLocation !== undefined) {
     resolveExpressionCarrier(walk, rawLocation.expression, sourceFile, rawLocation.inputCarrier);
@@ -265,7 +272,7 @@ export function resolveArrayLiteralCarrier(
   const hasHoles = elements.some((element) => ast.kindName(element) === KindOmittedExpression);
   const presentElements = elements.filter((element) => ast.kindName(element) !== KindOmittedExpression);
 
-  if (expected?.kind === "tuple" && expected.elements.length > 0 && !hasHoles) {
+  if (expected?.kind === "tuple" && !hasHoles) {
     const omittedOptionalElementIndexes = contextualTupleOmissions(
       walk,
       expression,

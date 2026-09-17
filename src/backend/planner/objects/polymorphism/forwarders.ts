@@ -22,6 +22,7 @@ import { rustProjectDispatchObjectType, rustProjectDispatchTraitType } from "./n
 import { rustSourceTypeCarrierValue } from "../../../../target-model/types/index.js";
 import { emptyRustGenerics } from "../../../target-ast/nodes.js";
 import { rustSelfParameter } from "../../declarations/self-parameter.js";
+import { planRootCallableForwarder } from "./callable-adapters.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustEffectiveExpressionOverride, RustPlanContext } from "../../program/plan-context.js";
 import type { RustExpr, RustImplFunction, RustType } from "../../../target-ast/nodes.js";
@@ -165,6 +166,8 @@ export function planRootAccessorForwarder(
 ): RustImplFunction | undefined {
   if (rustTypeEquals(helper.errorType, contractShape.errorType)) {
     return planRootCallableForwarder(
+      concreteCarrier,
+      contractAccessor,
       implementation,
       slot,
       rootType,
@@ -302,6 +305,8 @@ export function planRootMethodForwarder(
   }
   if (rustTypeEquals(helper.errorType, contractShape.errorType)) {
     return planRootCallableForwarder(
+        concreteCarrier,
+        contractMember,
         implementation,
         slot,
         rootType,
@@ -334,63 +339,6 @@ export function planRootMethodForwarder(
   return applyRootMethodOverride(
     implementation,
     direct,
-    overrideStoragePath,
-    context,
-  );
-}
-
-export function planRootCallableForwarder(
-  implementation: Node,
-  slot: string,
-  rootType: RustType,
-  helper: RustImplFunction,
-  contractShape: ProjectCallableShape,
-  overrideStoragePath: readonly string[] | undefined,
-  context: RustPlanContext,
-): RustImplFunction | undefined {
-  const representation = context.input.program.objectRepresentations.representationFor(
-    context.input.program.projectTypes.definitionContainingDeclaration(implementation),
-  );
-  if (representation === undefined || !rootCallableMatchesShape(helper, contractShape)) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, implementation),
-      "rust.backend.project-dispatch-signature",
-      "Selected project member implementation does not preserve the exact contract Rust ABI.",
-    ));
-    return undefined;
-  }
-  const call: RustExpr = {
-    kind: "associated-call",
-    owner: rootType,
-    method: helper.name,
-    args: [
-      { kind: "path", path: "self" },
-      ...helper.params.map((parameter) => ({
-        kind: "path" as const,
-        path: parameter.name,
-      })),
-    ],
-  };
-  return applyRootMethodOverride(
-    implementation,
-    {
-    name: slot,
-    visibility: "private",
-    generics: helper.generics,
-    selfParam: rustSelfParameter("rc"),
-    params: helper.params,
-    ...(helper.returnType === undefined ? {} : { returnType: helper.returnType }),
-    ...(helper.errorType === undefined ? {} : { errorType: helper.errorType }),
-    ...(helper.isUnsafe === true ? { isUnsafe: true } : {}),
-    body: {
-      statements: [{
-        kind: "tail",
-        expr: helper.isUnsafe === true
-          ? { kind: "unsafe", expression: call }
-          : call,
-      }],
-    },
-    },
     overrideStoragePath,
     context,
   );

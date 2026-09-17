@@ -2,9 +2,10 @@ import {
   targetSourceProfileDeclaration,
   typescriptNoLibUtilityDeclarations,
 } from "@tsonic/target-api/provider";
-import { jsStandardSourceProfileDeclarations } from "@tsonic/js-source-profile";
+import { jsStandardSourceProfileDeclarations, sourceErrorDeclarations } from "@tsonic/js-source-profile";
 import type { TargetSourceProfileContributions } from "@tsonic/target-api/provider";
 import { rustTargetId } from "../../target-model/identities/target.js";
+import { rustSourceErrorConstructors } from "../../target-model/identities/source-errors.js";
 
 export const rustSourceProfileOwnerId = rustTargetId;
 export const rustJsSourceProfileOwnerId = "js";
@@ -25,16 +26,7 @@ interface Number {}
 interface String {}
 interface RegExp {}
 
-interface Error {
-  name: string;
-  message: string;
-  stack?: string;
-}
-interface ErrorConstructor {
-  new (message?: string): Error;
-  (message?: string): Error;
-}
-declare var Error: ErrorConstructor;
+${sourceErrorDeclarations}
 
 interface PromiseLike<T> {
   then<TResult1 = T, TResult2 = never>(
@@ -136,12 +128,23 @@ interface ReadonlyArray<T> extends Iterable<T> {
 const rustJsSurfaceProfileDeclarations = `
 ${sharedNoLibDeclarations}
 
+${rustSourceErrorConstructors.filter((entry) => entry.sourceName !== "Error").map((entry) => `
+interface ${entry.sourceName} extends Error {}
+interface ${entry.ownerName} {
+  new (message?: string): ${entry.sourceName};
+  (message?: string): ${entry.sourceName};
+}
+declare var ${entry.sourceName}: ${entry.ownerName};
+`).join("\n")}
+
 interface Object {
   hasOwnProperty(key: PropertyKey): boolean;
   toString(): string;
 }
 
 interface ObjectConstructor {
+  freeze<T extends object>(value: T): Readonly<T>;
+  isFrozen(value: object): boolean;
   keys(value: object): string[];
   values<T>(value: { [key: string]: T } | ArrayLike<T>): T[];
   entries<T>(value: { [key: string]: T } | ArrayLike<T>): [string, T][];
@@ -188,6 +191,16 @@ interface NumberConstructor {
 }
 declare var Number: NumberConstructor;
 
+interface BigInt {
+  toString(radix?: number): string;
+}
+interface BigIntConstructor {
+  (value: bigint | boolean | number | string): bigint;
+  asIntN(bits: number, value: bigint): bigint;
+  asUintN(bits: number, value: bigint): bigint;
+}
+declare var BigInt: BigIntConstructor;
+
 declare function parseInt(value: string, radix?: number): number;
 declare function parseFloat(value: string): number;
 declare function isNaN(value: number): boolean;
@@ -195,7 +208,7 @@ declare function isFinite(value: number): boolean;
 declare function encodeURIComponent(value: string): string;
 declare function decodeURIComponent(value: string): string;
 
-interface String {
+interface String extends Iterable<string> {
   readonly length: number;
   readonly [index: number]: string;
   startsWith(value: string, position?: number): boolean;
@@ -240,6 +253,7 @@ interface Array<T> extends Iterable<T> {
   length: number;
   [index: number]: T;
   push(...items: T[]): number;
+  entries(): ArrayEntriesIterator<T>;
   pop(): T | undefined;
   shift(): T | undefined;
   unshift(...items: T[]): number;
@@ -273,6 +287,7 @@ interface ReadonlyArray<T> extends Iterable<T> {
   readonly length: number;
   readonly [index: number]: T;
   at(index: number): T | undefined;
+  entries(): ArrayEntriesIterator<T>;
   slice(start?: number, end?: number): T[];
   concat(...items: (T | readonly T[])[]): T[];
   join(separator?: string): string;
@@ -290,8 +305,15 @@ interface ReadonlyArray<T> extends Iterable<T> {
   map<U>(callbackfn: (value: T, index: number, array: readonly T[]) => U): U[];
 }
 
+interface ArrayEntriesIterator<T> extends IterableIterator<[number, T], undefined, unknown> {
+  next(): IteratorResult<[number, T], undefined>;
+  [Symbol.iterator](): ArrayEntriesIterator<T>;
+}
+
 interface ArrayConstructor {
+  new <T>(arrayLength: number): T[];
   new <T>(...items: T[]): T[];
+  <T>(arrayLength: number): T[];
   <T>(...items: T[]): T[];
   isArray(value: unknown): value is unknown[];
   from(arrayLike: string): string[];
@@ -348,6 +370,15 @@ declare var Set: SetConstructor;
 interface Date {
   getTime(): number;
   valueOf(): number;
+  getFullYear(): number;
+  getMonth(): number;
+  getDate(): number;
+  getDay(): number;
+  getHours(): number;
+  getMinutes(): number;
+  getSeconds(): number;
+  getMilliseconds(): number;
+  getTimezoneOffset(): number;
   getUTCFullYear(): number;
   getUTCMonth(): number;
   getUTCDate(): number;
@@ -376,12 +407,6 @@ interface DateConstructor {
   UTC(year: number, monthIndex: number, date?: number, hours?: number, minutes?: number, seconds?: number, ms?: number): number;
 }
 declare var Date: DateConstructor;
-
-interface JSON {
-  parse(text: string): unknown;
-  stringify(value: unknown, replacer?: null, space?: string | number): string | undefined;
-}
-declare var JSON: JSON;
 
 interface Math {
   readonly E: number;
@@ -440,6 +465,41 @@ interface Console {
 declare var console: Console;
 
 ${jsStandardSourceProfileDeclarations}
+
+interface DataView {
+  getBigUint64(byteOffset: number, littleEndian?: boolean): bigint;
+  setBigUint64(byteOffset: number, value: bigint, littleEndian?: boolean): void;
+}
+
+interface Uint8ArrayConstructor {
+  new (): Uint8Array;
+  from(values: readonly number[]): Uint8Array;
+  from(values: Uint8Array): Uint8Array;
+}
+
+interface JSON {
+  parse(text: string): unknown;
+  stringify(value: string): string;
+}
+declare var JSON: JSON;
+
+interface SharedArrayBuffer {
+  readonly byteLength: number;
+  slice(begin?: number, end?: number): SharedArrayBuffer;
+}
+interface SharedArrayBufferConstructor {
+  new (byteLength: number): SharedArrayBuffer;
+  readonly prototype: SharedArrayBuffer;
+}
+declare var SharedArrayBuffer: SharedArrayBufferConstructor;
+
+interface Atomics {
+  wait(array: Int32Array, index: number, value: number, timeout?: number): "ok" | "not-equal" | "timed-out";
+  notify(array: Int32Array, index: number, count?: number): number;
+  load(array: Int32Array, index: number): number;
+  store(array: Int32Array, index: number, value: number): number;
+}
+declare var Atomics: Atomics;
 `.trim();
 
 export function rustNativeSourceProfileContributions(): TargetSourceProfileContributions {

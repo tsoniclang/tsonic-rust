@@ -13,6 +13,7 @@ import {
   type RustType,
 } from "../../target-ast/nodes.js";
 import { emptyRustGenerics } from "../../target-ast/nodes.js";
+import { planRustErrorObservations, planRustSuppressedErrorConstructor } from "./error-observations.js";
 
 const programErrorName = "TsonicError";
 const programResultName = "TsonicResult";
@@ -78,6 +79,11 @@ export function planRustProgramErrorModule(
   domain: import("./source-package-errors.js").RustSourcePackageErrorDomainPlan,
   diagnostics: TargetDiagnostic[],
 ): RustSourceFileModel | undefined {
+  if (domain.forwardModulePath !== undefined) {
+    return createRustSourceFile([{
+      kind: "use", visibility: "public", path: `${domain.forwardModulePath}::*`,
+    }]);
+  }
   const definitions = domain.definitions;
   const externalPackageErrors = domain.externalErrors;
   if (definitions.length === 0 && externalPackageErrors.length === 0) {
@@ -162,7 +168,7 @@ export function planRustProgramErrorModule(
         ...externalVariants.map(({ variant, type }) => ({ name: variant, fields: [type] })),
         {
           name: "Suppressed",
-          fields: [boxType(programErrorType), boxType(programErrorType)],
+          fields: [boxType(programErrorType), boxType(programErrorType), runtimeJsErrorType],
         },
       ],
     },
@@ -181,8 +187,11 @@ export function planRustProgramErrorModule(
     ...externalVariants.map(({ variant, type }) =>
       fromImplementation(type, variant, false)),
     displayImplementation([
-      ...exactProjectVariants.map(({ variant }) => variant),
-      ...externalVariants.map(({ variant }) => variant),
+      ...exactProjectVariants.map(({ variant, definition }) => ({
+        variant,
+        delegate: input.program.projectTypes.externalBaseForDefinition(definition)?.programError === true,
+      })),
+      ...externalVariants.map(({ variant }) => ({ variant, delegate: true })),
     ]),
     debugImplementation(),
     {
@@ -193,6 +202,10 @@ export function planRustProgramErrorModule(
       functions: [],
     },
     sourceStringImplementation(),
+    planRustSuppressedErrorConstructor(),
+    planRustErrorObservations(externalVariants.map(item => item.variant),
+      exactProjectVariants.map(item => item.variant),
+      input.program.projectTypes.builtinErrorProjectionAvailable === true),
     finishResourceFunction(),
     finishFinallyFunction(),
   ];
@@ -229,7 +242,10 @@ function fromImplementation(
   };
 }
 
-function displayImplementation(projectVariants: readonly string[]): RustItem {
+function displayImplementation(projectVariants: readonly {
+  readonly variant: string;
+  readonly delegate: boolean;
+}[]): RustItem {
   const formatterType: RustType = {
     kind: "reference",
     mutable: true,
@@ -259,13 +275,23 @@ function displayImplementation(projectVariants: readonly string[]): RustItem {
             expression: path("self"),
             arms: [
               displayDelegateArm("Self::Runtime"),
-              ...projectVariants.map((variant) =>
-                displayDelegateArm(`Self::${variant}`)),
+              ...projectVariants.map(({ variant, delegate }) => delegate
+                ? displayDelegateArm(`Self::${variant}`)
+                : {
+                    pattern: tupleVariant(`Self::${variant}`, { kind: "wildcard" }),
+                    expression: {
+                      kind: "method-call" as const,
+                      receiver: path("formatter"),
+                      method: "write_str",
+                      args: [{ kind: "str-literal" as const, value: "[object Object]" }],
+                    },
+                  }),
               {
                 pattern: tupleVariant(
                   "Self::Suppressed",
                   binding("error"),
                   binding("suppressed"),
+                  { kind: "wildcard" },
                 ),
                 expression: {
                   kind: "format-write",
@@ -415,9 +441,9 @@ function finishResourceFunction(): RustItem {
               expression: call(
                 "Err",
                 call(
-                  "TsonicError::Suppressed",
-                  call("Box::new", path("error")),
-                  call("Box::new", path("suppressed")),
+                  "TsonicError::suppressed",
+                  path("error"),
+                  path("suppressed"),
                 ),
               ),
             },

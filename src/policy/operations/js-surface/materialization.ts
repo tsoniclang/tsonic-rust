@@ -1,3 +1,4 @@
+import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import {
   isRustNumericCarrier,
   rustJsValueTargetType,
@@ -70,6 +71,7 @@ export function materializeJsonValueConversions(
   target: RustProviderOperationForm,
   sourceIndexes: readonly number[] | undefined,
   sourceCarriers: readonly (TargetTypeRef | undefined)[],
+  definitions: RustTypeDefinitions,
 ): RustProviderOperationForm | undefined {
   if (sourceIndexes === undefined) {
     return target;
@@ -92,7 +94,7 @@ export function materializeJsonValueConversions(
     return existing !== undefined || source === undefined ||
         jsonValueArgumentNeedsNoConversion(source, mode)
       ? undefined
-      : selectRustJsonValueConversion(source);
+      : selectRustJsonValueConversion(source, definitions);
   });
   if (conversions.some((conversion, targetIndex) =>
     selected.has(order[targetIndex]!) && conversion === undefined &&
@@ -105,6 +107,7 @@ export function materializeJsonValueConversions(
   }
   return { ...target, argConversions: conversions };
 }
+
 
 function jsonValueArgumentNeedsNoConversion(
   source: TargetTypeRef | undefined,

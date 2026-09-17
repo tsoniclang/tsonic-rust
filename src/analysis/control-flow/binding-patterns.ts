@@ -213,9 +213,6 @@ function selectObjectProjection(
     }
     const remaining = sourceShape.fields.filter((field) =>
       !extractedSourceNames.has(field.sourceName));
-    if (remaining.some((field) => field.method === true)) {
-      return undefined;
-    }
     const bindingCarrier = resolveObjectRestBindingCarrier(
       name,
       remaining,
@@ -297,7 +294,7 @@ function selectObjectProjection(
 }
 
 interface ObjectBindingSource {
-  readonly storage: "project-object" | "object-handle";
+  readonly storage: "project-object" | "structural-object";
   readonly fields: readonly {
     readonly sourceName: string;
     readonly storageIndex: number;
@@ -319,7 +316,7 @@ function resolveObjectBindingSource(
   const structural = rustStructuralObjectCarrierValue(sourceCarrier);
   if (structural !== undefined) {
     return {
-      storage: "object-handle",
+      storage: "structural-object",
       fields: structural.fields.map((field, storageIndex) => ({
         sourceName: field.sourceName,
         storageIndex,
@@ -378,6 +375,7 @@ function resolveObjectRestBindingCarrier(
     readonly carrier: TargetTypeRef;
     readonly presence: "required" | "optional";
     readonly readonly: boolean;
+    readonly method?: true;
   }[],
   context: RustBindingPatternFactContext,
 ): TargetTypeRef | undefined {
@@ -398,6 +396,7 @@ function resolveObjectRestBindingCarrier(
     type: field.carrier,
     presence: field.presence,
     readonly: field.readonly,
+    ...(field.method === true ? { method: true as const } : {}),
   })));
   const canonical = rustStructuralObjectCarrierValue(carrier);
   if (canonical === undefined) {
@@ -427,13 +426,14 @@ function resolveObjectRestBindingCarrier(
       resultCarrier: field.type,
       presence: property.optional ? "optional" as const : "required" as const,
       readonly: property.readonly,
+      ...(field.method === true ? { method: true as const } : {}),
     };
   });
   return registeredFields.some((field) => field === undefined) ||
       !context.sourceTypes.registerStructuralObject({
         sourceType,
         carrier,
-        storage: "object-handle",
+        storage: "structural-object",
         fields: registeredFields as readonly RustSourceObjectField[],
       })
     ? undefined

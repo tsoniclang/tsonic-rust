@@ -158,26 +158,26 @@ export function rustGeneratedEnumDiscriminantDeadCodeDisposition(
 
 export function rustStructuralShapeDeadCodeDisposition(
   context: RustLivenessPlanningContext,
-  carrier: TargetTypeRef,
+  carriers: readonly TargetTypeRef[],
   publiclyReachable: boolean,
 ): RustDeadCodeDisposition | undefined {
-  return publiclyReachable || context.input.liveness.isStructuralShapeConstructed(carrier)
+  return publiclyReachable || carriers.some(carrier => context.input.liveness.isStructuralShapeConstructed(carrier))
     ? undefined
     : "generated-unconstructed-shape";
 }
 
 export function rustStructuralFieldDeadCodeDisposition(
   context: RustLivenessPlanningContext,
-  carrier: TargetTypeRef,
+  carriers: readonly TargetTypeRef[],
   storageIndex: number,
   publiclyReachable: boolean,
   role: "value" | "getter" | "setter",
 ): RustDeadCodeDisposition | undefined {
-  if (publiclyReachable || !context.input.liveness.isStructuralShapeConstructed(carrier)) {
+  if (publiclyReachable || !carriers.some(carrier => context.input.liveness.isStructuralShapeConstructed(carrier))) {
     return undefined;
   }
-  const used = role === "setter"
+  const used = carriers.some(carrier => role === "setter"
     ? context.input.liveness.isStructuralFieldWritten(carrier, storageIndex)
-    : context.input.liveness.isStructuralFieldRead(carrier, storageIndex);
+    : context.input.liveness.isStructuralFieldRead(carrier, storageIndex));
   return used ? undefined : "authored-unread-field";
 }
