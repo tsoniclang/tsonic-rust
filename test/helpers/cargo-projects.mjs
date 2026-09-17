@@ -1,13 +1,13 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { repositoryRoot } from "./rust-session.mjs";
+import { createTestWorkspace } from "../../../tsonic/test/scripts/test-workspaces.mjs";
 
 const generatedRoot = resolve(repositoryRoot, ".temp/generated");
 
 export function writeGeneratedProject(name, artifacts) {
-  mkdirSync(generatedRoot, { recursive: true });
-  const projectRoot = mkdtempSync(join(generatedRoot, `${name}-`));
+  const projectRoot = createTestWorkspace(generatedRoot, `${name}-`);
   for (const artifact of artifacts) {
     const filePath = join(projectRoot, artifact.path);
     mkdirSync(dirname(filePath), { recursive: true });

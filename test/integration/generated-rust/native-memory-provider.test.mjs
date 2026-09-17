@@ -1,17 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { compileRust, artifactText, repositoryRoot, rustRuntimeCratePath } from "../../helpers/rust-session.mjs";
 import { memoryAbiCapability } from "../../helpers/memory-abi.mjs";
 import { nativeMemoryProvider, nativeProviderProofSource, nativeProviderInferredProofSource } from "../../helpers/native-memory-provider.mjs";
 import { nativeRecordProvider, nativeRecordProofSource } from "../../helpers/native-record-proof.mjs";
+import { createTestWorkspace } from "../../../../tsonic/test/scripts/test-workspaces.mjs";
 
 function prepare() {
   const scratch = join(repositoryRoot, ".temp");
-  mkdirSync(scratch, { recursive: true });
-  const root = mkdtempSync(join(scratch, "native-provider-"));
+  const root = createTestWorkspace(scratch, "native-provider-");
   const providerRoot = join(root, "provider");
   mkdirSync(join(providerRoot, "src"), { recursive: true });
   writeFileSync(join(providerRoot, "src/lib.rs"), readFileSync(new URL("../../fixtures/native-memory/provider.rs", import.meta.url)));

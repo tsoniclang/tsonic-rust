@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createHash, randomUUID } from "node:crypto";
+import { createTestWorkspace } from "../../../../../tsonic/test/scripts/test-workspaces.mjs";
+import { createHash } from "node:crypto";
 import {
   appendFileSync,
   existsSync,
@@ -269,7 +270,5 @@ function createCargoProject() {
 }
 
 function uniquePath() {
-  const root = join(testRoot, `${process.pid}-${randomUUID()}`);
-  mkdirSync(root, { recursive: true });
-  return root;
+  return createTestWorkspace(testRoot, "artifact-");
 }

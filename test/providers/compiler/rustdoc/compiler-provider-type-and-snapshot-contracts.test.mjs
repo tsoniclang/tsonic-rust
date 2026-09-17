@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { createTestWorkspace } from "../../../../../tsonic/test/scripts/test-workspaces.mjs";
 import {
   appendFileSync,
   chmodSync,
@@ -236,9 +236,7 @@ function runCargo(manifestPath, arguments_) {
 }
 
 function uniquePath(label) {
-  const path = resolve(testRoot, `${label}-${process.pid}-${randomUUID()}`);
-  mkdirSync(path, { recursive: true });
-  return path;
+  return createTestWorkspace(testRoot, `${label}-`);
 }
 
 function tomlPath(path) {
