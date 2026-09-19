@@ -571,6 +571,7 @@ export function substituteProviderOperationForm(
             ),
           };
     case "marker":
+    case "numeric-cast":
     case "struct-variant":
     case "expression-macro":
     case "call-c-variadic":

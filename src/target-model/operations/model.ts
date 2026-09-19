@@ -240,6 +240,7 @@ export type RustValueConversion =
     };
 
 export type RustProviderOperationForm =
+  | { readonly form: "numeric-cast"; readonly target: SourcePrimitiveKind }
   | {
       // Value exports with no runtime representation (receiver markers).
       // Any direct lowering fails closed.

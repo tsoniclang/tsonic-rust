@@ -29,6 +29,9 @@ export function rustTargetOperationText(fact: RustTargetOperationFact): string {
     if (target.form === "marker") {
       return "marker";
     }
+    if (target.form === "numeric-cast") {
+      return `numeric-cast:${target.target}`;
+    }
     if (target.form === "binary-operator") {
       return target.operator;
     }
