@@ -67,6 +67,11 @@ export function main(): void {
   check(1 / convert13(-0) === Number.NEGATIVE_INFINITY && convert13(Number.POSITIVE_INFINITY) === Number.POSITIVE_INFINITY);
   check(Number.isNaN(convert13(Number.NaN)));
   check(Number(next()) === 9007199254740992 && calls === 1);
+  const plain = 1.5;
+  Number(plain);
+  Number(exact);
+  Number(next());
+  check(calls === 2);
   check(local() === 7);
 }
 ` },

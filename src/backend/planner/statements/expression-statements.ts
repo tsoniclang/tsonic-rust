@@ -168,6 +168,11 @@ export function planExpressionAsStatement(
     expressionKind === "KindYieldExpression" || expressionKind === KindDeleteExpression ||
     expressionKind === KindVoidExpression) {
     const planned = planExpression(expression, context, "discarded");
+    const fact = context.input.program.facts.getFact(expression, rustTargetOperationFactKey);
+    if (planned !== undefined && fact?.kind === "provider-operation" &&
+      fact.abi.target.form === "numeric-cast") {
+      return [{ kind: "let", name: "_", mutable: false, init: planned }];
+    }
     return planned === undefined ? undefined : [{ kind: "expr", expr: planned }];
   }
   const planned = planExpression(expression, context);
