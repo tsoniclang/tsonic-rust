@@ -90,6 +90,15 @@ export function finalizeTargetInputs(
     (values ?? []).map((value) => ({ source: { kind: "constant", value } }));
 
   switch (form.form) {
+    case "numeric-cast": {
+      const source = input.sourceArgumentCarrier(0);
+      const value = source?.kind !== "source-primitive" || sourceArgumentCount !== 1
+        ? undefined
+        : input.argument(0, "value", source.name === form.target ? undefined : {
+            kind: "numeric-promotion", source: source.name, target: form.target,
+          });
+      return value === undefined ? undefined : { targetReceiver: none, targetArguments: [value] };
+    }
     case "marker":
     case "path":
     case "reference-path":

@@ -6,6 +6,36 @@ import {
 } from "../../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
 
+test("native filesystem generics accept strings and retain UTF-8 bytes and errors", { timeout: 300_000 }, () => {
+  const { result } = compileRustThroughTargetPack({
+    surfaces: ["js"],
+    target: { id: "rust", options: { outputType: "bin", crateName: "rust_std_filesystem" } },
+    files: { "index.ts": `
+import { metadata, read_to_string, write, remove_file } from "@tsonic/rust/std/fs.js";
+export function main(): void {
+  const path = "native-filesystem-proof.txt";
+  const text = "héllo 😀";
+  write<string, string>(path, text).unwrap();
+  if (read_to_string<string>(path).unwrap() !== text || Number(metadata<string>(path).unwrap().len()) !== 11) {
+    throw new Error("explicit native filesystem call mismatch");
+  }
+  write(path, text).unwrap();
+  if (read_to_string(path).unwrap() !== text || metadata(path).unwrap().len() !== 11n) {
+    throw new Error("inferred native filesystem call mismatch");
+  }
+  remove_file(path).unwrap();
+  if (!read_to_string(path).is_err()) throw new Error("native error was lost");
+}
+` },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  const source = artifactText(result, "src/index.rs");
+  assert.match(source, /std::fs::write::<String, String>/u);
+  assert.match(source, /\.len\(\) as f64/u);
+  const run = validateGeneratedProject("rust-stdlib-filesystem", result.artifacts, { run: true });
+  assert.equal(run.status, 0);
+});
+
 test("Rust standard-library virtual imports retain exact generic operations", { timeout: 300_000 }, () => {
   const { result } = compileRustThroughTargetPack({
     target: { id: "rust", options: { outputType: "bin", crateName: "rust_std_provider_proof" } },

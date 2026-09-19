@@ -37,6 +37,7 @@ import type { RustNamedTypeCarrierValue } from "./native.js";
 import type { TargetTypeRef } from "../model.js";
 import type { RustTargetTraitRef } from "../model.js";
 import { rustTargetTypeRefEquals } from "../equality.js";
+import { rustCarrierSupportsAsRef } from "./as-ref.js";
 import {
   rustOnlyTypeGenericArguments,
   rustTargetGenericTypeArguments,
@@ -293,6 +294,10 @@ export function rustCarrierSatisfiesTraitRef(
     return rustCarrierSupportsTrait(carrier, trait.path, typeParameterSupports, undefined, definitions);
   }
   const [argument] = trait.genericArguments;
+  if (carrier !== undefined && trait.path === "core::convert::AsRef" &&
+    trait.genericArguments.length === 1 && argument?.kind === "type") {
+    return rustCarrierSupportsAsRef(carrier, argument.type);
+  }
   return carrier !== undefined &&
     trait.path === "core::borrow::Borrow" &&
     trait.genericArguments.length === 1 &&

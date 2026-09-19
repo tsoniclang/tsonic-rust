@@ -1,6 +1,16 @@
 import type { JsOperationRowData } from "./model.js";
 
 export const bigintOperationRows: readonly JsOperationRowData[] = [
+  {
+    owner: "NumberConstructor", member: "call", operationKind: "call", lane: "number",
+    variant: "numeric-scalar",
+    requirements: [{ carrier: { ref: "argument", index: 0 }, capability: "numeric" }],
+    shape: {
+      op: "operation", operationKind: "method",
+      target: { form: "numeric-cast", target: "float64" },
+      params: [{ ref: "argument", index: 0 }], result: { ref: "float64" },
+    },
+  },
   ...([
     ["NumberConstructor", "number", "to_number", "float64", false],
     ["BigIntConstructor", "bigint", "to_bigint", "bigint", true],

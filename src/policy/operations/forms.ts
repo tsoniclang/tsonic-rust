@@ -6,6 +6,7 @@ import type {
   RustProviderOperationForm,
 } from "../../target-model/operations/model.js";
 import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
+import { rustNumericPromotionKind } from "../../target-model/conversions/numeric-promotion.js";
 import { isRustBinaryOperator, rustBinaryOperatorTraitPath } from "../../target-model/syntax/tokens.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import {
@@ -60,6 +61,7 @@ export function rustProviderOperationFormDeclaresWritableInput(
       return form.mutatesReceiver === true ||
         form.argModes?.includes("mut-ref") === true;
     case "marker":
+    case "numeric-cast":
     case "struct-variant":
     case "expression-macro":
     case "call-str-slice":
@@ -98,6 +100,7 @@ export function rustProviderOperationSourceReceiverMayMutate(
     case "index":
       return operationKind === "index-set";
     case "marker":
+    case "numeric-cast":
     case "path":
     case "reference-path":
     case "static":
@@ -154,6 +157,7 @@ export function rustProviderOperationSourceArgumentMayMutate(
         ? form.leadingArguments[sourceIndex]?.mode === "mut-ref"
         : form.alternatives.some((alternative) => alternative.mode === "mut-ref");
     case "marker":
+    case "numeric-cast":
     case "path":
     case "reference-path":
     case "static":
@@ -224,6 +228,13 @@ export function rustProviderOperationFormContractViolation(
   };
 
   switch (form.form) {
+    case "numeric-cast":
+      return hasExactKeys(form, ["form", "target"], ["form", "target"]) &&
+        rustNumericPromotionKind(form.target, form.target) !== undefined &&
+        operationKind === "method" && sourceArgumentCount === 1 &&
+        runtimeSourceIndexes.length === 1
+        ? undefined
+        : "numeric-cast form requires one runtime argument and an exact numeric target";
     case "marker":
       return hasExactKeys(form, ["form"], ["form"]) && runtimeSourceIndexes.length === 0 ? undefined : "marker form has invalid fields or arguments";
     case "path":

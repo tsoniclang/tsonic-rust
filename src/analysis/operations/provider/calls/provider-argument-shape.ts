@@ -20,6 +20,7 @@ export function rustProviderSourceArgumentMode(
     return targetIndex < 0 ? undefined : modes?.[targetIndex] ?? "value";
   };
   switch (form.form) {
+    case "numeric-cast":
     case "struct-variant":
     case "expression-macro":
       return "value";

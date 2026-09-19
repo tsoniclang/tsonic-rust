@@ -180,6 +180,8 @@ export function planProviderOperationExpression(
       ? expression
       : applyRustProviderEvaluationScope(expression, evaluationScope);
   switch (form.form) {
+    case "numeric-cast":
+      return scoped(args[0]);
     case "marker":
       return undefined;
     case "arg-method": {

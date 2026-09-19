@@ -203,6 +203,7 @@ function rustFoundationForProviderOperationForm(
     require(rustFoundationForGenericArgument(argument));
   };
   switch (form.form) {
+    case "numeric-cast":
     case "marker":
     case "method":
     case "arg-method":

@@ -26,6 +26,14 @@ export function validateRustFinalizedOperationAbi(candidate: unknown, definition
     return false;
   }
   const abi = candidate;
+  if (abi.target.form === "numeric-cast" && (
+    abi.result.kind !== "sync" || abi.result.rawCarrier.kind !== "source-primitive" ||
+    abi.result.rawCarrier.name !== abi.target.target ||
+    abi.effects.invocation !== "infallible" || abi.effects.awaiting !== "not-applicable" ||
+    abi.effects.errorBoundary !== "none" || abi.effects.safety !== "safe"
+  )) {
+    return false;
+  }
   if (rustProviderOperationFormContractViolation(
     abi.operationKind,
     abi.target,
