@@ -7,6 +7,7 @@ import {
   targetSourceSyntaxProgram,
 } from "@tsonic/target-api/analysis";
 import { analyzeRustProgram } from "./analyze.js";
+import { analyzeRustNumericRepresentations } from "../numeric/representations.js";
 import { createRustAnalysisContext } from "./context.js";
 import type {
   AnalyzeRustTargetProgramResult,
@@ -145,6 +146,8 @@ export function analyzeRustTargetProgram(
     })));
   }
   const program: RustTargetProgram = Object.freeze({
+    numericRepresentations: analyzeRustNumericRepresentations({ source: context.source,
+      sourceFiles: context.sourceFiles, facts }),
     host: Object.freeze({
       paths: Object.freeze({ ...input.paths }),
       entryPoint: input.project.entryPoint,

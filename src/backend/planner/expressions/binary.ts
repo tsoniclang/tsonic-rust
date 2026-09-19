@@ -539,6 +539,18 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
     if (convertedLeft === undefined || convertedRight === undefined) {
       return undefined;
     }
+    if (context.input.program.numericRepresentations.usesInt32Remainder(node)) {
+      return {
+        kind: "numeric-cast",
+        target: "f64",
+        expression: {
+          kind: "binary",
+          operator: "%",
+          left: { kind: "numeric-cast", target: "i32", expression: convertedLeft },
+          right: { kind: "numeric-cast", target: "i32", expression: convertedRight },
+        },
+      };
+    }
     const comparisonLeft = comparison && leftNode !== undefined
       ? planRustNonConsumingValue(leftNode, convertedLeft, context)
       : convertedLeft;

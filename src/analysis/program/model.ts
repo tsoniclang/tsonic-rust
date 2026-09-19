@@ -1,4 +1,5 @@
 import type { SourceFile } from "@tsonic/tsts";
+import type { RustNumericRepresentations } from "../numeric/representations.js";
 import type { TargetCompileInput } from "@tsonic/target-api";
 import type {
   TargetPlanningSourceNavigation,
@@ -58,6 +59,7 @@ export interface RustPlanningHost {
 }
 
 export interface RustTargetProgram {
+  readonly numericRepresentations: RustNumericRepresentations;
   readonly typeDefinitions: import("../../target-model/types/source-union-definitions.js").RustTypeDefinitions;
   readonly typeFamilies: RustSourceTypeFamilyPlan;
   readonly host: RustPlanningHost;
