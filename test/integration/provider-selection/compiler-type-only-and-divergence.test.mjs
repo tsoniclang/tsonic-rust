@@ -49,8 +49,7 @@ export function main(): void {
   check(order === 12);
   const maybe: (number | undefined)[] = [undefined];
   check(0 in maybe && !(-1 in maybe));
-  delete maybe[0];
-  check(!(0 in maybe));
+  check(0 in maybe && maybe[0] === undefined);
   maybe[0] = undefined;
   check(0 in maybe);
   check(read<number>([3], 0) === 3);

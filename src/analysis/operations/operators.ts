@@ -62,6 +62,7 @@ import {
   resolveExpressionCarrierBeforeFlowReadProjection,
 } from "../expressions/carriers.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
+import { resolveRustExactNullishValueCarrier } from "../../policy/types/resolution/target.js";
 import { rustSelectedOperationKey } from "../../target-model/facts/selections.js";
 import { rustTargetOperationSupportsAssignment, rustTargetOperationText } from "../facts/target-operation.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -728,7 +729,8 @@ function selectedOptionNullishRelationship(
       ? selected([0]) : selected([]);
   }
   const optionFact = walk.context.facts.get(optionNode, rustTargetOperationFactKey) ??
-    walk.context.facts.resolve(optionNode, rustTargetOperationFactKey);
+    walk.context.facts.resolve(optionNode, rustTargetOperationFactKey) ??
+    walk.preparedCallbackCalls.get(optionNode)?.prepared.template;
   const matchingDepths: number[] = [];
   let payloadDepth = 0;
   if (optionFact?.kind === "provider-operation" &&
@@ -755,6 +757,14 @@ function selectedOptionNullishRelationship(
   const nullishSemantics = walk.context.semanticsFor(nullishNode);
   let optionType = optionSemantics.types.expressionType(optionNode);
   let optionalDeclaration = false;
+  if (optionFact?.kind === "provider-operation" &&
+    walk.context.ast.kindName(optionNode) === "KindElementAccessExpression") {
+    const access = optionSemantics.operations.elementAccess(optionNode);
+    const selected = access === undefined ? undefined
+      : optionSemantics.types.selectIndexedAccess(access.receiver.type, access.argument.type);
+    if (selected?.kind !== "resolved") return undefined;
+    optionType = selected.readType;
+  }
   if (optionFact?.kind === "provider-operation" && payloadDepth === 0) {
     const access = walk.context.ast.kindName(optionNode) === "KindElementAccessExpression"
       ? optionSemantics.operations.elementAccess(optionNode)
@@ -776,7 +786,13 @@ function selectedOptionNullishRelationship(
   const members = optionSemantics.types.isUnion(optionType)
     ? optionSemantics.types.unionOrIntersectionTypes(optionType)
     : [optionType];
-  const nullishMembers = members.filter((member) => optionSemantics.types.isNullish(member));
+  let nullishMembers = members.filter((member) => optionSemantics.types.isNullish(member));
+  if (payloadDepth === 1 && nullishMembers.length === 2 &&
+    optionFact?.kind === "provider-operation" && optionFact.sourceAbsenceCarrier !== undefined &&
+    walk.context.ast.is.IsCallExpression(optionNode)) {
+    nullishMembers = nullishMembers.filter(member => !rustTargetTypeRefEquals(
+      resolveRustExactNullishValueCarrier(member, optionSemantics), optionFact.sourceAbsenceCarrier));
+  }
   if (optionalDeclaration && nullishMembers.length === 0) {
     const comparedCarrier = optionNode === leftNode ? rightCarrier : leftCarrier;
     return rustTargetTypeRefEquals(comparedCarrier, rustUndefinedTargetType())

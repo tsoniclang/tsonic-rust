@@ -593,11 +593,12 @@ test("dense array deletion rejects without mutating values, length or enumerable
 import { check } from "@acme/testing";
 import type { int32 } from "@tsonic/core/types.js";
 
+export function remove(values: (int32 | undefined)[]): boolean {
+  return delete values[1];
+}
 export function main(): void {
   const values: (int32 | undefined)[] = [10, 20, 30];
-  let rejected = false;
-  try { delete values[1]; } catch { rejected = true; }
-  check(rejected && values[1] === 20);
+  check(values[1] === 20);
   check(values.length === 3);
   let keyCount: int32 = 0;
   for (const key in values) {
@@ -616,7 +617,21 @@ export function main(): void {
     source,
     /values\.delete_number\(1\.0\)/u,
   );
-  validateGeneratedProject("expression-delete-js-array", result.artifacts, { run: true });
+  validateGeneratedProject("expression-delete-js-array", [...result.artifacts, {
+    path: "tests/dense_delete.rs",
+    text: `use std::panic::{catch_unwind, AssertUnwindSafe};
+use tsonic_rust_js::JsArray;
+
+#[test]
+fn deletion_rejects_without_mutation() {
+    let values = JsArray::from_dense(vec![Some(10), Some(20), Some(30)]);
+    assert!(catch_unwind(AssertUnwindSafe(|| delete_proof::remove(values.clone()))).is_err());
+    assert_eq!(values.values(), vec![Some(10), Some(20), Some(30)]);
+    assert_eq!(values.len(), 3);
+    assert_eq!(values.enumerable_own_keys(), vec!["0", "1", "2"]);
+}
+`,
+  }], { run: true });
 });
 
 test("delete rejects non-JS-array targets without target-name inference", () => {

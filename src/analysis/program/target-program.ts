@@ -115,6 +115,11 @@ export function analyzeRustTargetProgram(
     return rejectedTargetStage(foundation.diagnostics);
   }
   const facts = context.facts.seal();
+  const valueLifetimes = analyzeRustValueLifetimes({
+    ast: context.ast,
+    sourceFiles: context.sourceFiles,
+    navigation: context.source.navigation,
+  });
   const declarationGenericRequirements = analyzeRustDeclarationGenericRequirements(
     context.source,
     context.sourceFiles,
@@ -125,6 +130,7 @@ export function analyzeRustTargetProgram(
     context.projectTypes,
     context.structuralShapes,
     context.typeDefinitions,
+    valueLifetimes,
   );
   if (declarationGenericRequirements.kind === "rejected") {
     return rejectedTargetStage(declarationGenericRequirements.diagnostics);
@@ -168,11 +174,7 @@ export function analyzeRustTargetProgram(
     sourceCallableSpecializations: context.sourceCallableSpecializations.seal(),
     sourceLifetimes: context.sourceLifetimes,
     declarationGenericRequirements: declarationGenericRequirements.index,
-    valueLifetimes: analyzeRustValueLifetimes({
-      ast: context.ast,
-      sourceFiles: context.sourceFiles,
-      navigation: context.source.navigation,
-    }),
+    valueLifetimes,
     structuralShapes: context.structuralShapes.seal(),
     frozenDataWrites: context.frozenDataWrites.seal(),
     classValues: context.classValues.seal(context),

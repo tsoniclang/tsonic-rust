@@ -20,6 +20,13 @@ export function main(): void {
   check(nullable[0] === 1 && nullable[1] === null);
   check(nullable[0] !== null && nullable[1] !== undefined);
   check(optional[0] !== undefined && optional[0] !== 2);
+  optional[1] = 7;
+  nullable[1] = 9;
+  check(optional[1] !== undefined && nullable[1] !== null);
+  check(optional[1] !== null && nullable[1] !== undefined);
+  optional[1] = undefined;
+  nullable[1] = null;
+  check(optional[1] === undefined && nullable[1] === null);
   check(1 in optional && 2 in optional && reads === 2);
   const allUndefined: undefined[] = [undefined, undefined, undefined];
   const allNull: null[] = [null, null];
@@ -28,6 +35,23 @@ export function main(): void {
   check(allNull[0] === null && allNull[1] === null);
   check(allNull[0] !== undefined && allNull[1] !== undefined);
   check(reads === 3);
+  check(optional.at(1) === undefined && optional.at(0) !== undefined);
+  check(nullable.at(1) === null && nullable.at(1) !== undefined);
+  check(nullable.at(9) === undefined && nullable.at(9) !== null);
+  check(optional.find(() => true) !== undefined);
+  check(optional.findLast(() => true) === undefined);
+  check(undefined === optional.findLast(() => true));
+  check(nullable.findLast(() => true) === null);
+  check(nullable.findLast(() => true) !== undefined);
+  check(nullable.find(() => false) === undefined);
+  check(nullable.find(() => false) !== null);
+  check(optional.findLast(() => { if (reads < 0) throw new Error("predicate"); return true; }) === undefined);
+  check(optional.pop() === undefined && optional.shift() === 1);
+  check(nullable.pop() === null && nullable.shift() === 1);
+  const lookup = new Map<string, number | null>();
+  lookup.set("present", null);
+  check(lookup.get("present") === null && lookup.get("present") !== undefined);
+  check(lookup.get("missing") === undefined && lookup.get("missing") !== null);
 }
 ` },
   });
