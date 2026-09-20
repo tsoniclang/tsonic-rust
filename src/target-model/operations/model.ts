@@ -485,6 +485,7 @@ export interface RustOptionalChainFact {
   readonly operationKind: "property" | "indexer" | "method";
   readonly sourceGuardCarrier: TargetTypeRef;
   readonly selectedGuardCarrier: TargetTypeRef;
+  readonly guardDepth: number;
   readonly innerResultCarrier: TargetTypeRef;
   readonly resultCarrier: TargetTypeRef;
   readonly lowering: "map" | "and-then";

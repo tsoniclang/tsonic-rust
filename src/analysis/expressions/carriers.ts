@@ -271,6 +271,25 @@ function applyFlowReadLane(
   if (sourceCarrier === undefined) {
     return undefined;
   }
+  let receiver = expression;
+  let parent = walk.context.ast.parent(receiver);
+  while (parent !== undefined &&
+    (walk.context.ast.kindName(parent) === KindParenthesizedExpression ||
+      walk.context.ast.kindName(parent) === KindSatisfiesExpression) &&
+    Node_Expression(walk.context.ast, parent) === receiver) {
+    receiver = parent;
+    parent = walk.context.ast.parent(receiver);
+  }
+  const parentKind = parent === undefined ? undefined : walk.context.ast.kindName(parent);
+  const access = parent === undefined ? undefined
+    : parentKind === KindPropertyAccessExpression
+      ? walk.context.semanticsFor(parent).operations.propertyAccess(parent)
+      : parentKind === KindElementAccessExpression
+        ? walk.context.semanticsFor(parent).operations.elementAccess(parent)
+        : undefined;
+  if (access?.optionalChain === true && access.receiver.expression === receiver) {
+    return sourceCarrier;
+  }
   const existing = walk.context.facts.get(expression, rustFlowReadProjectionFactKey) ??
     walk.context.facts.resolve(expression, rustFlowReadProjectionFactKey);
   if (existing !== undefined) {

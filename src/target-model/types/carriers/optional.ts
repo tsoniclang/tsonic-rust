@@ -37,3 +37,15 @@ export function rustOptionNestingDepth(
   }
   return undefined;
 }
+
+export function rustOptionValueCarrier(carrier: TargetTypeRef | undefined): TargetTypeRef | undefined {
+  const visited = new Set<TargetTypeRef>();
+  while (carrier !== undefined) {
+    if (visited.has(carrier)) return undefined;
+    visited.add(carrier);
+    const element = rustOptionElementCarrier(carrier);
+    if (element === undefined) return carrier;
+    carrier = element;
+  }
+  return undefined;
+}

@@ -13,7 +13,7 @@ import {
   isRustJsArrayLikeCarrier,
   isRustStringCarrier,
   rustStringTargetType,
-  rustJsArrayLikeIterationElementTargetType,
+  rustJsArrayLikeElementTargetType,
   rustJsRegExpExecArrayTargetType,
   rustJsRegExpStringIteratorTargetId,
   rustRegExpExecArrayTargetType,
@@ -428,7 +428,7 @@ function rustIterableTargetPolicy(iterable: TargetTypeRef | undefined, definitio
   if (fixed !== undefined) {
     return { kind: "borrowed", elementCarrier: fixed.element, input: "reference" };
   }
-  const jsElement = rustJsArrayLikeIterationElementTargetType(iterable);
+  const jsElement = rustJsArrayLikeElementTargetType(iterable);
   if (jsElement !== undefined) {
     return { kind: "js-array", elementCarrier: jsElement };
   }

@@ -1,7 +1,7 @@
 import { Node_Type } from "@tsonic/target-api/source";
 import type { Node } from "@tsonic/tsts";
 import { rustArrayEntryBinding, rustArrayEntryPayloadExcludesNullish } from "../control-flow/array-entry-values.js";
-import { rustTargetOperationFactKey } from "../facts/keys.js";
+import { rustOptionalChainFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
 import {
   isRustDefinitelyNullishCarrier,
   isRustOptionCarrier,
@@ -35,6 +35,13 @@ export function selectedOptionNullishRelationship(
       : undefined;
   if (optionNode === undefined || nullishNode === undefined) {
     return undefined;
+  }
+  const optionalChain = walk.context.facts.get(optionNode, rustOptionalChainFactKey) ??
+    walk.context.facts.resolve(optionNode, rustOptionalChainFactKey);
+  if (optionalChain?.lowering === "map" &&
+    rustTargetTypeRefEquals(optionalChain.resultCarrier, optionNode === leftNode ? leftCarrier : rightCarrier)) {
+    return rustTargetTypeRefEquals(optionNode === leftNode ? rightCarrier : leftCarrier, rustUndefinedTargetType())
+      ? selected([0]) : selected([]);
   }
   if (rustArrayEntryBinding(walk, optionNode) !== undefined) {
     if (!rustArrayEntryPayloadExcludesNullish(walk, optionNode)) return undefined;

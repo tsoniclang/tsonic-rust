@@ -4,6 +4,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustOptionalChainFact } from "../../target-model/operations/model.js";
 import {
   rustOptionElementCarrier,
+  rustOptionNestingDepth,
   rustOptionTargetType,
 } from "../../target-model/types/index.js";
 
@@ -47,11 +48,11 @@ export function selectRustOptionalChain(
           message: "Checker-proven non-null optional syntax has a final carrier that conflicts with the selected operation result.",
         };
   }
-  const sourceElement = rustOptionElementCarrier(sourceGuardCarrier);
-  if (sourceElement === undefined || !rustTargetTypeRefEquals(sourceElement, selectedGuardCarrier)) {
+  const guardDepth = rustOptionNestingDepth(sourceGuardCarrier, selectedGuardCarrier);
+  if (guardDepth === undefined || guardDepth === 0) {
     return {
       kind: "rejected",
-      message: "Optional-chain guard must be exactly Option of the TSTS-selected non-null receiver carrier.",
+      message: "Optional-chain guard must contain the exact TSTS-selected non-null receiver through Option layers only.",
     };
   }
   const innerIsOption = rustOptionElementCarrier(innerResultCarrier) !== undefined;
@@ -74,6 +75,7 @@ export function selectRustOptionalChain(
       operationKind: input.operationKind,
       sourceGuardCarrier,
       selectedGuardCarrier,
+      guardDepth,
       innerResultCarrier,
       resultCarrier,
       lowering,

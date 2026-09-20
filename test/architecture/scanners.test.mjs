@@ -502,8 +502,8 @@ test("optional chains consume exact TSTS evidence through one finalized Option f
   assert.match(semantics, /rustOptionalChainFactKey/u);
 
   const selector = readFileSync(join(sourceRoot, "policy/operations/optional-chains.ts"), "utf8");
-  assert.match(selector, /rustOptionElementCarrier\(sourceGuardCarrier\)/u);
-  assert.match(selector, /rustTargetTypeRefEquals\(sourceElement, selectedGuardCarrier\)/u);
+  assert.match(selector, /rustOptionNestingDepth\(sourceGuardCarrier, selectedGuardCarrier\)/u);
+  assert.match(selector, /guardDepth === undefined \|\| guardDepth === 0/u);
   assert.doesNotMatch(selector, /getResolved|getSymbolAtLocation|getTypeAtLocation|getPropertyOfType/u);
   assert.doesNotMatch(selector, /memberName|propertyName|sourceName|targetName/u);
 
@@ -517,6 +517,7 @@ test("optional chains consume exact TSTS evidence through one finalized Option f
   assert.match(planner, /planRawExpression\(fact\.guard, context, "value"\)/u);
   assert.match(planner, /planRustNonConsumingValue\(fact\.guard, plannedGuard, context\)/u);
   assert.match(planner, /overrides\.set\(fact\.guard/u);
+  assert.match(planner, /guardDepth !== fact\.guardDepth/u);
   assert.doesNotMatch(planner, /getResolved|getSymbolAtLocation|getTypeAtLocation|getPropertyOfType/u);
 });
 
