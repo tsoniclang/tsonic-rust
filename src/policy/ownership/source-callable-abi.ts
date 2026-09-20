@@ -38,6 +38,11 @@ import {
 } from "@tsonic/target-api/source";
 
 export interface RustSourceCallableAbiResolver {
+  canUseSharedBorrow(
+    parameter: Node,
+    context: RustTargetTypeResolutionContext,
+    options: RustTargetTypeResolutionOptions,
+  ): boolean;
   resolveParameterAbi(
     parameter: Node,
     context: RustTargetTypeResolutionContext,
@@ -95,10 +100,15 @@ export function instantiateRustSourceParameterValueCarrier(
       );
 }
 
-export function createRustSourceCallableAbiResolver(): RustSourceCallableAbiResolver {
+export function createRustSourceCallableAbiResolver(input: {
+  readonly isNativeCallableExpression: (expression: Node) => boolean;
+}): RustSourceCallableAbiResolver {
   const cache = new WeakMap<object, RustSourceParameterAbi | null>();
 
   return {
+    canUseSharedBorrow(parameter, context, options) {
+      return parameterCanUseSharedBorrow(parameter, context, options, input.isNativeCallableExpression);
+    },
     resolveParameterAbi(parameter, context, options) {
       const cached = cache.get(parameter);
       if (cached !== undefined) {
@@ -145,7 +155,7 @@ export function createRustSourceCallableAbiResolver(): RustSourceCallableAbiReso
           rustTargetTypeRefEquals(parameterLaneCarrier, base) &&
           isRustStringCarrier(base) &&
           !requiresOwnedValue &&
-          parameterCanUseSharedBorrow(parameter, context, options)
+          parameterCanUseSharedBorrow(parameter, context, options, input.isNativeCallableExpression)
         ? {
             kind: "reference" as const,
             referent: base,
@@ -315,10 +325,11 @@ function parameterUsesFlowState(
     });
 }
 
-export function parameterCanUseSharedBorrow(
+function parameterCanUseSharedBorrow(
   parameter: Node,
   context: RustTargetTypeResolutionContext,
   options: RustTargetTypeResolutionOptions,
+  isNativeCallableExpression: (expression: Node) => boolean,
 ): boolean {
   const { ast } = context;
   const pending = [parameter];
@@ -354,8 +365,7 @@ export function parameterCanUseSharedBorrow(
       const implementation = declaration === undefined ? undefined : context.source.navigation.callableImplementation(declaration);
       if (argumentIndex < 0 || implementation?.kind !== "resolved" ||
         !(ast.is.IsFunctionDeclaration(implementation.implementation.declaration) ||
-          ast.is.IsArrowFunction(implementation.implementation.declaration) ||
-          ast.is.IsFunctionExpression(implementation.implementation.declaration))) return false;
+          isNativeCallableExpression(implementation.implementation.declaration))) return false;
       const destination = ast.parameters(implementation.implementation.declaration)[argumentIndex];
       const parameterSyntax = destination === undefined ? undefined : ast.as.AsParameterDeclaration(destination);
       if (destination === undefined || parameterSyntax === undefined || parameterSyntax.DotDotDotToken !== undefined ||

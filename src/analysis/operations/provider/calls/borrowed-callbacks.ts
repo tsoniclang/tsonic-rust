@@ -1,5 +1,4 @@
 import { Node_Initializer } from "@tsonic/target-api/source";
-import { parameterCanUseSharedBorrow } from "../../../../policy/ownership/source-callable-abi.js";
 import { isRustStringCarrier } from "../../../../target-model/types/index.js";
 import { selectedCallArgumentNodes } from "../operators.js";
 import type { RustCheckedCallSelectionInput, RustOperationPolicyContext } from "../../../../policy/operations/contracts.js";
@@ -24,7 +23,7 @@ export function selectBorrowedCallbackParameters(
     !parameters.every(parameter => parameter !== undefined &&
       context.ast.as.AsParameterDeclaration(parameter)?.DotDotDotToken === undefined &&
       context.ast.questionToken(parameter) === undefined && Node_Initializer(context.ast, parameter) === undefined &&
-      parameterCanUseSharedBorrow(parameter, context, options))) return selection;
+      options.sourceCallableAbi.canUseSharedBorrow(parameter, context, options))) return selection;
   const parameterCarriers = selection.parameterCarriers!.map((parameter, index) =>
     index !== callback.sourceArgumentIndex ? parameter : {
       ...carrier,

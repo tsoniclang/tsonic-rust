@@ -23,6 +23,7 @@ import type { RustModuleBindingFact } from "../facts/keys.js";
 
 export interface RustModuleBindingPolicy {
   nativeCallable(declaration: Node): RustNativeModuleCallable | undefined;
+  isNativeCallableExpression(expression: Node): boolean;
   classifyValue(
     declaration: Node,
     declarationKind: "const" | "let" | "var",
@@ -42,6 +43,7 @@ export function createRustModuleBindingPolicy(
   const callableByDeclaration = collectNativeCallableCandidates(context);
   const cyclic = cyclicSourceFiles(context.source.navigation, context.sourceFiles);
   const nativeCallables = new Map<Node, RustNativeModuleCallable>();
+  const nativeExpressions = new WeakSet<Node>();
   for (const [declaration, callableDeclaration] of callableByDeclaration) {
     const sourceFile = context.ast.getSourceFile(declaration);
     const name = context.names.functionNameForDeclaration(declaration);
@@ -53,11 +55,15 @@ export function createRustModuleBindingPolicy(
         name,
         valueObserved,
       }));
+      nativeExpressions.add(callableDeclaration);
     }
   }
   return Object.freeze({
     nativeCallable(declaration: Node) {
       return nativeCallables.get(declaration);
+    },
+    isNativeCallableExpression(expression: Node) {
+      return nativeExpressions.has(expression);
     },
     classifyValue(
       declaration: Node,

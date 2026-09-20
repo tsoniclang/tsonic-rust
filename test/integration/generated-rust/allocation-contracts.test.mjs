@@ -158,3 +158,29 @@ export function main(): void {
   assert.equal([...output.matchAll(/counter\.clone\(\)/gu)].length, 3);
   validateGeneratedProject("authored-clone-effects", result.artifacts, { run: true });
 });
+
+test("borrow proofs respect retained callable ABIs through direct and indirect forwarding", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
+    files: { "index.ts": `
+const normalize = (value: string): string => value.replaceAll("x", "");
+function width(value: string): number { return normalize(value).length; }
+function direct(values: string[]): void { values.sort((left, right) => normalize(left).length - normalize(right).length); }
+function indirect(values: string[]): void { values.sort((left, right) => width(left) - width(right)); }
+export function main(): void {
+  const first = ["bbb", "xa", "cc"];
+  const second = ["xxxz", "yyy", "aa"];
+  direct(first);
+  indirect(second);
+  if (first.join("|") !== "xa|cc|bbb" || second.join("|") !== "xxxz|aa|yyy")
+    throw new Error("retained callable ABI");
+}
+` },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  const output = artifactText(result, "src/index.rs");
+  assert.match(output, /ModuleCell<NormalizeCallable>/u);
+  assert.match(output, /fn width\(value: String\)/u);
+  assert.doesNotMatch(output, /sort_borrowed/u);
+  validateGeneratedProject("retained-callable-borrow-proof", result.artifacts, { run: true });
+});

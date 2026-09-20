@@ -60,7 +60,6 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     jsEnabled,
   );
   const sourceTypes = createRustSourceTypeRegistry(context.typeFamilies, context.typeDefinitions);
-  const sourceCallableAbi = createRustSourceCallableAbiResolver();
   const projectSourceFiles = [...context.sourceFiles]
     .sort((left, right) => ast.getFileName(left).localeCompare(ast.getFileName(right)));
   for (const sourceFile of projectSourceFiles) {
@@ -75,6 +74,9 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     projectSourceFiles,
   );
   const moduleBindings = createRustModuleBindingPolicy(context);
+  const sourceCallableAbi = createRustSourceCallableAbiResolver({
+    isNativeCallableExpression: moduleBindings.isNativeCallableExpression,
+  });
   let finalizedProjectTypes: RustProjectTypePolicy | undefined;
   const operationOptions: RustOperationsProviderOptions = {
     providerExports: providerSemantics.exports,
