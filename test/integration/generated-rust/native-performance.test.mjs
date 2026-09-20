@@ -113,12 +113,13 @@ export function main(): void {
   validateGeneratedProject("native-string-dispatch", result.artifacts, { run: true });
 });
 
-test("owned indexed reads preserve native evaluation regions without block match scrutinees", { timeout: 300_000 }, () => {
-  const { result } = compileRust({
-    surfaces: ["js"],
-    packages: [acmeTestingPackage()],
-    target: { id: "rust", options: { outputType: "bin" } },
-    files: { "index.ts": `
+for (const edition of ["2021", "2024"]) {
+  test(`owned indexed reads preserve ${edition} evaluation regions`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({
+      surfaces: ["js"],
+      packages: [acmeTestingPackage()],
+      target: { id: "rust", options: { outputType: "bin", edition } },
+      files: { "index.ts": `
 import { check } from "@acme/testing";
 let calls = 0;
 function append(values: string[]): number {
@@ -135,10 +136,15 @@ export function main(): void {
   check(flow_input === "kept" && calls === 1 && values.length === 3);
 }
 ` },
+    });
+    assert.deepEqual(result.diagnostics, []);
+    const output = artifactText(result, "src/index.rs");
+    if (edition === "2024") {
+      assert.doesNotMatch(output, /match\s*\{/u);
+      assert.doesNotMatch(output, /blocks_in_conditions/u);
+    } else {
+      assert.match(output, /expect\(clippy::blocks_in_conditions, reason = "Rust 2021 match temporary scope"\)/u);
+    }
+    validateGeneratedProject(`native-owned-index-regions-${edition}`, result.artifacts, { run: true });
   });
-  assert.deepEqual(result.diagnostics, []);
-  const output = artifactText(result, "src/index.rs");
-  assert.doesNotMatch(output, /match\s*\{/u);
-  assert.doesNotMatch(output, /blocks_in_conditions/u);
-  validateGeneratedProject("native-owned-index-regions", result.artifacts, { run: true });
-});
+}

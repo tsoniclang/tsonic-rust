@@ -1,6 +1,8 @@
 export const rustLintAttributes = Object.freeze({
   blocksInConditions:
     '#[expect(clippy::blocks_in_conditions, reason = "checked evaluation region")]',
+  matchTemporaryScope:
+    '#[expect(clippy::blocks_in_conditions, reason = "Rust 2021 match temporary scope")]',
   collapsibleIf:
     '#[expect(clippy::collapsible_if, reason = "checked lexical regions")]',
   authoredDeadCode:

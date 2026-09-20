@@ -221,6 +221,7 @@ function printRustBlockExpressionContents(
   return [
     ...(expression.innerAttrs ?? []),
     ...bindings,
+    ...(expression.valueAttrs ?? []),
     printValue(expression.value),
   ].join(" ");
 }

@@ -11,6 +11,7 @@ import {
 } from "../../../target-model/types/index.js";
 import type { RustFlowReadProjectionFact } from "../../../analysis/facts/keys.js";
 import type { RustExpr } from "../../target-ast/nodes.js";
+import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
@@ -173,8 +174,17 @@ function bindRustFlowMatchSubject(
   node: Node,
   context: RustPlanContext,
 ): RustExpr {
-  if (expression.expression.kind !== "block" && expression.expression.kind !== "evaluate-then") {
+  if (expression.expression.kind !== "evaluate-then" &&
+    (expression.expression.kind !== "block" || expression.expression.bindings.length === 0)) {
     return expression;
+  }
+  if (context.input.program.configuration.edition === "2021") {
+    return {
+      kind: "block",
+      valueAttrs: [rustLintAttributes.matchTemporaryScope],
+      bindings: [],
+      value: expression,
+    };
   }
   const name = allocateRustSyntheticName(
     context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []),
