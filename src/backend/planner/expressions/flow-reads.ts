@@ -76,8 +76,10 @@ export function planRustFlowReadProjection(
   const operation = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
   const ownsValue = context.input.program.valueLifetimes.canMove(node) ||
     operation?.kind === "provider-operation" &&
-      (operation.abi.target.form === "method" || operation.abi.target.form === "call") &&
-      operation.resultCarrier?.kind !== "reference";
+      (operation.abi.target.form === "method" || operation.abi.target.form === "call" ||
+        operation.abi.target.form === "receiver-method") &&
+      operation.abi.result.kind === "sync" && operation.abi.result.carrier.kind !== "reference" &&
+      rustTargetTypeRefEquals(operation.abi.result.carrier, fact.sourceCarrier);
   if (fact.kind === "source-union") {
     const variants = context.input.program.typeDefinitions.sourceUnionVariants(fact.sourceCarrier);
     const path = rustUnionTypePathInContext(fact.sourceCarrier, context);
