@@ -31,6 +31,7 @@ export function main(): void {
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /const SEPARATOR: &str|const separator: &str/u);
   assert.match(output, /fn right_paren\(value: &str\)/u);
+  assert.match(output, /fn check_token\(value: &str\)/u);
   assert.match(output, /fn dispatch\(kind: &str, payload: &str\)/u);
   assert.match(output, /fn retained\(value: String\)/u);
   assert.match(output, /with_number_element/u);
@@ -67,8 +68,8 @@ export function main(): void {
 test("local receiver field results do not force shared object storage", () => {
   for (const [body, expected] of [
     ["read(): number { return this.position; }", "value"],
-    ["read(): Parser { return this; }", "shared-mutable"],
-    ["read(): () => number { return () => this.position; }", "shared-mutable"],
+    ["read(): Parser { return this; }", "shared-immutable"],
+    ["read(): () => number { return () => this.position; }", "shared-immutable"],
   ]) {
     const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
       class Parser { position = 0; ${body} }

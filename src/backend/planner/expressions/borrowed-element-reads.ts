@@ -6,6 +6,9 @@ import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planExpression } from "./entry.js";
 import { planRustSharedReceiver } from "./typed-locations.js";
 import { rustStringTargetType } from "../../../target-model/types/index.js";
+import { diagnosticInput, rustActiveErrorType } from "../program/plan-context.js";
+import { missingFactDiagnostic } from "../diagnostics.js";
+import { applyRustFallibleResultExpression, rustExpressionUsesTryInCurrentRegion } from "../types/fallible-shape.js";
 
 export function planRustBorrowedElementRead(
   node: Node,
@@ -28,14 +31,25 @@ export function planRustBorrowedElementRead(
   });
   const body = planRead(node, { ...context, expressionOverrides: overrides });
   if (body === undefined) return undefined;
+  const fallible = rustExpressionUsesTryInCurrentRegion(body);
+  const errorType = rustActiveErrorType(context);
+  if (fallible && errorType === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+      "rust.backend.borrowed-element-boundary", "A fallible borrowed read requires its finalized error boundary."));
+    return undefined;
+  }
+  const invocation: RustExpr = {
+    kind: "method-call", receiver: { kind: "path", path: arrayName }, method: read.method,
+    args: [{ kind: "path", path: indexName }, { kind: "closure",
+      params: [{ name: elementName, byRefCopy: false }],
+      body: fallible ? applyRustFallibleResultExpression(body, { errorType: errorType! }) : body }],
+  };
   return {
     kind: "block",
     bindings: [
       { name: arrayName, value: planRustSharedReceiver(read.array, array, context) },
       { name: indexName, value: index },
     ],
-    value: { kind: "method-call", receiver: { kind: "path", path: arrayName }, method: read.method,
-      args: [{ kind: "path", path: indexName }, { kind: "closure",
-        params: [{ name: elementName, byRefCopy: false }], body }] },
+    value: fallible ? { kind: "try", expr: invocation, resultErrorType: errorType!, operandErrorType: errorType! } : invocation,
   };
 }
