@@ -184,3 +184,32 @@ export function main(): void {
   assert.doesNotMatch(output, /sort_borrowed/u);
   validateGeneratedProject("retained-callable-borrow-proof", result.artifacts, { run: true });
 });
+
+test("value and retained cursor methods keep exact receiver lint contracts", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
+    files: { "index.ts": `
+class LocalCursor {
+  position = 0;
+  next(): number { this.position++; return this.position; }
+}
+export class RetainedCursor {
+  position = 0;
+  next(): number { this.position++; return this.position; }
+}
+export function retain(): RetainedCursor { return new RetainedCursor(); }
+export function main(): void {
+  const local = new LocalCursor();
+  const retained = retain();
+  const alias = retained;
+  if (local.next() !== 1 || local.next() !== 2 || retained.next() !== 1 || alias.next() !== 2)
+    throw new Error("cursor receiver contract");
+}
+` },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  const output = artifactText(result, "src/index.rs");
+  assert.match(output, /fn next\(&mut self\)/u);
+  assert.match(output, /fn next\(&self\)/u);
+  validateGeneratedProject("cursor-receiver-lint-contract", result.artifacts, { run: true });
+});
