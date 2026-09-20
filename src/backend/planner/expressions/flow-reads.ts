@@ -56,7 +56,7 @@ export function planRustFlowReadProjection(
   const operation = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
   const ownsValue = context.input.program.valueLifetimes.canMove(node) ||
     operation?.kind === "provider-operation" &&
-      (operation.target.form === "method" || operation.target.form === "call") &&
+      (operation.abi.target.form === "method" || operation.abi.target.form === "call") &&
       operation.resultCarrier?.kind !== "reference";
   if (fact.kind === "builtin-error") {
     if ((!isRustJsValueCarrier(fact.sourceCarrier) && !(isRustProgramErrorCarrier(fact.sourceCarrier) &&

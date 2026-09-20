@@ -297,6 +297,7 @@ export function planArrayLiteral(node: Node, context: RustPlanContext): RustExpr
     element !== undefined && context.input.program.source.ast.kindName(element) === "KindOmittedExpression");
   if (hasHoles) {
     context.diagnostics.push(unsupportedConstructDiagnostic(diagnosticInput(context, node),
+      "rust.array.sparse-literal",
       "Sparse array literals are not supported by native dense arrays; use explicit undefined elements."));
     return undefined;
   }
