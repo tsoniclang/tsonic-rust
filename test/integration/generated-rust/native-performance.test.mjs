@@ -143,7 +143,7 @@ export function main(): void {
       assert.doesNotMatch(output, /match\s*\{/u);
       assert.doesNotMatch(output, /blocks_in_conditions/u);
     } else {
-      assert.match(output, /expect\(clippy::blocks_in_conditions, reason = "Rust 2021 match temporary scope"\)/u);
+      assert.match(output, /expect\(\s*clippy::blocks_in_conditions,\s*reason = "Rust 2021 match temporary scope"\s*\)/u);
     }
     validateGeneratedProject(`native-owned-index-regions-${edition}`, result.artifacts, { run: true });
   });
