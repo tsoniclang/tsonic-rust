@@ -112,3 +112,33 @@ export function main(): void {
   assert.doesNotMatch(output, /\(\*[^)]+\)\.clone\(\)/u);
   validateGeneratedProject("native-string-dispatch", result.artifacts, { run: true });
 });
+
+test("owned indexed reads preserve native evaluation regions without block match scrutinees", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin" } },
+    files: { "index.ts": `
+import { check } from "@acme/testing";
+let calls = 0;
+function append(values: string[]): number {
+  calls += 1;
+  values.push("tail");
+  return values.length - 1;
+}
+export function main(): void {
+  const flow_input = "kept";
+  const values = ["é", "😀"];
+  const last = values[values.length - 1]!;
+  const appended = values[append(values)]!;
+  check(last === "😀" && appended === "tail");
+  check(flow_input === "kept" && calls === 1 && values.length === 3);
+}
+` },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  const output = artifactText(result, "src/index.rs");
+  assert.doesNotMatch(output, /match\s*\{/u);
+  assert.doesNotMatch(output, /blocks_in_conditions/u);
+  validateGeneratedProject("native-owned-index-regions", result.artifacts, { run: true });
+});

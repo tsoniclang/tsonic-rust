@@ -94,14 +94,14 @@ export function planRustFlowReadProjection(
     }
     const name = allocateRustSyntheticName(context.syntheticNames ??
       createRustSyntheticNameState(context.input.program.source.ast, node, []), "flow_value");
-    return { kind: "match", expression: ownsValue ? expression : { kind: "reference", expr: expression }, arms: [
+    return bindRustFlowMatchSubject({ kind: "match", expression: ownsValue ? expression : { kind: "reference", expr: expression }, arms: [
       { pattern: { kind: "tuple-variant", path: `${path}::${fact.variant}`,
         elements: [{ kind: "binding", name }] },
         expression: ownsValue ? { kind: "path", path: name }
           : { kind: "method-call", receiver: { kind: "path", path: name }, method: "clone", args: [] } },
       { pattern: { kind: "wildcard" }, expression: { kind: "unreachable",
         message: "TSTS-selected source refinement excluded this union variant" } },
-    ] };
+    ] }, node, context);
   }
   if (fact.kind === "option-value") {
     if (!ownsValue && !rustCarrierSupportsClone(fact.selectedCarrier, context.input.program.typeDefinitions) &&
@@ -118,7 +118,7 @@ export function planRustFlowReadProjection(
       context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []),
       "flow_value",
     );
-    return {
+    return bindRustFlowMatchSubject({
       kind: "match",
       expression: ownsValue ? expression : {
         kind: "method-call",
@@ -153,7 +153,7 @@ export function planRustFlowReadProjection(
           },
         },
       ],
-    };
+    }, node, context);
   }
   if (fact.kind === "program-error-variant") {
     return planRustProgramErrorFlowRead(node, expression, fact, context);
@@ -166,4 +166,23 @@ export function planRustFlowReadProjection(
     fact.selectedCarrier,
     context,
   );
+}
+
+function bindRustFlowMatchSubject(
+  expression: Extract<RustExpr, { readonly kind: "match" }>,
+  node: Node,
+  context: RustPlanContext,
+): RustExpr {
+  if (expression.expression.kind !== "block" && expression.expression.kind !== "evaluate-then") {
+    return expression;
+  }
+  const name = allocateRustSyntheticName(
+    context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []),
+    "flow_input",
+  );
+  return {
+    kind: "block",
+    bindings: [{ name, value: expression.expression }],
+    value: { ...expression, expression: { kind: "path", path: name } },
+  };
 }
