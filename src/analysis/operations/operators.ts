@@ -57,6 +57,7 @@ import {
 } from "../facts/keys.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { parseSourceBigIntLiteral } from "../../target-model/syntax/literals.js";
+import { rustUnparenthesizedExpression } from "../../target-model/syntax/expressions.js";
 import {
   resolveExpressionCarrier,
   resolveExpressionCarrierBeforeFlowReadProjection,
@@ -89,13 +90,17 @@ export function resolveBinaryOperandCarriers(
   readonly rightNode: Node;
   readonly operatorKind: string;
 } | undefined {
-  const leftNode = BinaryExpression_Left(walk.context.ast, expression);
-  const rightNode = BinaryExpression_Right(walk.context.ast, expression);
+  let leftNode = BinaryExpression_Left(walk.context.ast, expression);
+  let rightNode = BinaryExpression_Right(walk.context.ast, expression);
   const operatorToken = BinaryExpression_OperatorToken(walk.context.ast, expression);
   if (leftNode === undefined || rightNode === undefined || operatorToken === undefined) {
     return undefined;
   }
   const operatorKind = walk.context.ast.kindName(operatorToken);
+  if (operatorKind === KindQuestionQuestionToken) {
+    leftNode = rustUnparenthesizedExpression(walk.context.ast, leftNode);
+    rightNode = rustUnparenthesizedExpression(walk.context.ast, rightNode);
+  }
   if (operatorKind === KindQuestionQuestionEqualsToken) {
     const target = assignmentTarget(walk.context.ast, leftNode);
     const left = resolveExpressionCarrierBeforeFlowReadProjection(walk, target, sourceFile, undefined);

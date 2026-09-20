@@ -80,3 +80,35 @@ export function proof(): ${scenario.result} { ${scenario.body} }
     assert.equal(representation?.kind, scenario.kind, scenario.body);
   }
 });
+
+test("native string dispatch borrows read-only inputs and owns retained inputs", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin" } },
+    files: { "index.ts": `
+import { check } from "@acme/testing";
+interface Reader { read(value: string): number; }
+class BorrowingReader implements Reader {
+  read(value: string): number { return value.length; }
+}
+class RetainingReader implements Reader {
+  value = "";
+  read(value: string): number { this.value = value; return value.length; }
+}
+function invoke(reader: Reader, value: string): number { return reader.read(value); }
+export function main(): void {
+  const borrowing = new BorrowingReader();
+  const retaining = new RetainingReader();
+  const value = "café😀";
+  check(invoke(borrowing, value) === 9);
+  check(invoke(retaining, value) === 9);
+  check(retaining.value === value);
+}
+` },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  const output = artifactText(result, "src/index.rs");
+  assert.doesNotMatch(output, /\(\*[^)]+\)\.clone\(\)/u);
+  validateGeneratedProject("native-string-dispatch", result.artifacts, { run: true });
+});

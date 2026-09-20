@@ -4,6 +4,7 @@ import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
 import { rustTargetOperationText } from "../../../analysis/facts/target-operation.js";
 import { rustOptionElementCarrier } from "../../../target-model/types/index.js";
 import { rustOptionNestingDepth } from "../../../target-model/types/carriers/optional.js";
+import { rustUnparenthesizedExpression } from "../../../target-model/syntax/expressions.js";
 import type { RustExpr } from "../../target-ast/nodes.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
@@ -19,8 +20,11 @@ export function planNullishCoalescing(
   fact: Extract<RustTargetOperationFact, { readonly kind: "option-coalesce" }>,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  const leftNode = BinaryExpression_Left(context.input.program.source.ast, node);
-  const rightNode = BinaryExpression_Right(context.input.program.source.ast, node);
+  const ast = context.input.program.source.ast;
+  const leftSyntax = BinaryExpression_Left(ast, node);
+  const rightSyntax = BinaryExpression_Right(ast, node);
+  const leftNode = leftSyntax === undefined ? undefined : rustUnparenthesizedExpression(ast, leftSyntax);
+  const rightNode = rightSyntax === undefined ? undefined : rustUnparenthesizedExpression(ast, rightSyntax);
   let left = leftNode === undefined
     ? undefined
     : planExpressionBeforeValueProjections(leftNode, context, "value");

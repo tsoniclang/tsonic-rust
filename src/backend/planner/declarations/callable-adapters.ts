@@ -8,6 +8,7 @@ import type {
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import {
   isRustCopyCarrier,
+  isRustStringCarrier,
   isRustVecCarrier,
   rustCarrierSupportsClone,
 } from "../../../target-model/types/index.js";
@@ -246,6 +247,9 @@ function readRustCallableLogicalParameter(
 ): RustExpr | undefined {
   if (abi.mode === "value") {
     return expression;
+  }
+  if (isRustStringCarrier(abi.valueCarrier)) {
+    return { kind: "owned-string-from-borrowed-str", expression };
   }
   const value: RustExpr = { kind: "dereference", pointer: expression };
   if (isRustCopyCarrier(abi.valueCarrier)) {

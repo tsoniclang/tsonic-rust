@@ -193,6 +193,8 @@ export function main(): void {
   const booleans: (boolean | undefined)[] = [undefined, false];
   check((booleans[0] ?? true) === true);
   check((booleans[1] ?? true) === false);
+  check((optional[0] ?? (optional[99])) === undefined);
+  check(((optional[99]) ?? "missing") === "missing");
 }
 ` },
   });
