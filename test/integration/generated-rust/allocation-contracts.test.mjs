@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust, artifactText, analyzeRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
+import { rustModuleBindingFactKey } from "../../../dist/analysis/facts/keys.js";
 
 test("owned exits, static text, direct helpers and scoped array reads execute without extra owners", { timeout: 300_000 }, () => {
   const { result } = compileRust({
@@ -77,5 +78,25 @@ test("local receiver field results do not force shared object storage", () => {
     ` } });
     assert.equal(program.objectRepresentations.representations.find(value => value.definition.sourceName === "Parser")?.kind,
       expected, body);
+  }
+});
+
+test("static string selection preserves exported bindings and deferred default reads", () => {
+  for (const [source, storage] of [
+    ['const value = "ready"; export function read(): string { return value; }', "native-const"],
+    ['export const value = "public";', "module-cell"],
+    ['export const result = read(); const value = "later"; function read(input: string = value): string { return input; }', "module-cell"],
+    ['const value = "ready"; export const result = read(); function read(input: string = value): string { return input; }', "native-const"],
+  ]) {
+    const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": source } });
+    const ast = program.source.ast;
+    let declaration;
+    const visit = node => {
+      if (ast.is.IsVariableDeclaration(node) && ast.text(ast.name(node)) === "value") declaration = node;
+      ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    program.sourceFiles.forEach(visit);
+    assert.notEqual(declaration, undefined);
+    assert.equal(program.facts.getFact(declaration, rustModuleBindingFactKey)?.storage, storage, source);
   }
 });
