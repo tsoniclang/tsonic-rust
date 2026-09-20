@@ -26,12 +26,15 @@ import { rustFallibleFactKey, rustSourceAccessorEffectsFactKey } from "../../../
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import type { Node } from "@tsonic/tsts";
+import { planRustBorrowedElementRead } from "./borrowed-element-reads.js";
 import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function planPropertyAccess(node: Node, context: RustPlanContext): RustExpr | undefined {
+  const borrowed = context.input.program.borrowedElementReads.forExpression(node);
+  if (borrowed !== undefined) return planRustBorrowedElementRead(node, borrowed, context, planPropertyAccessInner);
   return planOptionalChainExpression(
     node,
     context,

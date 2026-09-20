@@ -793,6 +793,7 @@ export function selectJsSurfaceOperation(request: JsOperationRequest, definition
       operationKind: row.shape.operationKind,
       target: materializeTarget(target, copyReference),
       ...(row.shape.indexedLocationMethod === undefined ? {} : { indexedLocationMethod: row.shape.indexedLocationMethod }),
+      ...(row.shape.borrowedIndexMethod === undefined ? {} : { borrowedIndexMethod: row.shape.borrowedIndexMethod }),
       resultCarrier,
       ...(sourceResultCarrier === undefined ? {} : { sourceResultCarrier }),
       ...(row.shape.sourceAbsence === undefined

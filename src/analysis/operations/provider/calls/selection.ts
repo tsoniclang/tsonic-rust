@@ -392,13 +392,13 @@ export function selectRustCheckedCall(
     }
     if (selection.callback !== undefined) {
       const specialized = selectBorrowedCallbackParameters(request, selection, context, options);
-      return selection.fact.kind !== "provider-operation"
+      return specialized.fact.kind !== "provider-operation" || specialized.callback === undefined
         ? rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_CALLBACK_CARRIER_MISSING", `Selected JavaScript call '${selectedSourceMember.ownerName}.${selectedSourceMember.memberName}' has no provider operation template.`)
         : acceptRustPolicy({
             kind: "deferred-callback",
-            callback: specialized.callback!,
+            callback: specialized.callback,
             sourceName: selectedSourceMember.memberName,
-            template: specialized.fact as import("../../../facts/keys.js").RustProviderOperationTemplate,
+            template: specialized.fact,
             parameterCarriers: specialized.parameterCarriers ?? [],
           });
     }

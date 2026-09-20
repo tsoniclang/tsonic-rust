@@ -431,6 +431,7 @@ export interface RustProviderOperationTemplate<
   readonly sourceResultCarrier?: TargetTypeRef;
   readonly sourceAbsenceCarrier?: TargetTypeRef;
   readonly indexedLocationMethod?: string;
+  readonly borrowedIndexMethod?: string;
   readonly parameterCarriers?: readonly (TargetTypeRef | undefined)[];
   readonly receiverCarrier?: TargetTypeRef;
   readonly genericParameters?: readonly RustProviderGenericParameter[];

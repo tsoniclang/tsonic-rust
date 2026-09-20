@@ -18,6 +18,7 @@ import { createRustModuleInitializationPlan } from "./module-initialization-fact
 import { analyzeRustProviderErrorCarriers } from "./provider-errors.js";
 import { analyzeRustDeclarationGenericRequirements } from "../declarations/generic-requirements.js";
 import { analyzeRustValueLifetimes } from "./value-lifetimes.js";
+import { analyzeRustBorrowedElementReads } from "./borrowed-element-reads.js";
 import {
   analyzeRustBinaryHooks,
   analyzeRustRuntimeReferences,
@@ -177,6 +178,7 @@ export function analyzeRustTargetProgram(
     sourceLifetimes: context.sourceLifetimes,
     declarationGenericRequirements: declarationGenericRequirements.index,
     valueLifetimes,
+    borrowedElementReads: analyzeRustBorrowedElementReads(context.ast, context.sourceFiles, facts),
     structuralShapes: context.structuralShapes.seal(),
     frozenDataWrites: context.frozenDataWrites.seal(),
     classValues: context.classValues.seal(context),

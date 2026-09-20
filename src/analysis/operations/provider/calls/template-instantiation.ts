@@ -627,6 +627,7 @@ export function finalizeProviderOperationFact(
     kind: "provider-operation",
     operationId: template.operationId,
     ...(template.indexedLocationMethod === undefined ? {} : { indexedLocationMethod: template.indexedLocationMethod }),
+    ...(template.borrowedIndexMethod === undefined ? {} : { borrowedIndexMethod: template.borrowedIndexMethod }),
     ...(template.carrierRequirements === undefined ? {} : { carrierRequirements: template.carrierRequirements }),
     resultCarrier: abi.result.kind === "async" ? abi.result.futureCarrier : abi.result.carrier,
     ...(template.sourceResultCarrier === undefined
