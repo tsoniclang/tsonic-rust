@@ -185,6 +185,33 @@ export function main(): void {
   validateGeneratedProject("retained-callable-borrow-proof", result.artifacts, { run: true });
 });
 
+test("explicit shared String references borrow captured storage without copying", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
+    files: { "index.ts": `
+import { ref } from "@tsonic/rust/lang.js";
+import type { Ref } from "@tsonic/rust/types.js";
+import { read_to_string, write } from "@tsonic/rust/std/fs.js";
+function writer(value: string): () => void {
+  const path = "captured-reference.txt";
+  return () => { write<Ref<string>, Ref<string>>(ref(path), ref(value)).unwrap(); };
+}
+export function main(): void {
+  const output = writer("abc");
+  output();
+  output();
+  if (read_to_string<string>("captured-reference.txt").unwrap() !== "abc")
+    throw new Error("captured borrow");
+}
+` },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  const output = artifactText(result, "src/index.rs");
+  assert.match(output, /std::fs::write::<&str, &str>\(&capture_path, &capture_value\)/u);
+  assert.doesNotMatch(output, /&capture_(?:path|value)\.clone\(\)/u);
+  validateGeneratedProject("captured-string-reference", result.artifacts, { run: true });
+});
+
 test("value and retained cursor methods keep exact receiver lint contracts", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
