@@ -40,6 +40,8 @@ import {
   isRustOptionCarrier,
   isRustStringCarrier,
   rustOptionElementCarrier,
+  rustOptionTargetType,
+  rustOptionValueCarrier,
   rustBigIntTargetType,
   rustSourcePrimitiveTargetType,
 } from "../../target-model/types/index.js";
@@ -182,7 +184,7 @@ export function resolveBinaryOperandCarriers(
     left = resolveLeft(leftSemanticCarrier);
   }
   const initialRightExpectation = operatorKind === KindQuestionQuestionToken
-    ? rustOptionElementCarrier(left) ?? expected
+    ? isRustOptionCarrier(left) ? rustOptionValueCarrier(left) : expected
     : operatorKind === KindEqualsToken
       ? selectedAssignmentValueCarrier ??
         (useAssignmentReadCarrier ? left : undefined)
@@ -398,29 +400,43 @@ export function resolvePostCheckBinaryCarrier(
       };
     }
   } else if (operatorKind === KindQuestionQuestionToken) {
-    const inner = rustOptionElementCarrier(left);
+    const inner = isRustOptionCarrier(left) ? rustOptionValueCarrier(left) : undefined;
+    const leftOptionDepth = rustOptionNestingDepth(left, inner);
     if (inner !== undefined && right !== undefined &&
-      rustTargetTypeRefEquals(inner, right)) {
+      leftOptionDepth !== undefined && rustTargetTypeRefEquals(inner, right)) {
       fact = {
         kind: "option-coalesce",
         operationId: "tsonic.rust.option.coalesce",
-        rightOperand: "value",
+        leftOptionDepth,
+        rightOptionDepth: 0,
+        rightValueForm: "value",
         resultCarrier: inner,
       };
-    } else if (inner !== undefined && left !== undefined && right !== undefined &&
-      rustTargetTypeRefEquals(left, right)) {
+    } else if (inner !== undefined && right !== undefined && leftOptionDepth !== undefined &&
+      isRustOptionCarrier(right) && rustTargetTypeRefEquals(inner, rustOptionValueCarrier(right))) {
+      const rawRight = walk.context.facts.getRuntimeCarrierFact(rightNode)?.carrier;
+      const rawDepth = isRustOptionCarrier(rawRight) ? rustOptionNestingDepth(rawRight, inner) : undefined;
       fact = {
         kind: "option-coalesce",
         operationId: "tsonic.rust.option.coalesce-option",
-        rightOperand: "option",
-        resultCarrier: left,
+        leftOptionDepth,
+        rightOptionDepth: rawDepth ?? rustOptionNestingDepth(right, inner)!,
+        rightValueForm: rawDepth === undefined ? "value" : "raw",
+        resultCarrier: rustOptionTargetType(inner),
       };
-    } else if (inner !== undefined && isRustDefinitelyNullishCarrier(right) && left !== undefined) {
-      fact = {
-        kind: "nullish-identity",
-        operationId: "tsonic.rust.option.coalesce-nullish-identity",
-        resultCarrier: left,
-      };
+    } else if (inner !== undefined && isRustDefinitelyNullishCarrier(right) && leftOptionDepth !== undefined) {
+      const resultCarrier = rustOptionTargetType(inner);
+      const fallback = resolveExpressionCarrier(walk, rightNode, sourceFile, resultCarrier);
+      if (rustTargetTypeRefEquals(fallback, resultCarrier)) {
+        fact = {
+          kind: "option-coalesce",
+          operationId: "tsonic.rust.option.coalesce-option",
+          leftOptionDepth,
+          rightOptionDepth: 1,
+          rightValueForm: "value",
+          resultCarrier,
+        };
+      }
     } else if (left !== undefined && right !== undefined &&
       rustTargetTypeRefEquals(left, right) &&
       !isRustOptionCarrier(left) && !isRustNullishSourceCarrier(left) &&

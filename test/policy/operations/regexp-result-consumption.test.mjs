@@ -137,3 +137,66 @@ export function main(): void {
   assert.match(source, /\.len\(\)/u);
   assert.equal(validateGeneratedProject("regexp-result-consumption", result.artifacts, { run: true }).status, 0);
 });
+
+test("dense optional reads coalesce every absence layer with lazy native fallbacks", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin" } },
+    files: { "index.ts": `
+import { check } from "@acme/testing";
+let fallbackCalls = 0;
+function fallback(): string {
+  fallbackCalls += 1;
+  if (fallbackCalls < 0) throw new Error("unreachable control");
+  return "fallback";
+}
+function optionalFallback(): string | undefined {
+  fallbackCalls += 1;
+  return undefined;
+}
+export function main(): void {
+  const captures: string[] = [];
+  for (const match of "b".matchAll(/(a)?(b)/g)) {
+    captures.push(match[1] ?? "missing");
+    captures.push(match[2] ?? "missing");
+    captures.push(match[99] ?? "missing");
+  }
+  check(captures.join(",") === "missing,b,missing");
+  const optional: (string | undefined)[] = [undefined, "", "present"];
+  const nullable: (string | null)[] = [null, "present"];
+  const values: string[] = [];
+  values.push(optional[0] ?? fallback());
+  values.push(optional[1] ?? fallback());
+  values.push(optional[99] ?? fallback());
+  values.push(nullable[0] ?? fallback());
+  values.push(nullable[1] ?? fallback());
+  check(values.join(",") === "fallback,,fallback,fallback,present");
+  check(fallbackCalls === 3);
+  check((optional[2] ?? optionalFallback()) === "present");
+  check(fallbackCalls === 3);
+  check((optional[0] ?? optionalFallback()) === undefined);
+  check(fallbackCalls === 4);
+  check((optional[1] ?? undefined) === "");
+  check((optional[0] ?? undefined) === undefined);
+  check((optional[0] ?? optional[2]) === "present");
+  check((optional[0] ?? optional[99]) === undefined);
+  check((optional[2] ?? optional[0]) === "present");
+  check((nullable[0] ?? null) === null);
+  check((nullable[99] ?? null) === null);
+  check((nullable[0] ?? nullable[0]) === null);
+  check((nullable[0] ?? nullable[1]) === "present");
+  const numbers: (number | undefined)[] = [undefined, 0, 7];
+  check((numbers[0] ?? 42) === 42);
+  check((numbers[1] ?? 42) === 0);
+  check((numbers[2] ?? 42) === 7);
+  const booleans: (boolean | undefined)[] = [undefined, false];
+  check((booleans[0] ?? true) === true);
+  check((booleans[1] ?? true) === false);
+}
+` },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  assert.match(artifactText(result, "src/index.rs"), /\.flatten\(\)/u);
+  validateGeneratedProject("dense-optional-coalescing", result.artifacts, { run: true });
+});

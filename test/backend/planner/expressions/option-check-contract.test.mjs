@@ -80,3 +80,48 @@ export function read(values: (string | undefined)[]): void {
     assert.ok(context.diagnostics[0].evidence.includes("target.capability=rust.backend.optional-chain-contract"));
   }
 });
+
+test("sealed coalescing rejects missing and inconsistent source Option depths", () => {
+  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+export function read(values: (string | undefined)[]): string {
+  return values[0] ?? "missing";
+}
+` } });
+  const { ast } = program.source;
+  const operations = [];
+  const visit = node => {
+    const fact = program.facts.getFact(node, rustTargetOperationFactKey);
+    if (fact?.kind === "option-coalesce") operations.push({ node, fact });
+    for (const child of ast.children(node)) visit(child);
+  };
+  for (const sourceFile of program.sourceFiles) visit(sourceFile);
+  assert.equal(operations.length, 1);
+  const { node, fact } = operations[0];
+  assert.equal(fact.leftOptionDepth, 2);
+  assert.equal(fact.rightOptionDepth, 0);
+  const context = facts => ({
+    input: { program: { ...program, facts } }, diagnostics: [],
+    sourceFile: ast.getSourceFile(node), usedAliases: new Set(),
+    syntheticNames: createRustSyntheticNameState(ast, node, []),
+    moduleName: "index", structuralShapesModuleName: "shapes",
+    moduleNameByFileName: new Map(), externalCrateNameByFileName: new Map(),
+    externalItemPathByIdentity: new Map(), externalStructuralShapeModuleByFileName: new Map(),
+  });
+  const valid = context(program.facts);
+  assert.ok(planBinaryExpression(node, valid));
+  assert.deepEqual(valid.diagnostics, []);
+  const mutations = [
+    ...[undefined, 0, -1, 1, 3, 0.5, NaN, Infinity].map(leftOptionDepth => ({ leftOptionDepth })),
+    ...[undefined, -1, 1, 0.5, NaN, Infinity].map(rightOptionDepth => ({ rightOptionDepth })),
+    ...[undefined, "raw", "invalid"].map(rightValueForm => ({ rightValueForm })),
+  ];
+  for (const mutation of mutations) {
+    const selected = context({ ...program.facts, getFact: (subject, key) =>
+      subject === node && key === rustTargetOperationFactKey
+        ? { ...fact, ...mutation } : program.facts.getFact(subject, key) });
+    assert.equal(planBinaryExpression(node, selected), undefined);
+    assert.equal(selected.diagnostics.length, 1);
+    assert.equal(selected.diagnostics[0].code, "RUST_MISSING_TARGET_FACT");
+    assert.ok(selected.diagnostics[0].evidence.includes("target.capability=rust.backend.option-coalesce-depth"));
+  }
+});
