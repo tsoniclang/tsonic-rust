@@ -62,6 +62,6 @@ export function selectedRestSequenceIsClosed(
     tupleLength !== undefined && BigInt(bindings.length) === tupleLength && bindings.every((binding, elementIndex) =>
       binding.sourceForm === "spread-element" && binding.spreadElementIndex === elementIndex);
   return exactBindings && selectRustRestSequenceConversion(
-    carrier, form.elementCarrier, form.sequenceHolePolicy ?? "reject",
+    carrier, form.elementCarrier,
   ) !== undefined;
 }

@@ -276,42 +276,21 @@ export function rustJsArrayLikeElementTargetType(
     return arguments_?.length === 1 ? arguments_[0] : undefined;
   }
   if (carrier.id === rustRegExpExecArrayTargetId || carrier.id === rustRegExpMatchArrayTargetId) {
-    return { kind: "target-named", id: rustStringTargetId };
+    return rustOptionTargetType({ kind: "target-named", id: rustStringTargetId });
   }
   if (carrier.id === rustJsRegExpExecArrayTargetId || carrier.id === rustJsRegExpMatchArrayTargetId) {
-    return rustJsStringTargetType();
+    return rustOptionTargetType(rustJsStringTargetType());
   }
   return carrier.id === rustRegExpIndicesTargetId || carrier.id === rustJsRegExpIndicesTargetId
-    ? {
+    ? rustOptionTargetType({
         kind: "tuple",
         elements: [
           { kind: "source-primitive", name: "float64" },
           { kind: "source-primitive", name: "float64" },
         ],
-      }
+      })
     : undefined;
 }
-
-export function rustJsArrayLikeIterationElementTargetType(
-  carrier: TargetTypeRef | undefined,
-): TargetTypeRef | undefined {
-  const element = rustJsArrayLikeElementTargetType(carrier);
-  if (element === undefined || carrier?.kind !== "target-named") {
-    return undefined;
-  }
-  return rustRegExpResultArrayTargetIds.has(carrier.id)
-    ? rustOptionTargetType(element)
-    : element;
-}
-
-const rustRegExpResultArrayTargetIds: ReadonlySet<string> = new Set([
-  rustRegExpExecArrayTargetId,
-  rustRegExpMatchArrayTargetId,
-  rustRegExpIndicesTargetId,
-  rustJsRegExpExecArrayTargetId,
-  rustJsRegExpMatchArrayTargetId,
-  rustJsRegExpIndicesTargetId,
-]);
 
 export function isRustJsArrayLikeCarrier(carrier: TargetTypeRef | undefined): boolean {
   return rustJsArrayLikeElementTargetType(carrier) !== undefined;

@@ -227,6 +227,7 @@ export type RustExpr =
   | {
       readonly kind: "block";
       readonly innerAttrs?: readonly string[];
+      readonly valueAttrs?: readonly string[];
       readonly bindings: readonly {
         readonly name: string;
         readonly value?: RustExpr;

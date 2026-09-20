@@ -50,11 +50,11 @@ export function createInputFactory(
       ? undefined
       : sourceInput({ kind: "argument", sourceIndex }, sourceCarrier, mode, conversion, definitions);
   };
-  const sequenceTo = (sourceIndex: number, target: TargetTypeRef, holePolicy: "reject" | "number-nan") => {
+  const sequenceTo = (sourceIndex: number, target: TargetTypeRef) => {
     if (!spreadIndexes.has(sourceIndex)) return argumentTo(sourceIndex, "value", target);
     const carrier = argumentCarriers[sourceIndex];
     const conversion = carrier === undefined ? undefined
-      : selectRustRestSequenceConversion(carrier, target, holePolicy, definitions);
+      : selectRustRestSequenceConversion(carrier, target, definitions);
     return conversion === undefined ? undefined : argument(sourceIndex, "value", conversion);
   };
   const sourceArgumentCarrier = (sourceIndex: number): TargetTypeRef | undefined =>
@@ -339,7 +339,7 @@ export function finalizeTargetInputs(
         input.argumentTo(sourceIndex, argument.mode, argument.carrier));
       const sliceIndexes = indexes.slice(form.leadingArguments.length);
       const elements = sliceIndexes.map((sourceIndex) =>
-        input.sequenceTo(sourceIndex, form.elementCarrier, form.sequenceHolePolicy ?? "reject"));
+        input.sequenceTo(sourceIndex, form.elementCarrier));
       if (leading.some((entry) => entry === undefined) || elements.some((entry) => entry === undefined)) {
         return undefined;
       }

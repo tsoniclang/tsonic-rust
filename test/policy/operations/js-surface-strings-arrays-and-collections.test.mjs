@@ -399,16 +399,11 @@ export function values(): string {
   assert.match(text, /left[\s\S]*\.concat\(\[[\s\S]*JsArrayConcatItem::Value\([\s\S]*f64_to_i32\(4\.0\)\?[\s\S]*JsArrayConcatItem::Array\(right\)[\s\S]*\]\)/u);
 });
 
-test("sparse arrays lower to JsArray with holes, length writes, and at()", () => {
+test("omitted array elements reject before native artifacts are published", () => {
   const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": sparseSource } });
 
-  assert.deepEqual(result.diagnostics, []);
-  const text = artifactText(result, "src/index.rs");
-  assert.match(text, /let values: js_abi::JsArray<f64> = js_abi::JsArray::from_sparse\(3, vec!\[\(0, 1\.0\), \(2, 3\.0\)\]\);/u);
-  assert.match(text, /values\.set_len\(rt::conversions::i32_to_usize\(5\)\?\);/u);
-  assert.match(text, /values\.set_number\(3\.0, 4\.0\);/u);
-  assert.match(text, /values\.at\(-1\.0\)\.is_none\(\)/u);
-  assert.match(text, /use tsonic_rust_js::abi as js_abi;/u);
+  assert(result.diagnostics.some(diagnostic => diagnostic.category === "error" && /omitted|sparse|dense/u.test(diagnostic.message)));
+  assert.equal(result.artifacts.length, 0);
 });
 
 test("source primitive aliases do not contaminate unrelated inferred JS number carriers", () => {
@@ -420,8 +415,8 @@ import type { int32 } from "@tsonic/core/types.js";
 
 export function update(): void {
   const dense: int32[] = [1, 2, 3];
-  const sparse = [1, , 3];
-  sparse[3] = 4;
+  const inferred = [1, 2, 3];
+  inferred[3] = 4;
 }
 `,
     },
@@ -430,8 +425,8 @@ export function update(): void {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /let dense: js_abi::JsArray<i32> = js_abi::JsArray::from_dense\(vec!\[1, 2, 3\]\);/u);
-  assert.match(text, /let sparse: js_abi::JsArray<f64> = js_abi::JsArray::from_sparse/u);
-  assert.match(text, /sparse\.set_number\(3\.0, 4\.0\);/u);
+  assert.match(text, /let inferred: js_abi::JsArray<f64> = js_abi::JsArray::from_dense/u);
+  assert.match(text, /inferred\.set_number\(3\.0, 4\.0\);/u);
 });
 
 test("string members lower to the runtime string module by declaration identity", () => {
@@ -473,10 +468,11 @@ export function probe(text: string, index: int32): boolean {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /js_string::char_at\(&text, 0\.0\)\?/u);
+  assert.match(text, /pub fn probe\(text: &str, index: i32\)/u);
+  assert.match(text, /js_string::char_at\(text, 0\.0\)\?/u);
   assert.match(
     text,
-    /js_string::char_at\(\s*&text,\s*rt::conversions::i32_to_f64\(index\),?\s*\)\?/u,
+    /js_string::char_at\(\s*text,\s*rt::conversions::i32_to_f64\(index\),?\s*\)\?/u,
   );
   assert.match(text, /js_abi::JsDate::new\(\)/u);
 });

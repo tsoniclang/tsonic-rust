@@ -109,7 +109,6 @@ export function lowerRustValueConversion(
       const collectionType = rustTypeFromCarrierInContext(contract.target, context);
       if (collectionType === undefined) return undefined;
       const itemName = allocateConversionName(context, node, "spread_value");
-      const slotName = allocateConversionName(context, node, "spread_slot");
       if (contract.collection === "tuple") {
         if (contract.source.kind !== "tuple") return undefined;
         const sourceElements = contract.source.elements;
@@ -139,18 +138,12 @@ export function lowerRustValueConversion(
         kind: "method-call", receiver: source.kind === "reference" ? source.expr : source,
         method: contract.collection === "js-array" ? "values" : "to_vec", args: [],
       };
-      if (contract.collection !== "js-array" && elementConversion === null) return snapshot;
+      if (elementConversion === null) return snapshot;
       const iterator: RustExpr = { kind: "method-call", receiver: snapshot, method: "into_iter", args: [] };
-      const body: RustExpr = contract.collection !== "js-array" ? converted : {
-        kind: "method-call", receiver: elementConversion === null ? { kind: "path", path: slotName } : {
-          kind: "method-call", receiver: { kind: "path", path: slotName }, method: "map",
-          args: [{ kind: "closure", params: [{ name: itemName, byRefCopy: false }], body: converted }],
-        }, method: "unwrap_or", args: [{ kind: "path", path: "f64::NAN" }],
-      };
       return {
         kind: "method-call", receiver: {
           kind: "method-call", receiver: iterator, method: "map",
-          args: [{ kind: "closure", params: [{ name: contract.collection !== "js-array" ? itemName : slotName, byRefCopy: false }], body }],
+          args: [{ kind: "closure", params: [{ name: itemName, byRefCopy: false }], body: converted }],
         }, method: "collect", genericArguments: [{ kind: "type", type: collectionType }], args: [],
       };
     }

@@ -66,7 +66,6 @@ export {
   isRustVecCarrier,
   rustJsArrayConcatItemTargetType,
   rustJsArrayLikeElementTargetType,
-  rustJsArrayLikeIterationElementTargetType,
   rustJsArrayTargetType,
   rustJsArrayBufferTargetType,
   rustJsDataViewTargetType,
@@ -115,6 +114,8 @@ export type { RustJsTypedArrayName } from "./carriers/js.js";
 export {
   isRustOptionCarrier,
   rustOptionElementCarrier,
+  rustOptionNestingDepth,
+  rustOptionValueCarrier,
   rustOptionTargetType,
 } from "./carriers/optional.js";
 export {

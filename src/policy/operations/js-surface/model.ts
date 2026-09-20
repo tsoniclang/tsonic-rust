@@ -8,10 +8,7 @@ import type {
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustProviderOperationFormDeclaresWritableInput } from "../forms.js";
 
-export type JsArrayCopyMode = "dense" | "optional-undefined" | "undefined";
-
 export interface JsOperationRequest {
-  readonly arrayCopyMode?: () => JsArrayCopyMode | undefined;
   readonly ownerName: string;
   readonly memberName: string;
   readonly operationKind: "call" | "property" | "indexer" | "constructor" | "property-set" | "index-set" | "delete";
@@ -101,8 +98,10 @@ export type JsCarrierRef =
   | { readonly ref: "js-numeric" }
   | { readonly ref: "unit" }
   | { readonly ref: "string-array" }
+  | { readonly ref: "optional-string-array" }
   | { readonly ref: "float64-array" }
   | { readonly ref: "js-string-array" }
+  | { readonly ref: "optional-js-string-array" }
   | { readonly ref: "regexp" }
   | { readonly ref: "regexp-exec-array" }
   | { readonly ref: "regexp-match-array" }
@@ -181,7 +180,6 @@ export interface JsOperationRowData {
   readonly operationKind: JsOperationRequest["operationKind"];
   readonly lane: JsLane;
   readonly variant?: string;
-  readonly arrayCopyMode?: JsArrayCopyMode;
   readonly requirements?: readonly {
     readonly carrier: JsCarrierRef;
     readonly capability: JsCarrierCapability;

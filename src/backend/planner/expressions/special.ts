@@ -21,7 +21,7 @@ import { planRustNonConsumingValue } from "./typed-locations.js";
 import { planSelectedSourceCall } from "./calls/source.js";
 import { readRustStructuralObjectMethodStorage } from "../objects/project-storage.js";
 import { requireProviderArgumentPassingFacts } from "./calls/arguments.js";
-import { rustOptionElementCarrier, rustOptionTargetType, rustStructuralMethodStorageCarrier } from "../../../target-model/types/index.js";
+import { rustOptionElementCarrier, rustOptionNestingDepth, rustOptionTargetType, rustStructuralMethodStorageCarrier } from "../../../target-model/types/index.js";
 import { rustTargetOperationIsFallible } from "../../../analysis/facts/target-operation.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { Node } from "@tsonic/tsts";
@@ -169,7 +169,7 @@ export function planOptionalChainExpression(
     fact,
     context,
   );
-  const sourceElement = rustOptionElementCarrier(fact.sourceGuardCarrier);
+  const guardDepth = rustOptionNestingDepth(fact.sourceGuardCarrier, fact.selectedGuardCarrier);
   const finalRelationshipValid = fact.lowering === "map"
     ? rustTargetTypeRefEquals(fact.resultCarrier, rustOptionTargetType(fact.innerResultCarrier))
     : rustOptionElementCarrier(fact.innerResultCarrier) !== undefined &&
@@ -177,7 +177,7 @@ export function planOptionalChainExpression(
   if (fact.expression !== node || fact.operationKind !== expectedKind ||
     actualResultCarrier === undefined || !rustTargetTypeRefEquals(actualResultCarrier, fact.resultCarrier) ||
     actualGuardCarrier === undefined || !rustTargetTypeRefEquals(actualGuardCarrier, fact.sourceGuardCarrier) ||
-    sourceElement === undefined || !rustTargetTypeRefEquals(sourceElement, fact.selectedGuardCarrier) ||
+    guardDepth === undefined || guardDepth === 0 || guardDepth !== fact.guardDepth ||
     !finalRelationshipValid) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -255,9 +255,16 @@ export function planOptionalChainExpression(
   const fallibleBody = applyRustFallibleResultExpression(body, {
     errorType: activeErrorType!,
   });
+  let borrowedGuard: RustExpr = { kind: "method-call", receiver: guard, method: "as_ref", args: [] };
+  for (let depth = 1; depth < fact.guardDepth; depth += 1) {
+    borrowedGuard = {
+      kind: "method-call", receiver: borrowedGuard, method: "and_then",
+      args: [{ kind: "path", path: "core::option::Option::as_ref" }],
+    };
+  }
   const mapped: RustExpr = {
     kind: "method-call",
-    receiver: { kind: "method-call", receiver: guard, method: "as_ref", args: [] },
+    receiver: borrowedGuard,
     method: innerFallible || fact.lowering === "map" ? "map" : "and_then",
     args: [{
       kind: "closure",

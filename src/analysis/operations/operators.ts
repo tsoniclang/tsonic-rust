@@ -1,4 +1,4 @@
-import { rustArrayEntryBinding, rustArrayEntryPayloadExcludesNullish } from "../control-flow/array-entry-values.js";
+import { selectedOptionNullishRelationship } from "./nullish-comparisons.js";
 import {
   BinaryExpression_Left,
   BinaryExpression_OperatorToken,
@@ -19,7 +19,6 @@ import {
   KindQuestionQuestionEqualsToken,
   KindStringLiteral,
   Node_Expression,
-  Node_Type,
 } from "@tsonic/target-api/source";
 import { selectRustGenericNumericOperation } from "./generic-numeric.js";
 import { selectRustProgramErrorEquality } from "./error-equality.js";
@@ -41,9 +40,10 @@ import {
   isRustOptionCarrier,
   isRustStringCarrier,
   rustOptionElementCarrier,
+  rustOptionTargetType,
+  rustOptionValueCarrier,
   rustBigIntTargetType,
   rustSourcePrimitiveTargetType,
-  rustUndefinedTargetType,
 } from "../../target-model/types/index.js";
 import {
   rustModuleBindingFactKey,
@@ -57,6 +57,7 @@ import {
 } from "../facts/keys.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { parseSourceBigIntLiteral } from "../../target-model/syntax/literals.js";
+import { rustUnparenthesizedExpression } from "../../target-model/syntax/expressions.js";
 import {
   resolveExpressionCarrier,
   resolveExpressionCarrierBeforeFlowReadProjection,
@@ -89,13 +90,17 @@ export function resolveBinaryOperandCarriers(
   readonly rightNode: Node;
   readonly operatorKind: string;
 } | undefined {
-  const leftNode = BinaryExpression_Left(walk.context.ast, expression);
-  const rightNode = BinaryExpression_Right(walk.context.ast, expression);
+  let leftNode = BinaryExpression_Left(walk.context.ast, expression);
+  let rightNode = BinaryExpression_Right(walk.context.ast, expression);
   const operatorToken = BinaryExpression_OperatorToken(walk.context.ast, expression);
   if (leftNode === undefined || rightNode === undefined || operatorToken === undefined) {
     return undefined;
   }
   const operatorKind = walk.context.ast.kindName(operatorToken);
+  if (operatorKind === KindQuestionQuestionToken) {
+    leftNode = rustUnparenthesizedExpression(walk.context.ast, leftNode);
+    rightNode = rustUnparenthesizedExpression(walk.context.ast, rightNode);
+  }
   if (operatorKind === KindQuestionQuestionEqualsToken) {
     const target = assignmentTarget(walk.context.ast, leftNode);
     const left = resolveExpressionCarrierBeforeFlowReadProjection(walk, target, sourceFile, undefined);
@@ -184,7 +189,7 @@ export function resolveBinaryOperandCarriers(
     left = resolveLeft(leftSemanticCarrier);
   }
   const initialRightExpectation = operatorKind === KindQuestionQuestionToken
-    ? rustOptionElementCarrier(left) ?? expected
+    ? isRustOptionCarrier(left) ? rustOptionValueCarrier(left) : expected
     : operatorKind === KindEqualsToken
       ? selectedAssignmentValueCarrier ??
         (useAssignmentReadCarrier ? left : undefined)
@@ -400,29 +405,43 @@ export function resolvePostCheckBinaryCarrier(
       };
     }
   } else if (operatorKind === KindQuestionQuestionToken) {
-    const inner = rustOptionElementCarrier(left);
+    const inner = isRustOptionCarrier(left) ? rustOptionValueCarrier(left) : undefined;
+    const leftOptionDepth = rustOptionNestingDepth(left, inner);
     if (inner !== undefined && right !== undefined &&
-      rustTargetTypeRefEquals(inner, right)) {
+      leftOptionDepth !== undefined && rustTargetTypeRefEquals(inner, right)) {
       fact = {
         kind: "option-coalesce",
         operationId: "tsonic.rust.option.coalesce",
-        rightOperand: "value",
+        leftOptionDepth,
+        rightOptionDepth: 0,
+        rightValueForm: "value",
         resultCarrier: inner,
       };
-    } else if (inner !== undefined && left !== undefined && right !== undefined &&
-      rustTargetTypeRefEquals(left, right)) {
+    } else if (inner !== undefined && right !== undefined && leftOptionDepth !== undefined &&
+      isRustOptionCarrier(right) && rustTargetTypeRefEquals(inner, rustOptionValueCarrier(right))) {
+      const rawRight = walk.context.facts.getRuntimeCarrierFact(rightNode)?.carrier;
+      const rawDepth = isRustOptionCarrier(rawRight) ? rustOptionNestingDepth(rawRight, inner) : undefined;
       fact = {
         kind: "option-coalesce",
         operationId: "tsonic.rust.option.coalesce-option",
-        rightOperand: "option",
-        resultCarrier: left,
+        leftOptionDepth,
+        rightOptionDepth: rawDepth ?? rustOptionNestingDepth(right, inner)!,
+        rightValueForm: rawDepth === undefined ? "value" : "raw",
+        resultCarrier: rustOptionTargetType(inner),
       };
-    } else if (inner !== undefined && isRustDefinitelyNullishCarrier(right) && left !== undefined) {
-      fact = {
-        kind: "nullish-identity",
-        operationId: "tsonic.rust.option.coalesce-nullish-identity",
-        resultCarrier: left,
-      };
+    } else if (inner !== undefined && isRustDefinitelyNullishCarrier(right) && leftOptionDepth !== undefined) {
+      const resultCarrier = rustOptionTargetType(inner);
+      const fallback = resolveExpressionCarrier(walk, rightNode, sourceFile, resultCarrier);
+      if (rustTargetTypeRefEquals(fallback, resultCarrier)) {
+        fact = {
+          kind: "option-coalesce",
+          operationId: "tsonic.rust.option.coalesce-option",
+          leftOptionDepth,
+          rightOptionDepth: 1,
+          rightValueForm: "value",
+          resultCarrier,
+        };
+      }
     } else if (left !== undefined && right !== undefined &&
       rustTargetTypeRefEquals(left, right) &&
       !isRustOptionCarrier(left) && !isRustNullishSourceCarrier(left) &&
@@ -697,98 +716,6 @@ function inPlaceStringAppendDeclarationFor(
       ? "in-place-string-append-parts"
       : "in-place-string-append-value",
   };
-}
-
-function selectedOptionNullishRelationship(
-  walk: RustFactWalk,
-  leftNode: Node,
-  rightNode: Node,
-  leftCarrier: TargetTypeRef | undefined,
-  rightCarrier: TargetTypeRef | undefined,
-): { readonly depths: readonly number[]; readonly negated: boolean } | undefined {
-  const selected = (depths: readonly number[], negated = false) => Object.freeze({ depths: Object.freeze(depths), negated });
-  const leftIsOption = isRustOptionCarrier(leftCarrier);
-  const rightIsOption = isRustOptionCarrier(rightCarrier);
-  const optionNode = leftIsOption && isRustDefinitelyNullishCarrier(rightCarrier)
-    ? leftNode
-    : rightIsOption && isRustDefinitelyNullishCarrier(leftCarrier)
-      ? rightNode
-      : undefined;
-  const nullishNode = optionNode === leftNode
-    ? rightNode
-    : optionNode === rightNode
-      ? leftNode
-      : undefined;
-  if (optionNode === undefined || nullishNode === undefined) {
-    return undefined;
-  }
-  if (rustArrayEntryBinding(walk, optionNode) !== undefined) {
-    if (!rustArrayEntryPayloadExcludesNullish(walk, optionNode)) return undefined;
-    return rustTargetTypeRefEquals(optionNode === leftNode ? rightCarrier : leftCarrier, rustUndefinedTargetType())
-      ? selected([0]) : selected([]);
-  }
-  const optionFact = walk.context.facts.get(optionNode, rustTargetOperationFactKey) ??
-    walk.context.facts.resolve(optionNode, rustTargetOperationFactKey);
-  const matchingDepths: number[] = [];
-  let payloadDepth = 0;
-  if (optionFact?.kind === "provider-operation" &&
-    optionFact.sourceAbsenceCarrier !== undefined) {
-    const comparedNullishCarrier = optionNode === leftNode ? rightCarrier : leftCarrier;
-    if (comparedNullishCarrier === undefined) {
-      return undefined;
-    }
-    if (rustTargetTypeRefEquals(optionFact.sourceAbsenceCarrier, comparedNullishCarrier)) {
-      matchingDepths.push(0);
-    }
-    const payload = rustOptionElementCarrier(optionNode === leftNode ? leftCarrier : rightCarrier);
-    if (isRustDefinitelyNullishCarrier(payload)) {
-      if (!rustTargetTypeRefEquals(payload, optionFact.sourceResultCarrier)) return undefined;
-      const presentMatches = rustTargetTypeRefEquals(payload, comparedNullishCarrier);
-      return (matchingDepths.length === 1) === presentMatches
-        ? selected([], presentMatches) : selected([0], presentMatches);
-    }
-    if (!isRustOptionCarrier(payload)) return selected(matchingDepths);
-    if (!rustTargetTypeRefEquals(payload, optionFact.sourceResultCarrier)) return undefined;
-    payloadDepth = 1;
-  }
-  const optionSemantics = walk.context.semanticsFor(optionNode);
-  const nullishSemantics = walk.context.semanticsFor(nullishNode);
-  let optionType = optionSemantics.types.expressionType(optionNode);
-  let optionalDeclaration = false;
-  if (optionFact?.kind === "provider-operation" && payloadDepth === 0) {
-    const access = walk.context.ast.kindName(optionNode) === "KindElementAccessExpression"
-      ? optionSemantics.operations.elementAccess(optionNode)
-      : walk.context.ast.kindName(optionNode) === "KindPropertyAccessExpression"
-        ? optionSemantics.operations.propertyAccess(optionNode)
-        : undefined;
-    const annotation = Node_Type(walk.context.ast, access?.selectedDeclaration);
-    optionalDeclaration = access?.selectedDeclaration !== undefined &&
-      walk.context.ast.questionToken(access.selectedDeclaration) !== undefined;
-    if (annotation !== undefined) {
-      optionType = optionSemantics.types.authoredType(annotation);
-    }
-  }
-  const nullishType = nullishSemantics.types.expressionType(nullishNode);
-  if (optionType === undefined || nullishType === undefined ||
-    !nullishSemantics.types.isNullish(nullishType)) {
-    return undefined;
-  }
-  const members = optionSemantics.types.isUnion(optionType)
-    ? optionSemantics.types.unionOrIntersectionTypes(optionType)
-    : [optionType];
-  const nullishMembers = members.filter((member) => optionSemantics.types.isNullish(member));
-  if (optionalDeclaration && nullishMembers.length === 0) {
-    const comparedCarrier = optionNode === leftNode ? rightCarrier : leftCarrier;
-    return rustTargetTypeRefEquals(comparedCarrier, rustUndefinedTargetType())
-      ? selected([payloadDepth]) : selected(matchingDepths);
-  }
-  if (nullishMembers.length !== 1) {
-    return undefined;
-  }
-  if (optionSemantics.types.relationship(nullishMembers[0]!, nullishType) === "identical") {
-    matchingDepths.push(payloadDepth);
-  }
-  return selected(matchingDepths);
 }
 
 function strictEqualityOperandCarrier(

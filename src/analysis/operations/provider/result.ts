@@ -3,6 +3,8 @@ import {
   isRustProgramErrorCarrier,
   isRustNumericCarrier,
   rustOptionElementCarrier,
+  rustOptionNestingDepth,
+  rustOptionValueCarrier,
   isRustJsArrayCarrier,
   isRustVecCarrier,
 } from "../../../target-model/types/index.js";
@@ -125,6 +127,9 @@ export function selectedMemberReceiverCarrier(
       );
     }
   }
+  if (request.optionalChain === true && rustOptionElementCarrier(sourceCarrier) !== undefined) {
+    return rustOptionValueCarrier(sourceCarrier);
+  }
   if (flowRead !== undefined) return flowRead.selectedCarrier;
   if (sourceUnionCarrier !== undefined &&
     options.sourceTypes.sourceUnionVariantIndexesForTypes(
@@ -186,9 +191,6 @@ export function selectedMemberReceiverCarrier(
       : undefined;
   }
   const optionElement = rustOptionElementCarrier(sourceCarrier);
-  if (request.optionalChain === true && optionElement !== undefined) {
-    return optionElement;
-  }
   if (
     optionElement !== undefined &&
     rustTargetTypeRefEquals(optionElement, selectedCarrier)
@@ -260,13 +262,15 @@ export function acceptRustMemberOperation(
     context,
     options,
   );
-  const operationReceiverCarrier = request.optionalChain === true
-    ? rustOptionElementCarrier(sourceReceiverCarrier) ?? sourceReceiverCarrier
-    : sourceReceiverCarrier;
   const selectedReceiverCarrier = fact.kind === "provider-operation" &&
       fact.abi.sourceReceiver.kind === "receiver"
     ? fact.abi.sourceReceiver.carrier
     : selectedMemberReceiverCarrier(request, context, options);
+  const operationReceiverCarrier = request.optionalChain === true
+    ? rustOptionNestingDepth(sourceReceiverCarrier, selectedReceiverCarrier) !== undefined
+      ? selectedReceiverCarrier
+      : rustOptionElementCarrier(sourceReceiverCarrier) ?? sourceReceiverCarrier
+    : sourceReceiverCarrier;
   if (operationReceiverCarrier !== undefined && selectedReceiverCarrier !== undefined) {
     const projection = selectRustFlowReadProjection(
       operationReceiverCarrier,

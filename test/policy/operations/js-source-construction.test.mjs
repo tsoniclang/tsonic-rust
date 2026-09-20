@@ -13,9 +13,10 @@ test("builtin construction selection retains exact numeric and identity carriers
     assert.deepEqual(selected.resultCarrier, rustBigIntTargetType());
     assert.deepEqual(selected.parameterCarriers, [carrier]);
   }
-  const length = selectJsSurfaceConstructor({ className: "Array", typeArgumentCarriers: [rustEmptyObjectTargetType()], argumentCarriers: [rustSourcePrimitiveTargetType("int32")], soleArgumentNumberKind: "number" });
+  const length = selectJsSurfaceConstructor({ className: "Array", typeArgumentCarriers: [rustSourcePrimitiveTargetType("int32")], argumentCarriers: [rustSourcePrimitiveTargetType("int32")], soleArgumentNumberKind: "number" });
   assert.equal(length?.fact.operationId, "tsonic.rust.js.Array.constructor.length");
   assert.equal(length.fact.isFallible, true);
+  assert.equal(selectJsSurfaceConstructor({ className: "Array", typeArgumentCarriers: [rustEmptyObjectTargetType()], argumentCarriers: [rustSourcePrimitiveTargetType("int32")], soleArgumentNumberKind: "number" }), undefined);
   assert.equal(selectJsSurfaceConstructor({ className: "Array", typeArgumentCarriers: [rustEmptyObjectTargetType()], argumentCarriers: [rustSourcePrimitiveTargetType("int32")] }), undefined);
   const integer = rustSourcePrimitiveTargetType("int64");
   const items = selectJsSurfaceConstructor({ className: "Array", typeArgumentCarriers: [integer], argumentCarriers: [integer], soleArgumentNumberKind: "non-number" });
@@ -57,7 +58,7 @@ export function main(): void {
   assert.equal(run.status, 0, JSON.stringify(run));
 });
 
-test("array construction and frozen tokens retain sparse and identity semantics", { timeout: 300_000 }, () => {
+test("array construction and frozen tokens retain initialized values and identity", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     surfaces: ["js"], packages: [acmeTestingPackage()],
     target: { id: "rust", options: { outputType: "bin", crateName: "array_token_construction" } },
@@ -65,7 +66,9 @@ test("array construction and frozen tokens retain sparse and identity semantics"
 import { check } from "@acme/testing";
 
 function filled<T>(length: number, value: T): T[] {
-  return new Array<T>(length).fill(value);
+  const values: T[] = [];
+  for (let index = 0; index < length; index++) values.push(value);
+  return values;
 }
 function retain(token: object): object { return token; }
 export function main(): void {
@@ -79,11 +82,11 @@ export function main(): void {
   const tokens = new Set<object>();
   tokens.add(first);
   check(tokens.has(alias) && !tokens.has(second));
-  const slots = new Array<object>(3);
+  const slots = filled(3, first);
   check(slots.length === 3);
   let visits = 0;
   slots.forEach(() => { visits += 1; });
-  check(visits === 0);
+  check(visits === 3);
   slots.fill(first);
   check(slots[0] === alias && slots[2] === alias);
   const generic = filled(2, second);
@@ -96,7 +99,7 @@ export function main(): void {
   check(bigintItems.length === 1 && bigintItems[0] === 3n);
   check(empty.length === 0 && items.length === 2 && single.length === 1 && called.length === 2);
   let rejected = false;
-  try { new Array<object>(-1); } catch { rejected = true; }
+  try { new Array<number>(-1); } catch { rejected = true; }
   check(rejected);
 }
 ` },
@@ -104,6 +107,17 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   const run = validateGeneratedProject("array-token-construction", result.artifacts, { run: true });
   assert.equal(run.status, 0, JSON.stringify(run));
+});
+
+test("length construction cannot fabricate reference identities or unconstrained values", () => {
+  for (const declaration of [
+    "export function values(): object[] { return new Array<object>(3); }",
+    "export function values<T>(): T[] { return new Array<T>(3); }",
+  ]) {
+    const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": declaration } });
+    assert(result.diagnostics.some(diagnostic => diagnostic.category === "error"));
+    assert.equal(result.artifacts.length, 0);
+  }
 });
 
 test("same-spelled local declarations do not become builtins", { timeout: 300_000 }, () => {

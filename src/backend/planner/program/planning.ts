@@ -440,7 +440,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
           path: "tsonic_rust_runtime::block_on",
           args: [entryFunction.async === "js-promise"
             ? { kind: "method-call" as const, receiver: entryCall,
-                method: entryFunction.fallible ? "await_result" : "await_value", args: [] }
+                method: entryFunction.fallible ? "into_result" : "into_value", args: [] }
             : entryCall],
         }
       : entryCall;

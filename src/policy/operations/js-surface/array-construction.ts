@@ -2,6 +2,7 @@ import {
   isRustNumericCarrier,
   rustJsArrayTargetType,
   rustJsErrorTargetType,
+  rustCarrierSupportsTrait,
 } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
@@ -20,7 +21,8 @@ export function selectJsArrayConstruction(
   }
   if (arguments_.length === 1 && soleArgumentNumberKind === undefined) return undefined;
   const lengthConstruction = arguments_.length === 1 && soleArgumentNumberKind === "number";
-  if (lengthConstruction && !isRustNumericCarrier(arguments_[0])) return undefined;
+  if (lengthConstruction && (!isRustNumericCarrier(arguments_[0]) ||
+    !rustCarrierSupportsTrait(element, "core::default::Default"))) return undefined;
   if (!lengthConstruction && arguments_.some(argument => !rustTargetTypeRefEquals(argument, element))) {
     return undefined;
   }

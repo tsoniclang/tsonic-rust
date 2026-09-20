@@ -37,17 +37,25 @@ test("typed and ordinary numeric arrays cross files without copying their input 
   assert.equal(run.status, 0, JSON.stringify(run));
 });
 
-for (const sparse of ["new Array<number>(3)", "[1, 2]"]) {
-  test(`numeric array union copying requires density for ${sparse}`, () => {
-    const { result } = compileRust({ surfaces: ["js"],
-      target: { id: "rust", options: { outputType: "bin", crateName: "sparse_union" } },
+for (const initialized of ["new Array<number>(3)", "[1, 2]"]) {
+  test(`numeric array union copying retains initialized storage and independent output for ${initialized}`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ surfaces: ["js"], packages: [acmeTestingPackage()],
+      target: { id: "rust", options: { outputType: "bin", crateName: "dense_union" } },
       files: {
         "arrays.ts": numberArrayUnionFiles["arrays.ts"],
         "index.ts": `import { copy } from "./arrays.js";
-          export function main(): void { const values = ${sparse}; delete values[0]; copy(values); }`,
+          import { check } from "@acme/testing";
+          export function main(): void {
+            const values = ${initialized};
+            const before = values[0];
+            const copied = copy(values);
+            check(copied.length === values.length && copied[0] === before);
+            copied[0] = 19;
+            check(values[0] === before);
+          }`,
       },
     });
-    assert.ok(result.diagnostics.some(diagnostic => diagnostic.severity === "error" || diagnostic.category === "error"));
-    assert.equal(result.artifacts.length, 0);
+    assert.deepEqual(result.diagnostics, []);
+    validateGeneratedProject("dense-array-union-copy", result.artifacts, { run: true });
   });
 }

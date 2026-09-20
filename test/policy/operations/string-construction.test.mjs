@@ -138,7 +138,7 @@ export async function main(): Promise<void> {
 }
 ` } });
   assert.deepEqual(result.diagnostics, []);
-  assert.match(artifactText(result, "src/main.rs"), /await_value/u);
+  assert.match(artifactText(result, "src/main.rs"), /tsonic_entry\(\)\.into_value\(\)/u);
   const native = validateGeneratedProject("infallible-js-async-entry", result.artifacts, { run: true });
   assert.equal(native.stdout.trim(), "1");
 });

@@ -8,7 +8,7 @@ import {
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { applyRustValueConversion } from "./value-conversions.js";
 import { applyRustArgumentMode } from "./input-shaping.js";
-import { applyRustFallibleResultExpression, rustExpressionUsesTryInCurrentRegion } from "../types/fallible-shape.js";
+import { planNullishCoalescing } from "./nullish-coalescing.js";
 import {
   BinaryExpression_Left,
   BinaryExpression_Right,
@@ -40,7 +40,6 @@ import type { Node } from "@tsonic/tsts";
 import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
-import { rustTypeFromCarrierInContext } from "../types/render.js";
 
 export interface RustPlannedProjectTypeTest {
   readonly fact: Extract<RustTargetOperationFact, { readonly kind: "project-type-test" }>;
@@ -176,92 +175,7 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
     const leftNode = BinaryExpression_Left(context.input.program.source.ast, node);
     return leftNode === undefined ? undefined : planExpression(leftNode, context);
   }
-  if (fact !== undefined && fact.kind === "option-coalesce") {
-    const leftNode = BinaryExpression_Left(context.input.program.source.ast, node);
-    const rightNode = BinaryExpression_Right(context.input.program.source.ast, node);
-    const left = leftNode === undefined
-      ? undefined
-      : planExpressionBeforeValueProjections(leftNode, context, "value");
-    const right = rightNode === undefined ? undefined : planExpression(rightNode, context);
-    if (left === undefined || right === undefined ||
-      !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.option-coalesce-carrier") ||
-      !selectedOperationMatches(
-        context.input.program.facts.getSelectedTargetOperator(node),
-        fact.operationId,
-        "operator",
-        fact.resultCarrier,
-        rustTargetOperationText(fact),
-      )) {
-      return undefined;
-    }
-    context.usedAliases?.add("rt");
-    const fallbackIsFallible = rustExpressionUsesTryInCurrentRegion(right);
-    const activeErrorType = rustActiveErrorType(context);
-    if (fallbackIsFallible && activeErrorType === undefined) {
-      return undefined;
-    }
-    const fallback: RustExpr = !fallbackIsFallible && right.kind === "call" && right.args.length === 0
-      ? { kind: "path", path: right.path }
-      : {
-          kind: "closure",
-          params: [],
-          body: fallbackIsFallible
-            ? applyRustFallibleResultExpression(right, {
-                errorType: activeErrorType!,
-              })
-            : right,
-        };
-    const presentValueName = allocateRustSyntheticName(
-      context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []),
-      "present_value",
-    );
-    const present: RustExpr = fallbackIsFallible && fact.rightOperand !== "option"
-      ? { kind: "path", path: "Ok" }
-      : fallbackIsFallible
-        ? {
-            kind: "closure",
-            params: [{ name: presentValueName, byRefCopy: false }],
-            body: {
-              kind: "call",
-              path: "Ok",
-              args: [fact.rightOperand === "option"
-                ? { kind: "call", path: "Some", args: [{ kind: "path", path: presentValueName }] }
-                : { kind: "path", path: presentValueName }],
-            },
-          }
-        : {
-            kind: "path",
-            path: fact.rightOperand === "option" ? "Some" : "core::convert::identity",
-          };
-    const coalescedValueType = fallbackIsFallible ? rustTypeFromCarrierInContext(fact.resultCarrier, context) : undefined;
-    if (fallbackIsFallible && coalescedValueType === undefined) return undefined;
-    const coalesced: RustExpr = {
-      kind: "call",
-      path: "rt::option_coalesce",
-      ...(fallbackIsFallible ? { genericArguments: [
-        { kind: "type" as const, type: { kind: "infer" as const } },
-        { kind: "type" as const, type: { kind: "named" as const, path: "core::result::Result", genericArguments: [
-          { kind: "type" as const, type: coalescedValueType! },
-          { kind: "type" as const, type: activeErrorType! },
-        ] } },
-      ] } : {}),
-      args: [
-        left,
-        present,
-        fallback,
-      ],
-    };
-    if (!fallbackIsFallible) {
-      return coalesced;
-    }
-    context.usedAliases?.add("rt");
-    return {
-      kind: "try",
-      expr: coalesced,
-      resultErrorType: activeErrorType!,
-      operandErrorType: activeErrorType!,
-    };
-  }
+  if (fact?.kind === "option-coalesce") return planNullishCoalescing(node, fact, context);
   if (fact !== undefined && fact.kind === "option-check") {
     const leftNode = BinaryExpression_Left(context.input.program.source.ast, node);
     const rightNode = BinaryExpression_Right(context.input.program.source.ast, node);

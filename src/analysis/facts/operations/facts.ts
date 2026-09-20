@@ -561,7 +561,9 @@ export type RustTargetOperationFact =
   | {
       readonly kind: "option-coalesce";
       readonly operationId: string;
-      readonly rightOperand: "value" | "option";
+      readonly leftOptionDepth: number;
+      readonly rightOptionDepth: number;
+      readonly rightValueForm: "raw" | "value";
       readonly resultCarrier: TargetTypeRef;
     }
   | { readonly kind: "nullish-identity"; readonly operationId: string; readonly resultCarrier: TargetTypeRef }

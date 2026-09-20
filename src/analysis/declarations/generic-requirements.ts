@@ -1,4 +1,4 @@
-import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
+import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import { rustGenericNumericOperandsKey } from "../facts/generic-numeric.js";
 import { classifyCarrierRequirements } from "./generic-carrier-requirements.js";
@@ -12,6 +12,7 @@ import { rustJsArrayEntriesElementTargetType } from "../../target-model/types/ca
 import { rustTargetTypeParameterNames } from "../../target-model/types/carriers/generic-references.js";
 import { analyzeRustShapeGenericRequirements, type RustShapeGenericRequirementContract } from "./generic-shape-requirements.js";
 import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";
+import type { RustValueLifetimePlan } from "../program/value-lifetimes.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import {
   resolveTargetContractFixedPoint,
@@ -31,6 +32,7 @@ import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import {
   getRustGeneratorProtocol,
+  isRustCopyCarrier,
   rustCarrierSupportsTrait,
   rustClosureProtocol,
   rustJsPromiseTargetId,
@@ -114,7 +116,8 @@ export function analyzeRustDeclarationGenericRequirements(
   typeFamilies: RustSourceTypeFamilyRegistry,
   projectTypes: RustProjectTypePolicy,
   shapes: RustStructuralShapePlan,
-  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
+  definitions: RustTypeDefinitions,
+  valueLifetimes: RustValueLifetimePlan,
 ): AnalyzeRustDeclarationGenericRequirementsResult {
   const ast = source.ast;
   const diagnostics: TargetDiagnostic[] = [];
@@ -177,6 +180,7 @@ export function analyzeRustDeclarationGenericRequirements(
         sourceLifetimes,
         typeFamilies,
         projectTypes,
+        valueLifetimes,
         idByDeclaration,
         implementationDeclaration,
         contractFor(candidate) {
@@ -264,6 +268,7 @@ export function analyzeRustDeclarationGenericRequirements(
 }
 
 interface ClassifyCallableInput {
+  readonly valueLifetimes: RustValueLifetimePlan;
   readonly typeDefinitions: RustTypeDefinitions;
   readonly ast: AstReader;
   readonly declaration: Node;
@@ -552,6 +557,15 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       if (error !== undefined) return error;
     }
     if (operation?.kind === "provider-operation") {
+      for (const argument of operation.abi.sourceArguments) {
+        if (argument.disposition !== "runtime" || argument.mode !== "value" ||
+          argument.form !== "value" || isRustCopyCarrier(argument.carrier)) continue;
+        const expression = ast.arguments(node)[argument.sourceIndex];
+        if (expression === undefined || !ast.is.IsIdentifier(expression) ||
+          input.valueLifetimes.canMove(expression)) continue;
+        const error = addUse(expression, argument.carrier, ["clone"]);
+        if (error !== undefined) return error;
+      }
       for (const requirement of operation.carrierRequirements ?? []) {
         const error = addUse(node, requirement.carrier, [requirement.requirement]);
         if (error !== undefined) return error;

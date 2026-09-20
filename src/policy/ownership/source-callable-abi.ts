@@ -145,7 +145,7 @@ export function createRustSourceCallableAbiResolver(): RustSourceCallableAbiReso
           rustTargetTypeRefEquals(parameterLaneCarrier, base) &&
           isRustStringCarrier(base) &&
           !requiresOwnedValue &&
-          parameterCanUseSharedBorrow(parameter, context)
+          parameterCanUseSharedBorrow(parameter, context, options)
         ? {
             kind: "reference" as const,
             referent: base,
@@ -318,31 +318,57 @@ function parameterUsesFlowState(
 function parameterCanUseSharedBorrow(
   parameter: Node,
   context: RustTargetTypeResolutionContext,
+  options: RustTargetTypeResolutionOptions,
 ): boolean {
   const { ast } = context;
-  const name = ast.name(parameter);
-  const declarationReference = context.source.navigation.sourceReferenceFor(name);
-  if (name === undefined || declarationReference?.declaration !== parameter) {
-    return false;
+  const pending = [parameter];
+  const visited = new Set<Node>();
+  while (pending.length > 0) {
+    const current = pending.pop()!;
+    if (visited.has(current)) continue;
+    visited.add(current);
+    const name = ast.name(current);
+    if (name === undefined || context.source.navigation.sourceReferenceFor(name)?.declaration !== current ||
+      ast.body(enclosingCallable(ast.parent(current), context)) === undefined ||
+      parameterUsesFlowState(current, "moved", context)) return false;
+    const summary = context.source.navigation.parameterUseSummary(current);
+    if (summary === undefined || summary.bindingWritten || summary.memberWritten || summary.captured ||
+      summary.exported) return false;
+    for (const { reference, role, throughMember } of summary.uses) {
+      const flow = context.facts.resolve(reference, flowStateFactKey) ?? context.facts.get(reference, flowStateFactKey);
+      if (flow?.state === "borrowed-shared" || throughMember || role === "receiver" || role === "type-only") continue;
+      let operand = reference;
+      let call = ast.parent(operand);
+      while (call !== undefined && ast.is.IsParenthesizedExpression(call)) {
+        operand = call;
+        call = ast.parent(call);
+      }
+      if (call === undefined || !ast.is.IsCallExpression(call)) return false;
+      const semantics = context.semanticsFor(call);
+      const selected = semantics.operations.call(call);
+      if (selected === undefined || selected.sourceArguments.some(argument =>
+        ast.is.IsSpreadElement(argument.expression))) return false;
+      const argumentIndex = selected.sourceArguments.findIndex(argument => argument.expression === operand);
+      const declaration = semantics.declarations.signatureDeclaration(selected.selectedSignature);
+      const implementation = declaration === undefined ? undefined : context.source.navigation.callableImplementation(declaration);
+      if (argumentIndex < 0 || implementation?.kind !== "resolved" ||
+        !ast.is.IsFunctionDeclaration(implementation.implementation.declaration)) return false;
+      const destination = ast.parameters(implementation.implementation.declaration)[argumentIndex];
+      const parameterSyntax = destination === undefined ? undefined : ast.as.AsParameterDeclaration(destination);
+      if (destination === undefined || parameterSyntax === undefined || parameterSyntax.DotDotDotToken !== undefined ||
+        ast.questionToken(destination) !== undefined || Node_Initializer(ast, destination) !== undefined) return false;
+      const destinationFile = ast.getSourceFile(destination);
+      if (destinationFile === undefined) return false;
+      const carrier = resolveRustTargetTypeRef(Node_Type(ast, destination) ?? destination, {
+        ...context,
+        currentSourceFile: destinationFile,
+        currentSemantics: context.semanticsFor(destination),
+      }, options);
+      if (carrier === undefined || !isRustStringCarrier(carrier)) return false;
+      pending.push(destination);
+    }
   }
-  const callable = enclosingCallable(ast.parent(parameter), context);
-  const body = ast.body(callable);
-  if (body === undefined) {
-    return false;
-  }
-  const summary = context.source.navigation.parameterUseSummary(parameter);
-  if (summary === undefined || summary.uses.length === 0 ||
-    summary.bindingWritten || summary.memberWritten || summary.captured ||
-    summary.returned || summary.yielded || summary.aliasedOrStored ||
-    summary.exported) {
-    return false;
-  }
-  return summary.uses.every(({ reference, role }) => {
-    const flow = context.facts.resolve(reference, flowStateFactKey) ??
-      context.facts.get(reference, flowStateFactKey);
-    return flow?.state === "borrowed-shared" ||
-      role === "receiver";
-  });
+  return true;
 }
 
 function parameterOnlyForwardsThrownValue(

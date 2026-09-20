@@ -10,6 +10,7 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { selectRustOptionalChain } from "../../../dist/policy/operations/optional-chains.js";
 import {
   rustOptionTargetType,
+  rustOptionValueCarrier,
   rustStringTargetType,
 } from "../../../dist/target-model/types/index.js";
 
@@ -618,8 +619,35 @@ test("optional-chain selection fails closed without every exact carrier", () => 
     innerResultCarrier: stringCarrier,
   }), {
     kind: "rejected",
-    message: "Optional-chain guard must be exactly Option of the TSTS-selected non-null receiver carrier.",
+    message: "Optional-chain guard must contain the exact TSTS-selected non-null receiver through Option layers only.",
   });
+});
+
+test("optional-chain selection retains the exact nested presence depth", () => {
+  const stringCarrier = rustStringTargetType();
+  const optionString = rustOptionTargetType(stringCarrier);
+  const input = {
+    expression: {}, guard: {}, operationKind: "property",
+    sourceGuardCarrier: rustOptionTargetType(optionString),
+    selectedGuardCarrier: stringCarrier,
+    innerResultCarrier: stringCarrier,
+  };
+  const selection = selectRustOptionalChain(input);
+  assert.equal(selection.kind, "optional");
+  assert.equal(selection.fact.guardDepth, 2);
+  assert.deepEqual(selection.fact.resultCarrier, optionString);
+  assert.deepEqual(rustOptionValueCarrier(input.sourceGuardCarrier), stringCarrier);
+  assert.equal(rustOptionValueCarrier(undefined), undefined);
+  const cyclic = {
+    ...optionString,
+    genericArguments: [{ ...optionString.genericArguments[0] }],
+  };
+  cyclic.genericArguments[0].type = cyclic;
+  assert.equal(rustOptionValueCarrier(cyclic), undefined);
+  assert.equal(selectRustOptionalChain({ ...input, sourceGuardCarrier: cyclic }).kind, "rejected");
+  assert.equal(selectRustOptionalChain({
+    ...input, sourceResultCarrier: rustOptionTargetType(optionString),
+  }).kind, "rejected");
 });
 
 test("provider value identifiers lower only from exact provider declaration evidence", () => {

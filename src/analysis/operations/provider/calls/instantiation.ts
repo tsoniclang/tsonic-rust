@@ -24,7 +24,7 @@ import { recordRustValueCarrierReconciliation, rustEffectiveValueCarrier } from 
 import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution.js";
 import { rustArgumentPassingKey, rustSelectedCallKey, rustSelectedOperationKey } from "../../../../target-model/facts/selections.js";
 import { rustArgumentPassingMode } from "../../../facts/parameter-passing.js";
-import { rustOptionElementCarrier } from "../../../../target-model/types/index.js";
+import { rustOptionElementCarrier, rustOptionValueCarrier } from "../../../../target-model/types/index.js";
 import { rustTargetOperationFactKey, rustPreparedOperationResultFactKey, rustOptionalChainFactKey } from "../../../facts/keys.js";
 import { rustTargetOperationText } from "../../../facts/target-operation.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
@@ -732,12 +732,10 @@ export function selectedCallReceiverValueCarrier(
   }
   const optionElement = rustOptionElementCarrier(storedCarrier);
   if (optionElement !== undefined) {
-    if (selectedCarrier === undefined ||
-      storedCarrier !== undefined && rustTargetTypeRefEquals(storedCarrier, selectedCarrier)) {
-      return optionElement;
-    }
-    return rustTargetTypeRefEquals(optionElement, selectedCarrier)
-      ? selectedCarrier
+    const presentCarrier = rustOptionValueCarrier(storedCarrier);
+    return presentCarrier !== undefined && (selectedCarrier === undefined ||
+        rustTargetTypeRefEquals(presentCarrier, rustOptionValueCarrier(selectedCarrier)))
+      ? presentCarrier
       : undefined;
   }
   return storedCarrier !== undefined && selectedCarrier !== undefined &&

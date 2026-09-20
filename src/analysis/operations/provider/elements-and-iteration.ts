@@ -13,7 +13,7 @@ import {
   isRustJsArrayLikeCarrier,
   isRustStringCarrier,
   rustStringTargetType,
-  rustJsArrayLikeIterationElementTargetType,
+  rustJsArrayLikeElementTargetType,
   rustJsRegExpExecArrayTargetType,
   rustJsRegExpStringIteratorTargetId,
   rustRegExpExecArrayTargetType,
@@ -320,8 +320,7 @@ export function selectRustCheckedIteration(
     }, elementCarrier);
   }
   const iterable = resolveRustTargetTypeRef(request.expression, context, options);
-  const targetIteration = rustIterableTargetPolicy(iterable,
-    rustJsArrayEntriesElementTargetType(iterable) !== undefined && options.arrayDensity.entries(request.expression), context.typeDefinitions);
+  const targetIteration = rustIterableTargetPolicy(iterable, context.typeDefinitions);
   if (targetIteration === undefined) {
     return rejectSelectedOperation(
       request.statement,
@@ -403,15 +402,13 @@ type RustIterableTargetPolicy =
       readonly path: string;
     };
 
-function rustIterableTargetPolicy(iterable: TargetTypeRef | undefined, denseEntries: boolean, definitions: RustTypeDefinitions): RustIterableTargetPolicy | undefined {
+function rustIterableTargetPolicy(iterable: TargetTypeRef | undefined, definitions: RustTypeDefinitions): RustIterableTargetPolicy | undefined {
   const entryElement = rustJsArrayEntriesElementTargetType(iterable);
   if (entryElement !== undefined) {
     return {
       kind: "receiver-method",
-      elementCarrier: denseEntries
-        ? { kind: "tuple", elements: [{ kind: "source-primitive", name: "float64" }, entryElement] }
-        : rustJsArrayEntryTargetType(entryElement),
-      method: denseEntries ? "checked_present_values" : "clone",
+      elementCarrier: rustJsArrayEntryTargetType(entryElement),
+      method: "clone",
     };
   }
   if (isRustStringCarrier(iterable)) {
@@ -431,7 +428,7 @@ function rustIterableTargetPolicy(iterable: TargetTypeRef | undefined, denseEntr
   if (fixed !== undefined) {
     return { kind: "borrowed", elementCarrier: fixed.element, input: "reference" };
   }
-  const jsElement = rustJsArrayLikeIterationElementTargetType(iterable);
+  const jsElement = rustJsArrayLikeElementTargetType(iterable);
   if (jsElement !== undefined) {
     return { kind: "js-array", elementCarrier: jsElement };
   }

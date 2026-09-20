@@ -295,8 +295,14 @@ export function planArrayLiteral(node: Node, context: RustPlanContext): RustExpr
   const sourceElements = context.input.program.source.ast.elements(node);
   const hasHoles = sourceElements.some((element) =>
     element !== undefined && context.input.program.source.ast.kindName(element) === "KindOmittedExpression");
+  if (hasHoles) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(diagnosticInput(context, node),
+      "rust.array.sparse-literal",
+      "Sparse array literals are not supported by native dense arrays; use explicit undefined elements."));
+    return undefined;
+  }
   const elements: RustExpr[] = [];
-  for (const [index, element] of sourceElements.entries()) {
+  for (const element of sourceElements) {
     if (element === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, node),
@@ -305,16 +311,11 @@ export function planArrayLiteral(node: Node, context: RustPlanContext): RustExpr
       ));
       return undefined;
     }
-    if (context.input.program.source.ast.kindName(element) === "KindOmittedExpression") {
-      continue;
-    }
     const planned = planExpression(element, context);
     if (planned === undefined) {
       return undefined;
     }
-    elements.push(fact.lane === "js" && hasHoles
-      ? { kind: "tuple-literal", elements: [{ kind: "int-literal", text: String(index) }, planned] }
-      : planned);
+    elements.push(planned);
   }
   if (fact.lane === "native") {
     const array: RustExpr = { kind: "vec-literal", elements };
@@ -324,9 +325,7 @@ export function planArrayLiteral(node: Node, context: RustPlanContext): RustExpr
   context.usedAliases?.add("js_abi");
   return {
     kind: "call",
-    path: hasHoles ? "js_abi::JsArray::from_sparse" : "js_abi::JsArray::from_dense",
-    args: hasHoles
-      ? [{ kind: "int-literal", text: String(fact.length) }, { kind: "vec-literal", elements }]
-      : [{ kind: "vec-literal", elements }],
+    path: "js_abi::JsArray::from_dense",
+    args: [{ kind: "vec-literal", elements }],
   };
 }

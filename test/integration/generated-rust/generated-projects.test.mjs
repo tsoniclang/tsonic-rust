@@ -193,8 +193,7 @@ export function main(): void {
   check(concatenated.length === 5);
   check(concatenated.join(",") === "1,2,3,4,5");
 
-  const values = [1, , 3];
-  values.length = 5;
+  const values: (number | undefined)[] = [1, undefined, 3, undefined, undefined];
   values[3] = 4;
   check(values.length === 5);
   check(values.at(-1) === undefined);
@@ -344,7 +343,7 @@ export async function drive(): Promise<int32> {
   validateGeneratedProject("r4b-async-lib", result.artifacts);
 });
 
-test("generated cargo binary proves closed JavaScript string parity", { timeout: 300_000 }, () => {
+test("generated cargo binary proves native strings through the JavaScript API surface", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     surfaces: ["js"],
     packages: [acmeTestingPackage()],
@@ -366,7 +365,10 @@ export function main(): void {
   check("hello".replace("ll", "[$&][$\`][$']") === "he[ll][he][o]o");
   check("banana".replaceAll("a", "$&$&") === "baanaanaa");
   check("a".concat("b", "c") === "abc");
-  check(String.fromCharCode(65.9, 66) === "AB");
+  check(String.fromCharCode(65, 66) === "AB");
+  let invalidCharacter = false;
+  try { String.fromCharCode(65.9); } catch { invalidCharacter = true; }
+  check(invalidCharacter);
   check(String.fromCodePoint(0x1f600) === "😀");
   check("  value  ".trimLeft().trimRight().valueOf() === "value");
 }

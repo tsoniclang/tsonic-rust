@@ -11,6 +11,8 @@ import {
   rustStructuralMethodStorageCarrier,
   rustStructuralObjectCarrierValue,
   rustStringTargetType,
+  rustSourcePrimitiveTargetType,
+  rustOptionTargetType,
   rustUnitTargetType,
   rustTargetGenericBindingsForArguments,
   substituteRustTargetGenerics,
@@ -44,7 +46,6 @@ import { selectRustRuntimeCallableGenerics } from "./runtime-callable-generics.j
 import { rustLifetimeKey } from "../../../../target-model/lifetimes/index.js";
 import { rustOperandSupportsSourceNumeric } from "../../generic-numeric.js";
 import { selectRustPointerViewCall } from "../../pointer-views.js";
-import { selectRustArrayCopyMode } from "../../array-copy.js";
 import type {
   RustCheckedCallSelectionInput,
   RustCheckedCallSelectionResult,
@@ -227,6 +228,27 @@ export function selectRustCheckedCall(
       context,
       options,
     );
+    if (selectedSourceMember.profile === "native" && selectedSourceMember.ownerName === "String") {
+      const name = selectedSourceMember.memberName;
+      const noArgument = name === "len" || name === "is_empty";
+      const search = name === "find" || name === "rfind";
+      const boolean = name === "is_empty" || name === "contains" || name === "starts_with" || name === "ends_with";
+      const parameters = noArgument ? [] : [rustStringTargetType()];
+      if ((!search && !boolean && name !== "len") || receiverCarrier === undefined ||
+        !rustTargetTypeRefEquals(receiverCarrier, rustStringTargetType()) ||
+        selectedCallArgumentNodes(request).length !== parameters.length) {
+        return rejectSelectedOperation(request.source.call, context, "RUST_NATIVE_STRING_CONTRACT",
+          "Native String operations require their exact selected declaration and native string operands.");
+      }
+      const index = rustSourcePrimitiveTargetType("native-uint");
+      return acceptSelectedCall(request, {
+        kind: "provider-operation", operationId: `tsonic.rust.native-string.${name}`, operationKind: "method",
+        target: { form: "receiver-method", name, argModes: parameters.map(() => "ref" as const) },
+        parameterCarriers: parameters,
+        resultCarrier: search ? rustOptionTargetType(index) : boolean ? rustSourcePrimitiveTargetType("bool") : index,
+        isAsync: false, isFallible: false, errorBoundary: "none",
+      }, parameters, context, options, { sourceName: name });
+    }
     const generator = selectRustGeneratorSourceCall({
       ownerName: selectedSourceMember.ownerName,
       memberName: selectedSourceMember.memberName,
@@ -325,7 +347,6 @@ export function selectRustCheckedCall(
       ? undefined
       : resolveRustTargetTypeRef(request.source.sourceResultType, context, options);
     const selection = selectJsSurfaceOperation({
-      arrayCopyMode: () => selectRustArrayCopyMode(request, context, options),
       ownerName: selectedSourceMember.ownerName,
       memberName: selectedSourceMember.memberName,
       operationKind: "call",

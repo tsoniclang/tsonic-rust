@@ -10,8 +10,7 @@ export function selectRustNumberArrayUnionOperation(request: JsOperationRequest,
   const argument = request.argumentCarriers?.[0];
   if (request.ownerName === "ArrayConstructor" && request.memberName === "from" && request.operationKind === "call" &&
     request.argumentCarriers?.length === 1 && isRustNumberArrayUnion(argument, definitions) &&
-    request.selectedMethodTypeArgumentCarriers?.length === 1 && rustTargetTypeRefEquals(request.selectedMethodTypeArgumentCarriers[0], number) &&
-    request.arrayCopyMode?.() === "dense") {
+    request.selectedMethodTypeArgumentCarriers?.length === 1 && rustTargetTypeRefEquals(request.selectedMethodTypeArgumentCarriers[0], number)) {
     const resultCarrier = rustJsArrayTargetType(number);
     return { resultCarrier, parameterCarriers: [argument!], fact: {
       kind: "provider-operation", operationId: "rust.js.Array.from.number-array-union", operationKind: "method",

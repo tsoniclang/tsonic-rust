@@ -82,7 +82,6 @@ export type RustValueConversionContract = RustValueConversionContractBase & (
   | {
       readonly lowering: "rest-sequence";
       readonly collection: "vec" | "js-array" | "fixed-array" | "tuple";
-      readonly holePolicy: "reject" | "number-nan";
       readonly elementConversions: readonly (RustValueConversionContract | null)[];
     }
   | {
@@ -188,9 +187,6 @@ export function rustValueConversionContract(
       value.elementConversions.length !== sequence.elements.length) return undefined;
     const conversions = value.elementConversions.map(conversion => conversion === null ? null : rustValueConversionContract(conversion, definitions));
     if (!isRustTargetTypeRef(value.elementTarget) || sequence.elements.some(element => !rustCarrierSupportsClone(element, definitions)) ||
-      (value.holePolicy !== "reject" && value.holePolicy !== "number-nan") ||
-      (sequence.collection === "js-array" && value.holePolicy !== "number-nan") ||
-      (value.holePolicy === "number-nan" && !rustTargetTypeRefEquals(value.elementTarget, float64Carrier)) ||
       sequence.elements.some((element, index) => {
         const conversion = conversions[index];
         return conversion === null ? !rustTargetTypeRefEquals(element, value.elementTarget)
@@ -204,7 +200,7 @@ export function rustValueConversionContract(
     }
     return {
       category: "projection", lowering: "rest-sequence", collection: sequence.collection,
-      holePolicy: value.holePolicy, sourceMode: "ref", source: value.source,
+      sourceMode: "ref", source: value.source,
       target: { kind: "array", element: value.elementTarget }, fallible: false,
       elementConversions: conversions as readonly (RustValueConversionContract | null)[],
     };
@@ -648,7 +644,7 @@ export function rustValueConversionIdentity(value: RustValueConversion): string 
     return `native-upcast.${JSON.stringify(value.source)}.${JSON.stringify(value.target)}.${value.path}`;
   }
   if (value.kind === "rest-sequence") {
-    return `rest-sequence.${JSON.stringify(value.source)}.${JSON.stringify(value.elementTarget)}.${value.holePolicy}.${value.elementConversions.map(conversion => conversion === null ? "identity" : rustValueConversionIdentity(conversion)).join("|")}`;
+    return `rest-sequence.${JSON.stringify(value.source)}.${JSON.stringify(value.elementTarget)}.${value.elementConversions.map(conversion => conversion === null ? "identity" : rustValueConversionIdentity(conversion)).join("|")}`;
   }
   return value.kind === "semantic-conversion"
     ? value.id

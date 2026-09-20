@@ -77,7 +77,7 @@ export function text(): string {
   validateGeneratedProject("expression-template-literal", result.artifacts);
 });
 
-test("string relational operators preserve TypeScript UTF-16 ordering", { timeout: 300_000 }, () => {
+test("string relational operators use native UTF-8 ordering", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     packages: [acmeTestingPackage()],
     target: { id: "rust", options: { outputType: "bin", crateName: "string_ordering_proof" } },
@@ -92,7 +92,7 @@ export function main(): void {
   check("alpha" <= "alpha");
   check("beta" > "alpha");
   check("alpha" >= "alpha");
-  check(supplementary < privateUse);
+  check(supplementary > privateUse);
 }
 `,
     },
@@ -101,7 +101,7 @@ export function main(): void {
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /rt::source_string_less_than\("alpha", "beta"\)/u);
-  assert.match(source, /rt::source_string_less_than\(&supplementary, &private_use\)/u);
+  assert.match(source, /rt::source_string_greater_than\(&supplementary, &private_use\)/u);
   validateGeneratedProject("expression-string-ordering", result.artifacts, { run: true });
 });
 
@@ -583,7 +583,7 @@ export function main(): void {
   validateGeneratedProject("expression-bigint-division", result.artifacts, { run: true });
 });
 
-test("delete lowers only an exact mutable JS Array index selection", { timeout: 300_000 }, () => {
+test("dense array deletion rejects without mutating values, length or enumerable keys", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     surfaces: ["js"],
     packages: [acmeTestingPackage()],
@@ -593,16 +593,19 @@ test("delete lowers only an exact mutable JS Array index selection", { timeout: 
 import { check } from "@acme/testing";
 import type { int32 } from "@tsonic/core/types.js";
 
+export function remove(values: (int32 | undefined)[]): boolean {
+  return delete values[1];
+}
 export function main(): void {
   const values: (int32 | undefined)[] = [10, 20, 30];
-  check(delete values[1]);
+  check(values[1] === 20);
   check(values.length === 3);
   let keyCount: int32 = 0;
   for (const key in values) {
-    check(key !== "1");
+    check(key === "0" || key === "1" || key === "2");
     keyCount += 1;
   }
-  check(keyCount === 2);
+  check(keyCount === 3);
 }
 `,
     },
@@ -614,7 +617,21 @@ export function main(): void {
     source,
     /values\.delete_number\(1\.0\)/u,
   );
-  validateGeneratedProject("expression-delete-js-array", result.artifacts, { run: true });
+  validateGeneratedProject("expression-delete-js-array", [...result.artifacts, {
+    path: "tests/dense_delete.rs",
+    text: `use std::panic::{catch_unwind, AssertUnwindSafe};
+use tsonic_rust_js::JsArray;
+
+#[test]
+fn deletion_rejects_without_mutation() {
+    let values = JsArray::from_dense(vec![Some(10), Some(20), Some(30)]);
+    assert!(catch_unwind(AssertUnwindSafe(|| delete_proof::remove(values.clone()))).is_err());
+    assert_eq!(values.values(), vec![Some(10), Some(20), Some(30)]);
+    assert_eq!(values.len(), 3);
+    assert_eq!(values.enumerable_own_keys(), vec!["0", "1", "2"]);
+}
+`,
+  }], { run: true });
 });
 
 test("delete rejects non-JS-array targets without target-name inference", () => {
