@@ -280,6 +280,21 @@ export function planRustNonConsumingValue(
   expression: RustExpr,
   context: RustPlanContext,
 ): RustExpr {
+  const { ast } = context.input.program.source;
+  let source = node;
+  while (ast.is.IsParenthesizedExpression(source) || ast.is.IsAsExpression(source) ||
+    ast.is.IsSatisfiesExpression(source) || ast.is.IsNonNullExpression(source) ||
+    ast.is.IsTypeAssertion(source)) {
+    const inner = Node_Expression(ast, source);
+    if (inner === undefined) return expression;
+    source = inner;
+  }
+  const operation = context.input.program.facts.getFact(source, rustTargetOperationFactKey);
+  const kind = ast.kindName(source);
+  const storageRead = ast.is.IsIdentifier(source) || ast.is.IsElementAccessExpression(source) ||
+    kind === "KindThisExpression" || kind === "KindThisKeyword" ||
+    operation?.kind === "source-field" && operation.valueSemantics.kind === "stored";
+  if (!storageRead) return expression;
   const carrier = context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
   return rustReadRequiresClone(carrier, context) &&
       expression.kind === "method-call" && expression.method === "clone" &&

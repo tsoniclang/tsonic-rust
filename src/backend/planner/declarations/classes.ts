@@ -408,7 +408,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     name: className,
     ...(generatedStructAttributes.length === 0 ? {} : { attrs: generatedStructAttributes }),
     visibility: structVisibility,
-    derives: explicitWrapperTraits ? [] : ["Clone", "Debug", "PartialEq"],
+    derives: representation.kind === "value" ? ["Clone"] : explicitWrapperTraits ? [] : ["Clone", "Debug", "PartialEq"],
     generics,
     fields: structFields,
   };

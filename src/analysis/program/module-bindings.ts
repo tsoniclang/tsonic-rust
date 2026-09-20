@@ -1,5 +1,5 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import { flowStateFactKey, pointerOperationFactKey } from "@tsonic/tsts";
+import { flowStateFactKey } from "@tsonic/tsts";
 import { isRustStringCarrier } from "../../target-model/types/index.js";
 import {
   KindFalseKeyword,
@@ -97,18 +97,9 @@ export function createRustModuleBindingPolicy(
 function moduleStringCanUseStaticStorage(declaration: Node, context: RustAnalysisContext): boolean {
   const summary = context.source.navigation.declarationUseSummary(declaration);
   if (summary.exported || summary.bindingWritten) return false;
-  return summary.uses.every(use => {
-    if (context.facts.resolve(use.reference, flowStateFactKey) !== undefined ||
-      context.facts.get(use.reference, flowStateFactKey) !== undefined) return false;
-    let current: Node | undefined = use.reference;
-    while (current !== undefined && !context.ast.is.IsSourceFile(current) &&
-      !context.ast.is.IsBlock(current)) {
-      if (context.facts.resolve(current, pointerOperationFactKey) !== undefined ||
-        context.facts.get(current, pointerOperationFactKey) !== undefined) return false;
-      current = context.ast.parent(current);
-    }
-    return true;
-  });
+  return summary.uses.every(use =>
+    context.facts.resolve(use.reference, flowStateFactKey) === undefined &&
+    context.facts.get(use.reference, flowStateFactKey) === undefined);
 }
 
 function collectNativeCallableCandidates(

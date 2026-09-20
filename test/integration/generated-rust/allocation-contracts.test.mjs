@@ -117,6 +117,7 @@ test("static string selection preserves exported bindings and deferred default r
   for (const [source, storage] of [
     ['const value = "ready"; export function read(): string { return value; }', "native-const"],
     ['export const value = "public";', "module-cell"],
+    ['import { addressOf, loadPointer } from "@tsonic/core/lang.js"; let value = "ready"; export function read(): string { return loadPointer(addressOf(value)); }', "module-cell"],
     ['export const result = read(); const value = "later"; function read(input: string = value): string { return input; }', "module-cell"],
     ['const value = "ready"; export const result = read(); function read(input: string = value): string { return input; }', "native-const"],
   ]) {
@@ -131,4 +132,29 @@ test("static string selection preserves exported bindings and deferred default r
     assert.notEqual(declaration, undefined);
     assert.equal(program.facts.getFact(declaration, rustModuleBindingFactKey)?.storage, storage, source);
   }
+  assert.throws(() => analyzeRust({ surfaces: ["js"], files: { "index.ts":
+    'import { addressOf } from "@tsonic/core/lang.js"; const value = "ready"; export const pointer = addressOf(value);',
+  } }), /addressOf\(\.\.\.\) requires writable storage/u);
+});
+
+test("non-consuming comparisons preserve authored clone calls and their effects", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
+    files: { "index.ts": `
+let calls = 0;
+class Counter { clone(): string { calls++; return "value"; } }
+export function main(): void {
+  const counter = new Counter();
+  let matches = 0;
+  if (counter.clone() !== undefined) matches++;
+  if ((counter.clone()) === "value") matches++;
+  if ((counter.clone() as string) !== undefined) matches++;
+  if (matches !== 3 || calls !== 3) throw new Error("authored call was erased");
+}
+` },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  const output = artifactText(result, "src/index.rs");
+  assert.equal([...output.matchAll(/counter\.clone\(\)/gu)].length, 3);
+  validateGeneratedProject("authored-clone-effects", result.artifacts, { run: true });
 });

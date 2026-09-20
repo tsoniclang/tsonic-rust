@@ -26,6 +26,7 @@ export function fakeAstReader(sourceFiles = []) {
       IsNewExpression: () => false,
       IsObjectLiteralExpression: () => false,
       IsParenthesizedExpression: () => false,
+      IsPropertyAccessExpression: () => false,
       IsVariableDeclaration: () => false,
       IsVariableStatement: () => false,
       IsInterfaceDeclaration: () => false,

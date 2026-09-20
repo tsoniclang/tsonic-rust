@@ -121,7 +121,9 @@ function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr
     }
     if (rustSourceFieldHasValueReceiver(node, context)) {
       const location = planRustValueFieldLocation(node, context, "read");
-      return location === undefined ? undefined : { kind: "block", bindings: location.bindings, value: location.read };
+      return location === undefined ? undefined : location.bindings.length === 0
+        ? location.read
+        : { kind: "block", bindings: location.bindings, value: location.read };
     }
     const receiverNode = Node_Expression(context.input.program.source.ast, node);
     const plannedReceiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
