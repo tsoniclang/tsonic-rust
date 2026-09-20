@@ -29,7 +29,7 @@ interface StringLanePolicy {
   readonly sourceOwner: string;
   readonly carrierId: string;
   readonly value: Extract<JsCarrierRef, { readonly ref: "string" | "js-string" }>;
-  readonly array: Extract<JsCarrierRef, { readonly ref: "string-array" | "js-string-array" }>;
+  readonly array: Extract<JsCarrierRef, { readonly ref: "optional-string-array" | "optional-js-string-array" }>;
   readonly optionValue: Extract<JsCarrierRef, { readonly ref: "option-of-string" | "option-of-js-string" }>;
   readonly execArray: Extract<JsCarrierRef, { readonly ref: "regexp-exec-array" | "js-regexp-exec-array" }>;
   readonly matchArray: Extract<JsCarrierRef, { readonly ref: "regexp-match-array" | "js-regexp-match-array" }>;
@@ -58,7 +58,7 @@ const native: StringLanePolicy = {
   sourceOwner: owners.string,
   carrierId: rustStringTargetId,
   value: { ref: "string" },
-  array: { ref: "string-array" },
+  array: { ref: "optional-string-array" },
   optionValue: { ref: "option-of-string" },
   execArray: { ref: "regexp-exec-array" },
   matchArray: { ref: "regexp-match-array" },
@@ -87,7 +87,7 @@ const exact: StringLanePolicy = {
   sourceOwner: jsSourceSemanticsIdentity.typeExport,
   carrierId: rustJsStringTargetId,
   value: { ref: "js-string" },
-  array: { ref: "js-string-array" },
+  array: { ref: "optional-js-string-array" },
   optionValue: { ref: "option-of-js-string" },
   execArray: { ref: "js-regexp-exec-array" },
   matchArray: { ref: "js-regexp-match-array" },

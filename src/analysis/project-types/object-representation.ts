@@ -113,9 +113,7 @@ export function createRustObjectRepresentationPlan(
       flow.bindingAliased);
     const kind: RustObjectRepresentationKind = input.projectTypes.isPolymorphic(definition)
       ? "open-hierarchy"
-      : definition.kind !== "class"
-        ? "shared-mutable"
-        : creationFlows.length > 0 &&
+      : creationFlows.length > 0 &&
             !exported &&
             !identityObserved &&
             !escapes &&
@@ -123,7 +121,7 @@ export function createRustObjectRepresentationPlan(
             !promotedStorage &&
             !aliasedMutableValue
           ? "value"
-          : mutable
+          : mutable || definition.kind !== "class"
             ? "shared-mutable"
             : "shared-immutable";
     return Object.freeze({

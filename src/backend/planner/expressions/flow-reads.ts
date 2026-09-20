@@ -18,6 +18,7 @@ import { planRustProjectDowncastValue } from "../objects/project-downcasts.js";
 import { planRustProgramErrorFlowRead } from "./error-operations.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
+import { rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";
 import {
   allocateRustSyntheticName,
   createRustSyntheticNameState,
@@ -52,6 +53,11 @@ export function planRustFlowReadProjection(
     }
     return override.expression;
   }
+  const operation = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
+  const ownsValue = context.input.program.valueLifetimes.canMove(node) ||
+    operation?.kind === "provider-operation" &&
+      (operation.target.form === "method" || operation.target.form === "call") &&
+      operation.resultCarrier?.kind !== "reference";
   if (fact.kind === "builtin-error") {
     if ((!isRustJsValueCarrier(fact.sourceCarrier) && !(isRustProgramErrorCarrier(fact.sourceCarrier) &&
       context.input.program.projectTypes.builtinErrorProjectionAvailable === true)) ||
@@ -86,10 +92,11 @@ export function planRustFlowReadProjection(
     }
     const name = allocateRustSyntheticName(context.syntheticNames ??
       createRustSyntheticNameState(context.input.program.source.ast, node, []), "flow_value");
-    return { kind: "match", expression: { kind: "reference", expr: expression }, arms: [
+    return { kind: "match", expression: ownsValue ? expression : { kind: "reference", expr: expression }, arms: [
       { pattern: { kind: "tuple-variant", path: `${path}::${fact.variant}`,
         elements: [{ kind: "binding", name }] },
-        expression: { kind: "method-call", receiver: { kind: "path", path: name }, method: "clone", args: [] } },
+        expression: ownsValue ? { kind: "path", path: name }
+          : { kind: "method-call", receiver: { kind: "path", path: name }, method: "clone", args: [] } },
       { pattern: { kind: "wildcard" }, expression: { kind: "unreachable",
         message: "TSTS-selected source refinement excluded this union variant" } },
     ] };
@@ -111,7 +118,7 @@ export function planRustFlowReadProjection(
     );
     return {
       kind: "match",
-      expression: {
+      expression: ownsValue ? expression : {
         kind: "method-call",
         receiver: expression,
         method: "as_ref",
@@ -124,7 +131,7 @@ export function planRustFlowReadProjection(
             path: "Some",
             elements: [{ kind: "binding", name: valueName }],
           },
-          expression: isRustCopyCarrier(fact.selectedCarrier)
+          expression: ownsValue ? { kind: "path", path: valueName } : isRustCopyCarrier(fact.selectedCarrier)
             ? {
                 kind: "dereference",
                 pointer: { kind: "path", path: valueName },

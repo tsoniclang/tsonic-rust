@@ -101,8 +101,10 @@ export type JsCarrierRef =
   | { readonly ref: "js-numeric" }
   | { readonly ref: "unit" }
   | { readonly ref: "string-array" }
+  | { readonly ref: "optional-string-array" }
   | { readonly ref: "float64-array" }
   | { readonly ref: "js-string-array" }
+  | { readonly ref: "optional-js-string-array" }
   | { readonly ref: "regexp" }
   | { readonly ref: "regexp-exec-array" }
   | { readonly ref: "regexp-match-array" }

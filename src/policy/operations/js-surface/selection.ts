@@ -329,10 +329,14 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
       return rustJsValueTargetType();
     case "string-array":
       return rustJsArrayTargetType(rustStringTargetType());
+    case "optional-string-array":
+      return rustJsArrayTargetType(rustOptionTargetType(rustStringTargetType()));
     case "float64-array":
       return rustJsArrayTargetType(rustSourcePrimitiveTargetType("float64"));
     case "js-string-array":
       return rustJsArrayTargetType(rustJsStringTargetType());
+    case "optional-js-string-array":
+      return rustJsArrayTargetType(rustOptionTargetType(rustJsStringTargetType()));
     case "regexp":
       return rustJsRegExpTargetType();
     case "regexp-exec-array":

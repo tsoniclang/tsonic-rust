@@ -17,6 +17,9 @@ export function analyzeRustValueLifetimes(input: {
   const movableReferences = new WeakSet<Node>();
   const visit = (node: Node): void => {
     const kind = input.ast.kindName(node);
+    if (input.ast.is.IsCallExpression(node) || input.ast.is.IsNewExpression(node)) {
+      movableReferences.add(node);
+    }
     if (kind === "KindVariableDeclaration" || kind === "KindParameter") {
       classifyDeclaration(node, input, movableReferences);
     }

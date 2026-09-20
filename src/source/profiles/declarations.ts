@@ -116,6 +116,16 @@ interface AsyncDisposable {
 const rustNativeProfileDeclarations = `
 ${sharedNoLibDeclarations}
 
+interface String {
+  len(): import("@tsonic/rust/types.js").usize;
+  is_empty(): boolean;
+  contains(pattern: string): boolean;
+  starts_with(pattern: string): boolean;
+  ends_with(pattern: string): boolean;
+  find(pattern: string): import("@tsonic/rust/types.js").usize | undefined;
+  rfind(pattern: string): import("@tsonic/rust/types.js").usize | undefined;
+}
+
 interface Array<T> extends Iterable<T> {
   [index: number]: T;
 }

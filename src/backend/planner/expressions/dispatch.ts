@@ -498,7 +498,7 @@ export function planExpressionInner(
         ? {
             kind: "method-call",
             receiver: planned,
-            method: future.awaiting === "fallible" ? "await_result" : "await_value",
+            method: future.awaiting === "fallible" ? "into_result" : "into_value",
             args: [],
           }
         : planned;
