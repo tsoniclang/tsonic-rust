@@ -81,6 +81,38 @@ test("local receiver field results do not force shared object storage", () => {
   }
 });
 
+test("last-use moves respect overlapping argument borrows without penalizing completed reads", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
+    files: { "index.ts": `
+function select(first: string, second: string): string { return first.length === 0 ? "empty" : second; }
+function identity(value: string): string { return value; }
+function length(value: string): number { return value.length; }
+function afterLength(size: number, value: string): string { return size === 0 ? "empty" : value; }
+function owned(first: string, second: string): string[] { return [first, second]; }
+export function main(): void {
+  const direct = "direct";
+  const directResult = select((direct), direct);
+  const nested = "nested";
+  const nestedResult = select(nested, identity(nested));
+  const completed = "completed";
+  const completedResult = afterLength(length(completed), completed);
+  const copies = "copies";
+  const ownedResult = owned(copies, copies);
+  if (directResult !== "direct" || nestedResult !== "nested" || completedResult !== "completed" ||
+      ownedResult[0] !== "copies" || ownedResult[1] !== "copies") throw new Error("argument ownership");
+}
+` },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  const output = artifactText(result, "src/index.rs");
+  assert.match(output, /select\(&direct, direct\.clone\(\)\)/u);
+  assert.match(output, /select\(&nested, identity\(nested\.clone\(\)\)\)/u);
+  assert.match(output, /after_length\(length\(&completed\)\?, completed\)/u);
+  assert.match(output, /owned\(copies\.clone\(\), copies\)/u);
+  validateGeneratedProject("overlapping-argument-borrows", result.artifacts, { run: true });
+});
+
 test("static string selection preserves exported bindings and deferred default reads", () => {
   for (const [source, storage] of [
     ['const value = "ready"; export function read(): string { return value; }', "native-const"],

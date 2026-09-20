@@ -122,6 +122,7 @@ export function analyzeRustTargetProgram(
     sourceFiles: context.sourceFiles,
     navigation: context.source.navigation,
     isOwnedString: (declaration) => isRustStringCarrier(facts.getRuntimeCarrierFact(declaration)?.carrier),
+    mayBorrowArgument: (argument) => facts.getArgumentPassingFact(argument)?.mode !== "by-value",
   });
   const declarationGenericRequirements = analyzeRustDeclarationGenericRequirements(
     context.source,

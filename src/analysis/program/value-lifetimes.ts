@@ -14,6 +14,7 @@ export function analyzeRustValueLifetimes(input: {
   readonly sourceFiles: readonly SourceFile[];
   readonly navigation: SourceProgramNavigation;
   readonly isOwnedString: (declaration: Node) => boolean;
+  readonly mayBorrowArgument: (argument: Node) => boolean;
 }): RustValueLifetimePlan {
   const movableReferences = new WeakSet<Node>();
   const visit = (node: Node): void => {
@@ -42,6 +43,7 @@ function classifyDeclaration(
     readonly ast: AstReader;
     readonly navigation: SourceProgramNavigation;
     readonly isOwnedString: (declaration: Node) => boolean;
+    readonly mayBorrowArgument: (argument: Node) => boolean;
   },
   movableReferences: WeakSet<Node>,
 ): void {
@@ -118,19 +120,25 @@ function isExactCallableExitValue(
 function isLastStraightLineUse(
   reference: Node,
   declaration: Node,
-  input: { readonly ast: AstReader; readonly navigation: SourceProgramNavigation },
+  input: {
+    readonly ast: AstReader;
+    readonly navigation: SourceProgramNavigation;
+    readonly mayBorrowArgument: (argument: Node) => boolean;
+  },
 ): boolean {
   const callable = enclosingCallable(declaration, input.ast);
   const body = input.ast.body(callable);
   if (body === undefined || !input.ast.is.IsBlock(body)) return false;
   const range = input.ast.authoredRange(reference);
   if (range.kind !== "authored") return false;
+  const invocations = new Set<Node>();
   let current = reference;
   for (;;) {
     const parent = input.ast.parent(current);
     if (parent === undefined) return false;
     if (parent === body) break;
     const kind = input.ast.kindName(parent);
+    if (input.ast.is.IsCallExpression(parent) || input.ast.is.IsNewExpression(parent)) invocations.add(parent);
     if (!isTransparentValueWrapper(parent, current, input.ast) &&
       kind !== "KindCallExpression" && kind !== "KindNewExpression" &&
       kind !== "KindReturnStatement" && kind !== "KindExpressionStatement" &&
@@ -142,8 +150,26 @@ function isLastStraightLineUse(
     if (use.kind === "source-linkage" || use.kind === "type-only" || use.reference === reference) return true;
     if (use.captured) return false;
     const other = input.ast.authoredRange(use.reference);
-    return other.kind === "authored" && other.end <= range.start;
+    return other.kind === "authored" && other.end <= range.start &&
+      !hasOverlappingArgumentBorrow(use.reference, invocations, input);
   });
+}
+
+function hasOverlappingArgumentBorrow(
+  reference: Node,
+  invocations: ReadonlySet<Node>,
+  input: { readonly ast: AstReader; readonly mayBorrowArgument: (argument: Node) => boolean },
+): boolean {
+  let current = reference;
+  for (;;) {
+    const parent = input.ast.parent(current);
+    if (parent === undefined) return false;
+    if (isTransparentValueWrapper(parent, current, input.ast)) {
+      current = parent;
+      continue;
+    }
+    return invocations.has(parent) && input.mayBorrowArgument(current);
+  }
 }
 
 function returnCrossesRetainedControlRegion(
