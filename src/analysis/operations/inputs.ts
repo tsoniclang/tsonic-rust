@@ -333,11 +333,11 @@ export function resolveArrayLiteralCarrier(
   if (expectedElement === undefined) {
     return undefined;
   }
-  if (hasHoles && lane === "native") {
+  if (hasHoles) {
     appendRustDiagnostic(
       walk,
-      "RUST_JS_SURFACE_REQUIRED",
-      "Sparse array literals require the js surface for the Rust target.",
+      "RUST_SPARSE_ARRAY_UNSUPPORTED",
+      "Ordinary arrays use dense native storage. Write explicit optional elements instead of omitted array elements.",
       expression,
       ["target.capability=rust.js.sparse-array"],
     );

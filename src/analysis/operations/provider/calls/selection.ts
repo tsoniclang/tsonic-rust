@@ -46,7 +46,6 @@ import { selectRustRuntimeCallableGenerics } from "./runtime-callable-generics.j
 import { rustLifetimeKey } from "../../../../target-model/lifetimes/index.js";
 import { rustOperandSupportsSourceNumeric } from "../../generic-numeric.js";
 import { selectRustPointerViewCall } from "../../pointer-views.js";
-import { selectRustArrayCopyMode } from "../../array-copy.js";
 import type {
   RustCheckedCallSelectionInput,
   RustCheckedCallSelectionResult,
@@ -348,7 +347,6 @@ export function selectRustCheckedCall(
       ? undefined
       : resolveRustTargetTypeRef(request.source.sourceResultType, context, options);
     const selection = selectJsSurfaceOperation({
-      arrayCopyMode: () => selectRustArrayCopyMode(request, context, options),
       ownerName: selectedSourceMember.ownerName,
       memberName: selectedSourceMember.memberName,
       operationKind: "call",

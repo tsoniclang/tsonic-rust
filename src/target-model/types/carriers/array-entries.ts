@@ -1,5 +1,4 @@
 import { rustOnlyTypeGenericArguments, rustTypeGenericArguments } from "../generic-arguments.js";
-import { rustOptionTargetType } from "./optional.js";
 import type { TargetTypeRef } from "../model.js";
 
 export const rustJsArrayEntriesTargetId = "rust.js.JsArrayEntries";
@@ -21,6 +20,6 @@ export function rustJsArrayEntriesElementTargetType(carrier: TargetTypeRef | und
 export function rustJsArrayEntryTargetType(element: TargetTypeRef): TargetTypeRef {
   return {
     kind: "tuple",
-    elements: [{ kind: "source-primitive", name: "float64" }, rustOptionTargetType(element)],
+    elements: [{ kind: "source-primitive", name: "float64" }, element],
   };
 }

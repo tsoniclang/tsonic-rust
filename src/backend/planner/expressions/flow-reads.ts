@@ -84,7 +84,7 @@ export function planRustFlowReadProjection(
     const selected = variants?.filter(variant => variant.name === fact.variant &&
       rustTargetTypeRefEquals(variant.carrier, fact.selectedCarrier));
     if (path === undefined || selected?.length !== 1 ||
-      !rustCarrierSupportsClone(fact.selectedCarrier, context.input.program.typeDefinitions) &&
+      !ownsValue && !rustCarrierSupportsClone(fact.selectedCarrier, context.input.program.typeDefinitions) &&
         !requireRustCarrierRequirements(fact.selectedCarrier, ["clone"], node, context)) {
       context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
         "rust.backend.source-union-projection", "The selected union payload has no exact non-consuming projection."));
@@ -102,7 +102,7 @@ export function planRustFlowReadProjection(
     ] };
   }
   if (fact.kind === "option-value") {
-    if (!rustCarrierSupportsClone(fact.selectedCarrier, context.input.program.typeDefinitions) &&
+    if (!ownsValue && !rustCarrierSupportsClone(fact.selectedCarrier, context.input.program.typeDefinitions) &&
       (context.callableDeclaration === undefined ||
         !requireRustCarrierRequirements(fact.selectedCarrier, ["clone"], node, context))) {
       context.diagnostics.push(missingFactDiagnostic(

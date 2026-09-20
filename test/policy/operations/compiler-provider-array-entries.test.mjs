@@ -3,7 +3,7 @@ import test from "node:test";
 import { acmeTestingPackage, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
-test("compiler provider array entries preserve live storage, holes and iterator aliases", { timeout: 300_000 }, () => {
+test("compiler provider array entries preserve initialized live storage and iterator aliases", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     surfaces: ["js"], packages: [acmeTestingPackage()],
     target: { id: "rust", options: { outputType: "bin", crateName: "provider_array_entries" } },
@@ -45,7 +45,7 @@ export function main(): void {
     else payload += value;
     if (value === null) nulls++;
   }
-  check(holes === 2 && seen === 6 && countPresent(sparse) === 2 && payload === 7 && nulls === 0);
+  check(holes === 0 && seen === 6 && countPresent(sparse) === 6 && payload === 7 && nulls === 0);
 }
 ` },
   });

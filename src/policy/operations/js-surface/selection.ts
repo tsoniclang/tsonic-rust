@@ -638,7 +638,6 @@ export function selectJsSurfaceOperation(request: JsOperationRequest, definition
       candidate.member === request.memberName &&
       candidate.operationKind === request.operationKind &&
       candidate.lane === lane &&
-      (candidate.arrayCopyMode === undefined || candidate.arrayCopyMode === request.arrayCopyMode?.()) &&
       (candidate.selectedMethodTypeArgumentArity === undefined ||
         candidate.selectedMethodTypeArgumentArity ===
           (request.selectedMethodTypeArgumentCarriers?.length ?? 0)) &&
