@@ -135,7 +135,6 @@ export type RustNonOptionValueConversion =
       readonly kind: "rest-sequence";
       readonly source: TargetTypeRef;
       readonly elementTarget: TargetTypeRef;
-      readonly holePolicy: "reject" | "number-nan";
       readonly elementConversions: readonly (RustNonOptionValueConversion | null)[];
     }
   | {
@@ -290,7 +289,6 @@ export type RustProviderOperationForm =
         readonly mode: RustArgumentMode;
       }[];
       readonly elementCarrier: TargetTypeRef;
-      readonly sequenceHolePolicy?: "number-nan";
     }
   | {
       readonly form: "call-value-array";

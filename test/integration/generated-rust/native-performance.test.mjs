@@ -1,18 +1,24 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { compileRust, artifactText } from "../../helpers/rust-session.mjs";
+import { compileRust, artifactText, acmeTestingPackage, analyzeRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 test("native String operations retain UTF-8 units without a JS surface", { timeout: 300_000 }, () => {
   const { result } = compileRust({
+    packages: [acmeTestingPackage()],
     target: { id: "rust", options: { outputType: "bin" } },
     files: { "index.ts": `
+import { check } from "@acme/testing";
 export function main(): void {
   const text = "café😀";
-  if (text.len() !== 9 || text.is_empty() || !text.contains("😀") ||
-      !text.starts_with("café") || !text.ends_with("😀") ||
-      text.find("😀") !== 5 || text.rfind("é") !== 3 ||
-      text.find("missing") !== undefined) throw "native string contract";
+  check(text.len() === 9);
+  check(!text.is_empty());
+  check(text.contains("😀"));
+  check(text.starts_with("café"));
+  check(text.ends_with("😀"));
+  check(text.find("😀") === 5);
+  check(text.rfind("é") === 3);
+  check(text.find("missing") === undefined);
 }
 ` },
   });
@@ -27,20 +33,21 @@ test("read-only string forwarding and fresh async results preserve values", { ti
   const { result } = compileRust({
     surfaces: ["js"],
     target: { id: "rust", options: { outputType: "bin" } },
-    files: { "index.ts": `
+    files: { "length.ts": `export function readLength(value: string): number { return value.length; }`, "index.ts": `
+import { readLength } from "./length.js";
 interface Point { x: number; y: number }
-function readLength(value: string): number { return value.length; }
 function forward(value: string): number { return readLength(value); }
 function retain(value: string): () => string { return () => value; }
 function localRecord(): number {
   const point: Point = { x: 3, y: 4 };
+  point.x += 1;
   return point.x + point.y;
 }
 async function text(): Promise<string> { return "result"; }
 export async function main(): Promise<void> {
   const value = "café😀";
   const retained = retain(value);
-  if (forward(value) !== 9 || retained() !== value || localRecord() !== 7 ||
+  if (forward(value) !== 9 || retained() !== value || localRecord() !== 8 ||
       await text() !== "result") throw new Error("native ownership contract");
 }
 ` },
@@ -48,6 +55,28 @@ export async function main(): Promise<void> {
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /fn forward\(value: &(?:String|str)\)/u);
+  assert.match(output, /fn retain\(value: String\)/u);
+  assert.doesNotMatch(output, /PointState|ObjectHandle/);
   assert.match(output, /into_(?:result|value)\(\)/u);
   validateGeneratedProject("native-read-only-forwarding", result.artifacts, { run: true });
+});
+
+test("local record value storage never erases observable identity or escape", () => {
+  const cases = [
+    { body: `const point: Point = { x: 3, y: 4 }; return point.x + point.y;`, result: "number", kind: "value" },
+    { body: `const point: Point = { x: 3, y: 4 }; const alias = point; alias.x = 8; return point.x;`, result: "number", kind: "shared-mutable" },
+    { body: `const point: Point = { x: 3, y: 4 }; return point === point;`, result: "boolean", kind: "shared-mutable" },
+    { body: `const point: Point = { x: 3, y: 4 }; return point;`, result: "Point", kind: "shared-mutable" },
+    { body: `const point: Point = { x: 3, y: 4 }; return () => point.x;`, result: "() => number", kind: "shared-mutable" },
+    { body: `let point: Point = { x: 3, y: 4 }; point = { x: 5, y: 6 }; return point.x;`, result: "number", kind: "shared-mutable" },
+    { body: `const point: Point = { x: 3, y: 4 }; return point.x;`, result: "number", kind: "shared-mutable", exported: true },
+  ];
+  for (const scenario of cases) {
+    const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+${scenario.exported ? "export " : ""}interface Point { x: number; y: number }
+export function proof(): ${scenario.result} { ${scenario.body} }
+` } });
+    const representation = program.objectRepresentations.representations.find(value => value.definition.sourceName === "Point");
+    assert.equal(representation?.kind, scenario.kind, scenario.body);
+  }
 });

@@ -322,30 +322,24 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
   const stateCarrier = representation === undefined
     ? undefined
     : rustProjectObjectType(stateType, representation);
-  if (representation === undefined || stateCarrier === undefined) {
+  if (representation === undefined || representation.kind !== "value" && stateCarrier === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.interface-representation",
-      "Project interface has no exact shared Rust object representation.",
+      "Project interface has no exact Rust object representation.",
     ));
     return undefined;
   }
-  context.usedAliases?.add("rt");
+  if (representation.kind !== "value") context.usedAliases?.add("rt");
   const interfaceAttributes = structAttributes(interfaceName) ?? [];
   const interfaceDeadCode = rustProjectInterfaceDeadCodeDisposition(
     context,
     node,
     interfaceVisibility === "public",
   );
-  const explicitWrapperTraits = generics.parameters.some(parameter => parameter.kind === "type");
-  return [{
-    kind: "struct",
-    name: definition.stateName,
-    visibility: storageVisibility,
-    ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
-    derives: [],
-    generics,
-    fields: [
+  const explicitWrapperTraits = representation.kind !== "value" &&
+    generics.parameters.some(parameter => parameter.kind === "type");
+  const valueFields: RustStructField[] = [
       ...fields.map((field): RustStructField => {
         const deadCode = rustAuthoredFieldDeadCodeDisposition(
           context,
@@ -383,8 +377,17 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
             visibility: storageVisibility,
             ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
           }]),
-    ],
-  }, {
+    ];
+  const stateItem: RustItem = {
+    kind: "struct",
+    name: definition.stateName,
+    visibility: storageVisibility,
+    ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
+    derives: [],
+    generics,
+    fields: valueFields,
+  };
+  return [...(representation.kind === "value" ? [] : [stateItem]), {
     kind: "struct",
     name: interfaceName,
     ...(interfaceAttributes.length === 0 ? {} : { attrs: interfaceAttributes }),
@@ -392,9 +395,9 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
     visibility: interfaceVisibility,
     derives: explicitWrapperTraits ? [] : ["Clone", "Debug", "PartialEq"],
     generics,
-    fields: [{
+    fields: representation.kind === "value" ? valueFields : [{
       name: rustProjectObjectStateField,
-      type: stateCarrier,
+      type: stateCarrier!,
       visibility: storageVisibility,
       ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
       ...(() => {

@@ -5,6 +5,7 @@ import {
   type SourceDeclarationUse,
   type SourceExpressionValueFlowSummary,
   type SourceProgramNavigation,
+  type SourceProgramSemantics,
 } from "@tsonic/target-api/source";
 import type {
   RustProjectTypeDefinition,
@@ -44,6 +45,7 @@ export interface RustObjectRepresentationPlan {
 export interface RustObjectRepresentationAnalysisInput {
   readonly ast: AstReader;
   readonly navigation: SourceProgramNavigation;
+  readonly semantics: SourceProgramSemantics;
   readonly projectTypes: RustProjectTypePolicy;
   readonly sourceFiles: readonly SourceFile[];
   readonly valueWrites: ReadonlySet<Node>;
@@ -114,6 +116,7 @@ export function createRustObjectRepresentationPlan(
     const kind: RustObjectRepresentationKind = input.projectTypes.isPolymorphic(definition)
       ? "open-hierarchy"
       : creationFlows.length > 0 &&
+            (definition.kind === "class" || interfaceHasOnlyLocalLiteralBindings(definition, creationFlows, input)) &&
             !exported &&
             !identityObserved &&
             !escapes &&
@@ -167,17 +170,23 @@ function selectDispatchObjectLifetime(
     lifetimes.every((source) => rustLifetimeOutlives(source, candidate, contract)));
 }
 
-function collectProjectObjectOrigins(input: {
-  readonly ast: AstReader;
-  readonly navigation: SourceProgramNavigation;
-  readonly projectTypes: RustProjectTypePolicy;
-  readonly sourceFiles: readonly SourceFile[];
-}): ReadonlyMap<RustProjectTypeDefinition, readonly SourceExpressionValueFlowSummary[]> {
+function collectProjectObjectOrigins(input: RustObjectRepresentationAnalysisInput): ReadonlyMap<RustProjectTypeDefinition, readonly SourceExpressionValueFlowSummary[]> {
   const origins = new Map<RustProjectTypeDefinition, SourceExpressionValueFlowSummary[]>();
   const visit = (node: Node): void => {
     if (input.ast.is.IsNewExpression(node) || input.ast.is.IsObjectLiteralExpression(node)) {
-      const declaration = input.navigation.declarationFor(node);
-      const definition = input.projectTypes.definitionForDeclaration(declaration);
+      const semantics = input.semantics.forNode(node);
+      const contextual = input.ast.is.IsObjectLiteralExpression(node)
+        ? semantics.types.contextualValueSelection(node)
+        : undefined;
+      const symbol = contextual?.kind === "selected"
+        ? semantics.declarations.typeSymbol(contextual.type)
+        : undefined;
+      const declarations = symbol === undefined
+        ? [input.navigation.declarationFor(node)]
+        : semantics.declarations.symbolDeclarations(symbol);
+      const candidates = new Set(declarations.map(declaration =>
+        input.projectTypes.definitionForDeclaration(declaration)).filter(definition => definition !== undefined));
+      const definition = candidates.size === 1 ? candidates.values().next().value : undefined;
       if (definition !== undefined) {
         const flows = origins.get(definition) ?? [];
         flows.push(input.navigation.expressionValueFlow(node));
@@ -194,6 +203,26 @@ function collectProjectObjectOrigins(input: {
     visit(sourceFile);
   }
   return origins;
+}
+
+function interfaceHasOnlyLocalLiteralBindings(
+  definition: RustProjectTypeDefinition,
+  flows: readonly SourceExpressionValueFlowSummary[],
+  input: RustObjectRepresentationAnalysisInput,
+): boolean {
+  const uses = input.navigation.declarationUses(definition.declaration);
+  return uses.length > 0 && uses.every(use => {
+    const type = input.ast.parent(use.reference);
+    const binding = input.ast.parent(type);
+    if (use.kind !== "type-only" || type === undefined || binding === undefined ||
+      !input.ast.is.IsTypeReferenceNode(type) || !input.ast.is.IsVariableDeclaration(binding)) return false;
+    const declaration = input.ast.as.AsVariableDeclaration(binding);
+    const initializer = declaration?.Initializer;
+    return declaration?.Type === type && initializer !== undefined &&
+      input.ast.is.IsObjectLiteralExpression(initializer) &&
+      !input.navigation.declarationUseSummary(binding).bindingWritten &&
+      flows.some(flow => flow.expression === initializer && flow.aliasDeclarations.includes(binding));
+  });
 }
 
 function collectMutatingProjectMethods(input: {

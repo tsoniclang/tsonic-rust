@@ -211,6 +211,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   context.objectRepresentations.initialize({
     ast,
     navigation: context.source.navigation,
+    semantics: context.source.semantics,
     valueWrites: mutableStorageDeclarations.valueWrites,
     projectTypes,
     sourceFiles: projectSourceFiles,

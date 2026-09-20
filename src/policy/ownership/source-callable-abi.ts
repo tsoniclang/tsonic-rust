@@ -333,10 +333,10 @@ function parameterCanUseSharedBorrow(
       parameterUsesFlowState(current, "moved", context)) return false;
     const summary = context.source.navigation.parameterUseSummary(current);
     if (summary === undefined || summary.bindingWritten || summary.memberWritten || summary.captured ||
-      summary.returned || summary.yielded || summary.aliasedOrStored || summary.exported) return false;
-    for (const { reference, role } of summary.uses) {
+      summary.exported) return false;
+    for (const { reference, role, throughMember } of summary.uses) {
       const flow = context.facts.resolve(reference, flowStateFactKey) ?? context.facts.get(reference, flowStateFactKey);
-      if (flow?.state === "borrowed-shared" || role === "receiver") continue;
+      if (flow?.state === "borrowed-shared" || throughMember || role === "receiver" || role === "type-only") continue;
       let operand = reference;
       let call = ast.parent(operand);
       while (call !== undefined && ast.is.IsParenthesizedExpression(call)) {
@@ -357,7 +357,13 @@ function parameterCanUseSharedBorrow(
       const parameterSyntax = destination === undefined ? undefined : ast.as.AsParameterDeclaration(destination);
       if (destination === undefined || parameterSyntax === undefined || parameterSyntax.DotDotDotToken !== undefined ||
         ast.questionToken(destination) !== undefined || Node_Initializer(ast, destination) !== undefined) return false;
-      const carrier = resolveRustTargetTypeRef(Node_Type(ast, destination) ?? destination, context, options);
+      const destinationFile = ast.getSourceFile(destination);
+      if (destinationFile === undefined) return false;
+      const carrier = resolveRustTargetTypeRef(Node_Type(ast, destination) ?? destination, {
+        ...context,
+        currentSourceFile: destinationFile,
+        currentSemantics: context.semanticsFor(destination),
+      }, options);
       if (carrier === undefined || !isRustStringCarrier(carrier)) return false;
       pending.push(destination);
     }

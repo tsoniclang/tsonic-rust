@@ -41,12 +41,12 @@ export function main(): void {
   }
   check(denseKeys === "012");
 
-  const sparseValues: (int32 | undefined)[] = [1, , 3];
-  let sparseKeys: string = "";
-  for (const key in sparseValues) {
-    sparseKeys = sparseKeys + key;
+  const optionalValues: (int32 | undefined)[] = [1, undefined, 3];
+  let optionalKeys: string = "";
+  for (const key in optionalValues) {
+    optionalKeys = optionalKeys + key;
   }
-  check(sparseKeys === "02");
+  check(optionalKeys === "012");
 
   const pair: Pair = { second: 2, first: 1 };
   const alias = pair;

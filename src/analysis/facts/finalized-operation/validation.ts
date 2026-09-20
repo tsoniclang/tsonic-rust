@@ -380,9 +380,8 @@ function isValueProjectionConversion(value: Record<string, unknown>): boolean {
       typeof value.path === "string";
   }
   if (value.kind === "rest-sequence") {
-    return hasExactKeys(value, ["kind", "source", "elementTarget", "holePolicy", "elementConversions"]) &&
+    return hasExactKeys(value, ["kind", "source", "elementTarget", "elementConversions"]) &&
       isRustTargetTypeRef(value.source) && isRustTargetTypeRef(value.elementTarget) &&
-      (value.holePolicy === "reject" || value.holePolicy === "number-nan") &&
       Array.isArray(value.elementConversions) && value.elementConversions.every(conversion =>
         conversion === null || isNonOptionValueConversion(conversion));
   }

@@ -53,11 +53,6 @@ export function planRustFlowReadProjection(
     }
     return override.expression;
   }
-  const operation = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
-  const ownsValue = context.input.program.valueLifetimes.canMove(node) ||
-    operation?.kind === "provider-operation" &&
-      (operation.abi.target.form === "method" || operation.abi.target.form === "call") &&
-      operation.resultCarrier?.kind !== "reference";
   if (fact.kind === "builtin-error") {
     if ((!isRustJsValueCarrier(fact.sourceCarrier) && !(isRustProgramErrorCarrier(fact.sourceCarrier) &&
       context.input.program.projectTypes.builtinErrorProjectionAvailable === true)) ||
@@ -78,6 +73,11 @@ export function planRustFlowReadProjection(
     }
     return { kind: "method-call", receiver: planRustNonConsumingValue(node, expression, context), method: fact.method, args: [] };
   }
+  const operation = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
+  const ownsValue = context.input.program.valueLifetimes.canMove(node) ||
+    operation?.kind === "provider-operation" &&
+      (operation.abi.target.form === "method" || operation.abi.target.form === "call") &&
+      operation.resultCarrier?.kind !== "reference";
   if (fact.kind === "source-union") {
     const variants = context.input.program.typeDefinitions.sourceUnionVariants(fact.sourceCarrier);
     const path = rustUnionTypePathInContext(fact.sourceCarrier, context);

@@ -580,10 +580,10 @@ export function main(): void {
   const aliasedOutput = output.slice(aliasedStart, externallyMutatedStart);
   const externallyMutatedOutput = output.slice(externallyMutatedStart, selfAppendStart);
   const selfAppendOutput = output.slice(selfAppendStart, unstableStart);
-  assert.match(returnAfterOutput, /inspect\(value\.clone\(\)\)/u);
-  assert.equal(returnAfterOutput.match(/value\.clone\(\)/gu)?.length, 1);
-  assert.match(assertionOutput, /inspect\(value\.clone\(\)\)/u);
-  assert.equal(assertionOutput.match(/value\.clone\(\)/gu)?.length, 1);
+  assert.match(returnAfterOutput, /inspect\(&value\)/u);
+  assert.doesNotMatch(returnAfterOutput, /value\.clone\(\)/u);
+  assert.match(assertionOutput, /inspect\(&value\)/u);
+  assert.doesNotMatch(assertionOutput, /value\.clone\(\)/u);
   assert.match(finallyOutput, /value\.clone\(\)/u);
   assert.match(catchOutput, /value\.clone\(\)/u);
   assert.match(iterationReturnOutput, /values\.clone\(\)/u);
