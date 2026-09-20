@@ -40,6 +40,7 @@ import { analyzeRustFoundation } from "../foundation/plan.js";
 import { rustFoundationForCarrier } from "../foundation/requirements.js";
 import { maximumRustFoundation } from "../../target-model/foundation/model.js";
 import { analyzeRustProjectFlowReadSelections } from "../control-flow/project-flow-read-selections.js";
+import { isRustStringCarrier } from "../../target-model/types/index.js";
 
 const rustJsTimerEpilogue: RustProviderBinaryHookRow = Object.freeze({
   id: "tsonic.rust.js.timers",
@@ -119,6 +120,7 @@ export function analyzeRustTargetProgram(
     ast: context.ast,
     sourceFiles: context.sourceFiles,
     navigation: context.source.navigation,
+    isOwnedString: (declaration) => isRustStringCarrier(facts.getRuntimeCarrierFact(declaration)?.carrier),
   });
   const declarationGenericRequirements = analyzeRustDeclarationGenericRequirements(
     context.source,

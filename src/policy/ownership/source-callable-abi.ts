@@ -315,7 +315,7 @@ function parameterUsesFlowState(
     });
 }
 
-function parameterCanUseSharedBorrow(
+export function parameterCanUseSharedBorrow(
   parameter: Node,
   context: RustTargetTypeResolutionContext,
   options: RustTargetTypeResolutionOptions,
@@ -336,7 +336,8 @@ function parameterCanUseSharedBorrow(
       summary.exported) return false;
     for (const { reference, role, throughMember } of summary.uses) {
       const flow = context.facts.resolve(reference, flowStateFactKey) ?? context.facts.get(reference, flowStateFactKey);
-      if (flow?.state === "borrowed-shared" || throughMember || role === "receiver" || role === "type-only") continue;
+      if (flow?.state === "borrowed-shared" || throughMember || role === "receiver" ||
+        role === "comparison" || role === "condition" || role === "type-only") continue;
       let operand = reference;
       let call = ast.parent(operand);
       while (call !== undefined && ast.is.IsParenthesizedExpression(call)) {
@@ -352,7 +353,9 @@ function parameterCanUseSharedBorrow(
       const declaration = semantics.declarations.signatureDeclaration(selected.selectedSignature);
       const implementation = declaration === undefined ? undefined : context.source.navigation.callableImplementation(declaration);
       if (argumentIndex < 0 || implementation?.kind !== "resolved" ||
-        !ast.is.IsFunctionDeclaration(implementation.implementation.declaration)) return false;
+        !(ast.is.IsFunctionDeclaration(implementation.implementation.declaration) ||
+          ast.is.IsArrowFunction(implementation.implementation.declaration) ||
+          ast.is.IsFunctionExpression(implementation.implementation.declaration))) return false;
       const destination = ast.parameters(implementation.implementation.declaration)[argumentIndex];
       const parameterSyntax = destination === undefined ? undefined : ast.as.AsParameterDeclaration(destination);
       if (destination === undefined || parameterSyntax === undefined || parameterSyntax.DotDotDotToken !== undefined ||

@@ -456,6 +456,10 @@ export interface RustCallbackOperationTemplate {
   readonly shape: "direct" | "map" | "reduce";
   readonly sourceArgumentIndex: number;
   readonly accumulatorArgumentIndex?: number;
+  readonly borrowedParameters?: {
+    readonly target: RustProviderOperationForm;
+    readonly fallibleTarget: RustProviderOperationForm;
+  };
   readonly argumentAdapter?: {
     readonly kind: "regexp-replacement";
     readonly lane: "native" | "exact";

@@ -46,6 +46,7 @@ import { selectRustRuntimeCallableGenerics } from "./runtime-callable-generics.j
 import { rustLifetimeKey } from "../../../../target-model/lifetimes/index.js";
 import { rustOperandSupportsSourceNumeric } from "../../generic-numeric.js";
 import { selectRustPointerViewCall } from "../../pointer-views.js";
+import { selectBorrowedCallbackParameters } from "./borrowed-callbacks.js";
 import type {
   RustCheckedCallSelectionInput,
   RustCheckedCallSelectionResult,
@@ -390,14 +391,15 @@ export function selectRustCheckedCall(
       );
     }
     if (selection.callback !== undefined) {
+      const specialized = selectBorrowedCallbackParameters(request, selection, context, options);
       return selection.fact.kind !== "provider-operation"
         ? rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_CALLBACK_CARRIER_MISSING", `Selected JavaScript call '${selectedSourceMember.ownerName}.${selectedSourceMember.memberName}' has no provider operation template.`)
         : acceptRustPolicy({
             kind: "deferred-callback",
-            callback: selection.callback,
+            callback: specialized.callback!,
             sourceName: selectedSourceMember.memberName,
-            template: selection.fact,
-            parameterCarriers: selection.parameterCarriers ?? [],
+            template: specialized.fact as import("../../../facts/keys.js").RustProviderOperationTemplate,
+            parameterCarriers: specialized.parameterCarriers ?? [],
           });
     }
     return acceptSelectedCall(request, selection.fact, selection.parameterCarriers, context, options, {

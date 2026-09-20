@@ -23,6 +23,7 @@ import {
 } from "../../../analysis/facts/keys.js";
 import {
   isRustCopyCarrier,
+  isRustStringCarrier,
   rustLocationTargetType,
   rustProgramErrorTargetType,
   rustStructuralObjectCarrierValue,
@@ -213,6 +214,12 @@ export function planRustIdentifierValue(
   path: string,
   context: RustPlanContext,
 ): RustExpr {
+  const binding = context.input.program.facts.getFact(node, rustSourceBindingFactKey);
+  const module = binding === undefined ? undefined
+    : context.input.program.facts.getFact(binding.sourceDeclaration, rustModuleBindingFactKey);
+  if (module?.storage === "native-const" && isRustStringCarrier(module.valueCarrier)) {
+    return { kind: "owned-string-from-borrowed-str", expression: { kind: "path", path } };
+  }
   if (context.input.program.facts.getFact(node, rustNativeArrayStorageKey)?.kind === "reference") {
     return { kind: "method-call", receiver: { kind: "path", path }, method: "clone", args: [] };
   }

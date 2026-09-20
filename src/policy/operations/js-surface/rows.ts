@@ -381,7 +381,13 @@ export const jsOperationRows = defineJsOperationRows([
     operationKind: "call",
     lane: "js-array",
     variant,
-    callback: callbackOperation("direct", targetName),
+    callback: {
+      ...callbackOperation("direct", targetName),
+      ...(arity === 0 ? {} : { borrowedParameters: {
+        target: { form: "receiver-method" as const, name: `${targetName}_borrowed` },
+        fallibleTarget: { form: "receiver-method" as const, name: `try_${targetName}_borrowed` },
+      } }),
+    },
     shape: {
       op: "operation",
       operationKind: "method",

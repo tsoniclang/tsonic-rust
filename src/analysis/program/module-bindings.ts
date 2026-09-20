@@ -1,4 +1,6 @@
 import type { AstReader, Node } from "@tsonic/tsts";
+import { flowStateFactKey, pointerOperationFactKey } from "@tsonic/tsts";
+import { isRustStringCarrier } from "../../target-model/types/index.js";
 import {
   KindFalseKeyword,
   KindFunctionExpression,
@@ -66,10 +68,15 @@ export function createRustModuleBindingPolicy(
       const initializerKind = initializer === undefined
         ? undefined
         : context.ast.kindName(initializer);
+      const stringConstant = isRustStringCarrier(valueCarrier) &&
+        (initializerKind === "KindStringLiteral" || initializerKind === "KindNoSubstitutionTemplateLiteral") &&
+        moduleStringCanUseStaticStorage(declaration, context) &&
+        !cyclic.has(context.ast.getSourceFile(declaration)!) &&
+        !context.runtimeValueUses.hasSameFileRuntimeUseBeforeDeclaration(declaration);
       const nativeConst = declarationKind === "const" && (
         initializerKind === KindNumericLiteral ||
         initializerKind === KindTrueKeyword ||
-        initializerKind === KindFalseKeyword
+        initializerKind === KindFalseKeyword || stringConstant
       );
       if (nativeConst) {
         return {
@@ -84,6 +91,23 @@ export function createRustModuleBindingPolicy(
         valueCarrier,
       };
     },
+  });
+}
+
+function moduleStringCanUseStaticStorage(declaration: Node, context: RustAnalysisContext): boolean {
+  const summary = context.source.navigation.declarationUseSummary(declaration);
+  if (summary.exported || summary.bindingWritten) return false;
+  return summary.uses.every(use => {
+    if (context.facts.resolve(use.reference, flowStateFactKey) !== undefined ||
+      context.facts.get(use.reference, flowStateFactKey) !== undefined) return false;
+    let current: Node | undefined = use.reference;
+    while (current !== undefined && !context.ast.is.IsSourceFile(current) &&
+      !context.ast.is.IsBlock(current)) {
+      if (context.facts.resolve(current, pointerOperationFactKey) !== undefined ||
+        context.facts.get(current, pointerOperationFactKey) !== undefined) return false;
+      current = context.ast.parent(current);
+    }
+    return true;
   });
 }
 

@@ -1,5 +1,6 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceProgramNavigation } from "@tsonic/target-api/source";
+import { sourceMayReadBeforeInitialization } from "@tsonic/target-api/source";
 import type { RustSafetyApplicationFactIndex } from "../safety/application-index.js";
 
 export interface RustRuntimeValueUsePlan {
@@ -35,18 +36,7 @@ export function createRustRuntimeValueUsePlan(input: {
       if (existing !== undefined) {
         return existing;
       }
-      const declarationFile = input.ast.getSourceFile(declaration);
-      const declarationRange = input.ast.authoredRange(declaration);
-      const observed = declarationFile === undefined || declarationRange.kind !== "authored"
-        ? true
-        : input.navigation.declarationUses(declaration).some((use) => {
-            if (use.kind === "source-linkage" || use.kind === "type-only" ||
-              input.ast.getSourceFile(use.reference) !== declarationFile) {
-              return false;
-            }
-            const range = input.ast.authoredRange(use.reference);
-            return range.kind !== "authored" || range.start < declarationRange.start;
-          });
+      const observed = sourceMayReadBeforeInitialization(declaration, input.ast, input.navigation);
       earlyRuntimeUseByDeclaration.set(declaration, observed);
       return observed;
     },

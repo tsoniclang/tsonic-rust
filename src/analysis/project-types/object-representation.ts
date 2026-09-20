@@ -105,7 +105,8 @@ export function createRustObjectRepresentationPlan(
       input,
     );
     const identityObserved = creationFlows.some((flow) => flow.identityCompared);
-    const escapes = creationFlows.some((flow) => flow.escapes);
+    const escapes = creationFlows.some((flow) => flow.escapes) ||
+      projectReceiverEscapes(definition, input);
     const exported = input.navigation.declarationUseSummary(
       definition.declaration,
     ).exported;
@@ -168,6 +169,29 @@ function selectDispatchObjectLifetime(
   });
   return lifetimes.find((candidate) =>
     lifetimes.every((source) => rustLifetimeOutlives(source, candidate, contract)));
+}
+
+function projectReceiverEscapes(
+  definition: RustProjectTypeDefinition,
+  input: RustObjectRepresentationAnalysisInput,
+): boolean {
+  let escapes = false;
+  const visit = (node: Node, nestedCallable: boolean): void => {
+    if (escapes) return;
+    const kind = input.ast.kindName(node);
+    if (kind === "KindThisExpression" || kind === "KindThisKeyword") {
+      const flow = input.navigation.expressionValueFlow(node);
+      escapes = nestedCallable || flow.escapes || flow.hasUnclassifiedUse || flow.identityCompared;
+      return;
+    }
+    const nested = nestedCallable || input.ast.is.IsArrowFunction(node) ||
+      input.ast.is.IsFunctionExpression(node) || input.ast.is.IsFunctionDeclaration(node);
+    input.ast.forEachChild(node, child => { if (child !== undefined) visit(child, nested); });
+  };
+  for (const member of input.ast.members(definition.declaration)) {
+    if (member !== undefined && !input.ast.hasModifierKind(member, "static")) visit(member, false);
+  }
+  return escapes;
 }
 
 function collectProjectObjectOrigins(input: RustObjectRepresentationAnalysisInput): ReadonlyMap<RustProjectTypeDefinition, readonly SourceExpressionValueFlowSummary[]> {

@@ -13,6 +13,7 @@ export function analyzeRustValueLifetimes(input: {
   readonly ast: AstReader;
   readonly sourceFiles: readonly SourceFile[];
   readonly navigation: SourceProgramNavigation;
+  readonly isOwnedString: (declaration: Node) => boolean;
 }): RustValueLifetimePlan {
   const movableReferences = new WeakSet<Node>();
   const visit = (node: Node): void => {
@@ -40,6 +41,7 @@ function classifyDeclaration(
   input: {
     readonly ast: AstReader;
     readonly navigation: SourceProgramNavigation;
+    readonly isOwnedString: (declaration: Node) => boolean;
   },
   movableReferences: WeakSet<Node>,
 ): void {
@@ -51,7 +53,8 @@ function classifyDeclaration(
   const runtimeUses = summary.uses.filter((use) =>
     use.kind !== "source-linkage" && use.kind !== "type-only");
   for (const { reference } of runtimeUses) {
-    if (isExactCallableExitValue(reference, declaration, input)) {
+    if (isExactCallableExitValue(reference, declaration, input) ||
+      input.isOwnedString(declaration) && isLastStraightLineUse(reference, declaration, input)) {
       movableReferences.add(reference);
     }
   }
@@ -77,7 +80,7 @@ function isExactCallableExitValue(
     return false;
   }
   const selected = input.navigation.sourceReferenceFor(reference);
-  if (selected?.symbol === undefined || !sourceNodesEqual(
+  if (selected === undefined || !sourceNodesEqual(
     input.ast,
     selected.declaration,
     declaration,
@@ -95,18 +98,52 @@ function isExactCallableExitValue(
       current = parent;
       continue;
     }
+    if (input.ast.is.IsConditionalExpression(parent)) {
+      const conditional = input.ast.as.AsConditionalExpression(parent);
+      if (sourceNodesEqual(input.ast, conditional?.WhenTrue, current) ||
+        sourceNodesEqual(input.ast, conditional?.WhenFalse, current)) {
+        current = parent;
+        continue;
+      }
+    }
     if (input.ast.is.IsReturnStatement(parent) &&
       sourceNodesEqual(input.ast, Node_Expression(input.ast, parent), current) &&
       !returnCrossesRetainedControlRegion(parent, declarationCallable, input.ast)) {
-      const references = input.navigation.referencesWithin(selected.symbol, current);
-      return references.length === 1 && sourceNodesEqual(
-        input.ast,
-        references[0],
-        reference,
-      );
+      return true;
     }
     return false;
   }
+}
+
+function isLastStraightLineUse(
+  reference: Node,
+  declaration: Node,
+  input: { readonly ast: AstReader; readonly navigation: SourceProgramNavigation },
+): boolean {
+  const callable = enclosingCallable(declaration, input.ast);
+  const body = input.ast.body(callable);
+  if (body === undefined || !input.ast.is.IsBlock(body)) return false;
+  const range = input.ast.authoredRange(reference);
+  if (range.kind !== "authored") return false;
+  let current = reference;
+  for (;;) {
+    const parent = input.ast.parent(current);
+    if (parent === undefined) return false;
+    if (parent === body) break;
+    const kind = input.ast.kindName(parent);
+    if (!isTransparentValueWrapper(parent, current, input.ast) &&
+      kind !== "KindCallExpression" && kind !== "KindNewExpression" &&
+      kind !== "KindReturnStatement" && kind !== "KindExpressionStatement" &&
+      kind !== "KindVariableDeclaration" && kind !== "KindVariableDeclarationList" &&
+      kind !== "KindVariableStatement") return false;
+    current = parent;
+  }
+  return input.navigation.declarationUses(declaration).every(use => {
+    if (use.kind === "source-linkage" || use.kind === "type-only" || use.reference === reference) return true;
+    if (use.captured) return false;
+    const other = input.ast.authoredRange(use.reference);
+    return other.kind === "authored" && other.end <= range.start;
+  });
 }
 
 function returnCrossesRetainedControlRegion(
