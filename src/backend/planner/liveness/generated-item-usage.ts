@@ -40,6 +40,7 @@ import type { RustValueConversion } from "../../../target-model/operations/model
 import type { RustPlanQueries } from "../../../target-model/facts/selections.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustOptionElementCarrier, rustSourceUnionCarrierValue } from "../../../target-model/types/index.js";
+import { rustTargetTypeChildren } from "../../../target-model/types/carriers/children.js";
 import {
   isRustPreconstructionThisOperation,
   isRustArrayFieldContentAssignment,
@@ -65,6 +66,7 @@ export type RustGeneratedProjectFieldRole =
 export interface RustGeneratedItemUsage {
   isProjectTypeUsed(declaration: Node): boolean;
   isProjectTypeConstructed(declaration: Node): boolean;
+  isProjectTypeReified(declaration: Node): boolean;
   isProjectConstructorInvoked(declaration: Node): boolean;
   isAuthoredFieldRead(declaration: Node): boolean;
   isProjectGeneratedFieldUsed(
@@ -120,6 +122,8 @@ export function analyzeRustGeneratedItemUsage(input: {
   const variantsByDeclaration = new Map<Node, Set<string>>();
   const usedProjectTypes = new WeakSet<Node>();
   const constructedProjectTypes = new WeakSet<Node>();
+  const reifiedProjectTypes = new WeakSet<Node>();
+  const reifiedCarriers = new WeakSet<TargetTypeRef>();
   const invokedProjectConstructors = new WeakSet<Node>();
   const readAuthoredFields = new WeakSet<Node>();
   const usedProjectFields = new WeakMap<Node, Set<RustGeneratedProjectFieldRole>>();
@@ -143,6 +147,16 @@ export function analyzeRustGeneratedItemUsage(input: {
     if (definition === undefined) return;
     usedProjectTypes.add(definition.declaration);
     constructedProjectTypes.add(definition.declaration);
+  };
+  const markProjectTypeReified = (carrier: TargetTypeRef): void => {
+    if (reifiedCarriers.has(carrier)) return;
+    reifiedCarriers.add(carrier);
+    const definition = input.projectTypes.definitionForCarrier(carrier);
+    if (definition !== undefined) {
+      usedProjectTypes.add(definition.declaration);
+      reifiedProjectTypes.add(definition.declaration);
+    }
+    rustTargetTypeChildren(carrier).forEach(markProjectTypeReified);
   };
   const markProjectConstructorInvoked = (carrier: TargetTypeRef | undefined): void => {
     const definition = input.projectTypes.definitionForCarrier(carrier);
@@ -476,6 +490,9 @@ export function analyzeRustGeneratedItemUsage(input: {
         return;
       case "source-call":
         if (isRustPreconstructionThisOperation(input.ast, node)) return;
+        for (const argument of fact.targetGenericArguments ?? []) {
+          if (argument.kind === "type") markProjectTypeReified(argument.type);
+        }
         if (fact.target.form === "constructor") {
           markProjectConstructorInvoked(fact.target.typeCarrier);
         } else if (fact.target.form === "union-method") {
@@ -669,6 +686,7 @@ export function analyzeRustGeneratedItemUsage(input: {
     isProjectTypeUsed: (declaration: Node) => usedProjectTypes.has(declaration),
     isProjectTypeConstructed: (declaration: Node) =>
       constructedProjectTypes.has(declaration),
+    isProjectTypeReified: (declaration: Node) => reifiedProjectTypes.has(declaration),
     isProjectConstructorInvoked: (declaration: Node) =>
       invokedProjectConstructors.has(declaration),
     isAuthoredFieldRead: (declaration: Node) => readAuthoredFields.has(declaration),

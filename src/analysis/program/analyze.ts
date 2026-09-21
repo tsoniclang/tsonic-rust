@@ -254,7 +254,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
       const kind = ast.kindName(statement);
       if (kind === KindFunctionDeclaration) {
         recordFunctionSignatureFacts(walk, statement);
-      } else if (kind === "KindClassDeclaration") {
+      } else if (kind === "KindClassDeclaration" || kind === "KindClassExpression") {
         recordClassSignatureFacts(walk, statement);
       } else if (kind === "KindEnumDeclaration") {
         recordEnumFacts(walk, statement, sourceFile);

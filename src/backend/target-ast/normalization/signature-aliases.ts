@@ -1,4 +1,4 @@
-import type { RustFunctionParam, RustGenericArgument, RustGenericParameter, RustGenerics, RustItem, RustType, RustVisibility } from "../nodes.js";
+import type { RustBlock, RustFunctionParam, RustGenericArgument, RustGenericParameter, RustGenerics, RustItem, RustType, RustVisibility } from "../nodes.js";
 import { rustTypeEquals } from "../inspection/type-equality.js";
 import { rustPascalCaseIdentifier } from "../../../target-model/names/identifiers.js";
 
@@ -7,7 +7,10 @@ interface ClosedTypeSummary {
   readonly names: ReadonlySet<string>;
 }
 
-export function nameRustSignatureTypes(items: readonly RustItem[]): readonly RustItem[] {
+export function nameRustSignatureTypes(
+  items: readonly RustItem[],
+  visitBody: (body: RustBlock, nameType: (type: RustType, role: string) => RustType) => RustBlock = body => body,
+): readonly RustItem[] {
   const reserved = new Set(items.flatMap(item => [
     ...("name" in item ? [item.name] : []),
     ...("generics" in item ? item.generics.parameters.map(parameter => parameter.name) : []),
@@ -19,18 +22,19 @@ export function nameRustSignatureTypes(items: readonly RustItem[]): readonly Rus
     readonly name: string; readonly visibility: RustVisibility;
     readonly params: readonly RustFunctionParam[]; readonly returnType?: RustType;
     readonly generics: RustGenerics;
+    readonly body: RustBlock;
   }>(item: Callable, ownerParameters: readonly RustGenericParameter[]): Callable => {
     const availableParameters = [...ownerParameters, ...item.generics.parameters];
-    const nameType = (type: RustType, role: string): RustType => {
-      if (type.kind === "reference") return { ...type, referent: nameType(type.referent, role) };
-      if (type.kind === "slice") return { ...type, element: nameType(type.element, `${role}Element`) };
+    const nameType = (type: RustType, role: string, visibility = item.visibility): RustType => {
+      if (type.kind === "reference") return { ...type, referent: nameType(type.referent, role, visibility) };
+      if (type.kind === "slice") return { ...type, element: nameType(type.element, `${role}Element`, visibility) };
       if (type.kind === "impl-trait") return { ...type, bounds: type.bounds.map(bound =>
         bound.kind !== "callable" ? bound : { ...bound,
-          parameters: bound.parameters.map((parameter, index) => nameType(parameter, `${role}Arg${index}`)),
-          result: nameType(bound.result, `${role}Result`),
+          parameters: bound.parameters.map((parameter, index) => nameType(parameter, `${role}Arg${index}`, visibility)),
+          result: nameType(bound.result, `${role}Result`, visibility),
         }) };
       const summary = summarizeClosedType(type);
-      if (summary === undefined || summary.weight < 160) return type;
+      if (summary === undefined || summary.weight < 160 || summary.names.has("Self")) return type;
       const parameters = availableParameters.filter(parameter => summary.names.has(parameter.name))
         .map((parameter): RustGenericParameter => parameter.kind === "type"
           ? { kind: "type", name: parameter.name, bounds: [] }
@@ -53,10 +57,10 @@ export function nameRustSignatureTypes(items: readonly RustItem[]): readonly Rus
         let suffix = 2;
         while (reserved.has(name)) name = `${base}${suffix++}`;
         reserved.add(name);
-        alias = { kind: "type-alias", name, visibility: item.visibility,
+        alias = { kind: "type-alias", name, visibility,
           generics: { parameters, wherePredicates: [] }, target: type };
         aliases.push(alias);
-      } else if (item.visibility === "public" && alias.visibility !== "public") {
+      } else if (visibility === "public" && alias.visibility !== "public") {
         const index = aliases.indexOf(alias);
         alias = { ...alias, visibility: "public" };
         aliases[index] = alias;
@@ -65,7 +69,9 @@ export function nameRustSignatureTypes(items: readonly RustItem[]): readonly Rus
     };
     return { ...item, params: item.params.map(parameter => ({ ...parameter,
       type: nameType(parameter.type, parameter.name),
-    })), ...(item.returnType === undefined ? {} : { returnType: nameType(item.returnType, "Result") }) };
+    })), ...(item.returnType === undefined ? {} : { returnType: nameType(item.returnType, "Result") }),
+      body: visitBody(item.body, (type, role) => nameType(type, role, "private")),
+    };
   };
   const result = items.map(item => item.kind === "function" ? nameCallable(item, [])
     : item.kind === "impl" ? { ...item, functions: item.functions.map(method => nameCallable(method, item.generics.parameters)) }

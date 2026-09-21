@@ -76,7 +76,7 @@ export function createRustNamePlan(input: {
       if (name !== undefined) used.add(name);
       moduleNamesByFile.set(sourceFile, used);
     }
-    if (input.ast.kindName(candidate.declaration) === "KindClassDeclaration" &&
+    if ((input.ast.kindName(candidate.declaration) === "KindClassDeclaration" || input.ast.kindName(candidate.declaration) === "KindClassExpression") &&
       input.ast.parent(candidate.declaration) !== sourceFile) {
       const localClasses = localClassesByFile.get(sourceFile) ?? [];
       localClasses.push(candidate);
@@ -232,6 +232,8 @@ function collectNameCandidates(
     const sourceName = ast.kindName(node) === "KindExportAssignment" &&
         ast.as.AsExportAssignment(node)?.IsExportEquals !== true
       ? "default"
+      : name === undefined && ast.kindName(node) === "KindClassExpression"
+        ? "Anonymous"
       : nameKind === "KindPrivateIdentifier"
         ? ast.text(name)
         : propertyName.kind === "resolved" ? propertyName.name : "";
@@ -285,6 +287,7 @@ function declarationNameRole(
 ): RustNameRole | undefined {
   switch (ast.kindName(declaration)) {
     case "KindClassDeclaration":
+    case "KindClassExpression":
     case "KindEnumDeclaration":
     case "KindInterfaceDeclaration":
     case "KindTypeAliasDeclaration":
@@ -319,7 +322,7 @@ function declarationScope(
   ast: AstReader,
 ): Node | undefined {
   const parent = ast.parent(declaration);
-  if (ast.kindName(declaration) === "KindFunctionExpression") {
+  if (ast.kindName(declaration) === "KindFunctionExpression" || ast.kindName(declaration) === "KindClassExpression") {
     return declaration;
   }
   if (parent !== undefined && isMemberScope(ast.kindName(parent))) {
@@ -351,7 +354,7 @@ function nearestScope(
 }
 
 function isMemberScope(kind: string | undefined): boolean {
-  return kind === "KindClassDeclaration" || kind === "KindEnumDeclaration" ||
+  return kind === "KindClassDeclaration" || kind === "KindClassExpression" || kind === "KindEnumDeclaration" ||
     kind === "KindInterfaceDeclaration";
 }
 

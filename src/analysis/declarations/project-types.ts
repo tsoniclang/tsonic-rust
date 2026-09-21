@@ -36,7 +36,7 @@ export function recordMethodSelfModeFacts(walk: RustFactWalk, sourceFiles: reado
   const { ast } = walk.context;
   for (const sourceFile of sourceFiles) {
     for (const statement of rustSourceTypeDeclarations(sourceFile, ast)) {
-      if (ast.kindName(statement) !== "KindClassDeclaration") {
+      if (ast.kindName(statement) !== "KindClassDeclaration" && ast.kindName(statement) !== "KindClassExpression") {
         continue;
       }
       const members = requireDenseSourceNodes(walk, ast.members(statement), "Class declaration contains an undefined or non-data member slot.");

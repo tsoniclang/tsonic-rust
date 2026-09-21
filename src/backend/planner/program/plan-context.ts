@@ -33,7 +33,7 @@ export interface RustFlowReadOverride {
 
 export interface RustCapturedBinding {
   readonly declaration: Node;
-  readonly path: string;
+  readonly expression: RustExpr;
   readonly storage: "value" | "location";
   readonly valueCarrier: import("../../../target-model/types/model.js").TargetTypeRef;
   readonly borrowed?: boolean;

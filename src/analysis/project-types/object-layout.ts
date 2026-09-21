@@ -31,7 +31,7 @@ export function rustProjectObjectLayout(
   ast: AstReader,
 ): RustProjectObjectLayout | undefined {
   const kind = ast.kindName(declaration);
-  const objectKind = kind === "KindClassDeclaration"
+  const objectKind = kind === "KindClassDeclaration" || kind === "KindClassExpression"
     ? "class" as const
     : kind === "KindInterfaceDeclaration"
       ? "interface" as const
@@ -123,7 +123,7 @@ export function rustProjectStaticFieldStorage(
     return undefined;
   }
   const owner = ast.parent(declaration);
-  if (owner === undefined || ast.kindName(owner) !== "KindClassDeclaration") {
+  if (owner === undefined || (ast.kindName(owner) !== "KindClassDeclaration" && ast.kindName(owner) !== "KindClassExpression")) {
     return undefined;
   }
   const sourceFile = ast.getSourceFile(declaration);

@@ -7,7 +7,7 @@ export function rustProjectGenericParameters(
   context: Pick<RustSourcePolicyContext, "ast" | "sourceLifetimes" | "semanticsFor">,
 ): readonly RustSourceGenericParameterContract[] | undefined {
   const own = context.sourceLifetimes.contractFor(declaration)?.parameters ?? [];
-  if (context.ast.kindName(declaration) !== "KindClassDeclaration" ||
+  if ((context.ast.kindName(declaration) !== "KindClassDeclaration" && context.ast.kindName(declaration) !== "KindClassExpression") ||
     context.ast.parent(declaration) === context.ast.getSourceFile(declaration)) return own;
   const semantics = context.semanticsFor(declaration);
   const type = semantics.declarations.declaredType(declaration);

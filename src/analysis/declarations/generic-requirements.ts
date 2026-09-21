@@ -758,7 +758,7 @@ function collectCallableDeclarations(
 
 function isGenericTypeDeclaration(ast: AstReader, node: Node): boolean {
   const kind = ast.kindName(node);
-  return kind === "KindClassDeclaration" || kind === "KindInterfaceDeclaration" || kind === "KindTypeAliasDeclaration";
+  return kind === "KindClassDeclaration" || kind === "KindClassExpression" || kind === "KindInterfaceDeclaration" || kind === "KindTypeAliasDeclaration";
 }
 
 function isIndependentCallable(ast: AstReader, node: Node): boolean {

@@ -342,7 +342,7 @@ export function planCallableExpression(
     });
     capturedBindings.push({
       declaration: capture.declaration,
-      path: name,
+      expression: { kind: "path", path: name },
       storage: capture.storage,
       valueCarrier: capture.carrier,
     });
@@ -355,7 +355,7 @@ export function planCallableExpression(
     recursiveName = allocateRustSyntheticName(context.syntheticNames, "recursive_callable");
     capturedBindings.push({
       declaration: captureFact.recursiveDeclaration,
-      path: recursiveName,
+      expression: { kind: "path", path: recursiveName },
       storage: "value",
       valueCarrier: closureFact.resultCarrier,
     });

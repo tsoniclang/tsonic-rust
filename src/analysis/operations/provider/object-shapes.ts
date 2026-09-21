@@ -425,14 +425,14 @@ export function acceptProjectSourceCall(
   const selectedKind = ast.kindName(selectedDeclaration);
   const construction = checkedCallIsConstruction(request, context) ||
     selectedKind === "KindConstructor";
-  if (construction && selectedKind !== "KindClassDeclaration" && selectedKind !== "KindConstructor") {
+  if (construction && selectedKind !== "KindClassDeclaration" && selectedKind !== "KindClassExpression" && selectedKind !== "KindConstructor") {
     return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_CONSTRUCTOR_DECLARATION_INVALID", "Project-source construction evidence is not an exact constructor declaration or an implicit-constructor class declaration.");
   }
   const selectedCalleeDeclaration = asNode(selectedCallCalleeDeclaration(request), context);
   const selectedOwner = construction && selectedCalleeDeclaration !== undefined &&
-      ast.kindName(selectedCalleeDeclaration) === "KindClassDeclaration"
+      (ast.kindName(selectedCalleeDeclaration) === "KindClassDeclaration" || ast.kindName(selectedCalleeDeclaration) === "KindClassExpression")
     ? selectedCalleeDeclaration
-    : selectedKind === "KindClassDeclaration"
+    : selectedKind === "KindClassDeclaration" || selectedKind === "KindClassExpression"
       ? selectedDeclaration
       : selectedKind === "KindConstructor" ? ast.parent(selectedDeclaration) : undefined;
   const selectedOwnerDefinition = options.projectTypes.definitionForDeclaration(selectedOwner);
@@ -589,7 +589,7 @@ export function acceptProjectSourceCall(
     return rejectSelectedOperation(request.source.call, context, "RUST_UNION_METHOD_IDENTITY_MISSING",
       "A closed class union call requires one exact selected method implementation per arm.");
   }
-  const sourceParameters = ast.kindName(callableDeclaration) === "KindClassDeclaration"
+  const sourceParameters = ast.kindName(callableDeclaration) === "KindClassDeclaration" || ast.kindName(callableDeclaration) === "KindClassExpression"
     ? request.source.sourceSelectedSignatureParameters.map((parameter) =>
         parameter.parameterDeclaration)
     : ast.parameters(callableDeclaration);

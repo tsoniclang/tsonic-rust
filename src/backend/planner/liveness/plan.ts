@@ -19,6 +19,7 @@ export interface RustPlannerLiveness {
   requiresSuppression(declaration: Node): boolean;
   isRead(declaration: Node): boolean;
   isProjectTypeConstructed(declaration: Node): boolean;
+  isProjectTypeReified(declaration: Node): boolean;
   isProjectConstructorInvoked(declaration: Node): boolean;
   isProjectGeneratedFieldUsed(
     declaration: Node,
@@ -209,6 +210,7 @@ export function createRustPlannerLiveness(program: RustTargetProgram): RustPlann
     isRead: (declaration: Node) =>
       generatedUsage.isAuthoredFieldRead(canonical(declaration)),
     isProjectTypeConstructed: generatedUsage.isProjectTypeConstructed,
+    isProjectTypeReified: generatedUsage.isProjectTypeReified,
     isProjectConstructorInvoked: generatedUsage.isProjectConstructorInvoked,
     isProjectGeneratedFieldUsed: generatedUsage.isProjectGeneratedFieldUsed,
     isDispatchMemberUsed: generatedUsage.isDispatchMemberUsed,

@@ -66,7 +66,8 @@ function planImplementation(
   const names = createRustSyntheticNameState(context.input.program.source.ast, implementation.declaration, []);
   const captureNames = implementation.captures.map((_capture, index) => allocateRustSyntheticName(names, `capture_${index}`));
   const bodyContext: RustPlanContext = { ...helperContext, capturedBindings: implementation.captures.map((capture, index) => ({
-    declaration: capture.declaration, path: captureNames[index]!, storage: capture.storage, valueCarrier: capture.carrier, borrowed: true,
+    declaration: capture.declaration, expression: { kind: "path", path: captureNames[index]! },
+    storage: capture.storage, valueCarrier: capture.carrier, borrowed: true,
   })) };
   const helper = planNativeModuleFunction(implementation.declaration, implementation.declaration,
     implementation.functionName, true, bodyContext);

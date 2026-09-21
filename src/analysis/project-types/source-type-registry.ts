@@ -100,7 +100,7 @@ export function createRustSourceTypeRegistry(
       return undefined;
     }
     const kind = ast.kindName(declaration);
-    const shape = kind === "KindClassDeclaration" || kind === "KindInterfaceDeclaration"
+    const shape = kind === "KindClassDeclaration" || kind === "KindClassExpression" || kind === "KindInterfaceDeclaration"
       ? "object"
       : kind === "KindEnumDeclaration" ||
           (kind === "KindTypeAliasDeclaration" && variantsByDeclaration.has(declaration))
@@ -185,7 +185,7 @@ export function createRustSourceTypeRegistry(
       const declaration = key === undefined ? undefined : declarations.get(key);
       if (declaration === undefined ||
         (ast.kindName(declaration) !== "KindInterfaceDeclaration" &&
-          ast.kindName(declaration) !== "KindClassDeclaration") ||
+          ast.kindName(declaration) !== "KindClassDeclaration" && ast.kindName(declaration) !== "KindClassExpression") ||
         ast.extendsHeritageElements(declaration).length !== 0) {
         return undefined;
       }
@@ -200,7 +200,7 @@ export function createRustSourceTypeRegistry(
         if (sourceClassFieldIsTypeOnly(ast, member) || ast.hasModifierKind(member, "abstract")) continue;
         const kind = ast.kindName(member);
         if ((declarationKind === "KindInterfaceDeclaration" && kind === "KindPropertySignature") ||
-          (declarationKind === "KindClassDeclaration" &&
+          ((declarationKind === "KindClassDeclaration" || declarationKind === "KindClassExpression") &&
             (kind === "KindPropertyDeclaration" || sourceParameterIsProperty(ast, member)))) {
           if (ast.hasModifierKind(member, "static")) {
             continue;
@@ -215,7 +215,7 @@ export function createRustSourceTypeRegistry(
           keys.push(name);
           continue;
         }
-        if (declarationKind === "KindClassDeclaration" &&
+        if ((declarationKind === "KindClassDeclaration" || declarationKind === "KindClassExpression") &&
           (kind === "KindConstructor" || kind === "KindMethodDeclaration" ||
             kind === "KindGetAccessor" || kind === "KindSetAccessor")) {
           continue;

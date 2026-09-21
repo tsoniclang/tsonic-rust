@@ -99,7 +99,9 @@ export function planRustFlowReadProjection(
       { pattern: { kind: "tuple-variant", path: `${path}::${fact.variant}`,
         elements: [{ kind: "binding", name }] },
         expression: ownsValue ? { kind: "path", path: name }
-          : { kind: "method-call", receiver: { kind: "path", path: name }, method: "clone", args: [] } },
+          : isRustCopyCarrier(fact.selectedCarrier)
+            ? { kind: "dereference", pointer: { kind: "path", path: name } }
+            : { kind: "method-call", receiver: { kind: "path", path: name }, method: "clone", args: [] } },
       { pattern: { kind: "wildcard" }, expression: { kind: "unreachable",
         message: "TSTS-selected source refinement excluded this union variant" } },
     ] }, node, context);

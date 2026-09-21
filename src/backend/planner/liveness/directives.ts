@@ -41,7 +41,7 @@ export function rustProjectInterfaceDeadCodeDisposition(
   if (publiclyReachable) return undefined;
   const liveness = context.input.liveness;
   if (liveness.requiresSuppression(declaration)) return "authored-declaration";
-  return liveness.isProjectTypeConstructed(declaration)
+  return liveness.isProjectTypeConstructed(declaration) || liveness.isProjectTypeReified(declaration)
     ? undefined
     : "generated-unconstructed-instance";
 }

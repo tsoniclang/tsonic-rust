@@ -26,7 +26,7 @@ export function resolveRustInferredObjectUnion(
     const shape = options.sourceTypes.structuralObjectForType(sourceType, carrier);
     const kind = declaration === undefined ? undefined : context.ast.kindName(declaration);
     const projectObject = value?.shape === "object" && declaration !== undefined &&
-      (kind === "KindClassDeclaration" || kind === "KindInterfaceDeclaration") &&
+      (kind === "KindClassDeclaration" || kind === "KindClassExpression" || kind === "KindInterfaceDeclaration") &&
       context.source.navigation.isProjectDeclaration(declaration);
     if (!projectObject && shape === undefined && !numberArrayUnion) return undefined;
     const ownerFileName = value?.fileName ?? rustStructuralObjectCarrierValue(carrier)?.ownerFileName ??

@@ -37,7 +37,7 @@ export function createRustProjectTypePolicy(
     usedModuleNamesBySourceFile.set(sourceFile, usedNames);
     for (const statement of rustSourceTypeDeclarations(sourceFile, host.ast)) {
       if (host.isRepresentationAlias(statement)) continue;
-      if (host.ast.kindName(statement) === "KindClassDeclaration") {
+      if (host.ast.kindName(statement) === "KindClassDeclaration" || host.ast.kindName(statement) === "KindClassExpression") {
         const issue = rustLocalClassIssue(statement, host.ast, host.navigation, host.genericParametersFor(statement));
         if (issue !== undefined) {
           issues.push({ ...issue, code: "RUST_LOCAL_CLASS_NOT_CLOSED" });

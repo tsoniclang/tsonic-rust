@@ -15,7 +15,7 @@ export function projectDefinition(
   usedNames: Set<string>,
 ): RustProjectTypeDefinition | undefined {
   const kindName = ast.kindName(declaration);
-  const kind = kindName === "KindClassDeclaration"
+  const kind = kindName === "KindClassDeclaration" || kindName === "KindClassExpression"
     ? "class" as const
     : kindName === "KindInterfaceDeclaration"
       ? "interface" as const

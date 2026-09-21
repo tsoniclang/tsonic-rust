@@ -19,7 +19,8 @@ import { nameRustSignatureTypes } from "./signature-aliases.js";
 export function finalizeRustSourceStyle(
   model: RustSourceFileModel,
 ): RustSourceFileModel {
-  const items = closePublicRustTypeVisibility(nameRustSignatureTypes(model.items));
+  const items = closePublicRustTypeVisibility(nameRustSignatureTypes(model.items,
+    (body, nameType) => createRustBodyStyler(nameType).block(body)));
   const publicTypes = publicDeclaredRustTypeNames(items);
   return {
     ...model,
@@ -51,7 +52,7 @@ function finalizeRustItemStyle(
     const attrs = item.params.length <= 7
       ? item.attrs
       : appendRustAttribute(item.attrs, rustLintAttributes.tooManyArguments);
-    return { ...item, attrs, body: finalizeRustFunctionBodyStyle(item.body) };
+    return { ...item, attrs };
   }
   if (item.kind === "trait") {
     return {
@@ -68,7 +69,7 @@ function finalizeRustItemStyle(
     };
   }
   if (item.kind === "const" || item.kind === "thread-local") {
-    return { ...item, value: finalizeRustExpressionStyle(item.value) };
+    return { ...item, value: createRustBodyStyler().expression(item.value) };
   }
   return item;
 }
@@ -81,7 +82,7 @@ function finalizeRustTraitFunctionStyle(fn: RustTraitFunction): RustTraitFunctio
   return {
     ...fn,
     ...(attrs === undefined ? {} : { attrs }),
-    ...(fn.body === undefined ? {} : { body: finalizeRustFunctionBodyStyle(fn.body) }),
+    ...(fn.body === undefined ? {} : { body: createRustBodyStyler().block(fn.body) }),
   };
 }
 
@@ -103,8 +104,14 @@ function finalizeRustImplFunctionStyle(
     fn.selfParam?.kind === "reference" && fn.selfParam.mutable && fn.params.length === 0) {
     attrs = appendRustAttribute(attrs, rustLintAttributes.shouldImplementTrait);
   }
-  return { ...fn, attrs, body: finalizeRustFunctionBodyStyle(fn.body) };
+  return { ...fn, attrs };
 }
+
+function createRustBodyStyler(nameType?: (type: RustType, role: string) => RustType): {
+  readonly block: (block: RustBlock) => RustBlock;
+  readonly expression: (expression: RustExpr) => RustExpr;
+} {
+  return { block: finalizeRustFunctionBodyStyle, expression: finalizeRustExpressionStyle };
 
 function finalizeRustFunctionBodyStyle(block: RustBlock): RustBlock {
   return finalizeRustBlockLiveness(finalizeRustBlockStyle(block));
@@ -120,9 +127,10 @@ function finalizeRustBlockStyle(block: RustBlock): RustBlock {
 function finalizeRustStatementStyle(statement: RustStmt): RustStmt {
   switch (statement.kind) {
     case "let":
-      return statement.init === undefined
-        ? statement
-        : { ...statement, init: finalizeRustExpressionStyle(statement.init) };
+      return { ...statement,
+        ...(statement.type === undefined || nameType === undefined ? {} : { type: nameType(statement.type, statement.name) }),
+        ...(statement.init === undefined ? {} : { init: finalizeRustExpressionStyle(statement.init) }),
+      };
     case "expr":
       return { ...statement, expr: finalizeRustExpressionStyle(statement.expr) };
     case "assign":
@@ -433,6 +441,7 @@ function finalizeRustExpressionStyle(expression: RustExpr): RustExpr {
         ...expression,
         bindings: expression.bindings.map((binding) => ({
           ...binding,
+          ...(binding.type === undefined || nameType === undefined ? {} : { type: nameType(binding.type, binding.name) }),
           ...(binding.value === undefined ? {} : { value: finalizeRustExpressionStyle(binding.value) }),
         })),
         value: finalizeRustExpressionStyle(expression.value),
@@ -504,6 +513,8 @@ function finalizeRustExpressionStyle(expression: RustExpr): RustExpr {
       break;
   }
   return result;
+}
+
 }
 
 function closePublicRustTypeVisibility(items: readonly RustItem[]): readonly RustItem[] {
