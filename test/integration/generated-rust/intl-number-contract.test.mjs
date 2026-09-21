@@ -1,12 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { compileRust, acmeTestingPackage } from "../../helpers/rust-session.mjs";
+import { analyzeRust, compileRust, acmeTestingPackage } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { rustRuntimeUnionContract, rustRuntimeUnionProjection } from "../../../dist/target-model/types/carriers/runtime-unions.js";
 import { rustSourcePrimitiveTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
 import { rustJsIntlGroupingTargetId } from "../../../dist/target-model/types/carriers/source-types.js";
 import { planRustFlowReadProjection } from "../../../dist/backend/planner/expressions/flow-reads.js";
-import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../helpers/fake-compile-input.mjs";
 
 test("Intl exact integer, optional precision and grouping contracts execute in Rust", { timeout: 300_000 }, () => {
   const { result } = compileRust({
@@ -77,15 +76,30 @@ test("native result union correspondence rejects mismatched carriers", () => {
 });
 
 test("native result union planning rejects mutated projection evidence", () => {
-  const node = fakeStatement({ kindName: "Identifier", pos: 0, end: 8 });
-  const sourceFile = fakeSourceFile({ text: "grouping", statements: [node] });
-  const source = { kind: "target-named", id: rustJsIntlGroupingTargetId };
+  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+    export function inspect(): string {
+      const grouping = new Intl.NumberFormat("en").resolvedOptions().useGrouping;
+      return typeof grouping === "string" ? grouping : "disabled";
+    }
+  ` } });
+  const sourceFile = program.sourceFiles[0];
+  const ast = program.source.ast;
+  let node;
+  const visit = current => {
+    if (ast.is.IsIdentifier(current) && ast.text(current) === "grouping") {
+      const carrier = program.facts.getRuntimeCarrierFact(current)?.carrier;
+      if (carrier?.kind === "target-named" && carrier.id === rustJsIntlGroupingTargetId) {
+        node = current;
+      }
+    }
+    ast.forEachChild(current, child => { if (child !== undefined) visit(child); });
+  };
+  visit(sourceFile);
+  assert.notEqual(node, undefined);
+  const source = program.facts.getRuntimeCarrierFact(node).carrier;
   const selected = rustStringTargetType();
   const context = {
-    input: { program: {
-      source: { ast: fakeAstReader([sourceFile]) },
-      facts: { getRuntimeCarrierFact: () => ({ carrier: source }) },
-    } },
+    input: { program },
     sourceFile,
     diagnostics: [],
   };

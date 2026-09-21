@@ -26,12 +26,15 @@ import { rustFallibleFactKey, rustSourceAccessorEffectsFactKey } from "../../../
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import type { Node } from "@tsonic/tsts";
+import { planRustBorrowedElementRead } from "./borrowed-element-reads.js";
 import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function planPropertyAccess(node: Node, context: RustPlanContext): RustExpr | undefined {
+  const borrowed = context.input.program.borrowedElementReads.forExpression(node);
+  if (borrowed !== undefined) return planRustBorrowedElementRead(node, borrowed, context, planPropertyAccessInner);
   return planOptionalChainExpression(
     node,
     context,
@@ -118,7 +121,9 @@ function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr
     }
     if (rustSourceFieldHasValueReceiver(node, context)) {
       const location = planRustValueFieldLocation(node, context, "read");
-      return location === undefined ? undefined : { kind: "block", bindings: location.bindings, value: location.read };
+      return location === undefined ? undefined : location.bindings.length === 0
+        ? location.read
+        : { kind: "block", bindings: location.bindings, value: location.read };
     }
     const receiverNode = Node_Expression(context.input.program.source.ast, node);
     const plannedReceiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);

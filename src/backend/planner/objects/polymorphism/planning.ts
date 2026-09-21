@@ -290,7 +290,7 @@ export function planPolymorphicClassDeclaration(
           name: rustProjectObjectStateField,
           type: {
             kind: "named",
-            path: "rt::ObjectHandle",
+            path: "rt::ObjectState",
             genericArguments: [{ kind: "type" as const, type: stateType }],
           },
           visibility: "private",

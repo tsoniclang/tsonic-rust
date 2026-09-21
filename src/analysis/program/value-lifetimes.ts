@@ -1,4 +1,5 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
+import type { RustClosureCaptureFact } from "../facts/operations/keys.js";
 import {
   Node_Expression,
   sourceNodesEqual,
@@ -7,14 +8,19 @@ import {
 
 export interface RustValueLifetimePlan {
   canMove(reference: Node): boolean;
+  canMoveCapture(closure: Node, declaration: Node): boolean;
 }
 
 export function analyzeRustValueLifetimes(input: {
   readonly ast: AstReader;
   readonly sourceFiles: readonly SourceFile[];
   readonly navigation: SourceProgramNavigation;
+  readonly isOwnedString: (declaration: Node) => boolean;
+  readonly mayBorrowArgument: (argument: Node) => boolean;
+  readonly capturesFor: (closure: Node) => RustClosureCaptureFact | undefined;
 }): RustValueLifetimePlan {
   const movableReferences = new WeakSet<Node>();
+  const movableCaptures = new WeakMap<Node, ReadonlySet<Node>>();
   const visit = (node: Node): void => {
     const kind = input.ast.kindName(node);
     if (input.ast.is.IsCallExpression(node) || input.ast.is.IsNewExpression(node)) {
@@ -22,6 +28,14 @@ export function analyzeRustValueLifetimes(input: {
     }
     if (kind === "KindVariableDeclaration" || kind === "KindParameter") {
       classifyDeclaration(node, input, movableReferences);
+    }
+    if (kind === "KindArrowFunction" || kind === "KindFunctionExpression") {
+      const captures = input.capturesFor(node)?.captures.filter(capture =>
+        capture.storage === "value" && input.isOwnedString(capture.declaration) &&
+        isTerminalOwnedCapture(node, capture.declaration, input));
+      if (captures !== undefined && captures.length > 0) {
+        movableCaptures.set(node, new Set(captures.map(capture => capture.declaration)));
+      }
     }
     input.ast.forEachChild(node, (child) => {
       if (child !== undefined) visit(child);
@@ -32,6 +46,41 @@ export function analyzeRustValueLifetimes(input: {
     canMove(reference: Node): boolean {
       return movableReferences.has(reference);
     },
+    canMoveCapture(closure: Node, declaration: Node): boolean {
+      return movableCaptures.get(closure)?.has(declaration) === true;
+    },
+  });
+}
+
+function isTerminalOwnedCapture(
+  closure: Node,
+  declaration: Node,
+  input: { readonly ast: AstReader; readonly navigation: SourceProgramNavigation },
+): boolean {
+  const { ast, navigation } = input;
+  const owner = enclosingCallable(declaration, ast);
+  const parent = ast.parent(closure);
+  if (owner === undefined || parent === undefined || enclosingCallable(parent, ast) !== owner) return false;
+  const body = ast.body(owner);
+  if (body === undefined) return false;
+  let expression = closure;
+  let enclosing = parent;
+  while (isTransparentValueWrapper(enclosing, expression, ast)) {
+    expression = enclosing;
+    const next = ast.parent(enclosing);
+    if (next === undefined) return false;
+    enclosing = next;
+  }
+  if (expression !== body &&
+    !(ast.is.IsReturnStatement(enclosing) && ast.parent(enclosing) === body &&
+      Node_Expression(ast, enclosing) === expression)) return false;
+  const summary = navigation.declarationUseSummary(declaration);
+  if (summary.bindingWritten || summary.exported) return false;
+  const uses = summary.uses.filter(use => use.kind !== "source-linkage" && use.kind !== "type-only");
+  return uses.length > 0 && uses.every(use => {
+    let current: Node | undefined = use.reference;
+    while (current !== undefined && current !== closure && current !== owner) current = ast.parent(current);
+    return current === closure;
   });
 }
 
@@ -40,6 +89,8 @@ function classifyDeclaration(
   input: {
     readonly ast: AstReader;
     readonly navigation: SourceProgramNavigation;
+    readonly isOwnedString: (declaration: Node) => boolean;
+    readonly mayBorrowArgument: (argument: Node) => boolean;
   },
   movableReferences: WeakSet<Node>,
 ): void {
@@ -51,7 +102,8 @@ function classifyDeclaration(
   const runtimeUses = summary.uses.filter((use) =>
     use.kind !== "source-linkage" && use.kind !== "type-only");
   for (const { reference } of runtimeUses) {
-    if (isExactCallableExitValue(reference, declaration, input)) {
+    if (isExactCallableExitValue(reference, declaration, input) ||
+      input.isOwnedString(declaration) && isLastStraightLineUse(reference, declaration, input)) {
       movableReferences.add(reference);
     }
   }
@@ -77,7 +129,7 @@ function isExactCallableExitValue(
     return false;
   }
   const selected = input.navigation.sourceReferenceFor(reference);
-  if (selected?.symbol === undefined || !sourceNodesEqual(
+  if (selected === undefined || !sourceNodesEqual(
     input.ast,
     selected.declaration,
     declaration,
@@ -95,17 +147,75 @@ function isExactCallableExitValue(
       current = parent;
       continue;
     }
+    if (input.ast.is.IsConditionalExpression(parent)) {
+      const conditional = input.ast.as.AsConditionalExpression(parent);
+      if (sourceNodesEqual(input.ast, conditional?.WhenTrue, current) ||
+        sourceNodesEqual(input.ast, conditional?.WhenFalse, current)) {
+        current = parent;
+        continue;
+      }
+    }
     if (input.ast.is.IsReturnStatement(parent) &&
       sourceNodesEqual(input.ast, Node_Expression(input.ast, parent), current) &&
       !returnCrossesRetainedControlRegion(parent, declarationCallable, input.ast)) {
-      const references = input.navigation.referencesWithin(selected.symbol, current);
-      return references.length === 1 && sourceNodesEqual(
-        input.ast,
-        references[0],
-        reference,
-      );
+      return true;
     }
     return false;
+  }
+}
+
+function isLastStraightLineUse(
+  reference: Node,
+  declaration: Node,
+  input: {
+    readonly ast: AstReader;
+    readonly navigation: SourceProgramNavigation;
+    readonly mayBorrowArgument: (argument: Node) => boolean;
+  },
+): boolean {
+  const callable = enclosingCallable(declaration, input.ast);
+  const body = input.ast.body(callable);
+  if (body === undefined || !input.ast.is.IsBlock(body)) return false;
+  const range = input.ast.authoredRange(reference);
+  if (range.kind !== "authored") return false;
+  const invocations = new Set<Node>();
+  let current = reference;
+  for (;;) {
+    const parent = input.ast.parent(current);
+    if (parent === undefined) return false;
+    if (parent === body) break;
+    const kind = input.ast.kindName(parent);
+    if (input.ast.is.IsCallExpression(parent) || input.ast.is.IsNewExpression(parent)) invocations.add(parent);
+    if (!isTransparentValueWrapper(parent, current, input.ast) &&
+      kind !== "KindCallExpression" && kind !== "KindNewExpression" &&
+      kind !== "KindReturnStatement" && kind !== "KindExpressionStatement" &&
+      kind !== "KindVariableDeclaration" && kind !== "KindVariableDeclarationList" &&
+      kind !== "KindVariableStatement") return false;
+    current = parent;
+  }
+  return input.navigation.declarationUses(declaration).every(use => {
+    if (use.kind === "source-linkage" || use.kind === "type-only" || use.reference === reference) return true;
+    if (use.captured) return false;
+    const other = input.ast.authoredRange(use.reference);
+    return other.kind === "authored" && other.end <= range.start &&
+      !hasOverlappingArgumentBorrow(use.reference, invocations, input);
+  });
+}
+
+function hasOverlappingArgumentBorrow(
+  reference: Node,
+  invocations: ReadonlySet<Node>,
+  input: { readonly ast: AstReader; readonly mayBorrowArgument: (argument: Node) => boolean },
+): boolean {
+  let current = reference;
+  for (;;) {
+    const parent = input.ast.parent(current);
+    if (parent === undefined) return false;
+    if (isTransparentValueWrapper(parent, current, input.ast)) {
+      current = parent;
+      continue;
+    }
+    return invocations.has(parent) && input.mayBorrowArgument(current);
   }
 }
 

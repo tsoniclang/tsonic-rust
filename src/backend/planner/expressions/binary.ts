@@ -397,11 +397,11 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
     }
     return {
       kind: "evaluate-then",
-      effect: left,
+      effect: planRustNonConsumingValue(leftNode, left, context),
       discard: isRustUnitCarrier(expressionCarrier(leftNode, context)) ? "unit" : "value",
       value: {
         kind: "evaluate-then",
-        effect: right,
+        effect: planRustNonConsumingValue(rightNode, right, context),
         discard: isRustUnitCarrier(expressionCarrier(rightNode, context)) ? "unit" : "value",
         value: { kind: "bool-literal", value: fact.value },
       },

@@ -431,6 +431,7 @@ export interface RustProviderOperationTemplate<
   readonly sourceResultCarrier?: TargetTypeRef;
   readonly sourceAbsenceCarrier?: TargetTypeRef;
   readonly indexedLocationMethod?: string;
+  readonly borrowedIndexMethod?: string;
   readonly parameterCarriers?: readonly (TargetTypeRef | undefined)[];
   readonly receiverCarrier?: TargetTypeRef;
   readonly genericParameters?: readonly RustProviderGenericParameter[];
@@ -456,6 +457,10 @@ export interface RustCallbackOperationTemplate {
   readonly shape: "direct" | "map" | "reduce";
   readonly sourceArgumentIndex: number;
   readonly accumulatorArgumentIndex?: number;
+  readonly borrowedParameters?: {
+    readonly target: RustProviderOperationForm;
+    readonly fallibleTarget: RustProviderOperationForm;
+  };
   readonly argumentAdapter?: {
     readonly kind: "regexp-replacement";
     readonly lane: "native" | "exact";

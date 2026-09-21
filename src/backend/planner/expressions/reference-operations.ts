@@ -7,6 +7,7 @@ import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
+import { planRustNonConsumingValue } from "./typed-locations.js";
 
 export function planRustReferenceOperationCall(
   call: Node,
@@ -43,9 +44,9 @@ export function planRustReferenceOperationCall(
   if (operand === undefined) return undefined;
   switch (fact.operation) {
     case "shared-reference":
-      return { kind: "reference", expr: operand };
+      return { kind: "reference", expr: planRustNonConsumingValue(fact.operandExpression, operand, context) };
     case "mutable-reference":
-      return { kind: "reference", expr: operand, mutable: true };
+      return { kind: "reference", expr: planRustNonConsumingValue(fact.operandExpression, operand, context), mutable: true };
     case "load":
       return { kind: "dereference", pointer: operand };
     case "store": {

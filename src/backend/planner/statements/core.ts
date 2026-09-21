@@ -32,6 +32,8 @@ import type { RustBlock, RustStmt } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
 import { rustTypeAliasDeclarationFactKey } from "../../../analysis/facts/keys.js";
+import { planRustBorrowedElementLocal } from "../expressions/borrowed-element-reads.js";
+import { rustBlockTerminates } from "./block-flow.js";
 
 export type RustAssignmentOperationFact = Extract<
   RustTargetOperationFact,
@@ -151,6 +153,7 @@ export function planStatementSequence(
 ): RustBlock | undefined {
   const statements: RustStmt[] = [];
   let failed = false;
+  let sequenceContext = context;
   for (let index = 0; index < children.length; index += 1) {
     const child = children[index];
     if (child === undefined) {
@@ -162,11 +165,11 @@ export function planStatementSequence(
       failed = true;
       continue;
     }
-    if (isRustExplicitUnsafeBlockMarker(child, context.input)) {
+    if (isRustExplicitUnsafeBlockMarker(child, sequenceContext.input)) {
       const body = planStatementSequence(
         children.slice(index + 1),
         diagnosticNode,
-        withExplicitUnsafeContext(context),
+        withExplicitUnsafeContext(sequenceContext),
       );
       if (body === undefined) {
         return undefined;
@@ -174,14 +177,14 @@ export function planStatementSequence(
       statements.push({ kind: "unsafe-scope", body });
       return { statements };
     }
-    const resourceDeclaration = directResourceDeclaration(child, context);
+    const resourceDeclaration = directResourceDeclaration(child, sequenceContext);
     if (resourceDeclaration !== undefined) {
       const planned = planResourceDeclarationScope(
         child,
         resourceDeclaration,
         children.slice(index + 1),
         diagnosticNode,
-        context,
+        sequenceContext,
       );
       if (planned === undefined) {
         failed = true;
@@ -190,12 +193,22 @@ export function planStatementSequence(
       }
       return failed ? undefined : { statements };
     }
-    const planned = planStatement(child, context);
+    const borrowed = sequenceContext.input.program.borrowedElementReads.forStatement(child);
+    const local = borrowed === undefined ? undefined : planRustBorrowedElementLocal(borrowed, sequenceContext);
+    const planned = borrowed === undefined ? planStatement(child, sequenceContext) : local?.statements;
     if (planned === undefined) {
       failed = true;
       continue;
     }
+    if (local !== undefined) sequenceContext = local.context;
     statements.push(...planned);
+    if (!rustBlockTerminates({ statements: planned })) {
+      for (const read of sequenceContext.input.program.borrowedElementReads.endingAt(child)) {
+        const name = sequenceContext.input.program.names.nameForDeclaration(read.declaration);
+        if (name === undefined) { failed = true; continue; }
+        statements.push({ kind: "expr", expr: { kind: "call", path: "core::mem::drop", args: [{ kind: "path", path: name }] } });
+      }
+    }
   }
   return failed ? undefined : { statements };
 }

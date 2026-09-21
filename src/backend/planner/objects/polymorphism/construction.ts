@@ -619,7 +619,7 @@ export function planProjectClassConstructor(
                   name: rustProjectObjectStateField,
                   value: {
                     kind: "call",
-                    path: "rt::ObjectHandle::new",
+                    path: "rt::ObjectState::new",
                     args: [{ kind: "path", path: stateName }],
                   },
                 },

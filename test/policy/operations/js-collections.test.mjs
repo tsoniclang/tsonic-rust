@@ -343,7 +343,7 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /values\s*\.try_sort\(/u);
+  assert.match(source, /values\s*\.try_sort_borrowed\(/u);
   assert.doesNotMatch(source, /let operation_input_\d+ = \|left, right\|/u);
   assert.match(source, /unary\.sort_value\(/u);
   assert.match(source, /zero\.sort_zero\(/u);

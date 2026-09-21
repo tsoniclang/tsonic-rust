@@ -1,4 +1,6 @@
 import type { AstReader, Node } from "@tsonic/tsts";
+import { flowStateFactKey } from "@tsonic/tsts";
+import { isRustStringCarrier } from "../../target-model/types/index.js";
 import {
   KindFalseKeyword,
   KindFunctionExpression,
@@ -21,6 +23,7 @@ import type { RustModuleBindingFact } from "../facts/keys.js";
 
 export interface RustModuleBindingPolicy {
   nativeCallable(declaration: Node): RustNativeModuleCallable | undefined;
+  isNativeCallableExpression(expression: Node): boolean;
   classifyValue(
     declaration: Node,
     declarationKind: "const" | "let" | "var",
@@ -40,6 +43,7 @@ export function createRustModuleBindingPolicy(
   const callableByDeclaration = collectNativeCallableCandidates(context);
   const cyclic = cyclicSourceFiles(context.source.navigation, context.sourceFiles);
   const nativeCallables = new Map<Node, RustNativeModuleCallable>();
+  const nativeExpressions = new WeakSet<Node>();
   for (const [declaration, callableDeclaration] of callableByDeclaration) {
     const sourceFile = context.ast.getSourceFile(declaration);
     const name = context.names.functionNameForDeclaration(declaration);
@@ -51,11 +55,15 @@ export function createRustModuleBindingPolicy(
         name,
         valueObserved,
       }));
+      nativeExpressions.add(callableDeclaration);
     }
   }
   return Object.freeze({
     nativeCallable(declaration: Node) {
       return nativeCallables.get(declaration);
+    },
+    isNativeCallableExpression(expression: Node) {
+      return nativeExpressions.has(expression);
     },
     classifyValue(
       declaration: Node,
@@ -66,10 +74,15 @@ export function createRustModuleBindingPolicy(
       const initializerKind = initializer === undefined
         ? undefined
         : context.ast.kindName(initializer);
+      const stringConstant = isRustStringCarrier(valueCarrier) &&
+        (initializerKind === "KindStringLiteral" || initializerKind === "KindNoSubstitutionTemplateLiteral") &&
+        moduleStringCanUseStaticStorage(declaration, context) &&
+        !cyclic.has(context.ast.getSourceFile(declaration)!) &&
+        !context.runtimeValueUses.hasSameFileRuntimeUseBeforeDeclaration(declaration);
       const nativeConst = declarationKind === "const" && (
         initializerKind === KindNumericLiteral ||
         initializerKind === KindTrueKeyword ||
-        initializerKind === KindFalseKeyword
+        initializerKind === KindFalseKeyword || stringConstant
       );
       if (nativeConst) {
         return {
@@ -85,6 +98,14 @@ export function createRustModuleBindingPolicy(
       };
     },
   });
+}
+
+function moduleStringCanUseStaticStorage(declaration: Node, context: RustAnalysisContext): boolean {
+  const summary = context.source.navigation.declarationUseSummary(declaration);
+  if (summary.exported || summary.bindingWritten) return false;
+  return summary.uses.every(use =>
+    context.facts.resolve(use.reference, flowStateFactKey) === undefined &&
+    context.facts.get(use.reference, flowStateFactKey) === undefined);
 }
 
 function collectNativeCallableCandidates(

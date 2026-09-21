@@ -100,7 +100,7 @@ function finalizeRustImplFunctionStyle(
     attrs = appendRustAttribute(attrs, rustLintAttributes.inherentToString);
   }
   if (inherent && publicOwner && fn.visibility === "public" && fn.name === "next" &&
-    fn.selfParam !== undefined && fn.params.length === 0) {
+    fn.selfParam?.kind === "reference" && fn.selfParam.mutable && fn.params.length === 0) {
     attrs = appendRustAttribute(attrs, rustLintAttributes.shouldImplementTrait);
   }
   return { ...fn, attrs, body: finalizeRustFunctionBodyStyle(fn.body) };

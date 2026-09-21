@@ -21,11 +21,13 @@ export function fakeAstReader(sourceFiles = []) {
   }
   return {
     is: {
+      IsBlock: () => false,
       IsCallExpression: () => false,
       IsIdentifier: () => false,
       IsNewExpression: () => false,
       IsObjectLiteralExpression: () => false,
       IsParenthesizedExpression: () => false,
+      IsPropertyAccessExpression: () => false,
       IsVariableDeclaration: () => false,
       IsVariableStatement: () => false,
       IsInterfaceDeclaration: () => false,

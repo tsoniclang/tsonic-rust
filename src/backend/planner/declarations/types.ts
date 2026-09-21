@@ -393,7 +393,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
     ...(interfaceAttributes.length === 0 ? {} : { attrs: interfaceAttributes }),
     ...(interfaceDeadCode === undefined ? {} : { deadCode: interfaceDeadCode }),
     visibility: interfaceVisibility,
-    derives: explicitWrapperTraits ? [] : ["Clone", "Debug", "PartialEq"],
+    derives: representation.kind === "value" ? ["Clone"] : explicitWrapperTraits ? [] : ["Clone", "Debug", "PartialEq"],
     generics,
     fields: representation.kind === "value" ? valueFields : [{
       name: rustProjectObjectStateField,

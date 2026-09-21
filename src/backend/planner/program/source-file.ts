@@ -16,6 +16,7 @@ import {
 } from "../../../analysis/facts/keys.js";
 import {
   rustCarrierSupportsClone,
+  isRustStringCarrier,
 } from "../../../target-model/types/index.js";
 import {
   createRustSourceFile,
@@ -676,8 +677,12 @@ function planTopLevelVariableStatement(
         visibility,
         ...(attrs.length === 0 ? {} : { attrs }),
         ...(deadCode === undefined ? {} : { deadCode }),
-        type: rustType,
-        value,
+        type: isRustStringCarrier(binding.valueCarrier)
+          ? { kind: "reference", referent: { kind: "str" }, mutable: false }
+          : rustType,
+        value: isRustStringCarrier(binding.valueCarrier) && value.kind === "string-literal"
+          ? { kind: "str-literal", value: value.value }
+          : value,
       });
       continue;
     }

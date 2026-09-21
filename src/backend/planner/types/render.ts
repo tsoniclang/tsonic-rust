@@ -118,7 +118,7 @@ export function rustTypeFromCarrier(
     return { kind: "named", path: carrier.name };
   }
   if (carrier.kind === "reference") {
-    const referent = carrier.referent.kind === "target-named" &&
+    const referent = !carrier.mutable && carrier.referent.kind === "target-named" &&
         carrier.referent.id === rustStringTargetId
       ? { kind: "str" as const }
       : rustTypeFromCarrier(carrier.referent, resolveSourceTypePath, resolveStructuralShape);

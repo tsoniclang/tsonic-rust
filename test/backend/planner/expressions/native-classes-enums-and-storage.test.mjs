@@ -53,13 +53,13 @@ test("classes lower to reference-backed object wrappers with fact-backed members
   );
   assert.match(
     text,
-    /pub\(crate\) struct CounterRoot \{\s+identity: rt::ObjectIdentity,\s+state: rt::ObjectHandle<CounterState>,/u,
+    /pub\(crate\) struct CounterRoot \{\s+identity: rt::ObjectIdentity,\s+state: rt::ObjectState<CounterState>,/u,
   );
   assert.doesNotMatch(text, /derive\([^\n]*Copy/u);
   assert.match(text, /impl Counter \{/u);
   assert.match(text, /let field_value: i32 = value;/u);
   assert.match(text, /pub fn initialize_state\(value: i32\) -> CounterState/u);
-  assert.match(text, /state: rt::ObjectHandle::new\(state\)/u);
+  assert.match(text, /state: rt::ObjectState::new\(state\)/u);
   assert.match(text, /fn exact_counter_add/u);
   assert.match(
     text,

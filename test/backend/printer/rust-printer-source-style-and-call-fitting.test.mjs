@@ -95,6 +95,33 @@ test("source style attributes are item-local and derived from exact Rust signatu
   assert.doesNotMatch(text, /^#!\[allow/mu);
 });
 
+test("Iterator naming expectations require the exact mutable-reference receiver", () => {
+  for (const [receiver, parameters, expected] of [
+    [{ kind: "reference", mutable: true }, [], true],
+    [{ kind: "reference", mutable: false }, [], false],
+    [{ kind: "value" }, [], false],
+    [{ kind: "rc" }, [], false],
+    [undefined, [], false],
+    [{ kind: "reference", mutable: true }, [{ name: "count", type: { kind: "primitive", name: "i32" } }], false],
+  ]) {
+    const model = finalizeRustSourceStyle({
+      headerComment,
+      items: [{
+        kind: "struct", generics: emptyRustGenerics, name: "Cursor", visibility: "public", derives: [], fields: [],
+      }, {
+        kind: "impl", generics: emptyRustGenerics, target: { kind: "named", path: "Cursor" },
+        functions: [{
+          name: "next", generics: emptyRustGenerics, visibility: "public", selfParam: receiver,
+          params: parameters, returnType: { kind: "primitive", name: "i32" },
+          body: { statements: [{ kind: "tail", expr: { kind: "int-literal", text: "1" } }] },
+        }],
+      }],
+    });
+    assert.equal(model.items[1].functions[0].attrs?.some(attribute => attribute.includes("should_implement_trait")) ?? false,
+      expected, JSON.stringify({ receiver, parameters }));
+  }
+});
+
 test("source style keeps intentional control-flow policy statement-local", () => {
   const text = printRustSourceFile({
     headerComment,

@@ -25,7 +25,9 @@ export interface RustValueFieldLocation {
 export function rustSourceFieldHasValueReceiver(node: Node, context: RustPlanContext): boolean {
   const operation = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
   return operation?.kind === "source-field" &&
-    rustStructuralObjectCarrierValue(operation.receiverCarrier)?.representation === "value";
+    (operation.storage === "structural-object"
+      ? rustStructuralObjectCarrierValue(operation.receiverCarrier)?.representation === "value"
+      : rustProjectObjectRepresentation(operation.receiverCarrier, context)?.kind === "value");
 }
 
 export function planRustValueFieldLocation(
@@ -79,17 +81,22 @@ export function planRustValueFieldLocation(
       continue;
     }
     const operation = context.input.program.facts.getFact(current, rustTargetOperationFactKey);
-    if (operation?.kind !== "source-field" ||
-      rustStructuralObjectCarrierValue(operation.receiverCarrier)?.representation !== "value") break;
-    if (!sourceFieldSelectedOperationMatches(current, operation, context) || operation.storage !== "structural-object" ||
+    if (operation?.kind !== "source-field" || !rustSourceFieldHasValueReceiver(current, context)) break;
+    if (!sourceFieldSelectedOperationMatches(current, operation, context) ||
       operation.valueSemantics.kind !== "stored" || operation.dispatch !== undefined ||
       expectedReceiver !== undefined && !rustTargetTypeRefEquals(expectedReceiver, operation.resultCarrier)) return reject();
-    const field = context.input.program.structuralShapes.field(operation.receiverCarrier, operation.storageIndex);
-    if (field === undefined || field.storage !== "stored" || field.nativeLayout !== undefined || field.method === true ||
-      access === "write" && names.length === 0 && field.readonly) return reject();
+    if (operation.storage === "structural-object") {
+      const field = context.input.program.structuralShapes.field(operation.receiverCarrier, operation.storageIndex);
+      if (field === undefined || field.storage !== "stored" || field.nativeLayout !== undefined || field.method === true ||
+        access === "write" && names.length === 0 && field.readonly) return reject();
+      names.unshift(field.targetName);
+    } else {
+      const path = rustDirectProjectFieldStoragePath(operation.receiverCarrier, operation.storageIndex, context);
+      if (path === undefined) return reject();
+      names.unshift(...path);
+    }
     leafCarrier ??= operation.resultCarrier;
     expectedReceiver = operation.receiverCarrier;
-    names.unshift(field.targetName);
     const receiver = Node_Expression(ast, current);
     if (receiver === undefined) return reject();
     current = receiver;
@@ -102,21 +109,7 @@ export function planRustValueFieldLocation(
     const selected = project(value);
     return isRustCopyCarrier(resultCarrier) ? selected : { kind: "method-call", receiver: selected, method: "clone", args: [] };
   };
-  let rootField = context.input.program.facts.getFact(current, rustTargetOperationFactKey);
-  while (rootField?.kind === "source-field" && rootField.storage === "project-object" &&
-    rustProjectObjectRepresentation(rootField.receiverCarrier, context)?.kind === "value") {
-    if (rootField.valueSemantics.kind !== "stored" || rootField.dispatch !== undefined ||
-      !sourceFieldSelectedOperationMatches(current, rootField, context) ||
-      !rustTargetTypeRefEquals(rootField.resultCarrier, expectedReceiver!)) return reject();
-    const path = rustDirectProjectFieldStoragePath(rootField.receiverCarrier, rootField.storageIndex, context);
-    const receiver = Node_Expression(ast, current);
-    if (path === undefined || receiver === undefined || visited.has(receiver)) return reject();
-    visited.add(receiver);
-    names.unshift(...path);
-    expectedReceiver = rootField.receiverCarrier;
-    current = receiver;
-    rootField = context.input.program.facts.getFact(current, rustTargetOperationFactKey);
-  }
+  const rootField = context.input.program.facts.getFact(current, rustTargetOperationFactKey);
   if (rootField?.kind === "source-field") {
     if (rootField.valueSemantics.kind !== "stored" || rootField.dispatch !== undefined ||
       !sourceFieldSelectedOperationMatches(current, rootField, context) ||
