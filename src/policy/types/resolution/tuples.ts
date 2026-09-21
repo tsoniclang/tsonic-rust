@@ -115,6 +115,7 @@ export function resolveRustAuthoredTargetType(
       context,
       options,
       resolving,
+      node,
     );
 }
 

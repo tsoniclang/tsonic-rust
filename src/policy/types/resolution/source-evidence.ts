@@ -194,6 +194,7 @@ export function resolveRustTypeComponentEvidence(
     context,
     options,
     resolving,
+    component.authoredTypeNode,
   );
   if (semantics === undefined) {
     return selected;

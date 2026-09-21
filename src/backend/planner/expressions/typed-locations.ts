@@ -82,12 +82,12 @@ export function planRustIdentifierValue(
   if (module?.storage === "native-const" && isRustStringCarrier(module.valueCarrier)) {
     return { kind: "owned-string-from-borrowed-str", expression: { kind: "path", path } };
   }
-  if (context.input.program.facts.getFact(node, rustNativeArrayStorageKey)?.kind === "reference") {
-    return { kind: "method-call", receiver: { kind: "path", path }, method: "clone", args: [] };
-  }
   const captured = rustCapturedBinding(node, context);
   const storage = rustLocationStorageForReference(node, context);
   const value: RustExpr = captured?.expression ?? { kind: "path", path };
+  if (context.input.program.facts.getFact(node, rustNativeArrayStorageKey)?.kind === "reference") {
+    return { kind: "method-call", receiver: value, method: "clone", args: [] };
+  }
   if (captured?.storage === "location") {
     return { kind: "method-call", receiver: value, method: "load", args: [] };
   }

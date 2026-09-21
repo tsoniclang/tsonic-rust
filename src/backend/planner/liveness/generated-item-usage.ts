@@ -1,5 +1,6 @@
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import type { RustClassValuePlan } from "../../../analysis/objects/class-values.js";
+import type { RustSourceCallableSpecializationPlan } from "../../../analysis/callables/specializations.js";
 import type { RustDeclarationGenericRequirementIndex } from "../../../analysis/declarations/generic-requirements.js";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { TargetPlanningSourceNavigation } from "@tsonic/target-api/analysis";
@@ -94,6 +95,7 @@ export function analyzeRustGeneratedItemUsage(input: {
   readonly facts: RustPlanQueries;
   readonly projectTypes: RustProjectTypePolicy;
   readonly classValues: RustClassValuePlan;
+  readonly sourceCallableSpecializations: RustSourceCallableSpecializationPlan;
   readonly declarationGenericRequirements: RustDeclarationGenericRequirementIndex;
   readonly typeDefinitions: RustTypeDefinitions;
   readonly objectRepresentations: RustObjectRepresentationPlan;
@@ -490,8 +492,13 @@ export function analyzeRustGeneratedItemUsage(input: {
         return;
       case "source-call":
         if (isRustPreconstructionThisOperation(input.ast, node)) return;
-        for (const argument of fact.targetGenericArguments ?? []) {
-          if (argument.kind === "type") markProjectTypeReified(argument.type);
+        {
+          const declaration = input.facts.getSelectedTargetCall(node)?.sourceDeclaration;
+          if (declaration === undefined || !input.sourceCallableSpecializations.requiresSpecialization(declaration)) {
+            for (const argument of fact.targetGenericArguments ?? []) {
+              if (argument.kind === "type") markProjectTypeReified(argument.type);
+            }
+          }
         }
         if (fact.target.form === "constructor") {
           markProjectConstructorInvoked(fact.target.typeCarrier);

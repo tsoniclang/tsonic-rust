@@ -90,6 +90,7 @@ export function createRustPlannerLiveness(program: RustTargetProgram): RustPlann
     facts: program.facts,
     projectTypes: program.projectTypes,
     classValues: program.classValues,
+    sourceCallableSpecializations: program.sourceCallableSpecializations,
     declarationGenericRequirements: program.declarationGenericRequirements,
     typeDefinitions: program.typeDefinitions,
     objectRepresentations: program.objectRepresentations,
