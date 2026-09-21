@@ -90,6 +90,20 @@ test("type family templates replace equivalent concrete demands without overlapp
   }
 });
 
+test("substituting a compound argument normalizes nested selected families without recursively substituting binders", () => {
+  const registry = createRustSourceTypeFamilyRegistry();
+  registry.register(family);
+  registry.registerImplementation({ family, arguments: [], owner: signed, output: unsigned, sourceFileName: "/storage.ts" });
+  const nested = { kind: "tuple", elements: [{ ...projection, owner: signed }, parameter] };
+  const result = substituteRustTargetGenerics(parameter, new Map([["T", nested]]), new Map(), new Map(),
+    rustTypeFamilyNormalizer(registry));
+  assert.deepEqual(result, { kind: "tuple", elements: [unsigned, parameter] });
+  assert.deepEqual(substituteRustTargetGenerics(parameter, new Map([["T", nested]])), nested);
+  const unselected = { kind: "tuple", elements: [{ ...projection, owner: unsigned }] };
+  assert.deepEqual(substituteRustTargetGenerics(parameter, new Map([["T", unselected]]), new Map(), new Map(),
+    rustTypeFamilyNormalizer(registry)), unselected);
+});
+
 test("a family rejects blanket and conflicting partially specialized implementations", () => {
   const registry = createRustSourceTypeFamilyRegistry();
   registry.register(family);

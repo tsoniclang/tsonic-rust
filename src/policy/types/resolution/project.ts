@@ -6,7 +6,7 @@ import {
   rustStructuralObjectCarrierValue,
 } from "../../../target-model/types/index.js";
 import type { Node, Symbol, Type } from "@tsonic/tsts";
-import { substituteRustTargetGenerics } from "../../../target-model/types/carriers/substitution.js";
+import { mapRustTargetTypes, substituteRustTargetGenerics } from "../../../target-model/types/carriers/substitution.js";
 import { rustLifetimeKey, type RustLifetimeRef } from "../../../target-model/lifetimes/index.js";
 import { retainRustSourceUnionInstantiation } from "./source-unions.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
@@ -15,6 +15,7 @@ import type { RustTargetGenericArgument } from "../../../target-model/types/mode
 import { rustProjectGenericParameters } from "../project-generic-contract.js";
 import { resolveRustTargetType, resolveStructuralObjectType } from "./target.js";
 import { retainRustStructuralInstantiation } from "./structural-instantiations.js";
+import { rustTypeFamilyNormalizer } from "../type-family-normalization.js";
 
 export interface RustResolvedProjectGenericArguments {
   readonly values: readonly RustTargetGenericArgument[];
@@ -87,7 +88,7 @@ export function resolveProjectSourceCarrier(
         if (localIndex >= 0) return genericArguments.values[localIndex];
         const binding = bindings?.find(candidate => candidate.declaration === parameter.declaration && candidate.scope === "outer");
         if (binding === undefined || parameter.kind !== "type") return undefined;
-        const type = context.sourceTypeParameterSubstitutions?.get(parameter.declaration) ??
+        const type = context.sourceTypeParameterSubstitutions?.get(parameter.declaration)?.carrier ??
           resolveRustTargetType(binding.argumentType, context, options, resolving);
         return type === undefined ? undefined : { kind: "type" as const, type };
       });
@@ -111,10 +112,22 @@ export function resolveProjectSourceCarrier(
         if (parameter.kind === "lifetime" && argument.kind === "lifetime") lifetimes.set(rustLifetimeKey(parameter.lifetime), argument.lifetime);
       });
       const instantiated = substituteRustTargetGenerics(carrier, substitutions, lifetimes);
-      if (rustStructuralObjectCarrierValue(carrier) !== undefined &&
-        (selectedType === undefined || !retainRustStructuralInstantiation(
-          selectedType, carrier, instantiated, context, options))) continue;
-      return instantiated;
+      const sourceSubstitutions = new Map(context.sourceTypeParameterSubstitutions);
+      const application = selectedType === undefined ? undefined : context.currentSemantics.types.aliasApplication(selectedType);
+      for (const [index, parameter] of parameters.entries()) {
+        const argument = genericArguments.values[index];
+        const binding = application?.bindings.find(binding => binding.declaration === parameter.declaration);
+        if (argument?.kind === "type" && binding !== undefined) {
+          sourceSubstitutions.set(parameter.declaration, { sourceType: binding.argument, carrier: argument.type });
+        }
+      }
+      if (rustStructuralObjectCarrierValue(carrier) === undefined) return instantiated;
+      const selectedContext = { ...context, sourceTypeParameterSubstitutions: sourceSubstitutions };
+      if (selectedType === undefined || !retainRustStructuralInstantiation(
+        selectedType, carrier, instantiated, selectedContext, options, resolving)) continue;
+      const normalized = mapRustTargetTypes(instantiated, rustTypeFamilyNormalizer(options.sourceTypes.typeFamilies));
+      if (!retainRustStructuralInstantiation(selectedType, carrier, normalized, selectedContext, options, resolving)) continue;
+      return normalized;
     }
   }
   return undefined;

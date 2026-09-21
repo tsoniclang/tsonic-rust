@@ -33,6 +33,7 @@ import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { resolveRustTypeFamilyApplication, rustSourceTypeFamilyDeclaration } from "../../policy/types/resolution/type-families.js";
 import { resolveRustEvidenceNodesToCommonCarrier } from "../../policy/types/resolution/source-evidence.js";
+import { rustSourceUnionMemberDeclarationIsOwned } from "../../policy/evidence/source-union-members.js";
 
 export function reserveTypeAliasUnion(walk: RustFactWalk, declaration: Node): void {
   const {ast} = walk.context;
@@ -226,7 +227,7 @@ export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
     }
     const selectedDeclarations = declarations as readonly Node[];
     return selectedDeclarations.every((selected) =>
-      walk.context.source.navigation.isProjectDeclaration(selected) &&
+      rustSourceUnionMemberDeclarationIsOwned(selected, rustResolutionContext(walk, declaration), walk.operationOptions) &&
       variantMemberDeclarations.has(selected))
       ? {
           symbol: property.symbol,

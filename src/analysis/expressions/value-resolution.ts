@@ -159,7 +159,9 @@ export function resolveExpressionCarrierUncached(
       }
       const defaultCarrier = rustBigIntTargetType();
       const carrier = effectiveExpected === undefined ||
-          rustRuntimeUnionProjection(effectiveExpected, defaultCarrier) !== undefined
+          rustRuntimeUnionProjection(effectiveExpected, defaultCarrier) !== undefined ||
+          !isRustBigIntCarrier(effectiveExpected) &&
+          selectRustSourceValueConversion(defaultCarrier, effectiveExpected, walk.context.typeDefinitions) !== undefined
         ? defaultCarrier
         : effectiveExpected;
       if (!isRustBigIntCarrier(carrier)) {

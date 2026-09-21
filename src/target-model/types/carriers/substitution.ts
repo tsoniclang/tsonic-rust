@@ -43,7 +43,11 @@ function substituteCarrierParts(
     lifetimeSubstitutions.get(rustLifetimeKey(lifetime)) ?? lifetime;
   switch (type.kind) {
     case "type-parameter":
-      return substitutions.get(type.name) ?? type;
+      return (() => {
+        const replacement = substitutions.get(type.name);
+        return replacement === undefined ? type : normalize === undefined
+          ? replacement : mapRustTargetTypes(replacement, normalize);
+      })();
     case "target-named":
       return {
         ...type,

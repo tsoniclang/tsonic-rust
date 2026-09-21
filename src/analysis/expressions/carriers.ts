@@ -424,6 +424,13 @@ function resolveSelectedFlowReadCarrier(
   if (declaredReadType !== undefined && semantics.types.isIdentical(declaredReadType, selectedType)) {
     return sourceCarrier;
   }
+  const sourceUnion = walk.sourceTypes.sourceUnionForCarrier(sourceCarrier);
+  if (sourceUnion !== undefined) {
+    const selectedTypes = semantics.types.isUnion(selectedType)
+      ? semantics.types.unionOrIntersectionTypes(selectedType) : [selectedType];
+    const indexes = walk.sourceTypes.sourceUnionVariantIndexesForTypes(sourceCarrier, selectedTypes);
+    if (indexes?.length === 1) return sourceUnion.variants[indexes[0]!]!.carrier;
+  }
   if (isRustJsValueCarrier(sourceCarrier)) {
     const carrier = resolveRustTargetTypeRef(
       selectedType, rustResolutionContext(walk, expression), walk.operationOptions,

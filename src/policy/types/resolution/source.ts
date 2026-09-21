@@ -270,6 +270,12 @@ export function resolveRustTargetTypeSyntax(
   }
   const { ast } = context;
   const kind = ast.kindName(node);
+  if (kind === "KindIntersectionType") {
+    if (semantics === undefined) return undefined;
+    const selected = semantics.types.expressionType(node);
+    return selected === undefined ? undefined : resolveStructuralObjectType(selected,
+      { ...context, currentSemantics: semantics }, options, resolving, node);
+  }
   if (kind === "KindNullKeyword") {
     return rustNullTargetType();
   }

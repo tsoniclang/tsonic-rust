@@ -326,10 +326,11 @@ function resolveFinalizedRustSpreadInput(
     return undefined;
   }
   if (input.sourceForm === "value" || input.sourceForm === "spread-sequence") {
+    const normalize = context.input.program.typeFamilies.normalize;
     return rustFinalizedCarrierTransitionMatches(
-      sourceCarrier,
-      convertedCarrier,
-      input.carrier,
+      mapRustTargetTypes(sourceCarrier, normalize),
+      convertedCarrier === undefined ? undefined : mapRustTargetTypes(convertedCarrier, normalize),
+      mapRustTargetTypes(input.carrier, normalize),
     ) || convertedCarrier === undefined &&
       context.input.program.structuralShapes.sharesStorage(sourceCarrier, input.carrier)
       ? sourceExpression
@@ -342,7 +343,10 @@ function resolveFinalizedRustSpreadInput(
     sourceCarrier,
     input.spreadElementIndex,
   );
-  if (element === undefined || !rustTargetTypeRefEquals(element, input.carrier)) {
+  if (element === undefined || !rustTargetTypeRefEquals(
+    mapRustTargetTypes(element, context.input.program.typeFamilies.normalize),
+    mapRustTargetTypes(input.carrier, context.input.program.typeFamilies.normalize),
+  )) {
     return undefined;
   }
   const fixedArray = rustFixedArrayCarrierValue(sourceCarrier);

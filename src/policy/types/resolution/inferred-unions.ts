@@ -4,7 +4,7 @@ import { rustSourceTypeCarrierValue, rustSourceUnionTargetType, rustStructuralOb
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import { isRustNumberArrayPayload } from "../../../target-model/types/carriers/array-unions.js";
-import { resolveSelectedJsSourceMember } from "../../evidence/selected-source.js";
+import { rustSourceUnionMemberDeclarationIsOwned } from "../../evidence/source-union-members.js";
 
 export function resolveRustInferredObjectUnion(
   sourceType: Type,
@@ -54,7 +54,6 @@ export function resolveRustInferredObjectUnion(
     ])]),
   }));
   if (selectedProperties.some(property => property.declarations.length === 0 ||
-    property.declarations.some(declaration => !context.source.navigation.isProjectDeclaration(declaration) &&
-      (!numberArrayUnion || resolveSelectedJsSourceMember(context, declaration, options.sourceProfiles) === undefined)))) return undefined;
+    property.declarations.some(declaration => !rustSourceUnionMemberDeclarationIsOwned(declaration, context, options)))) return undefined;
   return options.sourceTypes.registerSourceUnion({ sourceType, carrier, variants, selectedProperties }) ? carrier : undefined;
 }

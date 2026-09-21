@@ -219,6 +219,7 @@ export function resolveRustTypeComponentEvidence(
     const normalize = rustTypeFamilyNormalizer(options.sourceTypes.typeFamilies);
     const normalizedAuthored = mapRustTargetTypes(authored, normalize);
     const normalizedSelected = mapRustTargetTypes(selected, normalize);
+    if (rustTargetTypeRefEquals(normalizedAuthored, normalizedSelected)) return authored;
     const references = rustTargetGenericReferences(normalizedAuthored);
     if (references.typeNames.length > 0) {
       const substitutions = inferRustTargetTypeParameterBindings(

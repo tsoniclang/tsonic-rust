@@ -427,9 +427,9 @@ export function resolveStructuralObjectType(
   if (new Set(fields.map((field) => field.sourceName)).size !== fields.length) {
     return undefined;
   }
-  const ownerNodes = representation === "value" && authoredTypeRoot !== undefined
+  const ownerNodes = authoredTypeRoot !== undefined
     ? [authoredTypeRoot]
-    : [...fields.flatMap((field) => field.declarations), ...(authoredTypeRoot === undefined ? [] : [authoredTypeRoot]),
+    : [...fields.flatMap((field) => field.declarations),
       ...(construction === undefined ? [] : [construction.declaration])];
   const ownerFileNames = new Set(ownerNodes.map((node) => context.ast.getFileName(context.ast.getSourceFile(node))));
   if (ownerFileNames.size !== 1) {

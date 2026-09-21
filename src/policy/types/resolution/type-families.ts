@@ -11,6 +11,7 @@ import { resolveRustAuthoredTargetType } from "./tuples.js";
 import { resolveRustTargetType } from "./target.js";
 import { resolveSourcePrimitive } from "./callables.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
+import { selectedRustSourceTypeArgument } from "./generic-arguments.js";
 
 export interface RustConditionalAliasSelection {
   readonly carrier: TargetTypeRef | undefined;
@@ -49,7 +50,10 @@ export function resolveRustConditionalAlias(
     argumentNodes.length !== parameters.length || argumentNodes.some(argument => argument === undefined)) {
     return undefined;
   }
-  const arguments_ = argumentNodes.map(argument => context.semanticsFor(argument!).types.expressionType(argument!));
+  const arguments_ = argumentNodes.map(argument => {
+    const type = context.semanticsFor(argument!).types.expressionType(argument!);
+    return type === undefined ? undefined : selectedRustSourceTypeArgument(type, context);
+  });
   if (arguments_.some(argument => argument === undefined)) return undefined;
   const application = context.currentSemantics.types.instantiateAlias(declaration, arguments_ as readonly Type[]);
   if (application?.kind !== "conditional") return undefined;
@@ -103,7 +107,7 @@ export function resolveRustTypeFamilyApplication(
   }
   const substitutions = new Map(context.sourceTypeParameterSubstitutions);
   for (const [index, binding] of application.bindings.entries()) {
-    substitutions.set(binding.declaration, arguments_[index]!);
+    substitutions.set(binding.declaration, { sourceType: binding.argument, carrier: arguments_[index]! });
   }
   let result: TargetTypeRef | undefined;
   for (const step of application.conditionalSteps) {
@@ -112,7 +116,8 @@ export function resolveRustTypeFamilyApplication(
       const index = application.bindings.findIndex(candidate => candidate.parameter === binding.applicationParameter);
       const argument = index < 0 ? inferredArgumentCarrier(binding.argument, context, options, resolving) : arguments_[index];
       if (argument !== undefined) {
-        for (const declaration of binding.declarations) substitutions.set(declaration, argument);
+        const sourceType = index < 0 ? binding.argument : application.bindings[index]!.argument;
+        for (const declaration of binding.declarations) substitutions.set(declaration, { sourceType, carrier: argument });
       }
     }
     if (context.ast.kindName(step.selectedNode) === "KindConditionalType") continue;
