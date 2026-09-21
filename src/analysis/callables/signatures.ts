@@ -51,7 +51,7 @@ import { resolveRustSuspendedCallableStorage } from "./suspension-storage.js";
 import { rustHigherRankedNativeFunctionCarrier } from "./higher-ranked-function.js";
 import { selectRustPointerReturnContract } from "../../policy/operations/pointer-return.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { rustGenericCallableProtocol } from "../../target-model/types/carriers/generic-callables.js";
+import { rustGenericCallableProtocol, rustGenericCallableTargetType, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 
 export function recordFunctionSignatureFacts(walk: RustFactWalk, declaration: Node): void {
   recordCallableParameterSignatureFacts(walk, declaration);
@@ -377,8 +377,10 @@ function recordCallableValueSignatureFacts(
   const runtimeParameterCarriers = parameterAbis.map((abi) => abi.parameterCarrier);
   const runtimeCarrier = selectedCarrier.kind === "function-pointer" || selectedCarrier.kind === "closure"
     ? { ...selectedCarrier, args: runtimeParameterCarriers, result: returnCarrier }
+    : rustGenericCallableValue(selectedCarrier) !== undefined && ownNames !== undefined
+      ? rustGenericCallableTargetType(ownNames, runtimeParameterCarriers, returnCarrier)
     : rustCallableTargetType(runtimeParameterCarriers, returnCarrier);
-  setCarrierFact(walk, declaration, runtimeCarrier);
+  if (runtimeCarrier !== undefined) setCarrierFact(walk, declaration, runtimeCarrier);
 }
 
 interface RustCallableValueSignaturePlan {

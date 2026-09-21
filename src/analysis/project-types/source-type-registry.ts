@@ -233,6 +233,8 @@ export function createRustSourceTypeRegistry(
         : variantsByDeclaration.get(declaration)?.find((variant) => variant.literal === literal);
     },
     registerStructuralObject(shape, template) {
+      const construction = rustStructuralObjectCarrierValue(shape.carrier)?.construction;
+      if (!rustTargetTypeRefEquals(construction, shape.construction?.carrier)) return false;
       const normalized = freezeSourceObjectShape(shape);
       const templateShape = template === undefined ? undefined : structuralObjects.find(candidate =>
         rustTargetTypeRefEquals(candidate.carrier, template));
@@ -253,7 +255,9 @@ export function createRustSourceTypeRegistry(
       const sameCarrier = existingForType.filter((existing) =>
         rustTargetTypeRefEquals(existing.carrier, normalized.carrier));
       if (sameCarrier.some((existing) =>
-        !sourceObjectTargetContractEquals(existing, normalized)
+        !sourceObjectTargetContractEquals(existing, normalized) ||
+        existing.construction?.declaration !== normalized.construction?.declaration ||
+        existing.construction?.signature !== normalized.construction?.signature
       )) {
         return false;
       }
@@ -575,6 +579,7 @@ function freezeSourceObjectShape(shape: RustSourceObjectShape): RustSourceObject
     carrier: shape.carrier,
     storage: shape.storage,
     fields: Object.freeze(shape.fields.map(freezeSourceObjectField)),
+    ...(shape.construction === undefined ? {} : { construction: Object.freeze({ ...shape.construction }) }),
   });
 }
 
@@ -620,6 +625,7 @@ function sourceObjectTargetContractEquals(
   right: RustSourceObjectShape,
 ): boolean {
   return left.storage === right.storage &&
+    rustTargetTypeRefEquals(left.construction?.carrier, right.construction?.carrier) &&
     rustTargetTypeRefEquals(left.carrier, right.carrier) &&
     left.fields.length === right.fields.length &&
     left.fields.every((field, index) => {
@@ -688,6 +694,9 @@ function sourceObjectShapeEquals(
   right: RustSourceObjectShape,
 ): boolean {
   return left.sourceType === right.sourceType &&
+    left.construction?.declaration === right.construction?.declaration &&
+    left.construction?.signature === right.construction?.signature &&
+    rustTargetTypeRefEquals(left.construction?.carrier, right.construction?.carrier) &&
     left.storage === right.storage &&
     rustTargetTypeRefEquals(left.carrier, right.carrier) &&
     left.fields.length === right.fields.length &&

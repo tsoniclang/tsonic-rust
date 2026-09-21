@@ -438,6 +438,18 @@ export function selectRustCheckedCall(
   }
   if (sourceDeclaration !== undefined) {
     const declarationKind = context.ast.kindName(sourceDeclaration);
+    if (declarationKind === "KindConstructSignature" || declarationKind === "KindConstructorType") {
+      const receiverCarrier = selectedValueCarrier(request.source.sourceCallee.expression, request.source.sourceCallee.type, context, options);
+      const construction = receiverCarrier === undefined ? undefined : options.sourceTypes.structuralObjectForCarrier(receiverCarrier)?.construction;
+      if (construction === undefined || receiverCarrier === undefined || construction.declaration !== sourceDeclaration ||
+        !checkedCallIsConstruction(request, context)) {
+        return rejectSelectedOperation(request.source.call, context, "RUST_CONSTRUCTOR_VALUE_SIGNATURE_NOT_CLOSED",
+          "A constructor value requires the exact selected construct declaration and its closed native signature.");
+      }
+      const result = acceptRuntimeCallableCarrierCall(request, construction.carrier, context, options,
+        undefined, undefined, sourceDeclaration, undefined, receiverCarrier);
+      if (result !== undefined) return result;
+    }
     if (declarationKind === "KindFunctionType" || declarationKind === "KindCallSignature") {
       const runtimeCallable = acceptRuntimeCallableCall(request, context, options);
       if (runtimeCallable !== undefined) return runtimeCallable;
@@ -621,6 +633,7 @@ function acceptRuntimeCallableCarrierCall(
   sourceStructuralMethod?: RustSelectedTargetSignature["sourceStructuralMethod"],
   sourceDeclaration?: Node,
   optionalGuard?: RustOptionalCallGuard,
+  sourceConstructorCarrier?: TargetTypeRef,
 ): RustPolicySelection<RustCheckedCallSelectionResult> | undefined {
   const generic = rustGenericCallableValue(calleeCarrier);
   const selectedGenerics = request.source.sourceSelectedMethodTypeArguments ?? [];
@@ -688,6 +701,7 @@ function acceptRuntimeCallableCarrierCall(
   const selectedSignature = {
     member,
     sourceCallableCarrier: calleeCarrier,
+    ...(sourceConstructorCarrier === undefined ? {} : { sourceConstructorCarrier }),
     ...(targetGenericArguments.length === 0 ? {} : { targetGenericArguments }),
     sourceCallableParameterIndexes: parameterPlan.sourceParameterIndexes,
     ...(sourceSelectedReceiverCarrier === undefined

@@ -15,6 +15,7 @@ import type { RustAnalysisContext } from "./context.js";
 import type { RustFoundation } from "../../target-model/foundation/model.js";
 import { stronglyConnectedSourceFiles } from "./module-graph.js";
 import { rustModuleInitializationIsStateIndependent } from "./independent-module-initialization.js";
+import type { RustClassValuePlan } from "../objects/class-values.js";
 
 export type RustModuleInitializationRequirement =
   | { readonly kind: "required" }
@@ -34,11 +35,12 @@ type RustModuleInitializationPlanInput = Pick<
 
 export function createRustModuleInitializationPlan(
   input: RustModuleInitializationPlanInput,
+  classValues: RustClassValuePlan,
 ): RustModuleInitializationPlan {
   const requirements = new Map<SourceFile, RustModuleInitializationRequirement>();
   let minimumFoundation: RustFoundation = "core";
   for (const sourceFile of input.sourceFiles) {
-    const requirement = classifyModuleInitialization(input, sourceFile);
+    const requirement = classifyModuleInitialization(input, sourceFile, classValues);
     requirements.set(sourceFile, requirement);
     if (requirement.kind === "required") minimumFoundation = "std";
   }
@@ -71,6 +73,7 @@ export function createRustModuleInitializationPlan(
 function classifyModuleInitialization(
   input: RustModuleInitializationPlanInput,
   sourceFile: SourceFile,
+  classValues: RustClassValuePlan,
 ): RustModuleInitializationRequirement {
   for (const statement of input.ast.statements(sourceFile)) {
     if (statement === undefined) {
@@ -106,6 +109,7 @@ function classifyModuleInitialization(
       continue;
     }
     if (kind === "KindClassDeclaration") {
+      if (classValues.forDeclaration(statement) !== undefined) return { kind: "required" };
       for (const member of input.ast.members(statement)) {
         if (member === undefined) {
           return unresolved(statement, "Class declaration contains an undefined member slot.");

@@ -66,7 +66,7 @@ export function sourceCallEffectsMatch(
   }
   const callableCarrier = fact.target.form === "callable"
     ? fact.target.carrier
-    : fact.target.form === "structural-method"
+    : fact.target.form === "structural-method" || fact.target.form === "constructor-value"
       ? fact.target.callableCarrier
       : undefined;
   return isAsync
@@ -181,6 +181,18 @@ export function planSelectedSourceCall(
 
   let planned: RustExpr | undefined;
   switch (fact.target.form) {
+    case "constructor-value": {
+      const constructor = context.input.program.structuralShapes.definitionForCarrier(fact.target.receiverCarrier)?.construction;
+      const receiver = callee === undefined ? undefined : planExpression(callee, context);
+      if (constructor === undefined || receiver === undefined || callee === undefined) break;
+      const selected: RustExpr = { kind: "method-call", receiver: planRustNonConsumingValue(callee, receiver, context),
+        method: "with", args: [{ kind: "closure", params: [{ name: "state", byRefCopy: false }],
+          body: { kind: "field", receiver: { kind: "path", path: "state" }, name: constructor.targetName },
+        }],
+      };
+      planned = { kind: "invoke", callee: selected, args: shaped };
+      break;
+    }
     case "union-method": {
       planned = planRustUnionMethodCall(node, callee, shaped, fact.target, context);
       break;
@@ -359,7 +371,8 @@ export function planSelectedSourceCall(
       if (receiverNode !== undefined && receiver !== undefined) {
         planned = invokeRustStructuralObjectMethod(
           fact.target.receiverCarrier,
-          receiver,
+          context.input.program.structuralShapes.field(fact.target.receiverCarrier, fact.target.storageIndex)?.nativeMethod === true
+            ? planRustNonConsumingValue(receiverNode, receiver, context) : receiver,
           fact.target.storageIndex,
           shaped,
           fact.resultCarrier,
@@ -399,7 +412,7 @@ export function planSelectedSourceCall(
   const resultErrorType = rustActiveErrorType(context);
   const callableCarrier = fact.target.form === "callable"
     ? fact.target.carrier
-    : fact.target.form === "structural-method"
+    : fact.target.form === "structural-method" || fact.target.form === "constructor-value"
       ? fact.target.callableCarrier
       : undefined;
   const genericDefinition = callableCarrier === undefined ? undefined

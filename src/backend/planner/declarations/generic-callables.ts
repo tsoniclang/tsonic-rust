@@ -10,7 +10,7 @@ import { diagnosticInput, rustCurrentErrorBoundary, rustErrorType } from "../pro
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import type { RustTypeRenderingContext } from "../types/render.js";
-import { rustGenericRequirementBounds } from "../types/generic-bounds.js";
+import { rustGenericRequirementBounds, rustGenericsWithAssociatedBounds } from "../types/generic-bounds.js";
 import { rustAssociatedPredicates } from "../types/associated-bounds.js";
 import { planNativeModuleFunction } from "./functions.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
@@ -85,8 +85,8 @@ function planImplementation(
   if (environment.length > 0) fields.push({ name: "marker", type: rustGenericCallableMarker(definition), visibility: "public" });
   return [{ kind: "struct", name: implementation.stateName, visibility: "public", derives: [],
     generics: { parameters: environment, wherePredicates: [] }, fields,
-  }, { ...helper, generics: { parameters: [...parameters, ...helper.generics.parameters],
-    wherePredicates: helper.generics.wherePredicates },
+  }, { ...helper, generics: rustGenericsWithAssociatedBounds([...parameters, ...helper.generics.parameters],
+    helper.generics.wherePredicates),
     params: [...captures.map((type, index): RustFunctionParam => ({
       name: captureNames[index]!, type: { kind: "reference", referent: type!, mutable: false },
     })), ...helper.params],

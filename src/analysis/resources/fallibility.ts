@@ -5,6 +5,7 @@ import {
   TryStatement_FinallyBlock,
   TryStatement_TryBlock,
   KindCallExpression,
+  KindElementAccessExpression,
   KindFunctionDeclaration,
   KindFunctionExpression,
   KindIdentifier,
@@ -672,7 +673,7 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
             );
           }
         }
-      } else if (kind === KindPropertyAccessExpression) {
+      } else if (kind === KindPropertyAccessExpression || kind === KindElementAccessExpression) {
         const operation = walk.context.facts.get(node, rustTargetOperationFactKey) ??
           walk.context.facts.resolve(node, rustTargetOperationFactKey);
         const selected = walk.context.facts.get(node, rustSelectedOperationKey) ??
@@ -705,7 +706,7 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
           const runtimeCallable = (operation.target.form === "callable" &&
               (rustGenericCallableValue(operation.target.carrier) !== undefined || rustCallableProtocol(operation.target.carrier) !== undefined ||
                 operation.target.carrier.kind === "closure" && operation.target.carrier.fallible === true)) ||
-            operation.target.form === "structural-method" &&
+            (operation.target.form === "structural-method" || operation.target.form === "constructor-value") &&
               rustCallableProtocol(operation.target.callableCarrier) !== undefined;
           if (nativeCallable || runtimeCallable || declaration !== undefined) {
             const isAsync = rustFutureOutputCarrier(operation.resultCarrier) !== undefined;

@@ -13,7 +13,7 @@ import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions }
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustTargetGenericArgument } from "../../../target-model/types/model.js";
 import { rustProjectGenericParameters } from "../project-generic-contract.js";
-import { resolveRustTargetType } from "./target.js";
+import { resolveRustTargetType, resolveStructuralObjectType } from "./target.js";
 import { retainRustStructuralInstantiation } from "./structural-instantiations.js";
 
 export interface RustResolvedProjectGenericArguments {
@@ -44,6 +44,11 @@ export function resolveProjectSourceCarrier(
       ];
   for (const declaration of declarations) {
     const carrier = options.sourceTypes.carrierForDeclaration(declaration, context.ast);
+    if (context.ast.kindName(declaration) === "KindInterfaceDeclaration" && selectedType !== undefined &&
+      rustSourceTypeCarrierValue(carrier) !== undefined &&
+      context.currentSemantics.types.constructSignatures(selectedType).length !== 0) {
+      return resolveStructuralObjectType(selectedType, context, options, resolving, declaration);
+    }
     const union = rustSourceUnionCarrierValue(carrier);
     if (union !== undefined && carrier !== undefined) {
       const contract = context.sourceLifetimes.contractFor(declaration);

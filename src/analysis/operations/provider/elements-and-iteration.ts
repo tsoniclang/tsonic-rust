@@ -104,7 +104,18 @@ export function selectRustCheckedElementAccess(
     const member = selected?.kind === "resolved" && selected.members.length === 1
       ? selected.members[0] : undefined;
     if (member?.kind === "property" && member.property.symbol === request.sourceSelectedSymbol) {
-      const result = selectRustCheckedPropertyAccess(request, context, options);
+      const declarationKind = request.sourceSelectedDeclaration === undefined ? undefined :
+        context.ast.kindName(request.sourceSelectedDeclaration);
+      const declarations = declarationKind === "KindGetAccessor" || declarationKind === "KindSetAccessor"
+        ? context.currentSemantics.types.structuralMembers(request.sourceReceiverType, request.sourceReceiverType)
+        : undefined;
+      const matches = declarations?.kind === "available" ? declarations.members.filter(pair =>
+        pair.kind === "present" && pair.source.property.symbol === request.sourceSelectedSymbol) : [];
+      const selectedMember = matches.length === 1 && matches[0]?.kind === "present" ? matches[0].source : undefined;
+      const result = selectRustCheckedPropertyAccess({ ...request,
+        ...(selectedMember?.getters.length === 1 ? { sourceSelectedReadDeclaration: selectedMember.getters[0]! } : {}),
+        ...(selectedMember?.setters.length === 1 ? { sourceSelectedWriteDeclaration: selectedMember.setters[0]! } : {}),
+      }, context, options);
       if (result.kind === "accept") {
         const kind = context.ast.kindName(request.argument);
         context.facts.set(request.expression, rustComputedMemberFactKey, {

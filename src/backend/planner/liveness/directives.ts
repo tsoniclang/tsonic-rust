@@ -161,7 +161,7 @@ export function rustStructuralShapeDeadCodeDisposition(
   carriers: readonly TargetTypeRef[],
   publiclyReachable: boolean,
 ): RustDeadCodeDisposition | undefined {
-  return publiclyReachable || carriers.some(carrier => context.input.liveness.isStructuralShapeConstructed(carrier))
+  return publiclyReachable || carriers.some(carrier => context.input.liveness.isStructuralShapeUsed(carrier))
     ? undefined
     : "generated-unconstructed-shape";
 }

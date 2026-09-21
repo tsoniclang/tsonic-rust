@@ -715,7 +715,9 @@ function applySelectedRuntimeCallableCall(
   const target: Extract<
     RustTargetOperationFact,
     { readonly kind: "source-call" }
-  >["target"] = structuralMethod === undefined
+  >["target"] = selectedSignature.sourceConstructorCarrier !== undefined
+    ? { form: "constructor-value", receiverCarrier: selectedSignature.sourceConstructorCarrier, callableCarrier: carrier }
+    : structuralMethod === undefined
     ? { form: "callable", carrier }
     : {
         form: "structural-method",
@@ -743,6 +745,8 @@ function applySelectedRuntimeCallableCall(
   });
   if (target.form === "callable") {
     resolveExpressionCarrier(walk, callee, sourceFile, carrier);
+  } else if (target.form === "constructor-value") {
+    resolveExpressionCarrier(walk, callee, sourceFile, target.receiverCarrier);
   }
   return setCarrierFact(walk, expression, finalResultCarrier);
 }

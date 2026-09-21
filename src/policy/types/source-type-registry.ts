@@ -3,6 +3,7 @@ import type {
   Node,
   SourceFile,
   Symbol,
+  Signature,
   Type,
 } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -35,6 +36,11 @@ export interface RustSourceObjectShape {
   readonly carrier: TargetTypeRef;
   readonly storage: "project-object" | "structural-object";
   readonly fields: readonly RustSourceObjectField[];
+  readonly construction?: {
+    readonly declaration: Node;
+    readonly signature: Signature;
+    readonly carrier: TargetTypeRef;
+  };
 }
 
 export interface RustSourceUnionVariant {

@@ -307,6 +307,9 @@ export function inferRustTargetGenericBindings(
         if (leftStructural !== undefined || rightStructural !== undefined) {
           return leftStructural !== undefined && rightStructural !== undefined &&
             leftStructural.representation === rightStructural.representation &&
+            (leftStructural.construction === undefined || rightStructural.construction === undefined
+              ? leftStructural.construction === rightStructural.construction
+              : match(leftStructural.construction, rightStructural.construction, lifetimeContext)) &&
             leftStructural.fields.length === rightStructural.fields.length &&
             leftStructural.fields.every((field, index) => {
               const other = rightStructural.fields[index];

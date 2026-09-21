@@ -79,7 +79,8 @@ export function visitRustTargetTypeParameters(
       const structuralObject = rustStructuralObjectCarrierValue(type);
       if (structuralObject !== undefined) {
         return structuralObject.fields.some((field) =>
-          visitRustTargetTypeParameters(field.type, visit));
+          visitRustTargetTypeParameters(field.type, visit)) ||
+          structuralObject.construction !== undefined && visitRustTargetTypeParameters(structuralObject.construction, visit);
       }
       const sourceUnion = rustSourceUnionCarrierValue(type);
       if (sourceUnion !== undefined) {
@@ -277,6 +278,7 @@ export function rustTargetGenericReferences(
         const structural = rustStructuralObjectCarrierValue(value);
         if (structural !== undefined) {
           structural.fields.forEach((field) => visitType(field.type, bound));
+          if (structural.construction !== undefined) visitType(structural.construction, bound);
           return;
         }
         const union = rustSourceUnionCarrierValue(value);

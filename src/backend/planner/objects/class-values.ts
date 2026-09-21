@@ -7,6 +7,7 @@ import { createRustStructuralObjectFromCarrier, type RustStructuralObjectFieldIn
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustClassValueFactKey } from "../../../analysis/facts/class-values.js";
 import { rustOptionElementCarrier, rustStructuralPropertyGetterStorageCarrier, rustStructuralPropertySetterStorageCarrier } from "../../../target-model/types/index.js";
+import { planRustClassValueForwarder } from "./class-value-callables.js";
 
 export function planRustClassValueRead(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = context.input.program.facts.getFact(node, rustClassValueFactKey);
@@ -33,10 +34,22 @@ export function planRustClassValues(declaration: Node, context: RustPlanContext)
     const type = rustTypeFromCarrierInContext(view.carrier, context);
     if (type === undefined) return undefined;
     const initializers: RustStructuralObjectFieldInitializer[] = [];
+    if (view.construction !== undefined) {
+      const forwarder = view.constructionName === undefined ? undefined : planRustClassValueForwarder(view.construction, view.constructionName, context);
+      if (forwarder === undefined) return undefined;
+      items.push(forwarder);
+    }
     for (const field of view.fields) {
       const path = sourceModuleItemPath(context, field.fileName, field.targetName);
       const storage = context.input.program.structuralShapes.field(view.carrier, field.storageIndex);
       if (path === undefined || storage === undefined || initializers.length !== field.storageIndex) return undefined;
+      if (field.callable !== undefined) {
+        const forwarder = field.forwarderName === undefined ? undefined : planRustClassValueForwarder(field.callable, field.forwarderName, context);
+        if (forwarder === undefined || field.forwarderName === undefined || storage.nativeMethod !== true) return undefined;
+        items.push(forwarder);
+        initializers.push({ kind: "method", value: { kind: "path", path: field.forwarderName } });
+        continue;
+      }
       const getterType = rustTypeFromCarrierInContext(rustOptionElementCarrier(
         rustStructuralPropertyGetterStorageCarrier(view.carrier, storage.carrier, storage.presence)), context);
       const setterType = field.writable ? rustTypeFromCarrierInContext(rustOptionElementCarrier(
@@ -59,7 +72,8 @@ export function planRustClassValues(declaration: Node, context: RustPlanContext)
       initializers.push({ kind: "accessor", getter, ...(setter === undefined ? {} : { setter }) });
     }
     const value = createRustStructuralObjectFromCarrier(view.carrier, initializers, context,
-      rustModuleCellAccess({ kind: "path", path: definition.identityName }, "load", []));
+      rustModuleCellAccess({ kind: "path", path: definition.identityName }, "load", []),
+      view.constructionName === undefined ? undefined : { kind: "path", path: view.constructionName });
     if (value === undefined) return undefined;
     const planned = planRustModuleCell(view.storageName, type, value, "crate", context.syntheticNames);
     items.push(...planned.items);

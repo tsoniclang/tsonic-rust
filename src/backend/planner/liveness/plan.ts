@@ -29,6 +29,7 @@ export interface RustPlannerLiveness {
   isStructuralFieldRead(carrier: TargetTypeRef, storageIndex: number): boolean;
   isStructuralFieldWritten(carrier: TargetTypeRef, storageIndex: number): boolean;
   isStructuralShapeConstructed(carrier: TargetTypeRef): boolean;
+  isStructuralShapeUsed(carrier: TargetTypeRef): boolean;
   isVariantConstructed(declaration: Node, variantName: string): boolean;
 }
 
@@ -87,6 +88,7 @@ export function createRustPlannerLiveness(program: RustTargetProgram): RustPlann
     declarations,
     facts: program.facts,
     projectTypes: program.projectTypes,
+    classValues: program.classValues,
     typeDefinitions: program.typeDefinitions,
     objectRepresentations: program.objectRepresentations,
     projectMethodProperties: program.projectMethodProperties,
@@ -213,6 +215,7 @@ export function createRustPlannerLiveness(program: RustTargetProgram): RustPlann
     isStructuralFieldRead: generatedUsage.isStructuralFieldRead,
     isStructuralFieldWritten: generatedUsage.isStructuralFieldWritten,
     isStructuralShapeConstructed: generatedUsage.isStructuralShapeConstructed,
+    isStructuralShapeUsed: generatedUsage.isStructuralShapeUsed,
     isVariantConstructed: generatedUsage.isVariantConstructed,
   });
 }

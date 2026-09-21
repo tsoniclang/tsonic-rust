@@ -27,7 +27,7 @@ export function isRustDeclarationPathUse(
       continue;
     }
     if (operation?.kind !== "source-call" || operation.target.form === "callable" ||
-      operation.target.form === "structural-method" || operation.target.form === "union-method") return false;
+      operation.target.form === "structural-method" || operation.target.form === "constructor-value" || operation.target.form === "union-method") return false;
     const selected = facts.getSelectedTargetCall(parent);
     return selected?.sourceDeclaration !== undefined &&
       (!throughMember || operation.target.form === "function" ||

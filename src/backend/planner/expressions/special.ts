@@ -29,6 +29,7 @@ import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustOptionalChainFact } from "../../../analysis/facts/keys.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { planCallExpression } from "./calls/basic.js";
 
 export function planRegExpCreate(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
@@ -67,6 +68,7 @@ export function planRegExpCreate(node: Node, context: RustPlanContext): RustExpr
 
 export function planNewExpression(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
+  if (fact?.kind === "source-call" && fact.target.form === "constructor-value") return planCallExpression(node, context);
   if (fact !== undefined && fact.kind === "regexp-create") {
     return planRegExpCreate(node, context);
   }

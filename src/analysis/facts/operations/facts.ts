@@ -385,6 +385,7 @@ export type RustTargetOperationFact =
           }
         | { readonly form: "static-method"; readonly name: string; readonly typeCarrier: TargetTypeRef }
         | { readonly form: "callable"; readonly carrier: TargetTypeRef }
+        | { readonly form: "constructor-value"; readonly receiverCarrier: TargetTypeRef; readonly callableCarrier: TargetTypeRef }
         | {
             readonly form: "structural-method";
             readonly receiverCarrier: TargetTypeRef;

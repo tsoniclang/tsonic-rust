@@ -91,7 +91,7 @@ export function main(): void {
   const first = { count: 3, label: "old" };
   const second = { count: 20, label: "second" };
   const alias = first;
-  check(first.copy === alias.copy && first.copy !== second.copy);
+  check(first === alias && first !== second);
   change(first, "count", value => value + 4);
   change(first, "label", value => value + "!");
   change(second, "count", value => value - 2);

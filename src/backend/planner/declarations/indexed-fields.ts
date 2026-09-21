@@ -68,7 +68,11 @@ export function planRustIndexedFieldImplementation(
           { name: "_key", type: { kind: "reference", referent: keyType, mutable: false } },
           ...(access === "read" ? [] : [{ name: "value", type: output }]),
         ], returnType: result,
-        body: { statements: [{ kind: "return", expr: { kind: "call", path: "Ok", args: [value] } }] },
+        body: { statements: access === "read"
+          ? [{ kind: "tail", expr: { kind: "call", path: "Ok", args: [value] } }]
+          : [{ kind: "expr", expr: value },
+            { kind: "tail", expr: { kind: "call", path: "Ok", args: [{ kind: "tuple-literal", elements: [] }] } }],
+        },
       }],
     });
   }

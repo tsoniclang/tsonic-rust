@@ -335,6 +335,7 @@ function applyRustCallableValueAdapterRaw(
         },
         adapter.sourceCarrier,
         context,
+        "owned",
       );
       return projected === undefined ? undefined : { expression: projected, fallible: false };
     }

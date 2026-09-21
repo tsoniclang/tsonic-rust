@@ -3,6 +3,8 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import { rustStructuralObjectCarrierValue } from "../../../target-model/types/carriers/source-types.js";
 import { rustJsArrayLikeElementTargetType, isRustJsArrayCarrier } from "../../../target-model/types/carriers/js.js";
+import { resolveRustConstructType } from "./constructors.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 
 export function retainRustStructuralInstantiation(
   sourceType: Type,
@@ -31,8 +33,11 @@ export function retainRustStructuralInstantiation(
   const correspondence = context.currentSemantics.types.structuralMembers(sourceType, template.sourceType);
   if (correspondence.kind !== "available" || correspondence.members.length !== template.fields.length ||
     structural.fields.length !== template.fields.length ||
-    correspondence.source.calls.length !== 0 || correspondence.source.constructs.length !== 0 ||
+    correspondence.source.calls.length !== 0 || correspondence.source.constructs.length !== (template.construction === undefined ? 0 : 1) ||
     correspondence.source.indexes.length !== 0) return false;
+  const construction = template.construction === undefined ? undefined : resolveRustConstructType(sourceType, context, options, new Set());
+  if (template.construction !== undefined && (construction === undefined ||
+    !rustTargetTypeRefEquals(construction.carrier, structural.construction))) return false;
   const fields = template.fields.map(field => {
     const matches = correspondence.members.filter(pair => field.symbols.includes(pair.destination.property.symbol));
     if (matches.length !== 1) return undefined;
@@ -58,6 +63,7 @@ export function retainRustStructuralInstantiation(
   });
   if (fields.some(field => field === undefined)) return false;
   return options.sourceTypes.registerStructuralObject({ ...template, sourceType, carrier,
+    ...(construction === undefined ? {} : { construction }),
     fields: fields as NonNullable<(typeof fields)[number]>[] }, templateCarrier);
 }
 

@@ -101,7 +101,8 @@ export function analyzeRustTargetProgram(
     return rejectedTargetStage(sourcePackageComponents.diagnostics);
   }
 
-  const moduleInitialization = createRustModuleInitializationPlan(context);
+  const classValues = context.classValues.seal(context);
+  const moduleInitialization = createRustModuleInitializationPlan(context, classValues);
   const objectRepresentations = context.objectRepresentations.seal();
   const foundation = analyzeRustFoundation({
     selected: configuration.foundation,
@@ -137,6 +138,7 @@ export function analyzeRustTargetProgram(
     context.structuralShapes,
     context.typeDefinitions,
     valueLifetimes,
+    objectRepresentations,
   );
   if (declarationGenericRequirements.kind === "rejected") {
     return rejectedTargetStage(declarationGenericRequirements.diagnostics);
@@ -184,7 +186,7 @@ export function analyzeRustTargetProgram(
     borrowedElementReads: analyzeRustBorrowedElementReads(context.ast, context.sourceFiles, facts, context.source.navigation),
     structuralShapes: context.structuralShapes.seal(),
     frozenDataWrites: context.frozenDataWrites.seal(),
-    classValues: context.classValues.seal(context),
+    classValues,
     runtimeReferences: runtimeReferences.plan,
     foundation: foundation.plan,
     binaryHooks,

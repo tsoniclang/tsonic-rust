@@ -13,6 +13,7 @@ import { rustJsArrayEntriesElementTargetType } from "../../target-model/types/ca
 import { rustTargetTypeParameterNames } from "../../target-model/types/carriers/generic-references.js";
 import { analyzeRustShapeGenericRequirements, type RustShapeGenericRequirementContract } from "./generic-shape-requirements.js";
 import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";
+import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
 import type { RustValueLifetimePlan } from "../program/value-lifetimes.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import {
@@ -119,6 +120,7 @@ export function analyzeRustDeclarationGenericRequirements(
   shapes: RustStructuralShapePlan,
   definitions: RustTypeDefinitions,
   valueLifetimes: RustValueLifetimePlan,
+  objectRepresentations: RustObjectRepresentationPlan,
 ): AnalyzeRustDeclarationGenericRequirementsResult {
   const ast = source.ast;
   const diagnostics: TargetDiagnostic[] = [];
@@ -181,6 +183,7 @@ export function analyzeRustDeclarationGenericRequirements(
         sourceLifetimes,
         typeFamilies,
         projectTypes,
+        objectRepresentations,
         valueLifetimes,
         idByDeclaration,
         implementationDeclaration,
@@ -278,6 +281,7 @@ interface ClassifyCallableInput {
   readonly sourceLifetimes: RustLifetimeIndex;
   readonly typeFamilies: RustSourceTypeFamilyRegistry;
   readonly projectTypes: RustProjectTypePolicy;
+  readonly objectRepresentations: RustObjectRepresentationPlan;
   readonly idByDeclaration: WeakMap<Node, string>;
   readonly implementationDeclaration: (declaration: Node) => Node;
   readonly contractFor: (declaration: Node) => RequirementContractState | undefined;
@@ -320,7 +324,13 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
   const declared = new Set([...exactNames, ...capturedNames]);
   const byParameter = new Map([...declared].map((name) =>
     [name, new Set<RustGenericRequirement>()] as const));
-  if (definition !== undefined) for (const name of exactNames) byParameter.get(name)!.add("clone");
+  if (definition !== undefined) {
+    const dispatchLifetime = input.objectRepresentations.representationFor(definition)?.dispatchObjectLifetime;
+    for (const name of exactNames) {
+      byParameter.get(name)!.add("clone");
+      if (dispatchLifetime?.kind === "static") byParameter.get(name)!.add("static");
+    }
+  }
   const uses: RequirementUse[] = [];
   const dependencies = new Set<string>();
   const associated = createRustAssociatedRequirementCollector(declared, input.typeFamilies,

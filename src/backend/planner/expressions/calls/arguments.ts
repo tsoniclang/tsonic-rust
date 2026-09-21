@@ -441,7 +441,7 @@ export function sourceCallSelectedMemberMatches(
   const expectedKind = fact.target.form === "constructor" ? "constructor" : "method";
   const expectedTargetName = fact.target.form === "constructor"
     ? fact.target.name
-    : fact.target.form === "callable" || fact.target.form === "structural-method"
+    : fact.target.form === "callable" || fact.target.form === "structural-method" || fact.target.form === "constructor-value"
       ? member.targetName
       : fact.target.form === "function"
         ? fact.target.selectedTargetName
@@ -465,7 +465,7 @@ export function sourceCallSelectedMemberMatches(
     return false;
   }
   const callableCarrier = fact.target.form === "callable" ? fact.target.carrier
-    : fact.target.form === "structural-method" ? fact.target.callableCarrier : undefined;
+    : fact.target.form === "structural-method" || fact.target.form === "constructor-value" ? fact.target.callableCarrier : undefined;
   const genericNames = parameters.flatMap(parameter => parameter.kind === "type" ? [parameter.sourceName] : []);
   const callable = rustGenericCallableProtocol(callableCarrier, genericNames) ??
     rustNativeCallableProtocol(callableCarrier) ?? rustCallableProtocol(callableCarrier);

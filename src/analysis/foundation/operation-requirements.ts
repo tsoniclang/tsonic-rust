@@ -182,7 +182,7 @@ export function rustFoundationForTargetOperationFact(
         requireCarrier(fact.target.typeCarrier);
       } else if (fact.target.form === "callable") {
         requireCarrier(fact.target.carrier);
-      } else if (fact.target.form === "structural-method") {
+      } else if (fact.target.form === "structural-method" || fact.target.form === "constructor-value") {
         requireCarrier(fact.target.receiverCarrier);
         requireCarrier(fact.target.callableCarrier);
       }

@@ -1,4 +1,4 @@
-import type { RustGenericArgument, RustGenericParameter, RustItem, RustType } from "../nodes.js";
+import type { RustFunctionParam, RustGenericArgument, RustGenericParameter, RustGenerics, RustItem, RustType, RustVisibility } from "../nodes.js";
 import { rustTypeEquals } from "../inspection/type-equality.js";
 import { rustPascalCaseIdentifier } from "../../../target-model/names/identifiers.js";
 
@@ -14,8 +14,12 @@ export function nameRustSignatureTypes(items: readonly RustItem[]): readonly Rus
     ...(item.kind === "use" ? [item.alias ?? item.path.split("::").slice(-1)[0]!] : []),
   ]));
   const aliases: Extract<RustItem, { readonly kind: "type-alias" }>[] = [];
-  const result = items.map(item => {
-    if (item.kind !== "function") return item;
+  const nameCallable = <Callable extends {
+    readonly name: string; readonly visibility: RustVisibility;
+    readonly params: readonly RustFunctionParam[]; readonly returnType?: RustType;
+    readonly generics: RustGenerics;
+  }>(item: Callable, ownerParameters: readonly RustGenericParameter[]): Callable => {
+    const availableParameters = [...ownerParameters, ...item.generics.parameters];
     const nameType = (type: RustType, role: string): RustType => {
       if (type.kind === "reference") return { ...type, referent: nameType(type.referent, role) };
       if (type.kind === "slice") return { ...type, element: nameType(type.element, `${role}Element`) };
@@ -26,7 +30,7 @@ export function nameRustSignatureTypes(items: readonly RustItem[]): readonly Rus
         }) };
       const summary = summarizeClosedType(type);
       if (summary === undefined || summary.weight < 160) return type;
-      const parameters = item.generics.parameters.filter(parameter => summary.names.has(parameter.name))
+      const parameters = availableParameters.filter(parameter => summary.names.has(parameter.name))
         .map((parameter): RustGenericParameter => parameter.kind === "type"
           ? { kind: "type", name: parameter.name, bounds: [] }
           : parameter.kind === "const" ? { kind: "const", name: parameter.name, type: parameter.type }
@@ -61,7 +65,10 @@ export function nameRustSignatureTypes(items: readonly RustItem[]): readonly Rus
     return { ...item, params: item.params.map(parameter => ({ ...parameter,
       type: nameType(parameter.type, parameter.name),
     })), ...(item.returnType === undefined ? {} : { returnType: nameType(item.returnType, "Result") }) };
-  });
+  };
+  const result = items.map(item => item.kind === "function" ? nameCallable(item, [])
+    : item.kind === "impl" ? { ...item, functions: item.functions.map(method => nameCallable(method, item.generics.parameters)) }
+      : item);
   return [...aliases, ...result];
 }
 

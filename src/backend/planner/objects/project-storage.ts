@@ -52,11 +52,13 @@ export function createRustStructuralObjectFromCarrier(
   initializers: readonly RustStructuralObjectFieldInitializer[],
   context: RustPlanContext,
   identity?: RustExpr,
+  constructor?: RustExpr,
 ): RustExpr | undefined {
   const definition = context.input.program.structuralShapes.definitionForCarrier(carrier);
   if (definition === undefined || definition.fields.length !== initializers.length) {
     return undefined;
   }
+  if ((definition.construction === undefined) !== (constructor === undefined)) return undefined;
   if (rustStructuralObjectCarrierValue(carrier)?.representation === "value" &&
     definition.fields.some(field => field.nativeLayout !== undefined)) return undefined;
   const fields = definition.fields.flatMap((field, index) => {
@@ -111,6 +113,9 @@ export function createRustStructuralObjectFromCarrier(
   });
   if (fields.some((field) => field === undefined)) {
     return undefined;
+  }
+  if (definition.construction !== undefined && constructor !== undefined) {
+    fields.push({ name: definition.construction.targetName, value: constructor });
   }
   if (rustStructuralObjectCarrierValue(carrier)?.representation === "value") {
     const type = rustTypeFromCarrierInContext(carrier, context);
@@ -202,6 +207,7 @@ export function readRustStructuralObjectMethodStorage(
   context: RustPlanContext,
 ): RustExpr | undefined {
   const field = context.input.program.structuralShapes.field(receiverCarrier, storageIndex);
+  if (field?.nativeMethod === true) return undefined;
   const storageCarrier = field?.receiverIndependent === true ? field.carrier : field?.method === true
     ? rustStructuralMethodStorageCarrier(receiverCarrier, field.carrier, field.presence)
     : undefined;
@@ -247,6 +253,13 @@ export function invokeRustStructuralObjectMethod(
       !rustTargetTypeRefEquals(storageOverride.carrier, rawStorageCarrier)) ||
     context.syntheticNames === undefined) {
     return undefined;
+  }
+  if (field.nativeMethod === true) {
+    if (storageOverride !== undefined || field.presence !== "required" || field.storage !== "stored") return undefined;
+    return { kind: "invoke", callee: { kind: "method-call", receiver, method: "with", args: [{
+      kind: "closure", params: [{ name: "state", byRefCopy: false }],
+      body: { kind: "field", receiver: { kind: "path", path: "state" }, name: field.targetName },
+    }] }, args: arguments_ };
   }
   const receiverName = allocateRustSyntheticName(
     context.syntheticNames,

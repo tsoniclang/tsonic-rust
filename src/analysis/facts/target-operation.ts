@@ -201,8 +201,8 @@ export function rustTargetOperationIsFallible(
     return fact.fallible;
   }
   if (fact.kind === "source-call" &&
-    (fact.target.form === "callable" || fact.target.form === "structural-method")) {
-    return fact.target.form === "structural-method" ||
+    (fact.target.form === "callable" || fact.target.form === "structural-method" || fact.target.form === "constructor-value")) {
+    return fact.target.form !== "callable" ||
       (fact.target.carrier.kind === "closure"
         ? fact.target.carrier.fallible === true
         : fact.target.carrier.kind !== "function-pointer");

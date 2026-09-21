@@ -44,6 +44,7 @@ import { resolveRustSemanticConditionalAlias } from "./type-families.js";
 import { resolveRustTypeComponentEvidence } from "./source-evidence.js";
 import { resolveRustSourceMarker } from "./markers.js";
 import { resolveRustIndexedField } from "./indexed-fields.js";
+import { resolveRustConstructType } from "./constructors.js";
 
 export function resolveRustFixedArrayTargetType(
   fixedArray: TsonicFixedArrayFact,
@@ -289,8 +290,10 @@ export function resolveStructuralObjectType(
   if (semantics.types.isSymbolLike(type)) return undefined;
   const declaredFields = struct === undefined ? undefined : new Map(struct.fields!.map(field => [field.name, field]));
   if (declaredFields !== undefined && declaredFields.size !== struct!.fields!.length) return undefined;
+  const constructSignatures = semantics.types.constructSignatures(type);
+  const construction = constructSignatures.length === 0 ? undefined : resolveRustConstructType(type, context, options, resolving);
   if (semantics.types.callSignatures(type).length !== 0 ||
-    semantics.types.constructSignatures(type).length !== 0 ||
+    constructSignatures.length !== 0 && (construction === undefined || representation !== "reference") ||
     semantics.types.indexInfos(type).length !== 0) {
     return undefined;
   }
@@ -298,7 +301,7 @@ export function resolveStructuralObjectType(
   if (properties === undefined) {
     return undefined;
   }
-  if (properties.length === 0 && representation === "reference") {
+  if (properties.length === 0 && representation === "reference" && construction === undefined) {
     if (semantics.types.couldContainTypeVariables(type)) return undefined;
     return semantics.declarations.typeSymbol(type) === undefined
       ? rustObjectIdentityTargetType()
@@ -426,7 +429,8 @@ export function resolveStructuralObjectType(
   }
   const ownerNodes = representation === "value" && authoredTypeRoot !== undefined
     ? [authoredTypeRoot]
-    : [...fields.flatMap((field) => field.declarations), ...(authoredTypeRoot === undefined ? [] : [authoredTypeRoot])];
+    : [...fields.flatMap((field) => field.declarations), ...(authoredTypeRoot === undefined ? [] : [authoredTypeRoot]),
+      ...(construction === undefined ? [] : [construction.declaration])];
   const ownerFileNames = new Set(ownerNodes.map((node) => context.ast.getFileName(context.ast.getSourceFile(node))));
   if (ownerFileNames.size !== 1) {
     return undefined;
@@ -440,12 +444,13 @@ export function resolveStructuralObjectType(
     ...(field.bound === true ? { bound: true as const } : {}),
     ...(field.accessor === undefined ? {} : { accessor: field.accessor }),
     ...(field.method === true ? { method: true as const } : {}),
-  })), representation);
+  })), representation, construction?.carrier);
   return options.sourceTypes.registerStructuralObject({
     sourceType: type,
     carrier,
     storage: "structural-object",
     fields,
+    ...(construction === undefined ? {} : { construction }),
   })
     ? carrier
     : undefined;

@@ -82,8 +82,10 @@ function planProjectedExpression(
   const key = context.input.program.facts.getFact(node, rustIndexedFieldKeyArgument);
   if (key !== undefined && finalStage !== "source" && override === undefined) {
     const type = rustTypeFromCarrierInContext(key.carrier, context);
-    if (type === undefined) return undefined;
-    const value: RustExpr = { kind: "associated-call", owner: type, method: "default", args: [] };
+    if (type?.kind !== "named" || type.genericArguments?.some(argument => argument.kind !== "type" && argument.kind !== "const")) return undefined;
+    const value: RustExpr = { kind: "path", path: type.path,
+      genericArguments: type.genericArguments?.filter(argument => argument.kind === "type" || argument.kind === "const"),
+    };
     if (!key.evaluate) return value;
     const effect = planExpressionBeforeValueProjections(node, context, "discarded");
     return effect === undefined ? undefined : { kind: "evaluate-then", effect, discard: "value", value };
@@ -153,7 +155,7 @@ function planProjectedExpression(
   if (projectCast !== undefined) {
     if (rustTargetTypeRefEquals(currentCarrier, projectCast.sourceCarrier)) {
       converted = upcast !== undefined
-        ? planRustProjectUpcast(node, converted, upcast, currentCarrier, context)
+        ? planRustProjectUpcast(node, converted, upcast, currentCarrier, context, "borrowed")
         : planRustProjectDowncast(node, converted, downcast!, context);
       if (converted === undefined) {
         return undefined;
@@ -439,6 +441,7 @@ export function planRustProjectUpcast(
   fact: import("../../../analysis/facts/keys.js").RustProjectUpcastFact,
   actual: TargetTypeRef | undefined,
   context: RustPlanContext,
+  ownership: "owned" | "borrowed",
 ): RustExpr | undefined {
   if (!rustTargetTypeRefEquals(actual, fact.sourceCarrier) ||
     !rustProjectUpcastSourceMatches(fact, context.input.program.typeDefinitions)) {
@@ -459,7 +462,7 @@ export function planRustProjectUpcast(
       const name = allocateRustSyntheticName(names, "upcast_variant");
       const projected = planRustProjectUpcast(node, { kind: "path", path: name }, {
         sourceCarrier: variant.carrier, targetCarrier: fact.targetCarrier,
-      }, variant.carrier, context);
+      }, variant.carrier, context, "borrowed");
       if (projected === undefined) return undefined;
       arms.push({
         pattern: { kind: "tuple-variant", path: `${typePath}::${variant.name}`,
@@ -495,34 +498,12 @@ export function planRustProjectUpcast(
     value: {
       kind: "struct-literal",
       path: targetPath,
-      fields: [
-        {
-          name: rustProjectObjectIdentityField,
-          value: {
-            kind: "method-call",
-            receiver: {
-              kind: "field",
-              receiver: { kind: "path", path: valueName },
-              name: rustProjectObjectIdentityField,
-            },
-            method: "clone",
-            args: [],
-          },
-        },
-        {
-          name: rustProjectObjectDispatchField,
-          value: {
-            kind: "method-call",
-            receiver: {
-              kind: "field",
-              receiver: { kind: "path", path: valueName },
-              name: rustProjectObjectDispatchField,
-            },
-            method: "clone",
-            args: [],
-          },
-        },
-      ],
+      fields: [rustProjectObjectIdentityField, rustProjectObjectDispatchField].map(name => {
+        const field: RustExpr = { kind: "field", receiver: { kind: "path", path: valueName }, name };
+        return { name, value: ownership === "owned" ? field : {
+          kind: "method-call", receiver: field, method: "clone", args: [],
+        } };
+      }),
     },
   };
 }

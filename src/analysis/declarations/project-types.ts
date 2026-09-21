@@ -265,8 +265,8 @@ export function recordInterfaceFacts(walk: RustFactWalk, declaration: Node): voi
       }
       setCarrierFact(walk, keyParameter, keyCarrier);
       setCarrierFact(walk, member, valueCarrier);
-    } else if (memberKind === "KindMethodSignature") {
-      walk.context.facts.set(member, rustSelfModeFactKey, { mode: "ref" }, [
+    } else if (memberKind === "KindMethodSignature" || memberKind === "KindConstructSignature") {
+      if (memberKind === "KindMethodSignature") walk.context.facts.set(member, rustSelfModeFactKey, { mode: "ref" }, [
         { message: "rust reference-backed project interface method self mode" },
       ]);
       recordCallableReturnFact(walk, member);

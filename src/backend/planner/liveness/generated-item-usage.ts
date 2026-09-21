@@ -1,4 +1,5 @@
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
+import type { RustClassValuePlan } from "../../../analysis/objects/class-values.js";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { TargetPlanningSourceNavigation } from "@tsonic/target-api/analysis";
 import {
@@ -73,6 +74,7 @@ export interface RustGeneratedItemUsage {
   isStructuralFieldRead(carrier: TargetTypeRef, storageIndex: number): boolean;
   isStructuralFieldWritten(carrier: TargetTypeRef, storageIndex: number): boolean;
   isStructuralShapeConstructed(carrier: TargetTypeRef): boolean;
+  isStructuralShapeUsed(carrier: TargetTypeRef): boolean;
   isVariantConstructed(declaration: Node, variantName: string): boolean;
 }
 
@@ -87,6 +89,7 @@ export function analyzeRustGeneratedItemUsage(input: {
   readonly declarations: readonly Node[];
   readonly facts: RustPlanQueries;
   readonly projectTypes: RustProjectTypePolicy;
+  readonly classValues: RustClassValuePlan;
   readonly typeDefinitions: RustTypeDefinitions;
   readonly objectRepresentations: RustObjectRepresentationPlan;
   readonly projectMethodProperties: RustProjectMethodPropertyPlan;
@@ -120,6 +123,7 @@ export function analyzeRustGeneratedItemUsage(input: {
   const usedDispatchMembers = new WeakMap<Node, Set<RustDispatchMemberRole>>();
   const usedDowncasts = new WeakMap<Node, WeakSet<Node>>();
   const constructedStructuralShapes = new Set<string>();
+  const accessedStructuralShapes = new Set<string>();
   const declarationNames = new WeakSet<Node>();
 
   for (const declaration of input.declarations) {
@@ -186,11 +190,13 @@ export function analyzeRustGeneratedItemUsage(input: {
   };
   const markStructuralFieldRead = (carrier: TargetTypeRef, storageIndex: number): void => {
     if (Number.isSafeInteger(storageIndex) && storageIndex >= 0) {
+      accessedStructuralShapes.add(closedMetadataKey(carrier));
       structuralFieldReads.add(structuralFieldKey(carrier, storageIndex));
     }
   };
   const markStructuralFieldWritten = (carrier: TargetTypeRef, storageIndex: number): void => {
     if (Number.isSafeInteger(storageIndex) && storageIndex >= 0) {
+      accessedStructuralShapes.add(closedMetadataKey(carrier));
       structuralFieldWrites.add(structuralFieldKey(carrier, storageIndex));
     }
   };
@@ -606,7 +612,18 @@ export function analyzeRustGeneratedItemUsage(input: {
       }
       const fact = input.facts.getFact(node, rustTargetOperationFactKey);
       const classValue = input.facts.getFact(node, rustClassValueFactKey);
-      if (classValue !== undefined) markStructuralShapeConstructed(classValue.carrier);
+      if (classValue !== undefined) {
+        markStructuralShapeConstructed(classValue.carrier);
+        const view = input.classValues.viewFor(classValue.declaration, classValue.carrier);
+        if (view?.construction !== undefined) markProjectConstructorInvoked(view.construction.ownerCarrier);
+        for (const callable of [view?.construction, ...(view?.fields.map(field => field.callable) ?? [])]) {
+          if (callable?.resultAdapter.kind === "project-upcast") {
+            markProjectCarrierFieldUsed(callable.resultAdapter.sourceCarrier, "wrapper-identity");
+            markProjectCarrierFieldUsed(callable.resultAdapter.sourceCarrier, "wrapper-dispatch");
+            markProjectTypeConstructed(callable.resultAdapter.targetCarrier);
+          }
+        }
+      }
       const memoryBinding = input.facts.getFact(node, rustMemoryBindingPlanKey);
       if (memoryBinding?.kind === "record") markStructuralShapeConstructed(memoryBinding.carrier);
       visitProjectProjectionFacts(node);
@@ -652,6 +669,8 @@ export function analyzeRustGeneratedItemUsage(input: {
       structuralFieldWrites.has(structuralFieldKey(carrier, storageIndex)),
     isStructuralShapeConstructed: (carrier: TargetTypeRef) =>
       constructedStructuralShapes.has(closedMetadataKey(carrier)),
+    isStructuralShapeUsed: (carrier: TargetTypeRef) =>
+      constructedStructuralShapes.has(closedMetadataKey(carrier)) || accessedStructuralShapes.has(closedMetadataKey(carrier)),
     isVariantConstructed: (declaration: Node, variantName: string) =>
       variantsByDeclaration.get(declaration)?.has(variantName) === true,
   });

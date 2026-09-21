@@ -38,6 +38,7 @@ export interface RustStructuralShapeField {
   };
   readonly method?: true;
   readonly receiverIndependent?: true;
+  readonly nativeMethod?: true;
 }
 
 export function rustStructuralFieldIsFallible(field: Pick<RustStructuralShapeField, "storage"> | undefined): boolean {
@@ -53,6 +54,7 @@ export interface RustStructuralShapeDefinition {
   readonly genericParameters: readonly RustStructuralShapeGenericParameter[];
   readonly genericArguments: readonly RustTargetGenericArgument[];
   readonly fields: readonly RustStructuralShapeField[];
+  readonly construction?: { readonly targetName: string; readonly carrier: TargetTypeRef };
 }
 
 export type RustStructuralShapeGenericParameter =
@@ -253,6 +255,7 @@ export function createRustStructuralShapePlan(
                 }),
               }),
           ...(field.method === true ? { method: true as const } : {}),
+          ...(field.method === true && structural.construction !== undefined ? { nativeMethod: true as const } : {}),
           ...(receiverIndependentMethods.has(`${structuralStorageKey(carrier, componentForFile)}#${storageIndex}`)
             ? { receiverIndependent: true as const } : {}),
         });
@@ -283,6 +286,9 @@ export function createRustStructuralShapePlan(
           ...genericReferences.typeNames.map(name => ({ kind: "type" as const, type: { kind: "type-parameter" as const, name } })),
         ]),
         fields: Object.freeze(fields),
+        ...(structural.construction === undefined ? {} : { construction: Object.freeze({
+          targetName: allocateSnakeName(usedFieldNames, "construct"), carrier: structural.construction,
+        }) }),
       });
     });
   const byKey = new Map(definitions.flatMap((definition) =>
@@ -349,7 +355,7 @@ export function structuralStorageKey(carrier: TargetTypeRef, componentForFile: (
   const normalized = substituteRustTargetTypeParameters(carrier, substitutions);
   const shape = rustStructuralObjectCarrierValue(normalized);
   return closedMetadataKey(shape === undefined ? normalized :
-    rustStructuralObjectTargetType(componentForFile(shape.ownerFileName), shape.fields, shape.representation));
+    rustStructuralObjectTargetType(componentForFile(shape.ownerFileName), shape.fields, shape.representation, shape.construction));
 }
 
 function instantiateStructuralDefinition(
@@ -362,7 +368,7 @@ function instantiateStructuralDefinition(
   const parameters = new Set(definition.genericParameters.flatMap(parameter =>
     parameter.kind === "type" ? [parameter.name] : []));
   const shape = rustStructuralObjectCarrierValue(carrier);
-  const aligned = shape === undefined ? carrier : rustStructuralObjectTargetType(definition.ownerFileName, shape.fields, shape.representation);
+  const aligned = shape === undefined ? carrier : rustStructuralObjectTargetType(definition.ownerFileName, shape.fields, shape.representation, shape.construction);
   const bindings = inferRustTargetTypeParameterBindings(definition.carrier, aligned, parameters);
   if (bindings === undefined || bindings.size !== parameters.size ||
     !rustTargetTypeRefEquals(substituteRustTargetTypeParameters(definition.carrier, bindings), aligned)) {
@@ -379,6 +385,9 @@ function instantiateStructuralDefinition(
       ...field,
       carrier: substituteRustTargetTypeParameters(field.carrier, bindings),
     }))),
+    ...(definition.construction === undefined ? {} : { construction: Object.freeze({
+      ...definition.construction, carrier: substituteRustTargetTypeParameters(definition.construction.carrier, bindings),
+    }) }),
   });
 }
 
