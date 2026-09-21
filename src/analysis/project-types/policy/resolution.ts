@@ -5,6 +5,7 @@ import {
   rustLifetimeGenericArgument,
   rustSourceTypeCarrier,
   rustSourceTypeCarrierValue,
+  rustStructuralObjectCarrierValue,
   rustTypeGenericArgument,
   substituteRustTargetGenerics,
 } from "../../../target-model/types/index.js";
@@ -161,6 +162,8 @@ export function createRustProjectTypePolicy(
   }
 
   const directSupertypes = (carrier: TargetTypeRef): readonly TargetTypeRef[] | undefined => {
+    const structural = rustStructuralObjectCarrierValue(carrier);
+    if (structural !== undefined) return structural.bases;
     const value = rustSourceTypeCarrierValue(carrier);
     const definition = value === undefined
       ? undefined

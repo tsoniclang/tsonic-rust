@@ -111,8 +111,9 @@ test("local static storage keeps evaluations independent and releases borrows be
 
 test("generic captured constructors share native instance views across exact instantiations", { timeout: 300_000 }, () => {
   const artifacts = compileAndRun("captured_class_views", { "index.ts": `
-    abstract class Base { abstract hash(): number; }
+    abstract class Base { abstract hash(): number; declare private readonly then?: never; }
     interface Factory<Value> { new(value: Value): Base & { readonly value: Value }; }
+    function invoke(value: Base): number { return value.hash(); }
     function factory<Value>(hash: (value: Value) => number): Factory<Value> {
       return class Selected extends Base {
         constructor(readonly value: Value) { super(); }
@@ -124,7 +125,7 @@ test("generic captured constructors share native instance views across exact ins
       const text = factory<string>(value => value.length);
       const first = new numeric(4);
       const second = new text("native");
-      if (first.hash() !== 5 || first.value !== 4 || second.hash() !== 6 || second.value !== "native") throw new Error("view");
+      if (first.hash() !== 5 || first.value !== 4 || invoke(second) !== 6 || second.value !== "native") throw new Error("view");
     }
   ` });
   const rust = artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");

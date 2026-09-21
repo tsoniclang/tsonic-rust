@@ -67,13 +67,11 @@ export function createRustClassValueRegistry(): RustClassValueRegistry {
       if (sealed) throw new Error("Rust instance views cannot change after sealing.");
       const existing = instanceViews.find(candidate => candidate.declaration === view.declaration &&
         rustTargetTypeRefEquals(candidate.sourceCarrier, view.sourceCarrier) && rustTargetTypeRefEquals(candidate.targetCarrier, view.targetCarrier));
-      if (existing !== undefined) return existing.bases.length === view.bases.length &&
-        existing.bases.every((base, index) => rustTargetTypeRefEquals(base, view.bases[index])) &&
-        existing.fields.length === view.fields.length && existing.fields.every((field, index) =>
+      if (existing !== undefined) return existing.fields.length === view.fields.length && existing.fields.every((field, index) =>
         field.declaration === view.fields[index]?.declaration && field.storageIndex === view.fields[index]?.storageIndex &&
         instanceViewFieldsEqual(field.field, view.fields[index]?.field) &&
         classValueCallablesEqual(field.callable, view.fields[index]?.callable));
-      instanceViews.push(Object.freeze({ ...view, bases: Object.freeze([...view.bases]),
+      instanceViews.push(Object.freeze({ ...view,
         fields: Object.freeze(view.fields.map(field => Object.freeze({ ...field }))) }));
       return true;
     },

@@ -1,4 +1,10 @@
 import type { AstReader, Node } from "@tsonic/tsts";
+import { sourceClassFieldIsTypeOnly } from "@tsonic/target-api/source";
+
+export function isRustErasedNominalMember(declarations: readonly Node[], ast: AstReader): boolean {
+  return declarations.length > 0 && declarations.every(declaration =>
+    sourceClassFieldIsTypeOnly(ast, declaration) && ast.hasModifierKind(declaration, "private"));
+}
 
 export function isRustStructuralObjectFieldDeclaration(
   declaration: Node,

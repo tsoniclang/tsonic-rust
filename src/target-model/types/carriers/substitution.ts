@@ -373,7 +373,8 @@ function substituteCarrierParts(
             normalize,
           ),
         })), structuralObject.representation, structuralObject.construction === undefined ? undefined :
-          substituteRustTargetGenerics(structuralObject.construction, substitutions, lifetimeSubstitutions, constSubstitutions, normalize));
+          substituteRustTargetGenerics(structuralObject.construction, substitutions, lifetimeSubstitutions, constSubstitutions, normalize),
+          structuralObject.bases.map(base => substituteRustTargetGenerics(base, substitutions, lifetimeSubstitutions, constSubstitutions, normalize)));
       }
       const sourceUnion = rustSourceUnionCarrierValue(type);
       if (sourceUnion !== undefined) {

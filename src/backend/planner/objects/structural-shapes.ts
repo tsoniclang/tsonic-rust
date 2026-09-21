@@ -43,11 +43,6 @@ import { rustAssociatedPredicates } from "../types/associated-bounds.js";
 import { rustGenericRequirementBounds } from "../types/generic-bounds.js";
 import { planRustNumberArrayUnionImplementation } from "./number-array-unions.js";
 import { planRustConstructorShape } from "./constructor-shapes.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { substituteRustTargetTypeParameters } from "../../../target-model/types/carriers/substitution.js";
-import { inferRustTargetTypeParameterBindings } from "../../../target-model/types/carriers/generic-inference.js";
-import { rustTargetTypeParameterNames } from "../../../target-model/types/carriers/generic-references.js";
 
 export function planRustStructuralShapeModule(
   input: RustPlanningContext,
@@ -141,17 +136,8 @@ export function planRustStructuralShapeModule(
     if (definition.dispatchName !== undefined) {
       const error = rustTypeFromCarrierInContext(rustProgramErrorTargetType(), definitionContext);
       const type: RustType = { kind: "named", path: definition.targetName, genericArguments: aliasGenericArguments };
-      const bases: TargetTypeRef[] = [];
-      for (const view of input.program.classValues.instanceViews) {
-        if (!definition.sourceCarriers.some(carrier => rustTargetTypeRefEquals(carrier, view.targetCarrier))) continue;
-        const substitutions = inferRustTargetTypeParameterBindings(view.targetCarrier, definition.carrier,
-          new Set(rustTargetTypeParameterNames(view.targetCarrier)));
-        if (substitutions === undefined) return undefined;
-        for (const base of view.bases) {
-          const selected = substituteRustTargetTypeParameters(base, substitutions);
-          if (!bases.some(candidate => rustTargetTypeRefEquals(candidate, selected))) bases.push(selected);
-        }
-      }
+      const bases = rustStructuralObjectCarrierValue(definition.carrier)?.bases;
+      if (bases === undefined) return undefined;
       const superTraits = bases.map(carrier => {
         const type = rustTypeFromCarrierInContext(carrier, definitionContext);
         const project = input.program.projectTypes.definitionForCarrier(carrier);

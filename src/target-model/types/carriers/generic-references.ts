@@ -81,7 +81,7 @@ export function visitRustTargetTypeParameters(
       }
       const structuralObject = rustStructuralObjectCarrierValue(type);
       if (structuralObject !== undefined) {
-        return structuralObject.fields.some((field) =>
+        return structuralObject.bases.some(base => visitRustTargetTypeParameters(base, visit)) || structuralObject.fields.some((field) =>
           visitRustTargetTypeParameters(field.type, visit)) ||
           structuralObject.construction !== undefined && visitRustTargetTypeParameters(structuralObject.construction, visit);
       }

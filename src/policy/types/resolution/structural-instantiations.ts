@@ -12,6 +12,7 @@ import { inferRustTargetTypeParameterBindings } from "../../../target-model/type
 import { rustTargetTypeParameterNames } from "../../../target-model/types/carriers/generic-references.js";
 import { resolveRustTargetType } from "./target.js";
 import { rustCallableProtocol } from "../../../target-model/types/carriers/callables.js";
+import { isRustErasedNominalMember } from "../source-shapes.js";
 
 export function retainRustStructuralInstantiation(
   sourceType: Type,
@@ -58,7 +59,8 @@ export function retainRustStructuralInstantiation(
     context = { ...context, sourceTypeParameterSubstitutions: substitutions };
   }
   const correspondence = context.currentSemantics.types.structuralMembers(sourceType, template.sourceType);
-  if (correspondence.kind !== "available" || correspondence.members.length !== template.fields.length ||
+  if (correspondence.kind !== "available" ||
+    correspondence.members.filter(member => !isRustErasedNominalMember(member.destination.declarations, context.ast)).length !== template.fields.length ||
     structural.fields.length !== template.fields.length ||
     correspondence.source.calls.length !== 0 || correspondence.source.constructs.length !== (template.construction === undefined ? 0 : 1) ||
     correspondence.source.indexes.length !== 0) return false;

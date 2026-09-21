@@ -113,6 +113,7 @@ export interface RustStructuralObjectCarrierValue {
   readonly ownerFileName: string;
   readonly representation: "reference" | "value";
   readonly fields: readonly RustStructuralObjectFieldCarrierValue[];
+  readonly bases: readonly TargetTypeRef[];
   readonly construction?: TargetTypeRef;
 }
 
@@ -226,6 +227,7 @@ export function rustStructuralObjectTargetType(
   fields: readonly RustStructuralObjectFieldCarrierValue[],
   representation: "reference" | "value" = "reference",
   construction?: TargetTypeRef,
+  bases: readonly TargetTypeRef[] = [],
 ): TargetTypeRef {
   const canonicalFields = Object.freeze(
     [...fields].sort((left, right) => left.sourceName.localeCompare(right.sourceName)),
@@ -234,7 +236,7 @@ export function rustStructuralObjectTargetType(
     kind: "target-specific",
     target: "rust",
     name: rustStructuralObjectCarrierName,
-    value: { ownerFileName, representation, fields: canonicalFields,
+    value: { ownerFileName, representation, fields: canonicalFields, bases: Object.freeze([...bases]),
       ...(construction === undefined ? {} : { construction }) },
   };
 }
@@ -248,17 +250,21 @@ export function rustStructuralObjectCarrierValue(
   }
   const value = carrier.value;
   if (typeof value !== "object" || value === null || Array.isArray(value) ||
-    !hasExactObjectKeys(value, ["fields", "ownerFileName", "representation",
+    !hasExactObjectKeys(value, ["fields", "bases", "ownerFileName", "representation",
       ...("construction" in value ? ["construction"] : [])])) {
     return undefined;
   }
   const candidateValue = value as {
     readonly fields?: unknown;
+    readonly bases?: unknown;
     readonly ownerFileName?: unknown;
     readonly representation?: unknown;
     readonly construction?: unknown;
   };
   const fields = candidateValue.fields;
+  const bases = candidateValue.bases;
+  if (!isDenseDataArray(bases) || bases.some(base => !isRustTargetTypeRef(base) || rustSourceTypeCarrierValue(base)?.shape !== "object") ||
+    bases.length !== 0 && candidateValue.representation !== "reference") return undefined;
   const construction = candidateValue.construction;
   if ("construction" in value && (construction === undefined || !isRustTargetTypeRef(construction) ||
     construction.kind !== "target-named" || construction.id !== rustCallableTargetId ||
@@ -267,7 +273,7 @@ export function rustStructuralObjectCarrierValue(
   if (typeof candidateValue.ownerFileName !== "string" ||
     candidateValue.ownerFileName.length === 0 ||
     (candidateValue.representation !== "reference" && candidateValue.representation !== "value") ||
-    !isDenseDataArray(fields) || (fields.length === 0 && candidateValue.representation !== "value" && candidateValue.construction === undefined) ||
+    !isDenseDataArray(fields) || (fields.length === 0 && bases.length === 0 && candidateValue.representation !== "value" && candidateValue.construction === undefined) ||
     candidateValue.construction !== undefined && (candidateValue.representation !== "reference" ||
       !isRustTargetTypeRef(candidateValue.construction))) {
     return undefined;
@@ -312,6 +318,7 @@ export function rustStructuralObjectCarrierValue(
     ownerFileName: candidateValue.ownerFileName,
     representation: candidateValue.representation,
     fields: Object.freeze(normalized),
+    bases: Object.freeze(bases as TargetTypeRef[]),
     ...(candidateValue.construction === undefined ? {} : { construction: candidateValue.construction as TargetTypeRef }),
   };
 }

@@ -362,7 +362,7 @@ export function structuralStorageKey(carrier: TargetTypeRef, componentForFile: (
   const normalized = substituteRustTargetTypeParameters(carrier, substitutions);
   const shape = rustStructuralObjectCarrierValue(normalized);
   return closedMetadataKey(shape === undefined ? normalized :
-    rustStructuralObjectTargetType(componentForFile(shape.ownerFileName), shape.fields, shape.representation, shape.construction));
+    rustStructuralObjectTargetType(componentForFile(shape.ownerFileName), shape.fields, shape.representation, shape.construction, shape.bases));
 }
 
 function instantiateStructuralDefinition(
@@ -375,7 +375,7 @@ function instantiateStructuralDefinition(
   const parameters = new Set(definition.genericParameters.flatMap(parameter =>
     parameter.kind === "type" ? [parameter.name] : []));
   const shape = rustStructuralObjectCarrierValue(carrier);
-  const aligned = shape === undefined ? carrier : rustStructuralObjectTargetType(definition.ownerFileName, shape.fields, shape.representation, shape.construction);
+  const aligned = shape === undefined ? carrier : rustStructuralObjectTargetType(definition.ownerFileName, shape.fields, shape.representation, shape.construction, shape.bases);
   const bindings = inferRustTargetTypeParameterBindings(definition.carrier, aligned, parameters);
   if (bindings === undefined || bindings.size !== parameters.size ||
     !rustTargetTypeRefEquals(substituteRustTargetTypeParameters(definition.carrier, bindings), aligned)) {

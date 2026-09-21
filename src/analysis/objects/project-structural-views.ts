@@ -2,17 +2,16 @@ import type { Node } from "@tsonic/tsts";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustFactWalk } from "../program/walk.js";
-import { rustOperationContext, rustResolutionContext } from "../program/walk.js";
-import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
+import { rustOperationContext } from "../program/walk.js";
 import { resolveRustProjectField, type RustProjectFieldSelection } from "../operations/provider/project-fields.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { selectRustClassValueCallable, type RustClassValueCallable } from "./class-value-callables.js";
+import { isRustErasedNominalMember } from "../../policy/types/source-shapes.js";
 
 export interface RustProjectStructuralView {
   readonly declaration: Node;
   readonly sourceCarrier: TargetTypeRef;
   readonly targetCarrier: TargetTypeRef;
-  readonly bases: readonly TargetTypeRef[];
   readonly fields: readonly {
     readonly declaration: Node;
     readonly storageIndex: number;
@@ -34,7 +33,7 @@ export function selectRustProjectStructuralView(
   const correspondence = semantics.types.structuralMembers(sourceType, target.sourceType);
   if (correspondence.kind !== "available" || correspondence.destination.calls.length !== 0 ||
     correspondence.destination.constructs.length !== 0 || correspondence.destination.indexes.length !== 0 ||
-    correspondence.members.length !== target.fields.length) return false;
+    correspondence.members.filter(member => !isRustErasedNominalMember(member.destination.declarations, walk.context.ast)).length !== target.fields.length) return false;
   const fields: RustProjectStructuralView["fields"][number][] = [];
   const context = rustOperationContext(walk, declaration);
   for (const field of target.fields) {
@@ -56,12 +55,7 @@ export function selectRustProjectStructuralView(
       fields.push({ declaration: member, storageIndex: field.storageIndex, field: selected });
     }
   }
-  const bases = semantics.types.isIntersection(target.sourceType)
-    ? semantics.types.unionOrIntersectionTypes(target.sourceType).flatMap(type => {
-      const carrier = resolveRustTargetTypeRef(type, rustResolutionContext(walk, declaration), walk.operationOptions);
-      return carrier !== undefined && walk.context.projectTypes.definitionForCarrier(carrier) !== undefined ? [carrier] : [];
-    }) : [];
-  if (!walk.context.classValues.recordInstanceView({ declaration, sourceCarrier, targetCarrier, bases, fields })) return false;
+  if (!walk.context.classValues.recordInstanceView({ declaration, sourceCarrier, targetCarrier, fields })) return false;
   return fields.every(field => walk.sourceTypes.registerStructuralFieldImplementation({
     carrier: targetCarrier, storageIndex: field.storageIndex, kind: "dispatch",
   }));
