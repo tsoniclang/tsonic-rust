@@ -42,6 +42,7 @@ import { rustFoundationForCarrier } from "../foundation/requirements.js";
 import { maximumRustFoundation } from "../../target-model/foundation/model.js";
 import { analyzeRustProjectFlowReadSelections } from "../control-flow/project-flow-read-selections.js";
 import { isRustStringCarrier } from "../../target-model/types/index.js";
+import { rustClosureCaptureFactKey } from "../facts/keys.js";
 
 const rustJsTimerEpilogue: RustProviderBinaryHookRow = Object.freeze({
   id: "tsonic.rust.js.timers",
@@ -123,6 +124,7 @@ export function analyzeRustTargetProgram(
     navigation: context.source.navigation,
     isOwnedString: (declaration) => isRustStringCarrier(facts.getRuntimeCarrierFact(declaration)?.carrier),
     mayBorrowArgument: (argument) => facts.getArgumentPassingFact(argument)?.mode !== "by-value",
+    capturesFor: (closure) => facts.getFact(closure, rustClosureCaptureFactKey),
   });
   const declarationGenericRequirements = analyzeRustDeclarationGenericRequirements(
     context.source,
@@ -179,7 +181,7 @@ export function analyzeRustTargetProgram(
     sourceLifetimes: context.sourceLifetimes,
     declarationGenericRequirements: declarationGenericRequirements.index,
     valueLifetimes,
-    borrowedElementReads: analyzeRustBorrowedElementReads(context.ast, context.sourceFiles, facts),
+    borrowedElementReads: analyzeRustBorrowedElementReads(context.ast, context.sourceFiles, facts, context.source.navigation),
     structuralShapes: context.structuralShapes.seal(),
     frozenDataWrites: context.frozenDataWrites.seal(),
     classValues: context.classValues.seal(context),

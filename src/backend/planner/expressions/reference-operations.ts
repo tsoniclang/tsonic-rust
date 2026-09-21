@@ -46,7 +46,7 @@ export function planRustReferenceOperationCall(
     case "shared-reference":
       return { kind: "reference", expr: planRustNonConsumingValue(fact.operandExpression, operand, context) };
     case "mutable-reference":
-      return { kind: "reference", expr: operand, mutable: true };
+      return { kind: "reference", expr: planRustNonConsumingValue(fact.operandExpression, operand, context), mutable: true };
     case "load":
       return { kind: "dereference", pointer: operand };
     case "store": {

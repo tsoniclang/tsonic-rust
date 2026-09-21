@@ -1,4 +1,5 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
+import type { RustClosureCaptureFact } from "../facts/operations/keys.js";
 import {
   Node_Expression,
   sourceNodesEqual,
@@ -7,6 +8,7 @@ import {
 
 export interface RustValueLifetimePlan {
   canMove(reference: Node): boolean;
+  canMoveCapture(closure: Node, declaration: Node): boolean;
 }
 
 export function analyzeRustValueLifetimes(input: {
@@ -15,8 +17,10 @@ export function analyzeRustValueLifetimes(input: {
   readonly navigation: SourceProgramNavigation;
   readonly isOwnedString: (declaration: Node) => boolean;
   readonly mayBorrowArgument: (argument: Node) => boolean;
+  readonly capturesFor: (closure: Node) => RustClosureCaptureFact | undefined;
 }): RustValueLifetimePlan {
   const movableReferences = new WeakSet<Node>();
+  const movableCaptures = new WeakMap<Node, ReadonlySet<Node>>();
   const visit = (node: Node): void => {
     const kind = input.ast.kindName(node);
     if (input.ast.is.IsCallExpression(node) || input.ast.is.IsNewExpression(node)) {
@@ -24,6 +28,14 @@ export function analyzeRustValueLifetimes(input: {
     }
     if (kind === "KindVariableDeclaration" || kind === "KindParameter") {
       classifyDeclaration(node, input, movableReferences);
+    }
+    if (kind === "KindArrowFunction" || kind === "KindFunctionExpression") {
+      const captures = input.capturesFor(node)?.captures.filter(capture =>
+        capture.storage === "value" && input.isOwnedString(capture.declaration) &&
+        isTerminalOwnedCapture(node, capture.declaration, input));
+      if (captures !== undefined && captures.length > 0) {
+        movableCaptures.set(node, new Set(captures.map(capture => capture.declaration)));
+      }
     }
     input.ast.forEachChild(node, (child) => {
       if (child !== undefined) visit(child);
@@ -34,6 +46,41 @@ export function analyzeRustValueLifetimes(input: {
     canMove(reference: Node): boolean {
       return movableReferences.has(reference);
     },
+    canMoveCapture(closure: Node, declaration: Node): boolean {
+      return movableCaptures.get(closure)?.has(declaration) === true;
+    },
+  });
+}
+
+function isTerminalOwnedCapture(
+  closure: Node,
+  declaration: Node,
+  input: { readonly ast: AstReader; readonly navigation: SourceProgramNavigation },
+): boolean {
+  const { ast, navigation } = input;
+  const owner = enclosingCallable(declaration, ast);
+  const parent = ast.parent(closure);
+  if (owner === undefined || parent === undefined || enclosingCallable(parent, ast) !== owner) return false;
+  const body = ast.body(owner);
+  if (body === undefined) return false;
+  let expression = closure;
+  let enclosing = parent;
+  while (isTransparentValueWrapper(enclosing, expression, ast)) {
+    expression = enclosing;
+    const next = ast.parent(enclosing);
+    if (next === undefined) return false;
+    enclosing = next;
+  }
+  if (expression !== body &&
+    !(ast.is.IsReturnStatement(enclosing) && ast.parent(enclosing) === body &&
+      Node_Expression(ast, enclosing) === expression)) return false;
+  const summary = navigation.declarationUseSummary(declaration);
+  if (summary.bindingWritten || summary.exported) return false;
+  const uses = summary.uses.filter(use => use.kind !== "source-linkage" && use.kind !== "type-only");
+  return uses.length > 0 && uses.every(use => {
+    let current: Node | undefined = use.reference;
+    while (current !== undefined && current !== closure && current !== owner) current = ast.parent(current);
+    return current === closure;
   });
 }
 

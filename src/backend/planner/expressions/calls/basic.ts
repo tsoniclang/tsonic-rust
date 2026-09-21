@@ -28,8 +28,12 @@ import type { RustExpr } from "../../../target-ast/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
 import { planRustReferenceOperationCall } from "../reference-operations.js";
+import { planRustBorrowedElementRead } from "../borrowed-element-reads.js";
 
 export function planCallExpression(node: Node, context: RustPlanContext, resultUse: RustExpressionResultUse = "value"): RustExpr | undefined {
+  const borrowed = context.input.program.borrowedElementReads.forExpression(node);
+  if (borrowed !== undefined) return planRustBorrowedElementRead(node, borrowed, context,
+    (expression, inner) => planCallExpressionInner(expression, inner, resultUse));
   return planOptionalChainExpression(
     node,
     context,

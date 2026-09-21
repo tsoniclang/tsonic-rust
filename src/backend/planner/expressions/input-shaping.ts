@@ -15,6 +15,7 @@ import { missingFactDiagnostic } from "../diagnostics.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import { planExpression } from "./entry.js";
+import { planRustLoadedSharedReference } from "./typed-locations.js";
 
 export function planRustCallArguments(
   node: Node,
@@ -130,11 +131,16 @@ function createRustSharedReferenceArgument(
   argument: RustExpr,
   node: Node | undefined,
 ): RustExpr {
+  const loaded = node === undefined ? undefined : planRustLoadedSharedReference(node, argument, context);
+  if (loaded !== undefined) return loaded;
   const borrowedString = rustBorrowedStringView(argument);
   if (borrowedString !== argument) {
     return borrowedString;
   }
   const override = node === undefined ? undefined : context.expressionOverrides?.get(node);
+  if (override?.valueForm === "storage" && isRustStringCarrier(override.carrier) && argument.kind === "dereference") {
+    return { kind: "reference", expr: argument.pointer };
+  }
   if (override?.valueForm === "shared-reference") {
     return isRustStringCarrier(override.carrier)
       ? { kind: "method-call", receiver: argument, method: "as_str", args: [] }

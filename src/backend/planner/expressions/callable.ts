@@ -302,9 +302,10 @@ export function planCallableExpression(
   const captureBindings: { readonly name: string; readonly value: RustExpr }[] = [];
   const capturedBindings = [...(context.capturedBindings ?? [])];
   for (const capture of captureFact.captures) {
+    const moveCapture = context.input.program.valueLifetimes.canMoveCapture(node, capture.declaration);
     if (context.syntheticNames === undefined || !requireRustCarrierRequirements(
       capture.carrier,
-      nativeClosureProtocol === undefined ? ["clone", "static"] : ["clone"],
+      [...(moveCapture ? [] : ["clone" as const]), ...(nativeClosureProtocol === undefined ? ["static" as const] : [])],
       capture.reference,
       closureContext,
     )) {
@@ -327,6 +328,7 @@ export function planCallableExpression(
       capture.reference,
       sourcePath,
       capture.storage,
+      moveCapture,
       context,
     );
     captureBindings.push({

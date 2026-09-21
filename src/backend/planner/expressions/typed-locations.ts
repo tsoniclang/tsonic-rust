@@ -256,6 +256,7 @@ export function planRustCaptureValue(
   node: Node,
   path: string,
   storage: "value" | "location",
+  move: boolean,
   context: RustPlanContext,
 ): RustExpr {
   const capturedPath = rustCapturedBinding(node, context)?.path ?? path;
@@ -267,6 +268,7 @@ export function planRustCaptureValue(
       args: [],
     };
   }
+  if (move) return { kind: "path", path: capturedPath };
   const value = planRustIdentifierValue(node, path, context);
   const carrier = context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
   return rustReadRequiresClone(carrier, context) &&
@@ -313,11 +315,23 @@ export function planRustSharedReceiver(
   if (override?.valueForm === "shared-reference") {
     return value;
   }
+  const loaded = planRustLoadedSharedReference(node, value, context);
+  if (loaded !== undefined) return loaded;
   const kind = context.input.program.source.ast.kindName(node);
   return override === undefined &&
       (kind === "KindThisExpression" || kind === "KindThisKeyword")
     ? value
     : { kind: "reference", expr: value };
+}
+
+export function planRustLoadedSharedReference(
+  node: Node,
+  value: RustExpr,
+  context: RustPlanContext,
+): RustExpr | undefined {
+  const operation = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
+  return operation?.kind === "reference-operation" && operation.operation === "load" &&
+    !operation.operandCarrier.mutable && value.kind === "dereference" ? value.pointer : undefined;
 }
 
 export function planRustMutableProjectReceiver(

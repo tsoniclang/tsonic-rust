@@ -17,7 +17,7 @@ for (const edition of ["2021", "2024"]) {
       input: { program: {
         source: { ast: fakeAstReader([sourceFile]) },
         facts: { getRuntimeCarrierFact: () => ({ carrier: sourceCarrier }), getFact: () => undefined },
-        valueLifetimes: { canMove: () => true },
+        valueLifetimes: { canMove: () => true, canMoveCapture: () => false },
         configuration: { edition },
       } },
       diagnostics: [], sourceFile,

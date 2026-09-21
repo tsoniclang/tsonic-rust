@@ -35,7 +35,7 @@ export function main(): void {
   assert.match(output, /fn check_token\(value: &str\)/u);
   assert.match(output, /fn dispatch\(kind: &str, payload: &str\)/u);
   assert.match(output, /fn retained\(value: String\)/u);
-  assert.match(output, /with_number_element/u);
+  assert.match(output, /borrow_number_element/u);
   assert.match(output, /sort_borrowed/u);
   const ensure = output.slice(output.indexOf("fn ensure_slash"), output.indexOf("fn dispatch"));
   assert.doesNotMatch(ensure, /value\.clone\(\)/u);
