@@ -40,7 +40,7 @@ import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js
 import type { RustValueConversion } from "../../../target-model/operations/model.js";
 import type { RustPlanQueries } from "../../../target-model/facts/selections.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { rustOptionElementCarrier, rustSourceUnionCarrierValue } from "../../../target-model/types/index.js";
+import { rustOptionElementCarrier, rustSourceUnionCarrierValue, rustStructuralObjectCarrierValue } from "../../../target-model/types/index.js";
 import { rustTargetTypeChildren } from "../../../target-model/types/carriers/children.js";
 import {
   isRustPreconstructionThisOperation,
@@ -658,10 +658,15 @@ export function analyzeRustGeneratedItemUsage(input: {
         const view = input.classValues.viewFor(classValue.declaration, classValue.carrier);
         if (view?.construction !== undefined) markProjectConstructorInvoked(view.construction.ownerCarrier);
         for (const callable of [view?.construction, ...(view?.fields.map(field => field.callable) ?? [])]) {
-          if (callable?.resultAdapter.kind === "project-upcast") {
+          if (callable?.resultAdapter.kind === "project-upcast" ||
+            callable?.resultAdapter.kind === "project-structural-view") {
             markProjectCarrierFieldUsed(callable.resultAdapter.sourceCarrier, "wrapper-identity");
             markProjectCarrierFieldUsed(callable.resultAdapter.sourceCarrier, "wrapper-dispatch");
-            markProjectTypeConstructed(callable.resultAdapter.targetCarrier);
+            if (callable.resultAdapter.kind === "project-upcast") {
+              markProjectTypeConstructed(callable.resultAdapter.targetCarrier);
+            } else {
+              markStructuralShapeConstructed(callable.resultAdapter.targetCarrier);
+            }
           }
         }
       }
@@ -686,6 +691,20 @@ export function analyzeRustGeneratedItemUsage(input: {
       input.ast.forEachChild(node, (child) => {
         if (child !== undefined) pending.push({ node: child, insideTypeAlias });
       });
+    }
+  }
+
+  for (const view of input.classValues.instanceViews) {
+    const fields = rustStructuralObjectCarrierValue(view.targetCarrier)?.fields;
+    for (const member of view.fields) {
+      if (member.callable !== undefined) {
+        markProjectMemberUsed(member.callable.ownerCarrier, member.callable.declaration, "method-exact");
+      }
+      if (member.field !== undefined) {
+        const writable = fields?.[member.storageIndex]?.readonly === false;
+        visitFact(member.declaration, { ...member.field, operationId: "project-structural-view",
+          accessMode: writable ? "read-write" : "read" });
+      }
     }
   }
 
