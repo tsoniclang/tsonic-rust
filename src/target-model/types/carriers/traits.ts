@@ -2,6 +2,7 @@ import { isRustBigIntCarrier, isRustJsStringCarrier, isRustNullCarrier, isRustSt
 import { isRustIntegerCarrier, rustFutureTargetId, rustPrimitiveTypeName } from "./primitives.js";
 import { rustRawPointerTargetId } from "./source-types.js";
 import { rustGenericCallableValue } from "./generic-callables.js";
+import { rustClassConstructorInstance } from "./class-constructors.js";
 import { emptyRustTypeDefinitions, rustSourceUnionDefinitionIdentity, type RustTypeDefinitions } from "../source-union-definitions.js";
 import { closedMetadataKey } from "../../metadata/closed-data.js";
 import { rustBigIntTargetId, rustCallableTargetId, rustJsArrayTargetId, rustJsDateTargetId, rustJsErrorTargetId, rustJsMapTargetId, rustJsRegExpExecArrayTargetId, rustJsRegExpIndicesTargetId, rustJsRegExpMatchArrayTargetId, rustJsRegExpNamedGroupsTargetId, rustJsRegExpNamedIndicesTargetId, rustJsRegExpStringIteratorTargetId, rustJsRegExpTargetId, rustJsSetTargetId, rustJsStringTargetId, rustJsValueTargetId, rustLocationTargetId, rustNullTargetId, rustOptionTargetId, rustProgramErrorTargetId, rustRegExpExecArrayTargetId, rustRegExpIndicesTargetId, rustRegExpMatchArrayTargetId, rustRegExpNamedGroupsTargetId, rustRegExpNamedIndicesTargetId, rustRegExpStringIteratorTargetId, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustStringTargetId, rustStrTargetId, rustStructuralObjectCarrierValue, rustTsValueTargetId, rustUndefinedTargetId } from "./source-types.js";
@@ -111,7 +112,7 @@ function supportsCloneWithContracts(
   if (carrier?.kind === "associated-type") return associatedTypeSupports(carrier, "core::clone::Clone");
   const supports = (type: TargetTypeRef): boolean =>
     supportsCloneWithContracts(type, typeParameterSupports, associatedTypeSupports, definitions, active);
-  if (rustGenericCallableValue(carrier) !== undefined) return true;
+  if (rustGenericCallableValue(carrier) !== undefined || rustClassConstructorInstance(carrier) !== undefined) return true;
   if (carrier === undefined ||
     carrier.kind === "opaque" || carrier.kind === "closure" ||
     carrier.kind === "slice" ||
@@ -390,6 +391,7 @@ export function rustCarrierSupportsJsEquality(carrier: TargetTypeRef | undefined
 }
 
 export function rustCarrierSupportsObjectIdentity(carrier: TargetTypeRef | undefined): boolean {
+  if (rustClassConstructorInstance(carrier) !== undefined) return true;
   const structural = rustStructuralObjectCarrierValue(carrier);
   return structural !== undefined ? structural.representation !== "value"
     : carrier?.kind === "target-named" && rustObjectIdentityTargetIds.has(carrier.id);

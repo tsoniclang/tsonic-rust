@@ -28,7 +28,7 @@ import { isRustCopyCarrier, isRustStringCarrier } from "../../../target-model/ty
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { planRustMutableProjectReceiver, planRustPromotedStorageLocation } from "../expressions/typed-locations.js";
 import { rustSelectedAccessorRequiresUnsafe } from "../safety/explicit-safety.js";
-import { rustSourceStaticFieldLocation } from "../declarations/static-field-storage.js";
+import { planRustSourceStaticFieldStorage } from "../declarations/static-field-storage.js";
 import { rustProjectObjectRepresentation } from "../objects/project-storage.js";
 import { rustStringConcat } from "../../target-ast/expressions.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -160,14 +160,12 @@ export function planRustSourceStaticFieldAssignment(
     ));
     return undefined;
   }
-  const location = rustSourceStaticFieldLocation(field, context);
+  const storage = planRustSourceStaticFieldStorage(field, context);
   const value = planExpression(valueNode, context);
-  if (location === undefined || value === undefined || context.syntheticNames === undefined) {
+  if (storage === undefined || value === undefined || context.syntheticNames === undefined) {
     return undefined;
   }
-  const locationName = allocateRustSyntheticName(context.syntheticNames, "static_field_location");
   const valueName = allocateRustSyntheticName(context.syntheticNames, "static_field_value");
-  const locationPath: RustExpr = { kind: "path", path: locationName };
   const valuePath: RustExpr = { kind: "path", path: valueName };
   if (assignment.operator === "=") {
     return [{
@@ -175,15 +173,10 @@ export function planRustSourceStaticFieldAssignment(
       expr: {
         kind: "block",
         bindings: [
-          { name: locationName, value: location },
+          ...storage.bindings,
           { name: valueName, value },
         ],
-        value: {
-          kind: "method-call",
-          receiver: locationPath,
-          method: "store",
-          args: [valuePath],
-        },
+        value: storage.write(valuePath),
       },
     }];
   }
@@ -209,20 +202,15 @@ export function planRustSourceStaticFieldAssignment(
     expr: {
       kind: "block",
       bindings: [
-        { name: locationName, value: location },
+        ...storage.bindings,
         {
           name: currentName,
-          value: { kind: "method-call", receiver: locationPath, method: "load", args: [] },
+          value: storage.read,
         },
         { name: valueName, value },
         { name: nextName, value: nextValue },
       ],
-      value: {
-        kind: "method-call",
-        receiver: locationPath,
-        method: "store",
-        args: [{ kind: "path", path: nextName }],
-      },
+      value: storage.write({ kind: "path", path: nextName }),
     },
   }];
 }

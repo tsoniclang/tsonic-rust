@@ -89,7 +89,7 @@ export function planRustIdentifierValue(
     return { kind: "method-call", receiver: value, method: "clone", args: [] };
   }
   if (captured?.storage === "location") {
-    return { kind: "method-call", receiver: value, method: "load", args: [] };
+    return { kind: "method-call", receiver: value.kind === "reference" ? value.expr : value, method: "load", args: [] };
   }
   if (storage !== undefined) {
     return storage.storage === "module-cell"
@@ -97,9 +97,10 @@ export function planRustIdentifierValue(
       : { kind: "method-call", receiver: value, method: "load", args: [] };
   }
   if (captured?.borrowed === true) {
+    const referent = value.kind === "reference" ? value.expr : undefined;
     return isRustCopyCarrier(captured.valueCarrier)
-      ? { kind: "dereference", pointer: value }
-      : { kind: "method-call", receiver: value, method: "clone", args: [] };
+      ? referent ?? { kind: "dereference", pointer: value }
+      : { kind: "method-call", receiver: referent ?? value, method: "clone", args: [] };
   }
   return planRustValueRead(node, value, context);
 }

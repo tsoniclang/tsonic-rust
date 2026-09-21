@@ -390,6 +390,7 @@ export function selectRustCheckedPropertyAccess(
       const operationId = sourceOperationId(context, declaration, "static-field");
       return acceptRustMemberOperation(request, "property", {
         kind: "source-static-field",
+        declaration,
         operationId,
         storageFileName: storage.fileName,
         storageName: storage.targetName,

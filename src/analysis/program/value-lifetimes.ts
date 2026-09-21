@@ -29,7 +29,8 @@ export function analyzeRustValueLifetimes(input: {
     if (kind === "KindVariableDeclaration" || kind === "KindParameter") {
       classifyDeclaration(node, input, movableReferences);
     }
-    if (kind === "KindArrowFunction" || kind === "KindFunctionExpression") {
+    if (kind === "KindArrowFunction" || kind === "KindFunctionExpression" ||
+      kind === "KindClassDeclaration" || kind === "KindClassExpression") {
       const captures = input.capturesFor(node)?.captures.filter(capture =>
         capture.storage === "value" &&
         isSingleOwnedCapture(node, capture.declaration, input));

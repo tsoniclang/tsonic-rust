@@ -1,5 +1,6 @@
 import { rustFixedArrayCarrierValue, rustFixedArrayTargetType, rustNamedTargetType, rustNamedTypeCarrierValue } from "./native.js";
 import { rustSourceTypeCarrier, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustSourceUnionTargetType, rustStructuralObjectCarrierValue, rustStructuralObjectTargetType } from "./source-types.js";
+import { rustClassConstructorInstance, rustClassConstructorTargetType } from "./class-constructors.js";
 import type {
   RustTargetConstArgument,
   RustTargetGenericArgument,
@@ -335,6 +336,10 @@ function substituteCarrierParts(
             }),
       };
     case "target-specific": {
+      const instance = rustClassConstructorInstance(type);
+      if (instance !== undefined) return rustClassConstructorTargetType(substituteRustTargetGenerics(
+        instance, substitutions, lifetimeSubstitutions, constSubstitutions, normalize,
+      ));
       const callable = rustGenericCallableValue(type);
       if (callable !== undefined) return rustGenericCallableCarrier({
         signature: callable.signature,

@@ -34,6 +34,7 @@ import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
 import { rustTypeAliasDeclarationFactKey } from "../../../analysis/facts/keys.js";
 import { planRustBorrowedElementLocal } from "../expressions/borrowed-element-reads.js";
 import { rustBlockTerminates } from "./block-flow.js";
+import { planRustClassEnvironmentValue } from "../objects/class-environments.js";
 
 export type RustAssignmentOperationFact = Extract<
   RustTargetOperationFact,
@@ -62,7 +63,11 @@ function planStatementInner(node: Node, context: RustPlanContext): readonly Rust
   const kind = ast.kindName(node);
   switch (kind) {
     case "KindClassDeclaration": {
-      return context.input.program.projectTypes.definitionForDeclaration(node) === undefined ? undefined : [];
+      if (context.input.program.projectTypes.definitionForDeclaration(node) === undefined) return undefined;
+      const environment = context.input.program.classValues.forDeclaration(node)?.environment;
+      if (environment === undefined) return [];
+      const value = planRustClassEnvironmentValue(node, context);
+      return value === undefined ? undefined : [{ kind: "let", name: environment.bindingName, mutable: false, init: value }];
     }
     case "KindTypeAliasDeclaration": {
       return context.input.program.facts.getFact(node, rustTypeAliasDeclarationFactKey)?.kind === "erased"

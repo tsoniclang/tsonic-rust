@@ -42,15 +42,13 @@ export function main(): void {
   validateGeneratedProject("closed-local-classes", result.artifacts, { run: true });
 });
 
-test("unproved local class evaluation and capture contracts fail before publication", () => {
+test("unproved local class evaluation and constructor identity contracts fail before publication", () => {
   for (const source of [
-    `export function create(value: number): number { class Entry { read(): number { return value; } } return new Entry().read(); }`,
-    `export function create(): number { class Entry { static count: number = 1; } return Entry.count; }`,
+    `export function create(): number { class Entry { static count = 1; static { Entry.count++; } } return Entry.count; }`,
     `export function create(): void { class Entry {} const alias = Entry; new alias(); }`,
     `export function create(): void { const make = () => new Entry(); make(); class Entry {} }`,
     `export function create(): boolean { class Entry {} return new Entry() instanceof Entry; }`,
     `export function create(): number { class Entry { static make(): number { return 1; } } const make = Entry.make; return make(); }`,
-    `export function create(value: number): number { class Entry { static make(): number { return value; } } return Entry.make(); }`,
     `class Base {} function selectBase(): typeof Base { return Base; } export function create(): void { class Entry extends selectBase() {} new Entry(); }`,
     `class Base {} function effect(): void {} export function create(): void { class Entry extends (effect(), Base) {} new Entry(); }`,
   ]) {

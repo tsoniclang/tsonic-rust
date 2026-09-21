@@ -2,9 +2,11 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import { Node_Type } from "@tsonic/target-api/source";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
-import { closedMetadataKey, closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
-import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { rustScreamingSnakeIdentifier, rustSnakeCaseIdentifier } from "../../target-model/names/identifiers.js";
+import { closedMetadataKey, closedMetadataEquals, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
+import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustPascalCaseIdentifier, rustScreamingSnakeIdentifier, rustSnakeCaseIdentifier } from "../../target-model/names/identifiers.js";
+import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
+import type { RustClassEnvironment } from "./class-environments.js";
 import type { RustFactWalk } from "../program/walk.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
@@ -28,6 +30,12 @@ export interface RustClassValueView {
 export interface RustClassValueDefinition {
   readonly declaration: Node;
   readonly identityName: string;
+  readonly environment?: RustClassEnvironment & {
+    readonly typeName: string;
+    readonly instanceFieldName: string;
+    readonly bindingName: string;
+    readonly parameterName: string;
+  };
   readonly views: readonly (RustClassValueView & {
     readonly storageName: string;
     readonly constructionName?: string;
@@ -42,13 +50,31 @@ export interface RustClassValuePlan {
 
 export interface RustClassValueRegistry {
   record(view: RustClassValueView): boolean;
+  recordEnvironment(environment: RustClassEnvironment): boolean;
   seal(context: RustAnalysisContext): RustClassValuePlan;
 }
 
 export function createRustClassValueRegistry(): RustClassValueRegistry {
   const requests = new Map<Node, Map<string, RustClassValueView>>();
+  const environments = new Map<Node, RustClassEnvironment>();
   let sealed = false;
   return {
+    recordEnvironment(environment) {
+      if (sealed) throw new Error("Rust class environments cannot change after sealing.");
+      if (environment.storage !== "value" && environment.storage !== "shared") return false;
+      const previous = environments.get(environment.declaration);
+      if (previous !== undefined) return classEnvironmentsEqual(previous, environment);
+      const names = [...environment.captures, ...environment.staticFields].map(field => field.fieldName);
+      if (new Set(names).size !== names.length || names.some(name => name.length === 0) ||
+        ![environment.carrier, ...environment.captures.map(capture => capture.carrier),
+          ...environment.staticFields.map(field => field.carrier)].every(isRustTargetTypeRef)) return false;
+      environments.set(environment.declaration, Object.freeze({ ...environment, carrier: snapshotClosedMetadata(environment.carrier),
+        consumers: Object.freeze([...environment.consumers]),
+        captures: Object.freeze(environment.captures.map(capture => Object.freeze({ ...capture, carrier: snapshotClosedMetadata(capture.carrier) }))),
+        staticFields: Object.freeze(environment.staticFields.map(field => Object.freeze({ ...field, carrier: snapshotClosedMetadata(field.carrier) }))),
+      }));
+      return true;
+    },
     record(view) {
       if (sealed) throw new Error("Rust constructor views cannot change after sealing.");
       const views = requests.get(view.declaration) ?? new Map<string, RustClassValueView>();
@@ -69,12 +95,20 @@ export function createRustClassValueRegistry(): RustClassValueRegistry {
       const byDeclaration = new Map<Node, RustClassValueDefinition>();
       const namesByFile = new Map<SourceFile, Set<string>>();
       const { ast } = context;
-      const allocate = (declaration: Node, purpose: string, callable = false): string => {
+      const projectNamesByFile = new Map<SourceFile, Set<string>>();
+      for (const definition of context.projectTypes.definitions) {
+        const names = projectNamesByFile.get(definition.sourceFile) ?? new Set<string>();
+        names.add(definition.stateName);
+        names.add(definition.dispatchName);
+        if (definition.rootName !== undefined) names.add(definition.rootName);
+        projectNamesByFile.set(definition.sourceFile, names);
+      }
+      const allocate = (declaration: Node, purpose: string, style: "constant" | "callable" | "type" = "constant"): string => {
         const file = ast.getSourceFile(declaration);
         if (file === undefined) throw new Error("Finalized constructor view has no exact source file.");
         let names = namesByFile.get(file);
         if (names === undefined) {
-          names = new Set<string>();
+          names = new Set(projectNamesByFile.get(file));
           const collect = (node: Node): void => {
             const name = context.names.nameForDeclaration(node);
             if (name !== undefined) names!.add(name);
@@ -85,7 +119,8 @@ export function createRustClassValueRegistry(): RustClassValueRegistry {
           collect(file);
           namesByFile.set(file, names);
         }
-        const identifier = callable ? rustSnakeCaseIdentifier : rustScreamingSnakeIdentifier;
+        const identifier = style === "callable" ? rustSnakeCaseIdentifier
+          : style === "type" ? rustPascalCaseIdentifier : rustScreamingSnakeIdentifier;
         const base = identifier(`${context.names.nameForDeclaration(declaration)}_${purpose}`);
         let selected = base;
         let suffix = 2;
@@ -93,16 +128,35 @@ export function createRustClassValueRegistry(): RustClassValueRegistry {
         names.add(selected);
         return selected;
       };
-      for (const [declaration, requestsForClass] of requests) {
-        const views = [...requestsForClass.entries()].sort(([left], [right]) => left.localeCompare(right))
+      for (const declaration of new Set([...requests.keys(), ...environments.keys()])) {
+        const views = [...(requests.get(declaration)?.entries() ?? [])].sort(([left], [right]) => left.localeCompare(right))
           .map(([, view]) => Object.freeze({ ...view, storageName: allocate(declaration, "constructor_view"),
-            ...(view.construction === undefined ? {} : { constructionName: allocate(declaration, "construct_value", true) }),
+            ...(view.construction === undefined ? {} : { constructionName: allocate(declaration, "construct_value", "callable") }),
             fields: Object.freeze(view.fields.map(field => Object.freeze({ ...field,
-              ...(field.callable === undefined ? {} : { forwarderName: allocate(declaration, `${field.targetName}_value`, true) }),
+              ...(field.callable === undefined ? {} : { forwarderName: allocate(declaration, `${field.targetName}_value`, "callable") }),
             }))),
           }));
+        const environment = environments.get(declaration);
+        const definition = context.projectTypes.definitionForDeclaration(declaration);
+        const fields = new Set<string>();
+        if (environment !== undefined) {
+          if (definition === undefined) throw new Error("Class environment has no exact native class definition.");
+          fields.add(context.projectTypes.baseStateFieldName(definition));
+          fields.add(context.projectTypes.stateMarkerFieldName(definition));
+          for (const member of ast.members(declaration)) {
+            if (member === undefined) throw new Error("Class environment has an absent source member.");
+            const field = context.projectTypes.fieldStorageName(definition, member);
+            if (field !== undefined) fields.add(field);
+          }
+        }
         byDeclaration.set(declaration, Object.freeze({
           declaration, identityName: allocate(declaration, "constructor_identity"), views: Object.freeze(views),
+          ...(environment === undefined ? {} : { environment: Object.freeze({ ...environment,
+            typeName: allocate(declaration, "Class", "type"),
+            instanceFieldName: allocateRustGeneratedName(fields, "class_environment"),
+            bindingName: allocate(declaration, "class_environment", "callable"),
+            parameterName: allocate(declaration, "class_context", "callable"),
+          }) }),
         }));
       }
       return Object.freeze({
@@ -191,4 +245,21 @@ function classValueCallablesEqual(left: RustClassValueCallable | undefined, righ
   const { declaration: leftDeclaration, ...leftContract } = left;
   const { declaration: rightDeclaration, ...rightContract } = right;
   return leftDeclaration === rightDeclaration && closedMetadataEquals(leftContract, rightContract);
+}
+
+function classEnvironmentsEqual(left: RustClassEnvironment, right: RustClassEnvironment): boolean {
+  return left.storage === right.storage && left.copy === right.copy && left.initializationUsesEnvironment === right.initializationUsesEnvironment &&
+    left.consumers.length === right.consumers.length && left.consumers.every((consumer, index) => consumer === right.consumers[index]) &&
+    rustTargetTypeRefEquals(left.carrier, right.carrier) &&
+    left.captures.length === right.captures.length && left.staticFields.length === right.staticFields.length &&
+    left.captures.every((capture, index) => {
+      const other = right.captures[index]!;
+      return capture.declaration === other.declaration && capture.reference === other.reference &&
+        capture.storage === other.storage && capture.fieldName === other.fieldName &&
+        rustTargetTypeRefEquals(capture.carrier, other.carrier);
+    }) && left.staticFields.every((field, index) => {
+      const other = right.staticFields[index]!;
+      return field.declaration === other.declaration && field.fieldName === other.fieldName &&
+        field.readonly === other.readonly && rustTargetTypeRefEquals(field.carrier, other.carrier);
+    });
 }

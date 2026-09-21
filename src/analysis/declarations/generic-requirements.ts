@@ -652,6 +652,13 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
         if (error !== undefined) return error;
       }
     }
+    if (ast.kindName(node) === "KindClassDeclaration" || ast.kindName(node) === "KindClassExpression") {
+      for (const capture of facts.getFact(node, rustClosureCaptureFactKey)?.captures ?? []) {
+        if (input.valueLifetimes.canMoveCapture(node, capture.declaration)) continue;
+        const error = addUse(node, capture.carrier, ["clone"]);
+        if (error !== undefined) return error;
+      }
+    }
     const yieldFact = facts.getFact(node, rustYieldFactKey);
     if (yieldFact?.kind === "delegate") {
       const delegated = getRustGeneratorProtocol(yieldFact.delegatedCarrier);

@@ -116,6 +116,7 @@ export interface RustPlanContext {
   readonly valueFieldLocations?: ReadonlyMap<Node, import("../objects/value-fields.js").RustValueFieldLocation>;
   readonly flowReadOverrides?: ReadonlyMap<Node, RustFlowReadOverride>;
   readonly capturedBindings?: readonly RustCapturedBinding[];
+  readonly classEnvironment?: { readonly declaration: Node; readonly expression: RustExpr; readonly borrowed?: boolean };
   readonly projectDispatchRoot?: RustExpr;
   readonly objectLiteralImplementations?: RustObjectLiteralImplementationRegistry;
   readonly typeParameterSubstitutions?: ReadonlyMap<string, import("../../../target-model/types/model.js").TargetTypeRef>;

@@ -276,7 +276,7 @@ export function resolveFunctionExpressionCarrier(
     : rustCallableTargetType(finalizedParameterCarriers, bodyCarrier);
   if (closureCarrier === undefined || rustGenericCallableValue(closureCarrier) !== undefined &&
     !recordCallableReturnFact(walk, expression, bodyCarrier)) return undefined;
-  const captures = collectRustClosureCaptures(walk, expression, body);
+  const captures = collectRustLexicalCaptures(walk, expression, [body]);
   if (captures === undefined) {
     return undefined;
   }
@@ -296,10 +296,10 @@ export function resolveFunctionExpressionCarrier(
   return setCarrierFact(walk, expression, closureCarrier);
 }
 
-function collectRustClosureCaptures(
+export function collectRustLexicalCaptures(
   walk: RustFactWalk,
   expression: Node,
-  body: Node,
+  roots: readonly Node[],
 ): import("../facts/keys.js").RustClosureCaptureFact | undefined {
   const { ast } = walk.context;
   const captures = new Map<Node, {
@@ -319,6 +319,8 @@ function collectRustClosureCaptures(
       const binding = walk.context.facts.get(node, rustSourceBindingFactKey) ??
         walk.context.facts.resolve(node, rustSourceBindingFactKey);
       const declaration = binding?.sourceDeclaration;
+      if (declaration === expression && (ast.kindName(expression) === "KindClassDeclaration" ||
+        ast.kindName(expression) === "KindClassExpression")) return;
       if (declaration === expression || declaration === valueDeclaration) {
         recursiveDeclaration = declaration;
       } else if (declaration !== undefined && !nodeIsWithin(declaration, expression, ast) &&
@@ -359,7 +361,7 @@ function collectRustClosureCaptures(
       }
     });
   };
-  visit(body);
+  for (const root of roots) visit(root);
   return valid
     ? {
         captures: [...captures.values()],

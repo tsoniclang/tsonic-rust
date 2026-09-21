@@ -6,6 +6,7 @@ import {
   rustTargetGenericTypeArguments,
   substituteRustTargetGenericArgument,
 } from "../../../../target-model/types/index.js";
+import { rustClassStaticEnvironmentForCall, rustOwnedClassEnvironmentForCall } from "../../objects/class-environments.js";
 import {
   diagnosticInput,
   isValidRustIdentifier,
@@ -203,10 +204,11 @@ export function planSelectedSourceCall(
       if (path === undefined || !isValidRustIdentifier(targetName)) {
         break;
       }
+      const environment = rustClassStaticEnvironmentForCall(selected.sourceDeclaration, context);
       planned = {
         kind: "call",
         path,
-        args: shaped,
+        args: [...(environment === undefined ? [] : [{ kind: "reference" as const, expr: environment }]), ...shaped],
         ...(callGenericArguments === undefined ? {} : { genericArguments: callGenericArguments }),
       };
       break;
@@ -311,10 +313,11 @@ export function planSelectedSourceCall(
       const typePath = value === undefined ? undefined : sourceTypePath(context, value);
       const targetName = callableSpecialization?.targetName ?? fact.target.name;
       if (typePath !== undefined && isValidRustIdentifier(targetName)) {
+        const environment = rustClassStaticEnvironmentForCall(selected.sourceDeclaration, context);
         planned = {
           kind: "call",
           path: `${typePath}::${targetName}`,
-          args: shaped,
+          args: [...(environment === undefined ? [] : [{ kind: "reference" as const, expr: environment }]), ...shaped],
           ...(callGenericArguments === undefined ? {} : { genericArguments: callGenericArguments }),
         };
       }
@@ -324,11 +327,13 @@ export function planSelectedSourceCall(
       const owner = rustTypeFromCarrierInContext(fact.target.typeCarrier, context);
       const targetName = fact.target.name;
       if (owner !== undefined && isValidRustIdentifier(targetName)) {
+        const definition = context.input.program.projectTypes.definitionForCarrier(fact.target.typeCarrier);
+        const environment = definition === undefined ? undefined : rustOwnedClassEnvironmentForCall(definition.declaration, context);
         planned = {
           kind: "associated-call",
           owner,
           method: targetName,
-          args: shaped,
+          args: [...(environment === undefined ? [] : [environment]), ...shaped],
         };
       }
       break;

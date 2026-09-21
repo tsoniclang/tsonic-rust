@@ -1,6 +1,8 @@
 import { appendMalformedSourceAstDiagnostic, recordClassBodyFacts, recordClassSignatureFacts, recordInterfaceFacts, recordMethodSelfModeFacts } from "../declarations/project-types.js";
 import { appendRustDiagnostic, rustResolutionContext } from "./walk.js";
 import { createRustModuleBindingPolicy } from "./module-bindings.js";
+import { selectRustClassEnvironment } from "../objects/class-environments.js";
+import { rustClosureCaptureFactKey } from "../facts/keys.js";
 import { createRustSourceCallableAbiResolver } from "../../policy/ownership/source-callable-abi.js";
 import { createRustSourceProfileRegistry } from "../facts/source-profile-registry.js";
 import { createRustSourceTypeRegistry } from "../project-types/source-type-registry.js";
@@ -301,6 +303,20 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
         ast.parent(definition.declaration) !== sourceFile) {
         recordClassBodyFacts(walk, definition.declaration, sourceFile);
       }
+    }
+  }
+  for (const definition of projectTypes.definitions) {
+    const selected = selectRustClassEnvironment(walk, definition.declaration);
+    if (selected.kind === "unresolved") {
+      appendRustDiagnostic(walk, "RUST_CLASS_ENVIRONMENT_NOT_CLOSED", selected.reason, definition.declaration,
+        ["target.capability=rust.class-value.environment"]);
+    } else if (selected.kind === "available") {
+      if (!context.classValues.recordEnvironment(selected.environment)) {
+        appendRustDiagnostic(walk, "RUST_CLASS_ENVIRONMENT_NOT_CLOSED",
+          "Class evaluation requires one consistent, immutable capture and static-storage contract.", definition.declaration,
+          ["target.capability=rust.class-value.environment"]);
+      }
+      context.facts.set(definition.declaration, rustClosureCaptureFactKey, { captures: selected.environment.captures });
     }
   }
   const nativeFields = recordRustNativeBacking(walk);

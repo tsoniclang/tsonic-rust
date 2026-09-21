@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { rustClassEnvironmentContext, rustClassEnvironmentParameter } from "../class-environments.js";
 import {
   KindCallExpression,
   Node_Expression,
@@ -177,8 +178,18 @@ export function planProjectClassConstructor(
   if (stateType === undefined) {
     return undefined;
   }
+  const environment = context.input.program.classValues.forDeclaration(definition.declaration)?.environment;
+  const environmentParameter = environment === undefined ? undefined
+    : rustClassEnvironmentParameter(definition.declaration, context, "owned");
+  const environmentBorrow = environment?.initializationUsesEnvironment !== true ? undefined
+    : rustClassEnvironmentParameter(definition.declaration, context, "borrowed");
+  if (environment !== undefined && (environmentParameter === undefined || environment.initializationUsesEnvironment && environmentBorrow === undefined)) return undefined;
   const initializationContext: RustPlanContext = {
-    ...context,
+    ...(environment === undefined ? context : rustClassEnvironmentContext(environment,
+      { kind: "path", path: environment.parameterName }, context)),
+    ...(environment === undefined ? {} : { classEnvironment: {
+      declaration: environment.declaration, expression: { kind: "path" as const, path: environment.parameterName }, borrowed: true,
+    } }),
     syntheticNames,
     controlFlow: { nextLoopId: 0 },
     functionReturnType: stateType,
@@ -525,7 +536,7 @@ export function planProjectClassConstructor(
             ...initializationSafetyAttributes,
           ],
         }),
-    params: parameterPlan.params,
+    params: [...(environmentBorrow === undefined ? [] : [environmentBorrow]), ...parameterPlan.params],
     ...(constructorErrorType === undefined ? {} : { errorType: constructorErrorType }),
     returnType: stateType,
     body: {
@@ -545,10 +556,11 @@ export function planProjectClassConstructor(
   if (context.input.program.source.ast.hasModifierKind(definition.declaration, "abstract")) {
     return { initialize };
   }
-  const forwardArgs = parameterPlan.params.map((parameter) => ({
-    kind: "path" as const,
-    path: parameter.name,
-  }));
+  const forwardArgs: RustExpr[] = [
+    ...(environmentBorrow === undefined ? [] : [{ kind: "reference" as const,
+      expr: { kind: "path" as const, path: environmentBorrow.name } }]),
+    ...parameterPlan.params.map((parameter) => ({ kind: "path" as const, path: parameter.name })),
+  ];
   const construct: RustImplFunction = {
     name: constructorSignature.targetName,
     generics: emptyRustGenerics,
@@ -568,7 +580,7 @@ export function planProjectClassConstructor(
       );
       return deadCode === undefined ? {} : { deadCode };
     })(),
-    params: parameterPlan.params,
+    params: [...(environmentParameter === undefined ? [] : [environmentParameter]), ...parameterPlan.params],
     ...(constructorErrorType === undefined ? {} : { errorType: constructorErrorType }),
     returnType: wrapperType,
     body: applyFallibleShape({
@@ -611,6 +623,8 @@ export function planProjectClassConstructor(
               kind: "struct-literal",
               path: rootType.path,
               fields: [
+                ...(environment === undefined ? [] : [{ name: environment.instanceFieldName,
+                  value: { kind: "path" as const, path: environment.parameterName } }]),
                 {
                   name: rustProjectObjectIdentityField,
                   value: cloneExpression({ kind: "path", path: identityName }),

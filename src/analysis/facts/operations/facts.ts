@@ -301,6 +301,7 @@ export type RustTargetOperationFact =
     }
   | {
       readonly kind: "source-static-field";
+      readonly declaration: Node;
       readonly operationId: string;
       readonly storageFileName: string;
       readonly storageName: string;

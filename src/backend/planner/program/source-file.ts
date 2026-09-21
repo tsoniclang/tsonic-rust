@@ -1,4 +1,5 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
+import { planRustClassEnvironmentItems } from "../objects/class-environments.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { rustCompileTimeSourceKey } from "../../../target-model/facts/source-declarations.js";
 import { rustTypeOnlyDeclarationFactKey } from "../../../target-model/facts/type-only.js";
@@ -443,6 +444,10 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
   for (const definition of context.input.program.projectTypes.definitions) {
     if (definition.sourceFile === context.sourceFile && definition.kind === "class") {
       const diagnosticCount = context.diagnostics.length;
+      const environmentItems = planRustClassEnvironmentItems(definition.declaration, context);
+      if (environmentItems === undefined) {
+        ensureTopLevelPlanningDiagnostic(context, definition.declaration, diagnosticCount, "class-environment");
+      } else items.push(...environmentItems);
       const staticFunctions = planProjectStaticFunctionItems(definition, context);
       if (staticFunctions === undefined) {
         ensureTopLevelPlanningDiagnostic(context, definition.declaration, diagnosticCount, "static-function");

@@ -1,4 +1,5 @@
 import { isDenseDataArray } from "../../metadata/closed-data.js";
+import { rustClassConstructorInstance } from "./class-constructors.js";
 import {
   rustFixedArrayCarrierValue,
   rustNamedTypeCarrierValue,
@@ -286,6 +287,12 @@ export function inferRustTargetGenericBindings(
       case "target-specific": {
         if (right.kind !== "target-specific") {
           return false;
+        }
+        const leftInstance = rustClassConstructorInstance(left);
+        const rightInstance = rustClassConstructorInstance(right);
+        if (leftInstance !== undefined || rightInstance !== undefined) {
+          return leftInstance !== undefined && rightInstance !== undefined &&
+            match(leftInstance, rightInstance, lifetimeContext);
         }
         const leftSource = rustSourceTypeCarrierValue(left);
         const rightSource = rustSourceTypeCarrierValue(right);

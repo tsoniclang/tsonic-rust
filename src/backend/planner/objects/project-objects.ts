@@ -35,6 +35,7 @@ export function enterRustProjectObjectMutableState(
 export function rustProjectObjectType(
   stateType: RustType,
   representation: RustObjectRepresentation,
+  contextType?: RustType,
 ): RustType | undefined {
   const path = rustSharedObjectCarrierPath(representation);
   if (path === undefined) {
@@ -43,7 +44,8 @@ export function rustProjectObjectType(
   return {
     kind: "named",
     path,
-    genericArguments: [{ kind: "type", type: stateType }],
+    genericArguments: [{ kind: "type", type: stateType },
+      ...(contextType === undefined ? [] : [{ kind: "type" as const, type: contextType }])],
   };
 }
 
@@ -52,6 +54,7 @@ export function createRustProjectObject(
   statePath: string,
   fields: readonly { readonly name: string; readonly value: RustExpr }[],
   representation: RustObjectRepresentation,
+  contextValue?: RustExpr,
 ): RustExpr {
   if (representation.kind === "value") {
     return { kind: "struct-literal", path: typePath, fields };
@@ -67,8 +70,9 @@ export function createRustProjectObject(
       name: rustProjectObjectStateField,
       value: {
         kind: "call",
-        path: `${carrierPath}::new`,
-        args: [{ kind: "struct-literal", path: statePath, fields }],
+        path: `${carrierPath}::${contextValue === undefined ? "new" : "with_context"}`,
+        args: [{ kind: "struct-literal", path: statePath, fields },
+          ...(contextValue === undefined ? [] : [contextValue])],
       },
     }],
   };

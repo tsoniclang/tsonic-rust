@@ -12,6 +12,50 @@ function compileAndRun(name, files) {
   return result.artifacts;
 }
 
+test("direct local classes preserve lexical captures without per-method allocation", { timeout: 300_000 }, () => {
+  const artifacts = compileAndRun("direct_class_captures", { "index.ts": `
+    interface Counter { read(): number; increment(): void; }
+    function create(initial: number): { value: Counter; change: (value: number) => void } {
+      let offset = initial;
+      class Selected implements Counter {
+        private value = 0;
+        read(): number { return this.value + offset; }
+        increment(): void { this.value++; }
+      }
+      return { value: new Selected(), change: value => { offset = value; } };
+    }
+    function local(offset: number): number {
+      class Inline {
+        read(): number { return offset; }
+        static captured(): number { return offset; }
+      }
+      return new Inline().read() + Inline.captured();
+    }
+    function owned(prefix: string) {
+      class Text {
+        suffix = "!";
+        read(): string { return prefix + this.suffix; }
+      }
+      return { first: new Text(), second: new Text() };
+    }
+    export function main(): void {
+      const first = create(4);
+      const second = create(9);
+      first.value.increment();
+      first.change(20);
+      if (first.value.read() !== 21 || second.value.read() !== 9 || local(7) !== 14) throw new Error("capture");
+      const text = owned("native");
+      const alias = text.first;
+      alias.suffix = "?";
+      if (text.first.read() !== "native?" || text.second.read() !== "native!") throw new Error("context");
+    }
+  ` });
+  const rust = artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
+  assert.match(rust, /struct LocalInlineClass/);
+  assert.doesNotMatch(rust, /Rc<(?:LocalInlineClass|CreateSelectedClass)>/);
+  assert.match(rust, /with_context\(/);
+});
+
 test("captured class factories retain per-evaluation identity, static state and live captures", { timeout: 300_000 }, () => {
   compileAndRun("captured_class_identity", { "index.ts": `
     interface Counter { read(): number; }
@@ -40,6 +84,27 @@ test("captured class factories retain per-evaluation identity, static state and 
       if (alias.count !== 2 || second.type.count !== 1) throw new Error("static count");
       alias.count = 7;
       if (first.type.count !== 7 || second.type.count !== 1) throw new Error("static alias");
+    }
+  ` });
+});
+
+test("local static storage keeps evaluations independent and releases borrows before callbacks", { timeout: 300_000 }, () => {
+  compileAndRun("local_class_static_storage", { "index.ts": `
+    interface Counter { increment(): number; reset(): number; }
+    function factory(initial: number): Counter {
+      class Selected implements Counter {
+        static count = initial;
+        static reset(): number { Selected.count = 5; return 2; }
+        increment(): number { return Selected.count++; }
+        reset(): number { Selected.count += Selected.reset(); return Selected.count; }
+      }
+      return new Selected();
+    }
+    export function main(): void {
+      const first = factory(1);
+      const second = factory(9);
+      if (first.increment() !== 1 || second.increment() !== 9 || first.reset() !== 4) throw new Error("static");
+      if (first.increment() !== 4 || second.increment() !== 10) throw new Error("independent");
     }
   ` });
 });
