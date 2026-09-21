@@ -12,7 +12,8 @@ import {
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
 import { planExpression } from "../entry.js";
 import type { RustExpressionResultUse } from "../entry.js";
-import { planRustNonConsumingValue, planRustSharedReceiver, planRustTypedLocationCall } from "../typed-locations.js";
+import { planRustNonConsumingValue, planRustSharedReceiver } from "../typed-locations.js";
+import { planRustTypedLocationCall } from "../typed-location-calls.js";
 import { planRustSourceCallArgumentEvaluation, requireProviderArgumentPassingFacts } from "./arguments.js";
 import { planSelectedSourceCall, sourceCallEffectsMatch } from "./source.js";
 import { providerSelectedCallMatches, rustOperationFact } from "../fundamentals.js";
