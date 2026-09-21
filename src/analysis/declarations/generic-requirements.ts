@@ -408,6 +408,9 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
         for (const requirement of input.contractFor(node)?.associatedTypes ?? []) {
           if (!rustTargetTypeParameterNames(requirement.carrier).every(name => declared.has(name))) continue;
           if (!associated.collect(requirement.carrier)) return "A captured associated output has no enclosing generic contract.";
+          if (requirement.fieldAccess !== undefined && !associated.requireField(requirement.carrier, requirement.fieldAccess)) {
+            return "A captured field operation has no enclosing native field contract.";
+          }
           const error = addUse(node, requirement.carrier, requirement.requirements);
           if (error !== undefined) return error;
         }
@@ -442,6 +445,8 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
           for (const requirement of contract?.associatedTypes ?? []) {
             const instantiated = substituteRustTargetTypeParameters(requirement.carrier, substitutions);
             if (!associated.collect(instantiated)) return "A generic class argument does not satisfy its dependent type contract.";
+            if (requirement.fieldAccess !== undefined && (instantiated.kind !== "associated-type" ||
+              !associated.requireField(instantiated, requirement.fieldAccess))) return "A generic class argument does not satisfy its field access contract.";
             const error = addUse(node, instantiated, requirement.requirements);
             if (error !== undefined) return error;
           }
@@ -461,6 +466,11 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
         const fieldError = addUse(node, carrier, ["clone"]);
         if (fieldError !== undefined) return fieldError;
       }
+    }
+    const indexedField = facts.getFact(node, rustTargetOperationFactKey);
+    if (indexedField?.kind === "source-indexed-field" && !associated.requireField(indexedField.resultCarrier,
+      indexedField.accessMode === "read-write" ? ["read", "write"] : [indexedField.accessMode])) {
+      return "A dependent field operation has no exact read/write trait obligation.";
     }
     const location = facts.getFact(node, rustLocationStorageFactKey);
     const objectView = facts.getFact(node, rustObjectReferenceViewKey);
@@ -645,6 +655,8 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
               const carrier = substituteRustTargetTypeParameters(requirement.carrier, substitutions);
               const collected = collectType(carrier);
               if (collected !== undefined) return collected;
+              if (requirement.fieldAccess !== undefined && (carrier.kind !== "associated-type" ||
+                !associated.requireField(carrier, requirement.fieldAccess))) return "A generic call does not satisfy its selected field access contract.";
               const error = addUse(node, carrier, requirement.requirements);
               if (error !== undefined) return error;
             }
@@ -748,6 +760,7 @@ function requirementContractsEqual(
     left.associatedTypes.every((requirement, index) => {
       const other = right.associatedTypes[index];
       return other !== undefined && rustTargetTypeRefEquals(requirement.carrier, other.carrier) &&
+        stringListsEqual(requirement.fieldAccess ?? [], other.fieldAccess ?? []) &&
         stringListsEqual(requirement.requirements, other.requirements);
     }) &&
     left.capturedTypeParameters.length === right.capturedTypeParameters.length &&

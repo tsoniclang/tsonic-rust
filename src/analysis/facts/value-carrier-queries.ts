@@ -1,4 +1,5 @@
 import type { ExtensionFactSubject } from "@tsonic/tsts";
+import { rustIndexedFieldKeyArgument } from "./indexed-field-keys.js";
 import { rustObjectReferenceViewKey } from "./object-reference-views.js";
 import type {
   RustPlanQueries,
@@ -77,6 +78,7 @@ export function rustValueCarrierBeforeOptionProjection(
   subject: ExtensionFactSubject | undefined,
 ): TargetTypeRef | undefined {
   return facts.getFact(subject, rustContextualValueConversionFactKey)?.targetCarrier ??
+    facts.getFact(subject, rustIndexedFieldKeyArgument)?.carrier ??
     facts.getFact(subject, rustObjectReferenceViewKey)?.targetCarrier ??
     rustValueCarrierBeforeContextualConversion(facts, subject);
 }

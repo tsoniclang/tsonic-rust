@@ -306,9 +306,9 @@ export function writeRustStoredObjectField(
   const valueName = allocateRustSyntheticName(context.syntheticNames, "field_value");
   const selected: RustExpr = { kind: "path", path: receiverName };
   const effect = writeRustStoredObjectFieldStorage(storage, receiverCarrier, selected, storageIndex, operator,
-    { kind: "path", path: valueName }, context, projection);
+    { kind: "path", path: valueName }, context, projection, receiverIsBorrowed);
   return effect === undefined ? undefined : { kind: "block", bindings: [
-    { name: receiverName, value: cloneExpression(receiver) }, { name: valueName, value },
+    { name: receiverName, value: receiverIsBorrowed ? receiver : cloneExpression(receiver) }, { name: valueName, value },
   ], value: checkRustDataWrite(check, selected, effect, errorType) };
 }
 

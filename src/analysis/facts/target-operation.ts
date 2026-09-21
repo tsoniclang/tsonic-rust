@@ -98,6 +98,7 @@ export function rustTargetOperationSupportsAssignment(fact: RustTargetOperationF
           field.valueSemantics.kind === "accessor" && field.valueSemantics.writable);
     })) ||
     (fact?.kind === "source-index-signature" && fact.writable) ||
+    (fact?.kind === "source-indexed-field" && fact.accessMode !== "read") ||
     (fact?.kind === "source-method-property" && fact.write !== undefined) ||
     (fact?.kind === "source-accessor" && fact.write !== undefined) ||
     rustTargetOperationIsDirectLocation(fact);
@@ -142,6 +143,7 @@ export function rustTargetOperationIsFallible(
   if (fact.kind === "source-accessor") {
     return false;
   }
+  if (fact.kind === "source-indexed-field") return true;
   if (fact.kind === "source-method-property") {
     return fact.accessMode !== "read" && frozenDataWrites.receiverForDeclaration(fact.declaration) !== undefined;
   }

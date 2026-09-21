@@ -63,6 +63,9 @@ import type { RustProviderOperationTemplate, RustTargetOperationFact } from "../
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { selectRustNumberArrayUnionMember } from "./number-array-unions.js";
 import { selectedRustForInKeys } from "./for-in-keys.js";
+import { selectRustCheckedPropertyAccess } from "./properties.js";
+import { rustComputedMemberFactKey } from "../../facts/operations/keys.js";
+import { resolveRustIndexedField } from "../../../policy/types/resolution/indexed-fields.js";
 
 export function selectRustCheckedElementAccess(
   request: RustCheckedElementSelectionInput,
@@ -78,6 +81,41 @@ export function selectRustCheckedElementAccess(
   }
   if (isIntrinsicSourceQualifier(request, context, options)) {
     return acceptDeclarationOperation("indexer");
+  }
+  if (request.sourceReceiverType !== undefined && request.accessMode !== "delete" &&
+    context.currentSemantics.types.selectIndexedAccess(request.sourceReceiverType, request.sourceArgumentType)?.kind === "deferred") {
+    const selected = resolveRustIndexedField(request.sourceReceiverType, request.sourceArgumentType,
+      context, options, new Set(), selectedReceiverCarrier);
+    if (selected?.result.kind !== "associated-type" || selectedReceiverCarrier === undefined) {
+      return rejectSelectedOperation(request.expression, context, "RUST_DEPENDENT_FIELD_NOT_PROVEN",
+        "Dependent indexed access requires an exact native owner, key and associated field type.");
+    }
+    return acceptRustMemberOperation(request, "indexer", {
+      kind: "source-indexed-field", operationId: sourceOperationId(context, request.expression, "indexed-field"),
+      receiverCarrier: selectedReceiverCarrier, keyCarrier: selected.key, resultCarrier: selected.result,
+      accessMode: request.accessMode,
+    }, context, options, elementProvenance(request));
+  }
+  if (request.sourceReceiverType !== undefined && request.sourceSelectedSymbol !== undefined &&
+    request.sourceSelectedElementIndex === undefined) {
+    const selected = context.semanticsFor(request.expression).types.selectIndexedAccess(
+      request.sourceReceiverType, request.sourceArgumentType,
+    );
+    const member = selected?.kind === "resolved" && selected.members.length === 1
+      ? selected.members[0] : undefined;
+    if (member?.kind === "property" && member.property.symbol === request.sourceSelectedSymbol) {
+      const result = selectRustCheckedPropertyAccess(request, context, options);
+      if (result.kind === "accept") {
+        const kind = context.ast.kindName(request.argument);
+        context.facts.set(request.expression, rustComputedMemberFactKey, {
+          receiver: request.receiver, key: request.argument,
+          accessMode: request.accessMode,
+          evaluateKey: kind !== "KindStringLiteral" && kind !== "KindNumericLiteral" &&
+            kind !== "KindNoSubstitutionTemplateLiteral",
+        }, [{ message: "rust exact checker-selected computed member and key evaluation" }]);
+      }
+      return result;
+    }
   }
   const sourceProfileIdentity = resolveSelectedSourceProfileMember(
     context,

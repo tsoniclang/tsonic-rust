@@ -25,8 +25,8 @@ export function instantiateRustSelectedMemberCarrier(
       const selected = options.projectTypes.instantiateMemberCarrier(declaration, receiver, template);
       if (selected?.kind !== "associated-type") return selected !== undefined;
       const family = familyRegistry.get(template.trait.id);
-      if (family === undefined) return false;
-      if (familyRegistry.implementation(family.trait.id, selected.owner) === undefined) {
+      if (family?.kind !== "conditional") return false;
+      if (familyRegistry.implementation(family.trait, selected.owner) === undefined) {
         const parameterName = template.owner.kind === "type-parameter" ? template.owner.name : undefined;
         const parameter = parameterName === undefined ? undefined
           : definition?.genericParameters.find(candidate => candidate.kind === "type" && candidate.targetName === parameterName);

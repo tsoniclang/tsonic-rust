@@ -24,6 +24,8 @@ import { requireRustCarrierRequirements } from "../types/generic-requirements.js
 import { planExpression } from "./entry.js";
 import { expressionCarrier, requireExpressionCarrier } from "./fundamentals.js";
 import { planRustDirectStorage } from "./updates/target.js";
+import { prepareRustComputedMemberEvaluation } from "./computed-members.js";
+import { rustComputedMemberFactKey } from "../../../analysis/facts/operations/keys.js";
 
 export function planCompoundAssignmentExpression(
   node: Node,
@@ -39,6 +41,12 @@ export function planCompoundAssignmentExpression(
   if (left === undefined || right === undefined || context.syntheticNames === undefined ||
     !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.compound-assignment-carrier") ||
     !selectedOperatorMatches(node, fact, context)) return undefined;
+  const evaluation = prepareRustComputedMemberEvaluation(left, context);
+  if (evaluation === undefined) return undefined;
+  if (evaluation.bindings.length !== 0) {
+    const value = planCompoundAssignmentExpression(node, fact, evaluation.context);
+    return value === undefined ? undefined : { kind: "block", bindings: evaluation.bindings, value };
+  }
   const copy = isRustCopyCarrier(fact.resultCarrier);
   if (!copy && !requireRustCarrierRequirements(fact.resultCarrier, ["clone"], node, context)) return undefined;
   const names = context.syntheticNames;
@@ -55,10 +63,11 @@ export function planCompoundAssignmentExpression(
     const staticReceiver = target?.kind === "source-static-field" ||
       target?.kind === "source-accessor" && target.receiver.kind === "static";
     const receiver = staticReceiver ? undefined : Node_Expression(ast, left);
-    const index = ast.kindName(left) === KindElementAccessExpression
+    const index = context.input.program.facts.getFact(left, rustComputedMemberFactKey) === undefined &&
+      ast.kindName(left) === KindElementAccessExpression
       ? ElementAccessExpression_ArgumentExpression(ast, left) : undefined;
     for (const operand of [receiver, index]) {
-      if (operand === undefined) continue;
+      if (operand === undefined || context.expressionOverrides?.has(operand)) continue;
       const storage = operand === receiver && rustTargetOperationIsDirectLocation(target)
         ? planRustDirectStorage(operand, context) : undefined;
       const value = storage === undefined

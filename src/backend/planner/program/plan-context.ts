@@ -112,6 +112,7 @@ export interface RustPlanContext {
     readonly protocol: RustGeneratorFact;
   };
   readonly expressionOverrides?: ReadonlyMap<Node, RustEffectiveExpressionOverride>;
+  readonly valueFieldLocations?: ReadonlyMap<Node, import("../objects/value-fields.js").RustValueFieldLocation>;
   readonly flowReadOverrides?: ReadonlyMap<Node, RustFlowReadOverride>;
   readonly capturedBindings?: readonly RustCapturedBinding[];
   readonly projectDispatchRoot?: RustExpr;

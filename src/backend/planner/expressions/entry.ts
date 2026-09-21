@@ -26,6 +26,7 @@ import { applyRustValueConversion } from "./value-conversions.js";
 import { planProviderRecordCopy } from "./provider-record-copy.js";
 import { planRustEmptyRecordConversion } from "./empty-record-conversion.js";
 import { rustObjectReferenceViewKey } from "../../../analysis/facts/object-reference-views.js";
+import { rustIndexedFieldKeyArgument } from "../../../analysis/facts/indexed-field-keys.js";
 import { planRustObjectReferenceView } from "./object-reference-views.js";
 import { diagnosticInput, sourceTypePath } from "../program/plan-context.js";
 import { findRustUpdateSourceAccessor } from "./updates/source.js";
@@ -78,6 +79,15 @@ function planProjectedExpression(
   finalStage: "source" | "contextual" | "option",
 ): RustExpr | undefined {
   const override = context.expressionOverrides?.get(node);
+  const key = context.input.program.facts.getFact(node, rustIndexedFieldKeyArgument);
+  if (key !== undefined && finalStage !== "source" && override === undefined) {
+    const type = rustTypeFromCarrierInContext(key.carrier, context);
+    if (type === undefined) return undefined;
+    const value: RustExpr = { kind: "associated-call", owner: type, method: "default", args: [] };
+    if (!key.evaluate) return value;
+    const effect = planExpressionBeforeValueProjections(node, context, "discarded");
+    return effect === undefined ? undefined : { kind: "evaluate-then", effect, discard: "value", value };
+  }
   const planned = planExpressionBeforeValueProjections(node, context, resultUse);
   if (planned === undefined || resultUse === "discarded") {
     return planned;

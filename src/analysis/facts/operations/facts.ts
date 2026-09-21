@@ -269,6 +269,14 @@ export type RustTargetOperationFact =
       };
     }
   | {
+      readonly kind: "source-indexed-field";
+      readonly operationId: string;
+      readonly receiverCarrier: TargetTypeRef;
+      readonly keyCarrier: TargetTypeRef;
+      readonly resultCarrier: Extract<TargetTypeRef, { readonly kind: "associated-type" }>;
+      readonly accessMode: "read" | "write" | "read-write";
+    }
+  | {
       readonly kind: "source-index-signature";
       readonly operationId: string;
       readonly receiverCarrier: TargetTypeRef;
@@ -734,6 +742,7 @@ export function rustTargetOperationResultCarrier(fact: RustTargetOperationFact):
     case "void-expression":
     case "array-literal":
     case "source-field":
+    case "source-indexed-field":
     case "source-index-signature":
     case "source-method-property":
     case "source-static-field":

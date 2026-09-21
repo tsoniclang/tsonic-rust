@@ -49,8 +49,10 @@ export function collectRustMutableProjectStorageRequirements(
       }
       return;
     }
-    if (kind === KindPropertyAccessExpression) {
-      const declaration = context.source.navigation.sourceReferenceFor(node)?.declaration;
+    if (kind === KindPropertyAccessExpression || kind === KindElementAccessExpression) {
+      const declaration = kind === KindPropertyAccessExpression
+        ? context.source.navigation.sourceReferenceFor(node)?.declaration
+        : context.semanticsFor(node).operations.elementAccess(node)?.selectedDeclaration;
       if (declaration !== undefined &&
         projectTypes.definitionContainingDeclaration(declaration) !== undefined) {
         mutableDeclarations.add(declaration);
@@ -62,10 +64,6 @@ export function collectRustMutableProjectStorageRequirements(
           }
         }
       }
-      collectStoragePath(Node_Expression(ast, node));
-      return;
-    }
-    if (kind === KindElementAccessExpression) {
       collectStoragePath(Node_Expression(ast, node));
       return;
     }
@@ -84,6 +82,11 @@ export function collectRustMutableProjectStorageRequirements(
       const selected = context.semantics(sourceFile).operations.elementAccess(node);
       if (selected !== undefined && selected.accessMode !== "read") {
         collectStoragePath(Node_Expression(ast, node));
+        if ((selected.accessMode === "write" || selected.accessMode === "read-write") &&
+          (hasValueReceiver(selected.receiver.expression) || selected.receiver.type !== undefined &&
+            context.semantics(sourceFile).types.selectIndexedAccess(selected.receiver.type, selected.argument.type)?.kind === "deferred")) {
+          valueWrites.add(node);
+        }
       }
     }
     if (kind === KindPropertyAccessExpression) {

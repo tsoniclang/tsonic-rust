@@ -10,12 +10,14 @@ import { rustTargetGenericReferences } from "../../../target-model/types/carrier
 import { rustAuthoredDeadCodeDisposition } from "../liveness/directives.js";
 import { rustGenericRequirementBounds } from "../types/generic-bounds.js";
 import { rustAssociatedPredicates } from "../types/associated-bounds.js";
+import { planRustIndexedFieldImplementation } from "./indexed-fields.js";
 
 export function planRustTypeFamilyDeclaration(
   declaration: Node,
   context: RustPlanContext,
 ): readonly RustItem[] | undefined {
-  const family = context.input.program.typeFamilies.families.find(candidate => candidate.declaration === declaration);
+  const family = context.input.program.typeFamilies.families.find(candidate =>
+    candidate.kind === "conditional" && candidate.declaration === declaration);
   if (family === undefined) return undefined;
   const name = context.input.program.names.nameForDeclaration(declaration);
   if (name === undefined) throw new Error("A sealed source type family has no target name.");
@@ -32,8 +34,16 @@ export function planRustTypeFamilyImplementations(context: RustPlanContext): rea
   const items: RustItem[] = [];
   for (const implementation of context.input.program.typeFamilies.implementations) {
     if (implementation.sourceFileName !== fileName) continue;
+    if (implementation.family.kind === "indexed") {
+      const selected = planRustIndexedFieldImplementation(implementation, context);
+      if (selected === undefined) context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, context.sourceFile),
+        "rust.backend.indexed-field-implementation", "A dependent field has no exact native storage implementation."));
+      else items.push(...selected);
+      continue;
+    }
     const owner = rustTypeFromCarrierInContext(implementation.owner, context);
-    const trait = rustTypeFromCarrierInContext(implementation.family.trait, context);
+    const trait = rustTypeFromCarrierInContext({ ...implementation.family.trait,
+      genericArguments: implementation.arguments }, context);
     const output = rustTypeFromCarrierInContext(implementation.output, context);
     const parameters = rustTargetGenericReferences(implementation.owner);
     const definition = context.input.program.projectTypes.definitionForCarrier(implementation.owner);

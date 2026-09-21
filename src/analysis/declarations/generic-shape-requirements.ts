@@ -57,6 +57,8 @@ export function analyzeRustShapeGenericRequirements(
       for (const requirement of contract.associatedTypes) {
         const projection = substituteRustTargetTypeParameters(requirement.carrier, substitutions);
         if (!associated.collect(projection) || !classify(projection, requirement.requirements)) return false;
+        if (requirement.fieldAccess !== undefined && (projection.kind !== "associated-type" ||
+          !associated.requireField(projection, requirement.fieldAccess))) return false;
       }
     }
     return rustTargetTypeChildren(type).every(visit);

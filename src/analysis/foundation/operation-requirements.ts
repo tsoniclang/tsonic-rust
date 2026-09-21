@@ -148,6 +148,11 @@ export function rustFoundationForTargetOperationFact(
       requireCarrier(fact.keyCarrier);
       requireCarrier(fact.resultCarrier);
       break;
+    case "source-indexed-field":
+      requireCarrier(fact.receiverCarrier);
+      requireCarrier(fact.keyCarrier);
+      requireCarrier(fact.resultCarrier);
+      break;
     case "source-method-property":
       requireCarrier(fact.receiverCarrier);
       requireCarrier(fact.callableCarrier);

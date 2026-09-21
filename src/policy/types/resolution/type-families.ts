@@ -1,7 +1,7 @@
 import type { Node, Type, TypeAliasApplicationInfo } from "@tsonic/tsts";
 import { Node_Type, sourceNodeIdentity, TypeReferenceNode_TypeName } from "@tsonic/target-api/source";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustSourceTypeFamily } from "../type-families.js";
+import type { RustConditionalSourceTypeFamily } from "../type-families.js";
 import { rustSourceTypeCarrierValue, rustStructuralObjectCarrierValue } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustTargetTypeParameterNames } from "../../../target-model/types/carriers/generic-references.js";
@@ -127,7 +127,7 @@ export function resolveRustTypeFamilyApplication(
   const ownerFileName = rustSourceTypeCarrierValue(owner)?.fileName ??
     rustStructuralObjectCarrierValue(owner)?.ownerFileName ?? family.trait.sourceItem?.fileName;
   if (ownerFileName === undefined || !options.sourceTypes.typeFamilies.registerImplementation({
-    family, owner, output: result, sourceFileName: ownerFileName,
+    family, arguments: [], owner, output: result, sourceFileName: ownerFileName,
   })) return undefined;
   return result;
 }
@@ -135,7 +135,7 @@ export function resolveRustTypeFamilyApplication(
 export function rustSourceTypeFamilyDeclaration(
   conditional: Node,
   context: RustTargetTypeResolutionContext,
-): RustSourceTypeFamily | undefined {
+): RustConditionalSourceTypeFamily | undefined {
   const { ast } = context;
   let body = conditional;
   let declaration = ast.parent(body);
@@ -154,6 +154,7 @@ export function rustSourceTypeFamilyDeclaration(
   if (identity === undefined || fileName.length === 0 || typeName.length === 0 ||
     !context.source.navigation.isProjectDeclaration(declaration)) return undefined;
   return Object.freeze({
+    kind: "conditional",
     declaration,
     parameter,
     trait: Object.freeze({

@@ -31,6 +31,8 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { selectedSourceLiteralIsRepresentable } from "../../policy/types/selected-numeric-literal.js";
 import { rustSpreadElementCarrier } from "../../target-model/operations/rest-assembly.js";
 import { rustLifetimeKey, rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
+import { selectRustIndexedCallKeys } from "./indexed-call-keys.js";
+import { rustIndexedFieldKeyArgument } from "../facts/indexed-field-keys.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type {
@@ -65,6 +67,7 @@ export function finalizeProjectSourceGenericArguments(
     return undefined;
   }
   const finalized = [...selectedTargets];
+  if (!selectRustIndexedCallKeys(walk, selected, callArguments, finalized)) return undefined;
   const initialSubstitutions = rustTargetGenericBindingsForArguments(
     parameters,
     finalized,
@@ -152,7 +155,8 @@ function reconcileProjectSourceArgumentTypeParameters(
     if (walk.context.ast.kindName(argument) === KindNumericLiteral) continue;
     const matches = bindings.filter((binding) =>
       binding.sourceArgumentIndex === argumentIndex);
-    const actual = walk.context.facts.getRuntimeCarrierFact(argument)?.carrier ??
+    const actual = walk.context.facts.getFact(argument, rustIndexedFieldKeyArgument)?.carrier ??
+      walk.context.facts.getRuntimeCarrierFact(argument)?.carrier ??
       resolveProjectSourceInferenceCarrier(walk, argument);
     if (matches.length === 0) continue;
     for (const binding of matches) {

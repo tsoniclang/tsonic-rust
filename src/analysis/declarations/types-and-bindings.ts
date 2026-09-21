@@ -107,7 +107,7 @@ export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
           rustResolutionContext(walk, declaration), walk.operationOptions, new Set());
       if (carrier !== undefined) {
         const family = walk.context.typeFamilies.get(selectedFamily.trait.id);
-        if (family === undefined) return;
+        if (family?.kind !== "conditional") return;
         setCarrierFact(walk, declaration, carrier);
         walk.context.facts.set(declaration, rustTypeAliasDeclarationFactKey,
           { kind: family.declaration === declaration ? "family" : "erased" },

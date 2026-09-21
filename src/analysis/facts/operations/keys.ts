@@ -22,6 +22,15 @@ export const rustTargetOperationFactKey: RustPlanKey<RustTargetOperationFact> =
 export const rustCompoundWriteFactKey: RustPlanKey<Extract<RustTargetOperationFact, { kind: "runtime-set" }>> =
   defineRustPlanKey("compoundWrite", closedMetadataEquals);
 
+export const rustComputedMemberFactKey: RustPlanKey<{
+  readonly receiver: Node;
+  readonly key: Node;
+  readonly evaluateKey: boolean;
+  readonly accessMode: "read" | "write" | "read-write" | "delete";
+}> = defineRustPlanKey("computedMember", (left, right) =>
+  left.receiver === right.receiver && left.key === right.key &&
+  left.evaluateKey === right.evaluateKey && left.accessMode === right.accessMode);
+
 export const rustReceiverIndependentMethodFactKey: RustPlanKey<{ readonly carrier: TargetTypeRef }> =
   defineRustPlanKey("receiverIndependentMethod", (left, right) => rustTargetTypeRefEquals(left.carrier, right.carrier));
 

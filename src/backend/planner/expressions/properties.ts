@@ -31,15 +31,18 @@ import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { planRustComputedMemberExpression } from "./computed-members.js";
 
 export function planPropertyAccess(node: Node, context: RustPlanContext): RustExpr | undefined {
   const borrowed = context.input.program.borrowedElementReads.forExpression(node);
-  if (borrowed !== undefined) return planRustBorrowedElementRead(node, borrowed, context, planPropertyAccessInner);
+  if (borrowed !== undefined) return planRustComputedMemberExpression(node, context,
+    selectedContext => planRustBorrowedElementRead(node, borrowed, selectedContext, planPropertyAccessInner));
   return planOptionalChainExpression(
     node,
     context,
     "property",
-    (innerContext) => planPropertyAccessInner(node, innerContext),
+    (innerContext) => planRustComputedMemberExpression(node, innerContext,
+      selectedContext => planPropertyAccessInner(node, selectedContext)),
   );
 }
 function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr | undefined {

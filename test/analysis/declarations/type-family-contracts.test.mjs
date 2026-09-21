@@ -11,11 +11,13 @@ import { rustTypeFamilyNormalizer } from "../../../dist/policy/types/type-family
 import { rustTypeFromCarrier } from "../../../dist/backend/planner/types/render.js";
 import { selectRustFlowReadProjection } from "../../../dist/policy/types/value-carrier-reconciliation.js";
 import { rustOptionTargetType } from "../../../dist/target-model/types/index.js";
+import { rustIndexedFieldKey, rustIndexedFieldProjection, rustIndexedFieldTrait } from "../../../dist/target-model/types/carriers/indexed-fields.js";
 
 const signed = { kind: "source-primitive", name: "int32" };
 const unsigned = { kind: "source-primitive", name: "uint32" };
 const parameter = { kind: "type-parameter", name: "T" };
 const family = {
+  kind: "conditional",
   declaration: {}, parameter: {},
   trait: { kind: "trait-ref", id: "storage-identity", path: "Storage",
     sourceItem: { fileName: "/storage.ts", typeName: "Storage" },
@@ -37,18 +39,18 @@ test("dependent type families retain exact identity and reject conflicting outpu
   assert.equal(registry.register(family), true);
   assert.equal(registry.register({ ...family, declaration: {} }), false);
   assert.equal(registry.register({ ...family, trait: { ...family.trait, sourceItem: undefined } }), false);
-  const implementation = { family, owner: signed, output: unsigned, sourceFileName: "/storage.ts" };
+  const implementation = { family, arguments: [], owner: signed, output: unsigned, sourceFileName: "/storage.ts" };
   assert.equal(registry.registerImplementation(implementation), true);
   assert.equal(registry.registerImplementation({ ...implementation, output: signed }), false);
-  assert.deepEqual(registry.implementation(family.trait.id, signed).output, unsigned);
-  assert.equal(registry.implementation("different-family", signed), undefined);
+  assert.deepEqual(registry.implementation(family.trait, signed).output, unsigned);
+  assert.equal(registry.implementation({ ...family.trait, id: "different-family" }, signed), undefined);
 });
 
 test("type family publication snapshots target carriers and prohibits late writes", () => {
   const registry = createRustSourceTypeFamilyRegistry();
   registry.register(family);
   const mutable = { ...signed };
-  assert.equal(registry.registerImplementation({ family, owner: mutable, output: mutable, sourceFileName: "/storage.ts" }), true);
+  assert.equal(registry.registerImplementation({ family, arguments: [], owner: mutable, output: mutable, sourceFileName: "/storage.ts" }), true);
   mutable.name = "uint32";
   const sealed = registry.seal();
   assert.equal(sealed.implementations[0].output.name, "int32");
@@ -64,12 +66,12 @@ test("generic family implementations preserve native argument widths on every us
   const registry = createRustSourceTypeFamilyRegistry();
   registry.register(family);
   const owner = (type) => rustSourceTypeCarrier("/value.ts", "Value", "object", [{ kind: "type", type }]);
-  registry.registerImplementation({ family, owner: owner(parameter), output: { kind: "tuple", elements: [parameter] }, sourceFileName: "/value.ts" });
-  assert.deepEqual(registry.implementation(family.trait.id, owner(unsigned)).output, { kind: "tuple", elements: [unsigned] });
+  registry.registerImplementation({ family, arguments: [], owner: owner(parameter), output: { kind: "tuple", elements: [parameter] }, sourceFileName: "/value.ts" });
+  assert.deepEqual(registry.implementation(family.trait, owner(unsigned)).output, { kind: "tuple", elements: [unsigned] });
   const unresolved = { ...projection, owner: owner(parameter) };
   const concrete = substituteRustTargetGenerics(unresolved, new Map([["T", signed]]), new Map(), new Map(), rustTypeFamilyNormalizer(registry));
   assert.deepEqual(concrete, { kind: "tuple", elements: [signed] });
-  assert.equal(registry.registerImplementation({ family, owner: signed, output: parameter, sourceFileName: "/storage.ts" }), false);
+  assert.equal(registry.registerImplementation({ family, arguments: [], owner: signed, output: parameter, sourceFileName: "/storage.ts" }), false);
 });
 
 test("type family templates replace equivalent concrete demands without overlapping impls", () => {
@@ -77,12 +79,12 @@ test("type family templates replace equivalent concrete demands without overlapp
     const registry = createRustSourceTypeFamilyRegistry();
     registry.register(family);
     const owner = type => rustSourceTypeCarrier("/value.ts", "Value", "object", [{ kind: "type", type }]);
-    const make = type => ({ family, owner: owner(type), output: type, sourceFileName: "/value.ts" });
+    const make = type => ({ family, arguments: [], owner: owner(type), output: type, sourceFileName: "/value.ts" });
     const requests = [make(signed), make(parameter)];
     if (genericFirst) requests.reverse();
     for (const request of requests) assert.equal(registry.registerImplementation(request), true);
     assert.equal(registry.implementations().length, 1);
-    assert.deepEqual(registry.implementation(family.trait.id, owner(unsigned)).output, unsigned);
+    assert.deepEqual(registry.implementation(family.trait, owner(unsigned)).output, unsigned);
     assert.equal(registry.registerImplementation({ ...make(unsigned), output: signed }), false);
     assert.equal(registry.registerImplementation({ ...make(unsigned), sourceFileName: "/different.ts" }), false);
   }
@@ -91,11 +93,11 @@ test("type family templates replace equivalent concrete demands without overlapp
 test("a family rejects blanket and conflicting partially specialized implementations", () => {
   const registry = createRustSourceTypeFamilyRegistry();
   registry.register(family);
-  assert.equal(registry.registerImplementation({ family, owner: parameter, output: parameter, sourceFileName: "/storage.ts" }), false);
+  assert.equal(registry.registerImplementation({ family, arguments: [], owner: parameter, output: parameter, sourceFileName: "/storage.ts" }), false);
   const owner = (left, right) => rustSourceTypeCarrier("/pair.ts", "Pair", "object",
     [{ kind: "type", type: left }, { kind: "type", type: right }]);
-  assert.equal(registry.registerImplementation({ family, owner: owner(parameter, signed), output: signed, sourceFileName: "/pair.ts" }), true);
-  assert.equal(registry.registerImplementation({ family, owner: owner(unsigned, parameter), output: unsigned, sourceFileName: "/pair.ts" }), false);
+  assert.equal(registry.registerImplementation({ family, arguments: [], owner: owner(parameter, signed), output: signed, sourceFileName: "/pair.ts" }), true);
+  assert.equal(registry.registerImplementation({ family, arguments: [], owner: owner(unsigned, parameter), output: unsigned, sourceFileName: "/pair.ts" }), false);
 });
 
 test("source trait references require source-owned paths rather than native-path guessing", () => {
@@ -131,7 +133,7 @@ test("normalization uses proved implementations and rejects recursive output equ
   const normalizer = rustTypeFamilyNormalizer(registry);
   assert.deepEqual(mapRustTargetTypes(projection, normalizer), projection);
   const closed = { ...projection, owner: signed };
-  registry.registerImplementation({ family, owner: signed, output: closed, sourceFileName: "/storage.ts" });
+  registry.registerImplementation({ family, arguments: [], owner: signed, output: closed, sourceFileName: "/storage.ts" });
   assert.throws(() => mapRustTargetTypes(closed, normalizer), /recursive native output equation/u);
 });
 
@@ -156,4 +158,46 @@ test("nongeneric shapes acquire no speculative generic bounds", () => {
   const selected = analyzeRustShapeGenericRequirements({ kind: "tuple", elements: [signed, unsigned] },
     { definitionForCarrier: () => undefined }, registry, () => undefined);
   assert.deepEqual(selected, { typeParameters: [], associatedTypes: [] });
+});
+
+test("indexed families distinguish exact keys and retain readonly storage and independent obligations", () => {
+  const registry = createRustSourceTypeFamilyRegistry();
+  const indexed = { kind: "indexed", trait: rustIndexedFieldTrait };
+  const countKey = rustIndexedFieldKey("00000000000000000000000000000001");
+  const labelKey = rustIndexedFieldKey("00000000000000000000000000000002");
+  const owner = rustSourceTypeCarrier("/record.ts", "Record", "object", []);
+  assert.equal(registry.register(indexed), true);
+  assert.equal(registry.register({ ...indexed, trait: { ...rustIndexedFieldTrait, path: "unproved::Field" } }), false);
+  for (const [index, key, output, readonly] of [[0, countKey, signed, false], [1, labelKey, unsigned, true]]) {
+    assert.equal(registry.registerImplementation({ family: indexed, arguments: [{ kind: "type", type: key }], owner,
+      output, sourceFileName: "/record.ts", field: { storage: "structural-object", storageIndex: index, readonly } }), true);
+  }
+  assert.deepEqual(rustTypeFamilyNormalizer(registry)(rustIndexedFieldProjection(owner, countKey)), signed);
+  assert.deepEqual(rustTypeFamilyNormalizer(registry)(rustIndexedFieldProjection(owner, labelKey)), unsigned);
+  const open = rustIndexedFieldProjection(parameter, { kind: "type-parameter", name: "Key" });
+  const collector = createRustAssociatedRequirementCollector(new Set(["T", "Key"]), registry, () => false);
+  assert.equal(collector.requireField(open, ["read", "write"]), true);
+  assert.equal(collector.requireField(rustIndexedFieldProjection(owner, labelKey), ["read"]), true);
+  assert.equal(collector.requireField(rustIndexedFieldProjection(owner, labelKey), ["write"]), false);
+  assert.deepEqual(collector.seal(), [{ carrier: open, requirements: [], fieldAccess: ["read", "write"] }]);
+});
+
+test("indexed field identity collisions and incomplete native implementations fail closed", () => {
+  const registry = createRustSourceTypeFamilyRegistry();
+  const identity = "00000000000000000000000000000001";
+  assert.equal(registry.registerFieldKey(identity, "count"), true);
+  assert.equal(registry.registerFieldKey(identity, "count"), true);
+  assert.equal(registry.registerFieldKey(identity, "label"), false);
+  assert.equal(registry.registerFieldKey("invalid", "count"), false);
+  const indexed = { kind: "indexed", trait: rustIndexedFieldTrait };
+  registry.register(indexed);
+  const implementation = { family: indexed, owner: signed, output: unsigned,
+    arguments: [{ kind: "type", type: rustIndexedFieldKey(identity) }], sourceFileName: "/record.ts",
+    field: { storage: "structural-object", storageIndex: 0, readonly: false } };
+  for (const mutation of [{ field: undefined }, { field: { ...implementation.field, storageIndex: -1 } },
+    { arguments: [] }, { arguments: [{ kind: "type", type: parameter }] }]) {
+    assert.equal(registry.registerImplementation({ ...implementation, ...mutation }), false);
+  }
+  registry.seal();
+  assert.throws(() => registry.registerFieldKey(identity, "count"), /already sealed/u);
 });

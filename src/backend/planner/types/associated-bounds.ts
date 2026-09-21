@@ -5,6 +5,7 @@ import { rustGenericRequirementBounds } from "./generic-bounds.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render.js";
 import type { RustTypeRenderingContext } from "./render.js";
+import { rustProgramErrorTargetType } from "../../../target-model/types/index.js";
 
 export function rustDeclarationAssociatedPredicates(
   declaration: Node,
@@ -29,6 +30,17 @@ export function rustAssociatedPredicates(
       throw new Error("A sealed dependent type obligation has no native syntax.");
     }
     predicates.push({ kind: "type", type: owner, bounds: [{ kind: "trait-type", reference: { trait } }] });
+    for (const access of selected.fieldAccess ?? []) {
+      const key = projection.trait?.genericArguments[0];
+      const keyType = key?.kind === "type" ? rustTypeFromCarrierInContext(key.type, context) : undefined;
+      const errorType = rustTypeFromCarrierInContext(rustProgramErrorTargetType(), context);
+      if (keyType === undefined || errorType === undefined) throw new Error("A dependent field operation lost its key or error contract.");
+      predicates.push({ kind: "type", type: owner, bounds: [{ kind: "trait-type", reference: {
+        trait: { kind: "named", path: access === "read" ? "rt::ReadField" : "rt::WriteField", genericArguments: [
+          { kind: "type", type: keyType }, { kind: "type", type: errorType },
+        ] },
+      } }] });
+    }
     if (selected.requirements.length > 0) predicates.push({ kind: "type", type,
       bounds: rustGenericRequirementBounds(selected.requirements),
     });

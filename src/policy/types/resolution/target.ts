@@ -43,6 +43,7 @@ import type { TsonicFixedArrayFact } from "@tsonic/source-core/facts";
 import { resolveRustSemanticConditionalAlias } from "./type-families.js";
 import { resolveRustTypeComponentEvidence } from "./source-evidence.js";
 import { resolveRustSourceMarker } from "./markers.js";
+import { resolveRustIndexedField } from "./indexed-fields.js";
 
 export function resolveRustFixedArrayTargetType(
   fixedArray: TsonicFixedArrayFact,
@@ -123,6 +124,9 @@ export function resolveRustTargetType(
     const semantics = context.currentSemantics;
     const conditional = resolveRustSemanticConditionalAlias(type, context, options, resolving);
     if (conditional !== undefined) return conditional.carrier;
+    const indexed = semantics.types.indexedAccessComponents(type);
+    if (indexed !== undefined) return resolveRustIndexedField(indexed.objectType, indexed.indexType,
+      context, options, resolving)?.result;
     if (resolveRustSourceMarker(type, context) === "pointer") {
       const arguments_ = semantics.types.effectiveTypeArguments(type);
       const pointee = arguments_?.length === 1

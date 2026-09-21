@@ -28,6 +28,7 @@ import type { RustExpr } from "../../../target-ast/nodes.js";
 import type { RustExpressionResultUse } from "../entry.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
+import { planRustComputedMemberExpression } from "../computed-members.js";
 
 export function planUnaryExpression(
   node: Node,
@@ -87,7 +88,8 @@ export function planUnaryExpression(
   }
   if (fact.operator !== "-" && fact.operator !== "!") {
     if ((fact.operator === "+=" || fact.operator === "-=") && operandNode !== undefined) {
-      return planRustUpdateExpression(node, operandNode, fact, resultUse, context);
+      return planRustComputedMemberExpression(operandNode, context,
+        selectedContext => planRustUpdateExpression(node, operandNode, fact, resultUse, selectedContext));
     }
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),

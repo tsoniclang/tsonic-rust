@@ -1,25 +1,40 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustTargetTraitRef, TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustTargetGenericArgument, RustTargetTraitRef, TargetTypeRef } from "../../target-model/types/model.js";
 
-export interface RustSourceTypeFamily {
+export interface RustConditionalSourceTypeFamily {
+  readonly kind: "conditional";
   readonly declaration: Node;
   readonly parameter: Node;
   readonly trait: RustTargetTraitRef;
 }
 
+export interface RustIndexedSourceTypeFamily {
+  readonly kind: "indexed";
+  readonly trait: RustTargetTraitRef;
+}
+
+export type RustSourceTypeFamily = RustConditionalSourceTypeFamily | RustIndexedSourceTypeFamily;
+
 export interface RustSourceTypeFamilyImplementation {
   readonly family: RustSourceTypeFamily;
+  readonly arguments: readonly RustTargetGenericArgument[];
   readonly owner: TargetTypeRef;
   readonly output: TargetTypeRef;
   readonly sourceFileName: string;
+  readonly field?: {
+    readonly storage: "structural-object" | "project-object";
+    readonly storageIndex: number;
+    readonly readonly: boolean;
+  };
 }
 
 export interface RustSourceTypeFamilyRegistry {
+  registerFieldKey(identity: string, name: string): boolean;
   register(family: RustSourceTypeFamily): boolean;
   get(identity: string): RustSourceTypeFamily | undefined;
   families(): readonly RustSourceTypeFamily[];
   registerImplementation(implementation: RustSourceTypeFamilyImplementation): boolean;
-  implementation(identity: string, owner: TargetTypeRef): RustSourceTypeFamilyImplementation | undefined;
+  implementation(trait: RustTargetTraitRef, owner: TargetTypeRef): RustSourceTypeFamilyImplementation | undefined;
   implementations(): readonly RustSourceTypeFamilyImplementation[];
   seal(): RustSourceTypeFamilyPlan;
 }

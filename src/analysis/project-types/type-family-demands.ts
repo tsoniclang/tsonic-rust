@@ -104,7 +104,7 @@ export function realizeRustSourceTypeFamilyDemands(walk: RustFactWalk, files: re
         const declaration = walk.sourceTypes.declarationForCarrier(owner);
         type = declaration === undefined ? undefined : walk.context.semanticsFor(declaration).declarations.declaredType(declaration);
       }
-      if (family === undefined || type === undefined) {
+      if (family?.kind !== "conditional" || type === undefined) {
         reject(node, "A dependent type application has no exact source argument correspondence."); return;
       }
       const application = walk.context.semanticsFor(node).types.instantiateAlias(family.declaration, [type]);
