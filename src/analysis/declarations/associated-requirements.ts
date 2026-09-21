@@ -50,7 +50,7 @@ export function createRustAssociatedRequirementCollector(
       const entry = entries.find(candidate => rustTargetTypeRefEquals(candidate.carrier, carrier));
       if (entry === undefined) {
         const field = families.implementation(carrier.trait, carrier.owner)?.field;
-        return field !== undefined && (!access.includes("write") || !field.readonly);
+        return field !== undefined && (!access.includes("write") || field.sharedWrite);
       }
       for (const mode of access) entry.fieldAccess.add(mode);
       return true;

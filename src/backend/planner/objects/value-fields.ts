@@ -18,7 +18,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { readRustStoredObjectField, writeRustStoredObjectField, rustProjectObjectRepresentation, rustDirectProjectFieldStoragePath } from "./project-storage.js";
 
 export interface RustValueFieldLocation {
-  readonly bindings: readonly { readonly name: string; readonly value: RustExpr }[];
+  readonly bindings: readonly { readonly name: string; readonly value: RustExpr; readonly mutable?: boolean }[];
   readonly read: RustExpr;
   readonly write: (value: RustExpr) => RustExpr | undefined;
 }

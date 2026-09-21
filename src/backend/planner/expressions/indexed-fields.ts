@@ -8,11 +8,10 @@ import { rustRecordFieldResult } from "../objects/record-fields.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planExpression } from "./entry.js";
 import { planRustSharedReceiver } from "./typed-locations.js";
-import { planRustDirectStorage } from "./updates/target.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import type { RustValueFieldLocation } from "../objects/value-fields.js";
 import { rustMutatedBindingFactKey, rustSourceBindingFactKey } from "../../../analysis/facts/keys.js";
-import { rustLocationStorageForReference } from "./typed-locations.js";
+import { rustLocationStorageForReference, planRustNonConsumingValue } from "./typed-locations.js";
 
 export type RustIndexedFieldOperation = Extract<RustTargetOperationFact, { readonly kind: "source-indexed-field" }>;
 
@@ -23,12 +22,14 @@ export function planRustIndexedFieldLocation(
   const ast = context.input.program.source.ast;
   const receiverNode = Node_Expression(ast, node);
   const keyNode = ElementAccessExpression_ArgumentExpression(ast, node);
-  const direct = receiverNode === undefined ? undefined : planRustDirectStorage(receiverNode, context);
+  const plannedReceiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
+  const direct = receiverNode === undefined || plannedReceiver === undefined ? undefined
+    : planRustNonConsumingValue(receiverNode, plannedReceiver, context);
   const binding = receiverNode === undefined ? undefined : context.input.program.facts.getFact(receiverNode, rustSourceBindingFactKey);
-  const stable = direct?.kind === "path" && binding !== undefined &&
+  const stable = (direct?.kind === "path" || direct?.kind === "reference") && binding !== undefined &&
     context.input.program.facts.getFact(binding.sourceDeclaration, rustMutatedBindingFactKey) === undefined &&
     rustLocationStorageForReference(receiverNode!, context) === undefined;
-  const receiver = receiverNode === undefined ? undefined : stable ? direct : planExpression(receiverNode, context);
+  const receiver = stable ? direct : plannedReceiver;
   const key = keyNode === undefined ? undefined : planExpression(keyNode, context);
   if (receiver === undefined || key === undefined || keyNode === undefined) return undefined;
   const receiverName = allocateRustSyntheticName(context.syntheticNames, "field_owner");
@@ -39,11 +40,11 @@ export function planRustIndexedFieldLocation(
   if (read === undefined) return undefined;
   return {
     bindings: [
-      ...(stable ? [] : [{ name: receiverName, value: receiver, mutable: access === "write" }]),
+      ...(stable ? [] : [{ name: receiverName, value: receiver }]),
       { name: keyName, value: planRustSharedReceiver(keyNode, key, context) },
     ], read,
     write: value => access !== "write" ? undefined : planRustIndexedFieldCall(fact,
-      { kind: "reference", expr: owner, mutable: true }, keyReference, value, context),
+      { kind: "reference", expr: owner }, keyReference, value, context),
   };
 }
 

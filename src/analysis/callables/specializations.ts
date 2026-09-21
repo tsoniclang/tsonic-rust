@@ -10,6 +10,8 @@ import {
   substituteRustTargetTypeParameters,
 } from "../../target-model/types/index.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
+import { createRustGenericCallablePlan, type RustGenericCallablePlan } from "./generic-values.js";
+import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 
 export interface RustSourceCallableSpecializationVariant {
   readonly declaration: Node;
@@ -29,6 +31,7 @@ export interface RustSourceCallableSpecializationIssue {
 }
 
 export interface RustSourceCallableSpecializationPlan {
+  readonly genericValues: RustGenericCallablePlan;
   readonly issues: readonly RustSourceCallableSpecializationIssue[];
   readonly projectMethodRequests: readonly RustProjectMethodSpecializationRequest[];
   requiresSpecialization(declaration: Node): boolean;
@@ -63,6 +66,8 @@ export interface RustSourceCallableSpecializationPlanRegistry
     readonly sourceLifetimes: RustLifetimeIndex;
   }): RustSourceCallableSpecializationRegistration;
   initialize(input: {
+    readonly sourceFiles: readonly SourceFile[];
+    readonly facts: RustPlanQueries;
     readonly ast: AstReader;
     readonly closedSourceFiles: ReadonlySet<SourceFile>;
     readonly names: RustNamePlan;
@@ -162,6 +167,7 @@ export function createRustSourceCallableSpecializationPlanRegistry(): RustSource
     get issues() {
       return requireCurrent().issues;
     },
+    get genericValues() { return requireCurrent().genericValues; },
     get projectMethodRequests() {
       return requireCurrent().projectMethodRequests;
     },
@@ -182,6 +188,8 @@ function createRustSourceCallableSpecializationPlan(
   sourceCalls: readonly SourceCallEdge[],
   projectMethodCalls: readonly ProjectMethodEdge[],
   input: {
+    readonly sourceFiles: readonly SourceFile[];
+    readonly facts: RustPlanQueries;
     readonly ast: AstReader;
     readonly closedSourceFiles: ReadonlySet<SourceFile>;
     readonly names: RustNamePlan;
@@ -367,7 +375,8 @@ function createRustSourceCallableSpecializationPlan(
       );
   });
   const plan: RustSourceCallableSpecializationPlan = {
-    issues: Object.freeze(issues),
+    genericValues: createRustGenericCallablePlan(input.ast, input.sourceFiles, input.facts, input.names),
+    get issues() { return Object.freeze([...issues, ...this.genericValues.issues]); },
     projectMethodRequests: Object.freeze(methodRequests),
     requiresSpecialization(declaration) {
       return required.has(declaration);

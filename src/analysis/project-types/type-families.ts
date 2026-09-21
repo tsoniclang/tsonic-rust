@@ -88,8 +88,10 @@ export function createRustSourceTypeFamilyRegistry(): RustSourceTypeFamilyRegist
       if (family.kind === "indexed" ? implementation.field === undefined ||
         !Number.isSafeInteger(implementation.field.storageIndex) || implementation.field.storageIndex < 0 ||
         typeof implementation.field.readonly !== "boolean" ||
+        typeof implementation.field.sharedWrite !== "boolean" ||
+        implementation.field.readonly && implementation.field.sharedWrite ||
         !["project-object", "structural-object"].includes(implementation.field.storage) ||
-        Object.keys(implementation.field).sort().join(",") !== "readonly,storage,storageIndex" :
+        Object.keys(implementation.field).sort().join(",") !== "readonly,sharedWrite,storage,storageIndex" :
         implementation.field !== undefined) return false;
       const trait = selectedTrait(implementation);
       const parameterNames = new Set(rustTargetTypeParameterNames(implementation.owner));

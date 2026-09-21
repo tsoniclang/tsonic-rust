@@ -52,6 +52,8 @@ import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustReceiverIndependentMethodFactKey } from "../../../analysis/facts/operations/keys.js";
+import { rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
+import { planRustGenericCallableValue } from "./generic-callables.js";
 
 export function planCallableExpression(
   node: Node,
@@ -69,6 +71,9 @@ export function planCallableExpression(
   }
   if (!requireExpressionCarrier(node, closureFact.resultCarrier, context, "rust.backend.closure-carrier")) {
     return undefined;
+  }
+  if (rustGenericCallableValue(closureFact.resultCarrier) !== undefined) {
+    return planRustGenericCallableValue(node, closureFact.resultCarrier, context);
   }
   const callableProtocol = rustCallableProtocol(closureFact.resultCarrier);
   const nativeClosureProtocol = rustClosureProtocol(closureFact.resultCarrier);

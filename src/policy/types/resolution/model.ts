@@ -12,6 +12,7 @@ export interface RustTargetTypeResolutionOptions {
   readonly providerTypes: readonly RustProviderTypeRow[];
   readonly sourceProfiles: RustSourceProfileRegistry;
   readonly sourceTypes: RustSourceTypeRegistry;
+  readonly projectCarrierSupportsObjectIdentity: (carrier: TargetTypeRef) => boolean;
   readonly resolveProjectUnionCarrier: (
     memberCarriers: readonly TargetTypeRef[],
   ) => TargetTypeRef | undefined;

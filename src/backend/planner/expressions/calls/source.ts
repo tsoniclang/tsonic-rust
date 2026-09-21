@@ -11,6 +11,7 @@ import {
   isValidRustIdentifier,
   rustActiveErrorType,
   rustCurrentErrorBoundary,
+  rustErrorBoundaryForDeclaration,
   rustErrorBoundaryForProjectMember,
   rustErrorType,
   sourceModuleItemPath,
@@ -46,6 +47,7 @@ import type { RustCallGenericArgument, RustExpr } from "../../../target-ast/node
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
 import { planRustUnionMethodCall } from "./union-methods.js";
+import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../../../target-model/types/carriers/generic-callables.js";
 
 export function sourceCallEffectsMatch(
   fact: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>,
@@ -330,13 +332,15 @@ export function planSelectedSourceCall(
         planned = { kind: "invoke", callee: callable, args: shaped };
         break;
       }
-      const protocol = rustCallableProtocol(fact.target.carrier);
+      const generic = rustGenericCallableValue(fact.target.carrier);
+      const protocol = rustGenericCallableProtocol(fact.target.carrier) ?? rustCallableProtocol(fact.target.carrier);
       if (protocol !== undefined && protocol.parameters.length === shaped.length) {
         planned = {
           kind: "method-call",
           receiver: callable,
           method: "call",
-          args: [{ kind: "tuple-literal", elements: shaped }],
+          args: generic === undefined ? [{ kind: "tuple-literal", elements: shaped }] : shaped,
+          ...(generic === undefined || callGenericArguments === undefined ? {} : { genericArguments: callGenericArguments }),
         };
       }
       break;
@@ -398,8 +402,13 @@ export function planSelectedSourceCall(
     : fact.target.form === "structural-method"
       ? fact.target.callableCarrier
       : undefined;
-  const operandBoundary = rustCallableProtocol(callableCarrier) !== undefined || callableCarrier?.kind === "closure"
-    ? rustCurrentErrorBoundary(context)
+  const genericDefinition = callableCarrier === undefined ? undefined
+    : context.input.program.sourceCallableSpecializations.genericValues.definitionFor(callableCarrier);
+  const genericDeclaration = genericDefinition?.implementations[0]?.declaration;
+  const operandBoundary = genericDeclaration !== undefined
+    ? rustErrorBoundaryForDeclaration(genericDeclaration, context)
+    : rustCallableProtocol(callableCarrier) !== undefined || callableCarrier?.kind === "closure"
+      ? rustCurrentErrorBoundary(context)
     : selected.sourceDeclaration === undefined
       ? undefined
       : rustErrorBoundaryForProjectMember(selected.sourceDeclaration, context);

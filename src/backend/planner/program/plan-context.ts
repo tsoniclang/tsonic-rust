@@ -36,6 +36,7 @@ export interface RustCapturedBinding {
   readonly path: string;
   readonly storage: "value" | "location";
   readonly valueCarrier: import("../../../target-model/types/model.js").TargetTypeRef;
+  readonly borrowed?: boolean;
 }
 
 interface RustControlTargetBase {

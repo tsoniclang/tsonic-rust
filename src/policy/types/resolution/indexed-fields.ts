@@ -41,7 +41,11 @@ export function resolveRustIndexedField(
   if (sourceFileName === undefined || !options.sourceTypes.typeFamilies.registerImplementation({
     family, arguments: [{ kind: "type", type: key }], owner,
     output: field.resultCarrier, sourceFileName,
-    field: { storage: shape.storage, storageIndex: field.storageIndex, readonly: field.readonly },
+    field: { storage: shape.storage, storageIndex: field.storageIndex, readonly: field.readonly,
+      sharedWrite: !field.readonly && (shape.storage === "structural-object"
+        ? rustStructuralObjectCarrierValue(owner)?.representation === "reference"
+        : options.projectCarrierSupportsObjectIdentity(owner)),
+    },
   })) return undefined;
   return { key, result: field.resultCarrier };
 }

@@ -42,7 +42,7 @@ export function planRustIndexedFieldImplementation(
   const items: RustItem[] = [{ kind: "impl", trait, target: storage, generics,
     associatedTypes: [{ name: "Output", type: output }, { name: "Storage", type: storage }], functions: [],
   }];
-  for (const access of field.readonly ? ["read"] as const : ["read", "write"] as const) {
+  for (const access of field.sharedWrite ? ["read", "write"] as const : ["read"] as const) {
     const bodyContext: RustPlanContext = { ...context, fallibleBoundary: boundary,
       syntheticNames: createRustSyntheticNameState(context.input.program.source.ast, context.sourceFile,
         ["owner", "_key", "value"]),
@@ -64,7 +64,7 @@ export function planRustIndexedFieldImplementation(
       functions: [{ name: access === "read" ? "read_field" : "write_field", visibility: "private",
         generics: emptyRustGenerics,
         params: [
-          { name: "owner", type: { kind: "reference", referent: owner, mutable: access === "write" } },
+          { name: "owner", type: { kind: "reference", referent: owner, mutable: false } },
           { name: "_key", type: { kind: "reference", referent: keyType, mutable: false } },
           ...(access === "read" ? [] : [{ name: "value", type: output }]),
         ], returnType: result,

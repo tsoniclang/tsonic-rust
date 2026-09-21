@@ -170,7 +170,7 @@ test("indexed families distinguish exact keys and retain readonly storage and in
   assert.equal(registry.register({ ...indexed, trait: { ...rustIndexedFieldTrait, path: "unproved::Field" } }), false);
   for (const [index, key, output, readonly] of [[0, countKey, signed, false], [1, labelKey, unsigned, true]]) {
     assert.equal(registry.registerImplementation({ family: indexed, arguments: [{ kind: "type", type: key }], owner,
-      output, sourceFileName: "/record.ts", field: { storage: "structural-object", storageIndex: index, readonly } }), true);
+      output, sourceFileName: "/record.ts", field: { storage: "structural-object", storageIndex: index, readonly, sharedWrite: !readonly } }), true);
   }
   assert.deepEqual(rustTypeFamilyNormalizer(registry)(rustIndexedFieldProjection(owner, countKey)), signed);
   assert.deepEqual(rustTypeFamilyNormalizer(registry)(rustIndexedFieldProjection(owner, labelKey)), unsigned);
@@ -193,11 +193,27 @@ test("indexed field identity collisions and incomplete native implementations fa
   registry.register(indexed);
   const implementation = { family: indexed, owner: signed, output: unsigned,
     arguments: [{ kind: "type", type: rustIndexedFieldKey(identity) }], sourceFileName: "/record.ts",
-    field: { storage: "structural-object", storageIndex: 0, readonly: false } };
+    field: { storage: "structural-object", storageIndex: 0, readonly: false, sharedWrite: true } };
   for (const mutation of [{ field: undefined }, { field: { ...implementation.field, storageIndex: -1 } },
+    { field: { ...implementation.field, sharedWrite: undefined } },
+    { field: { ...implementation.field, readonly: true, sharedWrite: true } },
     { arguments: [] }, { arguments: [{ kind: "type", type: parameter }] }]) {
     assert.equal(registry.registerImplementation({ ...implementation, ...mutation }), false);
   }
   registry.seal();
   assert.throws(() => registry.registerFieldKey(identity, "count"), /already sealed/u);
+});
+
+test("inline native field reads do not invent shared-write capability", () => {
+  const registry = createRustSourceTypeFamilyRegistry();
+  const indexed = { kind: "indexed", trait: rustIndexedFieldTrait };
+  const key = rustIndexedFieldKey("00000000000000000000000000000001");
+  registry.register(indexed);
+  assert.equal(registry.registerImplementation({ family: indexed, owner: signed, output: unsigned,
+    arguments: [{ kind: "type", type: key }], sourceFileName: "/record.ts",
+    field: { storage: "structural-object", storageIndex: 0, readonly: false, sharedWrite: false } }), true);
+  const collector = createRustAssociatedRequirementCollector(new Set(), registry, () => false);
+  const projection = rustIndexedFieldProjection(signed, key);
+  assert.equal(collector.requireField(projection, ["read"]), true);
+  assert.equal(collector.requireField(projection, ["write"]), false);
 });

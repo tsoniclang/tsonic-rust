@@ -12,7 +12,7 @@ import { substituteRustTargetTypeParameters } from "../../target-model/types/car
 import { emptyRustTypeDefinitions, rustSourceUnionDefinitionIdentity, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 
-export type RustShapeGenericRequirementContract = Omit<RustDeclarationGenericRequirementContract, "declaration">;
+export type RustShapeGenericRequirementContract = Pick<RustDeclarationGenericRequirementContract, "typeParameters" | "associatedTypes">;
 
 export function analyzeRustShapeGenericRequirements(
   carrier: TargetTypeRef,

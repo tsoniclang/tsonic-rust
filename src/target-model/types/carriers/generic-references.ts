@@ -7,6 +7,7 @@ import {
   rustSourceUnionCarrierValue,
   rustStructuralObjectCarrierValue,
 } from "./source-types.js";
+import { rustGenericCallableValue } from "./generic-callables.js";
 import type {
   RustTargetConstArgument,
   RustTargetGenericArgument,
@@ -69,6 +70,8 @@ export function visitRustTargetTypeParameters(
         (type.trait !== undefined && visitRustTargetTypeParameters(type.trait, visit)) ||
         visitGenericArgumentTypes(type.genericArguments, visit);
     case "target-specific": {
+      const callable = rustGenericCallableValue(type);
+      if (callable !== undefined) return callable.environment.some(argument => visitRustTargetTypeParameters(argument, visit));
       const sourceType = rustSourceTypeCarrierValue(type);
       if (sourceType !== undefined) {
         return visitGenericArgumentTypes(sourceType.genericArguments, visit);
@@ -261,6 +264,11 @@ export function rustTargetGenericReferences(
         visitArguments(value.genericArguments, bound);
         return;
       case "target-specific": {
+        const callable = rustGenericCallableValue(value);
+        if (callable !== undefined) {
+          callable.environment.forEach(argument => visitType(argument, bound));
+          return;
+        }
         const sourceType = rustSourceTypeCarrierValue(value);
         if (sourceType !== undefined) {
           visitArguments(sourceType.genericArguments, bound);

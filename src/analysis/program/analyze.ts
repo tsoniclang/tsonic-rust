@@ -306,6 +306,8 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   const nativeFields = recordRustNativeBacking(walk);
   const callableSpecializations = context.sourceCallableSpecializations.initialize({
     ast,
+    sourceFiles: context.sourceFiles,
+    facts: context.facts,
     closedSourceFiles,
     names: context.names,
     projectTypes,

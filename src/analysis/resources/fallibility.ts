@@ -39,6 +39,7 @@ import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { recordSelectedOperationInputs } from "../operations/inputs.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
 import { rustFutureOutputCarrier, rustCallableProtocol } from "../../target-model/types/index.js";
+import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustInheritedProjectConstructor } from "../project-types/type-policy.js";
 import { rustOperationAbiAwaitIsFallible, rustTargetOperationIsFallible } from "../facts/target-operation.js";
 import { rustPolicyTargetDiagnostic } from "../../policy/operations/contracts.js";
@@ -656,7 +657,7 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
           walk.context.facts.resolve(node, rustTargetOperationFactKey);
         const body = ast.body(node);
         if (operation?.kind === "closure" && body !== undefined && expressionRegionIsFallible(body)) {
-          if (rustCallableProtocol(operation.resultCarrier) !== undefined ||
+          if (rustGenericCallableValue(operation.resultCarrier) !== undefined || rustCallableProtocol(operation.resultCarrier) !== undefined ||
             operation.resultCarrier.kind === "closure" && operation.resultCarrier.fallible === true) {
             walk.context.facts.set(node, rustFallibleFactKey, { fallible: true }, [
               { message: "rust fallible first-class callable implementation" },
@@ -702,7 +703,7 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
           const nativeCallable = operation.target.form === "callable" &&
             (operation.target.carrier.kind === "closure" || operation.target.carrier.kind === "function-pointer");
           const runtimeCallable = (operation.target.form === "callable" &&
-              (rustCallableProtocol(operation.target.carrier) !== undefined ||
+              (rustGenericCallableValue(operation.target.carrier) !== undefined || rustCallableProtocol(operation.target.carrier) !== undefined ||
                 operation.target.carrier.kind === "closure" && operation.target.carrier.fallible === true)) ||
             operation.target.form === "structural-method" &&
               rustCallableProtocol(operation.target.callableCarrier) !== undefined;

@@ -83,8 +83,7 @@ export function collectRustMutableProjectStorageRequirements(
       if (selected !== undefined && selected.accessMode !== "read") {
         collectStoragePath(Node_Expression(ast, node));
         if ((selected.accessMode === "write" || selected.accessMode === "read-write") &&
-          (hasValueReceiver(selected.receiver.expression) || selected.receiver.type !== undefined &&
-            context.semantics(sourceFile).types.selectIndexedAccess(selected.receiver.type, selected.argument.type)?.kind === "deferred")) {
+          hasValueReceiver(selected.receiver.expression)) {
           valueWrites.add(node);
         }
       }

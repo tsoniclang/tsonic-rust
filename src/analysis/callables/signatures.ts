@@ -51,6 +51,7 @@ import { resolveRustSuspendedCallableStorage } from "./suspension-storage.js";
 import { rustHigherRankedNativeFunctionCarrier } from "./higher-ranked-function.js";
 import { selectRustPointerReturnContract } from "../../policy/operations/pointer-return.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustGenericCallableProtocol } from "../../target-model/types/carriers/generic-callables.js";
 
 export function recordFunctionSignatureFacts(walk: RustFactWalk, declaration: Node): void {
   recordCallableParameterSignatureFacts(walk, declaration);
@@ -324,7 +325,9 @@ function recordCallableValueSignatureFacts(
       rustResolutionContext(walk, declaration),
       walk.operationOptions,
     );
-  const callable = rustCallableProtocol(selectedCarrier);
+  const ownNames = walk.context.sourceLifetimes.contractFor(expression)?.parameters
+    .flatMap(parameter => parameter.kind === "type" ? [parameter.targetName] : []);
+  const callable = rustGenericCallableProtocol(selectedCarrier, ownNames) ?? rustCallableProtocol(selectedCarrier);
   const closure = rustClosureProtocol(selectedCarrier);
   const parameterCarriers = selectedCarrier?.kind === "function-pointer"
     ? selectedCarrier.args

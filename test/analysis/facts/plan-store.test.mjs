@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRustPlanBuilder } from "../../../dist/analysis/facts/plan-store.js";
+import { rustTargetOperationFactKey } from "../../../dist/analysis/facts/operations/keys.js";
 import {
   rustConversionKey,
   rustRuntimeCarrierKey,
@@ -17,6 +18,29 @@ import {
 function createModel() {
   return createRustPlanBuilder({ getFact: () => undefined });
 }
+
+test("source fields retain exact declaration identity when reselected", () => {
+  const model = createModel();
+  const declaration = { kind: "property", parent: undefined };
+  declaration.parent = declaration;
+  const fact = {
+    kind: "source-field", operationId: "field", declaration,
+    accessMode: "read", storage: "project-object", storageIndex: 0,
+    receiverCarrier: { kind: "type-parameter", name: "Owner" },
+    resultCarrier: { kind: "source-primitive", name: "int32" },
+    valueSemantics: { kind: "stored" },
+  };
+  const subject = {};
+  model.set(subject, rustTargetOperationFactKey, fact);
+  assert.doesNotThrow(() => model.set(subject, rustTargetOperationFactKey,
+    { ...fact, resultCarrier: { ...fact.resultCarrier }, valueSemantics: { ...fact.valueSemantics } }));
+  for (const mutation of [
+    { declaration: { ...declaration } }, { storageIndex: 1 }, { accessMode: "write" },
+    { resultCarrier: { kind: "source-primitive", name: "uint32" } },
+  ]) {
+    assert.throws(() => model.set(subject, rustTargetOperationFactKey, { ...fact, ...mutation }), /Conflicting Rust semantic plan/u);
+  }
+});
 
 test("closed Rust carrier and conversion facts are allocation-independent", () => {
   const model = createModel();

@@ -47,6 +47,7 @@ import { rustLifetimeKey } from "../../../../target-model/lifetimes/index.js";
 import { rustOperandSupportsSourceNumeric } from "../../generic-numeric.js";
 import { selectRustPointerViewCall } from "../../pointer-views.js";
 import { selectBorrowedCallbackParameters } from "./borrowed-callbacks.js";
+import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../../../target-model/types/carriers/generic-callables.js";
 import type {
   RustCheckedCallSelectionInput,
   RustCheckedCallSelectionResult,
@@ -621,17 +622,26 @@ function acceptRuntimeCallableCarrierCall(
   sourceDeclaration?: Node,
   optionalGuard?: RustOptionalCallGuard,
 ): RustPolicySelection<RustCheckedCallSelectionResult> | undefined {
-  const protocol = runtimeCallableProtocol(calleeCarrier);
+  const generic = rustGenericCallableValue(calleeCarrier);
+  const selectedGenerics = request.source.sourceSelectedMethodTypeArguments ?? [];
+  const protocol = generic === undefined ? runtimeCallableProtocol(calleeCarrier)
+    : rustGenericCallableProtocol(calleeCarrier, selectedGenerics.map(argument => argument.typeParameterName));
   if (calleeCarrier === undefined || protocol === undefined) {
     return undefined;
   }
-  const targetGenericArguments = selectRustRuntimeCallableGenerics(request, calleeCarrier, context);
+  const genericTypes = generic === undefined ? undefined : selectedGenerics.map(argument =>
+    resolveRustTargetTypeRef(argument.explicitTypeNode ?? argument.selectedType, context, options));
+  const targetGenericArguments = genericTypes === undefined ? selectRustRuntimeCallableGenerics(request, calleeCarrier, context)
+    : genericTypes.some(type => type === undefined) ? undefined
+      : genericTypes.map(type => ({ kind: "type" as const, type: type! }));
   if (targetGenericArguments === undefined) {
     return rejectSelectedOperation(request.source.call, context,
       "RUST_RUNTIME_CALLABLE_GENERIC_CONTRACT_CONFLICT",
       "Runtime callable generic arguments require the exact selected lifetime binder; runtime type generics are not erased.");
   }
-  const genericParameters = calleeCarrier.kind !== "closure" || calleeCarrier.lifetimeBinder === undefined ? []
+  const genericParameters = generic !== undefined
+    ? selectedGenerics.map(argument => ({ kind: "type" as const, sourceName: argument.typeParameterName }))
+    : calleeCarrier.kind !== "closure" || calleeCarrier.lifetimeBinder === undefined ? []
     : calleeCarrier.lifetimeBinder.parameters.map((parameter, index) => ({
         kind: "lifetime" as const,
         sourceName: request.source.sourceSelectedMethodTypeArguments![index]!.typeParameterName,
@@ -645,7 +655,7 @@ function acceptRuntimeCallableCarrierCall(
   const resultCarrier = instantiate(protocol.result);
   const parameterPlan = runtimeCallableTargetParameters(
     request,
-    protocol.parameters.map(instantiate),
+    generic === undefined ? protocol.parameters.map(instantiate) : protocol.parameters,
     context,
   );
   if (parameterPlan === undefined) {
@@ -672,7 +682,7 @@ function acceptRuntimeCallableCarrierCall(
     targetName: "call",
     kind: "method",
     parameters: parameterPlan.parameters,
-    returnType: resultCarrier,
+    returnType: generic === undefined ? resultCarrier : protocol.result,
     ...(genericParameters.length === 0 ? {} : { genericParameters }),
   };
   const selectedSignature = {
@@ -768,5 +778,5 @@ function runtimeCallableProtocol(
   if (carrier?.kind === "function-pointer" || carrier?.kind === "closure") {
     return { parameters: carrier.args, result: carrier.result };
   }
-  return rustCallableProtocol(carrier);
+  return rustGenericCallableProtocol(carrier) ?? rustCallableProtocol(carrier);
 }

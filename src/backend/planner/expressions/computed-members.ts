@@ -6,6 +6,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { planExpression } from "./entry.js";
 import { effectivePlannedExpressionCarrier } from "./fundamentals.js";
 import { planRustValueFieldLocation, rustSourceFieldHasValueReceiver } from "../objects/value-fields.js";
+import { planRustSharedReceiver } from "./typed-locations.js";
 
 export interface RustComputedMemberEvaluation {
   readonly bindings: readonly { readonly name: string; readonly value: RustExpr }[];
@@ -21,13 +22,14 @@ export function prepareRustComputedMemberEvaluation(
     return { bindings: [], context };
   }
   if (context.syntheticNames === undefined) return undefined;
-  const key = planExpression(fact.key, context);
+  const key = planExpression(fact.key, context, "discarded");
   const keyCarrier = effectivePlannedExpressionCarrier(fact.key, context);
   if (key === undefined || keyCarrier === undefined) return undefined;
+  const evaluatedKey = planRustSharedReceiver(fact.key, key, context);
   const keyName = allocateRustSyntheticName(context.syntheticNames, "_member_key");
   const overrides = new Map(context.expressionOverrides ?? []);
   overrides.set(fact.key, {
-    expression: { kind: "path", path: keyName }, carrier: keyCarrier, valueForm: "value",
+    expression: { kind: "path", path: keyName }, carrier: keyCarrier, valueForm: "shared-reference",
   });
   if (rustSourceFieldHasValueReceiver(node, context)) {
     const location = planRustValueFieldLocation(node, context,
@@ -36,7 +38,7 @@ export function prepareRustComputedMemberEvaluation(
     const locations = new Map(context.valueFieldLocations ?? []);
     locations.set(node, { ...location, bindings: [] });
     return {
-      bindings: [...location.bindings, { name: keyName, value: key }],
+      bindings: [...location.bindings, { name: keyName, value: evaluatedKey }],
       context: { ...context, expressionOverrides: overrides, valueFieldLocations: locations },
     };
   }
@@ -50,7 +52,7 @@ export function prepareRustComputedMemberEvaluation(
   return {
     bindings: [
       { name: receiverName, value: receiver },
-      { name: keyName, value: key },
+      { name: keyName, value: evaluatedKey },
     ],
     context: { ...context, expressionOverrides: overrides },
   };

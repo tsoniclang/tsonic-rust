@@ -45,6 +45,8 @@ import { setCarrierFact, setRustOperationFact } from "../operations/project-call
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { rustGenericCallableProtocol, rustGenericCallableTargetType, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
+import { recordCallableReturnFact } from "./signatures.js";
 
 export function resolveFunctionExpressionCarrier(
   walk: RustFactWalk,
@@ -62,6 +64,8 @@ export function resolveFunctionExpressionCarrier(
   },
 ): TargetTypeRef | undefined {
   const { ast } = walk.context;
+  const genericNames = walk.context.sourceLifetimes.contractFor(expression)?.parameters
+    .flatMap(parameter => parameter.kind === "type" ? [parameter.targetName] : []);
   const parameters = ast.parameters(expression);
   const sourceSelected = options?.sourceCarrier ?? (expected === undefined
     ? resolveRustTargetTypeRef(
@@ -72,7 +76,7 @@ export function resolveFunctionExpressionCarrier(
     : undefined);
   const resolvedSourceCallable = sourceSelected?.kind === "function-pointer"
     ? { parameters: sourceSelected.args, result: sourceSelected.result }
-    : rustClosureProtocol(sourceSelected) ?? rustCallableProtocol(sourceSelected);
+    : rustGenericCallableProtocol(sourceSelected, genericNames) ?? rustClosureProtocol(sourceSelected) ?? rustCallableProtocol(sourceSelected);
   const fallbackParameterCarriers = resolvedSourceCallable?.parameters.map((carrier, index) =>
     Node_Initializer(ast, parameters[index]) === undefined
       ? carrier
@@ -86,9 +90,12 @@ export function resolveFunctionExpressionCarrier(
         args: fallbackParameterCarriers,
         result: resolvedSourceCallable.result,
       }
-    : rustCallableTargetType(fallbackParameterCarriers, resolvedSourceCallable.result));
+    : rustGenericCallableValue(sourceSelected) !== undefined && genericNames !== undefined
+      ? rustGenericCallableTargetType(genericNames, fallbackParameterCarriers, resolvedSourceCallable.result)
+      : rustCallableTargetType(fallbackParameterCarriers, resolvedSourceCallable.result));
   if (selectedExpected === undefined || (selectedExpected.kind !== "function-pointer" &&
     rustClosureProtocol(selectedExpected) === undefined &&
+    rustGenericCallableProtocol(selectedExpected, genericNames) === undefined &&
     rustCallableProtocol(selectedExpected) === undefined)) {
     return undefined;
   }
@@ -96,7 +103,7 @@ export function resolveFunctionExpressionCarrier(
     walk.context.semanticsFor(expression).operations.generator(expression) !== undefined) {
     return undefined;
   }
-  const callable = rustCallableProtocol(selectedExpected);
+  const callable = rustGenericCallableProtocol(selectedExpected, genericNames) ?? rustCallableProtocol(selectedExpected);
   const closure = rustClosureProtocol(selectedExpected);
   const selectedParameters = selectedExpected.kind === "function-pointer"
     ? selectedExpected.args
@@ -262,9 +269,13 @@ export function resolveFunctionExpressionCarrier(
     ...leadingParameters.map((parameter) => parameter.carrier),
     ...parameterCarriers,
   ];
-  const closureCarrier: TargetTypeRef = selectedExpected.kind === "function-pointer" || selectedExpected.kind === "closure"
+  const closureCarrier = selectedExpected.kind === "function-pointer" || selectedExpected.kind === "closure"
     ? { ...selectedExpected, args: finalizedParameterCarriers, result: bodyCarrier }
+    : rustGenericCallableValue(selectedExpected) !== undefined && genericNames !== undefined
+      ? rustGenericCallableTargetType(genericNames, finalizedParameterCarriers, bodyCarrier)
     : rustCallableTargetType(finalizedParameterCarriers, bodyCarrier);
+  if (closureCarrier === undefined || rustGenericCallableValue(closureCarrier) !== undefined &&
+    !recordCallableReturnFact(walk, expression, bodyCarrier)) return undefined;
   const captures = collectRustClosureCaptures(walk, expression, body);
   if (captures === undefined) {
     return undefined;

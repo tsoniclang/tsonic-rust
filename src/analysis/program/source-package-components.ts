@@ -89,6 +89,20 @@ export function analyzeRustSourcePackageComponents(
     return { kind: "rejected", diagnostics: Object.freeze(diagnostics) };
   }
 
+  for (const definition of context.sourceCallableSpecializations.genericValues.definitions) {
+    const components = new Set(definition.implementations.map(implementation =>
+      componentIdByFileName.get(normalizePath(implementation.sourceFileName))));
+    if (components.size !== 1 || components.has(undefined)) {
+      diagnostics.push(componentDiagnostic(
+        "RUST_GENERIC_CALLABLE_COMPONENT_NOT_CLOSED",
+        "One generic callable environment requires implementations from different source-package components; a backward native dependency cannot be invented.",
+      ));
+    }
+  }
+  if (diagnostics.length > 0) {
+    return { kind: "rejected", diagnostics: Object.freeze(diagnostics) };
+  }
+
   const order: string[] = [];
   const visiting = new Set<string>();
   const visited = new Set<string>();

@@ -23,15 +23,17 @@ export function selectRustIndexedCallKeys(
   const visit = (carrier: TargetTypeRef): boolean => {
     if (carrier.kind === "associated-type" && carrier.trait?.id === rustIndexedFieldTrait.id) {
       const argument = carrier.trait.genericArguments[0];
-      if (carrier.owner.kind !== "type-parameter" || argument?.kind !== "type" || argument.type.kind !== "type-parameter") return false;
-      const ownerName = carrier.owner.name;
-      const ownerIndex = parameters.findIndex(parameter => parameter.kind === "type" && parameter.sourceName === ownerName);
+      if (argument?.kind !== "type" || argument.type.kind !== "type-parameter") return false;
+      const ownerName = carrier.owner.kind === "type-parameter" ? carrier.owner.name : undefined;
+      const ownerIndex = ownerName === undefined ? -1 : parameters.findIndex(parameter => parameter.kind === "type" && parameter.sourceName === ownerName);
       const keyName = argument.type.name;
       const keyIndex = parameters.findIndex(parameter => parameter.kind === "type" && parameter.sourceName === keyName);
-      if (ownerIndex < 0 || keyIndex < 0) return true;
-      const ownerType = sourceArguments[ownerIndex]?.selectedType;
+      if (keyIndex < 0) return true;
+      const owner = ownerIndex < 0 ? { kind: "type" as const, type: carrier.owner } : arguments_[ownerIndex];
+      const ownerType = ownerIndex < 0 ? walk.sourceTypes.structuralObjectForCarrier(carrier.owner)?.sourceType
+        : sourceArguments[ownerIndex]?.selectedType;
+      if (ownerType === undefined && carrier.owner.kind === "type-parameter") return true;
       const keyType = sourceArguments[keyIndex]?.selectedType;
-      const owner = arguments_[ownerIndex];
       if (ownerType === undefined || keyType === undefined || owner?.kind !== "type") return false;
       const field = resolveRustIndexedField(ownerType, keyType, context, walk.operationOptions, new Set(), owner.type);
       if (field === undefined || keys.has(keyName) && !rustTargetTypeRefEquals(keys.get(keyName), field.key)) return false;

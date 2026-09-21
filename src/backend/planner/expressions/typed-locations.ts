@@ -99,6 +99,11 @@ export function planRustIdentifierValue(
       ? rustModuleCellAccess(value, "load", [])
       : { kind: "method-call", receiver: value, method: "load", args: [] };
   }
+  if (captured?.borrowed === true) {
+    return isRustCopyCarrier(captured.valueCarrier)
+      ? { kind: "dereference", pointer: value }
+      : { kind: "method-call", receiver: value, method: "clone", args: [] };
+  }
   return planRustValueRead(node, value, context);
 }
 
@@ -121,7 +126,8 @@ export function planRustCaptureValue(
   move: boolean,
   context: RustPlanContext,
 ): RustExpr {
-  const capturedPath = rustCapturedBinding(node, context)?.path ?? path;
+  const captured = rustCapturedBinding(node, context);
+  const capturedPath = captured?.path ?? path;
   if (storage === "location") {
     return {
       kind: "method-call",
@@ -130,7 +136,7 @@ export function planRustCaptureValue(
       args: [],
     };
   }
-  if (move) return { kind: "path", path: capturedPath };
+  if (move && captured?.borrowed !== true) return { kind: "path", path: capturedPath };
   const value = planRustIdentifierValue(node, path, context);
   const carrier = context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
   return rustReadRequiresClone(carrier, context) &&

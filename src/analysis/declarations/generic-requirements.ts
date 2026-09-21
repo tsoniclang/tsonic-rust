@@ -1,4 +1,5 @@
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
+import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import { rustGenericNumericOperandsKey } from "../facts/generic-numeric.js";
 import { classifyCarrierRequirements } from "./generic-carrier-requirements.js";
@@ -64,6 +65,7 @@ export interface RustDeclarationTypeParameterRequirements {
 export interface RustDeclarationGenericRequirementContract {
   readonly declaration: Node;
   readonly typeParameters: readonly RustDeclarationTypeParameterRequirements[];
+  readonly capturedTypeParameters: readonly RustDeclarationTypeParameterRequirements[];
   readonly associatedTypes: readonly RustAssociatedTypeRequirement[];
 }
 
@@ -97,7 +99,6 @@ interface RequirementUse {
 
 interface RequirementContractState extends RustDeclarationGenericRequirementContract {
   readonly uses: readonly RequirementUse[];
-  readonly capturedTypeParameters: readonly RustDeclarationTypeParameterRequirements[];
 }
 
 const requirementOrder: readonly RustGenericRequirement[] = [
@@ -308,7 +309,7 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
   const exactNames = typeParameterNames as string[];
   const capturedNames: string[] = [];
   for (let ancestor = ast.parent(declaration); ancestor !== undefined; ancestor = ast.parent(ancestor)) {
-    if (!isIndependentCallable(ast, ancestor) && ast.kindName(ancestor) !== "KindClassDeclaration") continue;
+    if (!isIndependentCallable(ast, ancestor) && !isGenericTypeDeclaration(ast, ancestor)) continue;
     for (const parameter of ast.typeParameters(ancestor)) {
       if (parameter === undefined || input.sourceLifetimes.parameterFor(parameter)?.kind === "lifetime") continue;
       const name = names.nameForDeclaration(parameter);
@@ -605,7 +606,7 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
         return "A Rust closure has no exact capture classification.";
       }
       const required: readonly RustGenericRequirement[] =
-        rustClosureProtocol(operation.resultCarrier) === undefined
+        rustClosureProtocol(operation.resultCarrier) === undefined && rustGenericCallableValue(operation.resultCarrier) === undefined
           ? ["clone", "static"]
           : ["clone"];
       for (const capture of captures.captures) {
@@ -722,6 +723,11 @@ function isIndependentCallable(ast: AstReader, node: Node): boolean {
   return kind === "KindFunctionDeclaration" ||
     kind === "KindFunctionExpression" ||
     kind === "KindArrowFunction" ||
+    kind === "KindFunctionType" ||
+    kind === "KindCallSignature" ||
+    kind === "KindMethodSignature" ||
+    kind === "KindConstructSignature" ||
+    kind === "KindConstructorType" ||
     kind === "KindMethodDeclaration" ||
     kind === "KindConstructor" ||
     kind === "KindGetAccessor" ||

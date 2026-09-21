@@ -30,8 +30,8 @@ export function resolveCallableType(
   const declaration = callable.result.declaration;
   if (declaration !== undefined && context.ast.typeParameters(declaration).length > 0) {
     const contract = context.sourceLifetimes.contractFor(declaration);
-    if (contract?.lifetimeBinder === undefined || contract.parameters.some((parameter) =>
-      parameter.kind !== "lifetime")) {
+    if (contract === undefined || contract.parameters.some(parameter => parameter.kind !== "type") &&
+      (contract.lifetimeBinder === undefined || contract.parameters.some(parameter => parameter.kind !== "lifetime"))) {
       return undefined;
     }
   }

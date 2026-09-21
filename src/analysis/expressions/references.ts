@@ -1,3 +1,6 @@
+import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
+import { finalizeProjectSourceGenericArguments } from "../operations/project-call-generics.js";
+import { rustTypeFamilyNormalizer } from "../../policy/types/type-family-normalization.js";
 import {
   KindExportAssignment,
   KindFunctionDeclaration,
@@ -24,7 +27,6 @@ import {
   rustNativeCallableProtocol,
   rustSourcePrimitiveTargetType,
   rustUnitTargetType,
-  rustTargetGenericBindingsForArguments,
   substituteRustTargetGenerics,
 } from "../../target-model/types/index.js";
 import { appendRustDiagnostic, rustOperationContext, rustResolutionContext } from "../program/walk.js";
@@ -550,13 +552,17 @@ function applySelectedRuntimeCallableCall(
   sourceFile: SourceFile,
   selectedSignature: RustSelectedTargetSignature,
 ): TargetTypeRef | undefined {
+  if (!isDenseDataArray(callArguments) || callArguments.some(argument => argument === undefined)) return undefined;
   const carrier = selectedSignature.sourceCallableCarrier;
-  const protocol = rustNativeCallableProtocol(carrier) ?? rustCallableProtocol(carrier);
-  const genericBindings = rustTargetGenericBindingsForArguments(
-    selectedSignature.member.genericParameters ?? [], selectedSignature.targetGenericArguments ?? [],
-  );
+  const genericNames = (selectedSignature.member.genericParameters ?? [])
+    .flatMap(parameter => parameter.kind === "type" ? [parameter.sourceName] : []);
+  const protocol = rustGenericCallableProtocol(carrier, genericNames) ??
+    rustNativeCallableProtocol(carrier) ?? rustCallableProtocol(carrier);
+  const finalized = finalizeProjectSourceGenericArguments(walk, selectedSignature, callArguments as readonly Node[], undefined);
+  const genericBindings = finalized?.substitutions;
+  const normalize = rustTypeFamilyNormalizer(walk.context.typeFamilies);
   const instantiate = (type: TargetTypeRef): TargetTypeRef => genericBindings === undefined ? type
-    : substituteRustTargetGenerics(type, genericBindings.types, genericBindings.lifetimes, genericBindings.consts);
+    : substituteRustTargetGenerics(type, genericBindings.types, genericBindings.lifetimes, genericBindings.consts, normalize);
   const callable = protocol === undefined || genericBindings === undefined ? undefined : {
     parameters: protocol.parameters.map(instantiate), result: instantiate(protocol.result),
   };
@@ -574,12 +580,14 @@ function applySelectedRuntimeCallableCall(
     callArguments.some((argument) => argument === undefined) ||
     (selectedSignature.sourceSelectedMethodTypeArguments?.length ?? 0) !==
       (selectedSignature.targetGenericArguments?.length ?? 0) ||
-    selectedSignature.targetGenericArguments?.some(argument => argument.kind !== "lifetime") ||
+    selectedSignature.targetGenericArguments?.some(argument =>
+      argument.kind !== (rustGenericCallableValue(carrier) === undefined ? "lifetime" : "type")) ||
     callable.parameters.length !== memberParameters.length ||
     sourceParameterIndexes.length !== memberParameters.length ||
     sourceParameterIndexes.some((index) => !Number.isSafeInteger(index) || index < 0 ||
       !selectedParameters.some((parameter) => parameter.parameterIndex === index)) ||
-    !rustTargetTypeRefEquals(callable.result, selectedSignature.member.returnType)
+    selectedSignature.member.returnType === undefined ||
+    !rustTargetTypeRefEquals(callable.result, instantiate(selectedSignature.member.returnType))
   ) {
     appendRustDiagnostic(
       walk,
@@ -594,7 +602,7 @@ function applySelectedRuntimeCallableCall(
   const parameters = memberParameters.map((parameter, index) => {
     const parameterCarrier = callable.parameters[index];
     if (parameterCarrier === undefined ||
-      !rustTargetTypeRefEquals(parameterCarrier, parameter.type)) {
+      !rustTargetTypeRefEquals(parameterCarrier, instantiate(parameter.type))) {
       return undefined;
     }
     const form = parameter.paramsArray === true
@@ -729,8 +737,8 @@ function applySelectedRuntimeCallableCall(
     target,
     parameters: finalizedParameters,
     resultCarrier: callable.result,
-    ...(selectedSignature.targetGenericArguments === undefined ? {} : {
-      targetGenericArguments: selectedSignature.targetGenericArguments,
+    ...(finalized === undefined || finalized.targetGenericArguments.length === 0 ? {} : {
+      targetGenericArguments: finalized.targetGenericArguments,
     }),
   });
   if (target.form === "callable") {

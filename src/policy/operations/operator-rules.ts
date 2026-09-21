@@ -53,6 +53,7 @@ import {
   sameRustPrimitiveCarrier,
 } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustSourceTypeCarrierValue } from "../../target-model/types/index.js";
 import { rustIntegerKindIsExactlyRepresentableAsFloat64 } from "../../target-model/conversions/numeric-promotion.js";
 import {
@@ -512,7 +513,7 @@ export function selectRustBinaryOperator(
     const sameObject = leftEnum !== undefined && rightEnum !== undefined &&
       leftEnum.shape === "object" && rightEnum.shape === "object" &&
       leftEnum.fileName === rightEnum.fileName && leftEnum.typeName === rightEnum.typeName;
-    if (rustCallableProtocol(left) !== undefined && rustTargetTypeRefEquals(left, right)) {
+    if ((rustCallableProtocol(left) !== undefined || rustGenericCallableValue(left) !== undefined) && rustTargetTypeRefEquals(left, right)) {
       return { kind: "operator-token", rustOperator: equality, resultCarrier: rustSourcePrimitiveTargetType("bool") };
     }
     const sameStructuralObject = rustStructuralObjectCarrierValue(left) !== undefined &&

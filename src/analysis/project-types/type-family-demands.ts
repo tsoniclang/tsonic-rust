@@ -10,6 +10,8 @@ import { resolveRustTypeFamilyApplication } from "../../policy/types/resolution/
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustTypeFamilyNormalizer } from "../../policy/types/type-family-normalization.js";
+import { resolveRustIndexedField } from "../../policy/types/resolution/indexed-fields.js";
+import { rustIndexedFieldTrait } from "../../target-model/types/carriers/indexed-fields.js";
 
 interface FamilyDemandContext {
   readonly types: ReadonlyMap<Type, Type>;
@@ -69,8 +71,8 @@ export function realizeRustSourceTypeFamilyDemands(walk: RustFactWalk, files: re
     const targetArguments = (operation?.kind === "source-call" ? operation.targetGenericArguments : undefined) ??
       selected.targetGenericArguments ?? [];
     if (arguments_.length !== contract.parameters.length || targetArguments.length !== arguments_.length) return;
-    const types = new Map<Type, Type>();
-    const carriers = new Map<string, TargetTypeRef>();
+    const types = new Map(parent.types);
+    const carriers = new Map(parent.carriers);
     for (const [index, parameter] of contract.parameters.entries()) {
       const source = arguments_[index]!;
       const target = targetArguments[index];
@@ -84,6 +86,26 @@ export function realizeRustSourceTypeFamilyDemands(walk: RustFactWalk, files: re
   };
   const visitCarrier = (carrier: TargetTypeRef, node: Node, demand: FamilyDemandContext): void => {
     if (rejected) return;
+    if (carrier.kind === "associated-type" && carrier.trait?.id === rustIndexedFieldTrait.id) {
+      const owner = substituteRustTargetTypeParameters(carrier.owner, demand.carriers);
+      const argument = carrier.trait.genericArguments[0];
+      const sourceType = (part: TargetTypeRef): Type | undefined => {
+        const declaration = part.kind === "type-parameter" ? enclosingParameter(node, part.name, walk)
+          : walk.sourceTypes.declarationForCarrier(part);
+        const type = declaration === undefined ? undefined : walk.context.semanticsFor(declaration).declarations.declaredType(declaration);
+        return type === undefined ? undefined : demand.types.get(type) ?? type;
+      };
+      const ownerType = sourceType(carrier.owner);
+      const keyType = argument?.kind === "type" ? sourceType(argument.type) : undefined;
+      const selected = substituteRustTargetTypeParameters(carrier, demand.carriers);
+      if (!rustTargetTypeRefEquals(mapRustTargetTypes(selected, normalize), selected)) return;
+      if (ownerType === undefined || keyType === undefined ||
+        resolveRustIndexedField(ownerType, keyType, rustResolutionContext(walk, node),
+          walk.operationOptions, new Set(), owner) === undefined) {
+        reject(node, "An indexed field demand lost its exact source owner/key correspondence.");
+      }
+      return;
+    }
     if (carrier.kind === "associated-type" && carrier.trait?.sourceItem !== undefined) {
       const family = walk.context.typeFamilies.get(carrier.trait.id);
       const owner = substituteRustTargetTypeParameters(carrier.owner, demand.carriers);

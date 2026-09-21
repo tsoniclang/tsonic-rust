@@ -19,6 +19,7 @@ import {
   rustTypeGenericArguments,
 } from "../generic-arguments.js";
 import type { RustLifetimeRef } from "../../lifetimes/index.js";
+import { rustGenericCallableValue } from "./generic-callables.js";
 
 export function rustLocationTargetType(
   pointee: TargetTypeRef,
@@ -54,6 +55,7 @@ export function isRustCallableCarrier(
   carrier: TargetTypeRef | undefined,
 ): boolean {
   return carrier?.kind === "closure" || carrier?.kind === "function-pointer" ||
+    rustGenericCallableValue(carrier) !== undefined ||
     carrier?.kind === "target-named" && carrier.id === rustCallableTargetId;
 }
 

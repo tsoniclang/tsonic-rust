@@ -25,6 +25,7 @@ export interface RustSourceTypeFamilyImplementation {
     readonly storage: "structural-object" | "project-object";
     readonly storageIndex: number;
     readonly readonly: boolean;
+    readonly sharedWrite: boolean;
   };
 }
 

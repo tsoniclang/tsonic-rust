@@ -43,6 +43,7 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustSelectedTargetSignature, TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTargetOperationFact } from "../facts/keys.js";
+import { rustGenericCallableProtocol } from "../../target-model/types/carriers/generic-callables.js";
 
 export function applySelectedProjectSourceCall(
   walk: RustFactWalk,
@@ -265,8 +266,10 @@ export function applySelectedProjectSourceCall(
     walk.context.facts.resolve(expression, rustOptionalChainFactKey);
   const selectedCallableCarrier = optionalCall?.selectedGuardCarrier ?? callableCalleeCarrier;
   const selectedNativeCallable = rustNativeCallableProtocol(selectedCallableCarrier);
+  const selectedGenericCallable = rustGenericCallableProtocol(selectedCallableCarrier,
+    (selectedSignature.sourceSelectedMethodTypeArguments ?? []).map(argument => argument.typeParameterName));
   const indirectCallable = selectedCallableCarrier !== undefined &&
-    (selectedNativeCallable !== undefined ||
+    (selectedNativeCallable !== undefined || selectedGenericCallable !== undefined ||
       rustCallableProtocol(selectedCallableCarrier) !== undefined) &&
     (!directCallableDeclaration ||
       ast.kindName(callee) === "KindArrowFunction" || ast.kindName(callee) === KindFunctionExpression);
@@ -459,7 +462,7 @@ export function applySelectedProjectSourceCall(
     declarationKind === KindFunctionExpression) {
     const calleeCarrier = selectedCallableCarrier;
     if (calleeCarrier === undefined ||
-      (rustNativeCallableProtocol(calleeCarrier) === undefined &&
+      (selectedGenericCallable === undefined && rustNativeCallableProtocol(calleeCarrier) === undefined &&
         rustCallableProtocol(calleeCarrier) === undefined)) {
       return undefined;
     }
@@ -492,7 +495,7 @@ export function applySelectedProjectSourceCall(
     }
   }
   if (target.form === "callable") {
-    const callable = rustNativeCallableProtocol(target.carrier) ??
+    const callable = selectedGenericCallable ?? rustNativeCallableProtocol(target.carrier) ??
       rustCallableProtocol(target.carrier);
     if (callable !== undefined) {
       if (callable.parameters.length !== parameters.length) {

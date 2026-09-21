@@ -31,8 +31,8 @@ export function analyzeRustValueLifetimes(input: {
     }
     if (kind === "KindArrowFunction" || kind === "KindFunctionExpression") {
       const captures = input.capturesFor(node)?.captures.filter(capture =>
-        capture.storage === "value" && input.isOwnedString(capture.declaration) &&
-        isTerminalOwnedCapture(node, capture.declaration, input));
+        capture.storage === "value" &&
+        isSingleOwnedCapture(node, capture.declaration, input));
       if (captures !== undefined && captures.length > 0) {
         movableCaptures.set(node, new Set(captures.map(capture => capture.declaration)));
       }
@@ -52,7 +52,7 @@ export function analyzeRustValueLifetimes(input: {
   });
 }
 
-function isTerminalOwnedCapture(
+function isSingleOwnedCapture(
   closure: Node,
   declaration: Node,
   input: { readonly ast: AstReader; readonly navigation: SourceProgramNavigation },
@@ -61,19 +61,9 @@ function isTerminalOwnedCapture(
   const owner = enclosingCallable(declaration, ast);
   const parent = ast.parent(closure);
   if (owner === undefined || parent === undefined || enclosingCallable(parent, ast) !== owner) return false;
-  const body = ast.body(owner);
-  if (body === undefined) return false;
-  let expression = closure;
-  let enclosing = parent;
-  while (isTransparentValueWrapper(enclosing, expression, ast)) {
-    expression = enclosing;
-    const next = ast.parent(enclosing);
-    if (next === undefined) return false;
-    enclosing = next;
-  }
-  if (expression !== body &&
-    !(ast.is.IsReturnStatement(enclosing) && ast.parent(enclosing) === body &&
-      Node_Expression(ast, enclosing) === expression)) return false;
+  const declarationKind = ast.variableDeclarationKind(declaration);
+  if (declarationKind === "using" || declarationKind === "await using" ||
+    isInsideRepeatedRegion(closure, declaration, ast)) return false;
   const summary = navigation.declarationUseSummary(declaration);
   if (summary.bindingWritten || summary.exported) return false;
   const uses = summary.uses.filter(use => use.kind !== "source-linkage" && use.kind !== "type-only");

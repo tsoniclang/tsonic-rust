@@ -8,6 +8,7 @@ import type {
 } from "../model.js";
 import { rustLifetimeKey } from "../../lifetimes/index.js";
 import type { RustLifetimeRef } from "../../lifetimes/index.js";
+import { rustGenericCallableCarrier, rustGenericCallableValue } from "./generic-callables.js";
 
 export function substituteRustTargetTypeParameters(
   type: TargetTypeRef,
@@ -330,6 +331,12 @@ function substituteCarrierParts(
             }),
       };
     case "target-specific": {
+      const callable = rustGenericCallableValue(type);
+      if (callable !== undefined) return rustGenericCallableCarrier({
+        signature: callable.signature,
+        environment: callable.environment.map(argument => substituteRustTargetGenerics(
+          argument, substitutions, lifetimeSubstitutions, constSubstitutions, normalize)),
+      });
       const sourceType = rustSourceTypeCarrierValue(type);
       if (sourceType !== undefined) {
         return rustSourceTypeCarrier(

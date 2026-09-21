@@ -1,3 +1,4 @@
+import { rustGenericCallableProtocol } from "../../../../target-model/types/carriers/generic-callables.js";
 import {
   isRustCopyCarrier,
   isRustVecCarrier,
@@ -465,7 +466,9 @@ export function sourceCallSelectedMemberMatches(
   }
   const callableCarrier = fact.target.form === "callable" ? fact.target.carrier
     : fact.target.form === "structural-method" ? fact.target.callableCarrier : undefined;
-  const callable = rustNativeCallableProtocol(callableCarrier) ?? rustCallableProtocol(callableCarrier);
+  const genericNames = parameters.flatMap(parameter => parameter.kind === "type" ? [parameter.sourceName] : []);
+  const callable = rustGenericCallableProtocol(callableCarrier, genericNames) ??
+    rustNativeCallableProtocol(callableCarrier) ?? rustCallableProtocol(callableCarrier);
   if (callable !== undefined) {
     return callable.parameters.length === fact.parameters.length &&
       callable.parameters.every((carrier, index) => {
