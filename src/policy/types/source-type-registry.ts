@@ -69,7 +69,7 @@ export interface RustStructuralFieldRegistration {
 export interface RustStructuralFieldImplementation {
   readonly carrier: TargetTypeRef;
   readonly storageIndex: number;
-  readonly kind: "stored" | "accessor";
+  readonly kind: "stored" | "accessor" | "dispatch";
 }
 
 export interface RustStructuralInstantiation {

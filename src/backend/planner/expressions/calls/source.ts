@@ -186,12 +186,9 @@ export function planSelectedSourceCall(
       const constructor = context.input.program.structuralShapes.definitionForCarrier(fact.target.receiverCarrier)?.construction;
       const receiver = callee === undefined ? undefined : planExpression(callee, context);
       if (constructor === undefined || receiver === undefined || callee === undefined) break;
-      const selected: RustExpr = { kind: "method-call", receiver: planRustNonConsumingValue(callee, receiver, context),
-        method: "with", args: [{ kind: "closure", params: [{ name: "state", byRefCopy: false }],
-          body: { kind: "field", receiver: { kind: "path", path: "state" }, name: constructor.targetName },
-        }],
-      };
-      planned = { kind: "invoke", callee: selected, args: shaped };
+      const selected: RustExpr = { kind: "field", receiver: planRustNonConsumingValue(callee, receiver, context), name: "dispatch" };
+      planned = { kind: "method-call", receiver: { kind: "method-call", receiver: selected, method: "clone", args: [] },
+        method: constructor.targetName, args: shaped };
       break;
     }
     case "union-method": {

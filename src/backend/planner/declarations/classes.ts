@@ -338,8 +338,8 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   }
   const generatedStructAttributes = structAttributes(className) ?? [];
   const environment = context.input.program.classValues.forDeclaration(node)?.environment;
-  const environmentType = environment === undefined ? undefined : rustClassEnvironmentHandleType(environment.carrier, context);
-  if (environment !== undefined && environmentType === undefined) return undefined;
+  const environmentType = !environment?.instancesUseEnvironment ? undefined : rustClassEnvironmentHandleType(environment.carrier, context);
+  if (environment?.instancesUseEnvironment && environmentType === undefined) return undefined;
   const stateCarrier = stateType === undefined
     ? undefined
     : rustProjectObjectType(stateType, representation, environmentType);
@@ -492,7 +492,8 @@ function planConstructor(
   if (parameterPlan === undefined) {
     return undefined;
   }
-  const environment = context.input.program.classValues.forDeclaration(classDeclaration)?.environment;
+  const selectedEnvironment = context.input.program.classValues.forDeclaration(classDeclaration)?.environment;
+  const environment = selectedEnvironment?.instancesUseEnvironment || selectedEnvironment?.initializationUsesEnvironment ? selectedEnvironment : undefined;
   const environmentParameter = environment === undefined ? undefined : rustClassEnvironmentParameter(classDeclaration, context, "owned");
   if (environment !== undefined && environmentParameter === undefined) return undefined;
   const params = [...(environmentParameter === undefined ? [] : [environmentParameter]), ...parameterPlan.params];
@@ -628,13 +629,13 @@ function planConstructor(
         stateMarker === undefined
           ? []
           : [{ name: stateMarker.name, value: stateMarker.value }],
-        representation.kind !== "value" || environment === undefined ? [] : [{
+        representation.kind !== "value" || !environment?.instancesUseEnvironment ? [] : [{
           name: environment.instanceFieldName,
           value: { kind: "path" as const, path: environment.parameterName },
         }],
       ),
       representation,
-      environment === undefined || representation.kind === "value" ? undefined : { kind: "path", path: environment.parameterName },
+      !environment?.instancesUseEnvironment || representation.kind === "value" ? undefined : { kind: "path", path: environment.parameterName },
     ),
   });
   const constructorDeadCode = rustProjectConstructorDeadCodeDisposition(

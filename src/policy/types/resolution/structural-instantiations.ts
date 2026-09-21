@@ -1,4 +1,4 @@
-import type { Type } from "@tsonic/tsts";
+import type { Signature, Type } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import { rustStructuralObjectCarrierValue } from "../../../target-model/types/carriers/source-types.js";
@@ -11,6 +11,7 @@ import { mapRustTargetTypes } from "../../../target-model/types/carriers/substit
 import { inferRustTargetTypeParameterBindings } from "../../../target-model/types/carriers/generic-inference.js";
 import { rustTargetTypeParameterNames } from "../../../target-model/types/carriers/generic-references.js";
 import { resolveRustTargetType } from "./target.js";
+import { rustCallableProtocol } from "../../../target-model/types/carriers/callables.js";
 
 export function retainRustStructuralInstantiation(
   sourceType: Type,
@@ -21,6 +22,10 @@ export function retainRustStructuralInstantiation(
   resolving: Set<object> = new Set(),
 ): boolean {
   if (!containsStructuralStorage(templateCarrier)) return true;
+  if (rustCallableProtocol(templateCarrier) !== undefined) {
+    const signatures = context.currentSemantics.types.callSignatures(sourceType);
+    return signatures.length === 1 && retainSignature(signatures[0]!, templateCarrier, carrier, context, options, resolving);
+  }
   const templateElement = templateCarrier.kind === "array" ? templateCarrier.element :
     isRustJsArrayCarrier(templateCarrier) ? rustJsArrayLikeElementTargetType(templateCarrier) : undefined;
   const element = carrier.kind === "array" ? carrier.element :
@@ -60,6 +65,8 @@ export function retainRustStructuralInstantiation(
   const construction = template.construction === undefined ? undefined : resolveRustConstructType(sourceType, context, options, resolving);
   if (template.construction !== undefined && (construction === undefined ||
     !rustTargetTypeRefEquals(construction.carrier, structural.construction))) return false;
+  if (template.construction !== undefined && construction !== undefined &&
+    !retainSignature(construction.signature, template.construction.carrier, construction.carrier, context, options, resolving)) return false;
   const fields = template.fields.map(field => {
     const matches = correspondence.members.filter(pair => field.symbols.includes(pair.destination.property.symbol));
     if (matches.length !== 1) return undefined;
@@ -104,9 +111,26 @@ function containsStructuralStorage(carrier: TargetTypeRef): boolean {
   let current = carrier;
   for (;;) {
     if (rustStructuralObjectCarrierValue(current) !== undefined) return true;
+    const callable = rustCallableProtocol(current);
+    if (callable !== undefined) return [callable.result, ...callable.parameters].some(containsStructuralStorage);
     const element = current.kind === "array" ? current.element :
       isRustJsArrayCarrier(current) ? rustJsArrayLikeElementTargetType(current) : undefined;
     if (element === undefined) return false;
     current = element;
   }
+}
+
+function retainSignature(
+  signature: Signature, templateCarrier: TargetTypeRef, carrier: TargetTypeRef,
+  context: RustTargetTypeResolutionContext, options: RustTargetTypeResolutionOptions, resolving: Set<object>,
+): boolean {
+  const template = rustCallableProtocol(templateCarrier);
+  const selected = rustCallableProtocol(carrier);
+  const result = context.currentSemantics.types.returnType(signature);
+  const parameters = context.currentSemantics.types.signatureParameterInfos(signature);
+  if (template === undefined || selected === undefined || result === undefined ||
+    template.parameters.length !== selected.parameters.length || parameters.length !== selected.parameters.length ||
+    !retainRustStructuralInstantiation(result, template.result, selected.result, context, options, resolving)) return false;
+  return parameters.every((parameter, index) => retainRustStructuralInstantiation(
+    parameter.type, template.parameters[index]!, selected.parameters[index]!, context, options, resolving));
 }

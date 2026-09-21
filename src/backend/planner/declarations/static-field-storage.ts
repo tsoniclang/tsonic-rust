@@ -7,10 +7,10 @@ import { rustClassEnvironmentForCall } from "../objects/class-environments.js";
 import { isRustCopyCarrier } from "../../../target-model/types/index.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 
-type RustSourceStaticFieldFact = Extract<
+type RustSourceStaticFieldFact = Pick<Extract<
   RustTargetOperationFact,
   { readonly kind: "source-static-field" }
->;
+>, "declaration" | "storageFileName" | "storageName" | "resultCarrier">;
 
 function rustSourceStaticFieldCell(
   fact: RustSourceStaticFieldFact,
@@ -83,7 +83,8 @@ function classStaticField(fact: RustSourceStaticFieldFact, context: RustPlanCont
 } | undefined {
   const owner = context.input.program.projectTypes.definitionContainingDeclaration(fact.declaration);
   const environment = owner === undefined ? undefined : context.input.program.classValues.forDeclaration(owner.declaration)?.environment;
-  if (environment === undefined) return undefined;
+  if (environment === undefined || context.input.program.source.ast.parent(environment.declaration) ===
+    context.input.program.source.ast.getSourceFile(environment.declaration)) return undefined;
   const field = environment.staticFields.find(field => field.declaration === fact.declaration);
   const receiver = rustClassEnvironmentForCall(environment.declaration, context);
   if (field === undefined || receiver === undefined) throw new Error("A local static field lost its sealed environment storage.");

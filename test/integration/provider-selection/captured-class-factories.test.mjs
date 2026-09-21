@@ -109,6 +109,29 @@ test("local static storage keeps evaluations independent and releases borrows be
   ` });
 });
 
+test("generic captured constructors share native instance views across exact instantiations", { timeout: 300_000 }, () => {
+  const artifacts = compileAndRun("captured_class_views", { "index.ts": `
+    abstract class Base { abstract hash(): number; }
+    interface Factory<Value> { new(value: Value): Base & { readonly value: Value }; }
+    function factory<Value>(hash: (value: Value) => number): Factory<Value> {
+      return class Selected extends Base {
+        constructor(readonly value: Value) { super(); }
+        hash(): number { return hash(this.value); }
+      };
+    }
+    export function main(): void {
+      const numeric = factory<number>(value => value + 1);
+      const text = factory<string>(value => value.length);
+      const first = new numeric(4);
+      const second = new text("native");
+      if (first.hash() !== 5 || first.value !== 4 || second.hash() !== 6 || second.value !== "native") throw new Error("view");
+    }
+  ` });
+  const rust = artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
+  assert.match(rust, /trait HashValueShapeDispatch<Value>/);
+  assert.doesNotMatch(rust, /ObjectHandle<[^>]*HashValueShape/);
+});
+
 test("generic captured classes preserve cross-file base intersections and exact predicates", { timeout: 300_000 }, () => {
   compileAndRun("captured_class_projection", {
     "model.ts": `

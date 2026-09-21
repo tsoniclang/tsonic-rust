@@ -25,6 +25,7 @@ import {
 } from "../names/synthetic.js";
 import {
   rustCallableProtocol,
+  rustProgramErrorTargetType,
   isRustCopyCarrier,
   rustStructuralObjectCarrierValue,
   rustLocationTargetType,
@@ -169,6 +170,13 @@ export function readRustStoredObjectField(
     if (field === undefined) {
       return undefined;
     }
+    if (context.input.program.structuralShapes.definitionForCarrier(receiverCarrier)?.dispatchName !== undefined) {
+      const error = rustActiveErrorType(context);
+      const operand = rustTypeFromCarrierInContext(rustProgramErrorTargetType(), context);
+      if (field.property === undefined || error === undefined || operand === undefined || projection.length !== 0) return undefined;
+      return { kind: "try", expr: { kind: "method-call", receiver: { kind: "field", receiver, name: "dispatch" },
+        method: field.property.getterTargetName, args: [] }, resultErrorType: error, operandErrorType: operand };
+    }
     if (field.method === true && field.receiverIndependent !== true) {
       return undefined;
     }
@@ -256,10 +264,10 @@ export function invokeRustStructuralObjectMethod(
   }
   if (field.nativeMethod === true) {
     if (storageOverride !== undefined || field.presence !== "required" || field.storage !== "stored") return undefined;
-    return { kind: "invoke", callee: { kind: "method-call", receiver, method: "with", args: [{
-      kind: "closure", params: [{ name: "state", byRefCopy: false }],
-      body: { kind: "field", receiver: { kind: "path", path: "state" }, name: field.targetName },
-    }] }, args: arguments_ };
+    const dispatch: RustExpr = { kind: "field", receiver, name: "dispatch" };
+    return { kind: "method-call", receiver: context.input.program.structuralShapes.definitionForCarrier(receiverCarrier)?.construction === undefined
+      ? { kind: "method-call", receiver: dispatch, method: "clone", args: [] } : dispatch,
+      method: field.targetName, args: arguments_ };
   }
   const receiverName = allocateRustSyntheticName(
     context.syntheticNames,
@@ -340,6 +348,14 @@ function writeRustStoredObjectFieldStorage(
     const field = context.input.program.structuralShapes.field(receiverCarrier, storageIndex);
     if (field === undefined) {
       return undefined;
+    }
+    if (context.input.program.structuralShapes.definitionForCarrier(receiverCarrier)?.dispatchName !== undefined) {
+      const error = rustActiveErrorType(context);
+      const operand = rustTypeFromCarrierInContext(rustProgramErrorTargetType(), context);
+      if (field.property?.setterTargetName === undefined || error === undefined || operand === undefined ||
+        projection.length !== 0 || operator !== "=") return undefined;
+      return { kind: "try", expr: { kind: "method-call", receiver: { kind: "field", receiver, name: "dispatch" },
+        method: field.property.setterTargetName, args: [value] }, resultErrorType: error, operandErrorType: operand };
     }
     if (field.method === true && field.receiverIndependent !== true || field.readonly && projection.length === 0) {
       return undefined;

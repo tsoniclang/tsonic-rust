@@ -426,6 +426,13 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
           const error = addUse(node, { kind: "type-parameter", name: parameter.name }, parameter.requirements);
           if (error !== undefined) return error;
         }
+        const nestedClass = input.projectTypes.definitionForDeclaration(node);
+        for (const parameter of nestedClass?.genericParameters ?? []) {
+          if (parameter.kind !== "type" || ast.parent(parameter.declaration) === node) continue;
+          const requirements = input.contractFor(node)?.typeParameters.find(candidate => candidate.name === parameter.targetName)?.requirements ?? [];
+          const error = addUse(node, { kind: "type-parameter", name: parameter.targetName }, requirements);
+          if (error !== undefined) return error;
+        }
         for (const requirement of input.contractFor(node)?.associatedTypes ?? []) {
           if (!rustTargetTypeParameterNames(requirement.carrier).every(name => declared.has(name))) continue;
           if (!associated.collect(requirement.carrier)) return "A captured associated output has no enclosing generic contract.";

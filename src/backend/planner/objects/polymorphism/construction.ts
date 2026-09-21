@@ -178,7 +178,8 @@ export function planProjectClassConstructor(
   if (stateType === undefined) {
     return undefined;
   }
-  const environment = context.input.program.classValues.forDeclaration(definition.declaration)?.environment;
+  const selectedEnvironment = context.input.program.classValues.forDeclaration(definition.declaration)?.environment;
+  const environment = selectedEnvironment?.instancesUseEnvironment || selectedEnvironment?.initializationUsesEnvironment ? selectedEnvironment : undefined;
   const environmentParameter = environment === undefined ? undefined
     : rustClassEnvironmentParameter(definition.declaration, context, "owned");
   const environmentBorrow = environment?.initializationUsesEnvironment !== true ? undefined
@@ -623,7 +624,7 @@ export function planProjectClassConstructor(
               kind: "struct-literal",
               path: rootType.path,
               fields: [
-                ...(environment === undefined ? [] : [{ name: environment.instanceFieldName,
+                ...(!environment?.instancesUseEnvironment ? [] : [{ name: environment.instanceFieldName,
                   value: { kind: "path" as const, path: environment.parameterName } }]),
                 {
                   name: rustProjectObjectIdentityField,

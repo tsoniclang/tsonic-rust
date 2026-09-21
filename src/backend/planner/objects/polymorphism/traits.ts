@@ -30,6 +30,7 @@ import { rustProjectImplementationVisibility } from "../project-storage-abi.js";
 import { rustProjectObjectIdentityImplementation } from "../project-identity.js";
 import { rustArrayFieldMutationName, rustArrayFieldMutationType } from "./array-fields.js";
 import { planRustProjectProjectionImplementations } from "../project-projections.js";
+import { rustStructuralDispatchType } from "../project-structural-views.js";
 
 export function projectIdentityImplementations(
   definition: RustProjectTypeDefinition,
@@ -349,6 +350,9 @@ export function planProjectDispatchTrait(
   }
   const superTraits = context.input.program.projectTypes.heritageForDefinition(definition).map((edge) =>
     rustProjectDispatchTraitType(edge.targetType, context));
+  for (const view of context.input.program.classValues.instanceViews) {
+    if (view.declaration === definition.declaration) superTraits.push(rustStructuralDispatchType(view.targetCarrier, context));
+  }
   if (superTraits.some((type) => type === undefined)) {
     return undefined;
   }

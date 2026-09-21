@@ -1,15 +1,16 @@
 import type { RustClassValueCallable } from "../../../analysis/objects/class-value-callables.js";
 import { rustFallibleFactKey } from "../../../analysis/facts/keys.js";
-import type { RustExpr, RustFunctionParam, RustItem } from "../../target-ast/nodes.js";
+import type { RustExpr, RustFunctionParam, RustImplFunction } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustCurrentErrorBoundary, rustErrorBoundaryForProjectMember, rustErrorType } from "../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { applyRustCallableValueAdapter, planRustCallableArguments } from "../declarations/callable-adapters.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
+import { rustSelfParameter } from "../declarations/self-parameter.js";
 
 export function planRustClassValueForwarder(
-  callable: RustClassValueCallable, name: string, context: RustPlanContext,
-): RustItem | undefined {
+  callable: RustClassValueCallable, name: string, context: RustPlanContext, construction = false,
+): RustImplFunction | undefined {
   const boundary = rustCurrentErrorBoundary(context);
   const owner = rustTypeFromCarrierInContext(callable.ownerCarrier, context);
   const returnType = rustTypeFromCarrierInContext(callable.resultAdapter.targetCarrier, context);
@@ -25,7 +26,13 @@ export function planRustClassValueForwarder(
   const arguments_ = planRustCallableArguments({ declaration: callable.declaration, parameters: params,
     parameterAbis: callable.parameters, parameterAdapters: callable.parameterAdapters }, localContext);
   if (arguments_ === undefined) return undefined;
-  let invocation: RustExpr = { kind: "associated-call", owner, method: callable.targetName, args: arguments_.adaptedArguments };
+  const definition = context.input.program.projectTypes.definitionForCarrier(callable.ownerCarrier);
+  const environment = definition === undefined ? undefined : context.input.program.classValues.forDeclaration(definition.declaration)?.environment;
+  const contextArgument: RustExpr[] = environment === undefined ? [] : construction
+    ? environment.instancesUseEnvironment || environment.initializationUsesEnvironment ? [{ kind: "path", path: "self" }] : []
+    : environment.consumers.includes(callable.declaration) ? [{ kind: "path", path: "self" }] : [];
+  let invocation: RustExpr = { kind: "associated-call", owner, method: callable.targetName,
+    args: [...contextArgument, ...arguments_.adaptedArguments] };
   if (context.input.program.facts.getFact(callable.declaration, rustFallibleFactKey) !== undefined) {
     const operand = rustErrorBoundaryForProjectMember(callable.declaration, context);
     if (operand === undefined) return undefined;
@@ -33,7 +40,8 @@ export function planRustClassValueForwarder(
   }
   const result = applyRustCallableValueAdapter(invocation, callable.resultAdapter, callable.declaration, localContext);
   if (result === undefined) return undefined;
-  return { kind: "function", name, visibility: "crate", generics: { parameters: [], wherePredicates: [] },
+  return { name, visibility: "private", generics: { parameters: [], wherePredicates: [] },
+    selfParam: rustSelfParameter(construction ? "rc" : "ref"),
     params, returnType, errorType: rustErrorType(boundary),
     body: { statements: [...arguments_.statements, { kind: "tail", expr: { kind: "call", path: "Ok", args: [result] } }] },
   };

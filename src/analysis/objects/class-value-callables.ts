@@ -9,6 +9,7 @@ import { rustCallableProtocol, rustOptionElementCarrier, rustOptionTargetType } 
 import { rustProjectCallableTargetName } from "../facts/source-member-name.js";
 import { resolveParameterAbi } from "../declarations/types-and-bindings.js";
 import { selectRustCallableParameterAdapters, selectRustCallableValueAdapter } from "../callables/adapters.js";
+import { selectRustProjectStructuralView } from "./project-structural-views.js";
 
 export interface RustClassValueCallable {
   readonly declaration: Node;
@@ -28,17 +29,18 @@ export function selectRustClassValueCallable(
   targetCarrier: TargetTypeRef,
   construction: boolean,
   semantics: SourceFileSemantics,
+  instance = false,
 ): RustClassValueCallable | undefined {
   const { ast, projectTypes } = walk.context;
   const owner = projectTypes.definitionForDeclaration(classDeclaration);
   const sourceDeclaration = semantics.declarations.signatureDeclaration(sourceSignature);
   const target = rustCallableProtocol(targetCarrier);
-  if (owner === undefined || owner.kind !== "class" || owner.typeParameterNames.length !== 0 || target === undefined ||
+  if (owner === undefined || owner.kind !== "class" || target === undefined ||
     sourceDeclaration === undefined || ast.typeParameters(sourceDeclaration).length !== 0) return undefined;
   const matchingConstructors = construction ? projectTypes.constructorsForDefinition(owner)
     .filter(candidate => candidate.signature === sourceSignature || candidate.declaration === sourceDeclaration) : [];
   const sourceConstructor = matchingConstructors.length === 1 ? matchingConstructors[0] : undefined;
-  if (construction && sourceConstructor === undefined || !construction && !ast.hasModifierKind(sourceDeclaration, "static")) return undefined;
+  if (construction && sourceConstructor === undefined || !construction && ast.hasModifierKind(sourceDeclaration, "static") === instance) return undefined;
   const implementation = construction ? undefined : walk.context.source.navigation.callableImplementation(sourceDeclaration);
   const declaration = construction ? sourceConstructor!.declaration ?? classDeclaration
     : implementation?.kind === "resolved" ? implementation.implementation.declaration : undefined;
@@ -61,8 +63,11 @@ export function selectRustClassValueCallable(
   const resultSubject = ast.typeNode(declaration) ?? semantics.types.returnType(sourceSignature);
   const sourceResult = construction ? ownerCarrier : resultSubject === undefined ? undefined :
     resolveRustTargetTypeRef(resultSubject, rustResolutionContext(walk, declaration), walk.operationOptions);
-  const resultAdapter = sourceResult === undefined ? undefined : selectRustCallableValueAdapter(sourceResult, target.result,
+  const selectedResultAdapter = sourceResult === undefined ? undefined : selectRustCallableValueAdapter(sourceResult, target.result,
     projectTypes, walk.context.typeDefinitions);
+  const resultAdapter: RustCallableValueAdapter | undefined = selectedResultAdapter ??
+    (construction && sourceResult !== undefined && selectRustProjectStructuralView(walk, classDeclaration, sourceResult, target.result, semantics)
+      ? { kind: "project-structural-view", sourceCarrier: sourceResult, targetCarrier: target.result } : undefined);
   const targetName = construction ? sourceConstructor?.targetName : rustProjectCallableTargetName(declaration, walk.context);
   if (parameterAdapters === undefined || resultAdapter === undefined || targetName === undefined) return undefined;
   return Object.freeze({ declaration, ownerCarrier, targetName, parameters: Object.freeze(parameters),

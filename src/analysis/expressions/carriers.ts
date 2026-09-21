@@ -123,6 +123,9 @@ export function resolveExpressionCarrier(
   }
   walk.resolving.add(expression);
   try {
+    if (walk.context.ast.kindName(expression) === "KindClassExpression") {
+      return finalize(resolveRustClassValue(walk, expression, contextualExpected));
+    }
     if (existing !== undefined) {
       let operation = facts.get(expression, rustTargetOperationFactKey) ??
         walk.context.facts.resolve(expression, rustTargetOperationFactKey);

@@ -162,6 +162,8 @@ export function planExpressionInner(
       context.usedAliases?.add("rt");
       return { kind: "path", path: "rt::Null" };
     }
+    case "KindClassExpression":
+      return planRustClassValueRead(node, context);
     case KindIdentifier: {
       if (context.input.program.facts.getFact(node, rustClassValueFactKey) !== undefined) {
         return planRustClassValueRead(node, context);

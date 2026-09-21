@@ -42,6 +42,12 @@ import { rustLifetimeToAst } from "../types/lifetime-syntax.js";
 import { rustAssociatedPredicates } from "../types/associated-bounds.js";
 import { rustGenericRequirementBounds } from "../types/generic-bounds.js";
 import { planRustNumberArrayUnionImplementation } from "./number-array-unions.js";
+import { planRustConstructorShape } from "./constructor-shapes.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { substituteRustTargetTypeParameters } from "../../../target-model/types/carriers/substitution.js";
+import { inferRustTargetTypeParameterBindings } from "../../../target-model/types/carriers/generic-inference.js";
+import { rustTargetTypeParameterNames } from "../../../target-model/types/carriers/generic-references.js";
 
 export function planRustStructuralShapeModule(
   input: RustPlanningContext,
@@ -132,6 +138,40 @@ export function planRustStructuralShapeModule(
           : [])),
     };
     const callableAliases: RustItem[] = [];
+    if (definition.dispatchName !== undefined) {
+      const error = rustTypeFromCarrierInContext(rustProgramErrorTargetType(), definitionContext);
+      const type: RustType = { kind: "named", path: definition.targetName, genericArguments: aliasGenericArguments };
+      const bases: TargetTypeRef[] = [];
+      for (const view of input.program.classValues.instanceViews) {
+        if (!definition.sourceCarriers.some(carrier => rustTargetTypeRefEquals(carrier, view.targetCarrier))) continue;
+        const substitutions = inferRustTargetTypeParameterBindings(view.targetCarrier, definition.carrier,
+          new Set(rustTargetTypeParameterNames(view.targetCarrier)));
+        if (substitutions === undefined) return undefined;
+        for (const base of view.bases) {
+          const selected = substituteRustTargetTypeParameters(base, substitutions);
+          if (!bases.some(candidate => rustTargetTypeRefEquals(candidate, selected))) bases.push(selected);
+        }
+      }
+      const superTraits = bases.map(carrier => {
+        const type = rustTypeFromCarrierInContext(carrier, definitionContext);
+        const project = input.program.projectTypes.definitionForCarrier(carrier);
+        return type?.kind !== "named" || project === undefined ? undefined : {
+          ...type, path: `${type.path.slice(0, type.path.lastIndexOf("::") + 2)}${project.dispatchName}`,
+        };
+      });
+      if (superTraits.some(type => type === undefined)) return undefined;
+      const planned = error === undefined ? undefined : planRustConstructorShape(definition, generics, type, visibility,
+        error, carrier => rustTypeFromCarrierInContext(carrier, definitionContext), superTraits as RustType[]);
+      if (planned === undefined) {
+        diagnostics.push({ code: "RUST_STRUCTURAL_CONSTRUCTOR_TYPE_MISSING", category: "error", source: "tsonic-rust",
+          message: "A constructor interface requires exact native dispatch signatures and property storage.",
+          evidence: ["target.capability=rust.class-value.constructor"] });
+        return undefined;
+      }
+      usedAliases.add("rt");
+      structs.push(...planned);
+      continue;
+    }
     const fields: RustStructField[] = [];
     const nativeCallableType = (carrier: import("../../../target-model/types/model.js").TargetTypeRef): RustType | undefined => {
       const protocol = rustCallableProtocol(carrier);
@@ -143,16 +183,6 @@ export function planRustStructuralShapeModule(
           kind: "named", path: "Result", genericArguments: [{ kind: "type", type: result }, { kind: "type", type: error }],
         } };
     };
-    if (definition.construction !== undefined) {
-      const type = nativeCallableType(definition.construction.carrier);
-      if (type === undefined) {
-        diagnostics.push({ code: "RUST_STRUCTURAL_CONSTRUCTOR_TYPE_MISSING", category: "error", source: "tsonic-rust",
-          message: "A constructor view requires exact native parameter, result and source-package error types.",
-          evidence: ["target.capability=rust.class-value.constructor"] });
-        return undefined;
-      }
-      fields.push({ name: definition.construction.targetName, visibility: "public", type });
-    }
     for (const [storageIndex, field] of definition.fields.entries()) {
       const methodStorageCarrier = field.receiverIndependent === true ? field.carrier : field.method === true
         ? rustStructuralMethodStorageCarrier(

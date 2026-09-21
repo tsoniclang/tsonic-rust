@@ -64,7 +64,7 @@ export function recordClassSignatureFacts(walk: RustFactWalk, declaration: Node)
   if (classCarrier === undefined) {
     return;
   }
-  setCarrierFact(walk, declaration, classCarrier);
+  if (ast.kindName(declaration) !== "KindClassExpression") setCarrierFact(walk, declaration, classCarrier);
   const members = requireDenseSourceNodes(walk, sourceObjectMemberDeclarations(ast, declaration), "Class declaration contains an undefined or non-data member slot.");
   if (members === undefined) {
     return;

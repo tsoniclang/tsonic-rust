@@ -5,6 +5,11 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export type RustCallableValueAdapter =
   | {
+      readonly kind: "project-structural-view";
+      readonly sourceCarrier: TargetTypeRef;
+      readonly targetCarrier: TargetTypeRef;
+    }
+  | {
       readonly kind: "identity";
       readonly sourceCarrier: TargetTypeRef;
       readonly targetCarrier: TargetTypeRef;

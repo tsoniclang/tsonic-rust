@@ -160,7 +160,8 @@ export function planPolymorphicClassDeclaration(
     generics,
     constructor.construct,
   );
-  const environment = context.input.program.classValues.forDeclaration(declaration)?.environment;
+  const selectedEnvironment = context.input.program.classValues.forDeclaration(declaration)?.environment;
+  const environment = selectedEnvironment?.instancesUseEnvironment ? selectedEnvironment : undefined;
   const environmentType = environment === undefined ? undefined : rustClassEnvironmentHandleType(environment.carrier, context);
   if (environment !== undefined && environmentType === undefined) return undefined;
   const rootIdentityDeadCode = rustGeneratedExactStorageDeadCodeDisposition(

@@ -1,5 +1,7 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
 import { planRustClassEnvironmentItems } from "../objects/class-environments.js";
+import { planRustConstructorImplementations } from "../objects/constructor-values.js";
+import { planRustProjectStructuralImplementations } from "../objects/project-structural-views.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { rustCompileTimeSourceKey } from "../../../target-model/facts/source-declarations.js";
 import { rustTypeOnlyDeclarationFactKey } from "../../../target-model/facts/type-only.js";
@@ -448,6 +450,14 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
       if (environmentItems === undefined) {
         ensureTopLevelPlanningDiagnostic(context, definition.declaration, diagnosticCount, "class-environment");
       } else items.push(...environmentItems);
+      const constructorViews = planRustConstructorImplementations(definition.declaration, context);
+      if (constructorViews === undefined) {
+        ensureTopLevelPlanningDiagnostic(context, definition.declaration, diagnosticCount, "constructor-view");
+      } else items.push(...constructorViews);
+      const instanceViews = planRustProjectStructuralImplementations(definition.declaration, context);
+      if (instanceViews === undefined) {
+        ensureTopLevelPlanningDiagnostic(context, definition.declaration, diagnosticCount, "instance-view");
+      } else items.push(...instanceViews);
       const staticFunctions = planProjectStaticFunctionItems(definition, context);
       if (staticFunctions === undefined) {
         ensureTopLevelPlanningDiagnostic(context, definition.declaration, diagnosticCount, "static-function");

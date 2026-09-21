@@ -52,6 +52,7 @@ export interface RustStructuralShapeDefinition {
   readonly componentId: string;
   readonly targetName: string;
   readonly genericParameters: readonly RustStructuralShapeGenericParameter[];
+  readonly dispatchName?: string;
   readonly genericArguments: readonly RustTargetGenericArgument[];
   readonly fields: readonly RustStructuralShapeField[];
   readonly construction?: { readonly targetName: string; readonly carrier: TargetTypeRef };
@@ -211,6 +212,8 @@ export function createRustStructuralShapePlan(
       const usedTypeNames = usedTypeNamesByComponent.get(componentId) ?? new Set<string>();
       usedTypeNamesByComponent.set(componentId, usedTypeNames);
       const usedFieldNames = new Set<string>();
+      const nativeDispatch = structural.construction !== undefined || implementations.some(implementation =>
+        implementation.kind === "dispatch" && instances.has(closedMetadataKey(implementation.carrier)));
       const fields = structural.fields.map((field, storageIndex): RustStructuralShapeField => {
         const selectedNativeFields = nativeFields.filter(candidate => candidate.storageIndex === storageIndex &&
           instances.has(closedMetadataKey(candidate.owner)));
@@ -227,7 +230,7 @@ export function createRustStructuralShapePlan(
           implementation.storageIndex === storageIndex &&
           instances.has(closedMetadataKey(implementation.carrier)));
         const propertyStorage = field.accessor !== undefined ||
-          fieldImplementations.some((implementation) => implementation.kind === "accessor");
+          fieldImplementations.some((implementation) => implementation.kind === "accessor" || implementation.kind === "dispatch" && field.method !== true);
         return Object.freeze({
           ...(nativeLayout === undefined ? {} : { nativeLayout }),
           sourceName: field.sourceName,
@@ -255,7 +258,7 @@ export function createRustStructuralShapePlan(
                 }),
               }),
           ...(field.method === true ? { method: true as const } : {}),
-          ...(field.method === true && structural.construction !== undefined ? { nativeMethod: true as const } : {}),
+          ...(field.method === true && nativeDispatch ? { nativeMethod: true as const } : {}),
           ...(receiverIndependentMethods.has(`${structuralStorageKey(carrier, componentForFile)}#${storageIndex}`)
             ? { receiverIndependent: true as const } : {}),
         });
@@ -265,12 +268,16 @@ export function createRustStructuralShapePlan(
         genericReferences.lifetimes.some((lifetime) => lifetime.kind !== "parameter")) {
         throw new Error("Rust structural source shapes cannot capture const or higher-ranked generic parameters.");
       }
+      const targetName = allocatePascalName(usedTypeNames, preferredShapeName(fields));
       return Object.freeze({
         carrier,
         sourceCarriers,
         ownerFileName: structural.ownerFileName,
         componentId,
-        targetName: allocatePascalName(usedTypeNames, preferredShapeName(fields)),
+        targetName,
+        ...(!nativeDispatch ? {} : {
+          dispatchName: allocatePascalName(usedTypeNames, `${targetName}Dispatch`),
+        }),
         genericParameters: Object.freeze([
           ...genericReferences.lifetimes.map((lifetime) => Object.freeze({
             kind: "lifetime" as const,

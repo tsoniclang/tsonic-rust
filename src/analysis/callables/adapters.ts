@@ -231,6 +231,7 @@ export function rustCallableValueAdapterIsFallible(adapter: RustCallableValueAda
     case "identity":
     case "call-scoped-lifetime":
     case "project-upcast":
+    case "project-structural-view":
       return false;
   }
 }
