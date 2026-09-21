@@ -7,9 +7,10 @@ import { planExpression } from "./entry.js";
 import { effectivePlannedExpressionCarrier } from "./fundamentals.js";
 import { planRustValueFieldLocation, rustSourceFieldHasValueReceiver } from "../objects/value-fields.js";
 import { planRustSharedReceiver } from "./typed-locations.js";
+import { planRustSourceAccessorReceiver, rustSourceAccessorHasValueReceiver } from "../objects/accessor-receivers.js";
 
 export interface RustComputedMemberEvaluation {
-  readonly bindings: readonly { readonly name: string; readonly value: RustExpr }[];
+  readonly bindings: readonly { readonly name: string; readonly value: RustExpr; readonly mutable?: boolean }[];
   readonly context: RustPlanContext;
 }
 
@@ -31,6 +32,15 @@ export function prepareRustComputedMemberEvaluation(
   overrides.set(fact.key, {
     expression: { kind: "path", path: keyName }, carrier: keyCarrier, valueForm: "shared-reference",
   });
+  if (rustSourceAccessorHasValueReceiver(node, context)) {
+    const evaluation = planRustSourceAccessorReceiver(node, [fact.key], context);
+    if (evaluation === undefined) return undefined;
+    if (evaluation.bindings.length !== 0) overrides.set(fact.receiver, {
+      expression: evaluation.receiver, carrier: effectivePlannedExpressionCarrier(fact.receiver, context)!, valueForm: "storage",
+    });
+    return { bindings: [...evaluation.bindings, { name: keyName, value: evaluatedKey }],
+      context: { ...context, expressionOverrides: overrides } };
+  }
   if (rustSourceFieldHasValueReceiver(node, context)) {
     const location = planRustValueFieldLocation(node, context,
       fact.accessMode === "read" ? "read" : "write");

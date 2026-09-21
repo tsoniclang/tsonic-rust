@@ -72,3 +72,37 @@ test("const array dimensions are forwarded exactly through signature aliases", (
   assert.deepEqual(result[0].target, type);
   assert.deepEqual(result[1].params[0].type.genericArguments[1], { kind: "const", value: dimension });
 });
+
+test("impl signature aliases retain owner and call binders without moving their bounds", () => {
+  const owner = { kind: "type", name: "Owner", bounds: [{ kind: "trait", path: "Clone" }] };
+  const source = makeFunction("call", "public");
+  const dependent = { kind: "qualified", owner: named("Owner"), trait: named("Field", [named("Item")]),
+    name: "Output", genericArguments: [] };
+  const type = named("Callable", [named("Option", [dependent]), named("Result", [dependent, named("Error")])]);
+  const method = { ...source, selfParam: { kind: "reference", mutable: false },
+    params: [{ name: "value", type }], returnType: undefined };
+  const implementation = { kind: "impl", target: named("Wrapper", [named("Owner")]),
+    generics: { parameters: [owner], wherePredicates: [] }, functions: [method] };
+  const result = nameRustSignatureTypes([implementation]);
+  const alias = result.find(item => item.kind === "type-alias");
+  const native = result.find(item => item.kind === "impl");
+  assert.deepEqual(alias.target, type);
+  assert.deepEqual(alias.generics.parameters, ["Owner", "Item"].map(name => ({ kind: "type", name, bounds: [] })));
+  assert.deepEqual(native.generics, implementation.generics);
+  assert.deepEqual(native.functions[0].generics, method.generics);
+  assert.deepEqual(native.functions[0].body, method.body);
+  assert.deepEqual(native.functions[0].params[0].type.genericArguments,
+    ["Owner", "Item"].map(path => ({ kind: "type", type: { kind: "named", path } })));
+  assert.deepEqual(nameRustSignatureTypes(result), result);
+});
+
+test("impl alias allocation reserves method-local type parameter names", () => {
+  const source = makeFunction("read");
+  const method = { ...source, generics: { parameters: [...source.generics.parameters,
+    { kind: "type", name: "ReadValues", bounds: [] }], wherePredicates: [] } };
+  const result = nameRustSignatureTypes([{ kind: "impl", target: named("Container"), generics: emptyRustGenerics,
+    functions: [method] }]);
+  const alias = result.find(item => item.kind === "type-alias");
+  assert.notEqual(alias.name, "ReadValues");
+  assert.deepEqual(result.find(item => item.kind === "impl").functions[0].generics, method.generics);
+});

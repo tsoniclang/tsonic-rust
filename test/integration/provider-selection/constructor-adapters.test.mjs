@@ -119,6 +119,12 @@ test("constructor predicates retain closed base-interface narrowing and native f
           static accepts(value: Base | undefined): value is NumberBox { return value instanceof NumberBox; }
         }
         class Other implements Base { kind(): number { return 2; } }
+        class TextBox implements Box<string> {
+          readonly value: string;
+          constructor(value: string) { this.value = value; }
+          kind(): number { return 3; }
+          static accepts(value: Base | undefined): value is TextBox { return value instanceof TextBox; }
+        }
         function create<Value>(factory: Factory<Value>, value: Value): Box<Value> { return new factory(value); }
         function extract<Value>(factory: Factory<Value>, value: Base | undefined, otherwise: Value): Value {
           return factory.accepts(value) ? value.value : otherwise;
@@ -128,6 +134,10 @@ test("constructor predicates retain closed base-interface narrowing and native f
           const value = create(factory, 7);
           if (extract(factory, value, -1) !== 7 || extract(factory, new Other(), -1) !== -1 ||
             extract(factory, undefined, -1) !== -1) throw new Error("predicate");
+          const textFactory: Factory<string> = TextBox;
+          const text = create(textFactory, "native");
+          if (extract(textFactory, text, "missing") !== "native" || extract(factory, text, -1) !== -1 ||
+            extract(textFactory, value, "missing") !== "missing") throw new Error("independent native types");
         }
       `,
     } });
@@ -136,6 +146,8 @@ test("constructor predicates retain closed base-interface narrowing and native f
   assert.match(emitted, /accepts: fn\(/);
   assert.doesNotMatch(emitted, /Callable.*accepts|accepts.*Callable/);
   assert.match(emitted, /identity: upcast_value\.identity,/);
+  assert.match(emitted, /TryFrom</);
+  assert.doesNotMatch(emitted, /\bAny\b|transmute|downcast_ref/);
   const native = validateGeneratedProject("constructor-predicates", result.artifacts, { run: true });
   assert.equal(native.status, 0, native.stdout + native.stderr);
 });

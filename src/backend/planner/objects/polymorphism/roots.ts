@@ -166,7 +166,7 @@ function planRootContractFunctions(
   const functions: RustImplFunction[] = [];
   for (const route of context.input.program.projectTypes.downcastRoutesFor(contract)) {
     const relation = context.input.program.projectTypes.relationship(concreteCarrier, route.target);
-    const matches = context.input.program.projectTypes.classLineage(concrete)?.includes(route.target) === true &&
+    const matches = (route.target.kind === "interface" || context.input.program.projectTypes.classLineage(concrete)?.includes(route.target) === true) &&
       relation.kind === "related" &&
       rustTargetTypeRefEquals(relation.targetType, route.targetCarrier);
     if (matches) {

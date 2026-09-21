@@ -6,6 +6,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "./render.js";
 import type { RustTypeRenderingContext } from "./render.js";
 import { rustProgramErrorTargetType } from "../../../target-model/types/index.js";
+import { rustProjectProjectionPredicates } from "./project-projection-bounds.js";
 
 export function rustDeclarationAssociatedPredicates(
   declaration: Node,
@@ -13,7 +14,7 @@ export function rustDeclarationAssociatedPredicates(
 ): readonly RustWherePredicate[] {
   const contract = context.input.program.declarationGenericRequirements.contractFor(declaration);
   if (contract === undefined) throw new Error("A Rust declaration has no sealed generic requirement contract.");
-  return rustAssociatedPredicates(contract.associatedTypes, context);
+  return [...rustAssociatedPredicates(contract.associatedTypes, context), ...rustProjectProjectionPredicates(contract.projectProjections, context)];
 }
 
 export function rustAssociatedPredicates(

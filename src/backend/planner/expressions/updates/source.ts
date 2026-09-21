@@ -17,7 +17,7 @@ import { isRustBigIntCarrier } from "../../../../target-model/types/index.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
 import { rustProjectObjectRepresentation } from "../../objects/project-storage.js";
 import { planExpression } from "../entry.js";
-import { planRustMutableProjectReceiver, planRustSharedReceiver, planRustPromotedStorageLocation } from "../typed-locations.js";
+import { planRustMutableProjectReceiver, planRustPromotedStorageLocation } from "../typed-locations.js";
 import { planRustSourceUnionFieldProjection, mutateRustUnionField } from "../unions.js";
 import { readRustProjectObjectIndex, writeRustProjectObjectIndex } from "../../objects/project-objects.js";
 import { rustSourceStaticFieldLocation } from "../../declarations/static-field-storage.js";
@@ -29,6 +29,7 @@ import type { RustExpressionResultUse } from "../entry.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
 import { planRustComputedMemberExpression } from "../computed-members.js";
+import { planRustSourceAccessorReceiver } from "../../objects/accessor-receivers.js";
 
 export function planUnaryExpression(
   node: Node,
@@ -394,25 +395,13 @@ function planRustSourceAccessorUpdate(
   if (context.syntheticNames === undefined) {
     return undefined;
   }
-  const locationBindings: { name: string; value: RustExpr }[] = [];
+  const locationBindings: { name: string; value: RustExpr; mutable?: boolean }[] = [];
   let receiver: RustExpr | undefined;
   if (accessor.receiver.kind === "instance") {
-    const receiverNode = Node_Expression(context.input.program.source.ast, accessorExpression);
-    const plannedReceiver = receiverNode === undefined
-      ? undefined
-      : planExpression(receiverNode, context);
-    if (receiverNode === undefined || plannedReceiver === undefined) {
-      return undefined;
-    }
-    const receiverName = allocateRustSyntheticName(
-      context.syntheticNames,
-      "accessor_update_receiver",
-    );
-    locationBindings.push({
-      name: receiverName,
-      value: planRustSharedReceiver(receiverNode, plannedReceiver, context),
-    });
-    receiver = { kind: "path", path: receiverName };
+    const evaluation = planRustSourceAccessorReceiver(accessorExpression, [], context);
+    if (evaluation === undefined) return undefined;
+    locationBindings.push(...evaluation.bindings);
+    receiver = evaluation.receiver;
   }
   const plannedRead = planRustSourceAccessorCall(
     accessorExpression,

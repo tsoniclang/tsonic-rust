@@ -29,6 +29,7 @@ import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { rustProjectImplementationVisibility } from "../project-storage-abi.js";
 import { rustProjectObjectIdentityImplementation } from "../project-identity.js";
 import { rustArrayFieldMutationName, rustArrayFieldMutationType } from "./array-fields.js";
+import { planRustProjectProjectionImplementations } from "../project-projections.js";
 
 export function projectIdentityImplementations(
   definition: RustProjectTypeDefinition,
@@ -38,6 +39,7 @@ export function projectIdentityImplementations(
 ): readonly RustItem[] {
   const generics = rustProjectRepresentationGenerics(representation, context);
   return [
+    ...planRustProjectProjectionImplementations(definition, context),
     {
       kind: "impl",
       generics,

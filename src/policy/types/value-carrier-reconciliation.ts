@@ -23,6 +23,7 @@ import { rustTargetGenericReferences } from "../../target-model/types/carriers/g
 import { rustLifetimeKey, rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
 import { rustEmptyRecordCarrier } from "../../target-model/conversions/empty-record.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
+import { hasRustProjectProjection } from "./project-projections.js";
 
 export type RustValueCarrierReconciliation =
   | { readonly kind: "identity" }
@@ -106,12 +107,9 @@ export function selectRustFlowReadProjection(
   const relationship = sourceDefinition === undefined || targetDefinition === undefined
     ? { kind: "unrelated" as const }
     : projectTypes.relationship(selectedCarrier, sourceDefinition);
-  const route = sourceDefinition === undefined
-    ? undefined
-    : projectTypes.downcastRoute(sourceDefinition, selectedCarrier);
   if (relationship.kind !== "related" ||
     !rustTargetTypeRefEquals(relationship.targetType, dispatchCarrier) ||
-    route === undefined ||
+    !hasRustProjectProjection(dispatchCarrier, selectedCarrier, projectTypes) ||
     (optionalElement !== undefined && !rustCarrierSupportsClone(dispatchCarrier, definitions))) {
     return { kind: "incompatible" };
   }

@@ -1,5 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { hasRustProjectProjection } from "../../../policy/types/project-projections.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type {
   RustProjectDowncastFact,
@@ -15,6 +16,7 @@ import type { RustExpr } from "../../target-ast/nodes.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { diagnosticInput, sourceTypePath } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
+import { rustTypeFromCarrierInContext } from "../types/render.js";
 import {
   rustProjectObjectDispatchField,
   rustProjectObjectIdentityField,
@@ -61,14 +63,10 @@ export function planRustProjectDowncastValue(
 ): RustExpr | undefined {
   const sourceDefinition = context.input.program.projectTypes.definitionForCarrier(dispatchCarrier);
   const targetDefinition = context.input.program.projectTypes.definitionForCarrier(targetCarrier);
-  const route = sourceDefinition === undefined
-    ? undefined
-    : context.input.program.projectTypes.downcastRoute(sourceDefinition, targetCarrier);
-  const targetValue = rustSourceTypeCarrierValue(targetCarrier);
-  const targetPath = targetValue === undefined ? undefined : sourceTypePath(context, targetValue);
+  const targetType = rustTypeFromCarrierInContext(targetCarrier, context);
   const optionalElement = rustOptionElementCarrier(sourceCarrier);
-  if (sourceDefinition === undefined || targetDefinition === undefined || route === undefined ||
-    route.target !== targetDefinition || targetPath === undefined ||
+  if (sourceDefinition === undefined || targetDefinition === undefined || targetType === undefined ||
+    !hasRustProjectProjection(dispatchCarrier, targetCarrier, context.input.program.projectTypes) ||
     (!rustTargetTypeRefEquals(sourceCarrier, dispatchCarrier) &&
       !rustTargetTypeRefEquals(optionalElement, dispatchCarrier))) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -100,25 +98,10 @@ export function planRustProjectDowncastValue(
   return {
     kind: "block",
     bindings: [{ name: valueName, value: sourceReference }],
-    value: {
-      kind: "struct-literal",
-      path: targetPath,
-      fields: [
-        {
-          name: rustProjectObjectIdentityField,
-          value: cloneProjectField(valuePath, rustProjectObjectIdentityField),
-        },
-        {
-          name: rustProjectObjectDispatchField,
-          value: {
-            kind: "method-call",
-            receiver: projectDowncastDispatch(valuePath, route.slot),
-            method: "unwrap",
-            args: [],
-          },
-        },
-      ],
-    },
+    value: { kind: "method-call", receiver: { kind: "associated-call",
+      owner: targetType, method: "try_from",
+      args: [{ kind: "method-call", receiver: valuePath, method: "clone", args: [] }],
+    }, method: "unwrap", args: [] },
   };
 }
 

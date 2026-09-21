@@ -196,7 +196,7 @@ export function planRustAssignmentWrite(
     return statements === undefined ? undefined : [{ kind: "scope", body: {
       statements: [
         ...evaluation.bindings.map(binding => ({ kind: "let" as const,
-          name: binding.name, mutable: false, init: binding.value })),
+          name: binding.name, mutable: binding.mutable ?? false, init: binding.value })),
         ...statements,
       ],
     } }];

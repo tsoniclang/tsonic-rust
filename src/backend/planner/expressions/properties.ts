@@ -561,7 +561,8 @@ export function planRustSourceAccessorCall(
     return undefined;
   }
   if (fact.dispatch === undefined) {
-    return { kind: "method-call", receiver, method: selected.method, args };
+    return { kind: "method-call", receiver, method: selected.method, args,
+      receiverMode: context.input.program.objectRepresentations.methodSelfMode(selected.declaration) };
   }
   const receiverCarrier = receiverNode === undefined
     ? undefined

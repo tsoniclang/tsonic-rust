@@ -11,6 +11,7 @@ export function nameRustSignatureTypes(items: readonly RustItem[]): readonly Rus
   const reserved = new Set(items.flatMap(item => [
     ...("name" in item ? [item.name] : []),
     ...("generics" in item ? item.generics.parameters.map(parameter => parameter.name) : []),
+    ...(item.kind === "impl" ? item.functions.flatMap(method => method.generics.parameters.map(parameter => parameter.name)) : []),
     ...(item.kind === "use" ? [item.alias ?? item.path.split("::").slice(-1)[0]!] : []),
   ]));
   const aliases: Extract<RustItem, { readonly kind: "type-alias" }>[] = [];

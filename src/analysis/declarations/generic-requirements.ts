@@ -14,6 +14,9 @@ import { rustTargetTypeParameterNames } from "../../target-model/types/carriers/
 import { analyzeRustShapeGenericRequirements, type RustShapeGenericRequirementContract } from "./generic-shape-requirements.js";
 import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
+import type { RustProjectProjectionImplementation, RustProjectProjectionRequirement } from "../../policy/types/project-projections.js";
+import type { RustProjectTypeDefinition } from "../project-types/type-policy.js";
+import { createRustProjectProjectionRequirementCollector, createRustProjectProjectionImplementationIndex } from "./project-projection-requirements.js";
 import type { RustValueLifetimePlan } from "../program/value-lifetimes.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import {
@@ -49,6 +52,7 @@ import {
   rustGeneratorFactKey,
   rustFutureValueFactKey,
   rustFlowReadProjectionFactKey,
+  rustProjectDowncastFactKey,
   rustLocationStorageFactKey,
   rustSourceParameterAbiFactKey,
   rustTargetOperationFactKey,
@@ -68,9 +72,11 @@ export interface RustDeclarationGenericRequirementContract {
   readonly typeParameters: readonly RustDeclarationTypeParameterRequirements[];
   readonly capturedTypeParameters: readonly RustDeclarationTypeParameterRequirements[];
   readonly associatedTypes: readonly RustAssociatedTypeRequirement[];
+  readonly projectProjections: readonly RustProjectProjectionRequirement[];
 }
 
 export interface RustDeclarationGenericRequirementIndex {
+  projectionImplementationsFor(definition: RustProjectTypeDefinition): readonly RustProjectProjectionImplementation[];
   contractFor(declaration: Node): RustDeclarationGenericRequirementContract | undefined;
   contractForCarrier(carrier: TargetTypeRef): RustShapeGenericRequirementContract | undefined;
   supportsClone(declaration: Node, carrier: TargetTypeRef): boolean;
@@ -220,9 +226,11 @@ export function analyzeRustDeclarationGenericRequirements(
     };
   }
   const contractByDeclaration = new WeakMap<Node, RequirementContractState>();
+  const projectionRequirements: RustProjectProjectionRequirement[] = [];
   const usesByNode = new WeakMap<Node, RequirementUse[]>();
   for (const id of closure.program.ids) {
     const contract = closure.program.get(id)!;
+    projectionRequirements.push(...contract.projectProjections);
     contractByDeclaration.set(contract.declaration, contract);
     for (const use of contract.uses) {
       const uses = usesByNode.get(use.node) ?? [];
@@ -231,6 +239,7 @@ export function analyzeRustDeclarationGenericRequirements(
     }
   }
   const index: RustDeclarationGenericRequirementIndex = Object.freeze({
+    projectionImplementationsFor: createRustProjectProjectionImplementationIndex(projectionRequirements, projectTypes),
     contractFor(declaration: Node) {
       return contractByDeclaration.get(declaration);
     },
@@ -322,6 +331,7 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
     }
   }
   const declared = new Set([...exactNames, ...capturedNames]);
+  const projections = createRustProjectProjectionRequirementCollector(declared, input.projectTypes);
   const byParameter = new Map([...declared].map((name) =>
     [name, new Set<RustGenericRequirement>()] as const));
   if (definition !== undefined) {
@@ -425,6 +435,10 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
           const error = addUse(node, requirement.carrier, requirement.requirements);
           if (error !== undefined) return error;
         }
+        for (const requirement of input.contractFor(node)?.projectProjections ?? []) {
+          if (![requirement.sourceCarrier, requirement.targetCarrier].flatMap(rustTargetTypeParameterNames).every(name => declared.has(name))) continue;
+          if (!projections.require(requirement)) return "A captured projection has no exact enclosing native conversion contract.";
+        }
       }
       return undefined;
     }
@@ -446,6 +460,12 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
             if (parameter.kind === "type" && argument.kind === "type") substitutions.set(parameter.targetName, argument.type);
           }
           const contract = input.contractFor(definition.declaration);
+          for (const requirement of contract?.projectProjections ?? []) {
+            if (!projections.require({
+              sourceCarrier: substituteRustTargetTypeParameters(requirement.sourceCarrier, substitutions),
+              targetCarrier: substituteRustTargetTypeParameters(requirement.targetCarrier, substitutions),
+            })) return "A generic class argument does not satisfy its exact native projection contract.";
+          }
           for (const parameter of contract?.typeParameters ?? []) {
             if (parameter.requirements.length === 0) continue;
             const argument = substitutions.get(parameter.name);
@@ -470,6 +490,12 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       return undefined;
     };
     const carrier = facts.getRuntimeCarrierFact(node)?.carrier;
+    const downcast = facts.getFact(node, rustProjectDowncastFactKey);
+    const flowProjection = facts.getFact(node, rustFlowReadProjectionFactKey);
+    const projectProjection = downcast === undefined ? flowProjection?.kind === "project-downcast"
+      ? { sourceCarrier: flowProjection.dispatchCarrier, targetCarrier: flowProjection.selectedCarrier } : undefined
+      : { sourceCarrier: downcast.dispatchCarrier, targetCarrier: downcast.targetCarrier };
+    if (projectProjection !== undefined && !projections.require(projectProjection)) return "A checked project projection has no closed native conversion or generic obligation.";
     if (carrier !== undefined && !isRustDeclarationPathUse(node, ast, facts)) {
       const error = collectType(carrier);
       if (error !== undefined) return error;
@@ -662,6 +688,12 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
             }
             const substitutions = new Map(callee.typeParameters.map((parameter, index) =>
               [parameter.name, targetTypeArguments[index]!] as const));
+            for (const requirement of callee.projectProjections) {
+              if (!projections.require({ sourceCarrier: substituteRustTargetTypeParameters(requirement.sourceCarrier, substitutions),
+                targetCarrier: substituteRustTargetTypeParameters(requirement.targetCarrier, substitutions) })) {
+                return "A generic call does not satisfy its exact native projection contract.";
+              }
+            }
             for (const requirement of callee.associatedTypes) {
               const carrier = substituteRustTargetTypeParameters(requirement.carrier, substitutions);
               const collected = collectType(carrier);
@@ -693,6 +725,7 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
     contract: Object.freeze({
       declaration,
       associatedTypes: associated.seal(),
+      projectProjections: projections.seal(),
       typeParameters: Object.freeze(exactNames.map((name) => Object.freeze({
         name,
         requirements: normalizeRequirements([...(byParameter.get(name) ?? [])]),
@@ -772,6 +805,12 @@ function requirementContractsEqual(
   right: RequirementContractState,
 ): boolean {
   return left.declaration === right.declaration &&
+    left.projectProjections.length === right.projectProjections.length &&
+    left.projectProjections.every((projection, index) => {
+      const other = right.projectProjections[index];
+      return other !== undefined && rustTargetTypeRefEquals(projection.sourceCarrier, other.sourceCarrier) &&
+        rustTargetTypeRefEquals(projection.targetCarrier, other.targetCarrier);
+    }) &&
     left.associatedTypes.length === right.associatedTypes.length &&
     left.associatedTypes.every((requirement, index) => {
       const other = right.associatedTypes[index];

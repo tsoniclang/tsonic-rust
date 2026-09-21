@@ -20,6 +20,8 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustSourceTypeDeclarations } from "../../../policy/types/source-declarations.js";
 import { rustLocalClassIssue } from "../local-classes.js";
 import { projectGenericSubstitutions } from "./generic-substitutions.js";
+import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
+import { rustTargetGenericReferences } from "../../../target-model/types/carriers/generic-references.js";
 
 export function createRustProjectTypePolicy(
   host: RustProjectTypePolicyHost,
@@ -627,15 +629,23 @@ export function createRustProjectTypePolicy(
       : (implementationsByContract.get(source) ?? [])
           .filter((target) =>
             host.sourcePackageComponentForFile(target.fileName) === sourceComponent);
-    const ancestors = new Set(implementations.flatMap((implementation) => classLineage(implementation) ?? []));
-    const targets = [...ancestors].filter((target) =>
-      target.genericParameters.length === 0 &&
-      host.sourcePackageComponentForFile(target.fileName) === sourceComponent)
-      .sort(compareProjectDefinitions);
-    downcastRoutesByDefinition.set(source, Object.freeze(targets.map((target) => Object.freeze({
+    const targets = new Map<string, { target: RustProjectTypeDefinition; carrier: TargetTypeRef }>();
+    for (const implementation of implementations) {
+      for (const target of contractsForClass(implementation) ?? []) {
+        if (host.sourcePackageComponentForFile(target.fileName) !== sourceComponent) continue;
+        const selected = relationship(openCarrier(implementation), target);
+        if (selected.kind !== "related") continue;
+        const references = rustTargetGenericReferences(selected.targetType);
+        if (references.typeNames.length !== 0 || references.lifetimes.length !== 0 || references.constIdentities.length !== 0) continue;
+        targets.set(closedMetadataKey(selected.targetType), { target, carrier: selected.targetType });
+      }
+    }
+    const ordered = [...targets.values()].sort((left, right) => compareProjectDefinitions(left.target, right.target) ||
+      closedMetadataKey(left.carrier).localeCompare(closedMetadataKey(right.carrier), "en"));
+    downcastRoutesByDefinition.set(source, Object.freeze(ordered.map(({ target, carrier }) => Object.freeze({
       source,
       target,
-      targetCarrier: openCarrier(target),
+      targetCarrier: carrier,
       slot: allocateGeneratedName(
         usedNames,
         `downcast_${rustGeneratedNameComponent(source.targetName)}_to_${rustGeneratedNameComponent(target.targetName)}`,

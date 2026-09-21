@@ -12,6 +12,7 @@ import { rustTypeFromCarrierInContext } from "../types/render.js";
 import type { RustTypeRenderingContext } from "../types/render.js";
 import { rustGenericRequirementBounds, rustGenericsWithAssociatedBounds } from "../types/generic-bounds.js";
 import { rustAssociatedPredicates } from "../types/associated-bounds.js";
+import { rustProjectProjectionPredicates } from "../types/project-projection-bounds.js";
 import { planNativeModuleFunction } from "./functions.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 
@@ -134,6 +135,8 @@ function planDefinition(definition: RustGenericCallableDefinition, context: Rust
       if (predicate.bounds.length > 0) predicates.set(closedMetadataKey(predicate), predicate);
     }
     for (const predicate of rustAssociatedPredicates(contract.associatedTypes, { ...context, typeParameterSubstitutions: substitutions }))
+      predicates.set(closedMetadataKey(predicate), predicate);
+    for (const predicate of rustProjectProjectionPredicates(contract.projectProjections, { ...context, typeParameterSubstitutions: substitutions }))
       predicates.set(closedMetadataKey(predicate), predicate);
     const call: RustExpr = { kind: "call", path,
       genericArguments: [...arguments_, ...definition.signature.typeParameters.map(path => ({ kind: "type" as const, type: { kind: "named" as const, path } }))],

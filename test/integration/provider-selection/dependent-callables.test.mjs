@@ -53,7 +53,7 @@ export function main(): void {
 });
 
 test("computed accessors retain get/set order and exception behavior", { timeout: 300_000 }, () => {
-  compileAndRun("computed_accessor_order", `
+  const artifacts = compileAndRun("computed_accessor_order", `
 let events = "";
 class Box {
   stored: number = 3;
@@ -77,8 +77,19 @@ export function main(): void {
   let caught = false;
   try { box[failingKey()] = operand(); } catch { caught = true; }
   check(caught && events === "" && box["count"] === 9);
+  events = "";
+  box.count += box.count;
+  check(events === "ggs" && box.stored === 18);
+  events = "";
+  const next = ++box.count;
+  check(next === 19 && events === "gs");
+  events = "";
+  new Box()[key()] = operand();
+  check(events === "kvs");
 }
 `);
+  const native = artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
+  assert.doesNotMatch(native, /r#box\.clone\(\)/u);
 });
 
 test("dependent indexed callbacks retain distinct field types and writes", { timeout: 300_000 }, () => {

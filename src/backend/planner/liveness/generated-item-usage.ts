@@ -1,7 +1,9 @@
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import type { RustClassValuePlan } from "../../../analysis/objects/class-values.js";
+import type { RustDeclarationGenericRequirementIndex } from "../../../analysis/declarations/generic-requirements.js";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { TargetPlanningSourceNavigation } from "@tsonic/target-api/analysis";
+import { Node_Expression } from "@tsonic/target-api/source";
 import {
   rustFlowReadProjectionFactKey,
   rustContextualValueConversionFactKey,
@@ -90,6 +92,7 @@ export function analyzeRustGeneratedItemUsage(input: {
   readonly facts: RustPlanQueries;
   readonly projectTypes: RustProjectTypePolicy;
   readonly classValues: RustClassValuePlan;
+  readonly declarationGenericRequirements: RustDeclarationGenericRequirementIndex;
   readonly typeDefinitions: RustTypeDefinitions;
   readonly objectRepresentations: RustObjectRepresentationPlan;
   readonly projectMethodProperties: RustProjectMethodPropertyPlan;
@@ -309,6 +312,12 @@ export function analyzeRustGeneratedItemUsage(input: {
   };
 
   for (const concrete of input.projectTypes.definitions) {
+    for (const { sourceCarrier, route } of input.declarationGenericRequirements.projectionImplementationsFor(concrete)) {
+      markProjectCarrierFieldUsed(sourceCarrier, "wrapper-identity");
+      markProjectCarrierFieldUsed(sourceCarrier, "wrapper-dispatch");
+      markProjectTypeConstructed(route.targetCarrier);
+      markDowncastUsed(sourceCarrier, route.targetCarrier);
+    }
     if (concrete.kind !== "class" || !input.projectTypes.isPolymorphic(concrete)) continue;
     const contracts = input.projectTypes.contractsForClass(concrete);
     if (contracts === undefined) continue;
@@ -541,6 +550,14 @@ export function analyzeRustGeneratedItemUsage(input: {
           }
           if (fact.accessMode !== "read") {
             markProjectMemberUsed(fact.dispatch.ownerCarrier, fact.write?.declaration, "write");
+          }
+        } else {
+          const expression = Node_Expression(input.ast, node);
+          const receiverCarrier = fact.receiver.kind === "static" ? fact.receiver.typeCarrier :
+            expression === undefined ? undefined : input.facts.getRuntimeCarrierFact(expression)?.carrier;
+          if (receiverCarrier !== undefined) {
+            if (fact.accessMode !== "write") markProjectMemberUsed(receiverCarrier, fact.read?.declaration, "read");
+            if (fact.accessMode !== "read") markProjectMemberUsed(receiverCarrier, fact.write?.declaration, "write");
           }
         }
         return;
