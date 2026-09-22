@@ -973,7 +973,8 @@ test("Rust dead-code obligations are planner-local and normalized before output 
   assert.match(directives, /isStructuralFieldWritten/u);
   assert.match(directives, /isProjectTypeConstructed/u);
   assert.match(directives, /isProjectGeneratedFieldUsed/u);
-  assert.match(directives, /isStructuralShapeConstructed/u);
+  assert.match(directives, /isStructuralShapeUsed/u);
+  assert.doesNotMatch(directives, /isStructuralShapeConstructed/u);
   assert.doesNotMatch(
     directives,
     /sourceNavigation|declarationUseSummary|referencesToDeclaration/u,

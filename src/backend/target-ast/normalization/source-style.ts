@@ -571,7 +571,11 @@ function closePublicRustTypeVisibility(
     (item.kind === "struct" || item.kind === "enum" || item.kind === "trait" ||
         item.kind === "type-alias") && publicTypes.has(item.name) &&
         item.visibility !== "public"
-      ? { ...item, visibility: "public" }
+      ? { ...item, visibility: "public",
+          ...(item.kind === "trait" ? {
+            functions: item.functions.map(({ deadCode, ...method }) => method),
+          } : {}),
+        }
       : item);
 }
 

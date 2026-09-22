@@ -37,10 +37,10 @@ function finalizeRustItemDeadCode(item: RustItem): RustItem {
       };
     }
     case "trait": {
-      const owner = finalizeRustDeadCodeOwner(item, item.visibility === "public");
+      const owner = finalizeRustDeadCodeOwner(item);
       return {
         ...owner,
-        functions: owner.functions.map(fn => finalizeRustDeadCodeOwner(fn, item.visibility === "public")),
+        functions: owner.functions.map(finalizeRustDeadCodeOwner),
       };
     }
     case "impl":
@@ -81,9 +81,9 @@ function finalizeRustImplConstantDeadCode(
   return finalizeRustDeadCodeOwner(constant);
 }
 
-function finalizeRustDeadCodeOwner<T extends RustDeadCodeOwner>(owner: T, externallyReachable = false): T {
+function finalizeRustDeadCodeOwner<T extends RustDeadCodeOwner>(owner: T): T {
   const { deadCode, ...withoutDeadCode } = owner;
-  if (deadCode === undefined || externallyReachable) return withoutDeadCode as T;
+  if (deadCode === undefined) return withoutDeadCode as T;
   const attribute = rustDeadCodeAttribute(deadCode);
   const attrs = withoutDeadCode.attrs?.includes(attribute) === true
     ? withoutDeadCode.attrs

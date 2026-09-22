@@ -47,3 +47,19 @@ test("public trait promotion removes only obsolete dead-code expectations", () =
   assert.match(finalized.items[1].functions[0].attrs[1], /expect\(dead_code/u);
   assert.equal(method.deadCode, "generated-unused-dispatch");
 });
+
+test("already-public unused traits retain their exact dead-code dispositions", () => {
+  const unused = { ...trait("Unused", "public"), deadCode: "authored-declaration",
+    attrs: ["#[doc(hidden)]"], functions: [{ name: "read", generics: emptyRustGenerics,
+      params: [], returnType: { kind: "unit" }, deadCode: "authored-declaration" }] };
+  const models = new Map([["internal", { items: [unused] }]]);
+  const closed = closeRustModuleTypeVisibility(models);
+  const finalized = finalizeRustDeadCode(closed.get("internal")).items[0];
+  assert.equal(finalized.visibility, "public");
+  assert.deepEqual(finalized.attrs, ["#[doc(hidden)]",
+    '#[allow(dead_code, reason = "retains an unused authored declaration")]']);
+  assert.deepEqual(finalized.functions[0].attrs,
+    ['#[allow(dead_code, reason = "retains an unused authored declaration")]']);
+  assert.equal(unused.deadCode, "authored-declaration");
+  assert.deepEqual(closeRustModuleTypeVisibility(closed), closed);
+});
