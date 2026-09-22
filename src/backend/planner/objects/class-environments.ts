@@ -4,7 +4,7 @@ import type { RustClassValueDefinition } from "../../../analysis/objects/class-v
 import { rustSourceBindingFactKey } from "../../../analysis/facts/keys.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustSourceBindingPath, sourceModuleItemPath, rustSourceItemIsPubliclyReachable } from "../program/plan-context.js";
-import { emptyRustGenerics, type RustExpr, type RustFunctionParam, type RustItem, type RustStructField } from "../../target-ast/nodes.js";
+import { emptyRustGenerics, type RustCallGenericArgument, type RustExpr, type RustFunctionParam, type RustItem, type RustStructField } from "../../target-ast/nodes.js";
 import { isRustCopyCarrier, rustLocationTargetType } from "../../../target-model/types/index.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustProjectGenerics, rustProjectStateMarker } from "./polymorphism/names.js";
@@ -216,4 +216,18 @@ export function rustClassStaticEnvironmentForCall(member: Node | undefined, cont
   const environment = owner === undefined ? undefined : context.input.program.classValues.forDeclaration(owner.declaration)?.environment;
   if (environment === undefined || !environment.consumers.includes(member)) return undefined;
   return retained ?? rustClassEnvironmentForCall(environment.declaration, context);
+}
+
+export function rustClassStaticCallGenericArguments(
+  member: Node | undefined,
+  arguments_: readonly RustCallGenericArgument[] | undefined,
+  context: RustPlanContext,
+): readonly RustCallGenericArgument[] | undefined {
+  if (member === undefined || arguments_ === undefined) return arguments_;
+  const owner = context.input.program.projectTypes.definitionContainingDeclaration(member);
+  const environment = owner === undefined ? undefined : context.input.program.classValues.forDeclaration(owner.declaration)?.environment;
+  if (owner === undefined || environment === undefined || !environment.consumers.includes(member)) return arguments_;
+  const captured = rustProjectGenerics(owner, context, environment.genericParameterIndexes);
+  return [...arguments_, ...captured.parameters.flatMap((parameter): readonly RustCallGenericArgument[] =>
+    parameter.kind === "lifetime" ? [] : [{ kind: "type", type: { kind: "infer" } }])];
 }

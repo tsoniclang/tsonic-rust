@@ -71,7 +71,9 @@ function planImplementation(
     context.input.program.facts.getFact(implementation.declaration, rustGeneratorFactKey) !== undefined;
   if (suspended && definition.storage !== "shared") return undefined;
   const bodyContext: RustPlanContext = { ...helperContext, capturedBindings: implementation.captures.map((capture, index) => ({
-    declaration: capture.declaration, expression: { kind: "field", receiver: { kind: "path", path: owner }, name: `capture_${index}` },
+    declaration: capture.declaration, expression: { kind: "reference", expr: {
+      kind: "field", receiver: { kind: "path", path: owner }, name: `capture_${index}`,
+    } },
     storage: capture.storage, valueCarrier: capture.carrier, borrowed: true,
   })) };
   const helper = planNativeModuleFunction(implementation.declaration, implementation.declaration,

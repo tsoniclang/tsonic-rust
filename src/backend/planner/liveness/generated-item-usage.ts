@@ -502,6 +502,9 @@ export function analyzeRustGeneratedItemUsage(input: {
         }
         if (fact.target.form === "constructor") {
           markProjectConstructorInvoked(fact.target.typeCarrier);
+        } else if (fact.target.form === "constructor-value") {
+          markProjectTypeConstructed(fact.resultCarrier);
+          markStructuralShapeConstructed(fact.resultCarrier);
         } else if (fact.target.form === "union-method") {
           for (const method of fact.target.variants) {
             if (method.dispatchOwner !== undefined) {

@@ -30,7 +30,7 @@ export function isRustDeclarationPathUse(
       operation.target.form === "structural-method" || operation.target.form === "constructor-value" || operation.target.form === "union-method") return false;
     const selected = facts.getSelectedTargetCall(parent);
     return selected?.sourceDeclaration !== undefined &&
-      (!throughMember || operation.target.form === "function" ||
+      (!throughMember || operation.target.form === "function" || operation.target.form === "static-method" ||
         selected.member.static === true || selected.member.kind === "constructor");
   }
 }

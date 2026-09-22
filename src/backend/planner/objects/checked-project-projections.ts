@@ -39,8 +39,8 @@ export function planCheckedProjectProjectionImplementation(
   context: RustPlanContext,
 ): RustImplFunction | undefined {
   const statements: RustBlock["statements"][number][] = [];
-  for (const contract of contracts) {
-    if (contract.definition.genericParameters.some(parameter => parameter.kind === "lifetime")) continue;
+  const eligible = contracts.filter(contract => !contract.definition.genericParameters.some(parameter => parameter.kind === "lifetime"));
+  for (const [index, contract] of eligible.entries()) {
     const type = checkedProjectProjectionResultType(contract.carrier, context);
     if (type === undefined) return undefined;
     statements.push({ kind: "if-let-some", binding: "selected",
@@ -49,7 +49,7 @@ export function planCheckedProjectProjectionImplementation(
       body: { statements: [{ kind: "assign", operator: "=",
         target: { kind: "dereference", pointer: { kind: "path", path: "selected" } },
         value: { kind: "call", path: "Some", args: [{ kind: "path", path: "self" }] } },
-      { kind: "return" }] } });
+      ...(index === eligible.length - 1 ? [] : [{ kind: "return" as const }])] } });
   }
   return { ...checkedProjectProjectionSignature(slot), visibility: "private",
     body: { statements } };

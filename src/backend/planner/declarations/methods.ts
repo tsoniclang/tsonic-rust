@@ -40,6 +40,8 @@ import { wrapRustJsPromiseBody } from "./async-promise.js";
 import { planRustReturnExit } from "../statements/completion-exits.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import { rustClassEnvironmentParameter, rustClassMemberEnvironmentContext } from "../objects/class-environments.js";
+import { rustProjectGenerics } from "../objects/polymorphism/names.js";
+import { emptyRustGenerics } from "../../target-ast/nodes.js";
 
 export function planProjectMethod(
   member: Node,
@@ -492,9 +494,15 @@ export function planProjectStaticFunctionItems(
     const planned = planProjectMethodVariants(member, context);
     if (planned === undefined) return undefined;
     const specialized = context.input.program.sourceCallableSpecializations.requiresSpecialization(member);
+    const environment = context.input.program.classValues.forDeclaration(definition.declaration)?.environment;
+    const captured = environment?.consumers.includes(member)
+      ? rustProjectGenerics(definition, context, environment.genericParameterIndexes) : emptyRustGenerics;
     for (const method of planned) {
       if (method.selfParam !== undefined) return undefined;
-      items.push({ ...method, kind: "function", name: specialized ? method.name : name });
+      items.push({ ...method, kind: "function", name: specialized ? method.name : name, generics: {
+        parameters: [...method.generics.parameters, ...captured.parameters],
+        wherePredicates: [...method.generics.wherePredicates, ...captured.wherePredicates],
+      } });
     }
   }
   return items;

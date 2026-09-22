@@ -371,8 +371,7 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
       walk.context.frozenDataWrites, walk.context.typeDefinitions,
     ) ||
       (operation?.kind === "source-call" && operation.target.form === "union-method" &&
-        rustFutureOutputCarrier(operation.resultCarrier) === undefined &&
-        operation.target.variants.some(variant => fallible.has(variant.declaration))) ||
+        operation.target.variants.some(variant => genericInvocationIsFallible(variant.declaration))) ||
       (operation?.kind === "source-call" &&
         genericCallImplementations(operation)?.some(implementation => genericInvocationIsFallible(implementation.declaration)) === true) ||
       bindingProjectionIsFallible ||
@@ -754,23 +753,27 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
           if (nativeCallable || runtimeCallable || genericImplementations !== undefined || declaration !== undefined) {
             const isAsync = rustFutureOutputCarrier(operation.resultCarrier) !== undefined;
             const unionBranches = operation.target.form === "union-method"
-              ? operation.target.variants.map(variant => fallible.has(variant.declaration) ? "fallible" as const : "infallible" as const)
+              ? operation.target.variants.map(variant => ({
+                invocation: genericInvocationIsFallible(variant.declaration) ? "fallible" as const : "infallible" as const,
+                awaiting: !isAsync ? "not-applicable" as const
+                  : genericAwaitIsFallible(variant.declaration) ? "fallible" as const : "infallible" as const,
+              }))
               : undefined;
-            const isFallible = genericImplementations !== undefined
-              ? genericImplementations.some(implementation => fallible.has(implementation.declaration))
-              : unionBranches === undefined ? declaration !== undefined && fallible.has(declaration)
-              : unionBranches.some(branch => branch === "fallible");
             walk.context.facts.set(node, rustSourceCallEffectsFactKey, {
               ...(unionBranches === undefined ? {} : { unionBranches }),
               invocation: genericImplementations !== undefined
                 ? genericImplementations.some(implementation => genericInvocationIsFallible(implementation.declaration)) ? "fallible" : "infallible"
-                : runtimeCallable || isFallible && !isAsync
+                : runtimeCallable || (unionBranches === undefined
+                  ? declaration !== undefined && genericInvocationIsFallible(declaration)
+                  : unionBranches.some(branch => branch.invocation === "fallible"))
                 ? "fallible"
                 : "infallible",
               awaiting: isAsync
                 ? genericImplementations !== undefined
                   ? genericImplementations.some(implementation => genericAwaitIsFallible(implementation.declaration)) ? "fallible" : "infallible"
-                  : runtimeCallable || isFallible ? "fallible" : "infallible"
+                  : runtimeCallable || (unionBranches === undefined
+                    ? declaration !== undefined && genericAwaitIsFallible(declaration)
+                    : unionBranches.some(branch => branch.awaiting === "fallible")) ? "fallible" : "infallible"
                 : "not-applicable",
             }, [{ message: "rust finalized selected project-source call effects" }]);
           }

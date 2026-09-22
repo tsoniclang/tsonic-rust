@@ -32,12 +32,14 @@ test("closed generic projection contracts retain distinct exact native routes", 
   assert.equal(collector.require({ sourceCarrier: source, targetCarrier: open }), true);
   assert.equal(collector.require({ sourceCarrier: source, targetCarrier: open }), true);
   assert.equal(collector.seal().length, 1);
+  assert.equal(collector.seal()[0].requiresBound, true);
   assert.ok(Object.isFrozen(collector.seal()));
   const selected = createRustProjectProjectionImplementationIndex(collector.seal(), policy)(base);
   assert.equal(selected.length, 2);
   assert.deepEqual(selected.map(implementation => implementation.route), routes);
   const concrete = createRustProjectProjectionRequirementCollector(new Set(), policy);
   assert.equal(concrete.require({ sourceCarrier: source, targetCarrier: target(numberType) }), true);
+  assert.equal(concrete.seal()[0].requiresBound, false);
   assert.equal(createRustProjectProjectionImplementationIndex(concrete.seal(), policy)(base).length, 1);
 });
 
@@ -65,6 +67,7 @@ test("checked generic projections belong to their generic target, never the base
   assert.equal(collector.require({ sourceCarrier: source, targetCarrier: open }), true);
   assert.equal(collector.require({ sourceCarrier: source, targetCarrier: target(numberType) }), true);
   assert.equal(collector.require({ sourceCarrier: source, targetCarrier: target(stringType) }), true);
+  assert.ok(collector.seal().every(requirement => requirement.requiresBound === false));
   const index = createRustProjectProjectionImplementationIndex(collector.seal(), checked);
   assert.deepEqual(index(base), []);
   assert.equal(index(box).length, 1);

@@ -1,5 +1,5 @@
 import type { RustProjectTypePolicy } from "../../policy/types/project-types.js";
-import { hasRustProjectProjection, selectRustProjectProjectionImplementation,
+import { selectRustProjectProjection, selectRustProjectProjectionImplementation,
   type RustProjectProjectionImplementation } from "../../policy/types/project-projections.js";
 import type { RustProjectProjectionRequirement } from "../../target-model/types/project-projections.js";
 import type { RustProjectTypeDefinition } from "../../policy/types/project-types.js";
@@ -9,7 +9,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 export function createRustProjectProjectionRequirementCollector(
   declared: ReadonlySet<string>, projectTypes: RustProjectTypePolicy,
 ): {
-  require(requirement: RustProjectProjectionRequirement): boolean;
+  require(requirement: Pick<RustProjectProjectionRequirement, "sourceCarrier" | "targetCarrier">): boolean;
   seal(): readonly RustProjectProjectionRequirement[];
 } {
   const entries: RustProjectProjectionRequirement[] = [];
@@ -17,11 +17,12 @@ export function createRustProjectProjectionRequirementCollector(
     require(requirement) {
       const parameters = [...rustTargetTypeParameterNames(requirement.sourceCarrier),
         ...rustTargetTypeParameterNames(requirement.targetCarrier)];
-      if (!parameters.every(name => declared.has(name)) ||
-        !hasRustProjectProjection(requirement.sourceCarrier, requirement.targetCarrier, projectTypes)) return false;
+      const selection = selectRustProjectProjection(requirement.sourceCarrier, requirement.targetCarrier, projectTypes);
+      if (!parameters.every(name => declared.has(name)) || selection === undefined) return false;
       if (!entries.some(entry =>
         rustTargetTypeRefEquals(entry.sourceCarrier, requirement.sourceCarrier) &&
-        rustTargetTypeRefEquals(entry.targetCarrier, requirement.targetCarrier))) entries.push(Object.freeze({ ...requirement }));
+        rustTargetTypeRefEquals(entry.targetCarrier, requirement.targetCarrier))) entries.push(Object.freeze({ ...requirement,
+          requiresBound: selection.kind === "generic" }));
       return true;
     },
     seal: () => Object.freeze([...entries]),

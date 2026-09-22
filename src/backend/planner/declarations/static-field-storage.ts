@@ -35,7 +35,10 @@ export function readRustSourceStaticField(
     const read: RustExpr = isRustCopyCarrier(fact.resultCarrier)
       ? local.readonly ? value : { kind: "dereference", pointer: value }
       : { kind: "method-call", receiver: value, method: "clone", args: [] };
-    return local.bindings.length === 0 ? read : { kind: "block", bindings: local.bindings, value: read };
+    if (local.bindings.length === 0) return read;
+    if (context.syntheticNames === undefined) throw new Error("A static-field read has no native local-name allocator.");
+    const name = allocateRustSyntheticName(context.syntheticNames, "static_value");
+    return { kind: "block", bindings: [...local.bindings, { name, value: read }], value: { kind: "path", path: name } };
   }
   const cell = rustSourceStaticFieldCell(fact, context);
   if (cell === undefined) {
@@ -66,9 +69,11 @@ export function planRustSourceStaticFieldStorage(
       bindings: [...local.bindings, { name, value: { kind: "reference", expr: local.field } }],
       read: isRustCopyCarrier(fact.resultCarrier) ? { kind: "dereference", pointer: borrowed }
         : { kind: "method-call", receiver: borrowed, method: "clone", args: [] },
-      write: value => ({ kind: "assignment", operator: "=", value, target: {
-        kind: "dereference", pointer: { kind: "method-call", receiver: reference, method: "borrow_mut", args: [] },
-      } }),
+      write: value => ({ kind: "evaluate-then", discard: "unit", effect: {
+        kind: "assignment", operator: "=", value, target: {
+          kind: "dereference", pointer: { kind: "method-call", receiver: reference, method: "borrow_mut", args: [] },
+        },
+      }, value: { kind: "tuple-literal", elements: [] } }),
     };
   }
   const cell = rustSourceStaticFieldCell(fact, context);

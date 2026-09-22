@@ -12,7 +12,7 @@ export interface RustProjectProjectionImplementation {
 }
 
 export function selectRustProjectProjectionImplementation(
-  requirement: RustProjectProjectionRequirement, route: RustProjectDowncastRoute, projectTypes: RustProjectTypePolicy,
+  requirement: Pick<RustProjectProjectionRequirement, "sourceCarrier" | "targetCarrier">, route: RustProjectDowncastRoute, projectTypes: RustProjectTypePolicy,
 ): RustProjectProjectionImplementation | undefined {
   if (route.source === route.target) return undefined;
   const relation = projectTypes.relationship(route.targetCarrier, route.source);

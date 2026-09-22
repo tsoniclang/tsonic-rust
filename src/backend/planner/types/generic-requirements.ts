@@ -1,12 +1,20 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustGenericRequirement } from "../../../analysis/declarations/generic-requirements.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { rustCarrierSupportsClone } from "../../../target-model/types/index.js";
+import { isRustCopyCarrier, rustCarrierSupportsClone } from "../../../target-model/types/index.js";
 import { unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 
 export type { RustGenericRequirement } from "../../../analysis/declarations/generic-requirements.js";
+
+export function rustCarrierHasCopyContract(
+  carrier: TargetTypeRef | undefined,
+  context: RustPlanContext,
+): boolean {
+  return carrier !== undefined && (isRustCopyCarrier(carrier) ||
+    context.input.program.callableValues.generic.definitionFor(carrier)?.storage === "value");
+}
 
 export function rustCarrierHasCloneContract(
   carrier: TargetTypeRef | undefined,

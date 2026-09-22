@@ -6,7 +6,7 @@ import {
   rustTargetGenericTypeArguments,
   substituteRustTargetGenericArgument,
 } from "../../../../target-model/types/index.js";
-import { rustClassStaticEnvironmentForCall, rustOwnedClassEnvironmentForCall } from "../../objects/class-environments.js";
+import { rustClassStaticCallGenericArguments, rustClassStaticEnvironmentForCall, rustOwnedClassEnvironmentForCall } from "../../objects/class-environments.js";
 import {
   diagnosticInput,
   isValidRustIdentifier,
@@ -64,10 +64,14 @@ export function sourceCallEffectsMatch(
   const isAsync = rustFutureOutputCarrier(fact.resultCarrier) !== undefined;
   if (fact.target.form === "union-method") {
     if (effects.unionBranches?.length !== fact.target.variants.length ||
-      !effects.unionBranches.every(branch => branch === "infallible" || branch === "fallible")) return false;
-    const selectedEffect = effects.unionBranches.some(branch => branch === "fallible") ? "fallible" : "infallible";
-    return isAsync ? effects.invocation === "infallible" && effects.awaiting === selectedEffect
-      : effects.invocation === selectedEffect && effects.awaiting === "not-applicable";
+      !effects.unionBranches.every(branch => branch !== undefined &&
+        (branch.invocation === "infallible" || branch.invocation === "fallible") &&
+        (isAsync ? branch.awaiting === "infallible" || branch.awaiting === "fallible"
+          : branch.awaiting === "not-applicable"))) return false;
+    const invocation = effects.unionBranches.some(branch => branch.invocation === "fallible") ? "fallible" : "infallible";
+    const awaiting = !isAsync ? "not-applicable"
+      : effects.unionBranches.some(branch => branch.awaiting === "fallible") ? "fallible" : "infallible";
+    return effects.invocation === invocation && effects.awaiting === awaiting;
   }
   const callableCarrier = fact.target.form === "callable"
     ? fact.target.carrier
@@ -217,11 +221,12 @@ export function planSelectedSourceCall(
         break;
       }
       const environment = rustClassStaticEnvironmentForCall(selected.sourceDeclaration, context, retainedClass);
+      const genericArguments = rustClassStaticCallGenericArguments(selected.sourceDeclaration, callGenericArguments, context);
       planned = {
         kind: "call",
         path,
         args: [...(environment === undefined ? [] : [{ kind: "reference" as const, expr: environment }]), ...shaped],
-        ...(callGenericArguments === undefined ? {} : { genericArguments: callGenericArguments }),
+        ...(genericArguments === undefined ? {} : { genericArguments }),
       };
       break;
     }

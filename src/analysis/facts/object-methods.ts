@@ -86,7 +86,7 @@ export const rustFallibleFactKey: RustPlanKey<{ readonly fallible: true }> =
 export interface RustSourceCallEffectsFact {
   readonly invocation: "infallible" | "fallible";
   readonly awaiting: "not-applicable" | "infallible" | "fallible";
-  readonly unionBranches?: readonly ("infallible" | "fallible")[];
+  readonly unionBranches?: readonly Pick<RustSourceCallEffectsFact, "invocation" | "awaiting">[];
 }
 
 // Total post-fixpoint effects for an exact selected project-source call.

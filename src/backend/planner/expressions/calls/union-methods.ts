@@ -4,7 +4,7 @@ import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality
 import { rustSourceCallEffectsFactKey } from "../../../../analysis/facts/keys.js";
 import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
 import type { RustCallGenericArgument, RustExpr, RustPattern } from "../../../target-ast/nodes.js";
-import { rustFutureOutputCarrier, rustTargetGenericBindingsForArguments, substituteRustTargetGenerics, type TargetTypeRef } from "../../../../target-model/types/index.js";
+import { rustTargetGenericBindingsForArguments, substituteRustTargetGenerics, type TargetTypeRef } from "../../../../target-model/types/index.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustActiveErrorType, rustErrorBoundaryForProjectMember, rustErrorType } from "../../program/plan-context.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
@@ -73,7 +73,7 @@ export function planRustUnionMethodCall(
       if (planned === undefined) return undefined;
       expression = planned;
     }
-    if (effects.unionBranches[index] === "fallible" && rustFutureOutputCarrier(fact.resultCarrier) === undefined) {
+    if (effects.unionBranches[index]!.invocation === "fallible") {
       const resultErrorType = rustActiveErrorType(context);
       const operandBoundary = rustErrorBoundaryForProjectMember(method.declaration, context);
       if (resultErrorType === undefined || operandBoundary === undefined) return undefined;

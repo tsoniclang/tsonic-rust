@@ -17,6 +17,7 @@ import { rustStructuralViewInstance, rustStructuralViewIntoRoot, rustStructuralV
 import { rustDirectProjectFieldStoragePath } from "./project-storage.js";
 import { checkRustDataWrite } from "./data-writes.js";
 import { planRustSourceAccessorCall } from "../expressions/properties.js";
+import { applyRustFallibleResultExpression } from "../types/fallible-shape.js";
 
 export function rustStructuralDispatchType(carrier: TargetTypeRef, context: RustPlanContext): RustType | undefined {
   const type = rustTypeFromCarrierInContext(carrier, context);
@@ -72,7 +73,9 @@ export function planRustProjectStructuralImplementations(declaration: Node, cont
         const protocol = rustCallableProtocol(callable.carrier);
         const result = protocol === undefined ? undefined : rustTypeFromCarrierInContext(protocol.result, local);
         const variant = context.input.program.projectMethodDispatch.variantForMember(callable.declaration, []);
-        const owner = rustProjectDispatchTraitType(callable.ownerCarrier, local);
+        const declaringOwner = context.input.program.projectTypes.definitionContainingDeclaration(callable.declaration);
+        const relationship = declaringOwner === undefined ? undefined : context.input.program.projectTypes.relationship(callable.ownerCarrier, declaringOwner);
+        const owner = relationship?.kind !== "related" ? undefined : rustProjectDispatchTraitType(relationship.targetType, local);
         const parameters = callable.parameters.map(parameter => {
           const type = rustTypeFromCarrierInContext(parameter.parameterCarrier, local);
           return type === undefined ? undefined : { name: allocateRustSyntheticName(syntheticNames, "argument"), type };
@@ -97,7 +100,7 @@ export function planRustProjectStructuralImplementations(declaration: Node, cont
         if (value === undefined) return undefined;
         functions.push({ name: field.targetName, visibility: "private", generics: emptyRustGenerics, selfParam: rustSelfParameter("rc"),
           params, returnType: result, errorType: rustErrorType(boundary), body: { statements: [...arguments_.statements,
-            { kind: "tail", expr: { kind: "call", path: "Ok", args: [value] } }] } });
+            { kind: "tail", expr: applyRustFallibleResultExpression(value, { errorType: rustErrorType(boundary) }) }] } });
         continue;
       }
       const source = member.field;
@@ -134,7 +137,7 @@ export function planRustProjectStructuralImplementations(declaration: Node, cont
           functions.push({ name: role === "read" ? property.getterTargetName : property.setterTargetName!, visibility: "private",
             generics: emptyRustGenerics, selfParam: rustSelfParameter("rc"), params: role === "read" ? [] : [{ name: "value", type }],
             returnType: role === "read" ? type : { kind: "unit" }, errorType: rustErrorType(boundary), body: { statements: [
-              { kind: "tail", expr: { kind: "call", path: "Ok", args: [value] } },
+              { kind: "tail", expr: applyRustFallibleResultExpression(value, { errorType: rustErrorType(boundary) }) },
             ] } });
         }
         continue;
@@ -179,7 +182,7 @@ export function planRustProjectStructuralImplementations(declaration: Node, cont
       if (adapted === undefined) return undefined;
       functions.push({ name: field.property.getterTargetName, visibility: "private", generics: emptyRustGenerics,
         selfParam: rustSelfParameter(field.property.selfMode), params: [], returnType: type, errorType: rustErrorType(boundary),
-        body: { statements: [{ kind: "tail", expr: { kind: "call", path: "Ok", args: [adapted] } }] } });
+        body: { statements: [{ kind: "tail", expr: applyRustFallibleResultExpression(adapted, { errorType: rustErrorType(boundary) }) }] } });
       if (field.property.setterTargetName !== undefined) {
         if (dispatch.write === undefined) return undefined;
         const write: RustExpr = { kind: "associated-call", owner, method: source.dispatch.write,

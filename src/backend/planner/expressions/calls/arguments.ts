@@ -1,4 +1,5 @@
 import { rustGenericCallableProtocol } from "../../../../target-model/types/carriers/generic-callables.js";
+import { rustSuspendedCallableInvocationResult } from "../../../../analysis/facts/callable-results.js";
 import {
   isRustCopyCarrier,
   isRustVecCarrier,
@@ -27,7 +28,6 @@ import { planRustNonConsumingValue } from "../typed-locations.js";
 import { rustArgumentPassingMode } from "../../../../analysis/facts/parameter-passing.js";
 import { rustFinalizedCarrierTransitionMatches } from "../../../../analysis/facts/target-operation.js";
 import {
-  rustGeneratorFactKey,
   rustSourceParameterAbiFactKey,
   rustTargetOperationFactKey,
 } from "../../../../analysis/facts/keys.js";
@@ -515,10 +515,7 @@ export function sourceCallFinalizedResultCarrier(
   selected: SelectedTargetSignatureFact,
   context: RustPlanContext,
 ): TargetTypeRef | undefined {
-  return context.input.program.facts.getFact(
-    selected.sourceDeclaration,
-    rustGeneratorFactKey,
-  )?.resultCarrier ?? selected.member.returnType;
+  return rustSuspendedCallableInvocationResult(context.input.program.facts, selected.sourceDeclaration) ?? selected.member.returnType;
 }
 
 export function requireProviderArgumentPassingFacts(

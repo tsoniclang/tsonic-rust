@@ -503,7 +503,13 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
     const projectProjection = downcast === undefined ? flowProjection?.kind === "project-downcast"
       ? { sourceCarrier: flowProjection.dispatchCarrier, targetCarrier: flowProjection.selectedCarrier } : undefined
       : { sourceCarrier: downcast.dispatchCarrier, targetCarrier: downcast.targetCarrier };
-    if (projectProjection !== undefined && !projections.require(projectProjection)) return "A checked project projection has no closed native conversion or generic obligation.";
+    if (projectProjection !== undefined) {
+      if (!projections.require(projectProjection)) return "A checked project projection has no closed native conversion or generic obligation.";
+      for (const projectionCarrier of [projectProjection.sourceCarrier, projectProjection.targetCarrier]) {
+        const error = collectType(projectionCarrier);
+        if (error !== undefined) return error;
+      }
+    }
     if (carrier !== undefined && !isRustDeclarationPathUse(node, ast, facts)) {
       const error = collectType(carrier);
       if (error !== undefined) return error;
@@ -519,10 +525,10 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
     }
     const location = facts.getFact(node, rustLocationStorageFactKey);
     const objectView = facts.getFact(node, rustObjectReferenceViewKey);
-    if (objectView?.kind === "structural") {
+    if (objectView !== undefined) {
       const error = addUse(node, objectView.sourceCarrier, ["clone", "static"]);
       if (error !== undefined) return error;
-      for (const field of objectView.fields) {
+      for (const field of objectView.kind === "structural" ? objectView.fields : []) {
         const fieldError = addUse(node, field.source.resultCarrier, ["clone", "static"]);
         if (fieldError !== undefined) return fieldError;
       }
@@ -823,7 +829,8 @@ function requirementContractsEqual(
     left.projectProjections.length === right.projectProjections.length &&
     left.projectProjections.every((projection, index) => {
       const other = right.projectProjections[index];
-      return other !== undefined && rustTargetTypeRefEquals(projection.sourceCarrier, other.sourceCarrier) &&
+      return other !== undefined && projection.requiresBound === other.requiresBound &&
+        rustTargetTypeRefEquals(projection.sourceCarrier, other.sourceCarrier) &&
         rustTargetTypeRefEquals(projection.targetCarrier, other.targetCarrier);
     }) &&
     left.associatedTypes.length === right.associatedTypes.length &&

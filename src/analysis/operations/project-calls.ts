@@ -20,7 +20,6 @@ import {
   rustOptionalChainFactKey,
   rustSelfModeFactKey,
   rustTargetOperationFactKey,
-  rustGeneratorFactKey,
 } from "../facts/keys.js";
 import { appendMalformedSourceAst } from "../declarations/project-types.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
@@ -48,6 +47,7 @@ import { rustGenericCallableProtocol } from "../../target-model/types/carriers/g
 import { substituteRustValueConversion } from "../../target-model/conversions/contracts.js";
 import { recordSelectedMethodSpecialization } from "./project-method-calls.js";
 import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
+import { rustSuspendedCallableInvocationResult } from "../facts/callable-results.js";
 
 export function applySelectedProjectSourceCall(
   walk: RustFactWalk,
@@ -220,10 +220,7 @@ export function applySelectedProjectSourceCall(
       inputs: inputs as NonNullable<(typeof inputs)[number]>[],
     });
   }
-  const declaredResultCarrier = walk.context.facts.get(
-    selectedDeclaration,
-    rustGeneratorFactKey,
-  )?.resultCarrier ?? selectedMember.returnType;
+  const declaredResultCarrier = rustSuspendedCallableInvocationResult(walk.context.facts, selectedDeclaration) ?? selectedMember.returnType;
   const resultCarrier = declaredResultCarrier === undefined
     ? undefined
     : substituteRustTargetGenerics(

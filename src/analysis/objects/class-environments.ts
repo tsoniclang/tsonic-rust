@@ -26,7 +26,11 @@ export function recordRustClassEnvironmentDemands(walk: RustFactWalk): void {
     for (const child of rustTargetTypeChildren(carrier)) record(child);
   };
   const visit = (node: Node): void => {
-    if (!isRustDeclarationPathUse(node, ast, facts)) record(facts.getRuntimeCarrierFact(node)?.carrier);
+    const parent = ast.parent(node);
+    const declarationName = parent !== undefined && ast.name(parent) === node;
+    if (!ast.is.IsClassDeclaration(node) && !declarationName && !isRustDeclarationPathUse(node, ast, facts)) {
+      record(facts.getRuntimeCarrierFact(node)?.carrier);
+    }
     record(facts.getFact(node, rustSourceCallableReturnFactKey)?.returnCarrier);
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };

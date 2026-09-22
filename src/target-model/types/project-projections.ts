@@ -7,4 +7,5 @@ export type RustProjectProjectionSelection =
 export interface RustProjectProjectionRequirement {
   readonly sourceCarrier: TargetTypeRef;
   readonly targetCarrier: TargetTypeRef;
+  readonly requiresBound: boolean;
 }

@@ -7,6 +7,7 @@ export function rustProjectProjectionPredicates(
   requirements: readonly RustProjectProjectionRequirement[], context: RustTypeRenderingContext,
 ): readonly RustWherePredicate[] {
   return Object.freeze(requirements.flatMap(requirement => {
+    if (!requirement.requiresBound) return [];
     if ([requirement.sourceCarrier, requirement.targetCarrier].flatMap(rustTargetTypeParameterNames).length === 0) return [];
     const source = rustTypeFromCarrierInContext(requirement.sourceCarrier, context);
     const target = rustTypeFromCarrierInContext(requirement.targetCarrier, context);

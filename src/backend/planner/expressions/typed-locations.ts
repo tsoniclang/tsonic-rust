@@ -18,7 +18,6 @@ import {
   rustTargetOperationFactKey,
 } from "../../../analysis/facts/keys.js";
 import {
-  isRustCopyCarrier,
   isRustStringCarrier,
   rustLocationTargetType,
   rustProgramErrorTargetType,
@@ -40,7 +39,7 @@ import {
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustProjectObjectRepresentation } from "../objects/project-storage.js";
 import { rustModuleCellAccess } from "../project/module-storage.js";
-import { rustCarrierHasCloneContract } from "../types/generic-requirements.js";
+import { rustCarrierHasCloneContract, rustCarrierHasCopyContract } from "../types/generic-requirements.js";
 import {
   readRustProjectDispatchedField,
   writeRustProjectDispatchedField,
@@ -98,7 +97,7 @@ export function planRustIdentifierValue(
   }
   if (captured?.borrowed === true) {
     const referent = value.kind === "reference" ? value.expr : undefined;
-    return isRustCopyCarrier(captured.valueCarrier)
+    return rustCarrierHasCopyContract(captured.valueCarrier, context)
       ? referent ?? { kind: "dereference", pointer: value }
       : { kind: "method-call", receiver: referent ?? value, method: "clone", args: [] };
   }
@@ -219,7 +218,7 @@ export function planRustMutableProjectReceiver(
 }
 
 function rustReadRequiresClone(carrier: TargetTypeRef | undefined, context: RustPlanContext): boolean {
-  return carrier !== undefined && !isRustCopyCarrier(carrier) &&
+  return carrier !== undefined && !rustCarrierHasCopyContract(carrier, context) &&
     rustCarrierHasCloneContract(carrier, context);
 }
 
