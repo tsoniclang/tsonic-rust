@@ -42,6 +42,7 @@ import { requireRustCarrierRequirements } from "../types/generic-requirements.js
 import { rustClassEnvironmentParameter, rustClassMemberEnvironmentContext } from "../objects/class-environments.js";
 import { rustProjectGenerics } from "../objects/polymorphism/names.js";
 import { emptyRustGenerics } from "../../target-ast/nodes.js";
+import { planRustSuspendedReceiver } from "./suspended-receiver.js";
 
 export function planProjectMethod(
   member: Node,
@@ -220,8 +221,12 @@ export function planProjectMethod(
     ));
     return undefined;
   }
+  const receiverPlan = planRustSuspendedReceiver(
+    generatorFact?.ownedReceiver ?? (asyncFact?.kind === "js-promise" ? asyncFact.ownedReceiver : undefined),
+    { ...context, syntheticNames },
+  );
   const bodyContext: RustPlanContext = {
-    ...context,
+    ...receiverPlan.context,
     syntheticNames,
     controlFlow: { nextLoopId: 0 },
     functionReturnType: bodyReturnType,
@@ -300,7 +305,7 @@ export function planProjectMethod(
       params,
       returnType,
       body: {
-        statements: [...parameterStatements, {
+        statements: [...receiverPlan.prelude, ...parameterStatements, {
           kind: "tail",
           expr: {
             kind: "call",
@@ -364,9 +369,9 @@ export function planProjectMethod(
     params,
     ...(emittedReturnType === undefined ? {} : { returnType: emittedReturnType }),
     body: returnsJsPromise
-      ? wrapRustJsPromiseBody({
+      ? { statements: [...receiverPlan.prelude, ...wrapRustJsPromiseBody({
           statements: [...overridePrelude, ...finalizedBody.statements],
-        }, fallible)
+        }, fallible).statements] }
       : { statements: [...overridePrelude, ...finalizedBody.statements] },
   };
 }

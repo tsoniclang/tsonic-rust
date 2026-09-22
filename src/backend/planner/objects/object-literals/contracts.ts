@@ -50,7 +50,7 @@ export function planContractImplementation(
   const functions: RustImplFunction[] = [];
   const projectionSlot = context.input.program.projectTypes.checkedProjectionSlot(contract.definition);
   if (projectionSlot !== undefined) {
-    const projection = planCheckedProjectProjectionImplementation(projectionSlot, contracts, context);
+    const projection = planCheckedProjectProjectionImplementation(projectionSlot, contracts, [], context);
     if (projection === undefined) return undefined;
     functions.push(projection);
   }

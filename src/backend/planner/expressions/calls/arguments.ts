@@ -3,6 +3,7 @@ import { rustSuspendedCallableInvocationResult } from "../../../../analysis/fact
 import {
   isRustCopyCarrier,
   isRustVecCarrier,
+  isRustJsArrayCarrier,
   rustCallableProtocol,
   rustNativeCallableProtocol,
   rustFixedArrayCarrierValue,
@@ -88,7 +89,7 @@ export function shapeRustSourceCallParameters(
         }
         elements.push(element);
       }
-      shaped.push({ kind: "vec-literal", elements });
+      shaped.push(planSourceRestArray({ kind: "vec-literal", elements }, parameter.parameterCarrier, context));
       continue;
     }
     const input = parameter.inputs[0];
@@ -150,7 +151,14 @@ function shapeRustRestSequenceInputs(
     }
     segments.push({ value, sequence: input.sourceForm === "spread-sequence" });
   }
-  return planRustRestAssembly(segments, context);
+  const assembled = planRustRestAssembly(segments, context);
+  return assembled === undefined ? undefined : planSourceRestArray(assembled, parameter.parameterCarrier, context);
+}
+
+function planSourceRestArray(expression: RustExpr, carrier: TargetTypeRef, context: RustPlanContext): RustExpr {
+  if (!isRustJsArrayCarrier(carrier)) return expression;
+  context.usedAliases?.add("js_abi");
+  return { kind: "call", path: "js_abi::JsArray::from_dense", args: [expression] };
 }
 
 export function planRustSourceCallArgumentEvaluation(

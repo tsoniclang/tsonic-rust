@@ -3,6 +3,7 @@ import type { RustProjectDowncastRoute, RustProjectTypePolicy } from "./project-
 import { rustTargetTypeParameterNames } from "../../target-model/types/carriers/generic-references.js";
 import { inferRustTargetTypeParameterBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustStructuralObjectCarrierValue, rustTargetGenericReferences } from "../../target-model/types/index.js";
 import type { RustProjectProjectionRequirement, RustProjectProjectionSelection } from "../../target-model/types/project-projections.js";
 
 export interface RustProjectProjectionImplementation {
@@ -36,6 +37,13 @@ export function selectRustProjectProjection(
 ): RustProjectProjectionSelection | undefined {
   const source = projectTypes.definitionForCarrier(sourceCarrier);
   const target = projectTypes.definitionForCarrier(targetCarrier);
+  const structural = rustStructuralObjectCarrierValue(targetCarrier);
+  if (source !== undefined && structural?.bases?.some(base => rustTargetTypeRefEquals(base, sourceCarrier))) {
+    const slot = projectTypes.checkedProjectionSlot(source);
+    const references = rustTargetGenericReferences(targetCarrier);
+    return slot !== undefined && references.lifetimes.length === 0 && !references.hasUnnameableLifetime
+      ? Object.freeze({ kind: "structural", slot }) : undefined;
+  }
   if (source === undefined || target === undefined) return undefined;
   const relationship = projectTypes.relationship(targetCarrier, source);
   if (relationship.kind !== "related" || !rustTargetTypeRefEquals(relationship.targetType, sourceCarrier)) return undefined;

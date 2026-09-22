@@ -30,7 +30,7 @@ import { rustProjectImplementationVisibility } from "../project-storage-abi.js";
 import { rustProjectObjectIdentityImplementation } from "../project-identity.js";
 import { rustArrayFieldMutationName, rustArrayFieldMutationType } from "./array-fields.js";
 import { planRustProjectProjectionImplementations } from "../project-projections.js";
-import { rustStructuralDispatchType } from "../project-structural-views.js";
+import { rustStructuralDispatchType } from "../project-structural-types.js";
 import { checkedProjectProjectionSignature } from "../checked-project-projections.js";
 
 export function projectIdentityImplementations(
@@ -154,8 +154,7 @@ export function planProjectDispatchTrait(
   const functions: RustTraitFunction[] = [];
   const projectionSlot = context.input.program.projectTypes.checkedProjectionSlot(definition);
   if (projectionSlot !== undefined) {
-    const used = publiclyReachable || context.input.program.projectTypes.definitions.some(target =>
-      context.input.liveness.isDowncastUsed(definition.declaration, target.declaration));
+    const used = publiclyReachable || context.input.liveness.isCheckedProjectionUsed(definition.declaration);
     functions.push({ ...checkedProjectProjectionSignature(projectionSlot),
       ...(used ? {} : { deadCode: "generated-unused-dispatch" as const }) });
   }

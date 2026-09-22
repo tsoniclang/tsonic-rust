@@ -1,7 +1,7 @@
 import type { TargetTypeRef } from "./model.js";
 
 export type RustProjectProjectionSelection =
-  | { readonly kind: "closed" | "checked"; readonly slot: string }
+  | { readonly kind: "closed" | "checked" | "structural"; readonly slot: string }
   | { readonly kind: "generic" };
 
 export interface RustProjectProjectionRequirement {

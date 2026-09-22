@@ -656,7 +656,7 @@ export function acceptProjectSourceCall(
   }
   const unionContract = unionMethods === undefined ? undefined : resolveRustUnionMethodContracts(
     unionMethods, callableDeclaration, request.source.sourceSelectedSignatureParameters,
-    parameters as RustTargetMember["parameters"], returnType, context, options,
+    parameters as RustTargetMember["parameters"], context, options,
   );
   if (unionMethods !== undefined && unionContract === undefined) {
     return rejectSelectedOperation(request.source.call, context, "RUST_UNION_METHOD_ABI_UNSUPPORTED",

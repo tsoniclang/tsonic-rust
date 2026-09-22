@@ -48,7 +48,6 @@ export function resolveRustUnionMethodContracts(
   selectedDeclaration: Node,
   selectedParameters: RustCheckedCallSelectionInput["source"]["sourceSelectedSignatureParameters"],
   parameters: readonly RustTargetMember["parameters"][number][],
-  result: TargetTypeRef,
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): { readonly result: TargetTypeRef; readonly methods: readonly RustSelectedUnionMethod[] } | undefined {
@@ -80,7 +79,8 @@ export function resolveRustUnionMethodContracts(
   });
   if (resolved.some(method => method === undefined)) return undefined;
   const returns = resolved.map(method => method!.returnType);
-  const common = returns.find(type => rustOptionElementCarrier(type) !== undefined) ?? result;
+  const common = returns.find(type => rustOptionElementCarrier(type) !== undefined) ?? returns[0];
+  if (common === undefined) return undefined;
   const element = rustOptionElementCarrier(common);
   if (returns.some(type => !rustTargetTypeRefEquals(type, common) &&
     (element === undefined || !rustTargetTypeRefEquals(type, element)))) return undefined;

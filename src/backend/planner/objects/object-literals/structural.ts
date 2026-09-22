@@ -9,7 +9,7 @@ import type { RustPlanContext } from "../../program/plan-context.js";
 import { allocateRustSyntheticTypeName, type RustSyntheticNameState } from "../../names/synthetic.js";
 import { rustSelfParameter } from "../../declarations/self-parameter.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
-import { rustStructuralDispatchType } from "../project-structural-views.js";
+import { rustStructuralDispatchType } from "../project-structural-types.js";
 import { rustStructuralShapeGenerics } from "../structural-generics.js";
 import { checkRustDataWrite } from "../data-writes.js";
 import type { RustStructuralObjectFieldInitializer } from "../project-storage.js";

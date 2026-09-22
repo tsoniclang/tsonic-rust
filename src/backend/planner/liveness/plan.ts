@@ -27,6 +27,7 @@ export interface RustPlannerLiveness {
   ): boolean;
   isDispatchMemberUsed(declaration: Node, role: RustDispatchMemberRole): boolean;
   isDowncastUsed(source: Node, target: Node): boolean;
+  isCheckedProjectionUsed(source: Node): boolean;
   isStructuralFieldRead(carrier: TargetTypeRef, storageIndex: number): boolean;
   isStructuralFieldWritten(carrier: TargetTypeRef, storageIndex: number): boolean;
   isStructuralShapeConstructed(carrier: TargetTypeRef): boolean;
@@ -216,6 +217,7 @@ export function createRustPlannerLiveness(program: RustTargetProgram): RustPlann
     isProjectGeneratedFieldUsed: generatedUsage.isProjectGeneratedFieldUsed,
     isDispatchMemberUsed: generatedUsage.isDispatchMemberUsed,
     isDowncastUsed: generatedUsage.isDowncastUsed,
+    isCheckedProjectionUsed: generatedUsage.isCheckedProjectionUsed,
     isStructuralFieldRead: generatedUsage.isStructuralFieldRead,
     isStructuralFieldWritten: generatedUsage.isStructuralFieldWritten,
     isStructuralShapeConstructed: generatedUsage.isStructuralShapeConstructed,

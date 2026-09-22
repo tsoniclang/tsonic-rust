@@ -501,6 +501,7 @@ export function recordCallableSuspensionFacts(walk: RustFactWalk, declaration: N
         nextType: protocol.nextType,
         capturedParameters: storage.capturedParameters,
         storage: storage.storage,
+        ...(storage.ownedReceiver === undefined ? {} : { ownedReceiver: storage.ownedReceiver }),
       }, [{ message: "rust generator protocol" }]);
       const typeNode = Node_Type(ast, declaration);
       if (typeNode !== undefined) {
@@ -549,6 +550,7 @@ export function recordCallableSuspensionFacts(walk: RustFactWalk, declaration: N
               outputCarrier: inner,
               capturedParameters: storage.capturedParameters,
               storage: storage.storage,
+              ...(storage.ownedReceiver === undefined ? {} : { ownedReceiver: storage.ownedReceiver }),
             }
           : {
               kind: "native-future",

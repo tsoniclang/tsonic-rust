@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { emptyRustGenerics, type RustExpr, type RustImplFunction, type RustItem, type RustType } from "../../target-ast/nodes.js";
+import { emptyRustGenerics, type RustExpr, type RustImplFunction, type RustItem } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustCurrentErrorBoundary, rustErrorBoundaryForProjectMember, rustErrorType } from "../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
@@ -18,14 +18,7 @@ import { rustDirectProjectFieldStoragePath } from "./project-storage.js";
 import { checkRustDataWrite } from "./data-writes.js";
 import { planRustSourceAccessorCall } from "../expressions/properties.js";
 import { applyRustFallibleResultExpression } from "../types/fallible-shape.js";
-
-export function rustStructuralDispatchType(carrier: TargetTypeRef, context: RustPlanContext): RustType | undefined {
-  const type = rustTypeFromCarrierInContext(carrier, context);
-  const shape = context.input.program.structuralShapes.definitionForCarrier(carrier);
-  return type?.kind !== "named" || shape?.dispatchName === undefined ? undefined : {
-    ...type, path: `${type.path.slice(0, type.path.lastIndexOf("::") + 2)}${shape.dispatchName}`,
-  };
-}
+import { rustStructuralDispatchType } from "./project-structural-types.js";
 
 export function planRustProjectStructuralConversion(
   expression: RustExpr, sourceCarrier: TargetTypeRef, targetCarrier: TargetTypeRef, context: RustPlanContext,

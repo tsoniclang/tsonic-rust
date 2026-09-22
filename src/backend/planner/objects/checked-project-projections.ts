@@ -4,6 +4,8 @@ import type { RustBlock, RustExpr, RustGenerics, RustImplFunction, RustTraitFunc
 import { rustSelfParameter } from "../declarations/self-parameter.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustProjectDispatchObjectType } from "./polymorphism/names.js";
+import { rustStructuralDispatchType } from "./project-structural-types.js";
+import { rustStructuralObjectCarrierValue } from "../../../target-model/types/index.js";
 
 const projectionGenerics: RustGenerics = {
   parameters: [],
@@ -25,7 +27,10 @@ export function checkedProjectProjectionSignature(slot: string): RustTraitFuncti
 export function checkedProjectProjectionResultType(
   carrier: TargetTypeRef, context: RustPlanContext,
 ): RustType | undefined {
-  const dispatch = rustProjectDispatchObjectType(carrier, context);
+  const structural = rustStructuralObjectCarrierValue(carrier);
+  const trait = structural === undefined ? undefined : rustStructuralDispatchType(carrier, context);
+  const dispatch: RustType | undefined = structural === undefined ? rustProjectDispatchObjectType(carrier, context)
+    : trait === undefined ? undefined : { kind: "trait-object", principal: { trait }, autoTraits: [] };
   return dispatch === undefined ? undefined : {
     kind: "named", path: "Option", genericArguments: [{ kind: "type", type: {
       kind: "named", path: "alloc::rc::Rc", genericArguments: [{ kind: "type", type: dispatch }],
@@ -36,12 +41,14 @@ export function checkedProjectProjectionResultType(
 export function planCheckedProjectProjectionImplementation(
   slot: string,
   contracts: readonly { readonly definition: RustProjectTypeDefinition; readonly carrier: TargetTypeRef }[],
+  structuralCarriers: readonly TargetTypeRef[],
   context: RustPlanContext,
 ): RustImplFunction | undefined {
   const statements: RustBlock["statements"][number][] = [];
-  const eligible = contracts.filter(contract => !contract.definition.genericParameters.some(parameter => parameter.kind === "lifetime"));
-  for (const [index, contract] of eligible.entries()) {
-    const type = checkedProjectProjectionResultType(contract.carrier, context);
+  const eligible = [...contracts.filter(contract => !contract.definition.genericParameters.some(parameter => parameter.kind === "lifetime"))
+    .map(contract => contract.carrier), ...structuralCarriers];
+  for (const [index, carrier] of eligible.entries()) {
+    const type = checkedProjectProjectionResultType(carrier, context);
     if (type === undefined) return undefined;
     statements.push({ kind: "if-let-some", binding: "selected",
       expression: { kind: "method-call", receiver: { kind: "path", path: "output" },

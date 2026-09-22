@@ -26,7 +26,7 @@ export function planRustClassEnvironmentItems(declaration: Node, context: RustPl
   if (definition === undefined) return undefined;
   const fields: RustStructField[] = [];
   const publiclyReachable = rustSourceItemIsPubliclyReachable(context, environment.typeName);
-  if (environment.constructorValue) {
+  if (environment.constructorIdentity) {
     context.usedAliases?.add("rt");
     fields.push({ name: environment.identityFieldName, visibility: "crate", type: {
       kind: "named", path: "core::cell::OnceCell", genericArguments: [{ kind: "type", type: { kind: "named", path: "rt::ObjectIdentity" } }],
@@ -52,8 +52,8 @@ export function planRustClassEnvironmentItems(declaration: Node, context: RustPl
   const manualClone = environment.storage === "value" && (generics.parameters.length > 0 || !environment.copy);
   const target = manualClone ? rustClassEnvironmentType(environment.carrier, context) : undefined;
   if (manualClone && target === undefined) return undefined;
-  const identityOwner = environment.constructorValue ? rustClassEnvironmentType(environment.carrier, context) : undefined;
-  if (environment.constructorValue && identityOwner === undefined) return undefined;
+  const identityOwner = environment.constructorIdentity ? rustClassEnvironmentType(environment.carrier, context) : undefined;
+  if (environment.constructorIdentity && identityOwner === undefined) return undefined;
   const clonedFields: { readonly name: string; readonly value: RustExpr }[] = environment.captures.map(capture => {
     const value: RustExpr = { kind: "field", receiver: { kind: "path", path: "self" }, name: capture.fieldName };
     return { name: capture.fieldName, value: capture.storage === "value" && isRustCopyCarrier(capture.carrier) ? value
@@ -95,7 +95,7 @@ export function planRustClassEnvironmentValue(declaration: Node, context: RustPl
   const type = rustClassEnvironmentType(environment.carrier, context);
   if (type?.kind !== "named") return undefined;
   const fields: { name: string; value: RustExpr }[] = [];
-  if (environment.constructorValue) fields.push({ name: environment.identityFieldName,
+  if (environment.constructorIdentity) fields.push({ name: environment.identityFieldName,
     value: { kind: "call", path: "core::cell::OnceCell::new", args: [] } });
   const bindings: { name: string; value: RustExpr }[] = [];
   for (const capture of environment.captures) {

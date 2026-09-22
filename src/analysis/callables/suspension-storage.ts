@@ -4,12 +4,14 @@ import type { RustSuspendedCallableStorage } from "../facts/keys.js";
 import { selectRustSuspendedStorageLifetime } from "../../policy/ownership/suspended-storage.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustFactWalk } from "../program/walk.js";
+import type { RustSuspendedOwnedReceiver } from "../facts/callables-and-resources.js";
 
 export type RustSuspendedCallableStorageResolution =
   | {
       readonly kind: "resolved";
       readonly capturedParameters: readonly Node[];
       readonly storage: RustSuspendedCallableStorage;
+      readonly ownedReceiver?: RustSuspendedOwnedReceiver;
     }
   | { readonly kind: "rejected"; readonly reason: string };
 
@@ -30,10 +32,12 @@ export function resolveRustSuspendedCallableStorage(
   const exactParameters = parameters as readonly Node[];
   const parameterSet = new Set(exactParameters);
   const capturedParameterSet = new Set<Node>();
-  let capturesReceiver = false;
+  const receiverOccurrences: Node[] = [];
   const visit = (node: Node): void => {
-    if (ast.kindName(node) === "KindThisKeyword") {
-      capturesReceiver = true;
+    if (ast.is.IsFunctionExpression(node) || ast.is.IsFunctionDeclaration(node) ||
+      ast.is.IsClassDeclaration(node) || ast.is.IsClassExpression(node)) return;
+    if (ast.kindName(node) === "KindThisKeyword" || ast.kindName(node) === "KindThisExpression") {
+      receiverOccurrences.push(node);
     } else if (ast.kindName(node) === "KindIdentifier") {
       const selectedDeclaration = walk.context.source.navigation.sourceReferenceFor(node)?.declaration;
       const ownerParameter = selectedDeclaration === undefined
@@ -51,7 +55,14 @@ export function resolveRustSuspendedCallableStorage(
   const capturedParameters = exactParameters.filter((parameter) =>
     capturedParameterSet.has(parameter));
 
-  if (capturesReceiver && !ast.hasModifierKind(declaration, "static")) {
+  const owner = walk.context.projectTypes.definitionContainingDeclaration(declaration);
+  const representation = walk.context.objectRepresentations.representationFor(owner);
+  const ownsReceiver = receiverOccurrences.length > 0 && !ast.hasModifierKind(declaration, "static") &&
+    owner !== undefined && representation !== undefined && representation.kind !== "value";
+  const ownedReceiver: RustSuspendedOwnedReceiver | undefined = ownsReceiver
+    ? Object.freeze({ carrier: walk.context.projectTypes.openCarrier(owner), occurrences: Object.freeze(receiverOccurrences) })
+    : undefined;
+  if (receiverOccurrences.length > 0 && !ast.hasModifierKind(declaration, "static") && ownedReceiver === undefined) {
     return {
       kind: "resolved",
       capturedParameters: Object.freeze(capturedParameters),
@@ -59,7 +70,7 @@ export function resolveRustSuspendedCallableStorage(
     };
   }
 
-  const carriers: TargetTypeRef[] = [...storedCarriers];
+  const carriers: TargetTypeRef[] = [...storedCarriers, ...(ownedReceiver === undefined ? [] : [ownedReceiver.carrier])];
   for (const parameter of capturedParameters) {
     const carrier = walk.context.facts.get(parameter, rustSourceParameterAbiFactKey)
       ?.parameterCarrier;
@@ -84,12 +95,14 @@ export function resolveRustSuspendedCallableStorage(
       kind: "resolved",
       capturedParameters: Object.freeze(capturedParameters),
       storage: Object.freeze({ kind: "static" }),
+      ...(ownedReceiver === undefined ? {} : { ownedReceiver }),
     };
   }
   return {
     kind: "resolved",
     capturedParameters: Object.freeze(capturedParameters),
     storage: Object.freeze({ kind: "lifetime", lifetime }),
+    ...(ownedReceiver === undefined ? {} : { ownedReceiver }),
   };
 }
 

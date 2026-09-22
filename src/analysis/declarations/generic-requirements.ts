@@ -375,6 +375,10 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
   };
   const generator = facts.getFact(declaration, rustGeneratorFactKey);
   if (generator !== undefined) {
+    if (generator.storage.kind === "static" && generator.ownedReceiver !== undefined) {
+      const receiverError = addUse(declaration, generator.ownedReceiver.carrier, ["static"]);
+      if (receiverError !== undefined) return { kind: "rejected", reason: receiverError };
+    }
     if (generator.storage.kind !== "lifetime") {
       for (const parameter of generator.capturedParameters) {
         const error = addUse(
@@ -405,6 +409,10 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       return { kind: "rejected", reason: error };
     }
     if (asynchronous.storage.kind === "static") {
+      if (asynchronous.ownedReceiver !== undefined) {
+        const receiverError = addUse(declaration, asynchronous.ownedReceiver.carrier, ["static"]);
+        if (receiverError !== undefined) return { kind: "rejected", reason: receiverError };
+      }
       for (const parameter of asynchronous.capturedParameters) {
         const parameterError = addUse(
           parameter,
@@ -505,6 +513,10 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       : { sourceCarrier: downcast.dispatchCarrier, targetCarrier: downcast.targetCarrier };
     if (projectProjection !== undefined) {
       if (!projections.require(projectProjection)) return "A checked project projection has no closed native conversion or generic obligation.";
+      if (flowProjection?.kind === "project-downcast" && flowProjection.projection?.kind === "structural") {
+        const error = addUse(node, projectProjection.targetCarrier, ["static"]);
+        if (error !== undefined) return error;
+      }
       for (const projectionCarrier of [projectProjection.sourceCarrier, projectProjection.targetCarrier]) {
         const error = collectType(projectionCarrier);
         if (error !== undefined) return error;

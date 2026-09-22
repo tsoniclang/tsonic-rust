@@ -163,6 +163,11 @@ export function createRustProjectTypePolicy(
         ),
       }));
     }
+    for (const implicit of host.implicitInterfaces.filter(contract => contract.source === definition.declaration)) {
+      const target = byDeclaration.get(implicit.target);
+      if (target?.kind !== "interface" || edges.some(edge => edge.target === target && rustTargetTypeRefEquals(edge.targetType, implicit.carrier))) continue;
+      edges.push(Object.freeze({ kind: "implements", source: definition, target, heritage: implicit.subject, targetType: implicit.carrier }));
+    }
     heritageByDeclaration.set(definition.declaration, Object.freeze(edges));
   }
 
@@ -687,13 +692,13 @@ export function createRustProjectTypePolicy(
         memberImplementationBudgetExceeded = true;
         break;
       }
-      implementations.set(
-        member,
-        host.navigation.memberImplementation(
-          definition.declaration,
-          member,
-        ),
-      );
+      const implicit = host.implicitInterfaces.filter(contract => contract.source === definition.declaration)
+        .flatMap(contract => contract.members).filter(selection => selection.declaration === member);
+      implementations.set(member, implicit.length > 0 && implicit.every(selection =>
+        selection.implementation.declaration === implicit[0]!.implementation.declaration)
+        ? Object.freeze({ kind: "resolved", contractDeclaration: member,
+            implementation: Object.freeze({ ...implicit[0]!.implementation, project: true }) })
+        : host.navigation.memberImplementation(definition.declaration, member));
     }
     memberImplementationByClass.set(definition, implementations);
     if (memberImplementationBudgetExceeded) {

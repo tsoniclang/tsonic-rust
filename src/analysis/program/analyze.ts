@@ -42,6 +42,7 @@ import { recordRustTypeOnlyDeclarations } from "../declarations/type-only.js";
 import { recordRustProjectCallableAdapterFacts } from "../project-types/callable-adapters.js";
 import { recordRustValueStructDeclaration } from "../declarations/value-structs.js";
 import { recordRustInterfaceRepresentationAliases } from "../declarations/interface-aliases.js";
+import { collectRustImplicitInterfaceContracts } from "../project-types/implicit-interfaces.js";
 import { rustTypeOnlyDeclarationFactKey } from "../../target-model/facts/type-only.js";
 import { finalizeRustCopiedMethods } from "../objects/copied-methods.js";
 import { closeRustInheritedStructuralViews } from "../objects/inherited-structural-views.js";
@@ -126,6 +127,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   }
   recordRustInterfaceRepresentationAliases(walk, projectSourceFiles);
   const projectTypes = context.projectTypes.initialize({
+    implicitInterfaces: collectRustImplicitInterfaceContracts(walk),
     ast,
     names: context.names,
     navigation: context.source.navigation,

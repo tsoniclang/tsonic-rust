@@ -5,7 +5,7 @@ import { rustCarrierSupportsSourceNumeric } from "../../target-model/types/carri
 import { rustTargetTypeParameterNames } from "../../target-model/types/carriers/generic-references.js";
 import { isRustNeverCarrier, rustCarrierSupportsTrait, rustFixedArrayCarrierValue,
   rustNamedTypeCarrierValue, rustSourceTypeCarrierValue, rustTargetGenericTypeArguments,
-  rustTargetLifetimeArguments } from "../../target-model/types/index.js";
+  rustTargetLifetimeArguments, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 
 export function classifyCarrierRequirements(
   carrier: TargetTypeRef,
@@ -89,6 +89,10 @@ function classifyStaticCarrier(
         return rustTargetGenericTypeArguments(named.genericArguments).every((argument) =>
           classifyStaticCarrier(argument, declared, byParameter, associatedSupports));
       }
+      const structural = rustStructuralObjectCarrierValue(carrier);
+      if (structural !== undefined) return [...structural.bases, ...structural.fields.map(field => field.type),
+        ...(structural.construction === undefined ? [] : [structural.construction])].every(type =>
+          classifyStaticCarrier(type, declared, byParameter, associatedSupports));
       const sourceType = rustSourceTypeCarrierValue(carrier);
       return sourceType === undefined ||
         rustTargetLifetimeArguments(sourceType.genericArguments).every((lifetime) =>

@@ -15,6 +15,8 @@ import { rustLintAttributes } from "./lint-policy.js";
 import { rustBlockReferencesPath } from "../inspection/source-usage.js";
 import { collapseRustForwardingClosure } from "./forwarding-closures.js";
 import { nameRustSignatureTypes } from "./signature-aliases.js";
+import { rustItemsReferenceModuleAlias } from "../inspection/source-module-usage.js";
+import { emptyRustGenerics } from "../nodes.js";
 
 export function finalizeRustSourceStyle(
   model: RustSourceFileModel,
@@ -49,9 +51,10 @@ function finalizeRustItemStyle(
   publicTypes: ReadonlySet<string>,
 ): RustItem {
   if (item.kind === "function") {
-    const attrs = item.params.length <= 7
+    let attrs = item.params.length <= 7
       ? item.attrs
       : appendRustAttribute(item.attrs, rustLintAttributes.tooManyArguments);
+    if (hasErasedGenericParameter(item)) attrs = appendRustAttribute(attrs, rustLintAttributes.unusedTypeParameters);
     return { ...item, attrs };
   }
   if (item.kind === "trait") {
@@ -92,6 +95,7 @@ function finalizeRustImplFunctionStyle(
   publicOwner: boolean,
 ): RustImplFunction {
   let attrs = fn.attrs;
+  if (inherent && hasErasedGenericParameter(fn)) attrs = appendRustAttribute(attrs, rustLintAttributes.unusedTypeParameters);
   const argumentCount = fn.params.length + (fn.selfParam === undefined ? 0 : 1);
   if (inherent && argumentCount > 7) {
     attrs = appendRustAttribute(attrs, rustLintAttributes.tooManyArguments);
@@ -105,6 +109,12 @@ function finalizeRustImplFunctionStyle(
     attrs = appendRustAttribute(attrs, rustLintAttributes.shouldImplementTrait);
   }
   return { ...fn, attrs };
+}
+
+function hasErasedGenericParameter(fn: RustImplFunction): boolean {
+  const usage: RustItem = { ...fn, kind: "function", generics: emptyRustGenerics };
+  return fn.generics.parameters.some(parameter => parameter.kind === "type" &&
+    !rustItemsReferenceModuleAlias([usage], parameter.name));
 }
 
 function createRustBodyStyler(nameType?: (type: RustType, role: string) => RustType): {
@@ -152,6 +162,10 @@ function finalizeRustStatementStyle(statement: RustStmt): RustStmt {
         ? undefined
         : finalizeRustBlockStyle(statement.else);
       let attrs = statement.attrs;
+      if (condition.kind === "binary" && (condition.operator === "==" || condition.operator === "!=") &&
+        condition.left.kind === "path" && condition.right.kind === "path" && condition.left.path === condition.right.path) {
+        attrs = appendRustAttribute(attrs, rustLintAttributes.reflexiveComparison);
+      }
       if (rustConditionPrintsAsBlock(condition)) {
         attrs = appendRustAttribute(attrs, rustLintAttributes.blocksInConditions);
       }

@@ -106,3 +106,46 @@ export function main(): void {
 }
 `);
 });
+
+test("suspended generic methods retain the exact receiver after the invoking scope ends", { timeout: 300_000 }, () => {
+  compileAndRun("owned_suspended_receiver", `
+class Box<Value> {
+  value: Value;
+  constructor(value: Value) { this.value = value; }
+  async read(): Promise<Value> { return this.value; }
+  *values(): Generator<Value, void, unknown> { yield this.value; }
+  async *asyncValues(): AsyncGenerator<Value, void, unknown> { yield await this.read(); }
+}
+function pending<Value>(value: Value): Promise<Value> { return new Box(value).read(); }
+function values<Value>(value: Value): Generator<Value, void, unknown> { return new Box(value).values(); }
+function asyncValues<Value>(value: Value): AsyncGenerator<Value, void, unknown> { return new Box(value).asyncValues(); }
+export async function main(): Promise<void> {
+  check(await pending("kept") === "kept");
+  check(await pending<int32>(7) === 7);
+  const sequence = values("yielded");
+  const first = sequence.next();
+  check(!first.done && first.value === "yielded");
+  check(sequence.next().done === true);
+  const asynchronous = asyncValues<int32>(9);
+  const next = await asynchronous.next();
+  check(!next.done && next.value === 9);
+  check((await asynchronous.next()).done === true);
+}
+`);
+});
+
+test("locally awaited receiver methods keep native value storage", { timeout: 300_000 }, () => {
+  const generated = compileAndRun("local_suspended_receiver", `
+class LocalValue {
+  value: int32;
+  constructor(value: int32) { this.value = value; }
+  async read(): Promise<int32> { return this.value; }
+}
+export async function main(): Promise<void> {
+  const value = new LocalValue(3);
+  check(await value.read() === 3);
+}
+`);
+  assert.doesNotMatch(generated, /(?:Rc|RefCell)<LocalValue/u);
+  assert.doesNotMatch(generated, /(?:Rc|ObjectHandle)::new\(LocalValue/u);
+});

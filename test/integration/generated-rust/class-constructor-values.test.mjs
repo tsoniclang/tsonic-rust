@@ -103,6 +103,9 @@ export function main(): void {
 ` } });
   assert.deepEqual(result.diagnostics, []);
   validateGeneratedProject("inferred-constructor-values", result.artifacts, { run: true });
+  const generated = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
+  assert.doesNotMatch(generated, /Rc::new\([^\n]*EmptyClass\s*\{/u);
+  assert.doesNotMatch(generated, /struct [^\n]*EmptyClass[^}]*OnceCell/u);
 });
 
 test("generic constructor binders are independent of captured outer class arguments", { timeout: 300_000 }, () => {

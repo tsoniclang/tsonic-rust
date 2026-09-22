@@ -43,6 +43,7 @@ export interface RustClassEnvironment {
   readonly storage: "value" | "shared";
   readonly copy: boolean;
   readonly constructorValue: boolean;
+  readonly constructorIdentity: boolean;
   readonly evaluatedConstructorValue: boolean;
   readonly genericParameterIndexes: readonly number[];
   readonly consumers: readonly Node[];
@@ -119,12 +120,13 @@ export function selectRustClassEnvironment(walk: RustFactWalk, declaration: Node
     visit(Node_Initializer(ast, field.declaration)!);
     if (selfReference) return { kind: "unresolved", reason: "Self-referencing static initialization requires an exact staged class-evaluation contract." };
   }
-  const copy = !constructorValue && staticFields.length === 0 && captures.every(capture => capture.storage === "value" && isRustCopyCarrier(capture.carrier));
+  const constructorIdentity = constructorValue && requiresConstructorIdentity(walk, declaration);
+  const copy = !constructorIdentity && staticFields.length === 0 && captures.every(capture => capture.storage === "value" && isRustCopyCarrier(capture.carrier));
   const ownParameters = new Set((walk.context.sourceLifetimes.contractFor(declaration)?.parameters ?? []).map(parameter => parameter.declaration));
   const genericParameterIndexes = Object.freeze(definition.genericParameters.flatMap((parameter, index) => ownParameters.has(parameter.declaration) ? [] : [index]));
   return { kind: "available", environment: Object.freeze({ declaration, carrier: projectTypes.openCarrier(definition), genericParameterIndexes,
-    storage: !constructorValue && (copy || staticFields.length === 0 && captures.length === 1 && captures[0]!.storage === "location") ? "value" : "shared",
-    copy, constructorValue, evaluatedConstructorValue: walk.context.classValues.evaluatesConstructorValue(declaration),
+    storage: !constructorIdentity && (copy || staticFields.length === 0 && captures.length === 1 && captures[0]!.storage === "location") ? "value" : "shared",
+    copy, constructorValue, constructorIdentity, evaluatedConstructorValue: walk.context.classValues.evaluatesConstructorValue(declaration),
     consumers: Object.freeze(consumers),
     initializationUsesEnvironment: consumers.some(member => ast.kindName(member) === "KindConstructor" ||
       ast.kindName(member) === "KindPropertyDeclaration" && !ast.hasModifierKind(member, "static")),
@@ -133,4 +135,18 @@ export function selectRustClassEnvironment(walk: RustFactWalk, declaration: Node
     captures: Object.freeze(captures.map(capture => Object.freeze(capture))),
     staticFields: Object.freeze(staticFields.map(field => Object.freeze(field))),
   }) };
+}
+
+function requiresConstructorIdentity(walk: RustFactWalk, declaration: Node): boolean {
+  if (walk.context.classValues.hasConstructorView(declaration)) return true;
+  const { navigation, ast } = walk.context.source;
+  if (navigation.declarationUseSummary(declaration).exported) return true;
+  const expressions = ast.is.IsClassExpression(declaration) ? [declaration] : [];
+  expressions.push(...navigation.declarationUses(declaration)
+    .filter(use => use.kind !== "type-only" && use.kind !== "source-linkage")
+    .map(use => use.reference));
+  return expressions.some(expression => {
+    const flow = navigation.expressionValueFlow(expression);
+    return flow.identityCompared || flow.escapes || flow.hasUnclassifiedUse;
+  });
 }

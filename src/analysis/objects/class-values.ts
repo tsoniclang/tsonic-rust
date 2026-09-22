@@ -59,6 +59,7 @@ export interface RustClassValueRegistry {
   valueAdapters(): readonly { readonly subject: Node; readonly adapter: RustCallableValueAdapter }[];
   recordInstanceView(view: RustProjectStructuralView): boolean;
   hasConstructorValue(declaration: Node): boolean;
+  hasConstructorView(declaration: Node): boolean;
   evaluatesConstructorValue(declaration: Node): boolean;
   recordConstructorValue(declaration: Node, demand: "type" | "value"): void;
   record(view: RustClassValueView): boolean;
@@ -110,6 +111,9 @@ export function createRustClassValueRegistry(): RustClassValueRegistry {
     },
     hasConstructorValue(declaration) {
       return constructors.has(declaration) || (requests.get(declaration)?.size ?? 0) > 0;
+    },
+    hasConstructorView(declaration) {
+      return (requests.get(declaration)?.size ?? 0) > 0;
     },
     evaluatesConstructorValue(declaration) {
       return evaluatedConstructors.has(declaration) || (requests.get(declaration)?.size ?? 0) > 0;
@@ -379,6 +383,7 @@ function classValueCallablesEqual(left: RustClassValueCallable | undefined, righ
 
 function classEnvironmentsEqual(left: RustClassEnvironment, right: RustClassEnvironment): boolean {
   return left.storage === right.storage && left.copy === right.copy && left.constructorValue === right.constructorValue &&
+    left.constructorIdentity === right.constructorIdentity &&
     left.evaluatedConstructorValue === right.evaluatedConstructorValue &&
     closedMetadataEquals(left.genericParameterIndexes, right.genericParameterIndexes) &&
     left.initializationUsesEnvironment === right.initializationUsesEnvironment &&

@@ -67,10 +67,12 @@ export function planRustProjectDowncastValue(
   const targetDefinition = context.input.program.projectTypes.definitionForCarrier(targetCarrier);
   const targetType = rustTypeFromCarrierInContext(targetCarrier, context);
   const targetValue = rustSourceTypeCarrierValue(targetCarrier);
-  const targetPath = targetValue === undefined ? undefined : sourceTypePath(context, targetValue);
+  const targetPath = targetValue === undefined
+    ? targetType?.kind === "named" ? targetType.path : undefined : sourceTypePath(context, targetValue);
   const optionalElement = rustOptionElementCarrier(sourceCarrier);
   const selected = rustSelectedProjectDowncast(context.input.program.facts, node);
-  if (sourceDefinition === undefined || targetDefinition === undefined || targetType === undefined || targetPath === undefined ||
+  if (sourceDefinition === undefined || targetType === undefined || targetPath === undefined ||
+    (targetDefinition === undefined && selected?.projection?.kind !== "structural") ||
     selected === undefined || selected.projection === undefined ||
     !rustTargetTypeRefEquals(selected.sourceCarrier, sourceCarrier) ||
     !rustTargetTypeRefEquals(selected.dispatchCarrier, dispatchCarrier) ||
@@ -103,7 +105,16 @@ export function planRustProjectDowncastValue(
         method: "unwrap",
         args: [],
       };
-  const result: RustExpr = selected.projection.kind === "closed"
+  const structuralResultType = selected.projection.kind === "structural"
+    ? checkedProjectProjectionResultType(targetCarrier, context) : undefined;
+  if (selected.projection.kind === "structural" && structuralResultType === undefined) return undefined;
+  const result: RustExpr = selected.projection.kind === "structural"
+    ? { kind: "struct-literal", path: targetPath, fields: [{ name: "dispatch", value: {
+        kind: "method-call", receiver: planCheckedProjectProjectionCall(
+          cloneProjectField(valuePath, rustProjectObjectDispatchField), selected.projection.slot, structuralResultType!),
+        method: "unwrap", args: [],
+      } }] }
+    : selected.projection.kind === "closed"
     ? { kind: "struct-literal", path: targetPath, fields: [
         { name: rustProjectObjectIdentityField, value: cloneProjectField(valuePath, rustProjectObjectIdentityField) },
         { name: rustProjectObjectDispatchField, value: { kind: "method-call", receiver: {

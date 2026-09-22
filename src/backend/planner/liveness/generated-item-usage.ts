@@ -40,6 +40,7 @@ import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js
 import type { RustValueConversion } from "../../../target-model/operations/model.js";
 import type { RustPlanQueries } from "../../../target-model/facts/selections.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustProjectProjectionSelection } from "../../../target-model/types/project-projections.js";
 import { rustOptionElementCarrier, rustSourceUnionCarrierValue, rustStructuralObjectCarrierValue } from "../../../target-model/types/index.js";
 import { rustTargetTypeChildren } from "../../../target-model/types/carriers/children.js";
 import {
@@ -76,6 +77,7 @@ export interface RustGeneratedItemUsage {
   ): boolean;
   isDispatchMemberUsed(declaration: Node, role: RustDispatchMemberRole): boolean;
   isDowncastUsed(source: Node, target: Node): boolean;
+  isCheckedProjectionUsed(source: Node): boolean;
   isStructuralFieldRead(carrier: TargetTypeRef, storageIndex: number): boolean;
   isStructuralFieldWritten(carrier: TargetTypeRef, storageIndex: number): boolean;
   isStructuralShapeConstructed(carrier: TargetTypeRef): boolean;
@@ -131,6 +133,7 @@ export function analyzeRustGeneratedItemUsage(input: {
   const usedProjectFields = new WeakMap<Node, Set<RustGeneratedProjectFieldRole>>();
   const usedDispatchMembers = new WeakMap<Node, Set<RustDispatchMemberRole>>();
   const usedDowncasts = new WeakMap<Node, WeakSet<Node>>();
+  const usedCheckedProjections = new WeakSet<Node>();
   const constructedStructuralShapes = new Set<string>();
   const accessedStructuralShapes = new Set<string>();
   const declarationNames = new WeakSet<Node>();
@@ -203,9 +206,20 @@ export function analyzeRustGeneratedItemUsage(input: {
     const sourceDefinition = input.projectTypes.definitionForCarrier(source);
     const targetDefinition = input.projectTypes.definitionForCarrier(target);
     if (sourceDefinition === undefined || targetDefinition === undefined) return;
+    if (input.projectTypes.downcastRoute(sourceDefinition, target)?.kind === "checked") {
+      usedCheckedProjections.add(sourceDefinition.declaration);
+    }
     const targets = usedDowncasts.get(sourceDefinition.declaration) ?? new WeakSet<Node>();
     targets.add(targetDefinition.declaration);
     usedDowncasts.set(sourceDefinition.declaration, targets);
+  };
+  const markProjectionUsed = (
+    source: TargetTypeRef, target: TargetTypeRef, selection: RustProjectProjectionSelection,
+  ): void => {
+    markDowncastUsed(source, target);
+    if (selection.kind !== "checked" && selection.kind !== "structural") return;
+    const definition = input.projectTypes.definitionForCarrier(source);
+    if (definition !== undefined) usedCheckedProjections.add(definition.declaration);
   };
   const markStructuralFieldRead = (carrier: TargetTypeRef, storageIndex: number): void => {
     if (Number.isSafeInteger(storageIndex) && storageIndex >= 0) {
@@ -316,14 +330,14 @@ export function analyzeRustGeneratedItemUsage(input: {
       markProjectCarrierFieldUsed(downcast.dispatchCarrier, "wrapper-identity");
       markProjectCarrierFieldUsed(downcast.dispatchCarrier, "wrapper-dispatch");
       markProjectTypeConstructed(downcast.targetCarrier);
-      markDowncastUsed(downcast.dispatchCarrier, downcast.targetCarrier);
+      markProjectionUsed(downcast.dispatchCarrier, downcast.targetCarrier, downcast.projection);
     }
     const flow = input.facts.getFact(node, rustFlowReadProjectionFactKey);
     if (flow?.kind === "project-downcast") {
       markProjectCarrierFieldUsed(flow.dispatchCarrier, "wrapper-identity");
       markProjectCarrierFieldUsed(flow.dispatchCarrier, "wrapper-dispatch");
       markProjectTypeConstructed(flow.selectedCarrier);
-      markDowncastUsed(flow.dispatchCarrier, flow.selectedCarrier);
+      markProjectionUsed(flow.dispatchCarrier, flow.selectedCarrier, flow.projection);
     }
   };
 
@@ -332,7 +346,7 @@ export function analyzeRustGeneratedItemUsage(input: {
       markProjectCarrierFieldUsed(sourceCarrier, "wrapper-identity");
       markProjectCarrierFieldUsed(sourceCarrier, "wrapper-dispatch");
       markProjectTypeConstructed(route.targetCarrier);
-      markDowncastUsed(sourceCarrier, route.targetCarrier);
+      markProjectionUsed(sourceCarrier, route.targetCarrier, route);
     }
     if (concrete.kind !== "class" || !input.projectTypes.isPolymorphic(concrete)) continue;
     const contracts = input.projectTypes.contractsForClass(concrete);
@@ -731,6 +745,7 @@ export function analyzeRustGeneratedItemUsage(input: {
       usedDispatchMembers.get(declaration)?.has(role) === true,
     isDowncastUsed: (source: Node, target: Node) =>
       usedDowncasts.get(source)?.has(target) === true,
+    isCheckedProjectionUsed: (source: Node) => usedCheckedProjections.has(source),
     isStructuralFieldRead: (carrier: TargetTypeRef, storageIndex: number) =>
       structuralFieldReads.has(structuralFieldKey(carrier, storageIndex)),
     isStructuralFieldWritten: (carrier: TargetTypeRef, storageIndex: number) =>

@@ -2,9 +2,29 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { selectRustProjectViewImplementations } from "../../../dist/analysis/objects/view-implementations.js";
 import { createRustClassValueRegistry } from "../../../dist/analysis/objects/class-values.js";
+import { collectRustImplicitInterfaceContracts } from "../../../dist/analysis/project-types/implicit-interfaces.js";
 import { rustSourceTypeCarrier, rustStructuralObjectTargetType } from "../../../dist/target-model/types/carriers/source-types.js";
 
 const declaration = Object.freeze({ file: "/model.ts" });
+
+test("recursive constructor contracts terminate at the exact already visited type pair", () => {
+  const type = {};
+  const signature = {};
+  const node = {};
+  let reads = 0;
+  const semantics = { types: {
+    contextualValueSelection: () => ({ kind: "selected", type }),
+    expressionType: () => type,
+    constructSignatures: () => { reads += 1; return [signature]; },
+    returnType: () => type,
+  } };
+  const contracts = collectRustImplicitInterfaceContracts({ context: {
+    ast: { kindName: () => "KindIdentifier", forEachChild() {} },
+    sourceFiles: [node], semanticsFor: () => semantics,
+  } });
+  assert.deepEqual(contracts, []);
+  assert.equal(reads, 2);
+});
 const member = Object.freeze({ file: "/model.ts" });
 const parameter = { kind: "type-parameter", name: "Value" };
 const number = { kind: "source-primitive", name: "float64" };

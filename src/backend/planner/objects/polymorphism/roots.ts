@@ -173,7 +173,10 @@ function planRootContractFunctions(
   if (projectionSlot !== undefined) {
     const contracts = rustProjectInstanceContracts(context.input.program.projectTypes, concrete, concreteCarrier);
     const projection = contracts === undefined ? undefined
-      : planCheckedProjectProjectionImplementation(projectionSlot, contracts, context);
+      : planCheckedProjectProjectionImplementation(projectionSlot, contracts,
+        context.input.program.classValues.instanceViewImplementations.filter(view =>
+          view.declaration === concrete.declaration && rustTargetTypeRefEquals(view.sourceCarrier, concreteCarrier))
+          .map(view => view.targetCarrier), context);
     if (projection === undefined) return undefined;
     functions.push(projection);
   }

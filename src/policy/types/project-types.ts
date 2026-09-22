@@ -156,6 +156,7 @@ export interface RustProjectTypePolicy {
 }
 
 export interface RustProjectTypePolicyHost {
+  readonly implicitInterfaces: readonly import("../../target-model/types/project-interfaces.js").RustImplicitInterfaceContract[];
   readonly ast: AstReader;
   readonly names: RustNamePlan;
   readonly navigation: SourceProgramNavigation;

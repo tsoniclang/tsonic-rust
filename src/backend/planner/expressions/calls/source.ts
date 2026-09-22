@@ -51,6 +51,7 @@ import { planRustUnionMethodCall } from "./union-methods.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../../../target-model/types/carriers/generic-callables.js";
 import { rustGenericCallableEffectsFactKey } from "../../../../analysis/facts/generic-callable-effects.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
+import { rustExpressionReferencesPath } from "../../../target-ast/inspection/source-usage.js";
 
 export function sourceCallEffectsMatch(
   fact: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>,
@@ -418,7 +419,8 @@ export function planSelectedSourceCall(
     ));
     return undefined;
   }
-  if (classBindings.length > 0) planned = { kind: "block", bindings: classBindings, value: planned };
+  if (classBindings.length > 0) planned = { kind: "block", bindings: classBindings.map(binding =>
+    rustExpressionReferencesPath(planned!, binding.name) ? binding : { ...binding, name: `_${binding.name}` }), value: planned };
   const effects = context.input.program.facts.getFact(node, rustSourceCallEffectsFactKey);
   if (effects === undefined) {
     context.diagnostics.push(missingFactDiagnostic(

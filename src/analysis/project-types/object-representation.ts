@@ -94,7 +94,7 @@ export function createRustObjectRepresentationPlanRegistry(): RustObjectRepresen
 export function createRustObjectRepresentationPlan(
   input: RustObjectRepresentationAnalysisInput,
 ): RustObjectRepresentationPlan {
-  const origins = collectProjectObjectOrigins(input);
+  const { origins, escapingSuspendedMethods } = collectProjectObjectOrigins(input);
   const mutatingMethods = collectMutatingProjectMethods(input);
   const representations = input.projectTypes.definitions.map((definition) => {
     const creationFlows = origins.get(definition) ?? [];
@@ -107,7 +107,7 @@ export function createRustObjectRepresentationPlan(
     );
     const identityObserved = creationFlows.some((flow) => flow.identityCompared);
     const escapes = creationFlows.some((flow) => flow.escapes) ||
-      projectReceiverEscapes(definition, input);
+      projectReceiverEscapes(definition, input, escapingSuspendedMethods);
     const exported = input.navigation.declarationUseSummary(
       definition.declaration,
     ).exported;
@@ -196,6 +196,7 @@ function selectDispatchObjectLifetime(
 function projectReceiverEscapes(
   definition: RustProjectTypeDefinition,
   input: RustObjectRepresentationAnalysisInput,
+  escapingSuspendedMethods: ReadonlySet<Node>,
 ): boolean {
   let escapes = false;
   const visit = (node: Node, nestedCallable: boolean): void => {
@@ -211,14 +212,31 @@ function projectReceiverEscapes(
     input.ast.forEachChild(node, child => { if (child !== undefined) visit(child, nested); });
   };
   for (const member of input.ast.members(definition.declaration)) {
-    if (member !== undefined && !input.ast.hasModifierKind(member, "static")) visit(member, false);
+    if (member !== undefined && !input.ast.hasModifierKind(member, "static")) {
+      visit(member, escapingSuspendedMethods.has(member));
+    }
   }
   return escapes;
 }
 
-function collectProjectObjectOrigins(input: RustObjectRepresentationAnalysisInput): ReadonlyMap<RustProjectTypeDefinition, readonly SourceExpressionValueFlowSummary[]> {
+function collectProjectObjectOrigins(input: RustObjectRepresentationAnalysisInput): {
+  readonly origins: ReadonlyMap<RustProjectTypeDefinition, readonly SourceExpressionValueFlowSummary[]>;
+  readonly escapingSuspendedMethods: ReadonlySet<Node>;
+} {
   const origins = new Map<RustProjectTypeDefinition, SourceExpressionValueFlowSummary[]>();
+  const escapingSuspendedMethods = new Set<Node>();
   const visit = (node: Node): void => {
+    if (input.ast.is.IsCallExpression(node)) {
+      const semantics = input.semantics.forNode(node);
+      const call = semantics.operations.call(node);
+      const signature = call === undefined ? undefined : semantics.declarations.signatureDeclaration(call.selectedSignature);
+      const selected = signature === undefined ? undefined : input.navigation.callableImplementation(signature);
+      const method = selected?.kind === "resolved" ? selected.implementation.declaration : undefined;
+      if (method !== undefined && input.ast.kindName(method) === "KindMethodDeclaration" &&
+        !input.ast.hasModifierKind(method, "static") &&
+        (input.ast.hasModifierKind(method, "async") || input.semantics.forNode(method).operations.generator(method) !== undefined) &&
+        input.navigation.expressionValueFlow(node).escapes) escapingSuspendedMethods.add(method);
+    }
     if (input.ast.is.IsNewExpression(node) || input.ast.is.IsObjectLiteralExpression(node)) {
       const semantics = input.semantics.forNode(node);
       const contextual = input.ast.is.IsObjectLiteralExpression(node)
@@ -248,7 +266,7 @@ function collectProjectObjectOrigins(input: RustObjectRepresentationAnalysisInpu
   for (const sourceFile of input.sourceFiles) {
     visit(sourceFile);
   }
-  return origins;
+  return { origins, escapingSuspendedMethods };
 }
 
 function interfaceHasOnlyLocalLiteralBindings(

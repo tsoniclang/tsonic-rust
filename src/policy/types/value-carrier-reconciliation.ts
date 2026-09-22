@@ -109,9 +109,9 @@ export function selectRustFlowReadProjection(
     ? { kind: "unrelated" as const }
     : projectTypes.relationship(selectedCarrier, sourceDefinition);
   const projection = selectRustProjectProjection(dispatchCarrier, selectedCarrier, projectTypes);
-  if (relationship.kind !== "related" ||
-    !rustTargetTypeRefEquals(relationship.targetType, dispatchCarrier) ||
-    projection === undefined ||
+  if (projection === undefined ||
+    (projection.kind !== "structural" && (relationship.kind !== "related" ||
+      !rustTargetTypeRefEquals(relationship.targetType, dispatchCarrier))) ||
     (optionalElement !== undefined && !rustCarrierSupportsClone(dispatchCarrier, definitions))) {
     return { kind: "incompatible" };
   }

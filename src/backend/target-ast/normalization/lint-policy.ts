@@ -49,6 +49,10 @@ export const rustLintAttributes = Object.freeze({
     '#![expect(unused_assignments, reason = "checked source evaluation order")]',
   unusedVariables:
     '#[expect(unused_variables, reason = "authored binding drop scope")]',
+  unusedTypeParameters:
+    '#[expect(clippy::extra_unused_type_parameters, reason = "retains the checked generic callable contract")]',
+  reflexiveComparison:
+    '#[expect(clippy::eq_op, reason = "authored reflexive comparison")]',
   unusedUnsafe:
     '#[allow(unused_unsafe, reason = "explicit source unsafe region")]',
 });

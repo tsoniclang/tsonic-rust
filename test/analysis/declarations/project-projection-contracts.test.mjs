@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustSourceTypeCarrier, rustSourceTypeCarrierValue } from "../../../dist/target-model/types/index.js";
+import { rustSourceTypeCarrier, rustSourceTypeCarrierValue, rustStructuralObjectTargetType } from "../../../dist/target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
-import { hasRustProjectProjection, selectRustProjectProjectionImplementation } from "../../../dist/policy/types/project-projections.js";
+import { hasRustProjectProjection, selectRustProjectProjection, selectRustProjectProjectionImplementation } from "../../../dist/policy/types/project-projections.js";
+import { classifyCarrierRequirements } from "../../../dist/analysis/declarations/generic-carrier-requirements.js";
+import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { createRustProjectProjectionRequirementCollector, createRustProjectProjectionImplementationIndex } from "../../../dist/analysis/declarations/project-projection-requirements.js";
 
 const base = { declaration: {}, fileName: "/source.ts", sourceName: "Base", kind: "interface" };
@@ -12,6 +14,24 @@ const target = type => rustSourceTypeCarrier(box.fileName, box.sourceName, "obje
 const numberType = { kind: "source-primitive", name: "float64" };
 const stringType = { kind: "target-named", id: "rust.std.String", genericArguments: [] };
 const open = target({ kind: "type-parameter", name: "Value" });
+
+test("structural checked slots preserve exact bases and propagate static member requirements", () => {
+  const field = type => ({ sourceName: "value", type, presence: "required", readonly: true });
+  const structural = rustStructuralObjectTargetType("/source.ts", [field({ kind: "type-parameter", name: "Value" })], "reference", undefined, [source]);
+  const checked = { ...policy, checkedProjectionSlot: definition => definition === base ? "project_base" : undefined };
+  assert.deepEqual(selectRustProjectProjection(source, structural, checked), { kind: "structural", slot: "project_base" });
+  assert.equal(selectRustProjectProjection(source, structural, { ...checked, checkedProjectionSlot: () => undefined }), undefined);
+  assert.equal(selectRustProjectProjection(source,
+    rustStructuralObjectTargetType("/source.ts", [field(numberType)]), checked), undefined);
+  const requirements = new Map([["Value", new Set()]]);
+  assert.equal(classifyCarrierRequirements(structural, ["static"], new Set(["Value"]), requirements,
+    () => false, emptyRustTypeDefinitions), true);
+  assert.deepEqual([...requirements.get("Value")], ["static"]);
+  const borrowed = rustStructuralObjectTargetType("/source.ts", [field({ kind: "reference", mutable: false,
+    lifetime: { kind: "placeholder" }, referent: numberType })], "reference", undefined, [source]);
+  assert.equal(selectRustProjectProjection(source, borrowed, checked), undefined);
+  assert.equal(classifyCarrierRequirements(borrowed, ["static"], new Set(), new Map(), () => false, emptyRustTypeDefinitions), false);
+});
 const routes = [numberType, stringType].map((type, index) => ({ kind: "closed", source: base, target: box, targetCarrier: target(type), slot: `selected_${index}` }));
 const policy = {
   definitionForCarrier(carrier) {
