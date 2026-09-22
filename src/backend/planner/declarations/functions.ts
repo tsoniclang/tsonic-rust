@@ -16,7 +16,6 @@ import { rustAuthoredDeadCodeDisposition } from "../liveness/directives.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustReturnTypeFromCarrierInContext } from "../types/render.js";
 import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustGeneratorFactKey, rustSourceCallableReturnFactKey } from "../../../analysis/facts/keys.js";
-import type { RustGeneratorFact } from "../../../analysis/facts/keys.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import {
   planRustCallableGenerics,
@@ -42,6 +41,7 @@ import { applyFallibleShape } from "../types/fallible-shape.js";
 import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
 import { wrapRustJsPromiseBody } from "./async-promise.js";
 import { planRustReturnExit } from "../statements/completion-exits.js";
+import { planRustGeneratorBody } from "./generator-body.js";
 
 export { applyRustTailShape, rustBlockTerminates } from "../statements/block-flow.js";
 
@@ -355,25 +355,8 @@ function planRustFunctionItem(
       body: {
         statements: [...parameterStatements, {
           kind: "tail",
-          expr: {
-            kind: "call",
-            path: rustGeneratorConstructorPath(generatorFact),
-            args: [{
-              kind: "closure-block",
-              params: [{ name: generatorControllerName!, mutable: false }],
-              move: true,
-              async: true,
-              body: applyFallibleShape(
-                applyRustTailShape(body, !isRustUnitCarrier(generatorFact.returnType)),
-                {
-                  fallible: true,
-                  hasReturnValue: !isRustUnitCarrier(generatorFact.returnType),
-                  errorType: rustErrorType(bodyErrorBoundary!),
-                  inferErrorTypeFromReturnType: false,
-                },
-              ),
-            }],
-          },
+          expr: planRustGeneratorBody(body, generatorFact, generatorControllerName!,
+            rustErrorType(bodyErrorBoundary!)),
         }],
       },
     };
@@ -420,13 +403,4 @@ function planRustFunctionItem(
       : finalizedBody,
   };
   return item;
-}
-
-function rustGeneratorConstructorPath(fact: RustGeneratorFact): string {
-  if (fact.storage.kind === "static") {
-    return fact.kind === "sync" ? "rt::Generator::new" : "rt::AsyncGenerator::new";
-  }
-  return fact.kind === "sync"
-    ? "rt::BorrowedGenerator::new"
-    : "rt::BorrowedAsyncGenerator::new";
 }

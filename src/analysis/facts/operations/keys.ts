@@ -66,6 +66,7 @@ export const rustLocationStorageFactKey: RustPlanKey<{
 );
 
 export interface RustClosureCaptureFact {
+  readonly invocationOwner?: "shared-state";
   readonly captures: readonly {
     readonly declaration: Node;
     readonly reference: Node;
@@ -77,7 +78,8 @@ export interface RustClosureCaptureFact {
 
 export const rustClosureCaptureFactKey: RustPlanKey<RustClosureCaptureFact> = defineRustPlanKey(
   "closureCaptures",
-  (left, right) => left.recursiveDeclaration === right.recursiveDeclaration &&
+  (left, right) => left.invocationOwner === right.invocationOwner &&
+    left.recursiveDeclaration === right.recursiveDeclaration &&
     left.captures.length === right.captures.length &&
     left.captures.every((capture, index) => {
       const other = right.captures[index];

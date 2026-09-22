@@ -19,7 +19,9 @@ import {
   Node_Type,
 } from "@tsonic/target-api/source";
 import {
+  rustAsyncFunctionFactKey,
   rustClosureCaptureFactKey,
+  rustGeneratorFactKey,
   rustLocationStorageFactKey,
   rustMutatedBindingFactKey,
   rustSourceBindingFactKey,
@@ -46,7 +48,7 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustGenericCallableProtocol, rustGenericCallableTargetType, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
-import { recordCallableReturnFact } from "./signatures.js";
+import { recordCallableReturnFact, recordCallableSuspensionFacts } from "./signatures.js";
 
 export function resolveFunctionExpressionCarrier(
   walk: RustFactWalk,
@@ -97,10 +99,6 @@ export function resolveFunctionExpressionCarrier(
     rustClosureProtocol(selectedExpected) === undefined &&
     rustGenericCallableProtocol(selectedExpected, genericNames) === undefined &&
     rustCallableProtocol(selectedExpected) === undefined)) {
-    return undefined;
-  }
-  if (ast.hasModifierKind(expression, "async") ||
-    walk.context.semanticsFor(expression).operations.generator(expression) !== undefined) {
     return undefined;
   }
   const callable = rustGenericCallableProtocol(selectedExpected, genericNames) ?? rustCallableProtocol(selectedExpected);
@@ -207,26 +205,37 @@ export function resolveFunctionExpressionCarrier(
   if (body === undefined) {
     return undefined;
   }
+  recordCallableSuspensionFacts(walk, expression);
+  const generator = walk.context.facts.get(expression, rustGeneratorFactKey);
+  const asynchronous = walk.context.facts.get(expression, rustAsyncFunctionFactKey);
+  if (walk.context.semanticsFor(expression).operations.generator(expression) !== undefined
+    ? generator === undefined
+    : ast.hasModifierKind(expression, "async") && asynchronous === undefined) {
+    return undefined;
+  }
   const finalizedReturn = walk.context.facts.get(expression, rustSourceCallableReturnFactKey)?.returnCarrier ??
     walk.context.facts.resolve(expression, rustSourceCallableReturnFactKey)?.returnCarrier;
   const selectedResultExpectation = selectedResult.kind === "opaque" && selectedResult.id === "tsonic.rust.infer"
     ? resolveTypeNodeCarrier(walk, Node_Type(ast, expression))
     : selectedResult;
-  if (finalizedReturn !== undefined && selectedResultExpectation !== undefined &&
-    !rustTargetTypeRefEquals(finalizedReturn, selectedResultExpectation)) {
+  const selectedValueResult = generator?.resultCarrier ?? asynchronous?.futureCarrier ?? selectedResultExpectation;
+  const selectedBodyResult = generator?.returnType ?? asynchronous?.outputCarrier ?? selectedResultExpectation;
+  const selectedReturnFact = generator?.resultCarrier ?? selectedBodyResult;
+  if (finalizedReturn !== undefined && selectedReturnFact !== undefined &&
+    !rustTargetTypeRefEquals(finalizedReturn, selectedReturnFact)) {
     return undefined;
   }
-  const resultExpectation = finalizedReturn ?? selectedResultExpectation;
+  const resultExpectation = selectedBodyResult ?? finalizedReturn;
   const parameterCarriers = parameterAbis.map((abi) => abi.parameterCarrier);
   const expressionName = Node_Name(ast, expression);
   if (ast.kindName(expression) === KindFunctionExpression && expressionName !== undefined) {
-    if (resultExpectation === undefined) {
+    if (selectedValueResult === undefined) {
       return undefined;
     }
     const recursiveCarrier: TargetTypeRef = selectedExpected.kind === "function-pointer" ||
         selectedExpected.kind === "closure"
-      ? { ...selectedExpected, args: parameterCarriers, result: resultExpectation }
-      : rustCallableTargetType(parameterCarriers, resultExpectation);
+      ? { ...selectedExpected, args: parameterCarriers, result: selectedValueResult }
+      : rustCallableTargetType(parameterCarriers, selectedValueResult);
     setCarrierFact(walk, expression, recursiveCarrier);
     setCarrierFact(walk, expressionName, recursiveCarrier);
   }
@@ -236,7 +245,7 @@ export function resolveFunctionExpressionCarrier(
   const previousMethod = walk.currentMethodDeclaration;
   const previousThis = walk.currentThisCarrier;
   walk.currentCallableDeclaration = expression;
-  walk.currentGeneratorDeclaration = undefined;
+  walk.currentGeneratorDeclaration = generator === undefined ? undefined : expression;
   walk.currentMethodDeclaration = options?.selectedMethodDeclaration;
   walk.currentThisCarrier = walk.context.ast.kindName(expression) === "KindArrowFunction"
     ? previousThis
@@ -269,18 +278,25 @@ export function resolveFunctionExpressionCarrier(
     ...leadingParameters.map((parameter) => parameter.carrier),
     ...parameterCarriers,
   ];
+  const valueResult = generator?.resultCarrier ?? asynchronous?.futureCarrier ?? bodyCarrier;
   const closureCarrier = selectedExpected.kind === "function-pointer" || selectedExpected.kind === "closure"
-    ? { ...selectedExpected, args: finalizedParameterCarriers, result: bodyCarrier }
+    ? { ...selectedExpected, args: finalizedParameterCarriers, result: valueResult }
     : rustGenericCallableValue(selectedExpected) !== undefined && genericNames !== undefined
-      ? rustGenericCallableTargetType(genericNames, finalizedParameterCarriers, bodyCarrier)
-    : rustCallableTargetType(finalizedParameterCarriers, bodyCarrier);
-  if (closureCarrier === undefined || rustGenericCallableValue(closureCarrier) !== undefined &&
-    !recordCallableReturnFact(walk, expression, bodyCarrier)) return undefined;
+      ? rustGenericCallableTargetType(genericNames, finalizedParameterCarriers, valueResult)
+    : rustCallableTargetType(finalizedParameterCarriers, valueResult);
+  if (closureCarrier === undefined ||
+    !recordCallableReturnFact(walk, expression, generator?.resultCarrier ?? bodyCarrier)) return undefined;
   const captures = collectRustLexicalCaptures(walk, expression, [body]);
   if (captures === undefined) {
     return undefined;
   }
-  walk.context.facts.set(expression, rustClosureCaptureFactKey, captures, [
+  walk.context.facts.set(expression, rustClosureCaptureFactKey, {
+    ...captures,
+    ...((generator !== undefined || asynchronous !== undefined) &&
+        rustCallableProtocol(closureCarrier) !== undefined &&
+        (captures.captures.length > 0 || captures.recursiveDeclaration !== undefined)
+      ? { invocationOwner: "shared-state" as const } : {}),
+  }, [
     { message: "rust exact callable-expression captures" },
   ]);
   setRustOperationFact(walk, expression, {

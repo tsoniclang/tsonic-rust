@@ -150,8 +150,6 @@ function exactNativeCallableInitializer(
   const kind = initializer === undefined ? undefined : context.ast.kindName(initializer);
   if (initializer === undefined ||
     (kind !== "KindArrowFunction" && kind !== KindFunctionExpression) ||
-    context.ast.hasModifierKind(initializer, "async") ||
-    context.semanticsFor(initializer).operations.generator(initializer) !== undefined ||
     context.ast.body(initializer) === undefined ||
     kind === KindFunctionExpression && context.ast.name(initializer) !== undefined) {
     return undefined;

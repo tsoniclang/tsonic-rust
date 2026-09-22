@@ -313,7 +313,7 @@ function recordCallableValueSignatureFacts(
       recordCallableValueSignaturePlan(walk, expression, nativeSignature);
       setCarrierFact(walk, declaration, rustCallableTargetType(
         nativeSignature.parameters.map(({ abi }) => abi.parameterCarrier),
-        nativeSignature.returnCarrier,
+        selectedCallableValueReturn(walk, expression, nativeSignature.returnCarrier),
       ));
       return;
     }
@@ -371,15 +371,19 @@ function recordCallableValueSignatureFacts(
     }
     parameterAbis.push(parameterAbi);
   }
-  if (!recordCallableReturnFact(walk, expression, returnCarrier)) {
+  recordCallableSuspensionFacts(walk, expression);
+  if (!recordCallableReturnFact(walk, expression,
+    walk.context.facts.get(expression, rustAsyncFunctionFactKey)?.outputCarrier ??
+      walk.context.facts.get(expression, rustGeneratorFactKey)?.resultCarrier ?? returnCarrier)) {
     return;
   }
   const runtimeParameterCarriers = parameterAbis.map((abi) => abi.parameterCarrier);
+  const valueReturnCarrier = selectedCallableValueReturn(walk, expression, returnCarrier);
   const runtimeCarrier = selectedCarrier.kind === "function-pointer" || selectedCarrier.kind === "closure"
-    ? { ...selectedCarrier, args: runtimeParameterCarriers, result: returnCarrier }
+    ? { ...selectedCarrier, args: runtimeParameterCarriers, result: valueReturnCarrier }
     : rustGenericCallableValue(selectedCarrier) !== undefined && ownNames !== undefined
-      ? rustGenericCallableTargetType(ownNames, runtimeParameterCarriers, returnCarrier)
-    : rustCallableTargetType(runtimeParameterCarriers, returnCarrier);
+      ? rustGenericCallableTargetType(ownNames, runtimeParameterCarriers, valueReturnCarrier)
+    : rustCallableTargetType(runtimeParameterCarriers, valueReturnCarrier);
   if (runtimeCarrier !== undefined) setCarrierFact(walk, declaration, runtimeCarrier);
 }
 
@@ -396,10 +400,6 @@ function resolveAuthoredCallableValueSignature(
   expression: Node,
 ): RustCallableValueSignaturePlan | undefined {
   const { ast } = walk.context;
-  if (ast.hasModifierKind(expression, "async") ||
-    walk.context.semanticsFor(expression).operations.generator(expression) !== undefined) {
-    return undefined;
-  }
   const parameters = ast.parameters(expression);
   if (!isDenseDataArray(parameters) || parameters.some((parameter) => parameter === undefined)) {
     return undefined;
@@ -440,7 +440,19 @@ function recordCallableValueSignaturePlan(
       return;
     }
   }
-  recordCallableReturnFact(walk, expression, signature.returnCarrier);
+  recordCallableSuspensionFacts(walk, expression);
+  recordCallableReturnFact(walk, expression,
+    walk.context.facts.get(expression, rustAsyncFunctionFactKey)?.outputCarrier ??
+      walk.context.facts.get(expression, rustGeneratorFactKey)?.resultCarrier ?? signature.returnCarrier);
+}
+
+function selectedCallableValueReturn(
+  walk: RustFactWalk,
+  declaration: Node,
+  synchronousReturn: TargetTypeRef,
+): TargetTypeRef {
+  return walk.context.facts.get(declaration, rustGeneratorFactKey)?.resultCarrier ??
+    walk.context.facts.get(declaration, rustAsyncFunctionFactKey)?.futureCarrier ?? synchronousReturn;
 }
 
 export function recordCallableSuspensionFacts(walk: RustFactWalk, declaration: Node): void {

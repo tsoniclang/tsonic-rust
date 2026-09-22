@@ -1,12 +1,12 @@
 import {
   applyFallibleShape,
-  applyRustFallibleResultExpression,
 } from "../types/fallible-shape.js";
 import {
   diagnosticInput,
   isValidRustIdentifier,
   rustActiveErrorType,
   rustCurrentErrorBoundary,
+  rustErrorType,
   rustSourceBindingPath,
 } from "../program/plan-context.js";
 import {
@@ -23,8 +23,10 @@ import {
 } from "@tsonic/target-api/source";
 import { planRustCaptureValue } from "./typed-locations.js";
 import {
+  rustAsyncFunctionFactKey,
   rustClosureCaptureFactKey,
   rustFallibleFactKey,
+  rustGeneratorFactKey,
   rustMutatedBindingFactKey,
   rustMutatedReferentFactKey,
   rustSourceBindingFactKey,
@@ -48,14 +50,26 @@ import { rustOptionDefaultValue } from "./option-default.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
+import type { RustBlock, RustExpr, RustStmt } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustReceiverIndependentMethodFactKey } from "../../../analysis/facts/operations/keys.js";
 import { rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
 import { planRustGenericCallableValue } from "./generic-callables.js";
+import { planRustGeneratorBody } from "../declarations/generator-body.js";
+import { wrapRustJsPromiseBody } from "../declarations/async-promise.js";
+import { planRustSuspendedCallableConstruction } from "./suspended-callables.js";
 
 export function planCallableExpression(
+  node: Node,
+  context: RustPlanContext,
+): RustExpr | undefined {
+  return context.input.program.facts.getFact(node, rustClosureCaptureFactKey)?.invocationOwner === "shared-state"
+    ? planRustSuspendedCallableConstruction(node, context)
+    : planRustCallableExpressionBody(node, context);
+}
+
+export function planRustCallableExpressionBody(
   node: Node,
   context: RustPlanContext,
 ): RustExpr | undefined {
@@ -229,11 +243,26 @@ export function planCallableExpression(
     return undefined;
   }
   const fallible = context.input.program.facts.getFact(node, rustFallibleFactKey) !== undefined;
+  const generator = context.input.program.facts.getFact(node, rustGeneratorFactKey);
+  const asynchronous = context.input.program.facts.getFact(node, rustAsyncFunctionFactKey);
+  const suspended = generator !== undefined || asynchronous !== undefined;
+  const bodyResultCarrier = generator?.returnType ?? asynchronous?.outputCarrier ?? resultCarrier;
+  if (ast.hasModifierKind(node, "async") && !suspended) {
+    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+      "rust.backend.closure-suspension", "Async callable expressions require sealed suspension evidence."));
+    return undefined;
+  }
+  if (generator !== undefined && fallible) {
+    context.diagnostics.push(unsupportedConstructDiagnostic(diagnosticInput(context, node),
+      "rust.backend.generator-fallibility", "Throwing generator bodies require a closed Rust generator error protocol."));
+    return undefined;
+  }
   const resultIsFallible = callableProtocol !== undefined || nativeClosureProtocol?.fallible === true || fallible;
-  const callableErrorBoundary = resultIsFallible
+  const bodyIsFallible = suspended ? fallible : resultIsFallible;
+  const callableErrorBoundary = resultIsFallible || generator !== undefined
     ? context.fallibleBoundary ?? rustCurrentErrorBoundary(context)
     : undefined;
-  if (resultIsFallible && callableErrorBoundary === undefined) {
+  if ((resultIsFallible || generator !== undefined) && callableErrorBoundary === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.closure-error-boundary",
@@ -243,6 +272,17 @@ export function planCallableExpression(
   }
   if (resultIsFallible) {
     context.usedAliases?.add("rt");
+  }
+  const controllerName = generator === undefined || context.syntheticNames === undefined
+    ? undefined : allocateRustSyntheticName(context.syntheticNames, "generator");
+  if (generator !== undefined && controllerName === undefined) return undefined;
+  const ownedStateName = captureFact.invocationOwner !== "shared-state" || context.syntheticNames === undefined
+    ? undefined : allocateRustSyntheticName(context.syntheticNames, "callable_state");
+  if (captureFact.invocationOwner === "shared-state" &&
+      (!suspended || callableProtocol === undefined || ownedStateName === undefined)) {
+    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+      "rust.backend.closure-invocation-owner", "A suspended callable's retained owner conflicts with its finalized callable contract."));
+    return undefined;
   }
   const leadingParameterPlans = (independent === undefined ? leadingParameters : []).map((parameter) => ({
     ...parameter,
@@ -300,13 +340,15 @@ export function planCallableExpression(
     controlTargets: undefined,
     completionBoundary: undefined,
     fallibleBoundary: callableErrorBoundary,
-    asyncContext: false,
-    generator: undefined,
+    asyncContext: asynchronous !== undefined || generator?.kind === "async",
+    generator: generator === undefined ? undefined : {
+      declaration: node, controllerName: controllerName!, protocol: generator,
+    },
     expressionOverrides,
   };
   const captureBindings: { readonly name: string; readonly value: RustExpr }[] = [];
   const capturedBindings = [...(context.capturedBindings ?? [])];
-  for (const capture of captureFact.captures) {
+  for (const [index, capture] of captureFact.captures.entries()) {
     const moveCapture = context.input.program.valueLifetimes.canMoveCapture(node, capture.declaration);
     if (context.syntheticNames === undefined || !requireRustCarrierRequirements(
       capture.carrier,
@@ -342,9 +384,14 @@ export function planCallableExpression(
     });
     capturedBindings.push({
       declaration: capture.declaration,
-      expression: { kind: "path", path: name },
+      expression: ownedStateName === undefined ? { kind: "path", path: name } : {
+        kind: "field", receiver: {
+          kind: "field", receiver: { kind: "path", path: ownedStateName }, name: "state",
+        }, name: String(index),
+      },
       storage: capture.storage,
       valueCarrier: capture.carrier,
+      ...(ownedStateName === undefined ? {} : { borrowed: true }),
     });
   }
   let recursiveName: string | undefined;
@@ -352,10 +399,16 @@ export function planCallableExpression(
     if (context.syntheticNames === undefined || callableProtocol === undefined) {
       return undefined;
     }
-    recursiveName = allocateRustSyntheticName(context.syntheticNames, "recursive_callable");
+    recursiveName = ownedStateName === undefined
+      ? allocateRustSyntheticName(context.syntheticNames, "recursive_callable") : undefined;
     capturedBindings.push({
       declaration: captureFact.recursiveDeclaration,
-      expression: { kind: "path", path: recursiveName },
+      expression: ownedStateName === undefined ? { kind: "path", path: recursiveName! } : {
+        kind: "associated-call", owner: rustCallableConstructionType(constructionCarrier, context)!,
+        method: "from_shared", args: [{
+          kind: "method-call", receiver: { kind: "path", path: ownedStateName }, method: "clone", args: [],
+        }],
+      },
       storage: "value",
       valueCarrier: closureFact.resultCarrier,
     });
@@ -389,6 +442,7 @@ export function planCallableExpression(
       ? `_${allocatedTupleName}`
       : allocatedTupleName;
     closureParams = [
+      ...(ownedStateName === undefined ? [] : [{ name: ownedStateName, mutable: false }]),
       ...(recursiveName === undefined ? [] : [{ name: recursiveName, mutable: false }]),
       { name: tupleName, mutable: false },
     ];
@@ -442,68 +496,7 @@ export function planCallableExpression(
     }
     bindingStatements.push(...planned);
   }
-  if (context.input.program.source.ast.kindName(bodyNode) !== "KindBlock") {
-    const body = planExpression(bodyNode, callableClosureContext);
-    if (body === undefined) {
-      return undefined;
-    }
-    const unitFallibleEffect = resultIsFallible &&
-      isRustUnitCarrier(resultCarrier) && body.kind !== "bottom";
-    const resultBody = !resultIsFallible || body.kind === "bottom"
-      ? body
-      : applyRustFallibleResultExpression(
-          unitFallibleEffect ? { kind: "path", path: "()" } : body,
-          { errorType: rustActiveErrorType(callableClosureContext)! },
-        );
-    const closure: RustExpr = !unitFallibleEffect && bindingStatements.length === 0 &&
-        closureParams.every((parameter) => !parameter.mutable)
-      ? {
-          kind: "closure",
-          params: closureParams.map((parameter) => ({
-            name: parameter.name,
-            byRefCopy: parameter.byRefCopy === true,
-          })),
-          ...(closureMove ? { move: true } : {}),
-          body: resultBody,
-        }
-      : {
-          kind: "closure-block",
-          params: closureParams,
-          move: closureMove,
-          async: false,
-          body: {
-            statements: [
-              ...bindingStatements,
-              ...(unitFallibleEffect ? [{ kind: "expr" as const, expr: body }] : []),
-              { kind: "tail", expr: resultBody },
-            ],
-          },
-        };
-    if (callableProtocol === undefined) {
-      return nativeClosureProtocol === undefined || captureBindings.length === 0
-        ? closure
-        : { kind: "block", bindings: captureBindings, value: closure };
-    }
-    const callableType = rustCallableConstructionType(
-      constructionCarrier,
-      context,
-    );
-    if (callableType === undefined) {
-      return undefined;
-    }
-    context.usedAliases?.add("rt");
-    const callable = {
-      kind: "associated-call" as const,
-      owner: callableType,
-      method: recursiveName === undefined ? "new" : "recursive",
-      args: [closure],
-    };
-    return finishRuntimeCallableExpression(
-      callable,
-      captureBindings,
-    );
-  }
-  const resultType = rustTypeFromCarrierInContext(resultCarrier, context);
+  const resultType = rustTypeFromCarrierInContext(bodyResultCarrier, context);
   if (resultType === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -518,15 +511,22 @@ export function planCallableExpression(
     functionReturnType: resultType,
     functionUndefinedReturn: sourceReturn?.undefinedReturn === true,
   };
-  const plannedBody = context.planBlock(bodyNode, bodyContext);
+  const plannedBody = ast.kindName(bodyNode) === "KindBlock"
+    ? context.planBlock(bodyNode, bodyContext)
+    : (() => {
+      const expression = planExpression(bodyNode, bodyContext);
+      return expression === undefined ? undefined : {
+        statements: [{ kind: "tail" as const, expr: expression }],
+      };
+    })();
   if (plannedBody === undefined) {
     return undefined;
   }
   const block = retainRustCheckedCompletion({
     statements: [...plannedBody.statements, ...(sourceReturn?.fallthroughUndefined
       ? [planRustReturnExit({ kind: "path", path: "None" }, bodyContext)] : [])],
-  }, !isRustUnitCarrier(resultCarrier) ? sourceReturn?.canFallThrough : undefined);
-  if (!isRustUnitCarrier(resultCarrier) && !rustBlockTerminates(block)) {
+  }, !isRustUnitCarrier(bodyResultCarrier) && generator === undefined ? sourceReturn?.canFallThrough : undefined);
+  if (!isRustUnitCarrier(bodyResultCarrier) && !rustBlockTerminates(block)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, bodyNode),
       "rust.backend.closure-return-flow",
@@ -534,21 +534,38 @@ export function planCallableExpression(
     ));
     return undefined;
   }
-  const finalizedBlock = applyFallibleShape(applyRustTailShape(
-    { statements: [...bindingStatements, ...block.statements] },
-    !isRustUnitCarrier(resultCarrier),
-  ), resultIsFallible
+  const bodyWithBindings = { statements: [...bindingStatements, ...block.statements] };
+  const loweredBody = generator === undefined ? applyFallibleShape(applyRustTailShape(
+    bodyWithBindings,
+    !isRustUnitCarrier(bodyResultCarrier),
+  ), bodyIsFallible
     ? {
         fallible: true,
-        hasReturnValue: !isRustUnitCarrier(resultCarrier),
+        hasReturnValue: !isRustUnitCarrier(bodyResultCarrier),
         errorType: rustActiveErrorType(callableClosureContext)!,
         inferErrorTypeFromReturnType: false,
       }
-    : { fallible: false, hasReturnValue: !isRustUnitCarrier(resultCarrier) });
+    : { fallible: false, hasReturnValue: !isRustUnitCarrier(bodyResultCarrier) }) : block;
+  let finalizedBlock: RustBlock = loweredBody;
+  if (generator !== undefined) {
+    context.usedAliases?.add("rt");
+    finalizedBlock = { statements: [...bindingStatements, {
+      kind: "tail", expr: planRustGeneratorBody(loweredBody, generator, controllerName!, rustErrorType(callableErrorBoundary!)),
+    }] };
+  } else if (asynchronous?.kind === "js-promise") {
+    context.usedAliases?.add("js_abi");
+    finalizedBlock = wrapRustJsPromiseBody(loweredBody, bodyIsFallible);
+  }
+  if (suspended && resultIsFallible && asynchronous?.kind !== "native-future") {
+    finalizedBlock = applyFallibleShape(finalizedBlock, {
+      fallible: true, hasReturnValue: true,
+      errorType: rustActiveErrorType(callableClosureContext)!, inferErrorTypeFromReturnType: false,
+    });
+  }
   const onlyStatement = finalizedBlock.statements.length === 1
     ? finalizedBlock.statements[0]
     : undefined;
-  const closure: RustExpr = onlyStatement?.kind === "tail" &&
+  const closure: RustExpr = asynchronous?.kind !== "native-future" && onlyStatement?.kind === "tail" &&
       closureParams.every((parameter) => !parameter.mutable)
     ? {
       kind: "closure",
@@ -563,9 +580,10 @@ export function planCallableExpression(
         kind: "closure-block",
         params: closureParams,
         move: closureMove,
-        async: false,
+        async: asynchronous?.kind === "native-future",
         body: finalizedBlock,
       };
+  if (ownedStateName !== undefined) return closure;
   if (callableProtocol === undefined) {
     return nativeClosureProtocol === undefined || captureBindings.length === 0
       ? closure
