@@ -355,6 +355,7 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
       walk.context.frozenDataWrites, walk.context.typeDefinitions,
     ) ||
       (operation?.kind === "source-call" && operation.target.form === "union-method" &&
+        rustFutureOutputCarrier(operation.resultCarrier) === undefined &&
         operation.target.variants.some(variant => fallible.has(variant.declaration))) ||
       bindingProjectionIsFallible ||
       rustContextualValueConversionIsFallible(contextualConversion?.conversion, walk.context.typeDefinitions);
@@ -524,6 +525,9 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
         const selectedAsync = selectedDeclaration !== undefined &&
           walk.context.facts.get(selectedDeclaration, rustAsyncFunctionFactKey) !== undefined;
         if ((operandFact?.kind === "provider-operation" && rustOperationAbiAwaitIsFallible(operandFact.abi)) ||
+          (operandFact?.kind === "source-call" && operandFact.target.form === "union-method" &&
+            rustFutureOutputCarrier(operandFact.resultCarrier) !== undefined &&
+            operandFact.target.variants.some(variant => fallible.has(variant.declaration))) ||
           (operandFact?.kind === "source-call" && selectedDeclaration !== undefined &&
             selectedAsync && fallible.has(selectedDeclaration))) {
           found = true;

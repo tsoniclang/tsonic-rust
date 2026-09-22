@@ -61,9 +61,11 @@ export function sourceCallEffectsMatch(
   }
   const isAsync = rustFutureOutputCarrier(fact.resultCarrier) !== undefined;
   if (fact.target.form === "union-method") {
-    return !isAsync && effects.awaiting === "not-applicable" && effects.unionBranches?.length === fact.target.variants.length &&
-      effects.unionBranches.every(branch => branch === "infallible" || branch === "fallible") &&
-      effects.invocation === (effects.unionBranches.some(branch => branch === "fallible") ? "fallible" : "infallible");
+    if (effects.unionBranches?.length !== fact.target.variants.length ||
+      !effects.unionBranches.every(branch => branch === "infallible" || branch === "fallible")) return false;
+    const selectedEffect = effects.unionBranches.some(branch => branch === "fallible") ? "fallible" : "infallible";
+    return isAsync ? effects.invocation === "infallible" && effects.awaiting === selectedEffect
+      : effects.invocation === selectedEffect && effects.awaiting === "not-applicable";
   }
   const callableCarrier = fact.target.form === "callable"
     ? fact.target.carrier
@@ -192,7 +194,7 @@ export function planSelectedSourceCall(
       break;
     }
     case "union-method": {
-      planned = planRustUnionMethodCall(node, callee, shaped, fact.target, context);
+      planned = planRustUnionMethodCall(node, callee, shaped, fact, fact.target, callGenericArguments, targetTypeArguments, context);
       break;
     }
     case "function": {

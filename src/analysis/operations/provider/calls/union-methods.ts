@@ -3,7 +3,8 @@ import type { RustCheckedCallSelectionInput, RustOperationPolicyContext } from "
 import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution.js";
 import { selectRustPointerReturnCarrier } from "../../../../policy/operations/pointer-return.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
-import { rustOptionElementCarrier, rustSourceUnionCarrierValue } from "../../../../target-model/types/index.js";
+import { rustOptionElementCarrier, rustSourceUnionCarrierValue, substituteRustTargetGenerics } from "../../../../target-model/types/index.js";
+import { rustLifetimeKey, type RustLifetimeRef } from "../../../../target-model/lifetimes/index.js";
 import type { RustSelectedUnionMethod, RustSelectedUnionMethodIdentity, RustTargetMember, TargetTypeRef } from "../../../../target-model/types/model.js";
 import { rustProjectCallableTargetName } from "../../../facts/source-member-name.js";
 import type { RustOperationsProviderOptions } from "../model.js";
@@ -28,7 +29,7 @@ export function selectRustUnionMethods(
     const candidates = declarations.filter(declaration => {
       const owner = options.projectTypes.definitionContainingDeclaration(declaration);
       return context.ast.kindName(declaration) === "KindMethodDeclaration" &&
-        !context.ast.hasModifierKind(declaration, "static") && context.ast.typeParameters(declaration).length === 0 &&
+        !context.ast.hasModifierKind(declaration, "static") &&
         owner !== undefined && options.projectTypes.relationship(variant.carrier, owner).kind === "related";
     });
     if (candidates.length !== 1) return undefined;
@@ -43,6 +44,8 @@ export function selectRustUnionMethods(
 
 export function resolveRustUnionMethodContracts(
   methods: readonly RustSelectedUnionMethodIdentity[],
+  selectedDeclaration: Node,
+  selectedParameters: RustCheckedCallSelectionInput["source"]["sourceSelectedSignatureParameters"],
   parameters: readonly RustTargetMember["parameters"][number][],
   result: TargetTypeRef,
   context: RustOperationPolicyContext,
@@ -50,19 +53,27 @@ export function resolveRustUnionMethodContracts(
 ): { readonly result: TargetTypeRef; readonly methods: readonly RustSelectedUnionMethod[] } | undefined {
   const resolved = methods.map(method => {
     const declarations = context.ast.parameters(method.declaration);
-    if (declarations.length !== parameters.length || context.ast.hasModifierKind(method.declaration, "async")) return undefined;
+    const normalizeGenerics = unionMethodGenericNormalization(method.declaration, selectedDeclaration, context);
+    if (declarations.length !== parameters.length || normalizeGenerics === undefined) return undefined;
+    const instantiate = (subject: Node, carrier: TargetTypeRef): TargetTypeRef | undefined => {
+      const owned = options.projectTypes.instantiateMemberCarrier(subject, method.carrier, carrier);
+      return owned === undefined ? undefined : normalizeGenerics(owned);
+    };
     const valid = declarations.every((declaration, index) => {
       if (declaration === undefined) return false;
       const abi = options.sourceCallableAbi.resolveParameterAbi(declaration, context, options);
       const parameter = parameters[index]!;
-      return abi?.form === "required" &&
+      const selected = selectedParameters[index];
+      return abi !== undefined && selected !== undefined &&
+        (abi.form === "rest") === selected.rest &&
+        (!selected.acceptsOmission || abi.form !== "required") &&
         parameter.passingMode === (abi.mode === "mut-ref" ? "borrow-mut" : abi.mode === "ref" ? "borrow-shared" : "by-value") &&
-        rustTargetTypeRefEquals(parameter.type, options.projectTypes.instantiateMemberCarrier(declaration, method.carrier, abi.parameterCarrier));
+        rustTargetTypeRefEquals(parameter.type, instantiate(declaration, abi.parameterCarrier));
     });
     const annotation = context.ast.typeNode(method.declaration);
     const returnType = selectRustPointerReturnCarrier(method.declaration, context, options) ??
       (annotation === undefined ? undefined : resolveRustTargetTypeRef(annotation, context, options));
-    const instantiated = returnType === undefined ? undefined : options.projectTypes.instantiateMemberCarrier(method.declaration, method.carrier, returnType);
+    const instantiated = returnType === undefined ? undefined : instantiate(method.declaration, returnType);
     return !valid || instantiated === undefined ? undefined : { ...method, returnType: instantiated };
   });
   if (resolved.some(method => method === undefined)) return undefined;
@@ -75,6 +86,28 @@ export function resolveRustUnionMethodContracts(
     ...method!, resultConversion: rustTargetTypeRefEquals(method!.returnType, common)
       ? undefined : { kind: "option-some" as const, element: element! },
   }))) });
+}
+
+function unionMethodGenericNormalization(
+  declaration: Node,
+  selectedDeclaration: Node,
+  context: RustOperationPolicyContext,
+): ((carrier: TargetTypeRef) => TargetTypeRef) | undefined {
+  const declared = context.sourceLifetimes.contractFor(declaration)?.parameters ?? [];
+  const selected = context.sourceLifetimes.contractFor(selectedDeclaration)?.parameters ?? [];
+  if (declared.length !== context.ast.typeParameters(declaration).length ||
+    selected.length !== context.ast.typeParameters(selectedDeclaration).length || declared.length !== selected.length) return undefined;
+  const types = new Map<string, TargetTypeRef>();
+  const lifetimes = new Map<string, RustLifetimeRef>();
+  for (const [index, parameter] of declared.entries()) {
+    const canonical = selected[index]!;
+    if (parameter.kind === "type" && canonical.kind === "type") {
+      types.set(parameter.targetName, { kind: "type-parameter", name: canonical.targetName });
+    } else if (parameter.kind === "lifetime" && canonical.kind === "lifetime") {
+      lifetimes.set(rustLifetimeKey(parameter.lifetime), canonical.lifetime);
+    } else return undefined;
+  }
+  return carrier => substituteRustTargetGenerics(carrier, types, lifetimes);
 }
 
 export function rustUnionMethodOwner(

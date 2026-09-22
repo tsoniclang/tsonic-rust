@@ -649,11 +649,12 @@ export function acceptProjectSourceCall(
     return rejectSelectedOperation(request.source.call, context, "RUST_SOURCE_CALL_RETURN_CARRIER_MISSING", "The exact TSTS-selected project-source declaration has no closed Rust return carrier.");
   }
   const unionContract = unionMethods === undefined ? undefined : resolveRustUnionMethodContracts(
-    unionMethods, parameters as RustTargetMember["parameters"], returnType, context, options,
+    unionMethods, callableDeclaration, request.source.sourceSelectedSignatureParameters,
+    parameters as RustTargetMember["parameters"], returnType, context, options,
   );
   if (unionMethods !== undefined && unionContract === undefined) {
     return rejectSelectedOperation(request.source.call, context, "RUST_UNION_METHOD_ABI_UNSUPPORTED",
-      "The selected union methods require exact synchronous parameter contracts and a lossless closed common result.");
+      "The selected union methods require exact native parameter contracts and a lossless closed common result.");
   }
   returnType = unionContract?.result ?? returnType;
   const optionalResult = selectRustOptionalCallResult(

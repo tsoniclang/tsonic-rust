@@ -44,6 +44,8 @@ import type { RustFactWalk } from "../program/walk.js";
 import type { RustSelectedTargetSignature, TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTargetOperationFact } from "../facts/keys.js";
 import { rustGenericCallableProtocol } from "../../target-model/types/carriers/generic-callables.js";
+import { substituteRustValueConversion } from "../../target-model/conversions/contracts.js";
+import { recordSelectedMethodSpecialization } from "./project-method-calls.js";
 
 export function applySelectedProjectSourceCall(
   walk: RustFactWalk,
@@ -298,11 +300,16 @@ export function applySelectedProjectSourceCall(
       const polymorphic = owner !== undefined && walk.context.projectTypes.isPolymorphic(owner);
       const relationship = owner === undefined ? undefined : walk.context.projectTypes.relationship(variant.carrier, owner);
       if (polymorphic && relationship?.kind !== "related") return undefined;
+      if (polymorphic && !recordSelectedMethodSpecialization(walk, expression, variant.declaration, targetTypeArguments)) return undefined;
       return selfMode === undefined ? undefined : {
         name: variant.name,
         carrier: variant.carrier,
         declaration: variant.declaration,
         targetName: variant.targetName,
+        returnType: substituteRustTargetGenerics(variant.returnType, substitutions.types, substitutions.lifetimes, substitutions.consts, normalizeTypeFamily),
+        ...(variant.resultConversion === undefined ? {} : { resultConversion: substituteRustValueConversion(
+          variant.resultConversion, substitutions.types, substitutions.lifetimes, substitutions.consts,
+        ) }),
         mutatesSelf: selfMode.mode === "mut-ref",
         ...(polymorphic && relationship?.kind === "related" ? { dispatchOwner: relationship.targetType } : {}),
       };
@@ -403,29 +410,7 @@ export function applySelectedProjectSourceCall(
       if (polymorphic && ownerCarrier === undefined) {
         return undefined;
       }
-      if (polymorphic && ast.typeParameters(selectedDeclaration).length > 0) {
-        const registration = walk.context.sourceCallableSpecializations.recordProjectMethodCall({
-          subject: expression,
-          ...(walk.currentCallableDeclaration === undefined
-            ? {}
-            : { caller: walk.currentCallableDeclaration }),
-          declaration: selectedDeclaration,
-          targetTypeArguments,
-          ast,
-          projectTypes: walk.context.projectTypes,
-          sourceLifetimes: walk.context.sourceLifetimes,
-        });
-        if (registration.kind === "rejected") {
-          appendRustDiagnostic(
-            walk,
-            "RUST_PROJECT_METHOD_SPECIALIZATION_UNAVAILABLE",
-            registration.reason,
-            expression,
-            ["target.capability=rust.project-dispatch.finite-generic-specialization"],
-          );
-          return undefined;
-        }
-      }
+      if (polymorphic && !recordSelectedMethodSpecialization(walk, expression, selectedDeclaration, targetTypeArguments)) return undefined;
       const receiverKind = ast.kindName(receiver);
       target = {
         form: "method",
@@ -471,14 +456,15 @@ export function applySelectedProjectSourceCall(
   if (target === undefined) {
     return undefined;
   }
-  if (declarationKind === KindFunctionDeclaration ||
-    declarationKind === "KindMethodDeclaration") {
+  const callDeclarations = target.form === "union-method" ? target.variants.map(variant => variant.declaration)
+    : declarationKind === KindFunctionDeclaration || declarationKind === "KindMethodDeclaration" ? [selectedDeclaration] : [];
+  for (const declaration of callDeclarations) {
     const registration = walk.context.sourceCallableSpecializations.recordSourceCall({
       subject: expression,
       ...(walk.currentCallableDeclaration === undefined
         ? {}
         : { caller: walk.currentCallableDeclaration }),
-      callee: selectedDeclaration,
+      callee: declaration,
       targetTypeArguments,
       ast,
       sourceLifetimes: walk.context.sourceLifetimes,

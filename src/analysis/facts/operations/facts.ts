@@ -365,6 +365,8 @@ export type RustTargetOperationFact =
             readonly form: "union-method";
             readonly receiverCarrier: TargetTypeRef;
             readonly variants: readonly (RustSelectedUnionMethodIdentity & {
+              readonly returnType: TargetTypeRef;
+              readonly resultConversion?: RustValueConversion;
               readonly mutatesSelf: boolean;
               readonly dispatchOwner?: TargetTypeRef;
             })[];
