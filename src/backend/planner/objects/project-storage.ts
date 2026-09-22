@@ -174,7 +174,9 @@ export function readRustStoredObjectField(
       const error = rustActiveErrorType(context);
       const operand = rustTypeFromCarrierInContext(rustProgramErrorTargetType(), context);
       if (field.property === undefined || error === undefined || operand === undefined || projection.length !== 0) return undefined;
-      return { kind: "try", expr: { kind: "method-call", receiver: { kind: "field", receiver, name: "dispatch" },
+      const dispatch: RustExpr = { kind: "field", receiver, name: "dispatch" };
+      return { kind: "try", expr: { kind: "method-call", receiver: field.property.selfMode === "ref" ? dispatch
+        : { kind: "method-call", receiver: dispatch, method: "clone", args: [] },
         method: field.property.getterTargetName, args: [] }, resultErrorType: error, operandErrorType: operand };
     }
     if (field.method === true && field.receiverIndependent !== true) {
@@ -354,7 +356,9 @@ function writeRustStoredObjectFieldStorage(
       const operand = rustTypeFromCarrierInContext(rustProgramErrorTargetType(), context);
       if (field.property?.setterTargetName === undefined || error === undefined || operand === undefined ||
         projection.length !== 0 || operator !== "=") return undefined;
-      return { kind: "try", expr: { kind: "method-call", receiver: { kind: "field", receiver, name: "dispatch" },
+      const dispatch: RustExpr = { kind: "field", receiver, name: "dispatch" };
+      return { kind: "try", expr: { kind: "method-call", receiver: field.property.selfMode === "ref" ? dispatch
+        : { kind: "method-call", receiver: dispatch, method: "clone", args: [] },
         method: field.property.setterTargetName, args: [value] }, resultErrorType: error, operandErrorType: operand };
     }
     if (field.method === true && field.receiverIndependent !== true || field.readonly && projection.length === 0) {

@@ -189,7 +189,7 @@ function planProjectedExpression(
   let contextuallyConverted = converted;
   if (objectView !== undefined) {
     if (rustTargetTypeRefEquals(currentCarrier, objectView.sourceCarrier)) {
-      const selected = planRustObjectReferenceView(contextuallyConverted, objectView, context);
+      const selected = planRustObjectReferenceView(node, contextuallyConverted, objectView, context);
       if (selected === undefined) return undefined;
       contextuallyConverted = selected;
       currentCarrier = objectView.targetCarrier;

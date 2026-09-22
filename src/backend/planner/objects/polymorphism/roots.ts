@@ -38,6 +38,7 @@ import { checkRustDataWrite } from "../data-writes.js";
 import { planCheckedProjectProjectionImplementation } from "../checked-project-projections.js";
 import { rustProjectInstanceContracts } from "../../../../policy/types/project-types.js";
 import { rustArrayFieldMutationName, rustArrayFieldMutationType } from "./array-fields.js";
+import { rustProjectObjectIdentityImplementation } from "../project-identity.js";
 
 export function planProjectRootImplementations(
   concrete: RustProjectTypeDefinition,
@@ -51,8 +52,10 @@ export function planProjectRootImplementations(
   if (contracts === undefined || representation === undefined) {
     return undefined;
   }
-  const items: RustItem[] = [];
   const generics = rustProjectRepresentationGenerics(representation, context);
+  const items: RustItem[] = [rustProjectObjectIdentityImplementation(rootType, generics, {
+    kind: "reference", expr: { kind: "field", receiver: { kind: "path", path: "self" }, name: "identity" },
+  })];
   const methodImplementations = new Map<Node, RustImplFunction[]>();
   const accessorImplementations = new Map<Node, RustImplFunction>();
   const implementationFor = (

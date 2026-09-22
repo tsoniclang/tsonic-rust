@@ -555,6 +555,7 @@ export function createImplementationPlan(
     })), ...accessorFields],
   };
   return Object.freeze({
+    kind: "project" as const,
     expression,
     resultCarrier: fact.resultCarrier,
     wrapperType,

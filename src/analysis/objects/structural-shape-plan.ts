@@ -35,6 +35,7 @@ export interface RustStructuralShapeField {
   readonly property?: {
     readonly getterTargetName: string;
     readonly setterTargetName?: string;
+    readonly selfMode: "ref" | "rc";
   };
   readonly method?: true;
   readonly receiverIndependent?: true;
@@ -243,6 +244,8 @@ export function createRustStructuralShapePlan(
             ? {}
             : {
                 property: Object.freeze({
+                  selfMode: field.accessor !== undefined || fieldImplementations.some(implementation => implementation.kind === "accessor")
+                    ? "rc" as const : "ref" as const,
                   getterTargetName: allocateSnakeName(
                     usedFieldNames,
                     `get_${targetName}`,

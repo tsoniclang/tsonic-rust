@@ -33,6 +33,7 @@ import { parseSourceIntegerLiteral } from "../../../target-model/syntax/literals
 import { planExpression } from "./entry.js";
 import { planRustBoundProjectMethodCallable } from "./properties.js";
 import { rustObjectLiteralRequiresDispatchImplementation } from "../objects/object-literal-implementations.js";
+import { constructRustStructuralLiteral } from "../objects/object-literals/structural.js";
 import { rustProjectStateMarker, rustProjectStateType } from "../objects/polymorphism/names.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustEffectiveValueCarrier } from "../../../analysis/facts/value-carrier-queries.js";
@@ -151,10 +152,11 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
   });
   const requiresObjectLiteralImplementation =
     rustObjectLiteralRequiresDispatchImplementation(fact, context);
-  const objectLiteralImplementation = requiresObjectLiteralImplementation
+  const implementationPlan = requiresObjectLiteralImplementation
     ? context.objectLiteralImplementations?.forExpression(node)
     : undefined;
-  if (requiresObjectLiteralImplementation && objectLiteralImplementation === undefined) {
+  const objectLiteralImplementation = implementationPlan?.kind === "project" ? implementationPlan : undefined;
+  if (requiresObjectLiteralImplementation && implementationPlan === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.object-literal-method-implementation",
@@ -505,7 +507,9 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
     projectFields.push({ name: stateMarker.name, value: stateMarker.value });
   }
   let constructed: RustExpr | undefined;
-  if (objectLiteralImplementation !== undefined) {
+  if (implementationPlan?.kind === "structural") {
+    constructed = constructRustStructuralLiteral(implementationPlan, structuralInitializers);
+  } else if (objectLiteralImplementation !== undefined) {
     if (objectLiteralImplementation.wrapperType.kind !== "named" ||
       objectLiteralImplementation.stateFields.length +
         objectLiteralImplementation.accessors.length !== fact.fields.length ||

@@ -677,7 +677,7 @@ export function analyzeRustGeneratedItemUsage(input: {
       if (objectView !== undefined) {
         markStructuralShapeConstructed(objectView.targetCarrier);
         markProjectIdentityUsed(objectView.sourceCarrier);
-        for (const field of objectView.fields) visitFact(node, { ...field.source, operationId: "object-reference-view",
+        for (const field of objectView.kind === "structural" ? objectView.fields : []) visitFact(node, { ...field.source, operationId: "object-reference-view",
           accessMode: field.writable ? "read-write" : "read" });
       }
       const conversion = input.facts.getFact(node, rustContextualValueConversionFactKey)?.conversion;
@@ -704,6 +704,10 @@ export function analyzeRustGeneratedItemUsage(input: {
         const writable = fields?.[member.storageIndex]?.readonly === false;
         visitFact(member.declaration, { ...member.field, operationId: "project-structural-view",
           accessMode: writable ? "read-write" : "read" });
+      }
+      if (member.accessor !== undefined) {
+        visitFact(member.declaration, { ...member.accessor, operationId: "project-structural-accessor-view",
+          accessMode: member.accessor.write === undefined ? "read" : "read-write" });
       }
     }
   }

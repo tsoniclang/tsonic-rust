@@ -233,6 +233,14 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
     objectLiteralImplementations,
   };
   items.push(...objectLiteralImplementations.items);
+  const viewOwners = new Set(context.input.program.classValues.instanceViewImplementations.filter(view =>
+    view.ownerFileName === ast.getFileName(context.sourceFile)).map(view => view.declaration));
+  for (const declaration of viewOwners) {
+    const diagnosticCount = context.diagnostics.length;
+    const views = planRustProjectStructuralImplementations(declaration, context);
+    if (views === undefined) ensureTopLevelPlanningDiagnostic(context, declaration, diagnosticCount, "instance-view");
+    else items.push(...views);
+  }
   const asynchronous = context.input.program.sourceNavigation.moduleHasTopLevelAwait(
     context.sourceFile,
   );
@@ -455,10 +463,6 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
       if (constructorViews === undefined) {
         ensureTopLevelPlanningDiagnostic(context, definition.declaration, diagnosticCount, "constructor-view");
       } else items.push(...constructorViews);
-      const instanceViews = planRustProjectStructuralImplementations(definition.declaration, context);
-      if (instanceViews === undefined) {
-        ensureTopLevelPlanningDiagnostic(context, definition.declaration, diagnosticCount, "instance-view");
-      } else items.push(...instanceViews);
       const staticFunctions = planProjectStaticFunctionItems(definition, context);
       if (staticFunctions === undefined) {
         ensureTopLevelPlanningDiagnostic(context, definition.declaration, diagnosticCount, "static-function");

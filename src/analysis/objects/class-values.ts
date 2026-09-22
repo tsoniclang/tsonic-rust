@@ -15,7 +15,8 @@ import { rustClassValueFactKey } from "../facts/class-values.js";
 import type { RustAnalysisContext } from "../program/context.js";
 import { rustProjectStaticFieldStorage, type RustProjectStaticFieldStorage } from "../project-types/object-layout.js";
 import { selectRustClassValueCallable, type RustClassValueCallable } from "./class-value-callables.js";
-import type { RustProjectStructuralView } from "./project-structural-views.js";
+import type { RustProjectStructuralView, RustProjectStructuralViewImplementation } from "./project-structural-views.js";
+import { selectRustStructuralViewImplementations } from "./project-structural-views.js";
 
 export interface RustClassValueView {
   readonly declaration: Node;
@@ -45,6 +46,7 @@ export interface RustClassValueDefinition {
 
 export interface RustClassValuePlan {
   readonly instanceViews: readonly RustProjectStructuralView[];
+  readonly instanceViewImplementations: readonly RustProjectStructuralViewImplementation[];
   forDeclaration(declaration: Node): RustClassValueDefinition | undefined;
   viewFor(declaration: Node, carrier: TargetTypeRef): RustClassValueDefinition["views"][number] | undefined;
 }
@@ -70,6 +72,8 @@ export function createRustClassValueRegistry(): RustClassValueRegistry {
       if (existing !== undefined) return existing.fields.length === view.fields.length && existing.fields.every((field, index) =>
         field.declaration === view.fields[index]?.declaration && field.storageIndex === view.fields[index]?.storageIndex &&
         instanceViewFieldsEqual(field.field, view.fields[index]?.field) &&
+        instanceViewAccessorsEqual(field.accessor, view.fields[index]?.accessor) &&
+        closedMetadataEquals(field.readAdapter, view.fields[index]?.readAdapter) &&
         classValueCallablesEqual(field.callable, view.fields[index]?.callable));
       instanceViews.push(Object.freeze({ ...view,
         fields: Object.freeze(view.fields.map(field => Object.freeze({ ...field }))) }));
@@ -177,6 +181,7 @@ export function createRustClassValueRegistry(): RustClassValueRegistry {
       }
       return Object.freeze({
         instanceViews: Object.freeze([...instanceViews]),
+        instanceViewImplementations: selectRustStructuralViewImplementations(instanceViews, context),
         forDeclaration: (declaration: Node) => byDeclaration.get(declaration),
         viewFor(declaration: Node, carrier: TargetTypeRef) {
           return byDeclaration.get(declaration)?.views.find(view => rustTargetTypeRefEquals(view.carrier, carrier));
@@ -266,6 +271,19 @@ function instanceViewFieldsEqual(
   const { declaration: leftDeclaration, ...leftContract } = left;
   const { declaration: rightDeclaration, ...rightContract } = right;
   return leftDeclaration === rightDeclaration && closedMetadataEquals(leftContract, rightContract);
+}
+
+function instanceViewAccessorsEqual(
+  left: RustProjectStructuralView["fields"][number]["accessor"],
+  right: RustProjectStructuralView["fields"][number]["accessor"],
+): boolean {
+  if (left === undefined || right === undefined) return left === right;
+  return left.read?.declaration === right.read?.declaration && left.read?.method === right.read?.method &&
+    left.write?.declaration === right.write?.declaration && left.write?.method === right.write?.method &&
+    rustTargetTypeRefEquals(left.read?.resultCarrier, right.read?.resultCarrier) &&
+    rustTargetTypeRefEquals(left.write?.valueCarrier, right.write?.valueCarrier) &&
+    rustTargetTypeRefEquals(left.dispatch?.ownerCarrier, right.dispatch?.ownerCarrier) &&
+    rustTargetTypeRefEquals(left.resultCarrier, right.resultCarrier) && closedMetadataEquals(left.receiver, right.receiver);
 }
 
 function classValueCallablesEqual(left: RustClassValueCallable | undefined, right: RustClassValueCallable | undefined): boolean {

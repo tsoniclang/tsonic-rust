@@ -841,7 +841,7 @@ export function reconcileRequiredCarrier(
     walk.context.projectTypes, walk.context.typeDefinitions,
   );
   if (reconciliation.kind === "incompatible") {
-    return false;
+    return reconciliation.reason === "unrelated" && recordRustObjectReferenceView(walk, expression, sourceCarrier, targetCarrier);
   }
   if (reconciliation.kind === "call-scoped-lifetime" ||
     reconciliation.kind === "conversion" || reconciliation.kind === "project-upcast") {

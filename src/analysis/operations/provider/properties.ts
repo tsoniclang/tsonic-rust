@@ -10,11 +10,10 @@ import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js"
 import { isProjectAccessorDeclaration, selectRustFixedArrayLengthProperty, selectStructuralSourceProperty } from "./structural-properties.js";
 import { Node_Type } from "@tsonic/target-api/source";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
-import { instantiateRustSelectedMemberCarrier } from "./member-carriers.js";
+import { resolveRustProjectAccessor } from "./project-accessors.js";
 import { resolveRustProjectField } from "./project-fields.js";
 import { rustCallableProtocol, rustSourceTypeCarrier } from "../../../target-model/types/index.js";
 import { rustProjectStaticFieldStorage } from "../../project-types/object-layout.js";
-import { rustSourceCallableReturnFactKey } from "../../facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectJsSurfaceOperation } from "../../../policy/operations/js-surface.js";
 import { selectRustGeneratorSourceProperty } from "../../../policy/types/generator-source-profile.js";
@@ -683,103 +682,13 @@ function selectProjectSourceAccessor(
       "Selected getter and setter declarations disagree on static ownership.",
     );
   }
-  const declaredReadCarrier = readDeclaration === undefined
-    ? undefined
-    : context.facts.get(readDeclaration, rustSourceCallableReturnFactKey)?.returnCarrier ??
-      resolveRustTargetTypeRef(Node_Type(context.ast, readDeclaration), context, options) ??
-      resolveRustTargetTypeRef(request.sourceReadType, context, options);
-  const writeParameters = writeDeclaration === undefined
-    ? undefined
-    : context.ast.parameters(writeDeclaration);
-  const writeParameter = writeParameters !== undefined &&
-      isDenseDataArray(writeParameters) && writeParameters.length === 1
-    ? writeParameters[0]
-    : undefined;
-  const declaredWriteCarrier = writeDeclaration === undefined || writeParameter === undefined
-    ? undefined
-    : options.sourceCallableAbi.resolveParameterAbi(
-        writeParameter,
-        context,
-        options,
-      )?.valueCarrier ??
-      resolveRustTargetTypeRef(Node_Type(context.ast, writeParameter), context, options) ??
-      resolveRustTargetTypeRef(request.sourceWriteType, context, options);
-  const instantiate = (declaration: Node | undefined, carrier: TargetTypeRef | undefined): TargetTypeRef | undefined =>
-    declaration === undefined || carrier === undefined
-      ? undefined
-      : staticAccess ? carrier
-        : selectedReceiverCarrier === undefined ? undefined
-          : instantiateRustSelectedMemberCarrier(
-              declaration, selectedReceiverCarrier, request.sourceReceiverType,
-              carrier, context, options,
-            );
-  const readCarrier = instantiate(readDeclaration, declaredReadCarrier);
-  const writeCarrier = instantiate(writeDeclaration, declaredWriteCarrier);
-  if ((needsRead && readCarrier === undefined) ||
-    (needsWrite && writeCarrier === undefined)) {
-    return rejectSelectedOperation(
-      request.expression,
-      context,
-      "RUST_PROJECT_ACCESSOR_CARRIER_MISSING",
-      "Selected project accessor has no closed Rust carrier for its exact checked read or write type.",
-    );
-  }
-  const readMethod = readDeclaration === undefined
-    ? undefined
-    : options.projectTypes.memberSlotName(readDeclaration, "read");
-  const writeMethod = writeDeclaration === undefined
-    ? undefined
-    : options.projectTypes.memberSlotName(writeDeclaration, "write");
-  if ((needsRead && readMethod === undefined) ||
-    (needsWrite && writeMethod === undefined)) {
-    return rejectSelectedOperation(
-      request.expression,
-      context,
-      "RUST_PROJECT_ACCESSOR_SLOT_MISSING",
-      "Selected project accessor has no deterministic Rust declaration slot.",
-    );
-  }
-  const typeDefinition = options.projectTypes.definitionContainingDeclaration(
-    declarations[0]!,
-  );
-  const staticCarrier = !staticAccess || typeDefinition === undefined
-    ? undefined
-    : options.projectTypes.openCarrier(typeDefinition);
-  if (staticAccess && staticCarrier === undefined) {
-    return rejectSelectedOperation(
-      request.expression,
-      context,
-      "RUST_PROJECT_ACCESSOR_STATIC_CARRIER_MISSING",
-      "Static project accessor has no exact generated Rust owner carrier.",
-    );
-  }
-  const receiverRelationship = staticAccess || typeDefinition === undefined ||
-      selectedReceiverCarrier === undefined
-    ? undefined
-    : options.projectTypes.relationship(selectedReceiverCarrier, typeDefinition);
-  if (!staticAccess && (typeDefinition === undefined || selectedReceiverCarrier === undefined ||
-    receiverRelationship?.kind !== "related")) {
-    return rejectSelectedOperation(
-      request.expression,
-      context,
-      "RUST_PROJECT_ACCESSOR_RECEIVER_NOT_CLOSED",
-      "Selected project accessor has no exact receiver-to-declaration relationship.",
-    );
-  }
-  const dispatch = !staticAccess && typeDefinition !== undefined &&
-      options.projectTypes.isPolymorphic(typeDefinition) &&
-      receiverRelationship?.kind === "related"
-    ? { ownerCarrier: receiverRelationship.targetType }
-    : undefined;
-  const resultCarrier = readCarrier ?? writeCarrier;
-  if (resultCarrier === undefined) {
-    return rejectSelectedOperation(
-      request.expression,
-      context,
-      "RUST_PROJECT_ACCESSOR_RESULT_MISSING",
-      "Selected project accessor has no exact Rust operation result carrier.",
-    );
-  }
+  const selected = resolveRustProjectAccessor({
+    readDeclaration, writeDeclaration, sourceReceiverType: request.sourceReceiverType,
+    sourceReadType: request.sourceReadType, sourceWriteType: request.sourceWriteType,
+  }, selectedReceiverCarrier, context, options);
+  if (selected === undefined) return rejectSelectedOperation(request.expression, context,
+    "RUST_PROJECT_ACCESSOR_CARRIER_MISSING",
+    "Selected accessor declarations require exact receiver, native carrier and slot contracts.");
   const operationId = `tsonic.rust.source.accessor:${request.accessMode}:${[
     readDeclaration === undefined
       ? "-"
@@ -789,32 +698,7 @@ function selectProjectSourceAccessor(
       : sourceOperationId(context, writeDeclaration, "accessor-write"),
   ].join(":")}`;
   return acceptRustMemberOperation(request, "property", {
-    kind: "source-accessor",
-    operationId,
-    accessMode: request.accessMode,
-    receiver: staticAccess
-      ? { kind: "static", typeCarrier: staticCarrier! }
-      : { kind: "instance" },
-    ...(readMethod === undefined || readCarrier === undefined
-      ? {}
-      : {
-          read: {
-            declaration: readDeclaration!,
-            method: readMethod,
-            resultCarrier: readCarrier,
-          },
-        }),
-    ...(writeMethod === undefined || writeCarrier === undefined
-      ? {}
-      : {
-          write: {
-            declaration: writeDeclaration!,
-            method: writeMethod,
-            valueCarrier: writeCarrier,
-          },
-        }),
-    ...(dispatch === undefined ? {} : { dispatch }),
-    resultCarrier,
+    ...selected, operationId, accessMode: request.accessMode,
   }, context, options, {
     sourceExpression: request.expression,
     sourceReceiver: request.receiver,

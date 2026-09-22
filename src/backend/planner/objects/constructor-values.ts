@@ -31,8 +31,6 @@ export function planRustConstructorView(
   const name = allocateRustSyntheticName(context.syntheticNames, "class_value");
   const selected: RustExpr = { kind: "path", path: name };
   return { kind: "block", bindings: [{ name, value }], value: { kind: "struct-literal", path: type.path, fields: [
-    { name: "identity", value: { kind: "method-call", receiver: { kind: "field", receiver: selected,
-      name: environment.identityFieldName }, method: "clone", args: [] } },
     { name: "dispatch", value: selected },
   ] } };
 }

@@ -519,7 +519,7 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
     }
     const location = facts.getFact(node, rustLocationStorageFactKey);
     const objectView = facts.getFact(node, rustObjectReferenceViewKey);
-    if (objectView !== undefined) {
+    if (objectView?.kind === "structural") {
       const error = addUse(node, objectView.sourceCarrier, ["clone", "static"]);
       if (error !== undefined) return error;
       for (const field of objectView.fields) {

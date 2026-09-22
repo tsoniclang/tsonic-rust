@@ -8,7 +8,8 @@ import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { rustCallableProtocol, rustOptionElementCarrier, rustOptionTargetType } from "../../target-model/types/index.js";
 import { rustProjectCallableTargetName } from "../facts/source-member-name.js";
 import { resolveParameterAbi } from "../declarations/types-and-bindings.js";
-import { selectRustCallableParameterAdapters, selectRustCallableValueAdapter } from "../callables/adapters.js";
+import { projectOwnerTypeSubstitutions, selectRustCallableParameterAdapters, selectRustCallableValueAdapter, substituteRustCallableParameterAbi } from "../callables/adapters.js";
+import { substituteRustTargetTypeParameters } from "../../target-model/types/index.js";
 import { selectRustProjectStructuralView } from "./project-structural-views.js";
 
 export interface RustClassValueCallable {
@@ -30,6 +31,7 @@ export function selectRustClassValueCallable(
   construction: boolean,
   semantics: SourceFileSemantics,
   instance = false,
+  selectedOwnerCarrier?: TargetTypeRef,
 ): RustClassValueCallable | undefined {
   const { ast, projectTypes } = walk.context;
   const owner = projectTypes.definitionForDeclaration(classDeclaration);
@@ -45,10 +47,14 @@ export function selectRustClassValueCallable(
   const declaration = construction ? sourceConstructor!.declaration ?? classDeclaration
     : implementation?.kind === "resolved" ? implementation.implementation.declaration : undefined;
   if (declaration === undefined) return undefined;
-  const ownerCarrier = projectTypes.openCarrier(owner);
+  const ownerCarrier = selectedOwnerCarrier ?? projectTypes.openCarrier(owner);
+  const substitutions = projectOwnerTypeSubstitutions(owner, ownerCarrier);
   const sourceParameters = construction ? sourceConstructor!.parameters.map(parameter => parameter.parameterDeclaration)
     : ast.parameters(declaration);
-  const implementationParameters = sourceParameters.map(parameter => parameter === undefined ? undefined : resolveParameterAbi(walk, parameter));
+  const implementationParameters = sourceParameters.map(parameter => {
+    const abi = parameter === undefined ? undefined : resolveParameterAbi(walk, parameter);
+    return abi === undefined ? undefined : substituteRustCallableParameterAbi(abi, substitutions);
+  });
   const selectedParameters = semantics.types.signatureParameterInfos(targetSignature);
   if (implementationParameters.some(parameter => parameter === undefined) || selectedParameters.length !== target.parameters.length) return undefined;
   const parameters = selectedParameters.map((parameter, index): RustCallableParameterAbi => ({
@@ -61,12 +67,15 @@ export function selectRustClassValueCallable(
   const parameterAdapters = selectRustCallableParameterAdapters(parameters,
     implementationParameters as RustCallableParameterAbi[], projectTypes, walk.context.typeDefinitions);
   const resultSubject = ast.typeNode(declaration) ?? semantics.types.returnType(sourceSignature);
-  const sourceResult = construction ? ownerCarrier : resultSubject === undefined ? undefined :
+  const declaredResult = construction ? ownerCarrier : resultSubject === undefined ? undefined :
     resolveRustTargetTypeRef(resultSubject, rustResolutionContext(walk, declaration), walk.operationOptions);
+  const sourceResult = declaredResult === undefined ? undefined : substituteRustTargetTypeParameters(declaredResult, substitutions);
   const selectedResultAdapter = sourceResult === undefined ? undefined : selectRustCallableValueAdapter(sourceResult, target.result,
     projectTypes, walk.context.typeDefinitions);
+  const sourceInstanceType = semantics.types.returnType(sourceSignature);
   const resultAdapter: RustCallableValueAdapter | undefined = selectedResultAdapter ??
-    (construction && sourceResult !== undefined && selectRustProjectStructuralView(walk, classDeclaration, sourceResult, target.result, semantics)
+    (construction && sourceResult !== undefined && sourceInstanceType !== undefined &&
+      selectRustProjectStructuralView(walk, classDeclaration, sourceResult, target.result, semantics, sourceInstanceType)
       ? { kind: "project-structural-view", sourceCarrier: sourceResult, targetCarrier: target.result } : undefined);
   const targetName = construction ? sourceConstructor?.targetName : rustProjectCallableTargetName(declaration, walk.context);
   if (parameterAdapters === undefined || resultAdapter === undefined || targetName === undefined) return undefined;

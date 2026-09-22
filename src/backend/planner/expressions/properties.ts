@@ -533,11 +533,12 @@ export function sourceAccessorSelectedOperationMatches(
 
 export function planRustSourceAccessorCall(
   node: Node,
-  fact: Extract<RustTargetOperationFact, { readonly kind: "source-accessor" }>,
+  fact: Pick<Extract<RustTargetOperationFact, { readonly kind: "source-accessor" }>, "read" | "write" | "receiver" | "dispatch">,
   role: "read" | "write",
   args: readonly RustExpr[],
   context: RustPlanContext,
   receiverOverride?: RustExpr,
+  receiverCarrierOverride?: TargetTypeRef,
 ): RustExpr | undefined {
   const selected = role === "read" ? fact.read : fact.write;
   if (selected === undefined || args.length !== (role === "read" ? 0 : 1)) {
@@ -550,7 +551,7 @@ export function planRustSourceAccessorCall(
       ? undefined
       : { kind: "call", path: `${ownerPath}::${selected.method}`, args };
   }
-  const receiverNode = Node_Expression(context.input.program.source.ast, node);
+  const receiverNode = receiverCarrierOverride === undefined ? Node_Expression(context.input.program.source.ast, node) : undefined;
   const plannedReceiver = receiverOverride ?? (receiverNode === undefined
     ? undefined
     : planExpression(receiverNode, context));
@@ -564,9 +565,9 @@ export function planRustSourceAccessorCall(
     return { kind: "method-call", receiver, method: selected.method, args,
       receiverMode: context.input.program.objectRepresentations.methodSelfMode(selected.declaration) };
   }
-  const receiverCarrier = receiverNode === undefined
+  const receiverCarrier = receiverCarrierOverride ?? (receiverNode === undefined
     ? undefined
-    : effectivePlannedExpressionCarrier(receiverNode, context);
+    : effectivePlannedExpressionCarrier(receiverNode, context));
   const owner = context.input.program.projectTypes.definitionContainingDeclaration(selected.declaration);
   const relationship = owner === undefined || receiverCarrier === undefined
     ? undefined

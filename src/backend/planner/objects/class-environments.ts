@@ -14,6 +14,7 @@ import { planRustCaptureValue } from "../expressions/typed-locations.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { rustSelfParameter } from "../declarations/self-parameter.js";
 import { rustModuleCellAccess } from "../project/module-storage.js";
+import { rustProjectObjectIdentityImplementation } from "./project-identity.js";
 
 type Environment = NonNullable<RustClassValueDefinition["environment"]>;
 
@@ -70,6 +71,8 @@ export function planRustClassEnvironmentItems(declaration: Node, context: RustPl
   const manualClone = environment.storage === "value" && (generics.parameters.length > 0 || !environment.copy);
   const target = manualClone ? rustClassEnvironmentType(environment.carrier, context) : undefined;
   if (manualClone && target === undefined) return undefined;
+  const identityOwner = environment.constructorValue ? rustClassEnvironmentType(environment.carrier, context) : undefined;
+  if (environment.constructorValue && identityOwner === undefined) return undefined;
   const clonedFields: { readonly name: string; readonly value: RustExpr }[] = environment.captures.map(capture => {
     const value: RustExpr = { kind: "field", receiver: { kind: "path", path: "self" }, name: capture.fieldName };
     return { name: capture.fieldName, value: capture.storage === "value" && isRustCopyCarrier(capture.carrier) ? value
@@ -78,6 +81,10 @@ export function planRustClassEnvironmentItems(declaration: Node, context: RustPl
   if (marker !== undefined) clonedFields.push({ name: marker.name, value: marker.value });
   return [{ kind: "struct", name: environment.typeName, visibility: "crate",
     derives: environment.storage === "value" && !manualClone ? ["Clone", "Copy"] : [], generics, fields },
+    ...(identityOwner === undefined ? [] : [rustProjectObjectIdentityImplementation(
+      identityOwner, generics,
+      { kind: "reference", expr: { kind: "field", receiver: { kind: "path", path: "self" }, name: environment.identityFieldName } },
+    )]),
     ...(target === undefined ? [] : [
       ...(environment.copy ? [{ kind: "impl" as const, generics, target, trait: { kind: "named" as const, path: "Copy" }, functions: [] }] : []),
       { kind: "impl" as const, generics, target, trait: { kind: "named" as const, path: "Clone" }, functions: [{

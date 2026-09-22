@@ -1,13 +1,11 @@
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustPlanningContext } from "../context.js";
-import { rustGenericsWithAssociatedBounds } from "../types/generic-bounds.js";
 import {
   createRustSourceFile,
 } from "../../target-ast/nodes.js";
 import type {
   RustItem,
   RustGenericArgument,
-  RustGenericParameter,
   RustGenerics,
   RustSourceFileModel,
   RustStructField,
@@ -39,8 +37,7 @@ import {
 } from "../../../target-model/types/index.js";
 import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
 import { rustLifetimeToAst } from "../types/lifetime-syntax.js";
-import { rustAssociatedPredicates } from "../types/associated-bounds.js";
-import { rustGenericRequirementBounds } from "../types/generic-bounds.js";
+import { rustStructuralShapeGenerics } from "./structural-generics.js";
 import { planRustNumberArrayUnionImplementation } from "./number-array-unions.js";
 import { planRustConstructorShape } from "./constructor-shapes.js";
 
@@ -105,22 +102,7 @@ export function planRustStructuralShapeModule(
       definition.sourceCarriers,
       visibility === "public",
     );
-    const requirements = input.program.declarationGenericRequirements.contractForCarrier(definition.carrier);
-    if (requirements === undefined) throw new Error("A structural shape has no sealed generic requirements.");
-    const genericParameters: readonly RustGenericParameter[] = definition.genericParameters.map((parameter) =>
-      parameter.kind === "lifetime"
-        ? {
-            kind: "lifetime",
-            name: parameter.lifetime.name,
-            outlives: [],
-          }
-        : {
-            kind: "type",
-            name: parameter.name,
-            bounds: rustGenericRequirementBounds(requirements.typeParameters.find(candidate => candidate.name === parameter.name)!.requirements),
-          });
-    const generics: RustGenerics = rustGenericsWithAssociatedBounds(genericParameters,
-      rustAssociatedPredicates(requirements.associatedTypes, context));
+    const generics = rustStructuralShapeGenerics(definition, context);
     const aliasGenericArguments: readonly RustGenericArgument[] = definition.genericParameters.map((parameter) =>
       parameter.kind === "lifetime"
         ? { kind: "lifetime", lifetime: rustLifetimeToAst(parameter.lifetime) }

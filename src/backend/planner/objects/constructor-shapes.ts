@@ -31,35 +31,35 @@ export function planRustConstructorShape(
   };
   if (definition.construction !== undefined && !callable(definition.construction.targetName, definition.construction.carrier, true)) return undefined;
   for (const field of definition.fields) {
-    if (field.presence !== "required") return undefined;
     if (field.method) {
       if (!callable(field.targetName, field.carrier, false)) return undefined;
     } else {
       const selected = render(field.carrier);
       if (selected === undefined || field.property === undefined) return undefined;
       functions.push({ name: field.property.getterTargetName, generics: emptyRustGenerics,
-        selfParam: rustSelfParameter("ref"), params: [], returnType: selected, errorType });
+        selfParam: rustSelfParameter(field.property.selfMode), params: [], returnType: selected, errorType });
       if (field.property.setterTargetName !== undefined) functions.push({ name: field.property.setterTargetName,
-        generics: emptyRustGenerics, selfParam: rustSelfParameter("ref"), params: [{ name: "value", type: selected }],
+        generics: emptyRustGenerics, selfParam: rustSelfParameter(field.property.selfMode), params: [{ name: "value", type: selected }],
         returnType: { kind: "unit" }, errorType });
     }
   }
   const trait: RustType = { kind: "named", path: definition.dispatchName, genericArguments: type.genericArguments };
   const dispatch: RustType = { kind: "named", path: "alloc::rc::Rc", genericArguments: [{ kind: "type", type: {
     kind: "trait-object", principal: { trait }, autoTraits: [],
+    ...(definition.genericParameters.filter(parameter => parameter.kind === "lifetime").length === 1
+      ? { lifetime: { kind: "named" as const, name: definition.genericParameters.find(parameter => parameter.kind === "lifetime")!.lifetime.name } } : {}),
   } }] };
   const field = (owner: string, name: string): RustExpr => ({ kind: "field", receiver: { kind: "path", path: owner }, name });
   return [
-    { kind: "trait", name: definition.dispatchName, visibility, generics, functions, superTraits },
+    { kind: "trait", name: definition.dispatchName, visibility, generics, functions,
+      superTraits: [{ kind: "named", path: "rt::ObjectIdentityCarrier" }, ...superTraits] },
     { kind: "struct", name: definition.targetName, visibility, generics, derives: [], fields: [
-      { name: "identity", visibility, type: { kind: "named", path: "rt::ObjectIdentity" } },
       { name: "dispatch", visibility, type: dispatch },
     ] },
     { kind: "impl", generics, target: type, trait: { kind: "named", path: "Clone" }, functions: [{
       name: "clone", visibility: "private", generics: emptyRustGenerics, selfParam: rustSelfParameter("ref"), params: [],
       returnType: { kind: "named", path: "Self" }, body: { statements: [{ kind: "tail", expr: {
         kind: "struct-literal", path: "Self", fields: [
-          { name: "identity", value: { kind: "method-call", receiver: field("self", "identity"), method: "clone", args: [] } },
           { name: "dispatch", value: { kind: "method-call", receiver: field("self", "dispatch"), method: "clone", args: [] } },
         ],
       } }] },
@@ -68,10 +68,14 @@ export function planRustConstructorShape(
       name: "eq", visibility: "private", generics: emptyRustGenerics, selfParam: rustSelfParameter("ref"),
       params: [{ name: "other", type: { kind: "reference", mutable: false, referent: { kind: "named", path: "Self" } } }],
       returnType: { kind: "primitive", name: "bool" }, body: { statements: [{ kind: "tail", expr: {
-        kind: "binary", operator: "==", left: field("self", "identity"), right: field("other", "identity"),
+        kind: "binary", operator: "||", left: { kind: "call", path: "alloc::rc::Rc::ptr_eq",
+          args: ["self", "other"].map(name => ({ kind: "reference", expr: field(name, "dispatch") })) },
+        right: { kind: "call", path: "rt::source_objects_equal", args: [{ kind: "path", path: "self" }, { kind: "path", path: "other" }] },
       } }] },
     }] },
     { kind: "impl", generics, target: type, trait: { kind: "named", path: "Eq" }, functions: [] },
-    rustProjectObjectIdentityImplementation(type, generics, { kind: "reference", expr: field("self", "identity") }),
+    rustProjectObjectIdentityImplementation(type, generics, {
+      kind: "method-call", receiver: field("self", "dispatch"), method: "object_identity", args: [],
+    }),
   ];
 }
