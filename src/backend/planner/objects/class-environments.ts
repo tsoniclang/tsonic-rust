@@ -64,6 +64,8 @@ export function planRustClassEnvironmentItems(declaration: Node, context: RustPl
       identityOwner, generics,
       { kind: "method-call", receiver: { kind: "field", receiver: { kind: "path", path: "self" }, name: environment.identityFieldName },
         method: "get_or_init", args: [{ kind: "path", path: "rt::ObjectIdentity::new" }] },
+      { kind: "method-call", receiver: { kind: "call", path: "core::ptr::from_ref", args: [{ kind: "path", path: "self" }] },
+        method: "addr", args: [] },
     ), { kind: "impl", generics, target: identityOwner, trait: { kind: "named", path: "PartialEq" }, functions: [{
       name: "eq", visibility: "private", generics: emptyRustGenerics, selfParam: rustSelfParameter("ref"),
       params: [{ name: "other", type: { kind: "reference", mutable: false, referent: { kind: "named", path: "Self" } } }],

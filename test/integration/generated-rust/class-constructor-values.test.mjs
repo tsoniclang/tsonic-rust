@@ -36,6 +36,9 @@ export function main(): void {
     },
   });
   assert.deepEqual(result.diagnostics, []);
+  const generated = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
+  assert.match(generated, /fn object_identity_key\(&self\) -> usize/u);
+  assert.match(generated, /core::ptr::from_ref\(self\)\.addr\(\)/u);
   validateGeneratedProject("class-constructor-values", result.artifacts, { run: true });
 });
 

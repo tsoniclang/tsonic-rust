@@ -76,6 +76,8 @@ export function planRustConstructorShape(
     { kind: "impl", generics, target: type, trait: { kind: "named", path: "Eq" }, functions: [] },
     rustProjectObjectIdentityImplementation(type, generics, {
       kind: "method-call", receiver: field("self", "dispatch"), method: "object_identity", args: [],
+    }, {
+      kind: "method-call", receiver: field("self", "dispatch"), method: "object_identity_key", args: [],
     }),
   ];
 }

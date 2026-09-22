@@ -130,20 +130,25 @@ test("independent package factories retain their own generic callable implementa
     sourcePackages: {
       fingerprint: "independent-generic-factories", rootPackageId: "app",
       packages: [
+        { id: "contracts", name: "contracts", packageRoot: "/src/contracts", sourceRoot: "/src",
+          sourceFiles: ["/src/contracts.ts"], dependencies: [], componentId: "contracts",
+          exports: [{ specifier: "contracts", sourceFile: "/src/contracts.ts" }] },
         ...["pure", "throwing"].map(name => ({ id: name, name, packageRoot: `/src/${name}`, sourceRoot: "/src",
-          sourceFiles: [`/src/${name}.ts`], dependencies: [], componentId: name,
+          sourceFiles: [`/src/${name}.ts`], dependencies: ["contracts"], componentId: name,
           exports: [{ specifier: name, sourceFile: `/src/${name}.ts` }] })),
         { id: "app", name: "app", packageRoot: "/src", sourceRoot: "/src", sourceFiles: ["/src/index.ts"],
           dependencies: ["pure", "throwing"], componentId: "app", exports: [{ specifier: "app", sourceFile: "/src/index.ts" }] },
       ],
       components: [
-        ...["pure", "throwing"].map(name => ({ id: name, packages: [name], dependencies: [] })),
+        { id: "contracts", packages: ["contracts"], dependencies: [] },
+        ...["pure", "throwing"].map(name => ({ id: name, packages: [name], dependencies: ["contracts"] })),
         { id: "app", packages: ["app"], dependencies: ["pure", "throwing"] },
       ],
     },
     files: {
-      "pure.ts": `export function create(): <T>(value: T) => T { return <T>(value: T): T => value; }`,
-      "throwing.ts": `export function create(fail: boolean): <T>(value: T) => T {
+      "contracts.ts": `export type Identity = <T>(value: T) => T;`,
+      "pure.ts": `import type { Identity } from "./contracts.js"; export function create(): Identity { return <T>(value: T): T => value; }`,
+      "throwing.ts": `import type { Identity } from "./contracts.js"; export function create(fail: boolean): Identity {
   return <T>(value: T): T => { if (fail) throw new Error("selected"); return value; };
 }`,
       "index.ts": `import { create as pure } from "./pure.js";
