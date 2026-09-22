@@ -102,7 +102,7 @@ test("constructor static methods cannot silently become copied or independently 
   }
 });
 
-test("constructor predicates retain closed base-interface narrowing and native function entries", { timeout: 300_000 }, () => {
+test("constructor predicates retain closed base-interface narrowing and native dispatch entries", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"],
     target: { id: "rust", options: { outputType: "bin", crateName: "constructor_predicates" } }, files: {
       "index.ts": `
@@ -143,7 +143,7 @@ test("constructor predicates retain closed base-interface narrowing and native f
     } });
   assert.deepEqual(result.diagnostics, []);
   const emitted = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
-  assert.match(emitted, /accepts: fn\(/);
+  assert.match(emitted, /fn accepts\(&self, argument: Option<Base>\) -> Result<bool, rt::TsonicError>/u);
   assert.doesNotMatch(emitted, /Callable.*accepts|accepts.*Callable/);
   assert.match(emitted, /identity: upcast_value\.identity,/);
   assert.match(emitted, /TryFrom</);

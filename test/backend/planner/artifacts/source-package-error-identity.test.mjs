@@ -17,7 +17,9 @@ function classify(dependencies, errors) {
       components: names.map(name => ({ id: name, dependencies: dependencies[name] })),
     },
     sourceFiles: names.map(name => ({ fileName: `/${name}/index.ts` })),
-    ast: { getFileName: source => source.fileName },
+    ast: { getFileName: source => source.fileName, forEachChild() {} },
+    callableValues: { generic: { definitions: [], definitionFor: () => undefined } },
+    facts: { getFact: () => undefined },
     projectTypes: { programErrorDefinitions: definitions, programErrorVariant: definition => definition.sourceName },
   };
   const classified = analyzeRustSourcePackageComponents(context, "bin");

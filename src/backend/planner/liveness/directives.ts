@@ -173,7 +173,7 @@ export function rustStructuralFieldDeadCodeDisposition(
   publiclyReachable: boolean,
   role: "value" | "getter" | "setter",
 ): RustDeadCodeDisposition | undefined {
-  if (publiclyReachable || !carriers.some(carrier => context.input.liveness.isStructuralShapeConstructed(carrier))) {
+  if (publiclyReachable || !carriers.some(carrier => context.input.liveness.isStructuralShapeUsed(carrier))) {
     return undefined;
   }
   const used = carriers.some(carrier => role === "setter"

@@ -8,6 +8,12 @@ import type {
   TargetTypeRef,
 } from "../../../target-model/types/model.js";
 
+export type RustTypeofResult =
+  | "boolean" | "number" | "bigint" | "string" | "function" | "object" | "undefined"
+  | { readonly kind: "runtime-union"; readonly method: string; readonly sourceCarrier: TargetTypeRef }
+  | { readonly kind: "source-union"; readonly sourceCarrier: TargetTypeRef;
+      readonly variants: readonly { readonly name: string; readonly carrier: TargetTypeRef; readonly result: RustTypeofResult }[] };
+
 export type RustTargetOperationFact =
   | {
       readonly kind: "operator-token";
@@ -54,8 +60,7 @@ export type RustTargetOperationFact =
       readonly kind: "typeof";
       readonly operationId: string;
       readonly resultCarrier: TargetTypeRef;
-      readonly result: "boolean" | "number" | "bigint" | "string" | "function" | "object" | "undefined" |
-        { readonly method: string; readonly sourceCarrier: TargetTypeRef };
+      readonly result: RustTypeofResult;
     }
   | {
       readonly kind: "void-expression";

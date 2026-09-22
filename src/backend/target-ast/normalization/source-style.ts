@@ -38,6 +38,13 @@ export function rustPublicSignatureTypeNames(model: RustSourceFileModel): readon
       left.localeCompare(right, "en")));
 }
 
+export function exposeRustSignatureTypes(
+  model: RustSourceFileModel,
+  requiredNames: ReadonlySet<string>,
+): RustSourceFileModel {
+  return { ...model, items: closePublicRustTypeVisibility(model.items, requiredNames) };
+}
+
 function publicDeclaredRustTypeNames(items: readonly RustItem[]): ReadonlySet<string> {
   return new Set(items.flatMap((item) =>
     (item.kind === "struct" || item.kind === "trait" || item.kind === "enum" ||
@@ -531,7 +538,10 @@ function finalizeRustExpressionStyle(expression: RustExpr): RustExpr {
 
 }
 
-function closePublicRustTypeVisibility(items: readonly RustItem[]): readonly RustItem[] {
+function closePublicRustTypeVisibility(
+  items: readonly RustItem[],
+  requiredNames: ReadonlySet<string> = new Set(),
+): readonly RustItem[] {
   const localTypes = new Set(items.flatMap((item) =>
     item.kind === "struct" || item.kind === "enum" || item.kind === "trait" ||
         item.kind === "type-alias"
@@ -539,7 +549,7 @@ function closePublicRustTypeVisibility(items: readonly RustItem[]): readonly Rus
       : []));
   const publicTypes = new Set(items.flatMap((item) =>
     (item.kind === "struct" || item.kind === "enum" || item.kind === "trait" ||
-        item.kind === "type-alias") && item.visibility === "public"
+        item.kind === "type-alias") && (item.visibility === "public" || requiredNames.has(item.name))
       ? [item.name]
       : []));
   for (;;) {

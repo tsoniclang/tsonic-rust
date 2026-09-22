@@ -10,6 +10,9 @@ const receiverCarrier = {
   target: "rust",
   name: "structural-object",
   value: {
+    ownerFileName: "/src/index.ts",
+    representation: "reference",
+    bases: [],
     fields: [{
       sourceName: "value",
       type: int32Carrier,

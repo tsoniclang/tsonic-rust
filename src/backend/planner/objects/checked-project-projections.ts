@@ -1,4 +1,4 @@
-import type { RustProjectTypeDefinition } from "../../../policy/types/project-types.js";
+import type { RustProjectTypeDefinition } from "../../../analysis/project-types/type-policy.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustBlock, RustExpr, RustGenerics, RustImplFunction, RustTraitFunction, RustType } from "../../target-ast/nodes.js";
 import { rustSelfParameter } from "../declarations/self-parameter.js";

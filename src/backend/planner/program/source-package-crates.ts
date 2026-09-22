@@ -8,6 +8,7 @@ import {
   type RustSourceFileModel,
 } from "../../target-ast/nodes.js";
 import { rustPublicSignatureTypeNames } from "../../target-ast/normalization/source-style.js";
+import { closeRustModuleTypeVisibility } from "../../target-ast/normalization/module-visibility.js";
 import type { RustPlanningContext } from "../context.js";
 import { planRustStructuralShapeModule } from "../objects/structural-shapes.js";
 import { planRustProgramErrorModule } from "./errors.js";
@@ -177,16 +178,23 @@ export function planRustSourcePackageCrateContent(
     }),
     ...facades.rootItems,
   ];
+  const visibleModels = closeRustModuleTypeVisibility(new Map([
+    ...facades.sources.map(source => [source.moduleName, source.model] as const),
+    ...facades.syntheticModules,
+    ...(structuralShapeModel === undefined ? [] : [[component.structuralShapesModuleName, structuralShapeModel] as const]),
+    ...(programErrorModel === undefined ? [] : [[component.programModuleName, programErrorModel] as const]),
+    ...(initializerFacadeModel === undefined ? [] : [[initializerFacadeModuleName, initializerFacadeModel] as const]),
+  ]));
   return Object.freeze({
     component,
     initializerFacadeModuleName,
-    sources: facades.sources,
+    sources: facades.sources.map(source => ({ ...source, model: visibleModels.get(source.moduleName)! })),
     libraryItems: Object.freeze(libraryItems),
-    ...(programErrorModel === undefined ? {} : { programErrorModel }),
-    ...(structuralShapeModel === undefined ? {} : { structuralShapeModel }),
-    ...(initializerFacadeModel === undefined ? {} : { initializerFacadeModel }),
+    ...(programErrorModel === undefined ? {} : { programErrorModel: visibleModels.get(component.programModuleName)! }),
+    ...(structuralShapeModel === undefined ? {} : { structuralShapeModel: visibleModels.get(component.structuralShapesModuleName)! }),
+    ...(initializerFacadeModel === undefined ? {} : { initializerFacadeModel: visibleModels.get(initializerFacadeModuleName)! }),
     structuralShapeNames: Object.freeze(structuralShapeNames),
-    syntheticModules: facades.syntheticModules,
+    syntheticModules: new Map([...facades.syntheticModules].map(([name]) => [name, visibleModels.get(name)!])),
   });
 }
 

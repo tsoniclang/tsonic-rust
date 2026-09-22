@@ -3,7 +3,7 @@ import { rustGenericCallableValue } from "../../target-model/types/carriers/gene
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import { rustGenericNumericOperandsKey } from "../facts/generic-numeric.js";
 import { classifyCarrierRequirements } from "./generic-carrier-requirements.js";
-import { isRustDeclarationPathUse } from "./generic-reference-uses.js";
+import { isRustDeclarationPathUse, isRustReturnedValue, isRustIndependentCallable, isRustGenericTypeDeclaration, collectRustCallableDeclarations } from "./generic-reference-uses.js";
 import { createRustAssociatedRequirementCollector, type RustAssociatedTypeRequirement } from "./associated-requirements.js";
 import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
@@ -131,7 +131,7 @@ export function analyzeRustDeclarationGenericRequirements(
 ): AnalyzeRustDeclarationGenericRequirementsResult {
   const ast = source.ast;
   const diagnostics: TargetDiagnostic[] = [];
-  const declarations = collectCallableDeclarations(ast, sourceFiles);
+  const declarations = collectRustCallableDeclarations(ast, sourceFiles);
   const declarationById = new Map<string, Node>();
   const idByDeclaration = new WeakMap<Node, string>();
   for (const declaration of declarations) {
@@ -323,7 +323,7 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
   const exactNames = typeParameterNames as string[];
   const capturedNames: string[] = [];
   for (let ancestor = ast.parent(declaration); ancestor !== undefined; ancestor = ast.parent(ancestor)) {
-    if (!isIndependentCallable(ast, ancestor) && !isGenericTypeDeclaration(ast, ancestor)) continue;
+    if (!isRustIndependentCallable(ast, ancestor) && !isRustGenericTypeDeclaration(ast, ancestor)) continue;
     for (const parameter of ast.typeParameters(ancestor)) {
       if (parameter === undefined || input.sourceLifetimes.parameterFor(parameter)?.kind === "lifetime") continue;
       const name = names.nameForDeclaration(parameter);
@@ -426,7 +426,7 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
     }
   }
   const visit = (node: Node): string | undefined => {
-    if (node !== declaration && (isIndependentCallable(ast, node) || isGenericTypeDeclaration(ast, node))) {
+    if (node !== declaration && (isRustIndependentCallable(ast, node) || isRustGenericTypeDeclaration(ast, node))) {
       const nestedId = input.idByDeclaration.get(node);
       if (nestedId !== undefined) {
         dependencies.add(nestedId);
@@ -506,6 +506,11 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       return undefined;
     };
     const carrier = facts.getRuntimeCarrierFact(node)?.carrier;
+    if (carrier !== undefined && ast.is.IsIdentifier(node) &&
+      !input.valueLifetimes.canMove(node) && isRustReturnedValue(node, declaration, ast)) {
+      const error = addUse(node, carrier, ["clone"]);
+      if (error !== undefined) return error;
+    }
     const downcast = facts.getFact(node, rustProjectDowncastFactKey);
     const flowProjection = facts.getFact(node, rustFlowReadProjectionFactKey);
     const projectProjection = downcast === undefined ? flowProjection?.kind === "project-downcast"
@@ -697,6 +702,19 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       if (returnError !== undefined) return returnError;
     }
     if (operation?.kind === "source-call") {
+      for (const parameter of operation.parameters) {
+        if (parameter.mode !== "value") continue;
+        for (const argument of parameter.inputs) {
+          if (argument.sourceForm !== "value") continue;
+          const expression = ast.arguments(node)[argument.sourceArgumentIndex];
+          if (expression === undefined || !ast.is.IsIdentifier(expression) ||
+            input.valueLifetimes.canMove(expression)) continue;
+          const argumentCarrier = facts.getRuntimeCarrierFact(expression)?.carrier;
+          if (argumentCarrier === undefined || isRustCopyCarrier(argumentCarrier)) continue;
+          const error = addUse(expression, argumentCarrier, ["clone"]);
+          if (error !== undefined) return error;
+        }
+      }
       const selected = facts.getSelectedTargetCall(node);
       if (selected?.sourceDeclaration !== undefined) {
         const selectedDeclaration = input.implementationDeclaration(
@@ -770,44 +788,6 @@ function classifyCallableRequirements(input: ClassifyCallableInput):
       uses: Object.freeze(uses),
     }),
   };
-}
-
-function collectCallableDeclarations(
-  ast: AstReader,
-  sourceFiles: readonly SourceFile[],
-): readonly Node[] {
-  const result: Node[] = [];
-  const visit = (node: Node): void => {
-    if (isIndependentCallable(ast, node) || isGenericTypeDeclaration(ast, node)) {
-      result.push(node);
-    }
-    ast.forEachChild(node, (child) => {
-      if (child !== undefined) visit(child);
-    });
-  };
-  for (const sourceFile of sourceFiles) visit(sourceFile);
-  return Object.freeze(result);
-}
-
-function isGenericTypeDeclaration(ast: AstReader, node: Node): boolean {
-  const kind = ast.kindName(node);
-  return kind === "KindClassDeclaration" || kind === "KindClassExpression" || kind === "KindInterfaceDeclaration" || kind === "KindTypeAliasDeclaration";
-}
-
-function isIndependentCallable(ast: AstReader, node: Node): boolean {
-  const kind = ast.kindName(node);
-  return kind === "KindFunctionDeclaration" ||
-    kind === "KindFunctionExpression" ||
-    kind === "KindArrowFunction" ||
-    kind === "KindFunctionType" ||
-    kind === "KindCallSignature" ||
-    kind === "KindMethodSignature" ||
-    kind === "KindConstructSignature" ||
-    kind === "KindConstructorType" ||
-    kind === "KindMethodDeclaration" ||
-    kind === "KindConstructor" ||
-    kind === "KindGetAccessor" ||
-    kind === "KindSetAccessor";
 }
 
 

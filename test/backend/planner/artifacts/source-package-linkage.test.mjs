@@ -135,7 +135,9 @@ test("library roots retain exact facade linkage and component cycles fail closed
       }],
     },
     sourceFiles: [{ fileName: "/root/index.ts" }, { fileName: "/dep/index.ts" }],
-    ast: { getFileName: (sourceFile) => sourceFile.fileName },
+    ast: { getFileName: (sourceFile) => sourceFile.fileName, forEachChild() {} },
+    callableValues: { generic: { definitions: [], definitionFor: () => undefined } },
+    facts: { getFact: () => undefined },
     projectTypes: { programErrorDefinitions: [] },
   }, "bin");
   assert.equal(cycle.kind, "rejected");

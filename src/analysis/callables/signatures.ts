@@ -33,8 +33,6 @@ import {
   rustGeneratorStorageTargetType,
   rustJsPromiseTargetId,
   rustJsPromiseTargetTypeWithLifetime,
-  isRustNeverCarrier,
-  rustUnitTargetType,
 } from "../../target-model/types/index.js";
 import { rustPlaceholderLifetime, rustStaticLifetime } from "../../target-model/lifetimes/index.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
@@ -533,7 +531,7 @@ export function recordCallableSuspensionFacts(walk: RustFactWalk, declaration: N
       }
       const closedFutureCarrier = storage?.kind === "resolved"
         ? rustJsPromiseTargetTypeWithLifetime(
-            isRustNeverCarrier(inner) ? rustUnitTargetType() : inner,
+            inner,
             storage.storage.kind === "static"
               ? rustStaticLifetime
               : storage.storage.kind === "receiver"

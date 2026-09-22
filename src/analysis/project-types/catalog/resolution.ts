@@ -617,9 +617,9 @@ export function createRustProjectTypePolicy(
     }
     const sourceComponent = host.sourcePackageComponentForFile(source.fileName);
     if (!source.genericParameters.some(parameter => parameter.kind === "lifetime") &&
-      (implementationsByContract.get(source) ?? []).some(target =>
+      (host.externallyExtensible(source.declaration) || (implementationsByContract.get(source) ?? []).some(target =>
         target.genericParameters.some(parameter => parameter.kind === "type") ||
-        host.sourcePackageComponentForFile(target.fileName) !== sourceComponent)) {
+        host.sourcePackageComponentForFile(target.fileName) !== sourceComponent))) {
       checkedProjectionSlots.set(source, allocateGeneratedName(usedNames,
         `project_${rustGeneratedNameComponent(source.targetName)}`));
     }

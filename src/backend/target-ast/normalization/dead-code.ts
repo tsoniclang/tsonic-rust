@@ -5,7 +5,6 @@ import type {
   RustItem,
   RustSourceFileModel,
   RustStructField,
-  RustTraitFunction,
 } from "../nodes.js";
 import { rustLintAttributes } from "./lint-policy.js";
 
@@ -38,10 +37,10 @@ function finalizeRustItemDeadCode(item: RustItem): RustItem {
       };
     }
     case "trait": {
-      const owner = finalizeRustDeadCodeOwner(item);
+      const owner = finalizeRustDeadCodeOwner(item, item.visibility === "public");
       return {
         ...owner,
-        functions: owner.functions.map(finalizeRustTraitFunctionDeadCode),
+        functions: owner.functions.map(fn => finalizeRustDeadCodeOwner(fn, item.visibility === "public")),
       };
     }
     case "impl":
@@ -56,7 +55,7 @@ function finalizeRustItemDeadCode(item: RustItem): RustItem {
       const owner = finalizeRustDeadCodeOwner(item);
       return {
         ...owner,
-        variants: owner.variants.map(finalizeRustDeadCodeOwner),
+        variants: owner.variants.map(variant => finalizeRustDeadCodeOwner(variant)),
       };
     }
     case "mod-decl":
@@ -68,12 +67,6 @@ function finalizeRustItemDeadCode(item: RustItem): RustItem {
 
 function finalizeRustStructFieldDeadCode(field: RustStructField): RustStructField {
   return finalizeRustDeadCodeOwner(field);
-}
-
-function finalizeRustTraitFunctionDeadCode(
-  fn: RustTraitFunction,
-): RustTraitFunction {
-  return finalizeRustDeadCodeOwner(fn);
 }
 
 function finalizeRustImplFunctionDeadCode(
@@ -88,9 +81,9 @@ function finalizeRustImplConstantDeadCode(
   return finalizeRustDeadCodeOwner(constant);
 }
 
-function finalizeRustDeadCodeOwner<T extends RustDeadCodeOwner>(owner: T): T {
+function finalizeRustDeadCodeOwner<T extends RustDeadCodeOwner>(owner: T, externallyReachable = false): T {
   const { deadCode, ...withoutDeadCode } = owner;
-  if (deadCode === undefined) return withoutDeadCode as T;
+  if (deadCode === undefined || externallyReachable) return withoutDeadCode as T;
   const attribute = rustDeadCodeAttribute(deadCode);
   const attrs = withoutDeadCode.attrs?.includes(attribute) === true
     ? withoutDeadCode.attrs

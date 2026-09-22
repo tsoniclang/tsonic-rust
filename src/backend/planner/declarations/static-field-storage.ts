@@ -83,7 +83,7 @@ export function planRustSourceStaticFieldStorage(
   const receiver = fact.classReceiver === undefined ? undefined : planExpression(fact.classReceiver, context);
   if (fact.classReceiver !== undefined && receiver === undefined) return undefined;
   return {
-    bindings: [...(receiver === undefined ? [] : [{ name: allocateRustSyntheticName(context.syntheticNames, "class_receiver"), value: receiver }]),
+    bindings: [...(receiver === undefined ? [] : [{ name: allocateRustSyntheticName(context.syntheticNames, "_class_receiver"), value: receiver }]),
       { name, value: rustModuleCellAccess(cell, "location", []) }],
     read: { kind: "method-call", receiver: reference, method: "load", args: [] },
     write: value => ({ kind: "method-call", receiver: reference, method: "store", args: [value] }),

@@ -186,11 +186,14 @@ export function applyFallibleShape(
   if (!options.fallible) {
     return body;
   }
-  const result = (expression: RustExpr): RustExpr => applyRustResultExpression(
-    expression,
-    options,
-    options.inferErrorTypeFromReturnType,
-  );
+  const result = (expression: RustExpr): RustExpr => {
+    if (!options.hasReturnValue && expression.kind !== "bottom" &&
+      !(expression.kind === "path" && expression.path === "()")) {
+      return { kind: "evaluate-then", effect: expression, discard: "unit",
+        value: applyRustResultExpression({ kind: "path", path: "()" }, options, options.inferErrorTypeFromReturnType) };
+    }
+    return applyRustResultExpression(expression, options, options.inferErrorTypeFromReturnType);
+  };
   const wrap = (statement: RustStmt): RustStmt => {
     if (statement.kind === "return" && statement.expr !== undefined) {
       return {

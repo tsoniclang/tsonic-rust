@@ -23,6 +23,8 @@ export function fakeAstReader(sourceFiles = []) {
     is: {
       IsBlock: () => false,
       IsCallExpression: () => false,
+      IsClassDeclaration: () => false,
+      IsClassExpression: () => false,
       IsIdentifier: () => false,
       IsNewExpression: () => false,
       IsObjectLiteralExpression: () => false,

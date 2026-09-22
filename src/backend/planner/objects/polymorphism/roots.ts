@@ -36,7 +36,7 @@ import type { RustObjectRepresentation } from "../../../../analysis/project-type
 import { rustProjectMemberIsPrivate } from "../../../../analysis/project-types/member-privacy.js";
 import { checkRustDataWrite } from "../data-writes.js";
 import { planCheckedProjectProjectionImplementation } from "../checked-project-projections.js";
-import { rustProjectInstanceContracts } from "../../../../policy/types/project-types.js";
+import { rustProjectInstanceContracts } from "../../../../analysis/project-types/type-policy.js";
 import { rustArrayFieldMutationName, rustArrayFieldMutationType } from "./array-fields.js";
 import { rustProjectObjectIdentityImplementation } from "../project-identity.js";
 

@@ -145,7 +145,7 @@ test("stored value-field writes require writable sealed field metadata", () => {
   const field = { sourceName: "count", type: { kind: "source-primitive", name: "uint32" }, presence: "required", readonly: false };
   const carrier = rustStructuralObjectTargetType("/value.ts", [field], "value");
   const stored = { targetName: "count", carrier: field.type, storage: "stored", readonly: false };
-  const context = selected => ({ input: { program: { structuralShapes: { field: () => selected },
+  const context = selected => ({ input: { program: { structuralShapes: { field: () => selected, definitionForCarrier: () => ({}) },
     frozenDataWrites: { receiverFor: () => undefined } } } });
   const write = selected => writeRustStoredObjectField("structural-object", carrier, { kind: "path", path: "value" }, 0,
     "=", { kind: "int-literal", text: "3" }, context(selected));
@@ -167,7 +167,7 @@ test("nested value-field writes do not assign the containing frozen property", (
   ], "value");
   let checks = 0;
   const context = { input: { program: {
-    structuralShapes: { field: () => ({ targetName: "point", carrier: nested, storage: "stored", readonly: true }) },
+    structuralShapes: { field: () => ({ targetName: "point", carrier: nested, storage: "stored", readonly: true }), definitionForCarrier: () => ({}) },
     frozenDataWrites: { receiverFor: () => { checks += 1; return "receiver"; } },
   } } };
   const receiver = { kind: "path", path: "owner" };

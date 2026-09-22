@@ -41,6 +41,8 @@ import {
   isRustNeverCarrier,
   rustOnlyTypeGenericArguments,
   rustFutureTargetId,
+  rustJsPromiseTargetId,
+  rustUnitTargetType,
 } from "../../../target-model/types/index.js";
 
 export const rustStrRefType: RustType = {
@@ -104,7 +106,9 @@ export function rustTypeFromCarrier(
       return undefined;
     }
     const genericArguments = rustGenericArgumentsFromCarrier(
-      carrier.genericArguments,
+      carrier.id === rustJsPromiseTargetId ? carrier.genericArguments?.map(argument =>
+        argument.kind === "type" && isRustNeverCarrier(argument.type)
+          ? { kind: "type", type: rustUnitTargetType() } : argument) : carrier.genericArguments,
       resolveSourceTypePath,
       resolveStructuralShape,
     );

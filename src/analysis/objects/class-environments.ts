@@ -103,9 +103,13 @@ export function selectRustClassEnvironment(walk: RustFactWalk, declaration: Node
   }
   if (captures.length === 0 && staticFields.length === 0 && !constructorValue) return { kind: "none" };
   const capturedDeclarations = new Set(captures.map(capture => capture.declaration));
+  const constructorReferences = new Set(walk.context.source.navigation.declarationUses(declaration)
+    .filter(use => use.kind !== "type-only" && use.kind !== "source-linkage")
+    .map(use => use.reference));
   const usesEnvironment = (node: Node): boolean => {
     const binding = facts.getFact(node, rustSourceBindingFactKey);
-    if (binding !== undefined && (capturedDeclarations.has(binding.sourceDeclaration) || binding.sourceDeclaration === declaration)) return true;
+    if (binding !== undefined && (capturedDeclarations.has(binding.sourceDeclaration) ||
+      !moduleClass && constructorReferences.has(node))) return true;
     let used = false;
     ast.forEachChild(node, child => { if (!used && child !== undefined) used = usesEnvironment(child); });
     return used;

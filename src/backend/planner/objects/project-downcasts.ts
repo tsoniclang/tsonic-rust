@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustSelectedProjectDowncast } from "../../../analysis/facts/value-projections.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustProjectDowncastRoute } from "../../../policy/types/project-types.js";
+import type { RustProjectDowncastRoute } from "../../../analysis/project-types/type-policy.js";
 import { checkedProjectProjectionResultType, planCheckedProjectProjectionCall } from "./checked-project-projections.js";
 import type {
   RustProjectDowncastFact,

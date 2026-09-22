@@ -96,7 +96,16 @@ export function selectRustCheckedElementAccess(
       accessMode: request.accessMode,
     }, context, options, elementProvenance(request));
   }
-  if (request.sourceReceiverType !== undefined && request.sourceSelectedSymbol !== undefined &&
+  const jsIdentity = resolveSelectedJsSourceMember(context, request.sourceSelectedDeclaration, options.sourceProfiles);
+  const selectedArgumentCarrier = jsIdentity === undefined ? undefined : selectedValueCarrier(
+    request.argument, request.sourceArgumentType, context, options);
+  const selectedIndexOperation = jsIdentity === undefined ? undefined : selectJsSurfaceOperation({
+    ownerName: jsIdentity.ownerName, memberName: jsIdentity.memberName, operationKind: "indexer",
+    ...(selectedReceiverCarrier === undefined ? {} : { receiverCarrier: selectedReceiverCarrier }),
+    argumentCarriers: [selectedArgumentCarrier],
+    argumentMatchScore: selectedArgumentMatchScore([request.argument], context, options),
+  }, context.typeDefinitions);
+  if (selectedIndexOperation === undefined && request.sourceReceiverType !== undefined && request.sourceSelectedSymbol !== undefined &&
     request.sourceSelectedElementIndex === undefined) {
     const selected = context.semanticsFor(request.expression).types.selectIndexedAccess(
       request.sourceReceiverType, request.sourceArgumentType,
@@ -277,25 +286,11 @@ export function selectRustCheckedElementAccess(
     return acceptRustMemberOperation(request, "indexer", fact, context, options, elementProvenance(request));
   }
 
-  const jsIdentity = resolveSelectedJsSourceMember(context, request.sourceSelectedDeclaration, options.sourceProfiles);
   if (jsIdentity !== undefined) {
     if (!options.jsEnabled) {
       return rejectSelectedOperation(request.expression, context, "RUST_JS_SURFACE_REQUIRED", "The selected index signature belongs to the explicit JavaScript source profile, which is not active.");
     }
-    const selectedArgumentCarrier = selectedValueCarrier(
-      request.argument,
-      request.sourceArgumentType,
-      context,
-      options,
-    );
-    const selection = selectJsSurfaceOperation({
-      ownerName: jsIdentity.ownerName,
-      memberName: jsIdentity.memberName,
-      operationKind: "indexer",
-      ...(receiverCarrier === undefined ? {} : { receiverCarrier }),
-      argumentCarriers: [selectedArgumentCarrier],
-      argumentMatchScore: selectedArgumentMatchScore([request.argument], context, options),
-    }, context.typeDefinitions);
+    const selection = selectedIndexOperation;
     if (selection === undefined || selection.fact.kind !== "provider-operation" || selection.resultCarrier === undefined) {
       return rejectSelectedOperation(
         request.expression,
