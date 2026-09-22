@@ -89,7 +89,7 @@ export function analyzeRustSourcePackageComponents(
     return { kind: "rejected", diagnostics: Object.freeze(diagnostics) };
   }
 
-  for (const definition of context.sourceCallableSpecializations.genericValues.definitions) {
+  for (const definition of context.callableValues.generic.definitions) {
     const components = new Set(definition.implementations.map(implementation =>
       componentIdByFileName.get(normalizePath(implementation.sourceFileName))));
     if (components.size !== 1 || components.has(undefined)) {

@@ -11,8 +11,6 @@ import {
   substituteRustTargetTypeParameters,
 } from "../../target-model/types/index.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
-import { createRustGenericCallablePlan, type RustGenericCallablePlan } from "./generic-values.js";
-import { createRustSuspendedCallablePlan, type RustSuspendedCallablePlan } from "./suspended-values.js";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 
 export interface RustSourceCallableSpecializationVariant {
@@ -33,8 +31,6 @@ export interface RustSourceCallableSpecializationIssue {
 }
 
 export interface RustSourceCallableSpecializationPlan {
-  readonly genericValues: RustGenericCallablePlan;
-  readonly suspendedValues: RustSuspendedCallablePlan;
   readonly issues: readonly RustSourceCallableSpecializationIssue[];
   readonly projectMethodRequests: readonly RustProjectMethodSpecializationRequest[];
   requiresSpecialization(declaration: Node): boolean;
@@ -171,8 +167,6 @@ export function createRustSourceCallableSpecializationPlanRegistry(): RustSource
     get issues() {
       return requireCurrent().issues;
     },
-    get genericValues() { return requireCurrent().genericValues; },
-    get suspendedValues() { return requireCurrent().suspendedValues; },
     get projectMethodRequests() {
       return requireCurrent().projectMethodRequests;
     },
@@ -381,9 +375,7 @@ function createRustSourceCallableSpecializationPlan(
       );
   });
   const plan: RustSourceCallableSpecializationPlan = {
-    genericValues: createRustGenericCallablePlan(input.ast, input.sourceFiles, input.facts, input.names, input.navigation),
-    suspendedValues: createRustSuspendedCallablePlan(input.ast, input.sourceFiles, input.facts, input.names, input.sourceLifetimes),
-    get issues() { return Object.freeze([...issues, ...this.genericValues.issues, ...this.suspendedValues.issues]); },
+    issues: Object.freeze(issues),
     projectMethodRequests: Object.freeze(methodRequests),
     requiresSpecialization(declaration) {
       return required.has(declaration);

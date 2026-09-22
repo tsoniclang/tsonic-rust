@@ -60,9 +60,7 @@ export function planRustClassEnvironmentItems(declaration: Node, context: RustPl
       : { kind: "method-call" as const, receiver: value, method: "clone", args: [] } };
   });
   if (marker !== undefined) clonedFields.push({ name: marker.name, value: marker.value });
-  return [{ kind: "struct", name: environment.typeName, visibility: rustProjectImplementationVisibility(publiclyReachable),
-    derives: environment.storage === "value" && !manualClone ? ["Clone", "Copy"] : [], generics, fields },
-    ...(identityOwner === undefined ? [] : [rustProjectObjectIdentityImplementation(
+  const identityItems: RustItem[] = identityOwner === undefined ? [] : [rustProjectObjectIdentityImplementation(
       identityOwner, generics,
       { kind: "method-call", receiver: { kind: "field", receiver: { kind: "path", path: "self" }, name: environment.identityFieldName },
         method: "get_or_init", args: [{ kind: "path", path: "rt::ObjectIdentity::new" }] },
@@ -72,7 +70,10 @@ export function planRustClassEnvironmentItems(declaration: Node, context: RustPl
       returnType: { kind: "primitive", name: "bool" }, body: { statements: [{ kind: "tail", expr: {
         kind: "call", path: "core::ptr::eq", args: [{ kind: "path", path: "self" }, { kind: "path", path: "other" }],
       } }] },
-    }] }, { kind: "impl", generics, target: identityOwner, trait: { kind: "named", path: "Eq" }, functions: [] }]),
+    }] }, { kind: "impl", generics, target: identityOwner, trait: { kind: "named", path: "Eq" }, functions: [] }];
+  return [{ kind: "struct", name: environment.typeName, visibility: rustProjectImplementationVisibility(publiclyReachable),
+    derives: environment.storage === "value" && !manualClone ? ["Clone", "Copy"] : [], generics, fields },
+    ...identityItems,
     ...(target === undefined ? [] : [
       ...(environment.copy ? [{ kind: "impl" as const, generics, target, trait: { kind: "named" as const, path: "Copy" }, functions: [] }] : []),
       { kind: "impl" as const, generics, target, trait: { kind: "named" as const, path: "Clone" }, functions: [{

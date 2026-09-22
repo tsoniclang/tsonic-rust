@@ -684,7 +684,7 @@ export function analyzeRustGeneratedItemUsage(input: {
       if (conversion?.kind === "empty-record") markStructuralShapeConstructed(conversion.target);
       if (conversion !== undefined && conversion.kind !== "native-trait-object-upcast" &&
         conversion.kind !== "reference-reborrow" && conversion.kind !== "provider-record-copy" &&
-        conversion.kind !== "empty-record") {
+        conversion.kind !== "empty-record" && conversion.kind !== "generic-callable-flow") {
         visitConversion(conversion);
       }
       if (fact !== undefined) visitFact(node, fact);

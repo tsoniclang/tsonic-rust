@@ -13,7 +13,7 @@ import { planRustCaptureValue } from "./typed-locations.js";
 export function planRustGenericCallableValue(
   node: Node, carrier: TargetTypeRef, context: RustPlanContext,
 ): RustExpr | undefined {
-  const plan = context.input.program.sourceCallableSpecializations.genericValues;
+  const plan = context.input.program.callableValues.generic;
   const implementation = plan.implementationFor(node);
   const definition = plan.definitionFor(carrier);
   const rendered = rustTypeFromCarrierInContext(carrier, context);

@@ -18,6 +18,8 @@ import { selectRustClassValueCallable, type RustClassValueCallable } from "./cla
 import type { RustProjectStructuralView, RustProjectStructuralViewImplementation } from "./project-structural-views.js";
 import { selectRustProjectViewImplementations } from "./view-implementations.js";
 import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
+import type { RustCallableValueAdapter } from "../facts/callable-adapters.js";
+import { rustCallableAdapterValues } from "../callables/adapter-values.js";
 
 export interface RustClassValueView {
   readonly declaration: Node;
@@ -53,6 +55,7 @@ export interface RustClassValuePlan {
 }
 
 export interface RustClassValueRegistry {
+  valueAdapters(): readonly { readonly subject: Node; readonly adapter: RustCallableValueAdapter }[];
   recordInstanceView(view: RustProjectStructuralView): boolean;
   hasConstructorValue(declaration: Node): boolean;
   evaluatesConstructorValue(declaration: Node): boolean;
@@ -70,6 +73,25 @@ export function createRustClassValueRegistry(): RustClassValueRegistry {
   const instanceViews: RustProjectStructuralView[] = [];
   let sealed = false;
   return {
+    valueAdapters() {
+      const result: { readonly subject: Node; readonly adapter: RustCallableValueAdapter }[] = [];
+      const record = (callable: RustClassValueCallable): void => {
+        for (const adapter of rustCallableAdapterValues(callable)) result.push(Object.freeze({ subject: callable.declaration, adapter }));
+      };
+      for (const view of instanceViews) {
+        for (const field of view.fields) {
+          if (field.readAdapter !== undefined) result.push(Object.freeze({ subject: field.declaration, adapter: field.readAdapter }));
+          if (field.callable !== undefined) record(field.callable);
+        }
+      }
+      for (const views of requests.values()) {
+        for (const view of views.values()) {
+          if (view.construction !== undefined) record(view.construction);
+          for (const field of view.fields) if (field.callable !== undefined) record(field.callable);
+        }
+      }
+      return Object.freeze(result);
+    },
     recordInstanceView(view) {
       if (sealed) throw new Error("Rust instance views cannot change after sealing.");
       const existing = instanceViews.find(candidate => candidate.declaration === view.declaration &&

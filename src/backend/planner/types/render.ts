@@ -461,6 +461,7 @@ export interface RustTypeRenderingContext {
         readonly names: import("../../../target-model/names/model.js").RustNamePlan;
         readonly structuralShapes: import("../../../analysis/objects/structural-shape-plan.js").RustStructuralShapePlan;
         readonly sourceCallableSpecializations: import("../../../analysis/callables/specializations.js").RustSourceCallableSpecializationPlan;
+        readonly callableValues: import("../../../analysis/callables/value-plan.js").RustCallableValuePlan;
         readonly classValues: import("../../../analysis/objects/class-values.js").RustClassValuePlan;
       };
     };
@@ -501,7 +502,7 @@ export function rustTypeFromCarrierInContext(
     if (instance !== undefined) return rustClassEnvironmentHandleType(instance, context);
     const genericCallable = rustGenericCallableValue(shapeCarrier);
     if (genericCallable !== undefined) {
-      const definition = context.input.program.sourceCallableSpecializations.genericValues.definitionFor(shapeCarrier);
+      const definition = context.input.program.callableValues.generic.definitionFor(shapeCarrier);
       const module = definition === undefined ? undefined : context.moduleNameByFileName.get(definition.ownerFileName);
       const externalCrate = definition === undefined ? undefined : context.externalCrateNameByFileName.get(definition.ownerFileName);
       const arguments_ = genericCallable.environment.map(argument => rustTypeFromCarrierInContext(argument, context));

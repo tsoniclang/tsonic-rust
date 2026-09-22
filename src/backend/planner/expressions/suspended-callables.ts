@@ -11,7 +11,7 @@ import { planRustCaptureValue } from "./typed-locations.js";
 import { rustSuspendedCallableStateType } from "../types/suspended-callables.js";
 
 export function planRustSuspendedCallableConstruction(node: Node, context: RustPlanContext): RustExpr | undefined {
-  const implementation = context.input.program.sourceCallableSpecializations.suspendedValues.implementationFor(node);
+  const implementation = context.input.program.callableValues.suspended.implementationFor(node);
   const ownerType = implementation === undefined ? undefined : rustTypeFromCarrierInContext(implementation.carrier, context);
   const stateType = implementation === undefined ? undefined : rustSuspendedCallableStateType(implementation, context);
   if (implementation === undefined || ownerType === undefined || stateType === undefined || context.syntheticNames === undefined) {

@@ -279,7 +279,7 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
     }
   }
   const fallible = new Set<Node>();
-  const genericCallables = walk.context.sourceCallableSpecializations.genericValues;
+  const genericCallables = walk.context.callableValues.generic;
   for (const definition of genericCallables.definitions) {
     for (const implementation of definition.implementations) registerCallableDeclaration(implementation.declaration);
   }

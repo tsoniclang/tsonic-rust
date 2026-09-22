@@ -24,6 +24,7 @@ import { rustLifetimeKey, rustLifetimesEqual } from "../../target-model/lifetime
 import { rustEmptyRecordCarrier } from "../../target-model/conversions/empty-record.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { selectRustProjectProjection } from "./project-projections.js";
+import { rustGenericCallableSignaturesMatch } from "../../target-model/conversions/generic-callable.js";
 
 export type RustValueCarrierReconciliation =
   | { readonly kind: "identity" }
@@ -134,6 +135,11 @@ export function selectRustValueCarrierReconciliation(
 ): RustValueCarrierReconciliation {
   if (rustTargetTypeRefEquals(sourceCarrier, targetCarrier)) {
     return { kind: "identity" };
+  }
+  if (rustGenericCallableSignaturesMatch(sourceCarrier, targetCarrier)) {
+    return { kind: "conversion", fact: { sourceCarrier, targetCarrier,
+      conversion: { kind: "generic-callable-flow", source: sourceCarrier, target: targetCarrier },
+    } };
   }
   if (rustEmptyRecordCarrier(sourceCarrier) && rustEmptyRecordCarrier(targetCarrier)) {
     return { kind: "conversion", fact: {

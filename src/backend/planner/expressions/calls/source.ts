@@ -424,7 +424,7 @@ export function planSelectedSourceCall(
     return undefined;
   }
   if (fact.target.form === "callable" && rustGenericCallableValue(fact.target.carrier) !== undefined) {
-    const definition = context.input.program.sourceCallableSpecializations.genericValues.definitionFor(fact.target.carrier);
+    const definition = context.input.program.callableValues.generic.definitionFor(fact.target.carrier);
     if (definition === undefined || !definition.implementations.every(implementation => {
       const selected = context.input.program.facts.getFact(implementation.declaration, rustGenericCallableEffectsFactKey);
       return selected?.invocation === effects.invocation && selected.awaiting === effects.awaiting;
@@ -445,7 +445,7 @@ export function planSelectedSourceCall(
       ? fact.target.callableCarrier
       : undefined;
   const genericDefinition = callableCarrier === undefined ? undefined
-    : context.input.program.sourceCallableSpecializations.genericValues.definitionFor(callableCarrier);
+    : context.input.program.callableValues.generic.definitionFor(callableCarrier);
   const genericDeclaration = genericDefinition?.implementations[0]?.declaration;
   const operandBoundary = genericDeclaration !== undefined
     ? rustErrorBoundaryForDeclaration(genericDeclaration, context)

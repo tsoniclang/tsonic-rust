@@ -44,6 +44,7 @@ import { rustCompilerOwnedContextualConversionMatches } from "../../../target-mo
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import { tryPlanRustNativePointerOperation } from "./native-pointers.js";
 import type { Node } from "@tsonic/tsts";
+import { planRustGenericCallableFlow } from "./generic-callable-flow.js";
 import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
@@ -385,6 +386,9 @@ function applyRustContextualValueConversion(
       return undefined;
     }
     return expression;
+  }
+  if (fact.conversion.kind === "generic-callable-flow") {
+    return planRustGenericCallableFlow(fact.conversion, expression, context);
   }
   if (fact.conversion.kind === "provider-record-copy") {
     return planProviderRecordCopy(fact.conversion, expression, node, context);

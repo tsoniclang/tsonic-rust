@@ -9,6 +9,7 @@ import type { TargetStageResult } from "@tsonic/target-api/artifacts";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 import type { RustSourceCallableSpecializationPlan } from "../callables/specializations.js";
+import type { RustCallableValuePlan } from "../callables/value-plan.js";
 import type { RustDeclarationGenericRequirementIndex } from "../declarations/generic-requirements.js";
 import type { RustProjectFieldDispatchQueries } from "../project-types/field-dispatch.js";
 import type { RustProjectMethodDispatchPlan } from "../project-types/method-dispatch.js";
@@ -74,6 +75,7 @@ export interface RustTargetProgram {
   readonly projectMethodProperties: RustProjectMethodPropertyPlan;
   readonly projectFieldDispatch: RustProjectFieldDispatchQueries;
   readonly sourceCallableSpecializations: RustSourceCallableSpecializationPlan;
+  readonly callableValues: RustCallableValuePlan;
   readonly sourceLifetimes: RustLifetimeIndex;
   readonly declarationGenericRequirements: RustDeclarationGenericRequirementIndex;
   readonly valueLifetimes: RustValueLifetimePlan;

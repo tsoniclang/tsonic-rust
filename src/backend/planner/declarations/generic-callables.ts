@@ -43,7 +43,7 @@ export function rustGenericCallableMarker(definition: RustGenericCallableDefinit
 export function planRustGenericCallableItems(context: RustPlanContext): readonly RustItem[] {
   const result: RustItem[] = [];
   const fileName = context.input.program.source.ast.getFileName(context.sourceFile);
-  for (const definition of context.input.program.sourceCallableSpecializations.genericValues.definitions) {
+  for (const definition of context.input.program.callableValues.generic.definitions) {
     for (const implementation of definition.implementations) {
       if (implementation.sourceFileName !== fileName) continue;
       const items = planImplementation(definition, implementation, context);

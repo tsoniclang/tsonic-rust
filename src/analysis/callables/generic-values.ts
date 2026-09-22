@@ -9,12 +9,14 @@ import { substituteRustTargetTypeParameters } from "../../target-model/types/car
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
-import { rustClosureCaptureFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
+import { rustClosureCaptureFactKey, rustTargetOperationFactKey, rustContextualValueConversionFactKey } from "../facts/keys.js";
 import type { RustClosureCaptureFact } from "../facts/operations/keys.js";
 import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
 import type { SourceProgramNavigation } from "@tsonic/target-api/source";
 import { isRustCopyCarrier } from "../../target-model/types/index.js";
 import { rustAsyncFunctionFactKey, rustGeneratorFactKey } from "../facts/keys.js";
+import { createRustGenericCallableFlowIndex } from "./generic-callable-flow.js";
+import type { RustGenericCallableConversion } from "../../target-model/conversions/generic-callable.js";
 
 export interface RustGenericCallableImplementation {
   readonly declaration: Node;
@@ -47,20 +49,26 @@ export interface RustGenericCallablePlan {
 export function createRustGenericCallablePlan(
   ast: AstReader, sourceFiles: readonly SourceFile[], facts: RustPlanQueries, names: RustNamePlan,
   navigation: SourceProgramNavigation,
+  adapterFlows: readonly { readonly subject: Node; readonly conversion: RustGenericCallableConversion }[] = [],
 ): RustGenericCallablePlan {
   const groups = new Map<string, { origin: RustGenericCallableOrigin; signature: RustGenericCallableSignature; implementations: RustGenericCallableImplementation[] }>();
   const implementations = new Map<Node, RustGenericCallableImplementation>();
   const issues: RustSourceCallableSpecializationIssue[] = [];
   const usedNames = new Set<string>();
   const closures: Node[] = [];
+  const flows: { subject: Node; conversion: RustGenericCallableConversion }[] = [...adapterFlows];
   const visit = (node: Node): void => {
     for (const name of [names.nameForDeclaration(node), names.functionNameForDeclaration(node), names.callableValueNameForDeclaration(node)]) {
       if (name !== undefined) usedNames.add(name);
     }
     if (facts.getFact(node, rustTargetOperationFactKey)?.kind === "closure") closures.push(node);
+    const conversion = facts.getFact(node, rustContextualValueConversionFactKey)?.conversion;
+    if (conversion?.kind === "generic-callable-flow") flows.push({ subject: node, conversion });
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   for (const sourceFile of sourceFiles) visit(sourceFile);
+  const flow = createRustGenericCallableFlowIndex(flows);
+  issues.push(...flow.issues);
   closures.sort((left, right) => ast.getFileName(ast.getSourceFile(left)).localeCompare(ast.getFileName(ast.getSourceFile(right)), "en") || ast.pos(left) - ast.pos(right));
   for (const node of closures) {
     const operation = facts.getFact(node, rustTargetOperationFactKey);
@@ -69,7 +77,7 @@ export function createRustGenericCallablePlan(
     if (carrier !== undefined && value !== undefined) {
       const capture = facts.getFact(node, rustClosureCaptureFactKey);
       const signatureKey = closedMetadataKey(value.signature);
-      const identity = closedMetadataKey(value.origin);
+      const identity = flow.familyFor(carrier)!;
       const sourceFileName = ast.getFileName(ast.getSourceFile(node));
       const implementationIdentity = createHash("sha256").update(`${sourceFileName}:${ast.pos(node)}:${ast.end(node)}`).digest("hex");
       const substitutions = new Map<string, TargetTypeRef>();
@@ -119,12 +127,12 @@ export function createRustGenericCallablePlan(
       implementations: Object.freeze(group.implementations),
     });
   });
-  const byOrigin = new Map(definitions.map(definition => [closedMetadataKey(definition.origin), definition]));
+  const byFamily = new Map(definitions.map(definition => [definition.identity, definition]));
   return Object.freeze({ definitions: Object.freeze(definitions), issues: Object.freeze(issues),
     definitionFor(carrier: TargetTypeRef) {
       const value = rustGenericCallableValue(carrier);
       if (value === undefined) return undefined;
-      const selected = byOrigin.get(closedMetadataKey(value.origin));
+      const selected = byFamily.get(flow.familyFor(carrier)!);
       return selected === undefined || closedMetadataKey(selected.signature) !== closedMetadataKey(value.signature) ? undefined : selected;
     },
     implementationFor: (declaration: Node) => implementations.get(declaration),

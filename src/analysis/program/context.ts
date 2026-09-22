@@ -47,6 +47,7 @@ import {
   createRustSourceCallableSpecializationPlanRegistry,
 } from "../callables/specializations.js";
 import type { RustSourceCallableSpecializationPlanRegistry } from "../callables/specializations.js";
+import { createRustCallableValuePlanRegistry, type RustCallableValuePlanRegistry } from "../callables/value-plan.js";
 import {
   createRustStructuralShapePlanRegistry,
 } from "../objects/structural-shape-plan.js";
@@ -94,6 +95,7 @@ export interface RustAnalysisContext extends RustSourcePolicyContext {
   readonly projectMethodProperties: RustProjectMethodPropertyPlanRegistry;
   readonly projectFieldDispatch: RustProjectFieldDispatchPlanRegistry;
   readonly sourceCallableSpecializations: RustSourceCallableSpecializationPlanRegistry;
+  readonly callableValues: RustCallableValuePlanRegistry;
   readonly sourceLifetimes: RustLifetimeIndex;
   readonly structuralShapes: RustStructuralShapePlanRegistry;
   readonly frozenDataWrites: RustFrozenDataWriteRegistry;
@@ -174,6 +176,7 @@ export function createRustAnalysisContext(
     projectMethodProperties: createRustProjectMethodPropertyPlanRegistry(),
     projectFieldDispatch: createRustProjectFieldDispatchPlanRegistry(),
     sourceCallableSpecializations: createRustSourceCallableSpecializationPlanRegistry(),
+    callableValues: createRustCallableValuePlanRegistry(),
     sourceLifetimes: lifetimes.index ?? emptyRustLifetimeIndex,
     structuralShapes: createRustStructuralShapePlanRegistry(),
     frozenDataWrites: createRustFrozenDataWriteRegistry(),

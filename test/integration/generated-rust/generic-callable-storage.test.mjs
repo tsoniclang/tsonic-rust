@@ -152,3 +152,20 @@ export function main(): void {
   assert.doesNotMatch(pureOutput, /fn call<[^}]*?-> Result/u);
   validateGeneratedProject("independent-generic-factories", result.artifacts, { run: true });
 });
+
+test("annotated aliases and returns retain generic callable identity without wrappers", { timeout: 300_000 }, () => {
+  compileAndRun("quantified_value_flow", `
+type Identity = <T>(value: T) => T;
+function make(): Identity {
+  const original = <T>(value: T): T => value;
+  const alias: Identity = original;
+  return alias;
+}
+function invoke(value: Identity): number { return value<number>(7); }
+export function main(): void {
+  const first = make();
+  const alias: Identity = first;
+  if (first !== alias || invoke(alias) !== 7 || alias<string>("value") !== "value") throw new Error("flow");
+}
+`);
+});

@@ -15,7 +15,7 @@ import { rustDeclarationAssociatedPredicates } from "../types/associated-bounds.
 export function planRustSuspendedCallableItems(context: RustPlanContext): readonly RustItem[] {
   const fileName = context.input.program.source.ast.getFileName(context.sourceFile);
   const items: RustItem[] = [];
-  for (const implementation of context.input.program.sourceCallableSpecializations.suspendedValues.implementations) {
+  for (const implementation of context.input.program.callableValues.suspended.implementations) {
     if (implementation.sourceFileName !== fileName) continue;
     const planned = planImplementation(implementation, context);
     if (planned === undefined) {

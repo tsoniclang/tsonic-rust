@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { planRustGenericCallableFlow } from "../expressions/generic-callable-flow.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type {
   RustCallableParameterAbi,
@@ -301,6 +302,10 @@ function applyRustCallableValueAdapterRaw(
         ? { expression, fallible: false }
         : undefined;
     case "conversion": {
+      if (adapter.conversion.kind === "generic-callable-flow") {
+        const converted = planRustGenericCallableFlow(adapter.conversion, expression, context);
+        return converted === undefined ? undefined : { expression: converted, fallible: false };
+      }
       if (adapter.conversion.kind === "empty-record") {
         const converted = planRustEmptyRecordConversion(adapter.conversion, expression, node, context);
         return converted === undefined ? undefined : { expression: converted, fallible: false };
