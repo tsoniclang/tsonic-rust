@@ -1,5 +1,10 @@
 import { allocateRustGeneratedName as allocateGeneratedName, rustGeneratedNameComponent } from "../../../target-model/names/generated.js";
-import { compareProjectDefinitions, definitionKey, denseNodes, heritageKindIssue, projectDefinition, projectMemberNames, sourceFileIdentifierNames } from "./helpers.js";
+import { compareProjectDefinitions, definitionKey, denseNodes, projectDefinition, projectMemberNames, sourceFileIdentifierNames } from "./helpers.js";
+import {
+  heritageKindIssue,
+  selectRustProjectCommonSupertype,
+  selectRustProjectRelationship,
+} from "../../../policy/types/project/relationships.js";
 import { rustPascalCaseIdentifier, rustScreamingSnakeIdentifier, rustSnakeCaseIdentifier } from "../../../target-model/names/identifiers.js";
 import {
   rustLifetimeGenericArgument,
@@ -20,7 +25,7 @@ import type { RustProjectConstructorSignature, RustProjectDowncastRoute, RustPro
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustSourceTypeDeclarations } from "../../../policy/types/source-declarations.js";
 import { rustLocalClassIssue } from "../local-classes.js";
-import { projectGenericSubstitutions } from "./generic-substitutions.js";
+import { projectGenericSubstitutions } from "../../../policy/types/project/generic-substitutions.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { rustTargetGenericReferences } from "../../../target-model/types/carriers/generic-references.js";
 
@@ -200,31 +205,9 @@ export function createRustProjectTypePolicy(
   const relationship = (
     source: TargetTypeRef,
     target: RustProjectTypeDefinition,
-  ): RustProjectTypeRelationship => {
-    const pending: TargetTypeRef[] = [source];
-    const visited: TargetTypeRef[] = [];
-    const matches: TargetTypeRef[] = [];
-    while (pending.length > 0) {
-      const candidate = pending.shift()!;
-      if (visited.some((entry) => rustTargetTypeRefEquals(entry, candidate))) {
-        continue;
-      }
-      visited.push(candidate);
-      const definition = definitionForCarrier(candidate);
-      if (definition === target) {
-        if (!matches.some((entry) => rustTargetTypeRefEquals(entry, candidate))) {
-          matches.push(candidate);
-        }
-        continue;
-      }
-      pending.push(...(directSupertypes(candidate) ?? []));
-    }
-    return matches.length === 0
-      ? { kind: "unrelated" }
-      : matches.length === 1
-        ? { kind: "related", targetType: matches[0]! }
-        : { kind: "ambiguous", targetTypes: Object.freeze(matches) };
-  };
+  ): RustProjectTypeRelationship => selectRustProjectRelationship(
+    { definitionForCarrier, directSupertypes }, source, target,
+  );
 
   function definitionForCarrier(
     carrier: TargetTypeRef | undefined,
@@ -776,30 +759,11 @@ export function createRustProjectTypePolicy(
     },
     directSupertypes,
     commonSupertype(carriers) {
-      if (carriers.length < 2) {
-        return undefined;
-      }
-      const firstDefinition = definitionForCarrier(carriers[0]);
-      if (firstDefinition === undefined) return undefined;
-      const common = reachableDefinitions(firstDefinition).flatMap((definition) => {
-        const relationships = carriers.map((carrier) => relationship(carrier, definition));
-        if (relationships.some((selected) => selected.kind !== "related")) {
-          return [];
-        }
-        const targetTypes = relationships.map((selected) =>
-          selected.kind === "related" ? selected.targetType : undefined);
-        const first = targetTypes[0];
-        return first !== undefined && targetTypes.every((target) =>
-          target !== undefined && rustTargetTypeRefEquals(target, first))
-          ? [{ definition, targetType: first }]
-          : [];
-      });
-      const mostSpecific = common.filter((candidate) => !common.some((other) =>
-        other !== candidate && relationship(
-          policy.openCarrier(other.definition),
-          candidate.definition,
-        ).kind === "related"));
-      return mostSpecific.length === 1 ? mostSpecific[0]!.targetType : undefined;
+      return selectRustProjectCommonSupertype(
+        { definitionForCarrier, relationship, openCarrier },
+        reachableDefinitions,
+        carriers,
+      );
     },
     relationship,
     instantiateMemberCarrier(member, receiver, declaredCarrier) {

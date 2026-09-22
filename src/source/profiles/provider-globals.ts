@@ -1,5 +1,5 @@
 import type { TargetSourceProfileContributions } from "@tsonic/target-api/provider";
-import type { RustProviderPackageDefinition } from "../providers/packages/model.js";
+import type { RustProviderPackageDefinition } from "../../providers/packages/model.js";
 
 export const rustProviderGlobalsFileName = "provider-globals.d.ts";
 

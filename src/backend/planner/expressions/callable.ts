@@ -44,7 +44,7 @@ import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagno
 import { planExpression } from "./entry.js";
 import { planRustBindingPattern } from "../bindings/patterns.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
-import { rustOptionDefaultValue } from "../option-default.js";
+import { rustOptionDefaultValue } from "./option-default.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import type { Node } from "@tsonic/tsts";

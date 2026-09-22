@@ -14,7 +14,7 @@ import type {
   RustTargetAnalysisRequest,
   RustTargetProgram,
 } from "./model.js";
-import { createRustModuleInitializationPlan } from "./module-initialization-facts.js";
+import { createRustModuleInitializationPlan } from "../module-initialization/analyze.js";
 import { analyzeRustProviderErrorCarriers } from "./provider-errors.js";
 import { analyzeRustDeclarationGenericRequirements } from "../declarations/generic-requirements.js";
 import { analyzeRustValueLifetimes } from "./value-lifetimes.js";

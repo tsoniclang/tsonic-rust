@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { hasRustProjectProjection } from "../../../policy/types/project-projections.js";
+import { rustSelectedProjectDowncast } from "../../../analysis/facts/value-projections.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type {
   RustProjectDowncastFact,
@@ -65,8 +65,12 @@ export function planRustProjectDowncastValue(
   const targetDefinition = context.input.program.projectTypes.definitionForCarrier(targetCarrier);
   const targetType = rustTypeFromCarrierInContext(targetCarrier, context);
   const optionalElement = rustOptionElementCarrier(sourceCarrier);
+  const selected = rustSelectedProjectDowncast(context.input.program.facts, node);
   if (sourceDefinition === undefined || targetDefinition === undefined || targetType === undefined ||
-    !hasRustProjectProjection(dispatchCarrier, targetCarrier, context.input.program.projectTypes) ||
+    selected === undefined ||
+    !rustTargetTypeRefEquals(selected.sourceCarrier, sourceCarrier) ||
+    !rustTargetTypeRefEquals(selected.dispatchCarrier, dispatchCarrier) ||
+    !rustTargetTypeRefEquals(selected.targetCarrier, targetCarrier) ||
     (!rustTargetTypeRefEquals(sourceCarrier, dispatchCarrier) &&
       !rustTargetTypeRefEquals(optionalElement, dispatchCarrier))) {
     context.diagnostics.push(missingFactDiagnostic(

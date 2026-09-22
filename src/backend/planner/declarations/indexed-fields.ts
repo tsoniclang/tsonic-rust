@@ -1,4 +1,4 @@
-import type { RustSourceTypeFamilyImplementation } from "../../../policy/types/type-families.js";
+import type { RustSourceTypeFamilyImplementation } from "../../../target-model/types/type-families.js";
 import { rustProgramErrorTargetType } from "../../../target-model/types/index.js";
 import { rustTargetGenericReferences } from "../../../target-model/types/carriers/generic-references.js";
 import type { RustGenerics, RustItem, RustType } from "../../target-ast/nodes.js";

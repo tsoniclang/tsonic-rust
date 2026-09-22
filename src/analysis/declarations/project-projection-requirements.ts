@@ -1,6 +1,7 @@
 import type { RustProjectTypePolicy } from "../../policy/types/project-types.js";
 import { hasRustProjectProjection, selectRustProjectProjectionImplementation,
-  type RustProjectProjectionRequirement, type RustProjectProjectionImplementation } from "../../policy/types/project-projections.js";
+  type RustProjectProjectionImplementation } from "../../policy/types/project-projections.js";
+import type { RustProjectProjectionRequirement } from "../../target-model/types/project-projections.js";
 import type { RustProjectTypeDefinition } from "../../policy/types/project-types.js";
 import { rustTargetTypeParameterNames } from "../../target-model/types/carriers/generic-references.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";

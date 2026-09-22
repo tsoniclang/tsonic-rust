@@ -182,7 +182,7 @@ test("project downcasts use closed generated routes without runtime type discove
     assert.doesNotMatch(text, /method:\s*"downcast"/u, `${path} emits a runtime downcast`);
   }
   const policy = readFileSync(
-    join(sourceRoot, "analysis/project-types/policy/resolution.ts"),
+    join(sourceRoot, "analysis/project-types/catalog/resolution.ts"),
     "utf8",
   );
   assert.match(policy, /downcastRoutesByDefinition/u);
@@ -1010,7 +1010,7 @@ test("Rust build and test entrypoints honor one explicit Tsonic checkout root", 
 
 test("sealed Rust project-type queries never re-enter source navigation", () => {
   const text = readFileSync(
-    join(sourceRoot, "analysis/project-types/policy/resolution.ts"),
+    join(sourceRoot, "analysis/project-types/catalog/resolution.ts"),
     "utf8",
   );
   const sealedPolicy = sourceSection(

@@ -1,12 +1,12 @@
 import {
   canonicalTargetForbiddenDirectories,
   canonicalTargetLayerPolicies,
+  canonicalTargetRootPolicies,
   canonicalTargetSourceRules,
   targetForbiddenPackage,
   targetLayerExact,
   targetLayerPrefix,
   targetLayerPredicate,
-  targetRootPolicy,
 } from "../../../tsonic/test/architecture/tooling/target-layer-contract.mjs";
 
 function isProviderModel(path) {
@@ -47,15 +47,7 @@ export const rustForbiddenPackages = Object.freeze([
   targetForbiddenPackage("@tsonic/csharp-nodejs", "Rust"),
 ]);
 
-export const rustRootPolicies = Object.freeze([
-  targetRootPolicy("src/", ["src/index.ts"]),
-  targetRootPolicy("src/backend/", ["src/backend/compile.ts"]),
-  targetRootPolicy("src/backend/planner/", [
-    "src/backend/planner/context.ts",
-    "src/backend/planner/diagnostics.ts",
-    "src/backend/planner/option-default.ts",
-  ]),
-]);
+export const rustRootPolicies = canonicalTargetRootPolicies;
 
 export const rustAllowedImplementationIndexes = new Set([
   "src/public/index.ts",

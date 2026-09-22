@@ -4,7 +4,7 @@ import type {
   RustSourceTypeFamily,
   RustSourceTypeFamilyImplementation,
   RustSourceTypeFamilyRegistry,
-} from "../../policy/types/type-families.js";
+} from "../../target-model/types/type-families.js";
 import type { RustTargetGenericArgument, RustTargetTraitRef, TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeParameterNames } from "../../target-model/types/carriers/generic-references.js";
 import { inferRustTargetTypeParameterBindings } from "../../target-model/types/carriers/generic-inference.js";

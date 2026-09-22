@@ -3,7 +3,7 @@ import type { RustGenericRequirement } from "./generic-requirements.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustTargetTypeParameterNames } from "../../target-model/types/carriers/generic-references.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
-import type { RustSourceTypeFamilyRegistry } from "../../policy/types/type-families.js";
+import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
 
 export interface RustAssociatedTypeRequirement {
   readonly carrier: Extract<TargetTypeRef, { readonly kind: "associated-type" }>;

@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustTargetGenericArgument, RustTargetTraitRef, TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustTargetGenericArgument, RustTargetTraitRef, TargetTypeRef } from "./model.js";
 
 export interface RustConditionalSourceTypeFamily {
   readonly kind: "conditional";

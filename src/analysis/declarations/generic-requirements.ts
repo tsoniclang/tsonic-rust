@@ -5,7 +5,7 @@ import { rustGenericNumericOperandsKey } from "../facts/generic-numeric.js";
 import { classifyCarrierRequirements } from "./generic-carrier-requirements.js";
 import { isRustDeclarationPathUse } from "./generic-reference-uses.js";
 import { createRustAssociatedRequirementCollector, type RustAssociatedTypeRequirement } from "./associated-requirements.js";
-import type { RustSourceTypeFamilyRegistry } from "../../policy/types/type-families.js";
+import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
 import { substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
@@ -14,7 +14,8 @@ import { rustTargetTypeParameterNames } from "../../target-model/types/carriers/
 import { analyzeRustShapeGenericRequirements, type RustShapeGenericRequirementContract } from "./generic-shape-requirements.js";
 import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
-import type { RustProjectProjectionImplementation, RustProjectProjectionRequirement } from "../../policy/types/project-projections.js";
+import type { RustProjectProjectionImplementation } from "../../policy/types/project-projections.js";
+import type { RustProjectProjectionRequirement } from "../../target-model/types/project-projections.js";
 import type { RustProjectTypeDefinition } from "../project-types/type-policy.js";
 import { createRustProjectProjectionRequirementCollector, createRustProjectProjectionImplementationIndex } from "./project-projection-requirements.js";
 import type { RustValueLifetimePlan } from "../program/value-lifetimes.js";

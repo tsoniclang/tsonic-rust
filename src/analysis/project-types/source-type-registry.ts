@@ -8,7 +8,7 @@ import { rustSourceDeclarationTypeName, rustSourceTypeDeclarations } from "../..
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { createRustSourceTypeFamilyRegistry } from "./type-families.js";
-import type { RustSourceTypeFamilyRegistry } from "../../policy/types/type-families.js";
+import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
 import { closedMetadataKey, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { inferRustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";

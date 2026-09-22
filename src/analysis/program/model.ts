@@ -17,7 +17,7 @@ import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
 import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";
 import type { RustSafetyApplicationFactIndex } from "../safety/application-index.js";
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
-import type { RustModuleInitializationPlan } from "./module-initialization-facts.js";
+import type { RustModuleInitializationPlan } from "../module-initialization/analyze.js";
 import type { RustTargetConfiguration } from "../../target-model/configuration/model.js";
 import type { RustValueLifetimePlan } from "./value-lifetimes.js";
 import type { RustRuntimeReferencePlan } from "../runtime/index.js";
@@ -42,7 +42,7 @@ import type { RustSourceModuleConstructionIndex } from "../source-modules/index.
 import type { RustFoundationPlan } from "../foundation/plan.js";
 import type { RustProjectFlowReadSelectionIndex } from "../control-flow/project-flow-read-selections.js";
 import type { RustGeneratedDeclarationUse } from "./generated-declaration-uses.js";
-import type { RustSourceTypeFamilyPlan } from "../../policy/types/type-families.js";
+import type { RustSourceTypeFamilyPlan } from "../../target-model/types/type-families.js";
 
 export interface RustTargetAnalysisRequest {
   readonly input: TargetCompileInput;

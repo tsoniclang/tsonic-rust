@@ -11,10 +11,10 @@ import {
 import { rustModuleBindingFactKey } from "../facts/keys.js";
 import { rustCompileTimeSourceKey } from "../../target-model/facts/source-declarations.js";
 import { rustProjectStaticFieldStorage } from "../project-types/object-layout.js";
-import type { RustAnalysisContext } from "./context.js";
+import type { RustAnalysisContext } from "../program/context.js";
 import type { RustFoundation } from "../../target-model/foundation/model.js";
-import { stronglyConnectedSourceFiles } from "./module-graph.js";
-import { rustModuleInitializationIsStateIndependent } from "./independent-module-initialization.js";
+import { stronglyConnectedSourceFiles } from "../program/module-graph.js";
+import { rustModuleInitializationIsStateIndependent } from "./independence.js";
 import type { RustClassValuePlan } from "../objects/class-values.js";
 
 export type RustModuleInitializationRequirement =

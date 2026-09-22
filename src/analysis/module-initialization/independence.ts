@@ -11,7 +11,7 @@ import {
   VariableStatement_DeclarationList,
 } from "@tsonic/target-api/source";
 import type { Node, SourceFile } from "@tsonic/tsts";
-import type { RustAnalysisContext } from "./context.js";
+import type { RustAnalysisContext } from "../program/context.js";
 import { rustCompileTimeSourceKey } from "../../target-model/facts/source-declarations.js";
 
 type Input = Pick<RustAnalysisContext, "ast" | "source" | "facts">;

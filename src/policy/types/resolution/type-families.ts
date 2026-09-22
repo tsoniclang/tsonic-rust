@@ -1,7 +1,7 @@
 import type { Node, Type, TypeAliasApplicationInfo } from "@tsonic/tsts";
 import { Node_Type, sourceNodeIdentity, TypeReferenceNode_TypeName } from "@tsonic/target-api/source";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustConditionalSourceTypeFamily } from "../type-families.js";
+import type { RustConditionalSourceTypeFamily } from "../../../target-model/types/type-families.js";
 import { rustSourceTypeCarrierValue, rustStructuralObjectCarrierValue } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustTargetTypeParameterNames } from "../../../target-model/types/carriers/generic-references.js";

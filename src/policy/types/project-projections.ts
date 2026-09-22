@@ -3,11 +3,7 @@ import type { RustProjectDowncastRoute, RustProjectTypePolicy } from "./project-
 import { rustTargetTypeParameterNames } from "../../target-model/types/carriers/generic-references.js";
 import { inferRustTargetTypeParameterBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-
-export interface RustProjectProjectionRequirement {
-  readonly sourceCarrier: TargetTypeRef;
-  readonly targetCarrier: TargetTypeRef;
-}
+import type { RustProjectProjectionRequirement } from "../../target-model/types/project-projections.js";
 
 export interface RustProjectProjectionImplementation {
   readonly route: RustProjectDowncastRoute;

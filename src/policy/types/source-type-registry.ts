@@ -7,7 +7,7 @@ import type {
   Type,
 } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustSourceTypeFamilyRegistry } from "./type-families.js";
+import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 
 export interface RustSourceEnumVariant {

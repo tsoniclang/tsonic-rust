@@ -1,7 +1,7 @@
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
-import type { RustSourceTypeFamilyRegistry } from "./type-families.js";
+import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
 
 export function rustTypeFamilyNormalizer(
   families: Pick<RustSourceTypeFamilyRegistry, "implementation">,

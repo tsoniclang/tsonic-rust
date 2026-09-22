@@ -1,5 +1,5 @@
 import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
-import type { RustProjectTypeDefinition } from "../../../policy/types/project-types.js";
+import type { RustProjectTypeDefinition } from "../project-types.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 export function projectGenericSubstitutions(
   definition: RustProjectTypeDefinition,
