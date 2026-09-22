@@ -382,7 +382,7 @@ function recordCallableValueSignatureFacts(
   const runtimeCarrier = selectedCarrier.kind === "function-pointer" || selectedCarrier.kind === "closure"
     ? { ...selectedCarrier, args: runtimeParameterCarriers, result: valueReturnCarrier }
     : rustGenericCallableValue(selectedCarrier) !== undefined && ownNames !== undefined
-      ? rustGenericCallableTargetType(ownNames, runtimeParameterCarriers, valueReturnCarrier)
+      ? rustGenericCallableTargetType(ownNames, runtimeParameterCarriers, valueReturnCarrier, rustGenericCallableValue(selectedCarrier)!.origin)
     : rustCallableTargetType(runtimeParameterCarriers, valueReturnCarrier);
   if (runtimeCarrier !== undefined) setCarrierFact(walk, declaration, runtimeCarrier);
 }

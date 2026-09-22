@@ -68,9 +68,9 @@ export function planRustConstructorShape(
       name: "eq", visibility: "private", generics: emptyRustGenerics, selfParam: rustSelfParameter("ref"),
       params: [{ name: "other", type: { kind: "reference", mutable: false, referent: { kind: "named", path: "Self" } } }],
       returnType: { kind: "primitive", name: "bool" }, body: { statements: [{ kind: "tail", expr: {
-        kind: "binary", operator: "||", left: { kind: "call", path: "alloc::rc::Rc::ptr_eq",
-          args: ["self", "other"].map(name => ({ kind: "reference", expr: field(name, "dispatch") })) },
-        right: { kind: "call", path: "rt::source_objects_equal", args: [{ kind: "path", path: "self" }, { kind: "path", path: "other" }] },
+        kind: "call", path: "alloc::rc::Rc::ptr_eq", args: [
+          { kind: "reference", expr: field("self", "dispatch") }, { kind: "reference", expr: field("other", "dispatch") },
+        ],
       } }] },
     }] },
     { kind: "impl", generics, target: type, trait: { kind: "named", path: "Eq" }, functions: [] },

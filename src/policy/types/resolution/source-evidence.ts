@@ -32,6 +32,7 @@ import { mapRustTargetTypes } from "../../../target-model/types/carriers/substit
 import { resolveBoundSourceTypeParameter } from "./callables.js";
 import { rustTypeFamilyNormalizer } from "../type-family-normalization.js";
 import { rustGenericCallableTargetType } from "../../../target-model/types/carriers/generic-callables.js";
+import { rustGenericCallableOrigin } from "../generic-callable-origin.js";
 
 export function resolveRustSignatureParameterListTarget(
   parameters: SourceCallableTypeEvidence["parameters"],
@@ -100,8 +101,9 @@ export function resolveRustCallableEvidence(
   const genericContract = context.sourceLifetimes.contractFor(declaration);
   if (genericContract !== undefined && genericContract.parameters.length > 0 &&
     genericContract.parameters.every(parameter => parameter.kind === "type")) {
-    return rustGenericCallableTargetType(genericContract.parameters.map(parameter => parameter.targetName),
-      parameters as readonly TargetTypeRef[], result);
+    const origin = rustGenericCallableOrigin(context.ast, declaration);
+    return origin === undefined ? undefined : rustGenericCallableTargetType(genericContract.parameters.map(parameter => parameter.targetName),
+      parameters as readonly TargetTypeRef[], result, origin);
   }
   if (genericContract?.lifetimeBinder !== undefined) {
     return genericContract.parameters.some((parameter) => parameter.kind !== "lifetime")

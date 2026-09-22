@@ -7,6 +7,7 @@ import { rustTargetTypeParameterNames } from "../../dist/target-model/types/carr
 import { substituteRustTargetTypeParameters } from "../../dist/target-model/types/carriers/substitution.js";
 import { inferRustTargetTypeParameterBindings } from "../../dist/target-model/types/carriers/generic-inference.js";
 import { isRustCopyCarrier, rustCarrierSupportsClone, rustCarrierSupportsObjectIdentity } from "../../dist/target-model/types/carriers/traits.js";
+import { selectRustBinaryOperator } from "../../dist/policy/operations/operator-rules.js";
 
 const instance = (name, parameter) => rustSourceTypeCarrier("/src/model.ts", name, "object",
   [{ kind: "type", type: parameter }]);
@@ -28,6 +29,11 @@ test("constructor values retain distinct instance identity and exact generic arg
   assert.equal(rustCarrierSupportsClone(constructor), true);
   assert.equal(rustCarrierSupportsObjectIdentity(constructor), true);
   assert.equal(isRustCopyCarrier(constructor), false);
+  for (const operator of ["===", "!==", "==", "!="]) {
+    const selected = selectRustBinaryOperator(operator, constructor, constructor);
+    assert.equal(selected?.kind, "operator-token");
+    assert.equal(selected.rustOperator, operator.includes("!") ? "!=" : "==");
+  }
 });
 
 test("constructor binders remain quantified while outer environment arguments are substituted", () => {

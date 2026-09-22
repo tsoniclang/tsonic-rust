@@ -109,7 +109,7 @@ function planImplementation(
 function planDefinition(definition: RustGenericCallableDefinition, context: RustPlanContext): readonly RustItem[] | undefined {
   const environment = environmentParameters(definition);
   const arguments_ = environment.map(parameter => ({ kind: "type" as const, type: { kind: "named" as const, path: parameter.name } }));
-  const signatureCarrier = rustGenericCallableCarrier({ signature: definition.signature,
+  const signatureCarrier = rustGenericCallableCarrier({ origin: definition.origin, signature: definition.signature,
     environment: environment.map(parameter => ({ kind: "type-parameter", name: parameter.name })),
   });
   const protocol = rustGenericCallableProtocol(signatureCarrier);

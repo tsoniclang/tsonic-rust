@@ -1,6 +1,6 @@
 import type { TargetTypeRef } from "../model.js";
 import { isRustTargetTypeRef } from "../equality.js";
-import { hasExactObjectKeys, isDenseDataArray } from "../../metadata/closed-data.js";
+import { hasExactObjectKeys, isDenseDataArray, snapshotClosedMetadata } from "../../metadata/closed-data.js";
 import { rustTargetTypeParameterNames } from "./generic-references.js";
 import { substituteRustTargetTypeParameters } from "./substitution.js";
 
@@ -12,14 +12,21 @@ export interface RustGenericCallableSignature {
 }
 
 export interface RustGenericCallableValue {
+  readonly origin: RustGenericCallableOrigin;
   readonly signature: RustGenericCallableSignature;
   readonly environment: readonly TargetTypeRef[];
+}
+
+export interface RustGenericCallableOrigin {
+  readonly fileName: string;
+  readonly declarationIdentity: string;
 }
 
 export function rustGenericCallableTargetType(
   typeParameters: readonly string[],
   parameters: readonly TargetTypeRef[],
   result: TargetTypeRef,
+  origin: RustGenericCallableOrigin,
 ): TargetTypeRef | undefined {
   if (typeParameters.length === 0 || new Set(typeParameters).size !== typeParameters.length) return undefined;
   const bound = new Set(typeParameters);
@@ -30,6 +37,7 @@ export function rustGenericCallableTargetType(
   const substitutions = new Map<string, TargetTypeRef>([...typeParameters, ...free].map((name, index) =>
     [name, { kind: "type-parameter", name: [...callNames, ...environmentNames][index]! }]));
   return rustGenericCallableCarrier({
+    origin,
     signature: {
       typeParameters: callNames, environmentParameters: environmentNames,
       parameters: parameters.map(parameter => substituteRustTargetTypeParameters(parameter, substitutions)),
@@ -40,15 +48,21 @@ export function rustGenericCallableTargetType(
 }
 
 export function rustGenericCallableCarrier(value: RustGenericCallableValue): TargetTypeRef {
-  return { kind: "target-specific", target: "rust", name: "generic-callable", value };
+  const carrier = { kind: "target-specific" as const, target: "rust" as const, name: "generic-callable", value };
+  if (rustGenericCallableValue(carrier) === undefined) throw new Error("A generic callable requires an exact immutable origin and quantified signature.");
+  return Object.freeze({ ...carrier, value: snapshotClosedMetadata(value) });
 }
 
 export function rustGenericCallableValue(carrier: TargetTypeRef | undefined): RustGenericCallableValue | undefined {
   if (carrier?.kind !== "target-specific" || carrier.target !== "rust" || carrier.name !== "generic-callable") return undefined;
   const value = carrier.value;
   if (typeof value !== "object" || value === null || Array.isArray(value) ||
-    !hasExactObjectKeys(value, ["environment", "signature"])) return undefined;
+    !hasExactObjectKeys(value, ["environment", "signature", "origin"])) return undefined;
   const selected = value as Partial<RustGenericCallableValue>;
+  const origin = selected.origin;
+  if (typeof origin !== "object" || origin === null || !hasExactObjectKeys(origin, ["fileName", "declarationIdentity"]) ||
+    typeof origin.fileName !== "string" || origin.fileName.length === 0 ||
+    typeof origin.declarationIdentity !== "string" || origin.declarationIdentity.length === 0) return undefined;
   const signature = selected.signature;
   if (typeof signature !== "object" || signature === null || Array.isArray(signature) ||
     !hasExactObjectKeys(signature, ["environmentParameters", "parameters", "result", "typeParameters"]) ||

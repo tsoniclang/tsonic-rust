@@ -89,7 +89,7 @@ export function resolveFunctionExpressionCarrier(
         result: resolvedSourceCallable.result,
       }
     : rustGenericCallableValue(sourceSelected) !== undefined && genericNames !== undefined
-      ? rustGenericCallableTargetType(genericNames, fallbackParameterCarriers, resolvedSourceCallable.result)
+      ? rustGenericCallableTargetType(genericNames, fallbackParameterCarriers, resolvedSourceCallable.result, rustGenericCallableValue(sourceSelected)!.origin)
       : rustCallableTargetType(fallbackParameterCarriers, resolvedSourceCallable.result));
   if (selectedExpected === undefined || (selectedExpected.kind !== "function-pointer" &&
     rustClosureProtocol(selectedExpected) === undefined &&
@@ -278,7 +278,7 @@ export function resolveFunctionExpressionCarrier(
   const closureCarrier = selectedExpected.kind === "function-pointer" || selectedExpected.kind === "closure"
     ? { ...selectedExpected, args: finalizedParameterCarriers, result: valueResult }
     : rustGenericCallableValue(selectedExpected) !== undefined && genericNames !== undefined
-      ? rustGenericCallableTargetType(genericNames, finalizedParameterCarriers, valueResult)
+      ? rustGenericCallableTargetType(genericNames, finalizedParameterCarriers, valueResult, rustGenericCallableValue(selectedExpected)!.origin)
     : rustCallableTargetType(finalizedParameterCarriers, valueResult);
   if (closureCarrier === undefined ||
     !recordCallableReturnFact(walk, expression, generator?.resultCarrier ?? bodyCarrier)) return undefined;

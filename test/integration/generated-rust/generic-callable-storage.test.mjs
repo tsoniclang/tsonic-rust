@@ -110,3 +110,45 @@ export async function main(): Promise<void> {
 }
 `);
 });
+
+test("independent package factories retain their own generic callable implementations and effects", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: ["js"],
+    target: { id: "rust", options: { outputType: "bin", crateName: "independent_generic_factories" } },
+    sourcePackages: {
+      fingerprint: "independent-generic-factories", rootPackageId: "app",
+      packages: [
+        ...["pure", "throwing"].map(name => ({ id: name, name, packageRoot: `/src/${name}`, sourceRoot: "/src",
+          sourceFiles: [`/src/${name}.ts`], dependencies: [], componentId: name,
+          exports: [{ specifier: name, sourceFile: `/src/${name}.ts` }] })),
+        { id: "app", name: "app", packageRoot: "/src", sourceRoot: "/src", sourceFiles: ["/src/index.ts"],
+          dependencies: ["pure", "throwing"], componentId: "app", exports: [{ specifier: "app", sourceFile: "/src/index.ts" }] },
+      ],
+      components: [
+        ...["pure", "throwing"].map(name => ({ id: name, packages: [name], dependencies: [] })),
+        { id: "app", packages: ["app"], dependencies: ["pure", "throwing"] },
+      ],
+    },
+    files: {
+      "pure.ts": `export function create(): <T>(value: T) => T { return <T>(value: T): T => value; }`,
+      "throwing.ts": `export function create(fail: boolean): <T>(value: T) => T {
+  return <T>(value: T): T => { if (fail) throw new Error("selected"); return value; };
+}`,
+      "index.ts": `import { create as pure } from "./pure.js";
+import { create as throwing } from "./throwing.js";
+export function main(): void {
+  const first = pure();
+  const alias = first;
+  const second = throwing(false);
+  if (alias<number>(7) !== 7 || first<string>("native") !== "native" || !second<boolean>(true)) throw new Error("result");
+  let failed = false;
+  try { throwing(true)<number>(9); } catch { failed = true; }
+  if (!failed) throw new Error("effects");
+}`,
+    },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  const pureOutput = result.artifacts.filter(artifact => /(?:^|\/)pure\.rs$/u.test(artifact.path)).map(artifact => artifact.text).join("\n");
+  assert.match(pureOutput, /fn call</u);
+  assert.doesNotMatch(pureOutput, /fn call<[^}]*?-> Result/u);
+  validateGeneratedProject("independent-generic-factories", result.artifacts, { run: true });
+});

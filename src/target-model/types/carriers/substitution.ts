@@ -351,6 +351,7 @@ function substituteCarrierParts(
       }
       const callable = rustGenericCallableValue(type);
       if (callable !== undefined) return rustGenericCallableCarrier({
+        origin: callable.origin,
         signature: callable.signature,
         environment: callable.environment.map(argument => substituteRustTargetGenerics(
           argument, substitutions, lifetimeSubstitutions, constSubstitutions, normalize)),

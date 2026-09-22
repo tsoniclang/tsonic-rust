@@ -28,7 +28,9 @@ export function planRustClassEnvironmentItems(declaration: Node, context: RustPl
   const publiclyReachable = rustSourceItemIsPubliclyReachable(context, environment.typeName);
   if (environment.constructorValue) {
     context.usedAliases?.add("rt");
-    fields.push({ name: environment.identityFieldName, visibility: "crate", type: { kind: "named", path: "rt::ObjectIdentity" } });
+    fields.push({ name: environment.identityFieldName, visibility: "crate", type: {
+      kind: "named", path: "core::cell::OnceCell", genericArguments: [{ kind: "type", type: { kind: "named", path: "rt::ObjectIdentity" } }],
+    } });
   }
   for (const capture of environment.captures) {
     const type = rustTypeFromCarrierInContext(capture.storage === "location"
@@ -62,8 +64,15 @@ export function planRustClassEnvironmentItems(declaration: Node, context: RustPl
     derives: environment.storage === "value" && !manualClone ? ["Clone", "Copy"] : [], generics, fields },
     ...(identityOwner === undefined ? [] : [rustProjectObjectIdentityImplementation(
       identityOwner, generics,
-      { kind: "reference", expr: { kind: "field", receiver: { kind: "path", path: "self" }, name: environment.identityFieldName } },
-    )]),
+      { kind: "method-call", receiver: { kind: "field", receiver: { kind: "path", path: "self" }, name: environment.identityFieldName },
+        method: "get_or_init", args: [{ kind: "path", path: "rt::ObjectIdentity::new" }] },
+    ), { kind: "impl", generics, target: identityOwner, trait: { kind: "named", path: "PartialEq" }, functions: [{
+      name: "eq", visibility: "private", generics: emptyRustGenerics, selfParam: rustSelfParameter("ref"),
+      params: [{ name: "other", type: { kind: "reference", mutable: false, referent: { kind: "named", path: "Self" } } }],
+      returnType: { kind: "primitive", name: "bool" }, body: { statements: [{ kind: "tail", expr: {
+        kind: "call", path: "core::ptr::eq", args: [{ kind: "path", path: "self" }, { kind: "path", path: "other" }],
+      } }] },
+    }] }, { kind: "impl", generics, target: identityOwner, trait: { kind: "named", path: "Eq" }, functions: [] }]),
     ...(target === undefined ? [] : [
       ...(environment.copy ? [{ kind: "impl" as const, generics, target, trait: { kind: "named" as const, path: "Copy" }, functions: [] }] : []),
       { kind: "impl" as const, generics, target, trait: { kind: "named" as const, path: "Clone" }, functions: [{
@@ -84,7 +93,7 @@ export function planRustClassEnvironmentValue(declaration: Node, context: RustPl
   if (type?.kind !== "named") return undefined;
   const fields: { name: string; value: RustExpr }[] = [];
   if (environment.constructorValue) fields.push({ name: environment.identityFieldName,
-    value: { kind: "call", path: "rt::ObjectIdentity::new", args: [] } });
+    value: { kind: "call", path: "core::cell::OnceCell::new", args: [] } });
   const bindings: { name: string; value: RustExpr }[] = [];
   for (const capture of environment.captures) {
     const binding = context.input.program.facts.getFact(capture.reference, rustSourceBindingFactKey);

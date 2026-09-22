@@ -54,6 +54,7 @@ import {
 } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
+import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
 import { rustSourceTypeCarrierValue } from "../../target-model/types/index.js";
 import { rustIntegerKindIsExactlyRepresentableAsFloat64 } from "../../target-model/conversions/numeric-promotion.js";
 import {
@@ -481,6 +482,9 @@ export function selectRustBinaryOperator(
   }
   const equality = equalityTokens[operatorKindName];
   if (equality !== undefined) {
+    if (rustClassConstructorInstance(left) !== undefined && rustTargetTypeRefEquals(left, right)) {
+      return { kind: "operator-token", rustOperator: equality, resultCarrier: boolCarrier };
+    }
     if (rustTargetTypeRefEquals(left, rustJsErrorTargetType()) && rustTargetTypeRefEquals(left, right)) {
       return {
         kind: "operator-call",

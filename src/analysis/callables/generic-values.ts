@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { RustPlanQueries } from "../../target-model/facts/selections.js";
-import type { RustGenericCallableSignature } from "../../target-model/types/carriers/generic-callables.js";
+import type { RustGenericCallableOrigin, RustGenericCallableSignature } from "../../target-model/types/carriers/generic-callables.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { closedMetadataKey, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { rustTargetTypeParameterNames } from "../../target-model/types/carriers/generic-references.js";
@@ -29,6 +29,7 @@ export interface RustGenericCallableImplementation {
 
 export interface RustGenericCallableDefinition {
   readonly identity: string;
+  readonly origin: RustGenericCallableOrigin;
   readonly targetName: string;
   readonly storage: "value" | "shared";
   readonly ownerFileName: string;
@@ -47,7 +48,7 @@ export function createRustGenericCallablePlan(
   ast: AstReader, sourceFiles: readonly SourceFile[], facts: RustPlanQueries, names: RustNamePlan,
   navigation: SourceProgramNavigation,
 ): RustGenericCallablePlan {
-  const groups = new Map<string, { signature: RustGenericCallableSignature; implementations: RustGenericCallableImplementation[] }>();
+  const groups = new Map<string, { origin: RustGenericCallableOrigin; signature: RustGenericCallableSignature; implementations: RustGenericCallableImplementation[] }>();
   const implementations = new Map<Node, RustGenericCallableImplementation>();
   const issues: RustSourceCallableSpecializationIssue[] = [];
   const usedNames = new Set<string>();
@@ -68,7 +69,7 @@ export function createRustGenericCallablePlan(
     if (carrier !== undefined && value !== undefined) {
       const capture = facts.getFact(node, rustClosureCaptureFactKey);
       const signatureKey = closedMetadataKey(value.signature);
-      const identity = createHash("sha256").update(signatureKey).digest("hex");
+      const identity = closedMetadataKey(value.origin);
       const sourceFileName = ast.getFileName(ast.getSourceFile(node));
       const implementationIdentity = createHash("sha256").update(`${sourceFileName}:${ast.pos(node)}:${ast.end(node)}`).digest("hex");
       const substitutions = new Map<string, TargetTypeRef>();
@@ -92,9 +93,9 @@ export function createRustGenericCallablePlan(
         });
         const group = groups.get(identity);
         if (group !== undefined && closedMetadataKey(group.signature) !== signatureKey) {
-          issues.push({ subject: node, message: "Generic callable identities collided; no environment can be selected." });
+          issues.push({ subject: node, message: "One selected generic callable contract has conflicting native signatures; no implementation can be selected." });
         } else {
-          const selected = group ?? { signature: snapshotClosedMetadata(value.signature), implementations: [] };
+          const selected = group ?? { origin: value.origin, signature: snapshotClosedMetadata(value.signature), implementations: [] };
           selected.implementations.push(implementation);
           groups.set(identity, selected);
           implementations.set(node, implementation);
@@ -111,17 +112,20 @@ export function createRustGenericCallablePlan(
         facts.getFact(implementation.declaration, rustGeneratorFactKey) === undefined &&
         implementation.captures.every(capture => capture.storage === "value" && isRustCopyCarrier(capture.storageCarrier));
     }) ? "value" as const : "shared" as const;
-    return Object.freeze({ identity, targetName: allocateRustGeneratedName(usedNames, `GenericCallable${identity.slice(0, 12)}`),
+    const nativeIdentity = createHash("sha256").update(identity).digest("hex");
+    return Object.freeze({ identity, origin: group.origin, targetName: allocateRustGeneratedName(usedNames, `GenericCallable${nativeIdentity.slice(0, 12)}`),
       storage,
       ownerFileName: group.implementations[0]!.sourceFileName, signature: group.signature,
       implementations: Object.freeze(group.implementations),
     });
   });
-  const bySignature = new Map(definitions.map(definition => [closedMetadataKey(definition.signature), definition]));
+  const byOrigin = new Map(definitions.map(definition => [closedMetadataKey(definition.origin), definition]));
   return Object.freeze({ definitions: Object.freeze(definitions), issues: Object.freeze(issues),
     definitionFor(carrier: TargetTypeRef) {
       const value = rustGenericCallableValue(carrier);
-      return value === undefined ? undefined : bySignature.get(closedMetadataKey(value.signature));
+      if (value === undefined) return undefined;
+      const selected = byOrigin.get(closedMetadataKey(value.origin));
+      return selected === undefined || closedMetadataKey(selected.signature) !== closedMetadataKey(value.signature) ? undefined : selected;
     },
     implementationFor: (declaration: Node) => implementations.get(declaration),
   });
