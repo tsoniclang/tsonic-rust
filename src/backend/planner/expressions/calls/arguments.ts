@@ -149,7 +149,13 @@ function shapeRustRestSequenceInputs(
     if (value === undefined) {
       return undefined;
     }
-    segments.push({ value, sequence: input.sourceForm === "spread-sequence" });
+    const sequence = input.sourceForm === "spread-sequence";
+    segments.push({
+      value: sequence && isRustJsArrayCarrier(input.carrier)
+        ? { kind: "method-call", receiver: value, method: "iter_values", args: [] }
+        : value,
+      sequence,
+    });
   }
   const assembled = planRustRestAssembly(segments, context);
   return assembled === undefined ? undefined : planSourceRestArray(assembled, parameter.parameterCarrier, context);
