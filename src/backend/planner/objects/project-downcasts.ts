@@ -2,6 +2,8 @@ import type { Node } from "@tsonic/tsts";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustSelectedProjectDowncast } from "../../../analysis/facts/value-projections.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustProjectDowncastRoute } from "../../../policy/types/project-types.js";
+import { checkedProjectProjectionResultType, planCheckedProjectProjectionCall } from "./checked-project-projections.js";
 import type {
   RustProjectDowncastFact,
   RustTargetOperationFact,
@@ -64,10 +66,12 @@ export function planRustProjectDowncastValue(
   const sourceDefinition = context.input.program.projectTypes.definitionForCarrier(dispatchCarrier);
   const targetDefinition = context.input.program.projectTypes.definitionForCarrier(targetCarrier);
   const targetType = rustTypeFromCarrierInContext(targetCarrier, context);
+  const targetValue = rustSourceTypeCarrierValue(targetCarrier);
+  const targetPath = targetValue === undefined ? undefined : sourceTypePath(context, targetValue);
   const optionalElement = rustOptionElementCarrier(sourceCarrier);
   const selected = rustSelectedProjectDowncast(context.input.program.facts, node);
-  if (sourceDefinition === undefined || targetDefinition === undefined || targetType === undefined ||
-    selected === undefined ||
+  if (sourceDefinition === undefined || targetDefinition === undefined || targetType === undefined || targetPath === undefined ||
+    selected === undefined || selected.projection === undefined ||
     !rustTargetTypeRefEquals(selected.sourceCarrier, sourceCarrier) ||
     !rustTargetTypeRefEquals(selected.dispatchCarrier, dispatchCarrier) ||
     !rustTargetTypeRefEquals(selected.targetCarrier, targetCarrier) ||
@@ -99,13 +103,22 @@ export function planRustProjectDowncastValue(
         method: "unwrap",
         args: [],
       };
+  const result: RustExpr = selected.projection.kind === "closed"
+    ? { kind: "struct-literal", path: targetPath, fields: [
+        { name: rustProjectObjectIdentityField, value: cloneProjectField(valuePath, rustProjectObjectIdentityField) },
+        { name: rustProjectObjectDispatchField, value: { kind: "method-call", receiver: {
+          kind: "method-call", receiver: cloneProjectField(valuePath, rustProjectObjectDispatchField),
+          method: selected.projection.slot, args: [],
+        }, method: "unwrap", args: [] } },
+      ] }
+    : { kind: "method-call", receiver: { kind: "associated-call",
+        owner: targetType, method: "try_from",
+        args: [{ kind: "method-call", receiver: valuePath, method: "clone", args: [] }],
+      }, method: "unwrap", args: [] };
   return {
     kind: "block",
     bindings: [{ name: valueName, value: sourceReference }],
-    value: { kind: "method-call", receiver: { kind: "associated-call",
-      owner: targetType, method: "try_from",
-      args: [{ kind: "method-call", receiver: valuePath, method: "clone", args: [] }],
-    }, method: "unwrap", args: [] },
+    value: result,
   };
 }
 
@@ -155,6 +168,8 @@ export function planRustProjectTypeTest(
       ));
       return undefined;
     }
+    const projected = projectDowncastDispatch({ kind: "path", path: "value" }, route, context);
+    if (projected === undefined) return undefined;
     return {
       kind: "method-call",
       receiver: { kind: "method-call", receiver: expression, method: "as_ref", args: [] },
@@ -164,7 +179,7 @@ export function planRustProjectTypeTest(
         params: [{ name: "value", byRefCopy: false }],
         body: {
           kind: "option-presence",
-          receiver: projectDowncastDispatch({ kind: "path", path: "value" }, route.slot),
+          receiver: projected,
           present: true,
         },
       }],
@@ -207,8 +222,10 @@ export function planRustProjectTypeTestSelection(
     return undefined;
   }
   const sourceExpression = planRustNonConsumingProjectValue(node, expression, context);
+  const projected = projectDowncastDispatch(sourceExpression, route, context);
+  if (projected === undefined) return undefined;
   return {
-    expression: projectDowncastDispatch(sourceExpression, route.slot),
+    expression: projected,
     selectedCarrier: fact.targetCarrier,
     selectedValue: (dispatch): RustExpr => ({
       kind: "struct-literal",
@@ -224,11 +241,19 @@ export function planRustProjectTypeTestSelection(
   };
 }
 
-function projectDowncastDispatch(expression: RustExpr, slot: string): RustExpr {
+function projectDowncastDispatch(
+  expression: RustExpr, route: RustProjectDowncastRoute, context: RustPlanContext,
+): RustExpr | undefined {
+  const receiver = cloneProjectField(expression, rustProjectObjectDispatchField);
+  if (route.kind === "checked") {
+    const resultType = checkedProjectProjectionResultType(route.targetCarrier, context);
+    return resultType === undefined ? undefined
+      : planCheckedProjectProjectionCall(receiver, route.slot, resultType);
+  }
   return {
     kind: "method-call",
-    receiver: cloneProjectField(expression, rustProjectObjectDispatchField),
-    method: slot,
+    receiver,
+    method: route.slot,
     args: [],
   };
 }

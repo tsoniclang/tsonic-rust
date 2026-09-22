@@ -31,6 +31,7 @@ import { rustProjectObjectIdentityImplementation } from "../project-identity.js"
 import { rustArrayFieldMutationName, rustArrayFieldMutationType } from "./array-fields.js";
 import { planRustProjectProjectionImplementations } from "../project-projections.js";
 import { rustStructuralDispatchType } from "../project-structural-views.js";
+import { checkedProjectProjectionSignature } from "../checked-project-projections.js";
 
 export function projectIdentityImplementations(
   definition: RustProjectTypeDefinition,
@@ -151,6 +152,13 @@ export function planProjectDispatchTrait(
     return undefined;
   }
   const functions: RustTraitFunction[] = [];
+  const projectionSlot = context.input.program.projectTypes.checkedProjectionSlot(definition);
+  if (projectionSlot !== undefined) {
+    const used = publiclyReachable || context.input.program.projectTypes.definitions.some(target =>
+      context.input.liveness.isDowncastUsed(definition.declaration, target.declaration));
+    functions.push({ ...checkedProjectProjectionSignature(projectionSlot),
+      ...(used ? {} : { deadCode: "generated-unused-dispatch" as const }) });
+  }
   for (const route of context.input.program.projectTypes.downcastRoutesFor(definition)) {
     const returnType = projectDowncastReturnType(route, context);
     if (returnType === undefined) {

@@ -3,11 +3,12 @@ import type { RustProjectDowncastRoute, RustProjectTypePolicy } from "./project-
 import { rustTargetTypeParameterNames } from "../../target-model/types/carriers/generic-references.js";
 import { inferRustTargetTypeParameterBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import type { RustProjectProjectionRequirement } from "../../target-model/types/project-projections.js";
+import type { RustProjectProjectionRequirement, RustProjectProjectionSelection } from "../../target-model/types/project-projections.js";
 
 export interface RustProjectProjectionImplementation {
   readonly route: RustProjectDowncastRoute;
   readonly sourceCarrier: TargetTypeRef;
+  readonly genericOwner?: import("./project-types.js").RustProjectTypeDefinition;
 }
 
 export function selectRustProjectProjectionImplementation(
@@ -27,13 +28,21 @@ export function selectRustProjectProjectionImplementation(
 export function hasRustProjectProjection(
   sourceCarrier: TargetTypeRef, targetCarrier: TargetTypeRef, projectTypes: RustProjectTypePolicy,
 ): boolean {
+  return selectRustProjectProjection(sourceCarrier, targetCarrier, projectTypes) !== undefined;
+}
+
+export function selectRustProjectProjection(
+  sourceCarrier: TargetTypeRef, targetCarrier: TargetTypeRef, projectTypes: RustProjectTypePolicy,
+): RustProjectProjectionSelection | undefined {
   const source = projectTypes.definitionForCarrier(sourceCarrier);
   const target = projectTypes.definitionForCarrier(targetCarrier);
-  if (source === undefined || target === undefined) return false;
+  if (source === undefined || target === undefined) return undefined;
   const relationship = projectTypes.relationship(targetCarrier, source);
-  if (relationship.kind !== "related" || !rustTargetTypeRefEquals(relationship.targetType, sourceCarrier)) return false;
-  if (projectTypes.downcastRoute(source, targetCarrier) !== undefined) return true;
+  if (relationship.kind !== "related" || !rustTargetTypeRefEquals(relationship.targetType, sourceCarrier)) return undefined;
+  const route = projectTypes.downcastRoute(source, targetCarrier);
+  if (route !== undefined) return Object.freeze({ kind: route.kind, slot: route.slot });
   const parameters = new Set(rustTargetTypeParameterNames(targetCarrier));
   return parameters.size > 0 && projectTypes.downcastRoutesFor(source).some(route => route.target === target &&
-    inferRustTargetTypeParameterBindings(targetCarrier, route.targetCarrier, parameters) !== undefined);
+    inferRustTargetTypeParameterBindings(targetCarrier, route.targetCarrier, parameters) !== undefined)
+    ? Object.freeze({ kind: "generic" }) : undefined;
 }

@@ -1,6 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustContextualValueConversion } from "../../target-model/conversions/contextual.js";
+import type { RustProjectProjectionSelection } from "../../target-model/types/project-projections.js";
 
 export type RustOptionProjectionFact =
   | {
@@ -40,6 +41,7 @@ export type RustFlowReadProjectionFact =
     }
   | {
       readonly kind: "project-downcast";
+      readonly projection: RustProjectProjectionSelection;
       readonly sourceCarrier: TargetTypeRef;
       readonly dispatchCarrier: TargetTypeRef;
       readonly selectedCarrier: TargetTypeRef;
@@ -72,6 +74,7 @@ export interface RustProjectUpcastFact {
 }
 
 export interface RustProjectDowncastFact {
+  readonly projection: RustProjectProjectionSelection;
   readonly sourceCarrier: TargetTypeRef;
   readonly dispatchCarrier: TargetTypeRef;
   readonly targetCarrier: TargetTypeRef;

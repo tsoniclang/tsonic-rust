@@ -86,6 +86,9 @@ export function createRustProjectTypePolicyRegistry(): RustProjectTypePolicyRegi
     downcastRoutesFor(definition) {
       return requireCurrent().downcastRoutesFor(definition);
     },
+    checkedProjectionSlot(definition) {
+      return requireCurrent().checkedProjectionSlot(definition);
+    },
     downcastRoute(source, targetCarrier) {
       return requireCurrent().downcastRoute(source, targetCarrier);
     },

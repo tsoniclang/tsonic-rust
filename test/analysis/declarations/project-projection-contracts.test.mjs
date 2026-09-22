@@ -12,7 +12,7 @@ const target = type => rustSourceTypeCarrier(box.fileName, box.sourceName, "obje
 const numberType = { kind: "source-primitive", name: "float64" };
 const stringType = { kind: "target-named", id: "rust.std.String", genericArguments: [] };
 const open = target({ kind: "type-parameter", name: "Value" });
-const routes = [numberType, stringType].map((type, index) => ({ source: base, target: box, targetCarrier: target(type), slot: `selected_${index}` }));
+const routes = [numberType, stringType].map((type, index) => ({ kind: "closed", source: base, target: box, targetCarrier: target(type), slot: `selected_${index}` }));
 const policy = {
   definitionForCarrier(carrier) {
     const value = rustSourceTypeCarrierValue(carrier);
@@ -50,4 +50,31 @@ test("missing binders, unsupported closed types and mismatched projection identi
   const broken = { ...policy, relationship: () => ({ kind: "ambiguous", targetTypes: [source] }) };
   assert.equal(hasRustProjectProjection(source, open, broken), false);
   assert.equal(selectRustProjectProjectionImplementation({ sourceCarrier: source, targetCarrier: open }, routes[0], broken), undefined);
+});
+
+test("checked generic projections belong to their generic target, never the base package", () => {
+  const checked = {
+    ...policy,
+    openCarrier: definition => definition === base ? source : open,
+    downcastRoute: (definition, carrier) => definition === base &&
+      rustSourceTypeCarrierValue(carrier)?.typeName === "Box"
+      ? { kind: "checked", source: base, target: box, targetCarrier: carrier, slot: "project_base" }
+      : undefined,
+  };
+  const collector = createRustProjectProjectionRequirementCollector(new Set(["Value"]), checked);
+  assert.equal(collector.require({ sourceCarrier: source, targetCarrier: open }), true);
+  assert.equal(collector.require({ sourceCarrier: source, targetCarrier: target(numberType) }), true);
+  assert.equal(collector.require({ sourceCarrier: source, targetCarrier: target(stringType) }), true);
+  const index = createRustProjectProjectionImplementationIndex(collector.seal(), checked);
+  assert.deepEqual(index(base), []);
+  assert.equal(index(box).length, 1);
+  assert.equal(index(box)[0].genericOwner, box);
+  assert.ok(rustTargetTypeRefEquals(index(box)[0].route.targetCarrier, open));
+  assert.ok(Object.isFrozen(index(box)));
+  assert.ok(Object.isFrozen(index(box)[0]));
+  assert.equal(createRustProjectProjectionRequirementCollector(new Set(), checked)
+    .require({ sourceCarrier: source, targetCarrier: open }), false);
+  assert.throws(() => createRustProjectProjectionImplementationIndex(collector.seal(), {
+    ...checked, relationship: () => ({ kind: "unrelated" }),
+  }), /lost its generic native relationship/);
 });

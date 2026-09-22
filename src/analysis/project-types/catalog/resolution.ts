@@ -604,12 +604,20 @@ export function createRustProjectTypePolicy(
     RustProjectTypeDefinition,
     readonly RustProjectDowncastRoute[]
   >();
+  const checkedProjectionSlots = new Map<RustProjectTypeDefinition, string>();
   for (const source of frozenDefinitions) {
     const usedNames = dispatchUsedNamesByDefinition.get(source);
     if (usedNames === undefined) {
       throw new Error("Rust project definition has no dispatch name scope.");
     }
     const sourceComponent = host.sourcePackageComponentForFile(source.fileName);
+    if (!source.genericParameters.some(parameter => parameter.kind === "lifetime") &&
+      (implementationsByContract.get(source) ?? []).some(target =>
+        target.genericParameters.some(parameter => parameter.kind === "type") ||
+        host.sourcePackageComponentForFile(target.fileName) !== sourceComponent)) {
+      checkedProjectionSlots.set(source, allocateGeneratedName(usedNames,
+        `project_${rustGeneratedNameComponent(source.targetName)}`));
+    }
     const implementations = sourceComponent === undefined
       ? []
       : (implementationsByContract.get(source) ?? [])
@@ -629,6 +637,7 @@ export function createRustProjectTypePolicy(
     const ordered = [...targets.values()].sort((left, right) => compareProjectDefinitions(left.target, right.target) ||
       closedMetadataKey(left.carrier).localeCompare(closedMetadataKey(right.carrier), "en"));
     downcastRoutesByDefinition.set(source, Object.freeze(ordered.map(({ target, carrier }) => Object.freeze({
+      kind: "closed" as const,
       source,
       target,
       targetCarrier: carrier,
@@ -801,10 +810,19 @@ export function createRustProjectTypePolicy(
     downcastRoutesFor(definition) {
       return downcastRoutesByDefinition.get(definition) ?? Object.freeze([]);
     },
+    checkedProjectionSlot(definition) {
+      return checkedProjectionSlots.get(definition);
+    },
     downcastRoute(source, targetCarrier) {
       const matches = (downcastRoutesByDefinition.get(source) ?? []).filter((route) =>
         rustTargetTypeRefEquals(route.targetCarrier, targetCarrier));
-      return matches.length === 1 ? matches[0] : undefined;
+      if (matches.length !== 0) return matches.length === 1 ? matches[0] : undefined;
+      const target = definitionForCarrier(targetCarrier);
+      const slot = checkedProjectionSlots.get(source);
+      if (slot === undefined || target === undefined ||
+        target.genericParameters.some(parameter => parameter.kind === "lifetime") ||
+        relationship(targetCarrier, source).kind !== "related") return undefined;
+      return Object.freeze({ kind: "checked", source, target, targetCarrier, slot });
     },
     constructorsForDefinition(definition) {
       return constructorsByDefinition.get(definition) ?? Object.freeze([]);

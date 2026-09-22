@@ -35,6 +35,23 @@ export function createRustProjectProjectionImplementationIndex(
   for (const requirement of requirements) {
     const source = projectTypes.definitionForCarrier(requirement.sourceCarrier);
     if (source === undefined) throw new Error("A finalized projection has no source definition.");
+    const selected = projectTypes.downcastRoute(source, requirement.targetCarrier);
+    if (selected?.kind === "checked") {
+      const targetCarrier = projectTypes.openCarrier(selected.target);
+      const relation = projectTypes.relationship(targetCarrier, source);
+      const route = projectTypes.downcastRoute(source, targetCarrier);
+      if (relation.kind !== "related" || route?.kind !== "checked") {
+        throw new Error("A checked nominal projection lost its generic native relationship.");
+      }
+      const implementations = entries.get(selected.target) ?? [];
+      if (!implementations.some(implementation => implementation.route.source === source &&
+        rustTargetTypeRefEquals(implementation.route.targetCarrier, targetCarrier))) {
+        implementations.push(Object.freeze({ route, sourceCarrier: relation.targetType,
+          genericOwner: selected.target }));
+      }
+      entries.set(selected.target, implementations);
+      continue;
+    }
     const implementations = entries.get(source) ?? [];
     for (const route of projectTypes.downcastRoutesFor(source)) {
       if (implementations.some(implementation => implementation.route === route)) continue;
@@ -44,6 +61,12 @@ export function createRustProjectProjectionImplementationIndex(
     entries.set(source, implementations);
   }
   const sealed = new Map([...entries].map(([source, implementations]) => [source, Object.freeze(implementations)]));
+  const genericImplementations = [...entries.values()].flat().filter(implementation => implementation.genericOwner !== undefined);
+  for (const [owner, implementations] of sealed) {
+    sealed.set(owner, Object.freeze(implementations.filter(implementation => implementation.genericOwner !== undefined ||
+      !genericImplementations.some(generic => generic.route.source === implementation.route.source &&
+        generic.route.target === implementation.route.target))));
+  }
   const empty = Object.freeze([]);
   return definition => sealed.get(definition) ?? empty;
 }

@@ -468,6 +468,7 @@ export function createImplementationPlan(
       contract,
       rootType,
       wrapperType,
+      contracts,
       finalizedStateFields,
       accessors,
       methods,

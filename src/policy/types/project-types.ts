@@ -83,6 +83,7 @@ export type RustProjectTypeRelationship =
   | { readonly kind: "ambiguous"; readonly targetTypes: readonly TargetTypeRef[] };
 
 export interface RustProjectDowncastRoute {
+  readonly kind: "closed" | "checked";
   readonly source: RustProjectTypeDefinition;
   readonly target: RustProjectTypeDefinition;
   readonly targetCarrier: TargetTypeRef;
@@ -123,6 +124,7 @@ export interface RustProjectTypePolicy {
   contractsForClass(definition: RustProjectTypeDefinition): readonly RustProjectTypeDefinition[] | undefined;
   concreteClassesFor(definition: RustProjectTypeDefinition): readonly RustProjectTypeDefinition[];
   downcastRoutesFor(definition: RustProjectTypeDefinition): readonly RustProjectDowncastRoute[];
+  checkedProjectionSlot(definition: RustProjectTypeDefinition): string | undefined;
   downcastRoute(
     source: RustProjectTypeDefinition,
     targetCarrier: TargetTypeRef,

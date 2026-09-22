@@ -35,6 +35,8 @@ import type { ProjectClassStateLayer } from "./model.js";
 import type { RustObjectRepresentation } from "../../../../analysis/project-types/object-representation.js";
 import { rustProjectMemberIsPrivate } from "../../../../analysis/project-types/member-privacy.js";
 import { checkRustDataWrite } from "../data-writes.js";
+import { planCheckedProjectProjectionImplementation } from "../checked-project-projections.js";
+import { rustProjectInstanceContracts } from "../../../../policy/types/project-types.js";
 import { rustArrayFieldMutationName, rustArrayFieldMutationType } from "./array-fields.js";
 
 export function planProjectRootImplementations(
@@ -164,6 +166,14 @@ function planRootContractFunctions(
   context: RustPlanContext,
 ): readonly RustImplFunction[] | undefined {
   const functions: RustImplFunction[] = [];
+  const projectionSlot = context.input.program.projectTypes.checkedProjectionSlot(contract);
+  if (projectionSlot !== undefined) {
+    const contracts = rustProjectInstanceContracts(context.input.program.projectTypes, concrete, concreteCarrier);
+    const projection = contracts === undefined ? undefined
+      : planCheckedProjectProjectionImplementation(projectionSlot, contracts, context);
+    if (projection === undefined) return undefined;
+    functions.push(projection);
+  }
   for (const route of context.input.program.projectTypes.downcastRoutesFor(contract)) {
     const relation = context.input.program.projectTypes.relationship(concreteCarrier, route.target);
     const matches = (route.target.kind === "interface" || context.input.program.projectTypes.classLineage(concrete)?.includes(route.target) === true) &&
