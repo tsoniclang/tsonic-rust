@@ -176,13 +176,24 @@ test("no runtime crate code inside tsonic-rust", () => {
   assert.throws(() => statSync(join(repositoryRoot, "crates")), /ENOENT/u);
 });
 
-test("project downcasts use closed generated routes without runtime type discovery", () => {
+test("project downcasts use closed routes and restrict checked Any to native output slots", () => {
+  const checkedProjectionOwner = join(sourceRoot, "backend/planner/objects/checked-project-projections.ts");
+  const checkedOwners = [];
   for (const { path, text } of sourceFiles) {
     assert.doesNotMatch(text, /std::any::Any|\bTypeId\b|\binto_any\b/u, `${path} uses runtime type discovery`);
     assert.doesNotMatch(text, /method:\s*"downcast"/u, `${path} emits a runtime downcast`);
+    assert.doesNotMatch(text, /\b(?:downcast_ref|downcast_unchecked)\b/u, `${path} bypasses the checked output-slot contract`);
+    if (/core::any::Any|\bdowncast_mut\b/u.test(text)) checkedOwners.push(path);
   }
+  assert.deepEqual(checkedOwners, [checkedProjectionOwner]);
+  const checkedProjection = readFileSync(checkedProjectionOwner, "utf8");
+  assert.match(checkedProjection, /selfParam: rustSelfParameter\("rc"\)/u);
+  assert.match(checkedProjection, /name: "output", type: \{ kind: "reference", mutable: true/u);
+  assert.match(checkedProjection, /path: "Option", genericArguments/u);
+  assert.match(checkedProjection, /path: "alloc::rc::Rc", genericArguments/u);
+  assert.match(checkedProjection, /kind: "lifetime", lifetime: \{ kind: "static" \}/u);
   const policy = readFileSync(
-    join(sourceRoot, "analysis/project-types/policy/resolution.ts"),
+    join(sourceRoot, "analysis/project-types/catalog/resolution.ts"),
     "utf8",
   );
   assert.match(policy, /downcastRoutesByDefinition/u);
@@ -962,7 +973,8 @@ test("Rust dead-code obligations are planner-local and normalized before output 
   assert.match(directives, /isStructuralFieldWritten/u);
   assert.match(directives, /isProjectTypeConstructed/u);
   assert.match(directives, /isProjectGeneratedFieldUsed/u);
-  assert.match(directives, /isStructuralShapeConstructed/u);
+  assert.match(directives, /isStructuralShapeUsed/u);
+  assert.doesNotMatch(directives, /isStructuralShapeConstructed/u);
   assert.doesNotMatch(
     directives,
     /sourceNavigation|declarationUseSummary|referencesToDeclaration/u,
@@ -1010,7 +1022,7 @@ test("Rust build and test entrypoints honor one explicit Tsonic checkout root", 
 
 test("sealed Rust project-type queries never re-enter source navigation", () => {
   const text = readFileSync(
-    join(sourceRoot, "analysis/project-types/policy/resolution.ts"),
+    join(sourceRoot, "analysis/project-types/catalog/resolution.ts"),
     "utf8",
   );
   const sealedPolicy = sourceSection(

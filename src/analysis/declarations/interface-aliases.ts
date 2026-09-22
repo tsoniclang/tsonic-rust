@@ -43,6 +43,25 @@ export function recordRustInterfaceRepresentationAliases(
     const declaredType = semantics.declarations.declaredType(declaration);
     const symbol = declaredType === undefined ? undefined : semantics.declarations.typeSymbol(declaredType);
     const declarations = symbol === undefined ? undefined : semantics.declarations.symbolDeclarations(symbol);
+    if (declaredType !== undefined && declarations !== undefined && declarations.length > 0 &&
+      declarations.every(member => ast.kindName(member) === "KindInterfaceDeclaration") &&
+      semantics.types.constructSignatures(declaredType).length !== 0) {
+      const carrier = resolveRustTargetTypeRef(declaredType, rustResolutionContext(walk, declaration), walk.operationOptions);
+      if (carrier === undefined || rustSourceTypeCarrierValue(carrier) !== undefined) {
+        appendRustDiagnostic(walk, "RUST_CONSTRUCTOR_INTERFACE_NOT_CLOSED",
+          "A constructor interface requires one complete checked construction and static-member representation.", declaration, []);
+        return false;
+      }
+      for (const merged of declarations) {
+        if (!walk.sourceTypes.registerRepresentationAlias(merged, carrier) || setCarrierFact(walk, merged, carrier) === undefined) {
+          appendRustDiagnostic(walk, "RUST_INTERFACE_REPRESENTATION_CONFLICT",
+            "Merged constructor interfaces require one exact native representation.", merged, []);
+          return false;
+        }
+        facts.set(merged, rustTypeOnlyDeclarationFactKey, { reason: "representation-alias" });
+      }
+      return true;
+    }
     if (declaredType === undefined || declarations === undefined || declarations.length === 0 ||
       declarations.some(member => ast.kindName(member) !== "KindInterfaceDeclaration" || ast.members(member).length !== 0)) return true;
     const heritage = source.navigation.declaredHeritage(declaration);

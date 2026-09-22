@@ -472,6 +472,7 @@ function genericOperationKind(fact: RustTargetOperationFact): RustTargetOperatio
     case "tuple-index":
     case "fixed-index":
     case "source-index-signature":
+    case "source-indexed-field":
       return "indexer";
     case "source-field":
     case "builtin-error-property":

@@ -82,19 +82,22 @@ export function recordFunctionBodyFacts(walk: RustFactWalk, declaration: Node, s
   const previousGenerator = walk.currentGeneratorDeclaration;
   walk.currentCallableDeclaration = declaration;
   walk.currentGeneratorDeclaration = generatorFact === undefined ? undefined : declaration;
-  if (body !== undefined) {
-    const statements = requireDenseSourceNodes(walk, ast.statements(body), "Function body contains an undefined or non-data statement slot.");
-    if (statements === undefined) {
-      walk.currentCallableDeclaration = previousCallable;
-      walk.currentGeneratorDeclaration = previousGenerator;
-      return;
+  try {
+    if (body !== undefined && ast.kindName(body) === KindBlock) {
+      const statements = requireDenseSourceNodes(walk, ast.statements(body), "Function body contains an undefined or non-data statement slot.");
+      if (statements === undefined) {
+        return;
+      }
+      for (const statement of statements) {
+        recordStatementFacts(walk, statement, sourceFile, returnCarrier);
+      }
+    } else if (body !== undefined) {
+      resolveExpressionCarrier(walk, body, sourceFile, returnCarrier);
     }
-    for (const statement of statements) {
-      recordStatementFacts(walk, statement, sourceFile, returnCarrier);
-    }
+  } finally {
+    walk.currentCallableDeclaration = previousCallable;
+    walk.currentGeneratorDeclaration = previousGenerator;
   }
-  walk.currentCallableDeclaration = previousCallable;
-  walk.currentGeneratorDeclaration = previousGenerator;
 }
 
 export function recordVariableStatementFacts(walk: RustFactWalk, statement: Node, sourceFile: SourceFile): void {
@@ -124,7 +127,7 @@ export function recordVariableStatementFacts(walk: RustFactWalk, statement: Node
         walk.context.facts.resolve(declaration, rustModuleBindingFactKey)
       : undefined;
     if (nativeCallable?.storage === "native-callable") {
-      recordNativeModuleFunctionBodyFacts(
+      recordFunctionBodyFacts(
         walk,
         nativeCallable.callableDeclaration,
         sourceFile,
@@ -205,39 +208,6 @@ export function recordExportAssignmentFacts(
     valueCarrier: finalized,
   }, [{ message: "rust finalized default export snapshot storage" }]);
   return finalized;
-}
-
-function recordNativeModuleFunctionBodyFacts(
-  walk: RustFactWalk,
-  declaration: Node,
-  sourceFile: SourceFile,
-): void {
-  const body = walk.context.ast.body(declaration);
-  const returnCarrier = walk.context.facts.get(declaration, rustSourceCallableReturnFactKey)?.returnCarrier ??
-    walk.context.facts.resolve(declaration, rustSourceCallableReturnFactKey)?.returnCarrier;
-  if (body === undefined || returnCarrier === undefined) {
-    return;
-  }
-  const previousCallable = walk.currentCallableDeclaration;
-  const previousGenerator = walk.currentGeneratorDeclaration;
-  walk.currentCallableDeclaration = declaration;
-  walk.currentGeneratorDeclaration = undefined;
-  if (walk.context.ast.kindName(body) === KindBlock) {
-    const statements = requireDenseSourceNodes(
-      walk,
-      walk.context.ast.statements(body),
-      "Native module function body contains an undefined or non-data statement slot.",
-    );
-    if (statements !== undefined) {
-      for (const statement of statements) {
-        recordStatementFacts(walk, statement, sourceFile, returnCarrier);
-      }
-    }
-  } else {
-    resolveExpressionCarrier(walk, body, sourceFile, returnCarrier);
-  }
-  walk.currentCallableDeclaration = previousCallable;
-  walk.currentGeneratorDeclaration = previousGenerator;
 }
 
 export function recordStatementFacts(

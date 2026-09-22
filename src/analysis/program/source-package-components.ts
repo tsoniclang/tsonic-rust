@@ -7,6 +7,10 @@ import type {
 import type {
   RustAnalysisContext,
 } from "./context.js";
+import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
+import { rustSourceCallableReturnFactKey, rustSourceParameterAbiFactKey, rustTypeAliasDeclarationFactKey } from "../facts/keys.js";
+import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export interface RustSourcePackageComponentSemantics {
   readonly componentId: string;
@@ -84,6 +88,65 @@ export function analyzeRustSourcePackageComponents(
     const names = sourceFileNamesByComponent.get(componentId) ?? new Set<string>();
     names.add(fileName);
     sourceFileNamesByComponent.set(componentId, names);
+  }
+  if (diagnostics.length > 0) {
+    return { kind: "rejected", diagnostics: Object.freeze(diagnostics) };
+  }
+
+  for (const definition of context.callableValues.generic.definitions) {
+    const components = new Set(definition.implementations.map(implementation =>
+      componentIdByFileName.get(normalizePath(implementation.sourceFileName))));
+    if (components.size !== 1 || components.has(undefined)) {
+      diagnostics.push(componentDiagnostic(
+        "RUST_GENERIC_CALLABLE_COMPONENT_NOT_CLOSED",
+        "One generic callable environment requires implementations from different source-package components; a backward native dependency cannot be invented.",
+      ));
+    }
+  }
+  const dependencies = new Map<string, ReadonlySet<string>>();
+  const reachable = (componentId: string): ReadonlySet<string> => {
+    const previous = dependencies.get(componentId);
+    if (previous !== undefined) return previous;
+    const result = new Set<string>();
+    const pending = [componentId];
+    for (let index = 0; index < pending.length; index++) {
+      const current = pending[index]!;
+      if (result.has(current)) continue;
+      result.add(current);
+      pending.push(...componentById.get(current)?.dependencies ?? []);
+    }
+    dependencies.set(componentId, result);
+    return result;
+  };
+  for (const file of context.sourceFiles) {
+    const component = componentIdByFileName.get(normalizePath(context.ast.getFileName(file)));
+    if (component === undefined) continue;
+    const visited = new Set<TargetTypeRef>();
+    const inspected = new Set<string>();
+    const inspect = (carrier: TargetTypeRef): void => {
+      if (visited.has(carrier)) return;
+      visited.add(carrier);
+      const definition = context.callableValues.generic.definitionFor(carrier);
+      if (definition !== undefined && !inspected.has(definition.identity)) {
+        inspected.add(definition.identity);
+        const owner = componentIdByFileName.get(normalizePath(definition.ownerFileName));
+        if (owner === undefined || !reachable(component).has(owner)) diagnostics.push(componentDiagnostic(
+          "RUST_GENERIC_CALLABLE_COMPONENT_NOT_CLOSED",
+          "A generic callable's native implementation is not owned by this source package or a declared dependency; an upstream package cannot name a downstream environment.",
+        ));
+      }
+      rustTargetTypeChildren(carrier).forEach(inspect);
+    };
+    const visit = (node: import("@tsonic/tsts").Node): void => {
+      if (context.facts.getFact(node, rustTypeAliasDeclarationFactKey)?.kind === "erased") return;
+      for (const carrier of [context.facts.getFact(node, rustRuntimeCarrierKey)?.carrier,
+        context.facts.getFact(node, rustSourceCallableReturnFactKey)?.returnCarrier,
+        context.facts.getFact(node, rustSourceParameterAbiFactKey)?.parameterCarrier]) {
+        if (carrier !== undefined) inspect(carrier);
+      }
+      context.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    visit(file);
   }
   if (diagnostics.length > 0) {
     return { kind: "rejected", diagnostics: Object.freeze(diagnostics) };

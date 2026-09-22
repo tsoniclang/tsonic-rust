@@ -1,4 +1,5 @@
 import { isDenseDataArray } from "../../metadata/closed-data.js";
+import { rustClassConstructorContract, rustClassConstructorFreeArguments } from "./class-constructors.js";
 import {
   rustFixedArrayCarrierValue,
   rustNamedTypeCarrierValue,
@@ -287,6 +288,19 @@ export function inferRustTargetGenericBindings(
         if (right.kind !== "target-specific") {
           return false;
         }
+        const leftConstructor = rustClassConstructorContract(left);
+        const rightConstructor = rustClassConstructorContract(right);
+        if (leftConstructor !== undefined || rightConstructor !== undefined) {
+          if (leftConstructor === undefined || rightConstructor === undefined) return false;
+          const leftInstance = rustSourceTypeCarrierValue(leftConstructor.instance)!;
+          const rightInstance = rustSourceTypeCarrierValue(rightConstructor.instance)!;
+          return leftInstance.fileName === rightInstance.fileName && leftInstance.typeName === rightInstance.typeName &&
+            leftConstructor.boundParameterIndexes.length === rightConstructor.boundParameterIndexes.length &&
+            leftConstructor.boundParameterIndexes.every((index, position) => index === rightConstructor.boundParameterIndexes[position]) &&
+            matchGenericArguments(rustClassConstructorFreeArguments(left)!, rustClassConstructorFreeArguments(right)!,
+              (pattern, actual) => match(pattern, actual, lifetimeContext),
+              (pattern, actual) => matchLifetime(pattern, actual, lifetimeContext), matchConst);
+        }
         const leftSource = rustSourceTypeCarrierValue(left);
         const rightSource = rustSourceTypeCarrierValue(right);
         if (leftSource !== undefined || rightSource !== undefined) {
@@ -307,6 +321,11 @@ export function inferRustTargetGenericBindings(
         if (leftStructural !== undefined || rightStructural !== undefined) {
           return leftStructural !== undefined && rightStructural !== undefined &&
             leftStructural.representation === rightStructural.representation &&
+            leftStructural.bases.length === rightStructural.bases.length &&
+            leftStructural.bases.every((base, index) => match(base, rightStructural.bases[index]!, lifetimeContext)) &&
+            (leftStructural.construction === undefined || rightStructural.construction === undefined
+              ? leftStructural.construction === rightStructural.construction
+              : match(leftStructural.construction, rightStructural.construction, lifetimeContext)) &&
             leftStructural.fields.length === rightStructural.fields.length &&
             leftStructural.fields.every((field, index) => {
               const other = rightStructural.fields[index];

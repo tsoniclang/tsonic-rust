@@ -14,7 +14,7 @@ import type {
   RustTargetAnalysisRequest,
   RustTargetProgram,
 } from "./model.js";
-import { createRustModuleInitializationPlan } from "./module-initialization-facts.js";
+import { createRustModuleInitializationPlan } from "../module-initialization/analyze.js";
 import { analyzeRustProviderErrorCarriers } from "./provider-errors.js";
 import { analyzeRustDeclarationGenericRequirements } from "../declarations/generic-requirements.js";
 import { analyzeRustValueLifetimes } from "./value-lifetimes.js";
@@ -101,7 +101,8 @@ export function analyzeRustTargetProgram(
     return rejectedTargetStage(sourcePackageComponents.diagnostics);
   }
 
-  const moduleInitialization = createRustModuleInitializationPlan(context);
+  const classValues = context.classValues.seal(context);
+  const moduleInitialization = createRustModuleInitializationPlan(context, classValues);
   const objectRepresentations = context.objectRepresentations.seal();
   const foundation = analyzeRustFoundation({
     selected: configuration.foundation,
@@ -137,6 +138,7 @@ export function analyzeRustTargetProgram(
     context.structuralShapes,
     context.typeDefinitions,
     valueLifetimes,
+    objectRepresentations,
   );
   if (declarationGenericRequirements.kind === "rejected") {
     return rejectedTargetStage(declarationGenericRequirements.diagnostics);
@@ -178,13 +180,14 @@ export function analyzeRustTargetProgram(
     projectMethodProperties: context.projectMethodProperties.seal(),
     projectFieldDispatch: context.projectFieldDispatch.seal(),
     sourceCallableSpecializations: context.sourceCallableSpecializations.seal(),
+    callableValues: context.callableValues.seal(),
     sourceLifetimes: context.sourceLifetimes,
     declarationGenericRequirements: declarationGenericRequirements.index,
     valueLifetimes,
     borrowedElementReads: analyzeRustBorrowedElementReads(context.ast, context.sourceFiles, facts, context.source.navigation),
     structuralShapes: context.structuralShapes.seal(),
     frozenDataWrites: context.frozenDataWrites.seal(),
-    classValues: context.classValues.seal(context),
+    classValues,
     runtimeReferences: runtimeReferences.plan,
     foundation: foundation.plan,
     binaryHooks,

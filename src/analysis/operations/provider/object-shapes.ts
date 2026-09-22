@@ -16,6 +16,8 @@ import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
 import { rustArgumentPassingKey, rustSelectedCallKey, rustSelectedOperationKey } from "../../../target-model/facts/selections.js";
 import { rustProjectCallableTargetName } from "../../facts/source-member-name.js";
 import { rustTargetOperationFactKey, rustOptionalChainFactKey } from "../../facts/keys.js";
+import { rustCallableInvocationResult } from "../../facts/callable-results.js";
+import { rustClassConstructorInstance } from "../../../target-model/types/carriers/class-constructors.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
 import { selectedCallCalleeDeclaration, selectedCallCalleeSymbol, selectedSourceValueCarrier, selectedValueCarrier } from "./operators.js";
@@ -39,6 +41,7 @@ import type { RustTargetOperationFact } from "../../facts/keys.js";
 import { selectRustPointerReturnCarrier } from "../../../policy/operations/pointer-return.js";
 import { resolveRustUnionMethodContracts, rustUnionMethodOwner, selectRustUnionMethods } from "./calls/union-methods.js";
 import { rustSourceUnionCarrierValue } from "../../../target-model/types/carriers/source-types.js";
+import { rustGenericCallableValueOwner } from "../../../policy/types/generic-callable-origin.js";
 
 export function mapSelectedJsSpecialCall(
   request: RustCheckedCallSelectionInput,
@@ -425,14 +428,14 @@ export function acceptProjectSourceCall(
   const selectedKind = ast.kindName(selectedDeclaration);
   const construction = checkedCallIsConstruction(request, context) ||
     selectedKind === "KindConstructor";
-  if (construction && selectedKind !== "KindClassDeclaration" && selectedKind !== "KindConstructor") {
+  if (construction && selectedKind !== "KindClassDeclaration" && selectedKind !== "KindClassExpression" && selectedKind !== "KindConstructor") {
     return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_CONSTRUCTOR_DECLARATION_INVALID", "Project-source construction evidence is not an exact constructor declaration or an implicit-constructor class declaration.");
   }
   const selectedCalleeDeclaration = asNode(selectedCallCalleeDeclaration(request), context);
   const selectedOwner = construction && selectedCalleeDeclaration !== undefined &&
-      ast.kindName(selectedCalleeDeclaration) === "KindClassDeclaration"
+      (ast.kindName(selectedCalleeDeclaration) === "KindClassDeclaration" || ast.kindName(selectedCalleeDeclaration) === "KindClassExpression")
     ? selectedCalleeDeclaration
-    : selectedKind === "KindClassDeclaration"
+    : selectedKind === "KindClassDeclaration" || selectedKind === "KindClassExpression"
       ? selectedDeclaration
       : selectedKind === "KindConstructor" ? ast.parent(selectedDeclaration) : undefined;
   const selectedOwnerDefinition = options.projectTypes.definitionForDeclaration(selectedOwner);
@@ -583,13 +586,15 @@ export function acceptProjectSourceCall(
     ? selectedOwnerCarrier
     : selectedCallReceiverValueCarrier(request, context, options);
   const unionMethods = construction ? undefined : selectRustUnionMethods(request, receiverCarrier, context, options);
-  const ownerCarrier = unionMethods === undefined ? receiverCarrier : rustUnionMethodOwner(unionMethods, callableDeclaration);
+  const ownerCarrier = unionMethods === undefined
+    ? rustClassConstructorInstance(receiverCarrier) ?? receiverCarrier
+    : rustUnionMethodOwner(unionMethods, callableDeclaration);
   if (rustSourceUnionCarrierValue(receiverCarrier) !== undefined &&
     (unionMethods === undefined || ownerCarrier === undefined)) {
     return rejectSelectedOperation(request.source.call, context, "RUST_UNION_METHOD_IDENTITY_MISSING",
       "A closed class union call requires one exact selected method implementation per arm.");
   }
-  const sourceParameters = ast.kindName(callableDeclaration) === "KindClassDeclaration"
+  const sourceParameters = ast.kindName(callableDeclaration) === "KindClassDeclaration" || ast.kindName(callableDeclaration) === "KindClassExpression"
     ? request.source.sourceSelectedSignatureParameters.map((parameter) =>
         parameter.parameterDeclaration)
     : ast.parameters(callableDeclaration);
@@ -634,9 +639,10 @@ export function acceptProjectSourceCall(
     returnType = ownerCarrier;
   } else {
     const sourceReturn = Node_Type(ast, callableDeclaration) ?? request.source.sourceResultType;
-    const declaredReturnType = selectRustPointerReturnCarrier(callableDeclaration, context, options) ?? (sourceReturn === undefined
+    const declaredReturnType = rustCallableInvocationResult(context.facts, callableDeclaration) ??
+      selectRustPointerReturnCarrier(callableDeclaration, context, options) ?? rustGenericCallableValueOwner(ast, callableDeclaration, (sourceReturn === undefined
       ? undefined
-      : resolveRustTargetTypeRef(sourceReturn, context, options));
+      : resolveRustTargetTypeRef(sourceReturn, context, options)));
     returnType = declaredReturnType === undefined || ownerCarrier === undefined
       ? declaredReturnType
       : options.projectTypes.instantiateMemberCarrier(
@@ -649,11 +655,12 @@ export function acceptProjectSourceCall(
     return rejectSelectedOperation(request.source.call, context, "RUST_SOURCE_CALL_RETURN_CARRIER_MISSING", "The exact TSTS-selected project-source declaration has no closed Rust return carrier.");
   }
   const unionContract = unionMethods === undefined ? undefined : resolveRustUnionMethodContracts(
-    unionMethods, parameters as RustTargetMember["parameters"], returnType, context, options,
+    unionMethods, callableDeclaration, request.source.sourceSelectedSignatureParameters,
+    parameters as RustTargetMember["parameters"], context, options,
   );
   if (unionMethods !== undefined && unionContract === undefined) {
     return rejectSelectedOperation(request.source.call, context, "RUST_UNION_METHOD_ABI_UNSUPPORTED",
-      "The selected union methods require exact synchronous parameter contracts and a lossless closed common result.");
+      "The selected union methods require exact native parameter contracts and a lossless closed common result.");
   }
   returnType = unionContract?.result ?? returnType;
   const optionalResult = selectRustOptionalCallResult(

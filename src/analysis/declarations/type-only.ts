@@ -6,7 +6,8 @@ import { rustTypeOnlyDeclarationFactKey } from "../../target-model/facts/type-on
 
 export function recordRustTypeOnlyDeclarations(walk: RustFactWalk, sourceFiles: readonly SourceFile[]): void {
   const { ast, source, typeFamilies, facts } = walk.context;
-  const families = new Set(typeFamilies.families().map(family => family.declaration));
+  const families = new Set(typeFamilies.families().flatMap(family =>
+    family.kind === "conditional" ? [family.declaration] : []));
   const belongsToFamily = (node: Node): boolean => {
     for (let current: Node | undefined = node; current !== undefined; current = ast.parent(current)) {
       if (families.has(current)) return true;

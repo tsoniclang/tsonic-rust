@@ -25,6 +25,9 @@ import {
 } from "../../../target-model/types/index.js";
 import { rustSourceItemIdentity } from "../program/source-package-facades.js";
 import { rustExplicitNamedTypeArguments } from "./generic-defaults.js";
+import { rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
+import { rustClassConstructorInstance } from "../../../target-model/types/carriers/class-constructors.js";
+import { rustClassEnvironmentHandleType } from "../objects/class-environment-types.js";
 import { rustLifetimeToAst } from "./lifetime-syntax.js";
 import {
   rustBuiltInCarrierRenderPaths,
@@ -38,6 +41,8 @@ import {
   isRustNeverCarrier,
   rustOnlyTypeGenericArguments,
   rustFutureTargetId,
+  rustJsPromiseTargetId,
+  rustUnitTargetType,
 } from "../../../target-model/types/index.js";
 
 export const rustStrRefType: RustType = {
@@ -101,7 +106,9 @@ export function rustTypeFromCarrier(
       return undefined;
     }
     const genericArguments = rustGenericArgumentsFromCarrier(
-      carrier.genericArguments,
+      carrier.id === rustJsPromiseTargetId ? carrier.genericArguments?.map(argument =>
+        argument.kind === "type" && isRustNeverCarrier(argument.type)
+          ? { kind: "type", type: rustUnitTargetType() } : argument) : carrier.genericArguments,
       resolveSourceTypePath,
       resolveStructuralShape,
     );
@@ -213,7 +220,7 @@ export function rustTypeFromCarrier(
         };
   }
   const structuralObject = rustStructuralObjectCarrierValue(carrier);
-  if (structuralObject !== undefined) {
+  if (structuralObject !== undefined || rustGenericCallableValue(carrier) !== undefined || rustClassConstructorInstance(carrier) !== undefined) {
     return resolveStructuralShape?.(carrier);
   }
   if (carrier.kind === "array") {
@@ -457,6 +464,9 @@ export interface RustTypeRenderingContext {
       readonly program: {
         readonly names: import("../../../target-model/names/model.js").RustNamePlan;
         readonly structuralShapes: import("../../../analysis/objects/structural-shape-plan.js").RustStructuralShapePlan;
+        readonly sourceCallableSpecializations: import("../../../analysis/callables/specializations.js").RustSourceCallableSpecializationPlan;
+        readonly callableValues: import("../../../analysis/callables/value-plan.js").RustCallableValuePlan;
+        readonly classValues: import("../../../analysis/objects/class-values.js").RustClassValuePlan;
       };
     };
 }
@@ -492,6 +502,19 @@ export function rustTypeFromCarrierInContext(
       : moduleName === context.moduleName ? typeName : `crate::${moduleName}::${typeName}`;
   };
   const resolveStructuralShape = (shapeCarrier: TargetTypeRef): RustType | undefined => {
+    const instance = rustClassConstructorInstance(shapeCarrier);
+    if (instance !== undefined) return rustClassEnvironmentHandleType(instance, context);
+    const genericCallable = rustGenericCallableValue(shapeCarrier);
+    if (genericCallable !== undefined) {
+      const definition = context.input.program.callableValues.generic.definitionFor(shapeCarrier);
+      const module = definition === undefined ? undefined : context.moduleNameByFileName.get(definition.ownerFileName);
+      const externalCrate = definition === undefined ? undefined : context.externalCrateNameByFileName.get(definition.ownerFileName);
+      const arguments_ = genericCallable.environment.map(argument => rustTypeFromCarrierInContext(argument, context));
+      if (definition === undefined || module === undefined || arguments_.some(argument => argument === undefined)) return undefined;
+      return { kind: "named", path: `${externalCrate !== undefined && externalCrate !== context.crateName ? externalCrate : "crate"}::${module}::${definition.targetName}`,
+        genericArguments: (arguments_ as RustType[]).map(type => ({ kind: "type", type })),
+      };
+    }
     const union = rustSourceUnionCarrierValue(shapeCarrier);
     const definition = union?.origin === "generated"
       ? context.input.program.structuralShapes.unionForCarrier(shapeCarrier)
@@ -523,7 +546,8 @@ export function rustTypeFromCarrierInContext(
         ? {}
         : { genericArguments: genericArguments as readonly RustGenericArgument[] }),
     };
-    return union?.origin === "generated" || rustStructuralObjectCarrierValue(shapeCarrier)?.representation === "value" ? stateType : {
+    return union?.origin === "generated" || rustStructuralObjectCarrierValue(shapeCarrier)?.representation === "value" ||
+      context.input.program.structuralShapes.definitionForCarrier(shapeCarrier)?.dispatchName !== undefined ? stateType : {
       kind: "named",
       path: "rt::ObjectHandle",
       genericArguments: typeGenericArguments([stateType]),
@@ -558,24 +582,7 @@ export function rustUnionTypePathInContext(carrier: TargetTypeRef, context: Rust
 
 export function rustReturnTypeFromCarrierInContext(
   carrier: TargetTypeRef | undefined,
-  context: {
-    readonly moduleName: string;
-    readonly moduleNameByFileName: ReadonlyMap<string, string>;
-    readonly externalCrateNameByFileName: ReadonlyMap<string, string>;
-    readonly externalItemPathByIdentity: ReadonlyMap<string, string>;
-    readonly externalStructuralShapeModuleByFileName: ReadonlyMap<string, string>;
-    readonly crateName?: string;
-    readonly structuralShapesModuleName: string;
-    readonly usedAliases?: Set<string>;
-    readonly typeParameterSubstitutions?: ReadonlyMap<string, TargetTypeRef>;
-    readonly lifetimeSubstitutions?: ReadonlyMap<string, RustLifetimeRef>;
-    readonly input: {
-      readonly program: {
-        readonly names: import("../../../target-model/names/model.js").RustNamePlan;
-        readonly structuralShapes: import("../../../analysis/objects/structural-shape-plan.js").RustStructuralShapePlan;
-      };
-    };
-  },
+  context: RustTypeRenderingContext,
 ): RustType | undefined {
   return isRustNeverCarrier(carrier)
     ? { kind: "never" }

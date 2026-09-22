@@ -226,7 +226,7 @@ export function planRustDirectStorageCore(
     : { kind: "evaluate-then", effect, discard: "value", value: target };
 }
 
-function directStorageRemainsSelected(
+export function directStorageRemainsSelected(
   receiver: Node,
   laterExpressions: readonly Node[],
   receiverAlreadySelected: boolean,

@@ -68,6 +68,14 @@ export async function chooseAsync(flag: boolean): Promise<int32> {
   }
   return new Failure().choose(false);
 }
+
+export async function chooseAliasedAsync(flag: boolean): Promise<int32> {
+  if (flag) {
+    const pending = stopAsync();
+    return await pending;
+  }
+  return 42;
+}
 `,
     },
   });

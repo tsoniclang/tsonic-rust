@@ -1,0 +1,130 @@
+import { allocateRustGeneratedName as allocateGeneratedName } from "../../../target-model/names/generated.js";
+import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
+import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
+import type { RustNamePlan } from "../../../target-model/names/model.js";
+import type { RustProjectTypeDefinition } from "../../../policy/types/project-types.js";
+import type { RustSourceGenericParameterContract } from "../../../target-model/lifetimes/index.js";
+import { rustSourceDeclarationTypeName } from "../../../policy/types/source-declarations.js";
+
+export function projectDefinition(
+  declaration: Node,
+  sourceFile: SourceFile,
+  ast: AstReader,
+  namePlan: RustNamePlan,
+  genericContract: readonly RustSourceGenericParameterContract[] | undefined,
+  usedNames: Set<string>,
+): RustProjectTypeDefinition | undefined {
+  const kindName = ast.kindName(declaration);
+  const kind = kindName === "KindClassDeclaration" || kindName === "KindClassExpression"
+    ? "class" as const
+    : kindName === "KindInterfaceDeclaration"
+      ? "interface" as const
+      : undefined;
+  if (kind === undefined) {
+    return undefined;
+  }
+  const sourceName = rustSourceDeclarationTypeName(declaration, ast);
+  const targetName = namePlan.nameForDeclaration(declaration);
+  const fileName = ast.getFileName(sourceFile);
+  const rawParameters = ast.typeParameters(declaration);
+  const parameters = denseNodes(rawParameters);
+  const ownContract = genericContract?.filter(parameter => ast.parent(parameter.declaration) === declaration);
+  const contractMatches = parameters !== undefined && genericContract !== undefined &&
+    ownContract !== undefined && parameters.length === ownContract.length &&
+    ownContract.every((parameter, index) => parameter.declaration === parameters[index]);
+  const ordinaryParameters = contractMatches
+    ? genericContract.filter((parameter) => parameter.kind === "type")
+    : undefined;
+  const sourceTypeParameterNames = ordinaryParameters?.map((parameter) =>
+    parameter.sourceName);
+  const targetParameterNames = ordinaryParameters?.map((parameter) =>
+    parameter.targetName);
+  return sourceName.length === 0 || targetName === undefined || fileName.length === 0 ||
+      parameters === undefined || !contractMatches || genericContract === undefined ||
+      sourceTypeParameterNames === undefined ||
+      sourceTypeParameterNames.some((name) => name.length === 0) ||
+      targetParameterNames === undefined || targetParameterNames.some((name) => name === undefined)
+    ? undefined
+    : (() => {
+        const stateName = allocateGeneratedName(
+          usedNames,
+          `${targetName}State`,
+        );
+        const dispatchName = allocateGeneratedName(
+          usedNames,
+          `${targetName}Dispatch`,
+        );
+        const rootName = kind === "class"
+          ? allocateGeneratedName(usedNames, `${targetName}Root`)
+          : undefined;
+        return Object.freeze({
+        declaration,
+        sourceFile,
+        fileName,
+        sourceName,
+        targetName,
+        kind,
+        genericParameters: Object.freeze([...genericContract]),
+        typeParameterNames: Object.freeze(sourceTypeParameterNames),
+        targetTypeParameterNames: Object.freeze(targetParameterNames as string[]),
+        stateName,
+        dispatchName,
+        ...(rootName === undefined ? {} : { rootName }),
+      });
+      })();
+}
+
+export function sourceFileIdentifierNames(
+  sourceFile: SourceFile,
+  ast: AstReader,
+  namePlan: RustNamePlan,
+): Set<string> {
+  const result = new Set<string>();
+  const visit = (node: Node | undefined): void => {
+    if (node === undefined) {
+      return;
+    }
+    const targetName = namePlan.nameForDeclaration(node);
+    if (targetName !== undefined) {
+      result.add(targetName);
+    }
+    ast.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return result;
+}
+
+export function projectMemberNames(
+  declaration: Node,
+  ast: AstReader,
+  namePlan: RustNamePlan,
+): Set<string> {
+  const result = new Set<string>();
+  for (const member of denseNodes(ast.members(declaration)) ?? []) {
+    const targetName = namePlan.nameForDeclaration(member);
+    if (targetName !== undefined) {
+      result.add(targetName);
+    }
+  }
+  return result;
+}
+
+export function definitionKey(fileName: string, sourceName: string): string {
+  return `${fileName}::${sourceName}`;
+}
+
+export function compareProjectDefinitions(
+  left: RustProjectTypeDefinition,
+  right: RustProjectTypeDefinition,
+): number {
+  const fileOrder = left.fileName.localeCompare(right.fileName, "en");
+  return fileOrder !== 0
+    ? fileOrder
+    : left.sourceName.localeCompare(right.sourceName, "en");
+}
+
+export function denseNodes(values: readonly (Node | undefined)[]): readonly Node[] | undefined {
+  return isDenseDataArray(values) && values.every((value) => value !== undefined)
+    ? values as readonly Node[]
+    : undefined;
+}

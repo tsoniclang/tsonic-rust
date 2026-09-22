@@ -1,7 +1,7 @@
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustDeclarationGenericRequirementContract, RustGenericRequirement } from "./generic-requirements.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
-import type { RustSourceTypeFamilyRegistry } from "../../policy/types/type-families.js";
+import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
 import type { Node } from "@tsonic/tsts";
 import { createRustAssociatedRequirementCollector } from "./associated-requirements.js";
 import { classifyCarrierRequirements } from "./generic-carrier-requirements.js";
@@ -12,7 +12,7 @@ import { substituteRustTargetTypeParameters } from "../../target-model/types/car
 import { emptyRustTypeDefinitions, rustSourceUnionDefinitionIdentity, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 
-export type RustShapeGenericRequirementContract = Omit<RustDeclarationGenericRequirementContract, "declaration">;
+export type RustShapeGenericRequirementContract = Pick<RustDeclarationGenericRequirementContract, "typeParameters" | "associatedTypes">;
 
 export function analyzeRustShapeGenericRequirements(
   carrier: TargetTypeRef,
@@ -57,6 +57,8 @@ export function analyzeRustShapeGenericRequirements(
       for (const requirement of contract.associatedTypes) {
         const projection = substituteRustTargetTypeParameters(requirement.carrier, substitutions);
         if (!associated.collect(projection) || !classify(projection, requirement.requirements)) return false;
+        if (requirement.fieldAccess !== undefined && (projection.kind !== "associated-type" ||
+          !associated.requireField(projection, requirement.fieldAccess))) return false;
       }
     }
     return rustTargetTypeChildren(type).every(visit);

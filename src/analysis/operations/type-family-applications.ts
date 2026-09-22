@@ -27,13 +27,13 @@ export function realizeRustSelectedTypeFamilies(
     if (carrier.kind === "associated-type" && carrier.trait?.sourceItem !== undefined) {
       const family = walk.context.typeFamilies.get(carrier.trait.id);
       const owner = substituteRustTargetTypeParameters(carrier.owner, carriers);
-      if (family !== undefined && walk.context.typeFamilies.implementation(family.trait.id, owner) !== undefined) {
+      if (family !== undefined && walk.context.typeFamilies.implementation(family.trait, owner) !== undefined) {
         return rustTargetTypeChildren(carrier).every(visit);
       }
       const declaration = walk.sourceTypes.declarationForCarrier(owner);
       const type = carrier.owner.kind === "type-parameter" ? types.get(carrier.owner.name)
         : declaration === undefined ? undefined : walk.context.semanticsFor(declaration).declarations.declaredType(declaration);
-      if (family === undefined || type === undefined) return false;
+      if (family?.kind !== "conditional" || type === undefined) return false;
       const application = walk.context.semanticsFor(node).types.instantiateAlias(family.declaration, [type]);
       if (application === undefined || resolveRustTypeFamilyApplication(application, [owner],
         rustResolutionContext(walk, node), walk.operationOptions, new Set()) === undefined) return false;

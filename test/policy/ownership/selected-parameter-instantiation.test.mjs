@@ -40,6 +40,7 @@ test("selected parameter ABI normalizes noninjective families forwards without g
   const signed = rustSourcePrimitiveTargetType("int32");
   const unsigned = rustSourcePrimitiveTargetType("uint32");
   const family = {
+    kind: "conditional",
     declaration: {}, parameter: {},
     trait: { kind: "trait-ref", id: "storage", path: "Storage",
       sourceItem: { fileName: "/storage.ts", typeName: "Storage" },
@@ -47,7 +48,7 @@ test("selected parameter ABI normalizes noninjective families forwards without g
   };
   assert.equal(registry.register(family), true);
   for (const owner of [signed, unsigned]) {
-    assert.equal(registry.registerImplementation({ family, owner, output: unsigned, sourceFileName: "/storage.ts" }), true);
+    assert.equal(registry.registerImplementation({ family, arguments: [], owner, output: unsigned, sourceFileName: "/storage.ts" }), true);
   }
   const projection = { kind: "associated-type", owner: parameter, trait: family.trait, name: "Output" };
   const abi = { form: "required", valueCarrier: projection, parameterCarrier: projection, mode: "value" };

@@ -48,6 +48,7 @@ import {
   rustProjectMemberStorageVisibility,
 } from "../project-storage-abi.js";
 import { planProjectPrivateStateAccessors } from "./private-fields.js";
+import { rustClassEnvironmentHandleType } from "../class-environment-types.js";
 
 export function planPolymorphicClassDeclaration(
   declaration: Node,
@@ -159,6 +160,10 @@ export function planPolymorphicClassDeclaration(
     generics,
     constructor.construct,
   );
+  const selectedEnvironment = context.input.program.classValues.forDeclaration(declaration)?.environment;
+  const environment = selectedEnvironment?.instancesUseEnvironment ? selectedEnvironment : undefined;
+  const environmentType = environment === undefined ? undefined : rustClassEnvironmentHandleType(environment.carrier, context);
+  if (environment !== undefined && environmentType === undefined) return undefined;
   const rootIdentityDeadCode = rustGeneratedExactStorageDeadCodeDisposition(
     rustPlannedImplementationsReferenceSelfField(
       rootImplementations,
@@ -276,6 +281,9 @@ export function planPolymorphicClassDeclaration(
       derives: [],
       generics,
       fields: [
+        ...(environment === undefined || environmentType === undefined ? [] : [{
+          name: environment.instanceFieldName, type: environmentType, visibility: "private" as const,
+        }]),
         {
           name: rustProjectObjectIdentityField,
           type: { kind: "named", path: "rt::ObjectIdentity" },

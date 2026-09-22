@@ -7,6 +7,7 @@ export function planRustRestAssembly(
   segments: readonly { readonly value: RustExpr; readonly sequence: boolean }[],
   context: RustPlanContext,
 ): RustExpr | undefined {
+  if (segments.length === 1 && segments[0]?.sequence === true) return segments[0].value;
   if (context.syntheticNames === undefined) return undefined;
   const name = allocateRustSyntheticName(context.syntheticNames, "spread_rest");
   const collection: RustExpr = { kind: "path", path: name };

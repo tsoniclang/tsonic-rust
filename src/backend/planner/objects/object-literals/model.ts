@@ -7,6 +7,8 @@ import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustSyntheticNameState } from "../../names/synthetic.js";
 import type { RustProjectMethodDispatchVariant } from "../../../../analysis/project-types/method-dispatch.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
+import { createStructuralLiteralImplementation, type RustStructuralLiteralImplementation } from "./structural.js";
+import { rustObjectReferenceViewKey } from "../../../../analysis/facts/object-reference-views.js";
 
 export type RustObjectLiteralMethodImplementationPlan = {
   readonly kind: "authored";
@@ -66,6 +68,7 @@ export interface RustObjectLiteralAccessorImplementationPlan {
 }
 
 export interface RustObjectLiteralImplementationPlan {
+  readonly kind: "project";
   readonly expression: Node;
   readonly resultCarrier: TargetTypeRef;
   readonly wrapperType: RustType;
@@ -87,7 +90,8 @@ export interface RustObjectLiteralImplementationPlan {
 
 export interface RustObjectLiteralImplementationRegistry {
   readonly items: readonly RustItem[];
-  forExpression(expression: Node): RustObjectLiteralImplementationPlan | undefined;
+  forExpression(expression: Node): RustObjectLiteralImplementationPlan | RustStructuralLiteralImplementation | undefined;
+  forReferenceView(expression: Node): RustStructuralLiteralImplementation | undefined;
 }
 
 export type RustRecordLiteralFact = Extract<
@@ -100,7 +104,7 @@ export function rustObjectLiteralRequiresDispatchImplementation(
   context: RustPlanContext,
 ): boolean {
   if (fact.storage !== "project-object") {
-    return false;
+    return context.input.program.structuralShapes.definitionForCarrier(fact.resultCarrier)?.dispatchName !== undefined;
   }
   if (fact.contributions.some((contribution) =>
     contribution.kind === "method" || contribution.kind === "accessor" ||
@@ -125,15 +129,27 @@ export function createRustObjectLiteralImplementationRegistry(
   context: RustPlanContext,
   names: RustSyntheticNameState,
 ): RustObjectLiteralImplementationRegistry {
-  const plans = new Map<Node, RustObjectLiteralImplementationPlan>();
+  const plans = new Map<Node, RustObjectLiteralImplementationPlan | RustStructuralLiteralImplementation>();
+  const referenceViews = new Map<Node, RustStructuralLiteralImplementation>();
   const items: RustItem[] = [];
   const visit = (node: Node): void => {
     const fact = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
     if (fact?.kind === "record-literal" &&
       rustObjectLiteralRequiresDispatchImplementation(fact, context)) {
-      const plan = createImplementationPlan(node, fact, context, names);
+      const plan = fact.storage === "structural-object"
+        ? createStructuralLiteralImplementation(node, fact.resultCarrier, new Set(fact.contributions.flatMap(contribution =>
+          contribution.kind === "accessor" && contribution.role === "get" ? [contribution.targetStorageIndex] : [])), context, names)
+        : createImplementationPlan(node, fact, context, names);
       if (plan !== undefined) {
         plans.set(node, plan);
+        items.push(...plan.items);
+      }
+    }
+    const view = context.input.program.facts.getFact(node, rustObjectReferenceViewKey);
+    if (view?.kind === "structural" && context.input.program.structuralShapes.definitionForCarrier(view.targetCarrier)?.dispatchName !== undefined) {
+      const plan = createStructuralLiteralImplementation(node, view.targetCarrier, new Set(view.fields.map(field => field.destinationIndex)), context, names);
+      if (plan !== undefined) {
+        referenceViews.set(node, plan);
         items.push(...plan.items);
       }
     }
@@ -148,6 +164,9 @@ export function createRustObjectLiteralImplementationRegistry(
     items: Object.freeze(items),
     forExpression(expression: Node) {
       return plans.get(expression);
+    },
+    forReferenceView(expression: Node) {
+      return referenceViews.get(expression);
     },
   });
 }

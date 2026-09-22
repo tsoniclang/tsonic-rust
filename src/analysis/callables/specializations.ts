@@ -1,4 +1,5 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
+import type { SourceProgramNavigation } from "@tsonic/target-api/source";
 import { closedMetadataKey, isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
@@ -10,6 +11,7 @@ import {
   substituteRustTargetTypeParameters,
 } from "../../target-model/types/index.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
+import type { RustPlanQueries } from "../../target-model/facts/selections.js";
 
 export interface RustSourceCallableSpecializationVariant {
   readonly declaration: Node;
@@ -63,6 +65,9 @@ export interface RustSourceCallableSpecializationPlanRegistry
     readonly sourceLifetimes: RustLifetimeIndex;
   }): RustSourceCallableSpecializationRegistration;
   initialize(input: {
+    readonly navigation: SourceProgramNavigation;
+    readonly sourceFiles: readonly SourceFile[];
+    readonly facts: RustPlanQueries;
     readonly ast: AstReader;
     readonly closedSourceFiles: ReadonlySet<SourceFile>;
     readonly names: RustNamePlan;
@@ -182,6 +187,9 @@ function createRustSourceCallableSpecializationPlan(
   sourceCalls: readonly SourceCallEdge[],
   projectMethodCalls: readonly ProjectMethodEdge[],
   input: {
+    readonly navigation: SourceProgramNavigation;
+    readonly sourceFiles: readonly SourceFile[];
+    readonly facts: RustPlanQueries;
     readonly ast: AstReader;
     readonly closedSourceFiles: ReadonlySet<SourceFile>;
     readonly names: RustNamePlan;

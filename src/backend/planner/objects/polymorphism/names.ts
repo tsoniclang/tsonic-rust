@@ -4,6 +4,7 @@ import type { RustObjectRepresentation } from "../../../../analysis/project-type
 import { rustGenericsWithAssociatedBounds } from "../../types/generic-bounds.js";
 import {
   rustSourceTypeCarrierValue,
+  rustTargetGenericReferences,
 } from "../../../../target-model/types/index.js";
 import type {
   RustExpr,
@@ -39,8 +40,9 @@ export function rustProjectRootName(
 export function rustProjectGenerics(
   definition: RustProjectTypeDefinition,
   context: RustPlanContext,
+  parameterIndexes: readonly number[] = definition.genericParameters.map((_, index) => index),
 ): RustGenerics {
-  return rustProjectGenericsWithTypeOutlives(definition, [], context);
+  return rustProjectGenericsWithTypeOutlives(definition, [], context, parameterIndexes);
 }
 
 export function rustProjectRepresentationGenerics(
@@ -60,6 +62,7 @@ function rustProjectGenericsWithTypeOutlives(
   definition: RustProjectTypeDefinition,
   requiredTypeOutlives: readonly RustLifetimeRef[],
   context: RustPlanContext,
+  parameterIndexes: readonly number[] = definition.genericParameters.map((_, index) => index),
 ): RustGenerics {
   const contract = context.input.program.declarationGenericRequirements.contractFor(definition.declaration);
   if (contract === undefined) throw new Error("A source class has no sealed generic requirement contract.");
@@ -68,7 +71,19 @@ function rustProjectGenericsWithTypeOutlives(
     if (selected === undefined) throw new Error("A source class generic parameter lost its selected requirements.");
     return rustTypeParameterBounds(parameter, selected.requirements, requiredTypeOutlives);
   };
-  const parameters = definition.genericParameters.map((parameter): RustGenericParameter =>
+  const selectedParameters = parameterIndexes.map(index => {
+    const parameter = definition.genericParameters[index];
+    if (parameter === undefined) throw new Error("A selected native generic parameter is outside its declaration.");
+    return parameter;
+  });
+  const typeNames = new Set(selectedParameters.flatMap(parameter => parameter.kind === "type" ? [parameter.targetName] : []));
+  const lifetimeNames = new Set(selectedParameters.flatMap(parameter => parameter.kind === "lifetime" ? [parameter.lifetime.name] : []));
+  const inScope = (carrier: TargetTypeRef): boolean => {
+    const references = rustTargetGenericReferences(carrier);
+    return references.typeNames.every(name => typeNames.has(name)) &&
+      references.lifetimes.every(lifetime => lifetime.kind === "bound" || lifetimeNames.has(lifetime.name));
+  };
+  const parameters = selectedParameters.map((parameter): RustGenericParameter =>
     parameter.kind === "lifetime"
       ? {
           kind: "lifetime",
@@ -81,7 +96,7 @@ function rustProjectGenericsWithTypeOutlives(
           bounds: boundsFor(parameter),
         });
   return rustGenericsWithAssociatedBounds(parameters,
-    rustDeclarationAssociatedPredicates(definition.declaration, context));
+    rustDeclarationAssociatedPredicates(definition.declaration, context, inScope));
 }
 
 
@@ -127,12 +142,13 @@ export function rustProjectStateType(
 export function rustProjectStateMarker(
   definition: RustProjectTypeDefinition,
   context: RustPlanContext,
+  parameterIndexes: readonly number[] = definition.genericParameters.map((_, index) => index),
 ): {
   readonly name: string;
   readonly type: RustType;
   readonly value: RustExpr;
 } | undefined {
-  if (definition.genericParameters.length === 0) {
+  if (parameterIndexes.length === 0) {
     return undefined;
   }
   return {
@@ -144,15 +160,18 @@ export function rustProjectStateMarker(
         kind: "type",
         type: {
           kind: "tuple",
-          elements: definition.genericParameters.map((parameter): RustType =>
-            parameter.kind === "lifetime"
+          elements: parameterIndexes.map((index): RustType => {
+            const parameter = definition.genericParameters[index];
+            if (parameter === undefined) throw new Error("A native state marker has an invalid generic parameter index.");
+            return parameter.kind === "lifetime"
               ? {
                   kind: "reference",
                   referent: { kind: "unit" },
                   mutable: false,
                   lifetime: rustLifetimeToAst(parameter.lifetime),
                 }
-              : { kind: "named", path: parameter.targetName }),
+              : { kind: "named", path: parameter.targetName };
+          }),
         },
       }],
     },

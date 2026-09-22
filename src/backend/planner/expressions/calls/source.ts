@@ -6,11 +6,13 @@ import {
   rustTargetGenericTypeArguments,
   substituteRustTargetGenericArgument,
 } from "../../../../target-model/types/index.js";
+import { rustClassStaticCallGenericArguments, rustClassStaticEnvironmentForCall, rustOwnedClassEnvironmentForCall } from "../../objects/class-environments.js";
 import {
   diagnosticInput,
   isValidRustIdentifier,
   rustActiveErrorType,
   rustCurrentErrorBoundary,
+  rustErrorBoundaryForDeclaration,
   rustErrorBoundaryForProjectMember,
   rustErrorType,
   sourceModuleItemPath,
@@ -46,6 +48,10 @@ import type { RustCallGenericArgument, RustExpr } from "../../../target-ast/node
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
 import { planRustUnionMethodCall } from "./union-methods.js";
+import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../../../target-model/types/carriers/generic-callables.js";
+import { rustGenericCallableEffectsFactKey } from "../../../../analysis/facts/generic-callable-effects.js";
+import { allocateRustSyntheticName } from "../../names/synthetic.js";
+import { rustExpressionReferencesPath } from "../../../target-ast/inspection/source-usage.js";
 
 export function sourceCallEffectsMatch(
   fact: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>,
@@ -58,18 +64,25 @@ export function sourceCallEffectsMatch(
   }
   const isAsync = rustFutureOutputCarrier(fact.resultCarrier) !== undefined;
   if (fact.target.form === "union-method") {
-    return !isAsync && effects.awaiting === "not-applicable" && effects.unionBranches?.length === fact.target.variants.length &&
-      effects.unionBranches.every(branch => branch === "infallible" || branch === "fallible") &&
-      effects.invocation === (effects.unionBranches.some(branch => branch === "fallible") ? "fallible" : "infallible");
+    if (effects.unionBranches?.length !== fact.target.variants.length ||
+      !effects.unionBranches.every(branch => branch !== undefined &&
+        (branch.invocation === "infallible" || branch.invocation === "fallible") &&
+        (isAsync ? branch.awaiting === "infallible" || branch.awaiting === "fallible"
+          : branch.awaiting === "not-applicable"))) return false;
+    const invocation = effects.unionBranches.some(branch => branch.invocation === "fallible") ? "fallible" : "infallible";
+    const awaiting = !isAsync ? "not-applicable"
+      : effects.unionBranches.some(branch => branch.awaiting === "fallible") ? "fallible" : "infallible";
+    return effects.invocation === invocation && effects.awaiting === awaiting;
   }
   const callableCarrier = fact.target.form === "callable"
     ? fact.target.carrier
-    : fact.target.form === "structural-method"
+    : fact.target.form === "structural-method" || fact.target.form === "constructor-value"
       ? fact.target.callableCarrier
       : undefined;
   return isAsync
     ? effects.awaiting !== "not-applicable" &&
       (callableCarrier === undefined || callableCarrier.kind === "function-pointer" ||
+        rustGenericCallableValue(callableCarrier) !== undefined ||
         effects.invocation === "fallible")
     : effects.awaiting === "not-applicable";
 }
@@ -177,10 +190,29 @@ export function planSelectedSourceCall(
     ? undefined
     : targetAstGenericArguments as readonly RustCallGenericArgument[];
 
+  const classReceiver = "classReceiver" in fact.target ? fact.target.classReceiver : undefined;
+  const classBindings: { name: string; value: RustExpr }[] = [];
+  let retainedClass: RustExpr | undefined;
+  if (classReceiver !== undefined) {
+    const value = planExpression(classReceiver, context);
+    if (value === undefined || context.syntheticNames === undefined) return undefined;
+    const name = allocateRustSyntheticName(context.syntheticNames, "class_receiver");
+    classBindings.push({ name, value });
+    retainedClass = { kind: "path", path: name };
+  }
   let planned: RustExpr | undefined;
   switch (fact.target.form) {
+    case "constructor-value": {
+      const constructor = context.input.program.structuralShapes.definitionForCarrier(fact.target.receiverCarrier)?.construction;
+      const receiver = callee === undefined ? undefined : planExpression(callee, context);
+      if (constructor === undefined || receiver === undefined || callee === undefined) break;
+      const selected: RustExpr = { kind: "field", receiver: planRustNonConsumingValue(callee, receiver, context), name: "dispatch" };
+      planned = { kind: "method-call", receiver: { kind: "method-call", receiver: selected, method: "clone", args: [] },
+        method: constructor.targetName, args: shaped };
+      break;
+    }
     case "union-method": {
-      planned = planRustUnionMethodCall(node, callee, shaped, fact.target, context);
+      planned = planRustUnionMethodCall(node, callee, shaped, fact, fact.target, callGenericArguments, targetTypeArguments, context);
       break;
     }
     case "function": {
@@ -189,11 +221,13 @@ export function planSelectedSourceCall(
       if (path === undefined || !isValidRustIdentifier(targetName)) {
         break;
       }
+      const environment = rustClassStaticEnvironmentForCall(selected.sourceDeclaration, context, retainedClass);
+      const genericArguments = rustClassStaticCallGenericArguments(selected.sourceDeclaration, callGenericArguments, context);
       planned = {
         kind: "call",
         path,
-        args: shaped,
-        ...(callGenericArguments === undefined ? {} : { genericArguments: callGenericArguments }),
+        args: [...(environment === undefined ? [] : [{ kind: "reference" as const, expr: environment }]), ...shaped],
+        ...(genericArguments === undefined ? {} : { genericArguments }),
       };
       break;
     }
@@ -297,10 +331,11 @@ export function planSelectedSourceCall(
       const typePath = value === undefined ? undefined : sourceTypePath(context, value);
       const targetName = callableSpecialization?.targetName ?? fact.target.name;
       if (typePath !== undefined && isValidRustIdentifier(targetName)) {
+        const environment = rustClassStaticEnvironmentForCall(selected.sourceDeclaration, context, retainedClass);
         planned = {
           kind: "call",
           path: `${typePath}::${targetName}`,
-          args: shaped,
+          args: [...(environment === undefined ? [] : [{ kind: "reference" as const, expr: environment }]), ...shaped],
           ...(callGenericArguments === undefined ? {} : { genericArguments: callGenericArguments }),
         };
       }
@@ -310,11 +345,13 @@ export function planSelectedSourceCall(
       const owner = rustTypeFromCarrierInContext(fact.target.typeCarrier, context);
       const targetName = fact.target.name;
       if (owner !== undefined && isValidRustIdentifier(targetName)) {
+        const definition = context.input.program.projectTypes.definitionForCarrier(fact.target.typeCarrier);
+        const environment = definition === undefined ? undefined : rustOwnedClassEnvironmentForCall(definition.declaration, context, retainedClass);
         planned = {
           kind: "associated-call",
           owner,
           method: targetName,
-          args: shaped,
+          args: [...(environment === undefined ? [] : [environment]), ...shaped],
         };
       }
       break;
@@ -330,13 +367,15 @@ export function planSelectedSourceCall(
         planned = { kind: "invoke", callee: callable, args: shaped };
         break;
       }
-      const protocol = rustCallableProtocol(fact.target.carrier);
+      const generic = rustGenericCallableValue(fact.target.carrier);
+      const protocol = rustGenericCallableProtocol(fact.target.carrier) ?? rustCallableProtocol(fact.target.carrier);
       if (protocol !== undefined && protocol.parameters.length === shaped.length) {
         planned = {
           kind: "method-call",
           receiver: callable,
           method: "call",
-          args: [{ kind: "tuple-literal", elements: shaped }],
+          args: generic === undefined ? [{ kind: "tuple-literal", elements: shaped }] : shaped,
+          ...(generic === undefined || callGenericArguments === undefined ? {} : { genericArguments: callGenericArguments }),
         };
       }
       break;
@@ -355,7 +394,8 @@ export function planSelectedSourceCall(
       if (receiverNode !== undefined && receiver !== undefined) {
         planned = invokeRustStructuralObjectMethod(
           fact.target.receiverCarrier,
-          receiver,
+          context.input.program.structuralShapes.field(fact.target.receiverCarrier, fact.target.storageIndex)?.nativeMethod === true
+            ? planRustNonConsumingValue(receiverNode, receiver, context) : receiver,
           fact.target.storageIndex,
           shaped,
           fact.resultCarrier,
@@ -379,6 +419,8 @@ export function planSelectedSourceCall(
     ));
     return undefined;
   }
+  if (classBindings.length > 0) planned = { kind: "block", bindings: classBindings.map(binding =>
+    rustExpressionReferencesPath(planned!, binding.name) ? binding : { ...binding, name: `_${binding.name}` }), value: planned };
   const effects = context.input.program.facts.getFact(node, rustSourceCallEffectsFactKey);
   if (effects === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -388,6 +430,17 @@ export function planSelectedSourceCall(
     ));
     return undefined;
   }
+  if (fact.target.form === "callable" && rustGenericCallableValue(fact.target.carrier) !== undefined) {
+    const definition = context.input.program.callableValues.generic.definitionFor(fact.target.carrier);
+    if (definition === undefined || !definition.implementations.every(implementation => {
+      const selected = context.input.program.facts.getFact(implementation.declaration, rustGenericCallableEffectsFactKey);
+      return selected?.invocation === effects.invocation && selected.awaiting === effects.awaiting;
+    })) {
+      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node), "rust.backend.generic-callable-effects",
+        "The invocation effects differ from the sealed generic implementation family."));
+      return undefined;
+    }
+  }
   if (fact.target.form === "union-method") return planned;
   if (effects.invocation === "infallible") {
     return isRustNeverCarrier(fact.resultCarrier) ? rustBottomExpression(planned) : planned;
@@ -395,11 +448,16 @@ export function planSelectedSourceCall(
   const resultErrorType = rustActiveErrorType(context);
   const callableCarrier = fact.target.form === "callable"
     ? fact.target.carrier
-    : fact.target.form === "structural-method"
+    : fact.target.form === "structural-method" || fact.target.form === "constructor-value"
       ? fact.target.callableCarrier
       : undefined;
-  const operandBoundary = rustCallableProtocol(callableCarrier) !== undefined || callableCarrier?.kind === "closure"
-    ? rustCurrentErrorBoundary(context)
+  const genericDefinition = callableCarrier === undefined ? undefined
+    : context.input.program.callableValues.generic.definitionFor(callableCarrier);
+  const genericDeclaration = genericDefinition?.implementations[0]?.declaration;
+  const operandBoundary = genericDeclaration !== undefined
+    ? rustErrorBoundaryForDeclaration(genericDeclaration, context)
+    : rustCallableProtocol(callableCarrier) !== undefined || callableCarrier?.kind === "closure"
+      ? rustCurrentErrorBoundary(context)
     : selected.sourceDeclaration === undefined
       ? undefined
       : rustErrorBoundaryForProjectMember(selected.sourceDeclaration, context);

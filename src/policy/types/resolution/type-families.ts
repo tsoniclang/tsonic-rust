@@ -1,7 +1,7 @@
 import type { Node, Type, TypeAliasApplicationInfo } from "@tsonic/tsts";
 import { Node_Type, sourceNodeIdentity, TypeReferenceNode_TypeName } from "@tsonic/target-api/source";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustSourceTypeFamily } from "../type-families.js";
+import type { RustConditionalSourceTypeFamily } from "../../../target-model/types/type-families.js";
 import { rustSourceTypeCarrierValue, rustStructuralObjectCarrierValue } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustTargetTypeParameterNames } from "../../../target-model/types/carriers/generic-references.js";
@@ -11,6 +11,7 @@ import { resolveRustAuthoredTargetType } from "./tuples.js";
 import { resolveRustTargetType } from "./target.js";
 import { resolveSourcePrimitive } from "./callables.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
+import { selectedRustSourceTypeArgument } from "./generic-arguments.js";
 
 export interface RustConditionalAliasSelection {
   readonly carrier: TargetTypeRef | undefined;
@@ -49,7 +50,10 @@ export function resolveRustConditionalAlias(
     argumentNodes.length !== parameters.length || argumentNodes.some(argument => argument === undefined)) {
     return undefined;
   }
-  const arguments_ = argumentNodes.map(argument => context.semanticsFor(argument!).types.expressionType(argument!));
+  const arguments_ = argumentNodes.map(argument => {
+    const type = context.semanticsFor(argument!).types.expressionType(argument!);
+    return type === undefined ? undefined : selectedRustSourceTypeArgument(type, context);
+  });
   if (arguments_.some(argument => argument === undefined)) return undefined;
   const application = context.currentSemantics.types.instantiateAlias(declaration, arguments_ as readonly Type[]);
   if (application?.kind !== "conditional") return undefined;
@@ -103,7 +107,7 @@ export function resolveRustTypeFamilyApplication(
   }
   const substitutions = new Map(context.sourceTypeParameterSubstitutions);
   for (const [index, binding] of application.bindings.entries()) {
-    substitutions.set(binding.declaration, arguments_[index]!);
+    substitutions.set(binding.declaration, { sourceType: binding.argument, carrier: arguments_[index]! });
   }
   let result: TargetTypeRef | undefined;
   for (const step of application.conditionalSteps) {
@@ -112,7 +116,8 @@ export function resolveRustTypeFamilyApplication(
       const index = application.bindings.findIndex(candidate => candidate.parameter === binding.applicationParameter);
       const argument = index < 0 ? inferredArgumentCarrier(binding.argument, context, options, resolving) : arguments_[index];
       if (argument !== undefined) {
-        for (const declaration of binding.declarations) substitutions.set(declaration, argument);
+        const sourceType = index < 0 ? binding.argument : application.bindings[index]!.argument;
+        for (const declaration of binding.declarations) substitutions.set(declaration, { sourceType, carrier: argument });
       }
     }
     if (context.ast.kindName(step.selectedNode) === "KindConditionalType") continue;
@@ -127,7 +132,7 @@ export function resolveRustTypeFamilyApplication(
   const ownerFileName = rustSourceTypeCarrierValue(owner)?.fileName ??
     rustStructuralObjectCarrierValue(owner)?.ownerFileName ?? family.trait.sourceItem?.fileName;
   if (ownerFileName === undefined || !options.sourceTypes.typeFamilies.registerImplementation({
-    family, owner, output: result, sourceFileName: ownerFileName,
+    family, arguments: [], owner, output: result, sourceFileName: ownerFileName,
   })) return undefined;
   return result;
 }
@@ -135,7 +140,7 @@ export function resolveRustTypeFamilyApplication(
 export function rustSourceTypeFamilyDeclaration(
   conditional: Node,
   context: RustTargetTypeResolutionContext,
-): RustSourceTypeFamily | undefined {
+): RustConditionalSourceTypeFamily | undefined {
   const { ast } = context;
   let body = conditional;
   let declaration = ast.parent(body);
@@ -154,6 +159,7 @@ export function rustSourceTypeFamilyDeclaration(
   if (identity === undefined || fileName.length === 0 || typeName.length === 0 ||
     !context.source.navigation.isProjectDeclaration(declaration)) return undefined;
   return Object.freeze({
+    kind: "conditional",
     declaration,
     parameter,
     trait: Object.freeze({

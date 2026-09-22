@@ -3,10 +3,11 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustFactWalk } from "../program/walk.js";
-import { rustOperationContext } from "../program/walk.js";
-import { resolveRustProjectField } from "../operations/provider/project-fields.js";
 import { rustObjectReferenceViewKey, type RustObjectReferenceView } from "../facts/object-reference-views.js";
 import type { RustStructuralFieldRegistration } from "../../policy/types/source-type-registry.js";
+import { selectRustProjectStructuralView } from "../objects/project-structural-views.js";
+import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
+import { selectRustClassValueView } from "../objects/class-values.js";
 
 export function recordRustObjectReferenceView(
   walk: RustFactWalk, expression: Node, sourceCarrier: TargetTypeRef, targetCarrier: TargetTypeRef,
@@ -15,6 +16,15 @@ export function recordRustObjectReferenceView(
   const structural = rustStructuralObjectCarrierValue(targetCarrier);
   if (target === undefined || structural?.representation !== "reference" ||
     structural.fields.some(field => field.bound === true)) return false;
+  const instance = rustClassConstructorInstance(sourceCarrier);
+  if (instance !== undefined) {
+    const definition = walk.context.projectTypes.definitionForCarrier(instance);
+    if (definition?.kind !== "class" || !selectRustClassValueView(walk, expression, definition.declaration, targetCarrier)) return false;
+    walk.context.facts.set(expression, rustObjectReferenceViewKey, {
+      kind: "constructor", declaration: definition.declaration, sourceCarrier, targetCarrier,
+    });
+    return true;
+  }
   const sourceStructural = rustStructuralObjectCarrierValue(sourceCarrier);
   const project = walk.context.projectTypes.definitionForCarrier(sourceCarrier);
   if (sourceStructural?.representation !== "reference" && project === undefined) return false;
@@ -22,24 +32,25 @@ export function recordRustObjectReferenceView(
   const semantics = walk.context.semanticsFor(expression);
   const sourceType = semantics.types.expressionType(expression);
   if (sourceType === undefined) return false;
+  if (project !== undefined) {
+    if (!selectRustProjectStructuralView(walk, project.declaration, sourceCarrier, targetCarrier, semantics, sourceType)) return false;
+    walk.context.facts.set(expression, rustObjectReferenceViewKey, {
+      kind: "project", declaration: project.declaration, sourceCarrier, targetCarrier,
+    }, [{ message: "rust exact class-to-structural native root projection" }]);
+    return true;
+  }
   const correspondence = semantics.types.structuralMembers(sourceType, target.sourceType);
   if (correspondence.kind !== "available" || correspondence.destination.calls.length !== 0 ||
     correspondence.destination.constructs.length !== 0 || correspondence.destination.indexes.length !== 0) return false;
-  const fields: RustObjectReferenceView["fields"][number][] = [];
+  const fields: Extract<RustObjectReferenceView, { readonly kind: "structural" }>["fields"][number][] = [];
   const destinations = new Set<number>();
-  const context = rustOperationContext(walk, expression);
   for (const pair of correspondence.members) {
     if (pair.kind === "absent") return false;
     const destination = structuralProjection(walk, pair.destination.property.symbol, pair.destination.declarations, targetCarrier);
     if (destination === undefined || destinations.has(destination.field.storageIndex)) return false;
     const source = structuralProjection(walk, pair.source.property.symbol, pair.source.declarations, sourceCarrier);
-    const projectFields = source !== undefined ? [] : pair.source.declarations.flatMap(declaration => {
-      const selected = resolveRustProjectField(declaration, sourceCarrier, sourceType, pair.source.property.type,
-        context, walk.operationOptions);
-      return selected === undefined ? [] : [selected];
-    });
-    const selected: RustObjectReferenceView["fields"][number]["source"] | undefined = source === undefined
-      ? projectFields.length === 1 ? projectFields[0] : undefined
+    const selected: Extract<RustObjectReferenceView, { readonly kind: "structural" }>["fields"][number]["source"] | undefined = source === undefined
+      ? undefined
       : { kind: "source-field", storage: source.shape.storage, storageIndex: source.field.storageIndex,
           receiverCarrier: sourceCarrier, resultCarrier: source.field.resultCarrier,
           valueSemantics: { kind: source.field.method === true ? "method" : "stored" } };
@@ -56,7 +67,7 @@ export function recordRustObjectReferenceView(
       storageIndex: field.destinationIndex, kind: "accessor"})) return false;
   }
   walk.context.facts.set(expression, rustObjectReferenceViewKey,
-    {sourceCarrier, targetCarrier, fields: Object.freeze(fields)}, [{message: "rust exact identity-preserving structural view"}]);
+    {kind: "structural", sourceCarrier, targetCarrier, fields: Object.freeze(fields)}, [{message: "rust exact identity-preserving structural view"}]);
   return true;
 }
 

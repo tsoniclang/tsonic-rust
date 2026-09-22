@@ -468,6 +468,7 @@ export function createImplementationPlan(
       contract,
       rootType,
       wrapperType,
+      contracts,
       finalizedStateFields,
       accessors,
       methods,
@@ -554,6 +555,7 @@ export function createImplementationPlan(
     })), ...accessorFields],
   };
   return Object.freeze({
+    kind: "project" as const,
     expression,
     resultCarrier: fact.resultCarrier,
     wrapperType,

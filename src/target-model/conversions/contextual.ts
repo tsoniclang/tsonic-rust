@@ -6,11 +6,13 @@ import { rustCarrierSupportsTrait } from "../types/carriers/traits.js";
 import { rustProviderRecordCopyMatches, type RustProviderRecordCopy } from "./provider-record.js";
 import { rustEmptyRecordConversionMatches, type RustEmptyRecordConversion } from "./empty-record.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../types/source-union-definitions.js";
+import { rustGenericCallableConversionMatches, type RustGenericCallableConversion } from "./generic-callable.js";
 
 export type RustContextualValueConversion =
   | RustValueConversion
   | RustProviderRecordCopy
   | RustEmptyRecordConversion
+  | RustGenericCallableConversion
   | {
       readonly kind: "native-trait-object-upcast";
       readonly source: TargetTypeRef;
@@ -28,6 +30,9 @@ export function rustCompilerOwnedContextualConversionMatches(
   conversion: RustContextualValueConversion,
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): boolean {
+  if (conversion.kind === "generic-callable-flow") {
+    return rustGenericCallableConversionMatches(conversion, sourceCarrier, targetCarrier);
+  }
   if (conversion.kind === "empty-record") {
     return rustEmptyRecordConversionMatches(conversion, sourceCarrier, targetCarrier);
   }
@@ -60,5 +65,6 @@ export function rustContextualValueConversionIsFallible(
     conversion.kind !== "reference-reborrow" &&
     conversion.kind !== "provider-record-copy" &&
     conversion.kind !== "empty-record" &&
+    conversion.kind !== "generic-callable-flow" &&
     rustValueConversionIsFallible(conversion, definitions);
 }

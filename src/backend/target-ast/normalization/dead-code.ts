@@ -5,7 +5,6 @@ import type {
   RustItem,
   RustSourceFileModel,
   RustStructField,
-  RustTraitFunction,
 } from "../nodes.js";
 import { rustLintAttributes } from "./lint-policy.js";
 
@@ -41,7 +40,7 @@ function finalizeRustItemDeadCode(item: RustItem): RustItem {
       const owner = finalizeRustDeadCodeOwner(item);
       return {
         ...owner,
-        functions: owner.functions.map(finalizeRustTraitFunctionDeadCode),
+        functions: owner.functions.map(finalizeRustDeadCodeOwner),
       };
     }
     case "impl":
@@ -56,7 +55,7 @@ function finalizeRustItemDeadCode(item: RustItem): RustItem {
       const owner = finalizeRustDeadCodeOwner(item);
       return {
         ...owner,
-        variants: owner.variants.map(finalizeRustDeadCodeOwner),
+        variants: owner.variants.map(variant => finalizeRustDeadCodeOwner(variant)),
       };
     }
     case "mod-decl":
@@ -68,12 +67,6 @@ function finalizeRustItemDeadCode(item: RustItem): RustItem {
 
 function finalizeRustStructFieldDeadCode(field: RustStructField): RustStructField {
   return finalizeRustDeadCodeOwner(field);
-}
-
-function finalizeRustTraitFunctionDeadCode(
-  fn: RustTraitFunction,
-): RustTraitFunction {
-  return finalizeRustDeadCodeOwner(fn);
 }
 
 function finalizeRustImplFunctionDeadCode(

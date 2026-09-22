@@ -25,6 +25,7 @@ import {
 } from "../names/synthetic.js";
 import {
   rustCallableProtocol,
+  rustProgramErrorTargetType,
   isRustCopyCarrier,
   rustStructuralObjectCarrierValue,
   rustLocationTargetType,
@@ -52,11 +53,13 @@ export function createRustStructuralObjectFromCarrier(
   initializers: readonly RustStructuralObjectFieldInitializer[],
   context: RustPlanContext,
   identity?: RustExpr,
+  constructor?: RustExpr,
 ): RustExpr | undefined {
   const definition = context.input.program.structuralShapes.definitionForCarrier(carrier);
   if (definition === undefined || definition.fields.length !== initializers.length) {
     return undefined;
   }
+  if ((definition.construction === undefined) !== (constructor === undefined)) return undefined;
   if (rustStructuralObjectCarrierValue(carrier)?.representation === "value" &&
     definition.fields.some(field => field.nativeLayout !== undefined)) return undefined;
   const fields = definition.fields.flatMap((field, index) => {
@@ -112,6 +115,9 @@ export function createRustStructuralObjectFromCarrier(
   if (fields.some((field) => field === undefined)) {
     return undefined;
   }
+  if (definition.construction !== undefined && constructor !== undefined) {
+    fields.push({ name: definition.construction.targetName, value: constructor });
+  }
   if (rustStructuralObjectCarrierValue(carrier)?.representation === "value") {
     const type = rustTypeFromCarrierInContext(carrier, context);
     return identity !== undefined || type?.kind !== "named" ? undefined : {
@@ -164,6 +170,15 @@ export function readRustStoredObjectField(
     if (field === undefined) {
       return undefined;
     }
+    if (context.input.program.structuralShapes.definitionForCarrier(receiverCarrier)?.dispatchName !== undefined) {
+      const error = rustActiveErrorType(context);
+      const operand = rustTypeFromCarrierInContext(rustProgramErrorTargetType(), context);
+      if (field.property === undefined || error === undefined || operand === undefined || projection.length !== 0) return undefined;
+      const dispatch: RustExpr = { kind: "field", receiver, name: "dispatch" };
+      return { kind: "try", expr: { kind: "method-call", receiver: field.property.selfMode === "ref" ? dispatch
+        : { kind: "method-call", receiver: dispatch, method: "clone", args: [] },
+        method: field.property.getterTargetName, args: [] }, resultErrorType: error, operandErrorType: operand };
+    }
     if (field.method === true && field.receiverIndependent !== true) {
       return undefined;
     }
@@ -202,6 +217,7 @@ export function readRustStructuralObjectMethodStorage(
   context: RustPlanContext,
 ): RustExpr | undefined {
   const field = context.input.program.structuralShapes.field(receiverCarrier, storageIndex);
+  if (field?.nativeMethod === true) return undefined;
   const storageCarrier = field?.receiverIndependent === true ? field.carrier : field?.method === true
     ? rustStructuralMethodStorageCarrier(receiverCarrier, field.carrier, field.presence)
     : undefined;
@@ -247,6 +263,13 @@ export function invokeRustStructuralObjectMethod(
       !rustTargetTypeRefEquals(storageOverride.carrier, rawStorageCarrier)) ||
     context.syntheticNames === undefined) {
     return undefined;
+  }
+  if (field.nativeMethod === true) {
+    if (storageOverride !== undefined || field.presence !== "required" || field.storage !== "stored") return undefined;
+    const dispatch: RustExpr = { kind: "field", receiver, name: "dispatch" };
+    return { kind: "method-call", receiver: context.input.program.structuralShapes.definitionForCarrier(receiverCarrier)?.construction === undefined
+      ? { kind: "method-call", receiver: dispatch, method: "clone", args: [] } : dispatch,
+      method: field.targetName, args: arguments_ };
   }
   const receiverName = allocateRustSyntheticName(
     context.syntheticNames,
@@ -306,9 +329,9 @@ export function writeRustStoredObjectField(
   const valueName = allocateRustSyntheticName(context.syntheticNames, "field_value");
   const selected: RustExpr = { kind: "path", path: receiverName };
   const effect = writeRustStoredObjectFieldStorage(storage, receiverCarrier, selected, storageIndex, operator,
-    { kind: "path", path: valueName }, context, projection);
+    { kind: "path", path: valueName }, context, projection, receiverIsBorrowed);
   return effect === undefined ? undefined : { kind: "block", bindings: [
-    { name: receiverName, value: cloneExpression(receiver) }, { name: valueName, value },
+    { name: receiverName, value: receiverIsBorrowed ? receiver : cloneExpression(receiver) }, { name: valueName, value },
   ], value: checkRustDataWrite(check, selected, effect, errorType) };
 }
 
@@ -327,6 +350,16 @@ function writeRustStoredObjectFieldStorage(
     const field = context.input.program.structuralShapes.field(receiverCarrier, storageIndex);
     if (field === undefined) {
       return undefined;
+    }
+    if (context.input.program.structuralShapes.definitionForCarrier(receiverCarrier)?.dispatchName !== undefined) {
+      const error = rustActiveErrorType(context);
+      const operand = rustTypeFromCarrierInContext(rustProgramErrorTargetType(), context);
+      if (field.property?.setterTargetName === undefined || error === undefined || operand === undefined ||
+        projection.length !== 0 || operator !== "=") return undefined;
+      const dispatch: RustExpr = { kind: "field", receiver, name: "dispatch" };
+      return { kind: "try", expr: { kind: "method-call", receiver: field.property.selfMode === "ref" ? dispatch
+        : { kind: "method-call", receiver: dispatch, method: "clone", args: [] },
+        method: field.property.setterTargetName, args: [value] }, resultErrorType: error, operandErrorType: operand };
     }
     if (field.method === true && field.receiverIndependent !== true || field.readonly && projection.length === 0) {
       return undefined;

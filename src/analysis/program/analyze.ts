@@ -1,6 +1,8 @@
 import { appendMalformedSourceAstDiagnostic, recordClassBodyFacts, recordClassSignatureFacts, recordInterfaceFacts, recordMethodSelfModeFacts } from "../declarations/project-types.js";
 import { appendRustDiagnostic, rustResolutionContext } from "./walk.js";
 import { createRustModuleBindingPolicy } from "./module-bindings.js";
+import { selectRustClassEnvironment, recordRustClassEnvironmentDemands } from "../objects/class-environments.js";
+import { rustClosureCaptureFactKey } from "../facts/keys.js";
 import { createRustSourceCallableAbiResolver } from "../../policy/ownership/source-callable-abi.js";
 import { createRustSourceProfileRegistry } from "../facts/source-profile-registry.js";
 import { createRustSourceTypeRegistry } from "../project-types/source-type-registry.js";
@@ -40,8 +42,10 @@ import { recordRustTypeOnlyDeclarations } from "../declarations/type-only.js";
 import { recordRustProjectCallableAdapterFacts } from "../project-types/callable-adapters.js";
 import { recordRustValueStructDeclaration } from "../declarations/value-structs.js";
 import { recordRustInterfaceRepresentationAliases } from "../declarations/interface-aliases.js";
+import { collectRustImplicitInterfaceContracts } from "../project-types/implicit-interfaces.js";
 import { rustTypeOnlyDeclarationFactKey } from "../../target-model/facts/type-only.js";
 import { finalizeRustCopiedMethods } from "../objects/copied-methods.js";
+import { closeRustInheritedStructuralViews } from "../objects/inherited-structural-views.js";
 
 export function analyzeRustProgram(context: RustAnalysisContext): void {
   const { ast } = context;
@@ -123,6 +127,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   }
   recordRustInterfaceRepresentationAliases(walk, projectSourceFiles);
   const projectTypes = context.projectTypes.initialize({
+    implicitInterfaces: collectRustImplicitInterfaceContracts(walk),
     ast,
     names: context.names,
     navigation: context.source.navigation,
@@ -215,6 +220,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     navigation: context.source.navigation,
     semantics: context.source.semantics,
     valueWrites: mutableStorageDeclarations.valueWrites,
+    referenceDeclarations: mutableStorageDeclarations.referenceDeclarations,
     projectTypes,
     sourceFiles: projectSourceFiles,
     hasPromotedStorage(declaration) {
@@ -254,7 +260,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
       const kind = ast.kindName(statement);
       if (kind === KindFunctionDeclaration) {
         recordFunctionSignatureFacts(walk, statement);
-      } else if (kind === "KindClassDeclaration") {
+      } else if (kind === "KindClassDeclaration" || kind === "KindClassExpression") {
         recordClassSignatureFacts(walk, statement);
       } else if (kind === "KindEnumDeclaration") {
         recordEnumFacts(walk, statement, sourceFile);
@@ -303,9 +309,27 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
       }
     }
   }
+  recordRustClassEnvironmentDemands(walk);
+  for (const definition of projectTypes.definitions) {
+    const selected = selectRustClassEnvironment(walk, definition.declaration);
+    if (selected.kind === "unresolved") {
+      appendRustDiagnostic(walk, "RUST_CLASS_ENVIRONMENT_NOT_CLOSED", selected.reason, definition.declaration,
+        ["target.capability=rust.class-value.environment"]);
+    } else if (selected.kind === "available") {
+      if (!context.classValues.recordEnvironment(selected.environment)) {
+        appendRustDiagnostic(walk, "RUST_CLASS_ENVIRONMENT_NOT_CLOSED",
+          "Class evaluation requires one consistent, immutable capture and static-storage contract.", definition.declaration,
+          ["target.capability=rust.class-value.environment"]);
+      }
+      context.facts.set(definition.declaration, rustClosureCaptureFactKey, { captures: selected.environment.captures });
+    }
+  }
   const nativeFields = recordRustNativeBacking(walk);
   const callableSpecializations = context.sourceCallableSpecializations.initialize({
+    navigation: context.source.navigation,
     ast,
+    sourceFiles: context.sourceFiles,
+    facts: context.facts,
     closedSourceFiles,
     names: context.names,
     projectTypes,
@@ -367,6 +391,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   }
   realizeRustSourceTypeFamilyDemands(walk, projectSourceFiles);
   recordRustTypeOnlyDeclarations(walk, projectSourceFiles);
+  closeRustInheritedStructuralViews(walk);
   const structuralObjects = sourceTypes.structuralObjects();
   const sourcePackageComponentByFile = new Map(context.sourcePackages.packages.flatMap((entry) =>
     entry.sourceFiles.map((fileName) => [fileName, entry.componentId] as const)));
@@ -404,6 +429,13 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   // Fallibility depends on finalized operation facts and the one whole-program
   // structural storage plan produced while walking bodies.
   recordRustProjectCallableAdapterFacts(walk);
+  const callableValues = context.callableValues.initialize({ ast, sourceFiles: context.sourceFiles, facts: context.facts,
+    names: context.names, navigation: context.source.navigation, lifetimes: context.sourceLifetimes,
+    classValueAdapters: context.classValues.valueAdapters(), closedSourceFiles });
+  for (const issue of callableValues.issues) {
+    appendRustDiagnostic(walk, "RUST_CALLABLE_VALUE_NOT_CLOSED", issue.message, issue.subject,
+      ["target.capability=rust.callable-value.exact-implementation"]);
+  }
   recordFallibilityFacts(walk, projectSourceFiles);
   recordResourceManagementFacts(walk, projectSourceFiles);
   recordFutureValueFacts(walk, projectSourceFiles);

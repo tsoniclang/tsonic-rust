@@ -63,6 +63,9 @@ import type { RustProviderOperationTemplate, RustTargetOperationFact } from "../
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { selectRustNumberArrayUnionMember } from "./number-array-unions.js";
 import { selectedRustForInKeys } from "./for-in-keys.js";
+import { selectRustCheckedPropertyAccess } from "./properties.js";
+import { rustComputedMemberFactKey } from "../../facts/operations/keys.js";
+import { resolveRustIndexedField } from "../../../policy/types/resolution/indexed-fields.js";
 
 export function selectRustCheckedElementAccess(
   request: RustCheckedElementSelectionInput,
@@ -78,6 +81,61 @@ export function selectRustCheckedElementAccess(
   }
   if (isIntrinsicSourceQualifier(request, context, options)) {
     return acceptDeclarationOperation("indexer");
+  }
+  if (request.sourceReceiverType !== undefined && request.accessMode !== "delete" &&
+    context.currentSemantics.types.selectIndexedAccess(request.sourceReceiverType, request.sourceArgumentType)?.kind === "deferred") {
+    const selected = resolveRustIndexedField(request.sourceReceiverType, request.sourceArgumentType,
+      context, options, new Set(), selectedReceiverCarrier);
+    if (selected?.result.kind !== "associated-type" || selectedReceiverCarrier === undefined) {
+      return rejectSelectedOperation(request.expression, context, "RUST_DEPENDENT_FIELD_NOT_PROVEN",
+        "Dependent indexed access requires an exact native owner, key and associated field type.");
+    }
+    return acceptRustMemberOperation(request, "indexer", {
+      kind: "source-indexed-field", operationId: sourceOperationId(context, request.expression, "indexed-field"),
+      receiverCarrier: selectedReceiverCarrier, keyCarrier: selected.key, resultCarrier: selected.result,
+      accessMode: request.accessMode,
+    }, context, options, elementProvenance(request));
+  }
+  const jsIdentity = resolveSelectedJsSourceMember(context, request.sourceSelectedDeclaration, options.sourceProfiles);
+  const selectedArgumentCarrier = jsIdentity === undefined ? undefined : selectedValueCarrier(
+    request.argument, request.sourceArgumentType, context, options);
+  const selectedIndexOperation = jsIdentity === undefined ? undefined : selectJsSurfaceOperation({
+    ownerName: jsIdentity.ownerName, memberName: jsIdentity.memberName, operationKind: "indexer",
+    ...(selectedReceiverCarrier === undefined ? {} : { receiverCarrier: selectedReceiverCarrier }),
+    argumentCarriers: [selectedArgumentCarrier],
+    argumentMatchScore: selectedArgumentMatchScore([request.argument], context, options),
+  }, context.typeDefinitions);
+  if (selectedIndexOperation === undefined && request.sourceReceiverType !== undefined && request.sourceSelectedSymbol !== undefined &&
+    request.sourceSelectedElementIndex === undefined) {
+    const selected = context.semanticsFor(request.expression).types.selectIndexedAccess(
+      request.sourceReceiverType, request.sourceArgumentType,
+    );
+    const member = selected?.kind === "resolved" && selected.members.length === 1
+      ? selected.members[0] : undefined;
+    if (member?.kind === "property" && member.property.symbol === request.sourceSelectedSymbol) {
+      const declarationKind = request.sourceSelectedDeclaration === undefined ? undefined :
+        context.ast.kindName(request.sourceSelectedDeclaration);
+      const declarations = declarationKind === "KindGetAccessor" || declarationKind === "KindSetAccessor"
+        ? context.currentSemantics.types.structuralMembers(request.sourceReceiverType, request.sourceReceiverType)
+        : undefined;
+      const matches = declarations?.kind === "available" ? declarations.members.filter(pair =>
+        pair.kind === "present" && pair.source.property.symbol === request.sourceSelectedSymbol) : [];
+      const selectedMember = matches.length === 1 && matches[0]?.kind === "present" ? matches[0].source : undefined;
+      const result = selectRustCheckedPropertyAccess({ ...request,
+        ...(selectedMember?.getters.length === 1 ? { sourceSelectedReadDeclaration: selectedMember.getters[0]! } : {}),
+        ...(selectedMember?.setters.length === 1 ? { sourceSelectedWriteDeclaration: selectedMember.setters[0]! } : {}),
+      }, context, options);
+      if (result.kind === "accept") {
+        const kind = context.ast.kindName(request.argument);
+        context.facts.set(request.expression, rustComputedMemberFactKey, {
+          receiver: request.receiver, key: request.argument,
+          accessMode: request.accessMode,
+          evaluateKey: kind !== "KindStringLiteral" && kind !== "KindNumericLiteral" &&
+            kind !== "KindNoSubstitutionTemplateLiteral",
+        }, [{ message: "rust exact checker-selected computed member and key evaluation" }]);
+      }
+      return result;
+    }
   }
   const sourceProfileIdentity = resolveSelectedSourceProfileMember(
     context,
@@ -228,25 +286,11 @@ export function selectRustCheckedElementAccess(
     return acceptRustMemberOperation(request, "indexer", fact, context, options, elementProvenance(request));
   }
 
-  const jsIdentity = resolveSelectedJsSourceMember(context, request.sourceSelectedDeclaration, options.sourceProfiles);
   if (jsIdentity !== undefined) {
     if (!options.jsEnabled) {
       return rejectSelectedOperation(request.expression, context, "RUST_JS_SURFACE_REQUIRED", "The selected index signature belongs to the explicit JavaScript source profile, which is not active.");
     }
-    const selectedArgumentCarrier = selectedValueCarrier(
-      request.argument,
-      request.sourceArgumentType,
-      context,
-      options,
-    );
-    const selection = selectJsSurfaceOperation({
-      ownerName: jsIdentity.ownerName,
-      memberName: jsIdentity.memberName,
-      operationKind: "indexer",
-      ...(receiverCarrier === undefined ? {} : { receiverCarrier }),
-      argumentCarriers: [selectedArgumentCarrier],
-      argumentMatchScore: selectedArgumentMatchScore([request.argument], context, options),
-    }, context.typeDefinitions);
+    const selection = selectedIndexOperation;
     if (selection === undefined || selection.fact.kind !== "provider-operation" || selection.resultCarrier === undefined) {
       return rejectSelectedOperation(
         request.expression,

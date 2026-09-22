@@ -3,10 +3,11 @@ import type {
   Node,
   SourceFile,
   Symbol,
+  Signature,
   Type,
 } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustSourceTypeFamilyRegistry } from "./type-families.js";
+import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 
 export interface RustSourceEnumVariant {
@@ -35,6 +36,11 @@ export interface RustSourceObjectShape {
   readonly carrier: TargetTypeRef;
   readonly storage: "project-object" | "structural-object";
   readonly fields: readonly RustSourceObjectField[];
+  readonly construction?: {
+    readonly declaration: Node;
+    readonly signature: Signature;
+    readonly carrier: TargetTypeRef;
+  };
 }
 
 export interface RustSourceUnionVariant {
@@ -63,7 +69,7 @@ export interface RustStructuralFieldRegistration {
 export interface RustStructuralFieldImplementation {
   readonly carrier: TargetTypeRef;
   readonly storageIndex: number;
-  readonly kind: "stored" | "accessor";
+  readonly kind: "stored" | "accessor" | "dispatch";
 }
 
 export interface RustStructuralInstantiation {

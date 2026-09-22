@@ -6,6 +6,7 @@ export function rustProjectObjectIdentityImplementation(
   target: RustType,
   generics: RustGenerics,
   identity: RustExpr,
+  identityKey?: RustExpr,
 ): RustItem {
   return {
     kind: "impl",
@@ -24,6 +25,14 @@ export function rustProjectObjectIdentityImplementation(
         referent: { kind: "named", path: "rt::ObjectIdentity" },
       },
       body: { statements: [{ kind: "tail", expr: identity }] },
-    }],
+    }, ...(identityKey === undefined ? [] : [{
+      name: "object_identity_key",
+      visibility: "private" as const,
+      generics: emptyRustGenerics,
+      selfParam: rustSelfParameter("ref"),
+      params: [],
+      returnType: { kind: "primitive" as const, name: "usize" as const },
+      body: { statements: [{ kind: "tail" as const, expr: identityKey }] },
+    }])],
   };
 }

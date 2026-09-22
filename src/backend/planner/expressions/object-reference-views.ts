@@ -1,4 +1,5 @@
 import type { RustObjectReferenceView } from "../../../analysis/facts/object-reference-views.js";
+import { rustClassConstructorInstance } from "../../../target-model/types/carriers/class-constructors.js";
 import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustCurrentErrorBoundary } from "../program/plan-context.js";
@@ -9,10 +10,20 @@ import { createRustStructuralObjectFromCarrier, readRustStoredObjectField, write
   type RustStructuralObjectFieldInitializer } from "../objects/project-storage.js";
 import { planRustProjectFieldDispatchRoles } from "../objects/project-field-dispatch.js";
 import { readRustProjectDispatchedField, writeRustProjectDispatchedField } from "../objects/project-objects.js";
+import { planRustProjectStructuralConversion } from "../objects/project-structural-views.js";
+import type { Node } from "@tsonic/tsts";
+import { constructRustStructuralLiteral } from "../objects/object-literals/structural.js";
 
 export function planRustObjectReferenceView(
-  value: RustExpr, fact: RustObjectReferenceView, context: RustPlanContext,
+  node: Node, value: RustExpr, fact: RustObjectReferenceView, context: RustPlanContext,
 ): RustExpr | undefined {
+  if (fact.kind === "project") return planRustProjectStructuralConversion(value, fact.sourceCarrier, fact.targetCarrier, context);
+  if (fact.kind === "constructor") {
+    const instance = rustClassConstructorInstance(fact.sourceCarrier);
+    const view = instance === undefined ? undefined : context.input.program.classValues.viewFor(fact.declaration, instance, fact.targetCarrier);
+    const type = view === undefined ? undefined : rustTypeFromCarrierInContext(fact.targetCarrier, context);
+    return type?.kind !== "named" ? undefined : { kind: "struct-literal", path: type.path, fields: [{ name: "dispatch", value }] };
+  }
   const shape = context.input.program.structuralShapes.definitionForCarrier(fact.targetCarrier);
   const boundary = rustCurrentErrorBoundary(context);
   if (shape === undefined || shape.fields.length !== fact.fields.length || boundary === undefined ||
@@ -66,6 +77,8 @@ export function planRustObjectReferenceView(
   }
   context.usedAliases?.add("rt");
   const identity = clone({kind: "call", path: "rt::ObjectIdentityCarrier::object_identity", args: [{kind: "reference", expr: owner}]});
-  const constructed = createRustStructuralObjectFromCarrier(fact.targetCarrier, initializers, context, identity);
+  const implementation = context.objectLiteralImplementations?.forReferenceView(node);
+  const constructed = shape.dispatchName === undefined ? createRustStructuralObjectFromCarrier(fact.targetCarrier, initializers, context, identity)
+    : implementation?.kind === "structural" ? constructRustStructuralLiteral(implementation, initializers, identity) : undefined;
   return constructed === undefined ? undefined : {kind: "block", bindings, value: constructed};
 }

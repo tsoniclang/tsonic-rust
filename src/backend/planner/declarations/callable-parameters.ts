@@ -33,7 +33,7 @@ import { rustLocationStorageForDeclaration } from "../expressions/typed-location
 import { planRustNativeAllocation } from "../expressions/native-memory.js";
 import { rustNativeBackingKey } from "../../../target-model/operations/native-memory.js";
 import type { RustBindingExpressionPlanner } from "../bindings/patterns.js";
-import { rustOptionDefaultValue } from "../option-default.js";
+import { rustOptionDefaultValue } from "../expressions/option-default.js";
 import { rustCarrierReferentMutationRequiresMutableBinding } from "../../../target-model/types/index.js";
 
 type RustParameterPrelude =

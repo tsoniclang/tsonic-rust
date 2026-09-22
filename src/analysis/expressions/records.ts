@@ -715,7 +715,9 @@ export function resolveRecordLiteralCarrier(
     const initializerKind = initializer === undefined ? "" : ast.kindName(initializer);
     if (initializer !== undefined &&
       (initializerKind === KindFunctionExpression || initializerKind === "KindArrowFunction") &&
-      storage === "project-object" && selectedElement?.elementKind === "property") {
+      storage === "project-object" && selectedElement?.elementKind === "property" &&
+      selectedElement.sourceSelectedDeclaration !== undefined &&
+      selectedMethodDeclarations.includes(selectedElement.sourceSelectedDeclaration)) {
       const selectedDeclarations = selectedElement.sourceSelectedDeclarations;
       const selectedDeclaration = selectedElement.sourceSelectedDeclaration;
       const matchedDeclarations = selectedProjectMethodContracts(

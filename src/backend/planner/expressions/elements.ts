@@ -18,11 +18,17 @@ import { rustProjectObjectRepresentation } from "../objects/project-storage.js";
 import { requireProviderArgumentPassingFacts } from "./calls/arguments.js";
 import { rustOptionalChainFactKey } from "../../../analysis/facts/keys.js";
 import { rustOptionElementCarrier } from "../../../target-model/types/index.js";
+import { rustComputedMemberFactKey } from "../../../analysis/facts/operations/keys.js";
+import { planPropertyAccess } from "./properties.js";
+import { planRustIndexedFieldRead } from "./indexed-fields.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 
 export function planElementAccess(node: Node, context: RustPlanContext): RustExpr | undefined {
+  if (context.input.program.facts.getFact(node, rustComputedMemberFactKey) !== undefined) {
+    return planPropertyAccess(node, context);
+  }
   return planOptionalChainExpression(
     node,
     context,
@@ -36,6 +42,7 @@ function planElementAccessInner(node: Node, context: RustPlanContext): RustExpr 
     return planNativeRustArrayAccess(node, context, planExpression, "load");
   }
   const fact = rustOperationFact(node, context);
+  if (fact?.kind === "source-indexed-field") return planRustIndexedFieldRead(node, fact, context);
   if (fact !== undefined && fact.kind === "source-index-signature") {
     const resultCarrier = effectiveMemberResultCarrier(node, fact.resultCarrier, context);
     if (resultCarrier === undefined || !requireExpressionCarrier(

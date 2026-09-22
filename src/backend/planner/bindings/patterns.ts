@@ -38,7 +38,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustCarrierHasCloneContract } from "../types/generic-requirements.js";
-import { rustOptionDefaultValue } from "../option-default.js";
+import { rustOptionDefaultValue } from "../expressions/option-default.js";
 
 export type RustBindingExpressionPlanner = (
   node: Node,

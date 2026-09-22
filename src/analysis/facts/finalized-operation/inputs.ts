@@ -362,7 +362,7 @@ export function finalizeTargetInputs(
         input.argumentTo(sourceIndex, argument.mode, argument.carrier));
       const arrayIndexes = indexes.slice(form.leadingArguments.length);
       const elements = arrayIndexes.map((sourceIndex) =>
-        input.argumentTo(sourceIndex, "value", form.elementCarrier));
+        input.sequenceTo(sourceIndex, form.elementCarrier));
       if (leading.some((entry) => entry === undefined) || elements.some((entry) => entry === undefined)) {
         return undefined;
       }
@@ -385,7 +385,7 @@ export function finalizeTargetInputs(
         input.argumentTo(sourceIndex, argument.mode, argument.carrier));
       const arrayIndexes = indexes.slice(form.leadingArguments.length);
       const elements = arrayIndexes.map((sourceIndex) =>
-        input.argumentTo(sourceIndex, "value", form.elementCarrier));
+        input.sequenceTo(sourceIndex, form.elementCarrier));
       if (receiver === undefined || leading.some((entry) => entry === undefined) ||
         elements.some((entry) => entry === undefined)) {
         return undefined;

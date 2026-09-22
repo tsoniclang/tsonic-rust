@@ -5,6 +5,7 @@ import type { RustOperationsProviderOptions } from "../model.js";
 import { rustFixedArrayCarrierValue, rustTargetConstInteger } from "../../../../target-model/types/index.js";
 import { selectRustRestSequenceConversion } from "../../../../policy/conversions/rest-sequence.js";
 import { selectedCallArgumentNodes, selectedSourceValueCarrier } from "../operators.js";
+import { rustRestSequenceForm } from "../../../../target-model/operations/rest-assembly.js";
 
 export function selectedCallSourceParameterCarriers(
   request: RustCheckedCallSelectionInput,
@@ -18,12 +19,13 @@ export function selectedCallSourceParameterCarriers(
     .map((_argument, index) => index)
     .filter((index) => !compileTimeIndexes.has(index));
   const declaredBySourceIndex = new Map<number, TargetTypeRef | undefined>();
+  const sequenceForm = rustRestSequenceForm(fact.target);
   for (const sourceIndex of runtimeIndexes) {
     const bindings = request.source.sourceArgumentBindings.filter((binding) =>
       binding.sourceArgumentIndex === sourceIndex);
     const first = bindings[0];
-    if (first === undefined && fact.target.form === "call-value-slice" &&
-      sourceIndex >= fact.target.leadingArguments.length &&
+    if (first === undefined && sequenceForm !== undefined &&
+      sourceIndex >= sequenceForm.leadingArguments.length &&
       request.source.sourceArguments[sourceIndex] !== undefined &&
       context.ast.is.IsSpreadElement(request.source.sourceArguments[sourceIndex]!.expression)) {
       const carrier = selectedSourceValueCarrier(request.source.sourceArguments[sourceIndex]!, context, options);
@@ -53,7 +55,8 @@ export function selectedRestSequenceIsClosed(
   carrier: TargetTypeRef | undefined,
   form: RustProviderOperationForm,
 ): boolean {
-  if (carrier === undefined || form.form !== "call-value-slice" || index < form.leadingArguments.length) return false;
+  const sequenceForm = rustRestSequenceForm(form);
+  if (carrier === undefined || sequenceForm === undefined || index < sequenceForm.leadingArguments.length) return false;
   const bindings = request.source.sourceArgumentBindings.filter(binding => binding.sourceArgumentIndex === index);
   const fixed = rustFixedArrayCarrierValue(carrier);
   const tupleLength = carrier.kind === "tuple" ? BigInt(carrier.elements.length)
@@ -62,6 +65,6 @@ export function selectedRestSequenceIsClosed(
     tupleLength !== undefined && BigInt(bindings.length) === tupleLength && bindings.every((binding, elementIndex) =>
       binding.sourceForm === "spread-element" && binding.spreadElementIndex === elementIndex);
   return exactBindings && selectRustRestSequenceConversion(
-    carrier, form.elementCarrier,
+    carrier, sequenceForm.elementCarrier,
   ) !== undefined;
 }

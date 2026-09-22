@@ -7,6 +7,8 @@ import {
   rustSourceUnionCarrierValue,
   rustStructuralObjectCarrierValue,
 } from "./source-types.js";
+import { rustGenericCallableValue } from "./generic-callables.js";
+import { rustClassConstructorFreeArguments } from "./class-constructors.js";
 import type {
   RustTargetConstArgument,
   RustTargetGenericArgument,
@@ -69,14 +71,19 @@ export function visitRustTargetTypeParameters(
         (type.trait !== undefined && visitRustTargetTypeParameters(type.trait, visit)) ||
         visitGenericArgumentTypes(type.genericArguments, visit);
     case "target-specific": {
+      const constructorArguments = rustClassConstructorFreeArguments(type);
+      if (constructorArguments !== undefined) return visitGenericArgumentTypes(constructorArguments, visit);
+      const callable = rustGenericCallableValue(type);
+      if (callable !== undefined) return callable.environment.some(argument => visitRustTargetTypeParameters(argument, visit));
       const sourceType = rustSourceTypeCarrierValue(type);
       if (sourceType !== undefined) {
         return visitGenericArgumentTypes(sourceType.genericArguments, visit);
       }
       const structuralObject = rustStructuralObjectCarrierValue(type);
       if (structuralObject !== undefined) {
-        return structuralObject.fields.some((field) =>
-          visitRustTargetTypeParameters(field.type, visit));
+        return structuralObject.bases.some(base => visitRustTargetTypeParameters(base, visit)) || structuralObject.fields.some((field) =>
+          visitRustTargetTypeParameters(field.type, visit)) ||
+          structuralObject.construction !== undefined && visitRustTargetTypeParameters(structuralObject.construction, visit);
       }
       const sourceUnion = rustSourceUnionCarrierValue(type);
       if (sourceUnion !== undefined) {
@@ -261,6 +268,16 @@ export function rustTargetGenericReferences(
         visitArguments(value.genericArguments, bound);
         return;
       case "target-specific": {
+        const constructorArguments = rustClassConstructorFreeArguments(value);
+        if (constructorArguments !== undefined) {
+          visitArguments(constructorArguments, bound);
+          return;
+        }
+        const callable = rustGenericCallableValue(value);
+        if (callable !== undefined) {
+          callable.environment.forEach(argument => visitType(argument, bound));
+          return;
+        }
         const sourceType = rustSourceTypeCarrierValue(value);
         if (sourceType !== undefined) {
           visitArguments(sourceType.genericArguments, bound);
@@ -269,6 +286,7 @@ export function rustTargetGenericReferences(
         const structural = rustStructuralObjectCarrierValue(value);
         if (structural !== undefined) {
           structural.fields.forEach((field) => visitType(field.type, bound));
+          if (structural.construction !== undefined) visitType(structural.construction, bound);
           return;
         }
         const union = rustSourceUnionCarrierValue(value);

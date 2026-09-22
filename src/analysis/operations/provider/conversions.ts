@@ -17,6 +17,7 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import { selectRustProviderOperation } from "../../../policy/operations/provider-selection.js";
 import { rustValueConversionIdentity } from "../../../target-model/conversions/contracts.js";
 import { selectRustSourceValueConversion } from "../../../policy/conversions/selection.js";
+import { selectRustProjectProjection } from "../../../policy/types/project-projections.js";
 import type {
   RustCheckedConversionSelectionInput,
   RustCheckedConversionSelectionResult,
@@ -205,18 +206,20 @@ function selectProjectDowncast(
   const sourceDefinition = options.projectTypes.definitionForCarrier(dispatchCarrier);
   const targetDefinition = options.projectTypes.definitionForCarrier(targetCarrier);
   const relationship = sourceDefinition === undefined || targetDefinition === undefined ||
-      targetDefinition.kind !== "class" || targetDefinition.genericParameters.length !== 0
+      targetDefinition.kind !== "class"
     ? { kind: "unrelated" as const }
     : options.projectTypes.relationship(targetCarrier, sourceDefinition);
+  const projection = selectRustProjectProjection(dispatchCarrier, targetCarrier, options.projectTypes);
   if (sourceDefinition === undefined || relationship.kind !== "related" ||
     !rustTargetTypeRefEquals(relationship.targetType, dispatchCarrier) ||
-    options.projectTypes.downcastRoute(sourceDefinition, targetCarrier) === undefined) {
+    projection === undefined) {
     return false;
   }
   context.facts.set(subject, rustProjectDowncastFactKey, {
     sourceCarrier,
     dispatchCarrier,
     targetCarrier,
+    projection,
   }, [{ message: "rust exact project-type downcast" }]);
   return true;
 }

@@ -2,6 +2,8 @@ import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js
 import { defineRustPlanKey } from "../../target-model/facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustPlanKey } from "../../target-model/facts/keys.js";
+import type { RustPlanQueries } from "../../target-model/facts/selections.js";
+import type { Node } from "@tsonic/tsts";
 import type {
   RustBindingProjectionFact,
   RustCallScopedLifetimeReconciliationFact,
@@ -27,7 +29,8 @@ export const rustFlowReadProjectionFactKey: RustPlanKey<RustFlowReadProjectionFa
       (right.kind === "runtime-union" && left.method === right.method)) &&
     (left.kind !== "project-downcast" ||
       (right.kind === "project-downcast" &&
-        rustTargetTypeRefEquals(left.dispatchCarrier, right.dispatchCarrier))) &&
+        rustTargetTypeRefEquals(left.dispatchCarrier, right.dispatchCarrier) &&
+        closedMetadataEquals(left.projection, right.projection))) &&
     (left.kind !== "program-error-variant" ||
       (right.kind === "program-error-variant" && left.variant === right.variant)));
 
@@ -47,7 +50,29 @@ export const rustProjectDowncastFactKey: RustPlanKey<RustProjectDowncastFact> =
   defineRustPlanKey("projectDowncast", (left, right) =>
     rustTargetTypeRefEquals(left.sourceCarrier, right.sourceCarrier) &&
     rustTargetTypeRefEquals(left.dispatchCarrier, right.dispatchCarrier) &&
-    rustTargetTypeRefEquals(left.targetCarrier, right.targetCarrier));
+    rustTargetTypeRefEquals(left.targetCarrier, right.targetCarrier) &&
+    closedMetadataEquals(left.projection, right.projection));
+
+export function rustSelectedProjectDowncast(
+  facts: RustPlanQueries,
+  node: Node,
+): RustProjectDowncastFact | undefined {
+  const selected = facts.getFact(node, rustProjectDowncastFactKey);
+  const flow = facts.getFact(node, rustFlowReadProjectionFactKey);
+  if (flow?.kind !== "project-downcast") return selected;
+  const projection = Object.freeze({
+    sourceCarrier: flow.sourceCarrier,
+    dispatchCarrier: flow.dispatchCarrier,
+    targetCarrier: flow.selectedCarrier,
+    projection: flow.projection,
+  });
+  return selected === undefined ? projection
+    : rustTargetTypeRefEquals(selected.sourceCarrier, projection.sourceCarrier) &&
+      rustTargetTypeRefEquals(selected.dispatchCarrier, projection.dispatchCarrier) &&
+      rustTargetTypeRefEquals(selected.targetCarrier, projection.targetCarrier) &&
+      closedMetadataEquals(selected.projection, projection.projection)
+      ? selected : undefined;
+}
 
 export const rustSourceBindingFactKey: RustPlanKey<RustSourceBindingFact> =
   defineRustPlanKey("sourceBinding", (left, right) =>

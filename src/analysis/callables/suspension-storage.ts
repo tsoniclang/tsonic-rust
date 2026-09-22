@@ -1,23 +1,17 @@
 import type { Node } from "@tsonic/tsts";
 import { rustSourceParameterAbiFactKey } from "../facts/keys.js";
 import type { RustSuspendedCallableStorage } from "../facts/keys.js";
-import {
-  rustLifetimeKey,
-  rustLifetimeOutlives,
-} from "../../target-model/lifetimes/index.js";
-import type {
-  RustLifetimeRef,
-  RustSourceGenericContract,
-} from "../../target-model/lifetimes/index.js";
-import { rustTargetGenericReferences } from "../../target-model/types/index.js";
+import { selectRustSuspendedStorageLifetime } from "../../policy/ownership/suspended-storage.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustFactWalk } from "../program/walk.js";
+import type { RustSuspendedOwnedReceiver } from "../facts/callables-and-resources.js";
 
 export type RustSuspendedCallableStorageResolution =
   | {
       readonly kind: "resolved";
       readonly capturedParameters: readonly Node[];
       readonly storage: RustSuspendedCallableStorage;
+      readonly ownedReceiver?: RustSuspendedOwnedReceiver;
     }
   | { readonly kind: "rejected"; readonly reason: string };
 
@@ -38,10 +32,12 @@ export function resolveRustSuspendedCallableStorage(
   const exactParameters = parameters as readonly Node[];
   const parameterSet = new Set(exactParameters);
   const capturedParameterSet = new Set<Node>();
-  let capturesReceiver = false;
+  const receiverOccurrences: Node[] = [];
   const visit = (node: Node): void => {
-    if (ast.kindName(node) === "KindThisKeyword") {
-      capturesReceiver = true;
+    if (ast.is.IsFunctionExpression(node) || ast.is.IsFunctionDeclaration(node) ||
+      ast.is.IsClassDeclaration(node) || ast.is.IsClassExpression(node)) return;
+    if (ast.kindName(node) === "KindThisKeyword" || ast.kindName(node) === "KindThisExpression") {
+      receiverOccurrences.push(node);
     } else if (ast.kindName(node) === "KindIdentifier") {
       const selectedDeclaration = walk.context.source.navigation.sourceReferenceFor(node)?.declaration;
       const ownerParameter = selectedDeclaration === undefined
@@ -59,7 +55,14 @@ export function resolveRustSuspendedCallableStorage(
   const capturedParameters = exactParameters.filter((parameter) =>
     capturedParameterSet.has(parameter));
 
-  if (capturesReceiver && !ast.hasModifierKind(declaration, "static")) {
+  const owner = walk.context.projectTypes.definitionContainingDeclaration(declaration);
+  const representation = walk.context.objectRepresentations.representationFor(owner);
+  const ownsReceiver = receiverOccurrences.length > 0 && !ast.hasModifierKind(declaration, "static") &&
+    owner !== undefined && representation !== undefined && representation.kind !== "value";
+  const ownedReceiver: RustSuspendedOwnedReceiver | undefined = ownsReceiver
+    ? Object.freeze({ carrier: walk.context.projectTypes.openCarrier(owner), occurrences: Object.freeze(receiverOccurrences) })
+    : undefined;
+  if (receiverOccurrences.length > 0 && !ast.hasModifierKind(declaration, "static") && ownedReceiver === undefined) {
     return {
       kind: "resolved",
       capturedParameters: Object.freeze(capturedParameters),
@@ -67,7 +70,7 @@ export function resolveRustSuspendedCallableStorage(
     };
   }
 
-  const carriers: TargetTypeRef[] = [...storedCarriers];
+  const carriers: TargetTypeRef[] = [...storedCarriers, ...(ownedReceiver === undefined ? [] : [ownedReceiver.carrier])];
   for (const parameter of capturedParameters) {
     const carrier = walk.context.facts.get(parameter, rustSourceParameterAbiFactKey)
       ?.parameterCarrier;
@@ -80,46 +83,11 @@ export function resolveRustSuspendedCallableStorage(
     carriers.push(carrier);
   }
   const contract = walk.context.sourceLifetimes.contractFor(declaration);
-  const candidates = new Map<string, RustLifetimeRef>();
-  for (const carrier of carriers) {
-    const references = rustTargetGenericReferences(carrier);
-    if (references.hasUnnameableLifetime) {
-      return {
-        kind: "rejected",
-        reason: "A suspended-callable storage lifetime cannot be named from an elided, placeholder, or call-scoped captured lifetime.",
-      };
-    }
-    for (const lifetime of references.lifetimes) {
-      candidates.set(rustLifetimeKey(lifetime), lifetime);
-    }
-    for (const name of references.typeNames) {
-      const parameter = contract?.parameters.find((candidate) =>
-        candidate.kind === "type" && candidate.targetName === name);
-      for (const lifetime of parameter?.kind === "type" ? parameter.outlives : []) {
-        if (lifetime.kind !== "static") {
-          candidates.set(rustLifetimeKey(lifetime), lifetime);
-        }
-      }
-    }
-  }
-  if (candidates.size === 0) {
-    return {
-      kind: "resolved",
-      capturedParameters: Object.freeze(capturedParameters),
-      storage: Object.freeze({ kind: "static" }),
-    };
-  }
-  if (contract === undefined) {
-    return {
-      kind: "rejected",
-      reason: "A borrowed suspended callable has no exact source generic lifetime contract.",
-    };
-  }
-  const lifetime = selectShortestAuthoredLifetime([...candidates.values()], contract);
+  const lifetime = selectRustSuspendedStorageLifetime(carriers, contract);
   if (lifetime === undefined) {
     return {
       kind: "rejected",
-      reason: "A suspended callable's captured lifetimes have no single exact authored storage lifetime.",
+        reason: "A suspended callable's captured lifetimes have no single exact authored storage lifetime; elided, placeholder, or call-scoped captures cannot define escaping storage.",
     };
   }
   if (lifetime.kind === "static") {
@@ -127,12 +95,14 @@ export function resolveRustSuspendedCallableStorage(
       kind: "resolved",
       capturedParameters: Object.freeze(capturedParameters),
       storage: Object.freeze({ kind: "static" }),
+      ...(ownedReceiver === undefined ? {} : { ownedReceiver }),
     };
   }
   return {
     kind: "resolved",
     capturedParameters: Object.freeze(capturedParameters),
     storage: Object.freeze({ kind: "lifetime", lifetime }),
+    ...(ownedReceiver === undefined ? {} : { ownedReceiver }),
   };
 }
 
@@ -147,13 +117,4 @@ function containingParameter(
     current = ast.parent(current);
   }
   return undefined;
-}
-
-function selectShortestAuthoredLifetime(
-  candidates: readonly RustLifetimeRef[],
-  contract: RustSourceGenericContract,
-): RustLifetimeRef | undefined {
-  const eligible = candidates.filter((candidate) =>
-    candidates.every((source) => rustLifetimeOutlives(source, candidate, contract)));
-  return eligible.length === 1 ? eligible[0] : undefined;
 }

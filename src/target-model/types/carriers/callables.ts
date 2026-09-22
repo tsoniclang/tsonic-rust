@@ -11,7 +11,7 @@ import {
   rustRawPointerTargetId,
 } from "./source-types.js";
 import { rustOptionElementCarrier, rustOptionTargetType } from "./optional.js";
-import { rustTupleTargetType, rustUnitTargetType } from "./native.js";
+import { rustUnitTargetType } from "./native.js";
 import type { TargetTypeRef } from "../model.js";
 import {
   rustLifetimeGenericArgument,
@@ -19,6 +19,7 @@ import {
   rustTypeGenericArguments,
 } from "../generic-arguments.js";
 import type { RustLifetimeRef } from "../../lifetimes/index.js";
+import { rustGenericCallableValue } from "./generic-callables.js";
 
 export function rustLocationTargetType(
   pointee: TargetTypeRef,
@@ -46,7 +47,7 @@ export function rustCallableTargetType(
   return {
     kind: "target-named",
     id: rustCallableTargetId,
-    genericArguments: rustTypeGenericArguments([rustTupleTargetType(parameters), result]),
+    genericArguments: rustTypeGenericArguments([{ kind: "tuple", elements: parameters }, result]),
   };
 }
 
@@ -54,6 +55,7 @@ export function isRustCallableCarrier(
   carrier: TargetTypeRef | undefined,
 ): boolean {
   return carrier?.kind === "closure" || carrier?.kind === "function-pointer" ||
+    rustGenericCallableValue(carrier) !== undefined ||
     carrier?.kind === "target-named" && carrier.id === rustCallableTargetId;
 }
 

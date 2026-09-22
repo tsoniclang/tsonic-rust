@@ -1,6 +1,9 @@
+import { rustGenericCallableProtocol } from "../../../../target-model/types/carriers/generic-callables.js";
+import { rustSuspendedCallableInvocationResult } from "../../../../analysis/facts/callable-results.js";
 import {
   isRustCopyCarrier,
   isRustVecCarrier,
+  isRustJsArrayCarrier,
   rustCallableProtocol,
   rustNativeCallableProtocol,
   rustFixedArrayCarrierValue,
@@ -26,7 +29,6 @@ import { planRustNonConsumingValue } from "../typed-locations.js";
 import { rustArgumentPassingMode } from "../../../../analysis/facts/parameter-passing.js";
 import { rustFinalizedCarrierTransitionMatches } from "../../../../analysis/facts/target-operation.js";
 import {
-  rustGeneratorFactKey,
   rustSourceParameterAbiFactKey,
   rustTargetOperationFactKey,
 } from "../../../../analysis/facts/keys.js";
@@ -87,7 +89,7 @@ export function shapeRustSourceCallParameters(
         }
         elements.push(element);
       }
-      shaped.push({ kind: "vec-literal", elements });
+      shaped.push(planSourceRestArray({ kind: "vec-literal", elements }, parameter.parameterCarrier, context));
       continue;
     }
     const input = parameter.inputs[0];
@@ -147,9 +149,22 @@ function shapeRustRestSequenceInputs(
     if (value === undefined) {
       return undefined;
     }
-    segments.push({ value, sequence: input.sourceForm === "spread-sequence" });
+    const sequence = input.sourceForm === "spread-sequence";
+    segments.push({
+      value: sequence && isRustJsArrayCarrier(input.carrier)
+        ? { kind: "method-call", receiver: value, method: "iter_values", args: [] }
+        : value,
+      sequence,
+    });
   }
-  return planRustRestAssembly(segments, context);
+  const assembled = planRustRestAssembly(segments, context);
+  return assembled === undefined ? undefined : planSourceRestArray(assembled, parameter.parameterCarrier, context);
+}
+
+function planSourceRestArray(expression: RustExpr, carrier: TargetTypeRef, context: RustPlanContext): RustExpr {
+  if (!isRustJsArrayCarrier(carrier)) return expression;
+  context.usedAliases?.add("js_abi");
+  return { kind: "call", path: "js_abi::JsArray::from_dense", args: [expression] };
 }
 
 export function planRustSourceCallArgumentEvaluation(
@@ -325,10 +340,11 @@ function resolveFinalizedRustSpreadInput(
     return undefined;
   }
   if (input.sourceForm === "value" || input.sourceForm === "spread-sequence") {
+    const normalize = context.input.program.typeFamilies.normalize;
     return rustFinalizedCarrierTransitionMatches(
-      sourceCarrier,
-      convertedCarrier,
-      input.carrier,
+      mapRustTargetTypes(sourceCarrier, normalize),
+      convertedCarrier === undefined ? undefined : mapRustTargetTypes(convertedCarrier, normalize),
+      mapRustTargetTypes(input.carrier, normalize),
     ) || convertedCarrier === undefined &&
       context.input.program.structuralShapes.sharesStorage(sourceCarrier, input.carrier)
       ? sourceExpression
@@ -341,7 +357,10 @@ function resolveFinalizedRustSpreadInput(
     sourceCarrier,
     input.spreadElementIndex,
   );
-  if (element === undefined || !rustTargetTypeRefEquals(element, input.carrier)) {
+  if (element === undefined || !rustTargetTypeRefEquals(
+    mapRustTargetTypes(element, context.input.program.typeFamilies.normalize),
+    mapRustTargetTypes(input.carrier, context.input.program.typeFamilies.normalize),
+  )) {
     return undefined;
   }
   const fixedArray = rustFixedArrayCarrierValue(sourceCarrier);
@@ -440,7 +459,7 @@ export function sourceCallSelectedMemberMatches(
   const expectedKind = fact.target.form === "constructor" ? "constructor" : "method";
   const expectedTargetName = fact.target.form === "constructor"
     ? fact.target.name
-    : fact.target.form === "callable" || fact.target.form === "structural-method"
+    : fact.target.form === "callable" || fact.target.form === "structural-method" || fact.target.form === "constructor-value"
       ? member.targetName
       : fact.target.form === "function"
         ? fact.target.selectedTargetName
@@ -464,8 +483,10 @@ export function sourceCallSelectedMemberMatches(
     return false;
   }
   const callableCarrier = fact.target.form === "callable" ? fact.target.carrier
-    : fact.target.form === "structural-method" ? fact.target.callableCarrier : undefined;
-  const callable = rustNativeCallableProtocol(callableCarrier) ?? rustCallableProtocol(callableCarrier);
+    : fact.target.form === "structural-method" || fact.target.form === "constructor-value" ? fact.target.callableCarrier : undefined;
+  const genericNames = parameters.flatMap(parameter => parameter.kind === "type" ? [parameter.sourceName] : []);
+  const callable = rustGenericCallableProtocol(callableCarrier, genericNames) ??
+    rustNativeCallableProtocol(callableCarrier) ?? rustCallableProtocol(callableCarrier);
   if (callable !== undefined) {
     return callable.parameters.length === fact.parameters.length &&
       callable.parameters.every((carrier, index) => {
@@ -508,10 +529,7 @@ export function sourceCallFinalizedResultCarrier(
   selected: SelectedTargetSignatureFact,
   context: RustPlanContext,
 ): TargetTypeRef | undefined {
-  return context.input.program.facts.getFact(
-    selected.sourceDeclaration,
-    rustGeneratorFactKey,
-  )?.resultCarrier ?? selected.member.returnType;
+  return rustSuspendedCallableInvocationResult(context.input.program.facts, selected.sourceDeclaration) ?? selected.member.returnType;
 }
 
 export function requireProviderArgumentPassingFacts(

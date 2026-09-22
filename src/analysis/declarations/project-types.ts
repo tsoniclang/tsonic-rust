@@ -36,7 +36,7 @@ export function recordMethodSelfModeFacts(walk: RustFactWalk, sourceFiles: reado
   const { ast } = walk.context;
   for (const sourceFile of sourceFiles) {
     for (const statement of rustSourceTypeDeclarations(sourceFile, ast)) {
-      if (ast.kindName(statement) !== "KindClassDeclaration") {
+      if (ast.kindName(statement) !== "KindClassDeclaration" && ast.kindName(statement) !== "KindClassExpression") {
         continue;
       }
       const members = requireDenseSourceNodes(walk, ast.members(statement), "Class declaration contains an undefined or non-data member slot.");
@@ -64,7 +64,7 @@ export function recordClassSignatureFacts(walk: RustFactWalk, declaration: Node)
   if (classCarrier === undefined) {
     return;
   }
-  setCarrierFact(walk, declaration, classCarrier);
+  if (ast.kindName(declaration) !== "KindClassExpression") setCarrierFact(walk, declaration, classCarrier);
   const members = requireDenseSourceNodes(walk, sourceObjectMemberDeclarations(ast, declaration), "Class declaration contains an undefined or non-data member slot.");
   if (members === undefined) {
     return;
@@ -265,8 +265,8 @@ export function recordInterfaceFacts(walk: RustFactWalk, declaration: Node): voi
       }
       setCarrierFact(walk, keyParameter, keyCarrier);
       setCarrierFact(walk, member, valueCarrier);
-    } else if (memberKind === "KindMethodSignature") {
-      walk.context.facts.set(member, rustSelfModeFactKey, { mode: "ref" }, [
+    } else if (memberKind === "KindMethodSignature" || memberKind === "KindConstructSignature") {
+      if (memberKind === "KindMethodSignature") walk.context.facts.set(member, rustSelfModeFactKey, { mode: "ref" }, [
         { message: "rust reference-backed project interface method self mode" },
       ]);
       recordCallableReturnFact(walk, member);

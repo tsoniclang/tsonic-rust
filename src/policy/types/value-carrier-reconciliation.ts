@@ -23,6 +23,8 @@ import { rustTargetGenericReferences } from "../../target-model/types/carriers/g
 import { rustLifetimeKey, rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
 import { rustEmptyRecordCarrier } from "../../target-model/conversions/empty-record.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
+import { selectRustProjectProjection } from "./project-projections.js";
+import { rustGenericCallableSignaturesMatch } from "../../target-model/conversions/generic-callable.js";
 
 export type RustValueCarrierReconciliation =
   | { readonly kind: "identity" }
@@ -106,12 +108,10 @@ export function selectRustFlowReadProjection(
   const relationship = sourceDefinition === undefined || targetDefinition === undefined
     ? { kind: "unrelated" as const }
     : projectTypes.relationship(selectedCarrier, sourceDefinition);
-  const route = sourceDefinition === undefined
-    ? undefined
-    : projectTypes.downcastRoute(sourceDefinition, selectedCarrier);
-  if (relationship.kind !== "related" ||
-    !rustTargetTypeRefEquals(relationship.targetType, dispatchCarrier) ||
-    route === undefined ||
+  const projection = selectRustProjectProjection(dispatchCarrier, selectedCarrier, projectTypes);
+  if (projection === undefined ||
+    (projection.kind !== "structural" && (relationship.kind !== "related" ||
+      !rustTargetTypeRefEquals(relationship.targetType, dispatchCarrier))) ||
     (optionalElement !== undefined && !rustCarrierSupportsClone(dispatchCarrier, definitions))) {
     return { kind: "incompatible" };
   }
@@ -119,6 +119,7 @@ export function selectRustFlowReadProjection(
     kind: "projection",
     fact: {
       kind: "project-downcast",
+      projection,
       sourceCarrier,
       dispatchCarrier,
       selectedCarrier,
@@ -134,6 +135,11 @@ export function selectRustValueCarrierReconciliation(
 ): RustValueCarrierReconciliation {
   if (rustTargetTypeRefEquals(sourceCarrier, targetCarrier)) {
     return { kind: "identity" };
+  }
+  if (rustGenericCallableSignaturesMatch(sourceCarrier, targetCarrier)) {
+    return { kind: "conversion", fact: { sourceCarrier, targetCarrier,
+      conversion: { kind: "generic-callable-flow", source: sourceCarrier, target: targetCarrier },
+    } };
   }
   if (rustEmptyRecordCarrier(sourceCarrier) && rustEmptyRecordCarrier(targetCarrier)) {
     return { kind: "conversion", fact: {

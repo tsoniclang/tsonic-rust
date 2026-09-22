@@ -11,6 +11,7 @@ import {
 import type { RustFinalizedOperationAbi } from "./finalized-operation-abi.js";
 import { rustValueConversionIsFallible } from "../../target-model/conversions/contracts.js";
 import { rustStructuralFieldIsFallible } from "../objects/structural-shape-plan.js";
+import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 
 export function rustTargetOperationText(fact: RustTargetOperationFact): string {
   if (fact.kind === "provider-operation") {
@@ -98,6 +99,7 @@ export function rustTargetOperationSupportsAssignment(fact: RustTargetOperationF
           field.valueSemantics.kind === "accessor" && field.valueSemantics.writable);
     })) ||
     (fact?.kind === "source-index-signature" && fact.writable) ||
+    (fact?.kind === "source-indexed-field" && fact.accessMode !== "read") ||
     (fact?.kind === "source-method-property" && fact.write !== undefined) ||
     (fact?.kind === "source-accessor" && fact.write !== undefined) ||
     rustTargetOperationIsDirectLocation(fact);
@@ -142,6 +144,7 @@ export function rustTargetOperationIsFallible(
   if (fact.kind === "source-accessor") {
     return false;
   }
+  if (fact.kind === "source-indexed-field") return true;
   if (fact.kind === "source-method-property") {
     return fact.accessMode !== "read" && frozenDataWrites.receiverForDeclaration(fact.declaration) !== undefined;
   }
@@ -199,11 +202,11 @@ export function rustTargetOperationIsFallible(
     return fact.fallible;
   }
   if (fact.kind === "source-call" &&
-    (fact.target.form === "callable" || fact.target.form === "structural-method")) {
-    return fact.target.form === "structural-method" ||
+    (fact.target.form === "callable" || fact.target.form === "structural-method" || fact.target.form === "constructor-value")) {
+    return fact.target.form !== "callable" ||
       (fact.target.carrier.kind === "closure"
         ? fact.target.carrier.fallible === true
-        : fact.target.carrier.kind !== "function-pointer");
+        : fact.target.carrier.kind !== "function-pointer" && rustGenericCallableValue(fact.target.carrier) === undefined);
   }
   if (fact.kind === "provider-operation" || fact.kind === "runtime-set") {
     return rustOperationAbiInvocationIsFallible(fact.abi);

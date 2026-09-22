@@ -346,9 +346,10 @@ export function hasSelectedRuntimeCallableUse(walk: RustFactWalk, node: Node): b
     callee = parent;
     parent = ast.parent(callee);
   }
-  if (parent === undefined || ast.kindName(parent) !== KindCallExpression ||
+  if (parent === undefined || ![KindCallExpression, KindNewExpression].includes(ast.kindName(parent)) ||
     Node_Expression(ast, parent) !== callee) return false;
   const selected = walk.context.facts.getSelectedTargetCall(parent);
+  if (ast.kindName(parent) === KindNewExpression) return selected?.sourceConstructorCarrier !== undefined;
   return selected?.sourceCallableCarrier !== undefined &&
     selected.sourceStructuralMethod === undefined;
 }

@@ -31,6 +31,9 @@ import { inferRustTargetTypeParameterBindings } from "../../../target-model/type
 import { mapRustTargetTypes } from "../../../target-model/types/carriers/substitution.js";
 import { resolveBoundSourceTypeParameter } from "./callables.js";
 import { rustTypeFamilyNormalizer } from "../type-family-normalization.js";
+import { rustGenericCallableTargetType } from "../../../target-model/types/carriers/generic-callables.js";
+import { rustGenericCallableOrigin } from "../generic-callable-origin.js";
+import { closeRustCallableResultStorage } from "../callable-result-storage.js";
 
 export function resolveRustSignatureParameterListTarget(
   parameters: SourceCallableTypeEvidence["parameters"],
@@ -88,15 +91,23 @@ export function resolveRustCallableEvidence(
   if (parameters.some((parameter) => parameter === undefined)) {
     return undefined;
   }
-  const result = resolveRustTypeComponentEvidence(
+  const sourceResult = resolveRustTypeComponentEvidence(
     callable.result,
     context,
     options,
     resolving,
   );
-  if (result === undefined) return undefined;
   const declaration = callable.result.declaration;
   const genericContract = context.sourceLifetimes.contractFor(declaration);
+  const result = sourceResult === undefined ? undefined
+    : closeRustCallableResultStorage(sourceResult, parameters, genericContract);
+  if (result === undefined) return undefined;
+  if (genericContract !== undefined && genericContract.parameters.length > 0 &&
+    genericContract.parameters.every(parameter => parameter.kind === "type")) {
+    const origin = rustGenericCallableOrigin(context.ast, declaration);
+    return origin === undefined ? undefined : rustGenericCallableTargetType(genericContract.parameters.map(parameter => parameter.targetName),
+      parameters as readonly TargetTypeRef[], result, origin);
+  }
   if (genericContract?.lifetimeBinder !== undefined) {
     return genericContract.parameters.some((parameter) => parameter.kind !== "lifetime")
       ? undefined
@@ -188,6 +199,7 @@ export function resolveRustTypeComponentEvidence(
     context,
     options,
     resolving,
+    component.authoredTypeNode,
   );
   if (semantics === undefined) {
     return selected;
@@ -213,6 +225,7 @@ export function resolveRustTypeComponentEvidence(
     const normalize = rustTypeFamilyNormalizer(options.sourceTypes.typeFamilies);
     const normalizedAuthored = mapRustTargetTypes(authored, normalize);
     const normalizedSelected = mapRustTargetTypes(selected, normalize);
+    if (rustTargetTypeRefEquals(normalizedAuthored, normalizedSelected)) return authored;
     const references = rustTargetGenericReferences(normalizedAuthored);
     if (references.typeNames.length > 0) {
       const substitutions = inferRustTargetTypeParameterBindings(

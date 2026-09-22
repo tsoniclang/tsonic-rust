@@ -1,6 +1,8 @@
 import type { RustTargetGenericArgument, TargetTypeRef } from "../model.js";
 import { rustFixedArrayCarrierValue, rustNamedTypeCarrierValue } from "./native.js";
 import { rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustStructuralObjectCarrierValue } from "./source-types.js";
+import { rustGenericCallableValue } from "./generic-callables.js";
+import { rustClassConstructorFreeArguments } from "./class-constructors.js";
 
 export function rustTargetTypeChildren(type: TargetTypeRef): readonly TargetTypeRef[] {
   const arguments_ = (values: readonly RustTargetGenericArgument[] | undefined): readonly TargetTypeRef[] =>
@@ -24,10 +26,15 @@ export function rustTargetTypeChildren(type: TargetTypeRef): readonly TargetType
     case "trait-object": return [type.principal, ...type.autoTraits];
     case "impl-trait": return [...type.bounds, ...arguments_(type.captures)];
     case "target-specific": {
+      const constructorArguments = rustClassConstructorFreeArguments(type);
+      if (constructorArguments !== undefined) return arguments_(constructorArguments);
+      const callable = rustGenericCallableValue(type);
+      if (callable !== undefined) return callable.environment;
       const source = rustSourceTypeCarrierValue(type);
       if (source !== undefined) return arguments_(source.genericArguments);
       const shape = rustStructuralObjectCarrierValue(type);
-      if (shape !== undefined) return shape.fields.map(field => field.type);
+      if (shape !== undefined) return [...shape.bases, ...shape.fields.map(field => field.type),
+        ...(shape.construction === undefined ? [] : [shape.construction])];
       const union = rustSourceUnionCarrierValue(type);
       if (union !== undefined) return arguments_(union.genericArguments);
       const named = rustNamedTypeCarrierValue(type);

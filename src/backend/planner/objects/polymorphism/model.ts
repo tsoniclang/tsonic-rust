@@ -471,7 +471,7 @@ export function projectTypeSubstitutions(
       if (argument?.kind !== "type") {
         throw new Error("Project carrier generic argument kind conflicts with its sealed declaration.");
       }
-      result.set(parameter.sourceName, argument.type);
+      result.set(parameter.targetName, argument.type);
     } else if (argument?.kind !== "lifetime") {
       throw new Error("Project carrier generic argument kind conflicts with its sealed declaration.");
     }

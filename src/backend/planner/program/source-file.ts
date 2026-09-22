@@ -1,4 +1,7 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
+import { planRustClassEnvironmentItems } from "../objects/class-environments.js";
+import { planRustClassValueImplementations } from "../objects/constructor-values.js";
+import { planRustProjectStructuralImplementations } from "../objects/project-structural-views.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { rustCompileTimeSourceKey } from "../../../target-model/facts/source-declarations.js";
 import { rustTypeOnlyDeclarationFactKey } from "../../../target-model/facts/type-only.js";
@@ -76,6 +79,8 @@ import {
 import { planRustClassInitialization } from "../declarations/class-static-fields.js";
 import { planProjectStaticFunctionItems } from "../declarations/methods.js";
 import { planRustTypeFamilyImplementations } from "../declarations/type-families.js";
+import { planRustGenericCallableItems } from "../declarations/generic-callables.js";
+import { planRustSuspendedCallableItems } from "../declarations/suspended-callables.js";
 import { createRustObjectLiteralImplementationRegistry } from "../objects/object-literal-implementations.js";
 import { planRustSourceCallableValue } from "../expressions/source-callable-value.js";
 import { rustModuleInitializerFunctionName } from "./source-package-initializers.js";
@@ -140,7 +145,7 @@ export function planRustSourceFile(
   };
   const baseModule = planModuleItems(context);
   const plannedModule = { ...baseModule,
-    items: [...baseModule.items, ...planRustTypeFamilyImplementations(context)] };
+    items: [...baseModule.items, ...planRustTypeFamilyImplementations(context), ...planRustGenericCallableItems(context), ...planRustSuspendedCallableItems(context)] };
   const initializationRequirement = input.program.moduleInitialization.requirementFor(sourceFile);
   if (initializationRequirement.kind === "unresolved") {
     diagnostics.push(unsupportedConstructDiagnostic(
@@ -228,6 +233,22 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
     objectLiteralImplementations,
   };
   items.push(...objectLiteralImplementations.items);
+  const viewOwners = new Set(context.input.program.classValues.instanceViewImplementations.filter(view =>
+    view.ownerFileName === ast.getFileName(context.sourceFile)).map(view => view.declaration));
+  for (const declaration of viewOwners) {
+    const diagnosticCount = context.diagnostics.length;
+    const views = planRustProjectStructuralImplementations(declaration, context);
+    if (views === undefined) ensureTopLevelPlanningDiagnostic(context, declaration, diagnosticCount, "instance-view");
+    else items.push(...views);
+  }
+  const constructorOwners = new Set(context.input.program.classValues.constructorViewImplementations.filter(view =>
+    view.ownerFileName === ast.getFileName(context.sourceFile)).map(view => view.declaration));
+  for (const declaration of constructorOwners) {
+    const diagnosticCount = context.diagnostics.length;
+    const views = planRustClassValueImplementations(declaration, context);
+    if (views === undefined) ensureTopLevelPlanningDiagnostic(context, declaration, diagnosticCount, "constructor-view");
+    else items.push(...views);
+  }
   const asynchronous = context.input.program.sourceNavigation.moduleHasTopLevelAwait(
     context.sourceFile,
   );
@@ -442,6 +463,10 @@ function planModuleItems(context: RustPlanContext): PlannedRustModuleItems {
   for (const definition of context.input.program.projectTypes.definitions) {
     if (definition.sourceFile === context.sourceFile && definition.kind === "class") {
       const diagnosticCount = context.diagnostics.length;
+      const environmentItems = planRustClassEnvironmentItems(definition.declaration, context);
+      if (environmentItems === undefined) {
+        ensureTopLevelPlanningDiagnostic(context, definition.declaration, diagnosticCount, "class-environment");
+      } else items.push(...environmentItems);
       const staticFunctions = planProjectStaticFunctionItems(definition, context);
       if (staticFunctions === undefined) {
         ensureTopLevelPlanningDiagnostic(context, definition.declaration, diagnosticCount, "static-function");

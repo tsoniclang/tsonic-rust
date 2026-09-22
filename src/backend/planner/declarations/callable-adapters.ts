@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { planRustGenericCallableFlow } from "../expressions/generic-callable-flow.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type {
   RustCallableParameterAbi,
@@ -28,6 +29,7 @@ import {
 import { rustCompilerOwnedContextualConversionMatches } from "../../../target-model/conversions/contextual.js";
 import { planRustEmptyRecordConversion } from "../expressions/empty-record-conversion.js";
 import { closedMetadataEquals } from "../../../target-model/metadata/closed-data.js";
+import { planRustProjectStructuralConversion } from "../objects/project-structural-views.js";
 
 export function planRustCallableArguments(
   input: {
@@ -291,11 +293,19 @@ function applyRustCallableValueAdapterRaw(
   context: RustPlanContext,
 ): { readonly expression: RustExpr; readonly fallible: boolean } | undefined {
   switch (adapter.kind) {
+    case "project-structural-view": {
+      const projected = planRustProjectStructuralConversion(expression, adapter.sourceCarrier, adapter.targetCarrier, context);
+      return projected === undefined ? undefined : { expression: projected, fallible: false };
+    }
     case "identity":
       return rustTargetTypeRefEquals(adapter.sourceCarrier, adapter.targetCarrier)
         ? { expression, fallible: false }
         : undefined;
     case "conversion": {
+      if (adapter.conversion.kind === "generic-callable-flow") {
+        const converted = planRustGenericCallableFlow(adapter.conversion, expression, context);
+        return converted === undefined ? undefined : { expression: converted, fallible: false };
+      }
       if (adapter.conversion.kind === "empty-record") {
         const converted = planRustEmptyRecordConversion(adapter.conversion, expression, node, context);
         return converted === undefined ? undefined : { expression: converted, fallible: false };
@@ -335,6 +345,7 @@ function applyRustCallableValueAdapterRaw(
         },
         adapter.sourceCarrier,
         context,
+        "owned",
       );
       return projected === undefined ? undefined : { expression: projected, fallible: false };
     }

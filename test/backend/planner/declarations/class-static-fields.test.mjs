@@ -95,11 +95,14 @@ export function main(): void {
   assert.equal(run.status, 0);
 });
 
-test("static class fields reject unproven runtime constructor aliases", () => {
+test("static class fields preserve exact constructor aliases and live shared storage", { timeout: 300_000 }, () => {
   const { result } = compileRust({
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "class_static_alias" } },
     files: {
       "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
 
 class ExactOwner {
   static value: int32 = 1;
@@ -110,14 +113,20 @@ const RuntimeAlias = ExactOwner;
 export function read(): int32 {
   return RuntimeAlias.value;
 }
+export function main(): void {
+  check(read() === 1);
+  RuntimeAlias.value = 7;
+  check(ExactOwner.value === 7);
+  ExactOwner.value = 11;
+  check(read() === 11);
+}
 `,
     },
   });
 
-  assert.equal(result.artifacts.length, 0);
-  assert.ok(result.diagnostics.some((diagnostic) =>
-    diagnostic.code === "RUST_STATIC_FIELD_RECEIVER_NOT_EXACT" &&
-    diagnostic.message.includes("exact TSTS-selected receiver value evidence")));
+  assert.deepEqual(result.diagnostics, []);
+  const run = validateGeneratedProject("class-static-alias", result.artifacts, { run: true });
+  assert.equal(run.status, 0, run.stdout + run.stderr);
 });
 
 test("static class fields require explicit initialization and defaultValue uses exact Rust Default evidence", { timeout: 300_000 }, () => {

@@ -29,6 +29,9 @@ import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { rustProjectImplementationVisibility } from "../project-storage-abi.js";
 import { rustProjectObjectIdentityImplementation } from "../project-identity.js";
 import { rustArrayFieldMutationName, rustArrayFieldMutationType } from "./array-fields.js";
+import { planRustProjectProjectionImplementations } from "../project-projections.js";
+import { rustStructuralDispatchType } from "../project-structural-types.js";
+import { checkedProjectProjectionSignature } from "../checked-project-projections.js";
 
 export function projectIdentityImplementations(
   definition: RustProjectTypeDefinition,
@@ -38,6 +41,7 @@ export function projectIdentityImplementations(
 ): readonly RustItem[] {
   const generics = rustProjectRepresentationGenerics(representation, context);
   return [
+    ...planRustProjectProjectionImplementations(definition, context),
     {
       kind: "impl",
       generics,
@@ -148,6 +152,12 @@ export function planProjectDispatchTrait(
     return undefined;
   }
   const functions: RustTraitFunction[] = [];
+  const projectionSlot = context.input.program.projectTypes.checkedProjectionSlot(definition);
+  if (projectionSlot !== undefined) {
+    const used = publiclyReachable || context.input.liveness.isCheckedProjectionUsed(definition.declaration);
+    functions.push({ ...checkedProjectProjectionSignature(projectionSlot),
+      ...(used ? {} : { deadCode: "generated-unused-dispatch" as const }) });
+  }
   for (const route of context.input.program.projectTypes.downcastRoutesFor(definition)) {
     const returnType = projectDowncastReturnType(route, context);
     if (returnType === undefined) {
@@ -347,6 +357,9 @@ export function planProjectDispatchTrait(
   }
   const superTraits = context.input.program.projectTypes.heritageForDefinition(definition).map((edge) =>
     rustProjectDispatchTraitType(edge.targetType, context));
+  for (const view of context.input.program.classValues.instanceViews) {
+    if (view.declaration === definition.declaration) superTraits.push(rustStructuralDispatchType(view.targetCarrier, context));
+  }
   if (superTraits.some((type) => type === undefined)) {
     return undefined;
   }

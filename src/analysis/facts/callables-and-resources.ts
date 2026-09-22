@@ -42,6 +42,11 @@ export type RustSuspendedCallableStorage =
   | { readonly kind: "receiver" }
   | { readonly kind: "lifetime"; readonly lifetime: RustLifetimeRef };
 
+export interface RustSuspendedOwnedReceiver {
+  readonly carrier: TargetTypeRef;
+  readonly occurrences: readonly Node[];
+}
+
 export type RustAsyncFunctionFact =
   | {
       readonly kind: "native-future";
@@ -56,6 +61,7 @@ export type RustAsyncFunctionFact =
       readonly outputCarrier: TargetTypeRef;
       readonly capturedParameters: readonly Node[];
       readonly storage: RustSuspendedCallableStorage;
+      readonly ownedReceiver?: RustSuspendedOwnedReceiver;
     };
 
 export const rustAsyncFunctionFactKey: RustPlanKey<RustAsyncFunctionFact> =
@@ -67,7 +73,8 @@ export const rustAsyncFunctionFactKey: RustPlanKey<RustAsyncFunctionFact> =
       left.capturedParameters.length === right.capturedParameters.length &&
       left.capturedParameters.every((parameter, index) =>
         parameter === right.capturedParameters[index]) &&
-      suspendedCallableStorageEquals(left.storage, right.storage)));
+      suspendedCallableStorageEquals(left.storage, right.storage) &&
+      suspendedOwnedReceiverEquals(left.ownedReceiver, right.ownedReceiver)));
 
 export interface RustGeneratorFact {
   readonly kind: "sync" | "async";
@@ -77,6 +84,7 @@ export interface RustGeneratorFact {
   readonly nextType: TargetTypeRef;
   readonly capturedParameters: readonly Node[];
   readonly storage: RustSuspendedCallableStorage;
+  readonly ownedReceiver?: RustSuspendedOwnedReceiver;
 }
 
 export const rustGeneratorFactKey: RustPlanKey<RustGeneratorFact> =
@@ -90,7 +98,18 @@ export const rustGeneratorFactKey: RustPlanKey<RustGeneratorFact> =
     left.capturedParameters.every((parameter, index) =>
       parameter === right.capturedParameters[index]) &&
     left.storage.kind === right.storage.kind &&
-    suspendedCallableStorageEquals(left.storage, right.storage));
+    suspendedCallableStorageEquals(left.storage, right.storage) &&
+    suspendedOwnedReceiverEquals(left.ownedReceiver, right.ownedReceiver));
+
+function suspendedOwnedReceiverEquals(
+  left: RustSuspendedOwnedReceiver | undefined,
+  right: RustSuspendedOwnedReceiver | undefined,
+): boolean {
+  return left === undefined ? right === undefined : right !== undefined &&
+    rustTargetTypeRefEquals(left.carrier, right.carrier) &&
+    left.occurrences.length === right.occurrences.length &&
+    left.occurrences.every((node, index) => node === right.occurrences[index]);
+}
 
 function suspendedCallableStorageEquals(
   left: RustSuspendedCallableStorage,

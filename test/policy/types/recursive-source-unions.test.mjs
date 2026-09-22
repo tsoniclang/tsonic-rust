@@ -122,6 +122,8 @@ for (const surfaces of [[], ["js"]]) {
         import { check } from "@acme/testing"; export function main(): void { check(run()); }` } });
     assert.deepEqual(result.diagnostics, []);
     assert.match(artifactText(result, "src/steps.rs"), /enum Step<Value>/u);
+    assert.match(artifactText(result, "src/steps.rs"), /fn delayed<Value: Clone \+ 'static>/u);
+    assert.match(artifactText(result, "src/steps.rs"), /done::<Value>\(capture_value\.clone\(\)\)/u);
     const run = validateGeneratedProject("recursive-source-unions", result.artifacts, { run: true });
     assert.equal(run.status, 0, JSON.stringify(run));
   });

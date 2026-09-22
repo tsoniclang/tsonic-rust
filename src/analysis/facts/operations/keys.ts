@@ -8,6 +8,12 @@ import type { RustTargetOperationFact, RustTypedLocationPlan } from "./facts.js"
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 function rustTargetOperationFactEquals(left: RustTargetOperationFact, right: RustTargetOperationFact): boolean {
+  if (left.kind === "source-field") {
+    if (right.kind !== "source-field" || left.declaration !== right.declaration) return false;
+    const { declaration: _leftDeclaration, ...leftContract } = left;
+    const { declaration: _rightDeclaration, ...rightContract } = right;
+    return closedMetadataEquals(leftContract, rightContract);
+  }
   if (left.kind === "throw-op" && left.error.kind === "runtime") {
     return right.kind === "throw-op" && right.error.kind === "runtime" &&
       left.operationId === right.operationId && left.error.expression === right.error.expression &&
@@ -21,6 +27,15 @@ export const rustTargetOperationFactKey: RustPlanKey<RustTargetOperationFact> =
 
 export const rustCompoundWriteFactKey: RustPlanKey<Extract<RustTargetOperationFact, { kind: "runtime-set" }>> =
   defineRustPlanKey("compoundWrite", closedMetadataEquals);
+
+export const rustComputedMemberFactKey: RustPlanKey<{
+  readonly receiver: Node;
+  readonly key: Node;
+  readonly evaluateKey: boolean;
+  readonly accessMode: "read" | "write" | "read-write" | "delete";
+}> = defineRustPlanKey("computedMember", (left, right) =>
+  left.receiver === right.receiver && left.key === right.key &&
+  left.evaluateKey === right.evaluateKey && left.accessMode === right.accessMode);
 
 export const rustReceiverIndependentMethodFactKey: RustPlanKey<{ readonly carrier: TargetTypeRef }> =
   defineRustPlanKey("receiverIndependentMethod", (left, right) => rustTargetTypeRefEquals(left.carrier, right.carrier));
@@ -51,6 +66,7 @@ export const rustLocationStorageFactKey: RustPlanKey<{
 );
 
 export interface RustClosureCaptureFact {
+  readonly invocationOwner?: "shared-state";
   readonly captures: readonly {
     readonly declaration: Node;
     readonly reference: Node;
@@ -62,7 +78,8 @@ export interface RustClosureCaptureFact {
 
 export const rustClosureCaptureFactKey: RustPlanKey<RustClosureCaptureFact> = defineRustPlanKey(
   "closureCaptures",
-  (left, right) => left.recursiveDeclaration === right.recursiveDeclaration &&
+  (left, right) => left.invocationOwner === right.invocationOwner &&
+    left.recursiveDeclaration === right.recursiveDeclaration &&
     left.captures.length === right.captures.length &&
     left.captures.every((capture, index) => {
       const other = right.captures[index];

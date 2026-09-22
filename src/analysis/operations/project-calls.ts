@@ -4,6 +4,7 @@ import {
   rustTargetGenericTypeArguments,
   substituteRustTargetGenerics,
   isRustProgramErrorCarrier,
+  rustJsArrayLikeElementTargetType,
 } from "../../target-model/types/index.js";
 import {
   KindFunctionDeclaration,
@@ -19,7 +20,6 @@ import {
   rustOptionalChainFactKey,
   rustSelfModeFactKey,
   rustTargetOperationFactKey,
-  rustGeneratorFactKey,
 } from "../facts/keys.js";
 import { appendMalformedSourceAst } from "../declarations/project-types.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
@@ -43,6 +43,11 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustSelectedTargetSignature, TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTargetOperationFact } from "../facts/keys.js";
+import { rustGenericCallableProtocol } from "../../target-model/types/carriers/generic-callables.js";
+import { substituteRustValueConversion } from "../../target-model/conversions/contracts.js";
+import { recordSelectedMethodSpecialization } from "./project-method-calls.js";
+import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
+import { rustSuspendedCallableInvocationResult } from "../facts/callable-results.js";
 
 export function applySelectedProjectSourceCall(
   walk: RustFactWalk,
@@ -179,7 +184,7 @@ export function applySelectedProjectSourceCall(
     const inputs = parameterInputs.map((binding) => {
       const carrier = parameterAbi.form === "rest" &&
           binding.sourceParameterForm === "rest-element"
-        ? valueCarrier.kind === "array" ? valueCarrier.element : undefined
+        ? valueCarrier.kind === "array" ? valueCarrier.element : rustJsArrayLikeElementTargetType(valueCarrier)
         : parameterAbi.form === "optional" || parameterAbi.form === "default"
           ? parameterCarrier
           : valueCarrier;
@@ -215,10 +220,7 @@ export function applySelectedProjectSourceCall(
       inputs: inputs as NonNullable<(typeof inputs)[number]>[],
     });
   }
-  const declaredResultCarrier = walk.context.facts.get(
-    selectedDeclaration,
-    rustGeneratorFactKey,
-  )?.resultCarrier ?? selectedMember.returnType;
+  const declaredResultCarrier = rustSuspendedCallableInvocationResult(walk.context.facts, selectedDeclaration) ?? selectedMember.returnType;
   const resultCarrier = declaredResultCarrier === undefined
     ? undefined
     : substituteRustTargetGenerics(
@@ -265,8 +267,10 @@ export function applySelectedProjectSourceCall(
     walk.context.facts.resolve(expression, rustOptionalChainFactKey);
   const selectedCallableCarrier = optionalCall?.selectedGuardCarrier ?? callableCalleeCarrier;
   const selectedNativeCallable = rustNativeCallableProtocol(selectedCallableCarrier);
+  const selectedGenericCallable = rustGenericCallableProtocol(selectedCallableCarrier,
+    (selectedSignature.sourceSelectedMethodTypeArguments ?? []).map(argument => argument.typeParameterName));
   const indirectCallable = selectedCallableCarrier !== undefined &&
-    (selectedNativeCallable !== undefined ||
+    (selectedNativeCallable !== undefined || selectedGenericCallable !== undefined ||
       rustCallableProtocol(selectedCallableCarrier) !== undefined) &&
     (!directCallableDeclaration ||
       ast.kindName(callee) === "KindArrowFunction" || ast.kindName(callee) === KindFunctionExpression);
@@ -295,11 +299,16 @@ export function applySelectedProjectSourceCall(
       const polymorphic = owner !== undefined && walk.context.projectTypes.isPolymorphic(owner);
       const relationship = owner === undefined ? undefined : walk.context.projectTypes.relationship(variant.carrier, owner);
       if (polymorphic && relationship?.kind !== "related") return undefined;
+      if (polymorphic && !recordSelectedMethodSpecialization(walk, expression, variant.declaration, targetTypeArguments)) return undefined;
       return selfMode === undefined ? undefined : {
         name: variant.name,
         carrier: variant.carrier,
         declaration: variant.declaration,
         targetName: variant.targetName,
+        returnType: substituteRustTargetGenerics(variant.returnType, substitutions.types, substitutions.lifetimes, substitutions.consts, normalizeTypeFamily),
+        ...(variant.resultConversion === undefined ? {} : { resultConversion: substituteRustValueConversion(
+          variant.resultConversion, substitutions.types, substitutions.lifetimes, substitutions.consts,
+        ) }),
         mutatesSelf: selfMode.mode === "mut-ref",
         ...(polymorphic && relationship?.kind === "related" ? { dispatchOwner: relationship.targetType } : {}),
       };
@@ -311,10 +320,18 @@ export function applySelectedProjectSourceCall(
   } else if (indirectCallable) {
     target = { form: "callable", carrier: selectedCallableCarrier };
   } else if (selectedMember.kind === "constructor") {
+    const owner = walk.context.projectTypes.definitionForCarrier(resultCarrier);
+    const classReceiver = expressionKind !== KindNewExpression || calleeReferenceDeclaration === owner?.declaration ? undefined : callee;
+    if (classReceiver !== undefined) {
+      const carrier = resolveExpressionCarrier(walk, classReceiver, sourceFile, undefined);
+      const instance = rustClassConstructorInstance(carrier);
+      if (owner === undefined || instance === undefined || walk.context.projectTypes.definitionForCarrier(instance) !== owner) return undefined;
+    }
     target = {
       form: "constructor",
       name: selectedMember.targetName,
       typeCarrier: resultCarrier,
+      ...(classReceiver === undefined ? {} : { classReceiver }),
     };
     operationKind = "constructor";
   } else if (declarationKind === "KindMethodDeclaration" ||
@@ -332,10 +349,19 @@ export function applySelectedProjectSourceCall(
       if (typeCarrier === undefined) {
         return undefined;
       }
+      const receiver = Node_Expression(ast, callee);
+      const direct = receiver !== undefined && walk.context.source.navigation.sourceReferenceFor(receiver)?.declaration === classDeclaration;
+      const classReceiver = direct ? undefined : receiver;
+      if (!direct) {
+        const carrier = receiver === undefined ? undefined : resolveExpressionCarrier(walk, receiver, sourceFile, undefined);
+        const instance = rustClassConstructorInstance(carrier);
+        if (instance === undefined || walk.context.projectTypes.definitionForCarrier(instance)?.declaration !== classDeclaration) return undefined;
+      }
       target = moduleFunction === undefined
-        ? { form: "static-method", name: methodName, typeCarrier }
+        ? { form: "static-method", name: methodName, typeCarrier, ...(classReceiver === undefined ? {} : { classReceiver }) }
         : { form: "function", name: moduleFunction,
-            fileName: ast.getFileName(ast.getSourceFile(selectedDeclaration)), selectedTargetName: selectedMember.targetName };
+            fileName: ast.getFileName(ast.getSourceFile(selectedDeclaration)), selectedTargetName: selectedMember.targetName,
+            ...(classReceiver === undefined ? {} : { classReceiver }) };
     } else {
       const receiver = ast.kindName(callee) === KindPropertyAccessExpression
         ? Node_Expression(walk.context.ast, callee)
@@ -400,29 +426,7 @@ export function applySelectedProjectSourceCall(
       if (polymorphic && ownerCarrier === undefined) {
         return undefined;
       }
-      if (polymorphic && ast.typeParameters(selectedDeclaration).length > 0) {
-        const registration = walk.context.sourceCallableSpecializations.recordProjectMethodCall({
-          subject: expression,
-          ...(walk.currentCallableDeclaration === undefined
-            ? {}
-            : { caller: walk.currentCallableDeclaration }),
-          declaration: selectedDeclaration,
-          targetTypeArguments,
-          ast,
-          projectTypes: walk.context.projectTypes,
-          sourceLifetimes: walk.context.sourceLifetimes,
-        });
-        if (registration.kind === "rejected") {
-          appendRustDiagnostic(
-            walk,
-            "RUST_PROJECT_METHOD_SPECIALIZATION_UNAVAILABLE",
-            registration.reason,
-            expression,
-            ["target.capability=rust.project-dispatch.finite-generic-specialization"],
-          );
-          return undefined;
-        }
-      }
+      if (polymorphic && !recordSelectedMethodSpecialization(walk, expression, selectedDeclaration, targetTypeArguments)) return undefined;
       const receiverKind = ast.kindName(receiver);
       target = {
         form: "method",
@@ -459,7 +463,7 @@ export function applySelectedProjectSourceCall(
     declarationKind === KindFunctionExpression) {
     const calleeCarrier = selectedCallableCarrier;
     if (calleeCarrier === undefined ||
-      (rustNativeCallableProtocol(calleeCarrier) === undefined &&
+      (selectedGenericCallable === undefined && rustNativeCallableProtocol(calleeCarrier) === undefined &&
         rustCallableProtocol(calleeCarrier) === undefined)) {
       return undefined;
     }
@@ -468,14 +472,15 @@ export function applySelectedProjectSourceCall(
   if (target === undefined) {
     return undefined;
   }
-  if (declarationKind === KindFunctionDeclaration ||
-    declarationKind === "KindMethodDeclaration") {
+  const callDeclarations = target.form === "union-method" ? target.variants.map(variant => variant.declaration)
+    : declarationKind === KindFunctionDeclaration || declarationKind === "KindMethodDeclaration" ? [selectedDeclaration] : [];
+  for (const declaration of callDeclarations) {
     const registration = walk.context.sourceCallableSpecializations.recordSourceCall({
       subject: expression,
       ...(walk.currentCallableDeclaration === undefined
         ? {}
         : { caller: walk.currentCallableDeclaration }),
-      callee: selectedDeclaration,
+      callee: declaration,
       targetTypeArguments,
       ast,
       sourceLifetimes: walk.context.sourceLifetimes,
@@ -492,7 +497,7 @@ export function applySelectedProjectSourceCall(
     }
   }
   if (target.form === "callable") {
-    const callable = rustNativeCallableProtocol(target.carrier) ??
+    const callable = selectedGenericCallable ?? rustNativeCallableProtocol(target.carrier) ??
       rustCallableProtocol(target.carrier);
     if (callable !== undefined) {
       if (callable.parameters.length !== parameters.length) {

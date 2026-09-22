@@ -47,6 +47,8 @@ import { rustLifetimeKey } from "../../../../target-model/lifetimes/index.js";
 import { rustOperandSupportsSourceNumeric } from "../../generic-numeric.js";
 import { selectRustPointerViewCall } from "../../pointer-views.js";
 import { selectBorrowedCallbackParameters } from "./borrowed-callbacks.js";
+import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../../../target-model/types/carriers/generic-callables.js";
+import { rustClassConstructorInstance } from "../../../../target-model/types/carriers/class-constructors.js";
 import type {
   RustCheckedCallSelectionInput,
   RustCheckedCallSelectionResult,
@@ -413,11 +415,16 @@ export function selectRustCheckedCall(
   const calleeDeclaration = isProjectSourceDeclaration(context, selectedCallCalleeDeclaration(request))
     ? asNode(selectedCallCalleeDeclaration(request), context)
     : undefined;
-  const implicitConstructorClass = sourceDeclaration === undefined &&
-      calleeDeclaration !== undefined &&
-      checkedCallIsConstruction(request, context) &&
-      context.ast.kindName(calleeDeclaration) === "KindClassDeclaration"
-    ? calleeDeclaration
+  const constructorCarrier = sourceDeclaration === undefined && checkedCallIsConstruction(request, context)
+    ? selectedValueCarrier(request.source.sourceCallee.expression, request.source.sourceCallee.type, context, options)
+    : undefined;
+  const constructorInstance = constructorCarrier === undefined ? undefined : rustClassConstructorInstance(constructorCarrier);
+  const constructorDefinition = sourceDeclaration === undefined && checkedCallIsConstruction(request, context)
+    ? options.projectTypes.definitionForDeclaration(calleeDeclaration) ??
+      (constructorInstance === undefined ? undefined : options.projectTypes.definitionForCarrier(constructorInstance))
+    : undefined;
+  const implicitConstructorClass = constructorDefinition?.kind === "class"
+    ? constructorDefinition.declaration
     : sourceDeclaration === undefined
       ? selectedImplicitSuperConstructorClass(request, context, options)
       : undefined;
@@ -437,6 +444,18 @@ export function selectRustCheckedCall(
   }
   if (sourceDeclaration !== undefined) {
     const declarationKind = context.ast.kindName(sourceDeclaration);
+    if (declarationKind === "KindConstructSignature" || declarationKind === "KindConstructorType") {
+      const receiverCarrier = selectedValueCarrier(request.source.sourceCallee.expression, request.source.sourceCallee.type, context, options);
+      const construction = receiverCarrier === undefined ? undefined : options.sourceTypes.structuralObjectForCarrier(receiverCarrier)?.construction;
+      if (construction === undefined || receiverCarrier === undefined || construction.declaration !== sourceDeclaration ||
+        !checkedCallIsConstruction(request, context)) {
+        return rejectSelectedOperation(request.source.call, context, "RUST_CONSTRUCTOR_VALUE_SIGNATURE_NOT_CLOSED",
+          "A constructor value requires the exact selected construct declaration and its closed native signature.");
+      }
+      const result = acceptRuntimeCallableCarrierCall(request, construction.carrier, context, options,
+        undefined, undefined, sourceDeclaration, undefined, receiverCarrier);
+      if (result !== undefined) return result;
+    }
     if (declarationKind === "KindFunctionType" || declarationKind === "KindCallSignature") {
       const runtimeCallable = acceptRuntimeCallableCall(request, context, options);
       if (runtimeCallable !== undefined) return runtimeCallable;
@@ -620,18 +639,28 @@ function acceptRuntimeCallableCarrierCall(
   sourceStructuralMethod?: RustSelectedTargetSignature["sourceStructuralMethod"],
   sourceDeclaration?: Node,
   optionalGuard?: RustOptionalCallGuard,
+  sourceConstructorCarrier?: TargetTypeRef,
 ): RustPolicySelection<RustCheckedCallSelectionResult> | undefined {
-  const protocol = runtimeCallableProtocol(calleeCarrier);
+  const generic = rustGenericCallableValue(calleeCarrier);
+  const selectedGenerics = request.source.sourceSelectedMethodTypeArguments ?? [];
+  const protocol = generic === undefined ? runtimeCallableProtocol(calleeCarrier)
+    : rustGenericCallableProtocol(calleeCarrier, selectedGenerics.map(argument => argument.typeParameterName));
   if (calleeCarrier === undefined || protocol === undefined) {
     return undefined;
   }
-  const targetGenericArguments = selectRustRuntimeCallableGenerics(request, calleeCarrier, context);
+  const genericTypes = generic === undefined ? undefined : selectedGenerics.map(argument =>
+    resolveRustTargetTypeRef(argument.explicitTypeNode ?? argument.selectedType, context, options));
+  const targetGenericArguments = genericTypes === undefined ? selectRustRuntimeCallableGenerics(request, calleeCarrier, context)
+    : genericTypes.some(type => type === undefined) ? undefined
+      : genericTypes.map(type => ({ kind: "type" as const, type: type! }));
   if (targetGenericArguments === undefined) {
     return rejectSelectedOperation(request.source.call, context,
       "RUST_RUNTIME_CALLABLE_GENERIC_CONTRACT_CONFLICT",
       "Runtime callable generic arguments require the exact selected lifetime binder; runtime type generics are not erased.");
   }
-  const genericParameters = calleeCarrier.kind !== "closure" || calleeCarrier.lifetimeBinder === undefined ? []
+  const genericParameters = generic !== undefined
+    ? selectedGenerics.map(argument => ({ kind: "type" as const, sourceName: argument.typeParameterName }))
+    : calleeCarrier.kind !== "closure" || calleeCarrier.lifetimeBinder === undefined ? []
     : calleeCarrier.lifetimeBinder.parameters.map((parameter, index) => ({
         kind: "lifetime" as const,
         sourceName: request.source.sourceSelectedMethodTypeArguments![index]!.typeParameterName,
@@ -645,7 +674,7 @@ function acceptRuntimeCallableCarrierCall(
   const resultCarrier = instantiate(protocol.result);
   const parameterPlan = runtimeCallableTargetParameters(
     request,
-    protocol.parameters.map(instantiate),
+    generic === undefined ? protocol.parameters.map(instantiate) : protocol.parameters,
     context,
   );
   if (parameterPlan === undefined) {
@@ -672,12 +701,13 @@ function acceptRuntimeCallableCarrierCall(
     targetName: "call",
     kind: "method",
     parameters: parameterPlan.parameters,
-    returnType: resultCarrier,
+    returnType: generic === undefined ? resultCarrier : protocol.result,
     ...(genericParameters.length === 0 ? {} : { genericParameters }),
   };
   const selectedSignature = {
     member,
     sourceCallableCarrier: calleeCarrier,
+    ...(sourceConstructorCarrier === undefined ? {} : { sourceConstructorCarrier }),
     ...(targetGenericArguments.length === 0 ? {} : { targetGenericArguments }),
     sourceCallableParameterIndexes: parameterPlan.sourceParameterIndexes,
     ...(sourceSelectedReceiverCarrier === undefined
@@ -768,5 +798,5 @@ function runtimeCallableProtocol(
   if (carrier?.kind === "function-pointer" || carrier?.kind === "closure") {
     return { parameters: carrier.args, result: carrier.result };
   }
-  return rustCallableProtocol(carrier);
+  return rustGenericCallableProtocol(carrier) ?? rustCallableProtocol(carrier);
 }

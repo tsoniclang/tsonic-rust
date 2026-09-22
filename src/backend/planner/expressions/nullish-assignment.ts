@@ -22,6 +22,8 @@ import { requireRustCarrierRequirements } from "../types/generic-requirements.js
 import { planExpression, planExpressionBeforeContextualConversion, planExpressionBeforeValueProjections } from "./entry.js";
 import type { RustExpressionResultUse } from "./entry.js";
 import { expressionCarrier, requireExpressionCarrier, selectedOperationMatches } from "./fundamentals.js";
+import { prepareRustComputedMemberEvaluation } from "./computed-members.js";
+import { rustComputedMemberFactKey } from "../../../analysis/facts/operations/keys.js";
 
 export function planNullishAssignment(
   node: Node,
@@ -41,6 +43,12 @@ export function planNullishAssignment(
       fact.operationId, "operator", fact.resultCarrier, rustTargetOperationText(fact))) {
     return undefined;
   }
+  const evaluation = prepareRustComputedMemberEvaluation(left, context);
+  if (evaluation === undefined) return undefined;
+  if (evaluation.bindings.length !== 0) {
+    const value = planNullishAssignment(node, fact, evaluation.context, resultUse);
+    return value === undefined ? undefined : { kind: "block", bindings: evaluation.bindings, value };
+  }
   const names = context.syntheticNames;
   const bindings: { readonly name: string; readonly value: RustExpr }[] = [];
   const overrides = new Map(context.expressionOverrides ?? []);
@@ -57,11 +65,12 @@ export function planNullishAssignment(
     const staticReceiver = target?.kind === "source-static-field" ||
       target?.kind === "source-accessor" && target.receiver.kind === "static";
     const receiver = staticReceiver ? undefined : Node_Expression(ast, left);
-    const index = ast.kindName(left) === KindElementAccessExpression
+    const index = context.input.program.facts.getFact(left, rustComputedMemberFactKey) === undefined &&
+      ast.kindName(left) === KindElementAccessExpression
       ? ElementAccessExpression_ArgumentExpression(ast, left)
       : undefined;
     for (const operand of [receiver, index]) {
-      if (operand === undefined) continue;
+      if (operand === undefined || context.expressionOverrides?.has(operand)) continue;
       const value = planExpression(operand, context);
       const carrier = expressionCarrier(operand, context);
       if (value === undefined || carrier === undefined) return undefined;

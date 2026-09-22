@@ -39,6 +39,10 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { wrapRustJsPromiseBody } from "./async-promise.js";
 import { planRustReturnExit } from "../statements/completion-exits.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
+import { rustClassEnvironmentParameter, rustClassMemberEnvironmentContext } from "../objects/class-environments.js";
+import { rustProjectGenerics } from "../objects/polymorphism/names.js";
+import { emptyRustGenerics } from "../../target-ast/nodes.js";
+import { planRustSuspendedReceiver } from "./suspended-receiver.js";
 
 export function planProjectMethod(
   member: Node,
@@ -50,7 +54,7 @@ export function planProjectMethod(
     readonly fallibleBoundary?: import("../program/source-package-errors.js").RustSourcePackageErrorBoundary;
   },
 ): RustImplFunction | undefined {
-  let context = outerContext;
+  let context = rustClassMemberEnvironmentContext(member, outerContext);
   const { ast } = context.input.program.source;
   const sourceMethodName = options?.targetName ??
     context.input.program.projectTypes.callableTargetName(member);
@@ -106,7 +110,11 @@ export function planProjectMethod(
   if (parameterPlan === undefined) {
     return undefined;
   }
-  const params = parameterPlan.params;
+  const owner = context.input.program.projectTypes.definitionContainingDeclaration(member);
+  const environmentParameter = owner === undefined || !ast.hasModifierKind(member, "static") ? undefined
+    : context.input.program.classValues.forDeclaration(owner.declaration)?.environment?.consumers.includes(member)
+      ? rustClassEnvironmentParameter(owner.declaration, context, "borrowed") : undefined;
+  const params = [...(environmentParameter === undefined ? [] : [environmentParameter]), ...parameterPlan.params];
   const returnTypeNode = Node_Type(ast, member);
   const returnsJsPromise = asyncFact?.kind === "js-promise";
   const sourceAsync = ast.hasModifierKind(member, "async");
@@ -213,8 +221,12 @@ export function planProjectMethod(
     ));
     return undefined;
   }
+  const receiverPlan = planRustSuspendedReceiver(
+    generatorFact?.ownedReceiver ?? (asyncFact?.kind === "js-promise" ? asyncFact.ownedReceiver : undefined),
+    { ...context, syntheticNames },
+  );
   const bodyContext: RustPlanContext = {
-    ...context,
+    ...receiverPlan.context,
     syntheticNames,
     controlFlow: { nextLoopId: 0 },
     functionReturnType: bodyReturnType,
@@ -293,7 +305,7 @@ export function planProjectMethod(
       params,
       returnType,
       body: {
-        statements: [...parameterStatements, {
+        statements: [...receiverPlan.prelude, ...parameterStatements, {
           kind: "tail",
           expr: {
             kind: "call",
@@ -357,9 +369,9 @@ export function planProjectMethod(
     params,
     ...(emittedReturnType === undefined ? {} : { returnType: emittedReturnType }),
     body: returnsJsPromise
-      ? wrapRustJsPromiseBody({
+      ? { statements: [...receiverPlan.prelude, ...wrapRustJsPromiseBody({
           statements: [...overridePrelude, ...finalizedBody.statements],
-        }, fallible)
+        }, fallible).statements] }
       : { statements: [...overridePrelude, ...finalizedBody.statements] },
   };
 }
@@ -487,9 +499,15 @@ export function planProjectStaticFunctionItems(
     const planned = planProjectMethodVariants(member, context);
     if (planned === undefined) return undefined;
     const specialized = context.input.program.sourceCallableSpecializations.requiresSpecialization(member);
+    const environment = context.input.program.classValues.forDeclaration(definition.declaration)?.environment;
+    const captured = environment?.consumers.includes(member)
+      ? rustProjectGenerics(definition, context, environment.genericParameterIndexes) : emptyRustGenerics;
     for (const method of planned) {
       if (method.selfParam !== undefined) return undefined;
-      items.push({ ...method, kind: "function", name: specialized ? method.name : name });
+      items.push({ ...method, kind: "function", name: specialized ? method.name : name, generics: {
+        parameters: [...method.generics.parameters, ...captured.parameters],
+        wherePredicates: [...method.generics.wherePredicates, ...captured.wherePredicates],
+      } });
     }
   }
   return items;

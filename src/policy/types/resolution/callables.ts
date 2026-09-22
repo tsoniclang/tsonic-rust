@@ -30,8 +30,8 @@ export function resolveCallableType(
   const declaration = callable.result.declaration;
   if (declaration !== undefined && context.ast.typeParameters(declaration).length > 0) {
     const contract = context.sourceLifetimes.contractFor(declaration);
-    if (contract?.lifetimeBinder === undefined || contract.parameters.some((parameter) =>
-      parameter.kind !== "lifetime")) {
+    if (contract === undefined || contract.parameters.some(parameter => parameter.kind !== "type") &&
+      (contract.lifetimeBinder === undefined || contract.parameters.some(parameter => parameter.kind !== "lifetime"))) {
       return undefined;
     }
   }
@@ -60,7 +60,7 @@ export function resolveSourceTypeParameter(
     return undefined;
   }
   const substitution = context.sourceTypeParameterSubstitutions?.get(declaration);
-  if (substitution !== undefined) return substitution;
+  if (substitution !== undefined) return substitution.carrier;
   const name = context.ast.text(context.ast.name(declaration));
   return name.length === 0 ? undefined : { kind: "type-parameter", name };
 }
@@ -74,7 +74,7 @@ export function resolveBoundSourceTypeParameter(
   const type = semantics.types.authoredType(node);
   const symbol = type === undefined ? undefined : semantics.declarations.typeSymbol(type);
   const declaration = symbol === undefined ? undefined : semantics.declarations.primarySymbolDeclaration(symbol);
-  return declaration === undefined ? undefined : context.sourceTypeParameterSubstitutions?.get(declaration);
+  return declaration === undefined ? undefined : context.sourceTypeParameterSubstitutions?.get(declaration)?.carrier;
 }
 
 export function resolveSourcePrimitive(

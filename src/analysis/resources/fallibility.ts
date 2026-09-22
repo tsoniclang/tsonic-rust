@@ -5,6 +5,7 @@ import {
   TryStatement_FinallyBlock,
   TryStatement_TryBlock,
   KindCallExpression,
+  KindElementAccessExpression,
   KindFunctionDeclaration,
   KindFunctionExpression,
   KindIdentifier,
@@ -24,6 +25,7 @@ import {
   rustBindingProjectionFactKey,
   rustContextualValueConversionFactKey,
   rustFallibleFactKey,
+  rustGeneratorFactKey,
   rustModuleBindingFactKey,
   rustMutatedBindingFactKey,
   rustObjectLiteralMethodAdapterFactKey,
@@ -39,6 +41,8 @@ import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { recordSelectedOperationInputs } from "../operations/inputs.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
 import { rustFutureOutputCarrier, rustCallableProtocol } from "../../target-model/types/index.js";
+import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
+import { rustGenericCallableEffectsFactKey } from "../facts/generic-callable-effects.js";
 import { rustInheritedProjectConstructor } from "../project-types/type-policy.js";
 import { rustOperationAbiAwaitIsFallible, rustTargetOperationIsFallible } from "../facts/target-operation.js";
 import { rustPolicyTargetDiagnostic } from "../../policy/operations/contracts.js";
@@ -275,6 +279,20 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
     }
   }
   const fallible = new Set<Node>();
+  const genericCallables = walk.context.callableValues.generic;
+  for (const definition of genericCallables.definitions) {
+    for (const implementation of definition.implementations) registerCallableDeclaration(implementation.declaration);
+  }
+  const genericCallImplementations = (operation: import("../facts/keys.js").RustTargetOperationFact | undefined) => {
+    if (operation?.kind !== "source-call" || operation.target.form !== "callable" ||
+      rustGenericCallableValue(operation.target.carrier) === undefined) return undefined;
+    return genericCallables.definitionFor(operation.target.carrier)?.implementations;
+  };
+  const genericInvocationIsFallible = (declaration: Node): boolean =>
+    fallible.has(declaration) && walk.context.facts.get(declaration, rustAsyncFunctionFactKey) === undefined &&
+      walk.context.facts.get(declaration, rustGeneratorFactKey) === undefined;
+  const genericAwaitIsFallible = (declaration: Node): boolean =>
+    walk.context.facts.get(declaration, rustAsyncFunctionFactKey) === undefined || fallible.has(declaration);
   for (const usage of walk.context.projectMethodProperties.usages) {
     if (usage.writable) {
       fallible.add(usage.declaration);
@@ -353,7 +371,9 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
       walk.context.frozenDataWrites, walk.context.typeDefinitions,
     ) ||
       (operation?.kind === "source-call" && operation.target.form === "union-method" &&
-        operation.target.variants.some(variant => fallible.has(variant.declaration))) ||
+        operation.target.variants.some(variant => genericInvocationIsFallible(variant.declaration))) ||
+      (operation?.kind === "source-call" &&
+        genericCallImplementations(operation)?.some(implementation => genericInvocationIsFallible(implementation.declaration)) === true) ||
       bindingProjectionIsFallible ||
       rustContextualValueConversionIsFallible(contextualConversion?.conversion, walk.context.typeDefinitions);
   };
@@ -522,6 +542,11 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
         const selectedAsync = selectedDeclaration !== undefined &&
           walk.context.facts.get(selectedDeclaration, rustAsyncFunctionFactKey) !== undefined;
         if ((operandFact?.kind === "provider-operation" && rustOperationAbiAwaitIsFallible(operandFact.abi)) ||
+          (operandFact?.kind === "source-call" && operandFact.target.form === "union-method" &&
+            rustFutureOutputCarrier(operandFact.resultCarrier) !== undefined &&
+            operandFact.target.variants.some(variant => fallible.has(variant.declaration))) ||
+          (operandFact?.kind === "source-call" && rustFutureOutputCarrier(operandFact.resultCarrier) !== undefined &&
+            genericCallImplementations(operandFact)?.some(implementation => genericAwaitIsFallible(implementation.declaration)) === true) ||
           (operandFact?.kind === "source-call" && selectedDeclaration !== undefined &&
             selectedAsync && fallible.has(selectedDeclaration))) {
           found = true;
@@ -567,6 +592,18 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
     }
   }
   const ownedCallbackClosures = new Set<Node>();
+  for (const definition of genericCallables.definitions) {
+    const effects: import("../facts/generic-callable-effects.js").RustGenericCallableEffectsFact = {
+      invocation: definition.implementations.some(implementation => genericInvocationIsFallible(implementation.declaration))
+        ? "fallible" : "infallible",
+      awaiting: rustFutureOutputCarrier(definition.signature.result) === undefined ? "not-applicable"
+        : definition.implementations.some(implementation => genericAwaitIsFallible(implementation.declaration)) ? "fallible" : "infallible",
+    };
+    for (const implementation of definition.implementations) {
+      walk.context.facts.set(implementation.declaration, rustGenericCallableEffectsFactKey, effects,
+        [{ message: "rust finalized generic callable implementation effects" }]);
+    }
+  }
   for (const [call, pending] of walk.preparedCallbackCalls) {
     const callbackArgument = callbackValueExpression(callbackExpression(pending));
     const callbackAnalysis = callbackValueAnalysis(callbackArgument, new Set());
@@ -656,7 +693,7 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
           walk.context.facts.resolve(node, rustTargetOperationFactKey);
         const body = ast.body(node);
         if (operation?.kind === "closure" && body !== undefined && expressionRegionIsFallible(body)) {
-          if (rustCallableProtocol(operation.resultCarrier) !== undefined ||
+          if (rustGenericCallableValue(operation.resultCarrier) !== undefined || rustCallableProtocol(operation.resultCarrier) !== undefined ||
             operation.resultCarrier.kind === "closure" && operation.resultCarrier.fallible === true) {
             walk.context.facts.set(node, rustFallibleFactKey, { fallible: true }, [
               { message: "rust fallible first-class callable implementation" },
@@ -671,7 +708,7 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
             );
           }
         }
-      } else if (kind === KindPropertyAccessExpression) {
+      } else if (kind === KindPropertyAccessExpression || kind === KindElementAccessExpression) {
         const operation = walk.context.facts.get(node, rustTargetOperationFactKey) ??
           walk.context.facts.resolve(node, rustTargetOperationFactKey);
         const selected = walk.context.facts.get(node, rustSelectedOperationKey) ??
@@ -704,22 +741,39 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
           const runtimeCallable = (operation.target.form === "callable" &&
               (rustCallableProtocol(operation.target.carrier) !== undefined ||
                 operation.target.carrier.kind === "closure" && operation.target.carrier.fallible === true)) ||
-            operation.target.form === "structural-method" &&
+            (operation.target.form === "structural-method" || operation.target.form === "constructor-value") &&
               rustCallableProtocol(operation.target.callableCarrier) !== undefined;
-          if (nativeCallable || runtimeCallable || declaration !== undefined) {
+          const genericImplementations = genericCallImplementations(operation);
+          if (operation.target.form === "callable" && rustGenericCallableValue(operation.target.carrier) !== undefined &&
+            (genericImplementations === undefined || genericImplementations.length === 0)) {
+            appendRustDiagnostic(walk, "RUST_GENERIC_CALLABLE_EFFECTS_NOT_CLOSED",
+              "A generic invocation has no exact native implementation family for effect classification.", node,
+              ["target.capability=rust.generic-callable.effects"]);
+          }
+          if (nativeCallable || runtimeCallable || genericImplementations !== undefined || declaration !== undefined) {
             const isAsync = rustFutureOutputCarrier(operation.resultCarrier) !== undefined;
             const unionBranches = operation.target.form === "union-method"
-              ? operation.target.variants.map(variant => fallible.has(variant.declaration) ? "fallible" as const : "infallible" as const)
+              ? operation.target.variants.map(variant => ({
+                invocation: genericInvocationIsFallible(variant.declaration) ? "fallible" as const : "infallible" as const,
+                awaiting: !isAsync ? "not-applicable" as const
+                  : genericAwaitIsFallible(variant.declaration) ? "fallible" as const : "infallible" as const,
+              }))
               : undefined;
-            const isFallible = unionBranches === undefined ? declaration !== undefined && fallible.has(declaration)
-              : unionBranches.some(branch => branch === "fallible");
             walk.context.facts.set(node, rustSourceCallEffectsFactKey, {
               ...(unionBranches === undefined ? {} : { unionBranches }),
-              invocation: runtimeCallable || isFallible && !isAsync
+              invocation: genericImplementations !== undefined
+                ? genericImplementations.some(implementation => genericInvocationIsFallible(implementation.declaration)) ? "fallible" : "infallible"
+                : runtimeCallable || (unionBranches === undefined
+                  ? declaration !== undefined && genericInvocationIsFallible(declaration)
+                  : unionBranches.some(branch => branch.invocation === "fallible"))
                 ? "fallible"
                 : "infallible",
               awaiting: isAsync
-                ? runtimeCallable || isFallible ? "fallible" : "infallible"
+                ? genericImplementations !== undefined
+                  ? genericImplementations.some(implementation => genericAwaitIsFallible(implementation.declaration)) ? "fallible" : "infallible"
+                  : runtimeCallable || (unionBranches === undefined
+                    ? declaration !== undefined && genericAwaitIsFallible(declaration)
+                    : unionBranches.some(branch => branch.awaiting === "fallible")) ? "fallible" : "infallible"
                 : "not-applicable",
             }, [{ message: "rust finalized selected project-source call effects" }]);
           }

@@ -18,7 +18,6 @@ import {
   rustTargetOperationFactKey,
 } from "../../../analysis/facts/keys.js";
 import {
-  isRustCopyCarrier,
   isRustStringCarrier,
   rustLocationTargetType,
   rustProgramErrorTargetType,
@@ -40,7 +39,7 @@ import {
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustProjectObjectRepresentation } from "../objects/project-storage.js";
 import { rustModuleCellAccess } from "../project/module-storage.js";
-import { rustCarrierHasCloneContract } from "../types/generic-requirements.js";
+import { rustCarrierHasCloneContract, rustCarrierHasCopyContract } from "../types/generic-requirements.js";
 import {
   readRustProjectDispatchedField,
   writeRustProjectDispatchedField,
@@ -82,22 +81,25 @@ export function planRustIdentifierValue(
   if (module?.storage === "native-const" && isRustStringCarrier(module.valueCarrier)) {
     return { kind: "owned-string-from-borrowed-str", expression: { kind: "path", path } };
   }
-  if (context.input.program.facts.getFact(node, rustNativeArrayStorageKey)?.kind === "reference") {
-    return { kind: "method-call", receiver: { kind: "path", path }, method: "clone", args: [] };
-  }
   const captured = rustCapturedBinding(node, context);
   const storage = rustLocationStorageForReference(node, context);
-  const value: RustExpr = {
-    kind: "path",
-    path: captured?.path ?? path,
-  };
+  const value: RustExpr = captured?.expression ?? { kind: "path", path };
+  if (context.input.program.facts.getFact(node, rustNativeArrayStorageKey)?.kind === "reference") {
+    return { kind: "method-call", receiver: value, method: "clone", args: [] };
+  }
   if (captured?.storage === "location") {
-    return { kind: "method-call", receiver: value, method: "load", args: [] };
+    return { kind: "method-call", receiver: value.kind === "reference" ? value.expr : value, method: "load", args: [] };
   }
   if (storage !== undefined) {
     return storage.storage === "module-cell"
       ? rustModuleCellAccess(value, "load", [])
       : { kind: "method-call", receiver: value, method: "load", args: [] };
+  }
+  if (captured?.borrowed === true) {
+    const referent = value.kind === "reference" ? value.expr : undefined;
+    return rustCarrierHasCopyContract(captured.valueCarrier, context)
+      ? referent ?? { kind: "dereference", pointer: value }
+      : { kind: "method-call", receiver: referent ?? value, method: "clone", args: [] };
   }
   return planRustValueRead(node, value, context);
 }
@@ -121,16 +123,17 @@ export function planRustCaptureValue(
   move: boolean,
   context: RustPlanContext,
 ): RustExpr {
-  const capturedPath = rustCapturedBinding(node, context)?.path ?? path;
+  const captured = rustCapturedBinding(node, context);
+  const capturedValue: RustExpr = captured?.expression ?? { kind: "path", path };
   if (storage === "location") {
     return {
       kind: "method-call",
-      receiver: { kind: "path", path: capturedPath },
+      receiver: capturedValue,
       method: "clone",
       args: [],
     };
   }
-  if (move) return { kind: "path", path: capturedPath };
+  if (move && captured?.borrowed !== true) return capturedValue;
   const value = planRustIdentifierValue(node, path, context);
   const carrier = context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
   return rustReadRequiresClone(carrier, context) &&
@@ -215,7 +218,7 @@ export function planRustMutableProjectReceiver(
 }
 
 function rustReadRequiresClone(carrier: TargetTypeRef | undefined, context: RustPlanContext): boolean {
-  return carrier !== undefined && !isRustCopyCarrier(carrier) &&
+  return carrier !== undefined && !rustCarrierHasCopyContract(carrier, context) &&
     rustCarrierHasCloneContract(carrier, context);
 }
 
@@ -291,9 +294,8 @@ export function rustRawLocationRoot(
   if (sourcePath === undefined) {
     return undefined;
   }
-  const path = rustCapturedBinding(expression, context)?.path ?? sourcePath;
   const storage = rustLocationStorageForReference(expression, context);
-  const value: RustExpr = { kind: "path", path };
+  const value: RustExpr = rustCapturedBinding(expression, context)?.expression ?? { kind: "path", path: sourcePath };
   return storage?.storage === "module-cell"
     ? rustModuleCellAccess(value, "location", [])
     : value;

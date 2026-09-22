@@ -1,9 +1,6 @@
 import {
   KindBlock,
-  KindExportAssignment,
-  KindFunctionDeclaration,
   KindFunctionExpression,
-  KindIdentifier,
   KindArrayBindingPattern,
   KindBindingElement,
   KindNonNullExpression,
@@ -12,17 +9,18 @@ import {
   KindParenthesizedExpression,
   KindSatisfiesExpression,
   KindVariableDeclaration,
-  KindVariableStatement,
   Node_Expression,
   Node_Initializer,
   Node_Name,
   Node_Type,
+  sourceLexicalCaptures,
 } from "@tsonic/target-api/source";
 import {
+  rustAsyncFunctionFactKey,
   rustClosureCaptureFactKey,
+  rustGeneratorFactKey,
   rustLocationStorageFactKey,
   rustMutatedBindingFactKey,
-  rustSourceBindingFactKey,
   rustSourceCallableReturnFactKey,
   rustSourceParameterAbiFactKey,
 } from "../facts/keys.js";
@@ -45,6 +43,8 @@ import { setCarrierFact, setRustOperationFact } from "../operations/project-call
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { rustGenericCallableProtocol, rustGenericCallableTargetType, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
+import { recordCallableReturnFact, recordCallableSuspensionFacts } from "./signatures.js";
 
 export function resolveFunctionExpressionCarrier(
   walk: RustFactWalk,
@@ -62,6 +62,8 @@ export function resolveFunctionExpressionCarrier(
   },
 ): TargetTypeRef | undefined {
   const { ast } = walk.context;
+  const genericNames = walk.context.sourceLifetimes.contractFor(expression)?.parameters
+    .flatMap(parameter => parameter.kind === "type" ? [parameter.targetName] : []);
   const parameters = ast.parameters(expression);
   const sourceSelected = options?.sourceCarrier ?? (expected === undefined
     ? resolveRustTargetTypeRef(
@@ -72,7 +74,7 @@ export function resolveFunctionExpressionCarrier(
     : undefined);
   const resolvedSourceCallable = sourceSelected?.kind === "function-pointer"
     ? { parameters: sourceSelected.args, result: sourceSelected.result }
-    : rustClosureProtocol(sourceSelected) ?? rustCallableProtocol(sourceSelected);
+    : rustGenericCallableProtocol(sourceSelected, genericNames) ?? rustClosureProtocol(sourceSelected) ?? rustCallableProtocol(sourceSelected);
   const fallbackParameterCarriers = resolvedSourceCallable?.parameters.map((carrier, index) =>
     Node_Initializer(ast, parameters[index]) === undefined
       ? carrier
@@ -86,17 +88,16 @@ export function resolveFunctionExpressionCarrier(
         args: fallbackParameterCarriers,
         result: resolvedSourceCallable.result,
       }
-    : rustCallableTargetType(fallbackParameterCarriers, resolvedSourceCallable.result));
+    : rustGenericCallableValue(sourceSelected) !== undefined && genericNames !== undefined
+      ? rustGenericCallableTargetType(genericNames, fallbackParameterCarriers, resolvedSourceCallable.result, rustGenericCallableValue(sourceSelected)!.origin)
+      : rustCallableTargetType(fallbackParameterCarriers, resolvedSourceCallable.result));
   if (selectedExpected === undefined || (selectedExpected.kind !== "function-pointer" &&
     rustClosureProtocol(selectedExpected) === undefined &&
+    rustGenericCallableProtocol(selectedExpected, genericNames) === undefined &&
     rustCallableProtocol(selectedExpected) === undefined)) {
     return undefined;
   }
-  if (ast.hasModifierKind(expression, "async") ||
-    walk.context.semanticsFor(expression).operations.generator(expression) !== undefined) {
-    return undefined;
-  }
-  const callable = rustCallableProtocol(selectedExpected);
+  const callable = rustGenericCallableProtocol(selectedExpected, genericNames) ?? rustCallableProtocol(selectedExpected);
   const closure = rustClosureProtocol(selectedExpected);
   const selectedParameters = selectedExpected.kind === "function-pointer"
     ? selectedExpected.args
@@ -200,26 +201,37 @@ export function resolveFunctionExpressionCarrier(
   if (body === undefined) {
     return undefined;
   }
+  recordCallableSuspensionFacts(walk, expression);
+  const generator = walk.context.facts.get(expression, rustGeneratorFactKey);
+  const asynchronous = walk.context.facts.get(expression, rustAsyncFunctionFactKey);
+  if (walk.context.semanticsFor(expression).operations.generator(expression) !== undefined
+    ? generator === undefined
+    : ast.hasModifierKind(expression, "async") && asynchronous === undefined) {
+    return undefined;
+  }
   const finalizedReturn = walk.context.facts.get(expression, rustSourceCallableReturnFactKey)?.returnCarrier ??
     walk.context.facts.resolve(expression, rustSourceCallableReturnFactKey)?.returnCarrier;
   const selectedResultExpectation = selectedResult.kind === "opaque" && selectedResult.id === "tsonic.rust.infer"
     ? resolveTypeNodeCarrier(walk, Node_Type(ast, expression))
     : selectedResult;
-  if (finalizedReturn !== undefined && selectedResultExpectation !== undefined &&
-    !rustTargetTypeRefEquals(finalizedReturn, selectedResultExpectation)) {
+  const selectedValueResult = generator?.resultCarrier ?? asynchronous?.futureCarrier ?? selectedResultExpectation;
+  const selectedBodyResult = generator?.returnType ?? asynchronous?.outputCarrier ?? selectedResultExpectation;
+  const selectedReturnFact = generator?.resultCarrier ?? selectedBodyResult;
+  if (finalizedReturn !== undefined && selectedReturnFact !== undefined &&
+    !rustTargetTypeRefEquals(finalizedReturn, selectedReturnFact)) {
     return undefined;
   }
-  const resultExpectation = finalizedReturn ?? selectedResultExpectation;
+  const resultExpectation = selectedBodyResult ?? finalizedReturn;
   const parameterCarriers = parameterAbis.map((abi) => abi.parameterCarrier);
   const expressionName = Node_Name(ast, expression);
   if (ast.kindName(expression) === KindFunctionExpression && expressionName !== undefined) {
-    if (resultExpectation === undefined) {
+    if (selectedValueResult === undefined) {
       return undefined;
     }
     const recursiveCarrier: TargetTypeRef = selectedExpected.kind === "function-pointer" ||
         selectedExpected.kind === "closure"
-      ? { ...selectedExpected, args: parameterCarriers, result: resultExpectation }
-      : rustCallableTargetType(parameterCarriers, resultExpectation);
+      ? { ...selectedExpected, args: parameterCarriers, result: selectedValueResult }
+      : rustCallableTargetType(parameterCarriers, selectedValueResult);
     setCarrierFact(walk, expression, recursiveCarrier);
     setCarrierFact(walk, expressionName, recursiveCarrier);
   }
@@ -229,7 +241,7 @@ export function resolveFunctionExpressionCarrier(
   const previousMethod = walk.currentMethodDeclaration;
   const previousThis = walk.currentThisCarrier;
   walk.currentCallableDeclaration = expression;
-  walk.currentGeneratorDeclaration = undefined;
+  walk.currentGeneratorDeclaration = generator === undefined ? undefined : expression;
   walk.currentMethodDeclaration = options?.selectedMethodDeclaration;
   walk.currentThisCarrier = walk.context.ast.kindName(expression) === "KindArrowFunction"
     ? previousThis
@@ -262,14 +274,25 @@ export function resolveFunctionExpressionCarrier(
     ...leadingParameters.map((parameter) => parameter.carrier),
     ...parameterCarriers,
   ];
-  const closureCarrier: TargetTypeRef = selectedExpected.kind === "function-pointer" || selectedExpected.kind === "closure"
-    ? { ...selectedExpected, args: finalizedParameterCarriers, result: bodyCarrier }
-    : rustCallableTargetType(finalizedParameterCarriers, bodyCarrier);
-  const captures = collectRustClosureCaptures(walk, expression, body);
+  const valueResult = generator?.resultCarrier ?? asynchronous?.futureCarrier ?? bodyCarrier;
+  const closureCarrier = selectedExpected.kind === "function-pointer" || selectedExpected.kind === "closure"
+    ? { ...selectedExpected, args: finalizedParameterCarriers, result: valueResult }
+    : rustGenericCallableValue(selectedExpected) !== undefined && genericNames !== undefined
+      ? rustGenericCallableTargetType(genericNames, finalizedParameterCarriers, valueResult, rustGenericCallableValue(selectedExpected)!.origin)
+    : rustCallableTargetType(finalizedParameterCarriers, valueResult);
+  if (closureCarrier === undefined ||
+    !recordCallableReturnFact(walk, expression, generator?.resultCarrier ?? bodyCarrier)) return undefined;
+  const captures = collectRustLexicalCaptures(walk, expression, [body]);
   if (captures === undefined) {
     return undefined;
   }
-  walk.context.facts.set(expression, rustClosureCaptureFactKey, captures, [
+  walk.context.facts.set(expression, rustClosureCaptureFactKey, {
+    ...captures,
+    ...((generator !== undefined || asynchronous !== undefined) &&
+        rustCallableProtocol(closureCarrier) !== undefined &&
+        (captures.captures.length > 0 || captures.recursiveDeclaration !== undefined)
+      ? { invocationOwner: "shared-state" as const } : {}),
+  }, [
     { message: "rust exact callable-expression captures" },
   ]);
   setRustOperationFact(walk, expression, {
@@ -285,10 +308,10 @@ export function resolveFunctionExpressionCarrier(
   return setCarrierFact(walk, expression, closureCarrier);
 }
 
-function collectRustClosureCaptures(
+export function collectRustLexicalCaptures(
   walk: RustFactWalk,
   expression: Node,
-  body: Node,
+  roots: readonly Node[],
 ): import("../facts/keys.js").RustClosureCaptureFact | undefined {
   const { ast } = walk.context;
   const captures = new Map<Node, {
@@ -299,62 +322,28 @@ function collectRustClosureCaptures(
   }>();
   let recursiveDeclaration: Node | undefined;
   const valueDeclaration = callableExpressionValueDeclaration(expression, ast);
-  let valid = true;
-  const visit = (node: Node): void => {
-    if (!valid) {
-      return;
-    }
-    if (ast.kindName(node) === KindIdentifier) {
-      const binding = walk.context.facts.get(node, rustSourceBindingFactKey) ??
-        walk.context.facts.resolve(node, rustSourceBindingFactKey);
-      const declaration = binding?.sourceDeclaration;
-      if (declaration === expression || declaration === valueDeclaration) {
-        recursiveDeclaration = declaration;
-      } else if (declaration !== undefined && !nodeIsWithin(declaration, expression, ast) &&
-        !declarationIsModuleScoped(declaration, ast)) {
-        const declarationKind = ast.kindName(declaration);
-        if (declarationKind === KindParameter || declarationKind === KindVariableDeclaration ||
-          declarationKind === KindBindingElement) {
-          const carrier = walk.context.facts.get(node, rustRuntimeCarrierKey)?.carrier ??
-            walk.context.facts.resolve(node, rustRuntimeCarrierKey)?.carrier ??
-            walk.context.facts.get(declaration, rustRuntimeCarrierKey)?.carrier ??
-            walk.context.facts.resolve(declaration, rustRuntimeCarrierKey)?.carrier;
-          if (carrier === undefined) {
-            valid = false;
-            return;
-          }
-          const storage = rustCapturedBindingStorage(walk, declaration, node);
-          if (storage === undefined) {
-            valid = false;
-            return;
-          }
-          if (storage === "location") {
-            walk.context.facts.set(declaration, rustLocationStorageFactKey, {
-              valueCarrier: carrier,
-            }, [{ message: "rust captured mutable binding storage" }]);
-          }
-          captures.set(declaration, {
-            declaration,
-            reference: node,
-            carrier,
-            storage,
-          });
-        }
-      }
-    }
-    ast.forEachChild(node, (child) => {
-      if (child !== undefined) {
-        visit(child);
-      }
-    });
-  };
-  visit(body);
-  return valid
-    ? {
-        captures: [...captures.values()],
-        ...(recursiveDeclaration === undefined ? {} : { recursiveDeclaration }),
-      }
-    : undefined;
+  const selected = sourceLexicalCaptures(expression, roots, ast, walk.context.source.navigation);
+  if (selected.selfReferences.length > 0 && ast.kindName(expression) !== "KindClassDeclaration" &&
+    ast.kindName(expression) !== "KindClassExpression") recursiveDeclaration = expression;
+  for (const capture of selected.captures) {
+    const declaration = capture.declaration;
+    if (declaration === valueDeclaration) { recursiveDeclaration = declaration; continue; }
+    const kind = ast.kindName(declaration);
+    if (kind !== KindParameter && kind !== KindVariableDeclaration && kind !== KindBindingElement) continue;
+    const reference = capture.references[capture.references.length - 1];
+    if (reference === undefined) return undefined;
+    const carrier = walk.context.facts.get(reference, rustRuntimeCarrierKey)?.carrier ??
+      walk.context.facts.resolve(reference, rustRuntimeCarrierKey)?.carrier ??
+      walk.context.facts.get(declaration, rustRuntimeCarrierKey)?.carrier ??
+      walk.context.facts.resolve(declaration, rustRuntimeCarrierKey)?.carrier;
+    const storage = rustCapturedBindingStorage(walk, declaration, reference);
+    if (carrier === undefined || storage === undefined) return undefined;
+    if (storage === "location") walk.context.facts.set(declaration, rustLocationStorageFactKey, {
+      valueCarrier: carrier,
+    }, [{ message: "rust captured mutable binding storage" }]);
+    captures.set(declaration, { declaration, reference, carrier, storage });
+  }
+  return { captures: [...captures.values()], ...(recursiveDeclaration === undefined ? {} : { recursiveDeclaration }) };
 }
 
 function rustCapturedBindingStorage(
@@ -405,50 +394,6 @@ function callableExpressionValueDeclaration(
       Node_Initializer(ast, parent) === current
     ? parent
     : undefined;
-}
-
-function nodeIsWithin(node: Node, ancestor: Node, ast: RustFactWalk["context"]["ast"]): boolean {
-  let current: Node | undefined = node;
-  while (current !== undefined) {
-    if (current === ancestor) {
-      return true;
-    }
-    current = ast.parent(current);
-  }
-  return false;
-}
-
-export function declarationIsModuleScoped(
-  declaration: Node,
-  ast: RustFactWalk["context"]["ast"],
-): boolean {
-  let current: Node | undefined = declaration;
-  while (current !== undefined) {
-    const parent = ast.parent(current);
-    if (parent === undefined) {
-      return false;
-    }
-    const parentKind = ast.kindName(parent);
-    if (parentKind === KindFunctionDeclaration || parentKind === KindFunctionExpression ||
-      parentKind === "KindArrowFunction" || parentKind === "KindMethodDeclaration" ||
-      parentKind === "KindConstructor") {
-      return false;
-    }
-    if (parentKind === "KindSourceFile") {
-      if (current === declaration) {
-        const declarationKind = ast.kindName(declaration);
-        return declarationKind === KindFunctionDeclaration ||
-          declarationKind === "KindClassDeclaration" ||
-          declarationKind === "KindEnumDeclaration" ||
-          declarationKind === KindExportAssignment;
-      }
-      const declarationKind = ast.kindName(declaration);
-      return ast.kindName(current) === KindVariableStatement &&
-        (declarationKind === KindVariableDeclaration || declarationKind === KindBindingElement);
-    }
-    current = parent;
-  }
-  return false;
 }
 
 // --- RegExp constant lane ----------------------------------------------------

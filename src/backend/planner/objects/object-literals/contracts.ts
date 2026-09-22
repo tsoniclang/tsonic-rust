@@ -26,11 +26,13 @@ import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js"
 import { emptyRustGenerics } from "../../../target-ast/nodes.js";
 import { rustSelfParameter } from "../../declarations/self-parameter.js";
 import { checkRustDataWrite } from "../data-writes.js";
+import { planCheckedProjectProjectionImplementation } from "../checked-project-projections.js";
 
 export function planContractImplementation(
   contract: import("../../../../analysis/project-types/type-policy.js").RustProjectInstanceContract,
   rootType: RustType,
   wrapperType: RustType,
+  contracts: readonly import("../../../../analysis/project-types/type-policy.js").RustProjectInstanceContract[],
   stateFields: readonly RustObjectLiteralImplementationPlan["stateFields"][number][],
   accessors: readonly RustObjectLiteralAccessorImplementationPlan[],
   methods: readonly RustObjectLiteralMethodDispatchPlan[],
@@ -46,6 +48,12 @@ export function planContractImplementation(
     return undefined;
   }
   const functions: RustImplFunction[] = [];
+  const projectionSlot = context.input.program.projectTypes.checkedProjectionSlot(contract.definition);
+  if (projectionSlot !== undefined) {
+    const projection = planCheckedProjectProjectionImplementation(projectionSlot, contracts, [], context);
+    if (projection === undefined) return undefined;
+    functions.push(projection);
+  }
   for (const field of fields) {
     const dispatch = context.input.program.projectFieldDispatch.planFor(field.declaration);
     const stateField = stateFields.find((candidate) =>

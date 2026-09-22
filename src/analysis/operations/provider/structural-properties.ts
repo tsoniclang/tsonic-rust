@@ -206,6 +206,10 @@ export function selectStructuralSourceProperty(
     );
   }
   const { field, shape } = selected;
+  if (shape.construction !== undefined && field.method === true) {
+    return rejectSelectedOperation(request.expression, context, "RUST_CONSTRUCTOR_METHOD_VALUE_UNSUPPORTED",
+      "Constructor-object methods currently support selected calls, not extracted or replaced method values.");
+  }
   if (request.accessMode === "delete") {
     return rejectSelectedOperation(
       request.expression,

@@ -21,6 +21,7 @@ import {
   maximumRustFoundation,
   type RustFoundation,
 } from "../../target-model/foundation/model.js";
+import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 
 export function rustFoundationForCarrier(carrier: RustTargetTypeRef): RustFoundation {
   let foundation: RustFoundation = "core";
@@ -85,6 +86,14 @@ export function rustFoundationForCarrier(carrier: RustTargetTypeRef): RustFounda
         require("std");
         return;
       case "target-specific": {
+        const callable = rustGenericCallableValue(current);
+        if (callable !== undefined) {
+          require("alloc");
+          callable.environment.forEach(visit);
+          callable.signature.parameters.forEach(visit);
+          visit(callable.signature.result);
+          return;
+        }
         const fixedArray = rustFixedArrayCarrierValue(current);
         if (fixedArray !== undefined) {
           visit(fixedArray.element);

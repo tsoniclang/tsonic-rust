@@ -5,6 +5,7 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustSourceUnionCarrierValue } from "../../../target-model/types/carriers/source-types.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { resolveRustTargetType } from "./target.js";
+import { rustSourceUnionMemberDeclarationIsOwned } from "../../evidence/source-union-members.js";
 
 export function retainRustSourceUnionInstantiation(
   sourceType: Type,
@@ -25,11 +26,14 @@ export function retainRustSourceUnionInstantiation(
   const parameters = context.sourceLifetimes.contractFor(template.declaration)?.parameters ?? [];
   if (parameters.length !== value.genericArguments.length) return undefined;
   const substitutions = new Map(context.sourceTypeParameterSubstitutions);
+  const application = semantics.types.aliasApplication(sourceType);
   for (const [index, parameter] of parameters.entries()) {
     const argument = value.genericArguments[index];
     if (argument?.kind !== parameter.kind) return undefined;
     if (parameter.kind === "type" && argument.kind === "type") {
-      substitutions.set(parameter.declaration, argument.type);
+      const binding = application?.bindings.find(binding => binding.declaration === parameter.declaration);
+      if (binding === undefined) return undefined;
+      substitutions.set(parameter.declaration, { sourceType: binding.argument, carrier: argument.type });
     }
   }
   const instantiatedContext = { ...context, sourceTypeParameterSubstitutions: substitutions };
@@ -69,7 +73,7 @@ export function retainRustSourceUnionInstantiation(
     ])]),
   }));
   if (selectedProperties.some(property => property.declarations.length === 0 ||
-    property.declarations.some(declaration => !context.source.navigation.isProjectDeclaration(declaration)))) {
+    property.declarations.some(declaration => !rustSourceUnionMemberDeclarationIsOwned(declaration, context, options)))) {
     return undefined;
   }
   return options.sourceTypes.registerSourceUnion({

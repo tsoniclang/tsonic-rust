@@ -6,10 +6,10 @@ import type {
 } from "@tsonic/tsts";
 import { rustSourceDeclarationTypeName, rustSourceTypeDeclarations } from "../../policy/types/source-declarations.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { createRustSourceTypeFamilyRegistry } from "./type-families.js";
-import type { RustSourceTypeFamilyRegistry } from "../../policy/types/type-families.js";
-import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
+import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
+import { closedMetadataKey, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { inferRustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { createRustTypeDefinitionRegistry, type RustTypeDefinitionRegistry } from "./type-definitions.js";
@@ -58,7 +58,9 @@ export function createRustSourceTypeRegistry(
   const variantsByDeclaration = new Map<Node, readonly RustSourceEnumVariant[]>();
   const structuralObjectsByType = new WeakMap<Type, RustSourceObjectShape[]>();
   const structuralObjects: RustSourceObjectShape[] = [];
+  const structuralObjectsByCarrier = new Map<string, RustSourceObjectShape[]>();
   const structuralInstantiations: RustStructuralInstantiation[] = [];
+  const structuralInstantiationsByKey = new Map<string, RustStructuralInstantiation[]>();
   const structuralFieldsBySymbol = new WeakMap<Symbol, RustStructuralFieldRegistration[]>();
   const structuralFieldsByDeclaration = new WeakMap<Node, RustStructuralFieldRegistration[]>();
   const structuralFieldImplementations: RustStructuralFieldImplementation[] = [];
@@ -98,7 +100,7 @@ export function createRustSourceTypeRegistry(
       return undefined;
     }
     const kind = ast.kindName(declaration);
-    const shape = kind === "KindClassDeclaration" || kind === "KindInterfaceDeclaration"
+    const shape = kind === "KindClassDeclaration" || kind === "KindClassExpression" || kind === "KindInterfaceDeclaration"
       ? "object"
       : kind === "KindEnumDeclaration" ||
           (kind === "KindTypeAliasDeclaration" && variantsByDeclaration.has(declaration))
@@ -183,7 +185,7 @@ export function createRustSourceTypeRegistry(
       const declaration = key === undefined ? undefined : declarations.get(key);
       if (declaration === undefined ||
         (ast.kindName(declaration) !== "KindInterfaceDeclaration" &&
-          ast.kindName(declaration) !== "KindClassDeclaration") ||
+          ast.kindName(declaration) !== "KindClassDeclaration" && ast.kindName(declaration) !== "KindClassExpression") ||
         ast.extendsHeritageElements(declaration).length !== 0) {
         return undefined;
       }
@@ -198,7 +200,7 @@ export function createRustSourceTypeRegistry(
         if (sourceClassFieldIsTypeOnly(ast, member) || ast.hasModifierKind(member, "abstract")) continue;
         const kind = ast.kindName(member);
         if ((declarationKind === "KindInterfaceDeclaration" && kind === "KindPropertySignature") ||
-          (declarationKind === "KindClassDeclaration" &&
+          ((declarationKind === "KindClassDeclaration" || declarationKind === "KindClassExpression") &&
             (kind === "KindPropertyDeclaration" || sourceParameterIsProperty(ast, member)))) {
           if (ast.hasModifierKind(member, "static")) {
             continue;
@@ -213,7 +215,7 @@ export function createRustSourceTypeRegistry(
           keys.push(name);
           continue;
         }
-        if (declarationKind === "KindClassDeclaration" &&
+        if ((declarationKind === "KindClassDeclaration" || declarationKind === "KindClassExpression") &&
           (kind === "KindConstructor" || kind === "KindMethodDeclaration" ||
             kind === "KindGetAccessor" || kind === "KindSetAccessor")) {
           continue;
@@ -233,15 +235,28 @@ export function createRustSourceTypeRegistry(
         : variantsByDeclaration.get(declaration)?.find((variant) => variant.literal === literal);
     },
     registerStructuralObject(shape, template) {
+      if (!isRustTargetTypeRef(shape.carrier)) return false;
+      const value = rustStructuralObjectCarrierValue(shape.carrier);
+      if (value === undefined) return false;
+      const construction = value.construction;
+      if (!rustTargetTypeRefEquals(construction, shape.construction?.carrier)) return false;
       const normalized = freezeSourceObjectShape(shape);
-      const templateShape = template === undefined ? undefined : structuralObjects.find(candidate =>
+      const carrierKey = closedMetadataKey(normalized.carrier);
+      const templateKey = template === undefined ? undefined : structuralCarrierKey(template);
+      const templateShape = templateKey === undefined ? undefined : structuralObjectsByCarrier.get(templateKey)?.find(candidate =>
         rustTargetTypeRefEquals(candidate.carrier, template));
       if (template !== undefined && templateShape === undefined) return false;
       const retainInstantiation = (): void => {
-        if (templateShape === undefined || rustTargetTypeRefEquals(templateShape.carrier, normalized.carrier) ||
-          structuralInstantiations.some(entry => rustTargetTypeRefEquals(entry.template, templateShape.carrier) &&
-            rustTargetTypeRefEquals(entry.instance, normalized.carrier))) return;
-        structuralInstantiations.push(Object.freeze({ template: templateShape.carrier, instance: normalized.carrier }));
+        if (templateShape === undefined || templateKey === undefined ||
+          rustTargetTypeRefEquals(templateShape.carrier, normalized.carrier)) return;
+        const key = closedMetadataKey([templateKey, carrierKey]);
+        const entries = structuralInstantiationsByKey.get(key) ?? [];
+        if (entries.some(entry => rustTargetTypeRefEquals(entry.template, templateShape.carrier) &&
+          rustTargetTypeRefEquals(entry.instance, normalized.carrier))) return;
+        const entry = Object.freeze({ template: templateShape.carrier, instance: normalized.carrier });
+        entries.push(entry);
+        structuralInstantiationsByKey.set(key, entries);
+        structuralInstantiations.push(entry);
       };
       const existingForType = structuralObjectsByType.get(shape.sourceType) ?? [];
       if (existingForType.some((existing) =>
@@ -253,7 +268,9 @@ export function createRustSourceTypeRegistry(
       const sameCarrier = existingForType.filter((existing) =>
         rustTargetTypeRefEquals(existing.carrier, normalized.carrier));
       if (sameCarrier.some((existing) =>
-        !sourceObjectTargetContractEquals(existing, normalized)
+        !sourceObjectTargetContractEquals(existing, normalized) ||
+        existing.construction?.declaration !== normalized.construction?.declaration ||
+        existing.construction?.signature !== normalized.construction?.signature
       )) {
         return false;
       }
@@ -288,6 +305,9 @@ export function createRustSourceTypeRegistry(
       }
       structuralObjectsByType.set(shape.sourceType, [...existingForType, normalized]);
       structuralObjects.push(normalized);
+      const carrierShapes = structuralObjectsByCarrier.get(carrierKey) ?? [];
+      carrierShapes.push(normalized);
+      structuralObjectsByCarrier.set(carrierKey, carrierShapes);
       retainInstantiation();
       for (const [symbol, declarationsForSymbol] of pendingDeclarationsBySymbol) {
         selectedDeclarationsBySymbol.set(symbol, declarationsForSymbol);
@@ -305,7 +325,8 @@ export function createRustSourceTypeRegistry(
         implementation.storageIndex < 0) {
         return false;
       }
-      const shape = structuralObjects.find((candidate) =>
+      const key = structuralCarrierKey(implementation.carrier);
+      const shape = (key === undefined ? undefined : structuralObjectsByCarrier.get(key))?.find((candidate) =>
         rustTargetTypeRefEquals(candidate.carrier, implementation.carrier));
       if (shape?.fields[implementation.storageIndex] === undefined) {
         return false;
@@ -323,7 +344,8 @@ export function createRustSourceTypeRegistry(
       return Object.freeze([...structuralObjects]);
     },
     structuralObjectForCarrier(carrier) {
-      const candidates = structuralObjects.filter((shape) =>
+      const key = structuralCarrierKey(carrier);
+      const candidates = (key === undefined ? [] : structuralObjectsByCarrier.get(key) ?? []).filter((shape) =>
         rustTargetTypeRefEquals(shape.carrier, carrier));
       const first = candidates[0];
       return first !== undefined && candidates.every((candidate) =>
@@ -554,7 +576,7 @@ function freezeSourceObjectField(field: RustSourceObjectField): RustSourceObject
     sourceName: field.sourceName,
     sourceType: field.sourceType,
     storageIndex: field.storageIndex,
-    resultCarrier: field.resultCarrier,
+    resultCarrier: snapshotClosedMetadata(field.resultCarrier),
     presence: field.presence,
     readonly: field.readonly,
     ...(field.accessor === undefined
@@ -572,10 +594,18 @@ function freezeSourceObjectField(field: RustSourceObjectField): RustSourceObject
 function freezeSourceObjectShape(shape: RustSourceObjectShape): RustSourceObjectShape {
   return Object.freeze({
     sourceType: shape.sourceType,
-    carrier: shape.carrier,
+    carrier: snapshotClosedMetadata(shape.carrier),
     storage: shape.storage,
     fields: Object.freeze(shape.fields.map(freezeSourceObjectField)),
+    ...(shape.construction === undefined ? {} : { construction: Object.freeze({
+      ...shape.construction, carrier: snapshotClosedMetadata(shape.construction.carrier),
+    }) }),
   });
+}
+
+function structuralCarrierKey(carrier: TargetTypeRef): string | undefined {
+  return !isRustTargetTypeRef(carrier) || rustStructuralObjectCarrierValue(carrier) === undefined
+    ? undefined : closedMetadataKey(carrier);
 }
 
 function freezeSourceUnion(union: RustSourceUnion): RustSourceUnion {
@@ -620,6 +650,7 @@ function sourceObjectTargetContractEquals(
   right: RustSourceObjectShape,
 ): boolean {
   return left.storage === right.storage &&
+    rustTargetTypeRefEquals(left.construction?.carrier, right.construction?.carrier) &&
     rustTargetTypeRefEquals(left.carrier, right.carrier) &&
     left.fields.length === right.fields.length &&
     left.fields.every((field, index) => {
@@ -688,6 +719,9 @@ function sourceObjectShapeEquals(
   right: RustSourceObjectShape,
 ): boolean {
   return left.sourceType === right.sourceType &&
+    left.construction?.declaration === right.construction?.declaration &&
+    left.construction?.signature === right.construction?.signature &&
+    rustTargetTypeRefEquals(left.construction?.carrier, right.construction?.carrier) &&
     left.storage === right.storage &&
     rustTargetTypeRefEquals(left.carrier, right.carrier) &&
     left.fields.length === right.fields.length &&

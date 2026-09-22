@@ -53,6 +53,7 @@ import { planRustValueFieldLocation, rustSourceFieldHasValueReceiver } from "../
 import { planRustFieldProjectionAssignment } from "./field-projection-assignment.js";
 import { planRustCompoundRuntimeWrite } from "./compound-runtime-write.js";
 import { rustCompoundWriteFactKey } from "../../../analysis/facts/operations/keys.js";
+import { prepareRustComputedMemberEvaluation } from "../expressions/computed-members.js";
 
 export function planExpressionStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const expression = Node_Expression(context.input.program.source.ast, node);
@@ -188,6 +189,18 @@ export function planRustAssignmentWrite(
   fact: RustAssignmentOperationPlan,
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
+  const evaluation = prepareRustComputedMemberEvaluation(left, context);
+  if (evaluation === undefined) return undefined;
+  if (evaluation.bindings.length !== 0) {
+    const statements = planRustAssignmentWrite(expression, left, valueNode, fact, evaluation.context);
+    return statements === undefined ? undefined : [{ kind: "scope", body: {
+      statements: [
+        ...evaluation.bindings.map(binding => ({ kind: "let" as const,
+          name: binding.name, mutable: binding.mutable ?? false, init: binding.value })),
+        ...statements,
+      ],
+    } }];
+  }
   const { ast } = context.input.program.source;
   const operator = fact.operator;
   if (!isRustAssignmentOperator(operator)) {
@@ -214,6 +227,7 @@ export function planRustAssignmentWrite(
   if (target === undefined && sourceField?.kind !== "source-accessor" &&
     sourceField?.kind !== "source-static-field" &&
     sourceField?.kind !== "source-field" &&
+    sourceField?.kind !== "source-indexed-field" &&
     sourceField?.kind !== "source-index-signature" &&
     sourceField?.kind !== "source-method-property" &&
     sourceField?.kind !== "source-union-field") {

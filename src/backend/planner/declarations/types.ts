@@ -400,7 +400,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
       type: stateCarrier!,
       visibility: storageVisibility,
       ...(publiclyReachable ? { attrs: ["#[doc(hidden)]"] } : {}),
-      ...(() => {
+      ...(explicitWrapperTraits ? {} : (() => {
         const deadCode = rustGeneratedProjectInterfaceFieldDeadCodeDisposition(
           context,
           node,
@@ -409,7 +409,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
           storageVisibility === "public",
         );
         return deadCode === undefined ? {} : { deadCode };
-      })(),
+      })()),
     }],
   }, ...(explicitWrapperTraits ? rustProjectWrapperTraits(interfaceType, interfaceName, generics) : [])];
 }

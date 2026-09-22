@@ -35,7 +35,10 @@ import type { ProjectClassStateLayer } from "./model.js";
 import type { RustObjectRepresentation } from "../../../../analysis/project-types/object-representation.js";
 import { rustProjectMemberIsPrivate } from "../../../../analysis/project-types/member-privacy.js";
 import { checkRustDataWrite } from "../data-writes.js";
+import { planCheckedProjectProjectionImplementation } from "../checked-project-projections.js";
+import { rustProjectInstanceContracts } from "../../../../analysis/project-types/type-policy.js";
 import { rustArrayFieldMutationName, rustArrayFieldMutationType } from "./array-fields.js";
+import { rustProjectObjectIdentityImplementation } from "../project-identity.js";
 
 export function planProjectRootImplementations(
   concrete: RustProjectTypeDefinition,
@@ -49,8 +52,10 @@ export function planProjectRootImplementations(
   if (contracts === undefined || representation === undefined) {
     return undefined;
   }
-  const items: RustItem[] = [];
   const generics = rustProjectRepresentationGenerics(representation, context);
+  const items: RustItem[] = [rustProjectObjectIdentityImplementation(rootType, generics, {
+    kind: "reference", expr: { kind: "field", receiver: { kind: "path", path: "self" }, name: "identity" },
+  })];
   const methodImplementations = new Map<Node, RustImplFunction[]>();
   const accessorImplementations = new Map<Node, RustImplFunction>();
   const implementationFor = (
@@ -164,9 +169,20 @@ function planRootContractFunctions(
   context: RustPlanContext,
 ): readonly RustImplFunction[] | undefined {
   const functions: RustImplFunction[] = [];
+  const projectionSlot = context.input.program.projectTypes.checkedProjectionSlot(contract);
+  if (projectionSlot !== undefined) {
+    const contracts = rustProjectInstanceContracts(context.input.program.projectTypes, concrete, concreteCarrier);
+    const projection = contracts === undefined ? undefined
+      : planCheckedProjectProjectionImplementation(projectionSlot, contracts,
+        context.input.program.classValues.instanceViewImplementations.filter(view =>
+          view.declaration === concrete.declaration && rustTargetTypeRefEquals(view.sourceCarrier, concreteCarrier))
+          .map(view => view.targetCarrier), context);
+    if (projection === undefined) return undefined;
+    functions.push(projection);
+  }
   for (const route of context.input.program.projectTypes.downcastRoutesFor(contract)) {
     const relation = context.input.program.projectTypes.relationship(concreteCarrier, route.target);
-    const matches = context.input.program.projectTypes.classLineage(concrete)?.includes(route.target) === true &&
+    const matches = (route.target.kind === "interface" || context.input.program.projectTypes.classLineage(concrete)?.includes(route.target) === true) &&
       relation.kind === "related" &&
       rustTargetTypeRefEquals(relation.targetType, route.targetCarrier);
     if (matches) {

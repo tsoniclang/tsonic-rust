@@ -1,5 +1,6 @@
 import { rustFixedArrayCarrierValue, rustFixedArrayTargetType, rustNamedTargetType, rustNamedTypeCarrierValue } from "./native.js";
 import { rustSourceTypeCarrier, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustSourceUnionTargetType, rustStructuralObjectCarrierValue, rustStructuralObjectTargetType } from "./source-types.js";
+import { rustClassConstructorContract, rustClassConstructorTargetType } from "./class-constructors.js";
 import type {
   RustTargetConstArgument,
   RustTargetGenericArgument,
@@ -8,6 +9,7 @@ import type {
 } from "../model.js";
 import { rustLifetimeKey } from "../../lifetimes/index.js";
 import type { RustLifetimeRef } from "../../lifetimes/index.js";
+import { rustGenericCallableCarrier, rustGenericCallableValue } from "./generic-callables.js";
 
 export function substituteRustTargetTypeParameters(
   type: TargetTypeRef,
@@ -42,7 +44,11 @@ function substituteCarrierParts(
     lifetimeSubstitutions.get(rustLifetimeKey(lifetime)) ?? lifetime;
   switch (type.kind) {
     case "type-parameter":
-      return substitutions.get(type.name) ?? type;
+      return (() => {
+        const replacement = substitutions.get(type.name);
+        return replacement === undefined ? type : normalize === undefined
+          ? replacement : mapRustTargetTypes(replacement, normalize);
+      })();
     case "target-named":
       return {
         ...type,
@@ -330,6 +336,26 @@ function substituteCarrierParts(
             }),
       };
     case "target-specific": {
+      const constructor = rustClassConstructorContract(type);
+      if (constructor !== undefined) {
+        const arguments_ = rustSourceTypeCarrierValue(constructor.instance)!.genericArguments;
+        const scopedTypes = new Map(substitutions);
+        const scopedLifetimes = new Map(lifetimeSubstitutions);
+        for (const index of constructor.boundParameterIndexes) {
+          const argument = arguments_[index]!;
+          if (argument.kind === "type" && argument.type.kind === "type-parameter") scopedTypes.delete(argument.type.name);
+          if (argument.kind === "lifetime") scopedLifetimes.delete(rustLifetimeKey(argument.lifetime));
+        }
+        return rustClassConstructorTargetType(substituteRustTargetGenerics(constructor.instance, scopedTypes,
+          scopedLifetimes, constSubstitutions, normalize), constructor.boundParameterIndexes);
+      }
+      const callable = rustGenericCallableValue(type);
+      if (callable !== undefined) return rustGenericCallableCarrier({
+        origin: callable.origin,
+        signature: callable.signature,
+        environment: callable.environment.map(argument => substituteRustTargetGenerics(
+          argument, substitutions, lifetimeSubstitutions, constSubstitutions, normalize)),
+      });
       const sourceType = rustSourceTypeCarrierValue(type);
       if (sourceType !== undefined) {
         return rustSourceTypeCarrier(
@@ -356,7 +382,9 @@ function substituteCarrierParts(
             constSubstitutions,
             normalize,
           ),
-        })), structuralObject.representation);
+        })), structuralObject.representation, structuralObject.construction === undefined ? undefined :
+          substituteRustTargetGenerics(structuralObject.construction, substitutions, lifetimeSubstitutions, constSubstitutions, normalize),
+          structuralObject.bases.map(base => substituteRustTargetGenerics(base, substitutions, lifetimeSubstitutions, constSubstitutions, normalize)));
       }
       const sourceUnion = rustSourceUnionCarrierValue(type);
       if (sourceUnion !== undefined) {

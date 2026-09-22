@@ -97,3 +97,38 @@ test("sequence ABI rejects missing, conflicting and unproved input contracts", (
     assert.equal(validateRustFinalizedOperationAbi(changed), false);
   }
 });
+
+test("owned and receiver rest arrays retain the same closed sequence evidence", () => {
+  const element = { kind: "source-primitive", name: "float64" };
+  const receiver = rustJsArrayTargetType(element);
+  for (const form of [
+    { form: "call-value-array", path: "acme::values", leadingArguments: [], elementCarrier: element },
+    { form: "receiver-value-array", name: "extend_values", receiverMode: "ref", leadingArguments: [], elementCarrier: element },
+  ]) {
+    const options = {
+      operationKind: "method", form,
+      ...(form.form === "receiver-value-array" ? { sourceReceiverCarrier: receiver } : {}),
+      sourceArgumentCarriers: [receiver], spreadSourceArgumentIndexes: [0],
+      resultCarrier: element, isAsync: false, isFallible: false,
+    };
+    const abi = finalizeRustProviderOperationAbi(options);
+    assert.ok(abi);
+    assert.equal(validateRustFinalizedOperationAbi(abi), true);
+    assert.equal(abi.targetArguments[0].source.kind, "argument-array");
+    assert.equal(abi.targetArguments[0].elements[0].conversion.conversion.kind, "rest-sequence");
+    for (const mutate of [
+      value => { value.sourceArguments[0].form = "value"; },
+      value => { value.targetArguments[0].elements[0].parameterCarrier = element; },
+      value => { value.targetArguments[0].elementCarrier = receiver; },
+      value => { value.targetArguments[0].source.sourceIndexes = []; },
+    ]) {
+      const changed = structuredClone(abi);
+      mutate(changed);
+      assert.equal(validateRustFinalizedOperationAbi(changed), false);
+    }
+    assert.equal(finalizeRustProviderOperationAbi({ ...options,
+      form: { form: "call", path: "acme::value" } }), undefined);
+    assert.equal(finalizeRustProviderOperationAbi({ ...options,
+      form: { ...form, leadingArguments: [{ carrier: element, mode: "value" }] } }), undefined);
+  }
+});

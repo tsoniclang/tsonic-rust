@@ -12,19 +12,20 @@ import { planRustDirectStorage } from "../expressions/updates/target.js";
 import { findRustLocationStorageRoot, planRustSourceLocationStorage, rustExpressionHasBoundRecordField, planRustSharedReceiver, rustLocationStorageForReference, rustRawLocationRoot } from "../expressions/typed-locations.js";
 import { rustRecordFieldResult, readRustBoundRecordField, writeRustBoundRecordField } from "./record-fields.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
+import { planRustIndexedFieldLocation } from "../expressions/indexed-fields.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { readRustStoredObjectField, writeRustStoredObjectField, rustProjectObjectRepresentation, rustDirectProjectFieldStoragePath } from "./project-storage.js";
 
 export interface RustValueFieldLocation {
-  readonly bindings: readonly { readonly name: string; readonly value: RustExpr }[];
+  readonly bindings: readonly { readonly name: string; readonly value: RustExpr; readonly mutable?: boolean }[];
   readonly read: RustExpr;
   readonly write: (value: RustExpr) => RustExpr | undefined;
 }
 
 export function rustSourceFieldHasValueReceiver(node: Node, context: RustPlanContext): boolean {
   const operation = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
-  return operation?.kind === "source-field" &&
+  return operation?.kind === "source-indexed-field" || operation?.kind === "source-field" &&
     (operation.storage === "structural-object"
       ? rustStructuralObjectCarrierValue(operation.receiverCarrier)?.representation === "value"
       : rustProjectObjectRepresentation(operation.receiverCarrier, context)?.kind === "value");
@@ -35,6 +36,10 @@ export function planRustValueFieldLocation(
   context: RustPlanContext,
   access: "read" | "write",
 ): RustValueFieldLocation | undefined {
+  const prepared = context.valueFieldLocations?.get(node);
+  if (prepared !== undefined) return prepared;
+  const selectedField = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
+  if (selectedField?.kind === "source-indexed-field") return planRustIndexedFieldLocation(node, selectedField, context, access);
   const reject = (): undefined => {
     context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
       "rust.backend.value-field-location",

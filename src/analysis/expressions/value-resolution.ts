@@ -31,6 +31,7 @@ import {
   Node_Expression,
 } from "@tsonic/target-api/source";
 import { rustRuntimeUnionContract, rustRuntimeUnionProjection } from "../../target-model/types/carriers/runtime-unions.js";
+import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import {
   rustFutureOutputCarrier,
   getRustGeneratorProtocol,
@@ -159,7 +160,9 @@ export function resolveExpressionCarrierUncached(
       }
       const defaultCarrier = rustBigIntTargetType();
       const carrier = effectiveExpected === undefined ||
-          rustRuntimeUnionProjection(effectiveExpected, defaultCarrier) !== undefined
+          rustRuntimeUnionProjection(effectiveExpected, defaultCarrier) !== undefined ||
+          !isRustBigIntCarrier(effectiveExpected) &&
+          selectRustSourceValueConversion(defaultCarrier, effectiveExpected, walk.context.typeDefinitions) !== undefined
         ? defaultCarrier
         : effectiveExpected;
       if (!isRustBigIntCarrier(carrier)) {
@@ -442,7 +445,7 @@ export function resolveExpressionCarrierUncached(
         : resolveExpressionCarrier(walk, operand, sourceFile, undefined);
       const result = operand === undefined || operandCarrier === undefined
         ? undefined
-        : rustTypeofResult(operandCarrier);
+        : rustTypeofResult(operandCarrier, walk.context.typeDefinitions);
       if (result === undefined) {
         appendRustDiagnostic(
           walk,
@@ -593,10 +596,24 @@ function resolveTemplateExpressionCarrier(
 
 function rustTypeofResult(
   carrier: TargetTypeRef,
+  definitions: import("../../target-model/types/source-union-definitions.js").RustTypeDefinitions,
+  active: ReadonlySet<string> = new Set(),
 ): Extract<RustTargetOperationFact, { readonly kind: "typeof" }>["result"] | undefined {
+  const identity = closedMetadataKey(carrier);
+  if (active.has(identity)) return undefined;
+  const sourceVariants = definitions.sourceUnionVariants(carrier);
+  if (sourceVariants !== undefined) {
+    const nested = new Set(active).add(identity);
+    const variants = sourceVariants.map(variant => {
+      const result = rustTypeofResult(variant.carrier, definitions, nested);
+      return result === undefined ? undefined : { ...variant, result };
+    });
+    return variants.some(variant => variant === undefined) ? undefined
+      : { kind: "source-union", sourceCarrier: carrier, variants: variants.map(variant => variant!) };
+  }
   const runtimeUnion = rustRuntimeUnionContract(carrier);
   if (runtimeUnion !== undefined) {
-    return { method: runtimeUnion.typeofMethod, sourceCarrier: carrier };
+    return { kind: "runtime-union", method: runtimeUnion.typeofMethod, sourceCarrier: carrier };
   }
   if (isRustNullCarrier(carrier)) {
     return "object";

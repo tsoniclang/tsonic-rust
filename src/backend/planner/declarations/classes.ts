@@ -57,6 +57,8 @@ import {
 } from "../objects/project-storage-abi.js";
 import { rustProjectObjectIdentityImplementation } from "../objects/project-identity.js";
 import { rustProjectWrapperTraits } from "../objects/project-wrapper-traits.js";
+import { rustClassEnvironmentContext, rustClassEnvironmentParameter } from "../objects/class-environments.js";
+import { rustClassEnvironmentHandleType } from "../objects/class-environment-types.js";
 
 export interface PlannedProjectObjectField {
   readonly declaration: Node;
@@ -336,10 +338,16 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     context.usedAliases?.add("rt");
   }
   const generatedStructAttributes = structAttributes(className) ?? [];
+  const environment = context.input.program.classValues.forDeclaration(node)?.environment;
+  const environmentType = !environment?.instancesUseEnvironment ? undefined : rustClassEnvironmentHandleType(environment.carrier, context);
+  if (environment?.instancesUseEnvironment && environmentType === undefined) return undefined;
   const stateCarrier = stateType === undefined
     ? undefined
-    : rustProjectObjectType(stateType, representation);
+    : rustProjectObjectType(stateType, representation, environmentType);
   const valueFields: readonly RustStructField[] = [
+    ...(representation.kind !== "value" || environment === undefined || environmentType === undefined ? [] : [{
+      name: environment.instanceFieldName, type: environmentType, visibility: "private" as const,
+    }]),
     ...fields.map((field): RustStructField => {
       const deadCode = rustAuthoredFieldDeadCodeDisposition(
         context,
@@ -485,7 +493,11 @@ function planConstructor(
   if (parameterPlan === undefined) {
     return undefined;
   }
-  const params = parameterPlan.params;
+  const selectedEnvironment = context.input.program.classValues.forDeclaration(classDeclaration)?.environment;
+  const environment = selectedEnvironment?.instancesUseEnvironment || selectedEnvironment?.initializationUsesEnvironment ? selectedEnvironment : undefined;
+  const environmentParameter = environment === undefined ? undefined : rustClassEnvironmentParameter(classDeclaration, context, "owned");
+  if (environment !== undefined && environmentParameter === undefined) return undefined;
+  const params = [...(environmentParameter === undefined ? [] : [environmentParameter]), ...parameterPlan.params];
   const fallible = context.input.program.facts.getFact(
     member ?? classDeclaration,
     rustFallibleFactKey,
@@ -505,7 +517,8 @@ function planConstructor(
     context.usedAliases?.add("rt");
   }
   const constructorContext: RustPlanContext = {
-    ...context,
+    ...(environment === undefined ? context : rustClassEnvironmentContext(environment,
+      { kind: "path", path: environment.parameterName }, context)),
     syntheticNames,
     controlFlow: { nextLoopId: 0 },
     functionReturnType: classType,
@@ -617,8 +630,13 @@ function planConstructor(
         stateMarker === undefined
           ? []
           : [{ name: stateMarker.name, value: stateMarker.value }],
+        representation.kind !== "value" || !environment?.instancesUseEnvironment ? [] : [{
+          name: environment.instanceFieldName,
+          value: { kind: "path" as const, path: environment.parameterName },
+        }],
       ),
       representation,
+      !environment?.instancesUseEnvironment || representation.kind === "value" ? undefined : { kind: "path", path: environment.parameterName },
     ),
   });
   const constructorDeadCode = rustProjectConstructorDeadCodeDisposition(

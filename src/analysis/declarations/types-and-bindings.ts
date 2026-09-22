@@ -33,6 +33,7 @@ import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { resolveRustTypeFamilyApplication, rustSourceTypeFamilyDeclaration } from "../../policy/types/resolution/type-families.js";
 import { resolveRustEvidenceNodesToCommonCarrier } from "../../policy/types/resolution/source-evidence.js";
+import { rustSourceUnionMemberDeclarationIsOwned } from "../../policy/evidence/source-union-members.js";
 
 export function reserveTypeAliasUnion(walk: RustFactWalk, declaration: Node): void {
   const {ast} = walk.context;
@@ -107,7 +108,7 @@ export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
           rustResolutionContext(walk, declaration), walk.operationOptions, new Set());
       if (carrier !== undefined) {
         const family = walk.context.typeFamilies.get(selectedFamily.trait.id);
-        if (family === undefined) return;
+        if (family?.kind !== "conditional") return;
         setCarrierFact(walk, declaration, carrier);
         walk.context.facts.set(declaration, rustTypeAliasDeclarationFactKey,
           { kind: family.declaration === declaration ? "family" : "erased" },
@@ -226,7 +227,7 @@ export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
     }
     const selectedDeclarations = declarations as readonly Node[];
     return selectedDeclarations.every((selected) =>
-      walk.context.source.navigation.isProjectDeclaration(selected) &&
+      rustSourceUnionMemberDeclarationIsOwned(selected, rustResolutionContext(walk, declaration), walk.operationOptions) &&
       variantMemberDeclarations.has(selected))
       ? {
           symbol: property.symbol,
@@ -404,6 +405,7 @@ export function recordBindingWrite(walk: RustFactWalk, target: Node | undefined,
     return;
   }
   if (kind === KindPropertyAccessExpression || kind === KindElementAccessExpression) {
+    if (walk.context.facts.get(target, rustTargetOperationFactKey)?.kind === "source-indexed-field") return;
     const receiver = Node_Expression(walk.context.ast, target);
     const receiverKind = receiver === undefined ? "" : ast.kindName(receiver);
     if (receiverKind === "KindThisExpression" || receiverKind === "KindThisKeyword") {

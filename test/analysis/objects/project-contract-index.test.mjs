@@ -43,7 +43,8 @@ export function read(value: Slot<number>): number { return value.value; }
   assert.equal(textualRelation.kind, "related");
   assert.equal(rustTargetTypeRefEquals(numericRelation.targetType, textualRelation.targetType), false);
   assert.deepEqual(policy.concreteClassesFor(base).map(candidate => candidate.sourceName), ["Numeric", "OtherNumeric", "Textual"]);
-  assert.deepEqual(policy.downcastRoutesFor(slot).map(route => route.target.sourceName), ["BothFirst", "BothSecond", "Numeric", "OtherNumeric", "Textual"]);
+  assert.deepEqual(policy.downcastRoutesFor(slot).map(route => route.target.sourceName),
+    ["Base", "Base", "BothFirst", "BothSecond", "IntSlot", "Named", "Numeric", "OtherIntSlot", "OtherNumeric", "Slot", "Slot", "Textual"]);
   const open = name => policy.openCarrier(definition(name));
   const common = policy.commonSupertype([open("Numeric"), open("OtherNumeric")]);
   assert.ok(common);

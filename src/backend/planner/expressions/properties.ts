@@ -31,15 +31,18 @@ import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { planRustComputedMemberExpression } from "./computed-members.js";
 
 export function planPropertyAccess(node: Node, context: RustPlanContext): RustExpr | undefined {
   const borrowed = context.input.program.borrowedElementReads.forExpression(node);
-  if (borrowed !== undefined) return planRustBorrowedElementRead(node, borrowed, context, planPropertyAccessInner);
+  if (borrowed !== undefined) return planRustComputedMemberExpression(node, context,
+    selectedContext => planRustBorrowedElementRead(node, borrowed, selectedContext, planPropertyAccessInner));
   return planOptionalChainExpression(
     node,
     context,
     "property",
-    (innerContext) => planPropertyAccessInner(node, innerContext),
+    (innerContext) => planRustComputedMemberExpression(node, innerContext,
+      selectedContext => planPropertyAccessInner(node, selectedContext)),
   );
 }
 function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr | undefined {
@@ -530,11 +533,12 @@ export function sourceAccessorSelectedOperationMatches(
 
 export function planRustSourceAccessorCall(
   node: Node,
-  fact: Extract<RustTargetOperationFact, { readonly kind: "source-accessor" }>,
+  fact: Pick<Extract<RustTargetOperationFact, { readonly kind: "source-accessor" }>, "read" | "write" | "receiver" | "dispatch">,
   role: "read" | "write",
   args: readonly RustExpr[],
   context: RustPlanContext,
   receiverOverride?: RustExpr,
+  receiverCarrierOverride?: TargetTypeRef,
 ): RustExpr | undefined {
   const selected = role === "read" ? fact.read : fact.write;
   if (selected === undefined || args.length !== (role === "read" ? 0 : 1)) {
@@ -547,7 +551,7 @@ export function planRustSourceAccessorCall(
       ? undefined
       : { kind: "call", path: `${ownerPath}::${selected.method}`, args };
   }
-  const receiverNode = Node_Expression(context.input.program.source.ast, node);
+  const receiverNode = receiverCarrierOverride === undefined ? Node_Expression(context.input.program.source.ast, node) : undefined;
   const plannedReceiver = receiverOverride ?? (receiverNode === undefined
     ? undefined
     : planExpression(receiverNode, context));
@@ -558,11 +562,12 @@ export function planRustSourceAccessorCall(
     return undefined;
   }
   if (fact.dispatch === undefined) {
-    return { kind: "method-call", receiver, method: selected.method, args };
+    return { kind: "method-call", receiver, method: selected.method, args,
+      receiverMode: context.input.program.objectRepresentations.methodSelfMode(selected.declaration) };
   }
-  const receiverCarrier = receiverNode === undefined
+  const receiverCarrier = receiverCarrierOverride ?? (receiverNode === undefined
     ? undefined
-    : effectivePlannedExpressionCarrier(receiverNode, context);
+    : effectivePlannedExpressionCarrier(receiverNode, context));
   const owner = context.input.program.projectTypes.definitionContainingDeclaration(selected.declaration);
   const relationship = owner === undefined || receiverCarrier === undefined
     ? undefined

@@ -19,6 +19,7 @@ export interface RustPlannerLiveness {
   requiresSuppression(declaration: Node): boolean;
   isRead(declaration: Node): boolean;
   isProjectTypeConstructed(declaration: Node): boolean;
+  isProjectTypeReified(declaration: Node): boolean;
   isProjectConstructorInvoked(declaration: Node): boolean;
   isProjectGeneratedFieldUsed(
     declaration: Node,
@@ -26,9 +27,11 @@ export interface RustPlannerLiveness {
   ): boolean;
   isDispatchMemberUsed(declaration: Node, role: RustDispatchMemberRole): boolean;
   isDowncastUsed(source: Node, target: Node): boolean;
+  isCheckedProjectionUsed(source: Node): boolean;
   isStructuralFieldRead(carrier: TargetTypeRef, storageIndex: number): boolean;
   isStructuralFieldWritten(carrier: TargetTypeRef, storageIndex: number): boolean;
   isStructuralShapeConstructed(carrier: TargetTypeRef): boolean;
+  isStructuralShapeUsed(carrier: TargetTypeRef): boolean;
   isVariantConstructed(declaration: Node, variantName: string): boolean;
 }
 
@@ -87,6 +90,9 @@ export function createRustPlannerLiveness(program: RustTargetProgram): RustPlann
     declarations,
     facts: program.facts,
     projectTypes: program.projectTypes,
+    classValues: program.classValues,
+    sourceCallableSpecializations: program.sourceCallableSpecializations,
+    declarationGenericRequirements: program.declarationGenericRequirements,
     typeDefinitions: program.typeDefinitions,
     objectRepresentations: program.objectRepresentations,
     projectMethodProperties: program.projectMethodProperties,
@@ -206,13 +212,16 @@ export function createRustPlannerLiveness(program: RustTargetProgram): RustPlann
     isRead: (declaration: Node) =>
       generatedUsage.isAuthoredFieldRead(canonical(declaration)),
     isProjectTypeConstructed: generatedUsage.isProjectTypeConstructed,
+    isProjectTypeReified: generatedUsage.isProjectTypeReified,
     isProjectConstructorInvoked: generatedUsage.isProjectConstructorInvoked,
     isProjectGeneratedFieldUsed: generatedUsage.isProjectGeneratedFieldUsed,
     isDispatchMemberUsed: generatedUsage.isDispatchMemberUsed,
     isDowncastUsed: generatedUsage.isDowncastUsed,
+    isCheckedProjectionUsed: generatedUsage.isCheckedProjectionUsed,
     isStructuralFieldRead: generatedUsage.isStructuralFieldRead,
     isStructuralFieldWritten: generatedUsage.isStructuralFieldWritten,
     isStructuralShapeConstructed: generatedUsage.isStructuralShapeConstructed,
+    isStructuralShapeUsed: generatedUsage.isStructuralShapeUsed,
     isVariantConstructed: generatedUsage.isVariantConstructed,
   });
 }

@@ -8,6 +8,12 @@ import type {
   TargetTypeRef,
 } from "../../../target-model/types/model.js";
 
+export type RustTypeofResult =
+  | "boolean" | "number" | "bigint" | "string" | "function" | "object" | "undefined"
+  | { readonly kind: "runtime-union"; readonly method: string; readonly sourceCarrier: TargetTypeRef }
+  | { readonly kind: "source-union"; readonly sourceCarrier: TargetTypeRef;
+      readonly variants: readonly { readonly name: string; readonly carrier: TargetTypeRef; readonly result: RustTypeofResult }[] };
+
 export type RustTargetOperationFact =
   | {
       readonly kind: "operator-token";
@@ -54,8 +60,7 @@ export type RustTargetOperationFact =
       readonly kind: "typeof";
       readonly operationId: string;
       readonly resultCarrier: TargetTypeRef;
-      readonly result: "boolean" | "number" | "bigint" | "string" | "function" | "object" | "undefined" |
-        { readonly method: string; readonly sourceCarrier: TargetTypeRef };
+      readonly result: RustTypeofResult;
     }
   | {
       readonly kind: "void-expression";
@@ -269,6 +274,14 @@ export type RustTargetOperationFact =
       };
     }
   | {
+      readonly kind: "source-indexed-field";
+      readonly operationId: string;
+      readonly receiverCarrier: TargetTypeRef;
+      readonly keyCarrier: TargetTypeRef;
+      readonly resultCarrier: Extract<TargetTypeRef, { readonly kind: "associated-type" }>;
+      readonly accessMode: "read" | "write" | "read-write";
+    }
+  | {
       readonly kind: "source-index-signature";
       readonly operationId: string;
       readonly receiverCarrier: TargetTypeRef;
@@ -293,6 +306,8 @@ export type RustTargetOperationFact =
     }
   | {
       readonly kind: "source-static-field";
+      readonly declaration: Node;
+      readonly classReceiver?: Node;
       readonly operationId: string;
       readonly storageFileName: string;
       readonly storageName: string;
@@ -356,6 +371,8 @@ export type RustTargetOperationFact =
             readonly form: "union-method";
             readonly receiverCarrier: TargetTypeRef;
             readonly variants: readonly (RustSelectedUnionMethodIdentity & {
+              readonly returnType: TargetTypeRef;
+              readonly resultConversion?: RustValueConversion;
               readonly mutatesSelf: boolean;
               readonly dispatchOwner?: TargetTypeRef;
             })[];
@@ -365,6 +382,7 @@ export type RustTargetOperationFact =
             readonly fileName: string;
             readonly name: string;
             readonly selectedTargetName: string;
+            readonly classReceiver?: Node;
           }
         | {
             readonly form: "method";
@@ -375,8 +393,9 @@ export type RustTargetOperationFact =
               readonly ownerCarrier: TargetTypeRef;
             };
           }
-        | { readonly form: "static-method"; readonly name: string; readonly typeCarrier: TargetTypeRef }
+        | { readonly form: "static-method"; readonly name: string; readonly typeCarrier: TargetTypeRef; readonly classReceiver?: Node }
         | { readonly form: "callable"; readonly carrier: TargetTypeRef }
+        | { readonly form: "constructor-value"; readonly receiverCarrier: TargetTypeRef; readonly callableCarrier: TargetTypeRef }
         | {
             readonly form: "structural-method";
             readonly receiverCarrier: TargetTypeRef;
@@ -387,6 +406,7 @@ export type RustTargetOperationFact =
             readonly form: "constructor";
             readonly name: string;
             readonly typeCarrier: TargetTypeRef;
+            readonly classReceiver?: Node;
           };
       readonly parameters: readonly RustSourceCallParameterPlan[];
       readonly targetGenericArguments?: readonly RustTargetGenericArgument[];
@@ -734,6 +754,7 @@ export function rustTargetOperationResultCarrier(fact: RustTargetOperationFact):
     case "void-expression":
     case "array-literal":
     case "source-field":
+    case "source-indexed-field":
     case "source-index-signature":
     case "source-method-property":
     case "source-static-field":

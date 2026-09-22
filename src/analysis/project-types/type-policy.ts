@@ -11,5 +11,5 @@ export type {
   RustProjectTypePolicyRegistry,
   RustProjectTypeRelationship,
 } from "../../policy/types/project-types.js";
-export { createRustProjectTypePolicyRegistry } from "./policy/registry.js";
-export { createRustProjectTypePolicy } from "./policy/resolution.js";
+export { createRustProjectTypePolicyRegistry } from "./catalog/registry.js";
+export { createRustProjectTypePolicy } from "./catalog/resolution.js";

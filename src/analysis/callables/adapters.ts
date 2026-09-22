@@ -2,7 +2,8 @@ import type { AstReader, Node } from "@tsonic/tsts";
 import type { RustPlanBuilder } from "../facts/plan-store.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustCallableParameterAbi, RustCallableParameterAdapter, RustCallableValueAdapter } from "../facts/callable-adapters.js";
-import { rustSourceCallableReturnFactKey, rustSourceParameterAbiFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
+import { rustSourceParameterAbiFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
+import { rustCallableInvocationResult } from "../facts/callable-results.js";
 import type { RustProjectTypeDefinition, RustProjectTypePolicy } from "../project-types/type-policy.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
@@ -35,9 +36,8 @@ export function sourceCallableReturnCarrier(
   callable: Node,
   substitutions: ReadonlyMap<string, TargetTypeRef>,
 ): TargetTypeRef | undefined {
-  const fact = input.facts.get(callable, rustSourceCallableReturnFactKey) ??
-    input.facts.resolve(callable, rustSourceCallableReturnFactKey);
-  const operation = fact === undefined
+  const retainedResult = rustCallableInvocationResult(input.facts, callable);
+  const operation = retainedResult === undefined
     ? input.facts.get(callable, rustTargetOperationFactKey) ??
       input.facts.resolve(callable, rustTargetOperationFactKey)
     : undefined;
@@ -46,7 +46,7 @@ export function sourceCallableReturnCarrier(
       rustCallableProtocol(operation.resultCarrier)?.result ??
       (operation.resultCarrier.kind === "function-pointer" ? operation.resultCarrier.result : undefined)
     : undefined;
-  const returnCarrier = fact?.returnCarrier ?? operationReturn;
+  const returnCarrier = retainedResult ?? operationReturn;
   return returnCarrier === undefined
     ? undefined
     : substituteRustTargetTypeParameters(returnCarrier, substitutions);
@@ -231,6 +231,7 @@ export function rustCallableValueAdapterIsFallible(adapter: RustCallableValueAda
     case "identity":
     case "call-scoped-lifetime":
     case "project-upcast":
+    case "project-structural-view":
       return false;
   }
 }

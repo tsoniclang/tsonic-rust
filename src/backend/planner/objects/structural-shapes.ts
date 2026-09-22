@@ -1,13 +1,11 @@
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustPlanningContext } from "../context.js";
-import { rustGenericsWithAssociatedBounds } from "../types/generic-bounds.js";
 import {
   createRustSourceFile,
 } from "../../target-ast/nodes.js";
 import type {
   RustItem,
   RustGenericArgument,
-  RustGenericParameter,
   RustGenerics,
   RustSourceFileModel,
   RustStructField,
@@ -35,12 +33,13 @@ import {
   rustStructuralPropertySetterStorageCarrier,
   rustStructuralPropertyValueCarrier,
   rustStructuralMethodStorageCarrier,
+  rustCallableProtocol,
 } from "../../../target-model/types/index.js";
 import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
 import { rustLifetimeToAst } from "../types/lifetime-syntax.js";
-import { rustAssociatedPredicates } from "../types/associated-bounds.js";
-import { rustGenericRequirementBounds } from "../types/generic-bounds.js";
+import { rustStructuralShapeGenerics } from "./structural-generics.js";
 import { planRustNumberArrayUnionImplementation } from "./number-array-unions.js";
+import { planRustConstructorShape } from "./constructor-shapes.js";
 
 export function planRustStructuralShapeModule(
   input: RustPlanningContext,
@@ -103,22 +102,7 @@ export function planRustStructuralShapeModule(
       definition.sourceCarriers,
       visibility === "public",
     );
-    const requirements = input.program.declarationGenericRequirements.contractForCarrier(definition.carrier);
-    if (requirements === undefined) throw new Error("A structural shape has no sealed generic requirements.");
-    const genericParameters: readonly RustGenericParameter[] = definition.genericParameters.map((parameter) =>
-      parameter.kind === "lifetime"
-        ? {
-            kind: "lifetime",
-            name: parameter.lifetime.name,
-            outlives: [],
-          }
-        : {
-            kind: "type",
-            name: parameter.name,
-            bounds: rustGenericRequirementBounds(requirements.typeParameters.find(candidate => candidate.name === parameter.name)!.requirements),
-          });
-    const generics: RustGenerics = rustGenericsWithAssociatedBounds(genericParameters,
-      rustAssociatedPredicates(requirements.associatedTypes, context));
+    const generics = rustStructuralShapeGenerics(definition, context);
     const aliasGenericArguments: readonly RustGenericArgument[] = definition.genericParameters.map((parameter) =>
       parameter.kind === "lifetime"
         ? { kind: "lifetime", lifetime: rustLifetimeToAst(parameter.lifetime) }
@@ -131,7 +115,43 @@ export function planRustStructuralShapeModule(
           : [])),
     };
     const callableAliases: RustItem[] = [];
+    if (definition.dispatchName !== undefined) {
+      const error = rustTypeFromCarrierInContext(rustProgramErrorTargetType(), definitionContext);
+      const type: RustType = { kind: "named", path: definition.targetName, genericArguments: aliasGenericArguments };
+      const bases = rustStructuralObjectCarrierValue(definition.carrier)?.bases;
+      if (bases === undefined) return undefined;
+      const superTraits = bases.map(carrier => {
+        const type = rustTypeFromCarrierInContext(carrier, definitionContext);
+        const project = input.program.projectTypes.definitionForCarrier(carrier);
+        return type?.kind !== "named" || project === undefined ? undefined : {
+          ...type, path: `${type.path.slice(0, type.path.lastIndexOf("::") + 2)}${project.dispatchName}`,
+        };
+      });
+      if (superTraits.some(type => type === undefined)) return undefined;
+      const planned = error === undefined ? undefined : planRustConstructorShape(definition, generics, type, visibility,
+        error, carrier => rustTypeFromCarrierInContext(carrier, definitionContext), superTraits as RustType[],
+        (index, role) => rustStructuralFieldDeadCodeDisposition(context, definition.sourceCarriers, index, visibility === "public", role));
+      if (planned === undefined) {
+        diagnostics.push({ code: "RUST_STRUCTURAL_CONSTRUCTOR_TYPE_MISSING", category: "error", source: "tsonic-rust",
+          message: "A constructor interface requires exact native dispatch signatures and property storage.",
+          evidence: ["target.capability=rust.class-value.constructor"] });
+        return undefined;
+      }
+      usedAliases.add("rt");
+      structs.push(...planned);
+      continue;
+    }
     const fields: RustStructField[] = [];
+    const nativeCallableType = (carrier: import("../../../target-model/types/model.js").TargetTypeRef): RustType | undefined => {
+      const protocol = rustCallableProtocol(carrier);
+      const parameters = protocol?.parameters.map(parameter => rustTypeFromCarrierInContext(parameter, definitionContext));
+      const result = protocol === undefined ? undefined : rustTypeFromCarrierInContext(protocol.result, definitionContext);
+      const error = rustTypeFromCarrierInContext(rustProgramErrorTargetType(), definitionContext);
+      return parameters === undefined || parameters.some(parameter => parameter === undefined) || result === undefined || error === undefined
+        ? undefined : { kind: "function-pointer", parameters: parameters as readonly RustType[], result: {
+          kind: "named", path: "Result", genericArguments: [{ kind: "type", type: result }, { kind: "type", type: error }],
+        } };
+    };
     for (const [storageIndex, field] of definition.fields.entries()) {
       const methodStorageCarrier = field.receiverIndependent === true ? field.carrier : field.method === true
         ? rustStructuralMethodStorageCarrier(
@@ -152,7 +172,8 @@ export function planRustStructuralShapeModule(
         });
         return undefined;
       }
-      const renderedStorageType = rustTypeFromCarrierInContext(storageCarrier, definitionContext);
+      const renderedStorageType = field.nativeMethod === true ? nativeCallableType(field.carrier)
+        : rustTypeFromCarrierInContext(storageCarrier, definitionContext);
       if (renderedStorageType === undefined) {
         diagnostics.push({
           code: "RUST_STRUCTURAL_SHAPE_FIELD_TYPE_MISSING",
@@ -168,7 +189,7 @@ export function planRustStructuralShapeModule(
           ? rustTypeFromCarrierInContext(rustProgramErrorTargetType(), definitionContext) : undefined;
         if (field.storage === "bound" && errorType === undefined) return undefined;
         if (field.storage === "bound") usedAliases.add("rt");
-        const type = field.method === true
+        const type = field.method === true && field.nativeMethod !== true
           ? structuralCallableAlias(
               callableAliases,
               `${definition.targetName}${rustPascalCaseIdentifier(field.sourceName)}Method`,
@@ -352,7 +373,10 @@ function structuralCallableAlias(
     kind: "type-alias",
     name,
     visibility,
-    generics,
+    generics: { parameters: generics.parameters.map(parameter => parameter.kind === "type"
+      ? { ...parameter, bounds: [] } : parameter.kind === "lifetime" ? { ...parameter, outlives: [] } : parameter),
+      wherePredicates: [],
+    },
     target,
   });
   return {

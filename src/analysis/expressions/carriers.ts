@@ -123,6 +123,9 @@ export function resolveExpressionCarrier(
   }
   walk.resolving.add(expression);
   try {
+    if (walk.context.ast.kindName(expression) === "KindClassExpression") {
+      return finalize(resolveRustClassValue(walk, expression, contextualExpected));
+    }
     if (existing !== undefined) {
       let operation = facts.get(expression, rustTargetOperationFactKey) ??
         walk.context.facts.resolve(expression, rustTargetOperationFactKey);
@@ -423,6 +426,13 @@ function resolveSelectedFlowReadCarrier(
     semantics.types.typeOfSymbol(access.selectedSymbol);
   if (declaredReadType !== undefined && semantics.types.isIdentical(declaredReadType, selectedType)) {
     return sourceCarrier;
+  }
+  const sourceUnion = walk.sourceTypes.sourceUnionForCarrier(sourceCarrier);
+  if (sourceUnion !== undefined) {
+    const selectedTypes = semantics.types.isUnion(selectedType)
+      ? semantics.types.unionOrIntersectionTypes(selectedType) : [selectedType];
+    const indexes = walk.sourceTypes.sourceUnionVariantIndexesForTypes(sourceCarrier, selectedTypes);
+    if (indexes?.length === 1) return sourceUnion.variants[indexes[0]!]!.carrier;
   }
   if (isRustJsValueCarrier(sourceCarrier)) {
     const carrier = resolveRustTargetTypeRef(
@@ -831,7 +841,7 @@ export function reconcileRequiredCarrier(
     walk.context.projectTypes, walk.context.typeDefinitions,
   );
   if (reconciliation.kind === "incompatible") {
-    return false;
+    return reconciliation.reason === "unrelated" && recordRustObjectReferenceView(walk, expression, sourceCarrier, targetCarrier);
   }
   if (reconciliation.kind === "call-scoped-lifetime" ||
     reconciliation.kind === "conversion" || reconciliation.kind === "project-upcast") {

@@ -26,9 +26,9 @@ import {
 import { isRustAssignmentOperator } from "../../../target-model/syntax/tokens.js";
 import { isRustCopyCarrier, isRustStringCarrier } from "../../../target-model/types/index.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
-import { planRustMutableProjectReceiver, planRustSharedReceiver, planRustPromotedStorageLocation } from "../expressions/typed-locations.js";
+import { planRustMutableProjectReceiver, planRustPromotedStorageLocation } from "../expressions/typed-locations.js";
 import { rustSelectedAccessorRequiresUnsafe } from "../safety/explicit-safety.js";
-import { rustSourceStaticFieldLocation } from "../declarations/static-field-storage.js";
+import { planRustSourceStaticFieldStorage } from "../declarations/static-field-storage.js";
 import { rustProjectObjectRepresentation } from "../objects/project-storage.js";
 import { rustStringConcat } from "../../target-ast/expressions.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -38,6 +38,7 @@ import type { RustAssignmentOperator, RustBinaryOperator } from "../../../target
 import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
+import { planRustSourceAccessorReceiver } from "../objects/accessor-receivers.js";
 
 export function planRustSourceMethodPropertyAssignment(
   left: Node,
@@ -159,14 +160,12 @@ export function planRustSourceStaticFieldAssignment(
     ));
     return undefined;
   }
-  const location = rustSourceStaticFieldLocation(field, context);
+  const storage = planRustSourceStaticFieldStorage(field, context);
   const value = planExpression(valueNode, context);
-  if (location === undefined || value === undefined || context.syntheticNames === undefined) {
+  if (storage === undefined || value === undefined || context.syntheticNames === undefined) {
     return undefined;
   }
-  const locationName = allocateRustSyntheticName(context.syntheticNames, "static_field_location");
   const valueName = allocateRustSyntheticName(context.syntheticNames, "static_field_value");
-  const locationPath: RustExpr = { kind: "path", path: locationName };
   const valuePath: RustExpr = { kind: "path", path: valueName };
   if (assignment.operator === "=") {
     return [{
@@ -174,15 +173,10 @@ export function planRustSourceStaticFieldAssignment(
       expr: {
         kind: "block",
         bindings: [
-          { name: locationName, value: location },
+          ...storage.bindings,
           { name: valueName, value },
         ],
-        value: {
-          kind: "method-call",
-          receiver: locationPath,
-          method: "store",
-          args: [valuePath],
-        },
+        value: storage.write(valuePath),
       },
     }];
   }
@@ -208,20 +202,15 @@ export function planRustSourceStaticFieldAssignment(
     expr: {
       kind: "block",
       bindings: [
-        { name: locationName, value: location },
+        ...storage.bindings,
         {
           name: currentName,
-          value: { kind: "method-call", receiver: locationPath, method: "load", args: [] },
+          value: storage.read,
         },
         { name: valueName, value },
         { name: nextName, value: nextValue },
       ],
-      value: {
-        kind: "method-call",
-        receiver: locationPath,
-        method: "store",
-        args: [{ kind: "path", path: nextName }],
-      },
+      value: storage.write({ kind: "path", path: nextName }),
     },
   }];
 }
@@ -427,22 +416,13 @@ export function planRustSourceAccessorAssignment(
     ));
     return undefined;
   }
-  const bindings: { name: string; value: RustExpr }[] = [];
+  const bindings: { name: string; value: RustExpr; mutable?: boolean }[] = [];
   let receiver: RustExpr | undefined;
   if (accessor.receiver.kind === "instance") {
-    const receiverNode = Node_Expression(context.input.program.source.ast, target);
-    const plannedReceiver = receiverNode === undefined
-      ? undefined
-      : planExpression(receiverNode, context);
-    if (receiverNode === undefined || plannedReceiver === undefined) {
-      return undefined;
-    }
-    const receiverName = allocateRustSyntheticName(context.syntheticNames, "accessor_receiver");
-    bindings.push({
-      name: receiverName,
-      value: planRustSharedReceiver(receiverNode, plannedReceiver, context),
-    });
-    receiver = { kind: "path", path: receiverName };
+    const evaluation = planRustSourceAccessorReceiver(target, [valueNode], context);
+    if (evaluation === undefined) return undefined;
+    bindings.push(...evaluation.bindings);
+    receiver = evaluation.receiver;
   }
   let current: RustExpr | undefined;
   if (read !== undefined) {

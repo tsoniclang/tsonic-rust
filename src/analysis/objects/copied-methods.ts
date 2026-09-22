@@ -32,7 +32,7 @@ export function finalizeRustCopiedMethods(
       }
     }
     const view = walk.context.facts.getFact(node, rustObjectReferenceViewKey);
-    if (view !== undefined) {
+    if (view?.kind === "structural") {
       const shape = rustStructuralObjectCarrierValue(view.targetCarrier);
       for (const field of view.fields) {
         if (shape?.fields[field.destinationIndex]?.method !== true) continue;
