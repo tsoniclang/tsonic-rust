@@ -52,9 +52,13 @@ export function rustLocalClassIssue(
       (ast.kindName(selectedMember) === "KindPropertyDeclaration" ||
         ast.kindName(selectedMember) === "KindMethodDeclaration" && call !== undefined &&
         ast.kindName(call) === "KindCallExpression" && Node_Expression(ast, call) === parent);
-    if (!staticMember && (parent === undefined || ast.kindName(parent) !== "KindNewExpression" ||
-      Node_Expression(ast, parent) !== expression)) {
-      return { node: use.reference, message: "Local class constructor identity must not escape direct construction." };
+    if (!staticMember && parent !== undefined && ast.kindName(parent) === "KindPropertyAccessExpression" &&
+      selectedMember !== undefined && ast.kindName(selectedMember) === "KindMethodDeclaration") {
+      return { node: use.reference, message: "An extracted local static method requires its selected class environment as a callable capture." };
+    }
+    if (parent !== undefined && ast.kindName(parent) === "KindBinaryExpression" &&
+      ast.kindName(ast.as.AsBinaryExpression(parent)?.OperatorToken) === "KindInstanceOfKeyword") {
+      return { node: use.reference, message: "Local instanceof requires per-evaluation constructor identity on the selected instance." };
     }
     if (!inside(use.reference, declaration, ast) && ast.pos(use.reference) < ast.end(declaration)) {
       return { node: use.reference, message: "Local class construction is not proved to follow class evaluation." };

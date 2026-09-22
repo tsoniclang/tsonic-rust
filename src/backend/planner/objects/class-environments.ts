@@ -3,11 +3,10 @@ import { Node_Initializer } from "@tsonic/target-api/source";
 import type { RustClassValueDefinition } from "../../../analysis/objects/class-values.js";
 import { rustSourceBindingFactKey } from "../../../analysis/facts/keys.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { rustSourceBindingPath, sourceModuleItemPath } from "../program/plan-context.js";
-import { emptyRustGenerics, type RustExpr, type RustFunctionParam, type RustItem, type RustStructField, type RustType } from "../../target-ast/nodes.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { isRustCopyCarrier, rustLocationTargetType, rustSourceTypeCarrierValue } from "../../../target-model/types/index.js";
-import { rustTargetGenericArgumentToAstInContext, rustTypeFromCarrierInContext } from "../types/render.js";
+import { rustSourceBindingPath, sourceModuleItemPath, rustSourceItemIsPubliclyReachable } from "../program/plan-context.js";
+import { emptyRustGenerics, type RustExpr, type RustFunctionParam, type RustItem, type RustStructField } from "../../target-ast/nodes.js";
+import { isRustCopyCarrier, rustLocationTargetType } from "../../../target-model/types/index.js";
+import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustProjectGenerics, rustProjectStateMarker } from "./polymorphism/names.js";
 import { planExpression } from "../expressions/index.js";
 import { planRustCaptureValue } from "../expressions/typed-locations.js";
@@ -15,32 +14,10 @@ import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { rustSelfParameter } from "../declarations/self-parameter.js";
 import { rustModuleCellAccess } from "../project/module-storage.js";
 import { rustProjectObjectIdentityImplementation } from "./project-identity.js";
+import { rustClassEnvironmentType, rustClassEnvironmentHandleType } from "./class-environment-types.js";
+import { rustProjectImplementationVisibility, rustProjectMemberStorageVisibility } from "./project-storage-abi.js";
 
 type Environment = NonNullable<RustClassValueDefinition["environment"]>;
-
-export function rustClassEnvironmentType(
-  carrier: TargetTypeRef,
-  context: RustPlanContext,
-): RustType | undefined {
-  const definition = context.input.program.projectTypes.definitionForCarrier(carrier);
-  const environment = definition === undefined ? undefined
-    : context.input.program.classValues.forDeclaration(definition.declaration)?.environment;
-  const selected = rustSourceTypeCarrierValue(carrier);
-  const path = definition === undefined || environment === undefined ? undefined
-    : sourceModuleItemPath(context, definition.fileName, environment.typeName);
-  const arguments_ = selected?.genericArguments.map(argument => rustTargetGenericArgumentToAstInContext(argument, context));
-  if (path === undefined || arguments_ === undefined || arguments_.some(argument => argument === undefined)) return undefined;
-  return { kind: "named", path, genericArguments: arguments_ as NonNullable<typeof arguments_[number]>[] };
-}
-
-export function rustClassEnvironmentHandleType(carrier: TargetTypeRef, context: RustPlanContext): RustType | undefined {
-  const type = rustClassEnvironmentType(carrier, context);
-  const definition = context.input.program.projectTypes.definitionForCarrier(carrier);
-  if (definition !== undefined && context.input.program.classValues.forDeclaration(definition.declaration)?.environment?.storage === "value") return type;
-  return type === undefined ? undefined : {
-    kind: "named", path: "alloc::rc::Rc", genericArguments: [{ kind: "type", type }],
-  };
-}
 
 export function planRustClassEnvironmentItems(declaration: Node, context: RustPlanContext): readonly RustItem[] | undefined {
   const environment = context.input.program.classValues.forDeclaration(declaration)?.environment;
@@ -48,6 +25,7 @@ export function planRustClassEnvironmentItems(declaration: Node, context: RustPl
   const definition = context.input.program.projectTypes.definitionForDeclaration(declaration);
   if (definition === undefined) return undefined;
   const fields: RustStructField[] = [];
+  const publiclyReachable = rustSourceItemIsPubliclyReachable(context, environment.typeName);
   if (environment.constructorValue) {
     context.usedAliases?.add("rt");
     fields.push({ name: environment.identityFieldName, visibility: "crate", type: { kind: "named", path: "rt::ObjectIdentity" } });
@@ -61,13 +39,14 @@ export function planRustClassEnvironmentItems(declaration: Node, context: RustPl
   for (const field of environment.staticFields) {
     const type = rustTypeFromCarrierInContext(field.carrier, context);
     if (type === undefined) return undefined;
-    fields.push({ name: field.fieldName, visibility: "private", type: field.readonly ? type : {
+    fields.push({ name: field.fieldName, visibility: rustProjectMemberStorageVisibility(context.input.program.source.ast,
+      field.declaration, publiclyReachable), type: field.readonly ? type : {
       kind: "named", path: "core::cell::RefCell", genericArguments: [{ kind: "type", type }],
     } });
   }
-  const marker = rustProjectStateMarker(definition, context);
+  const marker = rustProjectStateMarker(definition, context, environment.genericParameterIndexes);
   if (marker !== undefined) fields.push({ name: marker.name, type: marker.type, visibility: "private" });
-  const generics = rustProjectGenerics(definition, context);
+  const generics = rustProjectGenerics(definition, context, environment.genericParameterIndexes);
   const manualClone = environment.storage === "value" && (generics.parameters.length > 0 || !environment.copy);
   const target = manualClone ? rustClassEnvironmentType(environment.carrier, context) : undefined;
   if (manualClone && target === undefined) return undefined;
@@ -79,7 +58,7 @@ export function planRustClassEnvironmentItems(declaration: Node, context: RustPl
       : { kind: "method-call" as const, receiver: value, method: "clone", args: [] } };
   });
   if (marker !== undefined) clonedFields.push({ name: marker.name, value: marker.value });
-  return [{ kind: "struct", name: environment.typeName, visibility: "crate",
+  return [{ kind: "struct", name: environment.typeName, visibility: rustProjectImplementationVisibility(publiclyReachable),
     derives: environment.storage === "value" && !manualClone ? ["Clone", "Copy"] : [], generics, fields },
     ...(identityOwner === undefined ? [] : [rustProjectObjectIdentityImplementation(
       identityOwner, generics,
@@ -129,7 +108,7 @@ export function planRustClassEnvironmentValue(declaration: Node, context: RustPl
   }
   const definition = context.input.program.projectTypes.definitionForDeclaration(declaration);
   if (definition === undefined) return undefined;
-  const marker = rustProjectStateMarker(definition, context);
+  const marker = rustProjectStateMarker(definition, context, environment.genericParameterIndexes);
   if (marker !== undefined) fields.push({ name: marker.name, value: marker.value });
   const value: RustExpr = { kind: "struct-literal", path: type.path, fields };
   return { kind: "block", bindings, value: environment.storage === "value" ? value

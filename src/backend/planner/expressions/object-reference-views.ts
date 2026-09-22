@@ -1,4 +1,5 @@
 import type { RustObjectReferenceView } from "../../../analysis/facts/object-reference-views.js";
+import { rustClassConstructorInstance } from "../../../target-model/types/carriers/class-constructors.js";
 import type { RustExpr } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustCurrentErrorBoundary } from "../program/plan-context.js";
@@ -17,6 +18,12 @@ export function planRustObjectReferenceView(
   node: Node, value: RustExpr, fact: RustObjectReferenceView, context: RustPlanContext,
 ): RustExpr | undefined {
   if (fact.kind === "project") return planRustProjectStructuralConversion(value, fact.sourceCarrier, fact.targetCarrier, context);
+  if (fact.kind === "constructor") {
+    const instance = rustClassConstructorInstance(fact.sourceCarrier);
+    const view = instance === undefined ? undefined : context.input.program.classValues.viewFor(fact.declaration, instance, fact.targetCarrier);
+    const type = view === undefined ? undefined : rustTypeFromCarrierInContext(fact.targetCarrier, context);
+    return type?.kind !== "named" ? undefined : { kind: "struct-literal", path: type.path, fields: [{ name: "dispatch", value }] };
+  }
   const shape = context.input.program.structuralShapes.definitionForCarrier(fact.targetCarrier);
   const boundary = rustCurrentErrorBoundary(context);
   if (shape === undefined || shape.fields.length !== fact.fields.length || boundary === undefined ||

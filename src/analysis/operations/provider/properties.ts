@@ -32,6 +32,7 @@ import type { Node, ResolvedSourcePropertyAccessInfo } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { selectRustNumberArrayUnionMember } from "./number-array-unions.js";
+import { rustClassConstructorInstance } from "../../../target-model/types/carriers/class-constructors.js";
 
 export function checkedPropertySelectionInput(
   context: RustOperationPolicyContext,
@@ -367,7 +368,9 @@ export function selectRustCheckedPropertyAccess(
     );
     if (storage !== undefined) {
       const owner = options.projectTypes.definitionContainingDeclaration(declaration);
-      if (owner?.kind !== "class" || request.sourceReceiverValueDeclaration !== owner.declaration) {
+      const direct = request.sourceReceiverValueDeclaration === owner?.declaration;
+      const constructor = direct ? undefined : rustClassConstructorInstance(resolveRustTargetTypeRef(request.receiver, context, options));
+      if (owner?.kind !== "class" || !direct && (constructor === undefined || options.projectTypes.definitionForCarrier(constructor) !== owner)) {
         return rejectSelectedOperation(
           request.expression,
           context,
@@ -390,6 +393,7 @@ export function selectRustCheckedPropertyAccess(
       return acceptRustMemberOperation(request, "property", {
         kind: "source-static-field",
         declaration,
+        ...(!direct ? { classReceiver: request.receiver } : {}),
         operationId,
         storageFileName: storage.fileName,
         storageName: storage.targetName,

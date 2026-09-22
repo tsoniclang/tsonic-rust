@@ -50,6 +50,7 @@ import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js
 import { planRustUnionMethodCall } from "./union-methods.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../../../target-model/types/carriers/generic-callables.js";
 import { rustGenericCallableEffectsFactKey } from "../../../../analysis/facts/generic-callable-effects.js";
+import { allocateRustSyntheticName } from "../../names/synthetic.js";
 
 export function sourceCallEffectsMatch(
   fact: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>,
@@ -184,6 +185,16 @@ export function planSelectedSourceCall(
     ? undefined
     : targetAstGenericArguments as readonly RustCallGenericArgument[];
 
+  const classReceiver = "classReceiver" in fact.target ? fact.target.classReceiver : undefined;
+  const classBindings: { name: string; value: RustExpr }[] = [];
+  let retainedClass: RustExpr | undefined;
+  if (classReceiver !== undefined) {
+    const value = planExpression(classReceiver, context);
+    if (value === undefined || context.syntheticNames === undefined) return undefined;
+    const name = allocateRustSyntheticName(context.syntheticNames, "class_receiver");
+    classBindings.push({ name, value });
+    retainedClass = { kind: "path", path: name };
+  }
   let planned: RustExpr | undefined;
   switch (fact.target.form) {
     case "constructor-value": {
@@ -205,7 +216,8 @@ export function planSelectedSourceCall(
       if (path === undefined || !isValidRustIdentifier(targetName)) {
         break;
       }
-      const environment = rustClassStaticEnvironmentForCall(selected.sourceDeclaration, context);
+      const selectedEnvironment = rustClassStaticEnvironmentForCall(selected.sourceDeclaration, context);
+      const environment = selectedEnvironment === undefined ? undefined : retainedClass ?? selectedEnvironment;
       planned = {
         kind: "call",
         path,
@@ -314,7 +326,8 @@ export function planSelectedSourceCall(
       const typePath = value === undefined ? undefined : sourceTypePath(context, value);
       const targetName = callableSpecialization?.targetName ?? fact.target.name;
       if (typePath !== undefined && isValidRustIdentifier(targetName)) {
-        const environment = rustClassStaticEnvironmentForCall(selected.sourceDeclaration, context);
+        const selectedEnvironment = rustClassStaticEnvironmentForCall(selected.sourceDeclaration, context);
+        const environment = selectedEnvironment === undefined ? undefined : retainedClass ?? selectedEnvironment;
         planned = {
           kind: "call",
           path: `${typePath}::${targetName}`,
@@ -329,7 +342,8 @@ export function planSelectedSourceCall(
       const targetName = fact.target.name;
       if (owner !== undefined && isValidRustIdentifier(targetName)) {
         const definition = context.input.program.projectTypes.definitionForCarrier(fact.target.typeCarrier);
-        const environment = definition === undefined ? undefined : rustOwnedClassEnvironmentForCall(definition.declaration, context);
+        const selectedEnvironment = definition === undefined ? undefined : rustOwnedClassEnvironmentForCall(definition.declaration, context);
+        const environment = selectedEnvironment === undefined ? undefined : retainedClass ?? selectedEnvironment;
         planned = {
           kind: "associated-call",
           owner,
@@ -402,6 +416,7 @@ export function planSelectedSourceCall(
     ));
     return undefined;
   }
+  if (classBindings.length > 0) planned = { kind: "block", bindings: classBindings, value: planned };
   const effects = context.input.program.facts.getFact(node, rustSourceCallEffectsFactKey);
   if (effects === undefined) {
     context.diagnostics.push(missingFactDiagnostic(

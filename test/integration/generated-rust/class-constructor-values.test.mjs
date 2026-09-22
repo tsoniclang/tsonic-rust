@@ -51,3 +51,112 @@ export function view(): { read: () => number } { return Factory; }
     /class.*value|constructor.*view/i.test(diagnostic.message)));
   assert.equal(result.artifacts.length, 0);
 });
+
+test("inferred constructor aliases retain the selected evaluation across calls and argument effects", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: ["js"],
+    target: { id: "rust", options: { outputType: "bin", crateName: "inferred_constructor_values" } },
+    files: { "index.ts": `
+function factory(seed: number) {
+  class Entry {
+    static count = seed;
+    value: number;
+    constructor(value: number) { Entry.count++; this.value = seed + value; }
+    read(): number { return this.value + seed; }
+    static read(): number { return Entry.count; }
+  }
+  return Entry;
+}
+export function main(): void {
+  const first = factory(3);
+  const alias = first;
+  const second = factory(8);
+  if (alias !== first || first === second) throw new Error("class identity");
+  let chosen = first;
+  function argument(): number { chosen = second; return 2; }
+  const value = new chosen(argument());
+  if (value.read() !== 8 || first.count !== 4 || second.count !== 8) throw new Error("receiver order");
+  alias.count += 2;
+  if (first.read() !== 6 || chosen.read() !== 8) throw new Error("live static storage");
+  const fresh = new (factory(20))(1);
+  if (fresh.read() !== 41) throw new Error("fresh receiver");
+  class Empty {}
+  const EmptyAlias = Empty;
+  const empty = new EmptyAlias();
+  if (empty !== empty) throw new Error("empty alias");
+}
+` } });
+  assert.deepEqual(result.diagnostics, []);
+  validateGeneratedProject("inferred-constructor-values", result.artifacts, { run: true });
+});
+
+test("generic constructor binders are independent of captured outer class arguments", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: ["js"],
+    target: { id: "rust", options: { outputType: "bin", crateName: "generic_constructor_binders" } },
+    files: { "index.ts": `
+function outer<Seed>(seed: Seed) {
+  return class Box<Item> {
+    readonly seed = seed;
+    item: Item;
+    constructor(item: Item) { this.item = item; }
+    read(): Item { return this.item; }
+  };
+}
+export function main(): void {
+  const TextBox = outer("native");
+  const Alias = TextBox;
+  const number = new Alias<number>(7);
+  const text = new TextBox<string>("value");
+  if (number.seed !== "native" || number.read() !== 7 || text.read() !== "value") throw new Error("binder");
+  number.item = 9;
+  if (number.read() !== 9 || text.seed !== "native") throw new Error("storage");
+}
+` } });
+  assert.deepEqual(result.diagnostics, []);
+  validateGeneratedProject("generic-constructor-binders", result.artifacts, { run: true });
+});
+
+test("native constructor and static views compose across forward-only package boundaries", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: ["js"],
+    target: { id: "rust", options: { outputType: "bin", crateName: "constructor_package_views" } },
+    sourcePackages: {
+      fingerprint: "constructor-package-views", rootPackageId: "app",
+      packages: [
+        { id: "model", name: "model", packageRoot: "/src/model", sourceRoot: "/src",
+          sourceFiles: ["/src/model.ts"], dependencies: [], componentId: "model",
+          exports: [{ specifier: "model", sourceFile: "/src/model.ts" }] },
+        { id: "app", name: "app", packageRoot: "/src", sourceRoot: "/src",
+          sourceFiles: ["/src/index.ts"], dependencies: ["model"], componentId: "app",
+          exports: [{ specifier: "app", sourceFile: "/src/index.ts" }] },
+      ],
+      components: [ { id: "model", packages: ["model"], dependencies: [] },
+        { id: "app", packages: ["app"], dependencies: ["model"] } ],
+    },
+    files: {
+      "model.ts": `
+export function factory(seed: number) {
+  return class Entry {
+    static count = seed;
+    value: number;
+    constructor(value: number) { this.value = value + seed; }
+    static read(): number { return Entry.count; }
+  };
+}
+`,
+      "index.ts": `
+import { factory } from "./model.js";
+interface Constructor { new(value: number): { value: number }; count: number; read(): number; }
+export function main(): void {
+  const native = factory(4);
+  const view: Constructor = native;
+  const repeated: Constructor = native;
+  if (view !== repeated || view.read() !== 4) throw new Error("identity");
+  view.count = 8;
+  if (native.count !== 8 || repeated.read() !== 8) throw new Error("statics");
+  const value = new view(3);
+  if (value.value !== 7) throw new Error("construct");
+}
+`,
+    } });
+  assert.deepEqual(result.diagnostics, []);
+  validateGeneratedProject("constructor-package-views", result.artifacts, { run: true });
+});

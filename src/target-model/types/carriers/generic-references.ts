@@ -8,7 +8,7 @@ import {
   rustStructuralObjectCarrierValue,
 } from "./source-types.js";
 import { rustGenericCallableValue } from "./generic-callables.js";
-import { rustClassConstructorInstance } from "./class-constructors.js";
+import { rustClassConstructorFreeArguments } from "./class-constructors.js";
 import type {
   RustTargetConstArgument,
   RustTargetGenericArgument,
@@ -71,8 +71,8 @@ export function visitRustTargetTypeParameters(
         (type.trait !== undefined && visitRustTargetTypeParameters(type.trait, visit)) ||
         visitGenericArgumentTypes(type.genericArguments, visit);
     case "target-specific": {
-      const instance = rustClassConstructorInstance(type);
-      if (instance !== undefined) return visitRustTargetTypeParameters(instance, visit);
+      const constructorArguments = rustClassConstructorFreeArguments(type);
+      if (constructorArguments !== undefined) return visitGenericArgumentTypes(constructorArguments, visit);
       const callable = rustGenericCallableValue(type);
       if (callable !== undefined) return callable.environment.some(argument => visitRustTargetTypeParameters(argument, visit));
       const sourceType = rustSourceTypeCarrierValue(type);
@@ -268,9 +268,9 @@ export function rustTargetGenericReferences(
         visitArguments(value.genericArguments, bound);
         return;
       case "target-specific": {
-        const instance = rustClassConstructorInstance(value);
-        if (instance !== undefined) {
-          visitType(instance, bound);
+        const constructorArguments = rustClassConstructorFreeArguments(value);
+        if (constructorArguments !== undefined) {
+          visitArguments(constructorArguments, bound);
           return;
         }
         const callable = rustGenericCallableValue(value);

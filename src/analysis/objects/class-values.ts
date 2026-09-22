@@ -1,5 +1,5 @@
-import type { Node, SourceFile } from "@tsonic/tsts";
-import { Node_Type } from "@tsonic/target-api/source";
+import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
+import { Node_Expression, Node_Type } from "@tsonic/target-api/source";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 import { closedMetadataKey, closedMetadataEquals, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
@@ -17,9 +17,11 @@ import { rustProjectStaticFieldStorage, type RustProjectStaticFieldStorage } fro
 import { selectRustClassValueCallable, type RustClassValueCallable } from "./class-value-callables.js";
 import type { RustProjectStructuralView, RustProjectStructuralViewImplementation } from "./project-structural-views.js";
 import { selectRustStructuralViewImplementations } from "./project-structural-views.js";
+import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
 
 export interface RustClassValueView {
   readonly declaration: Node;
+  readonly sourceCarrier: TargetTypeRef;
   readonly carrier: TargetTypeRef;
   readonly fields: readonly (RustProjectStaticFieldStorage & {
     readonly storageIndex: number;
@@ -31,7 +33,6 @@ export interface RustClassValueView {
 
 export interface RustClassValueDefinition {
   readonly declaration: Node;
-  readonly identityName: string;
   readonly environment?: RustClassEnvironment & {
     readonly typeName: string;
     readonly instanceFieldName: string;
@@ -39,21 +40,22 @@ export interface RustClassValueDefinition {
     readonly parameterName: string;
     readonly identityFieldName: string;
   };
-  readonly views: readonly (RustClassValueView & {
-    readonly storageName: string;
-  })[];
+  readonly views: readonly RustClassValueView[];
 }
 
 export interface RustClassValuePlan {
+  readonly constructorViewImplementations: readonly (RustClassValueView & { readonly ownerFileName: string })[];
   readonly instanceViews: readonly RustProjectStructuralView[];
   readonly instanceViewImplementations: readonly RustProjectStructuralViewImplementation[];
   forDeclaration(declaration: Node): RustClassValueDefinition | undefined;
-  viewFor(declaration: Node, carrier: TargetTypeRef): RustClassValueDefinition["views"][number] | undefined;
+  forCarrier(carrier: TargetTypeRef): RustClassValueDefinition | undefined;
+  viewFor(declaration: Node, sourceCarrier: TargetTypeRef, carrier: TargetTypeRef): RustClassValueDefinition["views"][number] | undefined;
 }
 
 export interface RustClassValueRegistry {
   recordInstanceView(view: RustProjectStructuralView): boolean;
-  hasConstructorView(declaration: Node): boolean;
+  hasConstructorValue(declaration: Node): boolean;
+  recordConstructorValue(declaration: Node): void;
   record(view: RustClassValueView): boolean;
   recordEnvironment(environment: RustClassEnvironment): boolean;
   seal(context: RustAnalysisContext): RustClassValuePlan;
@@ -62,6 +64,7 @@ export interface RustClassValueRegistry {
 export function createRustClassValueRegistry(): RustClassValueRegistry {
   const requests = new Map<Node, Map<string, RustClassValueView>>();
   const environments = new Map<Node, RustClassEnvironment>();
+  const constructors = new Set<Node>();
   const instanceViews: RustProjectStructuralView[] = [];
   let sealed = false;
   return {
@@ -79,8 +82,12 @@ export function createRustClassValueRegistry(): RustClassValueRegistry {
         fields: Object.freeze(view.fields.map(field => Object.freeze({ ...field }))) }));
       return true;
     },
-    hasConstructorView(declaration) {
-      return [...(requests.get(declaration)?.values() ?? [])].some(view => view.construction !== undefined);
+    hasConstructorValue(declaration) {
+      return constructors.has(declaration) || (requests.get(declaration)?.size ?? 0) > 0;
+    },
+    recordConstructorValue(declaration) {
+      if (sealed) throw new Error("Rust constructor values cannot change after sealing.");
+      constructors.add(declaration);
     },
     recordEnvironment(environment) {
       if (sealed) throw new Error("Rust class environments cannot change after sealing.");
@@ -92,6 +99,7 @@ export function createRustClassValueRegistry(): RustClassValueRegistry {
         ![environment.carrier, ...environment.captures.map(capture => capture.carrier),
           ...environment.staticFields.map(field => field.carrier)].every(isRustTargetTypeRef)) return false;
       environments.set(environment.declaration, Object.freeze({ ...environment, carrier: snapshotClosedMetadata(environment.carrier),
+        genericParameterIndexes: Object.freeze([...environment.genericParameterIndexes]),
         consumers: Object.freeze([...environment.consumers]),
         captures: Object.freeze(environment.captures.map(capture => Object.freeze({ ...capture, carrier: snapshotClosedMetadata(capture.carrier) }))),
         staticFields: Object.freeze(environment.staticFields.map(field => Object.freeze({ ...field, carrier: snapshotClosedMetadata(field.carrier) }))),
@@ -101,14 +109,15 @@ export function createRustClassValueRegistry(): RustClassValueRegistry {
     record(view) {
       if (sealed) throw new Error("Rust constructor views cannot change after sealing.");
       const views = requests.get(view.declaration) ?? new Map<string, RustClassValueView>();
-      const key = closedMetadataKey(view.carrier);
+      const key = closedMetadataKey([view.sourceCarrier, view.carrier]);
       const existing = views.get(key);
       if (existing !== undefined) return existing.fields.length === view.fields.length &&
         classValueCallablesEqual(existing.construction, view.construction) &&
         existing.fields.every((field, index) => field.declaration === view.fields[index]?.declaration &&
           field.storageIndex === view.fields[index]?.storageIndex && field.writable === view.fields[index]?.writable &&
           classValueCallablesEqual(field.callable, view.fields[index]?.callable));
-      views.set(key, Object.freeze({ ...view, fields: Object.freeze(view.fields.map(field => Object.freeze({ ...field }))) }));
+      views.set(key, Object.freeze({ ...view, sourceCarrier: snapshotClosedMetadata(view.sourceCarrier),
+        fields: Object.freeze(view.fields.map(field => Object.freeze({ ...field }))) }));
       requests.set(view.declaration, views);
       return true;
     },
@@ -153,7 +162,7 @@ export function createRustClassValueRegistry(): RustClassValueRegistry {
       };
       for (const declaration of new Set([...requests.keys(), ...environments.keys()])) {
         const views = [...(requests.get(declaration)?.entries() ?? [])].sort(([left], [right]) => left.localeCompare(right))
-          .map(([, view]) => Object.freeze({ ...view, storageName: allocate(declaration, "constructor_view") }));
+          .map(([, view]) => view);
         const environment = environments.get(declaration);
         const definition = context.projectTypes.definitionForDeclaration(declaration);
         const fields = new Set<string>();
@@ -168,7 +177,7 @@ export function createRustClassValueRegistry(): RustClassValueRegistry {
           }
         }
         byDeclaration.set(declaration, Object.freeze({
-          declaration, identityName: allocate(declaration, "constructor_identity"), views: Object.freeze(views),
+          declaration, views: Object.freeze(views),
           ...(environment === undefined ? {} : { environment: Object.freeze({ ...environment,
             typeName: allocate(declaration, "Class", "type"),
             instanceFieldName: allocateRustGeneratedName(fields, "class_environment"),
@@ -180,11 +189,22 @@ export function createRustClassValueRegistry(): RustClassValueRegistry {
         }));
       }
       return Object.freeze({
+        constructorViewImplementations: Object.freeze([...byDeclaration.values()].flatMap(definition => definition.views.map(view => {
+          const sourceFile = ast.getFileName(ast.getSourceFile(view.declaration));
+          const targetFile = rustStructuralObjectCarrierValue(view.carrier)?.ownerFileName;
+          if (targetFile === undefined) throw new Error("A constructor view lost its exact source package owner.");
+          const component = (file: string): string | undefined => context.sourcePackages.packages.find(entry => entry.sourceFiles.includes(file))?.componentId;
+          return Object.freeze({ ...view, ownerFileName: component(sourceFile) === component(targetFile) ? sourceFile : targetFile });
+        }))),
         instanceViews: Object.freeze([...instanceViews]),
         instanceViewImplementations: selectRustStructuralViewImplementations(instanceViews, context),
         forDeclaration: (declaration: Node) => byDeclaration.get(declaration),
-        viewFor(declaration: Node, carrier: TargetTypeRef) {
-          return byDeclaration.get(declaration)?.views.find(view => rustTargetTypeRefEquals(view.carrier, carrier));
+        forCarrier(carrier: TargetTypeRef) {
+          const definition = context.projectTypes.definitionForCarrier(carrier);
+          return definition === undefined ? undefined : byDeclaration.get(definition.declaration);
+        },
+        viewFor(declaration: Node, sourceCarrier: TargetTypeRef, carrier: TargetTypeRef) {
+          return byDeclaration.get(declaration)?.views.find(view => rustTargetTypeRefEquals(view.sourceCarrier, sourceCarrier) && rustTargetTypeRefEquals(view.carrier, carrier));
         },
       });
     },
@@ -210,10 +230,50 @@ export function resolveRustClassValue(
   const carrier = expected ?? (destinationType === undefined ? undefined : resolveRustTargetTypeRef(
     destinationType, rustResolutionContext(walk, expression), walk.operationOptions));
   const shape = carrier === undefined ? undefined : walk.sourceTypes.structuralObjectForCarrier(carrier);
-  if (sourceType === undefined || destinationType === undefined || carrier === undefined || shape === undefined) return undefined;
+  if (sourceType === undefined) return undefined;
+  const native = resolveRustTargetTypeRef(sourceType, rustResolutionContext(walk, expression), walk.operationOptions);
+  const instance = rustClassConstructorInstance(native);
+  if (native === undefined || instance === undefined || walk.context.projectTypes.definitionForCarrier(instance)?.declaration !== declaration) return undefined;
+  if (shape === undefined) {
+    if (!ast.is.IsClassExpression(expression) && isClassDeclarationQualifier(expression, ast)) {
+      return setCarrierFact(walk, expression, native);
+    }
+    walk.context.classValues.recordConstructorValue(declaration);
+    walk.context.facts.set(expression, rustClassValueFactKey, { declaration, sourceCarrier: instance, carrier: native });
+    return setCarrierFact(walk, expression, native);
+  }
+  if (carrier === undefined || !selectRustClassValueView(walk, expression, declaration, carrier)) return undefined;
+  walk.context.facts.set(expression, rustClassValueFactKey, { declaration, sourceCarrier: instance, carrier });
+  return setCarrierFact(walk, expression, carrier);
+}
+
+function isClassDeclarationQualifier(expression: Node, ast: AstReader): boolean {
+  let current = expression;
+  for (;;) {
+    const parent = ast.parent(current);
+    if (parent === undefined || Node_Expression(ast, parent) !== current) return false;
+    if (ast.is.IsParenthesizedExpression(parent)) {
+      current = parent;
+      continue;
+    }
+    return ast.is.IsNewExpression(parent) || ast.is.IsPropertyAccessExpression(parent) || ast.is.IsElementAccessExpression(parent);
+  }
+}
+
+export function selectRustClassValueView(
+  walk: RustFactWalk, expression: Node, declaration: Node, carrier: TargetTypeRef,
+): boolean {
+  const { ast } = walk.context;
+  const semantics = walk.context.semanticsFor(expression);
+  const sourceType = semantics.types.expressionType(expression);
+  const sourceCarrier = sourceType === undefined ? undefined : rustClassConstructorInstance(resolveRustTargetTypeRef(
+    sourceType, rustResolutionContext(walk, expression), walk.operationOptions));
+  const shape = walk.sourceTypes.structuralObjectForCarrier(carrier);
+  const destinationType = shape?.sourceType;
+  if (shape === undefined || sourceType === undefined || sourceCarrier === undefined || destinationType === undefined) return false;
   const reject = (): undefined => {
     appendRustDiagnostic(walk, "RUST_CLASS_VALUE_NOT_CLOSED",
-      "Class constructor values require exact same-component construct/static-member correspondence and closed structural storage.",
+      "Class constructor values require exact construct/static-member correspondence and closed structural storage.",
       expression, ["target.capability=rust.class-value.static-storage"]);
     return undefined;
   };
@@ -221,46 +281,45 @@ export function resolveRustClassValue(
   const component = (file: string) => walk.context.sourcePackages.packages.find(entry => entry.sourceFiles.includes(file))?.componentId;
   const declarationFile = ast.getSourceFile(declaration);
   if (shape.storage !== "structural-object" || owner === undefined ||
-    component(owner) === undefined || component(owner) !== component(ast.getFileName(declarationFile))) return reject();
+    component(owner) === undefined || component(ast.getFileName(declarationFile)) === undefined) { reject(); return false; }
   const correspondence = semantics.types.structuralMembers(sourceType, destinationType);
   if (correspondence.kind !== "available" || correspondence.destination.calls.length !== 0 ||
     correspondence.destination.constructs.length !== (shape.construction === undefined ? 0 : 1) || correspondence.destination.indexes.length !== 0 ||
-    correspondence.members.length !== shape.fields.length) return reject();
+    correspondence.members.length !== shape.fields.length) { reject(); return false; }
   const construction = shape.construction === undefined || correspondence.source.constructs.length !== 1
     ? undefined : selectRustClassValueCallable(walk, declaration, correspondence.source.constructs[0]!,
-      correspondence.destination.constructs[0]!, shape.construction.carrier, true, semantics);
-  if (shape.construction !== undefined && construction === undefined) return reject();
+      correspondence.destination.constructs[0]!, shape.construction.carrier, true, semantics, false, sourceCarrier);
+  if (shape.construction !== undefined && construction === undefined) { reject(); return false; }
   const fields: RustClassValueView["fields"][number][] = [];
   for (const field of shape.fields) {
     const pair = correspondence.members.find(pair => field.symbols.includes(pair.destination.property.symbol));
     if (pair?.kind !== "present" ||
-      field.presence !== "required" || pair.source.declarations.length !== 1) return reject();
+      field.presence !== "required" || pair.source.declarations.length !== 1) { reject(); return false; }
     const sourceDeclaration = pair.source.declarations[0]!;
-    if (ast.parent(sourceDeclaration) !== declaration) return reject();
+    if (ast.parent(sourceDeclaration) !== declaration) { reject(); return false; }
     if (field.method === true && pair.source.read === "method") {
-      if (shape.construction === undefined) return reject();
       const sourceSignatures = semantics.types.callSignatures(pair.source.property.type);
       const targetSignatures = semantics.types.callSignatures(pair.destination.property.type);
       const callable = sourceSignatures.length === 1 && targetSignatures.length === 1
-        ? selectRustClassValueCallable(walk, declaration, sourceSignatures[0]!, targetSignatures[0]!, field.resultCarrier, false, semantics) : undefined;
-      if (callable === undefined) return reject();
+        ? selectRustClassValueCallable(walk, declaration, sourceSignatures[0]!, targetSignatures[0]!, field.resultCarrier, false, semantics, false, sourceCarrier) : undefined;
+      if (callable === undefined) { reject(); return false; }
+      if (!walk.sourceTypes.registerStructuralFieldImplementation({ carrier, storageIndex: field.storageIndex, kind: "dispatch" })) { reject(); return false; }
       fields.push({ declaration: sourceDeclaration, fileName: ast.getFileName(ast.getSourceFile(sourceDeclaration)),
         targetName: callable.targetName, storageIndex: field.storageIndex, writable: false, callable });
       continue;
     }
-    if (field.method === true || pair.source.read !== "property") return reject();
+    if (field.method === true || pair.source.read !== "property") { reject(); return false; }
     const storage = rustProjectStaticFieldStorage(sourceDeclaration, ast,
       walk.context.projectTypes.memberSlotName(sourceDeclaration, "static"));
     const fieldType = Node_Type(ast, sourceDeclaration);
     const fieldCarrier = walk.context.facts.getRuntimeCarrierFact(sourceDeclaration)?.carrier ?? resolveRustTargetTypeRef(
       fieldType ?? pair.source.property.type, rustResolutionContext(walk, sourceDeclaration), walk.operationOptions);
-    if (storage === undefined || !rustTargetTypeRefEquals(fieldCarrier, field.resultCarrier)) return reject();
-    if (!walk.sourceTypes.registerStructuralFieldImplementation({ carrier, storageIndex: field.storageIndex, kind: "accessor" })) return reject();
+    if (storage === undefined || !rustTargetTypeRefEquals(fieldCarrier, field.resultCarrier)) { reject(); return false; }
+    if (!walk.sourceTypes.registerStructuralFieldImplementation({ carrier, storageIndex: field.storageIndex, kind: "dispatch" })) { reject(); return false; }
     fields.push({ ...storage, storageIndex: field.storageIndex, writable: !field.readonly });
   }
-  if (!walk.context.classValues.record({ declaration, carrier, fields, ...(construction === undefined ? {} : { construction }) })) return reject();
-  walk.context.facts.set(expression, rustClassValueFactKey, { declaration, carrier });
-  return setCarrierFact(walk, expression, carrier);
+  if (!walk.context.classValues.record({ declaration, sourceCarrier, carrier, fields, ...(construction === undefined ? {} : { construction }) })) { reject(); return false; }
+  return true;
 }
 
 function instanceViewFieldsEqual(
@@ -295,6 +354,7 @@ function classValueCallablesEqual(left: RustClassValueCallable | undefined, righ
 
 function classEnvironmentsEqual(left: RustClassEnvironment, right: RustClassEnvironment): boolean {
   return left.storage === right.storage && left.copy === right.copy && left.constructorValue === right.constructorValue &&
+    closedMetadataEquals(left.genericParameterIndexes, right.genericParameterIndexes) &&
     left.initializationUsesEnvironment === right.initializationUsesEnvironment &&
     left.instancesUseEnvironment === right.instancesUseEnvironment &&
     left.consumers.length === right.consumers.length && left.consumers.every((consumer, index) => consumer === right.consumers[index]) &&

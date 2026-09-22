@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustClassConstructorTargetType, rustClassConstructorInstance } from "../../dist/target-model/types/carriers/class-constructors.js";
+import { rustClassConstructorTargetType, rustClassConstructorInstance, rustClassConstructorContract } from "../../dist/target-model/types/carriers/class-constructors.js";
 import { rustSourceTypeCarrier } from "../../dist/target-model/types/carriers/source-types.js";
 import { rustTargetTypeChildren } from "../../dist/target-model/types/carriers/children.js";
 import { rustTargetTypeParameterNames } from "../../dist/target-model/types/carriers/generic-references.js";
@@ -18,7 +18,7 @@ test("constructor values retain distinct instance identity and exact generic arg
   const constructor = rustClassConstructorTargetType(source);
   assert.deepEqual(rustClassConstructorInstance(constructor), source);
   assert.equal(rustClassConstructorInstance(source), undefined);
-  assert.deepEqual(rustTargetTypeChildren(constructor), [source]);
+  assert.deepEqual(rustTargetTypeChildren(constructor), [parameter]);
   assert.deepEqual(rustTargetTypeParameterNames(constructor), ["Value"]);
   const concrete = substituteRustTargetTypeParameters(constructor, new Map([["Value", number]]));
   assert.deepEqual(rustClassConstructorInstance(concrete), instance("Adapter@10", number));
@@ -28,6 +28,27 @@ test("constructor values retain distinct instance identity and exact generic arg
   assert.equal(rustCarrierSupportsClone(constructor), true);
   assert.equal(rustCarrierSupportsObjectIdentity(constructor), true);
   assert.equal(isRustCopyCarrier(constructor), false);
+});
+
+test("constructor binders remain quantified while outer environment arguments are substituted", () => {
+  const own = { kind: "type-parameter", name: "Item" };
+  const source = rustSourceTypeCarrier("/src/model.ts", "Factory", "object", [
+    { kind: "type", type: parameter }, { kind: "type", type: own },
+  ]);
+  const constructor = rustClassConstructorTargetType(source, [1]);
+  const concrete = substituteRustTargetTypeParameters(constructor, new Map([["Value", number], ["Item", number]]));
+  assert.deepEqual(rustClassConstructorContract(concrete).boundParameterIndexes, [1]);
+  assert.deepEqual(rustClassConstructorInstance(concrete).value.genericArguments, [
+    { kind: "type", type: number }, { kind: "type", type: own },
+  ]);
+  assert.deepEqual(rustTargetTypeChildren(constructor), [parameter]);
+  assert.deepEqual(rustTargetTypeParameterNames(constructor), ["Value"]);
+  assert.deepEqual(inferRustTargetTypeParameterBindings(constructor, concrete, new Set(["Value", "Item"])), new Map([["Value", number]]));
+  assert.equal(inferRustTargetTypeParameterBindings(constructor, rustClassConstructorTargetType(source), new Set(["Value", "Item"])), undefined);
+  for (const indexes of [[-1], [2], [1, 1], [0.5], [NaN], [Infinity]]) {
+    assert.throws(() => rustClassConstructorTargetType(source, indexes), /bound parameter indexes/u);
+  }
+  assert.throws(() => rustClassConstructorTargetType(instance("Factory", number), [0]), /bound parameter indexes/u);
 });
 
 test("constructor metadata is immutable and malformed instance selections are rejected", () => {

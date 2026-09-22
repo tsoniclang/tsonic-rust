@@ -655,7 +655,7 @@ export function analyzeRustGeneratedItemUsage(input: {
       const classValue = input.facts.getFact(node, rustClassValueFactKey);
       if (classValue !== undefined) {
         markStructuralShapeConstructed(classValue.carrier);
-        const view = input.classValues.viewFor(classValue.declaration, classValue.carrier);
+        const view = input.classValues.viewFor(classValue.declaration, classValue.sourceCarrier, classValue.carrier);
         if (view?.construction !== undefined) markProjectConstructorInvoked(view.construction.ownerCarrier);
         for (const callable of [view?.construction, ...(view?.fields.map(field => field.callable) ?? [])]) {
           if (callable?.resultAdapter.kind === "project-upcast" ||

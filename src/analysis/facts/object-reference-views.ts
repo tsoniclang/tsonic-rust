@@ -11,6 +11,7 @@ interface RustObjectReferenceViewCarriers {
 
 export type RustObjectReferenceView = RustObjectReferenceViewCarriers & (
   | { readonly kind: "project"; readonly declaration: Node }
+  | { readonly kind: "constructor"; readonly declaration: Node }
   | {
   readonly kind: "structural";
   readonly fields: readonly {
@@ -23,7 +24,7 @@ export type RustObjectReferenceView = RustObjectReferenceViewCarriers & (
 export const rustObjectReferenceViewKey = defineRustPlanKey<RustObjectReferenceView>("objectReferenceView", (left, right) =>
   rustTargetTypeRefEquals(left.sourceCarrier, right.sourceCarrier) &&
   rustTargetTypeRefEquals(left.targetCarrier, right.targetCarrier) &&
-  left.kind === right.kind && (left.kind === "project" && right.kind === "project"
+  left.kind === right.kind && (left.kind !== "structural" && right.kind !== "structural"
     ? left.declaration === right.declaration
     : left.kind === "structural" && right.kind === "structural" &&
   left.fields.length === right.fields.length && left.fields.every((field, index) => {

@@ -1,7 +1,7 @@
 import { appendMalformedSourceAstDiagnostic, recordClassBodyFacts, recordClassSignatureFacts, recordInterfaceFacts, recordMethodSelfModeFacts } from "../declarations/project-types.js";
 import { appendRustDiagnostic, rustResolutionContext } from "./walk.js";
 import { createRustModuleBindingPolicy } from "./module-bindings.js";
-import { selectRustClassEnvironment } from "../objects/class-environments.js";
+import { selectRustClassEnvironment, recordRustClassEnvironmentDemands } from "../objects/class-environments.js";
 import { rustClosureCaptureFactKey } from "../facts/keys.js";
 import { createRustSourceCallableAbiResolver } from "../../policy/ownership/source-callable-abi.js";
 import { createRustSourceProfileRegistry } from "../facts/source-profile-registry.js";
@@ -305,6 +305,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
       }
     }
   }
+  recordRustClassEnvironmentDemands(walk);
   for (const definition of projectTypes.definitions) {
     const selected = selectRustClassEnvironment(walk, definition.declaration);
     if (selected.kind === "unresolved") {

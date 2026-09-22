@@ -75,7 +75,7 @@ export function resolveIdentifierCarrier(
   if (reference !== undefined && declaration !== undefined && reference.project) {
     const declarationKind = ast.kindName(declaration);
     recordProjectSourceBinding(walk, identifier);
-    if (declarationKind === "KindClassDeclaration") {
+    if (declarationKind === "KindClassDeclaration" || declarationKind === "KindClassExpression") {
       const value = resolveRustClassValue(walk, identifier, expected);
       if (value !== undefined) return value;
     }

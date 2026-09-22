@@ -2,7 +2,7 @@ import type { RustTargetGenericArgument, TargetTypeRef } from "../model.js";
 import { rustFixedArrayCarrierValue, rustNamedTypeCarrierValue } from "./native.js";
 import { rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustStructuralObjectCarrierValue } from "./source-types.js";
 import { rustGenericCallableValue } from "./generic-callables.js";
-import { rustClassConstructorInstance } from "./class-constructors.js";
+import { rustClassConstructorFreeArguments } from "./class-constructors.js";
 
 export function rustTargetTypeChildren(type: TargetTypeRef): readonly TargetTypeRef[] {
   const arguments_ = (values: readonly RustTargetGenericArgument[] | undefined): readonly TargetTypeRef[] =>
@@ -26,8 +26,8 @@ export function rustTargetTypeChildren(type: TargetTypeRef): readonly TargetType
     case "trait-object": return [type.principal, ...type.autoTraits];
     case "impl-trait": return [...type.bounds, ...arguments_(type.captures)];
     case "target-specific": {
-      const instance = rustClassConstructorInstance(type);
-      if (instance !== undefined) return [instance];
+      const constructorArguments = rustClassConstructorFreeArguments(type);
+      if (constructorArguments !== undefined) return arguments_(constructorArguments);
       const callable = rustGenericCallableValue(type);
       if (callable !== undefined) return callable.environment;
       const source = rustSourceTypeCarrierValue(type);

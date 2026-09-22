@@ -48,7 +48,7 @@ import {
   rustProjectMemberStorageVisibility,
 } from "../project-storage-abi.js";
 import { planProjectPrivateStateAccessors } from "./private-fields.js";
-import { rustClassEnvironmentHandleType } from "../class-environments.js";
+import { rustClassEnvironmentHandleType } from "../class-environment-types.js";
 
 export function planPolymorphicClassDeclaration(
   declaration: Node,

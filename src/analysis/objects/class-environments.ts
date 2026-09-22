@@ -7,7 +7,31 @@ import { allocateRustGeneratedName } from "../../target-model/names/generated.js
 import { rustSnakeCaseIdentifier } from "../../target-model/names/identifiers.js";
 import { Node_Initializer, sourceClassFieldIsTypeOnly } from "@tsonic/target-api/source";
 import { isRustCopyCarrier } from "../../target-model/types/index.js";
-import { rustSourceBindingFactKey } from "../facts/keys.js";
+import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
+import { rustSourceBindingFactKey, rustSourceCallableReturnFactKey } from "../facts/keys.js";
+import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
+import { isRustDeclarationPathUse } from "../declarations/generic-reference-uses.js";
+
+export function recordRustClassEnvironmentDemands(walk: RustFactWalk): void {
+  const { ast, facts, projectTypes, classValues } = walk.context;
+  const visited = new Set<TargetTypeRef>();
+  const record = (carrier: TargetTypeRef | undefined): void => {
+    if (carrier === undefined || visited.has(carrier)) return;
+    visited.add(carrier);
+    const instance = rustClassConstructorInstance(carrier);
+    if (instance !== undefined) {
+      const definition = projectTypes.definitionForCarrier(instance);
+      if (definition !== undefined) classValues.recordConstructorValue(definition.declaration);
+    }
+    for (const child of rustTargetTypeChildren(carrier)) record(child);
+  };
+  const visit = (node: Node): void => {
+    if (!isRustDeclarationPathUse(node, ast, facts)) record(facts.getRuntimeCarrierFact(node)?.carrier);
+    record(facts.getFact(node, rustSourceCallableReturnFactKey)?.returnCarrier);
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  for (const sourceFile of walk.context.sourceFiles) visit(sourceFile);
+}
 
 export interface RustClassEnvironment {
   readonly declaration: Node;
@@ -15,6 +39,7 @@ export interface RustClassEnvironment {
   readonly storage: "value" | "shared";
   readonly copy: boolean;
   readonly constructorValue: boolean;
+  readonly genericParameterIndexes: readonly number[];
   readonly consumers: readonly Node[];
   readonly initializationUsesEnvironment: boolean;
   readonly instancesUseEnvironment: boolean;
@@ -39,7 +64,7 @@ export function selectRustClassEnvironment(walk: RustFactWalk, declaration: Node
   const definition = projectTypes.definitionForDeclaration(declaration);
   if (definition?.kind !== "class") return { kind: "none" };
   const moduleClass = ast.parent(declaration) === ast.getSourceFile(declaration);
-  const constructorValue = walk.context.classValues.hasConstructorView(declaration);
+  const constructorValue = walk.context.classValues.hasConstructorValue(declaration);
   if (moduleClass && !constructorValue) return { kind: "none" };
   const captureRoots = ast.members(declaration).filter((member): member is Node => member !== undefined &&
     !(ast.hasModifierKind(member, "static") && ast.kindName(member) === "KindPropertyDeclaration"));
@@ -90,7 +115,9 @@ export function selectRustClassEnvironment(walk: RustFactWalk, declaration: Node
     if (selfReference) return { kind: "unresolved", reason: "Self-referencing static initialization requires an exact staged class-evaluation contract." };
   }
   const copy = !constructorValue && staticFields.length === 0 && captures.every(capture => capture.storage === "value" && isRustCopyCarrier(capture.carrier));
-  return { kind: "available", environment: Object.freeze({ declaration, carrier: projectTypes.openCarrier(definition),
+  const ownParameters = new Set((walk.context.sourceLifetimes.contractFor(declaration)?.parameters ?? []).map(parameter => parameter.declaration));
+  const genericParameterIndexes = Object.freeze(definition.genericParameters.flatMap((parameter, index) => ownParameters.has(parameter.declaration) ? [] : [index]));
+  return { kind: "available", environment: Object.freeze({ declaration, carrier: projectTypes.openCarrier(definition), genericParameterIndexes,
     storage: !constructorValue && (copy || staticFields.length === 0 && captures.length === 1 && captures[0]!.storage === "location") ? "value" : "shared",
     copy, constructorValue,
     consumers: Object.freeze(consumers),

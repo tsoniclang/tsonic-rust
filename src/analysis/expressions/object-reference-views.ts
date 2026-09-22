@@ -6,6 +6,8 @@ import type { RustFactWalk } from "../program/walk.js";
 import { rustObjectReferenceViewKey, type RustObjectReferenceView } from "../facts/object-reference-views.js";
 import type { RustStructuralFieldRegistration } from "../../policy/types/source-type-registry.js";
 import { selectRustProjectStructuralView } from "../objects/project-structural-views.js";
+import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
+import { selectRustClassValueView } from "../objects/class-values.js";
 
 export function recordRustObjectReferenceView(
   walk: RustFactWalk, expression: Node, sourceCarrier: TargetTypeRef, targetCarrier: TargetTypeRef,
@@ -14,6 +16,15 @@ export function recordRustObjectReferenceView(
   const structural = rustStructuralObjectCarrierValue(targetCarrier);
   if (target === undefined || structural?.representation !== "reference" ||
     structural.fields.some(field => field.bound === true)) return false;
+  const instance = rustClassConstructorInstance(sourceCarrier);
+  if (instance !== undefined) {
+    const definition = walk.context.projectTypes.definitionForCarrier(instance);
+    if (definition?.kind !== "class" || !selectRustClassValueView(walk, expression, definition.declaration, targetCarrier)) return false;
+    walk.context.facts.set(expression, rustObjectReferenceViewKey, {
+      kind: "constructor", declaration: definition.declaration, sourceCarrier, targetCarrier,
+    });
+    return true;
+  }
   const sourceStructural = rustStructuralObjectCarrierValue(sourceCarrier);
   const project = walk.context.projectTypes.definitionForCarrier(sourceCarrier);
   if (sourceStructural?.representation !== "reference" && project === undefined) return false;

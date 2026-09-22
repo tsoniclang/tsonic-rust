@@ -26,6 +26,8 @@ import {
 import { rustSourceItemIdentity } from "../program/source-package-facades.js";
 import { rustExplicitNamedTypeArguments } from "./generic-defaults.js";
 import { rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
+import { rustClassConstructorInstance } from "../../../target-model/types/carriers/class-constructors.js";
+import { rustClassEnvironmentHandleType } from "../objects/class-environment-types.js";
 import { rustLifetimeToAst } from "./lifetime-syntax.js";
 import {
   rustBuiltInCarrierRenderPaths,
@@ -214,7 +216,7 @@ export function rustTypeFromCarrier(
         };
   }
   const structuralObject = rustStructuralObjectCarrierValue(carrier);
-  if (structuralObject !== undefined || rustGenericCallableValue(carrier) !== undefined) {
+  if (structuralObject !== undefined || rustGenericCallableValue(carrier) !== undefined || rustClassConstructorInstance(carrier) !== undefined) {
     return resolveStructuralShape?.(carrier);
   }
   if (carrier.kind === "array") {
@@ -459,6 +461,7 @@ export interface RustTypeRenderingContext {
         readonly names: import("../../../target-model/names/model.js").RustNamePlan;
         readonly structuralShapes: import("../../../analysis/objects/structural-shape-plan.js").RustStructuralShapePlan;
         readonly sourceCallableSpecializations: import("../../../analysis/callables/specializations.js").RustSourceCallableSpecializationPlan;
+        readonly classValues: import("../../../analysis/objects/class-values.js").RustClassValuePlan;
       };
     };
 }
@@ -494,6 +497,8 @@ export function rustTypeFromCarrierInContext(
       : moduleName === context.moduleName ? typeName : `crate::${moduleName}::${typeName}`;
   };
   const resolveStructuralShape = (shapeCarrier: TargetTypeRef): RustType | undefined => {
+    const instance = rustClassConstructorInstance(shapeCarrier);
+    if (instance !== undefined) return rustClassEnvironmentHandleType(instance, context);
     const genericCallable = rustGenericCallableValue(shapeCarrier);
     if (genericCallable !== undefined) {
       const definition = context.input.program.sourceCallableSpecializations.genericValues.definitionFor(shapeCarrier);

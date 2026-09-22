@@ -302,6 +302,7 @@ export type RustTargetOperationFact =
   | {
       readonly kind: "source-static-field";
       readonly declaration: Node;
+      readonly classReceiver?: Node;
       readonly operationId: string;
       readonly storageFileName: string;
       readonly storageName: string;
@@ -376,6 +377,7 @@ export type RustTargetOperationFact =
             readonly fileName: string;
             readonly name: string;
             readonly selectedTargetName: string;
+            readonly classReceiver?: Node;
           }
         | {
             readonly form: "method";
@@ -386,7 +388,7 @@ export type RustTargetOperationFact =
               readonly ownerCarrier: TargetTypeRef;
             };
           }
-        | { readonly form: "static-method"; readonly name: string; readonly typeCarrier: TargetTypeRef }
+        | { readonly form: "static-method"; readonly name: string; readonly typeCarrier: TargetTypeRef; readonly classReceiver?: Node }
         | { readonly form: "callable"; readonly carrier: TargetTypeRef }
         | { readonly form: "constructor-value"; readonly receiverCarrier: TargetTypeRef; readonly callableCarrier: TargetTypeRef }
         | {
@@ -399,6 +401,7 @@ export type RustTargetOperationFact =
             readonly form: "constructor";
             readonly name: string;
             readonly typeCarrier: TargetTypeRef;
+            readonly classReceiver?: Node;
           };
       readonly parameters: readonly RustSourceCallParameterPlan[];
       readonly targetGenericArguments?: readonly RustTargetGenericArgument[];

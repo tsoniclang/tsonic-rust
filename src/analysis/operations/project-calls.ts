@@ -46,6 +46,7 @@ import type { RustTargetOperationFact } from "../facts/keys.js";
 import { rustGenericCallableProtocol } from "../../target-model/types/carriers/generic-callables.js";
 import { substituteRustValueConversion } from "../../target-model/conversions/contracts.js";
 import { recordSelectedMethodSpecialization } from "./project-method-calls.js";
+import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
 
 export function applySelectedProjectSourceCall(
   walk: RustFactWalk,
@@ -321,10 +322,18 @@ export function applySelectedProjectSourceCall(
   } else if (indirectCallable) {
     target = { form: "callable", carrier: selectedCallableCarrier };
   } else if (selectedMember.kind === "constructor") {
+    const owner = walk.context.projectTypes.definitionForCarrier(resultCarrier);
+    const classReceiver = calleeReferenceDeclaration === owner?.declaration ? undefined : callee;
+    if (classReceiver !== undefined) {
+      const carrier = resolveExpressionCarrier(walk, classReceiver, sourceFile, undefined);
+      const instance = rustClassConstructorInstance(carrier);
+      if (owner === undefined || instance === undefined || walk.context.projectTypes.definitionForCarrier(instance) !== owner) return undefined;
+    }
     target = {
       form: "constructor",
       name: selectedMember.targetName,
       typeCarrier: resultCarrier,
+      ...(classReceiver === undefined ? {} : { classReceiver }),
     };
     operationKind = "constructor";
   } else if (declarationKind === "KindMethodDeclaration" ||
@@ -342,10 +351,19 @@ export function applySelectedProjectSourceCall(
       if (typeCarrier === undefined) {
         return undefined;
       }
+      const receiver = Node_Expression(ast, callee);
+      const direct = receiver !== undefined && walk.context.source.navigation.sourceReferenceFor(receiver)?.declaration === classDeclaration;
+      const classReceiver = direct ? undefined : receiver;
+      if (!direct) {
+        const carrier = receiver === undefined ? undefined : resolveExpressionCarrier(walk, receiver, sourceFile, undefined);
+        const instance = rustClassConstructorInstance(carrier);
+        if (instance === undefined || walk.context.projectTypes.definitionForCarrier(instance)?.declaration !== classDeclaration) return undefined;
+      }
       target = moduleFunction === undefined
-        ? { form: "static-method", name: methodName, typeCarrier }
+        ? { form: "static-method", name: methodName, typeCarrier, ...(classReceiver === undefined ? {} : { classReceiver }) }
         : { form: "function", name: moduleFunction,
-            fileName: ast.getFileName(ast.getSourceFile(selectedDeclaration)), selectedTargetName: selectedMember.targetName };
+            fileName: ast.getFileName(ast.getSourceFile(selectedDeclaration)), selectedTargetName: selectedMember.targetName,
+            ...(classReceiver === undefined ? {} : { classReceiver }) };
     } else {
       const receiver = ast.kindName(callee) === KindPropertyAccessExpression
         ? Node_Expression(walk.context.ast, callee)

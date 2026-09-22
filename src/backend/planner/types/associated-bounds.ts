@@ -7,14 +7,18 @@ import { rustTypeFromCarrierInContext } from "./render.js";
 import type { RustTypeRenderingContext } from "./render.js";
 import { rustProgramErrorTargetType } from "../../../target-model/types/index.js";
 import { rustProjectProjectionPredicates } from "./project-projection-bounds.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function rustDeclarationAssociatedPredicates(
   declaration: Node,
   context: RustPlanContext,
+  inScope: (carrier: TargetTypeRef) => boolean = () => true,
 ): readonly RustWherePredicate[] {
   const contract = context.input.program.declarationGenericRequirements.contractFor(declaration);
   if (contract === undefined) throw new Error("A Rust declaration has no sealed generic requirement contract.");
-  return [...rustAssociatedPredicates(contract.associatedTypes, context), ...rustProjectProjectionPredicates(contract.projectProjections, context)];
+  return [...rustAssociatedPredicates(contract.associatedTypes.filter(requirement => inScope(requirement.carrier)), context),
+    ...rustProjectProjectionPredicates(contract.projectProjections.filter(requirement =>
+      inScope(requirement.sourceCarrier) && inScope(requirement.targetCarrier)), context)];
 }
 
 export function rustAssociatedPredicates(

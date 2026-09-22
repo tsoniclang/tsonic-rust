@@ -57,7 +57,8 @@ import {
 } from "../objects/project-storage-abi.js";
 import { rustProjectObjectIdentityImplementation } from "../objects/project-identity.js";
 import { rustProjectWrapperTraits } from "../objects/project-wrapper-traits.js";
-import { rustClassEnvironmentContext, rustClassEnvironmentHandleType, rustClassEnvironmentParameter } from "../objects/class-environments.js";
+import { rustClassEnvironmentContext, rustClassEnvironmentParameter } from "../objects/class-environments.js";
+import { rustClassEnvironmentHandleType } from "../objects/class-environment-types.js";
 
 export interface PlannedProjectObjectField {
   readonly declaration: Node;

@@ -16,6 +16,8 @@ import { rustProjectGenericParameters } from "../project-generic-contract.js";
 import { resolveRustTargetType, resolveStructuralObjectType } from "./target.js";
 import { retainRustStructuralInstantiation } from "./structural-instantiations.js";
 import { rustTypeFamilyNormalizer } from "../type-family-normalization.js";
+import { rustClassConstructorTargetType } from "../../../target-model/types/carriers/class-constructors.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 
 export interface RustResolvedProjectGenericArguments {
   readonly values: readonly RustTargetGenericArgument[];
@@ -45,6 +47,28 @@ export function resolveProjectSourceCarrier(
       ];
   for (const declaration of declarations) {
     const carrier = options.sourceTypes.carrierForDeclaration(declaration, context.ast);
+    if (selectedType !== undefined && (context.ast.is.IsClassDeclaration(declaration) || context.ast.is.IsClassExpression(declaration))) {
+      const signatures = context.currentSemantics.types.constructSignatures(selectedType);
+      if (signatures.length > 0) {
+        const instances = signatures.map(signature => {
+          const result = context.currentSemantics.types.returnType(signature);
+          return result === undefined ? undefined : resolveRustTargetType(result, context, options, resolving);
+        });
+        const instance = instances[0];
+        const parameters = rustProjectGenericParameters(declaration, context);
+        const own = new Set((context.sourceLifetimes.contractFor(declaration)?.parameters ?? []).map(parameter => parameter.declaration));
+        const arguments_ = rustSourceTypeCarrierValue(instance)?.genericArguments;
+        if (instance === undefined || parameters === undefined || arguments_ === undefined || parameters.length !== arguments_.length ||
+          instances.some(candidate => !rustTargetTypeRefEquals(candidate, instance))) return undefined;
+        const bound = parameters.flatMap((parameter, index) => {
+          const argument = arguments_[index]!;
+          const open = parameter.kind === "type" ? argument.kind === "type" && argument.type.kind === "type-parameter" && argument.type.name === parameter.targetName
+            : argument.kind === "lifetime" && rustLifetimeKey(argument.lifetime) === rustLifetimeKey(parameter.lifetime);
+          return own.has(parameter.declaration) && open ? [index] : [];
+        });
+        return rustClassConstructorTargetType(instance, bound);
+      }
+    }
     if (context.ast.kindName(declaration) === "KindInterfaceDeclaration" && selectedType !== undefined &&
       rustSourceTypeCarrierValue(carrier) !== undefined &&
       context.currentSemantics.types.constructSignatures(selectedType).length !== 0) {

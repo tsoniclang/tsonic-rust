@@ -1,5 +1,5 @@
 import { isDenseDataArray } from "../../metadata/closed-data.js";
-import { rustClassConstructorInstance } from "./class-constructors.js";
+import { rustClassConstructorContract, rustClassConstructorFreeArguments } from "./class-constructors.js";
 import {
   rustFixedArrayCarrierValue,
   rustNamedTypeCarrierValue,
@@ -288,11 +288,18 @@ export function inferRustTargetGenericBindings(
         if (right.kind !== "target-specific") {
           return false;
         }
-        const leftInstance = rustClassConstructorInstance(left);
-        const rightInstance = rustClassConstructorInstance(right);
-        if (leftInstance !== undefined || rightInstance !== undefined) {
-          return leftInstance !== undefined && rightInstance !== undefined &&
-            match(leftInstance, rightInstance, lifetimeContext);
+        const leftConstructor = rustClassConstructorContract(left);
+        const rightConstructor = rustClassConstructorContract(right);
+        if (leftConstructor !== undefined || rightConstructor !== undefined) {
+          if (leftConstructor === undefined || rightConstructor === undefined) return false;
+          const leftInstance = rustSourceTypeCarrierValue(leftConstructor.instance)!;
+          const rightInstance = rustSourceTypeCarrierValue(rightConstructor.instance)!;
+          return leftInstance.fileName === rightInstance.fileName && leftInstance.typeName === rightInstance.typeName &&
+            leftConstructor.boundParameterIndexes.length === rightConstructor.boundParameterIndexes.length &&
+            leftConstructor.boundParameterIndexes.every((index, position) => index === rightConstructor.boundParameterIndexes[position]) &&
+            matchGenericArguments(rustClassConstructorFreeArguments(left)!, rustClassConstructorFreeArguments(right)!,
+              (pattern, actual) => match(pattern, actual, lifetimeContext),
+              (pattern, actual) => matchLifetime(pattern, actual, lifetimeContext), matchConst);
         }
         const leftSource = rustSourceTypeCarrierValue(left);
         const rightSource = rustSourceTypeCarrierValue(right);

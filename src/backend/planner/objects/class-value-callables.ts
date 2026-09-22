@@ -2,7 +2,7 @@ import type { RustClassValueCallable } from "../../../analysis/objects/class-val
 import { rustFallibleFactKey } from "../../../analysis/facts/keys.js";
 import type { RustExpr, RustFunctionParam, RustImplFunction } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { rustCurrentErrorBoundary, rustErrorBoundaryForProjectMember, rustErrorType } from "../program/plan-context.js";
+import { rustCurrentErrorBoundary, rustErrorBoundaryForProjectMember, rustErrorType, sourceModuleItemPath } from "../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { applyRustCallableValueAdapter, planRustCallableArguments } from "../declarations/callable-adapters.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
@@ -33,6 +33,13 @@ export function planRustClassValueForwarder(
     : environment.consumers.includes(callable.declaration) ? [{ kind: "path", path: "self" }] : [];
   let invocation: RustExpr = { kind: "associated-call", owner, method: callable.targetName,
     args: [...contextArgument, ...arguments_.adaptedArguments] };
+  const moduleFunction = construction ? undefined : context.input.program.projectTypes.memberSlotName(callable.declaration, "static");
+  if (moduleFunction !== undefined) {
+    const ast = context.input.program.source.ast;
+    const path = sourceModuleItemPath(context, ast.getFileName(ast.getSourceFile(callable.declaration)), moduleFunction);
+    if (path === undefined) return undefined;
+    invocation = { kind: "call", path, args: [...contextArgument, ...arguments_.adaptedArguments] };
+  }
   if (context.input.program.facts.getFact(callable.declaration, rustFallibleFactKey) !== undefined) {
     const operand = rustErrorBoundaryForProjectMember(callable.declaration, context);
     if (operand === undefined) return undefined;

@@ -38,12 +38,12 @@ export function selectRustClassValueCallable(
   const sourceDeclaration = semantics.declarations.signatureDeclaration(sourceSignature);
   const target = rustCallableProtocol(targetCarrier);
   if (owner === undefined || owner.kind !== "class" || target === undefined ||
-    sourceDeclaration === undefined || ast.typeParameters(sourceDeclaration).length !== 0) return undefined;
+    !construction && (sourceDeclaration === undefined || ast.typeParameters(sourceDeclaration).length !== 0)) return undefined;
   const matchingConstructors = construction ? projectTypes.constructorsForDefinition(owner)
-    .filter(candidate => candidate.signature === sourceSignature || candidate.declaration === sourceDeclaration) : [];
+    .filter(candidate => candidate.signature === sourceSignature || sourceDeclaration !== undefined && candidate.declaration === sourceDeclaration) : [];
   const sourceConstructor = matchingConstructors.length === 1 ? matchingConstructors[0] : undefined;
-  if (construction && sourceConstructor === undefined || !construction && ast.hasModifierKind(sourceDeclaration, "static") === instance) return undefined;
-  const implementation = construction ? undefined : walk.context.source.navigation.callableImplementation(sourceDeclaration);
+  if (construction && sourceConstructor === undefined || !construction && ast.hasModifierKind(sourceDeclaration!, "static") === instance) return undefined;
+  const implementation = construction ? undefined : walk.context.source.navigation.callableImplementation(sourceDeclaration!);
   const declaration = construction ? sourceConstructor!.declaration ?? classDeclaration
     : implementation?.kind === "resolved" ? implementation.implementation.declaration : undefined;
   if (declaration === undefined) return undefined;

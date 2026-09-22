@@ -45,7 +45,6 @@ export function main(): void {
 test("unproved local class evaluation and constructor identity contracts fail before publication", () => {
   for (const source of [
     `export function create(): number { class Entry { static count = 1; static { Entry.count++; } } return Entry.count; }`,
-    `export function create(): void { class Entry {} const alias = Entry; new alias(); }`,
     `export function create(): void { const make = () => new Entry(); make(); class Entry {} }`,
     `export function create(): boolean { class Entry {} return new Entry() instanceof Entry; }`,
     `export function create(): number { class Entry { static make(): number { return 1; } } const make = Entry.make; return make(); }`,
