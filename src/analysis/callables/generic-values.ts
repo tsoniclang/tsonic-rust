@@ -12,6 +12,9 @@ import type { RustNamePlan } from "../../target-model/names/model.js";
 import { rustClosureCaptureFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
 import type { RustClosureCaptureFact } from "../facts/operations/keys.js";
 import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
+import type { SourceProgramNavigation } from "@tsonic/target-api/source";
+import { isRustCopyCarrier } from "../../target-model/types/index.js";
+import { rustAsyncFunctionFactKey, rustGeneratorFactKey } from "../facts/keys.js";
 
 export interface RustGenericCallableImplementation {
   readonly declaration: Node;
@@ -27,7 +30,7 @@ export interface RustGenericCallableImplementation {
 export interface RustGenericCallableDefinition {
   readonly identity: string;
   readonly targetName: string;
-  readonly alternativesName: string;
+  readonly storage: "value" | "shared";
   readonly ownerFileName: string;
   readonly signature: RustGenericCallableSignature;
   readonly implementations: readonly RustGenericCallableImplementation[];
@@ -42,6 +45,7 @@ export interface RustGenericCallablePlan {
 
 export function createRustGenericCallablePlan(
   ast: AstReader, sourceFiles: readonly SourceFile[], facts: RustPlanQueries, names: RustNamePlan,
+  navigation: SourceProgramNavigation,
 ): RustGenericCallablePlan {
   const groups = new Map<string, { signature: RustGenericCallableSignature; implementations: RustGenericCallableImplementation[] }>();
   const implementations = new Map<Node, RustGenericCallableImplementation>();
@@ -100,8 +104,15 @@ export function createRustGenericCallablePlan(
   }
   const definitions = [...groups].sort(([left], [right]) => left.localeCompare(right, "en")).map(([identity, group]) => {
     group.implementations.sort((left, right) => left.sourceFileName.localeCompare(right.sourceFileName, "en") || ast.pos(left.declaration) - ast.pos(right.declaration));
+    const storage = group.implementations.every(implementation => {
+      const flow = navigation.expressionValueFlow(implementation.declaration);
+      return !flow.escapes && !flow.identityCompared && !flow.hasUnclassifiedUse && !flow.captured &&
+        facts.getFact(implementation.declaration, rustAsyncFunctionFactKey) === undefined &&
+        facts.getFact(implementation.declaration, rustGeneratorFactKey) === undefined &&
+        implementation.captures.every(capture => capture.storage === "value" && isRustCopyCarrier(capture.storageCarrier));
+    }) ? "value" as const : "shared" as const;
     return Object.freeze({ identity, targetName: allocateRustGeneratedName(usedNames, `GenericCallable${identity.slice(0, 12)}`),
-      alternativesName: allocateRustGeneratedName(usedNames, `GenericCallableState${identity.slice(0, 12)}`),
+      storage,
       ownerFileName: group.implementations[0]!.sourceFileName, signature: group.signature,
       implementations: Object.freeze(group.implementations),
     });

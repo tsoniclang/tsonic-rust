@@ -11,6 +11,7 @@ import {
 import type { RustFinalizedOperationAbi } from "./finalized-operation-abi.js";
 import { rustValueConversionIsFallible } from "../../target-model/conversions/contracts.js";
 import { rustStructuralFieldIsFallible } from "../objects/structural-shape-plan.js";
+import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 
 export function rustTargetOperationText(fact: RustTargetOperationFact): string {
   if (fact.kind === "provider-operation") {
@@ -205,7 +206,7 @@ export function rustTargetOperationIsFallible(
     return fact.target.form !== "callable" ||
       (fact.target.carrier.kind === "closure"
         ? fact.target.carrier.fallible === true
-        : fact.target.carrier.kind !== "function-pointer");
+        : fact.target.carrier.kind !== "function-pointer" && rustGenericCallableValue(fact.target.carrier) === undefined);
   }
   if (fact.kind === "provider-operation" || fact.kind === "runtime-set") {
     return rustOperationAbiInvocationIsFallible(fact.abi);

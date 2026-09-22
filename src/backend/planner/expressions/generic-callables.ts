@@ -18,11 +18,9 @@ export function planRustGenericCallableValue(
   const definition = plan.definitionFor(carrier);
   const rendered = rustTypeFromCarrierInContext(carrier, context);
   const owner = rendered?.kind === "named" ? rendered : undefined;
-  const alternativesPath = definition === undefined || definition.implementations[0] === undefined ? undefined
-    : rustGenericCallableImplementationPath(definition.implementations[0], definition.alternativesName, context);
   const path = implementation === undefined ? undefined
     : rustGenericCallableImplementationPath(implementation, implementation.stateName, context);
-  if (implementation === undefined || definition === undefined || owner === undefined || path === undefined || alternativesPath === undefined) {
+  if (implementation === undefined || definition === undefined || owner === undefined || path === undefined) {
     context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
       "rust.backend.generic-callable-construction", "A generic callable requires one sealed native implementation and environment."));
     return undefined;
@@ -40,10 +38,7 @@ export function planRustGenericCallableValue(
     fields.push({ name: "marker", value: { kind: "path", path: "core::marker::PhantomData" } });
   }
   const state: RustExpr = { kind: "struct-literal", path, fields };
-  return { kind: "struct-literal", path: owner.path, fields: [{ name: "implementation", value: {
-    kind: "call", path: "alloc::rc::Rc::new", args: [{ kind: "associated-call",
-      owner: { kind: "named", path: alternativesPath, genericArguments: owner.genericArguments },
-      method: implementation.variantName, args: [state],
-    }],
-  } }] };
+  return { kind: "associated-call", owner, method: implementation.variantName,
+    args: [definition.storage === "shared" ? { kind: "call", path: "alloc::rc::Rc::new", args: [state] } : state],
+  };
 }

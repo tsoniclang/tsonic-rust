@@ -49,6 +49,7 @@ import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
 import { planRustUnionMethodCall } from "./union-methods.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../../../target-model/types/carriers/generic-callables.js";
+import { rustGenericCallableEffectsFactKey } from "../../../../analysis/facts/generic-callable-effects.js";
 
 export function sourceCallEffectsMatch(
   fact: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>,
@@ -75,6 +76,7 @@ export function sourceCallEffectsMatch(
   return isAsync
     ? effects.awaiting !== "not-applicable" &&
       (callableCarrier === undefined || callableCarrier.kind === "function-pointer" ||
+        rustGenericCallableValue(callableCarrier) !== undefined ||
         effects.invocation === "fallible")
     : effects.awaiting === "not-applicable";
 }
@@ -408,6 +410,17 @@ export function planSelectedSourceCall(
       "Project-source call requires finalized post-fixpoint invocation and await effects.",
     ));
     return undefined;
+  }
+  if (fact.target.form === "callable" && rustGenericCallableValue(fact.target.carrier) !== undefined) {
+    const definition = context.input.program.sourceCallableSpecializations.genericValues.definitionFor(fact.target.carrier);
+    if (definition === undefined || !definition.implementations.every(implementation => {
+      const selected = context.input.program.facts.getFact(implementation.declaration, rustGenericCallableEffectsFactKey);
+      return selected?.invocation === effects.invocation && selected.awaiting === effects.awaiting;
+    })) {
+      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node), "rust.backend.generic-callable-effects",
+        "The invocation effects differ from the sealed generic implementation family."));
+      return undefined;
+    }
   }
   if (fact.target.form === "union-method") return planned;
   if (effects.invocation === "infallible") {

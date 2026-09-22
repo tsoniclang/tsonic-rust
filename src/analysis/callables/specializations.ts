@@ -1,4 +1,5 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
+import type { SourceProgramNavigation } from "@tsonic/target-api/source";
 import { closedMetadataKey, isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
@@ -68,6 +69,7 @@ export interface RustSourceCallableSpecializationPlanRegistry
     readonly sourceLifetimes: RustLifetimeIndex;
   }): RustSourceCallableSpecializationRegistration;
   initialize(input: {
+    readonly navigation: SourceProgramNavigation;
     readonly sourceFiles: readonly SourceFile[];
     readonly facts: RustPlanQueries;
     readonly ast: AstReader;
@@ -191,6 +193,7 @@ function createRustSourceCallableSpecializationPlan(
   sourceCalls: readonly SourceCallEdge[],
   projectMethodCalls: readonly ProjectMethodEdge[],
   input: {
+    readonly navigation: SourceProgramNavigation;
     readonly sourceFiles: readonly SourceFile[];
     readonly facts: RustPlanQueries;
     readonly ast: AstReader;
@@ -378,7 +381,7 @@ function createRustSourceCallableSpecializationPlan(
       );
   });
   const plan: RustSourceCallableSpecializationPlan = {
-    genericValues: createRustGenericCallablePlan(input.ast, input.sourceFiles, input.facts, input.names),
+    genericValues: createRustGenericCallablePlan(input.ast, input.sourceFiles, input.facts, input.names, input.navigation),
     suspendedValues: createRustSuspendedCallablePlan(input.ast, input.sourceFiles, input.facts, input.names, input.sourceLifetimes),
     get issues() { return Object.freeze([...issues, ...this.genericValues.issues, ...this.suspendedValues.issues]); },
     projectMethodRequests: Object.freeze(methodRequests),

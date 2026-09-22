@@ -46,7 +46,7 @@ export function rustFutureValueForOperation(
     };
   }
   if (operation?.kind !== "source-call" || sourceCallEffects === undefined ||
-    sourceCallEffects.invocation !== "infallible" ||
+    (sourceCallEffects.invocation !== "infallible" && sourceCallEffects.invocation !== "fallible") ||
     sourceCallEffects.awaiting === "not-applicable") {
     return undefined;
   }
