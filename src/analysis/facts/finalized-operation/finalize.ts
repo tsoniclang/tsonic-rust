@@ -10,6 +10,7 @@ import {
 } from "./conversions.js";
 import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
 import { isRustFallibleErrorBoundary } from "../../../target-model/operations/error-boundary.js";
+import { rustRestSequenceForm } from "../../../target-model/operations/rest-assembly.js";
 import {
   isRustTargetGenericArgument,
   isRustTargetTypeRef,
@@ -67,11 +68,12 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
   if (options.spreadSourceArgumentIndexes !== undefined &&
     !isDenseDataArray(options.spreadSourceArgumentIndexes)) return undefined;
   const spreadIndexes = new Set(options.spreadSourceArgumentIndexes ?? []);
+  const sequenceForm = rustRestSequenceForm(options.form);
   if (options.spreadSourceArgumentIndexes !== undefined &&
     (spreadIndexes.size !== options.spreadSourceArgumentIndexes.length ||
-      options.form.form !== "call-value-slice" ||
+      sequenceForm === undefined ||
       options.spreadSourceArgumentIndexes.some(index => !Number.isSafeInteger(index) ||
-        index < (options.form.form === "call-value-slice" ? options.form.leadingArguments.length : 0) ||
+        index < sequenceForm.leadingArguments.length ||
         index >= options.sourceArgumentCarriers.length || compileTimeIndexes.has(index)))) return undefined;
   const runtimeSourceIndexes = options.sourceArgumentCarriers
     .map((_carrier, index) => index)

@@ -2,6 +2,15 @@ import { rustFixedArrayCarrierValue } from "../types/carriers/native.js";
 import { rustTargetConstInteger } from "../types/generic-arguments.js";
 import { isRustJsArrayCarrier, rustJsArrayLikeElementTargetType } from "../types/carriers/js.js";
 import type { TargetTypeRef } from "../types/model.js";
+import type { RustProviderOperationForm } from "./model.js";
+
+export function rustRestSequenceForm(form: RustProviderOperationForm): Extract<
+  RustProviderOperationForm,
+  { readonly form: "call-value-slice" | "call-value-array" | "receiver-value-array" }
+> | undefined {
+  return form.form === "call-value-slice" || form.form === "call-value-array" ||
+    form.form === "receiver-value-array" ? form : undefined;
+}
 
 export const rustVecRestAssembly = Object.freeze({
   appendElementMethod: "push",

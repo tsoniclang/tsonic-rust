@@ -10,6 +10,7 @@ import {
 } from "./conversions.js";
 import { closedMetadataEquals, isClosedMetadata } from "../../../target-model/metadata/closed-data.js";
 import { createInputFactory, finalizeTargetInputs } from "./inputs.js";
+import { rustRestSequenceForm } from "../../../target-model/operations/rest-assembly.js";
 import { isRustErrorBoundary } from "../../../target-model/operations/error-boundary.js";
 import {
   isRustTargetGenericArgument,
@@ -59,6 +60,7 @@ export function validateRustFinalizedOperationAbi(candidate: unknown, definition
     ))) {
     return false;
   }
+  const sequenceForm = rustRestSequenceForm(abi.target);
   if (abi.sourceArguments.some((argument, index) => {
     const expectedRole: RustFinalizedSourceArgumentRole = argument.disposition === "compile-time"
       ? "compile-time"
@@ -69,8 +71,8 @@ export function validateRustFinalizedOperationAbi(candidate: unknown, definition
       (argument.mode !== "value" && argument.mode !== "ref" && argument.mode !== "mut-ref") ||
       (argument.disposition !== "runtime" && argument.disposition !== "compile-time") ||
       (argument.form === "spread-sequence" &&
-        (argument.disposition !== "runtime" || abi.target.form !== "call-value-slice" ||
-          index < abi.target.leadingArguments.length)) ||
+        (argument.disposition !== "runtime" || sequenceForm === undefined ||
+          index < sequenceForm.leadingArguments.length)) ||
       argument.role !== expectedRole;
   })) {
     return false;

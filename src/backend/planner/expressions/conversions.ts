@@ -634,9 +634,8 @@ export function planFinalizedTargetInput(
     const sequenceFlags = input.elements.map(element => element.conversion.kind === "semantic" &&
       element.conversion.conversion.kind === "rest-sequence");
     if (sequenceFlags.some(Boolean)) {
-      if (!isRustFinalizedSliceInput(input)) return undefined;
       const value = planRustRestAssembly(elements.map((value, index) => ({ value, sequence: sequenceFlags[index]! })), context);
-      return value === undefined ? undefined : { kind: "reference", expr: value };
+      return value === undefined ? undefined : isRustFinalizedSliceInput(input) ? { kind: "reference", expr: value } : value;
     }
     return isRustFinalizedSliceInput(input)
       ? { kind: "reference", expr: { kind: "slice-literal", elements } }
