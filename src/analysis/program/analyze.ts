@@ -426,7 +426,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   recordRustProjectCallableAdapterFacts(walk);
   const callableValues = context.callableValues.initialize({ ast, sourceFiles: context.sourceFiles, facts: context.facts,
     names: context.names, navigation: context.source.navigation, lifetimes: context.sourceLifetimes,
-    classValueAdapters: context.classValues.valueAdapters() });
+    classValueAdapters: context.classValues.valueAdapters(), closedSourceFiles });
   for (const issue of callableValues.issues) {
     appendRustDiagnostic(walk, "RUST_CALLABLE_VALUE_NOT_CLOSED", issue.message, issue.subject,
       ["target.capability=rust.callable-value.exact-implementation"]);

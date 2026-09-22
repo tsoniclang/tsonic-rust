@@ -52,6 +52,7 @@ import { rustHigherRankedNativeFunctionCarrier } from "./higher-ranked-function.
 import { selectRustPointerReturnContract } from "../../policy/operations/pointer-return.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustGenericCallableProtocol, rustGenericCallableTargetType, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
+import { rustGenericCallableValueOwner } from "../../policy/types/generic-callable-origin.js";
 
 export function recordFunctionSignatureFacts(walk: RustFactWalk, declaration: Node): void {
   recordCallableParameterSignatureFacts(walk, declaration);
@@ -318,13 +319,13 @@ function recordCallableValueSignatureFacts(
       return;
     }
   }
-  const selectedCarrier = walk.context.facts.get(declaration, rustRuntimeCarrierKey)?.carrier ??
+  const selectedCarrier = rustGenericCallableValueOwner(ast, declaration, walk.context.facts.get(declaration, rustRuntimeCarrierKey)?.carrier ??
     walk.context.facts.resolve(declaration, rustRuntimeCarrierKey)?.carrier ??
     resolveRustTargetTypeRef(
       Node_Type(ast, declaration) ?? expression,
       rustResolutionContext(walk, declaration),
       walk.operationOptions,
-    );
+    ));
   const ownNames = walk.context.sourceLifetimes.contractFor(expression)?.parameters
     .flatMap(parameter => parameter.kind === "type" ? [parameter.targetName] : []);
   const callable = rustGenericCallableProtocol(selectedCarrier, ownNames) ?? rustCallableProtocol(selectedCarrier);
@@ -598,7 +599,7 @@ export function recordCallableReturnFact(
     !rustTargetTypeRefEquals(selectedCarrier, pointer.returnCarrier)) {
     return false;
   }
-  const carrier = pointer?.returnCarrier ?? selected;
+  const carrier = pointer?.returnCarrier ?? rustGenericCallableValueOwner(walk.context.ast, declaration, selected);
   if (carrier !== undefined) {
     const completion = walk.context.semanticsFor(declaration).operations.callableCompletion(declaration);
     walk.context.facts.set(declaration, rustSourceCallableReturnFactKey, {

@@ -26,6 +26,7 @@ export interface RustCallableValuePlanInput {
   readonly navigation: SourceProgramNavigation;
   readonly lifetimes: RustLifetimeIndex;
   readonly classValueAdapters: readonly { readonly subject: Node; readonly adapter: RustCallableValueAdapter }[];
+  readonly closedSourceFiles: ReadonlySet<SourceFile>;
 }
 
 export interface RustCallableValuePlanRegistry extends RustCallableValuePlan {
@@ -78,7 +79,7 @@ function createRustCallableValuePlan(input: RustCallableValuePlanInput): RustCal
     input.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   for (const sourceFile of input.sourceFiles) visit(sourceFile);
-  const generic = createRustGenericCallablePlan(input.ast, input.sourceFiles, input.facts, input.names, input.navigation, flows);
+  const generic = createRustGenericCallablePlan(input.ast, input.sourceFiles, input.facts, input.names, input.navigation, flows, input.closedSourceFiles);
   const suspended = createRustSuspendedCallablePlan(input.ast, input.sourceFiles, input.facts, input.names, input.lifetimes);
   return Object.freeze({ generic, suspended, issues: Object.freeze([...generic.issues, ...suspended.issues]) });
 }

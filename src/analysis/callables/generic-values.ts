@@ -17,6 +17,8 @@ import { isRustCopyCarrier } from "../../target-model/types/index.js";
 import { rustAsyncFunctionFactKey, rustGeneratorFactKey } from "../facts/keys.js";
 import { createRustGenericCallableFlowIndex } from "./generic-callable-flow.js";
 import type { RustGenericCallableConversion } from "../../target-model/conversions/generic-callable.js";
+import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
+import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 
 export interface RustGenericCallableImplementation {
   readonly declaration: Node;
@@ -50,6 +52,7 @@ export function createRustGenericCallablePlan(
   ast: AstReader, sourceFiles: readonly SourceFile[], facts: RustPlanQueries, names: RustNamePlan,
   navigation: SourceProgramNavigation,
   adapterFlows: readonly { readonly subject: Node; readonly conversion: RustGenericCallableConversion }[] = [],
+  closedSourceFiles: ReadonlySet<SourceFile> = new Set(),
 ): RustGenericCallablePlan {
   const groups = new Map<string, { origin: RustGenericCallableOrigin; signature: RustGenericCallableSignature; implementations: RustGenericCallableImplementation[] }>();
   const implementations = new Map<Node, RustGenericCallableImplementation>();
@@ -57,17 +60,41 @@ export function createRustGenericCallablePlan(
   const usedNames = new Set<string>();
   const closures: Node[] = [];
   const flows: { subject: Node; conversion: RustGenericCallableConversion }[] = [...adapterFlows];
+  const identityCarriers: TargetTypeRef[] = [];
   const visit = (node: Node): void => {
     for (const name of [names.nameForDeclaration(node), names.functionNameForDeclaration(node), names.callableValueNameForDeclaration(node)]) {
       if (name !== undefined) usedNames.add(name);
     }
-    if (facts.getFact(node, rustTargetOperationFactKey)?.kind === "closure") closures.push(node);
+    const operation = facts.getFact(node, rustTargetOperationFactKey);
+    if (operation?.kind === "closure") closures.push(node);
+    if (operation?.kind === "operator-token" && (operation.operator === "==" || operation.operator === "!=")) {
+      const expression = ast.as.AsBinaryExpression(node);
+      for (const operand of [expression?.Left, expression?.Right]) {
+        const carrier = operand === undefined ? undefined : facts.getFact(operand, rustRuntimeCarrierKey)?.carrier;
+        if (carrier !== undefined) identityCarriers.push(carrier);
+      }
+    }
+    if (operation !== undefined && "abi" in operation) {
+      for (const argument of operation.abi.sourceArguments) {
+        if (argument.disposition === "runtime") identityCarriers.push(argument.carrier);
+      }
+    }
     const conversion = facts.getFact(node, rustContextualValueConversionFactKey)?.conversion;
     if (conversion?.kind === "generic-callable-flow") flows.push({ subject: node, conversion });
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   for (const sourceFile of sourceFiles) visit(sourceFile);
   const flow = createRustGenericCallableFlowIndex(flows);
+  const identityFamilies = new Set<string>();
+  const visitedCarriers = new Set<TargetTypeRef>();
+  const retainIdentity = (carrier: TargetTypeRef): void => {
+    if (visitedCarriers.has(carrier)) return;
+    visitedCarriers.add(carrier);
+    const family = flow.familyFor(carrier);
+    if (family !== undefined) identityFamilies.add(family);
+    for (const child of rustTargetTypeChildren(carrier)) retainIdentity(child);
+  };
+  identityCarriers.forEach(retainIdentity);
   issues.push(...flow.issues);
   closures.sort((left, right) => ast.getFileName(ast.getSourceFile(left)).localeCompare(ast.getFileName(ast.getSourceFile(right)), "en") || ast.pos(left) - ast.pos(right));
   for (const node of closures) {
@@ -115,7 +142,8 @@ export function createRustGenericCallablePlan(
     group.implementations.sort((left, right) => left.sourceFileName.localeCompare(right.sourceFileName, "en") || ast.pos(left.declaration) - ast.pos(right.declaration));
     const storage = group.implementations.every(implementation => {
       const flow = navigation.expressionValueFlow(implementation.declaration);
-      return !flow.escapes && !flow.identityCompared && !flow.hasUnclassifiedUse && !flow.captured &&
+      return (!flow.escapes || closedSourceFiles.has(ast.getSourceFile(implementation.declaration)!)) &&
+        !identityFamilies.has(identity) && !flow.identityCompared && !flow.hasUnclassifiedUse &&
         facts.getFact(implementation.declaration, rustAsyncFunctionFactKey) === undefined &&
         facts.getFact(implementation.declaration, rustGeneratorFactKey) === undefined &&
         implementation.captures.every(capture => capture.storage === "value" && isRustCopyCarrier(capture.storageCarrier));

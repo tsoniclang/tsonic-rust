@@ -8,6 +8,7 @@ import { rustGenericCallableConversionMatches } from "../../../dist/target-model
 import { createRustCallableValuePlanRegistry } from "../../../dist/analysis/callables/value-plan.js";
 import { rustObjectLiteralMethodAdapterFactKey } from "../../../dist/analysis/facts/object-methods.js";
 import { rustProjectCallableAdaptersKey } from "../../../dist/analysis/facts/project-callable-adapters.js";
+import { rustRuntimeCarrierKey } from "../../../dist/target-model/facts/selections.js";
 
 const parameter = { kind: "type-parameter", name: "Value" };
 function input() {
@@ -26,8 +27,11 @@ function input() {
     getFileName: file => file.name,
     pos: node => node.position,
     end: node => node.position + 1,
+    as: { AsBinaryExpression: node => node.binary },
   };
   const facts = { getFact: (node, key) => {
+    if (key === rustRuntimeCarrierKey && node.carrier !== undefined) return { carrier: node.carrier };
+    if (key === rustTargetOperationFactKey && node.operation !== undefined) return node.operation;
     if (key === rustObjectLiteralMethodAdapterFactKey) return node.objectAdapters;
     if (key === rustProjectCallableAdaptersKey) return node.projectAdapters;
     if (key === rustContextualValueConversionFactKey && node.conversion !== undefined) return { conversion: node.conversion };
@@ -40,8 +44,8 @@ function input() {
   const navigation = { expressionValueFlow: node => ({ escapes: node === closures[1], identityCompared: false,
     hasUnclassifiedUse: false, captured: false }) };
   return { closures, planInput: { ast, sourceFiles: files, facts, names, navigation,
-    lifetimes: { contractFor: () => undefined }, classValueAdapters: [] },
-    create: () => createRustGenericCallablePlan(ast, files, facts, names, navigation) };
+    lifetimes: { contractFor: () => undefined }, classValueAdapters: [], closedSourceFiles: new Set() },
+    create: (closed = new Set()) => createRustGenericCallablePlan(ast, files, facts, names, navigation, [], closed) };
 }
 
 test("callable value plans seal only after adapter classification and cannot be replaced", () => {
@@ -108,6 +112,27 @@ test("only retained value-flow edges join otherwise independent callable contrac
   assert.equal(plan.definitions.length, 1);
   assert.equal(plan.definitionFor(conversion.source), plan.definitionFor(conversion.target));
   assert.equal(plan.definitions[0].implementations.length, 2);
+});
+
+test("closed returned Copy environments stay inline unless selected operations observe their identity", () => {
+  const { closures, planInput, create } = input();
+  const closed = new Set(planInput.sourceFiles);
+  assert.equal(create(closed).definitionFor(closures[1].carrier).storage, "value");
+  const comparison = { operation: { kind: "operator-token", operator: "==" },
+    binary: { Left: { carrier: closures[1].carrier }, Right: { carrier: closures[1].carrier } } };
+  planInput.sourceFiles[0].nodes.push(comparison);
+  assert.equal(create(closed).definitionFor(closures[1].carrier).storage, "shared");
+  assert.equal(create(closed).definitionFor(closures[0].carrier).storage, "value");
+});
+
+test("provider transport and open exports cannot silently lose callable identity", () => {
+  const { closures, planInput, create } = input();
+  assert.equal(create().definitionFor(closures[1].carrier).storage, "shared");
+  planInput.sourceFiles[0].nodes.push({ operation: { kind: "runtime-call", abi: {
+    sourceArguments: [{ disposition: "runtime", carrier: closures[1].carrier }],
+  } } });
+  assert.equal(create(new Set(planInput.sourceFiles)).definitionFor(closures[1].carrier).storage, "shared");
+  assert.equal(create(new Set(planInput.sourceFiles)).definitionFor(closures[0].carrier).storage, "value");
 });
 
 test("generic callable flow closure is deterministic, transitive and fail-closed", () => {

@@ -61,6 +61,19 @@ export function main(): void {
   assert.doesNotMatch(generated, /Rc<[^\n]*(?:GenericCallable|CallableAlternatives)/u);
 });
 
+test("returned pure quantified values in a closed executable do not allocate an environment", { timeout: 300_000 }, () => {
+  const generated = compileAndRun("returned_quantified_values", `
+function make(): <Value>(value: Value) => Value { return <Value>(value: Value): Value => value; }
+export function main(): void {
+  const value = make();
+  check(value<int32>(7) === 7 && value<string>("native") === "native");
+}
+`);
+  assert.match(generated, /impl Copy for GenericCallable/u);
+  assert.doesNotMatch(generated, /Rc<[^\n]*CallableEnvironment/u);
+  assert.doesNotMatch(generated, /fn call<[^}]*?-> Result/u);
+});
+
 test("quantified async callbacks retain one environment while pending work outlives the callable", { timeout: 300_000 }, () => {
   const generated = compileAndRun("suspended_quantified_values", `
 function make(): <Value>(value: Value) => Promise<Value> {
