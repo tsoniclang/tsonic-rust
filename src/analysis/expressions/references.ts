@@ -11,6 +11,7 @@ import {
   Node_Initializer,
   Node_Type,
   asSourceNode,
+  sourceDeclarationIsModuleScoped,
 } from "@tsonic/target-api/source";
 import {
   rustOptionalChainFactKey,
@@ -31,7 +32,6 @@ import {
 } from "../../target-model/types/index.js";
 import { appendRustDiagnostic, rustOperationContext, rustResolutionContext } from "../program/walk.js";
 import { applySelectedProjectSourceCall, applySelectedSourceCallArguments, recordTargetOperation, setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
-import { declarationIsModuleScoped } from "../callables/closures.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { prepareRustDeferredCheckedCall } from "../operations/provider/index.js";
 import { readRustSourceNativePointerOperation, readRustSourceSafetyBuilder, readRustSourceUnsafeContext } from "../../policy/safety/source-explicit-safety.js";
@@ -187,7 +187,7 @@ export function recordProjectSourceBinding(
     walk.context.names.nameForDeclaration(declaration) === undefined) {
     return undefined;
   }
-  const binding: RustSourceBindingFact = declarationIsModuleScoped(declaration, ast)
+  const binding: RustSourceBindingFact = sourceDeclarationIsModuleScoped(declaration, ast)
     ? {
         scope: "module",
         sourceName,

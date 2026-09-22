@@ -1,9 +1,6 @@
 import {
   KindBlock,
-  KindExportAssignment,
-  KindFunctionDeclaration,
   KindFunctionExpression,
-  KindIdentifier,
   KindArrayBindingPattern,
   KindBindingElement,
   KindNonNullExpression,
@@ -12,11 +9,11 @@ import {
   KindParenthesizedExpression,
   KindSatisfiesExpression,
   KindVariableDeclaration,
-  KindVariableStatement,
   Node_Expression,
   Node_Initializer,
   Node_Name,
   Node_Type,
+  sourceLexicalCaptures,
 } from "@tsonic/target-api/source";
 import {
   rustAsyncFunctionFactKey,
@@ -24,7 +21,6 @@ import {
   rustGeneratorFactKey,
   rustLocationStorageFactKey,
   rustMutatedBindingFactKey,
-  rustSourceBindingFactKey,
   rustSourceCallableReturnFactKey,
   rustSourceParameterAbiFactKey,
 } from "../facts/keys.js";
@@ -326,64 +322,28 @@ export function collectRustLexicalCaptures(
   }>();
   let recursiveDeclaration: Node | undefined;
   const valueDeclaration = callableExpressionValueDeclaration(expression, ast);
-  let valid = true;
-  const visit = (node: Node): void => {
-    if (!valid) {
-      return;
-    }
-    if (ast.kindName(node) === KindIdentifier) {
-      const binding = walk.context.facts.get(node, rustSourceBindingFactKey) ??
-        walk.context.facts.resolve(node, rustSourceBindingFactKey);
-      const declaration = binding?.sourceDeclaration;
-      if (declaration === expression && (ast.kindName(expression) === "KindClassDeclaration" ||
-        ast.kindName(expression) === "KindClassExpression")) return;
-      if (declaration === expression || declaration === valueDeclaration) {
-        recursiveDeclaration = declaration;
-      } else if (declaration !== undefined && !nodeIsWithin(declaration, expression, ast) &&
-        !declarationIsModuleScoped(declaration, ast)) {
-        const declarationKind = ast.kindName(declaration);
-        if (declarationKind === KindParameter || declarationKind === KindVariableDeclaration ||
-          declarationKind === KindBindingElement) {
-          const carrier = walk.context.facts.get(node, rustRuntimeCarrierKey)?.carrier ??
-            walk.context.facts.resolve(node, rustRuntimeCarrierKey)?.carrier ??
-            walk.context.facts.get(declaration, rustRuntimeCarrierKey)?.carrier ??
-            walk.context.facts.resolve(declaration, rustRuntimeCarrierKey)?.carrier;
-          if (carrier === undefined) {
-            valid = false;
-            return;
-          }
-          const storage = rustCapturedBindingStorage(walk, declaration, node);
-          if (storage === undefined) {
-            valid = false;
-            return;
-          }
-          if (storage === "location") {
-            walk.context.facts.set(declaration, rustLocationStorageFactKey, {
-              valueCarrier: carrier,
-            }, [{ message: "rust captured mutable binding storage" }]);
-          }
-          captures.set(declaration, {
-            declaration,
-            reference: node,
-            carrier,
-            storage,
-          });
-        }
-      }
-    }
-    ast.forEachChild(node, (child) => {
-      if (child !== undefined) {
-        visit(child);
-      }
-    });
-  };
-  for (const root of roots) visit(root);
-  return valid
-    ? {
-        captures: [...captures.values()],
-        ...(recursiveDeclaration === undefined ? {} : { recursiveDeclaration }),
-      }
-    : undefined;
+  const selected = sourceLexicalCaptures(expression, roots, ast, walk.context.source.navigation);
+  if (selected.selfReferences.length > 0 && ast.kindName(expression) !== "KindClassDeclaration" &&
+    ast.kindName(expression) !== "KindClassExpression") recursiveDeclaration = expression;
+  for (const capture of selected.captures) {
+    const declaration = capture.declaration;
+    if (declaration === valueDeclaration) { recursiveDeclaration = declaration; continue; }
+    const kind = ast.kindName(declaration);
+    if (kind !== KindParameter && kind !== KindVariableDeclaration && kind !== KindBindingElement) continue;
+    const reference = capture.references[capture.references.length - 1];
+    if (reference === undefined) return undefined;
+    const carrier = walk.context.facts.get(reference, rustRuntimeCarrierKey)?.carrier ??
+      walk.context.facts.resolve(reference, rustRuntimeCarrierKey)?.carrier ??
+      walk.context.facts.get(declaration, rustRuntimeCarrierKey)?.carrier ??
+      walk.context.facts.resolve(declaration, rustRuntimeCarrierKey)?.carrier;
+    const storage = rustCapturedBindingStorage(walk, declaration, reference);
+    if (carrier === undefined || storage === undefined) return undefined;
+    if (storage === "location") walk.context.facts.set(declaration, rustLocationStorageFactKey, {
+      valueCarrier: carrier,
+    }, [{ message: "rust captured mutable binding storage" }]);
+    captures.set(declaration, { declaration, reference, carrier, storage });
+  }
+  return { captures: [...captures.values()], ...(recursiveDeclaration === undefined ? {} : { recursiveDeclaration }) };
 }
 
 function rustCapturedBindingStorage(
@@ -434,50 +394,6 @@ function callableExpressionValueDeclaration(
       Node_Initializer(ast, parent) === current
     ? parent
     : undefined;
-}
-
-function nodeIsWithin(node: Node, ancestor: Node, ast: RustFactWalk["context"]["ast"]): boolean {
-  let current: Node | undefined = node;
-  while (current !== undefined) {
-    if (current === ancestor) {
-      return true;
-    }
-    current = ast.parent(current);
-  }
-  return false;
-}
-
-export function declarationIsModuleScoped(
-  declaration: Node,
-  ast: RustFactWalk["context"]["ast"],
-): boolean {
-  let current: Node | undefined = declaration;
-  while (current !== undefined) {
-    const parent = ast.parent(current);
-    if (parent === undefined) {
-      return false;
-    }
-    const parentKind = ast.kindName(parent);
-    if (parentKind === KindFunctionDeclaration || parentKind === KindFunctionExpression ||
-      parentKind === "KindArrowFunction" || parentKind === "KindMethodDeclaration" ||
-      parentKind === "KindConstructor") {
-      return false;
-    }
-    if (parentKind === "KindSourceFile") {
-      if (current === declaration) {
-        const declarationKind = ast.kindName(declaration);
-        return declarationKind === KindFunctionDeclaration ||
-          declarationKind === "KindClassDeclaration" ||
-          declarationKind === "KindEnumDeclaration" ||
-          declarationKind === KindExportAssignment;
-      }
-      const declarationKind = ast.kindName(declaration);
-      return ast.kindName(current) === KindVariableStatement &&
-        (declarationKind === KindVariableDeclaration || declarationKind === KindBindingElement);
-    }
-    current = parent;
-  }
-  return false;
 }
 
 // --- RegExp constant lane ----------------------------------------------------
