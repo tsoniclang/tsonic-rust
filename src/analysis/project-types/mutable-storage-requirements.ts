@@ -20,10 +20,12 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustAnalysisContext } from "../program/context.js";
 import type { RustProjectTypePolicy } from "./type-policy.js";
 import type { RustProviderOperationRow } from "../../providers/packages/model.js";
+import { createRustStructuralStorageCollector } from "./structural-storage-requirements.js";
 
 export interface RustMutableProjectStorageRequirements {
   readonly declarations: ReadonlySet<Node>;
   readonly valueWrites: ReadonlySet<Node>;
+  readonly referenceDeclarations: ReadonlySet<Node>;
 }
 
 export function collectRustMutableProjectStorageRequirements(
@@ -35,6 +37,8 @@ export function collectRustMutableProjectStorageRequirements(
 ): RustMutableProjectStorageRequirements {
   const mutableDeclarations = new Set<Node>();
   const valueWrites = new Set<Node>();
+  const referenceDeclarations = new Set<Node>();
+  const collectStructural = createRustStructuralStorageCollector(context, projectTypes, referenceDeclarations, mutableDeclarations);
   const collectStoragePath = (node: Node | undefined): void => {
     if (node === undefined) {
       return;
@@ -76,6 +80,7 @@ export function collectRustMutableProjectStorageRequirements(
     }
   };
   const visit = (sourceFile: SourceFile, node: Node): void => {
+    collectStructural(node);
     const { ast } = context;
     const kind = ast.kindName(node);
     if (kind === KindElementAccessExpression) {
@@ -154,5 +159,5 @@ export function collectRustMutableProjectStorageRequirements(
   for (const sourceFile of sourceFiles) {
     visit(sourceFile, sourceFile);
   }
-  return Object.freeze({ declarations: mutableDeclarations, valueWrites });
+  return Object.freeze({ declarations: mutableDeclarations, valueWrites, referenceDeclarations });
 }

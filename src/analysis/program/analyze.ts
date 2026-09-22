@@ -44,6 +44,7 @@ import { recordRustValueStructDeclaration } from "../declarations/value-structs.
 import { recordRustInterfaceRepresentationAliases } from "../declarations/interface-aliases.js";
 import { rustTypeOnlyDeclarationFactKey } from "../../target-model/facts/type-only.js";
 import { finalizeRustCopiedMethods } from "../objects/copied-methods.js";
+import { closeRustInheritedStructuralViews } from "../objects/inherited-structural-views.js";
 
 export function analyzeRustProgram(context: RustAnalysisContext): void {
   const { ast } = context;
@@ -217,6 +218,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     navigation: context.source.navigation,
     semantics: context.source.semantics,
     valueWrites: mutableStorageDeclarations.valueWrites,
+    referenceDeclarations: mutableStorageDeclarations.referenceDeclarations,
     projectTypes,
     sourceFiles: projectSourceFiles,
     hasPromotedStorage(declaration) {
@@ -387,6 +389,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   }
   realizeRustSourceTypeFamilyDemands(walk, projectSourceFiles);
   recordRustTypeOnlyDeclarations(walk, projectSourceFiles);
+  closeRustInheritedStructuralViews(walk);
   const structuralObjects = sourceTypes.structuralObjects();
   const sourcePackageComponentByFile = new Map(context.sourcePackages.packages.flatMap((entry) =>
     entry.sourceFiles.map((fileName) => [fileName, entry.componentId] as const)));

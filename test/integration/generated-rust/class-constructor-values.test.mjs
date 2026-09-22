@@ -88,7 +88,7 @@ export function main(): void {
   const second = factory(8);
   if (alias !== first || first === second) throw new Error("class identity");
   let chosen = first;
-  function argument(): number { chosen = second; return 2; }
+  const argument = (): number => { chosen = second; return 2; };
   const value = new chosen(argument());
   if (value.read() !== 8 || first.count !== 4 || second.count !== 8) throw new Error("receiver order");
   alias.count += 2;

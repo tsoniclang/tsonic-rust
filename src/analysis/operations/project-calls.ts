@@ -4,6 +4,7 @@ import {
   rustTargetGenericTypeArguments,
   substituteRustTargetGenerics,
   isRustProgramErrorCarrier,
+  rustJsArrayLikeElementTargetType,
 } from "../../target-model/types/index.js";
 import {
   KindFunctionDeclaration,
@@ -183,7 +184,7 @@ export function applySelectedProjectSourceCall(
     const inputs = parameterInputs.map((binding) => {
       const carrier = parameterAbi.form === "rest" &&
           binding.sourceParameterForm === "rest-element"
-        ? valueCarrier.kind === "array" ? valueCarrier.element : undefined
+        ? valueCarrier.kind === "array" ? valueCarrier.element : rustJsArrayLikeElementTargetType(valueCarrier)
         : parameterAbi.form === "optional" || parameterAbi.form === "default"
           ? parameterCarrier
           : valueCarrier;
@@ -323,7 +324,7 @@ export function applySelectedProjectSourceCall(
     target = { form: "callable", carrier: selectedCallableCarrier };
   } else if (selectedMember.kind === "constructor") {
     const owner = walk.context.projectTypes.definitionForCarrier(resultCarrier);
-    const classReceiver = calleeReferenceDeclaration === owner?.declaration ? undefined : callee;
+    const classReceiver = expressionKind !== KindNewExpression || calleeReferenceDeclaration === owner?.declaration ? undefined : callee;
     if (classReceiver !== undefined) {
       const carrier = resolveExpressionCarrier(walk, classReceiver, sourceFile, undefined);
       const instance = rustClassConstructorInstance(carrier);

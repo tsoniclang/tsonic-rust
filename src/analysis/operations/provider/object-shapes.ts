@@ -16,6 +16,8 @@ import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
 import { rustArgumentPassingKey, rustSelectedCallKey, rustSelectedOperationKey } from "../../../target-model/facts/selections.js";
 import { rustProjectCallableTargetName } from "../../facts/source-member-name.js";
 import { rustTargetOperationFactKey, rustOptionalChainFactKey } from "../../facts/keys.js";
+import { rustCallableInvocationResult } from "../../facts/callable-results.js";
+import { rustClassConstructorInstance } from "../../../target-model/types/carriers/class-constructors.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
 import { selectedCallCalleeDeclaration, selectedCallCalleeSymbol, selectedSourceValueCarrier, selectedValueCarrier } from "./operators.js";
@@ -39,6 +41,7 @@ import type { RustTargetOperationFact } from "../../facts/keys.js";
 import { selectRustPointerReturnCarrier } from "../../../policy/operations/pointer-return.js";
 import { resolveRustUnionMethodContracts, rustUnionMethodOwner, selectRustUnionMethods } from "./calls/union-methods.js";
 import { rustSourceUnionCarrierValue } from "../../../target-model/types/carriers/source-types.js";
+import { rustGenericCallableValueOwner } from "../../../policy/types/generic-callable-origin.js";
 
 export function mapSelectedJsSpecialCall(
   request: RustCheckedCallSelectionInput,
@@ -583,7 +586,9 @@ export function acceptProjectSourceCall(
     ? selectedOwnerCarrier
     : selectedCallReceiverValueCarrier(request, context, options);
   const unionMethods = construction ? undefined : selectRustUnionMethods(request, receiverCarrier, context, options);
-  const ownerCarrier = unionMethods === undefined ? receiverCarrier : rustUnionMethodOwner(unionMethods, callableDeclaration);
+  const ownerCarrier = unionMethods === undefined
+    ? rustClassConstructorInstance(receiverCarrier) ?? receiverCarrier
+    : rustUnionMethodOwner(unionMethods, callableDeclaration);
   if (rustSourceUnionCarrierValue(receiverCarrier) !== undefined &&
     (unionMethods === undefined || ownerCarrier === undefined)) {
     return rejectSelectedOperation(request.source.call, context, "RUST_UNION_METHOD_IDENTITY_MISSING",
@@ -634,9 +639,10 @@ export function acceptProjectSourceCall(
     returnType = ownerCarrier;
   } else {
     const sourceReturn = Node_Type(ast, callableDeclaration) ?? request.source.sourceResultType;
-    const declaredReturnType = selectRustPointerReturnCarrier(callableDeclaration, context, options) ?? (sourceReturn === undefined
+    const declaredReturnType = rustCallableInvocationResult(context.facts, callableDeclaration) ??
+      selectRustPointerReturnCarrier(callableDeclaration, context, options) ?? rustGenericCallableValueOwner(ast, callableDeclaration, (sourceReturn === undefined
       ? undefined
-      : resolveRustTargetTypeRef(sourceReturn, context, options));
+      : resolveRustTargetTypeRef(sourceReturn, context, options)));
     returnType = declaredReturnType === undefined || ownerCarrier === undefined
       ? declaredReturnType
       : options.projectTypes.instantiateMemberCarrier(

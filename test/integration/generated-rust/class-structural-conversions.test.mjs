@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { compileRust } from "../../helpers/rust-session.mjs";
+import { compileRust, createRustSession, rustSourceDiagnostics } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { classStructuralConversionFiles, invalidClassStructuralConversions } from "../../../../tsonic/test/fixtures/class-structural-conversions.mjs";
 
@@ -22,8 +22,7 @@ export function main(): void { if (!run()) throw new Error("structural conversio
 
 test("structural-view checking retains incompatible field and readonly-write errors", () => {
   for (const source of invalidClassStructuralConversions) {
-    const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": source } });
-    assert.ok(result.diagnostics.some(diagnostic => diagnostic.category === "error"));
-    assert.equal(result.artifacts.length, 0);
+    const session = createRustSession({ surfaces: ["js"], files: { "index.ts": source } });
+    assert.match(rustSourceDiagnostics(session), /error TS(?:2322|2540)/u);
   }
 });

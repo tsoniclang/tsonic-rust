@@ -129,7 +129,8 @@ export function planRustStructuralShapeModule(
       });
       if (superTraits.some(type => type === undefined)) return undefined;
       const planned = error === undefined ? undefined : planRustConstructorShape(definition, generics, type, visibility,
-        error, carrier => rustTypeFromCarrierInContext(carrier, definitionContext), superTraits as RustType[]);
+        error, carrier => rustTypeFromCarrierInContext(carrier, definitionContext), superTraits as RustType[],
+        (index, role) => rustStructuralFieldDeadCodeDisposition(context, definition.sourceCarriers, index, visibility === "public", role));
       if (planned === undefined) {
         diagnostics.push({ code: "RUST_STRUCTURAL_CONSTRUCTOR_TYPE_MISSING", category: "error", source: "tsonic-rust",
           message: "A constructor interface requires exact native dispatch signatures and property storage.",

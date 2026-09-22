@@ -1,15 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { rustSourceParameterAbiFactKey } from "../facts/keys.js";
 import type { RustSuspendedCallableStorage } from "../facts/keys.js";
-import {
-  rustLifetimeKey,
-  rustLifetimeOutlives,
-} from "../../target-model/lifetimes/index.js";
-import type {
-  RustLifetimeRef,
-  RustSourceGenericContract,
-} from "../../target-model/lifetimes/index.js";
-import { rustTargetGenericReferences } from "../../target-model/types/index.js";
+import { selectRustSuspendedStorageLifetime } from "../../policy/ownership/suspended-storage.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustFactWalk } from "../program/walk.js";
 
@@ -80,46 +72,11 @@ export function resolveRustSuspendedCallableStorage(
     carriers.push(carrier);
   }
   const contract = walk.context.sourceLifetimes.contractFor(declaration);
-  const candidates = new Map<string, RustLifetimeRef>();
-  for (const carrier of carriers) {
-    const references = rustTargetGenericReferences(carrier);
-    if (references.hasUnnameableLifetime) {
-      return {
-        kind: "rejected",
-        reason: "A suspended-callable storage lifetime cannot be named from an elided, placeholder, or call-scoped captured lifetime.",
-      };
-    }
-    for (const lifetime of references.lifetimes) {
-      candidates.set(rustLifetimeKey(lifetime), lifetime);
-    }
-    for (const name of references.typeNames) {
-      const parameter = contract?.parameters.find((candidate) =>
-        candidate.kind === "type" && candidate.targetName === name);
-      for (const lifetime of parameter?.kind === "type" ? parameter.outlives : []) {
-        if (lifetime.kind !== "static") {
-          candidates.set(rustLifetimeKey(lifetime), lifetime);
-        }
-      }
-    }
-  }
-  if (candidates.size === 0) {
-    return {
-      kind: "resolved",
-      capturedParameters: Object.freeze(capturedParameters),
-      storage: Object.freeze({ kind: "static" }),
-    };
-  }
-  if (contract === undefined) {
-    return {
-      kind: "rejected",
-      reason: "A borrowed suspended callable has no exact source generic lifetime contract.",
-    };
-  }
-  const lifetime = selectShortestAuthoredLifetime([...candidates.values()], contract);
+  const lifetime = selectRustSuspendedStorageLifetime(carriers, contract);
   if (lifetime === undefined) {
     return {
       kind: "rejected",
-      reason: "A suspended callable's captured lifetimes have no single exact authored storage lifetime.",
+        reason: "A suspended callable's captured lifetimes have no single exact authored storage lifetime; elided, placeholder, or call-scoped captures cannot define escaping storage.",
     };
   }
   if (lifetime.kind === "static") {
@@ -147,13 +104,4 @@ function containingParameter(
     current = ast.parent(current);
   }
   return undefined;
-}
-
-function selectShortestAuthoredLifetime(
-  candidates: readonly RustLifetimeRef[],
-  contract: RustSourceGenericContract,
-): RustLifetimeRef | undefined {
-  const eligible = candidates.filter((candidate) =>
-    candidates.every((source) => rustLifetimeOutlives(source, candidate, contract)));
-  return eligible.length === 1 ? eligible[0] : undefined;
 }

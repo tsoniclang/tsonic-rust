@@ -3,6 +3,7 @@ import {
   rustCarrierSupportsClone,
   rustOptionElementCarrier,
   rustSourceTypeCarrierValue,
+  rustStructuralObjectCarrierValue,
 } from "../../../target-model/types/index.js";
 import {
   KindBinaryExpression,
@@ -503,6 +504,12 @@ export function planRustProjectUpcast(
       kind: "struct-literal",
       path: targetPath,
       fields: [rustProjectObjectIdentityField, rustProjectObjectDispatchField].map(name => {
+        if (name === rustProjectObjectIdentityField && rustStructuralObjectCarrierValue(fact.sourceCarrier) !== undefined) {
+          return { name, value: { kind: "method-call", receiver: {
+            kind: "method-call", receiver: { kind: "field", receiver: { kind: "path", path: valueName },
+              name: rustProjectObjectDispatchField }, method: "object_identity", args: [],
+          }, method: "clone", args: [] } as RustExpr };
+        }
         const field: RustExpr = { kind: "field", receiver: { kind: "path", path: valueName }, name };
         return { name, value: ownership === "owned" ? field : {
           kind: "method-call", receiver: field, method: "clone", args: [],

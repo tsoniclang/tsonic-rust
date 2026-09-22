@@ -8,7 +8,7 @@ import type {
   RustAnalysisContext,
 } from "./context.js";
 import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
-import { rustSourceCallableReturnFactKey, rustSourceParameterAbiFactKey } from "../facts/keys.js";
+import { rustSourceCallableReturnFactKey, rustSourceParameterAbiFactKey, rustTypeAliasDeclarationFactKey } from "../facts/keys.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
@@ -138,6 +138,7 @@ export function analyzeRustSourcePackageComponents(
       rustTargetTypeChildren(carrier).forEach(inspect);
     };
     const visit = (node: import("@tsonic/tsts").Node): void => {
+      if (context.facts.getFact(node, rustTypeAliasDeclarationFactKey)?.kind === "erased") return;
       for (const carrier of [context.facts.getFact(node, rustRuntimeCarrierKey)?.carrier,
         context.facts.getFact(node, rustSourceCallableReturnFactKey)?.returnCarrier,
         context.facts.getFact(node, rustSourceParameterAbiFactKey)?.parameterCarrier]) {

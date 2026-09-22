@@ -420,8 +420,8 @@ export function selectRustCheckedPropertyAccess(
 
   if (isProjectSourceDeclaration(context, request.sourceSelectedDeclaration)) {
     const declaration = request.sourceSelectedDeclaration;
-    const memberName = context.ast.text(context.ast.name(declaration));
     if (context.ast.kindName(declaration) === "KindEnumMember") {
+      const memberName = context.ast.text(context.ast.name(declaration));
       const enumDeclaration = context.ast.parent(declaration);
       const enumName = enumDeclaration === undefined
         ? ""

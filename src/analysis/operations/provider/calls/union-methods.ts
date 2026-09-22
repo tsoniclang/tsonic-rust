@@ -9,6 +9,7 @@ import type { RustSelectedUnionMethod, RustSelectedUnionMethodIdentity, RustTarg
 import { rustProjectCallableTargetName } from "../../../facts/source-member-name.js";
 import type { RustOperationsProviderOptions } from "../model.js";
 import { selectedCallCalleeSymbol } from "../operators.js";
+import { rustCallableInvocationResult } from "../../../facts/callable-results.js";
 
 export function selectRustUnionMethods(
   request: RustCheckedCallSelectionInput,
@@ -71,7 +72,8 @@ export function resolveRustUnionMethodContracts(
         rustTargetTypeRefEquals(parameter.type, instantiate(declaration, abi.parameterCarrier));
     });
     const annotation = context.ast.typeNode(method.declaration);
-    const returnType = selectRustPointerReturnCarrier(method.declaration, context, options) ??
+    const returnType = rustCallableInvocationResult(context.facts, method.declaration) ??
+      selectRustPointerReturnCarrier(method.declaration, context, options) ??
       (annotation === undefined ? undefined : resolveRustTargetTypeRef(annotation, context, options));
     const instantiated = returnType === undefined ? undefined : instantiate(method.declaration, returnType);
     return !valid || instantiated === undefined ? undefined : { ...method, returnType: instantiated };

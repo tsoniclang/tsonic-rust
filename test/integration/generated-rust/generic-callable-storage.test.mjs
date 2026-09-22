@@ -76,11 +76,12 @@ export function main(): void {
 
 test("quantified async callbacks retain one environment while pending work outlives the callable", { timeout: 300_000 }, () => {
   const generated = compileAndRun("suspended_quantified_values", `
+async function resolved<Value>(value: Value): Promise<Value> { return value; }
 function make(): <Value>(value: Value) => Promise<Value> {
   let count: int32 = 0;
   return async <Value>(value: Value): Promise<Value> => {
     count += 1;
-    await Promise.resolve();
+    await resolved(0);
     if (count === 3) throw new Error("third");
     return value;
   };
@@ -107,10 +108,11 @@ export async function main(): Promise<void> {
 
 test("a synchronous quantified Promise factory preserves separate invocation and awaiting failures", { timeout: 300_000 }, () => {
   compileAndRun("quantified_promise_effects", `
+async function resolved<Value>(value: Value): Promise<Value> { return value; }
 function make(rejectNow: boolean): <Value>(value: Value) => Promise<Value> {
   return <Value>(value: Value): Promise<Value> => {
     if (rejectNow) throw new Error("invocation");
-    return Promise.resolve(value);
+    return resolved(value);
   };
 }
 export async function main(): Promise<void> {

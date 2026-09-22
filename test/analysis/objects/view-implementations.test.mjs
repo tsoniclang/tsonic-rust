@@ -41,7 +41,7 @@ test("view coverage does not merge distinct declarations, layouts or destination
     { ...concrete, fields: [{ declaration: member, storageIndex: 1 }] },
     { ...concrete, fields: [{ declaration: { file: "/model.ts" }, storageIndex: 0 }] },
     view(number, "/other.ts"),
-    { ...concrete, targetCarrier: view({ kind: "source-primitive", name: "boolean" }).targetCarrier },
+    { ...concrete, targetCarrier: view({ kind: "source-primitive", name: "bool" }).targetCarrier },
   ];
   for (const variant of variants) assert.equal(selectRustProjectViewImplementations([generic, variant], context(false)).length, 2);
   assert.throws(() => selectRustProjectViewImplementations([view(number, "/missing.ts")], context(false)), /exact source and destination package owners/u);

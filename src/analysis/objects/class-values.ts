@@ -55,6 +55,7 @@ export interface RustClassValuePlan {
 }
 
 export interface RustClassValueRegistry {
+  instanceViewRequests(): readonly RustProjectStructuralView[];
   valueAdapters(): readonly { readonly subject: Node; readonly adapter: RustCallableValueAdapter }[];
   recordInstanceView(view: RustProjectStructuralView): boolean;
   hasConstructorValue(declaration: Node): boolean;
@@ -73,6 +74,7 @@ export function createRustClassValueRegistry(): RustClassValueRegistry {
   const instanceViews: RustProjectStructuralView[] = [];
   let sealed = false;
   return {
+    instanceViewRequests() { return Object.freeze([...instanceViews]); },
     valueAdapters() {
       const result: { readonly subject: Node; readonly adapter: RustCallableValueAdapter }[] = [];
       const record = (callable: RustClassValueCallable): void => {
@@ -209,7 +211,8 @@ export function createRustClassValueRegistry(): RustClassValueRegistry {
           ...(environment === undefined ? {} : { environment: Object.freeze({ ...environment,
             typeName: allocate(declaration, "Class", "type"),
             instanceFieldName: allocateRustGeneratedName(fields, "class_environment"),
-            bindingName: allocate(declaration, "class_environment", "callable"),
+            bindingName: allocate(declaration, "class_environment",
+              ast.parent(declaration) === ast.getSourceFile(declaration) ? "constant" : "callable"),
             parameterName: allocate(declaration, "class_context", "callable"),
             identityFieldName: allocateRustGeneratedName(new Set([...fields,
               ...environment.captures.map(field => field.fieldName), ...environment.staticFields.map(field => field.fieldName)]), "class_identity"),

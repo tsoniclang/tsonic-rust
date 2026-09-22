@@ -29,10 +29,13 @@ test("constructor values retain distinct instance identity and exact generic arg
   assert.equal(rustCarrierSupportsClone(constructor), true);
   assert.equal(rustCarrierSupportsObjectIdentity(constructor), true);
   assert.equal(isRustCopyCarrier(constructor), false);
-  for (const operator of ["===", "!==", "==", "!="]) {
+  for (const operator of ["KindEqualsEqualsEqualsToken", "KindExclamationEqualsEqualsToken"]) {
     const selected = selectRustBinaryOperator(operator, constructor, constructor);
     assert.equal(selected?.kind, "operator-token");
-    assert.equal(selected.rustOperator, operator.includes("!") ? "!=" : "==");
+    assert.equal(selected.rustOperator, operator.includes("Exclamation") ? "!=" : "==");
+  }
+  for (const operator of ["KindEqualsEqualsToken", "KindExclamationEqualsToken"]) {
+    assert.equal(selectRustBinaryOperator(operator, constructor, constructor), undefined);
   }
 });
 

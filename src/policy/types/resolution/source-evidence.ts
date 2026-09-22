@@ -33,6 +33,7 @@ import { resolveBoundSourceTypeParameter } from "./callables.js";
 import { rustTypeFamilyNormalizer } from "../type-family-normalization.js";
 import { rustGenericCallableTargetType } from "../../../target-model/types/carriers/generic-callables.js";
 import { rustGenericCallableOrigin } from "../generic-callable-origin.js";
+import { closeRustCallableResultStorage } from "../callable-result-storage.js";
 
 export function resolveRustSignatureParameterListTarget(
   parameters: SourceCallableTypeEvidence["parameters"],
@@ -90,15 +91,17 @@ export function resolveRustCallableEvidence(
   if (parameters.some((parameter) => parameter === undefined)) {
     return undefined;
   }
-  const result = resolveRustTypeComponentEvidence(
+  const sourceResult = resolveRustTypeComponentEvidence(
     callable.result,
     context,
     options,
     resolving,
   );
-  if (result === undefined) return undefined;
   const declaration = callable.result.declaration;
   const genericContract = context.sourceLifetimes.contractFor(declaration);
+  const result = sourceResult === undefined ? undefined
+    : closeRustCallableResultStorage(sourceResult, parameters, genericContract);
+  if (result === undefined) return undefined;
   if (genericContract !== undefined && genericContract.parameters.length > 0 &&
     genericContract.parameters.every(parameter => parameter.kind === "type")) {
     const origin = rustGenericCallableOrigin(context.ast, declaration);

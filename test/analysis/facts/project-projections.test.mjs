@@ -10,7 +10,8 @@ import {
 const sourceCarrier = { kind: "target-named", id: "source" };
 const dispatchCarrier = { kind: "target-named", id: "dispatch" };
 const targetCarrier = { kind: "target-named", id: "target" };
-const selection = { sourceCarrier, dispatchCarrier, targetCarrier };
+const projection = { kind: "closed", slot: "selected_view" };
+const selection = { sourceCarrier, dispatchCarrier, targetCarrier, projection };
 
 function model() {
   return createRustPlanBuilder({ getFact: () => undefined });
@@ -23,7 +24,7 @@ test("project planning consumes exact sealed cast or flow evidence", () => {
     if (mode !== "flow") facts.set(node, rustProjectDowncastFactKey, selection);
     if (mode !== "cast") facts.set(node, rustFlowReadProjectionFactKey, {
       kind: "project-downcast", sourceCarrier, dispatchCarrier,
-      selectedCarrier: targetCarrier,
+      selectedCarrier: targetCarrier, projection,
     });
     assert.deepEqual(rustSelectedProjectDowncast(facts, node), selection);
     assert.equal(rustSelectedProjectDowncast(facts, {}), undefined);
@@ -37,7 +38,7 @@ test("contradictory projection evidence cannot be replanned as a valid cast", ()
     facts.set(node, rustProjectDowncastFactKey, selection);
     facts.set(node, rustFlowReadProjectionFactKey, {
       kind: "project-downcast", sourceCarrier, dispatchCarrier,
-      selectedCarrier: targetCarrier,
+      selectedCarrier: targetCarrier, projection,
       [field]: { kind: "target-named", id: "different" },
     });
     assert.equal(rustSelectedProjectDowncast(facts, node), undefined);

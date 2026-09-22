@@ -51,11 +51,12 @@ export async function main(): Promise<void> {
 
 test("escaping async callbacks retain captures and observe mutation across invocations", { timeout: 300_000 }, () => {
   const source = compileAndRun("owned_async_callable", `
+async function pause(): Promise<void> {}
 function counter(prefix: string): (step: int32) => Promise<string> {
   let total: int32 = 0;
   return async (step: int32): Promise<string> => {
     total += step;
-    await Promise.resolve();
+    await pause();
     return prefix + total.toString();
   };
 }

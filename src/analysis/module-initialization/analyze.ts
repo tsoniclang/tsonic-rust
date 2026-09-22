@@ -109,7 +109,8 @@ function classifyModuleInitialization(
       continue;
     }
     if (kind === "KindClassDeclaration") {
-      if (classValues.forDeclaration(statement) !== undefined) return { kind: "required" };
+      const environment = classValues.forDeclaration(statement)?.environment;
+      if (environment !== undefined && (environment.evaluatedConstructorValue || environment.staticFields.length > 0)) return { kind: "required" };
       for (const member of input.ast.members(statement)) {
         if (member === undefined) {
           return unresolved(statement, "Class declaration contains an undefined member slot.");

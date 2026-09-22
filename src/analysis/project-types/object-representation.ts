@@ -51,6 +51,7 @@ export interface RustObjectRepresentationAnalysisInput {
   readonly valueWrites: ReadonlySet<Node>;
   readonly hasPromotedStorage: (declaration: Node) => boolean;
   readonly hasMutableStorageUse: (declaration: Node) => boolean;
+  readonly referenceDeclarations?: ReadonlySet<Node>;
 }
 
 export interface RustObjectRepresentationPlanRegistry
@@ -123,6 +124,7 @@ export function createRustObjectRepresentationPlan(
             !identityObserved &&
             !escapes &&
             !hasIncompleteFlow &&
+            !input.referenceDeclarations?.has(definition.declaration) &&
             !promotedStorage &&
             !aliasedMutableValue
           ? "value"

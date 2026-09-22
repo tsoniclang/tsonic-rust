@@ -11,7 +11,7 @@ import {
   rustRawPointerTargetId,
 } from "./source-types.js";
 import { rustOptionElementCarrier, rustOptionTargetType } from "./optional.js";
-import { rustTupleTargetType, rustUnitTargetType } from "./native.js";
+import { rustUnitTargetType } from "./native.js";
 import type { TargetTypeRef } from "../model.js";
 import {
   rustLifetimeGenericArgument,
@@ -47,7 +47,7 @@ export function rustCallableTargetType(
   return {
     kind: "target-named",
     id: rustCallableTargetId,
-    genericArguments: rustTypeGenericArguments([rustTupleTargetType(parameters), result]),
+    genericArguments: rustTypeGenericArguments([{ kind: "tuple", elements: parameters }, result]),
   };
 }
 

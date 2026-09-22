@@ -179,10 +179,16 @@ export function hasExactObjectKeys(
   value: object,
   expected: readonly string[],
 ): boolean {
-  const actual = Object.keys(value).sort();
+  if (!isMetadataRecord(value)) return false;
+  const keys = Reflect.ownKeys(value);
+  if (keys.some(key => typeof key !== "string")) return false;
+  const actual = (keys as string[]).sort();
   const selected = [...expected].sort();
   return actual.length === selected.length &&
-    actual.every((key, index) => key === selected[index]);
+    actual.every((key, index) => {
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      return key === selected[index] && descriptor !== undefined && "value" in descriptor;
+    });
 }
 
 function isMetadataRecord(value: unknown): value is Readonly<Record<string, unknown>> {

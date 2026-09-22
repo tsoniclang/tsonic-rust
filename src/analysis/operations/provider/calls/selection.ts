@@ -48,6 +48,7 @@ import { rustOperandSupportsSourceNumeric } from "../../generic-numeric.js";
 import { selectRustPointerViewCall } from "../../pointer-views.js";
 import { selectBorrowedCallbackParameters } from "./borrowed-callbacks.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../../../target-model/types/carriers/generic-callables.js";
+import { rustClassConstructorInstance } from "../../../../target-model/types/carriers/class-constructors.js";
 import type {
   RustCheckedCallSelectionInput,
   RustCheckedCallSelectionResult,
@@ -414,11 +415,16 @@ export function selectRustCheckedCall(
   const calleeDeclaration = isProjectSourceDeclaration(context, selectedCallCalleeDeclaration(request))
     ? asNode(selectedCallCalleeDeclaration(request), context)
     : undefined;
-  const implicitConstructorClass = sourceDeclaration === undefined &&
-      calleeDeclaration !== undefined &&
-      checkedCallIsConstruction(request, context) &&
-      context.ast.kindName(calleeDeclaration) === "KindClassDeclaration"
-    ? calleeDeclaration
+  const constructorCarrier = sourceDeclaration === undefined && checkedCallIsConstruction(request, context)
+    ? selectedValueCarrier(request.source.sourceCallee.expression, request.source.sourceCallee.type, context, options)
+    : undefined;
+  const constructorInstance = constructorCarrier === undefined ? undefined : rustClassConstructorInstance(constructorCarrier);
+  const constructorDefinition = sourceDeclaration === undefined && checkedCallIsConstruction(request, context)
+    ? options.projectTypes.definitionForDeclaration(calleeDeclaration) ??
+      (constructorInstance === undefined ? undefined : options.projectTypes.definitionForCarrier(constructorInstance))
+    : undefined;
+  const implicitConstructorClass = constructorDefinition?.kind === "class"
+    ? constructorDefinition.declaration
     : sourceDeclaration === undefined
       ? selectedImplicitSuperConstructorClass(request, context, options)
       : undefined;
