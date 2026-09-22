@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { nestedArrayRestSource } from "../../../../tsonic/test/fixtures/nested-array-rest.mjs";
 
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import {
@@ -8,6 +9,19 @@ import {
   createRustSession,
   rustSourceDiagnostics,
 } from "../../helpers/rust-session.mjs";
+
+test("native rest contracts preserve array-valued arguments and nested storage identity", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"],
+    packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "nested_array_rest" } },
+    files: {
+      "index.ts": `${nestedArrayRestSource}\nimport { check } from "@acme/testing"; export function main(): void { check(run()); }`,
+    },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  validateGeneratedProject("nested-array-rest", result.artifacts, { run: true });
+});
 
 test("generated Rust closes identity, binary, collection, Date, and object APIs", { timeout: 300_000 }, () => {
   const { result } = compileRust({
