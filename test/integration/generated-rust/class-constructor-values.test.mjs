@@ -52,6 +52,19 @@ export function view(): { read: () => number } { return Factory; }
   assert.equal(result.artifacts.length, 0);
 });
 
+test("type-only constructor parameters do not initialize an unused native class owner", () => {
+  const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": `
+class Entry { value = 3; }
+export function ignored(constructor: typeof Entry): number { return 1; }
+export function main(): void { const entry = new Entry(); if (entry.value !== 3) throw new Error("value"); }
+` } });
+  assert.deepEqual(result.diagnostics, []);
+  const generated = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
+  assert.match(generated, /fn ignored/u);
+  assert.doesNotMatch(generated, /Rc::new\(EntryClass\s*\{/u);
+  assert.doesNotMatch(generated, /class_environment\.initialize/u);
+});
+
 test("inferred constructor aliases retain the selected evaluation across calls and argument effects", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"],
     target: { id: "rust", options: { outputType: "bin", crateName: "inferred_constructor_values" } },

@@ -162,11 +162,13 @@ export function rustClassEnvironmentForCall(declaration: Node, context: RustPlan
   return active?.declaration === declaration ? active.expression : { kind: "path", path: environment.bindingName };
 }
 
-export function rustOwnedClassEnvironmentForCall(declaration: Node, context: RustPlanContext): RustExpr | undefined {
+export function rustOwnedClassEnvironmentForCall(declaration: Node, context: RustPlanContext, retained?: RustExpr): RustExpr | undefined {
   const environment = context.input.program.classValues.forDeclaration(declaration)?.environment;
   if (environment !== undefined && !environment.instancesUseEnvironment && !environment.initializationUsesEnvironment) return undefined;
-  const value = rustClassEnvironmentForCall(declaration, context);
+  const value = retained ?? rustClassEnvironmentForCall(declaration, context);
   if (environment === undefined || value === undefined) return undefined;
+  const ast = context.input.program.source.ast;
+  if (retained !== undefined || ast.parent(declaration) === ast.getSourceFile(declaration)) return value;
   if (!environment.copy) return { kind: "method-call", receiver: value, method: "clone", args: [] };
   return context.classEnvironment?.declaration === declaration && context.classEnvironment.borrowed
     ? { kind: "dereference", pointer: value } : value;
@@ -196,10 +198,10 @@ export function rustClassMemberEnvironmentContext(member: Node, context: RustPla
   } };
 }
 
-export function rustClassStaticEnvironmentForCall(member: Node | undefined, context: RustPlanContext): RustExpr | undefined {
+export function rustClassStaticEnvironmentForCall(member: Node | undefined, context: RustPlanContext, retained?: RustExpr): RustExpr | undefined {
   if (member === undefined || !context.input.program.source.ast.hasModifierKind(member, "static")) return undefined;
   const owner = context.input.program.projectTypes.definitionContainingDeclaration(member);
   const environment = owner === undefined ? undefined : context.input.program.classValues.forDeclaration(owner.declaration)?.environment;
   if (environment === undefined || !environment.consumers.includes(member)) return undefined;
-  return rustClassEnvironmentForCall(environment.declaration, context);
+  return retained ?? rustClassEnvironmentForCall(environment.declaration, context);
 }

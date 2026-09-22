@@ -35,8 +35,8 @@ export function planRustClassValueImplementations(declaration: Node, context: Ru
     const generics = rustProjectImplementationGenerics(rustClassConstructorTargetType(view.sourceCarrier, bound), definition,
       rustProjectGenerics(definition, context, environment.genericParameterIndexes), context);
     if (generics === undefined) return undefined;
-    const shape = context.input.program.structuralShapes.definitionForCarrier(view.carrier);
-    const wrapper = rustTypeFromCarrierInContext(view.carrier, context);
+    const shape = context.input.program.structuralShapes.definitionForCarrier(view.targetCarrier);
+    const wrapper = rustTypeFromCarrierInContext(view.targetCarrier, context);
     if (shape?.dispatchName === undefined || wrapper?.kind !== "named") return undefined;
     const ownerPath = wrapper.path.slice(0, wrapper.path.lastIndexOf("::") + 2);
     const functions: RustImplFunction[] = [];

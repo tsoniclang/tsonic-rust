@@ -216,8 +216,7 @@ export function planSelectedSourceCall(
       if (path === undefined || !isValidRustIdentifier(targetName)) {
         break;
       }
-      const selectedEnvironment = rustClassStaticEnvironmentForCall(selected.sourceDeclaration, context);
-      const environment = selectedEnvironment === undefined ? undefined : retainedClass ?? selectedEnvironment;
+      const environment = rustClassStaticEnvironmentForCall(selected.sourceDeclaration, context, retainedClass);
       planned = {
         kind: "call",
         path,
@@ -326,8 +325,7 @@ export function planSelectedSourceCall(
       const typePath = value === undefined ? undefined : sourceTypePath(context, value);
       const targetName = callableSpecialization?.targetName ?? fact.target.name;
       if (typePath !== undefined && isValidRustIdentifier(targetName)) {
-        const selectedEnvironment = rustClassStaticEnvironmentForCall(selected.sourceDeclaration, context);
-        const environment = selectedEnvironment === undefined ? undefined : retainedClass ?? selectedEnvironment;
+        const environment = rustClassStaticEnvironmentForCall(selected.sourceDeclaration, context, retainedClass);
         planned = {
           kind: "call",
           path: `${typePath}::${targetName}`,
@@ -342,8 +340,7 @@ export function planSelectedSourceCall(
       const targetName = fact.target.name;
       if (owner !== undefined && isValidRustIdentifier(targetName)) {
         const definition = context.input.program.projectTypes.definitionForCarrier(fact.target.typeCarrier);
-        const selectedEnvironment = definition === undefined ? undefined : rustOwnedClassEnvironmentForCall(definition.declaration, context);
-        const environment = selectedEnvironment === undefined ? undefined : retainedClass ?? selectedEnvironment;
+        const environment = definition === undefined ? undefined : rustOwnedClassEnvironmentForCall(definition.declaration, context, retainedClass);
         planned = {
           kind: "associated-call",
           owner,

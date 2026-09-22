@@ -21,7 +21,7 @@ export function recordRustClassEnvironmentDemands(walk: RustFactWalk): void {
     const instance = rustClassConstructorInstance(carrier);
     if (instance !== undefined) {
       const definition = projectTypes.definitionForCarrier(instance);
-      if (definition !== undefined) classValues.recordConstructorValue(definition.declaration);
+      if (definition !== undefined) classValues.recordConstructorValue(definition.declaration, "type");
     }
     for (const child of rustTargetTypeChildren(carrier)) record(child);
   };
@@ -39,6 +39,7 @@ export interface RustClassEnvironment {
   readonly storage: "value" | "shared";
   readonly copy: boolean;
   readonly constructorValue: boolean;
+  readonly evaluatedConstructorValue: boolean;
   readonly genericParameterIndexes: readonly number[];
   readonly consumers: readonly Node[];
   readonly initializationUsesEnvironment: boolean;
@@ -119,7 +120,7 @@ export function selectRustClassEnvironment(walk: RustFactWalk, declaration: Node
   const genericParameterIndexes = Object.freeze(definition.genericParameters.flatMap((parameter, index) => ownParameters.has(parameter.declaration) ? [] : [index]));
   return { kind: "available", environment: Object.freeze({ declaration, carrier: projectTypes.openCarrier(definition), genericParameterIndexes,
     storage: !constructorValue && (copy || staticFields.length === 0 && captures.length === 1 && captures[0]!.storage === "location") ? "value" : "shared",
-    copy, constructorValue,
+    copy, constructorValue, evaluatedConstructorValue: walk.context.classValues.evaluatesConstructorValue(declaration),
     consumers: Object.freeze(consumers),
     initializationUsesEnvironment: consumers.some(member => ast.kindName(member) === "KindConstructor" ||
       ast.kindName(member) === "KindPropertyDeclaration" && !ast.hasModifierKind(member, "static")),

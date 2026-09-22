@@ -16,13 +16,13 @@ import type { RustAnalysisContext } from "../program/context.js";
 import { rustProjectStaticFieldStorage, type RustProjectStaticFieldStorage } from "../project-types/object-layout.js";
 import { selectRustClassValueCallable, type RustClassValueCallable } from "./class-value-callables.js";
 import type { RustProjectStructuralView, RustProjectStructuralViewImplementation } from "./project-structural-views.js";
-import { selectRustStructuralViewImplementations } from "./project-structural-views.js";
+import { selectRustProjectViewImplementations } from "./view-implementations.js";
 import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
 
 export interface RustClassValueView {
   readonly declaration: Node;
   readonly sourceCarrier: TargetTypeRef;
-  readonly carrier: TargetTypeRef;
+  readonly targetCarrier: TargetTypeRef;
   readonly fields: readonly (RustProjectStaticFieldStorage & {
     readonly storageIndex: number;
     readonly writable: boolean;
@@ -55,7 +55,8 @@ export interface RustClassValuePlan {
 export interface RustClassValueRegistry {
   recordInstanceView(view: RustProjectStructuralView): boolean;
   hasConstructorValue(declaration: Node): boolean;
-  recordConstructorValue(declaration: Node): void;
+  evaluatesConstructorValue(declaration: Node): boolean;
+  recordConstructorValue(declaration: Node, demand: "type" | "value"): void;
   record(view: RustClassValueView): boolean;
   recordEnvironment(environment: RustClassEnvironment): boolean;
   seal(context: RustAnalysisContext): RustClassValuePlan;
@@ -65,6 +66,7 @@ export function createRustClassValueRegistry(): RustClassValueRegistry {
   const requests = new Map<Node, Map<string, RustClassValueView>>();
   const environments = new Map<Node, RustClassEnvironment>();
   const constructors = new Set<Node>();
+  const evaluatedConstructors = new Set<Node>();
   const instanceViews: RustProjectStructuralView[] = [];
   let sealed = false;
   return {
@@ -85,9 +87,13 @@ export function createRustClassValueRegistry(): RustClassValueRegistry {
     hasConstructorValue(declaration) {
       return constructors.has(declaration) || (requests.get(declaration)?.size ?? 0) > 0;
     },
-    recordConstructorValue(declaration) {
+    evaluatesConstructorValue(declaration) {
+      return evaluatedConstructors.has(declaration) || (requests.get(declaration)?.size ?? 0) > 0;
+    },
+    recordConstructorValue(declaration, demand) {
       if (sealed) throw new Error("Rust constructor values cannot change after sealing.");
       constructors.add(declaration);
+      if (demand === "value") evaluatedConstructors.add(declaration);
     },
     recordEnvironment(environment) {
       if (sealed) throw new Error("Rust class environments cannot change after sealing.");
@@ -109,14 +115,14 @@ export function createRustClassValueRegistry(): RustClassValueRegistry {
     record(view) {
       if (sealed) throw new Error("Rust constructor views cannot change after sealing.");
       const views = requests.get(view.declaration) ?? new Map<string, RustClassValueView>();
-      const key = closedMetadataKey([view.sourceCarrier, view.carrier]);
+      const key = closedMetadataKey([view.sourceCarrier, view.targetCarrier]);
       const existing = views.get(key);
       if (existing !== undefined) return existing.fields.length === view.fields.length &&
         classValueCallablesEqual(existing.construction, view.construction) &&
         existing.fields.every((field, index) => field.declaration === view.fields[index]?.declaration &&
           field.storageIndex === view.fields[index]?.storageIndex && field.writable === view.fields[index]?.writable &&
           classValueCallablesEqual(field.callable, view.fields[index]?.callable));
-      views.set(key, Object.freeze({ ...view, sourceCarrier: snapshotClosedMetadata(view.sourceCarrier),
+      views.set(key, Object.freeze({ ...view, sourceCarrier: snapshotClosedMetadata(view.sourceCarrier), targetCarrier: snapshotClosedMetadata(view.targetCarrier),
         fields: Object.freeze(view.fields.map(field => Object.freeze({ ...field }))) }));
       requests.set(view.declaration, views);
       return true;
@@ -189,22 +195,16 @@ export function createRustClassValueRegistry(): RustClassValueRegistry {
         }));
       }
       return Object.freeze({
-        constructorViewImplementations: Object.freeze([...byDeclaration.values()].flatMap(definition => definition.views.map(view => {
-          const sourceFile = ast.getFileName(ast.getSourceFile(view.declaration));
-          const targetFile = rustStructuralObjectCarrierValue(view.carrier)?.ownerFileName;
-          if (targetFile === undefined) throw new Error("A constructor view lost its exact source package owner.");
-          const component = (file: string): string | undefined => context.sourcePackages.packages.find(entry => entry.sourceFiles.includes(file))?.componentId;
-          return Object.freeze({ ...view, ownerFileName: component(sourceFile) === component(targetFile) ? sourceFile : targetFile });
-        }))),
+        constructorViewImplementations: selectRustProjectViewImplementations([...byDeclaration.values()].flatMap(definition => definition.views), context),
         instanceViews: Object.freeze([...instanceViews]),
-        instanceViewImplementations: selectRustStructuralViewImplementations(instanceViews, context),
+        instanceViewImplementations: selectRustProjectViewImplementations(instanceViews, context),
         forDeclaration: (declaration: Node) => byDeclaration.get(declaration),
         forCarrier(carrier: TargetTypeRef) {
           const definition = context.projectTypes.definitionForCarrier(carrier);
           return definition === undefined ? undefined : byDeclaration.get(definition.declaration);
         },
         viewFor(declaration: Node, sourceCarrier: TargetTypeRef, carrier: TargetTypeRef) {
-          return byDeclaration.get(declaration)?.views.find(view => rustTargetTypeRefEquals(view.sourceCarrier, sourceCarrier) && rustTargetTypeRefEquals(view.carrier, carrier));
+          return byDeclaration.get(declaration)?.views.find(view => rustTargetTypeRefEquals(view.sourceCarrier, sourceCarrier) && rustTargetTypeRefEquals(view.targetCarrier, carrier));
         },
       });
     },
@@ -238,7 +238,7 @@ export function resolveRustClassValue(
     if (!ast.is.IsClassExpression(expression) && isClassDeclarationQualifier(expression, ast)) {
       return setCarrierFact(walk, expression, native);
     }
-    walk.context.classValues.recordConstructorValue(declaration);
+    walk.context.classValues.recordConstructorValue(declaration, "value");
     walk.context.facts.set(expression, rustClassValueFactKey, { declaration, sourceCarrier: instance, carrier: native });
     return setCarrierFact(walk, expression, native);
   }
@@ -318,7 +318,7 @@ export function selectRustClassValueView(
     if (!walk.sourceTypes.registerStructuralFieldImplementation({ carrier, storageIndex: field.storageIndex, kind: "dispatch" })) { reject(); return false; }
     fields.push({ ...storage, storageIndex: field.storageIndex, writable: !field.readonly });
   }
-  if (!walk.context.classValues.record({ declaration, sourceCarrier, carrier, fields, ...(construction === undefined ? {} : { construction }) })) { reject(); return false; }
+  if (!walk.context.classValues.record({ declaration, sourceCarrier, targetCarrier: carrier, fields, ...(construction === undefined ? {} : { construction }) })) { reject(); return false; }
   return true;
 }
 
@@ -354,6 +354,7 @@ function classValueCallablesEqual(left: RustClassValueCallable | undefined, righ
 
 function classEnvironmentsEqual(left: RustClassEnvironment, right: RustClassEnvironment): boolean {
   return left.storage === right.storage && left.copy === right.copy && left.constructorValue === right.constructorValue &&
+    left.evaluatedConstructorValue === right.evaluatedConstructorValue &&
     closedMetadataEquals(left.genericParameterIndexes, right.genericParameterIndexes) &&
     left.initializationUsesEnvironment === right.initializationUsesEnvironment &&
     left.instancesUseEnvironment === right.instancesUseEnvironment &&

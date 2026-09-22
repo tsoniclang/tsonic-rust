@@ -23,7 +23,7 @@ export function planRustClassValueRead(node: Node, context: RustPlanContext): Ru
     ? value : { kind: "method-call", receiver: value, method: "clone", args: [] };
   if (rustClassConstructorInstance(fact.carrier) !== undefined) return retained;
   const view = context.input.program.classValues.viewFor(fact.declaration, fact.sourceCarrier, fact.carrier);
-  const type = view === undefined ? undefined : rustTypeFromCarrierInContext(view.carrier, context);
+  const type = view === undefined ? undefined : rustTypeFromCarrierInContext(view.targetCarrier, context);
   return type?.kind !== "named" ? undefined : {
     kind: "struct-literal", path: type.path, fields: [{ name: "dispatch", value: retained }],
   };
@@ -34,7 +34,7 @@ export function planRustClassValues(declaration: Node, context: RustPlanContext)
   readonly initialization: readonly RustStmt[];
 } | undefined {
   const definition = context.input.program.classValues.forDeclaration(declaration);
-  if (definition?.environment?.constructorValue !== true) return { items: [], initialization: [] };
+  if (definition?.environment?.evaluatedConstructorValue !== true) return { items: [], initialization: [] };
   if (context.syntheticNames === undefined) return undefined;
   const type = rustClassEnvironmentHandleType(definition.environment.carrier, context);
   const value = planRustClassEnvironmentValue(declaration, context);

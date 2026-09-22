@@ -10,9 +10,6 @@ import { isRustErasedNominalMember } from "../../policy/types/source-shapes.js";
 import { resolveRustProjectAccessor, type RustProjectAccessorSelection } from "../operations/provider/project-accessors.js";
 import { selectRustCallableValueAdapter } from "../callables/adapters.js";
 import type { RustCallableValueAdapter } from "../facts/callable-adapters.js";
-import { inferRustTargetTypeParameterBindings, rustTargetGenericReferences, substituteRustTargetTypeParameters } from "../../target-model/types/index.js";
-import { rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
-import type { RustAnalysisContext } from "../program/context.js";
 
 export interface RustProjectStructuralView {
   readonly declaration: Node;
@@ -85,31 +82,4 @@ export function selectRustProjectStructuralView(
 
 export interface RustProjectStructuralViewImplementation extends RustProjectStructuralView {
   readonly ownerFileName: string;
-}
-
-export function selectRustStructuralViewImplementations(
-  views: readonly RustProjectStructuralView[], context: RustAnalysisContext,
-): readonly RustProjectStructuralViewImplementation[] {
-  const ordered = [...views].sort((left, right) =>
-    rustTargetGenericReferences(right.sourceCarrier).typeNames.length - rustTargetGenericReferences(left.sourceCarrier).typeNames.length);
-  const selected: RustProjectStructuralView[] = [];
-  for (const view of ordered) {
-    const covered = selected.some(candidate => {
-      if (candidate.declaration !== view.declaration || candidate.fields.length !== view.fields.length ||
-        candidate.fields.some((field, index) => field.declaration !== view.fields[index]?.declaration || field.storageIndex !== view.fields[index]?.storageIndex)) return false;
-      const parameters = new Set(rustTargetGenericReferences(candidate.sourceCarrier).typeNames);
-      const bindings = inferRustTargetTypeParameterBindings(candidate.sourceCarrier, view.sourceCarrier, parameters);
-      return bindings !== undefined && bindings.size === parameters.size &&
-        rustTargetTypeRefEquals(substituteRustTargetTypeParameters(candidate.sourceCarrier, bindings), view.sourceCarrier) &&
-        rustTargetTypeRefEquals(substituteRustTargetTypeParameters(candidate.targetCarrier, bindings), view.targetCarrier);
-    });
-    if (!covered) selected.push(view);
-  }
-  const component = (file: string): string | undefined => context.sourcePackages.packages.find(entry => entry.sourceFiles.includes(file))?.componentId;
-  return Object.freeze(selected.map(view => {
-    const sourceFile = context.ast.getFileName(context.ast.getSourceFile(view.declaration));
-    const targetFile = rustStructuralObjectCarrierValue(view.targetCarrier)?.ownerFileName;
-    if (targetFile === undefined) throw new Error("A structural implementation has no exact target owner.");
-    return Object.freeze({ ...view, ownerFileName: component(sourceFile) === component(targetFile) ? sourceFile : targetFile });
-  }));
 }
