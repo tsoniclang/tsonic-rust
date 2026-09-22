@@ -161,6 +161,37 @@ test("generated terminal captures and readonly array reads match native allocati
   const { result } = compile(`
 export function retainLength(value: string): () => number { return () => value.length; }
 export function fieldValue(values: string[]): number { const field = values[0]; return parseInt(field, 10); }
+export class Counter { count: number = 7; }
+export function counter(): Counter { return new Counter(); }
+export function counterView(value: Counter): { count: number } { return value; }
+export function quantifiedIdentity(value: number): number {
+  const identity = <Value>(input: Value): Value => input;
+  return identity(value);
+}
+abstract class ProjectionBase {
+  abstract readonly token: object;
+  abstract equal(other: ProjectionBase): boolean;
+}
+function projectionFactory<Value>(token: object, same: (left: Value, right: Value) => boolean): new(value: Value) => ProjectionBase {
+  class Selected extends ProjectionBase {
+    readonly token = token;
+    value: Value;
+    constructor(value: Value) { super(); this.value = value; }
+    static accepts(value: ProjectionBase): value is Selected { return value.token === token; }
+    equal(other: ProjectionBase): boolean { return Selected.accepts(other) && same(this.value, other.value); }
+  }
+  return Selected;
+}
+export function projectionCount(count: number): number {
+  const selected = projectionFactory<number>(Object.freeze({}), (left, right) => left === right);
+  const instance = new selected(7);
+  let total = 0;
+  for (let index = 0; index < count; index++) {
+    if (!instance.equal(instance)) throw new Error("projection identity");
+    total++;
+  }
+  return total;
+}
 `, { outputType: "lib", crateName: "bounded_allocations" });
   const root = writeGeneratedProject("bounded-native-allocations", result.artifacts);
   mkdirSync(join(root, "tests"), { recursive: true });
@@ -204,6 +235,23 @@ fn allocation_parity() {
     let values = JsArray::from_dense(vec![String::from("123456")]);
     let reads = measure(|| { for _iteration in 0..10000 { let _value = std::hint::black_box(index::field_value(values.clone())); } });
     assert_eq!(reads, (0, 0));
+    let counter = index::counter();
+    let views = measure(|| {
+        for _iteration in 0..10000 {
+            std::hint::black_box(index::counter_view(counter.clone()));
+        }
+    });
+    assert_eq!(views, (0, 0));
+    let quantified = measure(|| {
+        for iteration in 0..10000 {
+            assert_eq!(std::hint::black_box(index::quantified_identity(iteration as f64)), iteration as f64);
+        }
+    });
+    assert_eq!(quantified, (0, 0));
+    index::projection_count(0.0).expect("projection initialization");
+    let one_projection = measure(|| assert_eq!(index::projection_count(1.0).unwrap(), 1.0));
+    let many_projections = measure(|| assert_eq!(index::projection_count(10000.0).unwrap(), 10000.0));
+    assert_eq!(many_projections, one_projection);
 }
 `);
   runCargo(root, ["generate-lockfile", "--offline"]);
