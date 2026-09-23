@@ -14,13 +14,13 @@ export function planRustIntegerTruncation(
     !rustIntegerTruncationConversionMatches(fact.sourceCarrier, fact.targetCarrier, conversion)) return undefined;
   const type = rustTypeFromCarrierInContext(fact.targetCarrier, context);
   const invocation = expression.kind === "try" ? expression.expr : expression;
-  if (type === undefined || invocation.kind !== "call" || invocation.args.length !== 2) return undefined;
+  if (type?.kind !== "primitive" || invocation.kind !== "call" || invocation.args.length !== 2) return undefined;
   const call: RustExpr = {
     ...invocation,
     path: conversion.signed ? "js_abi::bigint_as_int_native" : "js_abi::bigint_as_uint_native",
   };
   return {
-    kind: "cast", type,
-    expr: expression.kind === "try" ? { ...expression, expr: call } : call,
+    kind: "numeric-cast", target: type.name,
+    expression: expression.kind === "try" ? { ...expression, expr: call } : call,
   };
 }

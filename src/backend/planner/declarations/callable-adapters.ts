@@ -310,7 +310,8 @@ function applyRustCallableValueAdapterRaw(
         const converted = planRustEmptyRecordConversion(adapter.conversion, expression, node, context);
         return converted === undefined ? undefined : { expression: converted, fallible: false };
       }
-      if (adapter.conversion.kind === "provider-record-copy") return undefined;
+      if (adapter.conversion.kind === "provider-record-copy" ||
+        adapter.conversion.kind === "integer-truncation") return undefined;
       if (adapter.conversion.kind === "native-trait-object-upcast" ||
         adapter.conversion.kind === "reference-reborrow") {
         return rustCompilerOwnedContextualConversionMatches(

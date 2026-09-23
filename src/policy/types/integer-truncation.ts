@@ -1,5 +1,5 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import { sourceIntegerLiteralValue } from "@tsonic/target-api";
+import { sourceIntegerLiteralValue } from "@tsonic/target-api/source";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import {
   rustIntegerTruncationConversionMatches,
