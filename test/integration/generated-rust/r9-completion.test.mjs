@@ -20,8 +20,8 @@ import type { int32 } from "@tsonic/core/types.js";
 export function probe(): int32 {
   const bytes = randomBytes(8);
   const text = bytes.toString("hex");
-  const size: int32 = bytes.length;
-  return size + text.length;
+  const size: int32 = bytes.length as int32;
+  return size + (text.length as int32);
 }
 `,
     },
@@ -99,7 +99,8 @@ export async function size_of(path: string): Promise<boolean> {
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /info\.is_file\(\)/u);
-  assert.match(text, /rt::conversions::u64_to_f64\(info\.size\)/u);
+  assert.match(text, /info\.size > 0/u);
+  assert.doesNotMatch(text, /u64_to_f64|info\.size as f64/u);
 });
 
 test("stream scheduler operations lower through exact provider rows", async () => {

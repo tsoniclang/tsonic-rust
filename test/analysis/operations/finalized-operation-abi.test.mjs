@@ -31,6 +31,29 @@ const unit = { kind: "tuple", elements: [] };
 const usize = { kind: "source-primitive", name: "native-uint" };
 const typeArgument = (type) => ({ kind: "type", type });
 
+test("native length emptiness correspondence is explicit and rejects inconsistent evidence", () => {
+  const options = {
+    operationKind: "property", form: { form: "receiver-method", name: "count", emptyTestMethod: "empty" },
+    sourceReceiverCarrier: string, sourceArgumentCarriers: [], resultCarrier: usize,
+    isAsync: false, isFallible: false, evaluation: "pure",
+  };
+  const abi = finalizeRustProviderOperationAbi(options);
+  assert.ok(abi);
+  assert.equal(abi.target.emptyTestMethod, "empty");
+  assert.equal(validateRustFinalizedOperationAbi(abi), true);
+  for (const mutation of [
+    { isFallible: true, errorBoundary: "target-runtime" }, { isAsync: true },
+    { evaluation: "observable" }, { operationKind: "method" }, { resultCarrier: int32 },
+    { resultCarrier: float64 }, { sourceReceiverCarrier: undefined },
+    { sourceArgumentCarriers: [int32] },
+    { form: { ...options.form, emptyTestMethod: "" } },
+    { form: { ...options.form, mutatesReceiver: true } },
+    { form: { ...options.form, chain: [{ kind: "method", name: "other" }] } },
+  ]) assert.equal(finalizeRustProviderOperationAbi({ ...options, ...mutation }), undefined, JSON.stringify(mutation));
+  assert.equal(validateRustFinalizedOperationAbi({ ...abi, effects: { ...abi.effects, evaluation: "observable" } }), false);
+  assert.equal(validateRustFinalizedOperationAbi({ ...abi, result: { ...abi.result, carrier: int32, rawCarrier: int32 } }), false);
+});
+
 test("provider calls retain closed target-only generic arguments", () => {
   const abi = finalizeRustProviderOperationAbi({
     operationKind: "method",

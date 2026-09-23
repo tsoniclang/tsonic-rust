@@ -37,6 +37,7 @@ import { realizeRustSelectedTypeFamilies } from "./type-family-applications.js";
 import { finalizeProjectSourceGenericArguments } from "./project-call-generics.js";
 import { instantiateRustSourceParameterValueCarrier } from "../../policy/ownership/source-callable-abi.js";
 import { retainRustStructuralInstantiation } from "../../policy/types/resolution/structural-instantiations.js";
+import { bindRustSelectedCallTypeArguments } from "../../policy/types/resolution/generic-arguments.js";
 import { sourceTypeCarrierForDeclaration } from "./inputs.js";
 import { rustSpreadElementCarrier } from "../../target-model/operations/rest-assembly.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
@@ -94,6 +95,16 @@ export function applySelectedProjectSourceCall(
   const declarationParameters = ast.kindName(selectedDeclaration) === "KindClassDeclaration"
     ? []
     : ast.parameters(selectedDeclaration);
+  const storageContext = bindRustSelectedCallTypeArguments(
+    selectedSignature.sourceSelectedMethodTypeArguments ?? [], targetGenericArguments,
+    rustResolutionContext(walk, expression),
+  );
+  if (storageContext === undefined) {
+    appendRustDiagnostic(walk, "RUST_SOURCE_CALL_TYPE_ARGUMENT_IDENTITY_MISSING",
+      "Selected source type arguments require exact, distinct parameter declarations.", expression,
+      ["target.capability=rust.source-call.parameter-storage"]);
+    return undefined;
+  }
   let parameters: import("../facts/keys.js").RustSourceCallParameterPlan[] = [];
   for (const [index, targetParameter] of selectedMember.parameters.entries()) {
     const selectedParameter = selectedParameters[index];
@@ -170,7 +181,7 @@ export function applySelectedProjectSourceCall(
       : selectedParameter?.selectedType;
     if (selectedParameter !== undefined && (selectedValueType === undefined || !retainRustStructuralInstantiation(
       selectedValueType, parameterAbi.valueCarrier, valueCarrier,
-      rustResolutionContext(walk, expression), walk.operationOptions))) {
+      storageContext, walk.operationOptions, new Set(), selectedParameter.authoredTypeNode))) {
       appendRustDiagnostic(walk, "RUST_SOURCE_CALL_PARAMETER_STORAGE_MISSING",
         "The selected source parameter type has no exact instantiated structural storage correspondence.",
         expression, ["target.capability=rust.source-call.parameter-storage"]);

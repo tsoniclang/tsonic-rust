@@ -9,6 +9,34 @@ import {
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 for (const surfaces of [[], ["js"]]) {
+  test(`small integer complement retains the native operand width (${surfaces[0] ?? "native"})`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({
+      surfaces, packages: [acmeTestingPackage()],
+      target: { id: "rust", options: { outputType: "bin", crateName: "native_complement" } },
+      files: { "index.ts": `
+import { check } from "@acme/testing";
+import type { int8, uint8, int16, uint16, int32 } from "@tsonic/core/types.js";
+function signed8(value: int8): int8 { return ~value; }
+function unsigned8(value: uint8): uint8 { return ~value; }
+function signed16(value: int16): int16 { return ~value; }
+function unsigned16(value: uint16): uint16 { return ~value; }
+function before(value: uint8): int32 { return ~(value as int32); }
+function after(value: uint8): int32 { return (~value) as int32; }
+export function main(): void {
+  check(signed8(-128) === 127 && signed8(-1) === 0);
+  check(unsigned8(255) === 0 && unsigned8(128) === 127);
+  check(signed16(-32768) === 32767 && unsigned16(65535) === 0);
+  check(before(255) === -256 && after(255) === 0);
+}
+` },
+    });
+    assert.deepEqual(result.diagnostics, []);
+    const source = artifactText(result, "src/index.rs");
+    assert.match(source, /fn unsigned8\(value: u8\) -> u8 \{\s*!value\s*\}/u);
+    assert.match(source, /fn signed16\(value: i16\) -> i16 \{\s*!value\s*\}/u);
+    validateGeneratedProject(`native-complement-${surfaces[0] ?? "native"}`, result.artifacts, { run: true });
+  });
+
   test(`bigint bitwise operations retain arbitrary precision (${surfaces[0] ?? "native"})`, { timeout: 300_000 }, () => {
     const { result } = compileRust({
       surfaces,
@@ -85,7 +113,7 @@ export function main(): void {
   });
 }
 
-test("native integral bitwise operations preserve promotion and native shifts", { timeout: 300_000 }, () => {
+test("native integral bitwise operations preserve widths and native shifts", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     packages: [acmeTestingPackage()],
     target: { id: "rust", options: { outputType: "bin", crateName: "native_bitwise" } },
@@ -108,7 +136,8 @@ export function main(): void {
   check((one << width) === 8);
   check((negativeOne >> one) === negativeOne);
   check((negativeOne >>> one) === 2147483647);
-  check((highByte << one) === 256);
+  check((highByte << one) === 0);
+  check(((highByte as int32) << one) === 256);
 }
 `,
     },

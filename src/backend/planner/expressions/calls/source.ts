@@ -52,6 +52,7 @@ import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../../
 import { rustGenericCallableEffectsFactKey } from "../../../../analysis/facts/generic-callable-effects.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { rustExpressionReferencesPath } from "../../../target-ast/inspection/source-usage.js";
+import { propagateRustBottomOperand } from "../bottom-operands.js";
 
 export function sourceCallEffectsMatch(
   fact: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>,
@@ -441,7 +442,8 @@ export function planSelectedSourceCall(
       return undefined;
     }
   }
-  if (fact.target.form === "union-method") return planned;
+  if (context.syntheticNames !== undefined) planned = propagateRustBottomOperand(planned, context.syntheticNames);
+  if (planned.kind === "bottom" || fact.target.form === "union-method") return planned;
   if (effects.invocation === "infallible") {
     return isRustNeverCarrier(fact.resultCarrier) ? rustBottomExpression(planned) : planned;
   }

@@ -11,8 +11,8 @@ export const enum RustPrecedence {
   Shift = 7,
   Additive = 8,
   Multiplicative = 9,
-  Unary = 10,
-  Cast = 11,
+  Cast = 10,
+  Unary = 11,
   Postfix = 12,
   Atom = 13,
 }

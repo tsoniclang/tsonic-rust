@@ -26,7 +26,7 @@ export function sum(): int32 {
   for (const value of xs) {
     total += value;
   }
-  return total + xs.length;
+  return total + (xs.length as int32);
 }
 `;
 
@@ -320,7 +320,7 @@ export function sum(xs: readonly int32[]): int32 {
   for (const x of xs) {
     total += x;
   }
-  return total + xs.length;
+  return total + (xs.length as int32);
 }
 
 export function caller(): int32 {

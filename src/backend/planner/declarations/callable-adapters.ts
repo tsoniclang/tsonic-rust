@@ -30,6 +30,7 @@ import { rustCompilerOwnedContextualConversionMatches } from "../../../target-mo
 import { planRustEmptyRecordConversion } from "../expressions/empty-record-conversion.js";
 import { closedMetadataEquals } from "../../../target-model/metadata/closed-data.js";
 import { planRustProjectStructuralConversion } from "../objects/project-structural-views.js";
+import { planRustParameterEntryValue } from "./parameter-entry-conversion.js";
 
 export function planRustCallableArguments(
   input: {
@@ -248,7 +249,7 @@ function readRustCallableLogicalParameter(
   context: RustPlanContext,
 ): RustExpr | undefined {
   if (abi.mode === "value") {
-    return expression;
+    return planRustParameterEntryValue(abi, expression, undefined, context);
   }
   if (isRustStringCarrier(abi.valueCarrier)) {
     return { kind: "owned-string-from-borrowed-str", expression };

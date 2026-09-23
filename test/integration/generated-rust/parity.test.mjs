@@ -288,7 +288,7 @@ export async function roundtrip(name: string): Promise<int32> {
   await writeFile(name, "grand proof", "utf8");
   const text = await readFile(name, "utf8");
   await rm(name);
-  return text.length;
+  return text.length as int32;
 }
 
 export function main(): void {

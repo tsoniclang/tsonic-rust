@@ -241,6 +241,7 @@ function createRustCompileInputFromSession({
   project,
   target,
   runtimeReferences,
+  runtimeActivatedCapabilityIds,
   paths,
 }) {
   return {
@@ -249,6 +250,7 @@ function createRustCompileInputFromSession({
     project,
     target,
     runtimeReferences,
+    runtimeActivatedCapabilityIds,
     paths,
   };
 }
@@ -299,6 +301,7 @@ export function compileRust(options) {
     project: harness.project,
     target: harness.target,
     runtimeReferences: runtime.references,
+    runtimeActivatedCapabilityIds: Object.freeze(harness.runtimeActivatedCapabilities.map(capability => capability.id)),
     paths: harness.paths,
   });
   let compiled;
@@ -336,6 +339,7 @@ export function analyzeRust(options) {
       project: harness.project,
       target: harness.target,
       runtimeReferences: runtime.references,
+      runtimeActivatedCapabilityIds: Object.freeze(harness.runtimeActivatedCapabilities.map(capability => capability.id)),
       paths: harness.paths,
     });
     const configuration = createRustTargetConfiguration(
@@ -370,7 +374,6 @@ function runtimeContributionsForHarness(harness) {
     target: harness.target,
     targetPackId: harness.pack.id,
     selectedCapabilities: harness.selectedCapabilities,
-    runtimeActivatedCapabilities: harness.runtimeActivatedCapabilities,
     selectedSurfaces: harness.selectedSurfaces,
     paths: harness.paths,
     targetContributions: harness.targetSession.runtimeContributions(),

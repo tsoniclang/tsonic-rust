@@ -21,12 +21,20 @@ import { rustFutureOutputCarrier, rustFutureTargetType, rustSliceRefTargetType }
 import { rustProviderOperationFormAcceptsTargetGenericArguments, rustProviderOperationFormContractViolation } from "../../../policy/operations/forms.js";
 import type { RustFinalizedOperationAbi, RustFinalizedOperationResult, RustFinalizedSourceArgument, RustFinalizedSourceArgumentRole, RustFinalizedSourceInput, RustFinalizedTargetInput, RustFinalizedValueConversion } from "./model.js";
 import type { RustProviderConstantArgument } from "../keys.js";
+import { rustLengthEmptinessContractIsValid } from "../../../target-model/operations/length-emptiness.js";
 
 export function validateRustFinalizedOperationAbi(candidate: unknown, definitions: RustTypeDefinitions = emptyRustTypeDefinitions): candidate is RustFinalizedOperationAbi {
   if (!isClosedMetadata(candidate) || !isRustFinalizedOperationAbiShape(candidate)) {
     return false;
   }
   const abi = candidate;
+  if (abi.target.form === "receiver-method" && abi.target.emptyTestMethod !== undefined && (
+    abi.result.kind !== "sync" || abi.sourceReceiver.kind !== "receiver" ||
+    !rustLengthEmptinessContractIsValid({ target: abi.target, operationKind: abi.operationKind,
+      resultCarrier: abi.result.carrier, sourceArgumentCount: abi.sourceArguments.length,
+      isFallible: abi.effects.invocation !== "infallible", isAsync: abi.effects.awaiting !== "not-applicable",
+      hasResultConversion: abi.result.conversion.kind !== "identity", evaluation: abi.effects.evaluation })
+  )) return false;
   if (abi.target.form === "numeric-cast" && (
     abi.result.kind !== "sync" || abi.result.rawCarrier.kind !== "source-primitive" ||
     abi.result.rawCarrier.name !== abi.target.target ||

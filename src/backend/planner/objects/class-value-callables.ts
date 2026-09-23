@@ -7,6 +7,7 @@ import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { applyRustCallableValueAdapter, planRustCallableArguments } from "../declarations/callable-adapters.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { rustSelfParameter } from "../declarations/self-parameter.js";
+import { applyRustFallibleResultExpression } from "../types/fallible-shape.js";
 
 export function planRustClassValueForwarder(
   callable: RustClassValueCallable, name: string, context: RustPlanContext, construction = false,
@@ -50,6 +51,7 @@ export function planRustClassValueForwarder(
   return { name, visibility: "private", generics: { parameters: [], wherePredicates: [] },
     selfParam: rustSelfParameter(construction ? "rc" : "ref"),
     params, returnType, errorType: rustErrorType(boundary),
-    body: { statements: [...arguments_.statements, { kind: "tail", expr: { kind: "call", path: "Ok", args: [result] } }] },
+    body: { statements: [...arguments_.statements, { kind: "tail", expr:
+      applyRustFallibleResultExpression(result, { errorType: rustErrorType(boundary) }) }] },
   };
 }

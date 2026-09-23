@@ -18,7 +18,7 @@ test("optional property reads lower through exact selected receiver and result c
     files: {
       "index.ts": `
 import { check } from "@acme/testing";
-import type { int32 } from "@tsonic/core/types.js";
+import type { int32, nativeUint } from "@tsonic/core/types.js";
 
 interface Box { value: int32 }
 
@@ -26,15 +26,16 @@ function read(item: Box | undefined): int32 | undefined {
   return item?.value;
 }
 
-function length(value: string | undefined): int32 | undefined {
+function length(value: string | undefined): nativeUint | undefined {
   return value?.length;
 }
 
 export function main(): void {
   check((read(undefined) ?? -1) === -1);
   check((read({ value: 7 }) ?? -1) === 7);
-  check((length(undefined) ?? -1) === -1);
-  check((length("rust") ?? -1) === 4);
+  check(length(undefined) === undefined);
+  check((length(undefined) ?? 0) === 0);
+  check((length("rust") ?? 0) === 4);
 }
 `,
     },
@@ -137,9 +138,9 @@ test("optional syntax on a checker-proven non-null receiver stays direct", { tim
     surfaces: ["js"],
     files: {
       "index.ts": `
-import type { int32 } from "@tsonic/core/types.js";
+import type { nativeUint } from "@tsonic/core/types.js";
 
-export function length(value: string): int32 {
+export function length(value: string): nativeUint {
   return value?.length;
 }
 `,

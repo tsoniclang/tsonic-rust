@@ -1,4 +1,5 @@
-import type { Signature, Type } from "@tsonic/tsts";
+import type { Node, Signature, Type } from "@tsonic/tsts";
+import { ArrayTypeNode_ElementType } from "@tsonic/target-api/source";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import { rustStructuralObjectCarrierValue } from "../../../target-model/types/carriers/source-types.js";
@@ -19,6 +20,7 @@ export function retainRustStructuralInstantiation(
   context: RustTargetTypeResolutionContext,
   options: RustTargetTypeResolutionOptions,
   resolving: Set<object> = new Set(),
+  authoredTypeNode?: Node,
 ): boolean {
   if (!containsStructuralStorage(templateCarrier)) return true;
   if (rustCallableProtocol(templateCarrier) !== undefined) {
@@ -34,8 +36,11 @@ export function retainRustStructuralInstantiation(
       !context.currentSemantics.types.isArrayLike(sourceType) ||
       !context.currentSemantics.types.isTypeReference(sourceType)) return false;
     const arguments_ = context.currentSemantics.types.typeArguments(sourceType);
+    const elementNode = authoredTypeNode === undefined ? undefined :
+      context.ast.kindName(authoredTypeNode) === "KindArrayType" ? ArrayTypeNode_ElementType(context.ast, authoredTypeNode)
+      : context.ast.typeArguments(authoredTypeNode)[0];
     return arguments_.length === 1 && arguments_[0] !== undefined &&
-      retainRustStructuralInstantiation(arguments_[0], templateElement, element, context, options, resolving);
+      retainRustStructuralInstantiation(arguments_[0], templateElement, element, context, options, resolving, elementNode);
   }
   const structural = rustStructuralObjectCarrierValue(carrier);
   if (structural === undefined || rustStructuralObjectCarrierValue(templateCarrier) === undefined) return false;
@@ -43,7 +48,7 @@ export function retainRustStructuralInstantiation(
     options.sourceTypes.structuralObjectForType(sourceType, carrier) !== undefined) return true;
   const template = options.sourceTypes.structuralObjectForCarrier(templateCarrier);
   if (template === undefined) return false;
-  const selectedContext = bindRustSourceAliasArguments(sourceType, context, options, resolving);
+  const selectedContext = bindRustSourceAliasArguments(sourceType, context, options, resolving, authoredTypeNode);
   if (selectedContext === undefined) return false;
   context = selectedContext;
   const correspondence = context.currentSemantics.types.structuralMembers(sourceType, template.sourceType);
@@ -82,7 +87,7 @@ export function retainRustStructuralInstantiation(
     if (declared.some(carrier => carrier === undefined ||
       !rustTargetTypeRefEquals(mapRustTargetTypes(carrier, normalize), expected))) return undefined;
     if (!retainRustStructuralInstantiation(selected.source.property.type, field.resultCarrier,
-      targetField.type, context, options, resolving)) return undefined;
+      targetField.type, context, options, resolving, authoredNodes[0])) return undefined;
     return {
       ...field,
       declarations: selected.source.declarations,

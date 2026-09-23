@@ -114,7 +114,7 @@ export function stats(xs: int32[]): int32 {
   if (any_big && all_positive) {
     bonus = 1;
   }
-  return xs.reduce((acc, x) => acc + x, 0) + evens.length + doubled.length + bonus;
+  return xs.reduce((acc, x) => acc + x, 0) + (evens.length as int32) + (doubled.length as int32) + bonus;
 }
 `,
     },
@@ -598,7 +598,7 @@ export function safe(xs: int32[]): int32 {
   let doubled_len: int32 = 0;
   try {
     risky();
-    doubled_len = xs.map((x) => x * 2).length;
+    doubled_len = xs.map((x) => x * 2).length as int32;
   } catch (error) {
     doubled_len = -1;
   }

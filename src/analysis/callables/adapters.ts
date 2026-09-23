@@ -61,6 +61,7 @@ export function substituteRustCallableParameterAbi(
     valueCarrier: substituteRustTargetTypeParameters(abi.valueCarrier, substitutions),
     parameterCarrier: substituteRustTargetTypeParameters(abi.parameterCarrier, substitutions),
     mode: abi.mode,
+    ...(abi.entryConversion === undefined ? {} : { entryConversion: abi.entryConversion }),
   });
 }
 

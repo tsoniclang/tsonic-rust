@@ -410,6 +410,7 @@ export type RustProviderOperationForm =
       // it is row metadata, never derived from method names.
       readonly form: "receiver-method";
       readonly name: string;
+      readonly emptyTestMethod?: string;
       readonly receiverConversion?: RustValueConversion;
       readonly argModes?: readonly RustArgumentMode[];
       readonly argConversions?: readonly (RustValueConversion | undefined)[];

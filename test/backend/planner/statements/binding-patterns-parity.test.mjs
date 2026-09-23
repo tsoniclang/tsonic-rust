@@ -91,7 +91,7 @@ import type { int32 } from "@tsonic/core/types.js";
 export function read(): int32 {
   const values: int32[] = [];
   const [first = 9, ...rest] = values;
-  return first + rest.length;
+  return first + (rest.length as int32);
 }
 `,
     },

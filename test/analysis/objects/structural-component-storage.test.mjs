@@ -45,8 +45,15 @@ test("structural instantiation diamonds require one ultimate template in either 
   for (const instantiations of [edges, [...edges].reverse()]) {
     const plan = createRustStructuralShapePlan(shapes, [], () => "source", [], instantiations);
     assert.equal(plan.definitions.length, 1);
-    assert.equal(plan.sharesStorage(template, instance), true);
-    assert.equal(plan.sharesStorage(middle, instance), true);
+    const definitions = [template, middle, instance].map(carrier => plan.definitionForCarrier(carrier));
+    assert.equal(definitions[0].targetName, definitions[1].targetName);
+    assert.equal(definitions[0].targetName, definitions[2].targetName);
+    assert.deepEqual(definitions[2].genericArguments, [{ kind: "type", type: {
+      kind: "array", element: { kind: "source-primitive", name: "int32" },
+    } }]);
+    assert.equal(plan.sharesStorage(template, instance), false);
+    assert.equal(plan.sharesStorage(middle, instance), false);
+    assert.equal(plan.sharesStorage(instance, carrier({ kind: "array", element: { kind: "source-primitive", name: "int32" } })), true);
   }
   assert.throws(() => createRustStructuralShapePlan(shapes, [], () => "source", [], edges.slice(1)),
     /contradictory storage templates/u);

@@ -217,7 +217,7 @@ test("fixed-array literal cardinality rejects exact mismatches without extent ex
   const expression = Object.freeze({});
   for (const length of [3n, 9007199254740992n, 9007199254740993n]) {
     const diagnostics = [];
-    const walk = { context: { ast: { elements: () => [] }, diagnostics } };
+    const walk = { context: { ast: { elements: () => [] }, diagnostics }, rejectedExpressions: new Set(), resolving: new Set() };
     assert.equal(resolveArrayLiteralCarrier(walk, expression, {}, rustFixedArrayTargetType(element, integer(length))), undefined);
     assert.deepEqual(diagnostics.map(({ code, message }) => ({ code, message })), [{
       code: "RUST_FIXED_ARRAY_LITERAL_LENGTH_MISMATCH",
@@ -304,7 +304,8 @@ test("numeric shared arrays preserve cross-file carriers, length, indexing and n
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /\[i32; 3\]/u);
-  assert.match(output, /usize_to_i32\(values\.len\(\)\)/u);
+  assert.match(output, /values\.len\(\) != 3/u);
+  assert.doesNotMatch(output, /usize_to_(?:i32|f64)\(values\.len\(\)\)/u);
   assert.match(output, /let for_in_length\w* = values\.len\(\);/u);
   assert.match(output, /0\.\.for_in_length/u);
   assert.doesNotMatch(output, /as f64|as i32/u);
@@ -332,9 +333,9 @@ for (const length of ["2n", "9007199254740993n"]) {
   for (const [name, expression] of [["direct", "values.length"], ["inferred", "inferred(values).length"]]) {
     test(`${name} bigint fixed-array length ${length} retains its exact native extent`, () => {
       const { result } = compileRust({ files: { "index.ts": `
-        import type { FixedArray, int32 } from "@tsonic/core/types.js";
+        import type { FixedArray, int32, nativeUint } from "@tsonic/core/types.js";
         function inferred(values: FixedArray<int32, ${length}>) { return values; }
-        export function length(values: FixedArray<int32, ${length}>): bigint { return ${expression}; }
+        export function length(values: FixedArray<int32, ${length}>): nativeUint { return ${expression}; }
       ` } });
       assert.deepEqual(result.diagnostics, []);
       const output = artifactText(result, "src/index.rs");

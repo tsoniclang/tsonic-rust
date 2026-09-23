@@ -10,9 +10,10 @@ import { rustValueConversionContract } from "../../../dist/target-model/conversi
 test("mapped string rows retain callback arity and explicit target result constraints", () => {
   const string = rustStringTargetType();
   const number = rustSourcePrimitiveTargetType("float64");
+  const index = rustSourcePrimitiveTargetType("native-uint");
   const byte = rustSourcePrimitiveTargetType("uint8");
   for (const arity of [0, 1, 2]) {
-    const callback = rustClosureTargetType([string, number].slice(0, arity), byte);
+    const callback = rustClosureTargetType([string, index].slice(0, arity), byte);
     const request = {
       ownerName: "ArrayConstructor", memberName: "from", operationKind: "call",
       argumentCarriers: [string, callback], selectedMethodTypeArgumentCarriers: [string, number],
@@ -39,14 +40,14 @@ test("mapped native strings and vectors execute with exact bytes and ordered fai
     target: { id: "rust", options: { outputType: "bin", crateName: "mapped_source_strings" } },
     files: { "index.ts": `
 import { check } from "@acme/testing";
-import type { uint8 } from "@tsonic/core/types.js";
+import type { nativeUint, uint8 } from "@tsonic/core/types.js";
 function byte(value: number): uint8 { return value as uint8; }
 export function main(): void {
   const bytes = Array.from("Aÿ", (part: string): uint8 => part.charCodeAt(0) as uint8);
   check(bytes.length === 2 && bytes[0] === 65 && bytes[1] === 255);
   const scalar = Array.from("a😀z", (part: string): string => part);
   check(scalar.length === 3 && scalar.join("") === "a😀z");
-  const indexed = Array.from("a😀z", (part: string, index: number): number => index);
+  const indexed = Array.from("a😀z", (part: string, index: nativeUint): nativeUint => index);
   check(indexed.length === 3 && indexed[0] === 0 && indexed[2] === 2);
   let count = 0;
   const zero = Array.from("abc", (): number => { count += 1; return count; });
@@ -56,7 +57,7 @@ export function main(): void {
   let visited = "";
   let failed = false;
   try {
-    Array.from("a😀z", (part: string, index: number): string => {
+    Array.from("a😀z", (part: string, index: nativeUint): string => {
       visited += part;
       if (index === 1) throw new Error("stop");
       return part;

@@ -35,6 +35,7 @@ import { rustNativeBackingKey } from "../../../target-model/operations/native-me
 import type { RustBindingExpressionPlanner } from "../bindings/patterns.js";
 import { rustOptionDefaultValue } from "../expressions/option-default.js";
 import { rustCarrierReferentMutationRequiresMutableBinding } from "../../../target-model/types/index.js";
+import { planRustParameterEntryConversion } from "./parameter-entry-conversion.js";
 
 type RustParameterPrelude =
   | { readonly kind: "statement"; readonly statement: RustStmt }
@@ -124,12 +125,12 @@ export function planRustCallableParameters(
     const ownedBinding = parameterCarrier !== undefined &&
       parameterCarrier.kind !== "pointer" &&
       parameterCarrier.kind !== "reference";
-    const objectRepresentation = context.input.program.objectRepresentations.representationFor(
-      context.input.program.projectTypes.definitionForCarrier(parameterCarrier),
-    );
     const referentMutationRequiresMutableBinding =
-      rustCarrierReferentMutationRequiresMutableBinding(parameterCarrier) &&
-      (objectRepresentation === undefined || objectRepresentation.kind === "value");
+      rustCarrierReferentMutationRequiresMutableBinding(parameterCarrier, carrier => {
+        const representation = context.input.program.objectRepresentations.representationFor(
+          context.input.program.projectTypes.definitionForCarrier(carrier));
+        return representation !== undefined && representation.kind !== "value";
+      });
     const mutable = pattern === undefined &&
       locationStorage === undefined &&
       (
@@ -146,8 +147,11 @@ export function planRustCallableParameters(
     params.push({
       name: parameterName,
       type: parameterType,
-      mutable: abi?.form !== "default" && mutable,
+      mutable: abi?.form !== "default" && abi?.entryConversion === undefined && mutable,
     });
+    const entry = planRustParameterEntryConversion(parameter, parameterName, mutable, context);
+    if (entry === undefined) return undefined;
+    prelude.push(...entry.map(statement => ({ kind: "statement" as const, statement })));
     if (abi?.form === "default") {
       const initializer = Node_Initializer(ast, parameter);
       if (initializer === undefined) {

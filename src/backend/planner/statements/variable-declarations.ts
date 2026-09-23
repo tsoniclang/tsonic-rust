@@ -152,8 +152,11 @@ function planVariableDeclaration(
     context.input.program.projectTypes.definitionForCarrier(declarationCarrier),
   );
   const referentMutationRequiresMutableBinding =
-    rustCarrierReferentMutationRequiresMutableBinding(declarationCarrier) &&
-    (objectRepresentation === undefined || objectRepresentation.kind === "value");
+    rustCarrierReferentMutationRequiresMutableBinding(declarationCarrier, carrier => {
+      const representation = context.input.program.objectRepresentations.representationFor(
+        context.input.program.projectTypes.definitionForCarrier(carrier));
+      return representation !== undefined && representation.kind !== "value";
+    });
   const mutable = nativeArray !== undefined ? sourceUseSummary.bindingWritten : locationStorage === undefined &&
     (sourceUseSummary.bindingWritten ||
       context.input.program.facts.getFact(declaration, rustMutatedBindingFactKey) !== undefined ||

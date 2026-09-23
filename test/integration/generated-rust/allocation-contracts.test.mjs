@@ -19,7 +19,7 @@ function append(values: string[]): number { calls++; values.push("tail"); return
 export function main(): void {
   const values = ["café", "a", "😀"];
   const size = values[append(values)]!.length;
-  values.sort((left, right) => left.length - right.length);
+  values.sort((left, right) => left.length < right.length ? -1 : left.length > right.length ? 1 : 0);
   if (size !== 4 || calls !== 1 || values[0] !== "a" || !checkToken(")") ||
     ensureSlash("ok/") !== "ok/" || ensureSlash("ok") !== "ok/" ||
     dispatch("size", "café😀") !== 9 || retained("kept")() !== "kept" || separator !== "/") {
@@ -53,7 +53,7 @@ export function main(): void {
   const values = ["bb", "a"];
   const saved = values[0]!;
   values[0] = "changed";
-  values.sort((left, right) => { observed = left; return left.length - right.length; });
+  values.sort((left, right) => { observed = left; return left.length < right.length ? -1 : left.length > right.length ? 1 : 0; });
   if (saved !== "bb" || repeat(saved) !== "bbbb" || finalize(saved) !== "bb" || observed !== "bb")
     throw new Error("ownership was erased");
 }
@@ -108,7 +108,7 @@ export function main(): void {
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /select\(&direct, direct\.clone\(\)\)/u);
   assert.match(output, /select\(&nested, identity\(nested\.clone\(\)\)\)/u);
-  assert.match(output, /after_length\(length\(&completed\)\?, completed\)/u);
+  assert.match(output, /after_length\(length\(&completed\), completed\)/u);
   assert.match(output, /owned\(copies\.clone\(\), copies\)/u);
   validateGeneratedProject("overlapping-argument-borrows", result.artifacts, { run: true });
 });
@@ -177,7 +177,11 @@ test("borrow proofs respect retained callable ABIs through direct and indirect f
     files: { "index.ts": `
 const normalize = (value: string): string => value.replaceAll("x", "");
 function width(value: string): number { return normalize(value).length; }
-function direct(values: string[]): void { values.sort((left, right) => normalize(left).length - normalize(right).length); }
+function direct(values: string[]): void { values.sort((left, right) => {
+  const leftSize = normalize(left).length;
+  const rightSize = normalize(right).length;
+  return leftSize < rightSize ? -1 : leftSize > rightSize ? 1 : 0;
+}); }
 function indirect(values: string[]): void { values.sort((left, right) => width(left) - width(right)); }
 export function main(): void {
   const first = ["bbb", "xa", "cc"];

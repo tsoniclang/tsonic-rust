@@ -40,6 +40,7 @@ import type { TargetTypeRef } from "../model.js";
 import type { RustTargetTraitRef } from "../model.js";
 import { rustTargetTypeRefEquals } from "../equality.js";
 import { rustCarrierSupportsAsRef } from "./as-ref.js";
+import { rustOptionElementCarrier } from "./optional.js";
 import {
   rustOnlyTypeGenericArguments,
   rustTargetGenericTypeArguments,
@@ -183,7 +184,11 @@ export function rustCarrierCanEnterTsValue(carrier: TargetTypeRef | undefined, d
 
 export function rustCarrierReferentMutationRequiresMutableBinding(
   carrier: TargetTypeRef | undefined,
+  isSharedObject: (carrier: TargetTypeRef) => boolean = () => false,
 ): boolean {
+  const element = rustOptionElementCarrier(carrier);
+  if (element !== undefined) return rustCarrierReferentMutationRequiresMutableBinding(element, isSharedObject);
+  if (carrier !== undefined && isSharedObject(carrier)) return false;
   const structural = rustStructuralObjectCarrierValue(carrier);
   return (structural === undefined || structural.representation === "value") &&
     rustSourceUnionCarrierValue(carrier) === undefined;

@@ -19,6 +19,7 @@ import type { RustProviderOperationForm } from "../../../target-model/operations
 import type { RustProviderPackageDefinition } from "../model.js";
 import type { RustProviderTypeParameterRequirement } from "../../../target-model/operations/model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { rustLengthEmptinessContractIsValid } from "../../../target-model/operations/length-emptiness.js";
 
 export function validateOperationRows(
   definition: RustProviderPackageDefinition,
@@ -34,6 +35,12 @@ export function validateOperationRows(
       "parameterCarriers", "receiverCarrier", "genericParameters", "typeRequirements", "targetGenericArguments", "resultConversion", "evaluation", "isAsync", "isFallible", "errorBoundary", "errorCarrier", "isUnsafe", "immediateCallback",
     ], `operation row '${String((row as { readonly memberId?: unknown; readonly exportId?: unknown }).memberId ?? row.exportId)}'`, fail);
     const label = row.memberId ?? row.exportId;
+    if (!rustLengthEmptinessContractIsValid({ ...row,
+      sourceArgumentCount: row.parameterCarriers?.length ?? 0,
+      isFallible: row.isFallible === true, isAsync: row.isAsync === true,
+      hasResultConversion: row.resultConversion !== undefined, evaluation: row.evaluation })) {
+      fail(`row '${label}' has an invalid native length/emptiness relation`);
+    }
     if (row.operationKind !== "method" && row.operationKind !== "constructor" &&
       row.operationKind !== "property" && row.operationKind !== "indexer" &&
       row.operationKind !== "property-set" && row.operationKind !== "index-set") {

@@ -50,7 +50,7 @@ export function main(): void {
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn manifest_has\(path: String, needle: String\) -> Result<bool, rt::TsonicError>/u);
   assert.match(text, /let xs: \[i32; 3\] = \[10, 20, 30\];/u);
-  assert.match(text, /tsonic_rust_node::crypto::random_bytes\(rt::conversions::i32_to_usize\(\s*16,?\s*\)\?\)\?/u);
+  assert.match(text, /tsonic_rust_node::crypto::random_bytes\(16\)\?/u);
   const run = validateGeneratedProject("r8-proof-bin", result.artifacts, { run: true });
   assert.equal(run.status, 0);
 });
@@ -128,7 +128,7 @@ import type { FixedArray, int32 } from "@tsonic/core/types.js";
 
 function selected(values: FixedArray<int32, 3>, index: int32): int32 {
   values[index] += 4;
-  return values[0] + values.length;
+  return values[0] + (values.length as int32);
 }
 
 export function main(): void {

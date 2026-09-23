@@ -72,10 +72,10 @@ export function analyzeRustTargetProgram(
   if (runtimeReferences.kind === "rejected") {
     return rejectedTargetStage(runtimeReferences.diagnostics);
   }
+  const runtimeActivatedCapabilities = new Set(input.runtimeActivatedCapabilityIds);
+  const providerBinaryHooks = providerSemantics.binaryHooks.filter(row => runtimeActivatedCapabilities.has(row.providerPackageId));
   const binaryHooks = analyzeRustBinaryHooks(
-    jsEnabled
-      ? [...providerSemantics.binaryHooks, rustJsTimerEpilogue]
-      : providerSemantics.binaryHooks,
+    jsEnabled ? [...providerBinaryHooks, rustJsTimerEpilogue] : providerBinaryHooks,
     runtimeReferences.plan.activeCrates,
   );
   const context = createRustAnalysisContext(

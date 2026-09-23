@@ -55,6 +55,20 @@ const unsupportedProviderValuePackage = createRustProviderPackage({
   crates: [],
 });
 
+test("native initializer widths reject implicit narrowing in local and loop declarations", () => {
+  for (const body of [
+    "const length: int32 = values.length; return length;",
+    "for (let length: int32 = values.length; length > 0; length--) { return length; } return 0;",
+  ]) {
+    const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+export function read(values: int32[]): int32 { ${body} }
+` } });
+    assert.deepEqual(result.artifacts, []);
+    assert.ok(result.diagnostics.some(diagnostic => diagnostic.code === "RUST_INITIALIZER_CARRIER_MISMATCH"));
+  }
+});
+
 test("assertion conversions use explicit TSTS evidence and checked runtime helpers", () => {
   const { result } = compileRust({
     files: {
@@ -214,8 +228,9 @@ export function read(values: readonly int32[], text: string): int32 {
   assert.deepEqual(result.diagnostics, []);
   assert.match(
     artifactText(result, "src/index.rs"),
-    /i32_to_f64\(\s*match index\.as_ref\(\) \{[\s\S]*Some\(flow_value\) => \*flow_value/u,
+    /get_number\(\s*match index\.as_ref\(\) \{[\s\S]*Some\(flow_value\) => \*flow_value/u,
   );
+  assert.doesNotMatch(artifactText(result, "src/index.rs"), /i32_to_f64/u);
   validateGeneratedProject("selected-flow-narrowed-index", result.artifacts);
 });
 
@@ -246,9 +261,9 @@ test("optional-chain access consumes exact selected receiver evidence", () => {
     surfaces: ["js"],
     files: {
       "index.ts": `
-import type { int32 } from "@tsonic/core/types.js";
+import type { nativeUint } from "@tsonic/core/types.js";
 
-export function length(value: string | null): int32 | undefined {
+export function length(value: string | null): nativeUint | undefined {
   return value?.length;
 }
 `,
@@ -257,9 +272,21 @@ export function length(value: string | null): int32 | undefined {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
+  assert.match(source, /Option<usize>/u);
   assert.match(source, /value\s*\.as_ref\(\)\s*\.map\(\s*\|optional_receiver/u);
   assert.doesNotMatch(source, /value\s*\.clone\(\)/u);
   validateGeneratedProject("selected-optional-property", result.artifacts);
+});
+
+test("optional native lengths cannot silently narrow to int32", () => {
+  const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+export function length(value: string | null): int32 | undefined {
+  return value?.length;
+}
+` } });
+  assert.deepEqual(result.artifacts, []);
+  assert.ok(result.diagnostics.some(diagnostic => diagnostic.code === "RUST_RETURN_CARRIER_MISMATCH"));
 });
 
 test("project property access consumes the checker-selected narrowed receiver", () => {

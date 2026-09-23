@@ -16,7 +16,7 @@ import {
   rustJsWeakSetTargetType,
   rustCarrierSupportsObjectIdentity,
 } from "../../../target-model/types/index.js";
-import { resolveCarrierRef } from "./selection.js";
+import { resolveCarrierRef } from "./carrier-references.js";
 import { selectJsArrayConstruction } from "./array-construction.js";
 import { materializeJsonValueConversions } from "./materialization.js";
 import { selectRustJsonValueConversion } from "../../conversions/selection.js";

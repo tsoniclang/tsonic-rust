@@ -178,24 +178,6 @@ function sameRustArithmeticCarrier(left: TargetTypeRef, right: TargetTypeRef): b
     (isRustBigIntCarrier(left) && isRustBigIntCarrier(right));
 }
 
-export function selectRustIntegralPromotion(
-  carrier: TargetTypeRef,
-): { readonly carrier: TargetTypeRef; readonly conversion?: RustValueConversion } | undefined {
-  if (!isRustIntegerCarrier(carrier)) {
-    return undefined;
-  }
-  const promotedKind = carrier.name === "int8" || carrier.name === "uint8" ||
-      carrier.name === "int16" || carrier.name === "uint16"
-    ? "int32"
-    : carrier.name;
-  const promoted = rustSourcePrimitiveTargetType(promotedKind);
-  const conversion = rustNumericPromotionConversion(carrier.name, promotedKind);
-  return {
-    carrier: promoted,
-    ...(conversion === undefined ? {} : { conversion }),
-  };
-}
-
 function rustArithmeticOperatorHasDirectSemantics(
   operator: RustOperatorToken,
   left: TargetTypeRef,
@@ -378,16 +360,14 @@ export function selectRustBinaryOperator(
         fallible: true, operandModes: ["value", "value"],
       };
     }
-    const promotion = selectRustIntegralPromotion(left);
-    return promotion !== undefined && isRustIntegerCarrier(right)
+    return isRustIntegerCarrier(left) && isRustIntegerCarrier(right)
       ? {
           kind: "operator-call",
           rustOperator: shift.operator,
-          resultCarrier: promotion.carrier,
+          resultCarrier: left,
           path: shift.nativePath,
           fallible: false,
           operandModes: ["value", "value"],
-          leftConversion: promotion.conversion,
         }
       : undefined;
   }

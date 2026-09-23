@@ -23,7 +23,9 @@ export function text(values: ${element}[]): string { return String.fromCharCode(
         assert.equal(fact.abi.sourceArguments[0].carrier.id, "rust.js.JsArray");
         const input = fact.abi.targetArguments[0].elements[0];
         assert.equal(input.conversion.conversion.kind, "rest-sequence");
-        assert.deepEqual(input.conversion.targetCarrier, { kind: "array", element: { kind: "source-primitive", name: "float64" } });
+        assert.deepEqual(input.conversion.targetCarrier, { kind: "array", element: {
+          kind: "source-primitive", name: element === "number" ? "float64" : element,
+        } });
       }
       source.ast.forEachChild(node, child => { visit(child); });
     };

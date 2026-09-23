@@ -52,10 +52,10 @@ test("constant-true loops remain idiomatic across break and fallible return flow
     target: { id: "rust", options: { outputType: "bin", crateName: "constant_loop_break" } },
     files: {
       "index.ts": `
-import type { int32 } from "@tsonic/core/types.js";
+import type { nativeUint } from "@tsonic/core/types.js";
 
-export function count(values: string[]): int32 {
-  let current: int32 = 0;
+export function count(values: string[]): nativeUint {
+  let current: nativeUint = 0;
   while (true) {
     if (current === values.length) break;
     current++;
@@ -64,7 +64,7 @@ export function count(values: string[]): int32 {
 }
 
 export function visit(values: string[]): void {
-  let current: int32 = 0;
+  let current: nativeUint = 0;
   while (true) {
     if (current === values.length) return;
     current++;

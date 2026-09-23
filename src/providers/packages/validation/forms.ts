@@ -284,8 +284,9 @@ export function validateOperationForm(
       requireRustIdentifier(form.name, `${label}.target.name`, fail);
       return;
     case "receiver-method":
-      requireExactKeys(record, ["form", "name", "receiverConversion", "argModes", "argConversions", "argOrder", "trailingArguments", "chain", "mutatesReceiver"], `${label}.target`, fail);
+      requireExactKeys(record, ["form", "name", "emptyTestMethod", "receiverConversion", "argModes", "argConversions", "argOrder", "trailingArguments", "chain", "mutatesReceiver"], `${label}.target`, fail);
       requireRustIdentifier(form.name, `${label}.target.name`, fail);
+      if (form.emptyTestMethod !== undefined) requireRustIdentifier(form.emptyTestMethod, `${label}.target.emptyTestMethod`, fail);
       if (form.receiverConversion !== undefined) {
         validateValueConversion(form.receiverConversion, definition, `${label}.target.receiverConversion`, undefined, undefined, fail);
       }

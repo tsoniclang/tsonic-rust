@@ -426,7 +426,7 @@ export function selectRustFixedArrayLengthProperty(
     kind: "provider-operation",
     operationId: "tsonic.rust.fixed-array.length",
     operationKind: "property",
-    target: { form: "receiver-method", name: "len" },
+    target: { form: "receiver-method", name: "len", emptyTestMethod: "is_empty" },
     resultCarrier,
     parameterCarriers: [],
     evaluation: "pure",

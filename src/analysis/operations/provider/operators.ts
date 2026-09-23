@@ -35,7 +35,6 @@ import { selectedValueCarrier } from "../selected-values.js";
 import { selectRustExactIntegerConversion } from "../../../target-model/conversions/exact-integer.js";
 import { rustContextualValueConversionFactKey } from "../../facts/value-projections.js";
 import { selectJsSurfaceOperation } from "../../../policy/operations/js-surface.js";
-import { selectRustIntegralPromotion } from "../../../policy/operations/operator-rules.js";
 import { selectRustProviderOperation } from "../../../policy/operations/provider-selection.js";
 import { selectRustBuiltinErrorTypeTest } from "./builtin-errors.js";
 import type {
@@ -234,13 +233,8 @@ function mapSelectedUnaryOperator(
     targetOperator = "!";
     resultCarrier = operand;
   } else if (request.operator === "~" && operand !== undefined && isRustIntegerCarrier(operand)) {
-    const promotion = selectRustIntegralPromotion(operand);
-    if (promotion !== undefined) {
-      return acceptRustOperation(request.expression, {
-        ...operatorFact("!", promotion.carrier),
-        ...(promotion.conversion === undefined ? {} : { leftConversion: promotion.conversion }),
-      }, context, { sourceExpression: request.expression, sourceReceiver: request.left });
-    }
+    targetOperator = "!";
+    resultCarrier = operand;
   } else if (request.operator === "~" && isRustBigIntCarrier(operand)) {
     targetOperator = "!";
     resultCarrier = operand;

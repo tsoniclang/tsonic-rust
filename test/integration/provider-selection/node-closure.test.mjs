@@ -22,12 +22,12 @@ import type { int32 } from "@tsonic/core/types.js";
 
 export function probe(): string {
   const buf = Buffer.from("hi", "utf8");
-  const size: int32 = buf.length;
+  const size: int32 = buf.length as int32;
   const u = new URL("https://example.com/a?b=1");
   const params = new URLSearchParams("x=1");
   const h = createHash("sha256");
   h.update("abc");
-  const id: int32 = pid;
+  const id: int32 = pid as int32;
   if (size > 0 && id > 0) {
     return u.pathname + (params.get("x") ?? "") + h.digest("hex") + (env["PATH"] ?? "");
   }
@@ -268,7 +268,7 @@ export async function roundtrip(dir: string, file: string): Promise<int32> {
   await rename(copied, renamed);
   await unlink(renamed);
   await rm(dir);
-  let total: int32 = names.length;
+  let total: int32 = names.length as int32;
   if (text.length > 0 && written > 0) {
     total += 1;
   }
