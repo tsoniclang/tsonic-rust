@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustTargetOperationFactKey } from "../../../dist/analysis/facts/operations/keys.js";
+import { rustOptionalChainFactKey, rustTargetOperationFactKey } from "../../../dist/analysis/facts/operations/keys.js";
 import { createRustPlanBuilder } from "../../../dist/analysis/facts/plan-store.js";
 
 const integer = { kind: "source-primitive", name: "int32" };
@@ -76,6 +76,27 @@ test("every node-bearing operation compares exact opaque identities and closed m
     const cycle = {};
     cycle.self = cycle;
     assert.equal(rustTargetOperationFactKey.equals(fact, { ...equivalent, extra: cycle }), false);
+  }
+});
+
+test("optional chain selection preserves exact opaque source identities", () => {
+  const fact = {
+    expression: first, guard: second, operationKind: "property",
+    sourceGuardCarrier: { kind: "target-named", id: "rust.core.Option", typeArguments: [text] },
+    selectedGuardCarrier: text, guardDepth: 1, innerResultCarrier: integer,
+    resultCarrier: { kind: "target-named", id: "rust.core.Option", typeArguments: [integer] },
+    lowering: "map",
+  };
+  const model = createRustPlanBuilder({ getFact: () => undefined });
+  model.set(first, rustOptionalChainFactKey, fact);
+  model.set(first, rustOptionalChainFactKey, copyMetadata(fact));
+  for (const mutation of [
+    { expression: second }, { guard: first }, { operationKind: "method" },
+    { guardDepth: 2 }, { selectedGuardCarrier: integer },
+    { innerResultCarrier: text }, { lowering: "and-then" },
+  ]) {
+    assert.throws(() => model.set(first, rustOptionalChainFactKey, { ...fact, ...mutation }),
+      /Conflicting Rust semantic plan/u);
   }
 });
 

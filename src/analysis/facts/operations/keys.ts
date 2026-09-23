@@ -39,7 +39,12 @@ export const rustPreparedOperationResultFactKey: RustPlanKey<RustPreparedOperati
     rustTargetTypeRefEquals(left.resultCarrier, right.resultCarrier));
 
 export const rustOptionalChainFactKey: RustPlanKey<RustOptionalChainFact> =
-  defineRustPlanKey("optionalChain", closedMetadataEquals);
+  defineRustPlanKey("optionalChain", (left, right) => {
+    const { expression: leftExpression, guard: leftGuard, ...leftMetadata } = left;
+    const { expression: rightExpression, guard: rightGuard, ...rightMetadata } = right;
+    return leftExpression === rightExpression && leftGuard === rightGuard &&
+      closedMetadataEquals(leftMetadata, rightMetadata);
+  });
 
 export const rustTypedLocationPlanKey: RustPlanKey<RustTypedLocationPlan> =
   defineRustPlanKey("typedLocationPlan", rustTypedLocationPlanEquals);

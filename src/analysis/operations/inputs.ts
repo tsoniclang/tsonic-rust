@@ -41,7 +41,7 @@ import { recordBindingPatternFacts, recordBindingWrite, validateFlowMarkerAgains
 import { recordProjectSourceBinding } from "../expressions/references.js";
 import { recordStatementFacts } from "../control-flow/statements.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
-import { resolveRustTupleElementTargetType } from "../../policy/types/resolution.js";
+import { resolveRustTargetTypeRef, resolveRustTupleElementTargetType } from "../../policy/types/resolution.js";
 import { rustMutatedBindingFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
 import { rustSelectedAssignmentValueCarrier } from "./operators.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -272,25 +272,28 @@ export function resolveArrayLiteralCarrier(
   const hasHoles = elements.some((element) => ast.kindName(element) === KindOmittedExpression);
   const presentElements = elements.filter((element) => ast.kindName(element) !== KindOmittedExpression);
 
-  if (expected?.kind === "tuple" && !hasHoles) {
+  const selected = expected ?? resolveRustTargetTypeRef(
+    expression, rustResolutionContext(walk, expression), walk.operationOptions,
+  );
+  if (selected?.kind === "tuple" && !hasHoles) {
     const omittedOptionalElementIndexes = contextualTupleOmissions(
       walk,
       expression,
       sourceFile,
-      expected,
+      selected,
       presentElements.length,
     );
     if (omittedOptionalElementIndexes !== undefined) {
       for (const [index, element] of presentElements.entries()) {
-        resolveExpressionCarrier(walk, element, sourceFile, expected.elements[index]);
+        resolveExpressionCarrier(walk, element, sourceFile, selected.elements[index]);
       }
       setRustOperationFact(walk, expression, {
         kind: "tuple-literal",
         operationId: "tsonic.rust.tuple.literal",
-        resultCarrier: expected,
+        resultCarrier: selected,
         omittedOptionalElementIndexes,
       });
-      return setCarrierFact(walk, expression, expected);
+      return setCarrierFact(walk, expression, selected);
     }
   }
   let expectedElement: TargetTypeRef | undefined;

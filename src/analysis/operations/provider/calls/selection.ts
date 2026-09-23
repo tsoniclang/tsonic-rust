@@ -415,11 +415,11 @@ export function selectRustCheckedCall(
   const calleeDeclaration = isProjectSourceDeclaration(context, selectedCallCalleeDeclaration(request))
     ? asNode(selectedCallCalleeDeclaration(request), context)
     : undefined;
-  const constructorCarrier = sourceDeclaration === undefined && checkedCallIsConstruction(request, context)
+  const constructorCarrier = checkedCallIsConstruction(request, context)
     ? selectedValueCarrier(request.source.sourceCallee.expression, request.source.sourceCallee.type, context, options)
     : undefined;
   const constructorInstance = constructorCarrier === undefined ? undefined : rustClassConstructorInstance(constructorCarrier);
-  const constructorDefinition = sourceDeclaration === undefined && checkedCallIsConstruction(request, context)
+  const constructorDefinition = checkedCallIsConstruction(request, context)
     ? options.projectTypes.definitionForDeclaration(calleeDeclaration) ??
       (constructorInstance === undefined ? undefined : options.projectTypes.definitionForCarrier(constructorInstance))
     : undefined;
