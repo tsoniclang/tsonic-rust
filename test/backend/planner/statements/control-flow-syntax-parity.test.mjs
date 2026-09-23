@@ -1,8 +1,21 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { artifactText, compileRust } from "../../../helpers/rust-session.mjs";
+import { acmeTestingPackage, artifactText, compileRust } from "../../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
+import { bigintSwitchSource } from "../../../../../tsonic/test/fixtures/bigint-switch.mjs";
+
+test("bigint switches preserve wide equality, evaluation order and fallthrough", { timeout: 300_000 }, () => {
+  const { result } = compileRust({
+    surfaces: ["js"], packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "bigint_switch" } },
+    files: { "index.ts": `${bigintSwitchSource}
+      import { check } from "@acme/testing";
+      export function main(): void { check(run()); }` },
+  });
+  assert.deepEqual(result.diagnostics, []);
+  validateGeneratedProject("bigint-switch", result.artifacts, { run: true });
+});
 
 test("constant-true loops with no selected break satisfy value-return flow", { timeout: 300_000 }, () => {
   const { result } = compileRust({

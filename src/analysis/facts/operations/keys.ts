@@ -6,21 +6,7 @@ import type { RustArgumentMode, RustOptionalChainFact, RustProviderFactOperation
 import type { RustPlanKey } from "../../../target-model/facts/keys.js";
 import type { RustTargetOperationFact, RustTypedLocationPlan } from "./facts.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-
-function rustTargetOperationFactEquals(left: RustTargetOperationFact, right: RustTargetOperationFact): boolean {
-  if (left.kind === "source-field") {
-    if (right.kind !== "source-field" || left.declaration !== right.declaration) return false;
-    const { declaration: _leftDeclaration, ...leftContract } = left;
-    const { declaration: _rightDeclaration, ...rightContract } = right;
-    return closedMetadataEquals(leftContract, rightContract);
-  }
-  if (left.kind === "throw-op" && left.error.kind === "runtime") {
-    return right.kind === "throw-op" && right.error.kind === "runtime" &&
-      left.operationId === right.operationId && left.error.expression === right.error.expression &&
-      rustTargetTypeRefEquals(left.error.carrier, right.error.carrier);
-  }
-  return closedMetadataEquals(left, right);
-}
+import { rustTargetOperationFactEquals } from "./equality.js";
 
 export const rustTargetOperationFactKey: RustPlanKey<RustTargetOperationFact> =
   defineRustPlanKey("targetOperation", rustTargetOperationFactEquals);

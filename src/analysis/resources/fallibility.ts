@@ -19,6 +19,7 @@ import {
   VariableDeclarationList_Declarations,
   VariableStatement_DeclarationList,
   asSourceNode,
+  sourceClassFieldIsTypeOnly,
 } from "@tsonic/target-api/source";
 import {
   rustAsyncFunctionFactKey,
@@ -188,30 +189,6 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
             );
           }
         }
-      } else if (kind === "KindClassDeclaration") {
-        const members = requireDenseSourceNodes(walk, ast.members(statement), "Class declaration contains an undefined or non-data member slot.");
-        if (members === undefined) {
-          return;
-        }
-        const constructors = members.filter((member) =>
-          ast.kindName(member) === "KindConstructor");
-        const constructorImplementation = constructors.find((member) =>
-          ast.body(member) !== undefined);
-        const constructorSubject = constructorImplementation ?? statement;
-        addDeclaration(constructorSubject);
-        for (const constructor of constructors) {
-          registerCallableDeclaration(constructor);
-          relateDeclarations(constructorSubject, constructor);
-        }
-        for (const member of members) {
-          if (ast.kindName(member) === "KindPropertyDeclaration") {
-            if (!ast.hasModifierKind(member, "static")) {
-              addRegion(constructorSubject, Node_Initializer(ast, member));
-            }
-          } else if (callableMemberKind(member)) {
-            registerCallableDeclaration(member);
-          }
-        }
       }
     }
   }
@@ -246,6 +223,22 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
     );
     if (members === undefined) {
       return;
+    }
+    if (definition.kind === "class") {
+      const constructors = members.filter(member => ast.kindName(member) === "KindConstructor");
+      const constructorSubject = constructors.find(member => ast.body(member) !== undefined) ?? definition.declaration;
+      addDeclaration(constructorSubject);
+      for (const constructor of constructors) {
+        registerCallableDeclaration(constructor);
+        relateDeclarations(constructorSubject, constructor);
+      }
+      for (const member of members) {
+        if (ast.kindName(member) === "KindPropertyDeclaration" && !ast.hasModifierKind(member, "static")) {
+          addRegion(constructorSubject, Node_Initializer(ast, member));
+        } else if (callableMemberKind(member)) {
+          registerCallableDeclaration(member);
+        }
+      }
     }
     for (const member of members) {
       if (!callableMemberKind(member) || ast.hasModifierKind(member, "static")) {
@@ -477,6 +470,24 @@ export function recordFallibilityFacts(walk: RustFactWalk, projectSourceFiles: r
       }
       if (kind === "KindArrowFunction" || kind === KindFunctionExpression) {
         // Closures are fallibility boundaries: errors cannot propagate out.
+        return;
+      }
+      if (kind === "KindClassDeclaration" || kind === "KindClassExpression") {
+        for (const heritage of ast.extendsHeritageElements(node)) {
+          const expression = ast.as.AsExpressionWithTypeArguments(heritage)?.Expression;
+          if (expression !== undefined) visit(expression, insideTry);
+        }
+        for (const member of ast.members(node)) {
+          if (member === undefined || sourceClassFieldIsTypeOnly(ast, member)) continue;
+          const name = ast.name(member);
+          const computed = name !== undefined && ast.kindName(name) === "KindComputedPropertyName"
+            ? Node_Expression(ast, name) : undefined;
+          if (computed !== undefined) visit(computed, insideTry);
+          const initializer = ast.kindName(member) === "KindClassStaticBlockDeclaration"
+            ? ClassStaticBlock_Body(ast, member)
+            : ast.hasModifierKind(member, "static") ? Node_Initializer(ast, member) : undefined;
+          if (initializer !== undefined) visit(initializer, insideTry);
+        }
         return;
       }
       if (kind === "KindRegularExpressionLiteral" && !insideTry) {

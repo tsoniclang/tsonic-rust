@@ -41,6 +41,7 @@ import {
   VariableStatement_DeclarationList,
 } from "@tsonic/target-api/source";
 import {
+  isRustBigIntCarrier,
   isRustBoolCarrier,
   isRustNumericCarrier,
   isRustStringCarrier,
@@ -437,7 +438,7 @@ function recordSwitchFacts(
 
 function rustSwitchCarrierSupportsEquality(carrier: TargetTypeRef): boolean {
   const sourceType = rustSourceTypeCarrierValue(carrier);
-  return isRustNumericCarrier(carrier) || isRustBoolCarrier(carrier) ||
+  return isRustNumericCarrier(carrier) || isRustBigIntCarrier(carrier) || isRustBoolCarrier(carrier) ||
     isRustStringCarrier(carrier) || sourceType?.shape === "enum";
 }
 
