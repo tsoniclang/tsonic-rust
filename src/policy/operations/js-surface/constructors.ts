@@ -104,7 +104,7 @@ function typedArrayConstructorRows(name: RustJsTypedArrayName): readonly JsConst
   const path = `js_abi::${name}`;
   return [
     { className: name, sourceOwnerName: `${name}Constructor`, typeArgumentCount: 0, argumentCount: 1, path: `${path}::new`, result, fallible: true, params: [{ ref: "numeric-argument", index: 0 }], variant: "length" },
-    { className: name, sourceOwnerName: `${name}Constructor`, typeArgumentCount: 0, argumentCount: 1, path: `${path}::from_array`, result, fallible: true, params: [{ ref: "float64-array" }], argModes: ["ref"], variant: "array" },
+    { className: name, sourceOwnerName: `${name}Constructor`, typeArgumentCount: 0, argumentCount: 1, path: `${path}::from_array`, result, fallible: true, params: [{ ref: "numeric-array-argument", index: 0 }], argModes: ["ref"], variant: "array" },
     ...typedArrayNames.map((source): JsConstructorRowData => ({
       className: name, sourceOwnerName: `${name}Constructor`, typeArgumentCount: 0,
       argumentCount: 1, path: `${path}::from_typed_array`, result, fallible: true,

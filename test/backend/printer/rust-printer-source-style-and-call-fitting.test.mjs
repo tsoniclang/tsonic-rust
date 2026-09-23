@@ -27,6 +27,32 @@ function printRustSourceFile(model) {
   return printFinalRustSourceFile(finalizeRustSourceStyle(model));
 }
 
+test("authored default-then-write order has an exact local style expectation", () => {
+  const type = { kind: "named", path: "Options" };
+  const initial = { kind: "let", name: "options", mutable: true, type,
+    init: { kind: "associated-call", owner: type,
+      trait: { kind: "named", path: "core::default::Default" }, method: "default", args: [] } };
+  const assignment = { kind: "assign", operator: "=", target: { kind: "field",
+    receiver: { kind: "path", path: "options" }, name: "mode" },
+    value: { kind: "call", path: "checked_mode", args: [] } };
+  for (const [first, second, expected] of [
+    [initial, assignment, true],
+    [{ ...initial, init: { kind: "call", path: "make_options", args: [] } }, assignment, false],
+    [initial, { ...assignment, target: { ...assignment.target, receiver: { kind: "path", path: "other" } } }, false],
+    [initial, { kind: "expr", expr: { kind: "call", path: "observe", args: [] } }, false],
+    [initial, { ...assignment, value: { kind: "field", receiver: { kind: "path", path: "options" }, name: "old_mode" } }, false],
+  ]) {
+    const model = finalizeRustSourceStyle({ headerComment, items: [{ kind: "function", name: "options",
+      visibility: "public", generics: emptyRustGenerics, params: [], returnType: type,
+      body: { statements: [first, second, { kind: "tail", expr: { kind: "path", path: "options" } }] } }] });
+    const statements = model.items[0].body.statements;
+    assert.equal(model.items[0].body.innerAttrs?.some(attribute => attribute.includes("field_reassign_with_default")) ?? false,
+      expected);
+    assert.deepEqual(statements[0].init, first.init);
+    assert.deepEqual(statements[1], second);
+  }
+});
+
 test("source style attributes are item-local and derived from exact Rust signatures", () => {
   const parameters = Array.from({ length: 8 }, (_, index) => ({
     name: `value_${index + 1}`,

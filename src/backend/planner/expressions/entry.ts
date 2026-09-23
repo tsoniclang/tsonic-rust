@@ -29,7 +29,9 @@ import { planRustEmptyRecordConversion } from "./empty-record-conversion.js";
 import { rustObjectReferenceViewKey } from "../../../analysis/facts/object-reference-views.js";
 import { rustIndexedFieldKeyArgument } from "../../../analysis/facts/indexed-field-keys.js";
 import { planRustObjectReferenceView } from "./object-reference-views.js";
-import { diagnosticInput, sourceTypePath } from "../program/plan-context.js";
+import { diagnosticInput, sourceTypePath, rustActiveErrorType } from "../program/plan-context.js";
+import { lowerRustExactIntegerConversion } from "./exact-integer.js";
+import { rustTargetRuntimeErrorType } from "../types/error-boundary.js";
 import { findRustUpdateSourceAccessor } from "./updates/source.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planExpressionInner } from "./dispatch.js";
@@ -372,6 +374,21 @@ function applyRustContextualValueConversion(
       ],
     });
     return undefined;
+  }
+  if (fact.conversion.kind === "exact-integer") {
+    const converted = lowerRustExactIntegerConversion(fact.conversion, expression, context);
+    const errorType = rustActiveErrorType(context);
+    if (converted === undefined || errorType === undefined ||
+      !rustCompilerOwnedContextualConversionMatches(
+        fact.sourceCarrier, fact.targetCarrier, fact.conversion, context.input.program.typeDefinitions)) {
+      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+        "rust.backend.exact-integer", "Exact native integer conversion requires sealed carriers and a fallible context."));
+      return undefined;
+    }
+    return {
+      kind: "try", resultErrorType: errorType, operandErrorType: rustTargetRuntimeErrorType,
+      expr: converted,
+    };
   }
   if (fact.conversion.kind === "native-trait-object-upcast" ||
     fact.conversion.kind === "reference-reborrow") {

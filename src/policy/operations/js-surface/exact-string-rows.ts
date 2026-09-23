@@ -1,20 +1,11 @@
 import { jsSourceSemanticsIdentity } from "@tsonic/js-source-profile";
-import {
-  rustInt32ToFloat64ValueConversion,
-} from "../../../target-model/conversions/model.js";
 import { rustJsStringTargetId } from "../../../target-model/types/index.js";
 import type { JsOperationRowData } from "./model.js";
 
 const owner = jsSourceSemanticsIdentity.typeExport;
 const zero = { kind: "integer", value: 0 } as const;
-const none = { kind: "none" } as const;
-const numberArguments = [
-  { variant: "float64", carrier: { ref: "float64" } as const, conversion: undefined },
-  { variant: "int32", carrier: { ref: "int32" } as const, conversion: rustInt32ToFloat64ValueConversion },
-] as const;
-const numberArgumentPairs = numberArguments.flatMap((first) =>
-  numberArguments.map((second) => ({ first, second })),
-);
+const numberArguments = [{ variant: "native", carrier: { ref: "numeric-argument", index: 0 } as const, conversion: undefined }] as const;
+const numberArgumentPairs = [{ first: numberArguments[0], second: { variant: "native", carrier: { ref: "numeric-argument", index: 1 } as const, conversion: undefined } }] as const;
 const exactUnaryStringRows: readonly {
   readonly member: string;
   readonly target: string;
@@ -109,7 +100,7 @@ export const exactJsStringOperationRows: readonly JsOperationRowData[] = Object.
           argConversions: [undefined, conversion],
         },
         result: row.result,
-        params: [{ ref: "js-string" }, carrier],
+        params: [{ ref: "js-string" }, { ...carrier, index: 1 }],
       },
     })),
   ]),
@@ -154,9 +145,9 @@ export const exactJsStringOperationRows: readonly JsOperationRowData[] = Object.
       operationKind: "method",
       target: {
         form: "free-call",
-        path: "js_exact_string::slice",
+        path: "js_exact_string::slice_from",
         receiverMode: "ref",
-        trailingArguments: [zero, none],
+        trailingArguments: [zero],
       },
       result: { ref: "js-string" },
     },
@@ -172,10 +163,9 @@ export const exactJsStringOperationRows: readonly JsOperationRowData[] = Object.
       operationKind: "method",
       target: {
         form: "free-call",
-        path: "js_exact_string::slice",
+        path: "js_exact_string::slice_from",
         receiverMode: "ref",
         argConversions: [conversion],
-        trailingArguments: [none],
       },
       result: { ref: "js-string" },
       params: [carrier],
@@ -389,7 +379,7 @@ export const exactJsStringOperationRows: readonly JsOperationRowData[] = Object.
         argConversions: [undefined, conversion],
       },
       result: { ref: "js-string-array" },
-      params: [{ ref: "js-string" }, carrier],
+      params: [{ ref: "js-string" }, { ...carrier, index: 1 }],
     },
   })),
 ]);

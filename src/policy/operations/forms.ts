@@ -25,7 +25,8 @@ export function rustProviderOperationFormAcceptsTargetGenericArguments(
   return form.form === "call" || form.form === "free-call" || form.form === "method" ||
     form.form === "source-module-construction" ||
     form.form === "receiver-method" || form.form === "arg-method" ||
-    form.form === "arg-receiver-method" || form.form === "trait-call";
+    form.form === "arg-receiver-method" || form.form === "trait-call" ||
+    form.form === "call-value-slice" || form.form === "call-value-array";
 }
 
 export function rustProviderOperationFormDeclaresWritableInput(

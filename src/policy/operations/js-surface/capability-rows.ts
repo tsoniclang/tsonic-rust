@@ -101,7 +101,7 @@ const typedArrayRows: readonly JsOperationRowData[] = [
     shape: {
       op: "operation", operationKind: "method",
       target: { form: "call", path: "js_abi::Uint8Array::from_array", argModes: ["ref"] },
-      result: { ref: "source-result" }, params: [{ ref: "float64-array" }],
+      result: { ref: "source-result" }, params: [{ ref: "numeric-array-argument", index: 0 }],
     },
   },
   ...[
@@ -119,8 +119,8 @@ const typedArrayRows: readonly JsOperationRowData[] = [
   { owner: "TypedArray", member: "join", operationKind: "call", lane: "typed-array", variant: "default", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "join_default" }, result: { ref: "string" } } },
   { owner: "TypedArray", member: "join", operationKind: "call", lane: "typed-array", variant: "separator", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "join", argModes: ["ref"] }, result: { ref: "string" }, params: [{ ref: "string" }] } },
   { owner: "TypedArray", member: "reverse", operationKind: "call", lane: "typed-array", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "reverse" }, result: { ref: "receiver" } } },
-  { owner: "TypedArray", member: "set", operationKind: "call", lane: "typed-array", variant: "default", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "set_from_array_default", argModes: ["ref"] }, result: { ref: "unit" }, params: [{ ref: "float64-array" }] } },
-  { owner: "TypedArray", member: "set", operationKind: "call", lane: "typed-array", variant: "offset", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "set_from_array", argModes: ["ref", "value"] }, result: { ref: "unit" }, params: [{ ref: "float64-array" }, { ref: "numeric-argument", index: 1 }] } },
+  { owner: "TypedArray", member: "set", operationKind: "call", lane: "typed-array", variant: "default", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "set_from_array_default", argModes: ["ref"] }, result: { ref: "unit" }, params: [{ ref: "numeric-array-argument", index: 0 }] } },
+  { owner: "TypedArray", member: "set", operationKind: "call", lane: "typed-array", variant: "offset", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "set_from_array", argModes: ["ref", "value"] }, result: { ref: "unit" }, params: [{ ref: "numeric-array-argument", index: 0 }, { ref: "numeric-argument", index: 1 }] } },
   ...(Object.keys(rustJsTypedArrayTargetIds) as RustJsTypedArrayName[]).flatMap((name) =>
     [false, true].map((offset): JsOperationRowData => ({
       owner: "TypedArray", member: "set", operationKind: "call", lane: "typed-array",

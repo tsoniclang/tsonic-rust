@@ -1,5 +1,6 @@
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import { selectRustNumberArrayUnionOperation } from "./number-array-unions.js";
+import { selectRustNumericRestCarrier } from "./numeric-rest.js";
 import { rustJsArrayEntriesElementTargetType, rustJsArrayEntriesTargetType, rustJsArrayEntryTargetType } from "../../../target-model/types/carriers/array-entries.js";
 import { rustIteratorResultTargetType } from "../../../target-model/types/index.js";
 import {
@@ -10,6 +11,7 @@ import {
   rustStructuralObjectCarrierValue,
   rustJsNumericTargetType,
   getRustJsMapTargetTypes,
+  isRustJsArrayCarrier,
   getRustJsSetElementTargetType,
   getRustJsWeakMapTargetTypes,
   getRustJsWeakSetElementTargetType,
@@ -341,8 +343,6 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
       return rustJsArrayTargetType(rustStringTargetType());
     case "optional-string-array":
       return rustJsArrayTargetType(rustOptionTargetType(rustStringTargetType()));
-    case "float64-array":
-      return rustJsArrayTargetType(rustSourcePrimitiveTargetType("float64"));
     case "js-string-array":
       return rustJsArrayTargetType(rustJsStringTargetType());
     case "optional-js-string-array":
@@ -553,6 +553,12 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
       const carrier = bindings.arguments?.[reference.index];
       return isRustNumericCarrier(carrier) ? carrier : undefined;
     }
+    case "numeric-array-argument": {
+      const carrier = bindings.arguments?.[reference.index];
+      const element = carrier !== undefined && isRustJsArrayCarrier(carrier)
+        ? rustJsArrayLikeElementTargetType(carrier) : undefined;
+      return isRustNumericCarrier(element) ? carrier : undefined;
+    }
   }
 }
 
@@ -676,6 +682,8 @@ export function selectJsSurfaceOperation(request: JsOperationRequest, definition
     }
     const parameterCarriers = (candidate.shape.params ?? []).map((reference) =>
       reference === undefined ? undefined : resolveCarrierRef(reference, candidateBindings));
+    if (parameterCarriers.some((carrier, index) =>
+      carrier === undefined && candidate.shape.params?.[index] !== undefined)) return [];
     if ((candidate.variadic !== true && parameterCarriers.length !== candidateArgumentCarriers.length) ||
       (candidate.variadic === true && candidateArgumentCarriers.length < parameterCarriers.length)) {
       return [];
@@ -718,12 +726,18 @@ export function selectJsSurfaceOperation(request: JsOperationRequest, definition
   const { row, parameterCarriers } = selected;
   const discardResult = request.resultUse === "discarded" &&
     row.shape.op === "operation" && row.shape.discardedTarget !== undefined;
-  const materializedTarget = materializeVariadicTarget(
+  const variadicTarget = materializeVariadicTarget(
     discardResult && row.shape.op === "operation"
       ? row.shape.discardedTarget!
       : row.shape.target,
     bindings.element,
+    parameterCarriers,
   );
+  const numericRestCarrier = row.numericRest === true
+    ? selectRustNumericRestCarrier(argumentCarriers, request.spreadArgumentIndexes ?? []) : undefined;
+  const materializedTarget = row.numericRest !== true ? variadicTarget
+    : numericRestCarrier === undefined || variadicTarget?.form !== "call-value-slice" ? undefined
+    : { ...variadicTarget, elementCarrier: numericRestCarrier };
   const authoredTarget = row.authoredPropertyKey !== true
     ? materializedTarget
     : request.authoredPropertyKey === undefined ||
@@ -814,6 +828,9 @@ export function selectJsSurfaceOperation(request: JsOperationRequest, definition
         : {}),
       operationKind: row.shape.operationKind,
       target: materializeTarget(target, copyReference),
+      ...(numericRestCarrier === undefined ? {} : {
+        targetGenericArguments: [{ kind: "type" as const, type: numericRestCarrier }],
+      }),
       ...(row.shape.indexedLocationMethod === undefined ? {} : { indexedLocationMethod: row.shape.indexedLocationMethod }),
       ...(row.shape.borrowedIndexMethod === undefined ? {} : { borrowedIndexMethod: row.shape.borrowedIndexMethod }),
       resultCarrier,

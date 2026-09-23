@@ -11,6 +11,8 @@ import { rustProviderRecordCopyMatches, type RustProviderRecordCopy } from "../.
 import { instantiateProviderOperationTemplate } from "./template-instantiation.js";
 import { providerOperationTemplate } from "../result.js";
 import { selectRustStructuralFieldProjection } from "../../../../policy/types/structural-fields.js";
+import { selectRustExactIntegerConversion } from "../../../../target-model/conversions/exact-integer.js";
+import { selectRustSourceValueConversion } from "../../../../policy/conversions/selection.js";
 
 export function selectProviderRecordArgument(
   sourceType: Type | undefined,
@@ -71,10 +73,17 @@ export function selectProviderRecordArgument(
     if (pair.source.read !== "property" || pair.source.property.optional) return undefined;
     const projection = selectRustStructuralFieldProjection(options.sourceTypes,
       pair.source.property.symbol, pair.source.declarations, source);
-    if (projection === undefined || projection.field.accessor !== undefined ||
-      !rustTargetTypeRefEquals(projection.field.resultCarrier, readTemplate.resultCarrier)) return undefined;
+    if (projection === undefined || projection.field.accessor !== undefined) return undefined;
+    const sourceCarrier = projection.field.resultCarrier;
+    const carrier = readTemplate.resultCarrier;
+    const identical = rustTargetTypeRefEquals(sourceCarrier, carrier);
+    const conversion = identical ? undefined
+      : selectRustExactIntegerConversion(sourceCarrier, carrier) ??
+        selectRustSourceValueConversion(sourceCarrier, carrier, context.typeDefinitions);
+    if (!identical && conversion === undefined) return undefined;
     fields.push(Object.freeze({ storageIndex: projection.field.storageIndex,
-      carrier: readTemplate.resultCarrier, targetName: readTemplate.target.name }));
+      sourceCarrier, carrier, targetName: readTemplate.target.name,
+      ...(conversion === undefined ? {} : { conversion }) }));
   }
   if (selectedExport === undefined) return undefined;
   const ownerRows = options.providerRows.filter(row => row.exportId === selectedExport &&

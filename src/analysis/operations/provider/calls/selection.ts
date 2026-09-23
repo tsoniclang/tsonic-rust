@@ -358,6 +358,8 @@ export function selectRustCheckedCall(
       ...(receiverCarrier === undefined ? {} : { receiverCarrier }),
       ...(sourceResultCarrier === undefined ? {} : { sourceResultCarrier }),
       ...(argumentCarriers.length === 0 ? {} : { argumentCarriers }),
+      spreadArgumentIndexes: request.source.sourceArguments.flatMap((argument, index) =>
+        context.ast.is.IsSpreadElement(argument.expression) ? [index] : []),
       selectedMethodTypeArgumentCarriers,
       authoredMethodTypeArgumentCarriers,
       argumentMatchScore: selectedArgumentMatchScore(selectedCallArgumentNodes(request), context, options),

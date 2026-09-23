@@ -32,6 +32,8 @@ import {
 import { rustSourcePrimitiveTargetType, rustUnitTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectedValueCarrier } from "../selected-values.js";
+import { selectRustExactIntegerConversion } from "../../../target-model/conversions/exact-integer.js";
+import { rustContextualValueConversionFactKey } from "../../facts/value-projections.js";
 import { selectJsSurfaceOperation } from "../../../policy/operations/js-surface.js";
 import { selectRustIntegralPromotion } from "../../../policy/operations/operator-rules.js";
 import { selectRustProviderOperation } from "../../../policy/operations/provider-selection.js";
@@ -484,14 +486,27 @@ function mapSelectedProviderAssignment(
       `Selected provider declaration '${providerIdentityText(identity)}' cannot instantiate one total Rust ${operationKind} ABI.`,
     );
   }
-  const sourceArgumentCarriers = sourceArguments.map((argument, index) =>
-    normalizeSelectedOperationInputCarrier(
+  const sourceArgumentCarriers = sourceArguments.map((argument, index) => {
+    const actual = rawArgumentCarriers[index];
+    const expected = template.parameterCarriers?.[index];
+    const selected = normalizeSelectedOperationInputCarrier(
       argument,
-      rawArgumentCarriers[index],
-      template.parameterCarriers?.[index],
+      actual,
+      expected,
       context,
       options,
-    ));
+    );
+    if (rustTargetTypeRefEquals(selected, expected)) return selected;
+    const conversion = operationKind !== "property-set" || template.target.form !== "field" ||
+      actual === undefined || expected === undefined ? undefined
+      : selectRustExactIntegerConversion(actual, rustOptionElementCarrier(actual) === undefined
+        ? rustOptionElementCarrier(expected) ?? expected : expected);
+    if (conversion === undefined) return selected;
+    context.facts.set(argument, rustContextualValueConversionFactKey, {
+      sourceCarrier: conversion.source, targetCarrier: conversion.target, conversion,
+    }, [{ message: "rust exact provider field write" }]);
+    return expected;
+  });
   const finalizedSourceArgumentCarriers = sourceArgumentCarriers.filter(
     (carrier): carrier is TargetTypeRef => carrier !== undefined,
   );

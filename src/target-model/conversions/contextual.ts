@@ -8,6 +8,7 @@ import { rustEmptyRecordConversionMatches, type RustEmptyRecordConversion } from
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../types/source-union-definitions.js";
 import { rustGenericCallableConversionMatches, type RustGenericCallableConversion } from "./generic-callable.js";
 import { rustIntegerTruncationConversionMatches, type RustIntegerTruncationConversion } from "./integer-truncation.js";
+import { rustExactIntegerConversionMatches, type RustExactIntegerConversion } from "./exact-integer.js";
 
 export type RustContextualValueConversion =
   | RustValueConversion
@@ -15,6 +16,7 @@ export type RustContextualValueConversion =
   | RustEmptyRecordConversion
   | RustGenericCallableConversion
   | RustIntegerTruncationConversion
+  | RustExactIntegerConversion
   | {
       readonly kind: "native-trait-object-upcast";
       readonly source: TargetTypeRef;
@@ -32,6 +34,9 @@ export function rustCompilerOwnedContextualConversionMatches(
   conversion: RustContextualValueConversion,
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): boolean {
+  if (conversion.kind === "exact-integer") {
+    return rustExactIntegerConversionMatches(sourceCarrier, targetCarrier, conversion);
+  }
   if (conversion.kind === "integer-truncation") {
     return rustIntegerTruncationConversionMatches(sourceCarrier, targetCarrier, conversion);
   }
@@ -65,10 +70,14 @@ export function rustContextualValueConversionIsFallible(
   conversion: RustContextualValueConversion | undefined,
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): boolean {
+  if (conversion?.kind === "exact-integer") return true;
+  if (conversion?.kind === "provider-record-copy") {
+    return conversion.fields.some(field => field.conversion?.kind === "exact-integer" ||
+      field.conversion !== undefined && rustValueConversionIsFallible(field.conversion, definitions));
+  }
   return conversion !== undefined &&
     conversion.kind !== "native-trait-object-upcast" &&
     conversion.kind !== "reference-reborrow" &&
-    conversion.kind !== "provider-record-copy" &&
     conversion.kind !== "empty-record" &&
     conversion.kind !== "generic-callable-flow" &&
     conversion.kind !== "integer-truncation" &&

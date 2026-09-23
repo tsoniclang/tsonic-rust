@@ -5,6 +5,8 @@ export const rustLintAttributes = Object.freeze({
     '#[expect(clippy::blocks_in_conditions, reason = "Rust 2021 match temporary scope")]',
   collapsibleIf:
     '#[expect(clippy::collapsible_if, reason = "checked lexical regions")]',
+  fieldReassignWithDefault:
+    '#![expect(clippy::field_reassign_with_default, reason = "checked source assignment order")]',
   authoredDeadCode:
     '#[allow(dead_code, reason = "retains an unused authored declaration")]',
   authoredUnreadField:

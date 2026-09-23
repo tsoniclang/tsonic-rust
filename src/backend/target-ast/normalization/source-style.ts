@@ -135,8 +135,18 @@ function finalizeRustFunctionBodyStyle(block: RustBlock): RustBlock {
 }
 
 function finalizeRustBlockStyle(block: RustBlock): RustBlock {
+  const retainsFieldAssignment = block.statements.some((statement, index) => {
+      const previous = block.statements[index - 1];
+      return previous?.kind === "let" && previous.init?.kind === "associated-call" &&
+        previous.init.trait?.kind === "named" && previous.init.trait.path === "core::default::Default" &&
+        previous.init.method === "default" && previous.init.args.length === 0 &&
+        statement.kind === "assign" && statement.operator === "=" && statement.target.kind === "field" &&
+        statement.target.receiver.kind === "path" && statement.target.receiver.path === previous.name &&
+        !rustBlockReferencesPath({ statements: [{ kind: "expr", expr: statement.value }] }, previous.name);
+  });
   return {
     ...block,
+    ...(retainsFieldAssignment ? { innerAttrs: appendRustAttribute(block.innerAttrs, rustLintAttributes.fieldReassignWithDefault) } : {}),
     statements: block.statements.map(finalizeRustStatementStyle),
   };
 }

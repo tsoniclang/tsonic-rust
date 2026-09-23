@@ -16,6 +16,7 @@ export interface JsOperationRequest {
   readonly receiverCarrier?: TargetTypeRef;
   readonly sourceResultCarrier?: TargetTypeRef;
   readonly argumentCarriers?: readonly (TargetTypeRef | undefined)[];
+  readonly spreadArgumentIndexes?: readonly number[];
   readonly soleArgumentNumberKind?: "number" | "non-number";
   readonly selectedMethodTypeArgumentCarriers?: readonly (TargetTypeRef | undefined)[];
   readonly authoredMethodTypeArgumentCarriers?: readonly (TargetTypeRef | undefined)[];
@@ -100,7 +101,7 @@ export type JsCarrierRef =
   | { readonly ref: "unit" }
   | { readonly ref: "string-array" }
   | { readonly ref: "optional-string-array" }
-  | { readonly ref: "float64-array" }
+  | { readonly ref: "numeric-array-argument"; readonly index: number }
   | { readonly ref: "js-string-array" }
   | { readonly ref: "optional-js-string-array" }
   | { readonly ref: "regexp" }
@@ -198,6 +199,7 @@ export interface JsOperationRowData {
   readonly compileTimeSourceArgumentIndexes?: readonly number[];
   readonly jsonValueSourceArgumentIndexes?: readonly number[];
   readonly variadic?: true;
+  readonly numericRest?: true;
   readonly firstArgCarrierId?: string;
   readonly authoredPropertyKey?: true;
   readonly shape:
@@ -227,6 +229,10 @@ export function defineJsOperationRows(rows: readonly JsOperationRowData[]): read
   const identities = new Set<string>();
   const variantsByOperation = new Map<string, string[]>();
   for (const row of rows) {
+    if (row.numericRest === true && (row.variadic !== true || row.shape.target.form !== "call-value-slice" ||
+      row.shape.target.leadingArguments.length !== 0)) {
+      throw new Error(`Numeric rest row '${row.owner}.${row.member}' requires one closed numeric sequence.`);
+    }
     if (row.shape.op === "operation" && row.shape.evaluation === "pure" &&
       (row.shape.operationKind === "constructor" ||
         row.callback !== undefined ||
