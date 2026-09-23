@@ -5,6 +5,7 @@ import {
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
   rustJsTypedArrayTargetIds,
+  type RustJsTypedArrayName,
 } from "../../../target-model/types/index.js";
 
 const falseArgument = { kind: "boolean", value: false } as const;
@@ -116,6 +117,20 @@ const typedArrayRows: readonly JsOperationRowData[] = [
   { owner: "TypedArray", member: "reverse", operationKind: "call", lane: "typed-array", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "reverse" }, result: { ref: "receiver" } } },
   { owner: "TypedArray", member: "set", operationKind: "call", lane: "typed-array", variant: "default", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "set_from_array_default", argModes: ["ref"] }, result: { ref: "unit" }, params: [{ ref: "float64-array" }] } },
   { owner: "TypedArray", member: "set", operationKind: "call", lane: "typed-array", variant: "offset", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: "set_from_array", argModes: ["ref", "value"] }, result: { ref: "unit" }, params: [{ ref: "float64-array" }, { ref: "float64" }] } },
+  ...(Object.keys(rustJsTypedArrayTargetIds) as RustJsTypedArrayName[]).flatMap((name) =>
+    [false, true].map((offset): JsOperationRowData => ({
+      owner: "TypedArray", member: "set", operationKind: "call", lane: "typed-array",
+      variant: `${name}-${offset ? "offset" : "default"}`, fallible: true,
+      shape: {
+        op: "operation", operationKind: "method",
+        target: {
+          form: "receiver-method", name: "set_from_typed_array", argModes: offset ? ["ref", "value"] : ["ref"],
+          ...(offset ? {} : { trailingArguments: [{ kind: "float64", value: 0 }] }),
+        },
+        result: { ref: "unit" },
+        params: [{ ref: "typed-array", name }, ...(offset ? [{ ref: "float64" as const }] : [])],
+      },
+    }))),
   ...["slice", "subarray"].flatMap((member): readonly JsOperationRowData[] => [
     { owner: "TypedArray", member, operationKind: "call", lane: "typed-array", variant: "all", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: `${member}_all` }, result: { ref: "receiver" } } },
     { owner: "TypedArray", member, operationKind: "call", lane: "typed-array", variant: "start", shape: { op: "operation", operationKind: "method", target: { form: "receiver-method", name: `${member}_from` }, result: { ref: "receiver" }, params: [{ ref: "float64" }] } },

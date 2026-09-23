@@ -6,6 +6,7 @@ import type {
   RustValueConversion,
 } from "../../../target-model/operations/model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustJsTypedArrayName } from "../../../target-model/types/index.js";
 import { rustProviderOperationFormDeclaresWritableInput } from "../forms.js";
 
 export interface JsOperationRequest {
@@ -159,6 +160,7 @@ export type JsCarrierRef =
   | { readonly ref: "weak-key-array" }
   | { readonly ref: "array-buffer" }
   | { readonly ref: "uint8-array" }
+  | { readonly ref: "typed-array"; readonly name: RustJsTypedArrayName }
   | { readonly ref: "int32-array" }
   | { readonly ref: "date" }
   | { readonly ref: "future-output" }

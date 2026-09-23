@@ -5,6 +5,7 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { rustIntegerTruncationConversionMatches } from "../../../dist/target-model/conversions/integer-truncation.js";
 import { rustBigIntTargetType, rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
 import { nativeNumericTextFunctions } from "../../../../tsonic/test/fixtures/native-numeric-text.mjs";
+import { numericApiFormattingSource } from "../../../../tsonic/test/fixtures/numeric-api-formatting.mjs";
 
 test("bounded integer results use native words without a BigInt result allocation", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], packages: [acmeTestingPackage()],
@@ -12,6 +13,7 @@ test("bounded integer results use native words without a BigInt result allocatio
     files: { "index.ts": `
 import { check } from "@acme/testing";
 ${nativeNumericTextFunctions}
+${numericApiFormattingSource}
 import type { int128, uint128 } from "@tsonic/core/types.js";
 function signed(value: int64): int64 { return BigInt.asIntN(64, value); }
 function unsigned(value: int64): uint64 { return BigInt.asUintN(64, value); }
@@ -28,7 +30,11 @@ export function main(): void {
   check(wideUnsigned(-1n) === 340282366920938463463374607431768211455n);
   const word: nativeUint = 100000;
   check(word === 100000);
-  check(Number.isSafeInteger(exact) && Number.isInteger(exact));
+  check(!Number.isSafeInteger(exact) && Number.isInteger(exact));
+  check(jsNumericApiContract());
+  const formattingFailures = numericApiFormattingFailures();
+  console.log(formattingFailures);
+  check(formattingFailures === "");
   check(Number.isFinite(exact) && !Number.isNaN(exact));
   check(exactWord().toString() === "9007199254740993" && nativePredicates(exact));
   check(signedText(exact) === "9007199254740993");

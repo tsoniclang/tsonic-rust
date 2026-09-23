@@ -4,6 +4,15 @@ import { rustInt32ToFloat64ValueConversion } from "../../../target-model/convers
 export const bigintOperationRows: readonly JsOperationRowData[] = [
   {
     owner: "NumberConstructor", member: "call", operationKind: "call", lane: "number",
+    variant: "string",
+    shape: {
+      op: "operation", operationKind: "method",
+      target: { form: "call", path: "js_abi::number_from_string", argModes: ["ref"] },
+      params: [{ ref: "string" }], result: { ref: "float64" },
+    },
+  },
+  {
+    owner: "NumberConstructor", member: "call", operationKind: "call", lane: "number",
     variant: "numeric-scalar",
     requirements: [{ carrier: { ref: "argument", index: 0 }, capability: "numeric" }],
     shape: {

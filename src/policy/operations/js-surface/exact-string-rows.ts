@@ -382,7 +382,6 @@ export const exactJsStringOperationRows: readonly JsOperationRowData[] = Object.
     operationKind: "call",
     lane: "js-string",
     variant: `string-limit-${variant}`,
-    fallible: true,
     firstArgCarrierId: rustJsStringTargetId,
     shape: {
       op: "operation",

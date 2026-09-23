@@ -105,6 +105,11 @@ function typedArrayConstructorRows(name: RustJsTypedArrayName): readonly JsConst
   return [
     { className: name, sourceOwnerName: `${name}Constructor`, typeArgumentCount: 0, argumentCount: 1, path: `${path}::new`, result, fallible: true, params: [{ ref: "float64" }], variant: "length" },
     { className: name, sourceOwnerName: `${name}Constructor`, typeArgumentCount: 0, argumentCount: 1, path: `${path}::from_array`, result, fallible: true, params: [{ ref: "float64-array" }], argModes: ["ref"], variant: "array" },
+    ...typedArrayNames.map((source): JsConstructorRowData => ({
+      className: name, sourceOwnerName: `${name}Constructor`, typeArgumentCount: 0,
+      argumentCount: 1, path: `${path}::from_typed_array`, result, fallible: true,
+      params: [{ ref: "typed-array", name: source }], argModes: ["ref"], variant: source,
+    })),
     { className: name, sourceOwnerName: `${name}Constructor`, typeArgumentCount: 0, argumentCount: 1, path: `${path}::from_buffer_only`, result, fallible: true, params: [{ ref: "array-buffer" }], variant: "buffer" },
     { className: name, sourceOwnerName: `${name}Constructor`, typeArgumentCount: 0, argumentCount: 2, path: `${path}::from_buffer_offset`, result, fallible: true, params: [{ ref: "array-buffer" }, { ref: "float64" }], variant: "buffer-offset" },
     { className: name, sourceOwnerName: `${name}Constructor`, typeArgumentCount: 0, argumentCount: 3, path: `${path}::from_buffer_length`, result, fallible: true, params: [{ ref: "array-buffer" }, { ref: "float64" }, { ref: "float64" }], variant: "buffer-offset-length" },

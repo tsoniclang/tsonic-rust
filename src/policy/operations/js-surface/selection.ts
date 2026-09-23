@@ -439,6 +439,8 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
       return bindings.element === undefined ? undefined : rustJsArrayEntriesTargetType(bindings.element);
     case "uint8-array":
       return rustJsTypedArrayTargetType("Uint8Array");
+    case "typed-array":
+      return rustJsTypedArrayTargetType(reference.name);
     case "array-entry-result":
       return bindings.element === undefined ? undefined : rustIteratorResultTargetType({
         yieldType: rustJsArrayEntryTargetType(bindings.element),
