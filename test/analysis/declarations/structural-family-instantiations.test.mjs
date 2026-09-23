@@ -99,6 +99,41 @@ test("selected record instantiation retains exact reordered members and one gene
   assert.equal(plan.definitionForCarrier(input.templateCarrier).genericArguments.length, 2);
 });
 
+test("an already registered exact structural selection does not repeat recursive source queries", () => {
+  const input = fixture();
+  assert.equal(input.retain(), true);
+  const context = { currentSemantics: { types: new Proxy({}, { get() {
+    throw new Error("Exact retained structural evidence must not be reconstructed");
+  } }) } };
+  for (let index = 0; index < 256; index += 1) {
+    assert.equal(retainRustStructuralInstantiation(input.selectedType,
+      structuredClone(input.selectedCarrier), structuredClone(input.selectedCarrier),
+      context, { sourceTypes: input.sourceTypes }), true);
+  }
+  assert.equal(input.sourceTypes.structuralObjects().length, 2);
+  assert.equal(input.sourceTypes.structuralInstantiations().length, 1);
+});
+
+test("structural proof reuse requires both exact source identity and target carrier", () => {
+  const input = fixture();
+  let queries = 0;
+  const context = { ...input.context, currentSemantics: { types: {
+    ...input.context.currentSemantics.types,
+    structuralMembers() {
+      queries += 1;
+      return { kind: "unavailable" };
+    },
+  } } };
+  const options = { sourceTypes: input.sourceTypes };
+  assert.equal(retainRustStructuralInstantiation(input.selectedType,
+    input.templateCarrier, input.templateCarrier, context, options), false);
+  assert.equal(retainRustStructuralInstantiation(input.templateType,
+    input.templateCarrier, input.selectedCarrier, context, options), false);
+  assert.equal(queries, 2);
+  assert.equal(input.sourceTypes.structuralObjects().length, 1);
+  assert.equal(input.sourceTypes.structuralInstantiations().length, 0);
+});
+
 test("record instantiation preserves independently declared source members through exact correspondence", () => {
   const input = fixture();
   const sourceDeclarations = [{}, {}];

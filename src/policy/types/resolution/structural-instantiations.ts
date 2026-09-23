@@ -41,6 +41,8 @@ export function retainRustStructuralInstantiation(
   }
   const structural = rustStructuralObjectCarrierValue(carrier);
   if (structural === undefined || rustStructuralObjectCarrierValue(templateCarrier) === undefined) return false;
+  if (rustTargetTypeRefEquals(templateCarrier, carrier) &&
+    options.sourceTypes.structuralObjectForType(sourceType, carrier) !== undefined) return true;
   const template = options.sourceTypes.structuralObjectForCarrier(templateCarrier);
   if (template === undefined) return false;
   const application = context.currentSemantics.types.aliasApplication(sourceType);
