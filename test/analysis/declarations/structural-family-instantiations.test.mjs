@@ -69,9 +69,24 @@ function fixture() {
 test("structural storage parameterizes independent family outputs without reversing their source argument", () => {
   const template = carrier([projection("Storage"), projection("Container"), projection("Storage"),
     { kind: "type-parameter", name: "Storage0" }]);
-  const fields = rustStructuralObjectCarrierValue(rustStructuralGenericCarrier(template)).fields;
+  const fields = rustStructuralObjectCarrierValue(rustStructuralGenericCarrier(template).carrier).fields;
   assert.deepEqual(fields.map(entry => entry.type.name), ["Storage1", "Storage2", "Storage1", "Storage0"]);
-  assert.deepEqual(rustStructuralGenericCarrier(carrier([scalar])), carrier([scalar]));
+  assert.deepEqual(rustStructuralGenericCarrier(carrier([scalar])).carrier, carrier([scalar]));
+});
+
+test("nested structural family storage retains exact child definitions and independent argument positions", () => {
+  const inner = carrier([projection("Storage"), projection("Container")]);
+  const outer = carrier([projection("Container"), inner]);
+  const plan = createRustStructuralShapePlan([{ carrier: inner }, { carrier: outer }], [], () => "source", []);
+  const outerDefinition = plan.definitionForCarrier(outer);
+  const canonical = plan.definitions.find(definition => definition.targetName === outerDefinition.targetName);
+  const child = plan.definitionForCarrier(canonical.fields[1].carrier);
+  assert.equal(plan.definitions.length, 2);
+  assert.equal(child.targetName, plan.definitionForCarrier(inner).targetName);
+  assert.deepEqual(child.genericArguments.map(argument => argument.type.name), ["Storage1", "Storage0"]);
+  assert.deepEqual(child.fields.map(field => field.carrier.name), ["Storage1", "Storage0"]);
+  assert.throws(() => createRustStructuralShapePlan([{ carrier: outer }], [], () => "source", []),
+    /missing its checked source definition/u);
 });
 
 test("selected record instantiation retains exact reordered members and one generic native storage", () => {

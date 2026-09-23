@@ -2,12 +2,25 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
 import { rustTargetGenericReferences, rustTargetTypeParameterNames } from "../../target-model/types/carriers/generic-references.js";
+import { rustStructuralObjectCarrierValue } from "../../target-model/types/carriers/source-types.js";
 
-export function rustStructuralGenericCarrier(carrier: TargetTypeRef): TargetTypeRef {
+export interface RustStructuralGenericCarrierSelection {
+  readonly carrier: TargetTypeRef;
+  readonly nestedCarriers: readonly {
+    readonly source: TargetTypeRef;
+    readonly carrier: TargetTypeRef;
+  }[];
+}
+
+export function rustStructuralGenericCarrier(carrier: TargetTypeRef): RustStructuralGenericCarrierSelection {
   const used = new Set(rustTargetGenericReferences(carrier).typeNames);
-  if (used.size === 0) return carrier;
+  if (used.size === 0) return Object.freeze({ carrier, nestedCarriers: Object.freeze([]) });
   const parameters = new Map<string, TargetTypeRef>();
-  const selected = mapRustTargetTypes(carrier, type => {
+  const nestedCarriers: { readonly source: TargetTypeRef; readonly carrier: TargetTypeRef }[] = [];
+  const selected = mapRustTargetTypes(carrier, (type, source) => {
+    if (source !== carrier && rustStructuralObjectCarrierValue(source) !== undefined) {
+      nestedCarriers.push(Object.freeze({ source, carrier: type }));
+    }
     if (type.kind !== "associated-type" || rustTargetTypeParameterNames(type).length === 0) return type;
     const key = closedMetadataKey(type);
     const existing = parameters.get(key);
@@ -20,5 +33,6 @@ export function rustStructuralGenericCarrier(carrier: TargetTypeRef): TargetType
     parameters.set(key, parameter);
     return parameter;
   });
-  return parameters.size === 0 ? carrier : selected;
+  return Object.freeze({ carrier: parameters.size === 0 ? carrier : selected,
+    nestedCarriers: Object.freeze(parameters.size === 0 ? [] : nestedCarriers) });
 }

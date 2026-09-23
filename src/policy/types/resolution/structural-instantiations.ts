@@ -8,8 +8,6 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import { resolveRustTypeComponentEvidence } from "./source-evidence.js";
 import { rustTypeFamilyNormalizer } from "../type-family-normalization.js";
 import { mapRustTargetTypes } from "../../../target-model/types/carriers/substitution.js";
-import { inferRustTargetTypeParameterBindings } from "../../../target-model/types/carriers/generic-inference.js";
-import { rustTargetTypeParameterNames } from "../../../target-model/types/carriers/generic-references.js";
 import { resolveRustTargetType } from "./target.js";
 import { rustCallableProtocol } from "../../../target-model/types/carriers/callables.js";
 import { isRustErasedNominalMember } from "../source-shapes.js";
@@ -47,15 +45,16 @@ export function retainRustStructuralInstantiation(
   if (template === undefined) return false;
   const application = context.currentSemantics.types.aliasApplication(sourceType);
   if (application !== undefined) {
-    const bindings = inferRustTargetTypeParameterBindings(templateCarrier, carrier,
-      new Set(rustTargetTypeParameterNames(templateCarrier)));
     const substitutions = new Map(context.sourceTypeParameterSubstitutions);
     for (const binding of application.bindings) {
       const owner = context.ast.parent(binding.declaration);
       const parameter = owner === undefined ? undefined : context.sourceLifetimes.contractFor(owner)?.parameters
         .find(parameter => parameter.declaration === binding.declaration);
-      const selected = parameter?.kind === "type" ? bindings?.get(parameter.targetName) ??
-        resolveRustTargetType(binding.argument, context, options, resolving) : undefined;
+      const existing = substitutions.get(binding.declaration);
+      const selected = parameter?.kind === "type"
+        ? existing?.sourceType === binding.argument ? existing.carrier
+          : resolveRustTargetType(binding.argument, context, options, resolving)
+        : undefined;
       if (selected !== undefined) substitutions.set(binding.declaration, { sourceType: binding.argument, carrier: selected });
     }
     context = { ...context, sourceTypeParameterSubstitutions: substitutions };
