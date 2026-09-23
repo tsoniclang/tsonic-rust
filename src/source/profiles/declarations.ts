@@ -213,8 +213,8 @@ declare var BigInt: BigIntConstructor;
 
 declare function parseInt(value: string, radix?: number): number;
 declare function parseFloat(value: string): number;
-declare function isNaN(value: number): boolean;
-declare function isFinite(value: number): boolean;
+declare function isNaN(value: number | bigint): boolean;
+declare function isFinite(value: number | bigint): boolean;
 declare function encodeURIComponent(value: string): string;
 declare function decodeURIComponent(value: string): string;
 

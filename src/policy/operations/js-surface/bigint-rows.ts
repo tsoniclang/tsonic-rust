@@ -1,4 +1,5 @@
 import type { JsOperationRowData } from "./model.js";
+import { rustInt32ToFloat64ValueConversion } from "../../../target-model/conversions/model.js";
 
 export const bigintOperationRows: readonly JsOperationRowData[] = [
   {
@@ -23,24 +24,32 @@ export const bigintOperationRows: readonly JsOperationRowData[] = [
       params: [{ ref: "argument", index: 0 }], result: { ref: result },
     },
   })),
+  ...(["number", "bigint"] as const).flatMap((lane): readonly JsOperationRowData[] => [
   {
-    owner: "BigInt", member: "toString", operationKind: "call", lane: "bigint",
-    variant: "default",
+    owner: "BigInt", member: "toString", operationKind: "call", lane,
+    variant: `${lane}-default`,
+    requirements: lane === "number" ? [{ carrier: { ref: "receiver" }, capability: "integer" }] : [],
     shape: {
       op: "operation", operationKind: "method",
       target: { form: "free-call", path: "ToString::to_string", receiverMode: "ref" },
       result: { ref: "string" },
     },
   },
-  {
-    owner: "BigInt", member: "toString", operationKind: "call", lane: "bigint",
-    variant: "radix", fallible: true,
+  ...(["float64", "int32"] as const).map((radix): JsOperationRowData => ({
+    owner: "BigInt", member: "toString", operationKind: "call", lane,
+    variant: `${lane}-${radix}-radix`, fallible: true,
+    requirements: lane === "number" ? [{ carrier: { ref: "receiver" }, capability: "integer" }] : [],
     shape: {
       op: "operation", operationKind: "method",
-      target: { form: "free-call", path: "js_abi::bigint_to_string_radix", receiverMode: "ref", argModes: ["value"] },
-      params: [{ ref: "float64" }], result: { ref: "string" },
+      target: {
+        form: "free-call", path: `js_abi::${lane}_to_string_radix`,
+        receiverMode: lane === "number" ? "value" : "ref", argModes: ["value"],
+        ...(radix === "int32" ? { argConversions: [rustInt32ToFloat64ValueConversion] } : {}),
+      },
+      params: [{ ref: radix }], result: { ref: "string" },
     },
-  },
+  })),
+  ]),
   ...([
     ["asIntN", "js_abi::bigint_as_int_n"],
     ["asUintN", "js_abi::bigint_as_uint_n"],

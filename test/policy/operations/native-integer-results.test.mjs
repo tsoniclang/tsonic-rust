@@ -4,13 +4,15 @@ import { acmeTestingPackage, artifactText, compileRust } from "../../helpers/rus
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { rustIntegerTruncationConversionMatches } from "../../../dist/target-model/conversions/integer-truncation.js";
 import { rustBigIntTargetType, rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
+import { nativeNumericTextFunctions } from "../../../../tsonic/test/fixtures/native-numeric-text.mjs";
 
 test("bounded integer results use native words without a BigInt result allocation", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], packages: [acmeTestingPackage()],
     target: { id: "rust", options: { outputType: "bin", crateName: "native_integer_results" } },
     files: { "index.ts": `
 import { check } from "@acme/testing";
-import type { int64, uint64, int128, uint128, nativeUint } from "@tsonic/core/types.js";
+${nativeNumericTextFunctions}
+import type { int128, uint128 } from "@tsonic/core/types.js";
 function signed(value: int64): int64 { return BigInt.asIntN(64, value); }
 function unsigned(value: int64): uint64 { return BigInt.asUintN(64, value); }
 function wide(value: bigint): int128 { return BigInt.asIntN(128, value); }
@@ -28,6 +30,18 @@ export function main(): void {
   check(word === 100000);
   check(Number.isSafeInteger(exact) && Number.isInteger(exact));
   check(Number.isFinite(exact) && !Number.isNaN(exact));
+  check(exactWord().toString() === "9007199254740993" && nativePredicates(exact));
+  check(signedText(exact) === "9007199254740993");
+  check(unsignedHex(18446744073709551615n) === "ffffffffffffffff");
+  check(preciseSingle(0.1) === "0.1" && fixedSingle(12.5) === "12.50");
+  check(wideIntegerText(1606938044258990275541962092341162602522202993782792835301376n) === "1606938044258990275541962092341162602522202993782792835301376");
+  check(wideIntegerHex(1606938044258990275541962092341162602522202993782792835301376n) === "${(1n << 200n).toString(16)}");
+  const input = new Int16Array([1, 2, 127]);
+  const copy = copyTyped(input);
+  const assigned = new Uint8Array(3);
+  assignTyped(assigned, input);
+  input[0] = 7;
+  check(copy[0] === 1 && assigned[2] === 127);
 }
 ` } });
   assert.deepEqual(result.diagnostics, []);

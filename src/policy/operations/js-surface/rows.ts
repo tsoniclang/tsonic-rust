@@ -35,6 +35,27 @@ const jsNumberArgumentPairs = jsNumberArgumentRows.flatMap((first) =>
   jsNumberArgumentRows.map((second) => ({ first, second }))
 );
 
+function nativeNumberPredicateRows(owner: "NumberConstructor" | "Global", lane: "number" | "global"): readonly JsOperationRowData[] {
+  return numberPredicateRows.filter(({ member }) => owner === "NumberConstructor" || member === "isNaN" || member === "isFinite")
+    .flatMap(({ member, path }): JsOperationRowData[] => [
+      {
+        owner, member, operationKind: "call", lane, variant: "native",
+        requirements: [{ carrier: { ref: "argument", index: 0 }, capability: "numeric" }],
+        shape: {
+          op: "operation", operationKind: "method", target: { form: "call", path },
+          result: { ref: "bool" }, params: [{ ref: "argument", index: 0 }],
+        },
+      },
+      {
+        owner, member, operationKind: "call", lane, variant: "bigint",
+        shape: {
+          op: "operation", operationKind: "method", target: { form: "call", path, argModes: ["ref"] },
+          result: { ref: "bool" }, params: [{ ref: "bigint" }],
+        },
+      },
+    ]);
+}
+
 interface JsNumberArgumentCombination {
   readonly variant: string;
   readonly carriers: readonly ({ readonly ref: "float64" } | { readonly ref: "int32" })[];
@@ -685,21 +706,7 @@ export const jsOperationRows = defineJsOperationRows([
     ["SQRT2", "js_abi::MATH_SQRT2"],
   ] as const).map(([member, path]): JsOperationRowData => ({ owner: "Math", member, operationKind: "property", lane: "math", shape: { op: "operation", operationKind: "property", target: { form: "path", path }, result: { ref: "float64" } } })),
 
-  ...numberPredicateRows.map(({ member, path }): JsOperationRowData => ({
-    owner: "NumberConstructor", member, operationKind: "call", lane: "number", variant: "native",
-    requirements: [{ carrier: { ref: "argument", index: 0 }, capability: "numeric" }],
-    shape: {
-      op: "operation", operationKind: "method", target: { form: "call", path },
-      result: { ref: "bool" }, params: [{ ref: "argument", index: 0 }],
-    },
-  })),
-  ...numberPredicateRows.map(({ member, path }): JsOperationRowData => ({
-    owner: "NumberConstructor", member, operationKind: "call", lane: "number", variant: "bigint",
-    shape: {
-      op: "operation", operationKind: "method", target: { form: "call", path, argModes: ["ref"] },
-      result: { ref: "bool" }, params: [{ ref: "bigint" }],
-    },
-  })),
+  ...nativeNumberPredicateRows("NumberConstructor", "number"),
   { owner: "NumberConstructor", member: "parseFloat", operationKind: "call", lane: "number", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::number_parse_float", argModes: ["ref"] }, result: { ref: "float64" }, params: [{ ref: "string" }] } },
   { owner: "NumberConstructor", member: "parseInt", operationKind: "call", lane: "number", variant: "default", shape: { op: "operation", evaluation: "pure", operationKind: "method", target: { form: "call", path: "js_abi::number_parse_int", argModes: ["ref"] }, result: { ref: "float64" }, params: [{ ref: "string" }] } },
   { owner: "NumberConstructor", member: "parseInt", operationKind: "call", lane: "number", variant: "float64-radix", shape: { op: "operation", evaluation: "pure", operationKind: "method", target: { form: "call", path: "js_abi::number_parse_int_radix", argModes: ["ref", "value"] }, result: { ref: "float64" }, params: [{ ref: "string" }, { ref: "float64" }] } },
@@ -726,10 +733,7 @@ export const jsOperationRows = defineJsOperationRows([
   { owner: "Global", member: "parseInt", operationKind: "call", lane: "global", variant: "int32-radix", shape: { op: "operation", evaluation: "pure", operationKind: "method", target: { form: "call", path: "js_abi::number_parse_int_radix", argModes: ["ref", "value"], argConversions: [undefined, rustInt32ToFloat64ValueConversion] }, result: { ref: "float64" }, params: [{ ref: "string" }, { ref: "int32" }] } },
   { owner: "Global", member: "encodeURIComponent", operationKind: "call", lane: "global", shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::encode_uri_component", argModes: ["ref"] }, result: { ref: "string" }, params: [{ ref: "string" }] } },
   { owner: "Global", member: "decodeURIComponent", operationKind: "call", lane: "global", fallible: true, shape: { op: "operation", operationKind: "method", target: { form: "call", path: "js_abi::decode_uri_component", argModes: ["ref"] }, result: { ref: "string" }, params: [{ ref: "string" }] } },
-  ...numberPredicateRows.filter(({ member }) => member === "isNaN" || member === "isFinite").flatMap(({ member, path }) => [
-    { owner: "Global", member, operationKind: "call" as const, lane: "global" as const, variant: "float64", shape: { op: "operation" as const, operationKind: "method" as const, target: { form: "call" as const, path }, result: { ref: "bool" as const }, params: [{ ref: "float64" as const }] } },
-    { owner: "Global", member, operationKind: "call" as const, lane: "global" as const, variant: "int32", shape: { op: "operation" as const, operationKind: "method" as const, target: { form: "call" as const, path, argConversions: [rustInt32ToFloat64ValueConversion] }, result: { ref: "bool" as const }, params: [{ ref: "int32" as const }] } },
-  ]),
+  ...nativeNumberPredicateRows("Global", "global"),
 
   { owner: "Boolean", member: "toString", operationKind: "call", lane: "boolean", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::boolean_to_string", receiverMode: "value" }, result: { ref: "string" } } },
   { owner: "Boolean", member: "valueOf", operationKind: "call", lane: "boolean", shape: { op: "operation", operationKind: "method", target: { form: "free-call", path: "js_abi::boolean_value_of", receiverMode: "value" }, result: { ref: "bool" } } },
