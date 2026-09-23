@@ -8,8 +8,26 @@ import {
   resolveSelectedProviderDeclaration,
 } from "../../../dist/policy/evidence/selected-source.js";
 import { rustCallScopedElisionLifetime } from "../../../dist/target-model/lifetimes/index.js";
+import { selectRustCheckedOperator } from "../../../dist/analysis/operations/provider/operators.js";
 
 const unit = { kind: "tuple", elements: [] };
+
+test("checked operators do not repeat the initialized project declaration scan", () => {
+  const context = {
+    ast: { kind: () => undefined },
+    get sourceFiles() { assert.fail("Operator selection must not traverse the source-file bank"); },
+  };
+  const options = { sourceTypes: {
+    registerSourceFile() { assert.fail("Declaration registration belongs to program initialization"); },
+  } };
+  for (let index = 0; index < 256; index++) {
+    const expression = {};
+    const result = selectRustCheckedOperator({ expression, operator: "+", left: {}, right: {} }, context, options);
+    assert.equal(result.kind, "accept");
+    assert.equal(result.value.operation.targetOperation, "post-check-finalization");
+    assert.equal(result.value.provenance.sourceExpression, expression);
+  }
+});
 
 function row(overrides = {}) {
   return {

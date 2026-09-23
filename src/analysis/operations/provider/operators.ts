@@ -53,11 +53,6 @@ export function selectRustCheckedOperator(
   context: RustOperationPolicyContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedOperationSelectionResult> {
-  for (const sourceFile of context.sourceFiles) {
-    if (sourceFile !== undefined) {
-      options.sourceTypes.registerSourceFile(sourceFile, context.ast);
-    }
-  }
   if (isDeclarationFileSubject(request.expression, context)) {
     return acceptDeclarationOperation("operator");
   }
