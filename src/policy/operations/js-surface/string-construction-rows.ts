@@ -15,7 +15,7 @@ export const stringConstructionRows: readonly JsOperationRowData[] = [
     requirements: [{ carrier: { ref: "argument", index: 0 }, capability: "stringifiable" }],
     shape: {
       op: "operation", operationKind: "method",
-      target: { form: "call", path: "rt::source_string", argModes: ["ref"] },
+      target: { form: "call", path: "js_abi::string_from_value", argModes: ["ref"] },
       params: [{ ref: "argument", index: 0 }], result: { ref: "string" },
     },
   },
@@ -24,7 +24,7 @@ export const stringConstructionRows: readonly JsOperationRowData[] = [
     variant: "numeric-union",
     shape: {
       op: "operation", operationKind: "method",
-      target: { form: "call", path: "rt::source_string", argModes: ["ref"] },
+      target: { form: "call", path: "js_abi::string_from_value", argModes: ["ref"] },
       params: [{ ref: "js-numeric" }], result: { ref: "string" },
     },
   },

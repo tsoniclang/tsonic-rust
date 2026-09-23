@@ -21,10 +21,8 @@ export function main(): void {
   check(BigInt.asIntN(64, 9007199254740993n) === 9007199254740993n);
   check(BigInt.asIntN(9, 256n) === -256n);
   check(BigInt.asUintN(9, -1n) === 511n);
-  let invalid = 0;
-  try { BigInt.asIntN(Number.NaN, 4n); } catch { invalid += 1; }
-  try { BigInt.asIntN(-0.5, 4n); } catch { invalid += 1; }
-  check(invalid === 2);
+  check(BigInt.asIntN(Number.NaN, 4n) === 0n);
+  check(BigInt.asIntN(-0.5, 4n) === 0n);
 }
 ` },
   });
@@ -71,6 +69,7 @@ export function main(): void {
   check(String(wide) === "9007199254740993" && String(byte) === "255");
   check(String(-18446744073709551617n) === "-18446744073709551617");
   check(numeric(9007199254740993n) === "9007199254740993" && numeric(1.5) === "1.5");
+  check(numeric(-0) === "0" && numeric(1e21) === "1e+21" && numeric(Number.POSITIVE_INFINITY) === "Infinity");
   let evaluations = 0;
   const evaluate = (): number => { evaluations += 1; return 7; };
   check(String(evaluate()) === "7" && evaluations === 1 && local() === "local");
@@ -78,7 +77,7 @@ export function main(): void {
 ` },
   });
   assert.deepEqual(result.diagnostics, []);
-  assert.match(artifactText(result, "src/index.rs"), /rt::source_string/u);
+  assert.match(artifactText(result, "src/index.rs"), /js_abi::string_from_value/u);
   const native = validateGeneratedProject("string-construction", result.artifacts, { run: true });
   assert.equal(native.status, 0, JSON.stringify(native));
 });
