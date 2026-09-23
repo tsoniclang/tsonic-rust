@@ -97,6 +97,7 @@ export {
   rustJsStringTargetType,
   rustJsSymbolTargetType,
   rustJsTypedArrayName,
+  rustJsTypedArrayElementTargetType,
   rustJsTypedArrayTargetIds,
   rustJsTypedArrayTargetType,
   rustJsValueTargetType,

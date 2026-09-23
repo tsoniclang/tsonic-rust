@@ -85,7 +85,7 @@ export type JsCarrierRef =
   | { readonly ref: "cb-array-comparator"; readonly arity: 0 | 1 | 2 }
   | { readonly ref: "cb-map-for-each"; readonly arity: 0 | 1 | 2 | 3 }
   | { readonly ref: "cb-set-for-each"; readonly arity: 0 | 1 | 2 | 3 }
-  | { readonly ref: "int32" }
+  | { readonly ref: "int8" | "uint8" | "int16" | "uint16" | "int32" | "uint32" | "uint64" | "native-int" | "native-uint" | "float32" }
   | { readonly ref: "jsvalue" }
   | { readonly ref: "float64" }
   | { readonly ref: "infer" }
@@ -135,7 +135,7 @@ export type JsCarrierRef =
   | { readonly ref: "element-array" }
   | { readonly ref: "array-entries" }
   | { readonly ref: "array-entry-result" }
-  | { readonly ref: "option-of-float64" }
+  | { readonly ref: "option-of-float64" | "option-of-uint16" | "option-of-uint32" | "option-of-native-uint" }
   | { readonly ref: "string" }
   | { readonly ref: "js-string" }
   | { readonly ref: "undefined" }

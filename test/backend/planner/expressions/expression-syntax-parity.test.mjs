@@ -255,7 +255,7 @@ export function main(): void {
   validateGeneratedProject("named-callable-expression", result.artifacts, { run: true });
 });
 
-test("substituted templates use exact source-string conversions", { timeout: 300_000 }, () => {
+test("substituted native templates use exact native string conversions", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     packages: [acmeTestingPackage()],
     target: { id: "rust", options: { outputType: "bin", crateName: "template_proof" } },
@@ -269,7 +269,7 @@ export function main(): void {
   const enabled: boolean = true;
   const negativeZero: number = -0;
   const text = \`count=\${count}; enabled=\${enabled}; zero=\${negativeZero}\`;
-  check(text === "count=42; enabled=true; zero=0");
+  check(text === "count=42; enabled=true; zero=-0");
 }
 `,
     },

@@ -1,8 +1,6 @@
 import { jsSourceSemanticsIdentity } from "@tsonic/js-source-profile";
 import {
   rustInt32ToFloat64ValueConversion,
-  rustIsizeToInt32ValueConversion,
-  rustUsizeToInt32ValueConversion,
 } from "../../../target-model/conversions/model.js";
 import { rustJsStringTargetId } from "../../../target-model/types/index.js";
 import type { JsOperationRowData } from "./model.js";
@@ -43,8 +41,7 @@ export const exactJsStringOperationRows: readonly JsOperationRowData[] = Object.
       op: "operation",
       operationKind: "property",
       target: { form: "free-call", path: "js_exact_string::js_len", receiverMode: "ref" },
-      result: { ref: "int32" },
-      resultConversion: rustUsizeToInt32ValueConversion,
+      result: { ref: "native-uint" },
       evaluation: "pure",
     },
   },
@@ -73,8 +70,8 @@ export const exactJsStringOperationRows: readonly JsOperationRowData[] = Object.
     { member: "includes", target: "includes", defaultTarget: "includes_from_start", result: { ref: "bool" } as const },
     { member: "startsWith", target: "starts_with", defaultTarget: "starts_with_from_start", result: { ref: "bool" } as const },
     { member: "endsWith", target: "ends_with", defaultTarget: "ends_with_at_end", result: { ref: "bool" } as const },
-    { member: "indexOf", target: "index_of", defaultTarget: "index_of_from_start", result: { ref: "int32" } as const, resultConversion: rustIsizeToInt32ValueConversion },
-    { member: "lastIndexOf", target: "last_index_of", defaultTarget: "last_index_of_from_end", result: { ref: "int32" } as const, resultConversion: rustIsizeToInt32ValueConversion },
+    { member: "indexOf", target: "index_of", defaultTarget: "index_of_from_start", result: { ref: "native-int" } as const },
+    { member: "lastIndexOf", target: "last_index_of", defaultTarget: "last_index_of_from_end", result: { ref: "native-int" } as const },
   ].flatMap((row): readonly JsOperationRowData[] => [
     {
       owner,
@@ -92,7 +89,6 @@ export const exactJsStringOperationRows: readonly JsOperationRowData[] = Object.
           argModes: ["ref"],
         },
         result: row.result,
-        ...("resultConversion" in row ? { resultConversion: row.resultConversion } : {}),
         params: [{ ref: "js-string" }],
       },
     },
@@ -113,7 +109,6 @@ export const exactJsStringOperationRows: readonly JsOperationRowData[] = Object.
           argConversions: [undefined, conversion],
         },
         result: row.result,
-        ...("resultConversion" in row ? { resultConversion: row.resultConversion } : {}),
         params: [{ ref: "js-string" }, carrier],
       },
     })),
@@ -121,7 +116,7 @@ export const exactJsStringOperationRows: readonly JsOperationRowData[] = Object.
   ...[
     { member: "charAt", target: "char_at", result: { ref: "js-string" } as const },
     { member: "charCodeAt", target: "char_code_at", result: { ref: "float64" } as const },
-    { member: "codePointAt", target: "code_point_at", result: { ref: "option-of-float64" } as const, sourceResult: { ref: "float64" } as const },
+    { member: "codePointAt", target: "code_point_at", result: { ref: "option-of-uint32" } as const, sourceResult: { ref: "uint32" } as const },
     { member: "at", target: "at", result: { ref: "option-of-js-string" } as const, sourceResult: { ref: "js-string" } as const },
     { member: "repeat", target: "repeat", result: { ref: "js-string" } as const, fallible: true },
   ].flatMap((row) => numberArguments.map(({ variant, carrier, conversion }): JsOperationRowData => ({

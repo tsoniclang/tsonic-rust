@@ -14,13 +14,16 @@ export function planRustNumberArrayUnionImplementation(definition: RustGenerated
     target: { kind: "named", path: definition.targetName,
       genericArguments: definition.variantNames.map((_, index) => ({ kind: "type", type: { kind: "named", path: `Payload${index}` } })),
     },
-    functions: [false, true].map(indexed => {
-      const name = indexed ? "number_array_get" : "number_array_length";
+    functions: ["number_array_length", "number_array_get", "number_array_copy"].map(name => {
+      const indexed = name === "number_array_get";
       const arguments_: RustExpr[] = [{ kind: "path", path: "value" }, ...(indexed ? [{ kind: "path" as const, path: "index" }] : [])];
       return {
         name, visibility: "private", generics: emptyRustGenerics, selfParam: rustSelfParameter("ref"),
         params: indexed ? [{ name: "index", type: number }] : [],
-        returnType: indexed ? { kind: "named", path: "Option", genericArguments: [{ kind: "type", type: number }] } : number,
+        returnType: indexed ? { kind: "named", path: "Option", genericArguments: [{ kind: "type", type: number }] }
+          : name === "number_array_copy"
+            ? { kind: "named", path: "js_abi::JsArray", genericArguments: [{ kind: "type", type: number }] }
+            : { kind: "primitive", name: "usize" },
         body: { statements: [{ kind: "tail", expr: {
           kind: "match", expression: { kind: "path", path: "self" },
           arms: definition.variantNames.map(variant => ({

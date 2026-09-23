@@ -149,6 +149,23 @@ export const rustJsTypedArrayTargetIds = Object.freeze({
 
 export type RustJsTypedArrayName = keyof typeof rustJsTypedArrayTargetIds;
 
+const typedArrayElementNames = Object.freeze({
+  Int8Array: "int8",
+  Uint8Array: "uint8",
+  Uint8ClampedArray: "uint8",
+  Int16Array: "int16",
+  Uint16Array: "uint16",
+  Int32Array: "int32",
+  Uint32Array: "uint32",
+  Float32Array: "float32",
+  Float64Array: "float64",
+} as const);
+
+export function rustJsTypedArrayElementTargetType(carrier: TargetTypeRef | undefined): TargetTypeRef | undefined {
+  const name = rustJsTypedArrayName(carrier);
+  return name === undefined ? undefined : { kind: "source-primitive", name: typedArrayElementNames[name] };
+}
+
 export function rustJsArrayBufferTargetType(): TargetTypeRef {
   return { kind: "target-named", id: rustJsArrayBufferTargetId };
 }

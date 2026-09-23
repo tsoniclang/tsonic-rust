@@ -330,27 +330,28 @@ test("large fixed-array value types and finite indexes emit exact native extents
 
 for (const length of ["2n", "9007199254740993n"]) {
   for (const [name, expression] of [["direct", "values.length"], ["inferred", "inferred(values).length"]]) {
-    test(`${name} bigint fixed-array length ${length} rejects instead of selecting a number result`, () => {
+    test(`${name} bigint fixed-array length ${length} retains its exact native extent`, () => {
       const { result } = compileRust({ files: { "index.ts": `
         import type { FixedArray, int32 } from "@tsonic/core/types.js";
         function inferred(values: FixedArray<int32, ${length}>) { return values; }
         export function length(values: FixedArray<int32, ${length}>): bigint { return ${expression}; }
       ` } });
-      assert.ok(result.diagnostics.some(({ code, message }) => code === "RUST_FIXED_ARRAY_LENGTH_RUNTIME_BASE_UNSUPPORTED" &&
-        message === "Rust FixedArray.length does not implement the selected bigint runtime result; numeric length conversion is not permitted."),
-      JSON.stringify(result.diagnostics));
-      assert.deepEqual(result.artifacts, []);
+      assert.deepEqual(result.diagnostics, []);
+      const output = artifactText(result, "src/index.rs");
+      assert.match(output, /\.len\(\)/u);
+      assert.doesNotMatch(output, /usize_to_i32|usize_to_f64|as f64/u);
     });
   }
 }
 
-test("numeric fixed-array length beyond int32 rejects with its exact extent", () => {
+test("numeric fixed-array length beyond int32 is not artificially narrowed", () => {
   const { result } = compileRust({ files: { "index.ts": `
-    import type { FixedArray, int32 } from "@tsonic/core/types.js";
-    export function length(values: FixedArray<int32, 2147483648>): number { return values.length; }
+    import type { FixedArray, int32, nativeUint } from "@tsonic/core/types.js";
+    export function length(values: FixedArray<int32, 2147483648>): nativeUint { return values.length; }
   ` } });
-  assert.ok(result.diagnostics.some(({ code, message }) => code === "RUST_FIXED_ARRAY_LENGTH_RANGE_UNSUPPORTED" &&
-    message === "Rust FixedArray.length uses a checked int32 result; exact extent 2147483648 exceeds 2147483647."),
-  JSON.stringify(result.diagnostics));
-  assert.deepEqual(result.artifacts, []);
+  assert.deepEqual(result.diagnostics, []);
+  const output = artifactText(result, "src/index.rs");
+  assert.match(output, /-> usize/u);
+  assert.match(output, /\.len\(\)/u);
+  assert.doesNotMatch(output, /usize_to_i32|usize_to_f64|as f64/u);
 });

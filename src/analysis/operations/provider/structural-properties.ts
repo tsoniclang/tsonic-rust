@@ -8,7 +8,7 @@ import {
   rustSourcePrimitiveTargetType,
   rustTargetConstInteger,
 } from "../../../target-model/types/index.js";
-import { rustInt32ToUsizeValueConversion, rustUsizeToInt32ValueConversion } from "../../../target-model/conversions/model.js";
+import { rustInt32ToUsizeValueConversion } from "../../../target-model/conversions/model.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectTsonicFixedArrayFromSource } from "@tsonic/source-core/facts";
 import { selectedValueCarrier } from "../selected-values.js";
@@ -421,23 +421,7 @@ export function selectRustFixedArrayLengthProperty(
       "The selected FixedArray.length access requires a source fixed-array fact whose exact extent agrees with its receiver carrier.",
     );
   }
-  if (sourceFixedArray.lengthRuntimeBase === "bigint") {
-    return rejectSelectedOperation(
-      request.expression,
-      context,
-      "RUST_FIXED_ARRAY_LENGTH_RUNTIME_BASE_UNSUPPORTED",
-      "Rust FixedArray.length does not implement the selected bigint runtime result; numeric length conversion is not permitted.",
-    );
-  }
-  if (length > 2147483647n) {
-    return rejectSelectedOperation(
-      request.expression,
-      context,
-      "RUST_FIXED_ARRAY_LENGTH_RANGE_UNSUPPORTED",
-      `Rust FixedArray.length uses a checked int32 result; exact extent ${length} exceeds 2147483647.`,
-    );
-  }
-  const resultCarrier = rustSourcePrimitiveTargetType("int32");
+  const resultCarrier = rustSourcePrimitiveTargetType("native-uint");
   const template: RustProviderOperationTemplate = {
     kind: "provider-operation",
     operationId: "tsonic.rust.fixed-array.length",
@@ -445,7 +429,6 @@ export function selectRustFixedArrayLengthProperty(
     target: { form: "receiver-method", name: "len" },
     resultCarrier,
     parameterCarriers: [],
-    resultConversion: rustUsizeToInt32ValueConversion,
     evaluation: "pure",
     isAsync: false,
     isFallible: false,

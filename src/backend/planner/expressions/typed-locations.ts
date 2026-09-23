@@ -319,7 +319,13 @@ export function planRustModuleBindingStore(
     return undefined;
   }
   const path = rustSourceBindingPath(context, binding);
-  return path === undefined ? undefined : rustModuleCellAccess({ kind: "path", path }, "store", [value]);
+  if (path === undefined || context.syntheticNames === undefined) return undefined;
+  const valueName = allocateRustSyntheticName(context.syntheticNames, "module_value");
+  return {
+    kind: "block",
+    bindings: [{ name: valueName, value }],
+    value: rustModuleCellAccess({ kind: "path", path }, "store", [{ kind: "path", path: valueName }]),
+  };
 }
 
 function rustCapturedBinding(

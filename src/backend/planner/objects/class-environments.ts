@@ -16,6 +16,7 @@ import { rustModuleCellAccess } from "../project/module-storage.js";
 import { rustProjectObjectIdentityImplementation } from "./project-identity.js";
 import { rustClassEnvironmentType, rustClassEnvironmentHandleType } from "./class-environment-types.js";
 import { rustProjectImplementationVisibility, rustProjectMemberStorageVisibility } from "./project-storage-abi.js";
+import { rustAuthoredFieldDeadCodeDisposition } from "../liveness/directives.js";
 
 type Environment = NonNullable<RustClassValueDefinition["environment"]>;
 
@@ -41,8 +42,10 @@ export function planRustClassEnvironmentItems(declaration: Node, context: RustPl
   for (const field of environment.staticFields) {
     const type = rustTypeFromCarrierInContext(field.carrier, context);
     if (type === undefined) return undefined;
-    fields.push({ name: field.fieldName, visibility: rustProjectMemberStorageVisibility(context.input.program.source.ast,
-      field.declaration, publiclyReachable), type: field.readonly ? type : {
+    const visibility = rustProjectMemberStorageVisibility(context.input.program.source.ast,
+      field.declaration, publiclyReachable);
+    const deadCode = rustAuthoredFieldDeadCodeDisposition(context, declaration, field.declaration, visibility === "public");
+    fields.push({ name: field.fieldName, visibility, ...(deadCode === undefined ? {} : { deadCode }), type: field.readonly ? type : {
       kind: "named", path: "core::cell::RefCell", genericArguments: [{ kind: "type", type }],
     } });
   }

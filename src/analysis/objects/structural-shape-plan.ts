@@ -168,25 +168,33 @@ export function createRustStructuralShapePlan(
       throw new Error("Rust structural carrier canonicalization produced a non-injective identity.");
     }
   }
-  const roots = new Map<string, string>();
+  const parents = new Map<string, Set<string>>();
   for (const { template, instance } of instantiations) {
     const templateKey = structuralStorageKey(template, componentForFile);
     const instanceKey = structuralStorageKey(instance, componentForFile);
     if (templateKey === instanceKey) continue;
-    const prior = roots.get(instanceKey);
-    if (prior !== undefined && prior !== templateKey) {
-      throw new Error("Rust structural instantiation has contradictory storage templates.");
-    }
-    roots.set(instanceKey, templateKey);
+    const selected = parents.get(instanceKey) ?? new Set<string>();
+    selected.add(templateKey);
+    parents.set(instanceKey, selected);
   }
+  const roots = new Map<string, string>();
+  const resolving = new Set<string>();
   const rootFor = (key: string): string => {
-    const visited = new Set<string>();
-    while (roots.has(key)) {
-      if (visited.has(key)) throw new Error("Rust structural instantiation has cyclic storage templates.");
-      visited.add(key);
-      key = roots.get(key)!;
+    const existing = roots.get(key);
+    if (existing !== undefined) return existing;
+    if (resolving.has(key)) throw new Error("Rust structural instantiation has cyclic storage templates.");
+    resolving.add(key);
+    let root: string | undefined;
+    for (const parent of parents.get(key) ?? []) {
+      const selected = rootFor(parent);
+      if (root !== undefined && root !== selected) {
+        throw new Error("Rust structural instantiation has contradictory storage templates.");
+      }
+      root = selected;
     }
-    return key;
+    resolving.delete(key);
+    roots.set(key, root ?? key);
+    return root ?? key;
   };
   const grouped = new Map<string, Map<string, TargetTypeRef>>();
   for (const [key, instances] of uniqueByKey) {

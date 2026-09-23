@@ -1,4 +1,5 @@
-import { flowStateFactKey, pointerOperationFactKey } from "@tsonic/tsts";
+import { flowStateFactKey } from "@tsonic/tsts";
+import { selectRustBindPointerSourceOperation } from "../../policy/operations/typed-location-source.js";
 import {
   KindCallExpression,
   KindElementAccessExpression,
@@ -83,8 +84,8 @@ export function collectRustMutableProjectStorageRequirements(
     collectStructural(node);
     const { ast } = context;
     const kind = ast.kindName(node);
-    const pointer = context.facts.get(node, pointerOperationFactKey);
-    if (pointer?.operation === "bind-pointer" && pointer.call === node) {
+    const pointer = selectRustBindPointerSourceOperation(node, context.facts.resolve, context.facts.get);
+    if (pointer !== undefined) {
       const semantics = context.semantics(sourceFile);
       const identityType = semantics.types.expressionType(pointer.identityExpression);
       const symbol = identityType === undefined ? undefined : semantics.declarations.typeSymbol(identityType);

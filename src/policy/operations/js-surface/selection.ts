@@ -41,7 +41,7 @@ import {
   rustJsIntlResolvedDateTimeFormatOptionsTargetId,
   rustJsIntlResolvedNumberFormatOptionsTargetId,
   rustJsSymbolTargetType,
-  rustJsTypedArrayName,
+  rustJsTypedArrayElementTargetType,
   rustJsTypedArrayTargetType,
   rustJsTypedArrayTargetIds,
   rustFutureOutputCarrier,
@@ -171,11 +171,12 @@ function laneOf(carrier: TargetTypeRef | undefined, ownerName: string): { readon
     if (carrier.id === rustJsDataViewTargetId) {
       return { lane: "data-view", bindings: { receiver: carrier } };
     }
-    if (rustJsTypedArrayName(carrier) !== undefined) {
+    const typedElement = rustJsTypedArrayElementTargetType(carrier);
+    if (typedElement !== undefined) {
       return {
         lane: "typed-array",
         bindings: {
-          element: rustSourcePrimitiveTargetType("float64"),
+          element: typedElement,
           receiver: carrier,
         },
       };
@@ -323,8 +324,17 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
         ? undefined
         : rustClosureTargetType(args as TargetTypeRef[], rustUnitTargetType());
     }
+    case "int8":
+    case "uint8":
+    case "int16":
+    case "uint16":
     case "int32":
-      return rustSourcePrimitiveTargetType("int32");
+    case "uint32":
+    case "uint64":
+    case "native-int":
+    case "native-uint":
+    case "float32":
+      return rustSourcePrimitiveTargetType(reference.ref);
     case "jsvalue":
       return rustJsValueTargetType();
     case "string-array":
@@ -397,6 +407,12 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
       return rustOptionTargetType(rustJsArrayTargetType(rustJsStringTargetType()));
     case "element-array":
       return bindings.element === undefined ? undefined : rustJsArrayTargetType(bindings.element);
+    case "option-of-uint16":
+      return rustOptionTargetType(rustSourcePrimitiveTargetType("uint16"));
+    case "option-of-uint32":
+      return rustOptionTargetType(rustSourcePrimitiveTargetType("uint32"));
+    case "option-of-native-uint":
+      return rustOptionTargetType(rustSourcePrimitiveTargetType("native-uint"));
     case "option-of-float64":
       return rustOptionTargetType(rustSourcePrimitiveTargetType("float64"));
     case "float64":
@@ -540,8 +556,8 @@ function regexpIndexPairTargetType(): TargetTypeRef {
   return {
     kind: "tuple",
     elements: [
-      rustSourcePrimitiveTargetType("float64"),
-      rustSourcePrimitiveTargetType("float64"),
+      rustSourcePrimitiveTargetType("native-uint"),
+      rustSourcePrimitiveTargetType("native-uint"),
     ],
   };
 }

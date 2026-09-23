@@ -21,10 +21,11 @@ export function selectRustNumberArrayUnionOperation(request: JsOperationRequest,
   if (!isRustNumberArrayUnion(request.receiverCarrier, definitions) ||
     !["Array", "ReadonlyArray", "TypedArray"].includes(request.ownerName)) return undefined;
   if (request.memberName === "length" && request.operationKind === "property") {
-    return { resultCarrier: number, fact: {
+    const length = rustSourcePrimitiveTargetType("native-uint");
+    return { resultCarrier: length, fact: {
       kind: "provider-operation", operationId: "rust.js.number-array-union.length", operationKind: "property",
       target: { form: "free-call", path: "js_abi::number_array_length", receiverMode: "ref" },
-      resultCarrier: number, isAsync: false, isFallible: false, errorBoundary: "none", evaluation: "pure",
+      resultCarrier: length, isAsync: false, isFallible: false, errorBoundary: "none", evaluation: "pure",
     } };
   }
   if (request.memberName !== "index" || request.operationKind !== "indexer" || request.argumentCarriers?.length !== 1 || argument === undefined) return undefined;
