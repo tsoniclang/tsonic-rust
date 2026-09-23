@@ -1,4 +1,4 @@
-import { flowStateFactKey } from "@tsonic/tsts";
+import { flowStateFactKey, pointerOperationFactKey } from "@tsonic/tsts";
 import {
   KindCallExpression,
   KindElementAccessExpression,
@@ -83,6 +83,16 @@ export function collectRustMutableProjectStorageRequirements(
     collectStructural(node);
     const { ast } = context;
     const kind = ast.kindName(node);
+    const pointer = context.facts.get(node, pointerOperationFactKey);
+    if (pointer?.operation === "bind-pointer" && pointer.call === node) {
+      const semantics = context.semantics(sourceFile);
+      const identityType = semantics.types.expressionType(pointer.identityExpression);
+      const symbol = identityType === undefined ? undefined : semantics.declarations.typeSymbol(identityType);
+      for (const declaration of symbol === undefined ? [] : semantics.declarations.symbolDeclarations(symbol)) {
+        const definition = projectTypes.definitionForDeclaration(declaration);
+        if (definition !== undefined) referenceDeclarations.add(definition.declaration);
+      }
+    }
     if (kind === KindElementAccessExpression) {
       const selected = context.semantics(sourceFile).operations.elementAccess(node);
       if (selected !== undefined && selected.accessMode !== "read") {

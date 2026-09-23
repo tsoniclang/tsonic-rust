@@ -2,7 +2,7 @@ import { BinaryExpression_Left, BinaryExpression_Right } from "@tsonic/target-ap
 import type { Node } from "@tsonic/tsts";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
 import { rustTargetOperationText } from "../../../analysis/facts/target-operation.js";
-import { rustOptionElementCarrier } from "../../../target-model/types/index.js";
+import { isRustNeverCarrier, rustOptionElementCarrier } from "../../../target-model/types/index.js";
 import { rustOptionNestingDepth } from "../../../target-model/types/carriers/optional.js";
 import { rustUnparenthesizedExpression } from "../../../target-model/syntax/expressions.js";
 import type { RustExpr } from "../../target-ast/nodes.js";
@@ -45,6 +45,11 @@ export function planNullishCoalescing(
   }
   const presentCarrier = fact.rightOptionDepth > 0
     ? rustOptionElementCarrier(fact.resultCarrier) : fact.resultCarrier;
+  const rightCarrier = rightNode === undefined ? undefined : fact.rightValueForm === "raw"
+    ? context.input.program.facts.getRuntimeCarrierFact(rightNode)?.carrier
+    : effectivePlannedExpressionCarrier(rightNode, context);
+  const rightDepth = fact.rightValueForm === "value" && isRustNeverCarrier(rightCarrier)
+    ? 0 : rustOptionNestingDepth(rightCarrier, presentCarrier);
   if (!Number.isSafeInteger(fact.leftOptionDepth) || fact.leftOptionDepth < 1 ||
     !Number.isSafeInteger(fact.rightOptionDepth) || fact.rightOptionDepth < 0 ||
     fact.rightValueForm !== "value" && fact.rightValueForm !== "raw" ||
@@ -53,10 +58,7 @@ export function planNullishCoalescing(
       context.input.program.facts.getRuntimeCarrierFact(leftNode)?.carrier,
       presentCarrier,
     ) !== fact.leftOptionDepth ||
-    rustOptionNestingDepth(rightNode === undefined ? undefined :
-      fact.rightValueForm === "raw"
-        ? context.input.program.facts.getRuntimeCarrierFact(rightNode)?.carrier
-        : effectivePlannedExpressionCarrier(rightNode, context), presentCarrier) !== fact.rightOptionDepth) {
+    rightDepth !== fact.rightOptionDepth) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.option-coalesce-depth",

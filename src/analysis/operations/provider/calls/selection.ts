@@ -31,7 +31,8 @@ import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution.js
 import { rustOptionalChainFactKey } from "../../../facts/keys.js";
 import { rustOptionElementCarrier } from "../../../../target-model/types/index.js";
 import { rustRuntimeCarrierKey, rustSelectedCallKey } from "../../../../target-model/facts/selections.js";
-import { selectedCallArgumentCarriers, selectedCallArgumentNodes, selectedCallCalleeDeclaration, selectedCallCalleeSymbol, selectedValueCarrier } from "../operators.js";
+import { selectedCallArgumentCarriers, selectedCallArgumentNodes, selectedCallCalleeDeclaration, selectedCallCalleeSymbol } from "../operators.js";
+import { selectedValueCarrier } from "../../selected-values.js";
 import { selectJsSurfaceConstructorBySourceOwner, selectJsSurfaceOperation } from "../../../../policy/operations/js-surface.js";
 import { selectRustGeneratorSourceCall } from "../../../../policy/types/generator-source-profile.js";
 import { rustSourceErrorConstructors } from "../../../../target-model/identities/source-errors.js";
@@ -446,7 +447,9 @@ export function selectRustCheckedCall(
     const declarationKind = context.ast.kindName(sourceDeclaration);
     if (declarationKind === "KindConstructSignature" || declarationKind === "KindConstructorType") {
       const receiverCarrier = selectedValueCarrier(request.source.sourceCallee.expression, request.source.sourceCallee.type, context, options);
-      const construction = receiverCarrier === undefined ? undefined : options.sourceTypes.structuralObjectForCarrier(receiverCarrier)?.construction;
+      const construction = receiverCarrier === undefined ? undefined : options.sourceTypes.structuralObjectForType(
+        request.source.sourceCallee.type, receiverCarrier,
+      )?.construction;
       if (construction === undefined || receiverCarrier === undefined || construction.declaration !== sourceDeclaration ||
         !checkedCallIsConstruction(request, context)) {
         return rejectSelectedOperation(request.source.call, context, "RUST_CONSTRUCTOR_VALUE_SIGNATURE_NOT_CLOSED",

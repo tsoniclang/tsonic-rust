@@ -22,6 +22,7 @@ import {
   planRustNonConsumingValue,
   planRustPromotedStorageLocation,
   planRustPromotedStorageWrite,
+  planRustModuleBindingStore,
 } from "../expressions/typed-locations.js";
 import {
   rustTargetOperationFactKey,
@@ -766,6 +767,10 @@ export function planRustAssignmentWrite(
         value: { kind: "assignment", operator: "=", target, value: concatenated },
       },
     }];
+  }
+  if (operator === "=") {
+    const moduleStore = planRustModuleBindingStore(left, value, context);
+    if (moduleStore !== undefined) return [{ kind: "expr", expr: moduleStore }];
   }
   const promoted = planRustPromotedStorageWrite(
     left,

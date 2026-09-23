@@ -130,6 +130,7 @@ export type RustModuleBindingFact =
   | {
       readonly declarationKind: "const" | "let" | "var";
       readonly storage: "module-cell";
+      readonly initialization: "value" | "declaration";
       readonly valueCarrier: TargetTypeRef;
     };
 
@@ -143,6 +144,8 @@ export const rustModuleBindingFactKey: RustPlanKey<RustModuleBindingFact> = defi
         left.name === right.name &&
         nativeCallableValuesEqual(left.value, right.value)
       : right.storage !== "native-callable" &&
+        (left.storage !== "module-cell" || right.storage === "module-cell" &&
+          left.initialization === right.initialization) &&
         rustTargetTypeRefEquals(left.valueCarrier, right.valueCarrier)),
 );
 

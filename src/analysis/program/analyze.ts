@@ -1,6 +1,7 @@
 import { appendMalformedSourceAstDiagnostic, recordClassBodyFacts, recordClassSignatureFacts, recordInterfaceFacts, recordMethodSelfModeFacts } from "../declarations/project-types.js";
 import { appendRustDiagnostic, rustResolutionContext } from "./walk.js";
 import { createRustModuleBindingPolicy } from "./module-bindings.js";
+import { recordRustModuleValueDeclarations } from "./module-declarations.js";
 import { selectRustClassEnvironment, recordRustClassEnvironmentDemands } from "../objects/class-environments.js";
 import { rustClosureCaptureFactKey } from "../facts/keys.js";
 import { createRustSourceCallableAbiResolver } from "../../policy/ownership/source-callable-abi.js";
@@ -77,7 +78,8 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     context,
     projectSourceFiles,
   );
-  const moduleBindings = createRustModuleBindingPolicy(context);
+  const promotedStorageDeclarations = new Set<Node>();
+  const moduleBindings = createRustModuleBindingPolicy(context, promotedStorageDeclarations);
   const sourceCallableAbi = createRustSourceCallableAbiResolver({
     isNativeCallableExpression: moduleBindings.isNativeCallableExpression,
   });
@@ -173,7 +175,6 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   if (projectTypes.issues.length > 0) {
     return;
   }
-  const promotedStorageDeclarations = new Set<Node>();
   const collectPromotedStorage = (node: Node): void => {
     if (recordRustValueStructDeclaration(walk, node)) return;
     context.pointerBacking.record(node);
@@ -274,6 +275,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
   }
   for (const sourceFile of projectSourceFiles) {
     recordPredeclaredNativeFunctionBindingFacts(walk, sourceFile);
+    recordRustModuleValueDeclarations(walk, sourceFile);
   }
   // Pass 1b: close method receiver modes from checked source identity before
   // any call ABI is recorded. Direct writes and finalized mutating provider

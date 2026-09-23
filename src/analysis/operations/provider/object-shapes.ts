@@ -20,7 +20,8 @@ import { rustCallableInvocationResult } from "../../facts/callable-results.js";
 import { rustClassConstructorInstance } from "../../../target-model/types/carriers/class-constructors.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
-import { selectedCallCalleeDeclaration, selectedCallCalleeSymbol, selectedSourceValueCarrier, selectedValueCarrier } from "./operators.js";
+import { selectedCallCalleeDeclaration, selectedCallCalleeSymbol, selectedSourceValueCarrier } from "./operators.js";
+import { selectedValueCarrier } from "../selected-values.js";
 import {
   selectedAuthoredObjectFields,
   selectObjectAssignmentFields,

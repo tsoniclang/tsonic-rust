@@ -64,7 +64,7 @@ export function planRustHoistedModuleCell(
 export function planRustModuleCell(
   name: string,
   type: RustType,
-  value: RustExpr,
+  value: RustExpr | undefined,
   visibility: RustVisibility,
   syntheticNames: RustSyntheticNameState,
   attrs: readonly string[] = [],
@@ -104,7 +104,9 @@ export function planRustModuleCell(
     ],
     initialization: {
       kind: "expr",
-      expr: {
+      expr: value === undefined ? rustModuleCellAccess(
+        { kind: "path", path: name }, "declare", [], cellName,
+      ) : {
         kind: "block",
         bindings: [{ name: valueName, value }],
         value: rustModuleCellAccess(
@@ -120,7 +122,7 @@ export function planRustModuleCell(
 
 export function rustModuleCellAccess(
   cell: RustExpr,
-  method: "initialize" | "load" | "location",
+  method: "initialize" | "declare" | "load" | "store" | "location",
   args: readonly RustExpr[],
   cellName = "module_binding",
 ): RustExpr {

@@ -35,6 +35,7 @@ import {
 import {
   isRustBigIntCarrier,
   isRustDefinitelyNullishCarrier,
+  isRustNeverCarrier,
   isRustNumericCarrier,
   isRustNullishSourceCarrier,
   isRustOptionCarrier,
@@ -408,7 +409,7 @@ export function resolvePostCheckBinaryCarrier(
     const inner = isRustOptionCarrier(left) ? rustOptionValueCarrier(left) : undefined;
     const leftOptionDepth = rustOptionNestingDepth(left, inner);
     if (inner !== undefined && right !== undefined &&
-      leftOptionDepth !== undefined && rustTargetTypeRefEquals(inner, right)) {
+      leftOptionDepth !== undefined && (rustTargetTypeRefEquals(inner, right) || isRustNeverCarrier(right))) {
       fact = {
         kind: "option-coalesce",
         operationId: "tsonic.rust.option.coalesce",
@@ -443,7 +444,7 @@ export function resolvePostCheckBinaryCarrier(
         };
       }
     } else if (left !== undefined && right !== undefined &&
-      rustTargetTypeRefEquals(left, right) &&
+      (rustTargetTypeRefEquals(left, right) || isRustNeverCarrier(right)) &&
       !isRustOptionCarrier(left) && !isRustNullishSourceCarrier(left) &&
       rustRuntimeUnionContract(left)?.alternatives.some(alternative =>
         isRustDefinitelyNullishCarrier(alternative.carrier)) !== true) {

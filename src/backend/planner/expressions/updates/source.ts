@@ -13,7 +13,8 @@ import { expressionCarrier, negateRustPlannedBooleanExpression, planNumericLiter
 import { findRustUpdateProjectField, planRustBorrowedUpdateLocation, planRustDirectStorage, planRustOwnedUpdateLocation, planRustSourceFieldUpdate, planRustUpdateProjectionArguments, planRustUpdateValue } from "./target.js";
 import { planRustValueFieldLocation, rustSourceFieldHasValueReceiver } from "../../objects/value-fields.js";
 import { finishRustSourceAccessorCall, planRustSourceAccessorCall, sourceAccessorSelectedOperationMatches, sourceIndexSelectedOperationMatches, sourceStaticFieldSelectedOperationMatches, sourceUnionFieldSelectedOperationMatches } from "../properties.js";
-import { isRustBigIntCarrier } from "../../../../target-model/types/index.js";
+import { isRustBigIntCarrier, isRustBoolCarrier } from "../../../../target-model/types/index.js";
+import { applyRustValueConversion } from "../value-conversions.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
 import { rustProjectObjectRepresentation } from "../../objects/project-storage.js";
 import { planExpression } from "../entry.js";
@@ -104,11 +105,12 @@ export function planUnaryExpression(
     : context.input.program.source.ast.kindName(operandNode) === KindNumericLiteral
       ? planNumericLiteralWithCarrier(operandNode, fact.resultCarrier, context)
       : planExpression(operandNode, context);
-  return operand === undefined
+  const converted = operand === undefined ? undefined : applyRustValueConversion(context, operand, fact.leftConversion, operandNode);
+  return converted === undefined
     ? undefined
-    : fact.operator === "!" && !isRustBigIntCarrier(fact.resultCarrier)
-      ? negateRustPlannedBooleanExpression(operandNode, operand, context)
-      : { kind: "unary", operator: fact.operator, operand };
+    : fact.operator === "!" && isRustBoolCarrier(fact.resultCarrier)
+      ? negateRustPlannedBooleanExpression(operandNode, converted, context)
+      : { kind: "unary", operator: fact.operator, operand: converted };
 }
 
 function planRustUpdateExpression(

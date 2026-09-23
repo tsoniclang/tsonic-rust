@@ -301,6 +301,27 @@ export function rustRawLocationRoot(
     : value;
 }
 
+export function planRustModuleBindingStore(
+  expression: Node,
+  value: RustExpr,
+  context: RustPlanContext,
+): RustExpr | undefined {
+  const ast = context.input.program.source.ast;
+  let target = expression;
+  while (ast.kindName(target) === "KindParenthesizedExpression") {
+    const inner = Node_Expression(ast, target);
+    if (inner === undefined) return undefined;
+    target = inner;
+  }
+  if (ast.kindName(target) !== "KindIdentifier") return undefined;
+  const binding = context.input.program.facts.getFact(target, rustSourceBindingFactKey);
+  if (binding === undefined || rustLocationStorageForReference(target, context)?.storage !== "module-cell") {
+    return undefined;
+  }
+  const path = rustSourceBindingPath(context, binding);
+  return path === undefined ? undefined : rustModuleCellAccess({ kind: "path", path }, "store", [value]);
+}
+
 function rustCapturedBinding(
   node: Node,
   context: RustPlanContext,

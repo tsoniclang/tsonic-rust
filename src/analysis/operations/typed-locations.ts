@@ -5,6 +5,7 @@ import type {
   SourceCallMarkerKind,
 } from "@tsonic/tsts";
 import type { SourceProgramNavigation } from "@tsonic/target-api/source";
+import { selectedValueCarrier } from "./selected-values.js";
 import {
   acceptRustPolicy,
   rejectRustPolicy,
@@ -175,7 +176,10 @@ function acceptRustTypedLocationCall(
             ? [optionLocationCarrier]
             : [optionLocationCarrier, optionLocationCarrier];
   if (sourceOperation.operation === "bind-pointer") {
-    const identity = resolveRustTargetTypeRef(sourceOperation.identityExpression, context, options);
+    const identityArgument = request.source.sourceArguments[0];
+    const identity = identityArgument?.expression === sourceOperation.identityExpression
+      ? selectedValueCarrier(identityArgument.expression, identityArgument.type, context, options)
+      : undefined;
     if (identity === undefined || !(rustCarrierSupportsObjectIdentity(identity) ||
       options.projectCarrierSupportsObjectIdentity(identity))) {
       return rejectRustTypedLocation(request.source.call, context,

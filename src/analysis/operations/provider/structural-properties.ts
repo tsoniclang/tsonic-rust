@@ -11,7 +11,7 @@ import {
 import { rustInt32ToUsizeValueConversion, rustUsizeToInt32ValueConversion } from "../../../target-model/conversions/model.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectTsonicFixedArrayFromSource } from "@tsonic/source-core/facts";
-import { selectedValueCarrier } from "./operators.js";
+import { selectedValueCarrier } from "../selected-values.js";
 import type {
   RustCheckedElementSelectionInput,
   RustCheckedOperationSelectionResult,

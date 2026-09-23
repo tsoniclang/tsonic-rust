@@ -44,14 +44,18 @@ export const bigintOperationRows: readonly JsOperationRowData[] = [
   ...([
     ["asIntN", "js_abi::bigint_as_int_n"],
     ["asUintN", "js_abi::bigint_as_uint_n"],
-  ] as const).map(([member, path]): JsOperationRowData => ({
-    owner: "BigIntConstructor", member, operationKind: "call", lane: "bigint", fallible: true,
+  ] as const).flatMap(([member, path]) => (["bigint", "integer"] as const).map((variant): JsOperationRowData => ({
+    owner: "BigIntConstructor", member, operationKind: "call", lane: "bigint", variant, fallible: true,
+    ...(variant === "integer" ? {
+      requirements: [{ carrier: { ref: "argument" as const, index: 1 }, capability: "integer" as const }],
+    } : {}),
     shape: {
       op: "operation", operationKind: "method",
       target: { form: "call", path, argModes: ["value", "ref"] },
-      params: [{ ref: "float64" }, { ref: "bigint" }], result: { ref: "bigint" },
+      params: [{ ref: "float64" }, variant === "bigint" ? { ref: "bigint" } : { ref: "argument", index: 1 }],
+      result: { ref: "bigint" },
     },
-  })),
+  }))),
   {
     owner: "BigIntConstructor", member: "call", operationKind: "call", lane: "bigint",
     variant: "numeric-union", fallible: true,

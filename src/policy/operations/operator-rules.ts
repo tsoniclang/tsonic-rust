@@ -215,7 +215,7 @@ function selectRustSourceNumberOperands(
     : undefined;
 }
 
-function selectRustIntegralShiftPromotion(
+export function selectRustIntegralPromotion(
   carrier: TargetTypeRef,
 ): { readonly carrier: TargetTypeRef; readonly conversion?: RustValueConversion } | undefined {
   if (!isRustIntegerCarrier(carrier)) {
@@ -441,7 +441,7 @@ export function selectRustBinaryOperator(
         rightConversion: sourceNumberOperands.rightConversion,
       };
     }
-    const promotion = selectRustIntegralShiftPromotion(left);
+    const promotion = selectRustIntegralPromotion(left);
     return promotion !== undefined && isRustIntegerCarrier(right)
       ? {
           kind: "operator-call",

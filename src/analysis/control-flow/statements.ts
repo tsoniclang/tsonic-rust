@@ -206,6 +206,7 @@ export function recordExportAssignmentFacts(
   walk.context.facts.set(declaration, rustModuleBindingFactKey, {
     declarationKind: "const",
     storage: "module-cell",
+    initialization: "value",
     valueCarrier: finalized,
   }, [{ message: "rust finalized default export snapshot storage" }]);
   return finalized;
