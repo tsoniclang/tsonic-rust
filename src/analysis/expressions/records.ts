@@ -124,6 +124,15 @@ export function resolveRecordLiteralCarrier(
     return undefined;
   }
   const contextualSelection = semantics.types.contextualValueSelection(expression);
+  if (contextualSelection.kind !== "selected" && expected === undefined) {
+    for (const property of properties) {
+      const kind = ast.kindName(property);
+      if (kind !== "KindPropertyAssignment" && kind !== "KindShorthandPropertyAssignment") continue;
+      const value = ObjectLiteralProperty_Value(ast, property);
+      if (value === undefined || ast.is.IsArrowFunction(value) || ast.is.IsFunctionExpression(value)) continue;
+      resolveExpressionCarrier(walk, value, sourceFile, undefined);
+    }
+  }
   const selectedSourceType = contextualSelection.kind === "selected"
     ? contextualSelection.type
     : sourceType;

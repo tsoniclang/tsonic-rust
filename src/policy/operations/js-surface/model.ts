@@ -172,7 +172,8 @@ export type JsCarrierRef =
   | { readonly ref: "json-replacer-callback" }
   | { readonly ref: "null" }
   | { readonly ref: "source-result" }
-  | { readonly ref: "argument"; readonly index: number };
+  | { readonly ref: "argument"; readonly index: number }
+  | { readonly ref: "numeric-argument"; readonly index: number };
 
 type JsCarrierCapability = "numeric" | "integer" | "numeric-parameter" | "clone" | "stringifiable" | "js-equality" | "project-identity-equality" | "object-identity" | "freezable-object";
 

@@ -1,10 +1,10 @@
-import type { Node, Symbol } from "@tsonic/tsts";
+import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustFactWalk } from "../program/walk.js";
 import { rustObjectReferenceViewKey, type RustObjectReferenceView } from "../facts/object-reference-views.js";
-import type { RustStructuralFieldRegistration } from "../../policy/types/source-type-registry.js";
+import { selectRustStructuralFieldProjection } from "../../policy/types/structural-fields.js";
 import { selectRustProjectStructuralView } from "../objects/project-structural-views.js";
 import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
 import { selectRustClassValueView } from "../objects/class-values.js";
@@ -46,9 +46,9 @@ export function recordRustObjectReferenceView(
   const destinations = new Set<number>();
   for (const pair of correspondence.members) {
     if (pair.kind === "absent") return false;
-    const destination = structuralProjection(walk, pair.destination.property.symbol, pair.destination.declarations, targetCarrier);
+    const destination = selectRustStructuralFieldProjection(walk.sourceTypes, pair.destination.property.symbol, pair.destination.declarations, targetCarrier);
     if (destination === undefined || destinations.has(destination.field.storageIndex)) return false;
-    const source = structuralProjection(walk, pair.source.property.symbol, pair.source.declarations, sourceCarrier);
+    const source = selectRustStructuralFieldProjection(walk.sourceTypes, pair.source.property.symbol, pair.source.declarations, sourceCarrier);
     const selected: Extract<RustObjectReferenceView, { readonly kind: "structural" }>["fields"][number]["source"] | undefined = source === undefined
       ? undefined
       : { kind: "source-field", storage: source.shape.storage, storageIndex: source.field.storageIndex,
@@ -69,17 +69,4 @@ export function recordRustObjectReferenceView(
   walk.context.facts.set(expression, rustObjectReferenceViewKey,
     {kind: "structural", sourceCarrier, targetCarrier, fields: Object.freeze(fields)}, [{message: "rust exact identity-preserving structural view"}]);
   return true;
-}
-
-function structuralProjection(
-  walk: RustFactWalk, symbol: Symbol, declarations: readonly Node[], carrier: TargetTypeRef,
-): RustStructuralFieldRegistration | undefined {
-  const candidates = [walk.sourceTypes.structuralFieldProjectionForSymbol(symbol, carrier),
-    ...declarations.map(declaration => walk.sourceTypes.structuralFieldProjectionForDeclaration(declaration, carrier))]
-    .filter(candidate => candidate !== undefined);
-  const first = candidates[0];
-  return first !== undefined && candidates.every(candidate =>
-    candidate.shape.storage === first.shape.storage && candidate.field.storageIndex === first.field.storageIndex &&
-    candidate.field.presence === first.field.presence && candidate.field.readonly === first.field.readonly &&
-    rustTargetTypeRefEquals(candidate.field.resultCarrier, first.field.resultCarrier)) ? first : undefined;
 }

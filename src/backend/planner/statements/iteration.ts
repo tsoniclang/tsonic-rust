@@ -40,11 +40,11 @@ export function planRuntimeSetStatement(
   expression: Node,
   fact: Extract<import("../../../analysis/facts/keys.js").RustTargetOperationFact, { kind: "runtime-set" }>,
   context: RustPlanContext,
-  computedValue = false,
+  computedValue?: { readonly target: Node; readonly value: Node },
 ): readonly RustStmt[] | undefined {
   const { ast } = context.input.program.source;
-  const left = BinaryExpression_Left(context.input.program.source.ast, expression);
-  const right = BinaryExpression_Right(context.input.program.source.ast, expression);
+  const left = computedValue?.target ?? BinaryExpression_Left(ast, expression);
+  const right = computedValue?.value ?? BinaryExpression_Right(ast, expression);
   if (left === undefined || right === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, expression),

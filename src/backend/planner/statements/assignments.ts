@@ -39,6 +39,7 @@ import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
 import { planRustSourceAccessorReceiver } from "../objects/accessor-receivers.js";
+import { applyRustValueConversion } from "../expressions/value-conversions.js";
 
 export function planRustSourceMethodPropertyAssignment(
   left: Node,
@@ -510,7 +511,10 @@ export function planRustCompoundAssignmentValue(
   if (binary === undefined) {
     return undefined;
   }
-  return { kind: "binary", operator: binary, left: current, right: value };
+  const left = applyRustValueConversion(context, current, assignment.leftConversion, node);
+  const right = applyRustValueConversion(context, value, assignment.rightConversion, node);
+  return left === undefined || right === undefined ? undefined
+    : { kind: "binary", operator: binary, left, right };
 }
 
 export function planRustSourceIndexAssignment(

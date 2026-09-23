@@ -302,8 +302,8 @@ export function rustJsArrayLikeElementTargetType(
     ? rustOptionTargetType({
         kind: "tuple",
         elements: [
-          { kind: "source-primitive", name: "float64" },
-          { kind: "source-primitive", name: "float64" },
+          { kind: "source-primitive", name: "native-uint" },
+          { kind: "source-primitive", name: "native-uint" },
         ],
       })
     : undefined;

@@ -22,7 +22,7 @@ import {
 } from "@tsonic/target-api/source";
 import { selectRustGenericNumericOperation } from "./generic-numeric.js";
 import { selectRustProgramErrorEquality } from "./error-equality.js";
-import { recordRustCompoundWrite } from "./provider/compound-writes.js";
+import { recordRustCompoundWrite, selectRustCompoundWrite } from "./provider/compound-writes.js";
 import {
   isRustAssignmentOperator,
   rustBinaryResultCarrierIsIndependentOfOperands,
@@ -37,6 +37,7 @@ import {
   isRustDefinitelyNullishCarrier,
   isRustNeverCarrier,
   isRustNumericCarrier,
+  isRustIntegerCarrier,
   isRustNullishSourceCarrier,
   isRustOptionCarrier,
   isRustStringCarrier,
@@ -281,6 +282,8 @@ function contextualLiteralOperandCarrier(
   if (kind === KindNumericLiteral && isRustBigIntCarrier(counterpart) ||
     kind === KindBigIntLiteral && isRustNumericCarrier(counterpart) &&
       (counterpart.name === "float64" || counterpart.name === "float32")) return undefined;
+  if (kind === KindNumericLiteral && isRustIntegerCarrier(counterpart) &&
+    !selectedSourceLiteralIsRepresentable(expression, counterpart.name, ast)) return undefined;
   return counterpart;
 }
 
@@ -560,7 +563,8 @@ export function resolvePostCheckBinaryCarrier(
       resultCarrier: rustValueCarrierBeforeOptionProjection(walk.context.facts, operands.rightNode) ?? right,
     };
   } else {
-    const compound = selectRustCompoundAssignment(operatorKind, left, right);
+    const compound = selectRustCompoundAssignment(operatorKind, left, right,
+      carrier => selectRustCompoundWrite(walk, leftNode, carrier) !== undefined);
     if (compound !== undefined && left !== undefined) {
       fact = compound.kind === "operator-call"
         ? {
@@ -571,12 +575,16 @@ export function resolvePostCheckBinaryCarrier(
             resultCarrier: compound.resultCarrier,
             fallible: compound.fallible,
             operandModes: compound.operandModes,
+            leftConversion: compound.leftConversion,
+            rightConversion: compound.rightConversion,
           }
         : {
             kind: "operator-token",
             operationId: `tsonic.rust.operator.${compound.operator}.${rustOperatorCarrierKey(left)}`,
             operator: compound.operator,
             resultCarrier: compound.resultCarrier,
+            leftConversion: compound.leftConversion,
+            rightConversion: compound.rightConversion,
           };
     } else {
       const binary = selectRustBinaryOperator(operatorKind, left, right) ??

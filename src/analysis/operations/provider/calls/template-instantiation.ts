@@ -1,6 +1,9 @@
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../../target-model/types/source-union-definitions.js";
 import {
   inferRustTargetGenericBindings,
+  isRustNullCarrier,
+  isRustUndefinedCarrier,
+  rustOptionElementCarrier,
   rustStrTargetId,
   rustStringTargetType,
   rustTargetGenericReferences,
@@ -88,6 +91,7 @@ export function instantiateProviderOperationTemplate<
       template.parameterCarriers?.[index],
       evidence.sourceParameterCarriers?.[index],
       parameterBindings,
+      true,
     )) {
       return undefined;
     }
@@ -222,6 +226,7 @@ export function instantiateProviderOperationTemplate<
     pattern: TargetTypeRef | undefined,
     actual: TargetTypeRef | undefined,
     inferredBindings: MutableRustTargetGenericBindings,
+    sourceArgument = false,
   ): boolean {
     if (pattern === undefined || !carrierReferencesUnboundProviderParameters(
       pattern,
@@ -231,6 +236,11 @@ export function instantiateProviderOperationTemplate<
       return true;
     }
     if (actual === undefined) return false;
+    const optionalElement = sourceArgument ? rustOptionElementCarrier(pattern) : undefined;
+    if (optionalElement !== undefined) {
+      if (isRustNullCarrier(actual) || isRustUndefinedCarrier(actual)) return true;
+      if (rustOptionElementCarrier(actual) === undefined) pattern = optionalElement;
+    }
     const inferred = inferRustTargetGenericBindings(pattern, actual, parameterSet, {
       callScopedElisionBindings: evidence.callScopedElisionBindings,
     });

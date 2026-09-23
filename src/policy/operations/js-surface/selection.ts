@@ -282,7 +282,7 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
     case "cb-array-from-map": {
       const source = bindings.selectedMethodTypeArguments?.[0];
       const result = bindings.authoredMethodTypeArguments?.[1] ?? rustInferCarrier;
-      const args = [source, rustSourcePrimitiveTargetType("float64")].slice(0, reference.arity);
+      const args = [source, rustSourcePrimitiveTargetType("native-uint")].slice(0, reference.arity);
       return args.some((argument) => argument === undefined)
         ? undefined
         : rustClosureTargetType(args as TargetTypeRef[], result);
@@ -549,6 +549,10 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
       return bindings.sourceResult;
     case "argument":
       return bindings.arguments?.[reference.index];
+    case "numeric-argument": {
+      const carrier = bindings.arguments?.[reference.index];
+      return isRustNumericCarrier(carrier) ? carrier : undefined;
+    }
   }
 }
 
@@ -567,7 +571,7 @@ function arrayCallbackCarrier(
   arity: 0 | 1 | 2 | 3,
   result: TargetTypeRef,
 ): TargetTypeRef | undefined {
-  const args = [bindings.element, rustSourcePrimitiveTargetType("float64"), bindings.receiver].slice(0, arity);
+  const args = [bindings.element, rustSourcePrimitiveTargetType("native-uint"), bindings.receiver].slice(0, arity);
   return args.some((argument) => argument === undefined)
     ? undefined
     : rustClosureTargetType(args as TargetTypeRef[], result);
@@ -581,7 +585,7 @@ function arrayReduceCallbackCarrier(
   const args = [
     accumulator,
     bindings.element,
-    rustSourcePrimitiveTargetType("float64"),
+    rustSourcePrimitiveTargetType("native-uint"),
     bindings.receiver,
   ].slice(0, arity);
   return args.some((argument) => argument === undefined)

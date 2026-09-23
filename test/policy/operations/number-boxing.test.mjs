@@ -8,7 +8,7 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { numberBoxingProof, numberBoxingOutput } from "../../../../tsonic/test/fixtures/number-boxing.mjs";
 
 const jsValue = { kind: "target-named", id: "rust.js.JsValue" };
-const admitted = ["int8", "uint8", "int16", "uint16", "int32", "uint32", "float32", "float64"];
+const admitted = ["int8", "uint8", "int16", "uint16", "int32", "uint32", "int64", "uint64", "native-int", "native-uint", "float32", "float64"];
 
 test("closed number boxing accepts only exactly representable source domains", () => {
   for (const name of admitted) {
@@ -24,10 +24,10 @@ test("closed number boxing accepts only exactly representable source domains", (
     assert.equal(arrayConversion?.kind, "js-value-from-array");
     assert.deepEqual(arrayConversion.elementConversion, conversion);
   }
-  for (const name of ["int64", "uint64", "int128", "uint128", "native-int", "native-uint", "float16", "decimal", "char"]) {
+  for (const name of ["int128", "uint128", "float16", "decimal", "char"]) {
     assert.equal(selectRustSourceValueConversion({ kind: "source-primitive", name }, jsValue), undefined, name);
   }
-  assert.equal(rustValueConversionContract({ kind: "semantic-conversion", id: "js-value-from-u64" }), undefined);
+  assert.equal(rustValueConversionContract({ kind: "semantic-conversion", id: "js-value-from-u128" }), undefined);
 });
 
 test("sealed number boxing rejects source-domain and conversion mutations", () => {

@@ -6,6 +6,7 @@ import { rustStructuralGenericCarrier } from "../../../dist/analysis/objects/str
 import { retainRustStructuralInstantiation } from "../../../dist/policy/types/resolution/structural-instantiations.js";
 import { rustGenericsWithAssociatedBounds } from "../../../dist/backend/planner/types/generic-bounds.js";
 import { rustStructuralObjectCarrierValue, rustStructuralObjectTargetType } from "../../../dist/target-model/types/carriers/source-types.js";
+import { selectRustStructuralFieldProjection } from "../../../dist/policy/types/structural-fields.js";
 
 const scalar = { kind: "source-primitive", name: "int32" };
 const parameter = { kind: "type-parameter", name: "T" };
@@ -112,6 +113,20 @@ test("selected record instantiation retains exact reordered members and one gene
   assert.deepEqual(selected.genericArguments.map(argument => argument.type), [scalar, scalar]);
   assert.deepEqual(selected.fields.map(entry => entry.carrier), [scalar, scalar]);
   assert.equal(plan.definitionForCarrier(input.templateCarrier).genericArguments.length, 2);
+});
+
+test("structural projections join exact declarations across fresh symbols and reject conflicting evidence", () => {
+  const input = fixture();
+  assert.equal(input.retain(), true);
+  const select = (symbol, declarations) => selectRustStructuralFieldProjection(input.sourceTypes,
+    symbol, declarations, input.selectedCarrier);
+  const field = select({}, [input.declarations[0]]);
+  assert.equal(field.field.storageIndex, 0);
+  assert.deepEqual(field.field.resultCarrier, scalar);
+  assert.equal(select({}, [{}]), undefined);
+  assert.equal(select(input.selectedSymbols[1], [input.declarations[0]]), undefined);
+  assert.equal(select({}, input.declarations), undefined);
+  assert.deepEqual(select(input.selectedSymbols[0], [input.declarations[0]]), field);
 });
 
 test("an already registered exact structural selection does not repeat recursive source queries", () => {

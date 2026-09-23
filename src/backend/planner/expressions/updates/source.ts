@@ -31,6 +31,8 @@ import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
 import { planRustComputedMemberExpression } from "../computed-members.js";
 import { planRustSourceAccessorReceiver } from "../../objects/accessor-receivers.js";
+import { rustCompoundWriteFactKey } from "../../../../analysis/facts/operations/keys.js";
+import { planRustRuntimeIndexUpdate } from "./runtime.js";
 
 export function planUnaryExpression(
   node: Node,
@@ -144,6 +146,9 @@ function planRustUpdateExpression(
   }
   const returnsPrevious = resultUse === "value" &&
     context.input.program.source.ast.kindName(expression) === KindPostfixUnaryExpression;
+  if (context.input.program.facts.getFact(expression, rustCompoundWriteFactKey) !== undefined) {
+    return planRustRuntimeIndexUpdate(expression, operand, fact, step, returnsPrevious, context);
+  }
   if (rustSourceFieldHasValueReceiver(operand, context)) {
     const location = planRustValueFieldLocation(operand, context, "write");
     return location === undefined ? undefined : planRustUpdateValue({

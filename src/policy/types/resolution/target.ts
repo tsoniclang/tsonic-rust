@@ -20,6 +20,7 @@ import {
   rustUnitTargetType,
   rustUndefinedTargetType,
   rustVecTargetType,
+  isRustNumericCarrier,
 } from "../../../target-model/types/index.js";
 import { denseDefined, resolveProjectSourceCarrier } from "./project.js";
 import { bindRustSourceAliasArguments } from "./generic-arguments.js";
@@ -31,6 +32,7 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import {
   sourcePropertyTypeEvidenceNodes,
   sourceTransformedTypeFactEvidenceNodes,
+  ObjectLiteralProperty_Value,
 } from "@tsonic/target-api/source";
 import { structFactKey } from "@tsonic/tsts";
 import type { Node, StructFact, Symbol, Type } from "@tsonic/tsts";
@@ -382,8 +384,19 @@ export function resolveStructuralObjectType(
           carrier !== undefined && rustTargetTypeRefEquals(carrier, authoredCarriers[0]))
       ? authoredCarriers[0]
       : undefined;
+    const initializerCarriers = authoredTypeNodes.length === 0 && semantics.types.isNumberLike(property.type)
+      ? ordinaryDeclarations.map(declaration => {
+          const kind = context.ast.kindName(declaration);
+          const value = kind === "KindPropertyAssignment" || kind === "KindShorthandPropertyAssignment"
+            ? ObjectLiteralProperty_Value(context.ast, declaration) : undefined;
+          return value === undefined ? undefined : context.facts.getRuntimeCarrierFact(value)?.carrier;
+        })
+      : [];
+    const inferredCarrier = initializerCarriers.length > 0 && initializerCarriers.every(carrier =>
+      isRustNumericCarrier(carrier) && rustTargetTypeRefEquals(carrier, initializerCarriers[0]))
+      ? initializerCarriers[0] : undefined;
     const selectedFieldCarrier = authoredTypeNodes.length === 0
-      ? resolveRustTargetType(property.type, context, options, resolving)
+      ? inferredCarrier ?? resolveRustTargetType(property.type, context, options, resolving)
       : authoredCarrier;
     const fieldCarrier = selectedFieldCarrier === undefined
       ? undefined

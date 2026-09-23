@@ -84,7 +84,8 @@ export function selectRustCheckedOperator(
     }
     return acceptPostCheckOperator(request);
   }
-  const operand = resolveRustTargetTypeRef(request.left, context, options);
+  const operand = rustEffectiveValueCarrier(context.facts, request.left) ??
+    resolveRustTargetTypeRef(request.left, context, options);
   return mapSelectedUnaryOperator(request, operand, context);
 }
 

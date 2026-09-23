@@ -91,6 +91,8 @@ export type RustCompoundAssignmentSelection =
       readonly kind: "operator-token";
       readonly operator: RustAssignmentOperator;
       readonly resultCarrier: TargetTypeRef;
+      readonly leftConversion?: RustValueConversion;
+      readonly rightConversion?: RustValueConversion;
     }
   | {
       readonly kind: "operator-call";
@@ -99,6 +101,8 @@ export type RustCompoundAssignmentSelection =
       readonly resultCarrier: TargetTypeRef;
       readonly fallible: boolean;
       readonly operandModes: readonly [RustArgumentMode, RustArgumentMode];
+      readonly leftConversion?: RustValueConversion;
+      readonly rightConversion?: RustValueConversion;
     };
 
 const bigintArithmeticCallByOperator: Readonly<Partial<Record<RustBinaryOperator, string>>> = {
@@ -163,6 +167,11 @@ const logicalTokens: Readonly<Record<string, RustBinaryOperator>> = {
 };
 
 const boolCarrier = rustSourcePrimitiveTargetType("bool");
+
+export function isRustNumericBinaryOperator(operatorKind: string): boolean {
+  return arithmeticTokens[operatorKind] !== undefined ||
+    bitwiseTokens[operatorKind] !== undefined || shiftOperations[operatorKind] !== undefined;
+}
 
 function sameRustArithmeticCarrier(left: TargetTypeRef, right: TargetTypeRef): boolean {
   return (isRustNumericCarrier(left) && sameRustPrimitiveCarrier(left, right)) ||
@@ -504,6 +513,7 @@ export function selectRustCompoundAssignment(
   operatorKindName: string,
   left: TargetTypeRef | undefined,
   right: TargetTypeRef | undefined,
+  acceptsPromotedResult?: (carrier: TargetTypeRef) => boolean,
 ): RustCompoundAssignmentSelection | undefined {
   operatorKindName = operatorKindByText[operatorKindName] ?? operatorKindName;
   const operator = compoundAssignmentTokens[operatorKindName];
@@ -511,6 +521,13 @@ export function selectRustCompoundAssignment(
     return undefined;
   }
   const binaryOperator = compoundBinaryOperator(operator);
+  if (binaryOperator !== undefined && acceptsPromotedResult !== undefined &&
+    isRustNumericCarrier(left) && isRustNumericCarrier(right)) {
+    const binary = selectRustBinaryOperator(binaryOperator, left, right);
+    if (binary !== undefined && binary.kind !== "string-concat" && acceptsPromotedResult(binary.resultCarrier)) {
+      return { ...binary, operator };
+    }
+  }
   if (operator === "+=" && isRustStringCarrier(left) && isRustStringCarrier(right)) {
     return { kind: "operator-token", operator, resultCarrier: left };
   }

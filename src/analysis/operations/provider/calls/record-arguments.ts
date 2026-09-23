@@ -10,6 +10,7 @@ import { providerCarrierFromRelations } from "../../../../policy/types/resolutio
 import { rustProviderRecordCopyMatches, type RustProviderRecordCopy } from "../../../../target-model/conversions/provider-record.js";
 import { instantiateProviderOperationTemplate } from "./template-instantiation.js";
 import { providerOperationTemplate } from "../result.js";
+import { selectRustStructuralFieldProjection } from "../../../../policy/types/structural-fields.js";
 
 export function selectProviderRecordArgument(
   sourceType: Type | undefined,
@@ -68,7 +69,8 @@ export function selectProviderRecordArgument(
       continue;
     }
     if (pair.source.read !== "property" || pair.source.property.optional) return undefined;
-    const projection = options.sourceTypes.structuralFieldProjectionForSymbol(pair.source.property.symbol, source);
+    const projection = selectRustStructuralFieldProjection(options.sourceTypes,
+      pair.source.property.symbol, pair.source.declarations, source);
     if (projection === undefined || projection.field.accessor !== undefined ||
       !rustTargetTypeRefEquals(projection.field.resultCarrier, readTemplate.resultCarrier)) return undefined;
     fields.push(Object.freeze({ storageIndex: projection.field.storageIndex,

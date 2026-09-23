@@ -8,6 +8,10 @@ const rows: readonly (readonly [SourcePrimitiveKind, RustValueConversionId])[] =
   ["uint16", "js-value-from-u16"],
   ["int32", "js-value-from-i32"],
   ["uint32", "js-value-from-u32"],
+  ["int64", "js-value-from-i64"],
+  ["uint64", "js-value-from-u64"],
+  ["native-int", "js-value-from-isize"],
+  ["native-uint", "js-value-from-usize"],
   ["float32", "js-value-from-f32"],
   ["float64", "js-value-from-f64"],
 ];

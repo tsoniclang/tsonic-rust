@@ -137,6 +137,18 @@ test("static string selection preserves exported bindings and deferred default r
   } }), /addressOf\(\.\.\.\) requires writable storage/u);
 });
 
+test("address-of rejects imported constants before target planning", () => {
+  for (const module of ["values", "exports"]) {
+    assert.throws(() => analyzeRust({ surfaces: ["js"], files: {
+      "values.ts": `export const fixed = 7;`,
+      "exports.ts": `export { fixed } from "./values.js";`,
+      "index.ts": `import { addressOf } from "@tsonic/core/lang.js";
+        import { fixed } from "./${module}.js";
+        export function reject(): void { addressOf(fixed); }`,
+    } }), /addressOf\(\.\.\.\) requires writable storage/u);
+  }
+});
+
 test("non-consuming comparisons preserve authored clone calls and their effects", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },

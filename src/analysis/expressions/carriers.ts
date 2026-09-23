@@ -1,6 +1,7 @@
 import {
   ElementAccessExpression_ArgumentExpression,
   BinaryExpression_Left,
+  BinaryExpression_Right,
   BinaryExpression_OperatorToken,
   Node_Operand,
   KindBinaryExpression,
@@ -56,7 +57,7 @@ import {
   rustTargetOperationResultCarrier,
 } from "../facts/keys.js";
 import { appendRustDiagnostic, rustResolutionContext, selectExpressionOperation } from "../program/walk.js";
-import { isRustAssignmentOperator } from "../../policy/operations/operator-rules.js";
+import { isRustAssignmentOperator, isRustNumericBinaryOperator } from "../../policy/operations/operator-rules.js";
 import { recordAssignmentWrite, recordBindingWrite } from "../declarations/types-and-bindings.js";
 import { recordSelectedOperationInputs } from "../operations/inputs.js";
 import { resolveBinaryOperandCarriers } from "../operations/operators.js";
@@ -64,6 +65,7 @@ import { resolveExpressionCarrierUncached } from "./value-resolution.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { rustConversionKey, rustRuntimeCarrierKey, rustSelectedOperationKey } from "../../target-model/facts/selections.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { recordRustCompoundWrite } from "../operations/provider/compound-writes.js";
 import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
 import type {
   AstReader,
@@ -161,6 +163,8 @@ export function resolveExpressionCarrier(
       if (target !== undefined) {
         resolveExpressionCarrier(walk, target, sourceFile, undefined);
       }
+      const value = BinaryExpression_Right(walk.context.ast, expression);
+      if (value !== undefined) resolveIndependentValueOperation(walk, value, sourceFile);
       selectExpressionOperation(walk, expression, sourceFile);
       resolveExpressionOperationDependencies(walk, expression, sourceFile, contextualExpected);
     } else if (expressionKind === KindCallExpression || expressionKind === KindNewExpression) {
@@ -581,7 +585,9 @@ function recordExpressionBindingEffects(walk: RustFactWalk, expression: Node): v
   if (kind === KindPrefixUnaryExpression || kind === KindPostfixUnaryExpression) {
     const fact = walk.context.facts.get(expression, rustTargetOperationFactKey);
     if (fact?.kind === "operator-token" && (fact.operator === "+=" || fact.operator === "-=")) {
-      recordBindingWrite(walk, Node_Operand(ast, expression));
+      const operand = Node_Operand(ast, expression);
+      recordBindingWrite(walk, operand);
+      if (operand !== undefined) recordRustCompoundWrite(walk, expression, operand, fact.resultCarrier);
     }
   }
 }
@@ -716,7 +722,7 @@ function resolveCallSelectionPrerequisites(
     resolveExpressionCarrier(walk, receiver, sourceFile, undefined);
   }
   for (const argument of source?.sourceArguments ?? []) {
-    resolveIndependentCallArgumentOperation(
+    resolveIndependentValueOperation(
       walk,
       argument.expression,
       sourceFile,
@@ -724,13 +730,27 @@ function resolveCallSelectionPrerequisites(
   }
 }
 
-function resolveIndependentCallArgumentOperation(
+function resolveIndependentValueOperation(
   walk: RustFactWalk,
   argument: Node,
   sourceFile: SourceFile,
 ): void {
   const { ast } = walk.context;
   const kind = ast.kindName(argument);
+  if (kind === KindBinaryExpression) {
+    const operator = BinaryExpression_OperatorToken(ast, argument);
+    if (operator === undefined || !isRustNumericBinaryOperator(ast.kindName(operator))) return;
+    const left = BinaryExpression_Left(ast, argument);
+    const right = BinaryExpression_Right(ast, argument);
+    if (left !== undefined) resolveIndependentValueOperation(walk, left, sourceFile);
+    if (right !== undefined) resolveIndependentValueOperation(walk, right, sourceFile);
+    const leftCarrier = walk.context.facts.getRuntimeCarrierFact(left)?.carrier;
+    const rightCarrier = walk.context.facts.getRuntimeCarrierFact(right)?.carrier;
+    if (isRustNumericCarrier(leftCarrier) || isRustNumericCarrier(rightCarrier)) {
+      resolveExpressionCarrier(walk, argument, sourceFile, undefined, "operation");
+    }
+    return;
+  }
   if (kind === KindIdentifier || kind === KindCallExpression || kind === KindNewExpression ||
     kind === "KindRegularExpressionLiteral" ||
     kind === KindPropertyAccessExpression || kind === KindElementAccessExpression ||
@@ -748,7 +768,7 @@ function resolveIndependentCallArgumentOperation(
         resolveExpressionCarrier(walk, inner, sourceFile, { kind: "tuple", elements: [] });
         return;
       }
-      resolveIndependentCallArgumentOperation(walk, inner, sourceFile);
+      resolveIndependentValueOperation(walk, inner, sourceFile);
     }
   }
 }
