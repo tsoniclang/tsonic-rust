@@ -85,7 +85,7 @@ export function main(): void {
   });
 }
 
-test("native integral bitwise operations preserve promotion and masked shifts", { timeout: 300_000 }, () => {
+test("native integral bitwise operations preserve promotion and native shifts", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     packages: [acmeTestingPackage()],
     target: { id: "rust", options: { outputType: "bin", crateName: "native_bitwise" } },
@@ -98,14 +98,14 @@ export function main(): void {
   const left: int32 = 5;
   const right: int32 = 3;
   const one: int32 = 1;
-  const width: int32 = 32;
+  const width: int32 = 3;
   const negativeOne: int32 = -1;
   const highByte: uint8 = 128;
 
   check((left & right) === 1);
   check((left | right) === 7);
   check((left ^ right) === 6);
-  check((one << width) === 1);
+  check((one << width) === 8);
   check((negativeOne >> one) === negativeOne);
   check((negativeOne >>> one) === 2147483647);
   check((highByte << one) === 256);
@@ -123,48 +123,13 @@ export function main(): void {
   validateGeneratedProject("native-bitwise", result.artifacts, { run: true });
 });
 
-test("source number bitwise operations retain the number carrier", { timeout: 300_000 }, () => {
-  const { result } = compileRust({
-    surfaces: ["js"],
-    packages: [acmeTestingPackage()],
-    target: { id: "rust", options: { outputType: "bin", crateName: "source_number_bitwise" } },
-    files: {
-      "index.ts": `
-import { check } from "@acme/testing";
-import type { int32 } from "@tsonic/core/types.js";
-
-export function main(): void {
-  const left: number = 5;
-  const right: number = 3;
-  const nativeLeft: int32 = 5;
-  const nativeRight: int32 = 3;
-  const width: number = 32;
-  const nativeWidth: int32 = 32;
-  const negativeOne: number = -1;
-
-  check((left & right) === 1);
-  check((left | right) === 7);
-  check((left ^ right) === 6);
-  check((left << width) === 5);
-  check((negativeOne >> 1) === -1);
-  check((negativeOne >>> 1) === 2147483647);
-  check((left & nativeRight) === 1);
-  check((nativeLeft | right) === 7);
-  check((left << nativeWidth) === 5);
-  check((nativeLeft << width) === 5);
-}
-`,
-    },
+for (const operator of ["&", "|", "^", "<<", ">>", ">>>"]) {
+  test(`floating operands require explicit integer selection for ${operator}`, () => {
+    const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": `
+export function calculate(left: number, right: number): number { return left ${operator} right; }
+` } });
+    assert(result.diagnostics.some(diagnostic => diagnostic.code === "RUST_BINARY_OPERATOR_CARRIER_UNSUPPORTED"),
+      JSON.stringify(result.diagnostics));
+    assert.equal(result.artifacts.length, 0);
   });
-
-  assert.deepEqual(result.diagnostics, []);
-  const source = artifactText(result, "src/index.rs");
-  assert.match(source, /rt::source_number_bitwise_and/u);
-  assert.match(source, /rt::source_number_shift_left/u);
-  assert.match(source, /rt::source_number_unsigned_shift_right/u);
-  assert.match(source, /rt::source_number_bitwise_and\(left, native_right as f64\)/u);
-  assert.match(source, /rt::source_number_bitwise_or\(native_left as f64, right\)/u);
-  assert.match(source, /rt::source_number_shift_left\(left, native_width as f64\)/u);
-  assert.match(source, /rt::source_number_shift_left\(native_left as f64, width\)/u);
-  validateGeneratedProject("source-number-bitwise", result.artifacts, { run: true });
-});
+}

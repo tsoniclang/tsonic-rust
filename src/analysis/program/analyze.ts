@@ -108,6 +108,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     context,
     providerRows,
     resolving: new Set(),
+    rejectedExpressions: new WeakSet<Node>(),
     jsEnabled,
     sourceProfiles,
     sourceTypes,

@@ -58,7 +58,6 @@ import { rustClassConstructorInstance } from "../../target-model/types/carriers/
 import { rustSourceTypeCarrierValue } from "../../target-model/types/index.js";
 import { rustIntegerKindIsExactlyRepresentableAsFloat64 } from "../../target-model/conversions/numeric-promotion.js";
 import {
-  type RustNumericBinaryPromotion,
   rustNumericPromotionConversion,
   selectRustNumericBinaryPromotion,
 } from "./numeric-promotion.js";
@@ -124,44 +123,19 @@ const bitwiseTokens: Readonly<Record<string, RustBinaryOperator>> = {
 const shiftOperations: Readonly<Record<string, {
   readonly operator: RustOperationSymbol;
   readonly nativePath: string;
-  readonly sourceNumberPath: string;
 }>> = {
   [KindLessThanLessThanToken]: {
     operator: "<<",
     nativePath: "rt::native_shift_left",
-    sourceNumberPath: "rt::source_number_shift_left",
   },
   [KindGreaterThanGreaterThanToken]: {
     operator: ">>",
     nativePath: "rt::native_shift_right",
-    sourceNumberPath: "rt::source_number_shift_right",
   },
   [KindGreaterThanGreaterThanGreaterThanToken]: {
     operator: ">>>",
     nativePath: "rt::native_unsigned_shift_right",
-    sourceNumberPath: "rt::source_number_unsigned_shift_right",
   },
-};
-
-const sourceNumberBitwisePaths: Readonly<Record<RustBinaryOperator, string | undefined>> = {
-  "+": undefined,
-  "-": undefined,
-  "*": undefined,
-  "/": undefined,
-  "%": undefined,
-  "&": "rt::source_number_bitwise_and",
-  "|": "rt::source_number_bitwise_or",
-  "^": "rt::source_number_bitwise_xor",
-  "<<": undefined,
-  ">>": undefined,
-  "<": undefined,
-  "<=": undefined,
-  ">": undefined,
-  ">=": undefined,
-  "==": undefined,
-  "!=": undefined,
-  "&&": undefined,
-  "||": undefined,
 };
 
 const comparisonTokens: Readonly<Record<string, RustBinaryOperator>> = {
@@ -193,26 +167,6 @@ const boolCarrier = rustSourcePrimitiveTargetType("bool");
 function sameRustArithmeticCarrier(left: TargetTypeRef, right: TargetTypeRef): boolean {
   return (isRustNumericCarrier(left) && sameRustPrimitiveCarrier(left, right)) ||
     (isRustBigIntCarrier(left) && isRustBigIntCarrier(right));
-}
-
-function isRustSourceNumberCarrier(carrier: TargetTypeRef): boolean {
-  return carrier.kind === "source-primitive" && carrier.name === "float64";
-}
-
-function selectRustSourceNumberOperands(
-  left: TargetTypeRef,
-  right: TargetTypeRef,
-): RustNumericBinaryPromotion | undefined {
-  if (
-    !isRustSourceNumberCarrier(left) &&
-    !isRustSourceNumberCarrier(right)
-  ) {
-    return undefined;
-  }
-  const promotion = selectRustNumericBinaryPromotion(left, right);
-  return promotion !== undefined && isRustSourceNumberCarrier(promotion.carrier)
-    ? promotion
-    : undefined;
 }
 
 export function selectRustIntegralPromotion(
@@ -395,19 +349,6 @@ export function selectRustBinaryOperator(
     if (isRustBigIntCarrier(left) && isRustBigIntCarrier(right)) {
       return { kind: "operator-token", rustOperator: bitwise, resultCarrier: left };
     }
-    const sourceNumberOperands = selectRustSourceNumberOperands(left, right);
-    if (sourceNumberOperands !== undefined) {
-      return {
-        kind: "operator-call",
-        rustOperator: bitwise,
-        resultCarrier: sourceNumberOperands.carrier,
-        path: sourceNumberBitwisePaths[bitwise]!,
-        fallible: false,
-        operandModes: ["value", "value"],
-        leftConversion: sourceNumberOperands.leftConversion,
-        rightConversion: sourceNumberOperands.rightConversion,
-      };
-    }
     const promotion = selectRustNumericBinaryPromotion(left, right);
     return promotion !== undefined && isRustIntegerCarrier(promotion.carrier)
       ? {
@@ -426,19 +367,6 @@ export function selectRustBinaryOperator(
         kind: "operator-call", rustOperator: shift.operator, resultCarrier: left,
         path: shift.operator === "<<" ? "rt::BigInt::checked_shift_left" : "rt::BigInt::checked_shift_right",
         fallible: true, operandModes: ["value", "value"],
-      };
-    }
-    const sourceNumberOperands = selectRustSourceNumberOperands(left, right);
-    if (sourceNumberOperands !== undefined) {
-      return {
-        kind: "operator-call",
-        rustOperator: shift.operator,
-        resultCarrier: sourceNumberOperands.carrier,
-        path: shift.sourceNumberPath,
-        fallible: false,
-        operandModes: ["value", "value"],
-        leftConversion: sourceNumberOperands.leftConversion,
-        rightConversion: sourceNumberOperands.rightConversion,
       };
     }
     const promotion = selectRustIntegralPromotion(left);

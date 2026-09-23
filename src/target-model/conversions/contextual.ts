@@ -7,12 +7,14 @@ import { rustProviderRecordCopyMatches, type RustProviderRecordCopy } from "./pr
 import { rustEmptyRecordConversionMatches, type RustEmptyRecordConversion } from "./empty-record.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../types/source-union-definitions.js";
 import { rustGenericCallableConversionMatches, type RustGenericCallableConversion } from "./generic-callable.js";
+import { rustIntegerTruncationConversionMatches, type RustIntegerTruncationConversion } from "./integer-truncation.js";
 
 export type RustContextualValueConversion =
   | RustValueConversion
   | RustProviderRecordCopy
   | RustEmptyRecordConversion
   | RustGenericCallableConversion
+  | RustIntegerTruncationConversion
   | {
       readonly kind: "native-trait-object-upcast";
       readonly source: TargetTypeRef;
@@ -30,6 +32,9 @@ export function rustCompilerOwnedContextualConversionMatches(
   conversion: RustContextualValueConversion,
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): boolean {
+  if (conversion.kind === "integer-truncation") {
+    return rustIntegerTruncationConversionMatches(sourceCarrier, targetCarrier, conversion);
+  }
   if (conversion.kind === "generic-callable-flow") {
     return rustGenericCallableConversionMatches(conversion, sourceCarrier, targetCarrier);
   }
@@ -66,5 +71,6 @@ export function rustContextualValueConversionIsFallible(
     conversion.kind !== "provider-record-copy" &&
     conversion.kind !== "empty-record" &&
     conversion.kind !== "generic-callable-flow" &&
+    conversion.kind !== "integer-truncation" &&
     rustValueConversionIsFallible(conversion, definitions);
 }

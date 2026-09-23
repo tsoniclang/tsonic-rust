@@ -21,8 +21,10 @@ export function main(): void {
   check(BigInt.asIntN(64, 9007199254740993n) === 9007199254740993n);
   check(BigInt.asIntN(9, 256n) === -256n);
   check(BigInt.asUintN(9, -1n) === 511n);
-  check(BigInt.asIntN(Number.NaN, 4n) === 0n);
-  check(BigInt.asIntN(-0.5, 4n) === 0n);
+  let invalid = 0;
+  try { BigInt.asIntN(Number.NaN, 4n); } catch { invalid += 1; }
+  try { BigInt.asIntN(-0.5, 4n); } catch { invalid += 1; }
+  check(invalid === 2);
 }
 ` },
   });

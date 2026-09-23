@@ -37,6 +37,8 @@ import {
 } from "../../target-model/types/index.js";
 import { rustRuntimeUnionContract, rustRuntimeUnionProjection } from "../../target-model/types/carriers/runtime-unions.js";
 import { recordRustObjectReferenceView } from "./object-reference-views.js";
+import { selectRustIntegerTruncationConversion } from "../../policy/types/integer-truncation.js";
+import { rustContextualValueConversionFactKey } from "../facts/value-projections.js";
 import {
   selectRustFlowReadProjection,
   selectRustValueCarrierReconciliation,
@@ -86,6 +88,7 @@ export function resolveExpressionCarrier(
   expected: TargetTypeRef | undefined,
   purpose: "value" | "operation" = "value",
 ): TargetTypeRef | undefined {
+  if (walk.rejectedExpressions.has(expression)) return undefined;
   const facts = walk.context.facts;
   const contextualExpected = rustExpressionResolutionExpectation(
     walk.context.ast,
@@ -765,6 +768,15 @@ function applyOptionLane(
   let projected = resolved;
   if (resolved !== undefined && target !== undefined &&
     !rustTargetTypeRefEquals(resolved, target)) {
+    const operation = walk.context.facts.get(expression, rustTargetOperationFactKey);
+    const truncation = selectRustIntegerTruncationConversion(walk.context.ast, expression,
+      operation?.kind === "provider-operation" ? operation.operationId : undefined, resolved, target);
+    if (truncation !== undefined) {
+      walk.context.facts.set(expression, rustContextualValueConversionFactKey, {
+        sourceCarrier: resolved, targetCarrier: target, conversion: truncation,
+      }, [{ message: "rust exact bounded integer result" }]);
+      projected = target;
+    }
     const reconciliation = selectRustValueCarrierReconciliation(
       resolved,
       target,

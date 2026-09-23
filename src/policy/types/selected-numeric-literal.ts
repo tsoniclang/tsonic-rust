@@ -2,15 +2,11 @@ import type { Node } from "@tsonic/tsts";
 import type { AstReader } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import {
-  KindBigIntLiteral,
+  sourceIntegerLiteralValue,
   KindMinusToken,
   KindPlusToken,
   Node_Operand,
 } from "@tsonic/target-api/source";
-import {
-  parseSourceBigIntLiteral,
-  parseSourceIntegerLiteral,
-} from "../../target-model/syntax/literals.js";
 import {
   rustPostCheckUnaryMinusOperationId,
   rustPostCheckUnaryPlusOperationId,
@@ -34,7 +30,10 @@ export function selectedSourceLiteralIsRepresentable(
     const value = selectedNumericLiteralValue(node, ast);
     return value !== undefined && Number.isFinite(value);
   }
-  const value = selectedIntegerLiteralValue(node, ast);
+  const value = sourceIntegerLiteralValue(ast, node);
+  if (primitive === "native-int" || primitive === "native-uint") {
+    return value !== undefined && (primitive === "native-int" || value >= 0n);
+  }
   const ranges: Readonly<Partial<Record<SourcePrimitiveName, readonly [bigint, bigint]>>> = {
     int8: [-128n, 127n],
     uint8: [0n, 255n],
@@ -49,14 +48,9 @@ export function selectedSourceLiteralIsRepresentable(
       170141183460469231731687303715884105727n,
     ],
     uint128: [0n, 340282366920938463463374607431768211455n],
-    "native-int": [-32768n, 32767n],
-    "native-uint": [0n, 65535n],
   };
   const range = ranges[primitive];
-  const requiresExactNumberProof = primitive === "int64" || primitive === "uint64" ||
-    primitive === "int128" || primitive === "uint128";
-  return value !== undefined && range !== undefined && value >= range[0] && value <= range[1] &&
-    (!requiresExactNumberProof || selectedIntegerLiteralIsExact(node, ast));
+  return value !== undefined && range !== undefined && value >= range[0] && value <= range[1];
 }
 
 export function selectedSourceLiteralOperandIsRepresentable(
@@ -113,63 +107,4 @@ function selectedNumericLiteralValue(
   }
   const value = Number(ast.text(operand));
   return Number.isFinite(value) ? sign * value : undefined;
-}
-
-function selectedIntegerLiteralValue(
-  node: Node,
-  ast: AstReader,
-): bigint | undefined {
-  const kind = ast.kindName(node);
-  if (kind === "KindNumericLiteral") {
-    return parseSourceIntegerLiteral(ast.text(node));
-  }
-  if (kind === KindBigIntLiteral) {
-    return parseSourceBigIntLiteral(ast.text(node));
-  }
-  if (kind !== "KindPrefixUnaryExpression") {
-    return undefined;
-  }
-  const operationId = selectedSourceNumericLiteralOperationId(node, ast);
-  const sign = operationId === rustPostCheckUnaryMinusOperationId
-    ? -1n
-    : operationId === rustPostCheckUnaryPlusOperationId
-      ? 1n
-      : undefined;
-  const operand = Node_Operand(ast, node);
-  if (sign === undefined || operand === undefined) {
-    return undefined;
-  }
-  const operandKind = ast.kindName(operand);
-  const value = operandKind === "KindNumericLiteral"
-    ? parseSourceIntegerLiteral(ast.text(operand))
-    : operandKind === KindBigIntLiteral
-      ? parseSourceBigIntLiteral(ast.text(operand))
-      : undefined;
-  return value === undefined ? undefined : sign * value;
-}
-
-function selectedIntegerLiteralIsExact(node: Node, ast: AstReader): boolean {
-  const kind = ast.kindName(node);
-  if (kind === KindBigIntLiteral) {
-    return parseSourceBigIntLiteral(ast.text(node)) !== undefined;
-  }
-  if (kind === "KindNumericLiteral") {
-    const value = parseSourceIntegerLiteral(ast.text(node));
-    return value !== undefined && value <= BigInt(Number.MAX_SAFE_INTEGER);
-  }
-  if (kind !== "KindPrefixUnaryExpression") {
-    return false;
-  }
-  const operand = Node_Operand(ast, node);
-  if (operand === undefined) {
-    return false;
-  }
-  if (ast.kindName(operand) === KindBigIntLiteral) {
-    return parseSourceBigIntLiteral(ast.text(operand)) !== undefined;
-  }
-  if (ast.kindName(operand) !== "KindNumericLiteral") {
-    return false;
-  }
-  const value = parseSourceIntegerLiteral(ast.text(operand));
-  return value !== undefined && value <= BigInt(Number.MAX_SAFE_INTEGER);
 }

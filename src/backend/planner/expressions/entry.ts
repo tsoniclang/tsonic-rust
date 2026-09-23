@@ -46,6 +46,7 @@ import { rustValueConversionContract } from "../../../target-model/conversions/c
 import { tryPlanRustNativePointerOperation } from "./native-pointers.js";
 import type { Node } from "@tsonic/tsts";
 import { planRustGenericCallableFlow } from "./generic-callable-flow.js";
+import { planRustIntegerTruncation } from "./integer-truncation.js";
 import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
@@ -390,6 +391,14 @@ function applyRustContextualValueConversion(
   }
   if (fact.conversion.kind === "generic-callable-flow") {
     return planRustGenericCallableFlow(fact.conversion, expression, context);
+  }
+  if (fact.conversion.kind === "integer-truncation") {
+    const selected = planRustIntegerTruncation(expression, fact, context);
+    if (selected === undefined) {
+      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+        "rust.backend.integer-truncation", "Native integer truncation requires its exact classified call and range proof."));
+    }
+    return selected;
   }
   if (fact.conversion.kind === "provider-record-copy") {
     return planProviderRecordCopy(fact.conversion, expression, node, context);
