@@ -16,7 +16,7 @@ import { rustTargetOperationFactKey, rustProjectDowncastFactKey } from "../../fa
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectRustProviderOperation } from "../../../policy/operations/provider-selection.js";
 import { rustValueConversionIdentity } from "../../../target-model/conversions/contracts.js";
-import { selectRustSourceValueConversion } from "../../../policy/conversions/selection.js";
+import { selectRustSourceAssertionConversion } from "../../../policy/conversions/selection.js";
 import { selectRustProjectProjection } from "../../../policy/types/project-projections.js";
 import type {
   RustCheckedConversionSelectionInput,
@@ -143,7 +143,7 @@ export function selectRustCheckedConversion(
   );
   const conversion = identity || projectUpcast || projectDowncast
     ? undefined
-    : selectRustSourceValueConversion(sourceCarrier, targetCarrier, context.typeDefinitions);
+    : selectRustSourceAssertionConversion(sourceCarrier, targetCarrier, context.typeDefinitions);
   if (!identity && !projectUpcast && !projectDowncast && conversion === undefined) {
     return rejectSelectedOperation(
       request.expression,

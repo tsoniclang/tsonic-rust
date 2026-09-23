@@ -53,6 +53,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustGenericCallableProtocol, rustGenericCallableTargetType, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustGenericCallableValueOwner } from "../../policy/types/generic-callable-origin.js";
 import { closeRustCallableResultStorage } from "../../policy/types/callable-result-storage.js";
+import { selectRustInferredNumericReturn } from "./inferred-numeric-return.js";
 
 export function recordFunctionSignatureFacts(walk: RustFactWalk, declaration: Node): void {
   recordCallableParameterSignatureFacts(walk, declaration);
@@ -583,12 +584,14 @@ export function recordCallableReturnFact(
   const generator = walk.context.facts.get(declaration, rustGeneratorFactKey);
   const asynchronous = walk.context.facts.get(declaration, rustAsyncFunctionFactKey);
   const sourceReturn = selectedSourceCallableReturn(walk, declaration);
-  const selected = selectedCarrier ?? generator?.resultCarrier ?? asynchronous?.outputCarrier ??
+  const baseline = selectedCarrier ?? generator?.resultCarrier ?? asynchronous?.outputCarrier ??
     resolveRustTargetTypeRef(
       Node_Type(walk.context.ast, declaration) ?? sourceReturn,
       rustResolutionContext(walk, declaration),
       walk.operationOptions,
     );
+  const selected = selectedCarrier !== undefined || generator !== undefined || asynchronous !== undefined
+    ? baseline : selectRustInferredNumericReturn(walk, declaration, baseline);
   const pointer = selectRustPointerReturnContract(declaration, rustResolutionContext(walk, declaration), walk.operationOptions);
   if (selectedCarrier !== undefined && pointer !== undefined &&
     !rustTargetTypeRefEquals(selectedCarrier, pointer.returnCarrier)) {

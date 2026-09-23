@@ -115,6 +115,8 @@ export function analyzeRustProgram(context: RustAnalysisContext): void {
     sourceCallableAbi,
     operationOptions,
     operationAttempts: new WeakSet<object>(),
+    inferredNumericReturns: new Map(),
+    resolvingNumericReturns: new Set(),
     postCheckOperations: new WeakMap<object, "binary" | "unary-minus" | "unary-plus">(),
     capturedBindingStorage: new Map<Node, "value" | "location">(),
     objectLiteralMethodExpressions: [],

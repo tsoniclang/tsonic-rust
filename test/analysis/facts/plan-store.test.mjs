@@ -19,6 +19,23 @@ function createModel() {
   return createRustPlanBuilder({ getFact: () => undefined });
 }
 
+test("analysis result probes retain parent facts without mutating the final plan", () => {
+  const parent = createModel();
+  const subject = {};
+  const value = { carrier: { kind: "source-primitive", name: "uint64" } };
+  parent.set(subject, rustRuntimeCarrierKey, value);
+  const probe = createRustPlanBuilder({ getFact: () => undefined }, undefined, parent);
+  assert.equal(probe.getRuntimeCarrierFact(subject), value);
+  assert.throws(() => probe.set(subject, rustRuntimeCarrierKey,
+    { carrier: { kind: "source-primitive", name: "float64" } }), /Conflicting Rust semantic plan/u);
+  const selected = {};
+  probe.set(selected, rustRuntimeCarrierKey, value);
+  assert.equal(parent.getRuntimeCarrierFact(selected), undefined);
+  assert.equal(probe.seal().getRuntimeCarrierFact(selected), value);
+  assert.throws(() => probe.set({}, rustRuntimeCarrierKey, value), /after analysis is sealed/u);
+  assert.equal(parent.seal().getRuntimeCarrierFact(subject), value);
+});
+
 test("source fields retain exact declaration identity when reselected", () => {
   const model = createModel();
   const declaration = { kind: "property", parent: undefined };

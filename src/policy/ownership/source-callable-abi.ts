@@ -40,6 +40,9 @@ import {
   Node_Expression,
   Node_Type,
 } from "@tsonic/target-api/source";
+import { resolveSelectedProviderDeclaration } from "../evidence/selected-source.js";
+import { selectRustProviderOperation } from "../operations/provider-selection.js";
+import { rustProviderArgumentBorrowsString } from "./provider-argument-borrow.js";
 
 export interface RustSourceCallableAbiResolver {
   canUseSharedBorrow(
@@ -150,7 +153,7 @@ export function createRustSourceCallableAbiResolver(input: {
         parameter,
         "moved",
         context,
-      );
+      ) || isRustVecCarrier(base) && parameterRetainsWholeValue(parameter, context);
       const parameterLaneCarrier = form === "required" && typeNode !== undefined
         ? requiresOwnedValue
           ? base
@@ -343,6 +346,13 @@ function parameterUsesFlowState(
     });
 }
 
+function parameterRetainsWholeValue(parameter: Node, context: RustTargetTypeResolutionContext): boolean {
+  const summary = context.source.navigation.parameterUseSummary(parameter);
+  return summary === undefined || summary.uses.some(use => !use.throughMember &&
+    (use.captured || use.role === "return" || use.role === "yield" || use.role === "storage" &&
+      context.source.navigation.expressionValueFlow(use.reference).escapes));
+}
+
 function parameterCanUseSharedBorrow(
   parameter: Node,
   context: RustTargetTypeResolutionContext,
@@ -380,6 +390,15 @@ function parameterCanUseSharedBorrow(
         ast.is.IsSpreadElement(argument.expression))) return false;
       const argumentIndex = selected.sourceArguments.findIndex(argument => argument.expression === operand);
       const declaration = semantics.declarations.signatureDeclaration(selected.selectedSignature);
+      const provider = resolveSelectedProviderDeclaration(context, declaration, [
+        { subject: selected.selectedSignature, precision: "exact" },
+      ]);
+      if (argumentIndex >= 0 && provider.kind === "selected") {
+        const operation = selectRustProviderOperation(options.providerRows, provider.identity, "method");
+        if (operation.kind !== "selected" || !rustProviderArgumentBorrowsString(operation.row, argumentIndex)) return false;
+        continue;
+      }
+      if (provider.kind === "conflict") return false;
       const implementation = declaration === undefined ? undefined : context.source.navigation.callableImplementation(declaration);
       if (argumentIndex < 0 || implementation?.kind !== "resolved" ||
         !(ast.is.IsFunctionDeclaration(implementation.implementation.declaration) ||

@@ -45,6 +45,25 @@ test("signature aliases avoid declarations, imports and generic parameter names"
   }
 });
 
+test("complex struct fields reuse exact native aliases without changing storage or generic bounds", () => {
+  const source = { kind: "struct", name: "Entries", visibility: "public", derives: [],
+    generics: makeFunction("read").generics,
+    fields: [{ name: "entries", type: nested, visibility: "public" },
+      { name: "count", type: { kind: "primitive", name: "usize" }, visibility: "private" }],
+  };
+  const result = nameRustSignatureTypes([source, makeFunction("read")]);
+  const aliases = result.filter(item => item.kind === "type-alias");
+  const selected = result.find(item => item.kind === "struct");
+  assert.equal(aliases.length, 1);
+  assert.equal(aliases[0].visibility, "public");
+  assert.deepEqual(aliases[0].target, nested);
+  assert.deepEqual(selected.generics, source.generics);
+  assert.equal(selected.fields[0].type.path, aliases[0].name);
+  assert.deepEqual(selected.fields[0].type.genericArguments, [{ kind: "type", type: { kind: "named", path: "Item" } }]);
+  assert.deepEqual(selected.fields[1], source.fields[1]);
+  assert.deepEqual(nameRustSignatureTypes(result), result);
+});
+
 test("borrowed and opaque boundaries remain in the function instead of escaping into aliases", () => {
   const boundary = { kind: "reference", mutable: true, referent: { kind: "slice", element: nested } };
   const opaque = { kind: "impl-trait", outlives: [], captures: [], bounds: [{ kind: "callable", trait: "Fn",

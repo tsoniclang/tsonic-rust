@@ -557,7 +557,12 @@ export function acceptProjectSourceCall(
       selectedOwnerDefinition === callableOwner
     ? instantiateExactSelectedConstructionCarrier(
         selectedOwnerDefinition,
-        targetGenericArguments,
+        targetGenericArguments.map((argument, index) => {
+          const parameter = genericContract[index]!;
+          return parameter.kind === "type" && argument.kind === "type"
+            ? { kind: "type" as const, type: { kind: "type-parameter" as const, name: parameter.sourceName } }
+            : argument;
+        }),
         options,
       )
     : undefined;

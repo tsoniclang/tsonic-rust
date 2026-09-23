@@ -30,6 +30,58 @@ test("dependent generic bounds occupy one location without changing bound-lifeti
   assert.deepEqual(rustGenericsWithAssociatedBounds([parameter], [bound]), { parameters: [parameter], wherePredicates: [bound] });
 });
 
+test("exact structural alias instances retain their generic root in either registration order", () => {
+  const declaration = {};
+  const otherDeclaration = {};
+  const root = carrier([parameter]);
+  const middle = carrier([{ kind: "array", element: parameter }]);
+  const selected = carrier([{ kind: "array", element: scalar }]);
+  const shape = (selectedCarrier, sourceAlias) => ({
+    sourceType: {}, sourceAlias, carrier: selectedCarrier, storage: "structural-object",
+    fields: rustStructuralObjectCarrierValue(selectedCarrier).fields.map((entry, storageIndex) => ({
+      ...entry, declarations: [], symbols: [], sourceType: {}, resultCarrier: entry.type, storageIndex,
+    })),
+  });
+  for (const aliasFirst of [true, false]) {
+    const registry = createRustSourceTypeRegistry();
+    assert.equal(registry.registerStructuralObject(shape(root, declaration)), true);
+    if (aliasFirst) assert.equal(registry.registerRepresentationAlias(declaration, root), true);
+    const partial = shape(middle, declaration);
+    assert.equal(registry.registerStructuralObject(partial), true);
+    assert.equal(registry.registerStructuralObject(partial), true);
+    assert.equal(registry.registerStructuralObject(shape(selected, otherDeclaration), middle), true);
+    if (!aliasFirst) assert.equal(registry.registerRepresentationAlias(declaration, root), true);
+    assert.equal(registry.registerRepresentationAlias(declaration, root), true);
+    assert.equal(registry.structuralInstantiations().length, 2);
+    assert.equal(registry.registerRepresentationAlias(declaration, selected), false);
+    assert.equal(registry.structuralInstantiations().length, 2);
+    const plan = createRustStructuralShapePlan(registry.structuralObjects(), [], () => "source", [],
+      registry.structuralInstantiations());
+    assert.equal(plan.definitions.length, 1);
+    assert.deepEqual(plan.definitionForCarrier(selected).genericArguments, [{ kind: "type", type: {
+      kind: "array", element: scalar,
+    } }]);
+    assert.equal(registry.registerRepresentationAlias(otherDeclaration, scalar), false);
+    assert.equal(registry.structuralInstantiations().length, 2);
+    assert.equal(registry.structuralObjects()[1].sourceAlias, declaration);
+    assert.equal(Object.isFrozen(registry.structuralObjects()[1]), true);
+  }
+});
+
+test("structural alias registration never joins unrelated declarations by their shape", () => {
+  const registry = createRustSourceTypeRegistry();
+  const declaration = {};
+  const otherDeclaration = {};
+  const root = carrier([parameter]);
+  const selected = carrier([scalar]);
+  assert.equal(registry.registerStructuralObject({ sourceType: {}, sourceAlias: declaration,
+    carrier: root, storage: "structural-object", fields: [] }), true);
+  assert.equal(registry.registerStructuralObject({ sourceType: {}, sourceAlias: otherDeclaration,
+    carrier: selected, storage: "structural-object", fields: [] }), true);
+  assert.equal(registry.registerRepresentationAlias(declaration, root), true);
+  assert.deepEqual(registry.structuralInstantiations(), []);
+});
+
 function fixture() {
   const sourceTypes = createRustSourceTypeRegistry();
   const templateCarrier = carrier([projection("Storage"), projection("Container")]);

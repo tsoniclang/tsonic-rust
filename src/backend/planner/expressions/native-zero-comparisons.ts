@@ -31,7 +31,7 @@ export function planRustNativeZeroComparison(
   if (!isRustIntegerCarrier(carrier) || isRustSignedNumericCarrier(carrier)) return undefined;
   if (selected.operator === "<" || selected.operator === ">=") {
     const value: RustExpr = { kind: "bool-literal", value: selected.operator === ">=" };
-    return selected.expression.kind === "path" || selected.expression.kind === "int-literal"
+    return selected.expression.kind === "int-literal"
       ? value
       : { kind: "evaluate-then", effect: selected.expression, discard: "value", value };
   }

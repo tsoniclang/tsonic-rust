@@ -12,6 +12,7 @@ import {
 } from "../../../dist/target-model/conversions/contracts.js";
 import {
   selectRustSourceValueConversion,
+  selectRustSourceAssertionConversion,
 } from "../../../dist/policy/conversions/selection.js";
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
@@ -197,6 +198,21 @@ test("optional value conversions lift one exact element conversion", () => {
     ),
     undefined,
   );
+});
+
+test("native-sized integers select checked narrowing without a floating intermediate", () => {
+  for (const name of ["native-int", "native-uint"]) {
+    const source = { kind: "source-primitive", name };
+    const target = { kind: "source-primitive", name: "int32" };
+    assert.equal(selectRustSourceValueConversion(source, target), undefined);
+    const conversion = selectRustSourceAssertionConversion(source, target);
+    const contract = rustValueConversionContract(conversion);
+    assert.deepEqual(contract.source, source);
+    assert.deepEqual(contract.target, target);
+    assert.equal(contract.category, "checked-range");
+    assert.equal(contract.fallible, true);
+    assert.equal(contract.path, `rt::conversions::${name === "native-int" ? "isize" : "usize"}_to_i32`);
+  }
 });
 
 test("generated Rust compiles representative mixed numeric operations", { timeout: 300_000 }, () => {

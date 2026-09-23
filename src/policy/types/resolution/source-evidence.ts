@@ -34,6 +34,7 @@ import { rustTypeFamilyNormalizer } from "../type-family-normalization.js";
 import { rustGenericCallableTargetType } from "../../../target-model/types/carriers/generic-callables.js";
 import { rustGenericCallableOrigin } from "../generic-callable-origin.js";
 import { closeRustCallableResultStorage } from "../callable-result-storage.js";
+import { rustSourceSelectionUsesExactBindings } from "./bound-source-selection.js";
 
 export function resolveRustSignatureParameterListTarget(
   parameters: SourceCallableTypeEvidence["parameters"],
@@ -194,6 +195,12 @@ export function resolveRustTypeComponentEvidence(
       context.source.semantics.includes(authoredSourceFile)
     ? context.semantics(authoredSourceFile)
     : undefined;
+  const authoredSource = semantics?.types.authoredType(component.authoredTypeNode);
+  if (authoredSource !== undefined && rustSourceSelectionUsesExactBindings(
+    authoredSource, component.selectedType, context,
+  )) {
+    return resolveRustAuthoredTargetType(component.authoredTypeNode, context, options, resolving);
+  }
   const selected = resolveRustTargetType(
     component.selectedType,
     context,

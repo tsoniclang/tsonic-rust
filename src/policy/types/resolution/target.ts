@@ -287,7 +287,7 @@ export function resolveStructuralObjectType(
   authoredTypeRoot?: Node,
   valueStruct?: StructFact,
 ): TargetTypeRef | undefined {
-  const selectedContext = bindRustSourceAliasArguments(type, context, options, resolving);
+  const selectedContext = bindRustSourceAliasArguments(type, context, options, resolving, authoredTypeRoot);
   if (selectedContext === undefined) return undefined;
   context = selectedContext;
   const semantics = context.currentSemantics;
@@ -458,7 +458,8 @@ export function resolveStructuralObjectType(
   if (new Set(fields.map((field) => field.sourceName)).size !== fields.length) {
     return undefined;
   }
-  const ownerNodes = authoredTypeRoot !== undefined
+  const aliasDeclaration = semantics.types.aliasApplication(type)?.declaration;
+  const ownerNodes = aliasDeclaration !== undefined ? [aliasDeclaration] : authoredTypeRoot !== undefined
     ? [authoredTypeRoot]
     : [...fields.flatMap((field) => field.declarations),
       ...(construction === undefined ? [] : [construction.declaration])];
@@ -478,6 +479,7 @@ export function resolveStructuralObjectType(
   })), representation, construction?.carrier, bases);
   return options.sourceTypes.registerStructuralObject({
     sourceType: type,
+    ...(aliasDeclaration === undefined ? {} : { sourceAlias: aliasDeclaration }),
     carrier,
     storage: "structural-object",
     fields,

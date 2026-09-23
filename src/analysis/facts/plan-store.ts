@@ -36,6 +36,7 @@ export interface RustPlanBuilder extends RustPlanWriter {
 export function createRustPlanBuilder(
   sourceFacts: ReadonlySourceFactResolver,
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
+  parent?: RustPlanQueries,
 ): RustPlanBuilder {
   const values = new Map<RustPlanKey<unknown>, WeakMap<object, unknown>>();
   let sealed = false;
@@ -47,7 +48,7 @@ export function createRustPlanBuilder(
   ): T | undefined => {
     if (subject === undefined) return undefined;
     return isRustPlanKey(key)
-      ? values.get(key as RustPlanKey<unknown>)?.get(subject) as T | undefined
+      ? (values.get(key as RustPlanKey<unknown>)?.get(subject) as T | undefined) ?? parent?.get(subject, key)
       : sourceFacts.getFact(subject, key);
   };
 
@@ -82,7 +83,7 @@ export function createRustPlanBuilder(
         bySubject = new WeakMap<object, unknown>();
         values.set(key as RustPlanKey<unknown>, bySubject);
       }
-      const existing = bySubject.get(subject);
+      const existing = bySubject.get(subject) ?? parent?.get(subject, key);
       if (existing !== undefined && !key.equals(existing as T, value)) {
         throw new Error(
           `Conflicting Rust semantic plan '${key.id}' for one exact source subject.`,

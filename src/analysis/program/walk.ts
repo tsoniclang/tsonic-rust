@@ -55,6 +55,8 @@ export interface RustFactWalk {
   readonly sourceCallableAbi: RustSourceCallableAbiResolver;
   readonly operationOptions: RustOperationsProviderOptions;
   readonly operationAttempts: WeakSet<object>;
+  readonly inferredNumericReturns: Map<Node, TargetTypeRef | undefined>;
+  readonly resolvingNumericReturns: Set<Node>;
   readonly postCheckOperations: WeakMap<object, "binary" | "unary-minus" | "unary-plus">;
   readonly deferredCallbackCalls: WeakMap<Node, {
     readonly request: import("../../policy/operations/contracts.js").RustCheckedCallSelectionInput;

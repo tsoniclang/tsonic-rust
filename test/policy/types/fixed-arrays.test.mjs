@@ -333,12 +333,13 @@ for (const length of ["2n", "9007199254740993n"]) {
   for (const [name, expression] of [["direct", "values.length"], ["inferred", "inferred(values).length"]]) {
     test(`${name} bigint fixed-array length ${length} retains its exact native extent`, () => {
       const { result } = compileRust({ files: { "index.ts": `
-        import type { FixedArray, int32, nativeUint } from "@tsonic/core/types.js";
+        import type { FixedArray, int32 } from "@tsonic/core/types.js";
         function inferred(values: FixedArray<int32, ${length}>) { return values; }
-        export function length(values: FixedArray<int32, ${length}>): nativeUint { return ${expression}; }
+        export function length(values: FixedArray<int32, ${length}>) { return ${expression}; }
       ` } });
       assert.deepEqual(result.diagnostics, []);
       const output = artifactText(result, "src/index.rs");
+      assert.match(output, /pub fn length\(values: \[i32; \d+\]\) -> usize/u);
       assert.match(output, /\.len\(\)/u);
       assert.doesNotMatch(output, /usize_to_i32|usize_to_f64|as f64/u);
     });

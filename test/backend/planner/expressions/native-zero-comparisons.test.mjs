@@ -50,6 +50,10 @@ test("unsigned zero-bound folding preserves evaluation and never folds signed or
     assert.deepEqual(planRustNativeZeroComparison(operator, effect, zero, subject, literal, context(nativeUint)), {
       kind: "evaluate-then", effect, discard: "value", value: { kind: "bool-literal", value },
     });
+    const variable = { kind: "path", path: "index" };
+    assert.deepEqual(planRustNativeZeroComparison(operator, variable, zero, subject, literal, context(nativeUint)), {
+      kind: "evaluate-then", effect: variable, discard: "value", value: { kind: "bool-literal", value },
+    });
     for (const name of ["int32", "int64", "float64"]) {
       assert.equal(planRustNativeZeroComparison(operator, effect, zero, subject, literal,
         context({ kind: "source-primitive", name })), undefined);

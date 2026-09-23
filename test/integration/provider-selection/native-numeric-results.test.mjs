@@ -55,6 +55,8 @@ for (const [name, source, node] of [
     assert.match(text, /word: u32/u);
     if (node) {
       assert.match(text, /size: u64/u);
+      assert.match(text, /fn native_file_size\(path: &str\) -> Result<u64,/u);
+      assert.match(text, /fn forwarded_file_size\(path: &str\) -> Result<u64,/u);
       assert.doesNotMatch(text, /u64_to_f64|usize_to_i32/u);
     } else {
       assert.match(text, /single: f32/u);

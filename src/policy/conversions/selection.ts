@@ -36,6 +36,7 @@ import {
   rustFloat64ToUint8ValueConversion,
   rustInt32ToFloat64ValueConversion,
   rustInt32ToUint8ValueConversion,
+  rustIsizeToInt32ValueConversion,
   rustJsValueCloneConversion,
   rustTsValueCloneConversion,
   rustNullToJsValueConversion,
@@ -45,6 +46,7 @@ import {
   rustUint32ToInt32ValueConversion,
   rustUint64ToFloat64ValueConversion,
   rustUint8ToInt32ValueConversion,
+  rustUsizeToInt32ValueConversion,
 } from "../../target-model/conversions/model.js";
 
 const boolCarrier = rustSourcePrimitiveTargetType("bool");
@@ -277,6 +279,18 @@ export function selectRustSourceValueConversion(
       rustNumericPromotionKind(source.name, target.name) === target.name
     ? { kind: "numeric-promotion", source: source.name, target: target.name }
     : undefined;
+}
+
+export function selectRustSourceAssertionConversion(
+  source: TargetTypeRef,
+  target: TargetTypeRef,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
+): RustValueConversion | undefined {
+  if (source.kind === "source-primitive" && target.kind === "source-primitive" && target.name === "int32") {
+    if (source.name === "native-int") return rustIsizeToInt32ValueConversion;
+    if (source.name === "native-uint") return rustUsizeToInt32ValueConversion;
+  }
+  return selectRustSourceValueConversion(source, target, definitions);
 }
 
 export function selectRustJsonValueConversion(

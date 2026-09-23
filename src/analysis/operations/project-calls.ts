@@ -246,7 +246,7 @@ export function applySelectedProjectSourceCall(
   }
   if (declaredResultCarrier !== undefined && selectedSignature.sourceReturnType !== undefined &&
     !retainRustStructuralInstantiation(selectedSignature.sourceReturnType, declaredResultCarrier,
-      resultCarrier, rustResolutionContext(walk, expression), walk.operationOptions)) {
+      resultCarrier, storageContext, walk.operationOptions, new Set(), ast.typeNode(selectedDeclaration))) {
     appendRustDiagnostic(walk, "RUST_SOURCE_CALL_RESULT_STORAGE_MISSING",
       "The selected source return type has no exact instantiated structural storage correspondence.", expression,
       ["target.capability=rust.source-call.result-storage"]);
