@@ -6,6 +6,16 @@ import { nestedStructuralStorageFiles, invalidNestedStructuralStorageFiles } fro
 
 for (const surfaces of [[], ["js"]]) {
   const profile = surfaces.length === 0 ? "native" : "js";
+  test(`nested structural alias facts are independent of imported declaration order (${profile})`, () => {
+    for (const storageName of ["a-storage", "z-storage"]) {
+      const files = Object.fromEntries(Object.entries(nestedStructuralStorageFiles).map(([name, source]) => [
+        name === "storage.ts" ? `${storageName}.ts` : name,
+        source.replaceAll('"./storage.js"', `"./${storageName}.js"`),
+      ]));
+      const { result } = compileRust({ surfaces, files });
+      assert.deepEqual(result.diagnostics, []);
+    }
+  });
   test(`nested structural storage preserves compound aliases and shared mutation (${profile})`, { timeout: 300_000 }, () => {
     const files = { ...nestedStructuralStorageFiles,
       "index.ts": `${nestedStructuralStorageFiles["index.ts"]}

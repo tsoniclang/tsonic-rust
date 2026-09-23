@@ -30,6 +30,41 @@ export function inferRustTargetTypeParameterBindings(
   })?.types;
 }
 
+export function rustTargetTypePatternsAreNominallyDisjoint(
+  left: TargetTypeRef,
+  right: TargetTypeRef,
+): boolean {
+  const leftSource = rustSourceTypeCarrierValue(left);
+  const rightSource = rustSourceTypeCarrierValue(right);
+  if (leftSource !== undefined && rightSource !== undefined) {
+    return leftSource.fileName !== rightSource.fileName || leftSource.typeName !== rightSource.typeName ||
+      disjointArguments(leftSource.genericArguments, rightSource.genericArguments);
+  }
+  if (left.kind === "target-named" && right.kind === "target-named" && left.id === right.id) {
+    return disjointArguments(left.genericArguments ?? [], right.genericArguments ?? []);
+  }
+  const leftNamed = rustNamedTypeCarrierValue(left);
+  const rightNamed = rustNamedTypeCarrierValue(right);
+  if (leftNamed !== undefined && rightNamed !== undefined && leftNamed.id === rightNamed.id && leftNamed.path === rightNamed.path) {
+    return disjointArguments(leftNamed.genericArguments, rightNamed.genericArguments);
+  }
+  if (left.kind === "array" && right.kind === "array") {
+    return rustTargetTypePatternsAreNominallyDisjoint(left.element, right.element);
+  }
+  if (left.kind === "tuple" && right.kind === "tuple" && left.elements.length === right.elements.length) {
+    return left.elements.some((element, index) => rustTargetTypePatternsAreNominallyDisjoint(element, right.elements[index]!));
+  }
+  return false;
+}
+
+function disjointArguments(left: readonly RustTargetGenericArgument[], right: readonly RustTargetGenericArgument[]): boolean {
+  return left.length === right.length && left.some((argument, index) => {
+    const other = right[index];
+    return argument.kind === "type" && other?.kind === "type" &&
+      rustTargetTypePatternsAreNominallyDisjoint(argument.type, other.type);
+  });
+}
+
 export interface RustTargetGenericParameterSet {
   readonly typeNames: ReadonlySet<string>;
   readonly lifetimeIdentities: ReadonlySet<string>;

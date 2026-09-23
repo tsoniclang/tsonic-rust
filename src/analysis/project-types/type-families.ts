@@ -7,7 +7,7 @@ import type {
 } from "../../target-model/types/type-families.js";
 import type { RustTargetGenericArgument, RustTargetTraitRef, TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeParameterNames } from "../../target-model/types/carriers/generic-references.js";
-import { inferRustTargetTypeParameterBindings } from "../../target-model/types/carriers/generic-inference.js";
+import { inferRustTargetTypeParameterBindings, rustTargetTypePatternsAreNominallyDisjoint } from "../../target-model/types/carriers/generic-inference.js";
 import { substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
 import { rustNamedTypeCarrierValue, rustSourceTypeCarrierValue } from "../../target-model/types/index.js";
 import { rustTypeFamilyNormalizer } from "../../policy/types/type-family-normalization.js";
@@ -15,7 +15,7 @@ import { rustIndexedFieldTrait } from "../../target-model/types/carriers/indexed
 
 interface ImplementationBucket {
   readonly closed: Map<string, RustSourceTypeFamilyImplementation>;
-  template?: RustSourceTypeFamilyImplementation;
+  readonly templates: Map<string, RustSourceTypeFamilyImplementation>;
 }
 
 export function createRustSourceTypeFamilyRegistry(): RustSourceTypeFamilyRegistry {
@@ -48,9 +48,16 @@ export function createRustSourceTypeFamilyRegistry(): RustSourceTypeFamilyRegist
   const implementation = (trait: RustTargetTraitRef, owner: TargetTypeRef): RustSourceTypeFamilyImplementation | undefined => {
     const exact = implementations.get(key(trait, owner));
     if (exact !== undefined) return exact;
-    const template = buckets.get(bucketKey(trait, owner))?.template;
-    return template === undefined ? undefined : instantiate(template, owner);
+    for (const candidate of buckets.get(bucketKey(trait, owner))?.templates.values() ?? []) {
+      const selected = instantiate(candidate, owner);
+      if (selected !== undefined) return selected;
+    }
+    return undefined;
   };
+  const equivalent = (left: RustSourceTypeFamilyImplementation, right: RustSourceTypeFamilyImplementation): boolean =>
+    left.sourceFileName === right.sourceFileName &&
+    closedMetadataKey(left.field ?? null) === closedMetadataKey(right.field ?? null) &&
+    rustTargetTypeRefEquals(left.output, right.output);
   return Object.freeze({
     registerFieldKey(identity: string, name: string) {
       assertWritable();
@@ -99,37 +106,39 @@ export function createRustSourceTypeFamilyRegistry(): RustSourceTypeFamilyRegist
       const identity = key(trait, implementation.owner);
       const existing = implementations.get(identity);
       if (existing !== undefined) {
-        return closedMetadataKey(existing.field ?? null) === closedMetadataKey(implementation.field ?? null) &&
-          existing.sourceFileName === implementation.sourceFileName &&
-          rustTargetTypeRefEquals(existing.output, implementation.output);
+        return equivalent(existing, implementation);
       }
       const constructor = bucketKey(trait, implementation.owner);
-      const bucket: ImplementationBucket = buckets.get(constructor) ?? { closed: new Map() };
-      if (bucket.template !== undefined) {
-        const selected = instantiate(bucket.template, implementation.owner);
-        return selected !== undefined && selected.sourceFileName === implementation.sourceFileName &&
-          closedMetadataKey(selected.field ?? null) === closedMetadataKey(implementation.field ?? null) &&
-          rustTargetTypeRefEquals(selected.output, implementation.output);
+      const bucket: ImplementationBucket = buckets.get(constructor) ?? { closed: new Map(), templates: new Map() };
+      const covered: string[] = [];
+      for (const [candidateIdentity, candidate] of bucket.templates) {
+        const selected = instantiate(candidate, implementation.owner);
+        if (selected !== undefined) return equivalent(selected, implementation);
+        const generalized = parameterNames.size > 0 ? instantiate(implementation, candidate.owner) : undefined;
+        if (generalized !== undefined) {
+          if (!equivalent(generalized, candidate)) return false;
+          covered.push(candidateIdentity);
+        } else if (!rustTargetTypePatternsAreNominallyDisjoint(implementation.owner, candidate.owner)) return false;
       }
       if (parameterNames.size > 0) {
-        for (const concrete of bucket.closed.values()) {
-          const selected = instantiate(implementation, concrete.owner);
-          if (selected === undefined || selected.sourceFileName !== concrete.sourceFileName ||
-            closedMetadataKey(selected.field ?? null) !== closedMetadataKey(concrete.field ?? null) ||
-            !rustTargetTypeRefEquals(selected.output, concrete.output)) return false;
+        for (const [candidateIdentity, candidate] of bucket.closed) {
+          const generalized = instantiate(implementation, candidate.owner);
+          if (generalized !== undefined) {
+            if (!equivalent(generalized, candidate)) return false;
+            covered.push(candidateIdentity);
+          } else if (!rustTargetTypePatternsAreNominallyDisjoint(implementation.owner, candidate.owner)) return false;
         }
       }
       const snapshot = Object.freeze({ ...implementation, family,
         ...(implementation.field === undefined ? {} : { field: snapshotClosedMetadata(implementation.field) }),
         arguments: snapshotClosedMetadata(implementation.arguments),
         owner: snapshotClosedMetadata(implementation.owner), output: snapshotClosedMetadata(implementation.output) });
-      if (parameterNames.size > 0) {
-        for (const identity of bucket.closed.keys()) implementations.delete(identity);
-        bucket.closed.clear();
-        bucket.template = snapshot;
-      } else {
-        bucket.closed.set(identity, snapshot);
+      for (const identity of covered) {
+        implementations.delete(identity);
+        bucket.closed.delete(identity);
+        bucket.templates.delete(identity);
       }
+      (parameterNames.size > 0 ? bucket.templates : bucket.closed).set(identity, snapshot);
       buckets.set(constructor, bucket);
       implementations.set(identity, snapshot);
       return true;

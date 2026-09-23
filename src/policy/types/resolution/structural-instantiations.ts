@@ -8,7 +8,7 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import { resolveRustTypeComponentEvidence } from "./source-evidence.js";
 import { rustTypeFamilyNormalizer } from "../type-family-normalization.js";
 import { mapRustTargetTypes } from "../../../target-model/types/carriers/substitution.js";
-import { resolveRustTargetType } from "./target.js";
+import { bindRustSourceAliasArguments } from "./generic-arguments.js";
 import { rustCallableProtocol } from "../../../target-model/types/carriers/callables.js";
 import { isRustErasedNominalMember } from "../source-shapes.js";
 
@@ -43,22 +43,9 @@ export function retainRustStructuralInstantiation(
     options.sourceTypes.structuralObjectForType(sourceType, carrier) !== undefined) return true;
   const template = options.sourceTypes.structuralObjectForCarrier(templateCarrier);
   if (template === undefined) return false;
-  const application = context.currentSemantics.types.aliasApplication(sourceType);
-  if (application !== undefined) {
-    const substitutions = new Map(context.sourceTypeParameterSubstitutions);
-    for (const binding of application.bindings) {
-      const owner = context.ast.parent(binding.declaration);
-      const parameter = owner === undefined ? undefined : context.sourceLifetimes.contractFor(owner)?.parameters
-        .find(parameter => parameter.declaration === binding.declaration);
-      const existing = substitutions.get(binding.declaration);
-      const selected = parameter?.kind === "type"
-        ? existing?.sourceType === binding.argument ? existing.carrier
-          : resolveRustTargetType(binding.argument, context, options, resolving)
-        : undefined;
-      if (selected !== undefined) substitutions.set(binding.declaration, { sourceType: binding.argument, carrier: selected });
-    }
-    context = { ...context, sourceTypeParameterSubstitutions: substitutions };
-  }
+  const selectedContext = bindRustSourceAliasArguments(sourceType, context, options, resolving);
+  if (selectedContext === undefined) return false;
+  context = selectedContext;
   const correspondence = context.currentSemantics.types.structuralMembers(sourceType, template.sourceType);
   if (correspondence.kind !== "available" ||
     correspondence.members.filter(member => !isRustErasedNominalMember(member.destination.declarations, context.ast)).length !== template.fields.length ||

@@ -22,6 +22,7 @@ import {
   rustVecTargetType,
 } from "../../../target-model/types/index.js";
 import { denseDefined, resolveProjectSourceCarrier } from "./project.js";
+import { bindRustSourceAliasArguments } from "./generic-arguments.js";
 import { instantiateTargetType, providerCarrierFromRelations, resolveOwnedSourceProfileTypeName, resolveProviderTypeIdentity, resolveSourceProfileCarrier } from "./providers.js";
 import { isRustStructuralObjectFieldDeclaration, isRustErasedNominalMember } from "../source-shapes.js";
 import { resolveBoundSourceTypeParameter, resolveCallableType, resolveSourcePrimitive, resolveSourceTypeParameter, resolveUnion } from "./callables.js";
@@ -284,6 +285,9 @@ export function resolveStructuralObjectType(
   authoredTypeRoot?: Node,
   valueStruct?: StructFact,
 ): TargetTypeRef | undefined {
+  const selectedContext = bindRustSourceAliasArguments(type, context, options, resolving);
+  if (selectedContext === undefined) return undefined;
+  context = selectedContext;
   const semantics = context.currentSemantics;
   const struct = valueStruct ?? context.facts.resolve(type, structFactKey) ?? context.facts.get(type, structFactKey);
   if (struct !== undefined && (struct.valueType !== true || struct.fields === undefined)) return undefined;
