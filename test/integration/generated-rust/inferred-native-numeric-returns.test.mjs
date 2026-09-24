@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { artifactText, compileRust } from "../../helpers/rust-session.mjs";
+import { acmeTestingPackage, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 test("inferred arrays and tuples retain native elements without overriding explicit contexts", { timeout: 300_000 }, () => {
@@ -24,7 +24,8 @@ export function main(): void {
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /(?:JsArray|Array)<i64>/u);
   assert.match(output, /\(i64, u32, String\)/u);
-  assert.match(output, /\(f64, f64\)/u);
+  assert.match(output, /\[f64; 2\]/u);
+  assert.doesNotMatch(output, /tuple\.clone\(\)|tuple\.\d\.clone\(\)/u);
   assert.doesNotMatch(output, /BigInt|i64_to_f64/u);
   validateGeneratedProject("inferred-native-elements", result.artifacts, { run: true });
 });
@@ -64,4 +65,40 @@ export function main(): void {
   assert.match(output, /fn ordinary\(value: f64\) -> f64/u);
   assert.match(output, /fn optional\([^)]*\) -> Option<usize>/u);
   validateGeneratedProject("inferred-native-numeric-returns", result.artifacts, { run: true });
+});
+
+test("tuple projections borrow retained owners and copy only an owned selected field", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "native_tuple_projection" } },
+    files: { "index.ts": `
+import { check } from "@acme/testing";
+import type { int32, int64 } from "@tsonic/core/types.js";
+let sequence: int32 = 0;
+function create(): [int64, string] {
+  sequence = sequence * 10 + 1;
+  return [9007199254740993n, "owned"];
+}
+function select(): 1 { sequence = sequence * 10 + 2; return 1; }
+export function main(): void {
+  const wide: int64 = 9007199254740993n;
+  const pair: [int64, string] = [wide, "retained"];
+  const kept = pair[1];
+  const last = 1 as const;
+  check(pair[0] === wide && pair[1] === "retained" && pair[last] === "retained");
+  check(kept === "retained");
+  const nested: [int32, [int64, string]] = [7, [wide, "nested"]];
+  check(nested[0] === 7 && nested[1][0] === wide && nested[1][1] === "nested");
+  const single: [int32, string] = [1, "moved"];
+  const moved = single[1];
+  check(moved === "moved");
+  const selected = create()[select()];
+  check(selected === "owned" && sequence === 12);
+}
+` } });
+  assert.deepEqual(result.diagnostics, []);
+  const output = artifactText(result, "src/index.rs");
+  assert.match(output, /let kept: String = pair\.1\.clone\(\);/u);
+  assert.match(output, /let moved: String = single\.1;/u);
+  assert.doesNotMatch(output, /(?:pair|nested|single)\.clone\(\)|nested\.1\.clone\(\)|create\([^)]*\)\.clone\(\)/u);
+  validateGeneratedProject("native-tuple-projection", result.artifacts, { run: true });
 });

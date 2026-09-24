@@ -12,7 +12,7 @@ import {
 } from "@tsonic/target-api/source";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planExpression } from "./entry.js";
-import { planRustSharedReceiver } from "./typed-locations.js";
+import { planRustNonConsumingValue, planRustSharedReceiver, planRustValueRead } from "./typed-locations.js";
 import { readRustProjectObjectIndex } from "../objects/project-objects.js";
 import { rustProjectObjectRepresentation } from "../objects/project-storage.js";
 import { requireProviderArgumentPassingFacts } from "./calls/arguments.js";
@@ -119,25 +119,15 @@ function planElementAccessInner(node: Node, context: RustPlanContext): RustExpr 
       return undefined;
     }
     const receiverNode = Node_Expression(context.input.program.source.ast, node);
-    const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
     const indexNode = ElementAccessExpression_ArgumentExpression(context.input.program.source.ast, node);
-    if (receiver === undefined || indexNode === undefined) {
+    if (receiverNode === undefined || indexNode === undefined) {
       return undefined;
     }
-    const effect = context.input.program.source.ast.kindName(indexNode) === KindNumericLiteral
-      ? undefined
-      : planExpression(indexNode, context);
-    if (context.input.program.source.ast.kindName(indexNode) !== KindNumericLiteral && effect === undefined) {
-      return undefined;
-    }
-    const value: RustExpr = {
+    return planIndexedProjection(node, receiverNode, indexNode, context, receiver => ({
       kind: "index",
       receiver,
       index: { kind: "int-literal", text: String(fact.index) },
-    };
-    return effect === undefined
-      ? value
-      : { kind: "evaluate-then", effect, discard: "value", value };
+    }));
   }
   if (fact !== undefined && fact.kind === "tuple-index") {
     const indexNode = ElementAccessExpression_ArgumentExpression(context.input.program.source.ast, node);
@@ -168,18 +158,9 @@ function planElementAccessInner(node: Node, context: RustPlanContext): RustExpr 
       return undefined;
     }
     const receiver = Node_Expression(context.input.program.source.ast, node);
-    const planned = receiver === undefined ? undefined : planExpression(receiver, context);
-    if (planned === undefined) {
-      return undefined;
-    }
-    const value: RustExpr = { kind: "field", receiver: planned, name: String(fact.index) };
-    if (context.input.program.source.ast.kindName(indexNode) === KindNumericLiteral) {
-      return value;
-    }
-    const effect = planExpression(indexNode, context);
-    return effect === undefined
-      ? undefined
-      : { kind: "evaluate-then", effect, discard: "value", value };
+    return receiver === undefined ? undefined
+      : planIndexedProjection(node, receiver, indexNode, context,
+          value => ({ kind: "field", receiver: value, name: String(fact.index) }));
   }
   if (fact === undefined || fact.kind !== "provider-operation" || fact.abi.operationKind !== "indexer") {
     context.diagnostics.push(missingFactDiagnostic(
@@ -240,6 +221,39 @@ function planElementAccessInner(node: Node, context: RustPlanContext): RustExpr 
     return undefined;
   }
   return finishProviderOperationExpression(context, fact, planned, node);
+}
+
+function planIndexedProjection(
+  node: Node,
+  receiverNode: Node,
+  indexNode: Node,
+  context: RustPlanContext,
+  project: (receiver: RustExpr) => RustExpr,
+): RustExpr | undefined {
+  const planned = planExpression(receiverNode, context);
+  if (planned === undefined) return undefined;
+  const receiver = planRustNonConsumingValue(receiverNode, planned, context);
+  const borrowed = receiver !== planned || expressionCarrier(receiverNode, context)?.kind === "reference" ||
+    context.expressionOverrides?.get(receiverNode)?.valueForm === "shared-reference";
+  const read = (owner: RustExpr): RustExpr => borrowed
+    ? planRustValueRead(node, project(owner), context) : project(owner);
+  if (context.input.program.source.ast.kindName(indexNode) === KindNumericLiteral) return read(receiver);
+  const effect = planExpression(indexNode, context);
+  if (effect === undefined) return undefined;
+  const effects = context.input.program.sourceNavigation.expressionEffects(receiverNode);
+  const indexEffects = context.input.program.sourceNavigation.expressionEffects(indexNode);
+  const selected: RustExpr = receiver === planned ? receiver : { kind: "reference", expr: receiver };
+  if (!effects.invokes && !effects.mutates && !effects.suspends && !effects.mayThrow &&
+    !indexEffects.invokes && !indexEffects.mutates && !indexEffects.suspends && !indexEffects.mayThrow) {
+    return read({ kind: "evaluate-then", effect, discard: "value", value: selected });
+  }
+  if (context.syntheticNames === undefined) return undefined;
+  const name = allocateRustSyntheticName(context.syntheticNames, "indexed_receiver");
+  return read({
+    kind: "block",
+    bindings: [{ name, value: selected }],
+    value: { kind: "evaluate-then", effect, discard: "value", value: { kind: "path", path: name } },
+  });
 }
 
 export function planArrayLiteral(node: Node, context: RustPlanContext): RustExpr | undefined {

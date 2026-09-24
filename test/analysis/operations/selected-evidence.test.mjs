@@ -170,7 +170,7 @@ export function second(pair: [int32, int32]): int32 {
   });
 
   assert.deepEqual(result.diagnostics, []);
-  assert.match(artifactText(result, "src/index.rs"), /\{\n        let _ = one;\n        pair\[1\]\n    \}/u);
+  assert.match(artifactText(result, "src/index.rs"), /\{\n        let _ = one;\n        pair\n    \}\[1\]/u);
   validateGeneratedProject("selected-tuple-ordinal", result.artifacts);
 });
 
